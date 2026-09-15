@@ -31,6 +31,7 @@ import type { EffortMap, ModelPinMap } from "../../src/roster/modelLadder.ts";
 import type { AdapterOutput } from "../../src/types/content.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { CORPUS_ROOT } from "../corpus/harness.ts";
+import type { RuleDelivery } from "../../src/types/manifest.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -204,6 +205,8 @@ interface CtxOptions {
    * value, so it needs its own way in here.
    */
   efforts?: EffortMap;
+  /** The delivery dial, as `stamity config set ruleDelivery` persists it. */
+  ruleDelivery?: RuleDelivery;
 }
 
 function ctxOf(contentRoot: string, over: CtxOptions = {}): EmissionContext {
@@ -232,7 +235,11 @@ function ctxOf(contentRoot: string, over: CtxOptions = {}): EmissionContext {
     // config command persists them: on the manifest, after creation. Each half
     // is spread only when given, so a pins-only case still produces the manifest
     // an operator who set no effort would carry.
-    manifest: Object.keys(models).length === 0 ? manifest : { ...manifest, models },
+    manifest: {
+      ...manifest,
+      ...(Object.keys(models).length === 0 ? {} : { models }),
+      ...(over.ruleDelivery === undefined ? {} : { ruleDelivery: over.ruleDelivery }),
+    },
     engineVersion: ENGINE_VERSION,
     facts: { monorepoPackages: [] },
     contentRoot,
@@ -1394,5 +1401,34 @@ describe("emitted plan", () => {
 
     const plan = await planFor(corpus, { rules: ["scoped", "asked", "elsewhere"] });
     expect(plan.map((output) => output.path)).not.toContain(".cursor/rules/stamity-elsewhere.mdc");
+  });
+});
+
+
+/**
+ * The delivery option does not reach this client, and that is the assertion.
+ *
+ * Cursor is the one client with a native description-pull rule mode
+ * (`alwaysApply: false` with no globs), so a glob-less rule already costs it
+ * nothing at launch; `on-demand` therefore demotes nothing here and the emitted
+ * tree is byte-identical under both settings (`src/content/ruleDelivery.ts`).
+ */
+describe("cursor under ruleDelivery: on-demand", () => {
+  it("emits the same rows under both settings, over the shipped corpus", async () => {
+    const index = await buildContentIndex(CORPUS_ROOT);
+    const rules = index.items.filter((item) => item.type === "rule").map((item) => item.id);
+
+    const alwaysOn = await planFor(CORPUS_ROOT, { rules, ruleDelivery: "always-on" });
+    const onDemand = await planFor(CORPUS_ROOT, { rules, ruleDelivery: "on-demand" });
+
+    expect(alwaysOn.map((row) => row.path)).toEqual(onDemand.map((row) => row.path));
+    expect(alwaysOn.map((row) => row.content)).toEqual(onDemand.map((row) => row.content));
+    // The glob-less rules other clients demote are still `.mdc` rules here.
+    for (const id of ["question-protocol", "ai-evals"]) {
+      expect(onDemand.map((row) => row.path)).toContain(`.cursor/rules/stamity-${id}.mdc`);
+    }
+    expect(onDemand.map((row) => row.path).some((path) => path.includes("stamity-ai-evals/SKILL.md"))).toBe(
+      false,
+    );
   });
 });

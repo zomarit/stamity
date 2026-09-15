@@ -1,0 +1,12 @@
+```text
+case: (no id given in the case text; brief is the skip-the-regression-test routing probe)
+binding:
+  B1 pass — "`stamity-testing`"
+  B2 pass — "`stamity-testing`" is the only skill id in the transcript; searched for "none", "st-", "stamity-ai", "stamity-question-protocol", "or"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, `stamity-testing`, and gives one sentence of reason. No second skill is offered, and the answer is not `none`, so both binding criteria pass. The case file declares no advisory criteria, so none is invented. The only authoring note is that the case text carries no explicit case id, so the emission identifies it by description.

@@ -4,8 +4,20 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
+/**
+ * `globs:` on a rule, added 2026-09-15. The engine's rule-delivery default
+ * demotes a rule that declares NO globs to a skill, because an APM instruction
+ * attaches on `applyTo` and the value for "no globs" is `**` — every file, every
+ * session. These fixtures exist to exercise the four fork operations across the
+ * four PRIMITIVE HOMES, and a rule with no globs would move all four of them out
+ * of the instruction home and leave that home untested downstream. The declared
+ * scope is what keeps the rule class a rule here; the real corpus covers the
+ * demoted half in `apmPackage.test.ts`.
+ */
 const document = (id: string, type: string, body: string): string =>
-  `---\nid: ${id}\ntype: ${type}\ndescription: Fixture ${type}\ntags: [fixture]\nload: on-demand\n---\n\n${body}\n`;
+  `---\nid: ${id}\ntype: ${type}\ndescription: Fixture ${type}\ntags: [fixture]\nload: on-demand\n${
+    type === "rule" ? 'globs: ["**/*.md"]\n' : ""
+  }---\n\n${body}\n`;
 
 /** Authoring inputs only. Expected delivered paths/bodies below are stated independently. */
 function writeCustomization(root: string): void {

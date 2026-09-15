@@ -1,9 +1,9 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit b801fe5. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
 <!-- Re-open when: any `file::symbol` address below stops resolving, a named control loses its
      last production caller, a new install source or execution surface ships, a control named
-     under "Publishing this package" changes in `.github/workflows/release.yml`, or the external
-     mapping in "Standards mapping" is authored. `test/docsPages.test.ts` fails on the first;
-     `test/ci/workflow.test.ts` fails on the fourth. -->
+     under "Publishing this package" changes in `.github/workflows/release.yml`, or the mapping
+     in `docs/security-mapping.md` stops agreeing with the table below. `test/docsPages.test.ts`
+     fails on the first and on the fifth; `test/ci/workflow.test.ts` fails on the fourth. -->
 
 # Security
 
@@ -163,7 +163,14 @@ where it depends on it.
   runs them, with your privileges. Reading `.stamity/generated/hooks/` covers only the scripts
   this engine generates. What decides whether a command runs at all is the client's own
   config — `.claude/settings.json`, `.cursor/hooks.json`, `.codex/hooks.json` — and a hook a
-  PACK supplies lands there, never under `.stamity/generated/`. An MCP server definition
+  PACK supplies lands there, never under `.stamity/generated/`. On Codex three things decide
+  it rather than one: `features.hooks = true` in `.codex/config.toml`, which this engine now
+  emits and the client defaults OFF, the project's trust level, and the per-hook review
+  through the interactive `/hooks` command — or `--dangerously-bypass-hook-trust` for
+  automation that cannot take that step. With all three in place, headless `codex exec` on
+  codex-cli 0.154.0 loaded no project hook layer at all in the 2026-09-15 measurement, so a
+  hook on that client is enforcement in the interactive session and nothing in the headless
+  lane (`src/adapters/codex.ts`, the `hook enforcement` fact). An MCP server definition
   likewise becomes a launcher your editor spawns at start-up. Read all four, and read the
   `runs on this machine` block `stamity add` prints before accepting a pack.
 - **Who a signature names.** A verified bundle proves that an identity signed exactly these
@@ -206,19 +213,22 @@ where it depends on it.
 
 ## Standards mapping
 
-Not written. The table above is this repository's own actor/vector/control/residual model and
-maps to no external control catalogue: no OWASP ASI mapping of THESE controls, no
-version-pinned crosswalk of them, no NSA/CISA joint-guidance anchor, and no NIST AI RMF table
-anywhere in this tree. OWASP ids do occur here — `A01`–`A10` and `ASI01`–`ASI10`, edition-pinned
-to OWASP Top 10:2025, as the finding vocabulary the emitted security reviewer writes in and as
-the category labels on the verify skill's security-axis checks
-(`content/skills/st-verify/references/security.md`), and `LLM01` in the deny-scan module
-header — as borrowed vocabulary, never as a crosswalk of the controls above.
+Written 2026-09-15: [`docs/security-mapping.md`](docs/security-mapping.md) crosswalks the table
+above to four external catalogues — the OWASP agentic list, the OWASP LLM list, the OWASP web
+list, the NSA/CISA and partner joint guidance, and the NIST AI RMF with its generative-AI
+profile. It is version-pinned to the editions it names, each read on a stated date, because a
+mapping to "OWASP ASI" with no version is a mapping to whatever that list says today. And it is a
+mapping, not a certification: no auditor read it, no scheme recognizes it, and it claims
+conformance with nothing. What it adds to this page is the other direction — seven surfaces as
+actor/vector/control/residual rows carrying the catalogue ids each control answers to, and the
+gaps those rows leave open collected into one list.
 
-It is listed here rather than omitted because an unstated obligation reads as one nobody
-took on. Writing it needs the catalogue versions read and cited at a fixed date — a mapping
-to "OWASP ASI" with no version is not a mapping — and a client set that has stopped moving.
-The controls it would map already exist and are addressed above.
+OWASP ids also occur here as borrowed vocabulary rather than as a crosswalk: `A01`–`A10` and
+`ASI01`–`ASI10` are the finding vocabulary the emitted security reviewer writes in and the
+category labels on the verify skill's security-axis checks
+(`content/skills/st-verify/references/security.md`), and `LLM01` appears in the deny-scan module
+header. Those labels carry their own edition pin, which is not the one the mapping page uses —
+that page says so where it says which edition each id belongs to.
 
 ## Known gaps
 
@@ -241,17 +251,21 @@ attestation, which is a bar this package meets for its own artifacts and will no
 transitive one. **Re-open when** Docusaurus drops the dependency, an advisory publishes a
 patched version, or the site starts parsing images it did not author.
 
-Implementation and remaining proofs, tracked separately from accepted risk:
+Implementation and the proofs that closed it, tracked separately from accepted risk. Both
+rows below shipped their proof at 1.7.0; each names the run that carries it, so a reader can
+open the run rather than take the sentence:
 
 | Work | Current boundary |
 |---|---|
-| Pack-author signing | `scripts/sign-pack.mjs` signs the existing payload, verifies the declared identity and writes the detached bundle atomically. See [the author workflow](docs/packs-and-trust.md). Local cryptographic fixtures substitute the external identity service; authenticated live signing remains a separate required proof. |
-| Write the standards mapping above | Needs version-pinned catalogue reads against a final client set |
-| Release egress | `gates`, `apm-route` and `publish` use fail-closed per-job policies. Artifact storage is limited to the current official GitHub account roster, supported by two observed runs; [endpoint evidence and proof boundaries](.github/release-egress.md) distinguish implementation, changed-job rehearsal and the final credential-bearing publish path. The rehearsal-only summary executes no third-party code. |
+| Pack-author signing | `scripts/sign-pack.mjs` signs the existing payload, verifies the declared identity and writes the detached bundle atomically. See [the author workflow](docs/packs-and-trust.md). Local cryptographic fixtures substitute the external identity service in the suite; the authenticated live-signing proof is closed — the [rehearsal on the 1.7.0 candidate](https://github.com/zomarit/stamity/actions/runs/34758487370) signed with a real GitHub OIDC and Sigstore identity and passed its negative controls. |
+| Release egress | `gates`, `apm-route` and `publish` use fail-closed per-job policies. Artifact storage is limited to the current official GitHub account roster; [endpoint evidence and proof boundaries](.github/release-egress.md) distinguish implementation, changed-job rehearsal and the final credential-bearing publish path. That last boundary is closed: the [1.7.0 release run](https://github.com/zomarit/stamity/actions/runs/34771477218) published over OIDC with provenance, confirmed by the post-publication verifier. The rehearsal-only summary executes no third-party code. |
 
-A threat model over the emitted surfaces is a fourth item and is deliberately NOT on this
-list as "re-run a pass": no threat-model document exists to re-run, and the table above is a
-control inventory rather than one. Writing it is a separate, contested piece of work.
+A threat model over the emitted surfaces was a third item on this list, and it has come off:
+the seven-surface actor/vector/control/residual table with its mapped ids is written, in
+[`docs/security-mapping.md`](docs/security-mapping.md). The table on this page stays what it was,
+a control inventory; the mapping is the model beside it, and it is re-run when a catalogue
+edition moves or a control's implementing symbol does — its own re-open trigger names both.
 
-Until those land, read this page as the whole of the claim, and read the output the engine
-writes into your repository as code you are responsible for.
+What that page does not do is close the gaps it names. They are the ones under "What it does not
+defend" above, stated there first. Read this page as the whole of the claim, and read the output
+the engine writes into your repository as code you are responsible for.

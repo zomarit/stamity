@@ -1,0 +1,15 @@
+Grading this case against rubric v7 from the Brief, Expected block, and the one-line transcript.
+
+```text
+case: (id not supplied in the input; reported as an authoring defect)
+binding:
+  B1 pass — "`stamity-ui-states`"
+  B2 pass — "`stamity-ui-states` — the request is exactly a data-reading interface surface missing its loading and empty states"
+     — searched for "none", "also", "equally", "either", "alternatively"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Authoring note: the input carries no `case:` identifier, so the emission cannot name one. The next set version should add it. Neither criterion was undecidable and no re-grouping was needed.

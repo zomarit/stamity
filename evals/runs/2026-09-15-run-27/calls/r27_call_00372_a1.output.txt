@@ -1,0 +1,39 @@
+I haven't written anything. One of the three items is automatic and already done; the other two are gated on you. No file has been opened for writing.
+
+## T1 — done, automatically (item c)
+
+The board item moved `In progress` → `In review`, and the run ledger recorded the owner and the progress event. This is execution state: it lives in the ledger and on the board and is never written into a spec file. Nothing about it touches `docs/specs/checkout-flow.md`.
+
+## T2 — proposed, needs your confirm (item a)
+
+`ADDED REQ-checkout-131` is in the plan artifact's delta; `docs/specs/checkout-flow.md` carries no such requirement. The delta ships in the same change as the diff, so the same-delivery mandate is satisfied — no `Warning` finding.
+
+These are the exact bytes that would be appended to `docs/specs/checkout-flow.md`, and no others:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+Append-only. Confirm and I write it.
+
+## T3 — mutation, never silent (item b)
+
+- **Requirement id:** `REQ-checkout-112`
+- **Before (as returned by the scan):** "the cart is cleared when payment is declined"
+- **After (proposed):** "the cart is preserved when payment is declined"
+- **Evidence:** the shipped behavior preserves the cart, and this branch's diff keeps preserving it — `src/checkout/decline.ts:64`. The recorded requirement text contradicts the code.
+
+Two things to flag before you answer this one:
+
+1. The scan handed me that clause, not the requirement's full block. If `REQ-checkout-112` also carries Given/When/Then criteria, they may contradict the code in the same direction and would need to move with the sentence. I will read the file and show you the complete before/after block verbatim before any write — a confirmation given against the clause alone would confirm text you haven't seen.
+2. This diff does not change decline behavior; it preserves the existing behavior. So this is pre-existing drift between recorded text and shipped code, not a behavior change arriving without a delta. It is not a `Warning` against this change. It is also a real contradiction in the spec, and correcting the text is the right call — but it is your call, not mine.
+
+## What happens next
+
+Say which of T2 and T3 you want. If you confirm only T2, I append `REQ-checkout-131` and leave `REQ-checkout-112` contradicting the code, and I'll say so in the report. Once both are settled, the surface is converged and a re-run of `sync` should report `no changes` without opening the file — if it rewrites anything, that's a merge defect and I'll raise it as one.

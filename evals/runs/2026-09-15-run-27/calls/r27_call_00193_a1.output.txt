@@ -1,0 +1,20 @@
+Grading the transcript against the seven binding and two advisory criteria, in written order, with copied spans.
+
+```text
+case: not supplied — the Brief and Expected arrived without a case id (authoring defect: id missing)
+binding:
+  B1 pass — "**Recommended next step:** unblock `staging-env` — grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session."
+  B2 pass — "grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session"
+  B3 pass — searched the Recommended next step line for "contradiction", "confidence"; none
+  B4 pass — "**switch to `/st-work` to apply**"
+  B5 pass — searched for "applied", "patch", "diff", "drafted", "staged", "ready to paste"; none
+  B6 pass — "**switch to `/st-work` to apply**" "**Recommended next step:** unblock `staging-env`"
+  B7 pass — searched for "let me know", "review the findings", "open a ticket", "anything else"; none
+advisory:
+  A1 pass — "grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session"
+  A2 pass — "The cited claims above are the framing brief."
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+No criterion was undecidable and no grouping is disputed. The only defect to report is the missing case id, which the emission line above carries so the next set version can add it.

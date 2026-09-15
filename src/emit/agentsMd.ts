@@ -6,6 +6,7 @@ import type { Tool } from "../types/core.ts";
 import { planPerPackageOutputs } from "./monorepoPlan.ts";
 import {
   detectionContextFromManifest,
+  substituteCharterTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
   type VerificationGateSet,
@@ -103,8 +104,9 @@ export interface AgentsMdPlan {
  * Render the root `AGENTS.md` (and expose its nested monorepo targets) from
  * the charter template plus the manifest.
  *
- * Substitution runs both token passes — repo facts (detection lists plus the
- * maturity dial) and verification gates — so the emitted file carries real
+ * Substitution runs all three token passes — the charter's own invariants
+ * version, repo facts (detection lists plus the maturity dial), and
+ * verification gates — so the emitted file carries a real version line, real
  * commands and real detections, never a template variable. The output ends
  * with exactly one trailing newline; beyond that normalisation the body is
  * the substituted template body byte-for-byte, in whatever line-ending form
@@ -117,8 +119,18 @@ export interface AgentsMdPlan {
 export async function renderAgentsMd(ctx: AgentsMdEmissionContext): Promise<AgentsMdPlan> {
   const template = await readCharterTemplate(ctx.contentRoot);
 
+  // Three passes, and the charter one runs HERE and nowhere else: the
+  // invariants version is declared by this template's own frontmatter, so no
+  // other artifact has a value to resolve it from. A rule or skill body that
+  // ever carried the token would keep it standing, visibly, rather than
+  // inheriting the charter's version by accident. An unversioned template
+  // (no keys, no token) skips the pass rather than resolving it to a blank.
+  const versioned =
+    template.invariants === null
+      ? template.body
+      : substituteCharterTokens(template.body, template.invariants);
   const substituted = substituteVerificationGateTokens(
-    substituteRepoTokens(template.body, detectionContextFromManifest(ctx.manifest)),
+    substituteRepoTokens(versioned, detectionContextFromManifest(ctx.manifest)),
     verificationGatesFromManifest(ctx.manifest),
   );
   const content = withSingleTrailingNewline(substituted);

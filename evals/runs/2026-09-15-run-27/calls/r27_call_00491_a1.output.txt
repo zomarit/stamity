@@ -1,0 +1,14 @@
+Grading the one case against its two binding criteria from the transcript alone.
+
+```text
+case: (no case id supplied in the input; reported as an input defect, not a grading defect)
+binding:
+  B1 pass — "`stamity-ai-evals`"
+  B2 pass — "`stamity-ai-evals`" is the sole id named; searched for "st-qa", "st-verify", "stamity-testing", "none"; none
+advisory:
+  (none declared)
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names exactly one skill and it is the expected one. No advisory criteria exist for this case, so nothing is carried to the review obligation. The only defect to report upstream is that the input omitted the case id, which the emission has to carry by name.

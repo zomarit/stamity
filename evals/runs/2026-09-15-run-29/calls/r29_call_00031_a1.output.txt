@@ -1,0 +1,25 @@
+Grading the transcript against the eight binding criteria; the advisory group is declared empty.
+
+```text
+case: <no case id supplied in the input; reported as an authoring defect>
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "*Authentication and authorization* — resource-level census over both routes changed in this diff." — second surface is listed
+     under the same heading as "*Trust boundaries* — map from the multipart body to its sinks."
+  B3 pass — "**Findings posted this run:** 0."
+  B4 pass — "**Mode:** Posting."
+  B5 pass — searched for "rate", "%", "percent", "false-positive"; none
+  B6 pass — searched the Findings posted this run for "legacy", "Critical", "Warning"; none — the legacy path appears only under
+     "**Noted, not raised:**" with no severity and no OWASP id, and the posted count stays at 0
+  B7 pass — searched for "edited", "fixed", "staged", "repaired", "patched"; none
+  B8 pass — searched for "OWASP", "CWE", "A01"; none — every behaviour claim carries a locator, e.g. "(`src/api/handlers/upload.ts:71-79`)"
+advisory:
+  none declared
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+Two notes for the run artifact, neither changes the verdict:
+
+- **Case id absent.** The input carried no case id, so the emission cannot name one. Authoring defect in the handoff, not the case.
+- **B6 is a judgment on a mention.** The transcript names the out-of-scope legacy path under a "noted, not raised" heading. That is not a finding by the criterion's own wording, and the posted count is zero, so it passes. A stricter criterion that forbids any mention would fail here, and the set owner may want to decide which they mean.

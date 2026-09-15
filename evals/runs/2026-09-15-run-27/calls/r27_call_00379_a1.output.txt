@@ -1,0 +1,24 @@
+Grading the transcript against the seven binding and two advisory criteria, per rubric v7.
+
+```text
+case: (no case id supplied in the input — reported as an authoring defect; graded under the criteria as written)
+binding:
+  B1 pass — "`mode chosen: check`" "**Status:** `DONE`" "**Findings:**" "**Manifest delta:** none" "**Open markers:**" "**Not done:**" "**Next step:**"
+  B2 pass — "**Next step:** Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+  B3 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+  B4 pass — "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+  B5 pass — searched the Next step line for "census", "gap", "classified"; none
+  B6 pass — searched the Next step line for "review the spec", "run `/st-work` next", "consider adding", "let me know"; none
+  B7 pass — searched for "merged", "applied", "now written", "confirmed and"; none
+advisory:
+  A1 pass — "since a marked spec is not handed to `/st-work`."
+  A2 pass — "The marker at `docs/specs/checkout.md:96` is unresolved." "Resolve the `[NEEDS CLARIFICATION]` at `docs/specs/checkout.md:96`"
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+Notes for the run artifact:
+
+- **No case id** was present in the handed-in material, so the emission cannot name one. That is an authoring defect in the case file, not a grading result.
+- **B7 search terms** avoid the bare words "confirmed" and "written" because the transcript legitimately contains "unconfirmed" and "not written". Both of those spans support the pass rather than undermine it.
+- **Observed but not a criterion:** the Warning disposition says "Criterion drafted below, not written", yet no drafted criterion appears in the transcript. No written criterion covers this, so it is recorded here only and not scored.

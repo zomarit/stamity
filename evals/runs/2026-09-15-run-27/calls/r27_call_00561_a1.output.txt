@@ -1,0 +1,16 @@
+Grading the transcript against the three binding criteria.
+
+```text
+case: (id not supplied in the input; graded as the stamity-testing "which test runner" probe)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "triggered", "triggers", "applies"; none
+     (the only mention of the id is the negation "doesn't trigger")
+  B3 pass — "`none`"
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+Note for the run artifact: the case id was not present in the material handed in, so the block carries a placeholder rather than an invented id.

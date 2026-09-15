@@ -1,0 +1,15 @@
+> Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief.
+
+**Why the retries hammer instead of backing off**
+
+The backoff multiplier is `1.0` (`src/http/retry.ts:41`). A multiplier of 1.0 means each delay is the previous delay times one — the interval never grows, so what should be exponential backoff is a fixed-interval retry. Three attempts fire at the same spacing, which is why the upstream sees a burst rather than a widening gap.
+
+The retry loop reads that multiplier once at construction (`src/http/retry.ts:12-18`), so the value is fixed for the lifetime of the retrier. There is no per-attempt recomputation that could rescue the behavior later in the loop, and no runtime override path — the constructed value is the whole story.
+
+**Why nothing caught it**
+
+The suite asserts three attempts and nothing about the interval between them (`test/http/retry.test.ts:88`). The timing behavior is entirely untested, so the multiplier could be any value at all and the suite would still pass. That is the more durable finding: changing the multiplier alone leaves the same blind spot, and the next regression in the same place goes unnoticed the same way.
+
+**For the work session**
+
+Two pieces, not one: the multiplier value at `src/http/retry.ts:41`, and an interval assertion at `test/http/retry.test.ts:88` that would fail if the multiplier regressed to 1.0. Worth confirming during the change whether anything else depends on the current flat timing — a fixed overall retry budget or an upstream timeout sized to three evenly spaced attempts would shift when the last attempt lands.

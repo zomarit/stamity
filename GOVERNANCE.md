@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 7644766. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
 <!-- Re-open when: a gate named under Landing rules is added, renamed or removed in
      `.github/workflows/`, the required-approval count changes, the private layer's scope
      changes, or the regulatory statement's own trigger fires. `test/docsPages.test.ts` resolves
@@ -7,7 +7,7 @@
 
 # Governance
 
-> Last updated: 2026-09-02
+> Last updated: 2026-09-15
 
 How this project is run and how a change lands. Contribution mechanics — the loop, the test lanes,
 regeneration — are in [CONTRIBUTING.md](CONTRIBUTING.md); the product, in
@@ -67,6 +67,25 @@ No force-push to `main`; work lands from feature branches. Releases are hand-ver
 maintainer picks the number and tags it, and that tag is what triggers a publish. A maintainer
 can also dispatch the release workflow, which is held to the same proofs: a `v*` tag naming the
 declared version, on a commit reachable from `main`, or the run fails before it packs anything.
+
+## Invariants versioning
+
+The charter's seven invariants are the floors every flow holds, and they carry a version so a
+change to one is a dated, citable event rather than a wording tweak. Three frontmatter keys on
+`content/charter/stamity-charter.md` hold it — `invariants_version`, `invariants_ratified`,
+`invariants_amended` — and the emitted charter renders them as one line under `## Invariants`, so
+every generated repository can say which version of the floors it is running.
+
+The version moves under three rules. **MAJOR**: a backward-incompatible removal or redefinition of
+an invariant. **MINOR**: a new invariant, or materially expanded guidance inside one. **PATCH**: a
+clarification, a wording change, or a non-semantic refinement. Every amendment carries a
+sync-impact note saying what a repository has to regenerate to pick it up.
+
+The maintainer bumps it, in the same change as the text — not afterwards, and not in a release
+sweep: a version that trails the words it names is worse than no version. The gate behind that is
+`test/content/invariantsVersion.test.ts`, which hashes the invariants block and refuses an
+invariants-text change that arrives without a version bump and a matching row in the amendments
+table on [docs/doctrine.md](docs/doctrine.md).
 
 ## The private governance layer
 

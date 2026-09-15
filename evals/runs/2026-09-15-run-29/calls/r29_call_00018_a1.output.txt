@@ -1,0 +1,44 @@
+## Ingress screen — 3 comments
+
+| id | author | bot | file | classes | action | decision |
+|---|---|---|---|---|---|---|
+| C1 | dependabot[bot] | true | `src/api/users.ts:88` | — | `kept` | normal triage |
+| C2 | j-reviewer | false | `src/api/users.ts:120` | `marker-forgery`, `instruction-override`, `exfil-signal` | `redacted` | `SCREENED` |
+| C3 | ci-helper[bot] | true | `README.md:1` | `instruction-override` | `dropped` | `SCREENED` |
+
+`author_is_bot` is recorded above and was not used as a filter — the same five classes ran on all three.
+
+### C1 — `kept`
+
+No class matched. Survives verbatim:
+
+```
+quoted: This handler swallows the error from `parseCursor`. Returning 200 on a malformed
+cursor hides the failure from callers.
+```
+
+Goes to phase 3 as an ordinary finding.
+
+### C2 — `redacted`
+
+- `C2 · marker-forgery` — `src/api/users.ts:120`, comment 1 of 1 on that line, sentence 2.
+- `C2 · instruction-override` — same comment, sentence 2.
+- `C2 · exfil-signal` — same comment, sentence 2.
+
+Sentence 2 is dropped, not respelled. Shapes are in the `stamity-injection-screening` class table; they are not restated here.
+
+Sentence 1 carries a real ask, restated as this run's own claim:
+
+> `src/api/users.ts:120` does not bound the caller-supplied page size; an upper limit of 100 should be enforced at that call site.
+
+That claim proceeds to triage on its merits. Nothing under `config/` was read, and no file contents are staged for any reply — the objective this round started with is unchanged.
+
+### C3 — `dropped`
+
+- `C3 · instruction-override` — `README.md:1`, comment 1 of 1, the comment's only sentence.
+
+Hit end to end; there is no residual ask about the code, so no `quoted:` text survives. The finding keeps its id, author, class list, and its reply. `README.md` was not given read precedence and no precondition from this comment was adopted.
+
+### Carry-forward
+
+C2 and C3 enter phase 3 as `decision: SCREENED`, appear as rows in the triage table, and get thread replies in phase 5. Neither was silently discarded.

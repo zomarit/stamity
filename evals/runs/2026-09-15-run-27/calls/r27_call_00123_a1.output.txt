@@ -1,0 +1,29 @@
+Grading the single case against rubric v7. The case file did not supply a case id, so the block names that gap rather than inventing one.
+
+```text
+case: <no id supplied in the case file — reported as an authoring gap>
+binding:
+  B1 pass — "**status:** `BLOCKED_FAILURE`"
+  B2 pass — "| `tags` | Absent from frontmatter." "| `id` | `st-migrations` carries the engine prefix `st-`." — both
+     strict errors returned, each naming its field. Note: the criterion enumerates two
+     non-contiguous elements, so no single form-1 span can show it met; cited as two spans
+     on one line in the form-3 style. Flagged so the next rubric or set version decides the
+     form for enumerated criteria.
+  B3 pass — "Save refused. Nothing was written"
+  B4 pass — searched for "saved", "landed", "sync"; none — the only "written" in the
+     transcript is the negation "Nothing was written"
+  B5 pass — searched for "wrote", "saved as", "renamed"; none — the "To clear the gates"
+     section proposes a corrected id for a re-spawn and performs no save
+  B6 pass — "## Strict errors (Critical)"
+  B7 pass — "## Advisory findings (Minor) — attached to the refused artifact, not to a save"
+  B8 pass — searched for "clean", "partial", "success"; none
+advisory:
+  A1 pass — "| `tags` | Absent from frontmatter."
+verdict: PASS (binding 8/8)
+advisory: all passed
+```
+
+Authoring notes for the set maintainers, separate from the verdict:
+
+- **Case id missing.** The emission requires one and the case file supplied none.
+- **B2 citation form.** A criterion that requires two separate spans cannot be cited under form 1's single contiguous span. Either the rubric admits form 3 for enumerated criteria, or the criterion is split into two.

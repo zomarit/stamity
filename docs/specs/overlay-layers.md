@@ -1,7 +1,7 @@
 ---
 id: overlay-layers
 # A design document, authored outside the spec command and excluded from the site build.
-status: shipped
+status: shipped-with-1.1.0
 obsolete_when: the published customization page stops carrying the overlay behaviour this spec designed, or a decision cuts the surface
 ---
 # Overlay customization layers

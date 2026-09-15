@@ -1,0 +1,15 @@
+"Add pagination" reads two ways that produce different artifacts, and the tree gives me nothing to break the tie: no pagination helper exists anywhere, and `docs/specs/` is silent on page size and cursor shape. So I'd be inventing both the scope and the mechanism, and the three plausible answers differ a lot in blast radius.
+
+**Which shape should I build?**
+
+1. **Offset/limit on `GET /api/v1/orders` only.** Smallest change, fixes the endpoint that actually hurts, trivially revertible; offset degrades on deep pages and leaves the other two endpoints inconsistent.
+2. **Offset/limit on all three endpoints, via a new shared helper.** Uniform API surface and one place to change later; triples the blast radius and touches two endpoints that aren't currently a problem.
+3. **Cursor pagination on all three, with a shared helper.** Best long-term behavior for the slow endpoint and stable under concurrent writes; requires picking a cursor shape that no spec sanctions, and it's the hardest to walk back once clients encode it.
+
+Sub-questions folded into whichever you pick — answer inline if you have opinions, otherwise I'll take the stated assumptions:
+
+- **Opt-in or default-on?** Assumption: opt-in — absent `?limit=`, responses stay unpaginated, so no existing caller breaks.
+- **Default and max page size?** Assumption: 50 and 500.
+- **Envelope?** Assumption: keep the bare array and put `next`/`total` in headers, since changing the body shape is the breaking part.
+
+Default if no response: **1**, opt-in, at those sizes. It's the reversible one and it's the only option whose payoff is already demonstrated by what's in the repo. If you want 3, I'd want the cursor shape written into `docs/specs/` first so it isn't just my invention.

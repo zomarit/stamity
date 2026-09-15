@@ -1,0 +1,3 @@
+`none`
+
+The operator's question is exactly what this command's QA checkpoint already answers, and `st-qa` is invoked by name as step 2 of that checkpoint rather than selected on its own — its own description rules out trigger-matching here.

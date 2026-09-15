@@ -1,0 +1,16 @@
+Grading the supplied transcript against the case's two binding criteria as the judge.
+
+```text
+case: (id not supplied in the input handed to the judge)
+binding:
+  B1 pass — "`st-handoff` — the request is to save mid-work state"
+  B2 pass — "`st-handoff` — the request is to save mid-work state" ; searched for "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-learn", "st-onboard", "st-qa", "st-verify", "none", "or"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass on the one-line transcript. The answer names st-handoff alone, offers no second skill, and does not answer none.
+
+One defect to report with the emission: the input carried no case id. The block above marks that slot as not supplied rather than inventing one. The next set version should attach the id so the runner can match the grade to the case.

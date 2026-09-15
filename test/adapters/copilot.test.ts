@@ -32,6 +32,7 @@ import {
 } from "../../src/roster/modelLadder.ts";
 import { PLATFORM_TOOL_MARKER, toCopilotToolsFrontmatter } from "../../src/tools/translator.ts";
 import type { AdapterOutput, ContentSelection } from "../../src/types/content.ts";
+import type { RuleDelivery } from "../../src/types/manifest.ts";
 import type { ModelClass, Tool } from "../../src/types/core.ts";
 import type { PackageEntry } from "../../src/types/detect.ts";
 import { EngineError } from "../../src/types/errors.ts";
@@ -103,6 +104,7 @@ const FULL_SELECTION: ContentSelection = { items: {} as ContentSelection["items"
 
 interface CtxOptions {
   tools?: Tool[];
+  ruleDelivery?: RuleDelivery;
   contentRoot?: string;
   rootDir?: string;
   selection?: ContentSelection;
@@ -132,6 +134,7 @@ function ctxOf(over: CtxOptions = {}): EmissionContext {
       // `models` is an operator dial persisted after creation, so it is layered
       // on rather than passed in — the same shape `stamity config` writes.
       ...(over.pins === undefined ? {} : { models: { pins: over.pins } }),
+      ...(over.ruleDelivery === undefined ? {} : { ruleDelivery: over.ruleDelivery }),
     },
     engineVersion: ENGINE_VERSION,
     facts: { monorepoPackages: over.packages ?? [] },
@@ -286,7 +289,13 @@ describe("rules → .github/instructions", () => {
   });
 
   it("round-trips every shipped rule's declared glob set through its emitted applyTo", async () => {
-    const plan = await planResidue();
+    // MODE PINNED 2026-09-15, explicitly `always-on`. The claim is the instruction
+    // dialect over EVERY shipped rule — the glob-less ones included, which is the
+    // `applyTo: "**"` branch below. The engine default is now `on-demand`, which
+    // delivers those two as skills, so under the default this case would stop
+    // covering that branch while still passing. The default's own file set has
+    // its own case at the foot of this file.
+    const plan = await planResidue({ ruleDelivery: "always-on" });
     const instructions = plan.filter((row) => row.path.endsWith(".instructions.md"));
     const rules = (await loadCorpusIndex()).items.filter((item) => item.type === "rule");
 
@@ -411,7 +420,11 @@ describe("rules → .github/instructions", () => {
   });
 
   it("emits one instruction file per shipped rule, through the real pipeline", async () => {
-    const plan = await planResidue();
+    // MODE PINNED 2026-09-15, same reason as the round-trip case above: one file
+    // per rule is the `always-on` shape, and `CORPUS_RULE_COUNT` is the count of
+    // rules in the corpus rather than the count this client receives as rules
+    // under the shipped default.
+    const plan = await planResidue({ ruleDelivery: "always-on" });
 
     const instructions = pathsOf(plan).filter((path) => path.endsWith(".instructions.md"));
     expect(instructions).toHaveLength(CORPUS_RULE_COUNT);
@@ -1173,5 +1186,77 @@ describe("ownership and determinism", () => {
       ".github/instructions/stamity-secrets.instructions.md",
       ".github/instructions/stamity-security-patterns.instructions.md",
     ]);
+  });
+});
+
+
+/**
+ * The delivery option on this client: an instructions file with no `applyTo`
+ * globs attaches to EVERY file (`applyTo: "**"`), so a glob-less rule is
+ * always-on here too — and those are exactly the ones `on-demand` moves into
+ * the `.agents/skills/` tree this client reads directly.
+ */
+describe("copilot under ruleDelivery: on-demand", () => {
+  const GLOBLESS = ["question-protocol", "ai-evals"] as const;
+
+  it("writes no instructions file for a glob-less rule, and the core projects it as a skill", async () => {
+    const composed = await planComposed({ ruleDelivery: "on-demand" });
+    const paths = new Set(pathsOf(composed));
+
+    for (const id of GLOBLESS) {
+      expect(paths.has(`.github/instructions/stamity-${id}.instructions.md`), id).toBe(false);
+      expect(paths.has(`.agents/skills/stamity-${id}/SKILL.md`), id).toBe(true);
+    }
+  });
+
+  it("keeps every glob-scoped rule as an instructions file", async () => {
+    const index = await loadCorpusIndex();
+    const globbed = index.items
+      .filter(
+        (item) =>
+          item.type === "rule" && !GLOBLESS.includes(item.id as (typeof GLOBLESS)[number]),
+      )
+      .map((item) => item.id);
+    const paths = new Set(pathsOf(await planComposed({ ruleDelivery: "on-demand" })));
+
+    expect(globbed).toHaveLength(CORPUS_RULE_COUNT - GLOBLESS.length);
+    for (const id of globbed) {
+      expect(paths.has(`.github/instructions/stamity-${id}.instructions.md`), id).toBe(true);
+    }
+  });
+
+  it("carries the rule's description into the projected skill head", async () => {
+    const composed = await planComposed({ ruleDelivery: "on-demand" });
+    const row = rowAt(composed, ".agents/skills/stamity-ai-evals/SKILL.md");
+    const index = await loadCorpusIndex();
+    const rule = index.items.find((item) => item.type === "rule" && item.id === "ai-evals");
+
+    expect(frontmatterValue(row.content, "name")).toBe("stamity-ai-evals");
+    expect(row.content).toContain(rule!.description);
+    expect(row.content).toContain("delivery: on-demand");
+  });
+
+  // FLIPPED 2026-09-15 with the engine default, which moved from `always-on` to
+  // `on-demand`. The old assertion — an absent key emits the pre-option file set
+  // — was true of the old default and is exactly what would have kept passing on
+  // the wrong half of the option. The claim is unchanged in shape: an absent key
+  // resolves to one named mode, and both modes are still reachable.
+  it("reads an absent ruleDelivery key as on-demand, and always-on restores the instruction files", async () => {
+    const defaulted = await planComposed();
+    const onDemand = await planComposed({ ruleDelivery: "on-demand" });
+    const alwaysOn = await planComposed({ ruleDelivery: "always-on" });
+
+    expect(pathsOf(onDemand)).toEqual(pathsOf(defaulted));
+    expect(onDemand.map((row) => row.content)).toEqual(defaulted.map((row) => row.content));
+
+    // The two modes disagree about this rule, so neither half passes by accident.
+    expect(
+      pathsOf(defaulted).includes(".github/instructions/stamity-ai-evals.instructions.md"),
+    ).toBe(false);
+    expect(pathsOf(defaulted).some((path) => path.includes("stamity-ai-evals/SKILL.md"))).toBe(true);
+    expect(pathsOf(alwaysOn).includes(".github/instructions/stamity-ai-evals.instructions.md")).toBe(
+      true,
+    );
+    expect(pathsOf(alwaysOn).some((path) => path.includes("stamity-ai-evals/SKILL.md"))).toBe(false);
   });
 });

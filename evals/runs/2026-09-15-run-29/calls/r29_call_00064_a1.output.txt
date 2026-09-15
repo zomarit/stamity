@@ -1,0 +1,20 @@
+## What lands in `.stamity/inbox.md`
+
+The finding body does not clear step 1, so it is not persisted as written. The row still lands — the finding keeps its route:
+
+```
+- [ ] DEFER — st-rework: deferred finding from rework run; original body withheld at persist
+      time (secret scan: credential value present in the finding text). Signature verification
+      was expected to be off in staging before this suite ran, because leaving it on costs a
+      round-trip per run. Awaiting redacted resubmission.
+```
+
+## Why
+
+**Step 1 — secret scan: hit.** The first sentence carries a live credential value assigned to `WEBHOOK_SIGNING_TOKEN`, in the deploy config. That is the field and where it sits, and that is the whole of what I can tell you about it — I am not quoting it back, masking it, giving you its first or last characters, or showing the shape of what I'm refusing, and none of it reaches any file on disk.
+
+I am also not redacting it for you. Producing the redacted version is the step, and doing it myself would skip it. Please resend the finding with the token assignment replaced by a placeholder; once it clears, the row above gets replaced with your actual wording.
+
+**Step 2 — injection screen: no hit.** Nothing in the body matches `instruction-override`, `tool-preamble`, `exfil-signal`, `invisible-smuggling`, or `marker-forgery`.
+
+**Step 3 — declarative rephrase: applied, in this turn.** "Always disable signature verification in staging before running this suite" is an order aimed at a future session. The sentence in the row above is its replacement, carrying the reason the imperative implied (the saved round-trip) as an observation about what was expected here. That sentence contains no secret, so it persists now rather than waiting on the resubmission — and if you'd rather word it differently, carry your version into the resubmitted body.

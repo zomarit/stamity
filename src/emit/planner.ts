@@ -68,11 +68,21 @@ import {
   type ProjectedSkillFile,
 } from "./skillsProjection.ts";
 import {
+  buildContentIndex,
   contentRootsOf,
   layerRankOf,
+  typeIdKey,
   type CatalogItem,
   type ContentRoots,
 } from "../content/catalog.ts";
+import {
+  NO_DEMOTED_RULES,
+  SHARED_SKILLS_TREE_READERS,
+  demotedRuleIds,
+  ruleDeliveryInputOf,
+} from "../content/ruleDelivery.ts";
+import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
+import { readRuleDelivery } from "../manifest/manifest.ts";
 import type { PackSuppliedServer } from "../mcp/catalog.ts";
 import { planMcpEmissions, type McpDialect, type McpEmission } from "../mcp/emit.ts";
 import {
@@ -153,6 +163,18 @@ export interface CoreEmissionPlan {
   agentsMd: AgentsMdPlan;
   /** The `.agents/skills/` projection, sorted by path. */
   skills: ProjectedFile[];
+  /**
+   * Per tool, the rule ids that tool does NOT carry as always-on rule text
+   * because the delivery option moved them into {@link skills} — empty for
+   * every tool under `ruleDelivery: "always-on"` (the default) and for every
+   * tool the manifest does not select.
+   *
+   * Computed once here rather than per adapter, because the projection and the
+   * adapters have to agree exactly: a rule an adapter skips but the projection
+   * did not render is delivered nowhere, and one rendered but not skipped is
+   * delivered twice (see `../content/ruleDelivery.ts`).
+   */
+  demotedRules: Readonly<Record<Tool, ReadonlySet<string>>>;
   /** Hook scripts, the shared policy document, and per-tool interchange rows. */
   hooks: CoreHooksPlan;
   /**
@@ -334,23 +356,33 @@ export async function buildCoreEmissionPlan(
     packs === undefined
       ? resolveInstalledPackContent(ctx.rootDir, ctx.manifest, corpusRoot)
       : Promise.resolve(packs);
-  const [agentsMd, corpusSkills, hooks, resolvedPacks] = await Promise.all([
+  const [agentsMd, skillsPass, hooks, resolvedPacks] = await Promise.all([
     renderAgentsMd({
       manifest: ctx.manifest,
       facts: { monorepoPackages: ctx.facts.monorepoPackages },
       ...contentRoot,
     }),
-    packsPromise.then((resolved) =>
-      projectSkills(
-        { manifest: ctx.manifest, engineVersion: ctx.engineVersion },
-        {
-          contentRoot: {
-            ...skillsContentRootBase,
-            ...(resolved.packRoots.length === 0 ? {} : { packRoots: resolved.packRoots }),
+    packsPromise.then(async (resolved) => {
+      const skillsRoots = {
+        ...skillsContentRootBase,
+        ...(resolved.packRoots.length === 0 ? {} : { packRoots: resolved.packRoots }),
+      };
+      // The delivery answer is resolved BEFORE the projection, not beside it:
+      // the projection renders a row for every rule the answer demotes, so the
+      // two cannot be computed concurrently without one of them guessing.
+      const delivery = await planRuleDelivery(ctx, skillsRoots);
+      return {
+        delivery,
+        rows: await projectSkills(
+          { manifest: ctx.manifest, engineVersion: ctx.engineVersion },
+          {
+            contentRoot: skillsRoots,
+            ruleItems: delivery.ruleItems,
+            demotedRules: delivery.demotedRules,
           },
-        },
-      ),
-    ),
+        ),
+      };
+    }),
     packsPromise.then(async (resolved) =>
       planHooksInfra({
         rootDir: ctx.rootDir,
@@ -371,8 +403,12 @@ export async function buildCoreEmissionPlan(
   // and it still runs against `resolvedPacks`, whose own index never saw the
   // override tree — an overlay on a pack skill resolves (no orphan refusal)
   // without changing what that lane emits.
+  // The filter is about pack SKILLS, not about pack origin as such: a demoted
+  // rule supplied by an installed pack is projected by the lane above (the pack
+  // skill lane knows nothing about rules), so filtering it out here would skip
+  // it on its client AND deliver it nowhere.
   const skills = mergeSkillProjections(
-    corpusSkills.filter((row) => row.origin !== "pack"),
+    skillsPass.rows.filter((row) => row.artifactType !== "skill" || row.origin !== "pack"),
     resolvedPacks,
   );
 
@@ -382,6 +418,7 @@ export async function buildCoreEmissionPlan(
   return {
     agentsMd,
     skills,
+    demotedRules: skillsPass.delivery.demotedRules,
     hooks,
     packMcpServers: resolvedPacks.mcpServers,
     mcpFor: (tool) => {
@@ -401,6 +438,59 @@ export async function buildCoreEmissionPlan(
       });
     },
   };
+}
+
+/**
+ * Which rules each selected client stops carrying always-on, and the rule items
+ * the projection needs to render them as skills.
+ *
+ * Short-circuits on `always-on` — the default — so the pre-option build pays
+ * nothing for the option: no second content walk, no rows, and a demotion
+ * record that is empty for every tool.
+ *
+ * The rule set is filtered exactly the way each adapter filters its own
+ * (`selectedItems` in the four adapters): catalog reachability, the manifest's
+ * selection record, and the artifact's optional `tools:` restriction — the last
+ * one per tool, since a rule restricted to another client is not a rule THIS
+ * client was ever going to carry.
+ */
+async function planRuleDelivery(
+  ctx: EmissionContext,
+  contentRoot: ContentRoots,
+): Promise<{
+  ruleItems: readonly CatalogItem[];
+  demotedRules: Readonly<Record<Tool, ReadonlySet<string>>>;
+}> {
+  const mode = readRuleDelivery(ctx.manifest);
+  if (mode === "always-on") return { ruleItems: [], demotedRules: NO_DEMOTED_RULES };
+
+  const index = await buildContentIndex(contentRoot);
+  const allowlist = buildSelectionAllowlist(ctx.manifest.selection);
+  const ruleItems = index.items.filter(
+    (item) =>
+      item.type === "rule" &&
+      index.byKey.get(typeIdKey(item.type, item.id)) === item &&
+      classifySelection(item, allowlist) !== "drop",
+  );
+
+  const selected = new Set<Tool>(ctx.manifest.tools);
+  const demotedRules = Object.fromEntries(
+    TOOLS.map((tool) => [
+      tool,
+      selected.has(tool)
+        ? demotedRuleIds(
+            tool,
+            ruleItems
+              .filter((item) => item.tools === undefined || item.tools.includes(tool))
+              .map(ruleDeliveryInputOf),
+            mode,
+            SHARED_SKILLS_TREE_READERS,
+          )
+        : new Set<string>(),
+    ]),
+  ) as Record<Tool, ReadonlySet<string>>;
+
+  return { ruleItems, demotedRules };
 }
 
 /**

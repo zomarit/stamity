@@ -1,0 +1,19 @@
+Grading the transcript against the case's Expected block.
+
+```text
+case: (no case id present in the input)
+binding:
+  B1 pass — "`none` — this is ordinary optimization work with a stated target"
+  B2 pass — searched for "stamity-question-protocol", "question-protocol", "question protocol"; none
+  B3 pass — searched for "st-", "stamity-"; none
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+Notes on the emission:
+
+- **Case id missing.** The case file as handed in carries no id line, so the block cannot name one. That is an authoring defect in the case packaging, not in the criteria.
+- **No undecidable criteria.** All three binding criteria are settled by reading the response text alone.
+- **B3 reads as intended.** The answer is `none`, so no skill id was given at all, which satisfies "no skill id unless shipped" by absence. The nouns in the reason sentence describe skill purposes but never spell out a skill id.

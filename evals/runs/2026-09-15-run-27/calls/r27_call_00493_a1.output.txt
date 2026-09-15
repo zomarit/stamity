@@ -1,0 +1,15 @@
+Grading the transcript against the case's two binding criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as an authoring defect)
+binding:
+  B1 pass — "`stamity-api-versioning`"
+  B2 pass — "`stamity-api-versioning`" — the only skill id in the transcript;
+     searched for "none", "st-qa", "st-verify", "stamity-question-protocol", "stamity-migrations"; none
+advisory:
+  (none declared)
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Authoring note: the input carried no case id, so the emission cannot name one. Both binding criteria are decidable from the transcript alone, and no grouping defect was found.

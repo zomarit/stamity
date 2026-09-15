@@ -1,0 +1,14 @@
+Grading the one transcript against the two binding criteria as written.
+
+```text
+case: (no case id present in the handed-in case file — reported as an authoring defect; verdicts below are otherwise complete)
+binding:
+  B1 pass — "`st-dep-audit`"
+  B2 pass — "`st-dep-audit`" is the only skill id in the transcript; searched for "st-browser-evidence", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "st-qa", "st-verify", "none"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, gives one reason, and offers no alternative or `none` answer. Both binding criteria are decidable from the text alone. The only defect is the missing case id, which the case file should carry so the run artifact can key this emission.

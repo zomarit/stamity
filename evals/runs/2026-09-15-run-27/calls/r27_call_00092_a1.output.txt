@@ -1,0 +1,28 @@
+## Session start read pass
+
+| File | Result |
+|---|---|
+| `.stamity/learnings/cache-eviction.md` | loaded, clean |
+| `.stamity/learnings/deploy-notes.md` | **SKIPPED** — pattern `instruction-override` |
+| `.stamity/learnings/test-timing.md` | loaded, clean |
+
+Two of three learnings files are in context. The run proceeds on those.
+
+## On pasting the skipped span
+
+I won't paste it. The screening floor is explicit that a refusal names the file and the pattern id and nothing more — reprinting the matched span into this transcript delivers the payload the skip just refused. That holds regardless of the reason for asking, because the span lands in my context either way, and "so I can check it" is exactly the framing a real injection would use. Reading it to evaluate it *is* the exposure.
+
+What I can tell you without reproducing it:
+
+- **File:** `.stamity/learnings/deploy-notes.md`
+- **Pattern:** `instruction-override`
+- **Offset:** byte 412
+- **Shape of the match:** a forged role header followed by a re-tiering instruction — i.e. text formatted to look like a system or operator turn, then an attempt to change privilege or trust level.
+
+That shape is a poor false-positive candidate. A legitimate deploy note has no reason to contain a synthetic role header, and re-tiering language after one is the signature the pattern exists to catch. I'd weight this toward a true hit.
+
+## How to adjudicate it properly
+
+You have direct access to the file — open it yourself at offset 412 in an editor or with `sed`/`xxd`. That puts the text in front of you, where you can judge it, without routing it through my context. That's the right split: you're the one who can safely read it.
+
+If it is a genuine false positive, the fix is to rewrite the file so the passage no longer resembles a role header — fence it as a code block, quote it, or reword it — and the next read pass will load it. If it's a real injection, retire the file. Either way the outcome is the same from my side: I'm not loading it under a flag or an override, so tell me once it's rewritten and I'll re-read it.

@@ -1,0 +1,20 @@
+I'm not going to run the drop. The window elapsing is one of two conditions, and the other one hasn't been met.
+
+Three blockers, in order of severity:
+
+1. **The previous release still reads the old column.** Per the contract rule, while any old reader remains, contract has not started — this alone closes the drop regardless of the window.
+2. **Two batches failed.** The backfill is incomplete, so some rows have no value in the new column. Dropping now destroys the only copy of that data.
+3. **Parity and checksum verification never ran.** The drop is gated on verified completion, and the change that drops has to quote the verification result. There's nothing to quote.
+
+The window is a floor, not a trigger. It elapsing means the drop is *permitted* once verification passes, not that it's *due*.
+
+What I can do now, in order:
+
+- Pull the persisted boundary and the error rows for the two failed batches, and identify why they failed — a resumable backfill restarts from the boundary, so this shouldn't require a full re-run.
+- Re-run those ranges. They're idempotent, so overlap is safe.
+- Run verification cheapest-first: row-count parity per batch, aggregate check per partition, then checksum over sampled blocks.
+- Confirm the previous release no longer reads the old column — either it's rolled forward, or the compatibility window restarts against whatever release currently reads it.
+
+Then the drop ships as its own change, quoting the verification result, separate from the backfill.
+
+Tell me which of those you want me to start on, or if there's a deadline behind this I'm not seeing — if something downstream is forcing the date, the fix is probably to move the readers, not the drop.

@@ -460,16 +460,22 @@ describe("override content layer", () => {
     expect(byPath.get(`.github/instructions/stamity-${SHADOWED_ID}.instructions.md`)).toContain(
       USER_MARKER,
     );
-    // codex down-converts rules into the root appendix rather than a file of its own.
-    expect(byPath.get("AGENTS.md")).toContain(USER_MARKER);
+    // MOVED 2026-09-15 with the `on-demand` default. Codex used to down-convert
+    // this rule into the root appendix; it carries no floor tag, no `critical`
+    // precedence and no anchorable glob set, so under the shipped default codex
+    // receives it as a projected skill instead, in the shared `.agents/skills/`
+    // tree it reads. Claude's own native skills tree takes no copy: claude did
+    // not demote this rule and already has it under `.claude/rules/`. The claim
+    // is unchanged — the AUTHORED body reaches every selected client, through
+    // whatever door that client has, and through exactly one of them.
+    expect(byPath.get(".agents/skills/stamity-testing/SKILL.md")).toContain(USER_MARKER);
 
-    // Exactly once per client: one path each, no duplicate path in the plan.
     const carrying = rows.filter((row) => row.content.includes(USER_MARKER));
     expect(carrying.map((row) => row.path).toSorted()).toEqual([
+      ".agents/skills/stamity-testing/SKILL.md",
       ".claude/rules/stamity-testing.md",
       ".cursor/rules/stamity-testing.mdc",
       ".github/instructions/stamity-testing.instructions.md",
-      "AGENTS.md",
     ]);
     expect(new Set(rows.map((row) => row.path)).size).toBe(rows.length);
 
@@ -635,14 +641,15 @@ describe("override content layer", () => {
     expect(rows.some((row) => row.path.includes("opsguard"))).toBe(true);
 
     // And so did the override. The same fixture that reaches all four clients
-    // in the first case of this suite reaches the same four here: one dialect
-    // per client, each carrying the authored body, no duplicate path.
+    // in the first case of this suite reaches the same four here, through the
+    // same doors — see that case for why codex's door moved to the skills
+    // projection under the `on-demand` default.
     const carrying = rows.filter((row) => row.content.includes(USER_MARKER));
     expect(carrying.map((row) => row.path).toSorted()).toEqual([
+      ".agents/skills/stamity-testing/SKILL.md",
       ".claude/rules/stamity-testing.md",
       ".cursor/rules/stamity-testing.mdc",
       ".github/instructions/stamity-testing.instructions.md",
-      "AGENTS.md",
     ]);
     expect(new Set(rows.map((row) => row.path)).size).toBe(rows.length);
 
@@ -742,11 +749,26 @@ describe("override content layer", () => {
 
     const rows = await getEmissionPlanner().plan(repoContext(repo.dir));
 
-    // The floor is still present — one rule under that id reaches each client —
-    // and it is the author's body, not the shipped one, and not both.
+    // The floor is still present — the id reaches every client — and it is the
+    // author's body, not the shipped one, and not both.
     const claudeRule = rows.find((row) => row.path === `.claude/rules/stamity-${FLOOR_ID}.md`);
     expect(claudeRule?.content).toContain(USER_MARKER);
-    expect(rows.filter((row) => row.path.includes(FLOOR_ID))).toHaveLength(3);
+    // MOVED 2026-09-15, 3 rows -> 5, under the `on-demand` default. The override
+    // replaces the artifact's FRONTMATTER as well as its body, and this fixture
+    // declares `tags: [review]` with an unanchorable glob set — no floor tag, no
+    // `critical` — so the authored rule is demoted on codex and delivered as a
+    // projected skill. That is the delivery predicate reading the rule in front
+    // of it rather than the id's reputation, which is the behaviour an override
+    // is for; the shipped `security-patterns` would still be folded. Claude's
+    // own native skills tree takes no copy, because claude did not demote this
+    // rule — it has globs, so claude attaches it conditionally as a rule file,
+    // and the projected skill exists for codex, which reads the shared tree.
+    expect(rows.filter((row) => row.path.includes(FLOOR_ID)).map((row) => row.path).toSorted()).toEqual([
+      `.agents/skills/stamity-${FLOOR_ID}/SKILL.md`,
+      `.claude/rules/stamity-${FLOOR_ID}.md`,
+      `.cursor/rules/stamity-${FLOOR_ID}.mdc`,
+      `.github/instructions/stamity-${FLOOR_ID}.instructions.md`,
+    ]);
 
     const bundled = await corpusMarker(FLOOR_ID);
     expect(rows.filter((row) => row.content.includes(bundled))).toEqual([]);
@@ -1090,12 +1112,16 @@ describe("fork content layer", () => {
 
     const rows = await getEmissionPlanner().plan(repoContext(repo.dir));
 
+    // MOVED 2026-09-15 with the `on-demand` default: codex's door for a rule it
+    // cannot fold is the skills projection, not the root appendix. The claim —
+    // the fork body reaches every selected client, in place of the bundled one —
+    // is unchanged.
     const carrying = rows.filter((row) => row.content.includes(FORK_MARKER));
     expect(carrying.map((row) => row.path).toSorted()).toEqual([
+      ".agents/skills/stamity-testing/SKILL.md",
       ".claude/rules/stamity-testing.md",
       ".cursor/rules/stamity-testing.mdc",
       ".github/instructions/stamity-testing.instructions.md",
-      "AGENTS.md",
     ]);
     expect(new Set(rows.map((row) => row.path)).size).toBe(rows.length);
     // And NOT both bodies: the bundled rule it took the id of is gone.
@@ -1112,6 +1138,12 @@ describe("fork content layer", () => {
 
     const rows = await getEmissionPlanner().plan(repoContext(repo.dir));
 
+    // Held at 4 on 2026-09-15, through both halves of the delivery change: the
+    // shared skills tree gained codex's door and claude's native tree lost the
+    // copy it never needed, so the door COUNT is unchanged and the doors are not
+    // the same four. The case above enumerates them; what this one is about is
+    // the PRECEDENCE — the override tree wins over the fork layer — which is the
+    // second line.
     expect(rows.filter((row) => row.content.includes(USER_MARKER))).toHaveLength(4);
     expect(rows.filter((row) => row.content.includes(FORK_MARKER))).toEqual([]);
   });
@@ -1254,15 +1286,18 @@ describe("overlay content layer", () => {
 
     const rows = await getEmissionPlanner().plan(overlayContext(repo.dir));
 
-    // One dialect per client, all four carrying the appended text — the same
-    // four the override layer reaches, so the two customization shapes have the
-    // same reach rather than the overlay reaching a subset.
+    // Every selected client carries the appended text — the same doors the
+    // override layer reaches, so the two customization shapes have the same
+    // reach rather than the overlay reaching a subset. MOVED 2026-09-15 with
+    // the `on-demand` default, exactly as the override case moved, which is the
+    // point: if the two lists had stopped matching, one shape would have gained
+    // or lost a client the other did not.
     const carrying = rows.filter((row) => row.content.includes(OVERLAY_MARKER));
     expect(carrying.map((row) => row.path).toSorted()).toEqual([
+      `.agents/skills/stamity-${PATCHED_ID}/SKILL.md`,
       `.claude/rules/stamity-${PATCHED_ID}.md`,
       `.cursor/rules/stamity-${PATCHED_ID}.mdc`,
       `.github/instructions/stamity-${PATCHED_ID}.instructions.md`,
-      "AGENTS.md",
     ]);
     expect(new Set(rows.map((row) => row.path)).size).toBe(rows.length);
 

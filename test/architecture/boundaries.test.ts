@@ -112,9 +112,10 @@ function scanImports(files: FileMap): ImportEdge[] {
 const ENTRYPOINTS: readonly string[] = ["src/index.ts", "src/cli.ts"];
 
 /**
- * The docs generator's roots (p6-u03). `scripts/generate-docs.mjs` imports
- * these four renderers directly, and the shipped CLI deliberately never loads
- * them — a reference page has no business costing startup time on
+ * The docs generator's roots (p6-u03, plus `measurements` at u8).
+ * `scripts/generate-docs.mjs` imports these renderers directly — and
+ * `scripts/merge-ready-rate.mjs` imports the last one for its rule — and the
+ * shipped CLI deliberately never loads them — a reference page has no business costing startup time on
  * `stamity --help`, and the CLI has no reason to hold a markdown renderer.
  *
  * They are roots of a second program, so they belong in the reachability
@@ -130,6 +131,7 @@ const GENERATOR_ENTRYPOINTS: readonly string[] = [
   "src/cli/docs/configReference.ts",
   "src/cli/docs/referencePages.ts",
   "src/cli/docs/llmsIndex.ts",
+  "src/cli/docs/measurements.ts",
 ];
 
 /** Every root the reachability walk starts from. */
@@ -325,9 +327,6 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // The pair keeps its strictness through the type-only assertion below: the
   // edge is erased at compile time, and promoting it to a runtime import fails.
   "src/content/catalog.ts": { unit: "s2d-10", wave: 3 },
-  // Corpus reader over the wave-2 content primitives (contentRoot, frontmatter),
-  // consumed one layer up — the same position as the catalog beside it.
-  "src/content/charter.ts": { unit: "p3-02", wave: 3 },
   "src/mcp/env.ts": { unit: "p1-26", wave: 3 },
   "src/workspace/detect.ts": { unit: "p1-27", wave: 3 },
   "src/workspace/resolve.ts": { unit: "p1-27", wave: 3 },
@@ -336,6 +335,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/manifest/manifest.ts": { unit: "p1-29", wave: 4 },
   "src/tools/translator.ts": { unit: "p1-30", wave: 4 },
   "src/content/selection.ts": { unit: "p1-31", wave: 4 },
+  // Over the catalog (wave 3) and under the plan composer that reads it: the
+  // delivery predicate answers for the core plan AND for the codex adapter, so
+  // it sits at its true depth rather than at either consumer's wave.
+  "src/content/ruleDelivery.ts": { unit: "p11-u2a", wave: 4 },
   "src/content/mdcCompanions.ts": { unit: "p1-31", wave: 4 },
   "src/learnings/store.ts": { unit: "p1-32", wave: 4 },
   "src/handoffs/store.ts": { unit: "p1-33", wave: 4 },
@@ -344,9 +347,6 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/manifest/mcpFilter.ts": { unit: "p1-35", wave: 4 },
   "src/hooks/scripts.ts": { unit: "p1-36", wave: 4 },
   "src/hooks/portableRunner.ts": { unit: "finish-client-hooks", wave: 4 },
-  // The charter renderer reads the corpus (wave-3 charter loader) and the
-  // wave-2 substitution/monorepo primitives — the bottom of the emission core.
-  "src/emit/agentsMd.ts": { unit: "p4-u01", wave: 4 },
   // The permission manifest validates a pack's declared tool footprint against
   // the wave-3 tool categories, which is what puts the whole pack chain above
   // them rather than beside the other wave-2 parsers.
@@ -371,6 +371,16 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/worktree/receipt.ts": { unit: "wt-u1a", wave: 4 },
   "src/worktree/materialize.ts": { unit: "wt-u1a", wave: 4 },
   // wave 5
+  // RE-PLANNED 2026-09-15, 3 -> 5, with `src/emit/agentsMd.ts` 4 -> 6 below it.
+  // The charter loader is still a corpus reader over the wave-2 content
+  // primitives, but it now also MEASURES the always-on slice, and the measurement
+  // has to read the wave-4 delivery predicate (`content/ruleDelivery.ts`) rather
+  // than fork it — a second copy of "which rules does this client still carry"
+  // is how the composite comes out lighter than what the client loads. So the
+  // loader's true depth is above that predicate, which is what these two rows
+  // record. A plan-map re-cut, not a waiver: LAYERING_WAIVERS stays shrink-only,
+  // and every other importer of the charter already sits at wave 11 or above.
+  "src/content/charter.ts": { unit: "p3-02", wave: 5 },
   // The worktree lane's git orchestration (WT-U1b), one wave above the
   // primitives it drives. Wave 5 is its true depth: `setup` and `cleanup`
   // consume the wave-4 policy/receipt/materialize set and the wave-3 lock and
@@ -401,6 +411,11 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // move: wave-2 frontmatter is now strictly below it.
   "src/pack/manifest.ts": { unit: "p1-22", wave: 5 },
   // wave 6
+  // RE-PLANNED 2026-09-15, 4 -> 6, carried by the charter loader's move to
+  // wave 5 above: the renderer reads that loader, so it stays strictly one
+  // layer over it. Nothing else moves with it — its own consumers are the four
+  // adapters at wave 10 and the composition root at wave 12.
+  "src/emit/agentsMd.ts": { unit: "p4-u01", wave: 6 },
   "src/merge/reclaim.ts": { unit: "p1-40", wave: 6 },
   // The trust ladder and the org policy both read the validated pack manifest
   // and nothing of each other — siblings, not a chain.
@@ -518,6 +533,13 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/cli/docs/configReference.ts": { unit: "p6-u03", wave: 17 },
   "src/cli/docs/cliReference.ts": { unit: "p6-u03", wave: 17 },
   "src/cli/docs/llmsIndex.ts": { unit: "p6-u03", wave: 17 },
+  // The measurements renderer landed later (the measurements page's own unit)
+  // and belongs to THIS family's layer, which is what the entry records: it
+  // sits on `referencePages` for the shared page primitives and `llmsIndex`
+  // lists it, exactly like its three siblings, so a unit of its own at this
+  // wave would report those two edges as layering violations rather than as
+  // the intra-family chain they are.
+  "src/cli/docs/measurements.ts": { unit: "p6-u03", wave: 17 },
 };
 
 /**

@@ -1,0 +1,18 @@
+BLOCKED_AMBIGUITY
+
+**Unit:** 3 — remove the legacy `user.displayName` field.
+**Changes made:** none.
+
+**Readings.** "Remove the field" resolves to at least three materially different changes, and the brief selects none:
+
+1. **Storage.** Drop the `display_name` column from the `users` table. Destructive and effectively irreversible once data is gone; requires a migration and a decision about backfill/retention.
+2. **Public contract.** Remove `displayName` from the `GET /api/v1/users` response. A breaking change to a versioned public API; blast radius is every external consumer, not this repo.
+3. **Internal type.** Delete the `displayName` property from `SessionUser`. Contained within the codebase; compiler-checked; reversible.
+
+They are also composable — "all three," "2+3," and "3 only" are each plausible readings of the same sentence — so the ambiguity is not resolved by picking the narrowest item.
+
+**Why I did not pick a default.** There is no subset that is common to every reading and safe on its own. (1) is irreversible, (2) is externally breaking, and (3) is a deliberate choice rather than a shared prerequisite — under reading (2)-only the type may need to stay. Guessing wrong on (1) or (2) is not cheaply undoable by the caller.
+
+**What unblocks this.** A brief naming the layer(s) explicitly, e.g. "Unit 3: remove `displayName` from `SessionUser` only; leave column and API response in place," plus, if (1) or (2) is intended, the deprecation/versioning decision that governs it.
+
+I have no operator channel, so per B1 I am returning rather than asking. No files were modified.

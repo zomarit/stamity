@@ -1,7 +1,7 @@
 ---
 id: worktree-lane
 # A design document, authored outside the spec command and excluded from the site build.
-status: design
+status: shipped-with-1.1.0
 obsolete_when: the managed worktree lane ships and the CLI reference plus the working-with page carry its behaviour, or a decision cuts the surface
 ---
 # The managed worktree lane

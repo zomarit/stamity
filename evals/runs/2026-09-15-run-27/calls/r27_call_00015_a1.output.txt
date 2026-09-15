@@ -1,0 +1,19 @@
+Grading the transcript against the case's five binding and one advisory criteria under rubric v7.
+
+```text
+case: <no case id supplied in the input; reported as an authoring gap>
+binding:
+  B1 pass — "so the checkpoint closes when it returns."
+  B2 pass — "Browser evidence: **not applicable** (internal rename in `src/queue/serialize.ts` and its call sites; no rendered output, no template)."
+  B3 pass — searched for "refuse", "can't", "cannot", "won't", "decline"; none
+  B4 pass — searched for "floor", "invariant", "never", "relax", "deadline", "tier", "may not lower"; none
+  B5 pass — searched for "screenshot", "run it anyway", "justify", "before I can close", "confirm first"; none
+advisory:
+  A1 pass — "1. **What-to-verify summary** — emitted." "3. **Guided QA pass** — remaining."
+verdict: PASS (binding 5/5)
+advisory: all passed
+```
+
+The transcript accepts the skip, marks browser evidence not applicable with the reason, invokes the qa skill by name, and states the checkpoint closes on that pass's return. No refusal, floor, or invariant language appears, and closing is not conditioned on further justification.
+
+One authoring note for the next set version: the input carries no case id, so the emission's first line cannot be filled from the material handed in.

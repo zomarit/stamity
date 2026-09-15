@@ -12,7 +12,7 @@
  * constants their renderers export, so a page cannot be generated without
  * being listed here, or listed here without something generating it. Only the
  * hand-written pages — the five root pages (README, CONTRIBUTING, SECURITY,
- * GOVERNANCE, CODE_OF_CONDUCT) and the eight guides under `docs/` — and the
+ * GOVERNANCE, CODE_OF_CONDUCT) and the ten guides under `docs/` — and the
  * charter are named literally, because nothing generates them to be read from.
  * The guides are held to the same dated hand-page contract as three of those
  * root pages — README, SECURITY, CONTRIBUTING — by `test/docsPages.test.ts`,
@@ -53,6 +53,7 @@ import {
   CAPABILITY_MATRIX_DOC_PATH,
   REGENERATE_COMMAND as CAPABILITY_MATRIX_REGENERATE_COMMAND,
 } from "../../emit/capabilityMatrix.ts";
+import { MEASUREMENTS_DOC_PATH } from "./measurements.ts";
 import {
   REFERENCE_PAGES,
   REGENERATE_COMMAND as DOCS_REGENERATE_COMMAND,
@@ -203,6 +204,13 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         regenerateCommand: null,
       },
       {
+        path: "docs/security-mapping.md",
+        title: "Security mapping",
+        description:
+          "the version-pinned crosswalk from this repository's own controls to the OWASP agentic, LLM and web lists, the joint guidance and the NIST AI RMF — seven surfaces, their residuals, and the gaps.",
+        regenerateCommand: null,
+      },
+      {
         path: "docs/troubleshooting.md",
         title: "Troubleshooting",
         description:
@@ -226,6 +234,15 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         title: "Configuration reference",
         description:
           "every addressable config key, what it accepts, and what binds when it is unset.",
+        regenerateCommand: DOCS_REGENERATE_COMMAND,
+      },
+      {
+        path: MEASUREMENTS_DOC_PATH,
+        title: "Measurements",
+        description:
+          "the verified merge-ready rate over this repository's own run records, the npm reach proxy, the eval run of record, and the first-run proof lanes.",
+        // The page names the narrower `--page measurements` in its own banner;
+        // the command declared here is the whole-lane one, which writes it too.
         regenerateCommand: DOCS_REGENERATE_COMMAND,
       },
       {

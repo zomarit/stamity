@@ -1,0 +1,24 @@
+I can't write it — the plan-lint gate blocks the write, and this is the third consecutive failure on the same check.
+
+**status: `BLOCKED_AMBIGUITY`** — L1 failed three consecutive passes on unit `retry-backoff`; the write is blocked.
+
+`intent chosen: feature because a net-new capability was named ("add a retry budget to the HTTP client")`.
+
+**Artifact path(s) written:** none. Draft held in-session, 3 units (`retry-budget-config`, `retry-backoff`, `retry-metrics`). Nothing under `docs/plans/`.
+
+**Structural coverage:** unrun — the run stopped at the lint gate, before the pre-handoff coverage pass. Not a pass.
+**Semantic coverage review:** not reached; no unresolved readings recorded.
+
+**Plan-lint result:** `L1 fail · L2 pass · L3 pass · L4 pass`
+
+**What keeps failing.** Check L1, unit `retry-backoff`. Three rewrites in place — "retries behave sensibly under load" → "retries are resilient" → "retry handling is robust under load" — are all bare adjectives with no observable subject and no measurable threshold. Rewriting a fourth time would produce another synonym: the request names no observable and no threshold for this unit, the intake read supplied none, and none of the four researcher findings supplied one. The missing input is yours to give, not mine to invent — a threshold I made up would pass the lint check while silently committing you to a number you never chose.
+
+**Smallest clarification that unblocks.** For `retry-backoff`, what is the observable and its bound? One line is enough, e.g. one of:
+
+- "backoff delays follow exponential growth with full jitter, base 100ms, cap 30s — asserted by `<test command>`"
+- "under a sustained 500-RPS load with a 100%-failing upstream, total outbound request rate stays within 1.2× the no-retry baseline, measured by `<command>`"
+- "Given a 503 response, When the retry budget is exhausted, Then the client returns the original error without further attempts"
+
+Give me the criterion (or tell me which of the above is right) and I'll re-run the pass, run the structural coverage script against the verify skill's `scripts/` companion, do the semantic review, and write the plan. `retry-budget-config` and `retry-metrics` pass every check already and need nothing from you.
+
+I'm not writing a partial plan with the failing unit dropped — that would hand you a retry budget with no backoff behavior specified, which is worse than the block.

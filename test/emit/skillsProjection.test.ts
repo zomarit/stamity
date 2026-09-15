@@ -14,8 +14,11 @@ import {
   type ProjectedFile,
   type ProjectSkillsOptions,
 } from "../../src/emit/skillsProjection.ts";
+import { buildContentIndex, type CatalogItem } from "../../src/content/catalog.ts";
+import { NO_DEMOTED_RULES, SHARED_SKILLS_TREE_READERS } from "../../src/content/ruleDelivery.ts";
 import { PLATFORM_TOOL_MARKER, buildAskUserPlatformTable } from "../../src/tools/translator.ts";
 import type { ContentSelection } from "../../src/types/content.ts";
+import { TOOLS, type Tool } from "../../src/types/core.ts";
 import type { DetectedSummary } from "../../src/types/detect.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { makeVolume } from "../support/vfs.ts";
@@ -1099,6 +1102,19 @@ describe("NATIVE_SKILL_DIRS", () => {
       expect(NATIVE_SKILL_DIRS[tool], `${tool} reads ${SKILLS_PROJECTION_DIR}`).toBeUndefined();
     }
   });
+
+  // N1: `SHARED_SKILLS_TREE_READERS` (`../../src/content/ruleDelivery.ts`) is a
+  // second, independently-declared set naming the same clients this describe
+  // block covers — `demotedRuleIds` reads it because `src/content/*` cannot
+  // import `src/emit/*` (the wave-layering boundary). The two must agree, or
+  // a client gaining a native copy silently reopens the leak N1 fixed for
+  // whichever set nobody updated.
+  it("agrees with SHARED_SKILLS_TREE_READERS on exactly the clients without a native copy", () => {
+    for (const tool of TOOLS) {
+      const hasNativeCopy = NATIVE_SKILL_DIRS[tool] !== undefined;
+      expect(SHARED_SKILLS_TREE_READERS.has(tool), tool).toBe(!hasNativeCopy);
+    }
+  });
 });
 
 describe("retargetProjection", () => {
@@ -1257,5 +1273,341 @@ describe("retargetProjection", () => {
 
     expect(pathsOf(native)).toEqual([`${NATIVE_DIR}/stamity-Alpha_1/SKILL.md`]);
     expect(native[0]?.content).toContain("name: stamity-alpha-1");
+  });
+});
+
+
+// ── Rules delivered as skills ────────────────────────────────────
+
+/**
+ * The delivery option's half of this projection: a rule a client stops
+ * carrying always-on is rendered here instead.
+ *
+ * The demotion ANSWER is not computed here — `../content/ruleDelivery.ts` owns
+ * it and `buildCoreEmissionPlan` hands it over — so these cases pass it
+ * explicitly, which is also the proof that nothing is rendered without one: the
+ * default options produce the pre-option tree, file for file.
+ */
+/** A demotion record naming `ids` on `tools` and nothing on the others. */
+const demotedOn = (
+  tools: readonly Tool[],
+  ...ids: string[]
+): Record<Tool, ReadonlySet<string>> => {
+  const record = {
+    claude: new Set<string>(),
+    cursor: new Set<string>(),
+    copilot: new Set<string>(),
+    codex: new Set<string>(),
+  };
+  for (const tool of tools) record[tool] = new Set(ids);
+  return record;
+};
+
+/** A detection summary whose gates are not the npm defaults, so substitution is visible. */
+const RULE_DETECTION: DetectedSummary = {
+  languages: ["python"],
+  linters: ["eslint", "oxlint"],
+  testFrameworks: ["pytest"],
+  ciProviders: [],
+};
+
+/** Named rules of the shipped corpus, as the catalog resolves them. */
+async function corpusRules(...ids: string[]): Promise<CatalogItem[]> {
+  const index = await buildContentIndex();
+  return index.items.filter((item) => item.type === "rule" && ids.includes(item.id));
+}
+
+describe("projectSkills over demoted rules", () => {
+  it("renders no rule row at all when nothing is demoted — the always-on tree, unchanged", async () => {
+    const baseline = await projectSkills(contextOf(ALL_SKILL_IDS));
+    const withRules = await projectSkills(contextOf(ALL_SKILL_IDS), {
+      ruleItems: await corpusRules("question-protocol", "ai-evals"),
+      demotedRules: NO_DEMOTED_RULES,
+    });
+
+    expect(pathsOf(withRules)).toEqual(pathsOf(baseline));
+    expect(withRules.map((row) => row.content)).toEqual(baseline.map((row) => row.content));
+  });
+
+  it("renders one SKILL.md per demoted rule under stamity-<id>, leaving the st- surface untouched", async () => {
+    const baseline = new Set(
+      pathsOf(await projectSkills(contextOf(ALL_SKILL_IDS))).map((path) => path.split("/")[2] ?? ""),
+    );
+    const rows = await projectSkills(contextOf(ALL_SKILL_IDS), {
+      ruleItems: await corpusRules("question-protocol", "ai-evals"),
+      demotedRules: demotedOn(["claude", "copilot"], "question-protocol", "ai-evals"),
+    });
+    const dirs = new Set(pathsOf(rows).map((path) => path.split("/")[2] ?? ""));
+
+    expect([...dirs].filter((dir) => dir.startsWith("st-")).toSorted()).toEqual(
+      [...baseline].toSorted(),
+    );
+    expect([...dirs].filter((dir) => dir.startsWith("stamity-")).toSorted()).toEqual([
+      "stamity-ai-evals",
+      "stamity-question-protocol",
+    ]);
+    expect(
+      pathsOf(rows).filter((path) => path.includes("stamity-question-protocol")),
+    ).toEqual([`${SKILLS_PROJECTION_DIR}/stamity-question-protocol/SKILL.md`]);
+    // Still one deterministic order over the merged set.
+    expect(pathsOf(rows)).toEqual([...pathsOf(rows)].toSorted());
+  });
+
+  it("carries the rule's own head into the spec shape, with the engine vocabulary under metadata.stamity", async () => {
+    const [rule] = await corpusRules("question-protocol");
+    const rows = await projectSkills(contextOf([]), {
+      ruleItems: [rule!],
+      demotedRules: demotedOn(["claude", "codex"], "question-protocol"),
+    });
+    const row = rows.find((candidate) =>
+      candidate.path.endsWith("stamity-question-protocol/SKILL.md"),
+    );
+
+    expect(row).toBeDefined();
+    const head = parse(row!.content.split("---")[1]!) as Record<string, unknown>;
+    expect(head.name).toBe("stamity-question-protocol");
+    expect(head.description).toBe(rule!.description);
+    expect(head.metadata).toEqual({
+      stamity: {
+        id: "question-protocol",
+        type: "rule",
+        tags: rule!.tags,
+        load: rule!.frontmatter["load"],
+        obsolete_when: rule!.frontmatter["obsolete_when"],
+        delivery: "on-demand",
+        // Exactly the clients that demoted it: cursor keeps its own .mdc rule.
+        tools: ["claude", "codex"],
+      },
+    });
+    // The head is the SIX-key spec shape: no authored key leaks to the top level.
+    expect(Object.keys(head).toSorted()).toEqual(["description", "metadata", "name"]);
+    // The rule's body ships whole, under its own title.
+    expect(row!.content).toContain("# Question Protocol");
+    expect(row!.artifactType).toBe("rule");
+    expect(row!.artifactId).toBe("question-protocol");
+  });
+
+  it("substitutes the repo's gate commands in a demoted rule body, exactly as in a skill body", async () => {
+    const ruleWithTokens: CatalogItem = {
+      type: "rule",
+      id: "alpha-rule",
+      filePath: "/corpus/rules/stamity-alpha-rule.md",
+      relativePath: "rules/stamity-alpha-rule.md",
+      description: "Fixture rule.",
+      tags: ["review"],
+      body: "\nRun ${STAMITY:VERIFY_GATE_TEST} with ${STAMITY:LINTER}.\n",
+      frontmatter: { id: "alpha-rule", load: "on-demand", obsolete_when: "never" },
+    };
+    const rows = await projectSkills(contextOf([], RULE_DETECTION), {
+      ruleItems: [ruleWithTokens],
+      demotedRules: demotedOn(["codex"], "alpha-rule"),
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.path).toBe(`${SKILLS_PROJECTION_DIR}/stamity-alpha-rule/SKILL.md`);
+    expect(rows[0]?.content).toContain("Run pytest with eslint, oxlint.");
+    expect(rows[0]?.content).not.toContain("${STAMITY:");
+  });
+
+  it("renders nothing for a rule no selected client demoted", async () => {
+    const rows = await projectSkills(contextOf([]), {
+      ruleItems: await corpusRules("secrets", "question-protocol"),
+      demotedRules: demotedOn(["claude"], "question-protocol"),
+    });
+
+    expect(pathsOf(rows)).toEqual([
+      `${SKILLS_PROJECTION_DIR}/stamity-question-protocol/SKILL.md`,
+    ]);
+  });
+
+  // W3: `.agents/skills/` is one file every projection reader (cursor, copilot,
+  // codex — everything without a NATIVE_SKILL_DIRS entry) loads off disk. A
+  // `tools:`-restricted rule demoted to a skill must never land there unless
+  // every one of those readers is named in its `tools:` — otherwise a client
+  // the rule never named can still read its body straight off the shared tree,
+  // bypassing the `tools:` contract entirely.
+  it("skips the shared skill row for a tools:-restricted demoted rule a projection reader is not named in", async () => {
+    const toolsRestricted: CatalogItem = {
+      type: "rule",
+      id: "claude-only-rule",
+      filePath: "/corpus/rules/stamity-claude-only-rule.md",
+      relativePath: "rules/stamity-claude-only-rule.md",
+      description: "Fixture rule, claude-only.",
+      tags: ["review"],
+      body: "\nClaude-only content.\n",
+      frontmatter: { id: "claude-only-rule", load: "on-demand", obsolete_when: "never" },
+      tools: ["claude"],
+    };
+    const rows = await projectSkills(contextOf([]), {
+      ruleItems: [toolsRestricted],
+      // Claude is the only client this rule names, and claude is also the
+      // only client the demotion answer names it against — a demotion answer
+      // that respected `tools:` the way `planRuleDelivery` does. Even so, the
+      // shared-tree readers (cursor, copilot, codex) are not in `tools:`, so
+      // the row must not be written where they can read it.
+      demotedRules: demotedOn(["claude"], "claude-only-rule"),
+    });
+
+    expect(pathsOf(rows)).toEqual([]);
+  });
+
+  it("still projects a tools:-restricted rule to the shared tree when every shared-tree reader is named", async () => {
+    const toolsRestricted: CatalogItem = {
+      type: "rule",
+      id: "shared-scoped-rule",
+      filePath: "/corpus/rules/stamity-shared-scoped-rule.md",
+      relativePath: "rules/stamity-shared-scoped-rule.md",
+      description: "Fixture rule, scoped to every shared-tree reader.",
+      tags: ["review"],
+      body: "\nContent every shared reader may see.\n",
+      frontmatter: { id: "shared-scoped-rule", load: "on-demand", obsolete_when: "never" },
+      tools: ["cursor", "copilot", "codex"],
+    };
+    const rows = await projectSkills(contextOf([]), {
+      ruleItems: [toolsRestricted],
+      demotedRules: demotedOn(["cursor", "copilot", "codex"], "shared-scoped-rule"),
+    });
+
+    expect(pathsOf(rows)).toEqual([
+      `${SKILLS_PROJECTION_DIR}/stamity-shared-scoped-rule/SKILL.md`,
+    ]);
+  });
+
+  // N1: codex- and copilot-named twins of the claude-only case above. This
+  // level (`projectSkills` handed a `demotedRules` map directly) cannot see
+  // whether that map came from a `demotedRuleIds` call that itself refused
+  // the demotion (the real, planner-driven path, after N1) — it only proves
+  // the projection's OWN refusal still holds as defense in depth if some
+  // future caller ever hands it a `demotedRules` map that violates the
+  // invariant. `ruleDelivery.test.ts`'s "a tools:-restricted rule on a
+  // shared-tree client" cases are what pin the N1 fix itself: that a real
+  // `demotedRuleIds` call never produces such a map for codex or copilot.
+  it("skips the shared skill row for a tools:[codex]-only demoted rule, the codex twin", async () => {
+    const codexOnly: CatalogItem = {
+      type: "rule",
+      id: "codex-only-rule",
+      filePath: "/corpus/rules/stamity-codex-only-rule.md",
+      relativePath: "rules/stamity-codex-only-rule.md",
+      description: "Fixture rule, codex-only.",
+      tags: ["review"],
+      body: "\nCodex-only content.\n",
+      frontmatter: { id: "codex-only-rule", load: "on-demand", obsolete_when: "never" },
+      tools: ["codex"],
+    };
+    const rows = await projectSkills(contextOf([]), {
+      ruleItems: [codexOnly],
+      demotedRules: demotedOn(["codex"], "codex-only-rule"),
+    });
+
+    expect(pathsOf(rows)).toEqual([]);
+  });
+
+  it("skips the shared skill row for a tools:[copilot]-only demoted rule, the copilot twin", async () => {
+    const copilotOnly: CatalogItem = {
+      type: "rule",
+      id: "copilot-only-rule",
+      filePath: "/corpus/rules/stamity-copilot-only-rule.md",
+      relativePath: "rules/stamity-copilot-only-rule.md",
+      description: "Fixture rule, copilot-only.",
+      tags: ["review"],
+      body: "\nCopilot-only content.\n",
+      frontmatter: { id: "copilot-only-rule", load: "on-demand", obsolete_when: "never" },
+      tools: ["copilot"],
+    };
+    const rows = await projectSkills(contextOf([]), {
+      ruleItems: [copilotOnly],
+      demotedRules: demotedOn(["copilot"], "copilot-only-rule"),
+    });
+
+    expect(pathsOf(rows)).toEqual([]);
+  });
+
+  // N1: the claude twin. Claude is not a {@link SHARED_SKILLS_TREE_READERS}
+  // member, but its native copy is filtered from these SAME shared-tree rows
+  // (`nativeSkillRows`), so a rule the shared tree refuses must be absent from
+  // this projection even when claude is the only tool that demoted it —
+  // otherwise `nativeSkillRows` would have no row left to filter and claude
+  // would lose the rule entirely rather than keep it always-on.
+  it("skips the shared skill row for a tools:[claude]-only demoted rule, the claude twin", async () => {
+    const claudeOnly: CatalogItem = {
+      type: "rule",
+      id: "claude-only-demoted-rule",
+      filePath: "/corpus/rules/stamity-claude-only-demoted-rule.md",
+      relativePath: "rules/stamity-claude-only-demoted-rule.md",
+      description: "Fixture rule, claude-only.",
+      tags: ["review"],
+      body: "\nClaude-only content.\n",
+      frontmatter: { id: "claude-only-demoted-rule", load: "on-demand", obsolete_when: "never" },
+      tools: ["claude"],
+    };
+    const rows = await projectSkills(contextOf([]), {
+      ruleItems: [claudeOnly],
+      demotedRules: demotedOn(["claude"], "claude-only-demoted-rule"),
+    });
+
+    expect(pathsOf(rows)).toEqual([]);
+  });
+
+  // M6: a demoted rule whose id an override tree also claims must project the
+  // OVERRIDE's body as a skill, not the shipped one — the same "replacement,
+  // not a filter" rule `projectSkills over an override tree` pins for skills,
+  // carried through the rule-as-skill door. `planRuleDelivery`
+  // (`../../src/emit/planner.ts:466-472`) resolves `ruleItems` off the SAME
+  // `index.byKey` reachability this test drives directly, so this is the
+  // combination the planner produces, not a hand-picked shortcut.
+  it("keeps the override's body for a rule that is both demoted and pack/override-claimed", async () => {
+    const ruleDoc = (id: string, description: string, body: string): string =>
+      artifact(
+        [
+          `id: ${id}`,
+          "type: rule",
+          `description: ${description}`,
+          "tags: [review]",
+          "load: always-on",
+          "obsolete_when: never",
+        ].join("\n"),
+        body,
+      );
+
+    const CORPUS_DIR = "corpus";
+    const OVERRIDE_DIR = "overrides";
+    const SHIPPED_MARKER = "Shipped rule body: the bundled instruction.";
+    const HOUSE_MARKER = "House rule body: this repository's own instruction.";
+    const volume = makeVolume({
+      [`${CORPUS_DIR}/rules/stamity-gamma-rule.md`]: ruleDoc(
+        "gamma-rule",
+        "The bundled version of this rule.",
+        `${SHIPPED_MARKER}\n`,
+      ),
+      [`${OVERRIDE_DIR}/rules/stamity-gamma-rule.md`]: ruleDoc(
+        "gamma-rule",
+        "The house version of this rule, authored in this repo.",
+        `${HOUSE_MARKER}\n`,
+      ),
+    });
+    const corpusRoot = `${volume.root}/${CORPUS_DIR}`;
+    const overrideRoot = `${volume.root}/${OVERRIDE_DIR}`;
+
+    const index = await buildContentIndex(
+      { root: corpusRoot, overrideRoot },
+      { fs: volume.fs },
+    );
+    const resolved = index.items.filter(
+      (item) => item.type === "rule" && index.byKey.get(`rule:gamma-rule`) === item,
+    );
+    expect(resolved).toHaveLength(1);
+
+    const rows = await projectSkills(contextOf([]), {
+      contentRoot: { root: corpusRoot, overrideRoot },
+      fs: volume.fs,
+      ruleItems: resolved,
+      demotedRules: demotedOn(["claude"], "gamma-rule"),
+    });
+
+    const row = rows.find((candidate) => candidate.path.endsWith("stamity-gamma-rule/SKILL.md"));
+    expect(row).toBeDefined();
+    expect(row!.content).toContain(HOUSE_MARKER);
+    expect(row!.content).not.toContain(SHIPPED_MARKER);
+    expect(row!.content).toContain("The house version of this rule, authored in this repo.");
   });
 });

@@ -1,0 +1,27 @@
+**status:** `BLOCKED_FAILURE` — the save was refused. Nothing was written. No file exists at `.stamity/overrides/rules/st-migrations.md`.
+
+## Strict-gate errors (Critical)
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from frontmatter. `id`, `type`, `description`, and `tags` must all be present; `tags` is missing. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine-prefixed ids mark engine-owned files and forfeit the verified backup a user-lane overwrite otherwise takes. |
+
+## Strict gates that passed
+
+- `type: rule` matches the class directory `rules`.
+- `id` is a lowercase kebab slug and matches the intended filename.
+- No block-severity deny hit in the 34-line body or in any frontmatter string, `description` included.
+
+## Advisory findings (Minor) — reported, not written
+
+These attached to the assembled artifact and would ride along as warnings on a save that clears the strict gates:
+
+- `load:` is not declared. Required declaration; absent.
+- `obsolete_when:` is not declared. Required declaration; absent.
+- Body is 34 lines, under the rule advisory threshold of 100. No length warning.
+- No overwrite backup: nothing exists at the target path, so a first save has nothing to lose.
+
+## What a compliant re-spawn needs
+
+Same brief, with `id: migrations` filed at `.stamity/overrides/rules/migrations.md`, a `tags` list in the frontmatter, and `load:` set to one of `always` / `on-demand` / `reference` plus an `obsolete_when:` condition to clear the two advisory rows as well. I authored one artifact this invocation and it did not land; I have not written a corrected version.

@@ -1,0 +1,19 @@
+Grading the `json-flag-render` transcript against the nine binding criteria, in order, then emitting the case block.
+
+```text
+case: st-plan-head-path-unit-preview
+binding:
+  B1 pass — "id: status-json-flag" "intent: feature" "stamp: 9f3c1ab 2026-09-02" "reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]"
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02" "reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]"
+  B4 pass — searched the Head for "approach:"; none
+  B5 pass — "`docs/plans/003-status-json-flag.md`"
+  B6 pass — "| `id` | `json-flag-render` |" "| `requirements` | `REQ-cli-140` |" "| `files` |" "| `interfaces` |" "| `testCriteria` |" "| `edgeCases` |" "| `depends_on` | `none` |" "| `verify` | `npm run test` |"
+  B7 pass — "| `requirements` | `REQ-cli-140` |"; searched for "spec carries no ids"; none
+  B8 pass — "name `--json`, boolean, `default: false`, takes no value argument, no short alias"; searched the Unit for "not yet resolvable", "see below", "not yet fillable"; none
+  B9 pass — "**Zero managed files** — `managedFiles` is `0` and `driftedFiles` is `0`; the keys are emitted as integers"
+verdict: PASS (binding 9/9)
+advisory: none declared
+```
+
+Case verdict is PASS with every binding criterion met and no advisory criteria declared. Criteria B1, B3 and B6 ask for several keys or fields that sit on separate transcript lines, so they are cited in the elements form rather than as one span. No authoring defects to report: every criterion was decidable from the transcript alone.

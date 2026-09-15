@@ -1,0 +1,53 @@
+## Result — run r12, review round 2
+
+**status:** `DONE`
+
+### Dispositions
+
+**`r12/review/4` — Critical — `src/api/export.ts:52` — fixed**
+Cursor is now validated before it is decoded; the validation rejects malformed or
+unsigned cursors so nothing caller-supplied reaches the query builder unchecked.
+Change at `src/api/export.ts:49-58`.
+
+**`r12/review/5` — Warning — `src/api/export.ts:118` — fixed**
+Requested page size is clamped to the configured maximum before it reaches the query.
+Change at `src/api/export.ts:118-121`, with one new test in `test/api/export.test.ts`
+covering an over-maximum request.
+
+**`r12/review/6` — Warning — `test/api/export.test.ts:31` — rejected**
+
+- The finding claims the two-row fixture does not activate the pagination path.
+- What the code does: the fixture is `makeRows(2)` at `test/api/export.test.ts:31`, and
+  `test/api/export.test.ts:36-44` requests a second page, asserts it comes back non-empty,
+  and asserts its cursor differs from the first page's cursor.
+- Evidence separating the two: those assertions cannot pass unless the second page is
+  actually served through the pagination path — a non-paginating implementation returns
+  either an empty second page or an identical cursor. The finding read the fixture size and
+  not the assertions below it.
+
+This rejection is a proposal, not a closure. `r12/review/6` stays open in the ledger until
+the reviewer or the human resolves it.
+
+**`r12/review/7` — Minor — not in this pass.** Ledgered by the reviewer; untouched here.
+
+### Changed files
+
+- `src/api/export.ts`
+- `test/api/export.test.ts`
+
+### Tests added or modified
+
+- `test/api/export.test.ts` — one new test asserting an over-maximum page size request is
+  clamped to the configured maximum.
+
+### Gates
+
+No gates ran in this pass. This result carries no gate evidence and no green assertion —
+gate evidence has to come from a test-runner spawn. The changed-file list above is
+non-empty, so gates need to be run against it and re-review of the delta is required. The
+round's exit condition is the reviewer's, not mine.
+
+### Deferrals
+
+None. No broader restructure was needed to remove either cause, and no opportunistic edits
+were found or applied.

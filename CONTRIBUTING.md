@@ -1,10 +1,10 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 17da583. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
 <!-- Re-open when: a step joins or leaves `npm run check`, a generated artifact class gains or
      loses a regeneration command, either Node floor moves, a test lane joins or leaves, a
      coverage floor in `vitest.config.ts` moves, or the eval set's version bumps — the `evals/`
      paths named below carry that version in their own names, so a bump silently repoints them
      and is what last carried this page past its stamp. `test/docsPages.test.ts` asserts `npm run
-     check`, the leak-gate row and four of the seven regeneration commands against this page;
+     check`, the leak-gate row and four of the eight regeneration commands against this page;
      `test/ci/workflow.test.ts` asserts the two required contexts and the `pr-checks`
      attribution. Beyond its Leak-gate row, the step table — the other five steps and their
      order — is unasserted. -->
@@ -145,6 +145,7 @@ at the next regeneration.
 |---|---|
 | `docs/capability-matrix.md` | `node scripts/generate-capability-matrix.mjs` |
 | `docs/cli-reference.md`, `docs/configuration.md`, `docs/reference/`, `llms.txt` | `node scripts/generate-docs.mjs` |
+| `docs/measurements.md` | `node scripts/merge-ready-rate.mjs --write` — freezes the snapshot under `evals/measurements/`, which the page renders from — then `node scripts/generate-docs.mjs --page measurements` |
 | `src/pack/catalogPins.ts` | `node scripts/generate-pack-manifests.mjs` — verifies every pack against its own `pack.json` integrity map, then rewrites the pins module and nothing else (`--check` verifies and writes nothing) |
 | `packs/*/pack.json` integrity maps | `node scripts/generate-pack-manifests.mjs --write` — maintenance mode, after a deliberate pack edit; the plain invocation fails on the drift instead |
 | `.claude-plugin/`, `.cursor-plugin/plugin.json`, `plugin.json` | `node scripts/generate-plugin-manifests.mjs` (`--check` verifies and writes nothing) |
@@ -180,14 +181,14 @@ need no edit at all.
 
 `content/` is model-executed prose: what it does is decided at execution by a model, so a diff
 review does not establish behaviour the way it does for `src/`. A change under `content/` re-runs
-the eval cases it affects — find them by the `source` field in `evals/cases-v5/**`, where every
+the eval cases it affects — find them by the `source` field in `evals/cases-v6/**`, where every
 case names the corpus path and line range its claim comes from, and move a case's `source` and
 its inlined brief in the same diff when the claim itself moves. An eval-coverage gate holds every
 content artifact's path to at least one case's `source` or to the written exemption list
-`evals/coverage-exemptions-v5.md`. A change of the model under test re-runs every adversarial
+`evals/coverage-exemptions-v6.md`. A change of the model under test re-runs every adversarial
 case at a zero-break bar, because guardrail behaviour is a property of the model-and-prose pair
 rather than of the prose alone. Thresholds, the run-artifact contract and the case index live in
-`evals/SET-v6.md`; runs are manual, in a harness session, on the operator's word.
+`evals/SET-v7.md`; runs are manual, in a harness session, on the operator's word.
 
 Select the model pair through `evals/MODEL-PROFILES-v1.md`: the original Claude profile
 remains the default, while `codex-astra` and `codex-astra-judge` support Astra in either
@@ -223,7 +224,8 @@ Something wrong that is not a vulnerability goes to the issue tracker,
 `src/` engine and CLI, `content/` the canonical corpus, `packs/` the first-party packs, `test/` the
 three lanes, `scripts/` generators, the leak gate, the two smokes (publish shape, APM route) and
 the upstream lane (`upstream.mjs`, for forks), `docs/` the generated reference pages
-(`capability-matrix.md`, `cli-reference.md`, `configuration.md`, `reference/`) beside the
+(`capability-matrix.md`, `cli-reference.md`, `configuration.md`, `measurements.md`,
+`reference/`) beside the
 hand-written guides, `plans/` and `specs/`. The boundary between engine and CLI is
 enforced by a static import-graph test (`test/architecture/boundaries.test.ts`), not by
 convention: the engine never imports the CLI, and a new `src/` file that no entrypoint reaches

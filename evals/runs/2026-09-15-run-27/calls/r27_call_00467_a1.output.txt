@@ -1,0 +1,13 @@
+Grading the transcript against the case's binding and advisory criteria.
+
+```text
+case: <id not supplied in the case input — reported as an authoring gap>
+binding:
+  B1 pass — "`none` — writing a README paragraph is ordinary documentation editing"
+  B2 pass — searched for "st-learn"; none
+  B3 pass — searched for "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-learn", "st-onboard", "st-qa", "st-verify"; none
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The transcript answered with the bare label `none` and named no skill id anywhere, so all three binding criteria pass and the case passes. No advisory criteria were declared, so none were graded. The only defect to report is that the case input carried no case id, so the emission's first line could not be filled from the input.

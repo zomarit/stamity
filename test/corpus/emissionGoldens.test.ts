@@ -9,8 +9,10 @@ import {
 import {
   DETECTION_UNKNOWN,
   REPO_SUBSTITUTION_TOKENS,
+  substituteCharterTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
+  type CharterInvariants,
   type DetectedRepoContext,
   type VerificationGateSet,
 } from "../../src/emit/substitution.ts";
@@ -428,9 +430,34 @@ function wellFormedTokens(text: string): string[] {
   return text.match(WELL_FORMED_TOKEN) ?? [];
 }
 
-/** Both substitution passes composed; the module contract makes the order immaterial. */
+/**
+ * Fixed invariants fixture for the charter pass. Not the shipped charter's
+ * values: these goldens resolve a body against fixture inputs, and reusing the
+ * real version would make a resolved line indistinguishable from an unresolved
+ * one that happened to read correctly.
+ */
+const INVARIANTS: CharterInvariants = {
+  version: "4.5.6",
+  ratified: "2026-02-03",
+  amended: "2026-04-05",
+};
+
+/**
+ * All three substitution passes composed; the module contract makes the order
+ * immaterial.
+ *
+ * TEST CHANGE, justified (2026-09-15): the charter gained a third token family
+ * — `${STAMITY:INVARIANTS_VERSION}`, resolved from the charter's own frontmatter
+ * — so "both passes" became three. The residue assertions below are unchanged
+ * and now cover one more token: a two-pass render of the current charter would
+ * leave it standing, which is the failure this composition fixes rather than
+ * the one it hides.
+ */
 function resolveBody(body: string, ctx: DetectedRepoContext): string {
-  return substituteVerificationGateTokens(substituteRepoTokens(body, ctx), GATES);
+  return substituteVerificationGateTokens(
+    substituteRepoTokens(substituteCharterTokens(body, INVARIANTS), ctx),
+    GATES,
+  );
 }
 
 /** One catalog item as a golden row: `type:id -> relativePath`, plus precedence where set. */

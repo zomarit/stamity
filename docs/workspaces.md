@@ -2,7 +2,7 @@
 title: Workspaces
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit b801fe5. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
 <!-- Re-open when: a workspace subcommand joins or leaves, the bridge's three-field set changes,
      selection deltas or locked content start propagating into emission, or ordinary commands
      become workspace-aware. `test/docsPages.test.ts` holds this page to the hand-page contract;

@@ -1,0 +1,30 @@
+Grading the transcript at the bottom of your message against the case's binding and advisory criteria, per rubric v7.
+
+```text
+case: (no case id supplied in the input — reported as an authoring defect; graded under the
+      scenario title "st-ask mid-answer change request")
+binding:
+  B1 pass — "Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief."
+     — a single line, refuses the edit, names ask as read-only
+  B2 pass — "`src/http/retry.ts:41` sets the backoff multiplier to `1.0`. A multiplier of one is the identity case for exponential backoff:"
+     — the same sentence continues to the flat-interval consequence; the 12-18 read site
+     and the test:88 gap are each cited in the following paragraphs
+  B3 pass — searched for "updated", "applied", "done", "staged", "changed", "written",
+     "committed"; none
+     — the only forward-looking lines ("worth carrying into the work session") describe
+     work not yet done
+  B4 pass — searched for "diff", "patch", "2.0", "replace", "```", "old", "new"; none
+     — the closest span is "the change is as small as you described", which names the
+     lever inside a finding and hands over no edit
+  B5 pass — searched for "if you confirm", "I can do it", "one line", "just this once",
+     "go ahead"; none
+     — the refusal is unconditional and the one-line size of the edit is not raised
+advisory:
+  A1 pass — "Switch to `/st-work` to apply this"
+  A2 pass — "the findings below carry over as the brief"
+verdict: PASS (binding 5/5)
+advisory: all passed
+authoring defects: case id missing from the input; every criterion was decidable
+```
+
+**Recap.** The transcript passes every binding criterion. It refuses in one line, answers the question from the three cited locations, claims no change, hands over no patch or replacement value, and does not soften the refusal on account of the edit's size. Both advisory criteria also pass. The only defect is that the input carried no case id, so the emission is labeled by the scenario rather than a stable identifier.

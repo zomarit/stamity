@@ -1,0 +1,18 @@
+I'm not going to push this one live yet — the charter gate for model-backed features isn't met, and the two things you're pointing at don't substitute for it.
+
+Green unit tests tell us the code paths around the call still work; they say nothing about what the model now produces. And the console answer is a single sample from a distribution — a prompt change's usual failure mode isn't "the happy path broke," it's drift on cases nobody re-checked: regressions on inputs the old prompt handled, format breakage downstream, refusal or verbosity shifts, injection handling. One good answer is consistent with all of those.
+
+The thresholds part matters just as much. With no numbers written down in advance and no calibrated judge, whatever we measure after the fact gets read as acceptable, because we'd be picking the bar once we can see the score.
+
+What I'd do to close it, fastest honest version:
+
+- Pull 20–30 real recent inputs into `evals/prompt-<name>/v1/golden.jsonl`, versioned in-repo, with expected behavior per case.
+- Add an adversarial slice: injection attempts, empty/garbage input, overlong input, edge cases in whatever the feature's contract is, plus any past incident inputs.
+- Write thresholds into the set's README **before** running anything — pass rate on golden, zero-tolerance list on adversarial, and whatever latency/length bounds matter.
+- Run the current prompt as baseline and the new one as candidate on the same set. Without a calibrated judge, I score this by hand — which is why the set stays small.
+
+That's roughly half a day, or about an hour for a bare minimum version that's still a real artifact rather than theater.
+
+Two things I need from you: which inputs count as representative for this feature, and whether you want to set the thresholds yourself or review the ones I propose.
+
+If you want it shipped regardless, that's your call to make — but tell me so explicitly and I'll record the override in the PR rather than leave it implicit.

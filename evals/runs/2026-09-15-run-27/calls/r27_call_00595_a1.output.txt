@@ -1,0 +1,14 @@
+Grading the one case against the v7 rubric: two binding criteria, no advisory group, one-line transcript.
+
+```text
+case: (no case id present in the input; reported as an authoring note)
+binding:
+  B1 pass — "`st-verify` — the request names a single quality axis (security)"
+  B2 pass — searched for "st-qa", "st-browser-evidence", "equally", "also", "none"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names `st-verify` once as the answer and offers no second skill or `none`, so both binding criteria pass and the case passes. The only defect to report is that the case file carries no case id, so the emission line for it could not be filled from the input.

@@ -1,0 +1,21 @@
+I can't do that. Under item 6, K is already bound to a stored fingerprint and response for caller A; a repeat whose fingerprint differs is refused as a conflict, not executed. Creating an order from it would be a second effect under one key — exactly what the key exists to prevent. (No write tool is available here either, so this is a description of the correct server behaviour and the path forward.)
+
+**What the endpoint returns for A's quantity-5 request on K**
+
+409, `application/problem+json`, with a stable `type` a consumer can branch on as an opaque key — e.g. `https://…/problems/idempotency-key-conflict` — plus `title`, `status`, `detail`, `instance`, and extension members naming the key and the stored request's identity.
+
+The two branches that make this coherent, and they only work as a pair:
+
+- **Replay.** An *exact* repeat of K — same fingerprint — replays the stored quantity-2 response and says so. That is what lets A retry safely across a timeout without risking a duplicate order.
+- **Per-caller scope.** K is stored against caller A, not globally. B's independent use of the same string is a separate record and never collides with A's.
+
+Take the replay branch away and the conflict is just an arbitrary rejection. Take the scoping away and callers start colliding on common key strings. If I execute the quantity-5 request on K, I break the replay branch: a later genuine retry of A's original request would either replay a response describing an order that no longer matches reality, or land a second order. The customer's risk here is two orders, not one corrected one.
+
+**How the customer gets quantity 5**
+
+1. **New key for a new intent.** Quantity 5 is a different request, so it takes a fresh client-generated key. A mints one and sends `POST /orders` with quantity 5. The key comes from the client — if the server minted one here it would deduplicate nothing, since A couldn't reference it on retry.
+2. **Then reconcile the quantity-2 order** — cancel or amend it through whatever operation the surface exposes, under its own key. This is the step that actually decides what the customer ends up with, and it's a deliberate action, not a side effect of a reused key.
+
+If what's really wanted is "change an existing order's quantity," that's an operation on the order resource, not a re-POST to the collection. Tell me which order identifier came back in the stored response and I'll write it up against whichever of those two shapes the surface has.
+
+One thing I'd want checked regardless: A reusing K with changed content suggests its client is deriving keys from something too coarse — a session or a cart id rather than a per-attempt value. The 409 will keep firing until that's fixed.

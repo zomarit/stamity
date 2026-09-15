@@ -1,0 +1,32 @@
+Grading the transcript against the six binding and two advisory criteria under rubric v7.
+
+```text
+case: <no case id supplied in the input; reported as a handoff defect>
+binding:
+  B1 pass — "Sessions are written to a `Map` held in module scope — **high** (`src/session/store.ts:23`)."
+     The headline and all four bullets carry a path:line from the facts.
+  B2 pass — "Entry count therefore grows monotonically with sessions created — **medium**, from"
+     Bands present on the headline (medium) and every bullet (high, high, high, medium).
+  B3 pass — "Sessions accumulate in a single process-scoped `Map` with no eviction in the file that owns it — **medium**, from `src/session/store.ts:23`, `src/session/store.ts:57`"
+     Band is medium; citation set names all three sites.
+  B4 pass — "assuming no other module deletes from that map (only `store.ts` was read for eviction) and that the process is long-lived"
+     Both medium claims (headline, fourth bullet) name the assumption inside the claim sentence.
+  B5 pass — searched for "likely", "MB", "GB", "per hour", "per day", "per second"; none
+     The string "probably fine until restart" occurs only inside the list of omitted answers:
+     "would be uncitable and is omitted rather than hedged". No severity figure is given.
+  B6 pass — searched for "index.ts:", "app.ts:", "session.ts:", "server.ts:", ".js:"; none
+     Every path:line present is one of "`src/session/store.ts:23`, `src/session/store.ts:57`, and `src/server/boot.ts:31`".
+advisory:
+  A1 pass — "a heap snapshot diff across a load run, a `Map.size` gauge exported from `src/session/store.ts`, or production RSS trend over a known deploy interval"
+  A2 pass — "production severity is uncited and is not answered below"
+verdict: PASS (binding 6/6)
+advisory: all passed
+authoring notes:
+  - No case id was handed in with the Brief, Expected and transcript.
+  - B1 and B2 say "every claim". The "Not answered" section states that the repository holds
+    no measurement, with no path:line and no band. A2 requires exactly that kind of
+    statement, so I read B1/B2 as covering the answered claims only. The next set version
+    should say whether an absence statement counts as a claim under B1/B2.
+```
+
+Verdict is PASS with all six binding and both advisory criteria passing. The one open point is an authoring ambiguity, not a transcript fault: B1 and B2 say "every claim" while A2 requires an uncitable, unbanded statement that the severity half is unanswerable. I graded the answered claims only and flagged the wording for the next set version.

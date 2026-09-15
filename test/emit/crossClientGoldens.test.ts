@@ -6,6 +6,7 @@ import { CODEX_AGENTS_MD_BUDGET_BYTES, CODEX_HOOKS_FILE } from "../../src/adapte
 import { COPILOT_HOOKS_PATH, COPILOT_SETUP_STEPS_PATH } from "../../src/adapters/copilot.ts";
 import { CURSOR_COMMANDS_DIR, CURSOR_HOOKS_CONFIG_PATH } from "../../src/adapters/cursor.ts";
 import { ADAPTER_REGISTRY } from "../../src/adapters/registry.ts";
+import { parseFrontmatter } from "../../src/content/frontmatter.ts";
 import { AGENTS_MD_FILE } from "../../src/emit/agentsMd.ts";
 import { AGENT_TOOL_POLICIES_PATH, HOOKS_GENERATED_DIR } from "../../src/emit/hooksInfra.ts";
 import { NATIVE_SKILL_DIRS, SKILLS_PROJECTION_DIR } from "../../src/emit/skillsProjection.ts";
@@ -1002,15 +1003,57 @@ describe("four-tool union", () => {
 
     // The re-target property: claude's native tree is the SAME bytes at a
     // second path, file for file — a copy, never a second render.
+    //
+    // NARROWED 2026-09-15, from "the two trees hold the same entries" to "the
+    // native tree is a SUBSET, and what it leaves out is named". The shared tree
+    // holds the union of every selected client's rule demotions because three
+    // clients read it; the native tree has one reader, so copying rules claude
+    // did not demote put a second copy of `stamity-testing` and six siblings
+    // beside the `.claude/rules/` files claude already receives. The byte
+    // property the old assertion protected is untouched and asserted below over
+    // every file that IS copied; what is added is the reason for each absence,
+    // read off the emitted file rather than assumed.
     const nativeSkillsDir = NATIVE_SKILL_DIRS.claude ?? "";
     expect(nativeSkillsDir).not.toBe("");
     const nativeCopies = Object.keys(tree)
       .filter((path) => path.startsWith(`${nativeSkillsDir}/`))
       .toSorted();
     expect(nativeCopies.length).toBeGreaterThan(0);
-    expect(nativeCopies.map((path) => path.slice(nativeSkillsDir.length))).toEqual(
-      skills.map((path) => path.slice(SKILLS_PROJECTION_DIR.length)).toSorted(),
+
+    const nativeEntries = nativeCopies.map((path) => path.slice(nativeSkillsDir.length));
+    const sharedEntries = skills
+      .map((path) => path.slice(SKILLS_PROJECTION_DIR.length))
+      .toSorted();
+    expect(sharedEntries).toEqual(expect.arrayContaining(nativeEntries));
+
+    // Each absence is a rule-skill whose own frontmatter says claude is not
+    // among the clients that demoted it — so claude receives it as a
+    // `.claude/rules/` file instead, which is asserted right after.
+    const absent = sharedEntries.filter((entry) => !nativeEntries.includes(entry));
+    expect(absent.length, "no rule-skill is left out, so this case proves nothing").toBeGreaterThan(
+      0,
     );
+    for (const entry of absent) {
+      const shared = `${SKILLS_PROJECTION_DIR}${entry}`;
+      const head = parseFrontmatter(tree[shared] ?? "", shared).frontmatter;
+      const stamity = (head["metadata"] as { stamity?: Record<string, unknown> } | undefined)
+        ?.stamity;
+      expect(stamity?.["type"], entry).toBe("rule");
+      expect(stamity?.["tools"], entry).not.toContain("claude");
+      expect(tree[`.claude/rules/stamity-${String(stamity?.["id"])}.md`], entry).toBeDefined();
+    }
+    // And the converse: every rule-skill claude DID demote is copied, and is not
+    // also a rule file — one door per rule on this client.
+    for (const entry of nativeEntries) {
+      const shared = `${SKILLS_PROJECTION_DIR}${entry}`;
+      const head = parseFrontmatter(tree[shared] ?? "", shared).frontmatter;
+      const stamity = (head["metadata"] as { stamity?: Record<string, unknown> } | undefined)
+        ?.stamity;
+      if (stamity?.["type"] !== "rule") continue;
+      expect(stamity["tools"], entry).toContain("claude");
+      expect(tree[`.claude/rules/stamity-${String(stamity["id"])}.md`], entry).toBeUndefined();
+    }
+
     for (const path of nativeCopies) {
       const twin = `${SKILLS_PROJECTION_DIR}${path.slice(nativeSkillsDir.length)}`;
       expect({ path, content: tree[path] }).toEqual({ path, content: tree[twin] });

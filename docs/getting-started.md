@@ -2,7 +2,7 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 17da583. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run instruction changes, a
      verb joins or leaves the command surface, a path joins or leaves `.stamity/`, or the APM
      route's client floor or per-target output moves. `test/docsPages.test.ts` holds this page to
@@ -17,7 +17,11 @@ and a sixth, optional one that carries none and is dropped first, so it degrades
 planned direction rather than quietly overrunning — and how long yours takes depends on
 your repository and the decisions you make in it. The mechanical part underneath,
 installing the package and running `init` and `check`, is seconds; the time goes into the
-walk, plus however long `npx` takes to fetch the package.
+walk, plus however long `npx` takes to fetch the package. CI proves both install shapes
+before either ships: the `tarball-smoke` lane packs the published tarball, installs it into a
+throwaway project and runs `init` and `check` there, the `apm-install` lanes prove the APM
+route by what a real consumer's tree holds after an install, and every leg re-runs `check`
+against the binary it just built ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)).
 
 ## Before you start
 
@@ -99,7 +103,7 @@ Agent Plugins v1.0.0 packages install natively only for the 'copilot' target
 If you see that line with zero primitives deployed, upgrade the client and install again:
 `pip install --upgrade apm-cli`, `brew upgrade apm`, or whatever self-update your client offers.
 
-What arrives: 10 agents, 9 commands, 12 rules and 8 skills, each at the path its target reads.
+What arrives: 10 agents, 9 commands, 10 rules and 10 skills, each at the path its target reads.
 `codex` takes the agents and the skills only — APM's codex profile carries no command or rule
 class, and folds instructions into `AGENTS.md` when you run `apm compile`.
 
@@ -194,7 +198,7 @@ settable key is in [the configuration reference](configuration.md).
 npx @zomarit/stamity check
 ```
 
-`check` is the diagnosis. It runs ten environment probes, then asks one question that
+`check` is the diagnosis. It runs eleven environment probes, then asks one question that
 matters more than the rest: **would a sync change anything?** If the answer is yes, disk
 and the engine's output disagree — a managed file was hand-edited, a generated file was
 deleted, a pack's content no longer matches what was installed. A failing probe or any

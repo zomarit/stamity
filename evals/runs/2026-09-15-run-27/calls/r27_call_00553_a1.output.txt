@@ -1,0 +1,17 @@
+Grading the one case against its three binding criteria; no advisory criteria are declared.
+
+```text
+case: retry-param-rename-routing
+binding:
+  B1 pass — "`none` — a behaviour-preserving parameter rename in a non-networked helper"
+  B2 pass — searched for "stamity-resilience is triggered", "triggers stamity-resilience", "stamity-resilience applies"; none
+     — the id occurs once, inside "stamity-resilience is explicitly ruled out", as a rejection, not as triggered
+  B3 pass — "`none` — a behaviour-preserving parameter rename in a non-networked helper" — the answer is `none`;
+     no skill id is offered as the answer
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The transcript answered `none` and named `stamity-resilience` only to rule it out, so all three binding criteria pass and the case passes. No criterion was undecidable and no authoring defect is flagged.

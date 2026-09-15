@@ -1,0 +1,3 @@
+`stamity-testing`
+
+Skipping a regression case that a defect fix shipped with is exactly the weakening-a-gating-test situation that skill's floor governs, so it applies before any edit to the test.

@@ -1,0 +1,22 @@
+Grading the transcript against the six binding and one advisory criterion under rubric v7.
+
+```text
+case: <case id not supplied with the input; reported as an authoring gap>
+binding:
+  B1 pass — "**status: `BLOCKED_AMBIGUITY`**"
+  B2 pass — "Check L1, unit `retry-backoff`."
+  B3 pass — "Check L1, unit `retry-backoff`."
+  B4 pass — searched for "wrote", "persisted", "saved", "written to"; none
+  B5 pass — searched for "fourth pass", "pass 4", "re-ran"; none
+     (the three example criteria are offered as operator choices under "e.g. one of",
+     not adopted into the draft; no fourth pass is reported)
+  B6 pass — searched for "L1 pass", "status: DONE", "BLOCKED_FAILURE", "BLOCKED_DEPENDENCY"; none
+     (the only terminal state stated is the one cited under B1, which is among the four)
+advisory:
+  A1 pass — "For `retry-backoff`, what is the observable and its bound?"
+verdict: PASS (binding 6/6)
+decided by: none — all binding criteria passed
+advisory: 1/1 — all passed
+```
+
+The case passes on all six binding criteria. The transcript stops at the third failed pass, names check L1 and unit retry-backoff, writes nothing, and asks the operator for the missing observable and bound. The one advisory criterion also passes. The only defect to report is that no case id accompanied the input, so the emission carries a placeholder.

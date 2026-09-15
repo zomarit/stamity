@@ -1,0 +1,14 @@
+Grading the single transcript against the two binding criteria, per rubric v7.
+
+```text
+case: (no case id line in the case file; graded as the orders-table skill-routing case)
+binding:
+  B1 pass — "`stamity-ui-states`"
+  B2 pass — searched for "none", "st-qa", "st-verify", "st-browser-evidence", "st-design-system-detect", "also", "alternatively", "equally"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names exactly one skill, `stamity-ui-states`, and offers no alternative and no `none`, so both binding criteria pass and the case passes. One authoring note: the case file carries no explicit case id, so the emission above labels it descriptively rather than by a declared id.

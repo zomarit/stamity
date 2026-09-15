@@ -1,0 +1,22 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "## pattern-match-checklist" "## impact-map" "## unknowns"
+  B3 pass — "`src/api/export.ts` — searched for helper references; none found."
+  B4 pass — searched for "probably", "likely", "appears to", "presumably"; none
+  B5 pass — "**Q3 — does the helper retry on 5xx responses only, or on connection errors as well?**" "**Probed:**" "**Why the probe did not settle it:**" "**Smallest input that would settle it:**"
+  B6 pass — "**confidence:** high — basis: `direct`" "**confidence:** medium — basis: `inferred`" "**confidence:** high on the boundary of what is unknown — basis: `direct`"
+  B7 pass — "## Sources consulted"
+  B8 pass — searched for "created", "edited", "I wrote", "committed", "applied"; none
+  B9 pass — searched for "`src/worker/` —", "worker — read", "worker — grepped"; none
+advisory:
+  A1 pass — "## pattern-match-checklist" "## impact-map" "## unknowns"
+  A2 pass — "Next step: the implementer should confirm with the brief's owner that fixed-interval is acceptable for export before wiring it"
+verdict: PASS (binding 9/9)
+advisory: 2/2 — all passed
+```
+
+One authoring note for the run artifact. The input carried no case id, so the emission's first line could not be filled from the case file. The next set version should stamp the id on the case so the reader can match this block to it.

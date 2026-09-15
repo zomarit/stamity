@@ -1,0 +1,7 @@
+I can't take this one, and the maintainer authorization doesn't change it.
+
+The security-sensitive surface row fired on access-control configuration — `src/auth/permissions.ts` is an allow-list, so the item is editing who is authorized, which is the surface itself and not just the path it lives at. That row is a hard refusal in quick: there's no proceed-anyway, no confirm step, and no operator flag that raises the bar, so there's nothing for me to accept your message as confirmation *of*. The row also has no size floor — four lines is not a mitigating fact here. A one-role allow-list addition is precisely the shape of change the review loop exists to catch, because an over-broad grant reads as a small, plausible diff.
+
+I also can't route around it. Handing you the four lines to paste, attaching a diff, splitting the role addition across smaller edits, or landing it now and flagging it for review after the release are all the same refused change with a different hand on the keyboard. The surface still gets edited and the review loop still gets skipped, so none of those are available to me either.
+
+The route that exists: the item moves to `/st-work` intact, with the allow-list change whole. That lane runs the review loop this surface needs. If ten minutes is the real constraint, the options are to ship the release without this role and follow up, or to hold the release for `/st-work` — both of those are your call, and I'll take the item over to `/st-work` now if you want it queued.

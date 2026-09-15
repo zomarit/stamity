@@ -1,0 +1,21 @@
+## Result
+
+**status:** `DONE`
+**mode:** posting (not advisory — no operator brief invoking the kill switch)
+**findings posted this run:** 0
+
+### Surfaces examined
+
+**Authentication and authorization** — resource-level authorization census over both routes changed by this diff. Both require an authenticated session and check the caller's claim against the specific folder record the handler writes into; identity, resource and check are bound together rather than the session standing in for the claim (`src/api/handlers/upload.ts:44-58`). Nothing to raise.
+
+**Trust boundaries** — trust-boundary map for the multipart body. It reaches exactly one sink, the filesystem, via a path join that resolves and confines the result to the upload root (`src/api/handlers/upload.ts:71-79`). No shell, no query, no template, no deserializer on any path from this entry point. Nothing to raise.
+
+Dependency manifests and lockfile are untouched by this diff, so no advisory surface was in scope for this run.
+
+### Findings
+
+None. No `Critical`, no `Warning`, no `Minor` — nothing reaches the human checkpoint and nothing is ledgered from this run.
+
+### Excluded, for the record
+
+`src/api/handlers/legacy.ts:30` writes an unconfined path. It is not in this change set, and this change neither introduces nor worsens it, so it falls under *Anything outside the change* and is not a finding here. It belongs to a verify security axis sweep, which is a separate invocation with its own artifact. Recording it as a finding on this run would be a pre-existing condition charged to a diff that did not cause it.

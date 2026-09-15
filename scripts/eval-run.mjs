@@ -7,7 +7,7 @@ import { runEvaluation } from './eval/run.mjs'
 export async function main(args = process.argv.slice(2)) {
   if (args.length === 1 && args[0] === '--help') {
     console.log('Manual full eval: node scripts/eval-run.mjs --run-id YYYY-MM-DD-run-N --profile codex-astra --trigger release [--capacity 4]')
-    console.log('Requires committed inputs and OPENAI_API_KEY. Default profile stays claude; this transport blocks unsupported profiles without fallback. No calls occur on import.')
+    console.log('Requires committed inputs and OPENAI_API_KEY. Default profile stays claude; this transport blocks unsupported profiles without fallback. No calls occur on import. Current set: SET-v7 (evals/SET-v7.md) over evals/cases-v6.')
     return 0
   }
   const options = {}

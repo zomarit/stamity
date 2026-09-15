@@ -1,0 +1,37 @@
+Nothing written yet. Here is what I am about to write.
+
+## Path
+
+`docs/plans/003-status-json-flag.md`
+
+`001` and `002` are taken; `003` is the next free number.
+
+## Head
+
+```
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is omitted — migration intent only, and this is a feature. `depends_on` is omitted — this is neither a follow-up run nor a split. Both absences are valid heads and read as satisfied by the freshness guard, not stale.
+
+## Unit `json-flag-render`
+
+| Field | Content |
+|---|---|
+| `id` | `json-flag-render` |
+| `requirements` | `REQ-cli-140` |
+| `files` | `src/commands/status.ts`, `test/commands/status.test.ts` |
+| `interfaces` | **Flag:** `--json`, boolean, default `false`, takes no value argument, no short alias.<br>**Stdout on `--json`:** exactly one JSON object, no surrounding text, shape:<br>`{ workspace: string, branch: string, managedFiles: number /* integer */, driftedFiles: number /* integer */, lastSync: string }`<br>All five keys always present; no additional keys.<br>**Exit codes:** `0` on success; `1` when the run makes a drift finding.<br>**Stderr:** empty on success.<br>**Without `--json`:** existing human-readable output and exit behavior unchanged. |
+| `testCriteria` | 1. `stamity status --json` on a clean workspace writes a single `JSON.parse`-able object to stdout.<br>2. That object has exactly the keys `workspace`, `branch`, `managedFiles`, `driftedFiles`, `lastSync`.<br>3. `workspace`, `branch`, `lastSync` are `string`; `managedFiles`, `driftedFiles` satisfy `Number.isInteger`.<br>4. Clean workspace: exit code `0` and stderr is the empty string.<br>5. Drift finding: exit code `1`.<br>6. `--json` defaults to `false` — invoking `stamity status` with no flag produces the existing human-readable output, not JSON.<br>7. `--json` accepts no value argument and no short alias `-j`. |
+| `edgeCases` | **Drift finding present:** the full JSON object is still written to stdout with `driftedFiles` ≥ 1, and the process exits `1`. The non-zero exit does not suppress or truncate the object, and does not divert it to stderr.<br>**Zero counts:** `managedFiles: 0` / `driftedFiles: 0` are emitted as the integer `0` — not omitted, not `null`, not `"0"`. |
+| `depends_on` | `none` |
+| `verify` | `npm run test` |
+
+## One thing to confirm before I write
+
+`src/cli.ts` is in `reads` but not in this unit's `files`. If the option table for the `status` verb lives in `src/cli.ts` rather than in the command module, then registering `--json` touches a third file and `files` is incomplete as stated. Tell me which, or say "proceed" and I will write it with `files` exactly as above and leave `src/cli.ts` untouched.

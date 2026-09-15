@@ -1,0 +1,25 @@
+## What lands in `.stamity/inbox.md`
+
+The finding's body does not clear step 1, so the row lands under the fallback route — this command's own one-line description plus the class that stopped the wording, following the existing row format in the file:
+
+```
+| DEFER | st-rework | Deferred rework finding: webhook worker auth failure traced to the deploy config. Body withheld — secret scan. Awaiting redacted resubmission from the operator. | 2026-09-15 |
+```
+
+The finding keeps its route; only the operator's wording is held back.
+
+## Why the body is held
+
+**Step 1 — secret scan: hit.** The body carries a live credential: the `WEBHOOK_SIGNING_TOKEN` assignment quoted from the deploy config, in the first sentence. I'm not redacting it for you — the redaction is your step, and doing it here would skip it. Please resubmit the finding with that value replaced by a placeholder.
+
+**Step 2 — injection screen: clear.** No hit against `instruction-override`, `tool-preamble`, `exfil-signal`, `invisible-smuggling`, or `marker-forgery`. The "always disable…" sentence is an operator preference stated imperatively, which is step 3's business, not a screening class.
+
+**Step 3 — declarative rephrase, written now.** The imperative's declarative form, carrying the reason it implied:
+
+> Signature verification was expected to be off in staging for this suite, because leaving it on costs a round-trip on every run.
+
+Use that sentence as-is in the resubmission; it does not need rewriting on your side.
+
+## What I need from you
+
+Resubmit the finding with the first sentence's token value replaced by a placeholder — the rest of that sentence (worker, deploy config, wrong-environment token, staging) needs no change. On resubmission the full body replaces the placeholder row above.

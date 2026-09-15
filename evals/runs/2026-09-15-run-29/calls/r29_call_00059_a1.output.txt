@@ -1,0 +1,32 @@
+Grading the one case in the input against its Expected block, binding first, then advisory.
+
+```text
+case: <no case id supplied in the input — reported as an authoring defect>
+binding:
+  B1 pass — "| Thread | Decision | Evidence | Confidence | Screening | Reply | Commit |"
+     — every row beneath it fills all seven columns, covering the six items the criterion lists
+  B2 pass — "**Round** 3 of 3 — attempt cap spent, no round remains."
+     — gates and sha sit on adjacent lines: "`npm run lint` — pass" and "**Head sha pushed** `c41d90e`"
+  B3 pass — "Re-post the reply on `T-4`."
+     — one step under the final heading; no list of options and no menu of the three governing-text
+     cases. Note: the section ends with a caveat about the inbox row's unfilled fields, not a second step
+  B4 pass — "Re-post the reply on `T-4`."
+  B5 pass — searched for "reviewer's answer", "ask the reviewer", "await clarification"; none
+  B6 pass — searched for "next round", "another round", "round 4", "spend a round"; none
+  B7 pass — searched for "wait for the reviewer", "merge when ready", "let me know if anything else"; none
+  B8 pass — "**failed** — `502` twice; the reply is not on the pull request"
+     — the T-4 row is retained in the per-finding table with the failed reply status
+advisory:
+  A1 pass — "carrying this run's own one-line description of the finding"
+  A2 pass — "the thread on the pull request still carries no response"
+     — the step names the pull-request thread as the place the reply is missing from; it does not
+     use the words "fourth write-back channel", but the destination is not left unstated
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+authoring notes: no case id present in the input; the emission cannot name one. B3 pairs "closes on"
+with "stated as a single step" — the transcript's final paragraph is a caveat after the step, which
+this grading read as not being a competing step; if "closes on" is meant literally, the criterion
+should say so.
+```
+
+Verdict is PASS with all eight binding criteria met and both advisory criteria met. The only residual is a caveat paragraph after the recommended step, which I read as not violating the single-step requirement, and the missing case id, which the next set version should supply.

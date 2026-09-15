@@ -36,31 +36,65 @@ page, under Currency and revisit triggers.
 
 What a session pays before it has done anything: the charter every client reads, plus every
 rule that client cannot attach conditionally. The charter TEMPLATE is capped at 150 physical
-lines, and on three of the four clients that cap is not the number a session loads.
+lines, and what a session actually loads is that template plus whatever rules the client's own
+delivery leaves in front of it.
 
-| Client | Always-on lines | What it loads unconditionally |
-|---|---|---|
-| `claude` | 236 | the charter plus every rule with no globs — those carry no attach trigger, so they load every session |
-| `cursor` | 92 | the charter alone — a rule with no globs is pulled in when the conversation matches it |
-| `copilot` | 236 | the charter plus every rule with no globs — those carry no attach trigger, so they load every session |
-| `codex` | 1063 | the charter plus EVERY selected rule — no per-rule attach mechanism, so the whole set is folded into the one instruction file |
+| Client | Always-on lines | Delivery of description-scoped rules | What it loads unconditionally |
+|---|---|---|---|
+| `claude` | 95 | skill, on demand | the charter alone — a rule with no globs is delivered as a skill instead, and every other rule attaches on paths |
+| `cursor` | 95 | rule, pulled on relevance | the charter alone — a rule with no globs is pulled in when the conversation matches it |
+| `copilot` | 95 | skill, on demand | the charter alone — a rule with no globs is delivered as a skill instead, and every other rule attaches on paths |
+| `codex` | 407 | skill, on demand | the charter plus the rules that must be unconditional — critical, floor-tagged, or anchored to a nested instruction file; the rest are skills |
+
+Measured under `ruleDelivery: on-demand`, the shipped default. A rule that carries no globs has
+no attach trigger, so under `always-on` claude and copilot load its whole body every session;
+under `on-demand` it is projected as `.agents/skills/stamity-<rule-id>/SKILL.md` and the client
+opens it when its description matches. Cursor is the one client that never needed the option —
+its own rule layer already pulls such a rule on relevance. A repository can take the other
+shape back with `stamity config set ruleDelivery always-on`, which moves the first two columns
+and nothing else.
 
 The line figures are the ratchet ceilings in `src/content/charter.ts`, each pinned at the load
-measured on the last corpus refresh: a client's real composite is at or under its cell, never
-over it, because the corpus suite fails the build when one grows past its ceiling. They are a
-bound a reader can plan against, not a reading this page took as it rendered.
+measured on the last corpus refresh: the corpus suite fails the build when a client's real
+composite differs from its cell in either direction, so a cell that grew is a slice nobody
+authorised and one that shrank is a saving nobody wrote down. They are a bound a reader can
+plan against, not a reading this page took as it rendered.
 
 **What co-selecting codex costs every other client.** Selecting `codex` does not add a
 codex-only file. It rewrites the root `AGENTS.md` that every other selected client already
-reads, so a claude+codex repository hands claude the codex rules appendix too: 29935 bytes of
-shared instruction text against 5004 without it — ≈6.0x the always-on bytes every co-selected
+reads, so a claude+codex repository hands claude the codex rules appendix too: 24952 bytes of
+shared instruction text against 5192 without it — ≈4.8x the always-on bytes every co-selected
 client pays.
 
-That appendix does not fit the client's own 32 KiB ceiling: budget shaping drops 8 rules from
-it on the full selection, lowest risk first — rules marked critical are kept longest, then
-floor-tagged rules, then declared precedence, then id. The emitted file names the dropped rules
-in its own omission notice, so the current set is read there rather than here. Re-measure with
-`node scripts/generate-capability-matrix.mjs` after a corpus change.
+**What codex folds, and what it pulls.** Under the delivery mode above, the appendix carries 3
+rules — `injection-screening`, `secrets`, `security-patterns` — and they are there for the
+reason the client has no conditional layer to put them anywhere else: each is either marked
+critical or carries a `floor:*` tag, and a floor that loads on relevance is a floor that stops
+binding the moment the model does not notice it applies. The other 9 rules are projected as
+`.agents/skills/stamity-<rule-id>/SKILL.md` instead, one directory each.
+
+**What that costs the clients beside it.** Those directories sit in the SHARED
+`.agents/skills/` tree, which cursor, copilot and codex all read — a directory cannot be made
+client-specific, so it holds the union of every selected client's demotions. Co-selecting
+`codex` therefore hands `cursor` 9 and `copilot` 7 rules a second time: each is already
+delivered to that client as its own `.mdc` rule or `.instructions.md` file, and is now also
+description-pullable as a skill. The duplicate is pulled on relevance and never loaded at
+launch, so it moves none of the line figures above — and a selection without `codex` does not
+pay it at all. `claude` is absent from that list because it reads no shared tree: its native
+skills directory carries only the rules it demoted itself.
+
+That trade is paid in a second budget, so it is measured too. The client holds every skill's
+name and description for the whole session in order to decide when to open one, and caps that
+list at 8000 characters when the context window is unknown. The full selection measures 5570 —
+the shipped skills plus the projected rules — and emission refuses outright rather than
+truncating past the cap, the same way it refuses an oversized instruction file. The remaining
+headroom is what a repository's own skills spend into.
+
+The appendix is shaped to the client's own 32 KiB ceiling, lowest risk first — rules marked
+critical are kept longest, then floor-tagged rules, then declared precedence, then id. On the
+full selection it drops 0 rules. The emitted file names any it dropped in its own omission
+notice, so the current set is read there rather than here. Re-measure with `node
+scripts/generate-capability-matrix.mjs` after a corpus change.
 
 ## Dialect facts by client
 
@@ -176,7 +210,7 @@ Declared caps:
 | Cap | Declared value |
 |---|---|
 | `AGENTS.md budget` | 32768 bytes (32 KiB) |
-| `hook enforcement` | exit 2 denies supported tool calls after native /hooks trust; the core role guard is telemetry because PreToolUse has no agent identity. Hosted tools and specialized paths may bypass hooks; use native sandbox/permissions for enforcement. |
+| `hook enforcement` | exit 2 denies supported tool calls after native /hooks trust; the core role guard is telemetry because PreToolUse has no agent identity. Hosted tools and specialized paths may bypass hooks; use native sandbox/permissions for enforcement. Three steps stand between the emitted hooks.json and a hook that runs — `features.hooks = true`, which this engine writes into .codex/config.toml and the client defaults OFF; `projects.<path>.trust_level = "trusted"` in the operator's own Codex home config; and a per-hook hash review through the interactive /hooks command, or --dangerously-bypass-hook-trust for automation that cannot take that step — and with all three in place headless `codex exec` on codex-cli 0.154.0 still loaded no project hook layer at all in this repository's 2026-09-15 measurement, so a hook is enforcement in the interactive client and nothing in that lane. |
 | `per-agent tool allowlist` | no native per-agent tools list is documented as of 2026-09-10; no placeholder key is emitted. sandbox_mode carries the supported filesystem boundary; the policy grant remains a prompt-level restriction. |
 | `command-surface` | none — custom prompts live in the user's Codex home directory, not the repository, and are deprecated in favour of skills, so the nine touchpoint bodies are not emitted here; the charter's touchpoint index still names them |
 
@@ -184,7 +218,7 @@ Sources:
 
 - <https://learn.chatgpt.com/docs/agent-configuration/subagents> — accessed 2026-09-10
 - <https://learn.chatgpt.com/docs/hooks> — accessed 2026-09-10
-- <https://learn.chatgpt.com/docs/config-file/config-reference> — accessed 2026-09-10
+- <https://learn.chatgpt.com/docs/config-file/config-reference> — accessed 2026-09-15
 - <https://learn.chatgpt.com/docs/custom-prompts> — accessed 2026-09-10
 
 ## Hook guarantee honesty

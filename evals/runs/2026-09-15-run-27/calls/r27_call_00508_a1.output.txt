@@ -1,0 +1,1 @@
+`stamity-learnings-schema` — the ask is pure curation of already-committed notes (merging two files on the same topic, correcting an unsupported confidence band), not capturing a new finding, which is what `st-learn`'s write path covers.

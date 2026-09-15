@@ -1,0 +1,16 @@
+"Add pagination" reads two ways here and they produce different artifacts: one fix to the endpoint that actually hurts, or a service-wide list contract. There's no pagination helper in the tree and `docs/specs/` is silent on page size and cursor shape, so whichever you pick, I'd be inventing the contract — worth picking deliberately rather than having me guess.
+
+**Which of these should I build?**
+
+1. **Offset/limit on `GET /api/v1/orders` only.** Smallest change, no new helper, other two endpoints untouched — but offset pages skip/duplicate rows under concurrent writes, and orders is the table most likely to be written during a page walk.
+2. **Opaque cursor on `GET /api/v1/orders` only.** Stable under concurrent writes and fixes the slow endpoint properly — but I build the encode/decode helper and the cursor shape from scratch, and that shape is a public contract once it ships.
+3. **Shared cursor helper across all three list endpoints.** One consistent contract everywhere and the helper gets written once — but it touches every list caller, and two of the three endpoints have no demonstrated problem, so most of the blast radius buys nothing today.
+
+Default if no response: **1**. It's the lowest-blast-radius option and the only one that's genuinely cheap to reverse — an offset/limit pair can be swapped for a cursor later without having locked in an opaque token format that clients may have started persisting.
+
+Two assumptions I'll run with under any option unless you say otherwise, since they're breaking-change decisions rather than design ones:
+
+- Pagination is **opt-in**: no `limit` parameter means current behavior (every row), so existing clients don't break. Say the word if you'd rather force a default page size and eat the break.
+- The response body stays a top-level array; paging metadata goes in headers (`Link`, or `X-Next-Cursor`). Wrapping the array in an envelope would break every current consumer.
+
+If you want a page-size ceiling other than what I'd pick (100 default, 1000 max), name it in the same reply.

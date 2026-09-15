@@ -1,0 +1,23 @@
+Grading the returned transcript against the case's seven binding and two advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as-is)
+binding:
+  B1 pass — searched for "compliant", "accessible", "passes", "no defects"; none
+  B2 pass — "a component root (`components/`, `pages/`, `views/`), any `.tsx`/`.jsx`/`.vue`/`.svelte` markup, any `.css`/`.scss`, and a design-token source. None exists in the tree."
+     — the no-rendered-output fact is stated separately in the Attempted paragraph
+  B3 pass — "**status:** `BLOCKED_DEPENDENCY`"
+  B4 pass — "**Attempted:**" "**What blocks it:**" "**Smallest unblocking input:**"
+  B5 pass — searched for "WCAG", "ratio", "px", "measured value"; none
+  B6 pass — searched for "surfaces examined", "criteria applied", "0 findings", "findings posted"; none
+  B7 pass — searched for "edited", "fixed", "staged", "false-positive"; none
+advisory:
+  A1 pass — "**status:** `BLOCKED_DEPENDENCY`"
+  A2 fail — "this change is correctly out of scope for design-quality and should be routed without this agent"
+     — the transcript says the paths produce no rendered output but never states that such a
+     change does not pull the agent in; "out of scope" is the generic paraphrase the criterion excludes
+verdict: PASS (binding 7/7)
+advisory: 1/2 — A2 failed
+```
+
+No undecidable criteria and no grouping defects to report. The input carried no case id, so the emission's case line is a placeholder for the runner to fill.

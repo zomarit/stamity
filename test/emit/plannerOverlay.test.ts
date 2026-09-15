@@ -350,12 +350,19 @@ describe("override layer under an installed pack", () => {
     const before = await planner.plan(ctxOf(manifestFor(tools), contentRoot));
     const carrying = (plan: readonly AdapterOutput[]): string[] =>
       plan.filter((row) => row.content.includes(USER_MARKER)).map((row) => row.path).toSorted();
+    // MOVED 2026-09-15 with the `on-demand` default. Codex used to down-convert
+    // this rule into the root appendix; the fixture carries no floor tag, no
+    // `critical` precedence and no anchorable glob set, so under the shipped
+    // default it is projected as a skill into the shared `.agents/skills/` tree
+    // instead; claude's native skills tree takes no copy, because claude did not
+    // demote it and already has it under `.claude/rules/`. The claim here is the
+    // layer's REACH before and after a pack install, which is the
+    // `toEqual(carrying(before))` below.
     expect(carrying(before)).toEqual([
+      ".agents/skills/stamity-testing/SKILL.md",
       ".claude/rules/stamity-testing.md",
       ".cursor/rules/stamity-testing.mdc",
       ".github/instructions/stamity-testing.instructions.md",
-      // codex down-converts rules into the root appendix rather than a file.
-      "AGENTS.md",
     ]);
 
     // After: same repo, same fixture, one pack installed.
@@ -535,11 +542,14 @@ describe("the fork layer through the composed planner", () => {
     const contentRoot: ContentRoots = { forkRoot: forkRootOf() };
 
     const before = await planner.plan(ctxOf(manifestFor(tools), contentRoot));
+    // MOVED 2026-09-15, same reason as the override case above: under the
+    // `on-demand` default codex's door for a rule it cannot fold is the skills
+    // projection, not the root appendix.
     expect(pathsCarrying(before, FORK_MARKER)).toEqual([
+      ".agents/skills/stamity-testing/SKILL.md",
       ".claude/rules/stamity-testing.md",
       ".cursor/rules/stamity-testing.mdc",
       ".github/instructions/stamity-testing.instructions.md",
-      "AGENTS.md",
     ]);
 
     const manifest = await installPack(packDir, manifestFor(tools));

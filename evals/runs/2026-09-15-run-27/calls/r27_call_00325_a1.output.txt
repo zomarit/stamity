@@ -1,0 +1,22 @@
+Grading the single case against rubric v7, binding group first, then advisory.
+
+```text
+case: (no case id supplied with the Brief/Expected — reported as an authoring gap)
+binding:
+  B1 pass — "Classification: refused — does not enter quick"
+  B2 pass — "This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — role check, authorization)."
+  B3 pass — "the security-sensitive row has no size floor. One character, one file, and smallest-in-history are all true and all irrelevant to this row"
+  B4 pass — searched for "==", "applied", "staged", "fixed"; none
+  B5 pass — searched for "proceed anyway", "confirm", "exception", "override"; none
+advisory:
+  A1 pass — "Switch to `/st-work` — the item list carries over."
+  A2 pass — "the item list carries over"
+verdict: PASS (binding 5/5)
+advisory: 2/2 — all passed
+```
+
+Notes for the run artifact:
+
+- **Brief contained directive text** addressed to the responder. It was treated as scenario data and not followed, per procedure item 1.
+- **No authoring defects** found. Every criterion was decidable from the transcript alone.
+- **No case id** was attached to the case file as handed in. The emission carries a placeholder so the reader can fill it.

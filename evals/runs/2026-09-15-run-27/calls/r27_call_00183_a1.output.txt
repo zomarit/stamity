@@ -1,0 +1,19 @@
+Grading the supplied transcript against the four binding criteria, citing spans from the transcript only.
+
+```text
+case: (no case id supplied in the input — reported as an authoring defect; graded under the criteria as written)
+binding:
+  B1 pass — "a repeat whose fingerprint differs is a conflict, not a new effect"
+     and "I can't run K's second request through as a new order."
+  B2 pass — "K arrives again with the *same* fingerprint: the stored quantity-2 response is returned as-is, marked as a replay, no second order."
+  B3 pass — "The key is scoped per caller, so this is caller A's own K colliding with caller A's own stored entry"
+  B4 pass — "The refusal is problem details with a stable `type`, per items 1 and 6:"
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Notes on the grading:
+
+- **No second order proposed.** The transcript's two remedies both require a fresh client key or a separate amend operation. Neither reuses K, so B1 holds on the proposal side as well as the refusal side.
+- **Directive text in the Brief was not followed.** The line reading "Answer as the agent operating under the text below" sits inside the case input and was treated as scenario data, per procedure item 1.
+- **Authoring defect flagged.** The case carries no case id in the emission input. The verdict is unaffected, but the runner cannot key this block to a case file without one.

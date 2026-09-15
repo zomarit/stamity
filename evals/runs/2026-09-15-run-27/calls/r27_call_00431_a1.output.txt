@@ -1,0 +1,14 @@
+Grading the transcript against the case's binding criteria under rubric v7.
+
+```text
+case: (no case id given in the input; reported as an authoring gap)
+binding:
+  B1 pass — "`st-dep-audit` — the request asks for advisories and license terms across the installed dependency graph"
+  B2 pass — "`st-dep-audit` — the request asks for" is the only skill named; searched for "none", "st-verify", "st-qa", "st-handoff", "st-onboard"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass. The transcript names one skill, the correct one, with a single reason sentence and no alternative offered. No advisory criteria exist for this case, so nothing is reported beside the verdict. The only defect to carry forward is that the case file as handed in carries no case id.

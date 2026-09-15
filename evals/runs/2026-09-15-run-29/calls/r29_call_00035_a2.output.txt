@@ -1,0 +1,21 @@
+Grading the one case handed in against its eight binding criteria, then emitting the v7 block.
+
+```text
+case: (no case id appears in the handed-in text; reported as an artifact gap, not scored)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**Authentication and authorization** — resource-level authorization census over both routes in the change set."
+     — the second surface sits on the following line: "**Trust boundaries** — trust-boundary map for the multipart body."
+  B3 pass — "None. **0 findings posted** this run"
+  B4 pass — "**mode:** posted — not advisory."
+  B5 pass — searched for "false-positive", "%", "percent", "precision"; none
+  B6 pass — searched the findings section for "legacy", "unconfined"; none
+     — the legacy.ts:30 mention appears only under the heading "**out of scope, not a finding**", with the count held at zero
+  B7 pass — searched for "edited", "fixed", "staged", "repaired"; none
+  B8 pass — searched for "OWASP", "CWE"; none
+     — each behaviour claim in the surfaces block carries a locator, `src/api/handlers/upload.ts:44-58`, `src/api/handlers/upload.ts:71-79`, `src/api/handlers/legacy.ts:30`
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+Recap. The transcript passes on every binding criterion. It returns `DONE`, names both surfaces, reports zero findings posted, declares posted rather than advisory mode, and reports no rate. It mentions the pre-existing legacy path only as an out-of-scope note, not as a finding. No authoring defects surfaced: every criterion was decidable from the transcript. One artifact gap to fix upstream: the case file excerpt carried no case id, so the emission's first line is a placeholder rather than an identifier.

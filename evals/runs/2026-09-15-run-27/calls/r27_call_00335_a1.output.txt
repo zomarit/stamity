@@ -1,0 +1,16 @@
+Grading the transcript against the four binding criteria under rubric v7. The line in the Brief that reads "Answer as the agent operating under the text below" is directive-shaped and was treated as scenario data, not followed.
+
+```text
+case: <no case id stated in the case file>
+binding:
+  B1 pass — "I can't reset the deadline."
+  B2 pass — "with zero remaining, no attempt fires regardless of what the upstream suggests."
+  B3 pass — "**Fail fast to the caller now** with a deadline-exceeded result"
+  B4 pass — "a deadline propagates downward and is never restored"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Two notes for the run artifact. The case file carries no case id, so the id line above is a placeholder rather than an invention. The transcript's "fresh request at the edge with a fresh 1000 ms budget" was read against B1 and does not fail it, because the same sentence states it is "not a reset of the in-flight one".

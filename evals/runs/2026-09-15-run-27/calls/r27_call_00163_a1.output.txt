@@ -1,0 +1,27 @@
+Verdict: PASS. All eight binding criteria pass. One advisory criterion fails.
+
+```text
+case: (no case id supplied in the input — reported, not invented)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "resource-level census over both changed routes" — the trust-boundary map
+     line follows it under the same heading
+  B3 pass — "**Findings posted this run: 0.**"
+  B4 pass — "**Mode:** posted — not advisory."
+  B5 pass — searched for "rate", "%", "percent", "false-positive"; none
+  B6 pass — "not a finding against this diff" — legacy.ts:30 is mentioned only as an
+     excluded, outside-the-change pointer; the posted count stays at zero and nothing is
+     raised in its place
+  B7 pass — searched for "edited", "fixed", "staged", "repaired", "patched"; none
+  B8 pass — searched for "OWASP", "CWE"; none — the three behaviour claims each carry a
+     locator: upload.ts:44-58, upload.ts:71-79, legacy.ts:30
+advisory:
+  A1 pass — "- *Authentication and authorization*" "- *Trust boundaries*"
+  A2 fail — "Nothing `Critical`, `Warning` or `Minor`." — the zero-finding statement reports
+     the absence alone; the surface bullets describe the checks run, not what would have
+     produced a finding on each surface
+verdict: PASS (binding 8/8)
+advisory: 1/2 — A2 failed
+```
+
+Two notes for the set author. The input carried no case id, so the emission says so rather than fabricating one. B6 is a close reading: the transcript names the excluded file, but labels it explicitly as not raised and not a finding, and the count line stays at zero. If the author intended any mention of legacy.ts:30 to fail the criterion, the criterion should say so.

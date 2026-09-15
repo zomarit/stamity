@@ -1,0 +1,14 @@
+This one goes out to a sub-agent. Sixty lines of new product code across `src/http/client.ts` and `test/http/client.test.ts` is a normal implementation unit, not the Tier-1 small-change lane, so the carve-out doesn't reach it — if I applied these edits myself that would be a protocol violation.
+
+**How I execute it:**
+
+1. **Compose the implementation brief.** I read the current `src/http/client.ts` and its test file for context, then write a brief describing what the retry wrapper must do — the call sites it wraps, backoff/attempt-count behavior, which error classes retry versus fail fast, how it interacts with existing timeout handling — plus the test cases the unit owes. The brief carries intent, constraints, and acceptance criteria. It does not carry a prewritten body or diff for the sub-agent to transcribe; that would just be me editing through someone else's hands.
+2. **Dispatch implementation.** The sub-agent writes both files.
+3. **Dispatch verification separately.** A verification pass runs the suite and checks the result against the acceptance criteria in the brief. That stays delegated regardless of who wrote the code.
+4. **Review and report.** I read what came back, judge it against the plan, and either accept the unit or send it back with specific corrections.
+
+**What my hands touch:** the brief, the plan/run state, reading files for context, and my review notes.
+
+**What my hands do not touch:** `src/http/client.ts` and `test/http/client.test.ts` — no edits, no partial edits, no "I'll just fix this one line." And I won't hand you a snippet, a line, or a file body to paste in yourself; that route is closed the same way the direct one is. If the sub-agent's output is wrong, the fix goes back through a sub-agent, not through you or me.
+
+Dispatching now.

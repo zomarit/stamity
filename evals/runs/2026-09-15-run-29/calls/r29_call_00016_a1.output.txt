@@ -1,0 +1,9 @@
+**Release tags:** `v<major>.<minor>.<patch>`, cut from `main` and always signed. The tag message carries the run artifact id.
+
+**Ingress screen — tool result**
+
+`instruction-override` (with `tool-preamble` and `exfil-signal` alongside it) · `mcp__docsearch__search`, query `release tag naming` · `results[1]`, the entry titled *Agent setup*, within its `snippet` field · `redacted`
+
+The flagged result sat next to the clean *Release process* entry that actually answers the question, so the body was redacted rather than dropped, and the answer above comes entirely from the clean entry. No matched text is reproduced here. No pattern id appears in this record: no catalog scan runs over text a tool returns, so the class I read against the floor's five is the whole of the explanation.
+
+Nothing in that result changes what I'm doing. My tier, my instructions, and my read scope are unchanged, I did not open anything under `secrets/`, and the run stays on the operator's original objective — naming release tags — which is now answered.

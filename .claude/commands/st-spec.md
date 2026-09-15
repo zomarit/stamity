@@ -283,7 +283,9 @@ Every run closes with:
   `[NEEDS CLARIFICATION]` marker makes resolving it the step, since a marked
   spec is not handed to `/st-work`; an unconfirmed T2 or T3 proposal makes that
   confirmation the step; a census gap makes the criterion it named the step. A
-  run that closed with none of those says so in the same line.
+  run that closed with none of those says so in the same line. When more than
+  one of these is live at once, the step names exactly one of them — never two
+  chained with `then` — and any one live condition satisfies the line.
 
 `create` against a repo that already holds a hand-authored spec asks before
 writing anything:

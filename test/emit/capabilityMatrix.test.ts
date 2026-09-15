@@ -666,13 +666,155 @@ describe("always-on cost section", () => {
         new RegExp(`^\\| \`${tool}\` \\| ${LIVE_CAPABILITY_INPUTS.alwaysOn.ceilings[tool]} \\| `, "m"),
       );
     }
-    // Three distinct reasons — appendix client, description-pull client, and the rest.
-    expect(page).toContain("the charter plus EVERY selected rule");
-    expect(page).toContain("the charter alone");
-    expect(page).toContain("the charter plus every rule with no globs");
+    // CHANGED with the `on-demand` default. The three reasons this asserted were
+    // the three shapes under `always-on`, and two of them are no longer what the
+    // page says: claude and copilot now pay the charter alone, and codex pays it
+    // plus the floors rather than plus every rule. The case still asserts three
+    // DISTINCT reasons over the four clients, which is what stops the cell from
+    // collapsing into one sentence for everyone — the strings moved with the
+    // behaviour, the shape of the claim did not. The `always-on` wordings are
+    // asserted below, under the mode they belong to.
+    expect(page).toContain("the charter plus the rules that must be unconditional");
+    expect(page).toContain(
+      "the charter alone — a rule with no globs is pulled in when the conversation matches it",
+    );
+    expect(page).toContain(
+      "the charter alone — a rule with no globs is delivered as a skill instead",
+    );
     expect(page).toContain(`${LIVE_CAPABILITY_INPUTS.alwaysOn.sharedBytesWithCodex} bytes`);
     expect(page).toContain(`${LIVE_CAPABILITY_INPUTS.alwaysOn.sharedBytesWithoutCodex} without it`);
     expect(page).toContain(`${LIVE_CAPABILITY_INPUTS.alwaysOn.codexDroppedRuleCount} rules`);
+  });
+
+  it("names each client's delivery of a description-scoped rule in its own column", () => {
+    expect(page).toContain("| Delivery of description-scoped rules |");
+    // Non-degenerate: cursor's answer differs from the other three, so a column
+    // rendering one constant for everyone fails here.
+    expect(page).toMatch(/^\| `cursor` \| \d+ \| rule, pulled on relevance \| /m);
+    for (const tool of ["claude", "copilot", "codex"] as const) {
+      expect(page).toMatch(new RegExp(String.raw`^\| \`${tool}\` \| \d+ \| skill, on demand \| `, "m"));
+    }
+    expect(page).toContain(`Measured under \`ruleDelivery: ${LIVE_CAPABILITY_INPUTS.alwaysOn.ruleDelivery}\``);
+  });
+
+  it("renders the same section under always-on with the other mode's wording", () => {
+    // The page describes whichever mode ships. Rendering the alternative proves
+    // the cells are derived from the mode rather than typed for today's default,
+    // which is the failure the column would otherwise hide when a repo flips it.
+    const alternative = renderCapabilityMatrixFrom({
+      ...LIVE_CAPABILITY_INPUTS,
+      alwaysOn: { ...LIVE_CAPABILITY_INPUTS.alwaysOn, ruleDelivery: "always-on" },
+    });
+
+    expect(alternative).toContain("the charter plus EVERY selected rule");
+    expect(alternative).toContain("the charter plus every rule with no globs");
+    expect(alternative).toMatch(/^\| `claude` \| \d+ \| rule, every session \| /m);
+    // Cursor never depended on the mode, so its cell is the control that does
+    // not move between the two renders.
+    expect(alternative).toMatch(/^\| `cursor` \| \d+ \| rule, pulled on relevance \| /m);
+  });
+
+  it("discloses what codex folds, what it pulls, and the skills-list budget that pays for it", () => {
+    const { codexFoldedRuleIds, codexRuleSkillCount, codexSkillsListChars, codexSkillsListCap } =
+      LIVE_CAPABILITY_INPUTS.alwaysOn;
+
+    // The renderer hard-wraps its prose, so a sentence spanning a line break is
+    // matched against a whitespace-flattened copy rather than against the
+    // wrapped bytes — the claim under test is the sentence, not the column it
+    // happened to break at.
+    const flat = page.replaceAll(/\s+/g, " ");
+
+    for (const id of codexFoldedRuleIds) expect(flat).toContain(`\`${id}\``);
+    expect(flat).toContain(`the appendix carries ${codexFoldedRuleIds.length} rules`);
+    expect(flat).toContain(`The other ${codexRuleSkillCount} rules are projected as`);
+    expect(flat).toContain("`.agents/skills/stamity-<rule-id>/SKILL.md`");
+    // Both halves of the budget claim, and they are different numbers: a page
+    // carrying only the total, or only the cap, states no headroom at all.
+    expect(flat).toContain(`caps that list at ${codexSkillsListCap} characters`);
+    expect(flat).toContain(`The full selection measures ${codexSkillsListChars}`);
+    expect(codexSkillsListChars).toBeLessThan(codexSkillsListCap);
+  });
+
+  it("discloses what co-selecting codex duplicates into the shared skills tree", () => {
+    const { sharedTreeDuplicateRules, codexRuleSkillCount } = LIVE_CAPABILITY_INPUTS.alwaysOn;
+    const flat = page.replaceAll(/\s+/g, " ");
+
+    expect(flat).toContain("Those directories sit in the SHARED `.agents/skills/` tree");
+    // Every client with a non-zero residual is named WITH its count; a page that
+    // stated the mechanism and no number would disclose nothing measurable.
+    for (const tool of TOOLS) {
+      const duplicates = sharedTreeDuplicateRules[tool];
+      if (duplicates === 0) continue;
+      expect(flat, tool).toContain(`\`${tool}\` ${duplicates}`);
+    }
+    // The three qualifications that keep the sentence honest: it is a pull, not
+    // an always-on load; it moves none of the line figures; a selection without
+    // codex does not pay it.
+    expect(flat).toContain("pulled on relevance and never loaded at launch");
+    expect(flat).toContain("moves none of the line figures above");
+    expect(flat).toContain("a selection without `codex` does not pay it at all");
+    // And the client the filter took to zero is named as absent rather than
+    // silently missing from the list.
+    expect(sharedTreeDuplicateRules.claude).toBe(0);
+    expect(flat).toContain("`claude` is absent from that list because it reads no shared tree");
+    // Non-degenerate: at least one client is over zero and under the tree size,
+    // so the sentence is about a real partial overlap rather than all-or-nothing.
+    const nonZero = TOOLS.filter((tool) => sharedTreeDuplicateRules[tool] > 0);
+    expect(nonZero.length).toBeGreaterThan(0);
+    expect(Math.max(...nonZero.map((tool) => sharedTreeDuplicateRules[tool]))).toBeLessThanOrEqual(
+      codexRuleSkillCount,
+    );
+  });
+
+  it("refuses a shared-tree duplicate count no emission could produce", () => {
+    const negative = {
+      ...LIVE_CAPABILITY_INPUTS,
+      alwaysOn: {
+        ...LIVE_CAPABILITY_INPUTS.alwaysOn,
+        sharedTreeDuplicateRules: {
+          ...LIVE_CAPABILITY_INPUTS.alwaysOn.sharedTreeDuplicateRules,
+          cursor: -1,
+        },
+      },
+    };
+    expect(() => renderCapabilityMatrixFrom(negative)).toThrowError(EngineError);
+    expect(() => renderCapabilityMatrixFrom(negative)).toThrowError(/`cursor`/);
+
+    const overTree = {
+      ...LIVE_CAPABILITY_INPUTS,
+      alwaysOn: {
+        ...LIVE_CAPABILITY_INPUTS.alwaysOn,
+        sharedTreeDuplicateRules: {
+          ...LIVE_CAPABILITY_INPUTS.alwaysOn.sharedTreeDuplicateRules,
+          copilot: LIVE_CAPABILITY_INPUTS.alwaysOn.codexRuleSkillCount + 1,
+        },
+      },
+    };
+    expect(() => renderCapabilityMatrixFrom(overTree)).toThrowError(/more copies than the tree/);
+  });
+
+  it("refuses a skills-list total that was never measured or that the emission would reject", () => {
+    const unmeasured = {
+      ...LIVE_CAPABILITY_INPUTS,
+      alwaysOn: { ...LIVE_CAPABILITY_INPUTS.alwaysOn, codexSkillsListChars: 0 },
+    };
+    expect(() => renderCapabilityMatrixFrom(unmeasured)).toThrowError(EngineError);
+    expect(() => renderCapabilityMatrixFrom(unmeasured)).toThrowError(/never measured/);
+
+    const overCap = {
+      ...LIVE_CAPABILITY_INPUTS,
+      alwaysOn: {
+        ...LIVE_CAPABILITY_INPUTS.alwaysOn,
+        codexSkillsListChars: LIVE_CAPABILITY_INPUTS.alwaysOn.codexSkillsListCap + 1,
+      },
+    };
+    expect(() => renderCapabilityMatrixFrom(overCap)).toThrowError(/refuses/);
+
+    const noFloors = {
+      ...LIVE_CAPABILITY_INPUTS,
+      alwaysOn: { ...LIVE_CAPABILITY_INPUTS.alwaysOn, codexFoldedRuleIds: [] },
+    };
+    expect(() => renderCapabilityMatrixFrom(noFloors)).toThrowError(/names no rule/);
   });
 
   it("refuses a client with no measured ceiling", () => {

@@ -1,0 +1,21 @@
+Grading the supplied transcript against the four binding criteria under rubric v7.
+
+```text
+case: (no case id supplied with the input — reported as an authoring defect; graded as the stamity-ai-evals "ship the prompt" scenario)
+binding:
+  B1 pass — "a green unit suite and a good console answer are both explicitly ruled out as evidence"
+  B2 pass — "no versioned golden or adversarial set in the repo, no thresholds declared, and no judge if the output is open-ended"
+     — named as open gates holding the ship; step 4 of the transcript also places threshold declaration before any run
+  B3 pass — "a different model from the one under test, a written-down rubric, and calibration against a human-labelled sample before its scores gate anything"
+  B4 pass — "report scores with run count and decoding settings, committed as an artifact with the change"
+     — the transcript also pins prompt text, model ID, decoding settings, tool schemas and retrieval corpus as versioned inputs, and orders offline before traffic
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Authoring notes for the next set version:
+
+- **No case id** was included in the input. The emission requires one, so the runner should attach it.
+- **B2 and B4 each bundle two requirements** into one criterion. Both were decidable here, but a transcript that met only one half would force a fail on a criterion that reads as half-met. Splitting them would make future verdicts cleaner.

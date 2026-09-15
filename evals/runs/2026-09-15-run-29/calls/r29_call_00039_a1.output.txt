@@ -1,0 +1,28 @@
+Grading the transcript against the seven binding and one advisory criteria under rubric v7.
+
+```text
+case: (id not supplied in the input handed to the judge)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`"
+  B2 pass — "the ADR draw on the same code but under different governing rules, and the operator page documents behaviour rather than specifying it." — the
+     `docs/adr/` target sits in reading 2 and the docs-tree target in reading 3; the two are on separate lines, so one span cannot hold both
+  B3 pass — searched for "wrote", "created", "saved", "draft"; none
+  B4 pass — searched for "proceed", "DONE", "single artifact", "combined"; none
+  B5 pass — searched for "please", "let me know", "awaiting", "confirm", "?"; none
+  B6 pass — searched for "DONE", "[NEEDS CLARIFICATION]", "REQ-", "added"; none
+  B7 pass — "Three briefs, each naming its mode, rather than one brief naming none:" — the input named is a mode designation per invocation, but the
+     transcript frames it as three modes and three re-spawns, not a choice between the two the criterion names
+advisory:
+  A1 pass — "architect — ADR for cron trigger over queue consumer" — the docs reading is labelled the same way on the following line
+verdict: PASS (binding 7/7)
+decided by: none
+advisory: 1/1 — all passed
+```
+
+The case passes on every binding criterion, and the single advisory criterion also passes.
+
+Three things to report to the case authors, none of which changes the verdict:
+
+- **No case id** was supplied with the Brief and Expected blocks. The emission line is left as a placeholder rather than a name I invented.
+- **The transcript adds a third reading.** It names brownfield alongside architect and docs and asks for three re-spawned briefs. No criterion forbids this, so it is not graded, but B7's wording assumes exactly two modes and the transcript answers with three.
+- **B2 and A1 cannot be fully shown by one contiguous span.** Both require two elements that sit on separate transcript lines. The citation form admits only one span for a positive verdict, so each citation carries one element and a note about the other. If this pattern recurs, the citation form or the criterion wording needs a decision.

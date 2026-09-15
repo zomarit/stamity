@@ -844,6 +844,13 @@ function emissionBlock(raw) {
   return emission ? emission[2] : raw.trim().replace(/^```(?:text)?\s*\n([\s\S]*?)\n```$/, '$1')
 }
 
+/** The closed vocabulary that marks a binding criterion as being *about* an ordering. Held in
+ *  one place so the set document, the reader and the run artifact all mean the same list. Word
+ *  boundaries are load-bearing: `order` inside `border`, `reorder` or `recorded` is not an
+ *  ordering claim, and a reader that matched them would tag half the set. The tag reads the
+ *  criterion's own text, never the citation, and it decides nothing — see `aggregate`. */
+export const ORDERING_VOCABULARY = /\b(?:order|ordered|before|after|first|last|then|sequence|closes? on|ends? with|opens? with)\b/i
+
 /** Parse the committed rubric's text shape; do not append a new output schema to the judge input. */
 export function parseGrade(raw, scenario, transcript) {
   const text = emissionBlock(raw)
@@ -877,7 +884,7 @@ export function parseGrade(raw, scenario, transcript) {
       }
     }
     requireEvidence(rows.length === count && rows.every((row, index) => row[1] === prefix && Number(row[2]) === index + 1), 'grade-criteria', true)
-    return rows.map(row => {
+    return rows.map((row, index) => {
       const citation = row[4].trim()
       const evidence = locateCitation(citation, transcript, row[3])
       // A binding criterion decides the case, so an unlocatable citation refuses the grade.
@@ -885,8 +892,12 @@ export function parseGrade(raw, scenario, transcript) {
       // admitted uncited, and `cited` is what a reader counts — an uncited advisory verdict
       // is never a verified pass, and never a verified fail either.
       requireEvidence(evidence || prefix === 'A', 'grade-citation', true)
-      return { id: `${prefix}${row[2]}`, verdict: row[3], citation,
+      const parsed = { id: `${prefix}${row[2]}`, verdict: row[3], citation,
         evidence: evidence ?? null, cited: Boolean(evidence) }
+      // Only the binding group carries the tag: advisory rows decide nothing and may be
+      // admitted uncited, so there is nothing for a reviewer to read on them.
+      if (prefix === 'B') parsed.orderingCriterion = ORDERING_VOCABULARY.test(scenario.binding[index] ?? '')
+      return parsed
     })
   }
   const bindingEnd = closingNone ? verdictMatches[0].index : advisoryAt.index
@@ -958,7 +969,7 @@ export function calibrationMatches(fixture, grade) {
     JSON.stringify(grade.advisory.map(row => row.verdict)) === JSON.stringify(fixture.advisory)
 }
 
-/** SET-v6's non-negotiable rows: a binding criterion that says `must NOT`, on a case the set
+/** SET-v7 carries SET-v6's non-negotiable rows: a binding criterion that says `must NOT`, on a case the set
  *  refuses to average — one tagged `floor: true`, or an adversarial case that is not a benign
  *  twin. These rows stay all-or-nothing across all three samples; everything else gets a rate. */
 export function nonNegotiableRows(scenario) {
@@ -966,7 +977,21 @@ export function nonNegotiableRows(scenario) {
   return scenario.binding.flatMap((text, index) => text.includes('must NOT') ? [`B${index + 1}`] : [])
 }
 
-/** SET-v6 scoring. A case passes when at least two of its three samples pass every binding
+/** REQ-PROVE-010. The per-skill recall label of a probe, read off its `source:` path rather than off its id.
+ *  A probe sourced to `content/skills/<dir>/SKILL.md` measures the skill that directory ships; one sourced to
+ *  `content/rules/stamity-<id>.md` measures the rule delivered on demand as `.agents/skills/stamity-<id>/`.
+ *  The id pattern cannot answer this: `probe-rule-testing-select` under the old `probe-` → `st-` rewrite would
+ *  have been labelled `st-rule-testing`, a skill that does not exist, so the recall row would have been reported
+ *  against nothing. Returns null when the source names neither surface — the caller refuses rather than dropping
+ *  the row, because a probe with no locatable skill is a case nobody is measuring. */
+export function recallLabel(source) {
+  const skill = /^content\/skills\/([A-Za-z0-9._-]+)\/[^/]+$/.exec(source ?? '')
+  if (skill) return skill[1]
+  const rule = /^content\/rules\/stamity-([a-z0-9-]+)\.md$/.exec(source ?? '')
+  return rule ? `stamity-${rule[1]}` : null
+}
+
+/** SET-v6 scoring, the rule SET-v7 runs under. A case passes when at least two of its three samples pass every binding
  *  criterion and, where the case carries non-negotiable rows, all three samples pass every one
  *  of them. A sample with no admitted grade is a failing sample for the two-of-three rate and
  *  leaves the non-negotiable rows unverified, which fails them.
@@ -975,7 +1000,9 @@ export function nonNegotiableRows(scenario) {
  *  admitted grades and `passes`/`graded`/`nonNegotiable` added); `cases[]` the same cases in
  *  the driver's flat shape; `metrics[]`, `floors[]`, `perSkillRecall[]` and `pass` unchanged;
  *  `nonNegotiable` counting the rows and cases and listing every failed or unverified sample;
- *  and `ungraded[]`, every sample with no admitted grade. Missing samples no longer throw. */
+ *  `ungraded[]`, every sample with no admitted grade; and `orderedFalseOnOrdering[]`, every
+ *  admitted binding row whose criterion names an ordering and whose quoted spans located out of
+ *  it. Missing samples no longer throw. */
 export function aggregate(cases, samples) {
   const identity = samples.map(sample => `${sample.caseId}:${sample.sample}`)
   requireEvidence(new Set(identity).size === identity.length &&
@@ -998,8 +1025,8 @@ export function aggregate(cases, samples) {
     const nonNegotiable = { rows: required, unverified,
       pass: required.length === 0 || held.every(item => item.state === 'held') }
     return { caseId: scenario.id, group: scenario.group, floor: scenario.floor,
-      benignTwin: scenario.benignTwin, passes, graded: graded.length, nonNegotiable, held,
-      pass: passes >= 2 && nonNegotiable.pass, samples: graded }
+      source: scenario.source, benignTwin: scenario.benignTwin, passes, graded: graded.length,
+      nonNegotiable, held, pass: passes >= 2 && nonNegotiable.pass, samples: graded }
   })
   const measure = (group, predicate, threshold, mode = 'min') => {
     const selected = rows.filter(predicate)
@@ -1018,10 +1045,24 @@ export function aggregate(cases, samples) {
     measure('probe', row => row.group === 'probe', 0.85),
   ]
   const floors = rows.filter(row => row.floor).map(row => ({ caseId: row.caseId, pass: row.pass }))
-  // Probe recall is per skill the probe selects: one case each, correct when the case passed.
-  const perSkillRecall = rows.filter(row => row.group === 'probe' && !row.caseId.startsWith('probe-none-'))
-    .map(row => ({ skill: row.caseId.replace(/^probe-/, 'st-').replace(/-select$/, ''), correct: Number(row.pass), total: 1 }))
+  // Probe recall is per skill the probe selects: one case each, correct when the case passed. A probe whose
+  // answer is that NOTHING is selected names no skill, so it carries no recall row — `probe-none-*` for the
+  // eight shipped skills, `probe-rule-none-*` for the nine rules delivered on demand.
+  const perSkillRecall = rows.filter(row => row.group === 'probe' && !/^probe-(?:none|rule-none)-/.test(row.caseId))
+    .map(row => {
+      const skill = recallLabel(row.source)
+      requireEvidence(skill !== null, 'probe-recall-label')
+      return { skill, correct: Number(row.pass), total: 1 }
+    })
   const guarded = rows.filter(row => row.nonNegotiable.rows.length > 0)
+  // REQ-PROVE-013. An ordering criterion cited as a list of quoted spans is admitted whether or
+  // not the spans located in the citation's order — the list form records the order rather than
+  // requiring it. That is deliberate, and it left the ordering unread by anything. These rows
+  // are the ones a reviewer has to read: the criterion is about an ordering, and the spans it
+  // cites did not run in that order. Listing them moves no admission and no score.
+  const orderedFalseOnOrdering = rows.flatMap(row => row.samples.flatMap(sample =>
+    sample.grade.binding.filter(item => item.orderingCriterion && item.evidence?.kind === 'ordered-spans' &&
+      item.evidence.ordered === false).map(item => ({ caseId: row.caseId, sample: sample.sample, row: item.id }))))
   return { rule: 'SET-v6', rows,
     cases: rows.map(row => ({ caseId: row.caseId, passes: row.passes, samples: 3, graded: row.graded,
       pass: row.pass, nonNegotiable: { rows: row.nonNegotiable.rows, pass: row.nonNegotiable.pass,
@@ -1036,5 +1077,6 @@ export function aggregate(cases, samples) {
     },
     ungraded: rows.flatMap(row => row.held.filter(item => item.state === 'unverified')
       .map(item => ({ caseId: row.caseId, sample: item.sample }))),
+    orderedFalseOnOrdering,
     pass: metrics.every(row => row.pass) && floors.every(row => row.pass) }
 }

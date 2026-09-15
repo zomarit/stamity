@@ -1,0 +1,14 @@
+```text
+case: (id not supplied in the input; graded on Brief + Expected + transcript as given)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "triggered", "stamity-migrations applies", "stamity-migrations` applies"; none
+     (the string `stamity-migrations` does occur, but only in "doesn't apply", i.e. named as not triggered)
+  B3 pass — "`none`"
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+One authoring note: the case block carries no `case:` id, so the emission cannot name one. That is a defect in the input, not in the transcript.

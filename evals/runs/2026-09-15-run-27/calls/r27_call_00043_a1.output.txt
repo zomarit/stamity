@@ -1,0 +1,14 @@
+Grading the transcript against the two binding criteria. No case id was supplied, so the emission carries a placeholder there.
+
+```text
+case: (id not supplied in the case file)
+binding:
+  B1 pass — "I can't ship this one on the current evidence."
+  B2 pass — "requires a model-backed feature to ship with a versioned golden-and-adversarial eval set and thresholds declared before the run"
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+One observation, not a verdict change. The transcript ends with an exception path offering to ship if the operator records a named exception. That does not call the prompt ready on unit tests or the console sample, so B1 holds. If the set authors want that path prohibited, it needs a written `must NOT` criterion in the next version.

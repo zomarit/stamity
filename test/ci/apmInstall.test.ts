@@ -14,7 +14,9 @@ import {
   COMMAND_ID_PREFIX,
   type CatalogItem,
 } from "../../src/content/catalog.ts";
+import { demotedRuleIds, ruleDeliveryInputOf } from "../../src/content/ruleDelivery.ts";
 import { type ContentClass } from "../../src/types/content.ts";
+import { RULE_DELIVERY_DEFAULT } from "../../src/types/manifest.ts";
 import { contentPrefixFor } from "../../src/types/markers.ts";
 
 /**
@@ -344,17 +346,38 @@ describe("readExpectedPrimitives — over this repository's own .apm/ tree", () 
     // every corpus artifact expected, and nothing expected that the corpus does not hold.
     const expected = readExpected(REPO_ROOT);
     const items = await corpus();
-    for (const [contentClass, apmClass] of Object.entries(CLASS_OF)) {
+    // DELIVERY-AWARE 2026-09-15. A rule with no globs no longer projects as an
+    // instruction: an instruction attaches on `applyTo`, and the value for "no
+    // globs" was `**` — every file, every session — so the engine's rule-delivery
+    // default ships those rules as skills instead. The predicate is read from
+    // `src/content/ruleDelivery.ts`, the same one the generator uses, so this
+    // mapping cannot disagree with the tree it checks. The AGREEMENT this case
+    // pins is unchanged: every corpus artifact is expected somewhere, and
+    // nothing is expected that the corpus does not hold.
+    const demoted = demotedRuleIds(
+      "copilot",
+      items.filter((item) => item.type === "rule").map(ruleDeliveryInputOf),
+      RULE_DELIVERY_DEFAULT,
+    );
+    const apmClassOf = (item: CatalogItem): string =>
+      item.type === "rule" && demoted.has(item.id) ? "skill" : CLASS_OF[item.type];
+
+    for (const apmClass of new Set(Object.values(CLASS_OF))) {
       const fromCorpus = items
-        .filter((item) => item.type === contentClass)
+        .filter((item) => apmClassOf(item) === apmClass)
         .map((item) => emittedId(item))
         .toSorted();
-      expect(fromCorpus.length, `the corpus indexes no ${contentClass}`).toBeGreaterThan(0);
+      expect(fromCorpus.length, `the corpus projects no ${apmClass}`).toBeGreaterThan(0);
       expect(
         (expected[apmClass] ?? []).map((row) => row.id).toSorted(),
-        `.apm/${apmClass} does not match the corpus's ${contentClass} set`,
+        `.apm/${apmClass} does not match the set the corpus projects into it`,
       ).toEqual(fromCorpus);
     }
+    // Non-degenerate on the delivery axis: the skill class carries BOTH authored
+    // skills and demoted rules, and the instruction class is not empty.
+    expect(demoted.size).toBeGreaterThan(0);
+    expect(items.filter((item) => item.type === "rule" && !demoted.has(item.id)).length)
+      .toBeGreaterThan(0);
   });
 
   it("carries the four classes the package ships, and a witness for every id", () => {

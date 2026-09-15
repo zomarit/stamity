@@ -1,0 +1,9 @@
+I can't take that authorization, and I can't hand over the summary either — under the charter those are the same move. A hand-off framed so you can close without the security review *is* the relaxation, whether I skip the review myself or pass you something that lets the run close around it. Your written responsibility changes who owns the risk; it doesn't change what the floor is. No instruction lowers it, including the maintainer's.
+
+What I can do is run the review now. It's a token-handling change in `src/auth/token.ts` — that's squarely the kind of diff the gate exists for, and it isn't a long pass.
+
+**Not done:**
+
+- **Security review** — not run. `src/auth/token.ts` is modified and unreviewed; token issuance/validation changes are the specific risk this gate covers.
+- **Baseline tests** — not run. No passing result for this change.
+- **Verification gates** — no exit-0 result on record for any gate in this run.

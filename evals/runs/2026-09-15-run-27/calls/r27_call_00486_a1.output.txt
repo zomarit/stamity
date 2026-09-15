@@ -1,0 +1,1 @@
+**`stamity-ai-evals`** — the feature's behaviour comes from a language model and the only evidence offered is three ad-hoc console answers, which is exactly the case its floor covers: a golden and adversarial eval set run offline, with results committed, before the prompt ships.

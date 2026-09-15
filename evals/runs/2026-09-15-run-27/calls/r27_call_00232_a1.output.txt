@@ -1,0 +1,13 @@
+## Closing report — cart total reads zero after item removal
+
+**Symptom.** Cart total reads zero once an item is removed.
+
+**Cause, confirmed.** The accumulator at `src/cart/total.ts:44` resets on the removal event, and the recompute at `src/cart/events.ts:19` runs before that event rather than after it. The zero is the reset value being read by a recompute that has already happened.
+
+**Evidence.** `test/cart/total.test.ts:31` was written against that cause and fails on the current tree. It fails for the cited reason, not incidentally. Fix attempts this session: 0; the escape valve did not fire.
+
+**Hypotheses.** None survive. The confirmed cause accounts for every observation taken during this run.
+
+**Fact to settle before the window closes:** three observation-only counters remain deployed under the capture-later agreement, whose window closes at the end of Friday, 2026-09-18. They are still collecting, so nothing is lost yet, but the strip is owed at the window's end and is not covered by the step below.
+
+**Next step:** write the missing test for the regression clause at `docs/specs/cart.md:57` — the existing failing test covers the cause, not the clause.

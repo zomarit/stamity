@@ -1,0 +1,16 @@
+Grading the transcript against the three binding criteria; no advisory criteria are declared.
+
+```text
+case: (id not supplied in the input — reported as a run-artifact gap, not an authoring defect)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "triggered", "triggers"; none — the only mention of the id is
+     "rules out `stamity-contract-census`", which names it as excluded, not as triggered
+  B3 pass — "`none`" — no skill id is given as the answer at all
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The case passes. All three binding criteria are met: the answer is `none`, the transcript names `stamity-contract-census` only to rule it out, and no skill id is offered as the answer. The one gap in the record is that the input carried no case id, so the emission above cannot cite one.

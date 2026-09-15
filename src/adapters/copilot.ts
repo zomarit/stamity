@@ -15,6 +15,7 @@ import {
   typeIdKey,
   type CatalogItem,
 } from "../content/catalog.ts";
+import { declaredRuleGlobs } from "../content/ruleDelivery.ts";
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
 import { detectPackageManager, type PackageManagerInfo } from "../detect/packageManager.ts";
 import { verificationGatesFromManifest } from "../emit/agentsMd.ts";
@@ -266,14 +267,19 @@ export const copilotResiduePlanner: ResiduePlanner = {
     // fall back to (`../roster/modelLadder.ts`).
     const pins = ctx.manifest.models?.pins ?? {};
 
-    const rows = items.map((item) => {
+    // A demoted rule is NOT written here: the core projected it as a skill
+    // under `.agents/skills/stamity-<id>/`, which this client reads directly,
+    // and an instructions file beside it would restore the always-on load the
+    // demotion exists to reclaim (`../content/ruleDelivery.ts`).
+    const demoted = core.demotedRules[TOOL];
+    const rows = items.flatMap((item): AdapterOutput[] => {
       switch (item.type) {
         case "rule":
-          return buildInstructionsFile(item, render);
+          return demoted.has(item.id) ? [] : [buildInstructionsFile(item, render)];
         case "agent":
-          return buildAgentFile(item, grantFor(item), render, pins);
+          return [buildAgentFile(item, grantFor(item), render, pins)];
         default:
-          return buildPromptFile(item, render, pins);
+          return [buildPromptFile(item, render, pins)];
       }
     });
 
@@ -626,24 +632,12 @@ function bodyRenderer(ctx: EmissionContext): (raw: string) => string {
  * generator's defect to report, and this adapter's fallback (`applyTo: "**"`)
  * over-attaches rather than dropping the rule from the setup.
  *
- * A shared rule-scope reader belongs beside the other clients that need the
- * same answer; until one exists, this is deliberately the narrow read.
+ * The extraction itself is {@link declaredRuleGlobs} (`../content/
+ * ruleDelivery.ts`), the shared reader; only the de-duplication is local to
+ * this adapter's own `applyTo` rendering.
  */
 function declaredGlobs(item: CatalogItem): string[] {
-  const declared = item.frontmatter["globs"];
-  const raw =
-    typeof declared === "string"
-      ? declared.split(",")
-      : Array.isArray(declared)
-        ? declared.filter((entry) => typeof entry === "string")
-        : [];
-
-  const seen = new Set<string>();
-  for (const glob of raw) {
-    const value = glob.trim();
-    if (value !== "") seen.add(value);
-  }
-  return [...seen];
+  return [...new Set(declaredRuleGlobs(item))];
 }
 
 /**

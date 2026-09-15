@@ -20,7 +20,13 @@ import {
 } from "../../../src/roster/reviewCaps.ts";
 import { MODEL_CLASSES } from "../../../src/types/core.ts";
 import { CONTENT_CLASSES, type ContentSelection } from "../../../src/types/content.ts";
-import { MANIFEST_FILE, MANIFEST_VERSION, type SetupManifest } from "../../../src/types/manifest.ts";
+import {
+  MANIFEST_FILE,
+  MANIFEST_VERSION,
+  RULE_DELIVERIES,
+  RULE_DELIVERY_DEFAULT,
+  type SetupManifest,
+} from "../../../src/types/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { MENU_KEYS, MenuTtyInput, waitForOutput } from "../../support/menuTty.ts";
@@ -1337,5 +1343,68 @@ describe("getConfigValue / setConfigValue", () => {
       servers: ["context7"],
       protocolVersion: "2025-06-18",
     });
+  });
+});
+
+
+/**
+ * The rule-delivery dial. Added as an ordinary registry row, so the list, the
+ * get, the picker and the reference page pick it up without a second code path
+ * — what this block pins is the pair a wrong value could break: the persisted
+ * spelling the engine reads, and the refusal that keeps an unsanctioned one out
+ * of the manifest at all.
+ */
+describe("config — ruleDelivery", () => {
+  it("reports the engine default when the manifest carries no key", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    const result = await run(handle, ["get", "ruleDelivery"]);
+
+    // DERIVED 2026-09-15, from a literal `always-on`. The default moved to
+    // `on-demand` that day, and a typed spelling of it here is a pin that can
+    // silently disagree with the constant the engine actually resolves — which
+    // is the one thing this case exists to check.
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(`(default: ${RULE_DELIVERY_DEFAULT})`);
+    expect(rowFor((await run(handle, ["list"])).stdout, "ruleDelivery")).toMatch(
+      new RegExp(String.raw`${RULE_DELIVERY_DEFAULT}\s+\(default\)`),
+    );
+    // The two modes are distinguishable, so this case cannot pass by matching a
+    // value that happens to be printed for another reason.
+    expect(RULE_DELIVERIES).toContain(RULE_DELIVERY_DEFAULT);
+    expect(RULE_DELIVERIES.length).toBeGreaterThan(1);
+  });
+
+  it("persists on-demand and reads it back as set", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    const written = await run(handle, ["set", "ruleDelivery", "on-demand"]);
+
+    expect(written.code).toBe(0);
+    expect((await readManifest(handle.dir))?.ruleDelivery).toBe("on-demand");
+    expect((await run(handle, ["get", "ruleDelivery"])).stdout).toContain(
+      "ruleDelivery  on-demand",
+    );
+    expect(rowFor((await run(handle, ["list"])).stdout, "ruleDelivery")).toMatch(
+      /on-demand\s+\(set\)/,
+    );
+  });
+
+  it("refuses an unsanctioned value, naming both, and writes nothing", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+    const before = await manifestBytes(handle);
+
+    const result = await run(handle, ["set", "ruleDelivery", "nonsense"]);
+
+    // Non-zero and specific: the engine's own enum message, not a generic parse
+    // failure, so the operator reads the two values they may write.
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("always-on | on-demand");
+    expect(result.stderr).toContain("ruleDelivery");
+    expect(await manifestBytes(handle)).toBe(before);
+    expect((await readManifest(handle.dir))?.ruleDelivery).toBeUndefined();
   });
 });

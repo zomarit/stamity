@@ -78,11 +78,16 @@ import {
   type ContentRoots,
 } from "../content/catalog.ts";
 import { composeFrontmatter, parseFrontmatter } from "../content/frontmatter.ts";
+import {
+  RULE_SKILL_DIR_PREFIX,
+  NO_DEMOTED_RULES,
+  SHARED_SKILLS_TREE_READERS,
+} from "../content/ruleDelivery.ts";
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
 import { verificationGatesFor } from "../detect/verificationGates.ts";
 import { PLATFORM_TOOL_MARKER, buildAskUserPlatformTable } from "../tools/translator.ts";
 import type { ContentClass } from "../types/content.ts";
-import type { Tool } from "../types/core.ts";
+import { TOOLS, type Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import type { SetupManifest } from "../types/manifest.ts";
 import {
@@ -218,6 +223,26 @@ export interface ProjectSkillsOptions {
   contentRoot?: string | ContentRoots;
   /** Filesystem override for corpus reads; defaults to `node:fs/promises`. */
   fs?: CatalogFs;
+  /**
+   * The selected RULES, for the delivery option: a rule demoted on at least one
+   * selected client is projected here as a skill instead of being carried as
+   * that client's always-on rule text (`../content/ruleDelivery.ts`).
+   *
+   * Passed in rather than read off this module's own index, because the answer
+   * to "which rules are demoted" is per client and the caller
+   * (`./planner.ts` → `buildCoreEmissionPlan`) is the one holding the manifest's
+   * tool selection. Omitted — every direct caller that is not the core plan —
+   * no rule is projected, which is also exactly what `always-on` produces.
+   */
+  ruleItems?: readonly CatalogItem[];
+  /**
+   * Demoted rule ids PER TOOL, as {@link demotedRuleIds} answered for each
+   * selected client. The union decides which rules get a row at all; the
+   * per-tool sets are what the row's own `metadata.stamity.tools` names, so a
+   * reader of one emitted file can see which clients are actually reaching the
+   * rule through it. Defaults to no demotions anywhere.
+   */
+  demotedRules?: Readonly<Record<Tool, ReadonlySet<string>>>;
 }
 
 /**
@@ -281,7 +306,92 @@ export async function projectSkills(
     ),
   );
 
-  return perSkill.flat().toSorted((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  const demoted = options.demotedRules ?? NO_DEMOTED_RULES;
+  // Every tool in {@link SHARED_SKILLS_TREE_READERS} reads this SAME shared
+  // `.agents/skills/` file off disk — the frontmatter's own
+  // `metadata.stamity.tools` list is bookkeeping the projection writes, not a
+  // gate any of those readers checks before loading it. A rule authored
+  // `tools:` restricted (only some clients should ever see its body) is
+  // therefore never safe to place here unless every shared-tree reader is one
+  // of the tools it names: placing it anyway is how a `tools:`-scoped rule's
+  // body reaches a client it never named (W3, N1).
+  //
+  // N1: this skip is now DEFENSIVE rather than load-bearing — `demotedRuleIds`
+  // (`../content/ruleDelivery.ts`) refuses to demote a `tools:`-restricted
+  // rule on ANY tool (codex, copilot, or claude) unless it names every
+  // {@link SHARED_SKILLS_TREE_READERS} tool, so `tools` below never contains
+  // a tool that demoted a rule this branch would otherwise drop, and that
+  // tool's always-on delivery is what carries the rule instead. Claude reaches
+  // a demoted rule through its own re-targeted native copy (filtered from
+  // these same rows by `nativeSkillRows`), not through this shared file, but
+  // it draws from the SAME row set, so the guard has to hold for claude's
+  // demotion answer too — and it does, structurally, in `demotedRuleIds`.
+  const ruleRows = (options.ruleItems ?? []).flatMap((item) => {
+    const tools = TOOLS.filter((tool) => demoted[tool].has(item.id));
+    if (tools.length === 0) return [];
+    if (
+      item.tools !== undefined &&
+      ![...SHARED_SKILLS_TREE_READERS].every((tool) => item.tools!.includes(tool))
+    ) {
+      return [];
+    }
+    return [projectRuleAsSkill(item, tools, detection, gates)];
+  });
+
+  return [...perSkill.flat(), ...ruleRows].toSorted((a, b) =>
+    a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
+  );
+}
+
+/**
+ * One demoted rule as a skill row: `.agents/skills/stamity-<id>/SKILL.md`.
+ *
+ * The rule does not become a skill — it stays a rule, with its own catalog id,
+ * its own ledger identity (`artifactType: "rule"`, so deselecting the rule
+ * reclaims this path) and its authored body unchanged. What changes is the DOOR
+ * it arrives through: a description-triggered skill file the client loads when
+ * the description matches, instead of instruction text every session pays for.
+ * The frontmatter is therefore the skills spec's shape with the engine's own
+ * vocabulary under `metadata.stamity` — the same six-key ceiling every other
+ * file in this tree is held to, since the strict validator that rejects an
+ * unexpected top-level key does not care which class the content came from.
+ *
+ * `tools` names the clients that demoted it, which is the one fact a reader of
+ * the emitted file cannot derive: the same rule can be delivered here for codex
+ * and as a `.cursor/rules/` file for cursor in one run, and a file that did not
+ * say so would read as "no client attaches this natively".
+ */
+function projectRuleAsSkill(
+  item: CatalogItem,
+  tools: readonly Tool[],
+  detection: ReturnType<typeof detectionContextFromManifest>,
+  gates: VerificationGateSet,
+): ProjectedSkillFile {
+  const skillDir = `${RULE_SKILL_DIR_PREFIX}${item.id}`;
+  assertSafePath(posix.join(skillDir, SKILL_FILE), `rule "${item.id}" projection`);
+  const head: Record<string, unknown> = {
+    name: skillDir.toLowerCase().replaceAll(SPEC_NAME_PATTERN, "-").slice(0, 64),
+    description: item.description,
+    metadata: {
+      stamity: {
+        id: item.id,
+        type: item.type,
+        tags: item.tags,
+        load: item.frontmatter["load"],
+        obsolete_when: item.frontmatter["obsolete_when"],
+        delivery: "on-demand",
+        tools: [...tools],
+      },
+    },
+  };
+  return {
+    path: posix.join(SKILLS_PROJECTION_DIR, skillDir, SKILL_FILE),
+    content: composeFrontmatter(head, substituteBody(item.body, detection, gates)),
+    artifactId: item.id,
+    artifactType: item.type,
+    artifactPath: item.relativePath,
+    origin: item.origin ?? "corpus",
+  };
 }
 
 /** `skills/<dir>/SKILL.md` → `<dir>`; the catalog validated the whole path. */
@@ -334,6 +444,47 @@ export function retargetProjection<Row extends ProjectedFile>(
       return { ...row, path: posix.join(dir, row.path.slice(prefix.length)) };
     })
     .toSorted((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+/**
+ * The rows ONE client's native skills directory should receive — content skills
+ * plus only the rule-skills that client itself demoted — already re-targeted
+ * onto {@link NATIVE_SKILL_DIRS}. An empty list for a client that reads the
+ * vendor-neutral tree directly and needs no copy.
+ *
+ * The filter exists because the projection's rule-skill rows are the UNION over
+ * selected tools and cannot be anything else: {@link SKILLS_PROJECTION_DIR} is
+ * one directory read by cursor, copilot and codex alike, so a rule demoted by
+ * any of them has to be in it. A native directory has exactly one reader, so
+ * the same union there is a different thing — a rule this client still receives
+ * as its own rule file, copied a second time as a skill. On a four-client
+ * selection that was seven rules delivered twice to claude: `.claude/rules/
+ * stamity-testing.md` beside `.claude/skills/stamity-testing/SKILL.md`, both
+ * carrying the same body, neither of them wrong on its own.
+ *
+ * What it costs the client nothing to lose: codex is the client that demoted
+ * those rules, and codex reads {@link SKILLS_PROJECTION_DIR}. The row is still
+ * emitted, still delivered, still ledgered — it is only the second copy under a
+ * root no demoting client reads that goes.
+ *
+ * A CONTENT skill is never filtered: it is selected content with no delivery
+ * question attached, and its support files ride with it. The test is
+ * `artifactType`, which the projection sets from the catalog item, so a rule
+ * delivered as a skill is still a rule here — the same fact the emitted file
+ * states under `metadata.stamity.tools`.
+ */
+export function nativeSkillRows<Row extends ProjectedFile>(
+  rows: readonly Row[],
+  tool: Tool,
+  demotedRules: Readonly<Record<Tool, ReadonlySet<string>>> = NO_DEMOTED_RULES,
+): Row[] {
+  const dir = NATIVE_SKILL_DIRS[tool];
+  if (dir === undefined || dir === "") return [];
+  const demoted = demotedRules[tool];
+  return retargetProjection(
+    rows.filter((row) => row.artifactType !== "rule" || demoted.has(row.artifactId)),
+    dir,
+  );
 }
 
 /**
@@ -427,11 +578,20 @@ function renderSkillBody(
   detection: ReturnType<typeof detectionContextFromManifest>,
   gates: VerificationGateSet,
 ): string {
-  const shaped = toSpecFrontmatter(raw, skillDir, source);
-  const substituted = substituteVerificationGateTokens(
-    substituteRepoTokens(shaped, detection),
-    gates,
-  );
+  return substituteBody(toSpecFrontmatter(raw, skillDir, source), detection, gates);
+}
+
+/**
+ * Emission-time substitution over one document — shared by the skill lane and
+ * the demoted-rule lane, so a rule delivered as a skill says what this
+ * repository's gate commands actually are exactly as a skill does.
+ */
+function substituteBody(
+  raw: string,
+  detection: ReturnType<typeof detectionContextFromManifest>,
+  gates: VerificationGateSet,
+): string {
+  const substituted = substituteVerificationGateTokens(substituteRepoTokens(raw, detection), gates);
   if (!substituted.includes(PLATFORM_TOOL_MARKER)) return substituted;
   return substituted.split(PLATFORM_TOOL_MARKER).join(buildAskUserPlatformTable());
 }

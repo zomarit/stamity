@@ -7,7 +7,13 @@
 
 import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE } from "../hooks/portableRunner.ts";
 import { buildContentIndex, typeIdKey, type CatalogItem } from "../content/catalog.ts";
+import { parseFrontmatter } from "../content/frontmatter.ts";
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
+import {
+  RULE_SKILL_DIR_PREFIX,
+  declaredRuleGlobs,
+  ruleAnchor,
+} from "../content/ruleDelivery.ts";
 import { isFloorTag } from "../content/tags.ts";
 import { AGENTS_MD_FILE, verificationGatesFromManifest } from "../emit/agentsMd.ts";
 import {
@@ -18,6 +24,7 @@ import {
   type ResidueEmission,
   type ResiduePlanner,
 } from "../emit/planner.ts";
+import { SKILLS_PROJECTION_DIR } from "../emit/skillsProjection.ts";
 import {
   detectionContextFromManifest,
   substituteRepoTokens,
@@ -42,7 +49,7 @@ import { substituteCanonicalPlatformMarker, toCodexToolsFrontmatter } from "../t
 import type { AdapterOutput, EmissionOwner, RulePrecedence } from "../types/content.ts";
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
-import { CONTENT_PREFIX, STATE_DIR } from "../types/markers.ts";
+import { CONTENT_PREFIX } from "../types/markers.ts";
 import { serializeTomlDocument, type TomlValue } from "./toml.ts";
 
 // ── Layout ───────────────────────────────────────────────────────
@@ -111,8 +118,66 @@ export const CODEX_COMMANDS_DIR: string | null = null;
  */
 export const CODEX_AGENTS_MD_BUDGET_BYTES = 32_768;
 
+/**
+ * The ceiling this setup enforces on the SKILLS LIST — the `name` plus
+ * `description` of every skill the client discovers, which it holds in context
+ * for the whole session so it can decide when to open one.
+ *
+ * This is the budget the rule-delivery option spends. Demoting a rule to
+ * `.agents/skills/stamity-<id>/SKILL.md` takes its whole body out of the
+ * always-on appendix and leaves one line — a name and a description — in this
+ * list instead, which is the trade. A trade with no ceiling is how the list
+ * quietly becomes the new always-on load, so the ceiling is enforced here and
+ * fail-closed: past it, emission refuses and names the measured total, exactly
+ * as {@link CODEX_AGENTS_MD_BUDGET_BYTES} refuses rather than truncating.
+ *
+ * 8,000 characters is the client's own published figure: "this list uses at
+ * most 2% of the model's context window, or 8,000 characters when the context
+ * window is unknown" (learn.chatgpt.com/docs/build-skills, accessed
+ * 2026-09-14). The engine takes the character bound because the context size
+ * is not known at emission, and it measures the WHOLE projection, content
+ * skills included, because the client does not distinguish where a skill came
+ * from. Re-read the page per release; the figure moves with the client.
+ */
+export const CODEX_SKILLS_LIST_BUDGET_CHARS = 8_000;
+
 /** The upstream gap that makes glob down-conversion necessary, cited in every notice. */
 const LOSSY_GAP = "open codex#34002";
+
+/** The vendor page carrying the `features.hooks` key and its default, with its read date. */
+const CONFIG_REFERENCE_PAGE =
+  "learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15)";
+
+/**
+ * The three steps between an emitted `hooks.json` and a hook the client runs.
+ *
+ * Emitting the file was never the whole contract, and reading it as if it were
+ * cost a QA lane a false negative: the harness saw zero hook invocations and
+ * had no way to tell "the client ignores the file" from "the client never
+ * loaded the layer". Each step is a different gate, owned by a different
+ * surface — a config key this engine writes, a trust record in the operator's
+ * Codex home, and a per-hook hash review that only the interactive client can
+ * take — so the operator is told all three wherever the subject comes up, in
+ * {@link buildHooksJson}'s `description` and in the `[features]` comment of
+ * {@link composeConfigToml}.
+ */
+const HOOK_TRUST_STEPS = [
+  "Three steps stand between this file and a hook the client runs.",
+  "1. Feature flag: `features.hooks = true`. The client defaults it OFF (deprecated alias",
+  `   \`features.codex_hooks\`), so this file is not read until it is on. ${CODEX_CONFIG_FILE}`,
+  "   carries it; the per-invocation equivalent is `codex exec --enable hooks`, which is",
+  "   shorthand for `-c features.hooks=true`.",
+  "2. Project trust: a project `.codex/` layer loads only when it is trusted. Record",
+  '   `projects.<path>.trust_level = "trusted"` in the Codex home config (`~/.codex/config.toml`),',
+  "   which is the operator's file and not one this engine writes.",
+  "3. Per-hook review: each hook is trusted by hash through the interactive `/hooks` command.",
+  "   Automation that cannot take that step runs `--dangerously-bypass-hook-trust`, which runs",
+  "   enabled hooks with no persisted trust.",
+  `Key set and default: ${CONFIG_REFERENCE_PAGE}.`,
+] as const;
+
+/** The one transformable file in a projected skill directory. */
+const SKILL_FILE = "SKILL.md";
 
 /** Heading shared by the root appendix and every nested rules file. */
 const APPENDIX_TITLE = "Conditional rules (Codex down-conversion)";
@@ -156,7 +221,9 @@ const CODEX_FACTS: AdapterDialectFacts = {
     { name: "AGENTS.md budget", value: `${CODEX_AGENTS_MD_BUDGET_BYTES} bytes (32 KiB)` },
     {
       name: "hook enforcement",
-      value: "exit 2 denies supported tool calls after native /hooks trust; the core role guard is telemetry because PreToolUse has no agent identity. Hosted tools and specialized paths may bypass hooks; use native sandbox/permissions for enforcement.",
+      value:
+        "exit 2 denies supported tool calls after native /hooks trust; the core role guard is telemetry because PreToolUse has no agent identity. Hosted tools and specialized paths may bypass hooks; use native sandbox/permissions for enforcement. " +
+        "Three steps stand between the emitted hooks.json and a hook that runs — `features.hooks = true`, which this engine writes into .codex/config.toml and the client defaults OFF; `projects.<path>.trust_level = \"trusted\"` in the operator's own Codex home config; and a per-hook hash review through the interactive /hooks command, or --dangerously-bypass-hook-trust for automation that cannot take that step — and with all three in place headless `codex exec` on codex-cli 0.154.0 still loaded no project hook layer at all in this repository's 2026-09-15 measurement, so a hook is enforcement in the interactive client and nothing in that lane.",
     },
     {
       name: "per-agent tool allowlist",
@@ -180,7 +247,7 @@ const CODEX_FACTS: AdapterDialectFacts = {
     // and trust recorded against the hook's own hash.
     { url: "https://learn.chatgpt.com/docs/hooks", accessDate: "2026-09-10" },
     // `project_doc_max_bytes`, default 32768 — the budget shaped below.
-    { url: "https://learn.chatgpt.com/docs/config-file/config-reference", accessDate: "2026-09-10" },
+    { url: "https://learn.chatgpt.com/docs/config-file/config-reference", accessDate: "2026-09-15" },
     // Custom prompts: home-directory scope, deprecated — why no commands emit.
     { url: "https://learn.chatgpt.com/docs/custom-prompts", accessDate: "2026-09-10" },
   ],
@@ -200,6 +267,23 @@ export const codexResiduePlanner: ResiduePlanner = {
   facts: CODEX_FACTS,
 
   async planResidue(core: CoreEmissionPlan, ctx: EmissionContext): Promise<ResidueEmission> {
+    // Before any row is built: a skills list over the ceiling is a refusal, not
+    // a shaping. Nothing here can choose which skill to leave out — every one of
+    // them is selected content — so the honest answer is to name the total and
+    // stop.
+    const skillsListChars = skillsListCharacters(core.skills);
+    if (skillsListChars > CODEX_SKILLS_LIST_BUDGET_CHARS) {
+      throw new EngineError(
+        `codex skills list is ${skillsListChars} characters; this setup caps it at ` +
+          `${CODEX_SKILLS_LIST_BUDGET_CHARS}. Every skill's name and description sits in the ` +
+          `client's context for the whole session, and nothing here can choose which skill to ` +
+          `leave out of that listing, so the run refuses instead of shipping a list past the ` +
+          `bound. Narrow the content selection, or set \`ruleDelivery: "always-on"\` to deliver ` +
+          `rules as instruction text instead of as skills.`,
+        { code: "VALIDATION_ERROR" },
+      );
+    }
+
     const { agents, rules } = await selectedItems(ctx);
     const render = bodyRenderer(ctx);
     // One read of the operator's allocation for the whole batch: pins and
@@ -230,13 +314,23 @@ export const codexResiduePlanner: ResiduePlanner = {
     // Built by hand rather than mapped: the rendered rule is the catalog item
     // with one field replaced, and spreading inside a `map` is the shape the
     // lint rule (rightly) reads as an accidental copy per element.
+    //
+    // A demoted rule never reaches the down-converter: the core projected it as
+    // a skill this client reads from `.agents/skills/`, and inlining it here
+    // too would spend the appendix budget on a body the client already has
+    // (`../content/ruleDelivery.ts`).
+    const demoted = core.demotedRules[TOOL];
     const renderedRules: CatalogItem[] = [];
-    for (const rule of rules) renderedRules.push({ ...rule, body: render(rule.body) });
+    for (const rule of rules) {
+      if (demoted.has(rule.id)) continue;
+      renderedRules.push({ ...rule, body: render(rule.body) });
+    }
 
     const downConverted = downConvertRules(
       renderedRules,
       core.agentsMd.root.content,
       core.agentsMd.nestedFor(TOOL).map((target) => target.outputPath),
+      ruleSkillIds(core.skills),
     );
     for (const file of downConverted.nested) {
       rows.push(emissionRow(file.path, file.content, RULES_APPENDIX_ARTIFACT_ID, "infra"));
@@ -336,6 +430,52 @@ function droppedRulesWarning(dropped: readonly string[]): string {
     `first: ${dropped.join(", ")}. They are named again in the emitted ${AGENTS_MD_FILE}. ` +
     `Narrow the content selection to bring them back.`
   );
+}
+
+/**
+ * One id in the omission notice. A rule the delivery option demoted is NOT
+ * lost when the appendix drops it — it reaches this client as a skill — and a
+ * notice that said "dropped" without saying so would report a loss that did not
+ * happen.
+ */
+function droppedRuleLabel(id: string, onDemandIds: ReadonlySet<string>): string {
+  const skillDir = `${SKILLS_PROJECTION_DIR}/${RULE_SKILL_DIR_PREFIX}${id}/`;
+  return onDemandIds.has(id) ? `\`${id}\` (on demand at ${skillDir})` : `\`${id}\``;
+}
+
+/**
+ * The measured skills list: `name` + `description` + 3 over every projected
+ * `SKILL.md`, the three being the separators the client's own listing puts
+ * around the pair.
+ *
+ * Measured from the RENDERED rows rather than from the catalog, because the
+ * rendered head is what the client reads — a description rewritten by
+ * substitution, or a name derived from a directory, counts at the length it
+ * actually ships with. A row whose head does not parse contributes nothing
+ * rather than throwing: this is a budget measurement, and the frontmatter
+ * validity of a skill is the projection's refusal to make, not this one's.
+ */
+export function skillsListCharacters(skills: readonly { path: string; content: string }[]): number {
+  let total = 0;
+  for (const row of skills) {
+    if (!row.path.endsWith(`/${SKILL_FILE}`)) continue;
+    const head = parseFrontmatter(row.content, row.path).frontmatter;
+    const name = typeof head["name"] === "string" ? head["name"] : "";
+    const description = typeof head["description"] === "string" ? head["description"] : "";
+    total += name.length + description.length + 3;
+  }
+  return total;
+}
+
+/** The rule ids that reach this client as a projected skill instead of as appendix text. */
+function ruleSkillIds(skills: readonly { path: string; artifactType: string }[]): Set<string> {
+  const ids = new Set<string>();
+  for (const row of skills) {
+    if (row.artifactType === "rule" && row.path.endsWith(`/${SKILL_FILE}`)) {
+      ids.add(row.path.slice(0, -`/${SKILL_FILE}`.length).split("/").pop() ?? "");
+    }
+  }
+  return new Set([...ids].map((dir) => dir.slice(RULE_SKILL_DIR_PREFIX.length)));
 }
 
 /** One planned row, owned by this adapter. */
@@ -444,6 +584,18 @@ function bodyRenderer(ctx: EmissionContext): (raw: string) => string {
 
 // ── 1. Hook configuration ────────────────────────────────────────
 
+/**
+ * {@link HOOK_TRUST_STEPS} as one line, for the JSON `description` field.
+ *
+ * JSON carries no comments, so the only channel this file has to the operator
+ * is that one string — and it is the file they open when a hook did not fire.
+ * Collapsing the TOML comment block rather than writing a second copy keeps the
+ * two renderings from drifting apart; a step added above appears in both.
+ */
+function hookTrustSentence(): string {
+  return HOOK_TRUST_STEPS.join(" ").replaceAll(/\s+/gu, " ");
+}
+
 /** Native Codex configuration: string commands and runtime-managed trust. */
 export function buildHooksJson(core: CoreEmissionPlan): string {
   const hooks: Record<string, { matcher?: string; hooks: { type: string; command: string; commandWindows: string; timeout?: number }[] }[]> = {};
@@ -462,7 +614,11 @@ export function buildHooksJson(core: CoreEmissionPlan): string {
       ...(row.timeoutMs === undefined ? {} : { timeout: Math.min(row.event === "session_end" ? 3 : Infinity, Math.ceil(row.timeoutMs / 1000)) }),
     });
   }
-  return `${JSON.stringify({ description: "Stamity hooks. Review and trust with /hooks; stamity check detects emitted-file drift. The role guard is telemetry because PreToolUse carries no agent identity.", hooks }, null, 2)}\n`;
+  const description =
+    `Stamity hooks. ${hookTrustSentence()} ` +
+    "stamity check detects emitted-file drift. " +
+    "The role guard is telemetry because PreToolUse carries no agent identity.";
+  return `${JSON.stringify({ description, hooks }, null, 2)}\n`;
 }
 
 // ── 2. Subagent definitions ──────────────────────────────────────
@@ -575,6 +731,13 @@ export function buildAgentToml(
  * An empty server selection still emits the file: the emitter's documented
  * empty-map spelling is written, so the hooks and subagents that reference this
  * configuration never point at a file that is not there.
+ *
+ * `[features] hooks = true` is the adapter-level table. It is not decoration:
+ * the client defaults the flag OFF, so every byte of {@link CODEX_HOOKS_FILE}
+ * was inert without it — the emission looked complete and enforced nothing.
+ * The other two gates ({@link HOOK_TRUST_STEPS}) are the operator's to close,
+ * and the comment above the key says so rather than leaving the flag to read
+ * as the whole story.
  */
 export function composeConfigToml(core: CoreEmissionPlan, ctx: EmissionContext): string {
   const reserved = core.mcpFor(TOOL);
@@ -601,7 +764,30 @@ export function composeConfigToml(core: CoreEmissionPlan, ctx: EmissionContext):
     tables: [],
   });
 
-  return `${header}\n${emitCodexToml(ctx.manifest.mcp?.servers ?? [], {
+  // `[features]` is its own serialized document, not a table appended to the
+  // header: this writer renders one comment preamble per document, and the
+  // three-step notice has to sit directly above the key it explains rather than
+  // at the top of the file behind the MCP prose.
+  const features = serializeTomlDocument({
+    comments: [
+      "Lifecycle hooks: OFF by default in the client, so an emitted hooks.json does nothing",
+      "until this key turns it on. Enabling it here is step 1 of 3.",
+      "",
+      ...HOOK_TRUST_STEPS,
+      "",
+      "One writer: this whole file is generated, so a `[features]` table of your own does not",
+      "belong in it — TOML reads a second [features] header as a redefinition, not a merge, and",
+      "a regeneration would drop the keys anyway. Your own keys are never clobbered: the engine",
+      "refuses to overwrite a file it does not own (sync reports an unmanaged-name collision),",
+      "so keep your file and add `hooks = true` INTO your existing [features] table.",
+      "Removing this key (or setting it false) makes every emitted hook inert with no other",
+      "signal — the client reads none of them — and `sync` restores `hooks = true` on this file",
+      "the next time it regenerates it.",
+    ],
+    tables: [{ header: "features", entries: [["hooks", true]] }],
+  });
+
+  return `${header}\n${features}\n${emitCodexToml(ctx.manifest.mcp?.servers ?? [], {
     packServers: core.packMcpServers,
   })}`;
 }
@@ -674,9 +860,6 @@ const PRECEDENCE_RANK: Readonly<Record<RulePrecedence, number>> = {
   low: 3,
 };
 
-/** Characters that end a glob's literal prefix. */
-const WILDCARD_PATTERN = /[*?[\]{}!]/;
-
 /**
  * Down-convert conditional rules into nested `AGENTS.md` files plus a root
  * appendix.
@@ -686,7 +869,7 @@ const WILDCARD_PATTERN = /[*?[\]{}!]/;
  * `src/models` globs anchor at `src`, because a file placed deeper would miss
  * half the rule's surface; a glob whose first segment is a wildcard (the
  * leading-doublestar form) anchors nowhere at all, a glob rooted at the
- * engine's own state directory is refused ({@link anchorOfGlob}), and a rule
+ * engine's own state directory is refused (`../content/ruleDelivery.ts` → {@link ruleAnchor}), and a rule
  * with no derivable anchor — or none declared, the description-triggered case —
  * goes to the root appendix where Codex is certain to read it.
  *
@@ -711,12 +894,13 @@ const WILDCARD_PATTERN = /[*?[\]{}!]/;
  * disappearing would silently add or reclaim a rules file, and the same rule
  * would down-convert differently on two checkouts of one commit. The
  * directories a rule must NOT anchor in are therefore refused by name in
- * {@link anchorOfGlob} rather than by asking the filesystem what is there.
+ * {@link ruleAnchor} rather than by asking the filesystem what is there.
  */
 export function downConvertRules(
   items: readonly CatalogItem[],
   coreRoot: string,
   coreNestedPaths: readonly string[] = [],
+  onDemandIds: ReadonlySet<string> = new Set(),
 ): DownConvertedRules {
   const sections = items.map(toSection).toSorted((a, b) => compareText(a.id, b.id));
   const taken = new Set(coreNestedPaths);
@@ -743,7 +927,14 @@ export function downConvertRules(
     .map(([path, group]) => {
       const anchor = path.slice(0, -(AGENTS_MD_FILE.length + 1));
       const shaped = shapeToBudget(group, (kept, omitted) =>
-        renderAppendix({ head: "", scope: anchor, titleLevel: 1, sections: kept, dropped: omitted }),
+        renderAppendix({
+          head: "",
+          scope: anchor,
+          titleLevel: 1,
+          sections: kept,
+          dropped: omitted,
+          onDemandIds,
+        }),
       );
       dropped.push(...shaped.dropped);
       return { path, content: shaped.content };
@@ -758,6 +949,7 @@ export function downConvertRules(
         titleLevel: 2,
         sections: kept,
         dropped: omitted,
+        onDemandIds,
       }),
     );
     dropped.push(...shaped.dropped);
@@ -769,7 +961,7 @@ export function downConvertRules(
 
 /** One catalog rule as a section, with its anchor and its risk resolved. */
 function toSection(item: CatalogItem): RuleSection {
-  const globs = readGlobs(item);
+  const globs = declaredRuleGlobs(item);
   const precedence = item.precedence ?? "normal";
   return {
     id: item.id,
@@ -781,113 +973,8 @@ function toSection(item: CatalogItem): RuleSection {
     globs,
     description: item.description,
     body: item.body,
-    anchor: anchorOf(globs),
+    anchor: ruleAnchor(globs),
   };
-}
-
-/** Declared globs as a clean list; an array or a legacy comma string both parse. */
-function readGlobs(item: CatalogItem): string[] {
-  const declared = item.frontmatter.globs;
-  const raw = Array.isArray(declared)
-    ? declared
-    : typeof declared === "string"
-      ? declared.split(",")
-      : [];
-  return raw
-    .filter((value): value is string => typeof value === "string")
-    .map((value) => value.trim())
-    .filter((value) => value !== "");
-}
-
-/**
- * The directory every glob in the set lives under, or null when there is none.
- * A single unanchorable glob makes the whole rule unanchorable: placing the
- * file deeper would silently stop covering that glob's surface. A glob
- * {@link anchorOfGlob} refuses outright — state directory, absolute,
- * `..`-climbing — takes the whole rule to the root with it: its siblings would
- * otherwise pick a home that covers them and not it.
- */
-function anchorOf(globs: readonly string[]): string | null {
-  let common: string[] | null = null;
-
-  for (const glob of globs) {
-    const anchor = anchorOfGlob(glob);
-    if (anchor === null) return null;
-    const segments = anchor.split("/");
-    if (common === null) {
-      common = segments;
-      continue;
-    }
-    const shared: string[] = [];
-    for (const [index, segment] of common.entries()) {
-      if (segments[index] !== segment) break;
-      shared.push(segment);
-    }
-    common = shared;
-    if (common.length === 0) return null;
-  }
-
-  return common === null || common.length === 0 ? null : common.join("/");
-}
-
-/**
- * One glob's literal directory prefix: the segments before the first one
- * carrying a wildcard, with the final segment excluded because it names a file
- * rather than a directory. Anything that could address outside the repository —
- * absolute, drive-rooted, `..`-climbing — anchors nowhere, so it falls back to
- * the root appendix instead of aiming a write at another tree.
- *
- * {@link STATE_DIR} is refused for the mirror-image reason: it addresses INSIDE
- * a tree that is not free space. The state directory is the engine's own store,
- * and every file in it is read by code that knows what it expects to find —
- * `.stamity/learnings/` is walked as learnings, so an `AGENTS.md` left there is
- * parsed as a malformed learning by the validate command, the session banner,
- * and the learnings reader alike, and a fresh init would fail its own
- * `validate` on a file this planner wrote. The rules that make this reachable
- * are the ones ABOUT the state directory (`.stamity/**`, `.stamity/learnings/**`)
- * — exactly the rules a repo most wants.
- *
- * WHAT THE REFUSAL COSTS, measured rather than assumed. The fallback is the
- * root appendix, and on the shipped corpus that appendix is already over
- * budget, so the two rerouted rules do not arrive intact — they enter a
- * zero-sum file and {@link shapeToBudget} settles it. `injection-screening`
- * survives on its `floor:security` rank and displaces `contract-census`;
- * `learnings-schema` carries no risk flag, so it ranks last and drops. Net
- * against the anchored behaviour, Codex receives two FEWER rules than before
- * the refusal: both rerouted rules used to be delivered in full in their own
- * files, and now one of them and one bystander are delivered nowhere. Neither
- * loss is silent — {@link renderDroppedNotice} names both — and neither is
- * endorsed here: this comment records the measurement, and
- * `test/adapters/codex.test.ts` pins the exact inlined and omitted sets so the
- * next change to either is a diff somebody has to approve. Restoring delivery
- * is not reachable from this function: the rank comes from corpus frontmatter
- * (`content/rules/stamity-learnings-schema.md` declares no floor tag), and no
- * anchor outside the root can carry a `.stamity/**` rule, since Codex reads
- * only the `AGENTS.md` files between the repository root and the working
- * directory.
- *
- * The refusal is on the FIRST directory segment, after `./` stripping and
- * backslash normalization, and it is an equality test rather than a prefix
- * test: a sibling like `.stamityx/**` is somebody else's directory and anchors
- * normally, and a nested `src/.stamity/**` is not this engine's store either.
- */
-function anchorOfGlob(glob: string): string | null {
-  const normalized = glob.replaceAll("\\", "/").replace(/^\.\//, "");
-  if (normalized.startsWith("/") || /^[A-Za-z]:/.test(normalized)) return null;
-
-  const segments = normalized.split("/");
-  const dirs: string[] = [];
-  for (const [index, segment] of segments.entries()) {
-    if (index === segments.length - 1) break;
-    if (WILDCARD_PATTERN.test(segment)) break;
-    if (segment === "" || segment === ".") continue;
-    if (segment === "..") return null;
-    // First segment only: `dirs` is still empty exactly once, on the segment
-    // that would root the anchor.
-    if (dirs.length === 0 && segment === STATE_DIR) return null;
-    dirs.push(segment);
-  }
-  return dirs.length === 0 ? null : dirs.join("/");
 }
 
 /**
@@ -966,6 +1053,8 @@ interface AppendixInput {
   titleLevel: number;
   sections: readonly RuleSection[];
   dropped: readonly string[];
+  /** Dropped ids that DO reach this client, as a projected skill. */
+  onDemandIds: ReadonlySet<string>;
 }
 
 /** The appendix as markdown: title, the lossy preamble, sections, then any omissions. */
@@ -986,7 +1075,7 @@ function renderAppendix(input: AppendixInput): string {
     blocks.push(renderSection(section, input.titleLevel + 1));
   }
   if (input.dropped.length > 0) {
-    blocks.push(renderDroppedNotice(input.dropped, input.titleLevel + 1));
+    blocks.push(renderDroppedNotice(input.dropped, input.titleLevel + 1, input.onDemandIds));
   }
 
   return `${blocks.join("\n\n")}\n`;
@@ -1043,15 +1132,19 @@ function globList(globs: readonly string[]): string {
  * states the shaping it actually did, says the aggregate is not enforced, and
  * hands over the measurement rather than implying it was taken.
  */
-function renderDroppedNotice(dropped: readonly string[], level: number): string {
+function renderDroppedNotice(
+  dropped: readonly string[],
+  level: number,
+  onDemandIds: ReadonlySet<string>,
+): string {
   return [
     `${"#".repeat(level)} Omitted for the ${CODEX_AGENTS_MD_BUDGET_BYTES}-byte budget`,
     `Codex reads at most ${CODEX_AGENTS_MD_BUDGET_BYTES} bytes (32 KiB) of instruction text, and ` +
       `this setup shapes each ${AGENTS_MD_FILE} to that ceiling on its own. These rules did not ` +
       `fit THIS file and were dropped, lowest risk first — rules marked critical are kept ` +
       `longest, then floor-tagged rules, then by declared precedence, then by id: ` +
-      `${dropped.map((id) => `\`${id}\``).join(", ")}. Narrow the content selection to bring ` +
-      `them back.`,
+      `${dropped.map((id) => droppedRuleLabel(id, onDemandIds)).join(", ")}. Narrow the ` +
+      `content selection to bring them back.`,
     `**Per-file shaping only — the aggregate is not enforced.** The ceiling applies to the ` +
       `CONCATENATION a session loads: the root ${AGENTS_MD_FILE} plus every nested one down to ` +
       `the working directory. Nothing here measures that total, so files that each fit can still ` +

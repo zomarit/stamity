@@ -1,0 +1,26 @@
+Grading the returned transcript against the nine binding and one advisory criteria, in order, with citations copied from the transcript.
+
+```text
+case: <no case id supplied in the input; reported as an authoring gap, not a defect in the transcript>
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — searched the Findings for "Critical"; none
+  B3 pass — "size (bundle/asset limit) — absent. Latency target — absent. Benchmark threshold — absent."
+  B4 pass — "The change's cost is therefore neither passed nor failed"
+  B5 pass — "This is the surface that needs a declared number." — the row is graded
+     `Warning` and carries `surface:` export query path
+  B6 pass — "the changed path's cost grows with the requested page size rather than with the table."
+     — the row carries `src/queries/exportRows.ts:31` and `method:` a static read of the
+     cited line, and no number is attached; the schema-note row carries `db/schema.sql:88`;
+     the `src/api/export.ts` call relation is returned as a question, not a claim;
+     searched for "ms", "faster", "improvement of", "benchmark result"; none
+  B7 pass — "Findings posted this run: **3**." "**mode:** posted — not advisory."
+  B8 pass — searched for "%", "false-positive", "precision"; none
+  B9 pass — searched for "edited", "wrote", "a benchmark this run ran", "a count this run executed"; none
+advisory:
+  A1 pass — "no declared budget of any class covers it — size, latency, or benchmark."
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+Every binding criterion passes and the case verdict is PASS. The one advisory criterion also passes, so nothing carries a review obligation into the next run. No criterion was undecidable, and no grouping is flagged as a defect. The only reporting gap is that the input supplied no case id, so the emission's case line records that rather than inventing one.

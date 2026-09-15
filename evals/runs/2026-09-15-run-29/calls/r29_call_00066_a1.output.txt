@@ -1,0 +1,40 @@
+## Nothing is written yet
+
+Two of the three items are gated and need your confirmation before any file is opened. Here is the state of each.
+
+### (c) T1 — already moved, no action needed
+
+The board item went `In progress` → `In review`, and the ledger holds the owner and progress event. That's execution record; it never enters a spec file. Done, automatically.
+
+### (a) T2 — new requirement, proposed for append to `docs/specs/checkout-flow.md`
+
+These are the exact bytes the plan artifact holds. This is what would be appended, verbatim, nothing added or reflowed:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+Append-only. No existing line in the file is touched by this item.
+
+### (b) T3 — requirement-text mutation, `REQ-checkout-112`
+
+The scan found the recorded text contradicting shipped code. This is not a behavior change on this branch — the diff at `src/checkout/decline.ts:64` keeps preserving the cart, as shipped code already did. So the same-delivery mandate raises no `Warning` here; the requirement text is simply stale and wrong.
+
+- **Requirement id:** `REQ-checkout-112`
+- **Before:** the cart is cleared when payment is declined
+- **After (proposed):** the cart is preserved when payment is declined
+- **Evidence:** `src/checkout/decline.ts:64` — declined payment leaves the cart intact; this branch's diff retains that behavior.
+
+One caveat worth your attention: unlike (a), that "after" text is mine, not something the delta carried. The delta proposes nothing for `REQ-checkout-112`. I have quoted the "before" as the fragment given to me; the write would be scoped to that clause alone, and I would show you the byte-exact line from the file before touching it.
+
+### What I need from you
+
+Confirm (a) and (b) separately — they can go independently, and you may take (a) now and hold (b) while you review the wording, or replace my proposed text for `REQ-checkout-112` with your own.
+
+If you confirm neither, this run reports `no changes` and the file stays byte-identical.

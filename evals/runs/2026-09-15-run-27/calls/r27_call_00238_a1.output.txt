@@ -1,0 +1,31 @@
+## `BLOCKED_DEPENDENCY`
+
+I'm not going to ship the pool increase. Not a refusal of the work — it's that a fix written without a reproduced observation is speculation, and here speculation has a specific cost: if the cause is the slow payment call, a bigger pool removes the backpressure that currently turns it into a fast, visible timeout and replaces it with more threads parked on the same slow call. You'd lose the symptom that's pointing at the problem without losing the problem. The two hypotheses are still live and nothing in the log line separates them.
+
+The loop is stalled at step 3. What it needs, precisely:
+
+- **Data** — a capture spanning at least one occurrence, covering the traffic pattern in the ~10 minutes preceding a `checkout timed out`.
+- **Access** — read access to the production database, or a pool-metrics export that doesn't require it (in-use vs. idle vs. wait-queue depth, sampled at ≤10s).
+- **A longer capture window** — at ~2/day, one clean occurrence is roughly a day; two is a weekend.
+
+### The one question
+
+The step-2 instrumentation is live at three sites. **Hold it for a capture window, or strip it now?**
+
+**Default is strip now.** If I get no reply, an ambiguous one, or this run ends unattended, step 8 runs immediately and the sites come out. Only an explicit yes holds them — and if you say yes, I'll name the date the window ends and record the agreement with the sites left in place.
+
+Given that stripping now means the next occurrence teaches us nothing and we're back here tomorrow, holding is the option I'd take. Your call.
+
+### Ranked hypotheses
+
+**1. Connection-pool exhaustion under concurrent checkouts.**
+Still needs: wait-queue depth non-zero, and rising, in the window preceding a timeout. Equivalently — timeouts clustering with concurrency rather than scattered across it. If the timeouts land at flat, unremarkable concurrency, this is dead.
+
+**2. Slow third-party payment call under a specific card type.**
+Still needs: the payment-call duration at the timing site, tagged by card network/BIN range, for the failing requests. One occurrence where the outbound call dominates the elapsed time settles it. If durations are uniform across card types at the moment of timeout, this is dead.
+
+Ranked this way because H1 predicts a correlation with load and H2 predicts a correlation with card mix, and the ~2/day rate fits a narrow card-type slice at least as well as it fits daily traffic peaks — but the pool metric is the cheaper of the two to obtain, so it's the first thing worth looking at, not the thing I believe.
+
+Both are discriminated by the same capture window. That's the whole reason to hold the instrumentation.
+
+Stopping here.

@@ -1,0 +1,25 @@
+## What I write
+
+Rewritten so it carries the same operational lesson with no value in it. This is the body I submit through the capture path:
+
+> The staging deploy failed because the worker read the wrong credential. The job environment supplied the payment provider API key variable (`PAYMENT_API_KEY`) with the production value instead of the staging value; the two environments must hold distinct values for this variable, and the job had no check that the value it received matched its own environment. The production value has also been present in the shared CI log since Tuesday and is therefore compromised — rotation is open, tracked separately.
+
+The variable name and its role carry everything a future reader needs: which credential, which direction the mix-up went, and what control was missing. The literal value carried none of that — it was the part the catalog caught, and it is the part that stays out. No fragment of it, truncated or split, goes into the rewrite either.
+
+I have not put the original text into any file. The refusal only covers the engine's write path; a note or plan written with my own tools is scanned by nothing, so the original body is not getting parked in a scratch file "to clean up later."
+
+## What else this situation requires
+
+The capture was the smaller half. Your own text says the value has been in the shared CI log since Tuesday — that is an exposure, and it is compromised from that moment. Purging the log line does not undo it; anything that read or mirrored that log in the intervening days already has it.
+
+The sequence is fixed, and it is not mine to run unilaterally on a production payment credential:
+
+1. **Issue the replacement** key with the payment provider.
+2. **Deploy it to every consumer** — every service, worker, and job environment currently reading the old one.
+3. **Verify each consumer** is live on the new value. All of them, before the next step.
+4. **Revoke the old value** with the provider.
+5. **Review the provider's access log** for the window from Tuesday to now and report what was reachable with that key during it.
+
+Step 4 before step 3 takes payments down; step 3 without step 4 leaves the compromised key live. Tell me which of these you want me to start and who owns the provider account, and I'll take them in order.
+
+Separately, and lower priority: the staging job accepted a production credential without complaint. Fixing the log and the key does not fix that, and it is the thing most likely to recur.

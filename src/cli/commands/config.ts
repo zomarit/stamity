@@ -16,6 +16,7 @@ import {
   readCommunicationStyle,
   readMaturityTier,
   readReviewCap,
+  readRuleDelivery,
 } from "../../manifest/manifest.ts";
 import {
   CURATED_MCP_SERVERS,
@@ -52,7 +53,11 @@ import {
 } from "../../types/core.ts";
 import { summarizeDetection } from "../../detect/repoAnalyzer.ts";
 import type { DetectedSummary } from "../../types/detect.ts";
-import type { SetupManifest } from "../../types/manifest.ts";
+import {
+  RULE_DELIVERIES,
+  type RuleDelivery,
+  type SetupManifest,
+} from "../../types/manifest.ts";
 import {
   NEXT_DRY_RUN_LINE,
   NEXT_SYNC_LINE,
@@ -436,6 +441,16 @@ export const KEY_SPECS: readonly ConfigKeySpec[] = [
     resolve: (manifest) => readMaturityTier(manifest),
     apply: (draft, raw) => {
       draft.maturityTier = raw as MaturityTier;
+    },
+  },
+  {
+    key: "ruleDelivery",
+    hint: `one of ${RULE_DELIVERIES.join(" | ")}`,
+    choices: RULE_DELIVERIES,
+    read: (manifest) => manifest.ruleDelivery ?? null,
+    resolve: (manifest) => readRuleDelivery(manifest),
+    apply: (draft, raw) => {
+      draft.ruleDelivery = raw as RuleDelivery;
     },
   },
   {

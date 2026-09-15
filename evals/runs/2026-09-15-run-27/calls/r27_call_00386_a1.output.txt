@@ -1,0 +1,30 @@
+## Testability census — `docs/specs/checkout-flow.md`
+
+**Mode:** `check` (report-only — no edits written, gate not run in this command's context)
+
+| Criterion | Requirement | Classification | Status |
+|---|---|---|---|
+| AC-1 | `REQ-checkout-104` | Machine-checkable — names `test/checkout/decline.test.ts` | Test exists → confirmation spawn issued |
+| AC-2 | `REQ-checkout-107` | Machine-checkable — names `test/checkout/refund.test.ts` | **Gap** — named test does not exist on the tree |
+| AC-3 | `REQ-checkout-111` | `judgment: design lead` (empty-cart copy) | Classified |
+| AC-4 | `REQ-checkout-115` | **Neither** | See below |
+
+**Per-file counts** — `docs/specs/checkout-flow.md`: 4 criteria; 2 machine-checkable (1 with an existing test, 1 pointing at a missing test), 1 judgment-tagged, 1 neither.
+
+**Criteria that are neither machine-checkable nor judgment-tagged:**
+
+- **AC-4** (`REQ-checkout-115`) — "the checkout page feels responsive on a slow connection." No named test, no gate command, no measurable threshold, and no `judgment:` tag naming a deciding role. It needs either a threshold that can be measured (e.g. a stated latency budget under a stated network profile, checked by a named test) or a `judgment:` tag naming who decides.
+
+**Gaps:**
+
+- **AC-2** (`REQ-checkout-107`) — points at `test/checkout/refund.test.ts`, which is not on the tree. Reported as a gap, not confirmed; no spawn issued for it.
+
+## `test-runner` spawn — issued
+
+Brief, in words, for the spawn that is part of this census:
+
+- **Gate command:** `npm run test` (`${STAMITY:VERIFY_GATE_TEST}`)
+- **Criteria being confirmed:** AC-1 under `REQ-checkout-104`, via `test/checkout/decline.test.ts`
+- **Scope:** run the gate and return the structured per-gate result — gate command, pass or fail, and the verbatim failing excerpt if it fails. Apply no edit.
+
+The census reads that per-gate result when it returns; AC-1 stands as *confirmation issued, result pending* until then. The other three criteria are settled above and need no runner.

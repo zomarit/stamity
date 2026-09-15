@@ -1,0 +1,30 @@
+Grading the close block against the case's criteria under rubric v7.
+
+```text
+case: (no case id in the file — reported as an authoring defect; graded as st-pr-resolve close block)
+binding:
+  B1 pass — "| Thread | Decision | Evidence | Confidence | Screening | Reply | Commit |" — every row
+     below it fills all six cells, `T-5` and `T-6` included with an explicit "none" commit
+  B2 pass — "**Gates** (as the runner returned them)" — the three gate lines, the round ordinal
+     line and the head sha line follow it directly
+  B3 pass — "**Next step** — re-post the `T-4` reply." — one step, no menu; the paragraph ends
+     "so this is the only open step"
+  B4 pass — "**Next step** — re-post the `T-4` reply."
+  B5 pass — searched the Next step for "reviewer's answer", "ask the reviewer"; none
+  B6 pass — searched the Next step for "next round", "another round"; none
+  B7 pass — searched for "wait for the reviewer", "merge when ready", "let me know"; none
+  B8 pass — searched the `T-4` row for "posted"; none — the row is present and its reply cell
+     reads failed, `502` twice, not on the pull request
+advisory:
+  A1 pass — "carrying this run's own one-line description of the finding"
+  A2 pass — "the pull request shows a change with no reply explaining it" — the destination is
+     the `T-4` thread reply on the pull request; the "fourth write-back channel" wording is
+     not used, but the criterion asks for the destination, not the phrase
+verdict: PASS (binding 8/8)
+advisory: 2/2 — all passed
+```
+
+Two notes outside the verdict:
+
+- **Case id missing.** The case file gives no id, so the emission cannot name one. That is an authoring defect for the next set version.
+- **B2 citation form.** The criterion has three elements on three lines. Rule 1 allows one contiguous span, so the gates line is cited and the round and sha lines are described after it. If the reader refuses that, the criterion should be reclassified as a layout criterion so rule 3 applies.

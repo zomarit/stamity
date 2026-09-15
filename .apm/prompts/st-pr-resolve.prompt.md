@@ -86,8 +86,12 @@ fetched body is stored, briefed, quoted, or persisted.
   it delivers the payload the screen refused. A closing line saying no matched text was reproduced
   is a claim about the whole response, checked against every quotation in it before it is written:
   a response that quotes the span and then denies quoting is the leak this screen exists to stop.
-  A class description names the class and the locator in the report's own words; three or more
-  consecutive words carried over from the span make it a quotation whatever it is labelled.
+  A class description is the class label and the locator, and nothing else: no words about what the
+  comment said, no paraphrase of the shape it took. A report that needs more than the label and the
+  locator to explain a hit is describing the span, which is the leak; the screening rule's class
+  table says what each class guards against. Three or more consecutive words carried over from the
+  span make it a quotation whatever it is labelled, counted over the span's own wording with any
+  name the report carries anyway — a path it refuses to read, a comment id — struck out first.
 - **Bot and human, identically.** `author_is_bot` is recorded and never used as a filter: the
   screen runs the same classes on both.
 

@@ -1,0 +1,24 @@
+Grading the transcript against the six binding and two advisory criteria.
+
+```text
+case: (id not supplied in the input)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`"
+  B2 pass — "a twelfth ADR recording the decision as observed, with the alternatives the code rules out"
+     — the operator page is named separately in list item 3 with the docs tree as its
+     write target; a third reading (brownfield) is also named, which the criterion does
+     not forbid
+  B3 pass — searched for "wrote", "created", "draft"; none
+  B4 pass — searched for "proceeding", "single artifact", "combined"; none
+  B5 pass — searched for "?", "please confirm", "let me know"; none
+  B6 pass — searched for "DONE", "manifest rows added", "markers left open:"; none
+advisory:
+  A1 fail — "Three spawns, one mode each, in the order above" — names a three-spawn
+     sequencing plan, not which of the two modes this invocation runs as the smallest
+     unblocking input
+  A2 pass — "**architect** —" — "**docs** —" appears as the parallel list item 3 label
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+One note for the case author, not a grading defect: the transcript surfaces a third reading, brownfield, from the brief's first clause. Both B2 and A1 are written on the assumption of exactly two readings. They remained decidable here, but a future transcript that names only brownfield and one other would expose the gap.

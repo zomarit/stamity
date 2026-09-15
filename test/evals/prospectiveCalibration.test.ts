@@ -101,9 +101,12 @@ describe("prospective calibration keys", () => {
   it("keeps profile roles, effort, default, set and unselected instruments unchanged", () => {
     const legacy = JSON.parse(read("evals/model-profiles-v1.json"));
     const current = JSON.parse(read("evals/model-profiles-v2.json"));
-    // v1 moved to SET-v6 and rubric v7 for both Codex profiles; v2 is the retained
-    // prospective document and keeps the rubric and set it was written against.
+    // Behaviour moved, not weakened: v1 moved to SET-v7 and to rubric v7 for the default
+    // `claude` profile as well as both Codex profiles; v2 is the retained prospective
+    // document and keeps the set and the three rubrics it was written against, so each one
+    // it pins differently is now named here rather than inherited from v1.
     expect(current).toEqual({ ...legacy, set: "evals/SET-v5.md", profiles: { ...legacy.profiles,
+      claude: { ...legacy.profiles["claude"], rubric: "evals/rubric-v4.md" },
       "codex-astra": { ...legacy.profiles["codex-astra"], rubric: "evals/rubric-v6.md" },
       "codex-astra-judge": { ...legacy.profiles["codex-astra-judge"], rubric: "evals/rubric-v5.md" } } });
   });

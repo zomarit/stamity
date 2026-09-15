@@ -168,18 +168,20 @@ regenerate its kickoff prompt — so the record never trails the registry. (Adde
 day the record was found two releases stale.)
 
 A second line rides the same cut and lands *before* the tag rather than after it: the full eval set
-runs per `evals/SET-v5.md`, and the release carries its run artifact under `evals/runs/`. The corpus
-is model-executed prose, so a version cut with no run behind it ships behaviour nobody measured — no
-artifact, no tag, and a release without one is blocked by this checklist rather than by anyone's
-memory. (Added 2026-09-01, with the set; repointed to `SET-v3.md` on 2026-09-02, and to
-`SET-v4.md` on 2026-09-04, and to `SET-v5.md` on 2026-09-10.)
+is measured per `evals/SET-v7.md` — by the release's baseline run, or by an incremental run composed
+with it under that file's incremental rule — and the release carries the composed artifact under
+`evals/runs/`. The corpus is model-executed prose, so a version cut with no run behind it ships
+behaviour nobody measured — no artifact, no tag, and a release without one is blocked by this
+checklist rather than by anyone's memory. (Added 2026-09-01, with the set; repointed to
+`SET-v3.md` on 2026-09-02, and to `SET-v4.md` on 2026-09-04, and to `SET-v5.md` on 2026-09-10,
+and to `SET-v7.md` on 2026-09-15; incremental runs declared 2026-09-15.)
 
 Name the model profile from `evals/MODEL-PROFILES-v1.md` before dispatch; the existing
 Claude profile remains the default. The artifact records the selected pair, rubric,
 reasoning/decoding and harness controls, with calibration for that configuration. A Codex
 profile's result starts a separate baseline and cannot be presented as the Claude run.
 
-The current full release run covers all 78 v5 cases, three admitted samples each.
+The current full release run covers all 99 v6 cases, three admitted samples each.
 For a selected Codex profile, the manual stateless transport is documented in
 `evals/README.md`; fresh provider isolation/model/effort evidence and every retained
 calibration fixture must pass before scores are admitted. A blocked preflight, missing
@@ -193,3 +195,17 @@ release ships — and review the admin roster, so the set of accounts holding ad
 and publish rights on the registry is a set someone looked at this release rather than one that
 accumulated. Both are console state that no file in this tree can assert, which is why they sit in
 this checklist beside the three platform controls rather than in a test. (Added 2026-09-02.)
+
+A fourth line rides the same cut, before the tag: every hand page — the whole hand bucket
+`test/docsPages.test.ts` declares, plus `GOVERNANCE.md` — is re-attested claim by claim against
+the candidate tree and restamped `verified against the tree at the X.Y.Z release cut (DATE)`,
+and `RELEASE_CUT_DATE` in that suite moves with it; a stale stamp is a currency defect the
+suite catches, a stale claim under a fresh stamp is the one a person catches. (Added
+2026-09-15, when the sweep found stamps from 1.5.0 under 1.7.0.)
+
+A fifth line rides the cut with the fourth: the measurements page's input is refreshed —
+`node scripts/merge-ready-rate.mjs --write` freezes the verified merge-ready rate over the committed run
+records into `evals/measurements/merge-ready-<date>.json`, then `node scripts/generate-docs.mjs --page
+measurements` re-renders `docs/measurements.md` from it; both are committed before the tag. A run record
+written after the snapshot is not on the page until the next refresh, which is the page's own contract.
+(Added 2026-09-15, with the page.)

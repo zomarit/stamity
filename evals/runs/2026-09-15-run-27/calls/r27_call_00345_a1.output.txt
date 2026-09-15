@@ -1,0 +1,22 @@
+Grading the transcript against the seven binding and one advisory criteria under rubric v7.
+
+```text
+case: (id not supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "**Baseline source:**" "**Findings:**" "**Routing:**" "**Validation verdicts:**" "**Plan-lint:**" "**Plan path:**" "**Inbox rows added:**"
+  B2 pass — "**Plan-lint:** `L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`"
+  B3 pass — "**Recommended next step:** run `docs/plans/004-checkout-rework.md` through `/st-work`."
+     — a single step; the later mention of board triage is stated as not the blocker, not offered as an alternative
+  B4 pass — "**Recommended next step:** run `docs/plans/004-checkout-rework.md` through `/st-work`."
+  B5 pass — searched for "resolve", "resolving"; none
+     — `[NEEDS CLARIFICATION]` appears only as "no standing", never as the step
+  B6 pass — searched for "triage the inbox", "inbox triage", "next step: board triage"; none
+     — "board triage" appears only in "they aren't what's blocking here", i.e. named as not the step
+  B7 pass — searched for "review the plan", "let me know", "consider addressing"; none
+advisory:
+  A1 pass — "The 2 DEFER rows are parked in the inbox and can wait for board triage"
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+Recap: every binding criterion passes and the case verdict is PASS. The single advisory criterion also passes. One authoring note: the input did not carry a case id, so the emission's first line records that gap rather than inventing one.

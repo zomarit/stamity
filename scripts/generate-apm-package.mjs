@@ -39,6 +39,16 @@
 //   command -> .apm/prompts/<id>.prompt.md              basename becomes /<id>
 //   agent   -> .apm/agents/<id>.agent.md                a callable persona
 //
+// ONE EXCEPTION, and it is the rule-delivery option rather than a fifth class.
+// A rule that declares NO globs has no scope to attach on, so an instruction
+// would carry `applyTo: "**"` — every file, on every session. Since 2026-09-15
+// the engine's default delivery for exactly that shape is a skill the consumer
+// opens when its description matches, so this package follows it: such a rule
+// lands at `.apm/skills/stamity-<id>/SKILL.md` and emits no instruction file.
+// The predicate is the engine's own (`../src/content/ruleDelivery.ts`), read
+// rather than restated. Glob-scoped rules are untouched — they were always
+// conditional, which is what an instruction is for.
+//
 // `<id>` is the EMITTED id — bundled skills keep their directory, new fork
 // skills keep their bare directory, commands take `st-` and other classes take
 // `stamity-`, following the catalog/CLI identity contract. An APM consumer
@@ -192,7 +202,7 @@
 //     schema-bearing `plugin.json` only with the Agent Plugins `$schema`, and
 //     `.claude-plugin/plugin.json` names the schemastore one.
 //   - minus both               -> APM_PACKAGE, and it works end to end:
-//     10 agents, 9 commands, 12 rules and 8 skills deployed under the emitted
+//     10 agents, 9 commands, 10 rules and 10 skills deployed under the emitted
 //     ids, with each rule's `applyTo` translated into the target's own glob
 //     vocabulary.
 //
@@ -211,7 +221,7 @@
 // route deploys this package from the published tree AS IT STANDS, both plugin
 // surfaces present and nothing stripped: `apm install zomarit/stamity` and
 // `apm install zomarit/stamity#<tag>` each deploy 10 agents, 9 commands,
-// 12 rules and 8 skills per target, and the lockfile types the dependency
+// 10 rules and 10 skills per target, and the lockfile types the dependency
 // `apm_package`. The imperative LOCAL route (`apm install <path>`) is still
 // refused by design — the local-bundle route inspects `plugin.json` first — and
 // a `file://` spec is rejected outright, so the local form that reaches this
@@ -418,6 +428,8 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   // ── Corpus projection ────────────────────────────────────────────
 
   const { assertSafePath, buildContentIndex, COMMAND_ID_PREFIX, replacedClaimantOf, typeIdKey } = await import('../src/content/catalog.ts')
+  const { declaredRuleGlobs, demotedRuleIds, ruleDeliveryInputOf } = await import('../src/content/ruleDelivery.ts')
+  const { RULE_DELIVERY_DEFAULT } = await import('../src/types/manifest.ts')
   const { composeFrontmatter } = await import('../src/content/frontmatter.ts')
   const { contentPrefixFor } = await import('../src/types/markers.ts')
   const { CONTENT_CLASSES } = await import('../src/types/content.ts')
@@ -437,6 +449,33 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   const items = index.items.filter((item) =>
     ['corpus', 'fork'].includes(item.origin ?? 'corpus') &&
     index.byKey.get(typeIdKey(item.type, item.id)) === item,
+  )
+
+  /**
+   * Rules this package ships as SKILLS rather than as instructions.
+   *
+   * The engine's rule-delivery option is not a per-client preference — it is the
+   * answer to "can this client attach the rule conditionally, and if not, is the
+   * rule's whole body worth a permanent seat in launch context". An APM
+   * instruction is glob-attached (`applyTo`), exactly like the Copilot surface
+   * this generator already shares its `applyTo` derivation with, and a rule with
+   * no globs takes `**` there — which is not a scope, it is every file, i.e. the
+   * unconditional load the option exists to reclaim. So the same predicate that
+   * decides the point for Copilot decides it here, read from
+   * `../src/content/ruleDelivery.ts` rather than restated: a second reading is
+   * how a rule ends up demoted on one surface and loaded on another while both
+   * claim to ship the same corpus.
+   *
+   * `copilot` is the tool passed because APM's instruction layer is the one this
+   * package's consumers compile to, and `RULE_DELIVERY_DEFAULT` because an APM
+   * consumer has no manifest of this engine's to select a mode in — it receives
+   * the shape the engine ships. A repository that wants the other shape installs
+   * through a channel that carries a manifest.
+   */
+  const demotedRules = demotedRuleIds(
+    'copilot',
+    items.filter((item) => item.type === 'rule').map(ruleDeliveryInputOf),
+    RULE_DELIVERY_DEFAULT,
   )
 
   const missingClasses = CONTENT_CLASSES.filter((type) => !items.some((item) => item.type === type))
@@ -485,18 +524,14 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
    * two surfaces come to disagree about one rule's scope.
    */
   function applyToOf(item) {
-    const declared = item.frontmatter['globs']
-    const raw =
-      typeof declared === 'string'
-        ? declared.split(',')
-        : Array.isArray(declared)
-          ? declared.filter((entry) => typeof entry === 'string')
-          : []
-    const globs = new Set()
-    for (const glob of raw) {
-      const value = glob.trim()
-      if (value !== '') globs.add(value)
-    }
+    // N2: the extraction itself is `declaredRuleGlobs` (`../src/content/
+    // ruleDelivery.ts`), the same shared reader `src/adapters/claude.ts` and
+    // `src/adapters/copilot.ts` route through (M1) — this script already
+    // dynamic-imports that module a few lines up, so the earlier "native ESM,
+    // cannot import the TS module" premise for leaving it alone was false.
+    // Only the de-duplication stays local, matching the two adapters' own
+    // `[...new Set(declaredRuleGlobs(item))]` shape.
+    const globs = new Set(declaredRuleGlobs(item))
     return globs.size === 0 ? APPLY_TO_EVERY_FILE : [...globs].join(APPLY_TO_SEPARATOR)
   }
 
@@ -570,6 +605,18 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
     await Promise.all(
       items.map(async (item) => {
         const id = emittedId(item)
+
+        // A demoted rule takes the skills home and the skills head — `name` equal
+        // to the directory, which `emittedId` already spells `stamity-<id>` for a
+        // rule. It ships no companion files, because a rule is one document.
+        if (item.type === 'rule' && demotedRules.has(item.id)) {
+          add(
+            posix.join(APM_DIR, APM_SUBDIR.skill, id, SKILL_FILE),
+            primitive({ name: id, description: item.description }, item),
+          )
+          return
+        }
+
         const dir = posix.join(APM_DIR, APM_SUBDIR[item.type])
 
         if (item.type !== 'skill') {

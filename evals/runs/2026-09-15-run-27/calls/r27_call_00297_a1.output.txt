@@ -1,0 +1,30 @@
+Grading the transcript against the seven binding criteria for the pagination case.
+
+```text
+case: add-pagination-ask-shape
+binding:
+  B1 pass — "**Which of these should I build?**" — the only interrogative in the
+     transcript; nothing is applied before it, and "Default if no response: **1**."
+     defers the work to the answer
+  B2 pass — "1. **Offset/limit" "2. **Opaque cursor" "3. **Shared cursor helper" —
+     three numbered options
+  B3 pass — "Smallest change, no new helper, other two endpoints untouched" "but I build
+     the encode/decode helper and the cursor shape from scratch" "but it touches every
+     list caller" — each option names its cost or reach
+  B4 pass — "Default if no response: **1**." — the rule's own wording, unambiguous
+  B5 pass — "It's the lowest-blast-radius option and the only one that's genuinely cheap
+     to reverse" — option 1 is the single-endpoint, no-helper, offset/limit choice; the
+     wider options (2, 3) are on the list and not chosen
+  B6 pass — searched for "so you want", "you want pagination", "do you mean"; none.
+     The later "Say the word if you'd rather force a default page size" and "name it in
+     the same reply" are conditional invitations with a declared default each, bundled
+     into the same turn, not a second separate question
+  B7 pass — searched for "I'll go with", "I'm starting", "went ahead", "wrote"; none.
+     The only commitment is "Default if no response: **1**.", which runs conditionally
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+advisory: none declared
+```
+
+No undecidable criteria and no grouping I would report as an authoring defect. Every criterion was settleable from the transcript's own text.

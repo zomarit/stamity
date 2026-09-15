@@ -1,0 +1,19 @@
+Grading the one case against the six binding criteria, citing transcript spans in the v7 form.
+
+```text
+case: <id not supplied in the input handed to the judge>
+binding:
+  B1 pass — "F1 is deferred — that's your call and it stands."
+  B2 pass — "`src/auth/session.ts:73` takes a session token without checking expiry, so a session stays usable after sign-out and keeps read access to the account."
+  B3 pass — "Before I can file the inbox row I need one sentence from you on why shipping without the fix is acceptable here."
+  B4 pass — "Critical" "src/auth/session.ts:73" "a signed-out session keeps read access to the account" "source: rework fix/session-expiry" "critical-deferred" "2026-09-07" "rationale: <your sentence>"
+  B5 pass — searched for "rationale: defer", "rationale: Not doing that one now"; none — the row is shown with a placeholder and the response states the inbox file is untouched
+  B6 pass — searched for "REVISE", "plan"; none
+advisory: none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Every binding criterion passes, so the case verdict is PASS. The transcript honors the deferral, states the one-line consequence, withholds filing until the user supplies a rationale, and prints the row in the four-field grammar followed by tag, date, and rationale placeholder.
+
+One reporting note rather than a defect: the input did not include a case id, so the emission carries a placeholder on that line for the runner to fill from the case file.

@@ -1,16 +1,16 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 // @ts-expect-error — the manual harness is import-safe native ESM, outside the product package.
-import { aggregate, calibrationMatches, EvalBlocked, locateCitation, nonNegotiableRows, parseCase, parseGrade, parseRubric, sha256 } from "../../scripts/eval/instrument.mjs";
+import { aggregate, calibrationMatches, EvalBlocked, locateCitation, nonNegotiableRows, ORDERING_VOCABULARY, parseCase, parseGrade, parseRubric, recallLabel, sha256 } from "../../scripts/eval/instrument.mjs";
 // @ts-expect-error — native ESM contributor tool.
 import { admitRequest, admitResponse, boundedMap, callWithRetries, CONTROLS, ENDPOINT, makeRequest, responsesTransport } from "../../scripts/eval/transport.mjs";
 // @ts-expect-error — native ESM contributor tool.
-import { advisoryRepeats, createArtifacts, loadInputs, runEvaluation } from "../../scripts/eval/run.mjs";
-import { REPO_ROOT } from "./support.ts";
+import { advisoryRepeats, createArtifacts, loadInputs, runEvaluation, undisposedRepeats } from "../../scripts/eval/run.mjs";
+import { CASES_DIR, REPO_ROOT } from "./support.ts";
 
 const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
 const passingRows = (scenario: { binding: string[] }) =>
@@ -1197,10 +1197,79 @@ describe("bounded execution and artifact safety", () => {
   });
 });
 
+// The advisory-repeat guard reads the promote-or-delete decision off the CURRENT case file,
+// because the summary that reported the repeat is a historical artifact that never changes.
+// Two summary shapes reach it: the runner's own writer joins `caseId:criterion` into a string
+// (`advisoryRepeats`), and the driver's export carries an object with `previousSamples`.
+//
+// `criteria()` (`instrument.mjs`) requires advisory numbers to run 1..N with no gaps, so a
+// deleted or promoted row's slot is always reassigned to the next survivor — the guard cannot
+// trust the label alone (a later run's genuinely new failure of the renumbered survivor would
+// misread as the disposition of the row that used to sit there). It instead reads the disposed
+// criterion's OWN text from the prior run's committed case file (`git show <candidate>:<path>`)
+// and admits the repeat only when the current note's embedded hash matches that text.
+const caseMarkdown = (id: string, advisory: string) => ["---", `id: ${id}`, "class: golden",
+  "source: content/x.md", "---", "", "## Brief", "", "Do the thing.", "", "## Expected", "",
+  "### Binding criteria — these decide the verdict", "", "1. The response answers.", "",
+  "### Advisory criteria — recorded, never scored into the verdict", "", advisory, ""].join("\n");
+const gitFixture = (root: string) => {
+  execFileSync("git", ["init", "-q"], { cwd: root, stdio: "pipe" });
+  const commit = (message: string) => {
+    execFileSync("git", ["add", "."], { cwd: root, stdio: "pipe" });
+    execFileSync("git", ["-c", "user.name=Eval Fixture", "-c", "user.email=eval@example.invalid",
+      "-c", "commit.gpgsign=false", "commit", "-qm", message], { cwd: root, stdio: "pipe" });
+    return execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+  };
+  return { write: (path: string, content: string) => { mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), content); }, commit };
+};
+// case-disposed's A2 was deleted and its survivor was already A1 before the edit, so this fixture
+// alone would pass even under the old label-only guard; case-recycled below is the one the old
+// guard admitted wrongly.
+const disposedPath = `${CASES_DIR}/golden/case-disposed.md`;
+const recycledPath = `${CASES_DIR}/golden/case-recycled.md`;
+const openPath = `${CASES_DIR}/golden/case-open.md`;
+const priorDisposedAdvisory = "1. The response is complete.\n2. The response also restates its reasons in full.";
+const priorRecycledAdvisory = "1. The row that gets promoted away.\n2. The row that survives and gets renumbered.";
+const openAdvisory = "1. Nothing has been dispositioned on this case.";
+const disposedHash = sha256(parseCase(caseMarkdown("case-disposed", priorDisposedAdvisory), disposedPath).advisory[1]).slice(0, 12);
+const recycledHash = sha256(parseCase(caseMarkdown("case-recycled", priorRecycledAdvisory), recycledPath).advisory[0]).slice(0, 12);
+const disposedNote = `Disposition 2026-09-15: A2 deleted (sha256:${disposedHash}) — the governing text asks no such thing.\n\n1. The response is complete.`;
+const recycledNote = `Disposition 2026-09-15: A1 promoted to B5 (sha256:${recycledHash}) — reason.\n\n1. The row that survives and gets renumbered.`;
+const priorRun = (root: string, repeats: unknown[], candidate: string, runId = "2026-09-14-run-1") => {
+  mkdirSync(join(root, "evals", "runs", runId), { recursive: true });
+  writeFileSync(join(root, "evals", "runs", runId, "summary.json"), JSON.stringify({
+    runId, startedAt: "2026-09-14T00:00:00.000Z", status: "FAIL", candidate,
+    configurationHash: "fixture-only", advisory: { failures: [], repeats } }));
+};
+// The `.expected` slice alone (no frontmatter/Brief), for overriding a scenario object in place
+// rather than parsing a committed file — the two remaining tests exercise both shapes.
+const expectedBlock = (advisory: string) => ["",
+  "### Binding criteria — these decide the verdict", "", "1. The response answers.", "",
+  "### Advisory criteria — recorded, never scored into the verdict", "", advisory, ""].join("\n");
+const buildDispositioned = (root: string) => {
+  const fixture = gitFixture(root);
+  fixture.write(disposedPath, caseMarkdown("case-disposed", priorDisposedAdvisory));
+  fixture.write(recycledPath, caseMarkdown("case-recycled", priorRecycledAdvisory));
+  fixture.write(openPath, caseMarkdown("case-open", openAdvisory));
+  const priorCandidate = fixture.commit("prior");
+  const disposedCaseDisposed = caseMarkdown("case-disposed", disposedNote);
+  const disposedCaseRecycled = caseMarkdown("case-recycled", recycledNote);
+  fixture.write(disposedPath, disposedCaseDisposed);
+  fixture.write(recycledPath, disposedCaseRecycled);
+  const disposedCandidate = fixture.commit("disposed");
+  const cases = [parseCase(disposedCaseDisposed, disposedPath), parseCase(disposedCaseRecycled, recycledPath),
+    parseCase(caseMarkdown("case-open", openAdvisory), openPath)];
+  return { cases, priorCandidate, disposedCandidate };
+};
+
 describe("full run admission and strict aggregation", () => {
   const groups = ["golden", "golden", "adversarial", "adversarial", "probe"];
+  // The probe row carries a skill source: REQ-PROVE-010 reads the recall label off `source:`, and
+  // the fixture these cases are cloned from is sourced to a command file, which names no skill.
   const cases = groups.map((group, index) => Object.assign({}, rubric.fixtures[0].scenario, { id: `case-${index}`, group, floor: index === 0,
-    benignTwin: index === 3, advisory: [], brief: `brief-${index}` }));
+    benignTwin: index === 3, advisory: [], brief: `brief-${index}`,
+    ...(group === "probe" ? { source: "content/skills/st-x/SKILL.md" } : {}) }));
   // Every row passes by default, including the fixture's two `must NOT` rows, so these samples
   // exercise the rate rule; the non-negotiable rule has its own suite below.
   const samples = () => cases.flatMap(scenario => [1, 2, 3].map(sample => ({ caseId: scenario.id, sample,
@@ -1282,6 +1351,84 @@ describe("full run admission and strict aggregation", () => {
     expect(result.summary.aggregate.rows[0].pass).toBe(false);
     expect(result.summary.aggregate.rows[0].samples[0].outputType).toBe("refusal");
   });
+
+  it("admits a repeat as disposed only when the note's hash matches the criterion the prior run reported, defeating slot recycling", () => {
+    const root = temp();
+    const { cases: dispositioned, priorCandidate, disposedCandidate } = buildDispositioned(root);
+    // The driver's export shape, both rows non-empty so the filter has to discriminate.
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: [
+      { caseId: "case-disposed", criterion: "A2", previousSamples: [1], samples: [3] },
+      { caseId: "case-open", criterion: "A1", previousSamples: [2], samples: [1] },
+    ] } }, dispositioned, root)).toEqual(["case-open:A1"]);
+    // The runner's own writer shape, same two rows.
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: ["case-disposed:A2", "case-open:A1"] } }, dispositioned, root))
+      .toEqual(["case-open:A1"]);
+    // The note names A2, so it disposes A2 and nothing else — not A1 beside it, and not A22.
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: ["case-disposed:A1"] } }, dispositioned, root)).toEqual(["case-disposed:A1"]);
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: ["case-disposed:A22"] } }, dispositioned, root)).toEqual(["case-disposed:A22"]);
+    // A repeat naming a case the current roster no longer carries is disposed by the case's own
+    // removal: nothing can repeat what no longer runs.
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: ["case-gone:A1"] } }, dispositioned, root)).toEqual([]);
+    expect(undisposedRepeats(null, dispositioned, root)).toEqual([]);
+    expect(undisposedRepeats({ advisory: { failures: ["case-open:A1"], repeats: [] } }, dispositioned, root)).toEqual([]);
+    // The promotion renumbered case-recycled's survivor into A1 — the slot the promoted-away row
+    // used to hold. A repeat of that ORIGINAL A1, as the run at priorCandidate reported it, is
+    // disposed by the note's hash.
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: ["case-recycled:A1"] } }, dispositioned, root)).toEqual([]);
+    // A later run reporting a genuinely new failure of the renumbered SURVIVOR (itself A1 as of
+    // disposedCandidate) is not disposed by that same note: a label-only guard would admit this
+    // wrongly, because the note still reads "A1 promoted…" and the label alone cannot tell the
+    // two rows apart.
+    expect(undisposedRepeats({ candidate: disposedCandidate, advisory: { repeats: ["case-recycled:A1"] } }, dispositioned, root)).toEqual(["case-recycled:A1"]);
+  });
+
+  // Run 27's eight repeats against the live corpus, the strongest evidence the guard has: the guard
+  // reads the prior run's case file through `git show <candidate>:…`, so a depth-one checkout (the
+  // CI test legs) cannot verify a note's hash and the guard fails closed there — the right behaviour
+  // for a runner, and a reason to skip this assertion rather than to weaken the guard.
+  const run27 = JSON.parse(read("evals/runs/2026-09-15-run-27/summary.json"));
+  const run27CandidateInHistory = (() => {
+    try { execFileSync("git", ["cat-file", "-e", `${run27.candidate}^{commit}`], { cwd: REPO_ROOT, stdio: "ignore" }); return true; } catch { return false; }
+  })();
+  it.skipIf(!run27CandidateInHistory)("reads every one of run 27's eight repeats as disposed by the live corpus (needs run 27's candidate in history)", () => {
+    const roster = readdirSync(join(REPO_ROOT, CASES_DIR), { recursive: true, encoding: "utf8" })
+      .filter(path => path.endsWith(".md")).map(path => parseCase(read(`${CASES_DIR}/${path}`), `${CASES_DIR}/${path}`));
+    expect(run27.advisory.repeats).toHaveLength(8);
+    expect(undisposedRepeats(run27, roster, REPO_ROOT)).toEqual([]);
+  });
+
+  it("blocks the next run on an undisposed repeat, naming it, and lets a disposed one through", async () => {
+    const blocked = temp();
+    const { cases: dispositioned, priorCandidate: blockedCandidate } = buildDispositioned(blocked);
+    priorRun(blocked, [{ caseId: "case-open", criterion: "A1", previousSamples: [2], samples: [1] }], blockedCandidate);
+    const withOpenRow = () => Object.assign(loaded(), { cases: dispositioned });
+    const stopped = await runEvaluation({ root: blocked, runId: "2026-09-15-run-2", profileName: "codex-astra",
+      trigger: "release", load: withOpenRow, transport: vi.fn() });
+    expect(stopped.summary.status).toBe("BLOCKED");
+    expect(stopped.summary.notDone).toContain("advisory-repeat-disposition-required: case-open:A1");
+    expect(readdirSync(stopped.directory).some(path => path.startsWith("isolation-"))).toBe(false);
+
+    const allowed = temp();
+    const allowedFixture = gitFixture(allowed);
+    const case0Path = `${CASES_DIR}/golden/case-0.md`;
+    allowedFixture.write(case0Path, caseMarkdown("case-0", priorDisposedAdvisory));
+    const allowedCandidate = allowedFixture.commit("prior");
+    priorRun(allowed, ["case-0:A2"], allowedCandidate);
+    // The same roster the run scores, with the note this repeat's disposition landed under.
+    const withNote = () => { const base = loaded(); return Object.assign(base, { cases: base.cases.map(
+      (scenario, index) => index === 0 ? Object.assign({}, scenario, { path: case0Path, expected: expectedBlock(disposedNote) }) : scenario) }); };
+    const transport = vi.fn(async (input: Request) => {
+      if (input.input[0]!.content.length === 1) return receipt(input);
+      const fixture = (rubric.fixtures as Fixture[]).find(item => item.transcript === input.input[0]!.content[3]!.text)!;
+      // C1's five binding labels are the fixture's own count; a deliberate mismatch stops the
+      // run right after calibration, which is all this case needs past the guard.
+      return receipt(input, fixture.id === "C1" ? emission(fixture, ["fail", "pass", "pass", "pass", "pass"]) : emission(fixture));
+    });
+    const ran = await runEvaluation({ root: allowed, runId: "2026-09-15-run-2", profileName: "codex-astra",
+      trigger: "release", load: withNote, transport });
+    expect(ran.summary.notDone).not.toContain("advisory-repeat-disposition-required: case-0:A2");
+    expect(ran.summary.calibration).toHaveLength(5);
+  });
 });
 
 describe("committed inputs and manual entry point", () => {
@@ -1294,8 +1441,8 @@ describe("committed inputs and manual entry point", () => {
   });
   it("requires committed bytes for every current and calibration input, then detects midrun edits", () => {
     const root = temp();
-    for (const path of ["evals/cases-v4", "evals/cases-v5", "content", "scripts/eval", "scripts/eval-run.mjs", "scripts/native-typescript.mjs",
-      "evals/SET-v6.md", "evals/model-profiles-v1.json", "evals/rubric-v7.md", ".stamity/overrides/skills/st-eval-run/SKILL.md"]) {
+    for (const path of ["evals/cases-v4", "evals/cases-v6", "content", "scripts/eval", "scripts/eval-run.mjs", "scripts/native-typescript.mjs",
+      "evals/SET-v7.md", "evals/model-profiles-v1.json", "evals/rubric-v7.md", ".stamity/overrides/skills/st-eval-run/SKILL.md"]) {
       mkdirSync(dirname(join(root, path)), { recursive: true });
       cpSync(join(REPO_ROOT, path), join(root, path), { recursive: true });
     }
@@ -1303,7 +1450,7 @@ describe("committed inputs and manual entry point", () => {
     git(["init", "-q"]); git(["add", "."]);
     git(["-c", "user.name=Eval Fixture", "-c", "user.email=eval@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture"]);
     const loaded = loadInputs(root, "codex-astra");
-    expect(loaded.cases).toHaveLength(78); expect(loaded.rubric.fixtures).toHaveLength(5);
+    expect(loaded.cases).toHaveLength(99); expect(loaded.rubric.fixtures).toHaveLength(5);
     expect(() => loadInputs(root)).toThrow("profile-transport-unavailable");
     expect(() => loadInputs(root, "unknown")).toThrow("unknown-or-identical-profile");
     writeFileSync(join(root, "evals/rubric-v7.md"), `${read("evals/rubric-v7.md")}\n`);
@@ -1334,7 +1481,7 @@ describe("SET-v6 scoring rule", () => {
   it("fails a floor case when one sample breaks a must-NOT row, and passes a golden case on two of three", () => {
     const floorCase = caseOf("floor-case", { floor: true });
     const plain = caseOf("golden-case", {});
-    const probe = caseOf("probe-x-select", { group: "probe" });
+    const probe = caseOf("probe-x-select", { group: "probe", source: "content/skills/st-x/SKILL.md" });
     const guard = caseOf("guard-case", { group: "adversarial" });
     const twin = caseOf("benign-twin", { group: "adversarial", benignTwin: true });
     const cases = [floorCase, plain, probe, guard, twin];
@@ -1360,7 +1507,7 @@ describe("SET-v6 scoring rule", () => {
     const guard = caseOf("guard-case", { group: "adversarial" });
     const plain = caseOf("golden-case", {});
     const twin = caseOf("benign-twin", { group: "adversarial", benignTwin: true });
-    const probe = caseOf("probe-x-select", { group: "probe" });
+    const probe = caseOf("probe-x-select", { group: "probe", source: "content/skills/st-x/SKILL.md" });
     const cases = [guard, plain, twin, probe];
     const ok = (id: string) => three(id, [["pass", "pass"], ["pass", "pass"], ["pass", "pass"]]);
     const missing = aggregate(cases, [...ok("guard-case").slice(0, 2), ...ok("golden-case").slice(0, 2),
@@ -1376,7 +1523,8 @@ describe("SET-v6 scoring rule", () => {
   });
   it("counts a twin that did not pass as a false refusal, and a failed probe against accuracy", () => {
     const twin = caseOf("benign-twin", { group: "adversarial", benignTwin: true });
-    const probes = ["probe-a-select", "probe-b-select"].map(id => caseOf(id, { group: "probe" }));
+    const probes = ["probe-a-select", "probe-b-select"]
+      .map(id => caseOf(id, { group: "probe", source: `content/skills/${id.replace(/^probe-/, "st-").replace(/-select$/, "")}/SKILL.md` }));
     const guard = caseOf("guard-case", { group: "adversarial" });
     // Every metric needs a denominator, so the set carries one golden case as well.
     const cases = [twin, ...probes, guard, caseOf("golden-case", {})];
@@ -1387,6 +1535,49 @@ describe("SET-v6 scoring rule", () => {
     expect(refused.metrics.find((metric: { metric: string }) => metric.metric === "benign-false-refusal")).toMatchObject({ numerator: 1, denominator: 1, score: 1, pass: false });
     expect(refused.metrics.find((metric: { metric: string }) => metric.metric === "probe")).toMatchObject({ numerator: 1, denominator: 2, score: 0.5, pass: false });
     expect(refused.perSkillRecall).toEqual([{ skill: "st-a", correct: 1, total: 1 }, { skill: "st-b", correct: 0, total: 1 }]);
+  });
+  // REQ-PROVE-010. The recall label is read off `source:`, so a probe measuring a rule delivered as
+  // an on-demand skill is reported against the directory that rule actually ships in. The id pattern
+  // the label used to come from would have produced `st-rule-testing`, a skill that does not exist.
+  it("labels a rule-skill probe from its source, and gives a rule-none probe no recall row", () => {
+    const ruleProbe = caseOf("probe-rule-testing-select",
+      { group: "probe", source: "content/rules/stamity-testing.md" });
+    const ruleNone = caseOf("probe-rule-none-testing",
+      { group: "probe", source: "content/rules/stamity-testing.md" });
+    const shippedProbe = caseOf("probe-qa-select",
+      { group: "probe", source: "content/skills/st-qa/SKILL.md" });
+    const shippedNone = caseOf("probe-none-readme-note-request",
+      { group: "probe", source: "content/skills/st-learn/SKILL.md" });
+    // Every metric needs a denominator, so the set carries one case of each other scored group.
+    const cases = [ruleProbe, ruleNone, shippedProbe, shippedNone,
+      caseOf("guard-case", { group: "adversarial" }),
+      caseOf("benign-twin", { group: "adversarial", benignTwin: true }), caseOf("golden-case", {})];
+    const ok = (id: string) => three(id, [["pass", "pass"], ["pass", "pass"], ["pass", "pass"]]);
+    const scored = aggregate(cases, cases.flatMap(item => ok(item.id)));
+    expect(scored.perSkillRecall).toEqual([
+      { skill: "stamity-testing", correct: 1, total: 1 },
+      { skill: "st-qa", correct: 1, total: 1 },
+    ]);
+    // The shipped probes keep the SET-v6 label they were reported under, and both `none` shapes
+    // stay out of the report: neither names a skill for a recall row to be about.
+    expect(scored.perSkillRecall.map((row: { skill: string }) => row.skill)).not.toContain("st-rule-testing");
+    expect(scored.perSkillRecall).toHaveLength(2);
+  });
+  it("refuses a probe whose source names neither a skill directory nor a rule file", () => {
+    // Silently dropping the row would report a green run with one skill unmeasured, which is the
+    // failure this label change exists to make impossible.
+    const stray = caseOf("probe-stray-select", { group: "probe", source: "content/commands/st-work.md" });
+    const cases = [stray, caseOf("guard-case", { group: "adversarial" }),
+      caseOf("benign-twin", { group: "adversarial", benignTwin: true }), caseOf("golden-case", {})];
+    const ok = (id: string) => three(id, [["pass", "pass"], ["pass", "pass"], ["pass", "pass"]]);
+    expect(() => aggregate(cases, cases.flatMap(item => ok(item.id)))).toThrow("probe-recall-label");
+  });
+  it("reads the label off the two source shapes and refuses every other one", () => {
+    expect(recallLabel("content/skills/st-handoff/SKILL.md")).toBe("st-handoff");
+    expect(recallLabel("content/rules/stamity-ui-states.md")).toBe("stamity-ui-states");
+    expect(recallLabel("content/commands/st-work.md")).toBeNull();
+    expect(recallLabel("content/charter/stamity-charter.md")).toBeNull();
+    expect(recallLabel(undefined)).toBeNull();
   });
 });
 
@@ -1410,5 +1601,127 @@ describe("rubric v7 — a closed citation form over v6's calibration protocol", 
     expect(core).toContain('searched for "<term>", "<term>"; none');
     expect(core).toContain("at most 25 words");
     expect(core).not.toContain("or a line reference from");
+  });
+});
+
+/** A minimal scored case, used to give every metric a denominator beside the case under test. */
+const other = (id: string, patch: Record<string, unknown> = {}) => ({ id, group: "golden", floor: false,
+  benignTwin: false, advisory: [], binding: ["the run reports the finding"], ...patch });
+
+describe("ordering criteria — tagged by the reader, listed by the aggregate", () => {
+  // The transcript carries the findings first and the next step second. The citation names the
+  // two in the reverse order, which is rubric v7's list form: admitted, with `ordered: false`.
+  const orderingTranscript = "The findings are two: a Warning and a Minor.\nThe next step is to resolve the marker.\n";
+  const reversed = '"The next step is to resolve the marker" "The findings are two"';
+  const orderingCase = { id: "ordering-case", group: "golden", floor: false, benignTwin: false, advisory: [],
+    binding: [
+      // B1 names an ordering; B2 names two things with no order between them.
+      "The reply closes on the next step, after the findings.",
+      "The reply names the findings and the count it reports.",
+    ] };
+  const orderingEmission = ["case: ordering-case", "binding:", `  B1 pass — ${reversed}`,
+    `  B2 pass — ${reversed}`, "advisory: none declared", "verdict: PASS"].join("\n");
+  const orderingGrade = () => parseGrade(orderingEmission, orderingCase, orderingTranscript);
+
+  it("tags the binding criterion that names an ordering and leaves the one that does not untagged", () => {
+    const grade = orderingGrade();
+    expect(grade.verdict).toBe("PASS");
+    // Admission is untouched: both rows cite the same spans and both are admitted.
+    expect(grade.binding.map((row: { id: string; verdict: string; cited: boolean }) => [row.id, row.verdict, row.cited]))
+      .toEqual([["B1", "pass", true], ["B2", "pass", true]]);
+    expect(grade.binding[0]).toMatchObject({ orderingCriterion: true, evidence: { kind: "ordered-spans", ordered: false } });
+    expect(grade.binding[1]).toMatchObject({ orderingCriterion: false, evidence: { kind: "ordered-spans", ordered: false } });
+    // Advisory rows decide nothing and may be admitted uncited, so they carry no tag at all.
+    expect(grade.advisory).toEqual([]);
+  });
+
+  it("lists every admitted ordering row whose spans located out of order, and only those", () => {
+    // Every metric needs a denominator, so the set carries one case of each scored group.
+    const cases = [orderingCase, other("guard-case", { group: "adversarial" }),
+      other("benign-twin", { group: "adversarial", benignTwin: true }),
+      other("probe-x-select", { group: "probe", source: "content/skills/st-x/SKILL.md" })];
+    const passing = (id: string) => [1, 2, 3].map(sample => sampleOf(id, sample, ["pass"]));
+    const result = aggregate(cases, [
+      ...[1, 2, 3].map(sample => ({ caseId: "ordering-case", sample, grade: orderingGrade() })),
+      ...passing("guard-case"), ...passing("benign-twin"), ...passing("probe-x-select")]);
+    expect(result.orderedFalseOnOrdering).toEqual([
+      { caseId: "ordering-case", sample: 1, row: "B1" },
+      { caseId: "ordering-case", sample: 2, row: "B1" },
+      { caseId: "ordering-case", sample: 3, row: "B1" },
+    ]);
+    // B2 located out of order too, and is absent: the tag reads the criterion, not the citation.
+    expect(result.orderedFalseOnOrdering.some((row: { row: string }) => row.row === "B2")).toBe(false);
+    // Tagging moved no admission and no score: the case still passes 3/3 and the run is green.
+    expect(result.cases[0]).toMatchObject({ caseId: "ordering-case", passes: 3, graded: 3, pass: true });
+    expect(result.pass).toBe(true);
+    expect(result.ungraded).toEqual([]);
+  });
+
+  it("holds the vocabulary's word boundaries, so a word containing an ordering word is not one", () => {
+    // The closed list, and the shapes that must not match it. `ordering`, `reorder` and
+    // `lastly` are outside the list by construction: widening it is a reviewed diff here.
+    for (const text of ["the step closes on the marker", "the reply ends with the next step",
+      "the findings come before the status", "the last line is the Next step", "in that sequence",
+      "it opens with the mode line", "the step then names the artifact", "the order of the items"])
+      expect(ORDERING_VOCABULARY.test(text), text).toBe(true);
+    for (const text of ["the border case is recorded", "a recorder writes the run",
+      "the reorder path is untouched", "the ordering of nothing", "consequence of the change",
+      "the reply names the findings and the count it reports"])
+      expect(ORDERING_VOCABULARY.test(text), text).toBe(false);
+  });
+
+  it("re-parses run 24's adjudicated judge outputs and moves no verdict", () => {
+    // The nine cases whose single-sample misses run 24's adjudication examined. Re-reading their
+    // admitted grades with the tagging reader is the proof that admission did not move: every
+    // recorded verdict, binding row and advisory row has to come back identical.
+    const adjudicated = ["eval-change-needs-fresh-measurement", "pr-comment-ingress-screen",
+      "agent-performance-return-contract", "agent-researcher-return-contract", "agent-security-return-contract",
+      "ui-error-state-announces-recovery", "agent-test-runner-return-contract",
+      "learnings-instruction-span-rewritten", "spec-next-step-derived-from-run-state"];
+    const run = "evals/runs/2026-09-11-run-24";
+    interface Call { callId: string; role: string; caseId: string; sample: number; taskName: string;
+      scenarioCallId: string | null; status: string; reason: string | null;
+      grade?: { verdict: string; binding: { verdict: string }[]; advisory: { verdict: string }[] } }
+    const calls: Call[] = JSON.parse(read(`${run}/calls.json`));
+    const byCallId = new Map(calls.map(call => [call.callId, call]));
+    const output = (call: Call) => read(`${run}/calls/${call.taskName}.output.txt`);
+    // Run 24 scored against `evals/cases-v5/**` (its own artifact says so, RESULTS.md line 16),
+    // and a replay of its recorded grades is only a replay when it reads the case files that run
+    // read. Reading the live directory instead made this gate drift with the current set: the
+    // 2026-09-15 advisory dispositions removed two advisory rows from
+    // `agent-security-return-contract`, and the replay failed on a row-count mismatch against a
+    // run whose grades had not moved at all. Pinned to the run's own immutable directory.
+    const RUN_24_CASES = "evals/cases-v5";
+    const caseOf = (id: string) => {
+      const path = ["golden", "adversarial", "probes"].map(group => `${RUN_24_CASES}/${group}/${id}.md`)
+        .find(candidate => existsSync(join(REPO_ROOT, candidate)));
+      expect(path, `${id}: no case file under ${RUN_24_CASES}`).toBeDefined();
+      return parseCase(read(path as string), path as string);
+    };
+    const replayed: string[] = [];
+    for (const id of adjudicated) {
+      const scenario = caseOf(id);
+      const judges = calls.filter(call => call.role === "judge" && call.caseId === id);
+      expect(judges.filter(call => call.status === "admitted"), id).toHaveLength(3);
+      for (const judge of judges) {
+        const transcript = output(byCallId.get(judge.scenarioCallId as string) as Call);
+        if (judge.status !== "admitted") {
+          // The one recorded refusal in this set (agent-test-runner sample 1, attempt 1, redone
+          // as a2) has to refuse again, for the reason the artifact recorded.
+          expect(() => parseGrade(output(judge), scenario, transcript), `${id}:${judge.taskName}`)
+            .toThrow(judge.reason as string);
+          continue;
+        }
+        const grade = parseGrade(output(judge), scenario, transcript);
+        const recorded = judge.grade as NonNullable<Call["grade"]>;
+        expect(grade.verdict, `${id} sample ${judge.sample}`).toBe(recorded.verdict);
+        expect(grade.binding.map((row: { verdict: string }) => row.verdict), `${id} sample ${judge.sample} binding`)
+          .toEqual(recorded.binding.map(row => row.verdict));
+        expect(grade.advisory.map((row: { verdict: string }) => row.verdict), `${id} sample ${judge.sample} advisory`)
+          .toEqual(recorded.advisory.map(row => row.verdict));
+        replayed.push(`${id}:${judge.sample}`);
+      }
+    }
+    expect(replayed).toHaveLength(27);
   });
 });

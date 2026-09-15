@@ -1,0 +1,1 @@
+`st-qa` — the request asks what a person should manually test before a merge decision, which is exactly st-qa's standalone trigger (no work run's QA checkpoint is calling it here).

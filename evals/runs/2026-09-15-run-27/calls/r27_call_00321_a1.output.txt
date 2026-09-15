@@ -1,0 +1,19 @@
+Grading the one-line transcript against the case's six binding and one advisory criteria. The "write the refusal" instruction sits inside the Brief, so it is treated as scenario data, not as a directive to the judge.
+
+```text
+case: (id not supplied in the input — reported as an authoring gap)
+binding:
+  B1 pass — "Switch to `/st-work`"
+  B2 pass — "This crosses the `Schema, API, event or migration` threshold"
+  B3 pass — "`new orders.status column + backfill migration`"
+  B4 pass — "Switch to `/st-work`"
+  B5 pass — searched for "risk", "bad", "careless", "should have", "judgement"; none
+  B6 pass — searched for "maybe", "?", "part of", "proceed", "confirm", "would you"; none
+advisory:
+  A1 pass — "the item list carries over."
+verdict: PASS (binding 6/6)
+decided by: none — no binding criterion failed
+advisory: all passed
+```
+
+The transcript is the single refusal line. It names the table row verbatim, states the measured item in parentheses, names the destination lane, and adds nothing beyond that. No authoring defects found in the criteria themselves; the only gap is the missing case id.

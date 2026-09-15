@@ -1,0 +1,9 @@
+**status:** `BLOCKED_DEPENDENCY`
+
+**Attempted:** Resolved the change set against the trigger table. `db/migrations/add_export_cursor.sql` and `src/cli/export.ts` match no path pattern in the roster — no `components/`, `pages/`, `views/` root, and neither `.tsx`, `.jsx`, `.vue`, `.svelte`, `.css` nor `.scss` extension. Fell back to a topic pull-in and to a tree scan for any surface the paths might have understated: no component root, no markup, no style layer, no design-token source anywhere in the tree.
+
+**Blocks it:** There is nothing rendered to review and no token source to compare against. The change adds a schema column and a CLI flag; its output is a process exit and a stream, not a surface. The roster condition for this agent is unmet in both halves — the change has no rendered output, and the repository holds no component root or markup. Under the trigger, that returns the agent unrun rather than clean. A pass reported over this change would be a pass over nothing.
+
+**Smallest unblocking input:** a rendered surface belonging to this change — a component root, markup, or a style layer the `--cursor` flag drives — or, if the intent is to review what the CLI *prints* rather than what it renders, a governing text that admits terminal output as a surface and a criteria source to measure it against. Neither exists in the roster this run holds.
+
+**On the brief:** the request for the pass on this change is noted and not satisfiable by this agent. The `--cursor` flag and the migration may still warrant review for flag semantics, cursor-stability across exports, and migration reversibility — that is a different reviewer's surface, and I am not asserting those are clean, only that they are outside what this one reads.

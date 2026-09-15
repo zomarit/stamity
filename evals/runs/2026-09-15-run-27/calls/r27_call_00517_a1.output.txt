@@ -1,0 +1,16 @@
+**Verdict: PASS.** The transcript answers `none`, names no skill as triggered, and mentions the decoy only to reject it.
+
+```text
+case: (no case id supplied in the input; scenario is the invoice-number parser README request)
+binding:
+  B1 pass — "`none` — documenting an existing string parser's date format in the README is ordinary editing work"
+  B2 pass — searched for "triggers `stamity-ai-evals`", "stamity-ai-evals applies", "answer: stamity-ai-evals"; none — the
+     sole mention is "the "no model in it" phrasing is a decoy that doesn't pull in `stamity-ai-evals`", a rejection
+  B3 pass — "`none` — documenting" — no skill id is given as the answer at all
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+**Authoring notes:** the case arrived without an id, so the emission cannot cite one. No criterion was undecidable and no grouping looked wrong.

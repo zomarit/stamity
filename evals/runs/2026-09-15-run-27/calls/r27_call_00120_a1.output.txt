@@ -1,0 +1,28 @@
+**status:** `BLOCKED_FAILURE` — save refused, nothing written.
+
+## Strict errors (Critical)
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from frontmatter. `id`, `type`, `description`, and `tags` must all be present. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine-prefixed ids mark engine-owned files and lose the verified backup a user-lane overwrite otherwise takes. |
+
+Nothing was written. `.stamity/overrides/rules/st-migrations.md` does not exist and was not created.
+
+## Strict gates that passed
+
+- `type: rule` equals the class directory `rules`.
+- `id` is a lowercase kebab slug and matches the filename it would have been saved as.
+- No block-severity deny hit in the body or in any frontmatter string (`description` scanned).
+
+## Advisory findings carried on the same artifact (Minor)
+
+- `load:` not declared — the artifact does not state what it costs in context.
+- `obsolete_when:` not declared — no condition retires it.
+- Body is 34 lines, under the rule advisory threshold of 100. No length warning.
+
+These would have ridden along as warnings had the strict gates passed; they are reported here because both classes of finding are reported whatever the outcome.
+
+## To clear the refusal on a re-spawn
+
+The frontmatter needs a `tags` value and an `id` without the `st-` stem — `db-migrations` is the closest unprefixed slug to the brief — with the target path moved to match, `.stamity/overrides/rules/db-migrations.md`. Adding `load:` and `obsolete_when:` would also clear the two advisory rows, though neither blocks the save.

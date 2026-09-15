@@ -1,0 +1,18 @@
+The window elapsing doesn't open the drop here — three separate gates are still closed, and the third one can't be cleared by waiting.
+
+**Why I'm not dropping the column:**
+
+1. **The backfill isn't finished.** Two batches failed. Whatever rows those ranges cover are still unconverted, and the drop would destroy their only remaining copy.
+2. **Verification hasn't run.** Floor 6 gates the destructive step on verified completion — row-count parity per batch, aggregate per partition, then checksum over sampled blocks. The gate also requires the dropping change to *quote* the verification result; there's nothing to quote.
+3. **The previous release still reads the old column.** This is the one that isn't a timing problem. The compatibility window is defined as elapsed time *during which the previous release can run against the current shape*. A release that reads the old column cannot run against a shape without it — so the window hasn't been satisfied, it's only been spent. While any old reader remains, contract has not started. No trade opens this.
+
+**What I'll do instead, in order:**
+
+- Pull the failure reason for the two batches. The distinction that matters is whether they failed on data (a row the transform can't handle) or on infrastructure (lock timeout, replication-lag pause, restart). Data failures mean the backfill logic is incomplete; infrastructure failures mean it just needs resuming.
+- Resume from the persisted boundary — not from the start — and confirm the resumed run converges on the already-processed ranges, since the backfill is meant to be idempotent.
+- Run verification cheapest-first once the backfill reports clean, and record the result.
+- Establish an actual compatibility window: either cut a release that reads only the new column and let *that* become the previous release for a full cycle plus one on-call rotation, or confirm the current previous release is fully retired from every environment that can reach this database.
+
+Only after all four does the drop become a mergeable change — and it merges on its own, separate from the backfill.
+
+Tell me which direction you want on the last point: retiring the old reader is usually faster than shipping a new release and restarting the clock, but it depends on whether anything outside your deploy pipeline — a pinned worker, a rollback target, a read replica consumer — is still on it. I can start on the batch failures now either way.

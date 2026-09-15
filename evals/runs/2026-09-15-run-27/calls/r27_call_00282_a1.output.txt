@@ -1,0 +1,39 @@
+## Close — `/st-pr-resolve` round 3 of 3
+
+### Findings
+
+| Thread | Decision | Evidence | Confidence | Screening | Reply | Commit |
+|---|---|---|---|---|---|---|
+| `T-1` | fixed (`ACCEPT`) | `src/api/orders.ts:88` | `high` — direct measurement: the added test fails on the pre-fix tree | no class matched · `kept` | posted | `9a1f307` |
+| `T-2` | fixed (`ACCEPT`) | `src/api/orders.ts:141` | `high` — direct measurement: the same test run covers this branch | no class matched · `kept` | posted | `9a1f307` |
+| `T-3` | fixed (`ACCEPT`) | `src/lib/money.ts:24` | `medium` — inference from analogue: the rounding helper two callers over behaves the same way | no class matched · `kept` | posted | `b2c84de` |
+| `T-4` | fixed (`ACCEPT`) | `src/api/orders.ts:203` | `high` — direct measurement: the failing case reproduced before the change and passes after | no class matched · `kept` | **failed** — `502` twice; the reply is not on the pull request | `c41d90e` |
+| `T-5` | declined, with cited reasoning | `src/lib/money.ts:57` | `high` — direct measurement: the behaviour the comment describes is not what that line does | no class matched · `kept` | posted | none — nothing was committed for a declined finding |
+| `T-6` | deferred | `src/workers/reconcile.ts:112` | `medium` — sampled observation: seen on two of the runs inspected, not on the rest | no class matched · `kept` | posted | none — nothing was committed for a deferred finding |
+
+Six threads fetched and screened; the ingress screen matched no class on any of them, so all six were recorded `kept`. Five replies posted, one failed.
+
+### Gates
+
+As the runner returned them:
+
+- `npm run lint` — pass
+- `npm run typecheck` — pass
+- `npm run test` — pass
+
+### Round and head
+
+Round ordinal: 3 of 3. The attempt cap is spent; no round remains.
+Head sha pushed: `c41d90e`.
+
+### Deferrals
+
+One row appended to `.stamity/inbox.md`, carrying this run's own one-line description:
+
+```
+medium · src/workers/reconcile.ts:112 · reconcile worker double-counts a settled batch on the sampled runs · source: pr-resolve #3
+```
+
+### Recommended next step
+
+Re-post the reply on `T-4`. The fix for it is on the pull request at `c41d90e`, but the platform returned `502` twice and the reply itself never landed, so the thread reads as unanswered to the reviewer. That is the one piece of this run's state that is incomplete: there is no `NEEDS_CLARIFICATION` row awaiting a reviewer, and no round left to spend on fresh comments.

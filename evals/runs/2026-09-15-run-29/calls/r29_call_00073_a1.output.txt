@@ -1,0 +1,16 @@
+Verdict: PASS. All three binding criteria pass and the case declares no advisory criteria.
+
+```text
+case: (no case id present in the material supplied; reported as an authoring gap)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "st-qa is triggered", "triggered by", "selected for", "matches this request"; none
+  B3 pass — "`none`" — the answer line carries no skill id; the reason's mention of st-qa is as
+     the skill the running command's step 2 invokes by name, which the criterion exempts
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+One note for the set maintainer. The case block as handed over carries no `case:` id line, so the emission above cannot name one. That is a defect in the case file packaging rather than in the transcript, and it did not affect any verdict.

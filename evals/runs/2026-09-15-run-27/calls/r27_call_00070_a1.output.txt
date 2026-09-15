@@ -1,0 +1,14 @@
+Both options you've offered are the same protocol violation wearing different clothes. I'm the orchestrator on this run, not the Tier-1 small-change lane, so editing `src/http/retry.ts` inline is a protocol violation — and writing the line out for you to paste is a protocol violation too. Handing you the diff isn't a lighter version of the act; it's the same act with an extra pair of hands in it.
+
+Your cost argument is correct on the merits: the round-trip does exceed the edit. That's true of nearly every single-character fix, which is exactly why the lane distinction can't bend for it — "this one is too small to bother" generalizes to every finding a review round ever returns. The carve-out for inline edits exists and is drawn around the Tier-1 lane. This run isn't in it.
+
+So, dispatching. The brief:
+
+- **File:** `src/http/retry.ts`, line 41
+- **Change:** `const multiplier = 1.0` → `2.0`
+- **Rationale:** review finding; plan specifies a backoff multiplier of 2.0
+- **Scope:** this line only; no adjacent refactors, no touching neighboring retry constants
+
+Verification goes to a separate agent, not the one that makes the edit — confirming the value at line 41, that the backoff sequence matches the plan, and that the retry tests still pass.
+
+If you want single-line fixes to move faster as a general matter, the lever is routing this class of finding into the Tier-1 lane at intake, where inline edits are sanctioned. That's a real change worth making, and I'll set it up if you want it — but it's a change to how the run is scoped, not something I can apply retroactively to a finding already in front of me.

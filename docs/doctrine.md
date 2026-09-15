@@ -2,11 +2,12 @@
 title: Doctrine
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit b801fe5. -->
-<!-- Re-open when: a pillar gains or loses a public enforcement surface, the root question's
-     three answers change, the always-on ceilings move, or the deferred with-versus-without
-     measurement lands. `test/docsPages.test.ts` holds this page to the hand-page contract;
-     `../src/content/charter.ts` owns the budgets and `../evals/runs/` owns what is red. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
+<!-- Re-open when: an invariant's text changes, a pillar gains or loses a public enforcement
+     surface, the root question's three answers change, the always-on ceilings move, or the
+     deferred with-versus-without measurement lands. `test/docsPages.test.ts` holds this page to
+     the hand-page contract; `../src/content/charter.ts` owns the budgets and `../evals/runs/`
+     owns what is red. -->
 
 # Doctrine
 
@@ -60,7 +61,9 @@ unconditionally.
   an over-budget template rather than emitting it.
 - The composite always-on slice is a per-client ratchet, asserted in
   [`test/corpus/invariants.test.ts`](../test/corpus/invariants.test.ts) and disclosed per
-  client on [the capability matrix](capability-matrix.md). A ratchet may only come down.
+  client on [the capability matrix](capability-matrix.md). Each ceiling equals the composite it
+  measures: a slice that grows past its ceiling fails, and so does one that shrinks without the
+  constant moving with it, so the table is a measurement, never a bound with slack.
 - Every corpus artifact — charter, command, agent, skill, rule, in `content/` and `packs/` —
   declares `obsolete_when`. The corpus invariant suite refuses a `content/` one that does not,
   and each pack's own suite under `test/packs/` applies the same check to its pack, so a corpus
@@ -78,7 +81,9 @@ A claim about behaviour is worth what its instrument is worth.
   build and the unused-code scan.
 - The corpus is prose executed by a model, so a test suite cannot decide it. The
   [eval set](../evals/README.md) does: thresholds declared before the run, red runs published
-  rather than re-scored.
+  rather than re-scored — most recently [run 24](../evals/runs/2026-09-11-run-24/RESULTS.md), the
+  1.7.0 release run, rolled up beside the verified merge-ready rate on
+  [the measurements page](measurements.md).
 - Every work run closes on a proof block naming the gates it ran and what it did not do.
 - The question protocol declares a default for every question it asks, so an unanswered
   question produces a recorded decision instead of a silent pick.
@@ -89,7 +94,7 @@ An artifact that was true once and says nothing about when is unfalsifiable.
 
 - The capability matrix carries a dated access stamp on every client's sources: a platform
   fact is only as current as the date beside it.
-- Every page in the hand bucket — README, SECURITY, CONTRIBUTING and the eight guides under
+- Every page in the hand bucket — README, SECURITY, CONTRIBUTING and the ten guides under
   `docs/` — carries a currency stamp and a re-open trigger, the two comments at the top of this
   page, held there by `test/docsPages.test.ts`. `GOVERNANCE.md` carries the same pair on its own
   trigger.
@@ -142,3 +147,25 @@ is a floor that stopped binding. `ALWAYS_ON_BUDGET_LINES` in
 invariant suite measures the real load against them, and
 [the capability matrix](capability-matrix.md) carries the figures. Read those rather than a
 sentence here: they move, and only they are checked.
+
+## Amendments
+
+The charter's seven invariants carry a version, because a floor that can be reworded without a
+record is a floor nobody can cite. It moves under three rules: **MAJOR** is a backward-incompatible
+removal or redefinition of an invariant, **MINOR** is a new invariant or materially expanded
+guidance, **PATCH** is a clarification, a wording change, or a non-semantic refinement — and every
+amendment carries a sync-impact note, because the text is rendered into every generated repo's
+always-on file and a repo that does not re-sync keeps the old floor. [GOVERNANCE](../GOVERNANCE.md)
+states who bumps it and when; `test/content/invariantsVersion.test.ts` hashes the block and fails an
+edit that arrives without a bump and a row here.
+
+| Version | Date | Invariant(s) | Class | Sync impact |
+|---|---|---|---|---|
+| — (`c2489db`) | 2026-09-07 | 7 | MINOR-equivalent | handing the operator a line, diff or file body to paste is named as the same violation; recorded, no bump — versioning begins at 1.0.0 |
+| — (`5a49b93`) | 2026-09-07 | 1 | MINOR-equivalent | a hand-off framed so the operator can close without the floor is named as the relaxation; recorded, no bump — versioning begins at 1.0.0 |
+| — (`a9074f1`) | 2026-09-13 | 1, 7 | MINOR-equivalent | offering a subset, a lighter pass or a deferral is the same relaxation, and a refusal calls the act a protocol violation in those words; recorded, no bump — versioning begins at 1.0.0 |
+| — (`33e13a1`) | 2026-09-13 | 1 | MINOR-equivalent | the `Not done:` report is the whole exit — no context block, no closing summary beside it; recorded, no bump — versioning begins at 1.0.0 |
+| 1.0.0 | 2026-09-15 | all seven | ratification | the version line is rendered in every client's charter; hash pinned in `test/content/invariantsVersion.test.ts` |
+
+The block as ratified at 1.0.0 is the 2026-08-31 text plus the four amendments above; nothing was
+reworded to ratify it, which is why the first version records no diff of its own.

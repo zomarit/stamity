@@ -1,0 +1,37 @@
+Nothing written yet — here is the preview.
+
+## Path
+
+`docs/plans/003-status-json-flag.md`
+
+`001` and `002` are taken; `003` is the next free number.
+
+## Head
+
+```text
+---
+id: status-json-flag
+intent: feature
+stamp: 9f3c1ab 2026-09-02
+reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]
+---
+```
+
+`approach` is omitted — it carries migration intent only, and this is `feature`. `depends_on` is omitted — this plan has no predecessor run and is not a split. Both are absent optional keys, so the head is complete and the freshness guard reads them as satisfied.
+
+## Unit — `json-flag-render`
+
+| Field | Content |
+|---|---|
+| `id` | `json-flag-render` |
+| `requirements` | `REQ-cli-140` |
+| `files` | `src/commands/status.ts`, `test/commands/status.test.ts` |
+| `interfaces` | **Flag declaration** (status verb): `--json`, boolean, default `false`, takes no value argument, no short alias.<br><br>**Emitted object** — exactly these five keys, no others:<br>`{ workspace: string, branch: string, managedFiles: number, driftedFiles: number, lastSync: string }`<br>`managedFiles` and `driftedFiles` are integers; the other three are strings.<br><br>**Renderer added by this unit:**<br>`export interface StatusJson { workspace: string; branch: string; managedFiles: number; driftedFiles: number; lastSync: string }`<br>`export function renderStatusJson(s: StatusJson): string` — returns `JSON.stringify(s)` followed by a single `"\n"`. One object, written to stdout only.<br><br>**Exit codes:** `0` on success; `1` on a drift finding.<br>**stderr:** empty on success. |
+| `testCriteria` | 1. `stamity status --json` writes a single JSON object to stdout, and `JSON.parse` of it succeeds.<br>2. The parsed object's key set is exactly `workspace`, `branch`, `managedFiles`, `driftedFiles`, `lastSync`.<br>3. `typeof workspace === 'string'`, same for `branch` and `lastSync`.<br>4. `Number.isInteger(managedFiles)` and `Number.isInteger(driftedFiles)`.<br>5. With no drift, exit code is `0` and stderr is the empty string.<br>6. With drift, exit code is `1`.<br>7. Without `--json`, stdout is the pre-existing human-readable rendering, byte-identical to the current output. |
+| `edgeCases` | **Drift present with `--json`:** exit code is `1`, and stdout still carries one complete, parseable JSON object with `driftedFiles` > 0 — the non-zero exit does not suppress or truncate the payload.<br>**Zero managed files:** `managedFiles` and `driftedFiles` serialize as `0`, not `null` and not `"0"`; exit code is `0`.<br>**`--json` passed twice:** parsed as the single boolean `true`; one object printed, not two. |
+| `depends_on` | `none` |
+| `verify` | `npm run test` |
+
+One thing to settle before I write: the unit's `files` list covers `src/commands/status.ts` and the test file, so I have placed the `--json` declaration in the status command module. That holds only if the status verb declares its own flags; if flags are instead registered centrally in `src/cli.ts`, that path has to join `files` and the disjointness check has to be re-run against it. `src/cli.ts` is in `reads`, so I can confirm which it is without a `BLOCKED_DEPENDENCY` return.
+
+Say the word and I will write `docs/plans/003-status-json-flag.md` with this head, this unit, and the remaining sections in order.

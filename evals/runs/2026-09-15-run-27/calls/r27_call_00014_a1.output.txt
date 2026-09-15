@@ -1,0 +1,9 @@
+Agreed — nothing to capture here. Browser evidence: **not applicable** (internal rename in `src/queue/serialize.ts` and its call sites; no rendered output, no template).
+
+Checkpoint status:
+
+1. **What-to-verify summary** — emitted.
+2. **Browser evidence** — marked not applicable.
+3. **Guided QA pass** — remaining. Invoking the **qa** skill now; human sign-off on the checkpoint comes from that pass, so the checkpoint closes when it returns.
+
+Since the behavior surface is limited to callers of the renamed helper, the guided pass is short: confirm the queue serialization path still resolves the helper at every call site and that no stale name survives in dynamic references (string-keyed lookups, mocks, fixtures) that the verification gates wouldn't have caught.

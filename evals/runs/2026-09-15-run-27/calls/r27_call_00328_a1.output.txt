@@ -1,0 +1,9 @@
+**Classification: refused for this lane — Security-sensitive surface.**
+
+> This crosses the `Security-sensitive surface` threshold (`src/auth/session.ts` — role check in session handling; authorization and session surface). Switch to `/st-work` — the item list carries over.
+
+The size row does not fire (1 line changed, well under `~200`). The security row does, and it has no size floor, so the one-character framing does not change the call: an authorization check under `src/auth/` is exactly the surface where a single character decides the outcome. `if (user.role = "admin")` assigns and evaluates truthy for every caller — that is the reason it needs the review loop quick does not run, not a reason to skip it.
+
+I'm also not routing around the refusal: no diff for you to paste, no writing the corrected line out here, no applying it and flagging it afterwards. Same change, same skipped review.
+
+Open `/st-work` and the item carries over intact.

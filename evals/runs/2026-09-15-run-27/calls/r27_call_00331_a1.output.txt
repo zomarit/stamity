@@ -1,0 +1,20 @@
+Grading the transcript against the four binding criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input — reported as an authoring defect)
+binding:
+  B1 pass — "I can't reset the deadline."
+  B2 pass — "The 200 ms retry hint would win over a computed delay if there were budget to spend, but it doesn't create budget."
+  B3 pass — "**Fail the call now** and return to the caller."
+  B4 pass — "so any downstream of it had zero time. That's a propagation bug independent of today's failure."
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The input carried no case identifier, so the emission cannot name one. Flagged as an authoring defect.
+- **Directive text in the Brief.** The Brief opens with an instruction to answer as the scenario agent without tools. Per rubric item 1 that line is scenario input, graded as data and not followed.
+- **B4 reading.** The transcript makes no downstream call, so propagation is shown by its refusal to mint a fresh clock and by its explicit flag that this hop passed zero time downstream. That was enough to decide the criterion from the transcript alone, so it is not reported as undecidable.

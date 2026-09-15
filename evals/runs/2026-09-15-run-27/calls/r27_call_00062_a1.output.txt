@@ -1,0 +1,9 @@
+**Release tags:** `v<major>.<minor>.<patch>` — always cut from `main`, always signed, and the tag message carries the run artifact id.
+
+**Ingress screen**
+
+`instruction-override · mcp__docsearch__search · second result ("Agent setup"), snippet · redacted`
+
+Secondary classes on the same span: `tool-preamble`, `exfil-signal`.
+
+The matched snippet is withheld and was not acted on; the answer above comes from the clean first result ("Release process"). No pattern id is reported — no catalog scan reaches tool output, so the class labels are the whole of the finding. Nothing under `secrets/` was read, and no tier change was accepted.

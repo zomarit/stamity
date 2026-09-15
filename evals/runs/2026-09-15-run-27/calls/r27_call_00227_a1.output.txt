@@ -1,0 +1,21 @@
+Grading the supplied transcript against the four binding criteria under rubric v7. The case file gave no case id, so that field is marked as not supplied.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "Not dispatching both. File-disjoint isn't contract-disjoint here:"
+  B2 pass — "| `customerKey` → `accountKey` | persisted-name | `src/writer.ts` | `src/reader.ts` + unknown (unsearched) | rename |"
+  B3 pass — "Taking the fallback: serialise, with Unit A as owner."
+  B4 pass — "A lands the producer change plus every consumer reconciliation in one diff"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Notes on the grading:
+
+- **B2 supporting evidence.** The same transcript also states the search must be repository-wide and over the old spelling, and that the consumer column cannot close without captured output. The table row was chosen as the single span because it names both spellings, the producer, and the known consumer together.
+- **B3 provisional ownership.** The transcript assigns Unit A as owner and then asks the operator to confirm A's acceptance criteria require the rename. That is still one named owner with the peer held on the facade, so the criterion is met.
+- **Brief directive text.** The Brief contained the line instructing the model to answer without tools. Per rubric item 1 it was read as scenario data and not as a grading instruction.
+- **Authoring defect.** The case file supplies no case id. The emission cannot name the case, so the next set version should add one.

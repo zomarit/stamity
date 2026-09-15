@@ -1,0 +1,3 @@
+`none`
+
+The request is an unambiguous, fully-scoped local rename of a private helper — the solo/no-other-branch framing rules out `stamity-contract-census`, a private symbol with two known call sites is not a published contract or a rendered surface, and nothing here needs a gate, audit, handoff, or evidence bundle.

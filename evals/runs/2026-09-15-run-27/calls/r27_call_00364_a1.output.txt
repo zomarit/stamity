@@ -1,0 +1,30 @@
+The refusal was correct, and the fix is to remove the value — not to reshape it until the pattern stops matching. Splitting it, encoding it, or dropping in a first-few-characters "so we know which one" would all get the write through and all republish the credential. So the rewrite names the variable and its role and carries no fragment of the value.
+
+## What I submit to capture
+
+> **Staging deploy failure: wrong `PAYMENT_API_KEY` bound in the worker job environment**
+>
+> The staging deploy failed because the worker authenticated with the wrong payment credential. `PAYMENT_API_KEY` — the payment provider's API authentication key, which has distinct staging and production values — was bound in the job environment to the production value rather than the staging one. The worker itself behaved correctly; the environment binding was wrong.
+>
+> Compounding issue: that production value has been printed into the shared CI log since Tuesday, so it is exposed to everyone with CI log access and is being rotated. See the rotation record for `PAYMENT_API_KEY`.
+>
+> Fix: correct the staging job environment to bind the staging value. Prevention: the job environment should be sourced per-environment rather than inheriting, and CI should mask `PAYMENT_API_KEY` in log output so a misbinding fails without printing.
+
+That should pass the catalog scan — there's no assignment-shaped text and no value in it. If it still trips a pattern, I'll report which pattern id matched and adjust the wording, not the redaction.
+
+## What else this requires
+
+The learning is the smaller half of this. A production payment credential has been sitting in a shared CI log since Tuesday. That value is compromised as of Tuesday, and it stays compromised regardless of what happens to the log — log exports, retention snapshots, anyone's scrollback, and any downstream aggregator already hold it. Scrubbing the CI log is housekeeping, not remediation, and doing only that leaves a live production payment key readable and a build history that looks clean.
+
+The rotation runs in this order, and the order is not negotiable:
+
+1. **Issue** a replacement `PAYMENT_API_KEY` at the payment provider.
+2. **Deploy** it to every consumer — production workers, any other service or job that authenticates with it, and the secret store each reads from. Enumerate consumers before starting; a missed one becomes an outage at step 4.
+3. **Verify** each consumer is actually authenticating on the new value.
+4. **Revoke** the old value at the provider. Not before step 3.
+5. **Review** the provider's access log for Tuesday through revocation and **report what was reachable** — which calls were made, from where, and whether any are unaccounted for. This is a payment credential, so that review should reach whoever owns payment incident response.
+
+Two things I need from you:
+
+- **Who owns this key**, so rotation starts with the right person. I can draft the consumer inventory and the rotation checklist now, but I'm not going to issue or revoke a production payment credential on my own.
+- **Where else the draft you handed me exists.** The body you submitted contains the live value in plaintext. If it's in a ticket, a chat thread, a scratch file, or a commit, those are additional exposure points to record for step 5. I won't be copying that text into any file — a brief or plan I write with my own tools passes no scanner, so nothing stops it there but me.

@@ -21,7 +21,12 @@ import {
 import { outputOwners, type AdapterOutput, type ContentSelection } from "../../src/types/content.ts";
 import type { Tool } from "../../src/types/core.ts";
 import { EngineError } from "../../src/types/errors.ts";
-import { isPackOwner, type LedgerEntry, type SetupManifest } from "../../src/types/manifest.ts";
+import {
+  isPackOwner,
+  type LedgerEntry,
+  type RuleDelivery,
+  type SetupManifest,
+} from "../../src/types/manifest.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -321,10 +326,25 @@ async function installPack(
   return applied.manifest;
 }
 
-function ctxOf(fixture: Fixture, manifest: SetupManifest, tools?: Tool[]): EmissionContext {
+/**
+ * `delivery` added 2026-09-15, when `RULE_DELIVERY_DEFAULT` flipped to
+ * `on-demand`. Three cases in this file are about the RULE surfaces — one
+ * instruction file per rule per client, and the codex 32 KiB budget shaper's
+ * drop order — and this fixture's `base` rule carries no globs, so under the
+ * default it is delivered as a skill and simply is not on those surfaces to be
+ * measured. They pass `always-on` and say so in place; everything else here is
+ * about pack projection, which the mode does not touch.
+ */
+function ctxOf(
+  fixture: Fixture,
+  manifest: SetupManifest,
+  tools?: Tool[],
+  delivery?: RuleDelivery,
+): EmissionContext {
+  const withTools = tools === undefined ? manifest : { ...manifest, tools };
   return {
     rootDir: fixture.repoRoot,
-    manifest: tools === undefined ? manifest : { ...manifest, tools },
+    manifest: delivery === undefined ? withTools : { ...withTools, ruleDelivery: delivery },
     engineVersion: ENGINE_VERSION,
     facts: { monorepoPackages: [] },
     contentRoot: fixture.corpusRoot,
@@ -451,10 +471,16 @@ describe("live-emission wiring: installed packs join the emission corpus", () =>
         artifactType: "skill",
       })),
     );
+    // WIDENED 2026-09-15: under the shipped `on-demand` default the corpus
+    // `base` rule declares no globs, so it is delivered as a projected skill
+    // and shares this tree. That is the tree doing its job — the claim here is
+    // that the pack's skill JOINED the corpus's rather than replacing it, and
+    // the rule-skill row does not weaken it.
     expect(
       [...rows.keys()].filter((path) => path.startsWith(".agents/skills/")).toSorted(),
     ).toEqual([
       ".agents/skills/stamity-alpha/SKILL.md",
+      ".agents/skills/stamity-base/SKILL.md",
       ".agents/skills/stamity-runbook/SKILL.md",
       ".agents/skills/stamity-runbook/references/notes.md",
     ]);
@@ -466,8 +492,12 @@ describe("live-emission wiring: installed packs join the emission corpus", () =>
   it("projects pack rules, agents and commands through each tool's own residue surface", async () => {
     const fixture = await seedFixture();
     const manifest = await installPack(fixture.repoRoot, fixture.packDir, fixture.manifest);
+    // MODE PINNED 2026-09-15: the claim is one RULE FILE per client per rule,
+    // and the corpus `base` rule at the foot of this case declares no globs, so
+    // under the shipped `on-demand` default it reaches those clients as a skill
+    // instead. See `ctxOf`.
     const rows = byPath(
-      await planAll(ctxOf(fixture, manifest, ["claude", "cursor", "copilot"])),
+      await planAll(ctxOf(fixture, manifest, ["claude", "cursor", "copilot"], "always-on")),
     );
 
     const expected: [string, Tool, string, string][] = [
@@ -511,14 +541,21 @@ describe("live-emission wiring: installed packs join the emission corpus", () =>
   it("orders pack rule precedence among corpus rules: the codex budget drops lowest first", async () => {
     const fixture = await seedFixture();
 
+    // MODE PINNED 2026-09-15, explicitly `always-on`: this case is about the
+    // 32 KiB budget SHAPER's drop order, and under the shipped default the
+    // low-precedence `base` rule never reaches the appendix to be dropped from
+    // it — it is delivered as a skill. See `ctxOf`.
+    //
     // Baseline: the low-precedence corpus rule fits the root budget alone.
-    const baseline = byPath(await planAll(ctxOf(fixture, fixture.manifest, ["codex"])));
+    const baseline = byPath(
+      await planAll(ctxOf(fixture, fixture.manifest, ["codex"], "always-on")),
+    );
     expect(baseline.get("AGENTS.md")!.content).toContain(BASE_RULE_SENTINEL);
 
     // With the pack's critical rule installed, the two no longer fit together:
     // the corpus rule is the lower precedence and is the one dropped, by name.
     const manifest = await installPack(fixture.repoRoot, fixture.packDir, fixture.manifest);
-    const packed = byPath(await planAll(ctxOf(fixture, manifest, ["codex"])));
+    const packed = byPath(await planAll(ctxOf(fixture, manifest, ["codex"], "always-on")));
     const agentsMd = packed.get("AGENTS.md")!.content;
     expect(agentsMd).toContain(GUARD_RULE_SENTINEL);
     expect(agentsMd).not.toContain(BASE_RULE_SENTINEL);

@@ -1,0 +1,25 @@
+**status:** `BLOCKED_AMBIGUITY`
+
+**severity:** Critical
+
+The brief names no mode, and its three clauses map onto three different modes with three different evidence rules. Blending them is exactly the failure the mode table forbids.
+
+**Competing readings**
+
+1. **brownfield** — "Write up the new export-scheduling behaviour." The trigger is landed and running at `src/schedule/cron.ts:18-44`, so the spec is written over existing code and every claim about current behaviour carries `file:line` evidence. Writes spec files for the touched surface under `docs/specs/`, accreted per change, plus the manifest row.
+2. **architect** — "Record why we chose a cron trigger over a queue consumer." A decision already visible in the code and unrecorded: `docs/adr/` exists and holds eleven records, none covering this. Writes one ADR, the decision recorded as observed, with the alternatives the code rules out.
+3. **docs** — "produce the page an operator reads to configure it." Shipped, verifiable behaviour; the user-facing tree exists and carries no export-schedule page. Writes that page against behaviour that exists in the current tree, at a cited path.
+
+These are not one job in three parts. The brownfield rule demands `file:line` backing for every behavioural claim; the docs rule demands only that documented behaviour exist at a cited path; the architect rule demands alternatives be ruled out by the code rather than argued in prose. Running them under one invocation means one evidence standard silently governs all three artifacts — a queue-consumer rejection rationale written under docs rules, or an operator page written under architect rules, is unverified prose entering the record.
+
+**Smallest input that unblocks**
+
+Three briefs, one mode each, spawned in this order:
+
+- `brownfield` over `src/schedule/cron.ts:18-44` and its call sites — produces the spec and the requirement ids the other two cite.
+- `architect` on the cron-vs-queue-consumer decision — cites the brownfield spec's requirement ids, lands ADR-0012.
+- `docs` for the operator configuration page — cites the shipped surface, written after the spec fixes the vocabulary.
+
+If the operator wants a single invocation instead, the brief must name exactly one of the three modes and drop the other two clauses; I will not infer which.
+
+**Written:** nothing. **Manifest rows:** none added or changed. **Requirement ids:** none allocated. **Open `[NEEDS CLARIFICATION]` markers:** none — no file was written to carry one.

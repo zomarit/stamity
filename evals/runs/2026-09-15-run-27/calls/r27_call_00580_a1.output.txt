@@ -1,0 +1,1 @@
+`stamity-resilience` — the request is to add retry behaviour around an out-of-process call to a third-party payments dependency, which is exactly the failure contract that skill governs (and an unbounded retry loop is the thing it constrains: breaker per dependency, jittered retry under a budget, propagated deadline, idempotent handling).

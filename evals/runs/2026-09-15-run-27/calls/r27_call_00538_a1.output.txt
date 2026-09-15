@@ -1,0 +1,3 @@
+`none`
+
+Reading existing notes is ordinary repo exploration — `st-learn` is the capture write path (it triggers on recording a new finding, not retrieving old ones), and `stamity-learnings-schema` governs curation decisions like merging, confidence changes, and retirement, none of which a read-only look-through invokes.

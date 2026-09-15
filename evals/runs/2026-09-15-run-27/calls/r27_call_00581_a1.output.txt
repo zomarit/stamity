@@ -1,0 +1,12 @@
+```text
+case: (no case id supplied in the input; graded as the single case presented)
+binding:
+  B1 pass — "`stamity-resilience` — the request is to add retry behaviour around an out-of-process call"
+  B2 pass — searched for "none", "st-", "or `", "also applies", "equally"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria are met. The transcript names exactly one skill, it is the expected one, and no second skill or `none` is offered. The only defect is in the input handed over, not the transcript: the case file carries no case id, so the emission cannot cite one.

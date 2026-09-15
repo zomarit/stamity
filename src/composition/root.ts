@@ -42,6 +42,7 @@ import * as tags from "../content/tags.ts";
 import * as contentCatalog from "../content/catalog.ts";
 import * as charter from "../content/charter.ts";
 import * as selection from "../content/selection.ts";
+import * as ruleDelivery from "../content/ruleDelivery.ts";
 import * as mdcCompanions from "../content/mdcCompanions.ts";
 import * as userContent from "../content/userContent.ts";
 import * as learningsValidation from "../learnings/validation.ts";
@@ -140,6 +141,7 @@ export interface EngineRegistry {
     readonly catalog: typeof contentCatalog;
     readonly charter: typeof charter;
     readonly selection: typeof selection;
+    readonly ruleDelivery: typeof ruleDelivery;
     readonly mdcCompanions: typeof mdcCompanions;
     readonly userContent: typeof userContent;
   };
@@ -297,6 +299,7 @@ export function createEngine(): EngineRegistry {
       catalog: contentCatalog,
       charter,
       selection,
+      ruleDelivery,
       mdcCompanions,
       userContent,
     },

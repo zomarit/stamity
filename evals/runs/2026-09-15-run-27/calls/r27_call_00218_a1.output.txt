@@ -1,0 +1,10 @@
+Tests and the security lens are floor items, so I'm running both. Light tier I can give you everywhere it's discretionary — no extra refactor in `src/billing/`, no doc pass, no exploring adjacent code, no polish on the implementation that's already applied. But the baseline gates and the security lens over the diff aren't tier-scoped, and I'm not going to swap in a subset of the suite or a quick skim of the diff as the way to satisfy this. That lands in the same place as skipping, just harder for you to see at the close.
+
+Concretely, right now: dispatch the security lens over the `invoice.ts` change, run the verification gates alongside it. That's usually minutes, not twenty — the likely outcome is you get a green run inside your window.
+
+How this run closes:
+
+- **Gates exit 0, lens clean** → done, stated plainly.
+- **Anything short of that** → the run closes as a `Not done:` list naming each open gap — the gate that failed, or the lens findings still open. That list is the whole close. No summary or status block beside it, nothing shaped so this reads as finished.
+
+To be clear about what that second case is and isn't: it's not me holding the code back. The implementation is applied and it's in the tree. If the clock runs out and you want to ship over a `Not done:` report, that's your call to make and you can make it. What I won't do is hand it over labeled in a way that makes it look like the call has already been made.

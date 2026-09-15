@@ -1,6 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -19,7 +20,9 @@ import {
   type CatalogItem,
 } from "../../src/content/catalog.ts";
 import { parseFrontmatter } from "../../src/content/frontmatter.ts";
+import { demotedRuleIds, ruleDeliveryInputOf } from "../../src/content/ruleDelivery.ts";
 import { CONTENT_CLASSES, type ContentClass } from "../../src/types/content.ts";
+import { RULE_DELIVERY_DEFAULT } from "../../src/types/manifest.ts";
 import { contentPrefixFor } from "../../src/types/markers.ts";
 
 /**
@@ -190,6 +193,39 @@ const corpus = async (): Promise<CatalogItem[]> => {
   const index = await buildContentIndex();
   return index.items.filter((item) => (item.origin ?? "corpus") === "corpus");
 };
+
+/**
+ * The rules this package ships as SKILLS rather than as instructions, read from
+ * the engine's own delivery predicate exactly as the generator reads it.
+ *
+ * ADDED 2026-09-15 with the `on-demand` default. An APM instruction attaches on
+ * `applyTo`, so a rule with no globs takes `**` — every file, every session,
+ * which is the unconditional load the rule-delivery option exists to reclaim.
+ * The generator therefore routes those rules to `.apm/skills/stamity-<id>/`,
+ * and this suite has to agree about WHICH rules those are; deriving both from
+ * `demotedRuleIds` is what stops the two from disagreeing. `copilot` is the
+ * tool because APM's instruction layer is the surface its consumers compile to,
+ * which is the same argument the generator's comment carries.
+ */
+const demotedRules = async (): Promise<ReadonlySet<string>> =>
+  demotedRuleIds(
+    "copilot",
+    (await corpus()).filter((item) => item.type === "rule").map(ruleDeliveryInputOf),
+    RULE_DELIVERY_DEFAULT,
+  );
+
+/** Where one artifact lands under `.apm/`, delivery included. */
+function apmPathOf(item: CatalogItem, demoted: ReadonlySet<string>): string {
+  const id = emittedId(item);
+  if (item.type === "skill" || (item.type === "rule" && demoted.has(item.id))) {
+    return posix.join(APM_DIR, APM_SUBDIR.skill, id, "SKILL.md");
+  }
+  return posix.join(APM_DIR, APM_SUBDIR[item.type], `${id}${APM_SUFFIX[item.type] ?? ""}`);
+}
+
+/** The frontmatter keys one artifact's primitive carries, delivery included. */
+const apmFrontmatterOf = (item: CatalogItem, demoted: ReadonlySet<string>): readonly string[] =>
+  item.type === "rule" && demoted.has(item.id) ? APM_FRONTMATTER.skill : APM_FRONTMATTER[item.type];
 
 /**
  * The declared glob scope of one artifact, trimmed and deduplicated in
@@ -370,22 +406,24 @@ describe("apm.yml", () => {
 describe("APM package layout", () => {
   it("lands every content class in the directory APM discovers it in", async () => {
     const items = await corpus();
+    const demoted = await demotedRules();
     for (const contentClass of CONTENT_CLASSES) {
       const projected = items.filter((item) => item.type === contentClass);
       expect(projected.length, `the corpus indexes no ${contentClass}`).toBeGreaterThan(0);
       for (const item of projected) {
-        const id = emittedId(item);
-        const suffix = APM_SUFFIX[contentClass];
-        const relPath =
-          suffix === null
-            ? posix.join(APM_DIR, APM_SUBDIR[contentClass], id, "SKILL.md")
-            : posix.join(APM_DIR, APM_SUBDIR[contentClass], `${id}${suffix}`);
+        const relPath = apmPathOf(item, demoted);
         expect(
           statSync(join(REPO_ROOT, relPath)).isFile(),
           `${item.id} (${contentClass}) does not project to ${relPath}`,
         ).toBe(true);
       }
     }
+    // Non-degenerate on the delivery axis: BOTH rule homes are occupied, so a
+    // generator that routed every rule one way fails here rather than passing
+    // with a `demoted` set the helper happened to agree with.
+    const rules = items.filter((item) => item.type === "rule");
+    expect(rules.filter((item) => demoted.has(item.id)).length).toBeGreaterThan(0);
+    expect(rules.filter((item) => !demoted.has(item.id)).length).toBeGreaterThan(0);
   });
 
   it("names every primitive with the emitted id every other client surface uses", async () => {
@@ -443,17 +481,16 @@ describe("APM package layout", () => {
 describe("APM primitive frontmatter", () => {
   it("carries the keys its class documents, and none of the engine's own", async () => {
     const items = await corpus();
+    const demoted = await demotedRules();
     for (const item of items) {
-      const id = emittedId(item);
-      const suffix = APM_SUFFIX[item.type];
-      const relPath =
-        suffix === null
-          ? posix.join(APM_DIR, APM_SUBDIR[item.type], id, "SKILL.md")
-          : posix.join(APM_DIR, APM_SUBDIR[item.type], `${id}${suffix}`);
+      const relPath = apmPathOf(item, demoted);
       const parsed = parseFrontmatter(readText(REPO_ROOT, relPath), relPath);
       expect(parsed.hadFrontmatter, `${relPath} declares no frontmatter`).toBe(true);
+      // A demoted rule carries the SKILLS head — `name` plus `description`, no
+      // `applyTo` — because it is discovered as a skill. The keys follow the
+      // home, not the authoring class.
       expect(Object.keys(parsed.frontmatter).toSorted(), relPath).toEqual([
-        ...APM_FRONTMATTER[item.type],
+        ...apmFrontmatterOf(item, demoted),
       ]);
       expect(parsed.frontmatter["description"], relPath).toBe(item.description);
       // The body is a COPY, not a re-render: a projection that reflowed or
@@ -462,12 +499,17 @@ describe("APM primitive frontmatter", () => {
     }
   });
 
-  it("scopes an instruction with applyTo, and states every-file when a rule declares no globs", async () => {
-    // `applyTo` is required on an instruction, and it is the field APM
-    // translates into each target's own glob vocabulary (`paths:`, `globs:`,
-    // `trigger: glob`, `inclusion: fileMatch`). A rule that declares no globs is
-    // unconditional, and `**` is how that is spelled here.
+  // REWRITTEN 2026-09-15. This case used to assert that a rule with no globs
+  // takes `applyTo: "**"` — "unconditional, and `**` is how that is spelled
+  // here". The engine stopped shipping that spelling: a glob-less rule is no
+  // longer an instruction at all, because `**` was never a scope, it was every
+  // file on every session, and the delivery option reclaims exactly that. The
+  // claim splits in two, and both halves are asserted, so nothing the old case
+  // covered is now uncovered: a glob-scoped rule still round-trips its globs
+  // into `applyTo`, and a glob-less one is somewhere else entirely.
+  it("scopes an instruction with applyTo, and delivers a glob-less rule as a skill instead", async () => {
     const items = await corpus();
+    const demoted = await demotedRules();
     const rules = items.filter((item) => item.type === "rule");
     expect(
       rules.filter((item) => globsOf(item).length === 0).length,
@@ -479,14 +521,31 @@ describe("APM primitive frontmatter", () => {
     ).toBeGreaterThan(0);
 
     for (const item of rules) {
-      const relPath = posix.join(
+      const globs = globsOf(item);
+      const instruction = posix.join(
         APM_DIR,
         APM_SUBDIR.rule,
         `${emittedId(item)}${APM_SUFFIX.rule ?? ""}`,
       );
-      const applyTo = parseFrontmatter(readText(REPO_ROOT, relPath), relPath).frontmatter["applyTo"];
-      const globs = globsOf(item);
-      expect(applyTo, relPath).toBe(globs.length === 0 ? "**" : globs.join(","));
+      if (globs.length === 0) {
+        // The delivery predicate and the glob count agree for this client, which
+        // is the invariant that makes the two branches below exhaustive.
+        expect(demoted.has(item.id), item.id).toBe(true);
+        expect(existsSync(join(REPO_ROOT, instruction)), instruction).toBe(false);
+        const skill = apmPathOf(item, demoted);
+        const head = parseFrontmatter(readText(REPO_ROOT, skill), skill).frontmatter;
+        expect(head["name"], skill).toBe(emittedId(item));
+        expect(head["applyTo"], skill).toBeUndefined();
+        continue;
+      }
+      expect(demoted.has(item.id), item.id).toBe(false);
+      const applyTo = parseFrontmatter(readText(REPO_ROOT, instruction), instruction).frontmatter[
+        "applyTo"
+      ];
+      expect(applyTo, instruction).toBe(globs.join(","));
+      // `**` is now a value no instruction in this package carries, which is the
+      // whole of what the delivery change did to this surface.
+      expect(applyTo, instruction).not.toBe("**");
     }
   });
 

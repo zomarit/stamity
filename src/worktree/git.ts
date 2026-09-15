@@ -615,6 +615,30 @@ export interface WorktreeAddRequest {
 const ALREADY_CHECKED_OUT = /already used by worktree at '([^']*)'/;
 
 /**
+ * Git losing a race with its OWN administrative write. Two concurrent
+ * `worktree add` runs each create `.git/worktrees/<name>/` and each re-reads
+ * the whole directory; on Windows one of them can read a sibling's `commondir`
+ * in the window between its creation and its content landing, and exits 128
+ * with `fatal: failed to read .git/worktrees/<other>/commondir: No error` —
+ * "No error" being the giveaway that nothing actually refused the read.
+ *
+ * Narrow on purpose. The status AND this sentence together are the signal; any
+ * other 128 is git answering the request (a bad ref, a taken directory) and
+ * waiting on it only delays the message. Both separators are accepted because
+ * git prints the path in its own convention, which is not the host's.
+ */
+const COMMONDIR_RACE = /failed to read .*[\\/]commondir/;
+
+/**
+ * Wait before the single re-run of an add that lost the race above. Long enough
+ * for the sibling's `commondir` write to complete (it is one short file, already
+ * issued), short enough that a genuine failure is still reported promptly. One
+ * retry, not a schedule: the race is lost in a window that closes, so a second
+ * 128 carrying the same sentence is a real failure and reported as one.
+ */
+const WORKTREE_ADD_RETRY_DELAY_MS = 250;
+
+/**
  * `git worktree add`, with its two operator-facing collisions classified.
  *
  * Both are `VALIDATION_ERROR` rather than an infrastructure failure, because
@@ -634,7 +658,17 @@ export async function addWorktree(
         ? ["worktree", "add", "--track", "-b", request.branch, request.path, `origin/${request.branch}`]
         : ["worktree", "add", "-b", request.branch, request.path];
 
-  const outcome = await run({ args, cwd: repoRoot });
+  let outcome = await run({ args, cwd: repoRoot });
+  // The retry is the SAME command, once, and only for the race above. Every
+  // outcome below — including the retry's own — is then classified normally: a
+  // first attempt that created the directory before losing the race makes the
+  // re-run report "already exists", and that refusal is the operator's answer.
+  let retriedAfterRace = false;
+  if (outcome.status === 128 && COMMONDIR_RACE.test(outcome.stderr)) {
+    await new Promise((wake) => setTimeout(wake, WORKTREE_ADD_RETRY_DELAY_MS));
+    outcome = await run({ args, cwd: repoRoot });
+    retriedAfterRace = true;
+  }
   if (outcome.status === 0) return;
 
   const collision = ALREADY_CHECKED_OUT.exec(outcome.stderr);
@@ -655,7 +689,12 @@ export async function addWorktree(
       `Remove it, or run \`stamity worktree cleanup\` for that name first.`,
     );
   }
-  gitFailed(`creating the worktree at ${request.path}`, outcome);
+  gitFailed(
+    retriedAfterRace
+      ? `creating the worktree at ${request.path} (retried once after the commondir race)`
+      : `creating the worktree at ${request.path}`,
+    outcome,
+  );
 }
 
 /**

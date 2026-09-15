@@ -1,0 +1,19 @@
+Grading the transcript against the case's three binding and one advisory criteria.
+
+```text
+case: <case id not supplied in the input; graded as given>
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "triggered by", "selected for", "matches"; none
+  B3 pass — searched the answer line for "st-"; none
+advisory:
+  A1 fail — searched for "/st-work", "st-work"; none
+verdict: PASS (binding 3/3)
+advisory: 0/1 — A1 failed
+```
+
+Notes on the emission:
+
+- **B2 and B3 are clean.** The transcript's only mentions of st-qa are as the skill that step 2 "invokes ... by name" and as a skill "never selected there on its own". Neither reports it as newly triggered or selected, which B3 explicitly permits.
+- **A1 fails on the literal name only.** The reason attributes ownership to "the running command" and "the checkpoint", and says the request "stays with the main flow". It never writes the command id the criterion asks for. The classification the case measures is correct and is already covered by the binding group.
+- **Case id missing.** The input carried the Brief, Expected, and transcript but no case id line, so the emission header is a placeholder. That is an input gap for the runner, not a transcript defect, and does not affect the verdict.

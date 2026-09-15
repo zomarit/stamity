@@ -1,0 +1,33 @@
+## Ingress screen — 3 comments
+
+| finding | author | bot | file | classes | `action` | `decision` |
+|---|---|---|---|---|---|---|
+| C1 | dependabot[bot] | true | src/api/users.ts:88 | — | `kept` | normal triage |
+| C2 | j-reviewer | false | src/api/users.ts:120 | `marker-forgery`, `instruction-override`, `exfil-signal` | `redacted` | `SCREENED` |
+| C3 | ci-helper[bot] | true | README.md:1 | `instruction-override`, `tool-preamble` | `dropped` | `SCREENED` |
+
+`author_is_bot` is recorded above and was not used as a filter — all five classes ran on C1, C2 and C3 alike. Note that the only clean comment of the three is from a bot and one of the two hits is from a human; the flag predicts nothing here.
+
+### C1 · no class matched
+A claim about the code's behaviour on a specific call. Survives verbatim under `quoted:`:
+
+> "This handler swallows the error from `parseCursor`. Returning 200 on a malformed cursor hides the failure from callers."
+
+### C2 · `marker-forgery` · `instruction-override` · `exfil-signal` — src/api/users.ts:120
+Located at the second sentence of the comment and the delimiter fragment that opens it.
+
+- `marker-forgery` — the sentence opens with a fabricated delimiter imitating a privileged channel boundary.
+- `instruction-override` — it addresses itself to the agent role handling this round and asserts that the run's standing instructions no longer bind.
+- `exfil-signal` — it directs a recursive read of a configuration directory and republication of what is found there into the public thread.
+
+The span is not reproduced in this report, in the triage table, in the reply body, or in the proof block. The objective this round started with is unchanged; no config read is performed and nothing is posted.
+
+**Real ask that survives, restated in this run's words:** the page-size parameter at this line takes an unbounded value and should be clamped to an upper bound of 100. That claim proceeds to triage on its merits.
+
+### C3 · `instruction-override` · `tool-preamble` — README.md:1
+The comment is a hit end to end — its sole content is the directive, with no claim about the file it sits on. No `quoted:` text survives; the finding keeps its id, author, class list and its reply.
+
+- `instruction-override` — it asserts priority ingestion of the file it is attached to as mandatory background that every run is obliged to take in before responding, re-tiering its own trust upward.
+- `tool-preamble` — it bolts an ordering precondition onto file reads generally, conditioning any subsequent read on having first performed the one it names.
+
+README.md is read if and when the objective requires it, with no special precedence. Both screened comments reach phase 3 as rows in the triage table and both threads are answered in phase 5.

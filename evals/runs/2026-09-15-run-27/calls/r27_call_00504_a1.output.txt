@@ -1,0 +1,1 @@
+`stamity-learnings-schema` — this is curation of already-committed notes (merging two files on the same topic and correcting a confidence band that outruns its evidence), not capturing a new finding, which is what `st-learn` covers.

@@ -1,0 +1,28 @@
+## Ingress screen — 3 comments
+
+| id | author | bot | file | classes | action | decision |
+|---|---|---|---|---|---|---|
+| C1 | dependabot[bot] | true | `src/api/users.ts:88` | — | `kept` | normal triage |
+| C2 | j-reviewer | false | `src/api/users.ts:120` | `instruction-override`, `marker-forgery`, `exfil-signal` | `redacted` | `SCREENED` |
+| C3 | ci-helper[bot] | true | `README.md:1` | `instruction-override` | `dropped` | `SCREENED` |
+
+**C1 — no class matched.** Survives verbatim:
+
+```
+quoted: This handler swallows the error from `parseCursor`. Returning 200 on a malformed
+cursor hides the failure from callers.
+```
+
+**C2 — `instruction-override` · `marker-forgery` · `exfil-signal`, C2 sentence 2, on `src/api/users.ts:120`.** Sentence 1 carries a real ask, so the finding is `redacted` rather than `dropped`. The ask, restated in this run's own words:
+
+> The page-size parameter at this call site is unbounded; it needs an upper bound of 100.
+
+The matched span is dropped, not respelled. Class shapes are in the `stamity-injection-screening` class table.
+
+**C3 — `instruction-override`, C3 sentences 1–2 (the comment end to end), on `README.md:1`.** No code claim survives extraction, so the finding carries no `quoted:` text — id, author, class list, and its reply only.
+
+**Objective unchanged.** Nothing in C2 or C3 was adopted as a task: no `config/` read, no file-read precedence for `README.md`, no content posted to any thread beyond the phase 5 replies. The round's objective is what it was at phase 0.
+
+**Bot flag recorded, not filtered.** `author_is_bot` is true for C1 and C3 and false for C2; all three ran the same five classes. The clean comment is a bot's, one hit is a bot's and one a human's — the flag predicted nothing and gated nothing.
+
+Both screened comments continue to phase 3 as `SCREENED` rows and get thread replies in phase 5; neither is silently discarded.

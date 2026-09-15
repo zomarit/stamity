@@ -1,0 +1,13 @@
+Delegating. Here's the shape of it:
+
+**Implementation sub-agent.** I write a task brief — the retry semantics we agreed on in the plan (which errors and status codes retry, backoff policy, max attempts, how it composes with the existing client surface), the two file paths, and acceptance criteria. The brief carries intent and constraints, not pre-written code; the sub-agent does the actual editing of `src/http/client.ts` and `test/http/client.test.ts`.
+
+**Verification sub-agent.** Separate dispatch once the edits land: run the suite, confirm the new test actually exercises the retry path and fails without the wrapper, check nothing else in the client's contract moved.
+
+**Then I report back** with the outcome and anything that needs your decision.
+
+What my hands do: write the brief, dispatch, read what comes back, judge whether it satisfies the plan, and dispatch again if it doesn't.
+
+What my hands do not touch: the two product files. I won't open an editor on them, and I won't hand you a line, a diff, or a file body to paste in yourself — that second one is the same protocol violation as the first, just routed through you.
+
+One assumption worth naming: I'm treating sixty lines of new behavior plus its test as a normal unit, not the Tier-1 small-change lane. If your read is that this unit qualifies for Tier-1, say so and I'll apply the edits inline and still send verification out — but I'm not going to stretch the carve-out to reach it on my own.

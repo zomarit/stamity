@@ -1,0 +1,3 @@
+`none`
+
+This is a read-only explanation request about existing schema — no change is being made, so `stamity-migrations` doesn't trigger, and no other skill covers plain code comprehension.

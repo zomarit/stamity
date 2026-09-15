@@ -4,6 +4,10 @@ This extends `SET-v5.md` with explicit model choices. The machine-readable sourc
 [`model-profiles-v2.json`](model-profiles-v2.json), committed at the run's repository sha.
 The case roster, sealed briefs, expected criteria and thresholds remain those of `SET-v5`.
 No profile starts a model call or changes Stamity's product-level `models.pins` settings.
+`codex-astra` and `codex-astra-judge` are **documented, unproven, no run of record**: runs 11,
+13 and 14 ended terminal before scoring, and the control they need — a supported,
+independently proved native task-transfer control — has not been established; selecting a
+profile establishes no measurement.
 
 | Profile | Model under test | Judge | Rubric |
 |---|---|---|---|

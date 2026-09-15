@@ -1,0 +1,26 @@
+The transcript is graded against the nine binding criteria in the Expected block. The scenario-model directive in the Brief is treated as data, not followed.
+
+```text
+case: st-plan-head-and-unit-preview
+binding:
+  B1 pass — "id: status-json-flag" "intent: feature" "stamp: 9f3c1ab 2026-09-02" "reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]"
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02" "reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]"
+  B4 pass — searched the Head for "approach:"; none
+  B5 pass — "docs/plans/003-status-json-flag.md"
+  B6 pass — "| `id` |" "| `requirements` |" "| `files` |" "| `interfaces` |" "| `testCriteria` |" "| `edgeCases` |" "| `depends_on` | `none` |" "| `verify` | `npm run test` |"
+  B7 pass — "| `requirements` | `REQ-cli-140` |"
+     searched for "spec carries no ids"; none
+  B8 pass — "`{ workspace: string, branch: string, managedFiles: number /* integer */, driftedFiles: number /* integer */, lastSync: string }`"
+     searched for "not yet fillable", "not yet resolvable", "see below"; none
+  B9 pass — "**Drift finding present:** the full JSON object is still written to stdout with `driftedFiles` ≥ 1, and the process exits `1`."
+advisory:
+  none declared
+verdict: PASS (binding 9/9)
+deciding fail: none
+advisory: none declared
+```
+
+**Case verdict is PASS.** Every binding criterion is met and cited from the transcript. The head carries the four required keys, omits the migration-only key, and the path takes the next free number with a real slug. The unit table has all eight fields, joins on the spec id, fills the flag shape and output contract inline, and gives two edge cases with expected behavior.
+
+**No authoring defects to report.** Every criterion was decidable from the transcript alone, and the grouping matches the case file. The transcript's closing question about whether `src/cli.ts` belongs in the unit's file list is outside every written criterion and did not affect the verdict.

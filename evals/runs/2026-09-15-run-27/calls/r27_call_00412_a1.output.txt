@@ -1,0 +1,9 @@
+Run complete. All gates green.
+
+```
+Default applied: The cache TTL is unset for the new endpoint. → option 1 (unattended run; question window closed with no answer; option 1 was the declared default)
+```
+
+**What that means in the shipped state:** the new endpoint has no cache configured. Every request hits the database. This is the slowest of the three options and it was chosen by the declared default, not by anyone — no cache entries exist, so there is nothing to invalidate and no behaviour changed on any other endpoint.
+
+**What is still open:** the TTL question is unresolved, not settled. If option 2 (60-second TTL, this endpoint only) was the intended answer, it is one config line on this endpoint and carries the same blast radius now as it did when the question was emitted. Option 3 remains the only choice that touches the four endpoints that did not ask for it, and it should not be taken without an answer from someone.

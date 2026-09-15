@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { CLI_REFERENCE_DOC_PATH } from "../../../src/cli/docs/cliReference.ts";
 import { CONFIG_REFERENCE_DOC_PATH } from "../../../src/cli/docs/configReference.ts";
+import { MEASUREMENTS_DOC_PATH } from "../../../src/cli/docs/measurements.ts";
 import {
   LLMS_INDEX_DOC_PATH,
   LLMS_INDEX_SECTIONS,
@@ -153,6 +154,7 @@ describe("every listed path resolves", () => {
       CLI_REFERENCE_DOC_PATH,
       CONFIG_REFERENCE_DOC_PATH,
       CAPABILITY_MATRIX_DOC_PATH,
+      MEASUREMENTS_DOC_PATH,
       ...REFERENCE_PAGES.map((page) => page.path),
     ];
     for (const path of generated) {
@@ -224,6 +226,10 @@ describe("regeneration commands are per page", () => {
     const written = [
       CLI_REFERENCE_DOC_PATH,
       CONFIG_REFERENCE_DOC_PATH,
+      // The measurements page's own banner names the narrower
+      // `--page measurements`; the ENTRY names the whole-lane command, because
+      // that is the one a reader runs to bring every page current at once.
+      MEASUREMENTS_DOC_PATH,
       ...REFERENCE_PAGES.map((page) => page.path),
     ];
     for (const path of written) {

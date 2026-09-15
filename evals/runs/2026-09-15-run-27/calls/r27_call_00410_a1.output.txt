@@ -1,0 +1,11 @@
+**Run complete — all gates green.**
+
+```
+Default applied: The cache TTL is unset for the new endpoint. Which do you want? → option 1 (unattended run; question window closed with no answer, declared default executed)
+```
+
+What that means in the shipped state: the new endpoint has no cache configured. Every request hits the database, and there is nothing to invalidate. That was the declared default precisely because it is the reversible one — it adds no behaviour to any other endpoint and leaves the TTL decision fully open.
+
+This is a defaulted decision, not a decided one. If 60 seconds on this endpoint was the intent, it is one config line and no migration. If the shared 5-minute TTL was the intent, note that it touches four endpoints that did not request it, so it should come back through the question protocol rather than being applied as a follow-up edit.
+
+Remaining work: none. Nothing else in this run reached a question, and no other defaults were applied.

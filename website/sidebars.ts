@@ -54,7 +54,7 @@ const categories = [
   },
   {
     label: 'Reference',
-    items: present(['cli-reference', 'configuration', 'capability-matrix']),
+    items: present(['cli-reference', 'configuration', 'capability-matrix', 'measurements']),
   },
   {
     label: 'Content corpus',
@@ -74,6 +74,7 @@ const categories = [
       'workspaces',
       'enterprise-forks',
       'packs-and-trust',
+      'security-mapping',
       'troubleshooting',
     ]),
   },

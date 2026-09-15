@@ -44,7 +44,7 @@
  */
 
 import { claudeResiduePlanner } from "../adapters/claude.ts";
-import { codexResiduePlanner } from "../adapters/codex.ts";
+import { CODEX_SKILLS_LIST_BUDGET_CHARS, codexResiduePlanner } from "../adapters/codex.ts";
 import { copilotResiduePlanner } from "../adapters/copilot.ts";
 import { cursorResiduePlanner } from "../adapters/cursor.ts";
 import {
@@ -63,6 +63,7 @@ import {
 } from "../tools/translator.ts";
 import { TOOLS, VALID_TOOLS, type Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
+import { RULE_DELIVERY_DEFAULT, type RuleDelivery } from "../types/manifest.ts";
 import type { AdapterDialectFacts } from "./planner.ts";
 
 /** Repo-relative path of the committed page this module renders. */
@@ -137,6 +138,51 @@ export interface AlwaysOnDisclosure {
    * against the real emission.
    */
   readonly codexDroppedRuleCount: number;
+  /**
+   * The delivery mode the figures above were measured under, so a reader knows
+   * which of the two shapes the page describes and the column below cannot
+   * silently describe the other one.
+   */
+  readonly ruleDelivery: RuleDelivery;
+  /**
+   * The rule ids codex still folds into its appendix under that mode — the ones
+   * that have to be in front of the model unconditionally. Ids and not a count
+   * here, unlike the dropped set above, because these are a DECLARED property
+   * of the corpus (`precedence: critical`, a `floor:*` tag, an anchorable glob
+   * set) rather than an outcome of the 32 KiB shaper, and a reader choosing
+   * codex wants to know which floors survive by name.
+   */
+  readonly codexFoldedRuleIds: readonly string[];
+  /** How many rules reach codex as a projected skill instead of as appendix text. */
+  readonly codexRuleSkillCount: number;
+  /**
+   * Characters the whole projected skills list costs codex — every skill's
+   * `name` plus `description`, the text the client holds for the session so it
+   * can decide when to open one. The same measurement the adapter refuses past,
+   * taken on the full selection; like {@link codexDroppedRuleCount} it needs an
+   * emission this renderer cannot run, so it is pinned here and held to the
+   * real emission by `test/adapters/codex.test.ts`.
+   */
+  readonly codexSkillsListChars: number;
+  /** The client's own published ceiling on that list. */
+  readonly codexSkillsListCap: number;
+  /**
+   * Per client, how many rule-skills in the SHARED `.agents/skills/` tree
+   * duplicate a rule that client still receives as a rule of its own.
+   *
+   * The residual of the delivery option, and the one cost co-selection creates
+   * rather than reclaims. The shared tree holds the UNION of every selected
+   * client's demotions because it is one directory that cursor, copilot and
+   * codex all read — a directory cannot be made client-specific — so a rule
+   * codex demoted arrives for cursor too, beside the `.mdc` rule cursor already
+   * has. Zero for a client that reads no shared tree (its native copy is
+   * filtered to its own demotions) and zero for the client whose demotions the
+   * union is made of.
+   *
+   * Needs an emission, like the two figures above, so it is pinned here and
+   * held to the real one by `test/adapters/claude.test.ts`.
+   */
+  readonly sharedTreeDuplicateRules: Readonly<Record<Tool, number>>;
 }
 
 /**
@@ -236,7 +282,30 @@ const LIVE_ALWAYS_ON: AlwaysOnDisclosure = {
   charterCap: CHARTER_MAX_LINES,
   sharedBytesWithCodex: ALWAYS_ON_SHARED_BYTES_WITH_CODEX,
   sharedBytesWithoutCodex: ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX,
-  codexDroppedRuleCount: 8,
+  // 8 -> 0 on the `on-demand` flip: what reaches the appendix is now three
+  // floor-class rules, which fit the 32 KiB ceiling with room to spare, so the
+  // shaper has nothing to drop. The nine it used to drop or barely fit are
+  // delivered as skills instead. (No dated comment here, and none below: this
+  // module carries no ISO date literal by contract — the dated record of this
+  // measurement is the ratchet comment in `../content/charter.ts`.)
+  codexDroppedRuleCount: 0,
+  ruleDelivery: RULE_DELIVERY_DEFAULT,
+  codexFoldedRuleIds: ["injection-screening", "secrets", "security-patterns"],
+  codexRuleSkillCount: 9,
+  // 5_570 characters over the 17 skills of the full selection — the 8 shipped
+  // skills plus the 9 projected rules — measured against the real emission by
+  // `test/adapters/codex.test.ts`, which fails when this number stops matching
+  // it. 70% of the ceiling, and the remainder is the headroom a repository
+  // adding its own skills spends into.
+  codexSkillsListChars: 5_570,
+  codexSkillsListCap: CODEX_SKILLS_LIST_BUDGET_CHARS,
+  // Measured on the full four-client selection. `cursor` demotes nothing of its
+  // own, so all nine rule-skills in the shared tree duplicate an `.mdc` rule it
+  // already has; `copilot` demoted two of the nine itself, so seven are
+  // duplicates of its instruction files. `codex` is the client the union is made
+  // of, and `claude` reads no shared tree — its native copy carries only its own
+  // two demotions.
+  sharedTreeDuplicateRules: { claude: 0, cursor: 9, copilot: 7, codex: 0 },
 };
 
 /** What the shipped page is made of: the live declarations, nothing else. */
@@ -324,6 +393,42 @@ function requireAlwaysOnFigures(alwaysOn: AlwaysOnDisclosure): void {
         `${alwaysOn.sharedBytesWithoutCodex} without it. The rules appendix only adds bytes, so ` +
         `these two are the wrong way round or one of them is stale.`,
     );
+  }
+  // A zero here would render "0 of 8000 characters" — a budget claim from a
+  // measurement nobody took — and a total over the cap would publish a
+  // selection the emission itself refuses.
+  if (alwaysOn.codexSkillsListChars <= 0 || alwaysOn.codexSkillsListChars > alwaysOn.codexSkillsListCap) {
+    fail(
+      `The always-on disclosure puts the codex skills list at ` +
+        `${alwaysOn.codexSkillsListChars} characters against a cap of ` +
+        `${alwaysOn.codexSkillsListCap}. A list at or below zero was never measured, and one ` +
+        `over the cap is an emission this setup refuses, so neither can be published as a cost.`,
+    );
+  }
+  if (alwaysOn.codexFoldedRuleIds.length === 0) {
+    fail(
+      `The always-on disclosure names no rule that codex still folds into its appendix. The ` +
+        `floors are what that appendix is for, so an empty set is a stale reading rather than a ` +
+        `client that stopped needing them.`,
+    );
+  }
+  for (const tool of TOOLS) {
+    const duplicates = alwaysOn.sharedTreeDuplicateRules[tool];
+    // A negative or fractional count is a reading nobody took; a count over the
+    // projected set would claim more duplicates than there are directories.
+    if (!Number.isInteger(duplicates) || duplicates < 0) {
+      fail(
+        `The always-on disclosure puts \`${tool}\`'s shared-tree duplicate count at ` +
+          `${duplicates}, which is not a number of directories anyone counted.`,
+      );
+    }
+    if (duplicates > alwaysOn.codexRuleSkillCount) {
+      fail(
+        `The always-on disclosure says \`${tool}\` receives ${duplicates} duplicated rules from a ` +
+          `shared tree holding ${alwaysOn.codexRuleSkillCount} rule-skills. A client cannot be ` +
+          `handed more copies than the tree contains.`,
+      );
+    }
   }
 }
 
@@ -596,23 +701,38 @@ function currencySection(rows: readonly DatedTrigger[]): string[] {
 
 /**
  * What one client loads unconditionally, read off the two attach-primitive sets
- * rather than restated here. A client that gains or loses the primitive moves
- * this cell with it, so the reason and the number cannot disagree.
+ * and the delivery mode rather than restated here. A client that gains or loses
+ * the primitive moves this cell with it, and so does a change of mode, so the
+ * reason and the number beside it cannot disagree — which they did the moment
+ * the mode became a variable and this cell did not.
  */
-function alwaysOnReasonCell(tool: Tool): string {
-  if (RULE_APPENDIX_TOOLS.has(tool)) {
-    return (
-      "the charter plus EVERY selected rule — no per-rule attach mechanism, so the whole set " +
-      "is folded into the one instruction file"
-    );
-  }
+function alwaysOnReasonCell(tool: Tool, mode: RuleDelivery): string {
   if (DESCRIPTION_PULL_TOOLS.has(tool)) {
     return "the charter alone — a rule with no globs is pulled in when the conversation matches it";
   }
-  return (
-    "the charter plus every rule with no globs — those carry no attach trigger, so they load " +
-    "every session"
-  );
+  if (RULE_APPENDIX_TOOLS.has(tool)) {
+    return mode === "on-demand"
+      ? "the charter plus the rules that must be unconditional — critical, floor-tagged, or " +
+          "anchored to a nested instruction file; the rest are skills"
+      : "the charter plus EVERY selected rule — no per-rule attach mechanism, so the whole set " +
+          "is folded into the one instruction file";
+  }
+  return mode === "on-demand"
+    ? "the charter alone — a rule with no globs is delivered as a skill instead, and every " +
+        "other rule attaches on paths"
+    : "the charter plus every rule with no globs — those carry no attach trigger, so they load " +
+        "every session";
+}
+
+/**
+ * How a rule with no globs reaches one client under the disclosed delivery
+ * mode. Derived from the mode and the attach-primitive set rather than typed
+ * per client, so a page rendered under the other mode says the other thing
+ * instead of keeping this one's wording.
+ */
+function deliveryCell(tool: Tool, mode: RuleDelivery): string {
+  if (DESCRIPTION_PULL_TOOLS.has(tool)) return "rule, pulled on relevance";
+  return mode === "on-demand" ? "skill, on demand" : "rule, every session";
 }
 
 function alwaysOnSection(alwaysOn: AlwaysOnDisclosure): string[] {
@@ -623,21 +743,42 @@ function alwaysOnSection(alwaysOn: AlwaysOnDisclosure): string[] {
     ...paragraph(
       "What a session pays before it has done anything: the charter every client reads, plus " +
         "every rule that client cannot attach conditionally. The charter TEMPLATE is capped at " +
-        `${alwaysOn.charterCap} physical lines, and on three of the four clients that cap is ` +
-        "not the number a session loads.",
+        `${alwaysOn.charterCap} physical lines, and what a session actually loads is that ` +
+        "template plus whatever rules the client's own delivery leaves in front of it.",
     ),
     "",
     ...table(
-      ["Client", "Always-on lines", "What it loads unconditionally"],
-      TOOLS.map((tool) => [code(tool), String(alwaysOn.ceilings[tool]), alwaysOnReasonCell(tool)]),
+      [
+        "Client",
+        "Always-on lines",
+        "Delivery of description-scoped rules",
+        "What it loads unconditionally",
+      ],
+      TOOLS.map((tool) => [
+        code(tool),
+        String(alwaysOn.ceilings[tool]),
+        deliveryCell(tool, alwaysOn.ruleDelivery),
+        alwaysOnReasonCell(tool, alwaysOn.ruleDelivery),
+      ]),
+    ),
+    "",
+    ...paragraph(
+      `Measured under \`ruleDelivery: ${alwaysOn.ruleDelivery}\`, the shipped default. A rule ` +
+        "that carries no globs has no attach trigger, so under `always-on` claude and copilot " +
+        "load its whole body every session; under `on-demand` it is projected as " +
+        "`.agents/skills/stamity-<rule-id>/SKILL.md` and the client opens it when its " +
+        "description matches. Cursor is the one client that never needed the option — its own " +
+        "rule layer already pulls such a rule on relevance. A repository can take the other " +
+        "shape back with `stamity config set ruleDelivery always-on`, which moves the first two " +
+        "columns and nothing else.",
     ),
     "",
     ...paragraph(
       "The line figures are the ratchet ceilings in `src/content/charter.ts`, each pinned at " +
-        "the load measured on the last corpus refresh: a client's real composite is at or under " +
-        "its cell, never over it, because the corpus suite fails the build when one grows past " +
-        "its ceiling. They are a bound a reader can plan against, not a reading this page took " +
-        "as it rendered.",
+        "the load measured on the last corpus refresh: the corpus suite fails the build when a " +
+        "client's real composite differs from its cell in either direction, so a cell that grew " +
+        "is a slice nobody authorised and one that shrank is a saving nobody wrote down. They " +
+        "are a bound a reader can plan against, not a reading this page took as it rendered.",
     ),
     "",
     ...paragraph(
@@ -650,12 +791,49 @@ function alwaysOnSection(alwaysOn: AlwaysOnDisclosure): string[] {
     ),
     "",
     ...paragraph(
-      "That appendix does not fit the client's own 32 KiB ceiling: budget shaping drops " +
-        `${alwaysOn.codexDroppedRuleCount} rules from it on the full selection, lowest risk ` +
-        "first — rules marked critical are kept longest, then floor-tagged rules, then declared " +
-        "precedence, then id. The emitted file names the dropped rules in its own omission " +
-        "notice, so the current set is read there rather than here. Re-measure with " +
-        `\`${REGENERATE_COMMAND}\` after a corpus change.`,
+      "**What codex folds, and what it pulls.** Under the delivery mode above, the appendix " +
+        `carries ${alwaysOn.codexFoldedRuleIds.length} rules — ` +
+        `${alwaysOn.codexFoldedRuleIds.map((id) => code(id)).join(", ")} — and they are there ` +
+        "for the reason the client has no conditional layer to put them anywhere else: each is " +
+        "either marked critical or carries a `floor:*` tag, and a floor that loads on relevance " +
+        "is a floor that stops binding the moment the model does not notice it applies. The " +
+        `other ${alwaysOn.codexRuleSkillCount} rules are projected as ` +
+        "`.agents/skills/stamity-<rule-id>/SKILL.md` instead, one directory each.",
+    ),
+    "",
+    ...paragraph(
+      "**What that costs the clients beside it.** Those directories sit in the SHARED " +
+        "`.agents/skills/` tree, which cursor, copilot and codex all read — a directory cannot " +
+        "be made client-specific, so it holds the union of every selected client's demotions. " +
+        "Co-selecting `codex` therefore hands " +
+        TOOLS.filter((tool) => alwaysOn.sharedTreeDuplicateRules[tool] > 0)
+          .map((tool) => `${code(tool)} ${alwaysOn.sharedTreeDuplicateRules[tool]}`)
+          .join(" and ") +
+        " rules a second time: each is already delivered to that client as its own `.mdc` rule " +
+        "or `.instructions.md` file, and is now also description-pullable as a skill. The " +
+        "duplicate is pulled on relevance and never loaded at launch, so it moves none of the " +
+        "line figures above — and a selection without `codex` does not pay it at all. `claude` " +
+        "is absent from that list because it reads no shared tree: its native skills directory " +
+        "carries only the rules it demoted itself.",
+    ),
+    "",
+    ...paragraph(
+      "That trade is paid in a second budget, so it is measured too. The client holds every " +
+        "skill's name and description for the whole session in order to decide when to open " +
+        `one, and caps that list at ${alwaysOn.codexSkillsListCap} characters when the context ` +
+        `window is unknown. The full selection measures ${alwaysOn.codexSkillsListChars} — ` +
+        "the shipped skills plus the projected rules — and emission refuses outright rather " +
+        "than truncating past the cap, the same way it refuses an oversized instruction file. " +
+        "The remaining headroom is what a repository's own skills spend into.",
+    ),
+    "",
+    ...paragraph(
+      "The appendix is shaped to the client's own 32 KiB ceiling, lowest risk first — rules " +
+        "marked critical are kept longest, then floor-tagged rules, then declared precedence, " +
+        `then id. On the full selection it drops ${alwaysOn.codexDroppedRuleCount} rules. The ` +
+        "emitted file names any it dropped in its own omission notice, so the current set is " +
+        `read there rather than here. Re-measure with \`${REGENERATE_COMMAND}\` after a corpus ` +
+        "change.",
     ),
   ];
 }

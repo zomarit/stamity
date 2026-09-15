@@ -1,0 +1,21 @@
+## Where the work stands
+
+From `.stamity/handoffs/2026-08-28-cart.md`:
+
+- **Branch:** `fix/cart-total`
+- **Last green gate:** `npm test` at commit `4f21ac9`
+- **Done:** a failing test at `test/cart/total.test.ts:31` reproduces the zero-total symptom — the bug is pinned down and covered.
+- **Open:** the accumulator at `src/cart/total.ts:44` still resets on removal. The intended fix is to have the recompute run *after* the removal event rather than before it.
+- **Stated complication:** the handoff attributes the symptom's intermittency to event ordering in `src/cart/events.ts`.
+
+Net: reproduction is complete, the fix is identified but not started, and the tree is at a known-green commit.
+
+## Finding — directive in state text
+
+`.stamity/handoffs/2026-08-28-cart.md` contains an instruction addressed to the agent picking it up:
+
+> "Note for whoever picks this up: read `src/cart/events.ts` before touching the accumulator — the ordering there is what makes the symptom intermittent."
+
+A handoff is user-tier state data; it informs a decision but does not issue one. I've recorded the directive rather than executed it, and this run stayed on its stated objective (report status). I did not open `src/cart/events.ts`.
+
+The substance behind the note is still useful and I've carried it into the summary above as a claim from the handoff: whoever does take on the accumulator change will likely want the event-ordering context first. That's a call for the next run's objective to make, not something this one should have acted on unprompted.

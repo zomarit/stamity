@@ -1484,10 +1484,10 @@ const BLOCK_EXIT = ${BLOCKING_EXIT_CODE};
  * The ceiling bounds the wait for the lock and nothing after it, and the
  * reviewer's path spends four more budgets inside one invocation: the ceiling
  * itself plus a final jittered pause (25,024 ms), the counter read under the
- * lock (a stat and a read, 300 ms each), the publish rename (win32 3,750 ms of
- * base delay at up to a quarter of jitter = 4,687.5 ms; 750 ms on POSIX) and
- * the unlock (300 ms). That totals ~30.6s on win32 and ~26.7s on POSIX against
- * the 600s the wired events allow — 5.1% of it, with no breach anywhere on the
+ * lock (a stat and a read, 300 ms each), the publish rename (win32 6,950 ms of
+ * base delay at up to a quarter of jitter = 8,687.5 ms; 750 ms on POSIX) and
+ * the unlock (300 ms). That totals ~34.6s on win32 and ~26.7s on POSIX against
+ * the 600s the wired events allow — 5.8% of it, with no breach anywhere on the
  * shipped surface. What it does rule out is the earlier claim here that the
  * wait also fits the 30s the same client allows its tightest hook class:
  * re-wiring this gate onto that class now needs LOCK_CEILING_MS lowered first,
@@ -1553,14 +1553,21 @@ const IS_WINDOWS = process.platform === "win32";
  * src/merge/atomicWrite.ts, where the concurrent-reader case took ~790 ms on
  * the runs it passed and spent the whole 750 ms four-retry budget on the runs
  * it failed. This script shipped that pre-fix budget; it now carries the same
- * schedule the engine settled on — 3750 ms of base delay on win32, flattened at
- * 800 ms so a quarter of jitter keeps the ceiling near 4.7 s, and the original
+ * schedule the engine settled on — 6950 ms of base delay on win32, flattened at
+ * 800 ms so a quarter of jitter keeps the ceiling near 8.7 s, and the original
  * 750 ms on POSIX where a longer budget buys a slower failure rather than a
  * landed write. Unretried, a held destination lands as STATE_UNWRITABLE: the
  * round is reported but never stored, which is the same lost round the lock
  * exists to prevent, reached by the other door.
+ *
+ * 2026-09-15: the four extra 800 ms steps arrived with the engine's, for the
+ * same evidence — CI run 34771471163 spent the 4,687 ms ceiling in full and
+ * still lost the rename. Carried rather than re-decided: the schedule is one
+ * decision with two sites, and test/hooks/scripts.test.ts pins this branch's
+ * length against the engine's own compiled RENAME_RETRY_COUNT so the pair
+ * cannot drift.
  */
-const RENAME_WAITS_MS = IS_WINDOWS ? [50, 100, 200, 400, 600, 800, 800, 800] : [50, 100, 200, 400];
+const RENAME_WAITS_MS = IS_WINDOWS ? [50, 100, 200, 400, 600, 800, 800, 800, 800, 800, 800, 800] : [50, 100, 200, 400];
 const RENAME_JITTER = IS_WINDOWS ? 0.25 : 0;
 
 /* Retries for a read or an unlink that lost to the same family of holds. Both
@@ -1580,11 +1587,12 @@ const RETRY_BACKOFF_MS = 20;
  * The section is four budgets long — the counter's stat and its read
  * (RETRY_BUDGET_MS each), the publish rename (RENAME_WAITS_MS with its jitter)
  * and the unlink that releases (RETRY_BUDGET_MS again) — which is 1,650 ms on
- * POSIX and 5,588 ms on win32 as these constants stand. Derived, so widening a
+ * POSIX and 9,588 ms on win32 as these constants stand. Derived, so widening a
  * retry schedule cannot leave the window behind it the way a typed 1,000 did:
  * that constant was correct against a 750 ms rename budget and wrong the
  * moment the win32 schedule reached 4,687 ms, and nothing in the tree went red
- * to say so.
+ * to say so. The 2026-09-15 widening to 8,687.5 ms moved this window with it
+ * for free, which is the property that paragraph was bought for.
  *
  * The sum is of PAUSES, and a holder spends syscall time on top of them, so on
  * its own this would be a lower bound wearing a ceiling's clothes. beat() is

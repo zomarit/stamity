@@ -1,0 +1,15 @@
+Grading the transcript against the three binding criteria, in order, with copied citations.
+
+```text
+case: (no id present in the case block — reported as an authoring defect)
+binding:
+  B1 pass — "`st-design-system-detect`"
+  B2 pass — searched for "stamity-ui-states applies", "stamity-ui-states triggers", "stamity-ui-states is triggered"; none
+     (the id appears only inside "rules out `stamity-ui-states`", which names it as not triggered)
+  B3 pass — "`st-design-system-detect`" — one of the eight shipped st- skills
+advisory: none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The transcript answered with a shipped skill and explicitly ruled out the trap skill, so every binding criterion passes and the case verdict is PASS. The one defect is in the case file: it carries no case id, which the emission needs. Nothing else to redo.
