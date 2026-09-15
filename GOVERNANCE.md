@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 7644766. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
 <!-- Re-open when: a gate named under Landing rules is added, renamed or removed in
      `.github/workflows/`, the required-approval count changes, the private layer's scope
      changes, or the regulatory statement's own trigger fires. `test/docsPages.test.ts` resolves
@@ -7,7 +7,7 @@
 
 # Governance
 
-> Last updated: 2026-09-02
+> Last updated: 2026-09-15
 
 How this project is run and how a change lands. Contribution mechanics — the loop, the test lanes,
 regeneration — are in [CONTRIBUTING.md](CONTRIBUTING.md); the product, in

@@ -2,7 +2,7 @@
 title: Working with stamity
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit b801fe5. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
 <!-- Re-open when: a touchpoint joins or leaves, or its one-line job changes in content/charter/stamity-charter.md — the touchpoint index's owner; a `stamity worktree` subcommand joins or leaves;
      `.stamity/worktree.json` or the receipt `version` changes shape; or the site stops rendering the mermaid fence. `test/docsPages.test.ts` holds this page to the hand-page contract. -->
 

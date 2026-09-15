@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit b801fe5. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
 <!-- Re-open when: any `file::symbol` address below stops resolving, a named control loses its
      last production caller, a new install source or execution surface ships, a control named
      under "Publishing this package" changes in `.github/workflows/release.yml`, or the mapping
@@ -163,7 +163,14 @@ where it depends on it.
   runs them, with your privileges. Reading `.stamity/generated/hooks/` covers only the scripts
   this engine generates. What decides whether a command runs at all is the client's own
   config — `.claude/settings.json`, `.cursor/hooks.json`, `.codex/hooks.json` — and a hook a
-  PACK supplies lands there, never under `.stamity/generated/`. An MCP server definition
+  PACK supplies lands there, never under `.stamity/generated/`. On Codex three things decide
+  it rather than one: `features.hooks = true` in `.codex/config.toml`, which this engine now
+  emits and the client defaults OFF, the project's trust level, and the per-hook review
+  through the interactive `/hooks` command — or `--dangerously-bypass-hook-trust` for
+  automation that cannot take that step. With all three in place, headless `codex exec` on
+  codex-cli 0.154.0 loaded no project hook layer at all in the 2026-09-15 measurement, so a
+  hook on that client is enforcement in the interactive session and nothing in the headless
+  lane (`src/adapters/codex.ts`, the `hook enforcement` fact). An MCP server definition
   likewise becomes a launcher your editor spawns at start-up. Read all four, and read the
   `runs on this machine` block `stamity add` prints before accepting a pack.
 - **Who a signature names.** A verified bundle proves that an identity signed exactly these

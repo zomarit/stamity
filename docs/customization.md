@@ -2,7 +2,7 @@
 title: Customization
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 17da583. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
 <!-- Re-open when: a save gate is added or removed, a content class joins or leaves the
      override tree, a merge verb joins the overlay layer, a class gains or loses overlay
      support, the fork layer's place in the precedence chain moves, or patch-or-replace
@@ -57,6 +57,11 @@ One tree, one directory per class:
 | rule | `.stamity/overrides/rules/<id>.md` |
 | command | `.stamity/overrides/commands/<id>.md` |
 | skill | `.stamity/overrides/skills/<id>/SKILL.md` |
+
+A bundled rule with no `globs` — `question-protocol`, `ai-evals` — now ships as a
+description-triggered skill `stamity-<id>` by default (`ruleDelivery: on-demand`, settable
+through `stamity config`); an override of that rule still lands in
+`.stamity/overrides/rules/<id>.md` and is delivered the same way.
 
 A skill is a directory rather than a file, and **the name a client invokes is the EMITTED one,
 not the one you filed it under**. An override that takes a bundled skill's id replaces it — the
@@ -240,7 +245,7 @@ line does not.
 
 ## Client metadata and native limits
 
-Revalidated on 2026-09-10. Bundled skills declare `license: MIT` and their runtime
+Revalidated on 2026-09-15. Bundled skills declare `license: MIT` and their runtime
 prerequisites in `compatibility`. Both fields already pass through the existing skill
 projection. Optional `agents/openai.yaml` companions supply Codex display names and
 default prompts; overrides keep their own companion files. No tool connection or
@@ -261,8 +266,13 @@ Tool-hook denial and errors block, but timeouts remain fail-open. Its session-st
 output does not inject the learning index: read `.stamity/learnings/` and active
 handoffs manually. Copilot cloud reads hook configuration from the default branch.
 
-Codex hooks use command strings and native `/hooks` trust review. An emitted digest
-is not native approval; `stamity check` detects generated-file drift. The Codex,
+Codex hooks use command strings and native `/hooks` trust review, and that review is the
+last of three gates: `features.hooks = true` in `.codex/config.toml`, which this engine
+emits and the client defaults off, then the project's trust level, then the per-hook review.
+With all three in place, headless `codex exec` on codex-cli 0.154.0 loaded no project hook
+layer at all in the 2026-09-15 measurement, so a hook there is enforcement in the interactive
+client only. An emitted digest is not native approval; `stamity check` detects
+generated-file drift. The Codex,
 Cursor and Copilot tool-call payloads do not identify the calling role, so the core
 role guard is telemetry there. Native sandbox and permission controls remain the
 enforcement boundary.

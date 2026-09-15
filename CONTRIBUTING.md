@@ -1,10 +1,10 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 17da583. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
 <!-- Re-open when: a step joins or leaves `npm run check`, a generated artifact class gains or
      loses a regeneration command, either Node floor moves, a test lane joins or leaves, a
      coverage floor in `vitest.config.ts` moves, or the eval set's version bumps — the `evals/`
      paths named below carry that version in their own names, so a bump silently repoints them
      and is what last carried this page past its stamp. `test/docsPages.test.ts` asserts `npm run
-     check`, the leak-gate row and four of the seven regeneration commands against this page;
+     check`, the leak-gate row and four of the eight regeneration commands against this page;
      `test/ci/workflow.test.ts` asserts the two required contexts and the `pr-checks`
      attribution. Beyond its Leak-gate row, the step table — the other five steps and their
      order — is unasserted. -->
@@ -145,6 +145,7 @@ at the next regeneration.
 |---|---|
 | `docs/capability-matrix.md` | `node scripts/generate-capability-matrix.mjs` |
 | `docs/cli-reference.md`, `docs/configuration.md`, `docs/reference/`, `llms.txt` | `node scripts/generate-docs.mjs` |
+| `docs/measurements.md` | `node scripts/merge-ready-rate.mjs --write` — freezes the snapshot under `evals/measurements/`, which the page renders from — then `node scripts/generate-docs.mjs --page measurements` |
 | `src/pack/catalogPins.ts` | `node scripts/generate-pack-manifests.mjs` — verifies every pack against its own `pack.json` integrity map, then rewrites the pins module and nothing else (`--check` verifies and writes nothing) |
 | `packs/*/pack.json` integrity maps | `node scripts/generate-pack-manifests.mjs --write` — maintenance mode, after a deliberate pack edit; the plain invocation fails on the drift instead |
 | `.claude-plugin/`, `.cursor-plugin/plugin.json`, `plugin.json` | `node scripts/generate-plugin-manifests.mjs` (`--check` verifies and writes nothing) |
@@ -223,7 +224,8 @@ Something wrong that is not a vulnerability goes to the issue tracker,
 `src/` engine and CLI, `content/` the canonical corpus, `packs/` the first-party packs, `test/` the
 three lanes, `scripts/` generators, the leak gate, the two smokes (publish shape, APM route) and
 the upstream lane (`upstream.mjs`, for forks), `docs/` the generated reference pages
-(`capability-matrix.md`, `cli-reference.md`, `configuration.md`, `reference/`) beside the
+(`capability-matrix.md`, `cli-reference.md`, `configuration.md`, `measurements.md`,
+`reference/`) beside the
 hand-written guides, `plans/` and `specs/`. The boundary between engine and CLI is
 enforced by a static import-graph test (`test/architecture/boundaries.test.ts`), not by
 convention: the engine never imports the CLI, and a new `src/` file that no entrypoint reaches

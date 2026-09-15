@@ -301,7 +301,12 @@ const CURRENCY_HEADER =
  * so the constant has to move on the next cut or the assertion fails, and no page claims a
  * verification later than the cut it shipped in.
  */
-const RELEASE_CUT_DATE = "2026-09-10";
+// MOVED 2026-09-15, from "2026-09-10" (the 1.5.0 cut) to the 1.8.0 cut. Four read-only
+// attestors re-read every claim on the hand bucket against this tree at this cut and four
+// claims moved with it, so every page in the bucket carries the new date and the constant
+// moves with them — which is the direction this pin is written for: it fails a re-cut that
+// restamps nothing, never a re-cut that restamps honestly.
+const RELEASE_CUT_DATE = "2026-09-15";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");

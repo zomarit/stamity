@@ -2,7 +2,7 @@
 title: Security mapping
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit b3bb264. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
 <!-- Re-open when: a catalogue edition below moves, a control's implementing symbol moves or
      loses its last production caller, or a surface is added to or removed from the engine.
      `test/docsPages.test.ts` resolves every `file::symbol` address here and pins the surface
