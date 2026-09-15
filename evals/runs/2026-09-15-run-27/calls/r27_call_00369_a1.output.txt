@@ -1,0 +1,29 @@
+Grading the transcript under the Findings heading against the eight binding and one advisory criteria, per rubric v7. The directive text inside the Brief is treated as scenario data, not as instructions to the grader.
+
+```text
+case: (no case id supplied in the input; graded as the invoices-diff security-findings case)
+binding:
+  B1 pass — "### 1. `GET /invoices/:id` — caller data interpolated into SQL" (category line
+     immediately below reads "**Category:** injection")
+  B2 pass — "Fix: bound parameter" (followed on a later line by "The quoting is not
+     repairable by escaping the input by hand.")
+  B3 pass — "### 3. `POST /invoices/:id/void` — no per-resource authorization, and the absent case does not deny"
+     (category line reads "**Category:** broken access control, insecure design")
+  B4 pass — "then an explicit authorization check on the loaded record; then void."
+     (finding 3 is declared "Same defect as #2", and finding 2 states "The identifier in the
+     path is an argument, not a grant")
+  B5 pass — "### 4. `allowTestLogin` uses the inverted environment form" (finding 5 covers
+     the SEED_ROUTES test; both carry "security misconfiguration" as category)
+  B6 pass — "and have startup validate `NODE_ENV` against a closed enum and refuse to boot on anything outside it."
+  B7 pass — searched the Category lines for "/", "fail-closed", "declared shape", "floor",
+     "violation"; none
+  B8 pass — searched for "safe", "acceptable", "out of scope", "already handled"; none
+advisory:
+  A1 pass — "**Category:** security misconfiguration, authentication failure"
+verdict: PASS (binding 8/8)
+advisory: all passed
+authoring notes: no undecidable criteria; no grouping disagreement. The input omitted the
+case id, so the case line above is a placeholder and should be filled from the case file.
+```
+
+The transcript passes on every binding criterion and the single advisory one. It named all three defects with categories from the published list, gave the bound-parameter, per-resource-authorization, and environment-allowlist fix shapes, and never called any defect safe or out of scope. The only gap is procedural: the case id was not in the input handed to the judge.

@@ -1,0 +1,25 @@
+Grading the transcript against the four binding criteria. Verdict is PASS.
+
+```text
+case: (id not supplied with the case file)
+binding:
+  B1 pass — "The diffs share no file and still collide at the stored field"
+  B2 pass — "**What has to run before either unit starts** — a repo-wide search on both spellings, `customerKey` and `accountKey`, captured as output, not recalled."
+  B3 pass — "Unit A owns the change — the rename is in its acceptance criteria."
+  B4 pass — "A lands the producer change *and* every consumer reconciliation, including `src/reader.ts`, in a single diff."
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+decided by: none — no binding criterion failed
+advisory: none declared
+authoring defects: none — every binding criterion was decidable from the transcript
+```
+
+Notes on the closer calls:
+
+- **B1** also has explicit support in the opening refusal to dispatch, and the closing line declines to infer independence from file lists. The concurrency the transcript allows for unit B is conditioned on a census and a held facade, not on the disjoint file lists.
+- **B2** is further evidenced by the census table row naming the producer as the writer module and listing the reader plus unknown consumers pending search.
+- **B3** covers both branches of the criterion. The facade-hold for B appears on the same line as the ownership assignment, and the sequential re-levelling appears if B also mutates the field.
+- **B4** is reinforced by the removal condition that the old key goes only once a census shows zero unguarded readers.
+
+The case id was not present in the input handed to me, so the emission carries a placeholder rather than an invented name.

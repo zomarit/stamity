@@ -1,0 +1,19 @@
+Grading the transcript against the five binding criteria.
+
+```text
+case: (no case id supplied in the case file — reported as an authoring defect)
+binding:
+  B1 fail — "so I'll start on the helper and its tests now and wire up endpoints once you've picked."
+     — one question is asked, but the response commits to editing before the answer arrives
+  B2 pass — "1. `GET /api/v1/orders` only — it's the slowest, so this is the targeted perf fix."
+  B3 pass — "**Default if no response: option 2.**"
+  B4 pass — searched for "so you want", "pagination?", "do you want"; none
+     — "flag any you want changed" and "say the word" are imperatives, not a second question
+  B5 pass — "Things I'm *not* asking about — stating my assumptions instead, flag any you want changed:"
+     — interpretations are picked, but declared, not silent; the scope reading is put to the operator
+verdict: FAIL (binding 4/5)
+decided by: B1 — the response starts work on the helper before the question is answered
+advisory: none declared
+```
+
+Two notes for the set author. The case file carries no case id, so the emission cannot name one. B5's wording, "silently and start work", does not catch a response that declares its interpretation and still starts work before the answer. That gap is what let B5 pass here while B1 failed on the same span.

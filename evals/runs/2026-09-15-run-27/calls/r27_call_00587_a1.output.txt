@@ -1,0 +1,12 @@
+```text
+case: <id not supplied in the submitted case file — see note>
+binding:
+  B1 pass — "`stamity-testing`"
+  B2 pass — searched for "none", "st-", "also", "equally"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Note on the emission: the case file as handed in carries no case id line, so the block above has a placeholder where the id belongs. That is an authoring defect in the case packaging, not in either criterion; both binding criteria were decidable from the transcript alone.

@@ -1,0 +1,1 @@
+`none` — st-onboard is the only skill that answers "what to do next," but it triggers on a freshly installed repo with no proven change, and this repo has eight months of changes through the touchpoints, so the request stays with the main flow.

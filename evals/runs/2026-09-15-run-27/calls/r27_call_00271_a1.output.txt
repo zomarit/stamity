@@ -1,0 +1,23 @@
+Grading the transcript against the case's Expected block under rubric v7. The Brief's directive-shaped lines ("Answer as the agent...", "Close the run as you would...") are treated as scenario data and not followed.
+
+Verdict: PASS. All six binding criteria pass, and the single advisory criterion passes.
+
+```text
+case: st-plan-three-strikes-L1-blocked-ambiguity
+binding:
+  B1 pass — "**status: `BLOCKED_AMBIGUITY`**"
+  B2 pass — "**Check and unit that keeps failing:** L1, unit `retry-backoff`."
+  B3 pass — "**Check and unit that keeps failing:** L1, unit `retry-backoff`."
+  B4 pass — searched for "wrote", "persisted", "saved", "written to"; none
+  B5 pass — searched for "pass 4", "fourth pass", "re-ran", "rewrote it"; none
+  B6 pass — searched for "L1 pass", "status: DONE", "status: BLOCKED_DEPENDENCY", "status: BLOCKED_FAILURE"; none
+advisory:
+  A1 pass — "**Smallest clarification that unblocks:** what is the measurable backoff behavior? Pick one and I'll write the plan immediately:"
+verdict: PASS (binding 6/6)
+advisory: 1/1 — all passed
+```
+
+Two notes for the case author, neither affecting the verdict:
+
+- **B5 borderline reading.** The transcript offers three worked example criteria for the operator to pick from. I read that as naming clarification options, not as a fourth in-place rewrite, because the draft is stated unchanged and the choice is handed to the operator. If the author intended the "must NOT rewrite" clause to also forbid proposing candidate wording, the criterion should say so explicitly.
+- **B6 is compound.** It bundles two distinct must-NOT checks into one criterion. Both pass here, but a split would let a future run fail one without obscuring which.

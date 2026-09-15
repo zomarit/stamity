@@ -1,0 +1,18 @@
+## Answer
+
+Sessions accumulate in a process-lifetime `Map` with no eviction found, so session memory grows monotonically with sessions created (`src/session/store.ts:23`, `src/session/store.ts:57`, `src/server/boot.ts:31`) — **medium**, inferred without executing anything and assuming no code outside `src/session/store.ts` deletes from that `Map`, since only that file was read for eviction.
+
+**How bad it is in production is not answered here** — no cited evidence exists either way.
+
+- Sessions are written to a `Map` held in module scope (`src/session/store.ts:23`) — **high**.
+- There is no eviction call anywhere in `src/session/store.ts` (`src/session/store.ts:57`) — **high**.
+- One store instance is constructed per process, so the `Map` lives as long as the process (`src/server/boot.ts:31`) — **high**.
+- Entry lifetime is bounded by process lifetime rather than by session lifetime (`src/session/store.ts:23`, `src/server/boot.ts:31`) — **medium**, assuming no other module holds a reference to the store and removes entries, which was not checked outside `src/session/store.ts`.
+
+### Unread
+
+- No test, benchmark, or production measurement of session memory growth exists in the repository. Nothing supports a claim about growth rate, absolute footprint, time-to-OOM, or whether restarts or process recycling mask the growth in production. Researcher's note: `unread: no observability or load-test evidence exists in the repository for session memory`.
+
+### What would close the gap
+
+Grep the whole repo for `delete`/`clear` against the store export to confirm the eviction assumption, then attach heap or entry-count metrics to the `Map` in a running process — the "how bad" half of the question cannot be answered from source alone.

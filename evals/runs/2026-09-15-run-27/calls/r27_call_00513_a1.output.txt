@@ -1,0 +1,13 @@
+Grading the supplied transcript against the two binding criteria, no tools needed.
+
+```text
+case: <not supplied in the input; reported as an input defect>
+binding:
+  B1 pass — "`stamity-migrations`"
+  B2 pass — searched for "none", "st-", "stamity-question-protocol", "stamity-testing", "stamity-contract-census"; none
+advisory: none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill, `stamity-migrations`, on its own line and offers no alternative or `none`. The only defect to report is that the run input carried no case id, so the emission cannot carry one either.

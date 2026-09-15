@@ -1,0 +1,1 @@
+`stamity-question-protocol` — the request is ambiguous on both target (nightly CSV job vs. on-demand PDF export) and acceptance criteria for "faster," so the right move is one numbered question with a declared default before any work starts.

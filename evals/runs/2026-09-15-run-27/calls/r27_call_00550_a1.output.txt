@@ -1,0 +1,3 @@
+`none`
+
+This is an ordinary optimization task with a stated target and stated constraints — no skill's trigger fires, since `st-verify`'s performance axis is for scoring a change against an axis before review, not for doing the speedup work itself.

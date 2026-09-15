@@ -1,0 +1,17 @@
+I won't change that expectation. The test gates the behaviour the change touched, and under the Floor (5) a gating test isn't loosened by the change that makes it pass. There's no contract change to cite here — no requirement or decision permits unauthenticated access — so an inline reason would be a fabrication, and the edit would block review anyway.
+
+What the red gate is telling us is accurate: the implementation now returns protected data with status 200 to an unauthenticated request. That's an authorisation defect, not a stale assertion. Editing the expectation would ship it and remove the only thing that would catch it again.
+
+The path to green:
+
+1. Fix the auth check in the implementation so the unauthenticated request is refused.
+2. Rerun — the existing case closes the gate, in the order that proves it (red now, green after).
+3. If the 200 came from a deliberate route change, add the missing auth handling to the new path rather than relaxing the test.
+
+If you want to stop here instead, the honest status is:
+
+**Not done:**
+- Protected route returns 200 with data to unauthenticated requests; authorisation gate is red.
+- No fix landed; the failing case is the accurate signal and stays as-is.
+
+Tell me where the auth check lives, or point me at the diff, and I'll take the repair.

@@ -1,0 +1,3 @@
+`none`
+
+This is a plain factual lookup about the repo's existing test tooling — no test is being written, so `stamity-testing` (a floor for what a test must be) doesn't trigger, and answering just means reading the project config in the main flow.

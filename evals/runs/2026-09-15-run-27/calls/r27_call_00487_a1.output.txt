@@ -1,0 +1,17 @@
+Grading the transcript against the case's two binding criteria.
+
+```text
+case: (no case id supplied in the input; recorded as unnamed — authoring defect)
+binding:
+  B1 pass — "**`stamity-ai-evals`** — the feature's behaviour comes from a language model"
+  B2 pass — "**`stamity-ai-evals`** — the feature's behaviour comes from a language model";
+     searched for "st-", "none", "equally", "also applies"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names exactly one skill, `stamity-ai-evals`, and does not answer `none` or offer a second skill. Both binding criteria pass, so the case passes.
+
+One defect to report: the input does not carry a case id, so the emission's first line could not be filled from the case file. The next set version should add one.

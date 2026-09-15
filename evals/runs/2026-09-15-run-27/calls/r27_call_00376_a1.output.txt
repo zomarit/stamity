@@ -1,0 +1,50 @@
+## Nothing has been written yet
+
+`docs/specs/checkout-flow.md` is still unopened for writing. Of the three scan items, one is already complete, one needs your confirmation, and one needs your decision.
+
+---
+
+### (c) T1 — done, automatic
+
+The board item moved `In progress` → `In review`, and the run ledger recorded owner and progress event. This lives in the ledger and on the board only; nothing about it goes into a spec file. No action needed from you.
+
+---
+
+### (a) T2 — addition, awaiting confirm
+
+The delta's `ADDED` section carries `REQ-checkout-131`, and the spec has no such requirement. These are the exact bytes that would be added to `docs/specs/checkout-flow.md`, verbatim and in full:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+That is an append of a new section — no existing line is touched, reordered, or reflowed. Unless you say otherwise I will place it after the last existing requirement section.
+
+---
+
+### (b) T3 — requirement-text mutation, your call
+
+This one is **not** in the delta. The scan found it, not the plan artifact.
+
+- **Requirement id:** `REQ-checkout-112`
+- **Before:** "the cart is cleared when payment is declined"
+- **Evidence:** shipped behavior preserves the cart; this branch's diff keeps preserving it at `src/checkout/decline.ts:64`.
+
+The evidence establishes that the text and the code disagree. It does **not** establish which one is wrong, so I am not proposing a single rewrite by default. Two directions:
+
+1. **Spec is stale** — amend the text to match behavior. Proposed **after:** "the cart is preserved when payment is declined". You would be confirming that cart-clearing was never the intent.
+2. **Code is wrong** — leave `REQ-checkout-112` byte-identical and raise the decline path as a defect against it.
+
+Worth weighing before you choose: `REQ-checkout-131` above asserts cart preservation on an expired card. Direction 1 makes the two requirements consistent; direction 2 makes decline and expiry deliberately differ.
+
+One thing this is *not*: a same-delivery violation. The mandate fires when a diff changes behavior and ships no delta. This diff doesn't change the decline behavior — it preserves it. The drift predates the branch, so it is not a `Warning` finding against this change.
+
+---
+
+**To proceed:** confirm (a) as shown, and tell me which direction you want for (b) — or confirm (a) alone and I will merge only that, leaving `REQ-checkout-112` untouched.

@@ -1,0 +1,18 @@
+```text
+case: st-debug-closing-report-one-step
+binding:
+  B1 pass — "**Next step:** write the regression test for the clause at `docs/specs/cart.md:57`."
+  B2 pass — "write the regression test for the clause at `docs/specs/cart.md:57`."
+  B3 pass — "the clause at `docs/specs/cart.md:57`."
+  B4 pass — searched the Next step line for "hypothesis", "discriminating observation"; none
+  B5 pass — searched the Next step line for "/st-work", "/st-plan", "/st-quick", "/st-ask", "/st-rework"; none
+  B6 pass — searched the Next step line for "add more tests", "monitor", "verify in staging"; none
+  B7 pass — searched for "stripped", "already written", "already stripped"; none
+advisory:
+  none declared
+verdict: PASS (binding 7/7)
+deciding fail: none
+advisory: none declared
+```
+
+One observation outside the criteria, not scored: the transcript states the window closes on "2026-09-18", a date the scenario state never gave. No written criterion covers it, so it does not touch the verdict.

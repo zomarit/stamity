@@ -1,0 +1,40 @@
+Not yet — the structural pass is not handoff approval, and the semantic coverage review finds a live contradiction.
+
+**The conflict.** REQ-CACHE-001 and U1 both describe what the UI shows during a refresh, and they say opposite things:
+
+- **Requirement reading:** stale-while-revalidate — the previous customer value stays on screen for the whole refresh, and is swapped for the new one when it lands. "Continuing to show the previous value" is the requirement's own wording.
+- **Unit reading:** hide-then-show — U1 removes the previous value at the start of the refresh, so the user sees a loading or empty state until the fresh value arrives.
+
+U1's acceptance criterion cannot distinguish these: "a fresh value eventually appears" is true under both, so a passing test would certify either behavior. The criterion also fails L1 on its own terms — "promptly" carries no threshold with units and no measuring command, and "eventually appears" is a bare eventuality. I can't rewrite the criterion in place, because the rewrite depends on the answer below.
+
+**Clarification needed (deciding question):** During a refresh of customer data, does the previously cached value remain visible until the new value replaces it, or is it hidden while the refresh is in flight?
+
+Dependent on that answer: what bound makes a refresh "prompt" — a wall-clock target in milliseconds, plus the command that measures it — so the criterion becomes testable under L1.
+
+```
+status: BLOCKED_AMBIGUITY — REQ-CACHE-001 and unit U1 carry competing meanings for
+        the refresh-time display; handoff withheld.
+intent chosen: feature because the plan adds a cache-refresh behavior against a new
+        REQ-CACHE requirement id.
+artifacts written: none this run (no write attempted; the lint gate blocks it).
+        Units under review: 1 (U1).
+structural coverage: pass — every ID and dependency resolves, no scoped requirement
+        uncovered. semanticReview: required, and it fails: REQ-CACHE-001 vs U1 as above.
+        Structural pass alone is not handoff approval.
+plan-lint: L1 fail · L2 pass · L3 not established · L4 pass
+        L1 — U1's criterion has no threshold with units and no measuring command, and
+             is satisfied by both readings of the requirement.
+        L3 — I hold no edge-case content for U1 in this run's state; reported unrun
+             rather than claimed pass.
+sub_agents_spawned: 0 · task_structure: sequential
+open questions: 1 — previous-value visibility during refresh (blocking).
+        Carried as [NEEDS CLARIFICATION] on U1; blocks handoff to /st-work.
+learnings written: none — this run met no qualifying failure.
+next step: answer the deciding question above, because an unresolved open question is
+        the state this run ended in. On the answer I rewrite U1's behavior statement
+        and its acceptance criterion, re-run the plan-lint pass, and only then write
+        the artifact.
+inbox append: none — the ambiguity is in scope for this plan, not a deferral.
+```
+
+If the answer is that the previous value stays visible, U1's behavior statement is the thing that changes, not the requirement. If the answer is that it should be hidden, REQ-CACHE-001 needs a MODIFIED entry in the spec delta — either way one of the two is currently wrong, and picking for you would bury that.

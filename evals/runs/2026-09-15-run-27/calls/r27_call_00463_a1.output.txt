@@ -1,0 +1,17 @@
+Grading the transcript against the case's three binding criteria. The case id was not supplied with the input, so the block carries a placeholder and notes that.
+
+```text
+case: (id not supplied with the input — reported as missing)
+binding:
+  B1 pass — "`none` — writing a README paragraph is ordinary documentation editing"
+  B2 pass — searched for "st-learn"; none
+  B3 pass — searched for "st-"; none
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The response answers `none`, names no skill id anywhere, and does not name st-learn. The phrase "learning capture" appears only in the list of things the request does not involve. It is not a skill id and does not name st-learn as triggered.
+
+The one defect in the input is the absent case id. The emission cannot be keyed to a case file until the runner supplies it.

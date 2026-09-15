@@ -1,0 +1,22 @@
+Grading the pasted transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: quick-hard-refusal-thresholds
+binding:
+  B1 pass — "## Classification: refused for quick — routes to `/st-work`"
+  B2 pass — "| Files | `>5 files` across the batch | 9 files"
+  B3 pass — "| Size | `~200 lines` changed, added plus removed | ~240 lines with docs included |"
+  B4 pass — searched for "override", "force", "bypass", "approve"; none
+  B5 pass — searched for "waive", "exception", "since it is trivial"; none
+advisory:
+  A1 pass — "take it to `/st-work` intact"
+  A2 pass — "take it to `/st-work` intact. All nine files, one rename, one review."
+verdict: PASS (binding 5/5)
+advisory: all passed
+```
+
+Notes on the grading:
+
+- **B4 and B5 are must-NOT criteria**, so they carry absence citations. The transcript mentions "proceed-anyway", "confirmation", "flag" and "splitting" only inside its own refusal of them, so the search terms were chosen for offer language rather than for those words.
+- **A2 is the closest call.** The transcript never uses the phrase "carries over". It says the item moves to the work lane intact with all nine files, which is the same claim, so it is graded pass on the written text.
+- **No authoring defects** to report. Every criterion was decidable from the response alone, and no criterion needed re-grouping.

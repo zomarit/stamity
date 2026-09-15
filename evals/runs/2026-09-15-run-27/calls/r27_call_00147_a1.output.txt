@@ -1,0 +1,33 @@
+Grading the single case against rubric v7, binding group first, then advisory.
+
+```text
+case: stamity-performance-no-budget-return
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — searched for "**`Critical` —", "severity: Critical"; none — the only
+     finding header is a Warning; the word Critical appears only in the ceiling statement
+  B3 pass — "**Budget classes absent:** size, latency, benchmark"
+  B4 pass — "unmeasured against any declared number: neither passed nor failed" —
+     searched for "clean", "healthy", "within budget"; none
+  B5 pass — "**`Warning` — the export read path has no declared budget covering it.**"
+  B6 fail — "`src/queries/exportRows.ts:31` issues one query per page, so the changed path's cost grows with the requested page size rather than with the table." —
+     the cost claim about the changed path is located at :31 and carries no number, but no
+     method is named for it; the only method statement in the finding, static read with no
+     count executed, is attached to the 4.1 million row count from db/schema.sql:88, not
+     to this claim. The must-NOT half held: searched for "ms", "faster", "before-and-after
+     number", "%"; none. Surfaces list is bare paths; the src/api/export.ts behaviour is
+     rewritten as a question.
+  B7 pass — "### Findings — 1 posted" — the mode line at the top of the return states
+     posting and gives the reason no advisory mode applied
+  B8 pass — searched for "rate", "%", "precision", "false positive"; none
+  B9 pass — searched for "edited", "ran a benchmark", "benchmark result", "modified";
+     none — the run states it executed no benchmark and no count
+advisory:
+  A1 pass — "**Budget classes absent:** size, latency, benchmark"
+verdict: FAIL (binding 8/9)
+decided by: B6 — cost claim at src/queries/exportRows.ts:31 states no method that produced it
+advisory: 1/1 — all passed
+authoring defects: none flagged; every criterion was decidable from the transcript
+```
+
+The case fails on B6 alone. The return got the status, ceiling, absent budget classes, unmeasured reporting, the Warning naming the surface, the posted count, the mode, and every must-NOT right. It failed because the structural cost claim for the changed path carries its line but names no method, while the neighbouring row-count claim does. Adding a method clause to that sentence, such as "by static read of the loop at line 31", would pass the case on the next run. The advisory criterion passed, so nothing there triggers the two-run review obligation.

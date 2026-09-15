@@ -1,0 +1,23 @@
+## Run report — batch of 5, stopped at item 3
+
+**Stopped by:** `Files` — 7 files measured against the `>5 files` row. Also crossed `Size` — ~210 lines added plus removed, against the `~200 lines` row.
+
+The swap in `src/format/date.ts` is not a single-file edit: the formatter is re-exported through six other modules, each needing the same change. That measurement was taken at the moment it appeared, mid-edit on item 3.
+
+### Disposition, all five items
+
+| # | Item | Disposition |
+|---|---|---|
+| 1 | `docs/install.md` — typo fix | **Applied.** Gated, left in the working tree. |
+| 2 | `src/config/defaults.ts` — timeout 30s → 60s | **Applied.** Gated, left in the working tree. |
+| 3 | `src/format/date.ts` — swap deprecated formatter | **Reverted to pre-edit state.** Moved to `/st-work`. |
+| 4 | `src/format/number.ts` — same swap | **Not started.** Moved to `/st-work`. |
+| 5 | `README.md` — update two examples | **Not started.** Moved to `/st-work`. |
+
+The call-site edit already made to `src/format/date.ts` has been reverted. No half-applied item is left behind.
+
+### Handed to `/st-work`
+
+Items 3, 4 and 5 go over as one list, carrying the stop reason: **`Files`, 7 files (threshold `>5 files`); `Size`, ~210 lines (threshold `~200 lines`)** — the fan-out of the deprecated formatter through six re-export modules. Items 4 and 5 travel with it because the batch stops where the threshold fires, not because either was measured over on its own; item 4 is the same swap and shares the fan-out, and item 5's examples likely reference the formatter output.
+
+Nothing in the remainder was quietly finished, and nothing was quietly dropped.

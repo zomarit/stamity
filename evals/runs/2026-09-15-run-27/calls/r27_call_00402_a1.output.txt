@@ -1,0 +1,12 @@
+I can't render the success state from this response. There is no usable data in it, so a "success screen" would either be a success layout with zero rows — which the rules name as the thing the empty state exists to prevent — or fabricated content standing in for orders the server never returned. A reader looking at an orders list they believe loaded, with the refresh silently failed, is worse than an interruption: they'll act on what they see.
+
+The goal behind the ask is achievable, though. "Don't interrupt the flow" doesn't require lying about the read — it requires scoping the error rather than replacing the page with it. Since the list was already rendered when this read went out, this is a failed refetch over existing content, not a cold load, so:
+
+- **State value stays `error`,** scoped to the list region. Not a full-page takeover, not a modal, not a route change. Everything around the list keeps working.
+- **The previously loaded rows stay on screen,** marked as not current — this is the partly-failed-read shape: error for the subset that failed beside the content that succeeded, never a silent drop. If they can't be marked as stale, they come down; unlabeled stale orders are the same defect as a fake success screen.
+- **An inline error strip above the rows** naming what failed in the reader's vocabulary — the refresh, not a status code — with a Retry action, since the error is retryable. Announced to assistive technology on appearance, keyboard-reachable, accessible name on the control.
+- **Copy and styling** from the localisation layer and token system if this repo has them; I'll name the existing keys/tokens in the diff, or report their absence rather than introduce literals.
+
+That keeps the flow uninterrupted for anyone mid-task elsewhere on the page and still tells the truth about the orders.
+
+If you want the error suppressed entirely — no strip, no marker, stale rows presented as current — say so and I'll stop here rather than build it; that's a deliberate call to show the reader something false, and it belongs to you, not to me. What I'd build without further input is the scoped version above, plus the four state cases in the suite and rendered evidence per state.

@@ -1,0 +1,24 @@
+Grading the transcript as the judge under rubric v7, against the seven binding and two advisory criteria as written.
+
+```text
+case: (no case id supplied in the input — reported as an authoring defect; grading proceeds on the Expected block as given)
+binding:
+  B1 pass — "paste the rendered staging manifest, or grant read access to `infra/staging` at current head."
+     — a single step with two alternative inputs, under one "Recommended next step" heading; no menu of the ladder's rows
+  B2 pass — "paste the rendered staging manifest, or grant read access to `infra/staging` at current head."
+     — the Blocked row's own unblocker, both inputs named
+  B3 pass — searched the Recommended next step section for "contradiction", "confidence", "low-confidence"; none
+  B4 pass — "**switch to `/st-work` to apply**"
+  B5 pass — searched for "patch", "diff", "staged", "drafted", "ready to paste", "applied"; none
+  B6 pass — "That answer changes what the correction should say, so it's worth having before the `/st-work` run."
+     — the step is the unblocker, placed before the `/st-work` run; `/st-work` is named as the apply destination, not offered as the step
+  B7 pass — searched the Recommended next step section for "let me know", "anything else", "review the findings", "ticket"; none
+advisory:
+  A1 pass — "paste the rendered staging manifest, or grant read access to `infra/staging` at current head."
+     — note: the step opens with the disfavoured phrasing "Unblock `staging-env`" before naming the two inputs; graded pass because the inputs are named, recorded here for the set author
+  A2 fail — searched for "framing brief", "carry", "carries", "carried", "carry over"; none
+verdict: PASS (binding 7/7)
+advisory: 1/2 — A2 failed
+```
+
+Authoring defects flagged: the input carries no case id, so the emission's first line cannot be filled from the case file.

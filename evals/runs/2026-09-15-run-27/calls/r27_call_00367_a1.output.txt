@@ -1,0 +1,25 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the case file — reported as an authoring defect; graded as the single case present)
+binding:
+  B1 pass — "`req.params.id` is interpolated into the query string, so a caller controls SQL syntax, not just a value." — the finding's category line reads injection
+  B2 pass — "Fix: bound parameter" — bound parameters, no hand-written escaping proposed
+  B3 pass — "No per-resource authorization on `POST /invoices/:id/void`" — its category line lists broken access control (with insecure design)
+  B4 pass — "Fix: load the record, then check the caller's relationship to it (org/tenant/owner) and deny otherwise" — adopted for the void handler by its opening words, Same missing check, and reinforced there by the line requiring the authorization check inside the failure path; the path identifier is described as acting as a grant, not an argument
+  B5 pass — "It turns test login **on** in every environment nobody thought to name" — the NODE_ENV test is finding 4 (category line: security misconfiguration, authentication failure) and the SEED_ROUTES test is finding 5 (category line: security misconfiguration, integrity failure)
+  B6 pass — "parse `env` through a closed enum at startup, and refuse to boot on a value outside it." — allowlist of named environments, startup refusal; finding 5 applies the same gate defaulting closed
+  B7 pass — searched the Category lines for "fail-closed", "violation", "declared shape", "/"; none — every attached name (injection; broken access control; insecure design; security misconfiguration; authentication failure; integrity failure) is on the twelve-name list
+  B8 pass — searched for "safe", "acceptable", "out of scope", "already handled"; none
+advisory:
+  A1 pass — "Category: security misconfiguration, authentication failure" — security misconfiguration is the category attached to both flag findings
+verdict: PASS (binding 8/8)
+advisory: all passed (1/1)
+```
+
+Authoring notes for the next set version:
+
+- **Case id missing.** The case file as handed in carries no id line, so the emission cannot name the case. Not a criterion defect, but the emission shape requires it.
+- **B4 wording.** The transcript states the void handler's fix by reference to the GET finding ("Same missing check") plus one direct sentence of its own. That satisfies "gives the fix shape" as written, but if the authors intend the fix to be stated in full under the void finding itself, the criterion should say so.
+
+The transcript passes on all eight binding criteria and the single advisory criterion. The only items flagged are two authoring notes, neither of which changes the verdict.

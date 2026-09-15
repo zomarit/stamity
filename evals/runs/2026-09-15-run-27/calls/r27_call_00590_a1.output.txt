@@ -1,0 +1,1 @@
+`stamity-ui-states` — the request is exactly the four-state contract for a data-reading surface: the orders table renders success only, and finishing it means adding explicit loading, empty, and error states.

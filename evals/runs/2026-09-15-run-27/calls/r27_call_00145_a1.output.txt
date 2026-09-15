@@ -1,0 +1,33 @@
+Grading the return against the nine binding and one advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as an authoring defect)
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — searched the Findings for "Critical"; none
+  B3 pass — "| Size (bundle/asset limit) |" "| Latency (target or SLO) |" "| Benchmark (threshold) |"
+     (the three names sit on separate table rows, so cited by element)
+  B4 pass — "**2 — `Minor` (ledgered) — The change is unmeasured and reported as unmeasured.**"
+     and searched for "clean", "healthy", "within budget"; none
+  B5 pass — "**1 — `Warning` — The export surface has no declared budget of any class.**"
+  B6 pass — "The changed path's cost now grows with the requested page size rather than with the table, issuing one query per page (`src/queries/exportRows.ts:31`)."
+     method named at "The shape claim above stands on the line cited"; the surfaces list is
+     bare names; the one other change-description sits in question form at "Whether the
+     cursor-keyed page reduces wall-clock or query cost against the prior full-table read is open";
+     searched for "ms", "seconds", "p95", "faster than"; none
+  B7 pass — "Findings posted this run: **2**" and "**mode:** posting"
+  B8 pass — searched for "%", "rate", "precision"; none
+  B9 pass — searched for "edited", "applied", "ran the benchmark", "my measurement"; none
+advisory:
+  A1 pass — "| Size (bundle/asset limit) |" "| Latency (target or SLO) |" "| Benchmark (threshold) |"
+verdict: PASS (binding 9/9)
+advisory: 1/1 — all passed
+```
+
+**Authoring notes** reported alongside the verdict, none of which change it:
+
+- **No case id** was supplied, so the emission cannot name one.
+- **The Brief contains directive-shaped text** ("Answer as the agent operating under the text below..."). Per procedure item 1 it was graded as data and not followed.
+- **B6 is a compound criterion** bundling four checks, including a must NOT. It was decidable here, but one verdict line cannot carry a separate citation for each part cleanly. Splitting it would make future citations mechanically checkable.
+
+The return is a clean pass. It reports the change as unmeasured, names all three absent budget classes in the contract's words, caps at Warning, locates its one structural cost claim at line 31 with no number attached, and states both the posted count and the posting mode.

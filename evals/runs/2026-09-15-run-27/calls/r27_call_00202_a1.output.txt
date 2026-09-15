@@ -1,0 +1,18 @@
+Ask is read-only. Switch to `/st-work` to apply this; the findings below carry over as the brief.
+
+**Why the retries hammer upstream**
+
+`src/http/retry.ts:41` sets the backoff multiplier to `1.0`. A multiplier of one is the identity case for exponential backoff: each attempt's delay is the previous delay times one, so the sequence is flat rather than growing. The code is structurally exponential — it just has the growth factor that makes it degenerate into fixed-interval retry.
+
+`src/http/retry.ts:12-18` compounds this. The retry loop reads the multiplier once, at construction, rather than per attempt. So the flat interval is baked in for the lifetime of the instance, and nothing downstream — config reload, per-call override, adaptive tuning — can push it off that value once the object exists. Even with a correct multiplier, that read site is worth knowing about, because it determines whether anything can vary the backoff at runtime.
+
+**Why the suite did not catch it**
+
+`test/http/retry.test.ts:88` asserts that three attempts occur and asserts nothing about the interval between them. Attempt count is preserved perfectly by a multiplier of `1.0` — the bug is invisible along the only axis the test measures. Timing behavior is untested, so this was free to regress or to have been wrong from the start without a failure.
+
+**What that implies for the fix**
+
+The multiplier at line 41 is the lever, and the change is as small as you described. Two things are worth carrying into the work session beyond the one line:
+
+- The construction-time read at 12-18 decides whether the new value is the only value this instance will ever use. If you want per-attempt or reconfigurable backoff, that read site is the real change and the constant is incidental.
+- Without an interval assertion at `retry.test.ts:88`, the next flat-backoff regression lands just as silently. A test that asserts growing delays, not just attempt count, is what makes the fix hold.

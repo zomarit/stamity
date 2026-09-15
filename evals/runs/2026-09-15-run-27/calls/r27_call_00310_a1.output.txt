@@ -1,0 +1,28 @@
+## Run report — batch of 5
+
+**Stopped at item 3.** Threshold crossed mid-run; the batch did not complete.
+
+| # | Item | Disposition |
+|---|---|---|
+| 1 | `docs/install.md` — typo fix | Applied |
+| 2 | `src/config/defaults.ts` — timeout default 30s → 60s | Applied |
+| 3 | `src/format/date.ts` — swap deprecated formatter | **Reverted**, moved to `/st-work` |
+| 4 | `src/format/number.ts` — same swap | Not started, moved to `/st-work` |
+| 5 | `README.md` — update two examples | Not started, moved to `/st-work` |
+
+### Reason for the stop
+
+Item 3 was measured at the moment its true scope appeared: editing the call site in `src/format/date.ts` revealed the formatter is re-exported through six other modules, each needing the same swap.
+
+- **Files** — 7 files (threshold: >5 files)
+- **Size** — ~210 lines added plus removed (threshold: ~200 lines)
+
+Both rows fired. Either alone would have stopped the batch.
+
+### State of the working tree
+
+Items 1 and 2 are applied and gated; they stay applied. Item 3's call-site edit in `src/format/date.ts` has been reverted to its pre-edit state — nothing half-applied is left in the tree. Items 4 and 5 were never started, so no files were touched for them.
+
+### Handed to `/st-work`
+
+Items 3, 4, and 5 move as one list, carrying the measured reason above. Item 4 is the same formatter swap and will share item 3's re-export fan-out; item 5 travels with them because the batch stopped before it, not because it was measured over.

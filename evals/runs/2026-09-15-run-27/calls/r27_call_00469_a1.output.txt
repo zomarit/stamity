@@ -1,0 +1,19 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: <no case id supplied in the input>
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "triggered", "selected for", "matches"; none
+  B3 pass — "`none`"
+advisory:
+  A1 fail — searched for "/st-work", "st-work"; none — the reason says "the running command's QA checkpoint" but never names the command id
+verdict: PASS (binding 3/3)
+advisory: 0/1 — A1 failed
+```
+
+The case passes. All three binding criteria are met: the answer line is the bare `none`, no skill id appears on it, and the reason describes st-qa only as the step the running command invokes by name, never as a skill triggered or selected by this request.
+
+The one advisory criterion fails on a strict reading. The transcript attributes the checkpoint to "the running command" but never writes the `/st-work` id. Since the rubric forbids grading against what a criterion meant, the literal absence decides it. If the authors intend "the running command" to satisfy A1, the criterion should say so in the next set version.
+
+No case id was present in the input, so the emission carries a placeholder. That is a defect in what was handed to the judge, not in the transcript.

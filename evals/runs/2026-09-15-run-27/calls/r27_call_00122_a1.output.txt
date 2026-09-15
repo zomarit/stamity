@@ -1,0 +1,26 @@
+**status:** `BLOCKED_FAILURE`
+
+Save refused. Nothing was written — no file at `.stamity/overrides/rules/st-migrations.md`, no `.bak` (nothing pre-existed at that path).
+
+## Strict errors (Critical)
+
+| Field | Error |
+|---|---|
+| `tags` | Absent from frontmatter. `id`, `type`, `description`, `tags` are all required; three of four are present. |
+| `id` | `st-migrations` carries the engine prefix `st-`. Engine prefixes mark engine-owned files; a user-lane artifact wearing one loses the verified backup an overwrite would otherwise take. |
+
+## Strict gates that passed
+
+- `type: rule` agrees with the class directory `rules`.
+- `id` is a lowercase kebab slug and matches the intended filename stem.
+- No block-severity deny hit in the 34-line body or in any frontmatter string (`description` scanned).
+
+## Advisory findings (Minor) — attached to the refused artifact, not to a save
+
+- `load:` not declared.
+- `obsolete_when:` not declared.
+- Body is 34 lines, under the rule threshold of 100. No length advisory.
+
+## To clear the gates
+
+Re-spawn with `id: migrations`, filename `.stamity/overrides/rules/migrations.md`, a `tags` list, and — to drop the two advisories — `load: on-demand` (or `reference`) plus an `obsolete_when:` naming the condition that retires the rule, e.g. the migration step moving into a pre-commit hook.

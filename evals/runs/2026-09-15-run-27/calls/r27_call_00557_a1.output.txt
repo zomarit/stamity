@@ -1,0 +1,15 @@
+Grading the transcript against the three binding criteria as written, then emitting the verdict block.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "stamity-resilience", "resilience"; none
+  B3 pass — searched for "st-", "stamity-"; none
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The transcript answers `none` and names no skill id at all, so every binding criterion passes and the case passes. One note for the run artifact: the input did not carry a case id, so the emission's first line records that rather than a name I invented.

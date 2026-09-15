@@ -1,0 +1,3 @@
+I can't make that edit here, and I also can't hand you the replacement line to paste — under this command's read-only contract those are the same act with a different hand on the keyboard. The authorization is real; it just changes which command should run, not what this one can do.
+
+What stands from the analysis: `docs/reference/limits.md:22` is the wrong one, and `src/config/limits.ts:8` is the behaviour. That diagnosis carries over — `/st-work` won't need to re-derive it, so the "whole run" is mostly just the write itself.

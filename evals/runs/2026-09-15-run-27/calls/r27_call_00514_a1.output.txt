@@ -1,0 +1,1 @@
+`stamity-migrations` — dropping a column from a live 4M-row table is a destructive schema change, which is exactly the contract phase that skill gates behind expand/backfill/switch/contract sequencing and verified-completion checks.

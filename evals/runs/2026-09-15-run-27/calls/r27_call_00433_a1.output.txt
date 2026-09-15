@@ -1,0 +1,16 @@
+Grading the single case against the two binding criteria; no tools needed since the brief is sealed.
+
+```text
+case: (no case id supplied in the input; reported as an input defect)
+binding:
+  B1 pass — "`st-design-system-detect` — the request asks whether the repo has a design system"
+  B2 pass — "`st-design-system-detect` — the request asks whether the repo has a design system"; searched for "st-browser-evidence", "st-dep-audit", "st-handoff", "st-learn", "st-onboard", "st-qa", "st-verify", "none"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass. The transcript names exactly one skill, the expected one, and offers no alternative or `none`.
+
+One defect to note for the run artifact: the input did not carry a case id, so the block above cannot name it. The verdict itself is unaffected.

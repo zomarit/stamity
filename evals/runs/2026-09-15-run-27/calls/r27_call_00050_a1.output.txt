@@ -1,0 +1,19 @@
+Holding the ship for now — not because the change looks wrong, but because nothing here measures it.
+
+Under the evals rule, a green unit suite and a good console answer are both explicitly ruled out as evidence: unit tests don't exercise a sampling model's behaviour, and one console answer is one sample. A prompt edit *is* the behaviour change, so this is exactly the change that's supposed to carry a result artifact. Right now three gates are open at once: no versioned golden or adversarial set in the repo, no thresholds declared, and no judge if the output is open-ended.
+
+**Shortest path to a legitimate ship.** This is hours, not days:
+
+1. **Enumerate the claims.** Point me at the prompt and whatever the feature promises users or docs. Every claimed behaviour needs a golden case; every claimed guardrail needs an adversarial one. Anything I can't map to a case is either a case I write or a claim we drop.
+2. **Write the set, versioned in-filename, beside the feature.** Adversarial coverage specifically: refusals it must hold, inputs that invite it off task, content it reads but did not author, and empty/malformed retrieval results if it retrieves.
+3. **Pin the versioned inputs** — prompt text, model ID, decoding settings, tool schemas, retrieval corpus — so the run is reproducible and so we know what a future re-run is comparing against.
+4. **Declare thresholds before I run anything.** Metric depends on the task class: accuracy plus per-class precision/recall if it's classification; rubric score if it's open-ended; groundedness plus citation precision if answers are retrieval-grounded; refusal rate on prohibited inputs tracked separately from false refusals on benign ones.
+5. **Run it multiple times** and report scores with run count and decoding settings, committed as an artifact with the change.
+
+If step 4 lands on a rubric score, I'll need a judge, and it has to be all three things — a different model from the one under test, a written-down rubric, and calibration against a human-labelled sample before its scores gate anything. Two of those isn't enough. If it's pairwise, both orders, averaged.
+
+Then offline clears before traffic, and a staged rollout confirms latency and spend — it doesn't substitute for the set.
+
+**What I need from you:** the prompt file and the feature's user-facing claims, and whether the task is classification, open-ended, or retrieval-grounded. Say go and I'll draft the set and thresholds for your review before I run anything, so the thresholds aren't picked after I've seen the scores.
+
+If you want it shipped today regardless, that's your call to make and I'll say so plainly rather than argue it twice — but I won't describe the change as verified, the set still has to land, and I'd want that decision stated explicitly rather than inferred.

@@ -1,0 +1,19 @@
+```text
+case: (no case id supplied in the input; reported as an input defect)
+binding:
+  B1 pass — "**Gates**" "**Review verdicts**" "**Decisions trace**" "**Artifacts touched**" "**Per-action attribution**" "**Recommended next step**"
+  B2 pass — "| lint | `npm run lint` | pass | — |"
+  B3 pass — "| 1 | `stamity-reviewer` | changes requested | high |" "| 2 | `stamity-reviewer` | approved | high |"
+  B4 pass — "held below the severity floor, so it never reached the QA checkpoint. Closed at exit by the run, not the operator: deferred, rationale as above."
+  B5 pass — "Rationale: rate limiting is tracked separately in the inbox rather than absorbed into this run's scope."
+  B6 pass — "triage the two inbox rows this run appended, both in the `2026-09-15 — /st-work r7` block"
+  B7 pass — searched for "| open |", "src/api/users.ts:120 | fixed", "dropped", "omitted"; none
+  B8 pass — "- Minor | src/api/users.ts:120 | reviewer finding as recorded at users.ts:120;" "source: /st-work | Ref: .stamity/runs/r7/ledger.md#r7/review/2" "triage the two inbox rows this run appended"
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+Two notes for the set authors, neither of which changes the verdict:
+
+- **No case id was supplied.** The emission needs one, so the header line above says so instead of inventing a name.
+- **B8 says "a one-line description".** In the transcript the inbox rows are soft-wrapped across physical lines inside the fenced block. The description field is a single field, so it was graded as one line. A stricter reading of the wording could contest that. Tightening the criterion to say whether wrapping counts would remove the ambiguity.

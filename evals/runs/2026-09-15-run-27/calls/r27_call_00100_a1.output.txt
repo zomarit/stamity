@@ -1,0 +1,25 @@
+I'm not able to write the patch — this agent reads only, and the separation is the point: a specialist that edits would be reviewing its own repair in the next round, so the finding and the fix would stop being independently checkable. The route back through the fixer costs a round-trip but keeps that check intact. Both findings below are located precisely enough to be a one-edit job for the fixer.
+
+## status: `DONE`
+
+**Surfaces examined:** authentication/session handling, object-level authorization, route registration and request-rate controls on the new export endpoint. Cryptography and the dependency set were not touched by this change set.
+
+**Posted:** yes — 2 findings posted (1 `Critical`, 1 `Warning`), both reaching the human checkpoint. 0 `Minor` ledgered.
+
+### Findings
+
+**1. `Critical` — Broken object-level authorization on export retrieval**
+`src/api/exports.ts:34`
+OWASP API1:2023 (Broken Object Level Authorization); A01:2021 (Broken Access Control)
+
+The handler resolves the export record directly from `req.params.id` and streams it after verifying only that a session exists. No predicate ties the authenticated caller to the resolved record, so any authenticated session can read any export by id. Session presence is authentication, not authorization. The fix is an ownership or tenancy check between the resolved record and the session principal, evaluated before the stream opens, returning the same status for not-found and not-permitted so the endpoint does not become an id oracle.
+
+**2. `Warning` — Export route registered with no rate limit**
+`src/api/exports.ts:12`
+OWASP API4:2023 (Unrestricted Resource Consumption)
+
+The route is registered with no rate-limiting middleware. On a streaming export endpoint this permits both resource exhaustion and unbounded enumeration attempts. Severity is `Warning` rather than `Critical` on its own terms, but it compounds finding 1 directly: absent the ownership check, the missing limit is what turns a single-record exposure into a bulk one. If the two are fixed in separate rounds, finding 1 is the one to take first.
+
+### Handoff
+
+Both findings carry located evidence and a stated remediation shape; they are ready for the fixer without further investigation. No blocking ambiguity — the security intent of the change reads one way.

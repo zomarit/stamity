@@ -1,0 +1,16 @@
+Grading the pasted transcript against the case's binding criteria under rubric v7.
+
+```text
+case: (no case id present in the input; reported as an authoring defect)
+binding:
+  B1 pass — "`none` — this is a plain factual lookup about the repo's existing test tooling"
+  B2 pass — searched for "stamity-testing applies", "stamity-testing triggers", "triggered"; none
+     — the id appears once, inside a clause explaining why it does not apply, not as the answer
+  B3 pass — "`none` — this is a plain factual lookup about the repo's existing test tooling"
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The transcript answers `none`, which satisfies all three binding criteria. The single mention of stamity-testing is a disclaimer, so the must-NOT criterion holds. One authoring defect: the input carries no case id, so the emission cannot name it. Nothing else needs action.

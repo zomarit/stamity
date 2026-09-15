@@ -1,0 +1,17 @@
+**status:** `BLOCKED_AMBIGUITY`
+
+**finding — mode collision** (severity: `Critical`)
+
+The brief names no mode and carries work for three distinct ones. Under one-mode-per-invocation I cannot blend them, and I cannot pick one on my own authority, because each clause is a first-class deliverable rather than a supporting detail of another.
+
+**Competing readings:**
+
+1. **brownfield** — "Write up the new export-scheduling behaviour." The cron trigger is landed and running at `src/schedule/cron.ts:18-44`. A spec for the touched surface, accreted into `docs/specs/`, with every behavioral claim carrying `file:line` evidence.
+2. **architect** — "Record why we chose a cron trigger over a queue consumer." A decision already visible in the code, with no ADR recording it; `docs/adr/` exists with eleven records. An ADR recorded as observed, naming the queue-consumer alternative the code rules out.
+3. **docs** — "produce the page an operator reads to configure it." Shipped, verifiable behavior; the user-facing tree exists and carries no export-schedule page.
+
+**Why not resolved in place:** the three modes differ precisely in what evidence is admissible. Writing the ADR's rationale inside a brownfield spec would put a decision record under evidence rules that only cover observed behavior, and writing the operator page in the same pass would let spec-stage prose reach users without the docs-mode requirement that every documented behavior exist at a cited path in the current tree. That is the failure the contract names.
+
+**Artifacts:** none. No files written, no manifest rows added or changed, no requirement ids allocated, no `[NEEDS CLARIFICATION]` markers left open.
+
+**Note for the ambiguity gate:** this is a mode collision, not a missing input. Each of the three readings is independently unblocked on present evidence — the code is landed and cited, `docs/adr/` is present, and the docs tree is present — so three sequential spawns, one per mode, should each reach `DONE` without further research. Natural order is brownfield → architect → docs, since the ADR and the operator page both cite the spec surface.

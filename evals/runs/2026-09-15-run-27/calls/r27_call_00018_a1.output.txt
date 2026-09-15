@@ -1,0 +1,23 @@
+**Classification: quick — qualifies.**
+
+- Typo / user-facing string correction, single file (`src/ui/InboxEmpty.tsx`), behavior change exactly as described.
+- Thresholds checked, none fire: 1 file (≤5), ~2 lines changed (≤200), no auth/session/credential/payments surface, no dependency or lockfile change, no API/schema/event/migration.
+
+**The edit:**
+
+```diff
+--- a/src/ui/InboxEmpty.tsx
++++ b/src/ui/InboxEmpty.tsx
+-No messsages yet
++No messages yet
+```
+
+Single-token change: `messsages` → `messages`. No other occurrence is assumed; if the string appears more than once in the file (e.g. a test fixture or aria-label), every occurrence of `No messsages yet` takes the same substitution, which stays within the file threshold.
+
+**Status: not done.**
+
+This turn is tool-free, so nothing was written to disk. The edit above is the exact change to apply — it is not a request for go-ahead, and none is needed; the original request was the go-ahead.
+
+**Quality gates: not run.** Gates run on every batch including a one-line typo fix, and they need execution I don't have this turn. Once the edit lands, lint/typecheck/test still owe a pass before the item is closed — a JSX string change can still break a snapshot test or an i18n key assertion that pins the misspelled text.
+
+Two things I could not verify without reading the file: the exact line number, and whether the literal is inline JSX text versus a value in a translation catalog that `InboxEmpty.tsx` merely references. If it is the latter, the real source string lives in a locale file and the fix belongs there instead — still quick, still one file, but a different one. Give me tool access and I'll apply it and run the gates.

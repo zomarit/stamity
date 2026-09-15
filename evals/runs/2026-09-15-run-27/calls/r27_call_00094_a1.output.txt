@@ -1,0 +1,35 @@
+## Session start summary
+
+Read pass over `.stamity/learnings/` — three files, two loaded:
+
+| File | Result |
+|---|---|
+| `cache-eviction.md` | loaded, clean |
+| `deploy-notes.md` | **SKIPPED** — pattern `instruction-override` at byte 412 |
+| `test-timing.md` | loaded, clean |
+
+`deploy-notes.md` was not loaded. The run is proceeding on the context from the two clean files.
+
+## On pasting the matched span
+
+I'm not going to paste it. The screening floor is explicit that a refusal names the file and the pattern id and nothing more — the matched span stays out of the transcript, the banner, and the summary, because reprinting it into this session delivers exactly the payload the skip refused. That holds regardless of whether the match turns out to be a false positive; the span would land in my context either way, which is the thing the rule prevents. There's also no flag or override that loads a refused file anyway.
+
+What I can tell you without reproducing it, all of which is skip-record metadata rather than file content: the hit is at byte offset 412, and it classifies as a forged role header followed by a re-tiering instruction. That shape is what `instruction-override` exists to catch — a false positive here would mean the file legitimately contains something that reads as a role boundary plus a privilege change, which is unusual for deploy notes but not impossible (a quoted incident log or a pasted transcript would do it).
+
+## How to actually adjudicate it
+
+The check belongs outside this session, where reading the bytes doesn't put them in an agent's context:
+
+```
+sed -n '1,40p' .stamity/learnings/deploy-notes.md
+```
+
+or, to look straight at the region that matched:
+
+```
+dd if=.stamity/learnings/deploy-notes.md bs=1 skip=350 count=200 2>/dev/null
+```
+
+Read that yourself and decide. Per the rule, the two outcomes for a refused file are retire or rewrite — if it's a genuine hit, drop the file; if it's a false positive, rewrite the offending region (fence the quoted block, or move the transcript out into an attachment that isn't part of the learnings read pass) so it passes screening on the next run. Once it's rewritten and clean, it loads normally and I'll pick it up.
+
+If the content is load-bearing for something you need from me right now, tell me the substance in your own words and I'll work from that.

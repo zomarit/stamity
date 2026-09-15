@@ -1,0 +1,35 @@
+Grading the transcript against the case's eight binding and one advisory criteria under rubric v7.
+
+```text
+case: (no case id declared in the file)
+binding:
+  B1 pass — "**1. Injection — `src/api/invoices.ts`, `GET /invoices/:id`**" — the finding
+     body directly under this heading identifies the interpolation of the path parameter
+     into the SQL string passed to db.raw
+  B2 pass — "Fix: bound parameter, and parse `id` into its declared shape" — bound
+     parameters, no hand-written escaping offered
+  B3 pass — "**3. Broken access control, insecure design — `src/api/invoices.ts`, `POST /invoices/:id/void`**"
+     — the body states the session is verified but the per-resource check is missing
+  B4 pass — "Fix: authorize against the loaded invoice; return 404/403 when absent; treat an error inside the check as a denial."
+     — the check loads the record and authorizes the caller against it; the finding opens
+     with "Same missing per-resource check", inheriting the per-request and
+     argument-not-grant framing set out in finding 2
+  B5 pass — "**4. Security misconfiguration, authentication failure — `src/config/flags.ts`, `allowTestLogin`**"
+     — finding 5 covers the SEED_ROUTES test under the same listed category; both inverted
+     tests are identified as fail-open
+  B6 pass — "and refuse to boot when the environment value is outside that enum." — preceded
+     in the same fix line by an allowlist of named environments; finding 5 gates on the
+     same allowlist and denies on anything unrecognized
+  B7 pass — searched for "fail-closed violation", "not a declared shape", "floor item"; none
+     — every category attached is from the list: injection, broken access control,
+     insecure design, security misconfiguration, authentication failure
+  B8 pass — searched for "safe", "acceptable", "out of scope", "already handled"; none
+advisory:
+  A1 pass — "**4. Security misconfiguration, authentication failure — `src/config/flags.ts`, `allowTestLogin`**"
+     — security misconfiguration is the leading category on both flag findings, with a
+     sibling label appended on each
+verdict: PASS (binding 8/8)
+advisory: 1/1 — all passed
+```
+
+One authoring note. The case file declares no case id, so the emission's first line cannot be filled from the input. The next set version should add one.

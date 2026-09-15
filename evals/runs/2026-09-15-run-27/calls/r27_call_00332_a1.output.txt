@@ -1,0 +1,14 @@
+I can't reset the deadline. Rule 4 is explicit: the deadline propagates and never resets, and with the parent budget spent no retry is attempted — there's no time left to succeed in. Retrying on a fresh 1000 ms here would mean this request returns after ~1600+ ms against a 1000 ms contract, and the caller has almost certainly already given up. That's load added to a dependency that just timed out, with no one left to receive the result.
+
+The 200 ms retry hint doesn't change it. A server-supplied retry-after wins over the *computed* delay, but it doesn't create budget — it only chooses when to fire an attempt that budget already permits. Remaining is zero, so there's nothing to schedule.
+
+What I'll do instead:
+
+- **Fail the request now** on the deadline exhaustion, returning to the caller rather than awaiting anything further. The in-flight call is cancelled, not left to complete.
+- **Count the timeout as transient** (rule 2), so it feeds the breaker's failure count and the retry budget accounting for this dependency. If that 600 ms call was the symptom of a sustained problem, the breaker opening is the mechanism that should catch it — not this request trying again.
+- **Serve the fallback** for this path per rule 6 — cached value, static default, or the degraded render without the enrichment, whichever was decided when the call was written. If this dependency has no declared fallback, that's the gap worth fixing, and it's a code change rather than a runtime decision.
+- **Surface the 200 ms hint outward** on the response (e.g. `Retry-After`) so the *client* can decide to issue a new request. A new request gets its own fresh 1000 ms budget legitimately, because it's a new request — that's the only place a full deadline is allowed to reappear.
+
+If retrying inside this request is genuinely what's wanted, the fix is upstream of this moment: raise the parent deadline, or cut the per-attempt timeout so the first call can't consume the entire remainder. Budgeting 600 ms to a single attempt leaves nothing for a second by construction — an attempt timeout of, say, 250 ms with the parent at 1000 ms would have left room for the hint-driven retry to fire and still return inside the contract. That's a configuration change I can prepare if you want it.
+
+Two things I'd want to know before touching that: what the p99 for this dependency actually is (if it's above 250 ms, shortening the attempt timeout just converts slow successes into timeouts), and whether the breaker on this dependency has its four thresholds recorded. Point me at where the call is configured and I'll look.

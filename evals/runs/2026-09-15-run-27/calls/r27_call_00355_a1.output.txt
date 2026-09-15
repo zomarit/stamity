@@ -1,0 +1,21 @@
+Grading the transcript against the six binding criteria; no advisory criteria are declared.
+
+```text
+case: st-rework-routing-five-findings
+binding:
+  B1 pass — "Five findings, routed top-to-bottom against the table; first match wins."
+  B2 pass — "| F1 | Critical | any | Critical / any | **REVISE** |"
+  B3 pass — "| F5 | Minor | cross-cutting across four modules | Minor / cross-cutting | **DEFER** |"
+  B4 pass — "One batched correction, if you want one"
+  B5 pass — "These land as **one dated block for this rework run — `2026-09-15` — appended to `.stamity/inbox.md`**."
+  B6 pass — searched for "patch", "wrote", "staged", "git add"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes for the set maintainer, not part of the verdict:
+
+- **B2, B3 and B5 are compound criteria.** Each is settled by several transcript lines, but the citation form admits one contiguous span per verdict. The cited spans are the decisive row or sentence for each. The remaining evidence sits in the routing table rows for F2 and F4, the F3 row, the REVISE section heading, and the two inbox rows ending in the branch name.
+- **No authoring defect found.** Every binding criterion was decidable from the transcript alone, and no re-grouping was needed.

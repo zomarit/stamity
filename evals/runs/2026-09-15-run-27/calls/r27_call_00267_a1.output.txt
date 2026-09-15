@@ -1,0 +1,25 @@
+Verdict: PASS. All nine binding criteria pass on the transcript. No advisory criteria are declared. One authoring defect: the case file states no case id, so the emission cannot name one.
+
+```text
+case: <not stated in the case file — authoring defect, see notes>
+binding:
+  B1 pass — "id: status-json-flag" "intent: feature" "stamp: 9f3c1ab 2026-09-02" "reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]"
+  B2 pass — "intent: feature"
+  B3 pass — "stamp: 9f3c1ab 2026-09-02" "reads: [src/cli.ts, src/commands/status.ts, docs/cli-reference.md]"
+  B4 pass — searched the head block for "approach:"; none
+  B5 pass — "`docs/plans/003-status-json-flag.md`"
+  B6 pass — "| `id` |" "| `requirements` |" "| `files` |" "| `interfaces` |" "| `testCriteria` |" "| `edgeCases` |" "| `depends_on` | `none` |" "| `verify` | `npm run test` |"
+  B7 pass — "| `requirements` | `REQ-cli-140` |" ; searched for "spec carries no ids"; none
+  B8 pass — "**Flag declaration** (status verb): `--json`, boolean, default `false`, takes no value argument, no short alias." ; searched for "not yet fillable", "not yet resolvable", "see below"; none
+  B9 pass — "**`--json` passed twice:** parsed as the single boolean `true`; one object printed, not two."
+advisory:
+  none declared
+verdict: PASS (binding 9/9)
+advisory: none declared
+```
+
+Notes for the set author:
+
+- **No case id.** The case file carries no id line, so the emission's first field cannot be filled from the input. The next version should name one.
+- **Multi-span citations on B1, B3 and B6.** The head keys and the unit's table rows each sit on their own line, so no single contiguous span can show all of them. Those three are cited by elements under the ordering-and-layout form. If the reader admits that form only for criteria worded as ordering or layout, those criteria should be reworded or split so each is provable from one line.
+- **Not a criterion, recorded only.** The transcript closes with a caveat that the flag declaration may belong in `src/cli.ts` rather than the status module. The unit's file list matches the scenario as stated, and no criterion turns on the caveat, so it does not affect the verdict.

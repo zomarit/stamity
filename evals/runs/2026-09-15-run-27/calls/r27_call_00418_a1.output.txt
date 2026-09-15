@@ -1,0 +1,84 @@
+`r7/review/2` still reads `open`, so I can't write the record yet — the close reads its own ledger first and refuses while any row is open. That row is Minor, so it doesn't go to the QA checkpoint, and its disposition isn't ambiguous (gates are green, no acceptance criterion hangs on it), so the severity floor's normal path applies: the run closes it itself as deferred, rather than asking you. Closing it now, then the record.
+
+**Ledger rewrite (in place, same id):**
+
+```
+r7/review/2 | Minor | stamity-reviewer | src/api/users.ts:120 | deferred |
+  rationale: below the QA checkpoint severity floor — non-blocking, no
+  acceptance criterion depends on it and all three gates are green; travels to
+  the board rather than ending the run pending.
+```
+
+**Appended to `.stamity/inbox.md`** (same dated block as the security deferral — one block per run):
+
+```
+## 2026-09-15 — /st-work r7
+
+- Warning | src/api/users.ts:41 | rate limiting absent on the users endpoint;
+  tracked separately rather than fixed in this run | source: /st-work |
+  Ref: .stamity/runs/r7/ledger.md#r7/security/1
+- Minor | src/api/users.ts:120 | reviewer finding as recorded at users.ts:120;
+  below the QA checkpoint floor, deferred to the board |
+  source: /st-work | Ref: .stamity/runs/r7/ledger.md#r7/review/2
+```
+
+---
+
+## Proof block — `/st-work` r7
+
+**Gates**
+
+| gate | command | result | failing excerpt |
+|---|---|---|---|
+| lint | `npm run lint` | pass | — |
+| typecheck | `npm run typecheck` | pass | — |
+| test | `npm test` | pass | — |
+
+**Review verdicts**
+
+| round | agent | verdict | confidence |
+|---|---|---|---|
+| 1 | `stamity-reviewer` | changes requested | high |
+| 2 | `stamity-reviewer` | approved | high |
+
+**Decisions trace**
+
+1. Gate `npm run lint` — pass, proceed.
+2. Gate `npm run typecheck` — pass, proceed.
+3. Gate `npm test` — pass, proceed.
+4. `r7/review/1` (Warning, `src/api/users.ts:88`) — reached the QA checkpoint, fixed in-run; round 2 re-review approved it.
+5. `r7/security/1` (Warning, `src/api/users.ts:41`) — deferred. Rationale: rate limiting is tracked separately in the inbox rather than absorbed into this run's scope. Inbox row appended.
+6. `r7/review/2` (Minor, `src/api/users.ts:120`) — held below the severity floor, so it never reached the QA checkpoint. Closed at exit by the run, not the operator: deferred, rationale as above. Ambiguity floor evaluated and did not fire — the disposition was not materially contested, so no ASK was raised.
+7. ASK outcomes this run: none. No question was put to the operator and none was pending at exit.
+8. Close re-read the ledger: no row reads `open`. Record written.
+
+**Artifacts touched**
+
+| path | owning sub-agent |
+|---|---|
+| `src/api/users.ts` | `stamity-implementer` |
+| `test/api/users.test.ts` | `stamity-implementer` |
+| `.stamity/runs/r7/ledger.md` | `/st-work` (close) |
+| `.stamity/inbox.md` | `/st-work` (close) |
+
+**Per-action attribution**
+
+| agent | tool | action | outcome |
+|---|---|---|---|
+| `stamity-implementer` | write | edited `src/api/users.ts` | applied |
+| `stamity-implementer` | write | edited `test/api/users.test.ts` | applied |
+| `/st-work` | bash | `npm run lint` | pass |
+| `/st-work` | bash | `npm run typecheck` | pass |
+| `/st-work` | bash | `npm test` | pass |
+| `stamity-reviewer` | review | round 1 | changes requested (high) |
+| `stamity-implementer` | write | fixed `r7/review/1` at `src/api/users.ts:88` | row → fixed |
+| `stamity-reviewer` | review | round 2 | approved (high) |
+| `stamity-security` | review | raised `r7/security/1` at `src/api/users.ts:41` | row → deferred |
+| `/st-work` | write | rewrote `r7/review/2` in place | row → deferred |
+| `/st-work` | write | appended 2 inbox rows | appended |
+
+Per-action tool identity for the implementer's edits is recorded at the granularity above; the individual edit tool calls were not itemised in this run's trace.
+
+**Recommended next step** — triage the two inbox rows this run appended, both in the `2026-09-15 — /st-work r7` block of `.stamity/inbox.md`: the Warning at `src/api/users.ts:41` (rate limiting on the users endpoint, needs a lane, trigger and owner) and the Minor at `src/api/users.ts:120`. No acceptance criterion was left uncovered by this run, and no finding was left live.
+
+**Not done:** rate limiting at `src/api/users.ts:41` → inbox row, `Ref: .stamity/runs/r7/ledger.md#r7/security/1`; reviewer finding at `src/api/users.ts:120` → inbox row, `Ref: .stamity/runs/r7/ledger.md#r7/review/2`. Neither row carries a `retired` field yet — that is added when the inbox row leaves.

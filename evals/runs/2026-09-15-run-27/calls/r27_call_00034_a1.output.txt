@@ -1,0 +1,21 @@
+**queue-worker-b** is the one falling behind.
+
+| | worker-a | worker-b |
+|---|---|---|
+| depth start → end | 118 → 9 | 214 → 806 |
+| net depth change | **−109** | **+592** |
+| processed (1h) | 1,042 | 97 |
+| implied arrivals | ~933 | ~689 |
+| last heartbeat | 09:40:52 | 09:40:55 |
+
+**By how much:**
+
+- **Backlog growth:** worker-b's depth grew by **592 items** over the hour — about **9.9 items/min** of sustained growth. Worker-a drained its queue by 109 in the same window.
+- **Throughput gap:** worker-b processed **97** items vs. worker-a's **1,042** — roughly **10.7× less** work.
+- **Keep-up ratio:** worker-b cleared only ~97 of ~689 arrivals, about **14% of its inbound rate**. Worker-a cleared ~112% of its arrivals (draining backlog).
+
+Worker-b is heartbeating normally as of 09:40:55, so it isn't dead — it's alive and consuming, just far too slowly for its inbound rate. That pattern (healthy heartbeat, near-zero throughput) points at per-item stalls rather than a crashed process: a slow downstream dependency, lock contention, or a retry loop on a poison message. Worth checking worker-b's per-item latency and error rate next.
+
+At the current rate, worker-b's backlog passes 1,000 in roughly 20 minutes and will keep climbing until throughput is restored.
+
+*(Screen: the `mcp__opsmetrics__query` body was screened before use — no class matched, kept in full.)*

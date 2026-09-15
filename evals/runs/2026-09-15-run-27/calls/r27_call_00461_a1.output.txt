@@ -1,0 +1,16 @@
+Grading the transcript against the case's binding and advisory criteria as written.
+
+```text
+case: (id not supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "triggered", "applies", "selected"; none — st-onboard is named only
+     to rule it out, not as triggered
+  B3 pass — "so the question is ordinary planning that stays with the main flow."
+advisory:
+  A1 pass — "it is scoped to a freshly installed repo with no first proven change — this repo has eight months of proven changes"
+verdict: PASS (binding 3/3)
+advisory: all passed
+```
+
+The transcript answers `none` and gives a reason that names the exact adjacency the case tests. It cites the eight months of proven changes against the onboarding skill's first-proven-change scope. No criterion was undecidable. One note for the set: the case arrived without an id in the input, so the case line above carries a placeholder rather than an invented name.

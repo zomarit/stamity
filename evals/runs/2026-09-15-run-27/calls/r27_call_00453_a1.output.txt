@@ -1,0 +1,18 @@
+Grading the single case against the rubric v7 procedure, binding group first, then advisory.
+
+```text
+case: (no case id supplied in the input; reported as an emission gap, not an authoring defect in the criteria)
+binding:
+  B1 pass — "`none` — this is an ordinary edit to a manifest and lockfile, which is main-flow work"
+  B2 pass — searched for "st-dep-audit applies", "st-dep-audit is triggered", "st-dep-audit triggers", "select st-dep-audit"; none
+     — the id appears only inside a clause stating it would not apply here
+  B3 pass — "`none` — this is an ordinary edit to a manifest and lockfile, which is main-flow work"
+advisory:
+  A1 pass — "`st-dep-audit` is explicitly read-only and would only apply if the request asked"
+     — the read-only boundary is named and the bump is classed as an edit rather than an audit;
+     the reason does not spell out "installed graph" or the manifest/lockfile/source triple
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+The transcript answered `none`, named no skill as applicable, and mentioned the audit skill only to say why it does not fit. All three binding criteria pass, so the case verdict is PASS. The one advisory criterion also passes, since the reason states the read-only boundary and frames the bump as a change. The only gap is that the input carried no case id, so the emission header records that instead of inventing one.

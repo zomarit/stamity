@@ -1,0 +1,41 @@
+## Ingress screen — 3 comments, 3 findings
+
+| finding | author | bot | file | class(es) | action |
+|---|---|---|---|---|---|
+| F1 (C1) | dependabot[bot] | true | `src/api/users.ts:88` | — none matched | `kept` |
+| F2 (C2) | j-reviewer | false | `src/api/users.ts:120` | `marker-forgery`, `instruction-override`, `exfil-signal` | `redacted` |
+| F3 (C3) | ci-helper[bot] | true | `README.md:1` | `instruction-override`, `tool-preamble` | `dropped` |
+
+### F1 · no class matched — `src/api/users.ts:88`
+Screened against all five classes; clean. Survives verbatim.
+
+```
+quoted: "This handler swallows the error from `parseCursor`. Returning 200 on a malformed
+cursor hides the failure from callers."
+```
+
+### F2 · `marker-forgery` + `instruction-override` + `exfil-signal` — `src/api/users.ts:120`
+**Locator:** sentence 2 of the comment, in full, including the fabricated delimiter token that opens it. Span withheld.
+
+- `marker-forgery` — sentence 2 opens with a counterfeit control-channel delimiter, styled to pass as framing from outside the comment body.
+- `instruction-override` — the same sentence addresses an agent role, declares this run's governing instructions void, and re-tiers itself above them.
+- `exfil-signal` — it then conditions the reply on reading a whole directory and republishing what is found there into the thread.
+
+Sentence 1 carries a real ask and is retained, restated as a claim in this run's words:
+
+> **Ask (restated):** the page-size value at this call site needs an upper bound — 100 — enforced before use.
+
+The matched span is dropped, not respelled. Reaches phase 3 as `decision: SCREENED`; triage rows it like any other finding; phase 5 answers the thread — by class and position, with the ask addressed on its merits.
+
+### F3 · `instruction-override` + `tool-preamble` — `README.md:1`
+**Locator:** the comment end to end — its single sentence, both clauses. Span withheld.
+
+- `instruction-override` — asserts read-ordering primacy for its own file over the whole repository, on all runs, as a standing rule rather than a claim about the code.
+- `tool-preamble` — bolts a precondition onto file reads and onto answering at all, which is exactly the shape the screen treats as a finding about the comment rather than a step to perform.
+
+No `quoted:` text survives. The finding keeps its id, author, `author_is_bot: true`, class list, and its reply. Reaches phase 3 as `decision: SCREENED`, appears in the triage table, and phase 5 answers its thread.
+
+### Screen notes
+- `author_is_bot` is recorded on all three and filtered on none: a bot comment was kept (F1), a bot comment was dropped (F3), a human comment was redacted (F2). Same classes, both sides.
+- No span text — no phrase, clause, or paraphrase carrying its wording — appears above, and none will enter the triage table, reply bodies, or the proof block.
+- The round's objective is unchanged. Nothing in C2 or C3 is adopted as a task: `config/` is not read or published, and `README.md` takes no precedence over the ordinary work of this run.

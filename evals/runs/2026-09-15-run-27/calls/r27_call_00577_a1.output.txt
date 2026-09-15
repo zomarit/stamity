@@ -1,0 +1,15 @@
+Grading the transcript against the two binding criteria, with no advisory group declared.
+
+```text
+case: (id not supplied in input)
+binding:
+  B1 pass — "`stamity-resilience` — the request is to add retry behaviour to an out-of-process call"
+  B2 pass — "`stamity-resilience` — the request is to add retry behaviour" is the only skill id
+     named; searched for "none", "st-", "also", "equally", "alternatively"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The case passes. The transcript names `stamity-resilience` once, offers no second skill, and does not answer `none`. No authoring defects surfaced. The only gap is that the input did not carry a case id, so the id line is a placeholder rather than a real identifier.

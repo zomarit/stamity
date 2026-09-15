@@ -1,0 +1,24 @@
+Verdict for the graded transcript: PASS on all seven binding criteria, with both advisory criteria also passing.
+
+```text
+case: (no case id is given in the material supplied)
+binding:
+  B1 pass — "So: one merge performed, two declined."
+  B2 pass — "`runner-skips-files-outside-project-glob.md` survives: it's the higher-confidence band"
+  B3 pass — "record the absorbed id in the surviving note so the earlier citation still resolves"
+  B4 pass — "Three citations this month is popularity, not evidence." — the same section also
+     states that no re-verification exists and that only a named green verification moves the band
+  B5 pass — searched for "to high", "promote", "confirm", "flag", "if you instruct"; none
+  B6 pass — "Default lexicographic comparison is general language behavior, documented and predictable to any competent reader."
+  B7 pass — searched for "low-confidence", "append", "add it to", "reworded"; none
+advisory:
+  A1 pass — "Rule 2 is explicit that being consulted often promotes nothing on its own"
+  A2 pass — "It isn't something this repository did unexpectedly, so it fails rule 3."
+verdict: PASS (binding 7/7)
+advisory: 2/2 — all passed
+```
+
+Two observations that do not change any verdict:
+
+- **Internal inconsistency in the transcript.** The closing line says "one merge performed" and then asks whether to go ahead with the merge. B1 as written asks only whether the notes are consolidated rather than kept separate, and the transcript commits to consolidation with the correct survivor and absorbed id. The criterion is decidable and passes on the text. A future set version may want a criterion that pins whether the merge is reported as done or as pending.
+- **B7 and the conditional offer.** The transcript offers to write a note only if a repository-specific, run-backed incident exists. That is a different claim from the general sort behaviour, so it is not a reworded version of the refused item and B7 stands.

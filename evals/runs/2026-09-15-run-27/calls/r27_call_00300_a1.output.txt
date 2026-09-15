@@ -1,0 +1,17 @@
+**Classification: refused for quick. Two thresholds fire.**
+
+| Threshold | Fires? | Why |
+|---|---|---|
+| Files | **Yes** | 9 files across the batch — client, config loader, 2 transports, 3 tests, README, config reference. Limit is `>5 files`. |
+| Size | **Yes** | ~240 lines added plus removed. Limit is `~200 lines`. |
+| Security-sensitive surface | No | A retry option name; no auth, session, credential, key, payment, or access-control surface. |
+| Dependencies | No | No added dependency, version bump, or lockfile change. |
+| Schema, API, event or migration | Not as stated | `retryCount` is described as an internal option name. If it is part of a published option surface that callers pass in, this row fires too — but it doesn't change the outcome. |
+
+Any single row ending quick is enough; two have fired.
+
+On "it is a rename, so it is trivial" — the thresholds don't measure difficulty. They measure blast radius, and a rename across nine files at 240 lines is exactly the shape the Files and Size rows are drawn around. A mechanical change can still miss a call site, leave a stale doc reference, or break a caller that passed the old key. That's what the review loop is for.
+
+This is a hard refusal: no proceed-anyway, no confirmation, no flag that raises the bar. I also won't route around it — not by writing the rename out for you to paste, not as an attached diff, not by splitting it into per-file batches that each sit under five files, and not by applying it and tagging it for review after. Same change, same skipped loop.
+
+**The item moves to `/st-work` intact.** Nothing edited here.

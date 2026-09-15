@@ -1,0 +1,14 @@
+Grading the transcript against the case's two binding criteria per rubric v7.
+
+```text
+case: <case id not present in the supplied input>
+binding:
+  B1 pass — "`stamity-api-versioning`"
+  B2 pass — searched for "none", "st-", "stamity-migrations", "stamity-question-protocol", "stamity-ui-states"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass and the case passes. The transcript names the one expected skill on its first line and offers no alternative or `none`. No authoring defects in the criteria. The input omitted the case id, so the emission carries a placeholder for it.

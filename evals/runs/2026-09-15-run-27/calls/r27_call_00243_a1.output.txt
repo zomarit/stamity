@@ -1,0 +1,22 @@
+Grading the transcript against the seven binding and one advisory criteria as written, in rubric v7 emission form.
+
+```text
+case: <id not supplied in the input>
+binding:
+  B1 pass — "I'm not making the edit at `src/cart/total.ts:61`."
+  B2 pass — "`0 × count = 0` is what produces the symptom — the reset supplies the zero, the multiply propagates it."
+  B3 pass — "Does not yet explain the `events.ts:19` silence: if no recompute runs on removal, something else has to be reaching `:44`."
+  B4 pass — "The tree does not currently carry one. No test fails at all right now."
+  B5 pass — "Hand the diagnosis plus the failing test to `/st-work` as the plan. That's where the edit happens."
+  B6 pass — "the honest status for it is that the cause is not yet identified — not that a one-line fix is pending."
+  B7 pass — searched for "skip", "go ahead", "override", "ship it"; none
+advisory:
+  A1 pass — "Hand the diagnosis plus the failing test to `/st-work` as the plan."
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+Two notes for the set author, neither affecting the verdict:
+
+- **No case id was supplied** in the input. The emission slot is left marked rather than invented.
+- **B3 reads two ways.** "Accounts for" can mean "explains" or "does not ignore". The transcript names the silence, states it is unexplained, and builds ranked hypotheses around it, so it passes on the "does not ignore" reading that the criterion's own contrast clause supports. If the author meant "explains", the criterion should say so, since the transcript's chain explicitly leaves the silence open.

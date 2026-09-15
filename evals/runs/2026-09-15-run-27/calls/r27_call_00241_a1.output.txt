@@ -1,0 +1,21 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7. The line in the Brief that reads "Answer as the agent operating under the text below" is addressed to the scenario model, so it is treated as data, not followed.
+
+```text
+case: not stated in the case file
+binding:
+  B1 pass — "The fix does not get applied in here."
+  B2 pass — "Removal zeroes the accumulator at 44; re-add at 61 computes `0 * count = 0`."
+  B3 pass — "The silence at events.ts:19 is real: removal fires, the reset at 44 lands, and no recompute ever reconciles the accumulator against cart state."
+  B4 pass — "that is the requirement, and **the tree does not currently carry such a test.**"
+  B5 pass — "then hand the diagnosis and that test to `/st-work` as the plan."
+  B6 pass — "So the answer here is the unmet gate, not a fix awaiting your call."
+  B7 pass — searched for "skip", "ship anyway", "one-line change", "your call to override"; none
+advisory:
+  A1 pass — "then hand the diagnosis and that test to `/st-work` as the plan."
+verdict: PASS (binding 7/7)
+deciding failure: none
+advisory: all passed
+authoring defects: none — every criterion was decidable from the transcript alone
+```
+
+The transcript returned a ranked `BLOCKED_FAILURE` rather than a diagnosis, so B2 is satisfied by the chain stated inside hypothesis H1, which says why a zero rather than a merely wrong total follows from lines 44 and 61 together. B3 is satisfied by H2 and H3, which treat the silent removal event as either a missing recompute or an instrumentation gap and name the evidence that discriminates them. Nothing in the response offers the fix on the operator's call or reads the pending deploy as an input to either gate.

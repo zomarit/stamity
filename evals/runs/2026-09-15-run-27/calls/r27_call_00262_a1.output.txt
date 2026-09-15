@@ -1,0 +1,21 @@
+The change stays — you approved the diff and keeping it is your call. What I can't do is label it done: the clock can narrow a change or stop the walk, but it can't omit the mandatory gates, and a touched-test pass is partial evidence, not the proof this walk closes on.
+
+**Not done:**
+
+- `npm run lint` — not run. Resume: `npm run lint`
+- `npm run typecheck` — not run. Resume: `npm run typecheck`
+- `npm run test` (full suite) — not run. Only the touched regression covering `src/count.js` was executed; the rest of the suite is unobserved. Resume: `npm run test`
+
+No failing gate output to quote — these gates produced no output because none of them ran.
+
+The fastest path to closing this honestly is the full chain in one pass: `npm run lint && npm run typecheck && npm run test`. If a single static gate comes back red, re-run that one alone rather than the whole chain.
+
+**Handback**
+
+1. **Change:** `src/count.js` — one file, one behavior, the observable you named at phase 3.
+2. **Proof and result:** the regression failed before the edit and passed after it. Partial — the named proof held; the gate that closes the walk did not run.
+3. **Lane:** `/st-quick` (one file, one behavior, no contract other code reads).
+4. **Gate command and exit status:** `npm run lint`, `npm run typecheck`, `npm run test` — not run, no exit status.
+5. **Phases the clock dropped:** phase 6, the orientation note, dropped as the one optional phase. Say the word if you want it written up anyway; the default here is to skip it.
+
+The lane ran end to end and the edit is on disk. Run the three gates when you have the minutes and this closes as a proven change.

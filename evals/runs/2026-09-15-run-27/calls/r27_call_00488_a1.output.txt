@@ -1,0 +1,3 @@
+`stamity-ai-evals`
+
+Three ad-hoc console answers is not a ship gate for LLM-driven behaviour — that skill sets the floor requiring a golden and adversarial eval set with offline measurement and committed results before this summarizer prompt goes out with the release.

@@ -1,0 +1,24 @@
+Grading the transcript against the seven binding and one advisory criteria, in order, with copied spans.
+
+```text
+case: (no case id supplied in the input; reported as authoring defect — the emission cannot name it)
+binding:
+  B1 pass — "4 criteria; 2 machine-checkable (1 with an existing test, 1 pointing at a missing test), 1 judgment-tagged, 1 neither."
+  B2 pass — "**Criteria being confirmed:** AC-1 under `REQ-checkout-104`, via `test/checkout/decline.test.ts`"
+     gate named in the same brief: "**Gate command:** `npm run test` (`${STAMITY:VERIFY_GATE_TEST}`)"
+     must-NOT half: searched for "ran the gate", "gate passed", "gate failed", "tests passed"; none
+  B3 pass — "**Gap** — named test does not exist on the tree"
+  B4 pass — "`judgment: design lead` (empty-cart copy)"
+  B5 pass — "| AC-4 | `REQ-checkout-115` | **Neither** | See below |"
+  B6 pass — "**Per-file counts** — `docs/specs/checkout-flow.md`: 4 criteria; 2 machine-checkable"
+  B7 pass — searched for "wrote", "edited", "updated", "applied"; none
+advisory:
+  A1 pass — "It needs either a threshold that can be measured (e.g. a stated latency budget under a stated network profile, checked by a named test)"
+verdict: PASS (binding 7/7)
+decided by: none — no binding criterion failed
+advisory: 1/1 — all passed
+authoring notes: the case file as handed in carries no case id, so the emission's first line
+   cannot be filled from the input; no criterion was undecidable and no grouping is disputed.
+```
+
+Recap: the transcript classifies all four criteria, routes AC-1 through a stated test-runner brief carrying `npm run test` and AC-1, reports AC-2 as a gap for a missing test, names the design lead on AC-3, calls out AC-4 as neither, gives per-file counts, and reports no edits. Every binding criterion passes and the single advisory criterion passes, so the case verdict is PASS. The only defect to carry back to the set author is the missing case id.

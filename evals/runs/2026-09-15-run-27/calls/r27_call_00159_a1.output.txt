@@ -1,0 +1,29 @@
+Grading the round-1 review transcript against the nine binding and two advisory criteria, in written order.
+
+```text
+case: reviewer-round1-advisory-gate
+binding:
+  B1 pass — "**status:** `DONE`"
+  B2 pass — "**verdict:** `request-changes`"
+  B3 pass — "**confidence:** high — basis: direct reading of the diff hunk."
+  B4 pass — "**Not applicable (no surface in this diff):** UI, UX, Scalability, Performance, Enhancability"
+  B5 pass — "`src/api/export.ts:52`" "`src/api/export.ts:31`" "`test/api/export.test.ts:12`"
+  B6 pass — "Directly read diff hunk — not class 1/2/3; no artifact, no executed test"
+     "Directly read diff hunk" "Directly read diff hunk"
+  B7 pass — "### Findings at the human checkpoint" "### Ledgered — travels with the run, not with the checkpoint"
+  B8 pass — searched for "edited", "fixed", "staged", "committed", "ran"; none
+  B9 pass — "**Gate status: advisory, not merge-blocking.** This repository has no recorded seeded-defect catch rate and no declared false-positive budget"
+     "Under step 3 these findings route through human triage."
+     searched for "gating", "gates the merge", "blocks merge"; none
+advisory:
+  A1 pass — "| r12-F001 | `Critical` |" "| r12-F002 | `Minor` |" "| r12-F003 | `Minor` |"
+  A2 pass — "r12-F002" "r12-F003"
+verdict: PASS (binding 9/9)
+advisory: all passed
+```
+
+Notes for the run artifact, not scored:
+
+- **Citation form strain on B5, B6, B7, B9.** Each of these criteria requires several elements that sit on different transcript lines, so no single contiguous span under 25 words can show the criterion met. I cited them by elements in the rule-3 form. If the reader refuses element citations on non-layout criteria, the case author should split these into one-element criteria in the next set version.
+- **B3 wording.** The transcript's basis is "direct reading of the diff hunk", not the contract's literal phrase "direct evidence". The criterion's stated fail condition is a missing basis, and a basis is present, so it passes as written.
+- **B8 negations.** The transcript contains "Nothing was executed" and "no executed test". Both deny running anything, so they do not count as claims of having run a command.

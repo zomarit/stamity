@@ -1,0 +1,3 @@
+`stamity-learnings-schema`
+
+It's a curation question about notes already committed — merging two files on the same topic and correcting a confidence band that outruns its evidence — which is exactly that skill's posture, whereas `st-learn` covers capturing one new finding through the write path.

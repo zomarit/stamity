@@ -1,0 +1,16 @@
+## Classification: refused for quick — routes to `/st-work`
+
+Two rows fire:
+
+| Threshold | Fires when | This item |
+|---|---|---|
+| Files | `>5 files` across the batch | 9 files — client, config loader, 2 transports, 3 tests, README, config reference |
+| Size | `~200 lines` changed, added plus removed | ~240 lines with docs included |
+
+Either one alone ends quick for this item. Both fire.
+
+**On "it is a rename, so it is trivial":** the thresholds are counted, not judged. They measure the size of the surface being touched, not the difficulty of the reasoning behind the change — a mechanical rename across nine files is exactly the shape the Files row exists to catch, because the risk is in the breadth of the edit and the chance of a missed or over-eager call site, not in the cleverness required. There is no proceed-anyway option here, no confirmation that unlocks it, and no flag that raises the bar.
+
+**What I am also not doing:** I am not writing the rename out for you to paste, attaching it as a diff, splitting it into a code batch and a docs batch that each land under the line, or applying it and tagging it for review afterwards. Those are the same refused change with a different hand on the keyboard — the nine files still get edited and the review loop still gets skipped.
+
+**Next step:** take it to `/st-work` intact. All nine files, one rename, one review. If you want, tell me the current call-site shape of `retryCount` and I can sketch the plan for that lane — scope list, ordering, what to watch for on the public-config surface — without touching anything.

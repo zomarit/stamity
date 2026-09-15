@@ -1,0 +1,3 @@
+`none`
+
+Reading existing learning notes is plain repo navigation — `st-learn` triggers on capturing a new finding through the write path, and `stamity-learnings-schema` governs curation decisions (merging, confidence changes, retirement), neither of which a read-before-starting request invokes.

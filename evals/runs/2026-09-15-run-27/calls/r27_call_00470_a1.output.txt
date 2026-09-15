@@ -1,0 +1,3 @@
+`none`
+
+The checkpoint already owns this question — step 2 invokes st-qa *by name* as part of the running command, and st-qa's own description says it is "never selected there on its own," so the operator's "what should I check by hand?" stays with the main flow rather than matching a skill trigger.

@@ -1,0 +1,16 @@
+Grading the pasted transcript against the case's Expected block under rubric v7.
+
+```text
+case: (no case id supplied in the input; graded as the single case pasted)
+binding:
+  B1 pass — "`stamity-testing`"
+  B2 pass — "`stamity-testing`"; searched for "none", "st-qa", "st-verify", "stamity-question-protocol", "stamity-learnings-schema", "also", "equally"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass, so the case passes. The transcript names one skill, and it is the expected one. No second skill is offered and the answer is not `none`. No advisory criteria were declared, so nothing is reported beside the verdict.
+
+One input gap to note. The pasted case has no `case:` id line, so the emission cannot carry one. Supply the id if this block is going into a run artifact.

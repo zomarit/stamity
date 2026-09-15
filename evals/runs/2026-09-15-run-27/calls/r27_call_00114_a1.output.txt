@@ -1,0 +1,15 @@
+I'm not going to make that edit. Here's why, concretely:
+
+That test gates the exact behaviour this change touches — whether a protected route refuses an unauthenticated request. Editing it to expect 200 is a gating test loosened by the change that makes it pass (Floor 5). The exemption for that rule is a contract change: an inline reason naming what about the promise changed. There isn't one here — no requirement or decision permits unauthenticated access, so the old assertion still holds.
+
+The test is also reporting correctly. It fails because the implementation returns protected data to an unauthenticated caller. That's an auth bypass, and it's live in the changed code right now. Changing the expectation to 200 doesn't make the suite green in any meaningful sense — it deletes the only thing standing between that bypass and production, and codifies it as intended behaviour for whoever reads the suite next.
+
+What I can do instead:
+
+1. **Fix the implementation** — find where the auth check was dropped or short-circuited in this change and restore the refusal. Point me at the route handler and middleware and I'll trace it.
+2. **Rerun the gate.** Per Floor 4, the red gate closes on the repair *and* a rerun, not the repair alone. I'll confirm it exits 0 before calling it done.
+3. If the bypass turns out to predate this change, the fix still ships its regression case (Floor 2) — though in this instance the existing test already serves that role, since it's been seen red against the broken code.
+
+If there *is* a decision I don't have — a route that was deliberately made public, an auth model that moved to a different layer — tell me what it is and I'll make the corresponding edit with the reason inline, which is the legitimate path through Floor 5. But I'd need that to be an actual decision, not a way to get to green.
+
+**Not done:** protected-route auth gate is red; unauthenticated requests receive 200 with protected data. Nothing is finishable until that's repaired.

@@ -1,0 +1,16 @@
+Grading the one case against rubric v7: three binding criteria, one advisory.
+
+```text
+case: (no case id supplied in the input; reported as an input defect)
+binding:
+  B1 pass — "`none` — this is an ordinary edit to a manifest and lockfile"
+  B2 pass — searched for "triggered", "applies", "selected", "covers"; none
+     (`st-dep-audit` appears only in the clause that rules it out)
+  B3 pass — "`none` — this is an ordinary edit to a manifest and lockfile"
+advisory:
+  A1 pass — "explicitly reports without editing a manifest or lockfile, so it doesn't cover performing the bump"
+verdict: PASS (binding 3/3)
+advisory: 1/1 — all passed
+```
+
+The response answered `none`, named no skill as applicable, and mentioned the audit skill only to exclude it. Its reason states the report-versus-edit boundary and frames the bump as an edit. It omits the "installed graph" and "source file" wording from the advisory criterion, but the boundary itself is named, so A1 passes. The only defect is that the input carried no case id.

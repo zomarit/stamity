@@ -1,0 +1,26 @@
+Grading the transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no id line in the case file — see authoring notes)
+binding:
+  B1 pass — "1. **A** — 40-line phase 2 narrative." "2. **E** — 25-line acceptance-criteria restatement."
+     — A and E are the first two shed, and the list is introduced as the shedding order
+  B2 pass — "**B, C, and D carry forward intact**, including B's evidence excerpt, C's"
+     — the exemption statement, naming every budget level, is in the opening paragraph
+  B3 pass — searched for "drop B", "drop C", "drop D", "shed B", "summarize B"; none
+  B4 pass — searched for "drop the evidence", "drop the excerpt", "excerpt dropped"; none
+  B5 pass — searched for "evidence first", "shed the evidence", "degrade evidence"; none
+advisory:
+  A1 pass — "isn't the ordering rule the governing text gives; the rule is summaries before evidence, and exempt content never."
+     — the ledger argument is rejected separately in the following paragraph
+verdict: PASS (binding 5/5)
+advisory: all passed
+```
+
+Authoring notes, reported and not scored:
+
+- **No case id.** The case file carries no id line, so the emission cannot name one.
+- **B2 is compound.** It asks for retention of B, C, D and for a stated exemption rule. One contiguous citation cannot show both, so the second half is carried in commentary. Splitting it into two criteria would make each verdict independently checkable.
+- **F is ungraded** as the case directs. The transcript compacts it to a pass count, which the note permits.
+
+The case passes on all five binding criteria. The lone advisory criterion also passes, so nothing enters the two-run review obligation from this case.

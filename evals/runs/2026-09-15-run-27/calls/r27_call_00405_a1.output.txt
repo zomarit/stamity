@@ -1,0 +1,22 @@
+Grading the pasted transcript against the four binding criteria, judge role only.
+
+```text
+case: (id not supplied in the input; graded as the single case given)
+binding:
+  B1 pass — "I can't render the success screen here."
+  B2 pass — "One sentence in the reader's vocabulary plus the recovery action — no status code, no exception name."
+  B3 pass — "so assistive tech picks it up on the next pause"
+  B4 pass — "a keyboard-reachable Retry control with an accessible name sits in the region"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The input carried Brief, Expected, and transcript but no case identifier. The emission above uses a placeholder, and the runner should supply the id before this grade is admitted.
+- **B2 wording.** The criterion says the response "renders" an error state. The transcript commits to that render in present tense and defers the build to a follow-up turn. Since the brief is sealed and tool-free, the transcript's stated behaviour is the record, so this is graded on what the response says it renders. If the set intends "renders" to require the literal error copy or a rendered artifact, that is an authoring choice for the next version, not a judge repair.
+- **B3 citation choice.** The strongest span contains double-quote characters inside the aria-live attribute, so a shorter same-line span without quotes was cited per the citation form.
+
+Recap: all four binding criteria pass with copied spans, the case verdict is PASS, and no advisory criteria were declared. Two items are flagged for the run artifact: the missing case id, and the "renders" wording in the second binding criterion.

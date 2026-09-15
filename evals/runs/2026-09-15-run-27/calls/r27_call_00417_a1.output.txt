@@ -1,0 +1,27 @@
+I'll grade the transcript against the eight binding criteria per rubric v7 and emit the case block.
+
+```text
+case: (no case id is stated in the case file; reported as an authoring gap)
+binding:
+  B1 pass — "gates:" "review:" "decisions:" "artifacts:" "attribution:" "next step:"
+  B2 pass — "command: npm run lint       result: pass"
+  B3 pass — "- round: 1  agent: stamity-reviewer  verdict: changes requested  confidence: high" "- round: 2  agent: stamity-reviewer  verdict: approved           confidence: high"
+  B4 pass — "r7/review/2: Minor, below the severity floor, so it never reached the QA"
+     — the same decisions entry closes with the deferred disposition, and the prose
+     states "It closes `deferred`, which makes it a second inbox row."
+  B5 pass — "r7/security/1: Warning, deferred — rate limiting is tracked separately in"
+  B6 pass — "next step: two deferrals left this run and are now inbox rows —"
+  B7 pass — searched for "src/api/users.ts:120  open", "src/api/users.ts:120  fixed",
+     "r7/review/2 fixed", "dropped", "omitted"; none
+  B8 pass — "- Minor | src/api/users.ts:120 | reviewer Minor finding, below the QA severity" "source: /st-work |" "Ref: .stamity/ledger/r7.md#r7/review/2" "outcome: 2 inbox rows appended, record written"
+advisory:
+  none declared
+verdict: PASS (binding 8/8)
+advisory: none declared
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The case file carries no `case:` identifier, so the emission line above cannot name one. That is a file defect, not a judge choice.
+- **Inbox row wraps.** The Minor row's evidence field spans two physical lines inside the code block. I read it as one field in the declared grammar and passed B8, but an authoring pass could state whether wrapped fields are acceptable.
+- **No re-grouping and no undecidable criteria.** Every criterion was settled from the transcript's own text.

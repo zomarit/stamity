@@ -1,0 +1,48 @@
+**status:** `DONE`
+
+---
+
+## pattern-match-checklist
+
+- The helper is constructed by the caller, not shared as a singleton — `src/api/report.ts:77` constructs it and calls it at the same site. Export would follow the same shape.
+- The retry predicate is a caller-supplied argument and the file declares no default (`src/http/retry.ts:29`). **Next step for the implementer: export must pass a predicate explicitly; there is nothing to fall back on.**
+- Strategy is three attempts at a fixed interval — the backoff multiplier is 1.0 (`src/http/retry.ts:41`) and is read once at construction (`src/http/retry.ts:12-18`). Pacing therefore cannot be varied per call. If export needs different pacing than report, it needs its own instance, not a per-call option.
+- `src/api/export.ts` contains no reference to the helper anywhere. This is new wiring, not a modification of existing behaviour.
+
+**Confidence: high — basis `direct`.** Every item above was read at the cited line in `src/http/retry.ts` or `src/api/report.ts`.
+
+## impact-map
+
+- `src/api/export.ts` — one new construction site plus the call it wraps. This is the only file that must change to adopt the helper.
+- `src/http/retry.ts` — unchanged if export supplies its own predicate. It changes only if a shared default predicate is introduced, and that would alter `src/api/report.ts:77` as well, since both callers route through the same constructor (`:12-18`). **Recommendation: have export supply its own predicate, which leaves report's behaviour untouched.**
+- The predicate module that `src/api/report.ts:77` imports — if export reuses that same predicate, the module becomes a shared dependency of two endpoints. Its path lies outside this brief's scope and was not resolved; see unknowns.
+- Worst-case added latency for an export request is three attempts at the fixed interval (`:41`). Whether that suits an export's latency budget was not in this brief's questions and is not claimed here.
+- `src/worker/` and the queue worker were declared out of bounds, were not probed, and carry no claim in this map.
+
+**Confidence: medium — basis `inferred`.** The file-level surface is read directly, but "retry.ts needs no change" is assembled from two sources — the absent default at `retry.ts:29` and the caller-supplied predicate at `report.ts:77` — with the step between them being that any default added to the constructor reaches report's call site too. It also holds only while the predicate question below stays open.
+
+## unknowns
+
+**Q3 — does the helper retry on 5xx only, or on connection errors as well? Unresolved.** `Warning`: the reuse decision may turn on this, and an implementer who assumes either answer is guessing.
+
+- **Probed:** read `src/http/retry.ts` end to end; grepped `src/http/` for `ECONNRESET`, `ETIMEDOUT`, and `catch`.
+- **Why it did not settle:** the retry predicate is supplied by the caller (`src/http/retry.ts:29`) and the file declares no default, so the helper itself has no 5xx-versus-connection-error behaviour to read. The predicate that `src/api/report.ts:77` passes is imported from a path outside this brief's scope and could not be resolved. Nothing read locates a claim either way.
+- **Smallest input that would settle it:** the scope line extended to the module that `src/api/report.ts:77` imports its predicate from — one file, read for which error shapes it returns true on.
+
+Secondary, same probe: whether export should reuse report's predicate or define its own cannot be decided until that module is readable, since the choice depends on what report's predicate actually admits.
+
+**Confidence: high — basis `direct`.** The claim in this section is that nothing within scope locates an answer, and that was established by running the probes named above.
+
+## Unanswerable list
+
+1. Q3, above — helper behaviour on connection errors. Returned in full rather than inferred from the presence of a `catch` block.
+
+## Sources consulted
+
+- `src/http/retry.ts` — read end to end; cited at `:12-18`, `:29`, `:41`.
+- `src/api/export.ts` — read; no reference to the helper.
+- `src/api/report.ts` — cited at `:77`.
+- `src/http/` — grepped for `ECONNRESET`, `ETIMEDOUT`, `catch`.
+- `docs/reference/http.md` — in scope, consulted; no located claim about retry predicate defaults or connection-error handling, so it carries no claim above.
+
+**handoff_to:** implementer. The checklist and impact-map are actionable now for the construction-site work; the predicate choice is blocked on the one-file scope extension named in unknowns.

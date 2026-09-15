@@ -1,0 +1,36 @@
+## Result — Unit 3
+
+**Status:** `BLOCKED_AMBIGUITY`
+**Changes made:** none. No files written, no migrations generated.
+
+### Competing readings
+
+The brief says "remove the legacy `user.displayName` field." `displayName` exists in three places, and "remove" resolves differently at each:
+
+| # | Reading | Scope | Blast radius |
+|---|---|---|---|
+| A | Delete the property from the internal `SessionUser` type only | Type layer | Internal callers only; compile-time failures, all inside this codebase. Reversible. |
+| B | A, plus drop the field from the `GET /api/v1/users` response | Type + API | Breaks every external consumer of `v1` that reads `displayName`. Not reversible for clients already shipped. |
+| C | B, plus drop the `display_name` column from `users` | Type + API + DB | Destructive and irreversible without a restore. Any consumer outside this repo reading the column (reporting, ETL, other services) breaks silently. |
+
+These are nested, but they are not a single change staged — a plausible larger run does C as its own migration unit *after* the read path is cold, which would make Unit 3 mean A or B and nothing else. Nothing in the brief distinguishes them, and choosing wrong in the C direction is not something I can undo.
+
+### Question for the operator (verbatim, self-contained)
+
+> `user.displayName` currently exists in three places: the `display_name` column on the `users` table, a field in the public `GET /api/v1/users` response, and a property on the internal `SessionUser` type. "Unit 3: remove the legacy `user.displayName` field" doesn't say which of the three to remove. Which scope should Unit 3 cover?
+>
+> - **A** — internal `SessionUser` type property only; leave the API field and the DB column in place.
+> - **B** — the type property and the public API field; leave the DB column for a later unit.
+> - **C** — all three, including dropping the column.
+
+### Smallest input that unblocks
+
+One token: `A`, `B`, or `C`.
+
+**Conditional default, overridable in the same reply:** if the answer is `B` or `C`, I will treat the API change as a straight breaking removal from `v1` — no deprecation window, no null-valued placeholder field. If `v1` needs a deprecation period instead, say `B/deprecate` or `C/deprecate` and I will keep the field present and null/empty for the window rather than removing the key.
+
+### Recommendation (not acted on)
+
+**B.** "Legacy" plus a multi-unit run reads to me as retiring the read path first and reclaiming storage separately, and B is the largest scope whose failure mode is recoverable. But this is inference from the word "legacy," not from anything in the brief, so I am not proceeding on it.
+
+Re-dispatch with the scope token and I will complete the unit.

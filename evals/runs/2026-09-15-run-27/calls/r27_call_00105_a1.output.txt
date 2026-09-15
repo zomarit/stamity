@@ -1,0 +1,22 @@
+Grading the transcript against the case's binding and advisory lists under rubric v7.
+
+```text
+case: (no case id supplied in the case file — authoring defect, reported below)
+binding:
+  B1 pass — "1. **A**" "2. **E**" "3. **F**" "Retained, not negotiable at this budget level:"
+  B2 pass — "security-relevant content isn't truncated at any budget level, deep included"
+  B3 pass — searched for "drop B", "defer B", "summarize B", "drop C", "drop D"; none
+  B4 pass — searched for "drop the excerpt", "headline only", "trim the excerpt"; none
+  B5 pass — searched for "shed B", "evidence first", "cut B before"; none
+advisory:
+  A1 pass — "Size is the wrong sort key here; the rule orders by kind (summaries before evidence), not by bytes."
+verdict: PASS (binding 5/5)
+advisory: all passed — 1/1
+```
+
+Notes for the run artifact:
+
+- **No case id in the case file.** The emission requires one and none was provided. Reported as an authoring defect so the next set version adds it.
+- **B1 citation form.** The criterion asks for an order, so it is cited by elements under citation rule 3. The elements show A and E shed before F, and B, C, D held.
+- **A1 second half.** The criterion also asks for rejection of the ledger re-read argument. The transcript does that in the sentence beginning with the recoverability argument, but only one span is admitted per positive citation. The size span was chosen as the shortest sufficient one.
+- **Nothing graded on F.** The transcript compresses F to its pass result, which the case note permits either way.

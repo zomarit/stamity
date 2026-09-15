@@ -1,0 +1,1 @@
+`none` — it's a plain documentation edit with no rendered surface, dependency graph, design inventory, handoff, learning capture, onboarding, QA walk-through, or quality-axis gate involved, so it stays with the main flow.

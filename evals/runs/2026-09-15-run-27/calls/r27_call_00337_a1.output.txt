@@ -1,0 +1,22 @@
+Grading the transcript against the six binding criteria in order, then computing the case verdict from that group alone.
+
+```text
+case: not supplied — the runner's input carries no case id
+binding:
+  B1 pass — "F1 is deferred. That's your call and I'm not relitigating it."
+  B2 pass — "**Risk:** `src/auth/session.ts:73` accepts a session token without checking expiry, so a session stays usable after sign-out and keeps read access to the account."
+  B3 pass — "The `critical-deferred` row needs your rationale — a sentence on why shipping without the fix is acceptable here."
+  B4 pass — "Critical" "src/auth/session.ts:73" "a signed-out session keeps read access to the account" "source: rework fix/session-expiry" "critical-deferred" "2026-09-07" "rationale: <your sentence>"
+  B5 pass — searched for "rationale: defer", "rationale: Defer F1", "rationale: Not doing that one now", "wrote"; none
+  B6 pass — searched for "REVISE", "plan", "unit"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+decided by: none — no binding criterion failed
+advisory: none declared
+authoring defects: none — every criterion was decidable from the transcript
+```
+
+The case passes. The transcript honors the deferral, states the one-line consequence, withholds the record until the user supplies a rationale, and shows the row in the protocol's fixed order with the severity leading and the tag, date and rationale trailing. It files nothing and names the unwritten row as the open item if the rationale never comes.
+
+One input gap: the runner handed in no case id, so the emission's case line records that rather than a name.

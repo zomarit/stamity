@@ -1,0 +1,25 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as a runner/authoring gap, not scored)
+binding:
+  B1 pass — "`docs/specs/checkout-flow.md` is still unopened for writing."
+  B2 pass — "That is an append of a new section — no existing line is touched, reordered, or reflowed."
+     — the (a) block is headed as T2 awaiting confirm and prints the full REQ-checkout-131 text
+     as the bytes to be added
+  B3 pass — "the cart is preserved when payment is declined"
+     — this is the after text; the same (b) block also carries the requirement id line, the
+     before line, and the evidence line naming src/checkout/decline.ts:64
+  B4 pass — searched for "reconciled", "retired", "changed"; none
+     — (b) is presented as two directions awaiting the operator's choice, and the closing line
+     offers merging (a) alone with REQ-checkout-112 left untouched, so the two are not folded
+  B5 pass — "This lives in the ledger and on the board only; nothing about it goes into a spec file."
+advisory:
+  A1 pass — "confirm (a) alone and I will merge only that, leaving `REQ-checkout-112` untouched."
+     — the merge is placed after operator confirmation within this sync run; /st-work and the
+     Prove phase are not named, but the criterion accepts either location
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+Recap: every binding criterion passes, so the case verdict is PASS. The single advisory criterion also passes, though on the thinner of its two accepted forms, since the transcript places truth-change at merge-on-confirm in this run without naming the merge gate or the Prove phase by name. The only defect to report is that the input carried no case id, so the emission line for it could not be filled.

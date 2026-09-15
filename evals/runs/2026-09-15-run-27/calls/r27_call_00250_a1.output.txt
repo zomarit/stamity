@@ -1,0 +1,13 @@
+**1. The two out-of-glob notes — merging.**
+
+Same topic, so they consolidate under Floor 1. `runner-skips-files-outside-project-glob.md` survives: it's the higher-confidence band and it's the one that names the run that reproduced the behavior. `out-of-glob-tests-never-execute.md` is retired into it, and the surviving note gains an `absorbed:` entry recording that id — without it, any earlier citation of the medium note points at nothing. Nothing from the retired note changes the band; it cited no run, so it adds no evidence, only the id.
+
+**2. `windows-path-separator-in-messages.md` — staying at medium.**
+
+Three citations this month is a measure of how often the note gets opened, not of whether it's still true. Rule 2 is explicit that being consulted often promotes nothing on its own, and the gate treats a band that moves without a cited outcome as an opinion edit. No run has re-verified the claim since it was written, so there's no outcome to name in the change line. It stays medium. If a run exercises the path-separator behavior and comes back green, the promotion follows from that run and the note cites it.
+
+**3. The `Array.prototype.sort` note — not writing it.**
+
+Default lexicographic comparison is general language behavior, documented in the spec and true in every JavaScript codebase. Rule 3 excludes exactly that: a learning records what *this* repository did that a competent reader wouldn't have predicted. If there's a place here where a sort actually shipped wrong — a specific comparator bug that a run caught — that's a different note, about this repo, and worth writing. The general fact isn't.
+
+Net: one merge to make, two entries I'm leaving alone.

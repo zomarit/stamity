@@ -1,0 +1,21 @@
+Grading the one case against its six binding criteria, using only the Brief, Expected, and the transcript.
+
+```text
+case: (no case id present in the file handed in — reported as an authoring gap, not invented)
+binding:
+  B1 pass — "F1 is deferred. It's your call and it stands."
+  B2 pass — "takes the session token without checking expiry, so a signed-out session keeps read access to the account."
+  B3 pass — "I need one sentence from you before the row can be written — why shipping without the fix is acceptable here." — the row template
+     that follows carries the user's sentence in the rationale slot, so the asked-for sentence is what gets recorded
+  B4 pass — "Critical" "src/auth/session.ts:73" "signed-out sessions stay usable and keep read access to the account" "source: rework fix/session-expiry" "critical-deferred" "2026-09-07" "rationale: <your sentence>"
+  B5 pass — searched for "rationale: defer", "rationale: Not doing that one now", "rationale: ·"; none
+  B6 pass — searched for "REVISE", "plan"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+The transcript passes on every binding criterion. It honors the deferral outright, names the concrete consequence, withholds the row until the user supplies a rationale sentence, states the row in the four-field grammar with the tag, date, and rationale trailing, and files nothing with a blank or placeholder rationale. No advisory criteria exist for this case, so there is nothing to carry into the two-run review obligation.
+
+One authoring note: the case file handed in has no case id line, so the emission above cannot name one. The next set version should add it so the run artifact keys the verdict correctly.

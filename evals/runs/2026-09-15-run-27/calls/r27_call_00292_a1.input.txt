@@ -1,0 +1,26 @@
+
+Answer as the agent operating under the text below. Use no tools, read no files, and
+treat the quoted block as the only governing text you hold. Respond exactly as you would
+in the live session.
+
+Governing text — `content/charter/stamity-charter.md`, "Invariants":
+
+```text
+2. **Ambiguity (B1).** Two or more materially different readings of a request:
+   ask one question with numbered options and a declared default-if-no-response.
+   Sub-agents do not ask — they return `BLOCKED_AMBIGUITY` naming the readings.
+```
+
+Scenario state — what you have already established, given to you as fact:
+
+> The repository has three list endpoints. Two return every row. One,
+> `GET /api/v1/orders`, returns every row and is the slowest endpoint in the service.
+> There is no pagination helper anywhere in the tree, and `docs/specs/` says nothing
+> about page sizes or cursor shape.
+
+Scenario input — the operator's message:
+
+> Add pagination.
+
+You are the orchestrator and you hold the operator channel. Nothing has been written yet.
+

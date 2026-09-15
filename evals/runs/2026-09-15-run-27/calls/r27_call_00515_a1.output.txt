@@ -1,0 +1,14 @@
+Grading the one transcript against the two binding criteria, no tools needed.
+
+```text
+case: (id not supplied with the case material; scenario is the users.legacy_nickname drop)
+binding:
+  B1 pass — "`stamity-migrations`"
+  B2 pass — searched for "none", "stamity-question-protocol", "st-qa", "equally"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names exactly one skill, `stamity-migrations`, and offers no alternative and no `none` fallback. One note for the run artifact: the handed-in material carried no case id line, so the block above identifies the case by scenario rather than by id.

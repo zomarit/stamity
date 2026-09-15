@@ -1,0 +1,51 @@
+## Findings
+
+### 1. `GET /invoices/:id` — caller data interpolated into SQL
+**Category:** injection
+
+`req.params.id` is concatenated into a `db.raw` string with surrounding quotes. Any `'` in the path segment terminates the literal and the remainder is parsed as SQL — `1' OR '1'='1` returns the whole invoice table, and `db.raw` typically permits stacked statements or subqueries depending on driver config.
+
+Fix: bound parameter, e.g. `db.raw("SELECT ... WHERE id = ?", [id])` or the query builder's `.where({ id })`. The quoting is not repairable by escaping the input by hand.
+
+`src/api/invoices.ts` — the `GET` handler.
+
+### 2. `GET /invoices/:id` — no per-resource authorization
+**Category:** broken access control
+
+`requireSession` establishes *who* the caller is and nothing more. The handler loads the row addressed by the path and returns it without asking whether `req.user` may read that invoice. The identifier in the path is an argument, not a grant: every invoice in the table is reachable from this route by any caller holding a valid session. Invoice IDs are also typically enumerable, so this is a bulk read.
+
+Fix: load the record, then check ownership/tenancy against `req.user` before serializing; deny on no match. Also note `SELECT *` ships every column, including any the caller should never see.
+
+### 3. `POST /invoices/:id/void` — no per-resource authorization, and the absent case does not deny
+**Category:** broken access control, insecure design
+
+Same defect as #2 on a state-changing, financially irreversible operation: any authenticated caller can void any invoice by ID. Separately, `invoices.byId` returning `undefined`/`null` for an unknown ID is passed straight into `invoices.void(invoice)` — the missing record takes whatever branch `void` happens to implement rather than an explicit denial. An absent grant must deny.
+
+Fix: `if (!invoice) return 404`; then an explicit authorization check on the loaded record; then void. Errors raised inside the check must deny, not fall through.
+
+### 4. `allowTestLogin` uses the inverted environment form
+**Category:** security misconfiguration, authentication failure
+
+`process.env.NODE_ENV !== "production"` turns the test-login path **on** in every environment nobody named — an unset `NODE_ENV` in a fresh container, a renamed staging tier, `"Production"`, `"prod"`, a typo in a deploy manifest. A credential-bypass path defaults to enabled.
+
+Fix: allowlist the environments that may have it — `["development", "test"].includes(env)` — and have startup validate `NODE_ENV` against a closed enum and refuse to boot on anything outside it.
+
+`src/config/flags.ts:1`.
+
+### 5. `seedRoutesEnabled` defaults to enabled and is gated on a denylist
+**Category:** security misconfiguration
+
+`process.env.SEED_ROUTES !== "off"` enables seed/reset routes unless someone remembers to set exactly the string `"off"`. Unset enables. `"false"`, `"0"`, `"OFF"`, `"disabled"` all enable. Seed and reset commands generally truncate or rewrite production data.
+
+Fix: same shape as #4 — gate on the named-environment allowlist, not on an opt-out sentinel, and do not let the flag be flipped on by an environment variable in production at all.
+
+`src/config/flags.ts:2`.
+
+### 6. Path parameters cross the trust boundary unparsed
+**Category:** insecure design
+
+Both handlers take `req.params.id` as an arbitrary string and hand it to the data layer with no shape declared — no type, no length bound, no format check. Parsing into a declared shape (UUID or positive integer, bounded length, rejected otherwise) is what makes #1 structurally unreachable rather than fixed in one call site, and it is what keeps the next handler on this router from repeating it.
+
+---
+
+**One thing I could not determine from the diff:** whether voiding an invoice emits an audit record. If it does not, that is a **logging failure** — an irreversible financial mutation with no attributable trail. Worth confirming against the surrounding module, which I was not given.

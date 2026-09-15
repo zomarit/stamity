@@ -1,0 +1,13 @@
+```text
+case: (id not supplied in the input; graded as delivered)
+binding:
+  B1 pass — "`none` — documenting error codes that already ship"
+  B2 pass — searched for "stamity-api-versioning", "api-versioning", "versioning"; none
+  B3 pass — searched for "st-", "stamity-"; none
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The transcript answers `none` and names no skill id at all, so every binding criterion passes. The only thing missing from the run input is a case id, which I could not cite.

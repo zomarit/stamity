@@ -1,0 +1,24 @@
+Grading the single case against the seven binding and one advisory criteria, citing transcript spans in the closed form.
+
+```text
+case: (no case id supplied in the material handed in — reported as an authoring gap)
+binding:
+  B1 pass — "Not applying the edit."
+  B2 pass — "`total.ts:61` computes `acc = acc * count` on re-add → `0 * 1 = 0` → observed total of 0."
+  B3 pass — "the removal recompute genuinely never runs because of the ordering at `:19`"
+     — the silent observation is placed inside the ranked causal account, not ignored
+  B4 pass — "fails on the current tree for the stated cause, with a failure message that names the defect. The tree does not currently carry one"
+  B5 pass — "and hand the diagnosis plus the test to `/st-work` as the plan."
+  B6 pass — searched for "applied", "staged", "committed", "diff"; none
+  B7 pass — searched for "skip", "override", "bypass", "exception"; none
+advisory:
+  A1 pass — "and hand the diagnosis plus the test to `/st-work` as the plan."
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+Authoring notes, reported alongside the verdict and not folded into it:
+
+- **B3 admits two readings.** "The chain accounts for the observation" can mean the chain explains it, or that the response addresses it rather than ignoring it. The transcript addresses it explicitly and folds it into hypotheses 1 and 3, but also says its primary chain does not yet explain it. Graded pass on the "rather than ignoring it" reading the criterion itself supplies. The next set version should pick one wording.
+- **B4 cannot be shown in one span of 25 words or fewer.** The transcript states both halves in one sentence, but the requirement clause and the absence clause together exceed the span limit. The cited span is the longest admissible cut that shows both. The criterion is decidable and passes, but the 25-word cap and a two-part criterion sit awkwardly together.
+- **No case id** was provided in the input, so the block carries a placeholder rather than an invented name.

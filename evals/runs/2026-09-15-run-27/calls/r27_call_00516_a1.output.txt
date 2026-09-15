@@ -1,0 +1,1 @@
+`none` — documenting an existing string parser's date format in the README is ordinary editing work; the "no model in it" phrasing is a decoy that doesn't pull in `stamity-ai-evals`, and no other skill's trigger (rendered surface, dependency graph, QA sign-off, handoff, etc.) is touched.

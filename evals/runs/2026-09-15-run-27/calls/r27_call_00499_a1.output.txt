@@ -1,0 +1,14 @@
+Grading the transcript against the two binding criteria; the case declares no advisory criteria.
+
+```text
+case: (no id line in the case file; reported as-is)
+binding:
+  B1 pass — "`stamity-contract-census`"
+  B2 pass — "`stamity-contract-census`"; searched for "none", "also", "either", "alternatively"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names one skill on its first line and gives a single reason that refers back to that same skill. No second skill id appears, and the answer is not `none`. The only defect to report is that the case file carries no case id, so the emission cannot cite one.

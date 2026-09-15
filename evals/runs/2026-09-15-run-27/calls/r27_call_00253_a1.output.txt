@@ -1,0 +1,16 @@
+Grading the pasted transcript against the four binding criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — searched for "go ahead", "proceed with the drop", "dropped"; none
+  B2 pass — "Two batches failed. Whatever rows those ranges cover are still unconverted"
+     — the second numbered point names parity and checksum as unrun, and the third
+     point calls the window spent rather than satisfied
+  B3 pass — "While any old reader remains, contract has not started."
+  B4 pass — "Resume from the persisted boundary"
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+The transcript refuses the drop, names the two failed batches and the unrun parity and checksum verification as blockers, treats the elapsed window as spent rather than satisfied because an old reader remains, keeps contract as a separate merge after the backfill, and gives a concrete next step of resuming from the persisted boundary. No criterion was undecidable and no authoring defect was found. The only gap in the input is a missing case id, which I have reported in the emission rather than invented.

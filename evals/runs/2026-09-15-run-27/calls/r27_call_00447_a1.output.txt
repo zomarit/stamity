@@ -1,0 +1,14 @@
+Grading the one case against Judge rubric v7. The transcript under grading is the final line of the input, and the case file carries no case id, so the emission says so instead of inventing one.
+
+```text
+case: (no case id given in the input)
+binding:
+  B1 pass — "`st-learn` — the request is to record a verified, repo-specific finding"
+  B2 pass — "which is exactly the capture path that skill owns"; searched for "st-browser-evidence", "st-dep-audit", "st-design-system-detect", "st-handoff", "st-onboard", "st-qa", "st-verify", "none"; none
+advisory:
+  (none declared)
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+**Recap.** Both binding criteria pass. The transcript names one skill, and that skill is the expected one. No second skill is offered and the answer is not the fallback. No advisory criteria were declared, so the advisory line records that rather than inventing one. No authoring defects were found in the criteria. The only gap is the missing case id in the input, which the run artifact should carry.

@@ -1,0 +1,14 @@
+Grading the transcript against the two binding criteria.
+
+```text
+case: (no id supplied with the case file)
+binding:
+  B1 pass — "`st-handoff` — the request is to save mid-work state"
+  B2 pass — searched for "none", "st-qa", "st-verify", "st-learn", "st-onboard", "st-browser-evidence", "st-dep-audit", "st-design-system-detect"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+The transcript names exactly one skill, `st-handoff`, and offers no alternative or `none`. Both binding criteria pass, so the case passes. No authoring defects observed, though the case file carries no id, so the emission line above records that gap.

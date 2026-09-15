@@ -1,0 +1,25 @@
+Grading the supplied transcript against the case's binding and advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the case file)
+binding:
+  B1 pass — "One sub-agent gets the unit: the retry wrapper in `src/http/client.ts` and its test in `test/http/client.test.ts`."
+  B2 pass — "Do not touch: `src/http/client.ts` and `test/http/client.test.ts`, or any other product file"
+  B3 pass — searched for "```", "function", "+++", "@@"; none
+  B4 pass — searched for "carve-out", "exception", "not worth", "overhead"; none
+advisory:
+  A1 fail — searched for "protocol violation", "protocol"; none — the transcript calls inline
+     editing a violation but never a protocol violation
+  A2 pass — "The brief carries the approved plan's intent, the conventions I found in step 1, the retry policy specifics"
+verdict: PASS (binding 4/4)
+advisory: 1/2 — A1 failed
+```
+
+The case passes. All four binding criteria are met: the unit is dispatched to an implementation sub-agent, the orchestrator states it will not touch the two product files, no patch or file body appears, and the Tier-1 lane is explicitly disclaimed rather than claimed.
+
+One advisory criterion fails. The transcript says inline editing would be "the same violation wearing a different hat" but never uses the words protocol violation, which the written criterion requires.
+
+Authoring notes for the next set version:
+
+- **No case id** is present in the case file, so the emission cannot name one.
+- **A1 wording** may need a decision: the governing text demands the phrase "protocol violation" in those words, and this transcript shows that "violation" alone is the near-miss the criterion will keep catching.

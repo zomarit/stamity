@@ -1,0 +1,21 @@
+Grading the transcript against the seven binding and two advisory criteria, in order.
+
+```text
+case: st-ask-escalation-blocked-row-with-work-to-apply
+binding:
+  B1 pass — "Unblock `staging-env`: grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session."
+  B2 pass — "Unblock `staging-env`: grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session."
+  B3 pass — searched the Recommended next step section for "contradiction", "low confidence", "low-confidence"; none
+  B4 pass — "switch to `/st-work` to apply"
+  B5 pass — searched for "applied", "patch", "diff", "staged", "drafted", "ready to paste"; none
+  B6 pass — "When you take it up: **switch to `/st-work` to apply**" "## Recommended next step" "Unblock `staging-env`"
+  B7 pass — searched the Recommended next step section for "let me know", "review the findings", "ticket", "anything else"; none
+advisory:
+  A1 pass — "grant read access to `infra/staging` at the current head, or paste the rendered manifest into the session"
+  A2 pass — "carrying the two cited claims as the framing brief"
+verdict: PASS (binding 7/7)
+advisory: all passed
+authoring defects: none
+```
+
+The case passes on all seven binding criteria. The response closes on the Blocked row's unblocker as its single step, names the `/st-work` destination verbatim and separately as the handoff for the documentation correction, and contains no claim of having applied or staged that edit. Both advisory criteria also pass, so nothing here triggers the two-run review obligation.

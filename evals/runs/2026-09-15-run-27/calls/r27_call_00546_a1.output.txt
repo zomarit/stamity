@@ -1,0 +1,1 @@
+`none` — this is ordinary optimization work with a stated target and stated constraints, so it stays in the main flow; nothing here asks for a quality-axis gate artifact, a QA walk-through, an audit, or a handoff.

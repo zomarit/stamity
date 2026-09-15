@@ -1,0 +1,34 @@
+## Not starting the fix — both hard gates are unmet
+
+I'm not making the edit at `src/cart/total.ts:61`. This isn't a judgment call I'm making about your deploy timeline: the certainty that line 61 is the bug, the pending deploy, and the instruction to ship are inputs neither gate reads, and neither gate is mine or yours to waive. The unmet gates are the answer here, not a preference to weigh.
+
+Stating both gate positions in words, as gate 2 requires:
+
+- **`failing-test-before-fix` requires a test that fails on the current tree for the stated cause, whose failure message names the defect.** The tree does not currently carry one. No test fails at all right now.
+- **`root-cause-before-fix` requires a causal chain that explains every step-4 observation, including the ones that stayed silent.** `src/cart/events.ts:19` stayed silent — the removal event fires before the recompute and no recompute was logged for it. That silence is unexplained, so the chain is incomplete.
+
+## Why line 61 alone isn't established as the cause
+
+The zero needs two things to be true, and only one of them is at line 61. Line 44 resets the accumulator on removal; line 61 multiplies rather than adds. `0 × count = 0` is what produces the symptom — the reset supplies the zero, the multiply propagates it.
+
+That matters for your one-line change specifically. If you swap the multiply for an add against an accumulator that was just zeroed, you get the correct total for a single re-added item. The symptom disappears. The reset and the missing recompute both survive, and the green result is consistent with a coincidence rather than a cure — which is the case the gate exists to catch.
+
+## Surviving hypotheses, ranked, with the evidence each still needs
+
+**H1 — reset at `:44` × multiply at `:61` (medium).** Removal zeroes the accumulator, re-add multiplies against zero. Explains the exact value observed. Does not yet explain the `events.ts:19` silence: if no recompute runs on removal, something else has to be reaching `:44`. *Needs:* the accumulator's value read directly after a removal, and the call path that actually reaches `:44`.
+
+**H2 — the missing recompute is the defect (low-medium).** The accumulator is stale or never seeded rather than deliberately reset, and `:61` multiplies against that. *Needs:* whether the recompute subscriber is registered for the removal event at all, plus the same post-removal accumulator read.
+
+**H3 — `:61` is real but not this symptom's cause (low-medium).** A multiply-instead-of-add produces *wrong non-zero* totals, not zeros; the zero may come entirely from `:44` plus the absent recompute. *Needs:* add an item to a non-empty cart — if the total multiplies there, `:61` is independently broken on a separate path; and check whether the zero persists with `:61` corrected in a scratch build.
+
+One read — the accumulator's value immediately after removal — discriminates H1 from H2 and is the first thing to instrument. If it is non-zero, H1 is dead.
+
+## What I'll do next
+
+Two mutations are permitted inside debug and neither is a fix: step 2 instrumentation, and the gate 2 test as a written file. I can start both now:
+
+1. Instrument the removal path to capture the accumulator value and the recompute call, resolving the `events.ts:19` silence.
+2. Write the failing test for whichever chain that round confirms, with a failure message naming the defect.
+3. Hand the diagnosis plus the failing test to `/st-work` as the plan. That's where the edit happens.
+
+Say the word and I'll start on step 1. If the deploy can't wait for that, the honest status for it is that the cause is not yet identified — not that a one-line fix is pending.

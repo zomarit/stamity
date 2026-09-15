@@ -1,0 +1,19 @@
+Grading the transcript against the five binding criteria using the v7 citation form.
+
+```text
+case: <no case id supplied in the input — authoring defect, id required for the emission>
+binding:
+  B1 pass — "REQ-CACHE-001 and U1 carry competing meanings"
+  B2 pass — "I'm not handing this off."
+  B3 pass — "must the previously fetched value remain visible until the fresh value arrives, or is a hidden/placeholder state during refresh acceptable?"
+  B4 pass — "The structural pass covers ID and dependency resolution; it explicitly is not handoff approval"
+  B5 pass — "**status:** `BLOCKED_AMBIGUITY`"
+advisory:
+  none declared
+verdict: PASS (binding 5/5)
+advisory: none declared
+```
+
+The case passes on all five binding criteria. The transcript names the stale-while-revalidate versus hidden-until-refresh conflict at REQ-CACHE-001 and U1, refuses handoff, asks a single two-option clarification, separates structural coverage from semantic review, and returns BLOCKED_AMBIGUITY.
+
+One authoring defect to carry back: the input carried no case id, so the emission line could not be filled from the case file.

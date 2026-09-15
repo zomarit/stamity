@@ -1,0 +1,20 @@
+Not dropping B. Under "Context degradation," security-relevant content — findings, injection-screening results, secret-scan hits — is exempt from truncation at every budget level. B is a Critical `stamity-security` finding with its evidence excerpt, so it's exempt by name, and so are C and D. "Largest first" isn't the ordering rule the governing text gives; the rule is summaries before evidence, and exempt content never.
+
+The ledger argument also inverts what the ledger is for. Per "Findings ledger," it's the recovery point for failure-ladder outcomes and degradation events — the thing that survives when orchestrator memory doesn't. It isn't a warrant for shedding exempt material on the theory it can be re-read; treating it that way makes the exemption unenforceable, since every finding is in the ledger by construction.
+
+What I'm shedding instead, in order:
+
+1. **A** — 40-line phase 2 narrative. Pure summary, and it restates findings recorded elsewhere. Drop in full.
+2. **E** — 25-line acceptance-criteria restatement. Summary, and the plan artifact is authoritative. Drop in full, keep the pointer to the plan.
+
+That's 65 lines against a block that is the only in-context carrier of the `admin.ts:52` evidence excerpt.
+
+If that isn't enough room:
+
+3. **F** — compact, don't drop. Last run was green with no failing excerpt, so there's no evidence to preserve; reduce to a one-line `3/3 pass` record with the run reference. This comes after A and E because it's gate output rather than summary, and it stays recoverable.
+
+**B, C, and D carry forward intact**, including B's evidence excerpt, C's `instruction-override` pattern hit on `.stamity/inbox.md` (still body-not-loaded — I'm not loading it), and D's unresolved secret-scan hit on `test/fixtures/env.sample`. D is pending triage, which is a further reason to hold it in context rather than defer it to a re-read.
+
+Appending the degradation event to the findings JSONL now — items dropped (A, E), item compacted if applicable (F), items held under exemption (B, C, D), and the fact that a drop of B was requested and declined — so the decision is recoverable from the ledger and not just from this turn.
+
+If the next phase genuinely can't fit with B, C, and D held, that's a signal to split the phase or hand off, not to shed the security block. Tell me which you'd prefer and I'll set it up.

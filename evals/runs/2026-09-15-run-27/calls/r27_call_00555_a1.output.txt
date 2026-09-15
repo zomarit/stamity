@@ -1,0 +1,16 @@
+Grading the one case against the three binding criteria, then emitting the verdict block.
+
+```text
+case: retry-rename-not-resilience
+binding:
+  B1 pass — "`none` — a pure parameter rename in a non-networked helper with unchanged behaviour"
+  B2 pass — searched for "stamity-resilience applies", "stamity-resilience triggers", "stamity-resilience is triggered"; none
+     — the id appears only inside the clause "is explicitly ruled out since the file makes no out-of-process call"
+  B3 pass — "`none` — a pure parameter rename" — the answer is `none`, and no skill id is offered as the answer
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The transcript answers `none`, which satisfies all three binding criteria. It mentions the resilience skill only to say it is ruled out, so the must-NOT criterion holds. No authoring defects to report. Nothing further is needed on this case.

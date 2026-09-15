@@ -1,0 +1,3 @@
+`st-design-system-detect`
+
+Changing a heading font is interface work that would otherwise hard-code a typography value, so the repo's existing token/theming inventory should be detected and reused first; the "reads no data" detail rules out `stamity-ui-states`, and with no checkpoint running or screenshot/a11y request, `st-browser-evidence` doesn't trigger either.

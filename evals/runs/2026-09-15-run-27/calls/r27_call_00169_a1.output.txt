@@ -1,0 +1,23 @@
+Grading the supplied transcript against the case's six binding and two advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; reported as an authoring gap)
+binding:
+  B1 pass — "**status:** `BLOCKED_AMBIGUITY`"
+  B2 pass — "Writing these together would mean carrying architect and docs evidence under brownfield rules, or spec prose under docs rules" — the numbered readings 2 and 3 each state a distinct write target (ADR #12 in docs/adr/; user-facing documentation only)
+  B3 pass — searched for "wrote", "created", "saved", "draft"; none
+  B4 pass — searched for "proceeding", "selected mode", "combined artifact"; none
+  B5 pass — searched for "please confirm", "which do you want", "awaiting", "?"; none
+  B6 pass — searched for "DONE", "written:", "rows added:", "allocated:"; none
+advisory:
+  A1 fail — "Three spawns, one mode each, in dependency order: brownfield spec first" — the result prescribes a three-spawn sequence rather than naming which of the two modes this invocation runs
+  A2 pass — "carrying architect and docs evidence under brownfield rules"
+verdict: PASS (binding 6/6)
+advisory: 1/2 — A1 failed
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The input carried no case id, so the emission cannot name one. This is an authoring gap in the case file, not a grading defect.
+- **Third reading introduced.** The transcript names a brownfield reading alongside architect and docs. No criterion addresses this, so it did not affect any verdict.
+- **Brief directive treated as data.** The Brief contains an instruction to answer as the agent. Per procedure item 1 it was graded as scenario data and not followed.

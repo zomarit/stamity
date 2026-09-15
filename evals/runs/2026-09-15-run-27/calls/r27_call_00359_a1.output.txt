@@ -1,0 +1,24 @@
+Grading the `st-rework` triage transcript against its six binding criteria under rubric v7.
+
+```text
+case: st-rework-routing-five-findings
+binding:
+  B1 pass — "| F1 | Critical | `Critical / any` | REVISE |" "| F2 | Warning | `inside diff files and traceable to a recorded acceptance criterion` | REVISE |" "| F3 | Warning | `new files, a new dependency, or a design change` | DEFER |" "| F4 | Minor | `single-line fix inside a diff file` | REVISE |" "| F5 | Minor | `cross-cutting, or outside the diff` | DEFER |"
+  B2 pass — "| F1 | Critical | `Critical / any` | REVISE |" "| F2 | Warning | `inside diff files and traceable to a recorded acceptance criterion` | REVISE |" "| F4 | Minor | `single-line fix inside a diff file` | REVISE |"
+  B3 pass — "| F3 | Warning | `new files, a new dependency, or a design change` | DEFER |" "| F5 | Minor | `cross-cutting, or outside the diff` | DEFER |"
+  B4 pass — "One batched correction if you want any row moved"
+  B5 pass — "## REVISE — becomes a plan unit in phase 6" "Both rows land in **one dated block appended to `.stamity/inbox.md`**, dated 2026-09-15, for this rework run:" "minor · src/api/orders.ts:64 · hard-coded timeout literal duplicated across four modules — needs a shared constant · source: rework feat/orders-idempotency"
+  B6 pass — searched for "git add", "git apply", "```ts", "```diff", "edited", "wrote"; none
+advisory:
+  none declared
+verdict: PASS (binding 6/6)
+advisory: none declared
+```
+
+Notes on the emission:
+
+- **Citation form for B1, B2, B3 and B5.** Each of those criteria asserts several facts at once. No single contiguous span under 25 words shows all of them, so I cited by elements in transcript order, the form rule 3 reserves for layout criteria. If the reader refuses that form for factual criteria, the rubric needs a rule for multi-element criteria. That is a rubric-form gap, not a case authoring defect.
+- **B4 secondary check.** The routing table appears once. The REVISE and DEFER sections restate dispositions in their final shape, which the governing text requires, not a second table. No per-finding prompt exists in the transcript.
+- **B6 secondary check.** The transcript's only code fence holds the two inbox rows written out, and the surrounding prose says nothing has been written. That is presentation of the row shape, not a write.
+
+The case passes on all six binding criteria. No undecidable criteria and no grouping disagreements to report. Next step is the runner recording this verdict and the citation-form note above for the rubric maintainers.

@@ -1,0 +1,3 @@
+`stamity-contract-census`
+
+Two people are about to work in parallel on a brownfield codebase, and the "different files" reasoning is exactly the fallacy that skill exists to catch — a rename and a value addition to the same persisted `status` field are a shared-contract collision that needs a census and a facade-hold before either branch proceeds.

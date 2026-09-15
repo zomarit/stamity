@@ -1,0 +1,28 @@
+**status:** `BLOCKED_AMBIGUITY`
+
+**severity:** `Critical` — no deliverable can ship under a single mode.
+
+## Competing readings
+
+The brief names no mode and its three clauses fall under three different governing rules. One mode per invocation, so this cannot be blended.
+
+1. **brownfield** — "Write up the new export-scheduling behaviour." The behaviour is landed and running at `src/schedule/cron.ts:18-44`, so a spec of the touched surface is writable, accreted per change, with every claim about existing behaviour carrying `file:line` evidence. Writes spec files under `docs/specs/` plus a manifest row.
+
+2. **architect** — "Record why we chose a cron trigger over a queue consumer." The decision is already visible in the code and no ADR records it; `docs/adr/` exists with eleven records. Writes ADR #12, decision recorded as observed, with the queue-consumer alternative framed as what the code rules out.
+
+3. **docs** — "produce the page an operator reads to configure it." The behaviour is shipped and verifiable at a cited path and the user-facing tree carries no export-schedule page. Writes user-facing documentation only.
+
+Clause 1 is additionally ambiguous on its own terms: "write up the new behaviour" reads as either the brownfield spec of the surface or the docs page describing it, and clause 3 makes the docs reading live. Resolving clause 1 into docs would leave the brownfield spec unwritten; resolving it into brownfield leaves clauses 1 and 3 as two distinct artifacts over the same code.
+
+Writing these together would mean carrying architect and docs evidence under brownfield rules, or spec prose under docs rules — the exact path by which unverified prose enters truth.
+
+## Not written
+
+- No files written.
+- No manifest rows added or changed.
+- No requirement ids allocated.
+- No `[NEEDS CLARIFICATION]` markers left open (markers are a greenfield instrument and no mode was fixed).
+
+## What unblocks
+
+Three spawns, one mode each, in dependency order: brownfield spec first (it fixes the requirement ids the other two cite), then architect ADR, then docs page against the shipped tree. The ambiguity gate belongs to the spawning flow.

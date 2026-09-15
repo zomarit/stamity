@@ -1,0 +1,28 @@
+## Testability census — `docs/specs/checkout-flow.md`
+
+Mode: `check` (report-only; nothing written, gate not run in this context).
+
+| AC | REQ | Classification | Status |
+|---|---|---|---|
+| AC-1 | `REQ-checkout-104` | Machine-checkable — names `test/checkout/decline.test.ts`, present on tree | Confirmation dispatched to `test-runner` |
+| AC-2 | `REQ-checkout-107` | Machine-checkable in form — names `test/checkout/refund.test.ts`, **absent from tree** | **Gap** |
+| AC-3 | `REQ-checkout-111` | `judgment: design lead` (empty-cart copy) | Satisfies the census |
+| AC-4 | `REQ-checkout-115` | **Neither** — "the checkout page feels responsive on a slow connection" carries no named test, no gate command, no measurable threshold, and no `judgment:` tag | **Reported by name** |
+
+**Counts for this file:** 4 criteria — 1 machine-checkable with an existing test, 1 pointing at a test that does not exist, 1 judgment-tagged, 1 neither.
+
+### Criteria that are neither machine-checkable nor judgment-tagged
+
+- **AC-4 (`REQ-checkout-115`)** — "feels responsive on a slow connection." Needs either a threshold and the conditions it holds under (e.g. a named metric, a budget, a throttled profile) or a `judgment:` tag naming the role that decides.
+
+### Gaps
+
+- **AC-2 (`REQ-checkout-107`)** — the criterion points at `test/checkout/refund.test.ts`, which does not exist. No confirmation is possible; the criterion is unbacked as written.
+
+### Spawn issued
+
+`test-runner` is dispatched as part of this census, not as a step after it. Brief, in words, since I cannot make the call from this turn:
+
+> **`test-runner`** — run the repository test gate `npm run test` (`${STAMITY:VERIFY_GATE_TEST}`). Criteria being confirmed: **AC-1 of `docs/specs/checkout-flow.md`, under `REQ-checkout-104`**, backed by `test/checkout/decline.test.ts`. Return the structured per-gate result: the gate command, pass or fail, and the verbatim failing excerpt if it fails. Apply no edits — this is `check` mode and the runner is report-only.
+
+AC-1's confirmation stands open against that result; the census reads the runner's per-gate result when it returns rather than running the gate here. AC-2, AC-3 and AC-4 need no spawn — AC-2 has no test to run, AC-3 is decided by the design lead, and AC-4 is unclassifiable until it is given a threshold or a tag.

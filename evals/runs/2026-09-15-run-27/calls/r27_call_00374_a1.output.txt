@@ -1,0 +1,40 @@
+I haven't written anything yet. Two of the three items are confirm-gated, so here is the state and what I need from you.
+
+## T1 — done, automatic (c)
+
+The board item moved `In progress` → `In review`, and the run ledger holds the owner and the progress event. That lives in the ledger and on the board; nothing from it goes into a spec file. No action needed from you.
+
+## T2 — proposed, awaiting confirmation (a)
+
+`ADDED REQ-checkout-131` is absent from `docs/specs/checkout-flow.md`. These are the exact lines that would be appended, verbatim from the plan artifact's `ADDED` section — nothing else is in that section:
+
+```text
+### REQ-checkout-131 — an expired card is rejected and the cart is preserved
+
+The checkout flow rejects a card whose expiry has passed and leaves the cart untouched, so a
+second attempt with a valid card starts from the same items.
+
+- GIVEN a cart holding one item WHEN checkout is submitted with an expired card THEN the order
+  is rejected and the cart is preserved
+```
+
+Append-only, into `docs/specs/checkout-flow.md`. Confirm and I write it.
+
+## T3 — proposed, awaiting confirmation (b)
+
+This one changes what a recorded requirement says, so it never goes in silently.
+
+- **Requirement id:** `REQ-checkout-112`
+- **Before:** "the cart is cleared when payment is declined"
+- **After (proposed):** "the cart is preserved when payment is declined"
+- **Evidence:** `src/checkout/decline.ts:64` preserves the cart; this is the shipped behavior, and this branch's diff keeps it that way. The recorded text contradicts the code.
+
+Two things to be clear about here. First, the "after" wording above is my proposal, not something the plan artifact supplied — the delta carries no `MODIFIED` entry for `REQ-checkout-112`. Say the word and I'll use different text. Second, before I write it I need to read the requirement's exact current bytes in the file; the before-text above is the substance as reported by the scan, and I won't edit a line I haven't matched byte-for-byte.
+
+This is not a `Warning` against this change. The same-delivery mandate covers a diff that changes behavior without shipping a delta; this diff changes nothing about the decline path, it preserves the cart as it already did. What you have is pre-existing drift between spec text and code, surfaced by the scan.
+
+## What happens on confirmation
+
+I write the T2 append and, separately, the T3 mutation — nothing else in `docs/specs/checkout-flow.md` is touched. No reordering, no reflowing, no date restamp. A re-run of `sync` after that should report `no changes` against an unchanged tree; if it doesn't, that's a merge defect and I'll say so.
+
+Confirm both, one, or neither.

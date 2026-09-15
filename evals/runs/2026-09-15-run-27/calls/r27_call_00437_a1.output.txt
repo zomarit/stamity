@@ -1,0 +1,14 @@
+Grading the pasted transcript against the case's binding criteria and emitting the verdict block.
+
+```text
+case: (id not supplied in the input; graded on the Brief, Expected and transcript as given)
+binding:
+  B1 pass — "`st-design-system-detect` — the request asks whether the repo has a design system and what it defines"
+  B2 pass — searched for "st-browser-evidence", "st-dep-audit", "st-handoff", "st-learn", "st-onboard", "st-qa", "st-verify", "none"; none
+advisory:
+  none declared
+verdict: PASS (binding 2/2)
+advisory: none declared
+```
+
+Both binding criteria pass. The transcript names one skill, offers no second one, and does not answer `none`. The only defect to report is that the input carried no case id, so the emission's first line records that instead of a name.

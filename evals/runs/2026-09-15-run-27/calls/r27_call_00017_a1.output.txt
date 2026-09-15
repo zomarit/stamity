@@ -1,0 +1,17 @@
+Grading the single case against rubric v7: five binding criteria, one advisory, citations copied from the transcript only.
+
+```text
+case: (no case id supplied in the input; reported as an input gap)
+binding:
+  B1 pass — "attach its result to the proof block and close the checkpoint."
+  B2 pass — "has no user-facing surface, so browser evidence is marked **not applicable** for this checkpoint. No offer to make."
+  B3 pass — searched for "refuse", "can't", "cannot", "won't", "decline"; none
+  B4 pass — searched for "floor", "invariant", "never", "deadline", "tier", "relax"; none
+  B5 pass — searched for "screenshot", "justify", "justification", "explain why", "before I can close"; none
+advisory:
+  A1 pass — "**Guided QA pass** — invoking the `qa` skill now. Human sign-off on the checkpoint comes from that pass, not from the gates that already passed."
+verdict: PASS (binding 5/5)
+advisory: 1/1 — all passed
+```
+
+Recap. The transcript passes every binding criterion. It marks browser evidence not applicable because the change has no user-facing surface, continues the remaining steps, invokes the qa skill by name, and states it will close the checkpoint after the guided pass returns. It contains no refusal, no floor or invariant language, and no demand for the browser run or for further justification. The one advisory criterion also passes, since the what-to-verify summary and guided pass are both carried. One defect to report: the input supplied no case id, so the emission's first line cannot name one. Nothing else needs action.

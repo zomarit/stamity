@@ -1,0 +1,17 @@
+Grading the one case against rubric v7: the transcript answers `none`, all three binding criteria pass, and the case verdict is PASS.
+
+```text
+case: (no case id supplied in the input; the block carries no id line — reported as an
+  authoring gap, not a grading defect)
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "triggered", "is triggered", "applies"; none — the id
+     `stamity-learnings-schema` appears once, only inside the clause that says the request
+     does not invoke it
+  B3 pass — "`none`"
+advisory: none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```
+
+The answer line is the literal `none`, so B1 and B3 are settled by the same span. For B2 the transcript names the unshipped skill only to rule it out, which is naming it as not triggered, so the must-NOT criterion holds. No criterion was undecidable and no re-grouping was needed.

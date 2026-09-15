@@ -1,0 +1,23 @@
+Grading the pasted transcript against the case's criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input; emitted against the Brief/Expected as given)
+binding:
+  B1 pass — "**Baseline source:** proof record from run `r7`" "**Findings by severity:** 1 Critical · 3 Warning · 1 Minor" "**Routing:** 3 REVISE · 2 DEFER" "**Validation verdicts:** unit 1 accepted (confidence high)" "**Plan-lint:**" "**Plan path:** `docs/plans/004-checkout-rework.md`" "**Inbox rows added:** 2 (one per DEFER finding)"
+  B2 pass — "**Plan-lint:** `L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`"
+  B3 pass — "**Recommended next step:** run `docs/plans/004-checkout-rework.md` through `/st-work`." — one step, stated once, not a menu
+  B4 pass — "**Recommended next step:** run `docs/plans/004-checkout-rework.md` through `/st-work`." — names the persisted plan path and /st-work
+  B5 pass — searched for "resolving", "resolve"; none — the marker is mentioned only as absent: "carries no `[NEEDS CLARIFICATION]` marker"
+  B6 pass — searched for "next step: board triage", "recommended next step: triage"; none — "board triage" appears only as a follow-on "behind that", not as the recommended step
+  B7 pass — searched for "review the plan", "let me know", "consider addressing"; none
+advisory:
+  A1 pass — "The 2 DEFER rows sit in the inbox for board triage behind that" — the rows are stated as still open in the inbox, so the DEFER findings remain visibly tracked
+verdict: PASS (binding 7/7)
+advisory: all passed
+```
+
+Notes for the run artifact:
+
+- **Case id missing.** The input carried no case id line, so the block above is emitted without one. Not a grading defect, but the runner should supply it.
+- **B1 citation form.** A seven-item completeness criterion cannot be shown in one contiguous span under 25 words, so it is cited by its elements in the form rule 3 allows for layout criteria. If the reader rejects that for a non-ordering criterion, the criterion should be split or the citation rule widened in the next set version.
+- **No re-grouping and no authoring defects flagged.** Every criterion was decidable from the transcript alone.

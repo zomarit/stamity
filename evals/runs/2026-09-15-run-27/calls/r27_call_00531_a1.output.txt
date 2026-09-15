@@ -1,0 +1,16 @@
+Grading the transcript against the three binding criteria; no advisory criteria are declared.
+
+```text
+case: skill-routing-solo-rename-no-census
+binding:
+  B1 pass — "`none`"
+  B2 pass — searched for "stamity-contract-census"; none — the only mention is
+     "contract-census and question-protocol triggers are explicitly negated", stated as
+     not triggered
+  B3 pass — searched for "st-", "stamity-"; none — the answer given is `none`, no skill
+     id is offered as the answer
+advisory:
+  none declared
+verdict: PASS (binding 3/3)
+advisory: none declared
+```

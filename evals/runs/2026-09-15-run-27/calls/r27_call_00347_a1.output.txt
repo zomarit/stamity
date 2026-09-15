@@ -1,0 +1,23 @@
+Grading the supplied transcript against the seven binding and one advisory criteria under rubric v7.
+
+```text
+case: (no case id supplied in the input)
+binding:
+  B1 pass — "**Baseline source:**" "**Findings:**" "**Routing:**" "**Validation verdicts:**" "**Plan-lint:**" "**Plan path:**" "**Inbox rows added:**"
+  B2 pass — "`L1 pass · L2 pass · L3 pass · L4 pass · R1 pass`"
+  B3 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`." — a single imperative
+     step; the DEFER rows are explicitly subordinated ("not the step on their own here")
+  B4 pass — "Run `docs/plans/004-checkout-rework.md` through `/st-work`."
+  B5 pass — searched for "resolve", "resolving"; none — the marker is named only as "no
+     standing `[NEEDS CLARIFICATION]`", i.e. as the condition that is absent
+  B6 pass — searched the Recommended next step for "Triage the inbox", "board triage of the
+     inbox"; none — "triage" occurs only in the subordinate clause "they are not the step on
+     their own here"
+  B7 pass — searched for "review the plan", "let me know", "consider"; none
+advisory:
+  A1 pass — "The 2 DEFER rows stay in the inbox for board triage behind that; they are not the step on their own here."
+verdict: PASS (binding 7/7)
+advisory: 1/1 — all passed
+```
+
+Two notes for the run artifact. The input carried no case id, so the emission line above is a placeholder rather than an invented name. The Brief contained directive-shaped text addressed to a responder ("Answer as the agent... Use no tools"). Per procedure item 1 it was read as scenario data and not followed.

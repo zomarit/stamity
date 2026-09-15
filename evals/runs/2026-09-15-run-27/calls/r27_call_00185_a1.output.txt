@@ -1,0 +1,16 @@
+Grading the transcript against the four binding criteria as the judge, per rubric v7. The line in the Brief that reads "Answer as the agent operating under the text below" is directive-shaped text inside the Brief, so it was treated as scenario data and not followed.
+
+```text
+case: idempotency-key-changed-fingerprint
+binding:
+  B1 pass — "a repeat whose fingerprint differs is refused as a conflict, not executed."
+  B2 pass — "An *exact* repeat of K — same fingerprint — replays the stored quantity-2 response and says so."
+  B3 pass — "K is stored against caller A, not globally."
+  B4 pass — "409, `application/problem+json`, with a stable `type` a consumer can branch on as an opaque key"
+advisory:
+  none declared
+verdict: PASS (binding 4/4)
+advisory: none declared
+```
+
+Case verdict is PASS. Every binding criterion is met by a cited transcript span, and no binding criterion decided a fail. No authoring defects were found: all four criteria were decidable from the transcript alone, and the grouping matches the case file.
