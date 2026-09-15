@@ -1380,10 +1380,19 @@ describe("full run admission and strict aggregation", () => {
     // wrongly, because the note still reads "A1 promoted…" and the label alone cannot tell the
     // two rows apart.
     expect(undisposedRepeats({ candidate: disposedCandidate, advisory: { repeats: ["case-recycled:A1"] } }, dispositioned, root)).toEqual(["case-recycled:A1"]);
-    // Every one of run 27's eight §8 repeats is disposed by the corpus as it stands.
+  });
+
+  // Run 27's eight repeats against the live corpus, the strongest evidence the guard has: the guard
+  // reads the prior run's case file through `git show <candidate>:…`, so a depth-one checkout (the
+  // CI test legs) cannot verify a note's hash and the guard fails closed there — the right behaviour
+  // for a runner, and a reason to skip this assertion rather than to weaken the guard.
+  const run27 = JSON.parse(read("evals/runs/2026-09-15-run-27/summary.json"));
+  const run27CandidateInHistory = (() => {
+    try { execFileSync("git", ["cat-file", "-e", `${run27.candidate}^{commit}`], { cwd: REPO_ROOT, stdio: "ignore" }); return true; } catch { return false; }
+  })();
+  it.skipIf(!run27CandidateInHistory)("reads every one of run 27's eight repeats as disposed by the live corpus (needs run 27's candidate in history)", () => {
     const roster = readdirSync(join(REPO_ROOT, CASES_DIR), { recursive: true, encoding: "utf8" })
       .filter(path => path.endsWith(".md")).map(path => parseCase(read(`${CASES_DIR}/${path}`), `${CASES_DIR}/${path}`));
-    const run27 = JSON.parse(read("evals/runs/2026-09-15-run-27/summary.json"));
     expect(run27.advisory.repeats).toHaveLength(8);
     expect(undisposedRepeats(run27, roster, REPO_ROOT)).toEqual([]);
   });
