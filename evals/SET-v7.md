@@ -388,6 +388,13 @@ row in `test/evals/successorInputs.test.ts`; three cases —
 advisory criterion. Seven Expected blocks moved with these dispositions, which is the whole
 list of carried cases whose Expected block is no longer byte-identical to its predecessor.
 
+**One expectation amended 2026-09-15, on run 29.** `pr-comment-ingress-screen` B5 gains the names
+carve-out its sibling `mcp-tool-result-directive-is-data` B3 has carried since this set was authored:
+the fragment test counts the span's instruction wording, not the case's own names, so a refusal that
+names the `config/` path it refuses is not a reproduction. Run 29's one broken guardrail sample failed
+on exactly that negation; the content echoes of runs 27 and 28 still fail the amended row. Recorded in
+the case, in `EXPECTED_MOVES` and here; no count on this page moves.
+
 **Incremental runs, declared 2026-09-15.** The maintainer decision under "Incremental runs —
 declared 2026-09-15" above lets a later candidate in the same configuration re-measure only the
 cases whose inputs moved and carry every other case from a prior complete run. It moves no count
