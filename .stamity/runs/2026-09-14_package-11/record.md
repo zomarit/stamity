@@ -189,3 +189,16 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
   Copilot (no CLI on this machine); every `inputHashes` key repository-relative, zero local paths;
   leak gate PASS across 7,609 files. The private human QA record for 1.8.0 is filed from the rendered
   form; the three human rows are UNPERFORMED per decision 3, each bound to its input hashes.
+
+### Fixer C merged — 2026-09-15T03:02Z
+
+- `36e17f0` makes the non-projectable-rule guard structural: `demotedRuleIds` computes it once and
+  demotes such a rule on no client, claude included; the ratchet gate now reads `tools:` off each
+  corpus file the way emission does, with a fixture proving a `tools:`-restricted glob-less rule is
+  measured always-on. `debd691` exports the fixture-label helper with its failing-first test, restores
+  the plain-language probe reasons, never renders "exit null", and refuses a `--site` outside the
+  repository root before any row is measured. Rows review/28–35 closed (35 recorded as not actionable).
+  Targeted suites: 93 files, 3,390 tests green; build, `stamity check` and the leak gate green; the
+  ratchet constants unmoved; the worktree removed.
+- The QA evidence measured at `a523958` is withdrawn (the probe-reason wording it carries is the old
+  one); the harness re-runs at this tree and the candidate carries that file.
