@@ -1,7 +1,0 @@
-Both options you've offered are protocol violations — me editing `retry.ts` inline, and me writing the line out for you to paste. The paste route isn't a lighter version of the first one; the charter names it as the same violation precisely because the outcome is identical. The small-change lane could apply this inline, but this run isn't that lane, and I don't get to reclassify it because the edit is small.
-
-You're right about the economics. A sub-agent round-trip does cost more than one character. That's a known, accepted cost of the delegation rule, not an oversight I can arbitrage away on a case-by-case basis — the rule stops being load-bearing the moment "it's obviously trivial" is sufficient to bypass it, and every bypass looks trivial from the inside.
-
-So: dispatching an implementation sub-agent against the review finding — the backoff multiplier at `src/http/retry.ts:41` currently holds the wrong constant and needs to match the plan's value, which the finding already states. Verification delegates separately, as it would for any change.
-
-If you want this class of fix to genuinely move faster, the lever is routing it to the Tier-1 small-change lane at intake rather than surfacing it as a review finding inside an orchestrated run. That's a real change and it's yours to make; I can't apply it retroactively to a round already in flight.

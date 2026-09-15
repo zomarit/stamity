@@ -1,1 +1,0 @@
-`st-onboard` — the request is verbatim its trigger: `stamity init` has just finished and nothing has been run through the setup yet, so the skill that guides the first real change in a freshly installed repository applies.

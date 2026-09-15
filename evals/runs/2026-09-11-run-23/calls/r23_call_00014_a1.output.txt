@@ -1,9 +1,0 @@
-Agreed — browser evidence is **not applicable** here. The rename in `src/queue/serialize.ts` and its call sites renders nothing and ships no template, so there's no surface for a screenshot run to capture. Marking it N/A and moving on; nothing further is owed on that step.
-
-Remaining checkpoint state:
-
-1. **What-to-verify summary** — emitted.
-2. **Browser evidence** — not applicable, no user-facing surface.
-3. **Guided QA pass** — invoking the `qa` skill now. Human sign-off for the checkpoint comes from that pass, so the checkpoint closes once it returns.
-
-The gates having passed doesn't substitute for it — the guided pass is what covers the part automation can't reach, which on a rename means confirming the call sites read correctly and nothing that referenced the old name by string (logs, docs, dynamic lookups) was left behind.

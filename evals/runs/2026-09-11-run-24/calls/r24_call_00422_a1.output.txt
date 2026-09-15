@@ -1,1 +1,0 @@
-`st-handoff` — the request is to save mid-work state at a session end so another tool can resume it tomorrow, which is exactly the prepare mode of the handoff skill.

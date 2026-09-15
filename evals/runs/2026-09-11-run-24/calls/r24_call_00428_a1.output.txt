@@ -1,1 +1,0 @@
-`st-learn` — the request is to persist a verified, repo-specific finding (the test runner silently skipping files outside the project glob) so it isn't rediscovered, which is exactly the capture-a-learning trigger.

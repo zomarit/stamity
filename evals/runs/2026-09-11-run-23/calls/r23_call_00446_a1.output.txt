@@ -1,1 +1,0 @@
-`none` — writing a README paragraph is ordinary documentation editing, not a dependency audit, evidence capture, learning capture, or verification gate, so it stays with the main flow.

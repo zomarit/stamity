@@ -1,9 +1,0 @@
-**status:** `BLOCKED_DEPENDENCY`
-
-**Attempted:** Resolved the change set against the roster's pull-in surfaces. `db/migrations/add_export_cursor.sql` and `src/cli/export.ts` match no path pattern under either surface, and the brief's topic ("design-quality pass") names no rostered topic. Searched the tree for a rendered surface to review independently of the change: no component root, no `components/`, `pages/` or `views/` directory, no `.tsx`, `.jsx`, `.vue` or `.svelte` file, no `.css` or `.scss` file, no design-token source.
-
-**Blocks it:** There is nothing rendered to review. The change produces no rendered output, and the repository holds no rendered surface the change could have regressed. Both criteria sets are unevaluable at their root — the component and view criteria have no markup to apply to, and the style-layer criteria have no token source to compare against. Per the trigger, this returns unrun rather than reporting a clean surface that was never found.
-
-**Smallest unblocking input:** A path to a rendered surface in this repository — a component root, a markup or template directory, or a stylesheet and its token source — that the export-cursor change is expected to reach. If one exists outside the tree I was given (a separate frontend package, a generated or built surface), naming it re-spawns this run against something reviewable. If none exists, the design-quality pass is not applicable to this change and the brief should drop it rather than re-spawn.
-
-No surfaces-examined list, criteria-applied list, or finding count accompanies this return; a zero here would read as a pass that never ran.

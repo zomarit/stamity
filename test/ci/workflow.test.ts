@@ -310,6 +310,24 @@ describe("ci.yml — the merge-blocking gate", () => {
     expect(conditionOf(check, "Tarball smoke (publish shape)")).toBe("matrix.tarball_smoke");
   });
 
+  it("makes repository hygiene mandatory on the PR toolchain leg with its base available", () => {
+    const step = stepOf(check, "Repository hygiene");
+    expect(step.run).toBe('node scripts/repo-hygiene.mjs --base "$HYGIENE_BASE_REF"');
+    expect(step.env?.HYGIENE_BASE_REF).toBe("${{ github.event.pull_request.base.sha }}");
+    expect(step["continue-on-error"]).toBeUndefined();
+    const depth = String(stepOf(check, "Checkout").with?.["fetch-depth"])
+      .replace(/^\$\{\{/, "").replace(/\}\}$/, "");
+    for (const event_name of ["pull_request", "push", "schedule", "workflow_dispatch"]) {
+      for (const leg of jobs["check"]?.strategy?.matrix?.include ?? []) {
+        const context = { github: { event_name }, matrix: leg };
+        const required = event_name === "pull_request" && leg.toolchain === true;
+        expect(evaluateWorkflowExpression(step.if ?? "false", context)).toBe(required);
+        expect(evaluateWorkflowExpression(`(${depth}) == '0'`, context)).toBe(required);
+      }
+    }
+    expect(jobOf(ci, "all-ci-checks").needs).toContain("check");
+  });
+
   it("runs the coverage floors on the legs that can meet them, and the suite on all of them", () => {
     // vitest.config.ts holds the merge and emit core at 100% and those floors BLOCK. The windows
     // leg skips the mode- and symlink-dependent cases by platform guard, so a coverage run there

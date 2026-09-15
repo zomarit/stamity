@@ -1,3 +1,0 @@
-`st-qa`
-
-The request is a standalone pre-merge ask for what a person should manually test, which is exactly st-qa's independent trigger — no work run's QA checkpoint is calling it here.
