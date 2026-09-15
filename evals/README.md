@@ -45,7 +45,7 @@ default `claude` profile selects `rubric-v7.md`.
 
 ## What v5 changes
 
-The current roster has 78 cases: 48 golden, 18 adversarial (14 guardrails and
+v5's roster had 78 cases: 48 golden, 18 adversarial (14 guardrails and
 4 benign twins), and 12 probes. It refreshes changed governing text, adds the
 onboarding-budget and semantic-ambiguity regressions, and fulfils all seven
 next-version exemption triggers. All 69 carried Expected blocks remain byte-identical;
