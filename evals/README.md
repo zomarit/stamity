@@ -392,6 +392,12 @@ The set runs when an operator says so, in a harness session, and at no other tim
 - **A person starts the run.** There is no `npm run eval`: a scored run costs model
   calls, and a person decides when and why to spend them.
 
+Incremental runs are a property of the route, not of the set's prose. `SET-v7.md` declares the rule
+under "Incremental runs — declared 2026-09-15" — a later candidate in the same configuration
+re-measures the cases whose inputs moved and carries the rest from a prior complete run — and the
+route of record's driver is what implements the composition. The manual runner documented on this
+page runs the full set, every case, every time.
+
 The three gates above are the exception that proves the rule: they are deterministic checks
 over the case files, they run in `npm run test` with everything else, and they score nothing.
 

@@ -164,6 +164,40 @@ as disposed only when the current case file carries `Disposition <YYYY-MM-DD>: A
 that criterion there, and it names every repeat that carries none. The eight taken on
 2026-09-15, against run 27's §8 repeats, are listed under "What v7 adds" below.
 
+## Incremental runs — declared 2026-09-15
+
+A maintainer decision of 2026-09-15, declared before any run uses it, so that no run chooses the
+rule that scores it.
+
+**A release's baseline run.** A release's first complete run of the set — every case with three
+admitted samples and three admitted judges, calibration five of five — is that release's
+**baseline run**.
+
+**What a later run may be.** A later run on another candidate within the same configuration — the
+same model pair, harness, rubric core, thresholds and scoring rule — may be **incremental**: it
+names one **prior complete run** (the baseline, or an earlier incremental run's composed result)
+and re-measures exactly the cases whose inputs moved since that run's candidate — the case file's
+bytes, or the text of any source line range the case's `source:` names, compared as resolved at
+each candidate — plus any case the operator adds by name. Additions only: a moved case can never
+be excluded. Every other case **carries** its three admitted scenario samples and three admitted
+judges from the prior run, unchanged and never re-graded.
+
+**Calibration always runs afresh.** A prior sample that was invalid, blocked or withheld never
+carries; if a case's prior samples are not all admitted, the case re-measures.
+
+**The composed artifact.** It scores the whole set under the unchanged rule and thresholds, and
+carries a provenance section: the prior run's id and candidate, the count and list of re-measured
+cases, and for every carried case the case-file sha256 and the source ranges it was found
+identical on. Its per-case verdict table marks each carried case with the run it came from.
+
+**Nothing is rescored.** Historical runs stay untouched; a composed run is a new artifact naming
+its sources, and a carried sample is the same measurement it was.
+
+**Advisory repeats read the same pair.** The advisory-repeat rule compares an incremental run with
+its prior run as before.
+
+**Implemented by the route of record.** A runner without composition runs the full set.
+
 ## What v7 adds
 
 Twenty-one cases, in two groups, and one change to how a probe's recall row is labelled.
@@ -353,6 +387,11 @@ row in `test/evals/successorInputs.test.ts`; three cases —
 `spec-converge-confirm-gated-merge` — now declare no
 advisory criterion. Seven Expected blocks moved with these dispositions, which is the whole
 list of carried cases whose Expected block is no longer byte-identical to its predecessor.
+
+**Incremental runs, declared 2026-09-15.** The maintainer decision under "Incremental runs —
+declared 2026-09-15" above lets a later candidate in the same configuration re-measure only the
+cases whose inputs moved and carry every other case from a prior complete run. It moves no count
+on this page, and nothing in the scoring rule, the metric names or their thresholds moves with it.
 
 Recomputed against the files: 99 cases (78 carried from cases-v5, 71 of them with their
 `## Expected` block still byte-identical and seven moved by the dispositions above — eight of

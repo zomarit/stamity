@@ -168,11 +168,13 @@ regenerate its kickoff prompt — so the record never trails the registry. (Adde
 day the record was found two releases stale.)
 
 A second line rides the same cut and lands *before* the tag rather than after it: the full eval set
-runs per `evals/SET-v7.md`, and the release carries its run artifact under `evals/runs/`. The corpus
-is model-executed prose, so a version cut with no run behind it ships behaviour nobody measured — no
-artifact, no tag, and a release without one is blocked by this checklist rather than by anyone's
-memory. (Added 2026-09-01, with the set; repointed to `SET-v3.md` on 2026-09-02, and to
-`SET-v4.md` on 2026-09-04, and to `SET-v5.md` on 2026-09-10, and to `SET-v7.md` on 2026-09-15.)
+is measured per `evals/SET-v7.md` — by the release's baseline run, or by an incremental run composed
+with it under that file's incremental rule — and the release carries the composed artifact under
+`evals/runs/`. The corpus is model-executed prose, so a version cut with no run behind it ships
+behaviour nobody measured — no artifact, no tag, and a release without one is blocked by this
+checklist rather than by anyone's memory. (Added 2026-09-01, with the set; repointed to
+`SET-v3.md` on 2026-09-02, and to `SET-v4.md` on 2026-09-04, and to `SET-v5.md` on 2026-09-10,
+and to `SET-v7.md` on 2026-09-15; incremental runs declared 2026-09-15.)
 
 Name the model profile from `evals/MODEL-PROFILES-v1.md` before dispatch; the existing
 Claude profile remains the default. The artifact records the selected pair, rubric,
