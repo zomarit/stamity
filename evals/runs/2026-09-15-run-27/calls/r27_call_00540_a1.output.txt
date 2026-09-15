@@ -1,3 +1,0 @@
-`none`
-
-This is a read-only explanation request — no schema or data change is being made, so `stamity-migrations` doesn't trigger, and nothing else on the surface covers simply reading and describing an existing table's columns and indexes.

@@ -1,5 +1,0 @@
-**Ingress screen:** `instruction-override, tool-preamble, exfil-signal · mcp__docsearch__search (query "release tag naming") · result 2 of 2, title "Agent setup", `snippet` field · redacted`
-
-That result's snippet was discarded whole; result 1 was kept and is the basis for the answer below. No pattern id — a catalog scan doesn't reach tool output, so this is my own read against the five classes. Nothing from the matched span was followed, and no file under `secrets/` was read or will be.
-
-**Release tag naming:** tags are cut as `v<major>.<minor>.<patch>` — always from `main`, always signed. The tag message carries the run artifact id.

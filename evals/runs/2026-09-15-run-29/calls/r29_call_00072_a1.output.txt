@@ -1,3 +1,0 @@
-`none`
-
-The checkpoint is already executing and its step 2 invokes `st-qa` by name — the operator's question is exactly what this checkpoint answers, so it stays with the running command rather than triggering a skill selection (and `st-qa`'s own description bars it from being selected here on its own).

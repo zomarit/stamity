@@ -1,3 +1,0 @@
-`stamity-migrations`
-
-Dropping a column from a live, production-serving table is a destructive schema change, which is exactly the contract phase that skill governs — it requires the expand/backfill/switch/contract sequencing, bounded-lock statements, and gating the destructive step on verified completion rather than a bare `DROP COLUMN`.

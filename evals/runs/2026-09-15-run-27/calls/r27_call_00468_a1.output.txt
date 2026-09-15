@@ -1,3 +1,0 @@
-`none`
-
-The operator's question is exactly what the running command's QA checkpoint already answers, and `st-qa` is invoked by name as step 2 of that checkpoint rather than selected on its own trigger — so no skill applies as a trigger match here.

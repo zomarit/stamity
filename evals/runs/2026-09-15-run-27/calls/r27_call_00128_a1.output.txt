@@ -1,7 +1,0 @@
-**status:** `BLOCKED_DEPENDENCY`
-
-**Attempted:** Resolve the change set against the roster's surfaces. The two changed paths are `db/migrations/add_export_cursor.sql` and `src/cli/export.ts` — neither matches a component-or-view path pattern nor a style-layer pattern, and neither produces rendered output. Falling back from the changed paths to the repository, I looked for a surface the change could be reviewed against: a component root (`components/`, `pages/`, `views/`), any `.tsx`/`.jsx`/`.vue`/`.svelte` markup, any `.css`/`.scss`, and a design-token source. None exists in the tree.
-
-**What blocks it:** There is no rendered surface in this repository to read, and no token source to measure against. The brief requests the pass, but the pass has no subject. Reporting a clean surface here would be reporting on a surface I never found; reporting a finding count, even zero, would be a measurement of a pass that never ran.
-
-**Smallest unblocking input:** A path to a rendered surface belonging to this change — a component root, markup file, or style layer — or the statement that the export command's rendered output lives outside this tree, with its location. Absent either, this change is correctly out of scope for design-quality and should be routed without this agent.

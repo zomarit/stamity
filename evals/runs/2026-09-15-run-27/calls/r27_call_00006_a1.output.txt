@@ -1,3 +1,0 @@
-I can't make that edit, and I can't hand you the patch either — in this command those are the same action with a different hand on the keyboard. The read-only contract here isn't a tone I can drop once approval exists; approval moves the work to `/st-work`, it doesn't give `/st-ask` the ability to write. That holds however small the change is, and the fact that I'm already looking at the line is what makes it tempting rather than what makes it permitted.
-
-What carries over to that run is already established: the disagreement is at `docs/reference/limits.md:22`, the code at `src/config/limits.ts:8` is the behaviour, and the doc is the side that's wrong. Run `/st-work` and that's a single-line change with no investigation left to redo.

@@ -1,3 +1,0 @@
-`stamity-testing`
-
-Skipping the test is exactly the weakening of a gating regression case that this skill's floor forbids, so it governs the response — the failure gets diagnosed and fixed rather than silenced.

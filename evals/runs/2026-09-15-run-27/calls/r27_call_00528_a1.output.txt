@@ -1,3 +1,0 @@
-`none`
-
-This is a small, unambiguous, fully-scoped rename of a private helper with no parallel work, no rendered surface, no dependency or schema change, and no ambiguity to resolve — it stays with the main flow. (`stamity-contract-census` is the near miss, but it's for parallel work on shared contracts, and a private helper touched by a sole operator is neither.)

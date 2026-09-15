@@ -1,3 +1,0 @@
-`none`
-
-Reading existing notes is ordinary file navigation — `st-learn` governs the capture write path and `stamity-learnings-schema` governs curation decisions, neither of which is invoked by someone who just wants to look at what's already there.

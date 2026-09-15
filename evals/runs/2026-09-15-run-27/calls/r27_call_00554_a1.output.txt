@@ -1,1 +1,0 @@
-`none` — a pure parameter rename in a non-networked helper with unchanged behaviour touches no rendered surface, dependency graph, contract, or quality gate, so it stays with the main flow (`stamity-resilience` is explicitly ruled out since the file makes no out-of-process call).

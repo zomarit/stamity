@@ -1,1 +1,0 @@
-`stamity-ui-states` — the request is exactly a data-reading interface surface missing its loading and empty states, which is the four-state contract that skill defines.

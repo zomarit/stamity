@@ -1,1 +1,0 @@
-`none` — this is a plain factual lookup about the repo's existing test tooling, not the authoring or gating of a test, so `stamity-testing` (which governs what a test must be) doesn't trigger and the main flow can just read the config and answer.

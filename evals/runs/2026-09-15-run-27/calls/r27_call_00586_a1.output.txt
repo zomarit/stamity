@@ -1,1 +1,0 @@
-`stamity-testing` — the request asks to weaken a regression case that a defect fix shipped with, which is precisely the floor that skill defines (regression case per fix, gating test never weakened by the change it gates).

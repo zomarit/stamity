@@ -1,3 +1,0 @@
-`stamity-api-versioning`
-
-This is a breaking change to the error body of a published, third-party-consumed endpoint, which is exactly what that floor governs — RFC 9457 problem details, additive-first change within a version, and an announce-sunset-remove lifecycle instead of dropping the old flat `code` string outright.
