@@ -151,3 +151,14 @@ records each as `Default applied: <question> → <option> (<reason>)` where it e
 - 02:09Z Review round 2: request-changes (medium) — 21 of 22 round-one dispositions verified; one regression (N1: a tools-restricted rule could be delivered nowhere on a shared-tree client), one contested rejection (N2), four Minors (M-a..M-d) → round-three fixes dispatched to both fixers.
 - 02:12Z Fixer A round 2 → cherry-picked 9e030ff (M-a, M-b, M-c; binding 503).
 - 02:14Z U11 round 4 DONE: driver pinned to binding 503 and SET-v7 cb2eae0a…; canaries K3j/K4j; committed privately.
+
+### Release checklist, third line — checked 2026-09-15T02:36Z (needs no publish)
+
+- Repository description and topics read at the console API: the description names the four clients and
+  the seven artifact classes this release still ships; nine topics; homepage `https://stamity.dev` — current.
+- Admin roster: one account holds admin on the repository (the maintainer); the registry lists one
+  maintainer account for `@zomarit/stamity`. Both rosters looked at this release.
+- The morning sequence is one private script beside the 1.8.0 adaptation of the post-publication verifier
+  (page markers moved to the pages this release changes: security mapping, measurements, doctrine
+  amendments, capability matrix, and the two new pages in `llms.txt`); the usage probe is a scratchpad
+  script; five-hour window 0.16 and seven-day 0.50 at 02:19Z — no capacity hold before run 25.
