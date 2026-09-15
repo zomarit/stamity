@@ -9,7 +9,7 @@ import { aggregate, calibrationMatches, EvalBlocked, locateCitation, nonNegotiab
 // @ts-expect-error — native ESM contributor tool.
 import { admitRequest, admitResponse, boundedMap, callWithRetries, CONTROLS, ENDPOINT, makeRequest, responsesTransport } from "../../scripts/eval/transport.mjs";
 // @ts-expect-error — native ESM contributor tool.
-import { advisoryRepeats, createArtifacts, loadInputs, runEvaluation } from "../../scripts/eval/run.mjs";
+import { advisoryRepeats, createArtifacts, loadInputs, runEvaluation, undisposedRepeats } from "../../scripts/eval/run.mjs";
 import { REPO_ROOT } from "./support.ts";
 
 const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
@@ -1197,6 +1197,26 @@ describe("bounded execution and artifact safety", () => {
   });
 });
 
+// The advisory-repeat guard reads the promote-or-delete decision off the CURRENT case file,
+// because the summary that reported the repeat is a historical artifact that never changes.
+// Two summary shapes reach it: the runner's own writer joins `caseId:criterion` into a string
+// (`advisoryRepeats`), and the driver's export carries an object with `previousSamples`.
+const expectedBlock = (note: string) => ["",
+  "### Binding criteria — these decide the verdict", "", "1. The response answers.", "",
+  "### Advisory criteria — recorded, never scored into the verdict", "", note, "",
+  "1. The response is complete.", ""].join("\n");
+const NOTE = "Disposition 2026-09-15: A2 deleted — the governing text asks no such thing.";
+const dispositioned = [
+  { id: "case-disposed", expected: expectedBlock(NOTE) },
+  { id: "case-open", expected: expectedBlock("Nothing has been dispositioned on this case.") },
+];
+const priorRun = (root: string, repeats: unknown[], runId = "2026-09-14-run-1") => {
+  mkdirSync(join(root, "evals", "runs", runId), { recursive: true });
+  writeFileSync(join(root, "evals", "runs", runId, "summary.json"), JSON.stringify({
+    runId, startedAt: "2026-09-14T00:00:00.000Z", status: "FAIL",
+    configurationHash: "fixture-only", advisory: { failures: [], repeats } }));
+};
+
 describe("full run admission and strict aggregation", () => {
   const groups = ["golden", "golden", "adversarial", "adversarial", "probe"];
   // The probe row carries a skill source: REQ-PROVE-010 reads the recall label off `source:`, and
@@ -1284,6 +1304,58 @@ describe("full run admission and strict aggregation", () => {
     expect(transport).toHaveBeenCalledTimes(2 + 5 + cases.length * 6);
     expect(result.summary.aggregate.rows[0].pass).toBe(false);
     expect(result.summary.aggregate.rows[0].samples[0].outputType).toBe("refusal");
+  });
+
+  it("admits a repeat as disposed only when the current case file carries its note, in either summary shape", () => {
+    // The driver's export shape, both rows non-empty so the filter has to discriminate.
+    expect(undisposedRepeats({ advisory: { repeats: [
+      { caseId: "case-disposed", criterion: "A2", previousSamples: [1], samples: [3] },
+      { caseId: "case-open", criterion: "A1", previousSamples: [2], samples: [1] },
+    ] } }, dispositioned)).toEqual(["case-open:A1"]);
+    // The runner's own writer shape, same two rows.
+    expect(undisposedRepeats({ advisory: { repeats: ["case-disposed:A2", "case-open:A1"] } }, dispositioned))
+      .toEqual(["case-open:A1"]);
+    // The note names A2, so it disposes A2 and nothing else — not A1 beside it, and not A22.
+    expect(undisposedRepeats({ advisory: { repeats: ["case-disposed:A1"] } }, dispositioned)).toEqual(["case-disposed:A1"]);
+    expect(undisposedRepeats({ advisory: { repeats: ["case-disposed:A22"] } }, dispositioned)).toEqual(["case-disposed:A22"]);
+    // A repeat naming a case the current roster no longer carries has no note to read.
+    expect(undisposedRepeats({ advisory: { repeats: ["case-gone:A1"] } }, dispositioned)).toEqual(["case-gone:A1"]);
+    expect(undisposedRepeats(null, dispositioned)).toEqual([]);
+    expect(undisposedRepeats({ advisory: { failures: ["case-open:A1"], repeats: [] } }, dispositioned)).toEqual([]);
+    // Every one of run 27's eight §8 repeats is disposed by the corpus as it stands.
+    const roster = readdirSync(join(REPO_ROOT, "evals/cases-v6"), { recursive: true, encoding: "utf8" })
+      .filter(path => path.endsWith(".md")).map(path => parseCase(read(`evals/cases-v6/${path}`), path));
+    const run27 = JSON.parse(read("evals/runs/2026-09-15-run-27/summary.json"));
+    expect(run27.advisory.repeats).toHaveLength(8);
+    expect(undisposedRepeats(run27, roster)).toEqual([]);
+  });
+
+  it("blocks the next run on an undisposed repeat, naming it, and lets a disposed one through", async () => {
+    const blocked = temp();
+    priorRun(blocked, [{ caseId: "case-open", criterion: "A1", previousSamples: [2], samples: [1] }]);
+    const withOpenRow = () => Object.assign(loaded(), { cases: dispositioned });
+    const stopped = await runEvaluation({ root: blocked, runId: "2026-09-15-run-2", profileName: "codex-astra",
+      trigger: "release", load: withOpenRow, transport: vi.fn() });
+    expect(stopped.summary.status).toBe("BLOCKED");
+    expect(stopped.summary.notDone).toContain("advisory-repeat-disposition-required: case-open:A1");
+    expect(readdirSync(stopped.directory).some(path => path.startsWith("isolation-"))).toBe(false);
+
+    const allowed = temp();
+    priorRun(allowed, ["case-0:A2"]);
+    // The same roster the run scores, with the note this repeat's disposition landed under.
+    const withNote = () => { const base = loaded(); return Object.assign(base, { cases: base.cases.map(
+      (scenario, index) => index === 0 ? Object.assign({}, scenario, { expected: expectedBlock(NOTE) }) : scenario) }); };
+    const transport = vi.fn(async (input: Request) => {
+      if (input.input[0]!.content.length === 1) return receipt(input);
+      const fixture = (rubric.fixtures as Fixture[]).find(item => item.transcript === input.input[0]!.content[3]!.text)!;
+      // C1's five binding labels are the fixture's own count; a deliberate mismatch stops the
+      // run right after calibration, which is all this case needs past the guard.
+      return receipt(input, fixture.id === "C1" ? emission(fixture, ["fail", "pass", "pass", "pass", "pass"]) : emission(fixture));
+    });
+    const ran = await runEvaluation({ root: allowed, runId: "2026-09-15-run-2", profileName: "codex-astra",
+      trigger: "release", load: withNote, transport });
+    expect(ran.summary.notDone).not.toContain("advisory-repeat-disposition-required: case-0:A2");
+    expect(ran.summary.calibration).toHaveLength(5);
   });
 });
 

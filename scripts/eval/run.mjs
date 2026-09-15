@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { aggregate, calibrationMatches, EvalBlocked, parseCase, parseGrade, parseRubric, requireEvidence, sha256 } from './instrument.mjs'
+import { aggregate, calibrationMatches, EvalBlocked, headings, parseCase, parseGrade, parseRubric, requireEvidence, sha256 } from './instrument.mjs'
 import { boundedMap, callWithRetries, CONTROLS, HARNESS, makeRequest, responsesTransport } from './transport.mjs'
 
 const PROFILE_PATH = 'evals/model-profiles-v1.json'
@@ -88,6 +88,34 @@ export function createArtifacts(root, runId) {
   return { directory, write }
 }
 
+/** `case-id:A2` from either shape: the runner writes the joined string, the driver's export an object. */
+const repeatId = row => typeof row === 'string' ? row : `${row.caseId}:${row.criterion}`
+
+/**
+ * The reviewed disposition a repeat needs, read off the CURRENT case file rather than off the
+ * historical summary that reported the repeat. `SET-v7.md`'s promote-or-delete rule records a
+ * disposition three times, and the note under the case's own Advisory heading — `Disposition
+ * <YYYY-MM-DD>: A<n> …` — is the copy that travels with the corpus. A run artifact never
+ * changes, so a guard that read the summary alone could never be satisfied: the repeats it
+ * lists stay listed forever. This reads the promote-or-delete decision where the decision lives.
+ */
+function disposed(scenario, criterion) {
+  // An id the corpus cannot carry is never disposed, and never reaches the pattern below.
+  if (!scenario?.expected || !/^A[1-9]\d*$/.test(criterion ?? '')) return false
+  const heading = headings(scenario.expected).find(item => item.title.startsWith('### Advisory criteria'))
+  if (!heading) return false
+  return new RegExp(`^Disposition \\d{4}-\\d{2}-\\d{2}: ${criterion}(?![0-9])`, 'm')
+    .test(scenario.expected.slice(heading.end))
+}
+
+/** The previous run's advisory repeats whose current case file carries no disposition note. */
+export function undisposedRepeats(previous, cases) {
+  return (previous?.advisory?.repeats ?? []).map(repeatId).filter(id => {
+    const [caseId, criterion] = id.split(':')
+    return !disposed(cases.find(scenario => scenario.id === caseId), criterion)
+  })
+}
+
 export function advisoryRepeats(aggregateResult, previous) {
   const failures = aggregateResult.rows.flatMap(row => [...new Set(row.samples.flatMap(sample =>
     sample.grade.advisory.filter(item => item.verdict === 'fail').map(item => `${row.caseId}:${item.id}`)))])
@@ -154,7 +182,8 @@ export async function runEvaluation({ root, runId, profileName, trigger, capacit
     requireEvidence(suppliedTransport || (typeof apiKey === 'string' && apiKey.trim().length > 0), 'OPENAI_API_KEY-unavailable')
     const transport = suppliedTransport ?? (request => responsesTransport(request, { apiKey }))
     const prior = previousRun(root, loaded.configurationHash)
-    requireEvidence(!prior?.advisory?.repeats.length, 'advisory-repeat-disposition-required')
+    const undisposed = undisposedRepeats(prior, loaded.cases)
+    requireEvidence(undisposed.length === 0, `advisory-repeat-disposition-required: ${undisposed.join(', ')}`)
     const invoke = async (name, role, blocks, validate, allowRefusal = false) => {
       loaded.assertUnchanged()
       const request = makeRequest(role, blocks)
