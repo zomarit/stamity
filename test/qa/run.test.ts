@@ -1,7 +1,7 @@
-import { homedir } from "node:os";
-import { readFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type * as NodeModule from "node:module";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import type * as NodePath from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -31,6 +31,11 @@ function pathFree(reason: string): void {
   // one per line — the absence of any `node_modules` mention is the
   // cheapest signal that the raw message never landed in the reason.
   expect(reason, reason).not.toContain("node_modules");
+}
+
+/** One evidence object's `rowHash` for the named row. */
+function rowHashOf(evidence: { rows: { row: string; rowHash: string }[] }, id: string): string {
+  return evidence.rows.find((row) => row.row === id)!.rowHash;
 }
 
 describe("loadBrowserLane — path-free skip reason", () => {
@@ -114,5 +119,126 @@ describe("run.mjs source — launch-failure reason", () => {
     expect(launchCatch).toContain("no browser binary");
     expect(launchCatch).toContain("BROWSER_INSTALL_HINT");
     expect(source).toContain("const BROWSER_INSTALL_HINT = 'cd website && npx playwright install chromium'");
+  });
+});
+
+/**
+ * The relativize fix: `inputHashes` keys must never carry the checkout location the harness ran
+ * from — a `--site` argument (or any other input) is free to be absolute, since that is how an
+ * orchestrator that has already resolved paths would invoke this script, and the evidence file's
+ * keys must not be. Exercised through `main()` itself, not through `repoRelativeLabel` alone,
+ * because the bug this fixes was in how `main()` built the label BEFORE handing it to that
+ * function's predecessor — a unit test of the helper in isolation would not have caught it.
+ */
+describe("main — inputHashes keys never carry the checkout location", () => {
+  const temps: string[] = [];
+
+  afterEach(() => {
+    for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  const PAGE_FILES = [
+    "index.html",
+    "docs/getting-started/index.html",
+    "docs/customization/index.html",
+    "docs/packs-and-trust/index.html",
+    "docs/capability-matrix/index.html",
+  ];
+
+  /**
+   * A built-site tree carrying every file `PAGES` names, at a fresh ABSOLUTE directory nested
+   * under `website/build/` — the real shape `--site` is documented and used against
+   * (`[--site website/build]`), never a location outside the repository entirely. `website/build/`
+   * is wholesale gitignored (`.gitignore`), so a fixture left here by an interrupted run is neither
+   * tracked nor walked by the leak gate.
+   */
+  function siteFixture(): string {
+    mkdirSync(join(REPO_ROOT, "website", "build"), { recursive: true });
+    const dir = mkdtempSync(join(REPO_ROOT, "website", "build", "stamity-qa-run-site-"));
+    temps.push(dir);
+    for (const file of PAGE_FILES) {
+      const target = join(dir, ...file.split("/"));
+      mkdirSync(join(target, ".."), { recursive: true });
+      writeFileSync(target, `<!doctype html><title>${file}</title>\n`);
+    }
+    return dir;
+  }
+
+  function evidencePath(): string {
+    const dir = mkdtempSync(join(tmpdir(), "stamity-qa-run-out-"));
+    temps.push(dir);
+    return join(dir, "evidence.json");
+  }
+
+  it("keeps every H2/H3 inputHashes key repo-relative, home-free and repo-root-free — even given an absolute --site", async () => {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { main } = await import("../../scripts/qa/run.mjs");
+    const site = siteFixture();
+
+    const evidence = await main([
+      "--site",
+      site,
+      "--skip-browser",
+      "--skip-hooks",
+      "--sha",
+      "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "--out",
+      evidencePath(),
+    ]);
+
+    const rowsWithInputs = evidence.rows.filter(
+      (row: { inputHashes: Record<string, string> }) => Object.keys(row.inputHashes).length > 0,
+    );
+    expect(rowsWithInputs.length, "at least one row carries page inputs").toBeGreaterThan(0);
+    for (const row of rowsWithInputs) {
+      for (const key of Object.keys((row as { inputHashes: Record<string, string> }).inputHashes)) {
+        expect(key, `${row.row} key ${key}`).not.toMatch(/^[/\\]|^[A-Za-z]:[/\\]/);
+        expect(key, `${row.row} key ${key}`).not.toContain(HOME);
+        expect(key, `${row.row} key ${key}`).not.toContain(REPO_ROOT);
+        // The fixture's own directory name is expected to survive as a relative SEGMENT
+        // (`website/build/stamity-qa-run-site-XXXX/index.html`) — what must not survive is the
+        // absolute prefix in front of it, already ruled out above.
+        expect(key.startsWith("website/build/")).toBe(true);
+      }
+    }
+  });
+
+  it("gives the same rowHash for the same page bytes whether --site is spelled relative or absolute", async () => {
+    // "A checkout location never moves it": the ONE thing this test can vary within a single
+    // process is how the caller SPELLS the path to the very same on-disk bytes, not which checkout
+    // it runs from — but that is exactly the mechanism the fix changed. Before the fix, `siteLabel`
+    // was the `--site` argument's own spelling verbatim, so an absolute and a relative spelling of
+    // the identical location produced two different labels and two different row hashes for
+    // identical bytes; `repoRelativeLabel` resolves both spellings through the same
+    // `relative(REPO_ROOT, …)` call, so they now agree — which is the same invariance a different
+    // checkout root would get, through the same mechanism.
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { main } = await import("../../scripts/qa/run.mjs");
+    const site = siteFixture();
+    const relativeSite = site.slice(REPO_ROOT.length + 1);
+
+    const evidenceRelative = await main([
+      "--site",
+      relativeSite,
+      "--skip-browser",
+      "--skip-hooks",
+      "--sha",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "--out",
+      evidencePath(),
+    ]);
+    const evidenceAbsolute = await main([
+      "--site",
+      site,
+      "--skip-browser",
+      "--skip-hooks",
+      "--sha",
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "--out",
+      evidencePath(),
+    ]);
+
+    expect(rowHashOf(evidenceRelative, "H2")).toBe(rowHashOf(evidenceAbsolute, "H2"));
+    expect(rowHashOf(evidenceRelative, "H3a")).toBe(rowHashOf(evidenceAbsolute, "H3a"));
   });
 });

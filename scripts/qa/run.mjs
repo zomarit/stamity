@@ -39,6 +39,21 @@ const SELF = fileURLToPath(import.meta.url)
 const REPO_ROOT = resolve(SELF, '..', '..', '..')
 
 /**
+ * `absolute` as a path relative to `REPO_ROOT`, in POSIX form.
+ *
+ * The evidence file's `inputHashes` keys are this label, never the raw path the caller supplied —
+ * a `--site` (or any other) argument passed as an ABSOLUTE path (the common shape when an
+ * orchestrator resolves paths before invoking this script) would otherwise land verbatim in a
+ * committed evidence file, carrying the operator's home directory or the repo's own absolute
+ * checkout path into it. `relative()` plus a POSIX-separator normalization is the same fix S-4
+ * applied to the skip-reason strings: the fact the label names ("this page, this input") survives,
+ * the checkout location it was measured from does not.
+ */
+export function repoRelativeLabel(absolute) {
+  return relative(REPO_ROOT, absolute).replaceAll('\\', '/')
+}
+
+/**
  * The pages under test, as site routes paired with the file the build writes for each.
  *
  * Five, chosen for what each one contributes rather than for coverage: the home page (the only
@@ -220,7 +235,15 @@ function hashEntries(entries) {
   return { inputs, missing }
 }
 
-/** Hash the fixture files that decide a hook row, under fixture-relative labels. */
+/**
+ * Hash the fixture files that decide a hook row, under fixture-relative labels.
+ *
+ * The label is `fixture/<path within the fixture>` — never the fixture's own absolute directory,
+ * which lives under the OS temp directory (`scripts/qa/fixtures.mjs`) and carries the operator's
+ * home directory on most machines. Each hook row (`H1a`–`H1d`) owns its own `inputHashes` map, so
+ * dropping the per-client qualifier this label used to carry (`fixture(${client})/…`) does not
+ * collide two rows' keys — it only drops information the row id already carries.
+ */
 function hashFixtureInputs(client, fixtureDir) {
   if (fixtureDir === undefined) return { inputs: [], missing: [] }
   const relatives = [
@@ -249,7 +272,7 @@ function hashFixtureInputs(client, fixtureDir) {
       missing.push(entry)
       continue
     }
-    inputs.push({ path: `fixture(${client})/${entry}`, sha256: hashFile(absolute) })
+    inputs.push({ path: `fixture/${entry}`, sha256: hashFile(absolute) })
   }
   return { inputs, missing }
 }
@@ -354,13 +377,14 @@ export async function main(argv) {
   const out = resolve(REPO_ROOT, options.out ?? `.stamity/evidence/qa-${sha.slice(0, 7)}.json`)
 
   // Page inputs first: the H2 and H3 rows are bound to the built pages whether or not the browser
-  // lane runs, so a skipped run still records WHAT it skipped measuring.
-  const siteLabel = (options.site ?? 'website/build').replaceAll('\\', '/').replace(/\/+$/, '')
+  // lane runs, so a skipped run still records WHAT it skipped measuring. The label is ALWAYS
+  // repo-root-relative (`repoRelativeLabel`), never the `--site` argument's own spelling — that
+  // argument is free to be absolute, and the evidence file's keys must not be.
   const pageHashes = hashEntries(
-    PAGES.map((page) => ({
-      label: `${siteLabel}/${page.file}`,
-      absolute: join(siteDir, ...page.file.split('/')),
-    })),
+    PAGES.map((page) => {
+      const absolute = join(siteDir, ...page.file.split('/'))
+      return { label: repoRelativeLabel(absolute), absolute }
+    }),
   )
   const missingPages = pageHashes.missing
 
