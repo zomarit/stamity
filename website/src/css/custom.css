@@ -493,10 +493,10 @@ html[data-theme='dark'] .landing::before {
  * diagram's label font, which is mermaid's own `"trebuchet ms", verdana, arial, sans-serif` and
  * not the site's, so a visitor's substitute font lays the graph out slightly differently anyway.
  * A wrong ratio degrades to a smaller shift; it cannot break the page. Two more drift triggers
- * are silent in the other direction: rename the `## The spine` heading and `#the-spine` stops
- * matching, reverting the page to the shift above; insert a paragraph directly under that heading
- * and `:has(+ p)` matches forever, leaving a permanent gap — the loud failure, which is the right
- * direction for the one that cannot be measured away.
+ * are silent in the other direction: rename the `## How the nine fit together` heading and
+ * `#how-the-nine-fit-together` stops matching, reverting the page to the shift above; insert a
+ * paragraph directly under that heading and `:has(+ p)` matches forever, leaving a permanent gap
+ * — the loud failure, which is the right direction for the one that cannot be measured away.
  *
  * WHAT IS LEFT UNRESERVED, deliberately: the container is 7.390625px taller than its svg at 1280
  * and at 375 alike — the strut's descender under the inline svg, the same constant at both widths
@@ -505,7 +505,7 @@ html[data-theme='dark'] .landing::before {
  * CLS. That is at most 6% of the 0.1 threshold, against a third property and a magic pixel to
  * reclaim it.
  */
-.markdown h2#the-spine:has(+ p)::after {
+.markdown h2#how-the-nine-fit-together:has(+ p)::after {
   aspect-ratio: 443.04296875 / 767.125;
   content: '';
   display: block;
