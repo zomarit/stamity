@@ -46,6 +46,15 @@ const STALE_MESSAGE =
 
 const committedPage = (): string => readFileSync(join(REPO_ROOT, CLI_REFERENCE_DOC_PATH), "utf-8");
 
+/**
+ * A source file with its comments removed, so a census over where a symbol is USED is not
+ * satisfied by prose naming it. Block comments (which is where a `{@link}` lives) and
+ * whole-line `//` comments only — a trailing `//` is left alone rather than risk cutting a
+ * string that contains one.
+ */
+const withoutComments = (body: string): string =>
+  body.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+
 /** Body rows of every markdown table in the page — header and delimiter dropped. */
 function tableRows(doc: string): string[] {
   const rows: string[] = [];
@@ -586,10 +595,38 @@ describe("the restated kit contract", () => {
       "src/pack/sign.ts", // family 2
       "src/pack/trust.ts", // family 2
     ]);
-    for (const relPath of throwingFiles) {
-      expect(sources, `${relPath} throws the code without the mention scan seeing it`).toContain(
-        relPath,
-      );
+    /**
+     * TEST CHANGE, justified: what stood here looped the throw sites back through `sources` and
+     * asserted containment. Both lists come out of the same scan over `src`, and the throw-site
+     * pattern contains the mention pattern, so it held by construction and could not fail — a
+     * superset claim checked against its own subset. The question it was reaching for runs the
+     * other way: a file that NAMES the code without throwing it must be naming it in prose or
+     * in a declaration, never in a runtime use that decides something about this code while
+     * staying out of the census above.
+     *
+     * So each mention-only file is read with its comments stripped, and what survives must be
+     * one of the declarative forms pinned below — the type union's member and the two lookup
+     * tables that classify the code — or nothing at all. A new `=== "INTEGRITY_ERROR"`, a new
+     * argument carrying the code, or a handler keyed on it lands in code rather than in a
+     * comment or a `{@link}`, and fails here.
+     */
+    // Pinned as exact lines rather than as file names, so a table gaining a second mention of
+    // the code — or the union member growing a call site beside it — fails rather than passing
+    // because the file was already on the list.
+    const declarativeMentions: Record<string, readonly string[]> = {
+      "src/cli/docs/cliReference.ts": ["  INTEGRITY_ERROR:"],
+      "src/resilience/failureClass.ts": ['  INTEGRITY_ERROR: "substantive",'],
+      "src/types/errors.ts": ['  | "INTEGRITY_ERROR"'],
+    };
+
+    for (const relPath of sources.filter((candidate) => !throwingFiles.includes(candidate))) {
+      const inCode = withoutComments(source(relPath))
+        .split("\n")
+        .filter((line) => line.includes("INTEGRITY_ERROR"));
+      expect(
+        inCode,
+        `${relPath} names INTEGRITY_ERROR outside a comment without throwing it`,
+      ).toEqual(declarativeMentions[relPath] ?? []);
     }
 
     // Each clause of the row, checked against the words its producer uses.

@@ -205,9 +205,11 @@ where it depends on it.
   Nothing calls it at a delegation boundary, and it refuses nothing outside this repository's own
   suite. Read a denial as one control, not as a pair.
 - **Bounded phase IO.** `src/guard/promptGuard.ts` defines a 500 KB phase-input bound, a 1 MB
-  agent-output bound, and boundary-marker wrapping. Only the 250 000-character ceiling above
-  has a production caller. `guardInput`, `validateAgentOutput`, `wrapWithBoundary` and
-  `extractBoundedContent` have none outside their own module, and reject nothing today.
+  agent-output bound, and boundary-marker wrapping. Only `MAX_USER_CONTENT_LENGTH` above has
+  production callers: the overlay path applies it as a 250 000-character ceiling, and the
+  `learn` and `handoff` stdin reads apply it as a byte one. `guardInput`, `validateAgentOutput`,
+  `wrapWithBoundary` and `extractBoundedContent` have none outside their own module, and reject
+  nothing today.
 - **MCP tool-manifest drift.** `hashToolManifest` and `detectToolManifestDrift` exist and are tested,
   and nothing calls them. No path records a manifest hash at install, and no path compares one later.
   A server that redefines its tools after you approved it is not detected in this build.
