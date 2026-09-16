@@ -27,11 +27,12 @@
 #
 # THE DISPATCH PUBLISH ARM. A dispatch with `dry_run` set to false IS a real release, so it is
 # held to the same proofs as a tag push rather than trusted because a human clicked it: the
-# `gates` job requires the dispatched ref to be a `v*` TAG whose name equals the version
-# package.json declares, and requires that commit to be reachable from origin/main. Both run
-# before the pack step, so a dispatch from a branch — or from a tag naming another version —
-# fails this workflow before anything irreversible happens. A dry run skips those proofs because
-# it publishes nothing, and prints which ones it skipped and why rather than going quiet.
+# `gates` job requires three proofs of the dispatched ref — (1) it is a `v*` TAG; (2) the tag
+# name equals the version package.json declares; (3) the tagged commit is reachable from
+# origin/main. All three run before the pack step, so a dispatch from a branch — or from a tag
+# naming another version — fails this workflow before anything irreversible happens. A dry run
+# skips those three proofs because it publishes nothing, and prints which ones it skipped and
+# why rather than going quiet.
 # test/ci/workflow.test.ts evaluates both job conditions against every trigger shape and runs the
 # proof script itself against a scratch repository.
 #

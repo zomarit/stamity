@@ -391,9 +391,15 @@ describe("the restated figures are held to the artifacts they come from", () => 
     // verdict beside them — the page's "PASS" — was a literal nothing read. A run whose status
     // moved to FAIL would have left the page calling it a pass with four scores that still
     // matched their rows. The artifact's own status line is what the word is held to now.
-    expect(results, `${RUN_OF_RECORD_PATH} states no status`).toMatch(/^Status: \*\*PASS\*\*$/m);
-    expect(page, "the page does not state the run's status beside its scores").toContain(
-      "PASS, three samples per case.",
+    //
+    // TEST CHANGE, justified: the derivation stopped one step short — the artifact was matched
+    // against the literal `PASS`, so a run whose status moved failed HERE rather than at the
+    // page, and the page's own word stayed a transcription. The status is now read out of the
+    // artifact and interpolated, the way the metric scores above are.
+    const status = /^Status: \*\*(\w+)\*\*$/m.exec(results)?.[1];
+    expect(status, `${RUN_OF_RECORD_PATH} states no status`).toBeDefined();
+    expect(page, `the page does not state the run's status (${status}) beside its scores`).toContain(
+      `${status}, three samples per case.`,
     );
   });
 
