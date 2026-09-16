@@ -2,85 +2,97 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
-<!-- Re-open when: init's prompt budget changes, a client's first-run instruction changes, a
-     verb joins or leaves the command surface, a path joins or leaves `.stamity/`, or the APM
-     route's client floor or per-target output moves. `test/docsPages.test.ts` holds this page to
-     the hand-page contract; the generated `docs/cli-reference.md` and
-     `docs/capability-matrix.md` are what it must not contradict. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit e79dcf0. Re-attested 2026-09-16 in the Package 14 rewrite. -->
+<!-- Re-open when: init's prompt budget changes, a client's first-run line changes, a verb joins
+     or leaves the command surface, a doctor probe joins or leaves `check`, a path joins or leaves
+     `.stamity/`, or the APM route's client floor or per-target output moves. `test/docsPages.test.ts`
+     holds this page to the hand-page contract; the generated `cli-reference.md` and
+     `capability-matrix.md` are what it must not contradict. -->
 
 # Getting started
 
-From nothing to one proven change on your own code. The guided first run is sized for
-fifteen minutes — six phases, five of them carrying a minute budget that sums to fifteen
-and a sixth, optional one that carries none and is dropped first, so it degrades in a
-planned direction rather than quietly overrunning — and how long yours takes depends on
-your repository and the decisions you make in it. The mechanical part underneath,
-installing the package and running `init` and `check`, is seconds; the time goes into the
-walk, plus however long `npx` takes to fetch the package. CI proves both install shapes
-before either ships: the `tarball-smoke` lane packs the published tarball, installs it into a
-throwaway project and runs `init` and `check` there, the `apm-install` lanes prove the APM
-route by what a real consumer's tree holds after an install, and every leg re-runs `check`
-against the binary it just built ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)).
+This page walks you through setting stamity up in your own repository for the first time.
+At the end you have a working setup on disk, a manifest you can commit, and one real change
+proved by a passing verification gate.
 
-## Before you start
+## What you need first
 
-Two things, and nothing else.
+Two things.
 
-- **Node 22.22.2 or newer.** That is the published floor, and `stamity check` verifies it
-  as its `node-version` row. Nothing is installed globally. Two things reach the network:
-  a once-a-day update probe to the npm registry at startup, silenced by
-  `STAMITY_NO_UPDATE_CHECK=1`, `NO_UPDATE_NOTIFIER` or `CI`; and the Sigstore trust root,
-  fetched when `add` verifies a signed pack. `worktree setup` additionally lets git contact
-  `origin` to plan its branch.
-- **A git repository.** Not strictly required — but setup writes dozens of files, and
-  without git there is no revert path. Run `git init` first if this is a fresh directory;
-  if you do not, an interactive init stops and asks before writing anything; a `-y` or
-  `--json` run proceeds and prints the no-revert-path disclosure instead.
+- **Node 22.22.2 or newer.** That is the published floor. `stamity check` verifies it as its
+  `node-version` row.
+- **A git repository.** Nothing in stamity requires git. But setup writes dozens of files, and
+  git is your revert path. Run `git init` first if this directory is fresh.
 
-## Set it up
+If you skip the second one, an interactive `init` stops and asks before it writes anything. A
+`-y` or `--json` run goes ahead instead and prints a line saying the files it wrote have no
+revert path.
+
+Nothing is installed globally.
+
+## Set stamity up
 
 ```sh
 npx @zomarit/stamity init
 ```
 
-Init reads the repository, decides what it can, asks what it cannot, and writes the
-setup plus a manifest every later command works from.
+`init` reads your repository. It writes a setup and a manifest. Later commands read that
+manifest.
 
-**At most two questions on the ordinary path**, both skipped when something already
-answered them:
+### The two questions init asks
 
-1. **Which clients.** Asked only when nothing decided the target set — no `--tools` flag,
-   and no traces of any client in the repository. If you already have a `.claude/` or a
-   `.cursor/` directory, the question does not appear. On a terminal it is a
-   checkbox menu — arrow keys move, space toggles a client on or off, and
-   enter confirms; anywhere else — a pipe, a captured log, `TERM=dumb`, a window
-   too short to draw the menu — it falls back to a numbered list you answer by
-   typing the numbers, comma-separated.
-2. **What to do with what is already here.** One question in one of two shapes: a
-   previous setup from the predecessor project was detected (migrate, or leave it), or an
-   existing agent config file was found (supplement it, replace it, or skip it). When both
-   are present the first subsumes the second. If neither is present the question does not
-   appear.
+At most two questions are asked on the ordinary path. Each one is skipped when something
+already answered it.
 
-`-y` takes every default and asks nothing, which is what makes the command safe to pipe
-or run in CI. `--json` puts one JSON document on stdout, and because stdout belongs to
-that document the run is non-interactive too — on `init`, which has no destructive
-confirmation, that means every prompt resolves to its default, the same set `-y` would
-take. It is **not** consent, though, and it does not imply `-y`: a command whose prompt is
-a destructive confirmation refuses the run rather than assume a yes, so a pipeline that
-means to delete says `-y` explicitly. [The CLI reference](cli-reference.md) states that
-rule for the whole command surface.
+1. **Which clients do you want?** This is asked only when nothing else decided the set: no
+   `--tools` flag, and no trace of any client in the repository. If you already have a
+   `.claude/` or a `.cursor/` directory, the question does not appear.
+2. **What should happen to what is already here?** This is one question in one of two shapes. A
+   previous setup from the predecessor project was found, so you choose to migrate it or leave
+   it. Or an existing agent config file was found, so you choose to supplement it, replace it,
+   or skip it. When both are present, the first question replaces the second. When neither is
+   present, no question is asked.
 
-One default differs between the interactive and non-interactive paths on purpose: a
-detected previous setup is **migrated** when you answer the prompt and **skipped** when
-nobody is there to answer, because migrating strips files and no machine should consent to
-that on your behalf. `--dry-run` previews the whole run without writing.
+On a terminal, the clients question is a **checkbox menu**: the arrow keys move between rows,
+space toggles a client on or off, enter confirms, and ctrl-c cancels. Anywhere else you get a
+numbered list instead, which you answer by typing the numbers separated by commas. A pipe, a
+captured log, `TERM=dumb` and a window too short to draw the menu all take that path.
 
-## Install through APM
+### The two questions only some repositories see
+
+Two further questions sit outside that ceiling. Neither is on the ordinary path, and both are
+asked after the two above.
+
+- **Continue without git?** Asked only where git does not answer in this directory. Answering
+  no cancels the run and writes nothing.
+- **Create a workspace here?** Asked only where this directory is standalone and holds two or
+  more repositories. The default is no, and a non-interactive run never creates one.
+  [The workspaces guide](workspaces.md) explains what a yes sets up.
+
+### Running init without answering anything
+
+`-y` takes every default and asks nothing. That is what makes `init` safe to pipe or run in CI.
+
+`--json` puts one JSON document on stdout. Because stdout belongs to that document, the run is
+non-interactive too. On `init` that means every prompt resolves to its default — the same set
+`-y` would take.
+
+`--json` is **not** consent, and it does not imply `-y`. A command whose prompt is a
+destructive confirmation refuses the run rather than assume a yes. A pipeline that means to
+delete says `-y` explicitly. [The CLI reference](cli-reference.md) states that rule for the
+whole command surface.
+
+One default differs between the two paths on purpose. A detected previous setup is **migrated**
+when you answer the prompt, and **skipped** when nobody is there to answer. Migrating strips
+files, and no machine should consent to that on your behalf.
+
+`--dry-run` previews the whole run without writing. `--tools <csv>` names the clients up front.
+`--force` replaces an existing setup in place.
+
+## Install through APM instead
 
 If your team already uses APM — the Agent Package Manager — the same corpus installs straight
-from this repository as an APM package, without npm and without the init walk:
+from this repository as an APM package. That route needs no npm and runs no init walk.
 
 ```sh
 apm install zomarit/stamity --target claude
@@ -92,42 +104,43 @@ Pin the ref for a repeatable install:
 apm install zomarit/stamity#v<version> --target <claude|copilot|cursor|codex>
 ```
 
-**The client floor is apm-cli 0.29.1**, the release that fixed the type-detection cascade that
-used to route this repository's tree past its own APM package; 0.30.0 is the current tested
-client. An older one fails without failing — it exits 0, deploys nothing, and prints
+**The client floor is apm-cli 0.29.1.** That release fixed a type-detection cascade which used
+to route this repository's tree past its own APM package. 0.30.0 is the current tested client.
+
+An older client fails without failing. It exits 0, deploys nothing, and prints:
 
 ```
 Agent Plugins v1.0.0 packages install natively only for the 'copilot' target
 ```
 
-If you see that line with zero primitives deployed, upgrade the client and install again:
+If you see that line with zero primitives deployed, upgrade the client and install again. Use
 `pip install --upgrade apm-cli`, `brew upgrade apm`, or whatever self-update your client offers.
 
 What arrives: 10 agents, 9 commands, 10 rules and 10 skills, each at the path its target reads.
-`codex` takes the agents and the skills only — APM's codex profile carries no command or rule
-class, and folds instructions into `AGENTS.md` when you run `apm compile`.
+`codex` takes the agents and the skills only. APM's codex profile carries no command or rule
+class, and it folds instructions into `AGENTS.md` when you run `apm compile`.
 
-One difference from the npm route to know about: an APM install clones this whole repository at
-the ref into the consumer's `apm_modules/` — tests, site and all — and deploys the primitives out
-of it. APM gitignores that directory itself, and the primitives it deploys are the corpus,
+One difference from the npm route is worth knowing. An APM install clones this whole repository
+at the ref into your `apm_modules/` directory — tests, site and all — and deploys the primitives
+out of it. APM gitignores that directory itself. The primitives it deploys are the corpus,
 projected for APM by this repository's own generator and byte-checked in CI.
 
-For public downstreams or independent private packages, the [enterprise guide](enterprise-forks.md)
-covers source/fork customization, publisher identity, private authentication and the existing
-APM/Renovate update lifecycle. APM delivers these four primitive classes; Stamity's charter,
-hooks, MCP wiring and engine/runtime remain capabilities of the packaged CLI route.
+APM delivers those four primitive classes and no more. The charter, hooks, MCP wiring and the
+engine itself stay with the packaged CLI route. For public downstreams or independent private
+packages, [the enterprise guide](enterprise-forks.md) covers source and fork customization,
+publisher identity, private authentication and the update lifecycle.
 
-## What lands
+## What init writes for each client
 
-`AGENTS.md` is written for every client — the charter: repository facts, the floor
-invariants, the touchpoint index. Three of the four read it natively.
+`AGENTS.md` is written for every client. It is the charter: your repository's facts, the floor
+invariants, and the index of touchpoints. Three of the four clients read it natively.
 
-`.agents/skills/` — the skills projection — is written for the clients that read that
-tree, and only when one is selected. Claude Code keeps its own copy in `.claude/skills/`
-instead, so a claude-only repository gets no `.agents/` tree at all: the projection
-would duplicate the native copy byte for byte, for a client that never looks at it.
+`.agents/skills/` is the skills projection. It is written for the clients that read that tree,
+and only when one of them is selected. Claude Code keeps its own copy in `.claude/skills/`
+instead. So a claude-only repository gets no `.agents/` tree at all — the projection would
+duplicate the native copy byte for byte, for a client that never looks at it.
 
-Then each client gets what it cannot read without help. The short version:
+Then each client gets what it cannot read without help:
 
 | Client | Entry point | Touchpoint commands | Hooks | Skills |
 |---|---|---|---|---|
@@ -137,60 +150,95 @@ Then each client gets what it cannot read without help. The short version:
 | Codex | `AGENTS.md`, read natively | none — no repo-level command home | `.codex/hooks.json` | read from `.agents/skills/` |
 
 Agents, rules and MCP documents land per client too, each in that client's own dialect.
-[The capability matrix](capability-matrix.md) is the one home for every cell of that —
-it renders from the adapters themselves, so it cannot drift from what is emitted.
+[The capability matrix](capability-matrix.md) is the one home for every cell of that. It renders
+from the adapters themselves, so it cannot drift from what is emitted.
 
-## Do the first real change
+## Make your first real change
 
-The setup is not proven until something has run through it. That is what the onboard
-walkthrough is for: six phases, sized for about fifteen minutes, on your actual code —
-orient, pick one small change, name the proof, make the change, run the gate, and
-optionally leave a note behind. It ends on a passing verification gate or on a named list
-of what is not done. It never ends on a claim.
+Your setup is not proven until something has run through it. The onboard walkthrough is what
+proves it. It is six phases on your actual code: orient, pick one small change, name the proof,
+make the change, run the verification gate, and optionally leave a note behind.
 
-How you reach it depends on the client, and init prints the right line for yours:
+The six phases are sized for about fifteen minutes. That is a budget, not a promise about your
+repository. The walk ends on a passing verification gate, or on a named list of what is not
+done. It never ends on a claim.
+
+How you reach it depends on your client. `init` prints the right line for yours:
 
 - **Claude Code** — type `/st-onboard`.
 - **Cursor** — type `/st-onboard`.
-- **Copilot** — in chat: `@workspace run the st-onboard workflow`.
+- **Copilot** — in the chat, type `@workspace run the st-onboard workflow`.
 - **Codex** — type `$st-onboard`.
 
-Cursor and Codex discover skills in `.agents/skills/` and support their native
-invocation syntax from that directory. Copilot's named workflow request reaches the
-same projection. Claude Code receives its native copy under `.claude/skills/`.
-The nine touchpoint command names remain unchanged; Codex still has no emitted
-project command directory, so its charter lists the available workflow outcomes.
+Cursor and Codex find skills in `.agents/skills/` and invoke them from there. Copilot's named
+workflow request reaches the same projection. Claude Code reads its own copy under
+`.claude/skills/`. Codex has no emitted project command directory, so its charter is where its
+touchpoints are listed.
+
+Both install routes are proved on a clean machine before either ships.
+[The measurements page](measurements.md) has the first-run proof, lane by lane.
 
 ## The nine verbs
 
 `init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
 `clean`
 
-What each one does, every flag it takes and every status it exits with is
-[the CLI reference](cli-reference.md)'s to state: it renders from the program, so it cannot
-describe a verb the CLI does not have or miss one it does. Three things it cannot tell you,
-because each is about how two of them go together rather than about any one verb:
+The package installs two names for one binary: `stamity` and the shorter alias `st`.
 
-- **Run `sync` after any `config` change.** `config` edits state and never regenerates
-  managed output, so no client file moves until a sync does — though `config mcp add`
-  provisions `.env.mcp` and its `.gitignore` line on the spot.
-- **`worktree` is three subcommands** — `setup`, `list` and `cleanup`. What each one places,
-  records and inverts is in [working with stamity](working-with-stamity.md).
-- **`workspace` reaches past this repository**, and has a guide of its own:
-  [workspaces](workspaces.md).
+What each verb does, every flag it takes and every status it exits with is
+[the CLI reference](cli-reference.md)'s to state. That page renders from the program, so it
+cannot describe a verb the CLI does not have or miss one it does.
 
-There are two more, hidden: `learn`, which agents call to record a learning through the
-engine's write gates, and `handoff`, which prepares, resumes, lists, completes and prunes
-handoffs through those same gates. Both are plumbing, not something you type. The gates
-exist because a learning is text that re-enters an agent's context on a later session:
-anything with write access to the repository can author a file that is read back into a
-prompt, which makes a note a security surface rather than a scratch file. So the CLI is the
-one write path, and every note passes it — a name shape that cannot address anything but a
-file in place, per-file and per-directory caps, content checks (frontmatter schema, required
-sections, injection screening), and an integrity digest stamped over the body.
+### What the CLI reference cannot tell you
 
-Every flag and every exit status is in [the CLI reference](cli-reference.md); every
-settable key is in [the configuration reference](configuration.md).
+Four things, because each is about how two parts fit together rather than about any one verb.
+
+- **Which verbs need the manifest.** `sync`, `check`, `config`, `workspace`, `clean` and `add`
+  all read the manifest `init` wrote. `validate` runs with or without one. `learn` and `handoff`
+  ask only that `.stamity/` exists.
+- **Which verbs need git.** `init`, `sync` and `check` read git where it is, and carry on where
+  it is not. The `worktree` verbs need a `git` binary on PATH and refuse without one. The rest
+  never call git.
+- **Run `sync` after any `config` change.** `config` edits state and never regenerates managed
+  output, so no client file moves until a sync runs. The one exception is `config mcp add`,
+  which provisions `.env.mcp` and its `.gitignore` line on the spot.
+- **Two verbs have subcommands with guides of their own.** `worktree` takes `list`, `setup` and
+  `cleanup` — [working with stamity](working-with-stamity.md) covers what each one places,
+  records and inverts. `workspace` takes `status`, `init` and `sync`, and reaches past this
+  repository — [the workspaces guide](workspaces.md) covers it.
+
+Every flag and every exit status is in [the CLI reference](cli-reference.md). Every settable key
+is in [the configuration reference](configuration.md).
+
+### The two hidden verbs
+
+There are two more verbs, kept off `stamity --help`. `learn` records a learning through the
+engine's write gates. `handoff` prepares, resumes, lists, completes and prunes handoffs through
+those same gates. Both are plumbing an agent calls, not something you type.
+
+Those gates exist because a learning is text that re-enters an agent's context on a later
+session. Anything with write access to the repository can author a file that is read back into a
+prompt. That makes a note a security surface rather than a scratch file.
+
+So the CLI is the one write path, and every note passes it. A name shape cannot address anything
+but a file in place. Per-file and per-directory caps bound what lands. Content checks cover the
+frontmatter schema, the required sections and injection screening. An integrity digest is
+stamped over the body.
+
+### What reaches the network
+
+Three things, and no more.
+
+- **A startup update notice** asks the npm registry whether a newer version exists. It probes at
+  most once a day. There is no `config` key for it — three environment variables switch it off.
+  Set `STAMITY_NO_UPDATE_CHECK` to exactly `1`. `NO_UPDATE_NOTIFIER` and `CI` switch it off on
+  any non-empty value.
+- **`add` fetches the Sigstore trust root** when it installs a pack that declares a signature.
+- **`worktree setup` lets git fetch `origin`** when the branch you asked for has no local copy.
+
+Two of the nine touchpoints reach further. `/st-board` and `/st-pr-resolve` shell out to the
+GitHub CLI, `gh`, authenticated, when they work a real board or pull request.
+[`SECURITY.md`](../SECURITY.md) documents every one of these paths.
 
 ## When something looks wrong
 
@@ -198,26 +246,27 @@ settable key is in [the configuration reference](configuration.md).
 npx @zomarit/stamity check
 ```
 
-`check` is the diagnosis. It runs eleven environment probes, then asks one question that
-matters more than the rest: **would a sync change anything?** If the answer is yes, disk
-and the engine's output disagree — a managed file was hand-edited, a generated file was
-deleted, a pack's content no longer matches what was installed. A failing probe or any
-drift exits 1; warnings alone exit 0, so it is usable as a CI step unchanged.
+`check` is the diagnosis. It runs eleven environment probes. Then it asks the one question that
+matters more than the rest: **would a sync change anything?**
 
-For a missing generated file, run `stamity sync`, then `stamity check` again. If you
-hand-edited managed content, preserve the edits through the documented
-[override path](customization.md) before syncing, and inspect any reported collision.
-An `unknown` verification gate needs the project's actual command configured and
-redetected; do not invent a command or run the literal word `unknown`.
+If the answer is yes, disk and the engine's output disagree. Something was hand-edited, a
+generated file was deleted, or a pack's content no longer matches what was installed. A failing
+probe or any drift exits 1. Warnings alone exit 0, so `check` works as a CI step unchanged.
 
-If the onboarding clock expires after a touched-test pass, that is partial evidence.
-Report `Not done:` until every declared test, lint and typecheck gate exits 0.
+For a missing generated file, run `stamity sync`, then `stamity check` again. If you hand-edited
+managed content, move your edits to the documented [override path](customization.md) before you
+sync, and inspect any collision it reports. An `unknown` verification gate needs the project's
+real command configured and redetected. Do not invent one, and do not run the literal word
+`unknown`.
 
-Row by row, and what each remedy means: [troubleshooting](troubleshooting.md).
+If the onboarding clock runs out after a touched-test pass, that is partial evidence. Report
+`Not done:` until every declared test, lint and typecheck gate exits 0.
 
-## Where state lives
+Row by row, with what each remedy means: [troubleshooting](troubleshooting.md).
 
-Everything the setup knows about itself is under `.stamity/`:
+## Where stamity keeps its state
+
+Everything the setup knows about itself lives under `.stamity/`:
 
 | Path | What it holds |
 |---|---|
@@ -229,44 +278,56 @@ Everything the setup knows about itself is under `.stamity/`:
 | `.stamity/overrides/` | agents, rules, commands and skills of your own, merged above the bundled content |
 | `.stamity/runs/` | one record per work run — its proof block, with that run's findings ledger beside it |
 | `.stamity/verify/` | one artifact per quality axis per commit, written by the verify skill |
+| `.stamity/evidence/` | browser and QA evidence bundles, one per commit that captured them |
 | `.stamity/inbox.md` | deferred rows, one dated block per run that filed them |
 | `.stamity/worktree.json` | the worktree lane's policy — yours to write; absent, its two defaults apply |
 | `.stamity/workspace-sync-journal.jsonl` | at a workspace root: the cascade's crash trail, two lines per attempted member per run |
 | `.stamity/review-gate.json` | the per-run review-round counter the generated review-gate hook writes |
 
-Commit it. The manifest is the provenance record, and a teammate who clones the
-repository gets the same setup without re-running init. Everything init writes outside
-that directory commits for the same reason — `AGENTS.md`, `.agents/`,
-the managed block in `CLAUDE.md`, the client trees `.claude/`, `.cursor/`, `.github/`
-(agents, instructions, prompts, hooks and the `copilot-setup-steps.yml` workflow) and `.codex/`,
-and the MCP documents `.mcp.json`, `.cursor/mcp.json` and `.vscode/mcp.json` when servers
-are selected — because that is what makes the clone arrive with working commands and
-skills already on disk, and because generated content earns no exemption from review: it
-lands as an ordinary diff, and `check` is what catches it drifting from what the engine
-would emit today. The one file init keeps **out** of the repository is `.env.mcp` — MCP
-credentials — and it is the single entry it adds to `.gitignore` for you. Because
-everything above it is committed, a second checkout of this repository arrives with the
-whole setup already in place and that one file missing, which is exactly what `stamity worktree setup` places for you when it creates one.
+### What to commit
 
-`review-gate.json` is the one path that is neither: a run writes it, nothing commits it, and
-nothing ignores it either. Leave it in that state. It is runtime state for the run that wrote
-it — its absence simply means the gate is open — and a path that is untracked and un-ignored
-is one `stamity worktree setup` refuses to carry across, so a review round counted in one
-worktree never gates another.
+Commit `.stamity/`. The manifest is the provenance record. A teammate who clones the repository
+gets the same setup without re-running `init`.
 
-## Keeping it current
+Commit everything `init` writes outside that directory too: `AGENTS.md`, `.agents/`,
+the managed block in `CLAUDE.md`, and the client trees `.claude/`, `.cursor/`, `.github/`
+and `.codex/`. Under `.github/` that means agents, instructions, prompts, hooks and the
+`copilot-setup-steps.yml` workflow. It also means the MCP documents `.mcp.json`,
+`.cursor/mcp.json`, `.vscode/mcp.json` and `.codex/config.toml`, where servers are selected.
+
+Two reasons to commit all of it. A clone then arrives with working commands and skills already
+on disk. And generated content earns no exemption from review — it lands as an ordinary diff,
+and `check` is what catches it drifting from what the engine would emit today.
+
+### What not to commit
+
+One file stays out of the repository: `.env.mcp`, which holds MCP credentials. It is the single
+entry `init` adds to your `.gitignore` for you.
+
+Because everything else is committed, a second checkout of this repository arrives with the
+whole setup in place and that one file missing. Placing it is exactly what
+`stamity worktree setup` does when it creates one.
+
+`review-gate.json` is the one path that is neither committed nor ignored. A run writes it,
+nothing commits it, and nothing ignores it. Leave it in that state. It is runtime state for the
+run that wrote it, and its absence simply means the review gate is open. A path that is
+untracked and un-ignored is one `stamity worktree setup` refuses to carry across, so a review
+round counted in one worktree never gates another.
+
+## Keeping your setup current
 
 ```sh
 npx @zomarit/stamity@latest sync
 ```
 
-`sync` regenerates every managed file from the bundled content of whichever version ran
-it, so pinning `@latest` on the sync is how you take an engine update. Your own edits
-outside a managed block survive; the block itself is rewritten. Run `check` afterwards to
-confirm the tree is clean.
+`sync` regenerates every managed file from the bundled content of whichever version ran it.
+Pinning `@latest` on the sync is how you take an engine update. Your own edits outside a managed
+block survive; the block itself is rewritten. Run `check` afterwards to confirm the tree is
+clean.
 
 ## Where to go next
 
 - [Working with stamity](working-with-stamity.md) — the nine touchpoints as one workflow, and how to run two changes at once.
-- [Packs and trust](packs-and-trust.md) — installing content on top of the corpus, and what the gates check.
+- [Customization](customization.md) — overrides and overlays, when the bundled content is not what you want.
+- [Packs and trust](packs-and-trust.md) — installing content on top of the corpus, and what the trust gates check.
 - [Troubleshooting](troubleshooting.md) — exit codes, doctor rows, and the common failures.
