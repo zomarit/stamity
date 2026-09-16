@@ -225,3 +225,17 @@ each item had shipped already and the roadmap had not been ticked.
   recover without a page-wide reflow; recorded, not done. One more contradiction the fixer found
   (getting-started still says nothing requires git, where `worktree` refuses without it) goes to a
   one-sentence unit.
+- 03:55Z Fixer round 1, governance half, returned two commits (cherry-picked). W1 answered, not
+  applied: `.github/workflows/release.yml:153–157` enumerates three proofs (a `v*` tag; the tag names
+  the version `package.json` declares; the tagged commit reachable from `origin/main`), each with its
+  own failure path in `Resolve version`; the header comment the reviewer read collapses the first two;
+  SECURITY's "all three" stands and GOVERNANCE now enumerates the same three. W2 fixed: the published
+  TypeScript API (declarations shipped, `createEngine` and `SetupManifest` exported, the `signPack`
+  route) on packs-and-trust; the declaration graph, the two Knip exceptions and the packed-consumer
+  `skipLibCheck: false` gate on CONTRIBUTING — each claim verified. W3 fixed: the re-attestation date is
+  an enforced pin (`REATTESTATION_DATE = "2026-09-16"`; every hand page must carry one of the two dates;
+  falsification proved). W4 fixed: `referencesTo()` normalises the separator, with the Windows failure
+  named. M1 fixed, M2 answered (`authorization` is unanimous across the hand pages), M3–M8 fixed, and
+  M9 (bytes → characters) fixed with the byte pin kept for the stdin row that counts bytes. The final
+  candidate is `022018f`; pushed; the gate chain, the QA harness, CI and review round 2 (both halves)
+  run on it together.
