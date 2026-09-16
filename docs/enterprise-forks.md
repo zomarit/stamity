@@ -2,73 +2,88 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit e79dcf0. Re-attested 2026-09-16 in the Package 14 rewrite. -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
-     `.stamity/upstream.json`, the fork layer's layout or precedence changes (`src/content/catalog.ts`),
-     the job split or the permissions in `.github/workflows/upstream-update.yml` change, or
-     CONTRIBUTING.md's regeneration table moves. `test/docsPages.test.ts` holds this page to the
-     hand-page contract, and `test/upstream/lane.test.ts` owns the lane's behaviour below, and the
-     fork layer's is owned by the content, emission and validate suites. -->
+     `.stamity/upstream.json`, the fork layer's layout or precedence changes in `src/content/catalog.ts`,
+     or the jobs or the permissions in `.github/workflows/upstream-update.yml` change. `test/docsPages.test.ts`
+     holds this page to the hand-page contract. `test/upstream/lane.test.ts` owns the lane's behaviour, and
+     the content, emission and validate suites own the fork layer's. A move of CONTRIBUTING.md's
+     regeneration table moves the `regenerate` list and the `generatedPaths` list below with it. -->
 
 # Enterprise forks
 
-An organisation that forks this repository, changes something in it — a rule's prose, a default
-under `src/`, a generated tree — and then wants the next upstream release without losing that
-work needs three answers git does not give on its own: which release is really in this branch, an
-integration attempt that cannot damage the branch it integrates into, and a result a reviewer can
-act on. That is the upstream lane: one plain-Node script (`scripts/upstream.mjs`), one
-configuration file (`.stamity/upstream.json`), and one opt-in GitHub workflow over the script.
+This page is for the engineer who keeps a fork of stamity and has to take the next upstream
+release without losing the fork's own changes. When you finish it you can configure the upstream
+lane, run it, act on what it reports, land the result, and move your customizations into a layer
+upstream never writes.
 
-It is a repository tool rather than a CLI verb, because it has to run in a tree that is mid-merge,
-where `src/` may not compile and `dist/` may be stale. Run it as `node scripts/upstream.mjs
-<verb>` or `npm run upstream -- <verb>`, and `help` for the verb and flag list: Node built-ins and
-`git` 2.24 or newer, nothing imported from `src/`.
+Start here, in your fork:
 
-Three things it does not promise. **A conflict-free upgrade for arbitrary edits** — two edits to
-the same lines are a conflict, and the lane's job is to report one well, not guess at it.
-**Semantic compatibility from a clean textual merge** — that is what your own gates are for, and
-the lane runs them. **Anything model-assisted** — no suggestion, no resolution and no summary
-comes from a model.
+```sh
+node scripts/upstream.mjs status
+```
 
-## Getting a fork that carries the history
+It prints which release your branch already has, which release is next, and what that release
+touches. Nothing is merged and nothing is written.
 
-The lane relies on nothing in the fork network. It needs one property: the upstream's history in
-your object store, so a merge base exists.
+The lane is three things: one plain-Node script, `scripts/upstream.mjs`; one configuration file,
+`.stamity/upstream.json`; and one opt-in GitHub workflow that runs the script. Run the script as
+`node scripts/upstream.mjs <verb>` or as `npm run upstream -- <verb>`. Run `help` for the verb and
+flag list. It needs Node built-ins and `git` 2.24 or newer, and it imports nothing from `src/`. It
+is a script rather than a CLI verb because it has to run in a tree that is mid-merge, where `src/`
+may not compile and `dist/` may be stale.
 
-**A public fork.** Fork the repository and clone it. The upstream commits are already there.
+## What the lane does not promise
 
-**A private copy.** A private copy of a public repository cannot be a fork at all — a fork's
-visibility is tied to its network — so the private case is a bare clone mirror-pushed into a
-new, empty repository. Follow the ordered private onboarding below: Actions must be disabled
-before importing historical refs, then reviewed before enabling the downstream workflows.
+Three limits, so you do not plan around a guarantee that is not there.
 
-Clone that normally and work in it. The mirror route gives up every fork feature — no "Sync
-fork", no merge-upstream endpoint, no pull request back to upstream, `gh repo sync` refusing with
-"repository is not fork" — and none of it matters to the lane, which is why the lane is
-git-native. Two platform facts hold either way: upstream `release` and `push` events never reach
-another repository, so a fork learns about a release by polling or by dispatch; and `gh repo
-sync` is fast-forward-only, its `--force` a hard reset, so it is no route for a customized fork.
+- **A conflict-free upgrade for any edit.** Two edits to the same lines are a conflict. The lane's
+  job is to report one well, not to guess at it.
+- **Semantic compatibility from a clean merge.** A clean merge is a statement about text. Your own
+  gates are what say the product still works, and the lane runs them.
+- **Anything model-assisted.** No suggestion, no resolution and no summary comes from a model.
 
-### Private onboarding and destinations
+## Get a fork that carries the upstream history
 
-Start with approved empty private package and consumer repositories, an integration branch
-that permits reviewed merge commits, and owners for updates and monitoring. Confirm access
-to upstream git releases, npm dependencies, the APM client and its Python dependencies,
-Actions and the selected runner. Where network policy requires mirrors, configure approved
-git/npm/Python endpoints and permitted Actions first, then perform the same fetch, build and
-install checks against them. This guide uses APM's private git route; an experimental APM
-registry is a separate deployment choice. Official sources and tested clients are recorded
-in [the implementation plan](plans/005-enterprise-downstream-support.md).
+The lane needs one property, and nothing else: the upstream's history in your object store, so a
+merge base exists. It relies on nothing in the GitHub fork network.
 
-Confirm the destination owner's GitHub plan supports the required private branch controls.
-Private rulesets and protected branches on GitHub require GitHub Pro, Team or Enterprise
-Cloud. A plan-related `403` leaves required-check enforcement and landing-policy proof
-blocked until the owner provides supported private
-controls. Keep the repository private; changing visibility is not a recovery step.
+**A public fork.** Fork the repository and clone it. The upstream commits are already there. Work
+in that clone.
 
-Set the destination to your approved example equivalent. Keep credentials out of variables
-that name repositories and out of git URLs. Disable Actions **before importing any refs**:
-historical tags can carry older workflows without the current publication guards.
+**A private copy.** A private copy of a public repository cannot be a fork, because a fork's
+visibility is tied to its network. The private case is a bare clone mirror-pushed into a new, empty
+repository. Follow the four steps below in order.
+
+The mirror route gives up every fork feature. There is no "Sync fork", no merge-upstream endpoint,
+no pull request back to upstream, and `gh repo sync` refuses with "repository is not fork". None of
+that matters to the lane, which is git-native. Two platform facts hold on both routes. Upstream
+`release` and `push` events never reach another repository, so a fork learns about a release by
+polling or by dispatch. And `gh repo sync` is fast-forward-only, with `--force` meaning a hard
+reset, so it is no route for a customized fork.
+
+### Check the prerequisites before you import
+
+Start with approved empty private package and consumer repositories, an integration branch that
+permits reviewed merge commits, and named owners for updates and for monitoring. Confirm access to
+upstream git releases, npm dependencies, the APM client and its Python dependencies, Actions, and
+the runner you selected. Where network policy requires mirrors, configure the approved git, npm and
+Python endpoints and the permitted Actions first, then repeat the same fetch, build and install
+checks against them. This guide uses APM's private git route; an experimental APM registry is a
+separate deployment choice. Official sources and tested clients are recorded in
+[the enterprise downstream plan](plans/005-enterprise-downstream-support.md).
+
+Confirm the destination owner's GitHub plan supports the private branch controls you need. Private
+rulesets and protected branches need GitHub Pro, Team or Enterprise Cloud. A plan-related `403`
+leaves required-check enforcement and landing-policy proof blocked until the owner provides
+supported private controls. Keep the repository private. Changing visibility is not a recovery
+step.
+
+### Import the history into a private repository
+
+Set the destination to your own approved equivalent of the example below. Keep credentials out of
+variables that name repositories and out of git URLs. Disable Actions **before importing any
+refs**: historical tags can carry older workflows that lack the current publication guards.
 
 ```sh
 set -euo pipefail
@@ -87,17 +102,17 @@ git fetch upstream
 git merge-base --is-ancestor v1.5.0 HEAD
 ```
 
-The ancestry command checks the illustrated imported baseline; substitute the exact approved
-upstream tag/SHA for another import. Confirm `origin` points to the private destination before
-every initial push. The initial duplication follows GitHub's bare-clone procedure, linked
-from [the implementation plan](plans/005-enterprise-downstream-support.md). It imports
-branches and tags without pull-request refs that GitHub rejects on push.
-Keep the bare import backup until downstream and consumer checks pass.
-Repeating `push --mirror` after customization would replace downstream refs; subsequent
-updates use the upstream lane. Keep Actions disabled until current workflows, identity,
-credentials and destinations have been reviewed, including how historical tags are handled.
+The last command checks the baseline this example imported. Substitute the exact approved upstream
+tag or SHA for another import. Confirm `origin` points to the private destination before every
+initial push. The duplication follows GitHub's own bare-clone procedure, linked from
+[the enterprise downstream plan](plans/005-enterprise-downstream-support.md); it imports branches
+and tags without the pull-request refs GitHub rejects on push. Keep the bare import as a backup
+until the downstream and consumer checks pass. Do not repeat `push --mirror` after customization.
+It would replace your downstream refs. Every later update comes through the upstream lane instead.
 
-Configure publisher and repository identity through package metadata:
+### Set the private package's identity
+
+Configure the publisher and the repository through package metadata:
 
 ```sh
 STAMITY_PUBLISHER="${STAMITY_DOWNSTREAM%%/*}"
@@ -112,66 +127,79 @@ node scripts/generate-plugin-manifests.mjs
 node scripts/generate-apm-package.mjs
 ```
 
-`stamity.publisher` defaults to `zomarit` when absent. When configured, it must be a valid
-owner slug matching `repository.url`; unsupported keys or mismatched/invalid identities fail
-before generation writes anything. Both generators share this validator. Name, version,
-description and license remain their existing package fields. `private: true` blocks npm
-publishing for this APM-only setup; removing public `publishConfig` makes the destination
-review explicit.
+`stamity.publisher` defaults to `zomarit` when it is absent. When you set it, it must be a valid
+owner slug that matches `repository.url`. An unsupported key or a mismatched or invalid identity
+fails before generation writes anything, and both generators share that validator. Name, version,
+description and license keep their existing package fields. `private: true` blocks npm publishing
+for this APM-only setup. Deleting the public `publishConfig` makes the destination review explicit.
 
-The inherited canonical release and docs deployment workflows additionally check the executing
-repository's identity and visibility. Their public publication jobs run only in the public
-canonical repository. Preserve those guards during upstream review. Private APM needs its
-generated tree and a private git ref; enterprise npm or docs deployment needs a separate
-reviewed workflow and explicit private destination before enabling it.
+The release and docs-deployment workflows you inherit also check the running repository's identity
+and visibility. Their public publication jobs run only in the public canonical repository. Preserve
+those guards when you review an upstream release. Private APM needs its generated tree and a
+private git ref. Enterprise npm publishing or docs deployment needs a separate reviewed workflow
+and an explicit private destination before you enable it.
 
-Commit identity, customization and `.stamity/upstream.json`, setting its `branch` to the
-intended integration branch. Run the regeneration table and behavior gates before pushing.
-Align the downstream CI workflows' `push` and `pull_request` branch filters with that branch,
-and match its protection's required check names to the jobs that actually run. Verify those
-checks on a real update PR; inherited filters limited to `main` do not cover another branch.
-Update the corresponding workflow tests with that deliberate customization: this repository's
-`test/ci/workflow.test.ts` asserts the canonical `main` filter exactly. Keep an equally explicit
-assertion for the downstream's chosen filters so its full gate still checks the intended policy.
-Only then enable the approved CI/upstream/private-release workflows and repository Actions,
-after the organization owner verifies the bot permissions and actual required PR checks.
-Do not copy canonical branch rules blindly: this integration branch must allow merge ancestry;
-existing protections remain in force elsewhere.
+### Turn the workflows on last
 
-### The one precondition, and what to do without it
+Commit your identity, your customization and `.stamity/upstream.json`, with its `branch` set to the
+integration branch you intend to use. Run the regeneration commands and the behaviour gates before
+you push.
+
+Align the downstream CI workflows' `push` and `pull_request` branch filters with that branch. Match
+the branch protection's required check names to the jobs that actually run. Verify those checks on
+a real update pull request: inherited filters limited to `main` do not cover another branch. Update
+the workflow tests to match your deliberate customization. This repository's
+`test/ci/workflow.test.ts` asserts the canonical `main` filter exactly, so keep an equally explicit
+assertion for your own filters and your full gate still checks the policy you intended.
+
+Only then enable the approved CI, upstream and private-release workflows and repository Actions,
+after the organisation owner has verified the bot permissions and the real required pull-request
+checks. Keep Actions disabled until the current workflows, identity, credentials and destinations
+have been reviewed, including how historical tags are handled. Do not copy the canonical branch
+rules blindly: this integration branch must allow merge ancestry, while your existing protections
+stay in force everywhere else.
+
+### Recover when there is no shared history
 
 `status`, `preview` and `integrate` all refuse on a tree that shares no merge base with the
-release: outcome `ancestry-missing`, exit 1, no merge attempted, and never
-`--allow-unrelated-histories`. Forks arrive there two ways — a tree imported without its history,
-or a repository started from a tarball — and there are two recoveries: re-create the repository
-from a clone that carries the upstream history and replay your commits on top, or, when you know
-the upstream commit your tree was taken at, replay your local changes as one commit onto it.
-A shallow clone first runs `git fetch --unshallow origin` against its authorized history
-source, then fetches upstream and retries `status`. If no common history exists, preserve
-the original checkout and replay reviewed changes onto a fresh full-history clone. Erasing
-records or forcing unrelated histories together does not reconstruct the missing base.
+release. The outcome is `ancestry-missing`, the exit code is 1, no merge is attempted, and the lane
+never runs `--allow-unrelated-histories`.
 
-## Configuring `.stamity/upstream.json`
+Forks arrive there two ways: a tree imported without its history, or a repository started from a
+tarball. There are three recoveries.
 
-The file at the repository root is what enables the lane. `version` (which must be `1`) and
-`upstream` are the two required keys; every other has a default, and an unknown key, a
-non-object, or a missing or non-`1` `version` is a configuration error (exit 2).
+- **A shallow clone.** Run `git fetch --unshallow origin` against your authorized history source,
+  then fetch upstream and retry `status`.
+- **No common history at all.** Re-create the repository from a clone that carries the upstream
+  history, and replay your commits on top. Preserve the original checkout while you do it.
+- **A known base commit.** When you know the upstream commit your tree was taken at, replay your
+  local changes as one commit onto that commit.
+
+Erasing records or forcing unrelated histories together does not reconstruct the missing base.
+
+## Configure `.stamity/upstream.json`
+
+The lane reads its configuration from `.stamity/upstream.json` in your repository, and committing
+that file is what turns the lane on. `version` and `upstream` are the two required keys, and
+`version` must be `1`. Every other key has a default. An unknown key, a top level that is not a
+JSON object, and a missing or non-`1` `version` are each a configuration error that exits 2.
 
 | Key | Default | What it does |
 |---|---|---|
 | `version` | — | Must be `1`. |
 | `upstream` | required | The clone URL the lane fetches from. |
-| `remote` | `upstream` | The remote name. Created with that URL when absent; a remote of that name with a *different* URL refuses the run, naming both, rather than being repointed. |
-| `branch` | `main` | Your integration branch — where releases are merged and where ancestry is read from. |
+| `remote` | `upstream` | The remote name. The lane creates it with that URL when it is absent. A remote of that name with a *different* URL refuses the run and names both URLs, rather than being repointed. |
+| `branch` | `main` | Your integration branch. Releases are merged into it, and ancestry is read from it. |
+| `releases` | — | An object holding the two keys below. |
 | `releases.pattern` | `v*` | Which upstream tags count as releases. |
 | `releases.prerelease` | `false` | Whether a tag carrying a prerelease suffix may be selected. |
-| `gates` | empty | `[{ "name": ..., "run": ... }]`, run in order in the update worktree. Empty is reported in words: *no gates configured — a clean merge proves nothing about behaviour*. |
+| `gates` | empty | `[{ "name": ..., "run": ... }]`, run in order in the update worktree. An empty list is reported in words: *no gates configured — a clean merge proves nothing about behaviour*. |
 | `regenerate` | empty | Commands that rebuild the generated tree, run in order before the gates. |
 | `generatedPaths` | empty | Globs the lane treats as regenerable rather than as merge inputs. |
 | `watch` | empty | Globs you want named in the report whenever a release touches them. |
 | `shadows` | empty | `{ "<your path>": "<upstream path>" }` — a file of yours that stands in for an upstream one. |
 
-### The values to start from for a fork of this repository
+### Start from these values for a fork of this repository
 
 ```json
 {
@@ -199,20 +227,22 @@ non-object, or a missing or non-`1` `version` is a configuration error (exit 2).
 }
 ```
 
-`remote`, `branch` and `releases` are left at their defaults. The `regenerate` list is [the
-regeneration table in CONTRIBUTING.md](../CONTRIBUTING.md) in command form, and `generatedPaths` is
-that table's left column; `npm ci --ignore-scripts` leads it because the commands run in a fresh
-linked worktree with no `node_modules` of its own. Keep the two lists in step: a generated path
-that is not listed is offered to a human as a conflict nobody should resolve by hand, and a listed
-path that nothing regenerates keeps its markers and is refused at `continue`.
+`remote`, `branch` and `releases` are left at their defaults here. The `regenerate` list is
+[the regeneration table in CONTRIBUTING.md](../CONTRIBUTING.md) in command form, and
+`generatedPaths` is that table's left column. `npm ci --ignore-scripts` leads the list because the
+commands run in a fresh linked worktree that has no `node_modules` of its own.
 
-`watch` is advisory and cheap — those four are where a downstream customization is most often
-quietly invalidated: the charter template, the core types, the agent roster and its grants, the
-MCP catalog. `shadows` is the one thing the lane cannot derive: a file of yours standing in for a
-bundled artifact, declared so a release that moves the artifact behind it is reported even when
-the merge is clean.
+Keep the two lists in step. A generated path that is not listed is offered to a human as a conflict
+nobody should resolve by hand. A listed path that nothing regenerates keeps its conflict markers
+and is refused at `continue`.
 
-## The update loop
+`watch` is advisory and cheap. The four globs above are where a downstream customization is most
+often quietly invalidated: the charter template, the core types, the agent roster and its grants,
+and the MCP catalog. `shadows` is the one thing the lane cannot derive for itself. Declare a file
+of yours that stands in for a bundled artifact, and a release that moves the artifact behind it is
+reported even when the merge is clean.
+
+## Take the next release
 
 ```sh
 node scripts/upstream.mjs status                  # what is integrated, what is next, what it touches
@@ -221,51 +251,73 @@ node scripts/upstream.mjs integrate               # the newest stable release
 node scripts/upstream.mjs integrate --release v1.4.0
 ```
 
-Without `--release`, the target is the newest release matching the pattern by semantic-version
-order; `--prerelease` admits a prerelease suffix. Skipped releases are not skipped work: several
-are integrated as **one merge of the newest one**, whose ancestry then covers every release the
-newest one contains (a maintenance release cut on a side branch is not covered and stays a
-candidate), and the report lists them so a reviewer sees each one. `--offline` reads what the
-last fetch brought, `--config <path>` moves the configuration file, `--branch <name>` takes
-another branch as the target for any verb — `status` against the update branch itself, or
-`integrate` from a runner checkout under another name — and every verb takes `--json` — one
-document on stdout and nothing else there, which is how the workflow reads results.
+Without `--release`, the target is the newest release matching the pattern in semantic-version
+order. `--prerelease` admits a tag with a prerelease suffix. Skipped releases are not skipped work:
+several are integrated as **one merge of the newest one**, and that merge's ancestry then covers
+every release the newest one contains. A maintenance release cut on a side branch is not covered
+and stays a candidate. The report lists every release the merge covers, so a reviewer sees each
+one.
 
-`preview` is the safe one: it merges in a temporary detached worktree, reads the result, then
-aborts and removes it. Your working tree, index, stash list and branches are byte-identical
-before and after, and a dirty tree is no obstacle.
+The other flags:
 
-`integrate` cuts `stamity-upstream/<tag>` from your integration branch's head, checks it out
-under `.stamity/upstream-work/<tag>/` (gitignored), merges the release there with
-`--no-ff --no-commit`, regenerates, runs your gates, writes the record, and commits with the
-message `Merge upstream release <tag> into <branch>` and three trailers —
+- `--json` puts one document on stdout and nothing else there. Every verb takes it, and it is how
+  the workflow reads results.
+- `--offline` skips the fetch and reads what the last fetch brought.
+- `--config <path>` reads the configuration from somewhere other than `.stamity/upstream.json`.
+- `--no-gates` does not run the gates. The record then says `skipped`, which never counts as
+  integrated.
+- `--recreate` lets `integrate` start a stale update branch over. See `update-branch-stale` below.
+- `--branch <name>` takes another branch as the target, for every verb. Use it to run `status`
+  against the update branch itself, or `integrate` from a runner checkout under another name.
+- `--release <tag>` also names which update branch `continue`, `validate` and `abort` act on, when
+  several exist.
+
+`preview` is the safe one. It merges in a temporary detached worktree, reads the result, then
+aborts the merge and removes the worktree. Your working tree, index, stash list and branches are
+byte-identical before and after, and a dirty tree is no obstacle.
+
+`integrate` cuts `stamity-upstream/<tag>` from your integration branch's head. It checks that out
+under `.stamity/upstream-work/<tag>/`, which is gitignored. There it merges the release with
+`--no-ff --no-commit`, regenerates, runs your gates, writes the record, and commits. The commit
+message is `Merge upstream release <tag> into <branch>`, with three trailers:
 `Stamity-Upstream-Release: <tag>`, `Stamity-Upstream-Commit: <sha>` and
 `Stamity-Upstream-Gates: passed | failed | none | skipped`.
 
-The record beside them is `.stamity/upstream/integrations/<tag>.json`, committed **in the merge
-commit itself**: the release and its commit, the merge base, the target head the branch was cut
-from, every gate with its command, exit code and duration, the regeneration commands, every
-conflicted path with its kind and `resolvedBy` (`human` or `regeneration`), the drift rows, the
-tool version and the timestamp. It is evidence, never authority — delete every record and
-`status` is still correct, only less detailed, because **history is the marker**.
+`integrate`, `continue` and `validate` run the merged tree's `regenerate` commands and `gates` with
+your environment. Review the release before you run them on a workstation that holds credentials,
+or run them in CI, where the preparation job holds none. The lane prints that warning itself.
 
-### Outcomes and exit codes
+The record beside the trailers is `.stamity/upstream/integrations/<tag>.json`, committed **in the
+merge commit itself**. It carries:
+
+- the release and its commit, the merge base, and the target head the branch was cut from;
+- every gate with its command, exit code and duration, and the regeneration commands;
+- every conflicted path with its kind and its `resolvedBy`, which is `human` or `regeneration`;
+- the drift rows, the tool version and the timestamp.
+
+The record is evidence, never authority. Delete every record and `status` is still correct, only
+less detailed, because **history is the marker**.
+
+### Read the outcome and the exit code
 
 | Outcome | Exit | What it means |
 |---|---|---|
 | `up-to-date` | 0 | The selected release is already in the branch's ancestry, with a record that agrees. |
 | `update-available` | 0 | A newer release exists. `status` and `preview` say so; nothing was merged. |
-| `integrated` | 0 | The merge is committed on the update branch and the gates passed, or none were configured. |
-| `conflict` | 1 | The merge stopped. Nothing is committed; the update worktree holds it, and the report names every conflicted path and its kind. |
-| `validation-failed` | 1 | The merge is clean and your gates failed. On `status`, also: the release is in the ancestry but its record says the gates failed or were skipped — in history and still not integrated. |
-| `regenerate-failed` | 1 | A `regenerate` command exited non-zero — the sequence stops at the first one, output captured — or regeneration rewrote a tracked path no `generatedPaths` glob covers, named with the fix (list it). Nothing is staged or committed either way. |
-| `conflict-pending` | 1 | An update worktree from an earlier run still holds an in-progress merge. Finish it or `abort`; nothing is redone behind your back. |
-| `update-branch-stale` | 1 | The update branch was cut from a target head that has since moved. `--recreate` starts over when the branch carries nothing but the lane's own merge commit; otherwise merge your branch into the update worktree by hand. |
-| `ancestry-missing` | 1 | No merge base with the release. |
-| `ancestry-lost` | 1 | A record claims a release the history does not contain — almost always a squash or rebase landing. |
-| — | 2 | No `.stamity/upstream.json` (*this is not a fork*), a configuration or usage error, git missing or below the floor, a remote name clash, a failed fetch. |
+| `integrated` | 0 | The merge is committed on the update branch, and the gates passed or none were configured. |
+| `conflict` | 1 | The merge stopped. Nothing is committed. The update worktree holds it, and the report names every conflicted path and its kind. |
+| `validation-failed` | 1 | The merge is clean and your gates failed. On `status` it also means this: the release is in the ancestry, but its record says the gates failed or were skipped, so it is in history and still not integrated. |
+| `regenerate-failed` | 1 | A `regenerate` command exited non-zero, or regeneration rewrote a tracked path that no `generatedPaths` glob covers. The sequence stops at the first failure with its output captured, and an unlisted path is named with the fix: list it. Nothing is staged or committed either way. |
+| `conflict-pending` | 1 | An update worktree from an earlier run still holds an in-progress merge. Finish it or run `abort`. Nothing is redone behind your back. |
+| `update-branch-stale` | 1 | The update branch was cut from a target head that has since moved. `--recreate` starts over when the branch carries nothing but the lane's own merge commit. Otherwise merge your branch into the update worktree by hand. |
+| `ancestry-missing` | 1 | There is no merge base with the release. |
+| `ancestry-lost` | 1 | A record claims a release the history does not contain. This is almost always a squash or rebase landing. |
+| `not-a-fork` | 2 | There is no `.stamity/upstream.json`, so this repository is not a fork that opted in. |
+| `error` | 2 | A configuration or usage error, git missing or below the 2.24 floor, a remote name clash, or a failed fetch. |
 
-## Resolving a conflict
+The exit-0 outcomes `aborted` and `help` are what `abort` and `help` report.
+
+## Resolve a conflict
 
 A conflicted `integrate` leaves the merge in progress in `.stamity/upstream-work/<tag>/` and
 commits nothing. Work there, not in your own checkout:
@@ -277,31 +329,37 @@ git add <paths>
 cd - && node scripts/upstream.mjs continue
 ```
 
-Two things make this shorter than it looks. **Generated paths are never hand-merged**: a
-conflicted path matching `generatedPaths` is not offered to you at all — `continue` runs the
-`regenerate` commands and stages the result, resolution by derivation rather than by preference,
-and the record marks those paths `resolvedBy: regeneration`. When a merge's *only* conflicts are
-generated paths, `integrate` finishes it on its own. And the lane runs the merge and its merge
-commit under `rerere` (`-c rerere.enabled=true` per invocation — nothing is written to your git
-configuration), so a resolution recorded once in the shared `rr-cache` is replayed the next time
-git meets the same conflict.
+Two things make this shorter than it looks.
 
-`continue` refuses while any unmerged index entry remains, or any `<<<<<<<`, `=======` or
-`>>>>>>>` marker line remains in a file the merge touched (a bare `=======` counts only beside
-another marker — a setext underline alone does not). A marker that survives regeneration is a
-defect in your `generatedPaths` list, and is reported as one rather than committed.
+**Generated paths are never hand-merged.** A conflicted path matching `generatedPaths` is not
+offered to you at all. `continue` runs the `regenerate` commands and stages the result, so the
+resolution comes from derivation rather than from preference, and the record marks those paths
+`resolvedBy: regeneration`. When a merge's *only* conflicts are generated paths, `integrate`
+finishes it on its own.
 
-## Gates are upgrade gates
+**Resolutions are replayed.** The lane runs the merge and its merge commit under `rerere`, passing
+`-c rerere.enabled=true` per invocation so that nothing is written to your git configuration. A
+resolution recorded once in the shared `rr-cache` is replayed the next time git meets the same
+conflict.
 
-The lane merges text. Only your own tests can say whether the merged product still does what
-your organisation needs, so `gates` is the load-bearing part of the configuration. They run in
-the update worktree, in order, after regeneration and before the merge commit, so the commit
-carries their verdict; the first failure stops the sequence. `validate` re-runs them on an
-existing update branch and commits a fresh record, so a branch fixed by hand turns from
+`continue` refuses while any unmerged index entry remains. It also refuses while any `<<<<<<<`,
+`=======` or `>>>>>>>` marker line remains in a file the merge touched. A bare `=======` counts only
+beside another marker, so a setext underline on its own does not block you. A marker that survives
+regeneration is a defect in your `generatedPaths` list, and the lane reports it as one rather than
+committing it.
+
+## Write the gates that decide the upgrade
+
+The lane merges text. Only your own tests can say whether the merged product still does what your
+organisation needs, which makes `gates` the load-bearing part of the configuration.
+
+Gates run in the update worktree, in order, after regeneration and before the merge commit, so that
+commit carries their verdict. The first failure stops the sequence. `validate` re-runs the gates on
+an existing update branch and commits a fresh record, so a branch you fixed by hand turns from
 `validation-failed` into `integrated` without rewriting history.
 
-The gate worth writing first asserts a downstream clause is still there — say one your fork added
-to `content/charter/stamity-charter.md`:
+The gate worth writing first asserts that a downstream clause is still there. This one checks a
+clause your fork added to `content/charter/stamity-charter.md`:
 
 ```ts
 // test/enterprise/charter-clause.test.ts — an upgrade gate, not a unit test.
@@ -325,92 +383,95 @@ describe("the downstream charter clause survives an upstream release", () => {
 });
 ```
 
-It can rely on `dist/cli.js` because the recommended `regenerate` list built it one step earlier.
-A release that rewrites the charter in a file your fork never edited merges perfectly cleanly and
-fails this test — which is the point. **A clean textual merge proves nothing about behaviour**,
-and a fork with no gates gets `Stamity-Upstream-Gates: none` rather than silence reading as a
-pass.
+It can rely on `dist/cli.js` because the recommended `regenerate` list built it one step earlier. A
+release that rewrites the charter in a file your fork never edited merges perfectly cleanly and
+fails this test, which is the point. **A clean textual merge proves nothing about behaviour.** A
+fork with no gates gets `Stamity-Upstream-Gates: none`, so silence never reads as a pass.
 
-## Landing the update branch
+## Land the update branch
 
 Ancestry is the marker, so only a **merge-commit landing** preserves it. Allow merge commits on
-your integration branch, or keep a dedicated one that allows them and land onto your default
-branch separately. Squash and rebase both destroy the ancestry, verified rather than assumed:
-after either, the release commit is not an ancestor, the lane still reports the release as
-pending, and the next merge re-conflicts on lines only the fork touched, because the merge base
-regressed to the root. This repository's own `main` ruleset requires linear history and allows
-squash and rebase only — exactly the policy a fork must not copy onto its integration branch.
+your integration branch, or keep a dedicated branch that allows them and land onto your default
+branch separately.
 
-On GitHub the workflow checks active rulesets across all response pages, repository merge
-settings, and classic branch protection. A linear-history requirement or a restriction to
-squash/rebase (including a merge queue) produces a warning in the PR and job summary. Classic
-protection needs Administration: read; unavailable, 404 or malformed responses are marked
-**not fully checked**, while restrictions already observed still produce warnings. Confirm
-unreadable settings with the repository administrator; do not broaden the automation token
-just to suppress the note. The PR still opens and the landing decision remains yours.
+Squash and rebase both destroy the ancestry, and that is verified rather than assumed. After either
+one, the release commit is not an ancestor and the lane still reports the release as pending. The
+next merge then re-conflicts on lines only the fork touched, because the merge base regressed to
+the root. This repository's own `main` ruleset requires linear history and allows squash and rebase
+only. That is exactly the policy a fork must not copy onto its integration branch.
 
-New and recovered PRs use a conventional title (`chore(upstream): integrate <tag>`). Existing
-PR titles, bodies and labels remain untouched. Lane-created commits use the configured
-committer's DCO sign-off under this repository's contribution policy; the workflow configures
-its automation identity. The local placeholder fallback remains available but carries no
-DCO sign-off: configure an approved contributor identity and review/sign off the contribution
-before submitting it to a DCO-gated repository. Upstream commits retain their original
-messages; missing upstream sign-offs need maintainer resolution and do not justify exempting
-the update PR from required checks.
+On GitHub the workflow checks three surfaces: the active rulesets across all response pages, the
+repository merge settings, and classic branch protection. A linear-history requirement, or a
+restriction to squash and rebase, or a merge queue set to either, produces a warning in the pull
+request and in the job summary. Classic protection needs Administration: read. An unavailable, 404
+or malformed response is marked **not fully checked**, while restrictions the check already
+observed still produce their warnings. Confirm any unreadable setting with the repository
+administrator, and do not broaden the automation token just to silence the note. The pull request
+still opens, and the landing decision stays yours.
 
-When policy forbids merge commits, construct the merge by hand from
-the record's upstream commit (git 2.40 or newer), then move your branch onto the result:
+New and recovered pull requests get a conventional title, `chore(upstream): integrate <tag>`. An
+existing pull request's title, body and labels are left untouched. Commits the lane creates use the
+configured committer's DCO sign-off under this repository's contribution policy, and the workflow
+configures its own automation identity. The local placeholder fallback is still available, but it
+carries no DCO sign-off. Before you submit to a DCO-gated repository, configure an approved
+contributor identity, then review and sign off the contribution. Upstream commits keep their
+original messages. A missing upstream sign-off needs a maintainer's decision, and it does not
+justify exempting the update pull request from its required checks.
+
+When policy forbids merge commits, construct the merge by hand from the record's upstream commit
+with git 2.40 or newer, then move your branch onto the result:
 
 ```sh
 git merge-tree --write-tree --merge-base=<the record's upstream commit> <your branch> <release>
 git commit-tree <the tree that printed> -p <your branch> -p <release> -m "Merge upstream release <tag>"
 ```
 
-## Recovery
+## Back out an attempt or a landed release
 
-- **Back out an attempt.** `node scripts/upstream.mjs abort` aborts the in-progress merge and
-  removes the update worktree, deleting the update branch only when it carries no commit beyond
-  the target head it was cut from — a branch with any commit on it, the lane's own merge commit
-  included, is kept, and the lane says so.
-  Your integration branch is untouched either way, and a second `abort` is a no-op.
-- **Back out a landed integration.** `git revert -m 1 <the merge commit>` on the integration
-  branch. Git then remembers the merge as reverted, so revert the revert before merging that
-  release again — otherwise the second merge brings back nothing.
-- **An interrupted run.** A killed process during the merge or the gates leaves the update
-  worktree behind; the next `integrate` recognises it and reports `conflict-pending` or
-  `update-branch-stale` rather than starting over. Uncommitted changes and untracked files in
-  your own checkout are intact, because no verb writes there.
+**Back out an attempt.** `node scripts/upstream.mjs abort` aborts the in-progress merge and removes
+the update worktree. It deletes the update branch only when that branch carries no commit beyond
+the target head it was cut from. A branch with any commit on it, including the lane's own merge
+commit, is kept, and the lane says so. Your integration branch is untouched either way, and a
+second `abort` is a no-op.
 
-## Customization boundaries, and what each costs
+**Back out a landed integration.** Run `git revert -m 1 <the merge commit>` on the integration
+branch. Git then remembers the merge as reverted, so revert the revert before you merge that
+release again. Otherwise the second merge brings back nothing.
+
+**Clean up after an interrupted run.** A process killed during the merge or the gates leaves the
+update worktree behind. The next `integrate` recognises it and reports `conflict-pending` or
+`update-branch-stale` rather than starting over. Uncommitted changes and untracked files in your own
+checkout are intact, because no verb writes there.
+
+## Choose where your customization lives
+
+Each boundary below costs a fork a different amount at upgrade time. Pick the cheapest one that can
+express what you need. [Customization](customization.md) is the full reference for the override
+tree and the overlay patches.
 
 | Boundary | Where it lives | Conflict cost | What the lane reports |
 |---|---|---|---|
-| Replacement override | `.stamity/overrides/<class>/<id>.md` | None. The file is yours; upstream never writes it. | An override-drift row when the release changes the artifact behind it: *the default behind `<path>` changed in `<tag>`; the override still applies and hides the change — review it*. Reads *orphaned* when the upstream side was deleted, naming the rename target when git found one. |
-| Patch overlay | `.stamity/overrides/<class>/<id>.customize.yaml` or `.customize.md` | None on the merge. The risk is a patch that quietly stops matching what it patches. | The same drift rows, derived rather than declared. Both shadow roots — `.stamity/overrides/` and `fork/` — spell their ids as bare slugs, so the counterpart is whichever corpus spelling EXISTS at your branch's head — the target head the pairs are derived from — rather than the bare name: `rules/secrets.md` pairs with `content/rules/stamity-secrets.md`, and `skills/qa/SKILL.customize.yaml` with `content/skills/st-qa/SKILL.md`. |
-| Pack | `packs/<id>/` and its `pack.json` | None while the pack only adds. | Nothing, unless the pack shadows a bundled id — declare that in `shadows` and it is reported like an override. |
-| Fork layer | `fork/<class>/<id>.md` and `fork/skills/<id>/SKILL.md` inside the package, with `.customize.yaml` / `.customize.md` siblings for a patch instead of a replacement. | None. Upstream never writes under `fork/`, so no release can conflict with it; a replaced or patched default that moves upstream is drift, not a conflict. | A `shadowed` row per fork file whose bundled counterpart changed, resolved to the prefixed corpus file — `fork/rules/secrets.md` pairs with `content/rules/stamity-secrets.md`. Reads *orphaned* when that counterpart was deleted or renamed. A fork ADDITION has no counterpart, so it derives no pair and the lane says nothing about it. |
-| Direct core edit | `src/**`, the roster, the MCP catalog, the hook bodies — and `content/**` for what the fork layer cannot express: the charter template under `content/charter/`, which is not a content class, and an edit to the middle of a bundled body that has to keep tracking upstream, which a whole replacement stops doing and an appended patch cannot state | The real cost. Same lines on both sides: a conflict. Same file, different lines: a clean merge that may still be wrong. | `overlaps`, one row per path both sides changed — *merged cleanly on both sides' edits; semantic review needed* — and one `watched` row per changed path a `watch` glob matches, each with the upstream line delta. |
+| Replacement override | `.stamity/overrides/<class>/<id>.md` | None. The file is yours; upstream never writes it. | An override-drift row when the release changes the artifact behind it: *the default behind `<path>` changed in `<tag>`; the override still applies and hides the change — review it*. It reads *orphaned* when the upstream side was deleted, naming the rename target when git found one. |
+| Patch overlay | `.stamity/overrides/<class>/<id>.customize.yaml` or `.customize.md` | None on the merge. The risk is a patch that quietly stops matching what it patches. | The same drift rows, derived rather than declared. Both shadow roots — `.stamity/overrides/` and `fork/` — spell their ids as bare slugs, so the counterpart is whichever corpus spelling EXISTS at your branch's head, rather than the bare name. `rules/secrets.md` pairs with `content/rules/stamity-secrets.md`, and `skills/qa/SKILL.customize.yaml` with `content/skills/st-qa/SKILL.md`. |
+| Pack | `packs/<id>/` and its `pack.json` | None while the pack only adds. | Nothing, unless the pack shadows a bundled id. Declare that in `shadows` and it is reported like an override. |
+| Fork layer | `fork/<class>/<id>.md` and `fork/skills/<id>/SKILL.md` inside the package, with `.customize.yaml` or `.customize.md` siblings for a patch instead of a replacement. | None. Upstream never writes under `fork/`, so no release can conflict with it. A replaced or patched default that moves upstream is drift, not a conflict. | A `shadowed` row per fork file whose bundled counterpart changed, resolved to the prefixed corpus file: `fork/rules/secrets.md` pairs with `content/rules/stamity-secrets.md`. It reads *orphaned* when that counterpart was deleted or renamed. A fork ADDITION has no counterpart, so it derives no pair and the lane says nothing about it. |
+| Direct core edit | `src/**`, the roster, the MCP catalog, the hook bodies. Also `content/**` for the two things the fork layer cannot express: the charter template under `content/charter/`, which is not a content class, and an edit to the middle of a bundled body that has to keep tracking upstream, which a whole replacement stops doing and an appended patch cannot state. | The real cost. Same lines on both sides is a conflict. Same file, different lines is a clean merge that may still be wrong. | `overlaps`, one row per path both sides changed — *merged cleanly on both sides' edits; semantic review needed* — plus one `watched` row per changed path a `watch` glob matches, each with the upstream line delta. |
 
-Those rows are the lane's honest limit: it can say *look here*, and it cannot say *this is fine*.
+Those rows are the lane's honest limit. It can say *look here*. It cannot say *this is fine*.
 
 Adding content downstream also moves this repository's own hand-maintained pins, and an upgrade
-conflicts on them by design: the corpus counts in README's `content/` map row — hand-typed, and
-held to the catalog's own count by `test/docsPages.test.ts` — and, if your fork adds a guide,
-that test's page-roster literals. Expect that conflict, and resolve it by re-deriving the counts
-for your fork rather than taking either side whole.
+conflicts on them by design. The corpus counts in README's `content/` map row are hand-typed and
+held to the catalog's own count, and a guide your fork adds moves the page-roster literals the same
+way. Expect that conflict. Resolve it by re-deriving the counts for your fork, rather than by
+taking either side whole.
 
-A bundled layer — a directory inside the package that adds and shadows corpus artifacts without
-editing `content/` — used to be a non-goal on this page, with a trigger: the first fork reporting
-recurring conflicts on content additions. The trigger was pulled, and the layer is the **fork
-layer** in the table above: it is what turns the most common core edit into a boundary that costs a
-fork nothing. [Authoring in the fork layer](#authoring-in-the-fork-layer) is the whole of it.
-
-## Authoring in the fork layer
+## Author in the fork layer
 
 `fork/` is a directory inside the package that a fork of this repository fills with its own agents,
-rules, commands and skills. It exists for one reason: the most common core edit — our wording of
-that rule, our extra agent, that default with our tags — becomes a file upstream never touches, so
-what used to be a conflict every release is a file every release merges past.
+rules, commands and skills. It exists for one reason. The most common core edit is our wording of
+that rule, our extra agent, that default with our tags. The fork layer turns each of those into a
+file upstream never touches, so what used to be a conflict every release becomes a file every
+release merges past.
 
 **The layout** is the override tree's, rooted at the package instead of at a consumer repository:
 
@@ -421,54 +482,62 @@ what used to be a conflict every release is a file every release merges past.
 | command | `fork/commands/<id>.md` | `fork/commands/<id>.customize.yaml`, `fork/commands/<id>.customize.md` |
 | skill | `fork/skills/<id>/SKILL.md`, plus the skill's own files | `fork/skills/<id>/SKILL.customize.yaml`, `fork/skills/<id>/SKILL.customize.md` |
 
-In a checkout it is `fork/` beside `content/`; in the package your build publishes it is
-`dist/fork` beside `dist/content`, staged by `tsdown.config.mjs` only when the checkout has one and
-counted in the corpus half of the size budget. A package with no `fork/` directory indexes, plans
-and emits byte-identically to one built before the layer existed — this repository ships none.
+In a checkout it is `fork/` beside `content/`. In the package your build publishes it is
+`dist/fork` beside `dist/content`, staged by `tsdown.config.mjs` only when the checkout has one,
+and counted in the corpus half of the size budget. A package with no `fork/` directory indexes,
+plans and emits byte-identically to one built before the layer existed. This repository ships none.
 
 **Replace or patch, never both for one id.** A fork file claiming an id the corpus holds replaces
 that artifact whole, and the replaced one leaves the index: one identity, one body. A
-`.customize.yaml` instead patches the resolved artifact's frontmatter key by key and a
-`.customize.md` appends to its body, with the base still flowing from the corpus or the pack that
-supplies it — so the patch survives an upstream rewrite of everything it did not name. The two
-shapes are mutually exclusive per layer: `fork/rules/testing.md` beside
-`fork/rules/testing.customize.md` is refused naming both files, exactly as that pair is refused in a
-consumer's override tree.
+`.customize.yaml` instead patches the resolved artifact's frontmatter key by key, and a
+`.customize.md` appends to its body. The base keeps flowing from the corpus or from the pack that
+supplies it, so the patch survives an upstream rewrite of everything it did not name. The two
+shapes are mutually exclusive per layer. `fork/rules/testing.md` beside
+`fork/rules/testing.customize.md` is refused naming both files, exactly as that pair is refused in
+a consumer's override tree.
 
-**Ids are bare slugs.** The corpus spells its own filenames with the prefix the engine mints —
-`stamity-` for agents and rules, `st-` for commands and skills — and a fork file wearing that prefix
-is refused at index time: *a fork-layer filename carries the engine content prefix, which names the
-generated corpus, not the fork's own artifact. Save it under the bare spelling
-"security-patterns.md" instead — a bare slug that matches a bundled artifact's id replaces it, prefix
-and all.* The same refusal covers a skill directory (`fork/skills/st-qa/`); the engine mints the
-prefix onto what it emits, so you never spell it yourself. So `fork/rules/security-patterns.md` is
-how you replace `content/rules/stamity-security-patterns.md`, and the bare spelling is what the
-drift derivation above resolves back to the prefixed corpus file.
+### Name a fork file with a bare slug
 
-**The precedence chain** any `(class, id)` resolves through is corpus or pack → fork (a full
-replacement or a patch) → user (a full replacement or a patch). A consumer of your fork can still
-replace or patch what your fork layer put there, because their `.stamity/overrides/` tree sits above
-it.
+The corpus spells its own filenames with the prefix the engine mints: `stamity-` for agents and
+rules, `st-` for commands and skills. A fork file wearing that prefix is refused at index time:
 
-**A pack and the fork layer never share an id.** Whichever of the two arrives first, the pack is the
-one refused on contact, with *Packs must not shadow existing content* — the same rule that already
-holds between a pack and the corpus, and the same two remedies for whoever meets it: remove the
-pack, or ask its author to rename the artifact. From the fork's side there is no reason to reach for
-a pack's id at all. To change what a pack supplies, patch it —
-`fork/<class>/<id>.customize.yaml`, `fork/<class>/<id>.customize.md` — or ship your own artifact
-under an id of your own.
+> a fork-layer filename carries the engine content prefix, which names the generated corpus, not
+> the fork's own artifact. Save it under the bare spelling "security-patterns.md" instead — a bare
+> slug that matches a bundled artifact's id replaces it, prefix and all.
+
+The same refusal covers a skill directory such as `fork/skills/st-qa/`. The engine mints the prefix
+onto what it emits, so you never spell it yourself. So `fork/rules/security-patterns.md` is how you
+replace `content/rules/stamity-security-patterns.md`, and the bare spelling is what the drift
+derivation above resolves back to the prefixed corpus file.
+
+### Know what wins, and what a pack may not do
+
+**The precedence chain** any `(class, id)` resolves through is corpus or pack → fork → user. Each
+of the two upper stages can hold either shape, a full replacement or a patch. A consumer of your
+fork can still replace or patch what your fork layer put there, because their `.stamity/overrides/`
+tree sits above it.
+
+**A pack and the fork layer never share an id.** Whichever of the two arrives first, the pack is
+the one refused on contact, with *Packs must not shadow existing content*. That is the same rule
+that already holds between a pack and the corpus. Whoever meets it has the same two remedies:
+remove the pack with `clean --pack <id>`, or ask the pack's author to rename the artifact. From the
+fork's side there is no reason to reach for a pack's id at all. To change what a pack supplies,
+patch it with `fork/<class>/<id>.customize.yaml` or `fork/<class>/<id>.customize.md`, or ship your
+own artifact under an id of your own.
 
 **A fork patch can outrun the pack it patches.** The fork layer is package-global and packs are
-per-repository, so a fork patch addressed at an id only an installed pack supplies is skipped in a
-consumer repository that does not carry that pack, and `validate` shows a warning row naming the
-artifact the patch waits for (the pack itself cannot be named: nothing installed supplies it) —
-never an error, because nothing there is wrong. A consumer's own orphan
-patch keeps its error: it names an id nothing in that repository supplies, which is almost always a
-typo in the filename. And where a consumer's own override has already replaced the id a fork patch
-addresses, the patch is reported as inert under that override rather than as applied.
+per-repository. A fork patch addressed at an id only an installed pack supplies is skipped in a
+consumer repository that does not carry that pack. `validate` shows a warning row naming the
+artifact the patch waits for; it cannot name the pack, because nothing installed supplies it. It is
+never an error, because nothing there is wrong. A consumer's own orphan patch keeps its error: it
+names an id nothing in that repository supplies, which is almost always a typo in the filename.
+And where a consumer's own override has already replaced the id a fork patch addresses, the patch
+is reported as inert under that override rather than as applied.
 
-**What `validate` shows.** Every id the layer replaces or patches is a row, marked so a reader can
-tell a fork's customization from a consumer's:
+### Read what `validate` reports
+
+Every id the layer replaces or patches is a row, marked so a reader can tell a fork's customization
+from a consumer's:
 
 ```text
 shadowing — 1 fork replacement takes a bundled id, 1 fork overlay patches one
@@ -477,73 +546,74 @@ shadowing — 1 fork replacement takes a bundled id, 1 fork overlay patches one
   rule testing  fork/rules/testing.customize.yaml  patches rules/stamity-testing.md (corpus) — fork layer
 ```
 
-The JSON envelope carries the same rows — a replacement as `winner: "fork"`, a patch as
-`layer: "fork"` — and, like every shadowing line, they are information and never move the exit code.
-Nothing about the layer relaxes a floor: a fork artifact passes the index-time contract a bundled
-one passes, and the merged artifact a fork patch produces goes through the same gate a consumer's
-patch does, with the finding addressed to the fork file.
+The JSON envelope carries the same rows, a replacement as `winner: "fork"` and a patch as
+`layer: "fork"`. Like every shadowing line, they are information and never move the exit code.
+Nothing about the layer relaxes a floor. A fork artifact passes the index-time contract a bundled
+one passes. The merged artifact a fork patch produces is checked exactly as a consumer's patched
+artifact is, with the finding addressed to the fork file.
 
-**Fork artifacts are always on for your consumers.** Selection admits one by presence, the way it
-admits a consumer's override: a fork ships what it put under `fork/`, and no selection record
-deselects it. Each then reaches every client location its class reaches for corpus content, and the
-per-client copy is an adapter-owned, regenerated, reclaimable file while the source under `fork/` is
-never planned, never wrapped in a managed block and never reclaimed.
+### Know what your consumers receive
+
+**Fork artifacts are always on.** Selection admits one by presence, the way it admits a consumer's
+override: a fork ships what it put under `fork/`, and no selection record deselects it. Each then
+reaches every client location its class reaches for corpus content. The per-client copy is an
+adapter-owned, regenerated, reclaimable file, while the source under `fork/` is never planned,
+never wrapped in a managed block and never reclaimed.
 
 **A fork skill that replaces a bundled one keeps the bundled spelling.** The directory you author is
-bare — `fork/skills/verify/SKILL.md` — and because `verify` is the id the bundled `st-verify` holds,
-it projects to every client as `st-verify`, directory and `name` alike, so every call site and every
+bare, `fork/skills/verify/SKILL.md`. Because `verify` is the id the bundled `st-verify` holds, it
+projects to every client as `st-verify`, directory and `name` alike. Every call site and every
 cross-reference to that skill keeps working. A fork skill whose id nothing bundled holds is an
-addition, and projects under its own bare directory. Either way the directory travels whole:
-`SKILL.md` plus supported companion files beneath it (UTF-8 text for the CLI, original bytes
-for APM). APM excludes patch control files from installed companions.
-What a fork skill cannot do is land in a projection
-directory another skill already occupies under a different id — that is refused, naming the file to
-move.
+addition, and it projects under its own bare directory. Either way the directory travels whole:
+`SKILL.md` plus the supported companion files beneath it, as UTF-8 text for the CLI and as the
+original bytes for APM. APM excludes patch control files from the installed companions. The one
+thing a fork skill cannot do is land in a projection directory another skill already occupies under
+a different id. That is refused, naming the file to move.
 
 **Your generated reference pages will list your artifacts.** `docs/reference/` is rendered from the
-built index, so in a fork `node scripts/generate-docs.mjs` writes the fork's agents, rules, commands
-and skills into those pages and moves their count lines with them — which is what a fork's own
-reference should say. This repository's README counts and its corpus census read `content/` alone,
-so those do not move.
+built index. So in a fork, `node scripts/generate-docs.mjs` writes the fork's agents, rules,
+commands and skills into those pages and moves their count lines with them. That is what a fork's
+own reference should say. This repository's README counts and its corpus census read `content/`
+alone, so those do not move.
 
 [The fork-layer spec](specs/fork-layer.md) is the design reference behind all of it: what was
 decided, what was dropped, and why.
 
-## APM authoring, installation and capabilities
+## Ship your fork through APM
 
-Direct `content/` edits already reach the generated APM package. Fork additions, full
-replacements and patches reach it through the same resolved catalog: a replacement appears
-once with your body, and a patch preserves the resolved patched body. Run
-`node scripts/generate-apm-package.mjs` after authoring, then commit `apm.yml` and `.apm/`.
-Check independent expected content in an installed consumer; generation alone cannot prove
-the client discovered it.
+Direct `content/` edits already reach the generated APM package. Fork additions, full replacements
+and patches reach it through the same resolved catalog: a replacement appears once with your body,
+and a patch preserves the resolved patched body. Run `node scripts/generate-apm-package.mjs` after
+authoring, then commit `apm.yml` and `.apm/`. Check for your own expected content in an installed
+consumer, because generation alone cannot prove the client discovered it.
 
 | Distribution | Author customization | What consumers receive |
 | --- | --- | --- |
 | Canonical public APM | Canonical source | Generated rules, commands, agents and skills |
 | Public downstream APM | Direct `content/` edits and the fork layer | Those four resolved classes from the downstream ref |
 | Independent private APM | The same inputs and explicit identity | Those classes after authenticated private git installation |
-| Packaged CLI | Source/engine changes and bundled fork layer | Existing CLI behavior and supported client emission, with consumer override precedence |
+| Packaged CLI | Source and engine changes, plus the bundled fork layer | Existing CLI behaviour and supported client emission, with consumer override precedence |
 
-APM delivery depends on its target profile: the tested Claude, Copilot and Cursor profiles
-deploy all four classes; Codex deploys agents and skills, with instructions compiled by APM
-separately. This package does not deliver Stamity's charter, hooks, MCP wiring, engine/runtime
-or CLI behavior through APM. Editing those sources changes a downstream repository or its
-packaged CLI, not the APM projection. Plugin manifests retain their direct `content/` surface;
-this change does not add fork projection to plugin installation. Consumer
-`.stamity/overrides/` precedence belongs to the CLI and is not read during APM generation.
+APM delivery depends on the target profile. The tested Claude, Copilot and Cursor profiles deploy
+all four classes. Codex deploys agents and skills, with instructions compiled by APM separately.
+This package does not deliver stamity's charter, hooks, MCP wiring, engine and runtime, or CLI
+behaviour through APM. Editing those sources changes a downstream repository or its packaged CLI,
+not the APM projection. Plugin manifests keep their direct `content/` surface; the fork layer is not
+projected into plugin installation. Consumer `.stamity/overrides/` precedence belongs to the CLI and
+is not read during APM generation.
 
-### A private release and authenticated consumer
+### Cut a private release
 
-Use the existing private APM and Renovate engine's release convention. Choose a tag distinct
-from imported upstream tags that its version policy accepts: `v1.5.0-acme.1`, for example,
-is a prerelease and needs a consumer policy allowing that prerelease. Update package version,
-regenerate, run full gates, review and commit on the integration branch before tagging.
+Use your existing private APM and Renovate engine's release convention. Choose a tag that is
+distinct from the imported upstream tags and that your version policy accepts. `v1.5.0-acme.1`, for
+example, is a prerelease and needs a consumer policy that allows prereleases. Update the package
+version, regenerate, run the full gates, review and commit on the integration branch, and only then
+tag.
 
-The existing update engine must also order those tags correctly. Native Renovate APM updates
-use a coerced version policy by default, which can treat `.1` and `.2` prerelease tags as the
-same version. For that manager, merge a rule scoped to this private dependency into the
-existing configuration, then prove it offers the second tag:
+Your update engine also has to order those tags correctly. Native Renovate APM updates use a
+coerced version policy by default, which can treat `.1` and `.2` prerelease tags as the same
+version. For that manager, merge a rule scoped to this private dependency into your existing
+configuration, then prove it offers the second tag:
 
 ```json
 {
@@ -556,10 +626,10 @@ existing configuration, then prove it offers the second tag:
 }
 ```
 
-If the deployed engine uses another manager, apply its equivalent supported policy or choose
-its supported stable tag convention. Keep the existing engine; do not infer ordering from a
-successful APM install. The [version-policy source notes](https://github.com/zomarit/stamity/blob/main/docs/specs/enterprise-upstream-lane.md)
-record the dependency contracts behind this prerequisite.
+If your deployed engine uses another manager, apply that manager's equivalent supported policy, or
+choose its supported stable tag convention. Keep the existing engine, and do not infer ordering
+from a successful APM install. [The upstream-lane spec](specs/enterprise-upstream-lane.md) records
+the dependency contracts behind this prerequisite.
 
 ```sh
 set -euo pipefail
@@ -573,18 +643,20 @@ git tag "$STAMITY_PRIVATE_TAG"
 git push origin "$STAMITY_PRIVATE_TAG"
 ```
 
-The private git tag is sufficient for APM. If your existing engine consumes GitHub Release
-objects, add one on that same private repository using its reviewed notes and
-`gh release create "$STAMITY_PRIVATE_TAG" --repo "$STAMITY_DOWNSTREAM" --verify-tag`.
-Check actual visibility immediately before release. These releases remain separate from
-canonical Stamity's public npm/APM/docs release.
+The private git tag is enough for APM on its own. If your engine consumes GitHub Release objects,
+add one on that same private repository with its reviewed notes:
+`gh release create "$STAMITY_PRIVATE_TAG" --repo "$STAMITY_DOWNSTREAM" --verify-tag`. Check the
+actual visibility immediately before you release. These releases stay separate from the canonical
+project's public npm, APM and docs release.
 
-The consumer names the private ref in `apm.yml` in the same form as a public dependency.
-Also declare the intended supported clients in `targets`; this example selects Claude.
-Native Renovate APM runs plain `apm install` to refresh the lock and deployed files. A
-manual `--target` flag is not remembered for that run, and multiple detected clients without
-manifest targets can fail noninteractive installation. List every intended client explicitly
-(for example, `[claude, copilot]` when both are required).
+### Install it in a consumer repository
+
+The consumer names the private ref in `apm.yml` in the same form as a public dependency. Declare
+the intended supported clients in `targets` as well; this example selects Claude. Native Renovate
+APM runs plain `apm install` to refresh the lock and the deployed files. A manual `--target` flag is
+not remembered for that run, and several detected clients with no manifest targets can fail a
+noninteractive installation. List every intended client explicitly. Write `[claude, copilot]` when
+both are required.
 
 ```yaml
 targets: [claude]
@@ -593,186 +665,206 @@ dependencies:
     - acme/stamity-private#v1.5.0-acme.1
 ```
 
-Use apm-cli **0.29.1 or newer**; **0.30.0** is the current tested client. Supply an approved
-read credential through the secret manager as `GITHUB_APM_PAT_ACME` for this example owner,
-or `GITHUB_APM_PAT`. Per-organization credentials take precedence over the general APM token,
-which precedes `GITHUB_TOKEN` and `GH_TOKEN`. A consumer's Actions token normally cannot
-read another private repository; explicitly grant the selected credential access and
-complete organization SSO authorization where needed. Keep values out of manifests, URLs,
-command history, logs and evidence.
+Use apm-cli **0.29.1 or newer**; **0.30.0** is the current tested client. Supply an approved read
+credential through your secret manager as `GITHUB_APM_PAT_ACME` for this example owner, or as
+`GITHUB_APM_PAT`. A per-organisation credential takes precedence over the general APM token, which
+in turn precedes `GITHUB_TOKEN` and `GH_TOKEN`. A consumer's Actions token normally cannot read
+another private repository: grant the selected credential access explicitly, and complete
+organisation SSO authorization where it is needed. Keep the values out of manifests, URLs, command
+history, logs and evidence.
 
 ```sh
 apm install
 ```
 
-Read `apm.lock.yaml`: the dependency must be `apm_package` and resolve the intended private
-commit. Assert an independently specified customization marker in every expected installed
-class, skill directory/name and companion file. Retain client version, source ref, resolved
-SHA and byte hashes in the approved private evidence location. An authentication failure
-is incomplete installation even if stale files from an earlier install remain.
+Then read `apm.lock.yaml`. The dependency must be `apm_package` and must resolve to the private
+commit you intended. Assert an independently specified customization marker in every expected
+installed class, skill directory and name, and companion file. Retain the client version, the source
+ref, the resolved SHA and the byte hashes in your approved private evidence location. An
+authentication failure is an incomplete installation, even when stale files from an earlier install
+remain.
 
-After the reviewed upstream merge and second private release, let the existing Renovate
-engine open its consumer update PR. Verify its actual run, chosen ref, access, checks and
-resolved lockfile/installed content. Keep that engine's manager and policy configuration;
-a proposed config or simulated update does not prove the deployed integration. The
+After the reviewed upstream merge and the second private release, let your existing Renovate engine
+open its consumer update pull request. Verify its actual run, the ref it chose, its access, its
+checks and the resolved lockfile and installed content. Keep that engine's manager and policy
+configuration: a proposed config or a simulated update does not prove the deployed integration. The
 distribution owner closes this step with observed evidence.
 
-## The GitHub workflow
+## Turn on the GitHub workflow
 
 `.github/workflows/upstream-update.yml` ships in every copy of this repository and does nothing
-until you opt in. **Activation is committing `.stamity/upstream.json`**: the first job probes for
-that file, and where there is none it writes a notice and the run ends green with the jobs after
-it skipped — this repository's own case, permanently.
+until you opt in. **Committing `.stamity/upstream.json` is the activation.** The first job probes
+for that file. Where there is none it writes a notice, and the run ends green with the jobs after it
+skipped. That is this repository's own case, permanently.
 
-It runs on `workflow_dispatch` (inputs: `release`, an optional tag, and `dry_run`) and an hourly
-schedule at minute 17 (`17 * * * *`). Change the cron through a reviewed downstream workflow
-edit when policy requires another cadence. Scheduling is best effort, not a deadline, and
-upstream releases do not themselves trigger this workflow. Two schedule facts are the
-platform's rather than the lane's: scheduled workflows are **disabled by default in a fork**, and
-are auto-disabled after sixty idle days in a public repository. Enable them, and expect to
-re-enable them. Two jobs follow the probe, split by trust:
+The workflow runs on `workflow_dispatch` and on an hourly schedule at minute 17 (`17 * * * *`). The
+dispatch takes two inputs: `release`, an optional tag, and `dry_run`, which prepares the update and
+publishes nothing: no branch, no pull request, no issue. Change the cron through a reviewed
+downstream edit when your policy requires another cadence. Scheduling is best effort, not a
+deadline, and an upstream release does not itself trigger this workflow. Two more schedule facts
+are the platform's rather than the lane's. Scheduled workflows are **disabled by default in a
+fork**. They are also auto-disabled after sixty idle days in a public repository. Enable them, and
+expect to re-enable them.
 
-- **`prepare`** — `contents: read`, `persist-credentials: false`, **no secret in its
-  environment**. It fetches, merges, regenerates and runs your gates, every one of which executes
-  third-party code out of your dependency tree, and hands the result forward as an artifact: the
-  two reports and the update branch as a git bundle.
-- **`publish`** — `contents: write`, `pull-requests: write`, `issues: write`. It runs only git
-  and `gh` over that artifact and executes none of your code. It pushes `stamity-upstream/<tag>`
-  when the remote branch does not already exist, opens one pull request for it, applies the
-  landing-policy check, and fails the run on `validation-failed` so the check on the pull request
+Two jobs follow the probe, split by trust:
+
+- **`prepare`** — `contents: read`, `persist-credentials: false`, and **no secret in its
+  environment**. It fetches, merges, regenerates and runs your gates. Every one of those executes
+  third-party code out of your dependency tree, which is why the job holds nothing that can push.
+  It hands the result forward as an artifact: the two reports, and the update branch as a git
+  bundle.
+- **`publish`** — `contents: write`, `pull-requests: write`, `issues: write`. It runs only `git` and
+  `gh` over that artifact and executes none of your code. It pushes `stamity-upstream/<tag>` when
+  the remote branch does not already exist, opens one pull request for it, and applies the
+  landing-policy check. It fails the run on `validation-failed`, so the check on that pull request
   is red. On a conflict there is nothing to push, so it opens or updates one issue per release,
   `Upstream <tag> needs conflict resolution`, carrying the report and the local commands.
 
-The preparation job can fetch the public upstream without credentials. Its publish-only
+`prepare` can fetch a public upstream without credentials. The publish-only
 `STAMITY_UPSTREAM_TOKEN` does not authenticate a private upstream or mirror during preparation.
-Choose an approved source reachable by that job without the write secret, or have the platform
-owner review a separate authenticated-fetch design before claiming that deployment is supported.
+Choose an approved source that job can reach without the write secret, or have the platform owner
+review a separate authenticated-fetch design before you claim that deployment is supported.
 
-**An update branch that already exists on the remote is preserved.** A later run reports its
-open PR without changing its body, title, labels or branch. If the push succeeded but PR
-creation failed, retry can create the missing PR only after proving the same owned integration:
-matching release/target, merge parents, non-record tree and semantic integration record,
-with no human follow-up. A fresh sync may change only the generated manifest's top-level
-`updatedAt`: recovery accepts that timestamp difference in canonical schema-1.0.0 manifests,
-with valid UTC millisecond timestamps, while requiring every other manifest byte to match.
-Missing, linked, executable, malformed or noncanonical changed manifests require review;
-other generated files remain part of the exact tree comparison. The recovered PR names that
-retained remote SHA. Target movement,
-human fixups, wrong base or ambiguous ownership require manual review and create nothing.
-A closed or merged PR is never reopened or replaced. The `upstream-publication` artifact
-retains `publish-result.json` and the prepared/remote record evidence. The lane finds its own issues by a marker it writes into
-the body — `<!-- stamity-upstream-lane: <tag> <kind> -->` — rather than by title alone, so
-renaming one does not produce a second.
+**An update branch that already exists on the remote is preserved.** A later run reports its open
+pull request without changing the body, title, labels or branch.
+
+If the push succeeded but pull request creation failed, a retry can create the missing pull request
+only after proving the same owned integration. That means a matching release and target, matching
+merge parents, a matching non-record tree, and a semantic integration record, with no human
+follow-up. A fresh sync may change only the generated manifest's top-level `updatedAt`. Recovery
+accepts that one timestamp difference in canonical schema-1.0.0 manifests carrying valid UTC
+millisecond timestamps, and requires every other manifest byte to match. A missing, linked,
+executable, malformed or noncanonical changed manifest requires review. Every other generated file
+stays part of the exact tree comparison. The recovered pull request names the remote SHA it
+retained.
+
+Target movement, human fixups, a wrong base or ambiguous ownership all require manual review and
+create nothing. A closed or merged pull request is never reopened or replaced. The
+`upstream-publication` artifact retains `publish-result.json` and the prepared and remote record
+evidence. The lane finds its own issues by a marker it writes into the body,
+`<!-- stamity-upstream-lane: <tag> <kind> -->`, rather than by title alone, so renaming one does not
+produce a second.
 
 **Automation never pushes a workflow change.** When the release touches anything under
-`.github/workflows/`, `publish` pushes nothing at all and opens or updates one issue,
+`.github/workflows/`, `publish` pushes nothing at all. It opens or updates one issue,
 `Upstream <tag> needs a reviewed push`, carrying the report and the commands that push the update
-branch from your own checkout. This is not a token limit to work around: a pushed branch's own
-workflow files run on `push` under the pushing identity, so a person reads the workflow diff and
-pushes it and opens the reviewed PR. Even if the reviewed workflow-change branch is already
-on the remote, automatic missing-PR recovery remains refused for it. Upstream releases of
-this product do touch workflow files — expect that issue.
+branch from your own checkout. This is not a token limit to work around. A pushed branch's own
+workflow files run on `push` under the pushing identity, so a person reads the workflow diff, pushes
+it, and opens the reviewed pull request. Even when the reviewed workflow-change branch is already on
+the remote, automatic missing-pull-request recovery stays refused for it. Upstream releases of this
+product do touch workflow files, so expect that issue.
 
-A `concurrency` group serialises runs and never cancels one in flight, because a killed
-`integrate` leaves state the next run has to reconcile.
+A `concurrency` group serialises runs and never cancels one in flight, because a killed `integrate`
+leaves state the next run has to reconcile.
 
-### The optional secret, and the one thing it buys
+### Add the optional token, and what it buys
 
 The workflow needs no token and no App: `publish` falls back to the per-run repository token. The
-optional `STAMITY_UPSTREAM_TOKEN` — a fine-grained PAT with Contents: write, Pull
-requests: write and Issues: write, read only by `publish` — buys exactly one thing, the pull
-request's own CI. Since
-2026-06-11 a pull request created with the repository token does start `pull_request` runs, but
-in an approval-required state: someone clicks "Approve and run" on each, and with the secret they
-start on their own. It also sidesteps the second half of that limit — opening a pull request with
-the repository token needs the repository or organisation setting **"Allow GitHub Actions to
-create and approve pull requests"**, and without it `gh pr create` fails, the branch is still
-pushed, and the run says exactly that. Correct the permission or credential and retry: an
-unchanged owned branch can then receive its missing PR without a branch rewrite.
+optional `STAMITY_UPSTREAM_TOKEN` is a fine-grained PAT with Contents: write, Pull requests: write
+and Issues: write, and only `publish` reads it. It buys exactly one thing: the pull request's own
+CI.
 
-Store the PAT in the approved Actions secret store, scoped to the downstream repository,
-with a named owner, expiration and rotation procedure. It reaches `publish` alone. If the
-organization selects a GitHub App, its approved integration must mint a short-lived
-installation token per run; an expiring installation token saved as a static secret is not
-a supported setup. Verify the actual required checks on a real bot-created PR under your
-rules. A passing preparation report alone does not prove those platform checks ran.
+Since 2026-06-11 a pull request created with the repository token does start `pull_request` runs,
+but in an approval-required state, where someone clicks "Approve and run" on each. With the secret
+they start on their own. The secret also sidesteps the other half of that limit. Opening a pull
+request with the repository token needs the repository or organisation setting **"Allow GitHub
+Actions to create and approve pull requests"**. Without it, `gh pr create` fails, the branch is
+still pushed, and the run says exactly that. Correct the permission or the credential and retry: an
+unchanged owned branch can then receive its missing pull request without a branch rewrite.
 
-What the secret does **not** buy is a workflow-touching release: that path is closed by design,
+Store the PAT in the approved Actions secret store, scoped to the downstream repository, with a
+named owner, an expiration and a rotation procedure. It reaches `publish` alone. If your
+organisation selects a GitHub App instead, its approved integration must mint a short-lived
+installation token per run. An expiring installation token saved as a static secret is not a
+supported setup. Verify the real required checks on a real bot-created pull request under your own
+rules, because a passing preparation report does not prove those platform checks ran.
+
+What the secret does **not** buy is a workflow-touching release. That path is closed by design, as
 above, not by permission. Either way your gates already ran in `prepare` and their verdict is
 committed on the branch, so the pull request is never the first place the merged tree is tested.
 
-**Any other host.** The script is portable: a self-hosted remote or a mirror runs
+**Any other host.** The script is portable. A self-hosted remote or a mirror runs
 `node scripts/upstream.mjs integrate` the same way, and no verb asks the host anything. Only the
-landing-policy check does not carry over, being a GitHub API read — elsewhere set the project's
-merge-method setting to the option that produces a merge commit rather than a fast-forward or a
-squash, and check it by hand. Only the GitHub reading is automated and only it was verified for
-this release; everywhere else the same misconfiguration surfaces as `ancestry-lost` after the
-first landing.
+landing-policy check does not carry over, because it is a GitHub API read. Elsewhere, set the
+project's merge-method setting to the option that produces a merge commit rather than a
+fast-forward or a squash, and check it by hand. Only the GitHub reading is automated and only it was
+verified for this release. Everywhere else the same misconfiguration surfaces as `ancestry-lost`
+after the first landing.
 
-### Failure, monitoring and recovery evidence
+### Recover from a failed run
 
 | Condition | Recovery and retained evidence |
 | --- | --- |
-| Authentication/permission failure | Retain the run/report; check repository access, token expiry/SSO and effective grants, then retry. A failed remote lookup is never an absent branch. |
-| `conflict` or `conflict-pending` | Resolve named source conflicts in the update worktree, run `continue`, then review and push. |
-| `regenerate-failed` or `validation-failed` | Fix the failed command or behavior, regenerate and use `continue` or `validate` for the existing state; preserve earlier failures. |
-| Missing/lost ancestry | Restore full history or reconstruct from the known base and review the landing method; preserve the original checkout. |
-| Workflow files changed | Read the complete diff and reviewed-push issue, then perform its local push under the approved reviewer identity. No stronger token bypasses the guard. |
-| Missing PR on unchanged owned branch | Correct the creation failure and retry; verify one PR at the original SHA without a rewrite. |
-| Closed PR, changed branch or ambiguous owner | Preserve state and review manually. An operator decides whether to reopen the existing PR or use a separately reviewed recovery branch. |
+| Authentication or permission failure | Retain the run and the report. Check repository access, token expiry and SSO, and the effective grants, then retry. A failed remote lookup is never an absent branch. |
+| `conflict` or `conflict-pending` | Resolve the named source conflicts in the update worktree, run `continue`, then review and push. |
+| `regenerate-failed` or `validation-failed` | Fix the failed command or the failed behaviour, regenerate, and use `continue` or `validate` for the existing state. Preserve the earlier failures. |
+| Missing or lost ancestry | Restore the full history, or reconstruct from the known base, and review the landing method. Preserve the original checkout. |
+| Workflow files changed | Read the complete diff and the reviewed-push issue, then perform its local push under the approved reviewer identity. No stronger token bypasses the guard. |
+| Missing pull request on an unchanged owned branch | Correct the creation failure and retry. Verify one pull request at the original SHA, with no rewrite. |
+| Closed pull request, changed branch, or ambiguous owner | Preserve the state and review it manually. An operator decides whether to reopen the existing pull request or use a separately reviewed recovery branch. |
 
-Assign an operations owner and connect failed Actions runs to the existing notification
-destination. An external monitor must compare the latest attempted/successful poll with an
-agreed threshold; three hours for hourly polling is an initial threshold to review with that
-owner. A disabled or missed workflow cannot emit its own failure notification. Test a
-controlled failed run and a stale/disabled-poll signal in approved fixtures, retaining proof
-that the selected destination received both.
+Assign an operations owner, and connect failed Actions runs to your existing notification
+destination. An external monitor has to compare the latest attempted poll and the latest successful
+poll against an agreed threshold. Three hours is a reasonable starting threshold for hourly
+polling, to review with that owner. A disabled or missed workflow cannot emit its own failure
+notification. Test both a controlled failed run and a stale-or-disabled-poll signal in approved
+fixtures, and retain proof that the destination received both.
 
-Before fixture cleanup, retain private/non-fork metadata, initial/final tags and SHAs,
-authenticated installed-content assertions, the ordinary-file upstream release, update run
-and PR/checks, reviewed merge ancestry/customization, the actual Renovate consumer PR and
-final installation. Capture missing-PR retry, unchanged repeat, the separate landing-policy
-warning and reviewed workflow-change recovery. Missing authorization, credentials, observed
-Renovate run or monitoring destination leaves that exact proof as `Not done:` while
-independent work continues. Keep private evidence in its approved private location.
+Before you clean up those fixtures, retain:
 
-## What is guaranteed, and by whom
+- the private and non-fork metadata, and the initial and final tags and SHAs;
+- the authenticated installed-content assertions;
+- the ordinary-file upstream release, the update run, and the pull request with its checks;
+- the reviewed merge ancestry and customization;
+- the actual Renovate consumer pull request, and the final installation;
+- the missing-pull-request retry, the unchanged repeat, the separate landing-policy warning, and
+  the reviewed workflow-change recovery.
 
-**Automatic.** The merge commit carries the upstream release in its ancestry, or the run does not
-claim `integrated`. Everything happens on an isolated update branch in its own worktree; your
-integration branch and working tree are never written. No conflict marker is ever committed, and
-every commit reachable from your branch and from the release stays reachable from the merge
-commit. Every verb is idempotent: run it twice and there is still one branch, one worktree, one
-record, one pull request, one issue.
+Missing authorization, credentials, an observed Renovate run or a monitoring destination leaves
+that exact proof as `Not done:` while independent work continues. Keep private evidence in its
+approved private location.
 
-**Your gates decide.** Whether the merged product still behaves. A clean merge is a statement
-about text and nothing more; `Stamity-Upstream-Gates: none` is the lane telling you nobody asked.
+## Know who guarantees what
 
-**A maintainer decides.** Whether a clean overlap is semantically right; whether an override
-should still apply now that the default behind it moved; whether an extension point your fork
-depends on was quietly retired upstream. The lane surfaces all three as rows — none is a verdict.
+**The lane guarantees these automatically.** The merge commit carries the upstream release in its
+ancestry, or the run does not claim `integrated`. Everything happens on an isolated update branch in
+its own worktree, so your integration branch and your working tree are never written. No conflict
+marker is ever committed. Every commit reachable from your branch and from the release stays
+reachable from the merge commit. Every verb is idempotent: run it twice and there is still one
+branch, one worktree, one record, one pull request, one issue.
 
-**AI assistance: none required, none used.** No step calls a model, and nothing the lane itself
-sends leaves the machine except a `git fetch` of the upstream you configured — your own
-`regenerate` and `gates` commands reach whatever they reach (the recommended list's `npm ci`
-reaches the npm registry) — plus, in the GitHub workflow, that platform's own API through `gh`.
+**Your gates decide whether the merged product still behaves.** A clean merge is a statement about
+text and nothing more. `Stamity-Upstream-Gates: none` is the lane telling you nobody asked.
 
-## For stamity maintainers: keeping upgrades cheap downstream
+**A maintainer decides the three questions no check can answer.** Whether a clean overlap is
+semantically right. Whether an override should still apply now that the default behind it moved.
+Whether an extension point your fork depends on was quietly retired upstream. The lane surfaces all
+three as rows, and none of them is a verdict.
+
+**AI assistance: none required, none used.** No step calls a model. Nothing the lane itself sends
+leaves the machine except a `git fetch` of the upstream you configured, plus that platform's own
+API through `gh` in the GitHub workflow. Your own `regenerate` and `gates` commands reach whatever
+they reach. The recommended list's `npm ci` reaches the npm registry.
+
+## Keep upgrades cheap downstream
+
+These six are for stamity's maintainers, and they are what a fork's upgrade cost is made of.
 
 - **Keep generated trees regenerable and listed.** A generated file that cannot be rebuilt from a
-  command is a file every fork hand-merges forever; a new generator moves CONTRIBUTING.md's
+  command is a file every fork hand-merges forever. A new generator moves CONTRIBUTING.md's
   regeneration table and the `generatedPaths` list above with it.
-- **Prefer additive changes to prose.** Appending a section conflicts with nothing; rewriting a
+- **Prefer additive changes to prose.** Appending a section conflicts with nothing. Rewriting a
   whole rule conflicts with every fork that touched a line of it.
 - **Keep pins derivable.** A count computed from its source cannot conflict with a downstream
-  addition; a count typed into a page conflicts with every one of them.
+  addition. A count typed into a page conflicts with every one of them.
 - **Keep `CHANGELOG.md` sections per release.** The lane extracts the `## [<version>]` section at
-  the release commit into the report and the pull request body — that is how a fork's reviewer
-  sees what they are taking.
-- **Tag releases as `v*`.** The default `releases.pattern`, and what makes "the newest stable
-  release" answerable from tag names alone.
-- **Document a retired extension point in the changelog.** The one class of breakage no gate
-  catches: the merge is clean, the fork's tests may pass, and the feature they hung off is gone.
+  the release commit into the report and the pull request body. That is how a fork's reviewer sees
+  what they are taking.
+- **Tag releases as `v*`.** It is the default `releases.pattern`, and it is what makes "the newest
+  stable release" answerable from tag names alone.
+- **Document a retired extension point in the changelog.** It is the one class of breakage no
+  upgrade gate catches: the merge is clean, the fork's tests may pass, and the feature they hung
+  off is gone.
 
 ## Where to go next
 
