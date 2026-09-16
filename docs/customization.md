@@ -279,8 +279,8 @@ full override is held to: the deny scan, the lifecycle declarations and the lean
 It reports what it finds against the half that carries it. Sync itself does not run that wider
 gate, so an overlay can pass sync and still be flagged by `validate`.
 
-A `patched` line is information and never moves the exit code, exactly as a shadowing line does
-not.
+A `patches` row prints inside the same `shadowing` block a `replaces` row does. Both are
+information, and neither one moves the exit code.
 
 ## How do you remove one?
 
