@@ -302,16 +302,125 @@ describe("the reach proxy is labelled as one", () => {
   });
 });
 
+/** The prior complete run a composed artifact names, as that run's directory id. */
+const PRIOR_RUN = /prior complete run is `([\w.-]+)`/;
+
+/** A run's directory id, read off the `evals/runs/<id>/RESULTS.md` path that points at it. */
+function runId(path: string): string {
+  return path.split("/").at(-2) ?? "";
+}
+
+/** The run number a directory id ends with: `2026-09-15-run-30` is `30`. */
+function runNumber(id: string): string {
+  return /-run-(\d+)$/.exec(id)?.[1] ?? "";
+}
+
+/**
+ * One `## ` section of a results file, heading excluded, or `""` when it carries none.
+ *
+ * Absence is a value here rather than a throw: "this run has no composition section" is
+ * precisely what identifies a complete run, so the caller asserts on it.
+ */
+function resultsSection(results: string, heading: string): string {
+  const start = results.indexOf(`\n## ${heading}\n`);
+  if (start === -1) return "";
+  const body = results.slice(start + heading.length + 5);
+  const end = body.indexOf("\n## ");
+  return end === -1 ? body : body.slice(0, end);
+}
+
+/** The per-metric score table's body rows, each as its trimmed cells. */
+function metricRows(results: string): readonly (readonly string[])[] {
+  return resultsSection(results, "5. Per-metric scores beside their declared thresholds")
+    .split("\n")
+    .filter((line) => line.trimStart().startsWith("|"))
+    .map((line) =>
+      line
+        .split("|")
+        .slice(1, -1)
+        .map((cell) => cell.trim()),
+    )
+    .filter((cells) => cells.length === 4 && cells[0] !== "Metric" && !/^-+$/.test(cells[0] ?? ""));
+}
+
 describe("the restated figures are held to the artifacts they come from", () => {
-  it("quotes run 24's four metric scores as that run's results file states them", () => {
+  /**
+   * TEST CHANGE, justified: the four figures were typed here as literals of run 24's
+   * results file, and the run of record moved to run 30 — the 1.8.0 release run. A
+   * retyped literal list would have had to move again at the next release, and a
+   * transcription is exactly what this describe block exists to refuse. The figures
+   * are now DERIVED from the run's own `## 5. Per-metric scores` table, and each is
+   * held to the page beside the metric it belongs to rather than on its own.
+   *
+   * Strictly stronger in three ways: the metric NAMES are pinned as a list, so a
+   * metric dropped from the table no longer passes by vacuum; the page must restate
+   * `<metric> <score>` as a pair, so a score landing under the wrong metric fails;
+   * and the score cell's shape is asserted, so a row whose count cell went missing
+   * cannot be restated as an empty string the page trivially contains.
+   */
+  it("quotes run 30's four metric scores as that run's results file states them", () => {
     const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
     const page = renderMeasurements();
-    for (const figure of ["**1.000** (48/48)", "**1.000** (14/14)", "**0.000** (0/4)", "**1.000** (12/12)"]) {
-      expect(results, `run 24 does not state ${figure}`).toContain(figure);
-      expect(page, `the page does not restate ${figure}`).toContain(figure);
+
+    // Section 5 only. A composed run carries `## 0. Composition` with tables of its own
+    // (re-measured cases, carried cases), and reading "the tables in this file" would pick
+    // those up; the section heading is what selects the one table that states the scores.
+    const rows = metricRows(results);
+    expect(rows.map((cells) => cells[0])).toEqual([
+      "Golden rubric pass rate",
+      "Adversarial guardrail hold rate",
+      "Benign-twin false-refusal rate",
+      "Trigger-probe accuracy",
+    ]);
+
+    for (const [metric, score] of rows.map((cells) => [cells[0] ?? "", cells[1] ?? ""])) {
+      expect(score, `${RUN_OF_RECORD_PATH} states no score and count for ${metric}`).toMatch(
+        /^\*\*[01]\.\d{3}\*\* \(\d+\/\d+\)$/,
+      );
+      expect(page, `the page does not restate ${metric} as ${score}`).toContain(
+        `${metric} ${score}`,
+      );
     }
-    expect(results).toContain("floors 21/21");
-    expect(page).toContain("21/21");
+
+    // The floor count lives in the golden row's result cell, not in its score cell.
+    const floors = /floors (\d+\/\d+)/.exec(rows[0]?.[3] ?? "")?.[1];
+    expect(floors, `${RUN_OF_RECORD_PATH} states no floor count for the golden rate`).toBeDefined();
+    expect(page).toContain(`every floor case passed, ${floors}.`);
+  });
+
+  it("says the run of record is composed, and names the runs it was composed from", () => {
+    const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
+    const page = renderMeasurements();
+
+    // A composed run scores the whole set from samples some of which were carried from an
+    // earlier run rather than measured again. The page says so, because "PASS, three samples
+    // per case" over 99 cases otherwise reads as 297 fresh measurements on this candidate.
+    const composition = resultsSection(results, "0. Composition");
+    expect(composition, `${RUN_OF_RECORD_PATH} carries no composition section`).toContain(
+      "incremental rule",
+    );
+    expect(page).toContain("SET-v7's incremental rule");
+    expect(page).toContain("composed");
+
+    // The prior complete run, and the complete run IT was composed from, are read out of the
+    // artifacts rather than typed: the chain the page describes is the chain the files record.
+    const prior = PRIOR_RUN.exec(composition)?.[1];
+    expect(prior, "the composition section names no prior complete run").toBeDefined();
+    const priorResults = readFileSync(join(REPO_ROOT, "evals/runs", prior ?? "", "RESULTS.md"), "utf-8");
+    const baseline = PRIOR_RUN.exec(resultsSection(priorResults, "0. Composition"))?.[1];
+    expect(baseline, `${prior} names no prior complete run`).toBeDefined();
+
+    const baselineResults = readFileSync(
+      join(REPO_ROOT, "evals/runs", baseline ?? "", "RESULTS.md"),
+      "utf-8",
+    );
+    // What makes the baseline the full run: it composes from nothing, so every case in it
+    // was measured on its own candidate. That is the claim the page makes about run 27.
+    expect(resultsSection(baselineResults, "0. Composition")).toBe("");
+    expect(page).toContain(`Run ${runNumber(baseline ?? "")} measured every case in full`);
+    expect(page).toContain(
+      `runs ${runNumber(prior ?? "")} and ${runNumber(runId(RUN_OF_RECORD_PATH))} re-measured`,
+    );
   });
 
   it("names first-run lanes the workflow actually declares", () => {
