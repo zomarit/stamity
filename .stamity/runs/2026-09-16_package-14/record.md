@@ -248,3 +248,17 @@ each item had shipped already and the roadmap had not been ticked.
   QA form filed privately with the rows bound to their hashes and the maintainer's up-front sign-off of
   decision 3 recorded as a sign-off without a performance, the third time, with track D3's acceptance
   line noted as unmet. Branch pushed; CI runs on the head; review round 2 out on both halves.
+- 04:40Z Review round 2. Governance half: **approve**; the reviewer withdrew its round-1 W1 after
+  reading the workflow's enumeration (three proofs, `release.yml:153–157`, the suite's own wording at
+  `test/ci/workflow.test.ts:1478`) and found the outlier to be the workflow's header comment; three
+  Minors ledgered (SECURITY's "only the character ceiling has a production caller" understates the
+  constant's stdin callers; one assertion in the producer census that cannot fail; a literal PASS where
+  the neighbouring assertion derives) plus that header comment. Daily-use half: **request-changes** on
+  one Warning — README's manifest sentence dropped the qualification its 157-line budget was raised for
+  at 1.8.0 (`validate` runs with or without a manifest; `learn` and `handoff` want only `.stamity/`),
+  and getting-started repeats the over-claim — and the evidence-gap Warning, closed by the gate run
+  recorded above; four Minors ledgered (the `cleanup` disposition's arithmetic is "not worth the style
+  inconsistency" rather than impossible; the spec row's "same 49 files"; a long comment line; the
+  MCP-file secret warning). Every Minor except the cosmetic line width is fixed: two file-disjoint
+  fixers dispatched (README, getting-started and the spec; SECURITY, the three tests and the workflow
+  comment). The candidate moves; the harness re-runs at the new one.
