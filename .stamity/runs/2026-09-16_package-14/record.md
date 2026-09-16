@@ -262,3 +262,14 @@ each item had shipped already and the roadmap had not been ticked.
   MCP-file secret warning). Every Minor except the cosmetic line width is fixed: two file-disjoint
   fixers dispatched (README, getting-started and the spec; SECURITY, the three tests and the workflow
   comment). The candidate moves; the harness re-runs at the new one.
+- 05:05Z CI at `e845b5e`: every check green on every leg, the Windows leg included — the path fix
+  holds. Fixer round 2 returned: README's manifest sentence restored within 157 lines (which verbs
+  work from the manifest; `validate` with or without one; `learn` and `handoff` want only
+  `.stamity/`), paid for by dropping the package-name and `st`-alias sentence from README — both stay
+  on getting-started, which README links for the prerequisites in full; getting-started's early
+  sentence qualified and pointing at its full section; the spec's "49 files" attributed to the
+  2026-09-09 probe; the `.stamity/mcp/` row carries the file's never-a-secret warning; SECURITY's bound
+  sentence scoped to its constant with both callers named; the producer census made failable (seen
+  red); the PASS status derived from the artifact (seen red); the release workflow's header comment
+  now names its three proofs. New candidate `cc37050`; the 022018f evidence retired; the harness, the
+  gate chain, CI and the round-3 checks run on it together.
