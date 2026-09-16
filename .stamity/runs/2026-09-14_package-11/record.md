@@ -1,7 +1,9 @@
 # Package 11 — Prove behavior and value (tracks D, A, C) and the 1.8.0 cut
 
-Status: **in progress** — opened 2026-09-14T21:29Z (23:29 local) as one overnight run on the maintainer's
-instruction of 2026-09-14. Track B (the with/without benchmark) stays scheduled with its trigger; it is
+Status: **closed** — opened 2026-09-14T21:29Z (23:29 local) as one overnight run on the maintainer's
+instruction of 2026-09-14; closed 2026-09-15T21:45Z at the 1.8.0 cut and completed by the publication of
+2026-09-16T08:03Z (the last two sections). The status line was left reading `in progress` past the close;
+corrected 2026-09-16 in the Package 14 run, which found it on re-read. Track B (the with/without benchmark) stays scheduled with its trigger; it is
 not this run's.
 
 ## Baseline, re-verified at intake (2026-09-14T21:29Z)
