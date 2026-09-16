@@ -17,12 +17,12 @@ proved by a passing verification gate.
 
 ## What you need first
 
-Two things.
+One prerequisite, and one strong recommendation.
 
-- **Node 22.22.2 or newer.** That is the published floor. `stamity check` verifies it as its
-  `node-version` row.
-- **A git repository.** Nothing in stamity requires git. But setup writes dozens of files, and
-  git is your revert path. Run `git init` first if this directory is fresh.
+- **Node 22.22.2 or newer.** That is the only prerequisite, and the published floor.
+  `stamity check` verifies it as its `node-version` row.
+- **Recommended: a git repository.** Nothing in stamity requires git. But setup writes dozens
+  of files, and git is your revert path. Run `git init` first if this directory is fresh.
 
 If you skip the second one, an interactive `init` stops and asks before it writes anything. A
 `-y` or `--json` run goes ahead instead and prints a line saying the files it wrote have no
@@ -273,6 +273,7 @@ Everything the setup knows about itself lives under `.stamity/`:
 | `.stamity/learnings/` | notes agents recorded through `stamity learn` |
 | `.stamity/handoffs/` | handoff records between sessions and clients |
 | `.stamity/generated/` | hook scripts and the agent tool policy, written from code |
+| `.stamity/mcp/` | `copilot-repo-settings.env`, the Copilot coding agent's MCP entries — you paste each one into repository Settings → Copilot → MCP servers |
 | `.stamity/packs/` | content installed by `add`, one directory per pack |
 | `.stamity/overrides/` | agents, rules, commands and skills of your own, merged above the bundled content |
 | `.stamity/runs/` | one record per work run — its proof block, with that run's findings ledger beside it |
