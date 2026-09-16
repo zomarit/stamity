@@ -51,11 +51,16 @@ regression has been filed (#2831 is a duplicate whose reporter confirmed the rel
 |---|---|---|
 | 0.29.0 | `apm install zomarit/stamity --target claude` | exit 0, **zero** primitives, "install natively only for the 'copilot' target" |
 | 0.29.0 | declarative, `--target copilot` | exit 0, "Registered 1 Agent Plugin", one file under `.github/copilot/`, zero `.apm/` primitives |
-| 0.29.1 / 0.30.0 | `apm install zomarit/stamity --target claude` | 10 agents, 9 commands, 12 rules, 8 skills → `.claude/` |
+| 0.29.1 / 0.30.0 | `apm install zomarit/stamity --target claude` | 10 agents, 9 commands, 10 rules, 10 skills → `.claude/` |
 | 0.30.0 | `apm install zomarit/stamity#v1.3.0 --target claude` | the same 49 files; `.claude/` byte-identical to an install from the mirror |
 | 0.30.0 | `#v1.3.0`, copilot / cursor / codex | 49 / 49 / 28 files (codex: agents and skills; APM's codex profile carries no commands and compiles instructions on `apm compile`) |
 | 0.30.0 | imperative local path | still refused as an Agent Plugin (the local-bundle route inspects `plugin.json` first, by design) |
 | 0.30.0 | declarative local path in a consumer `apm.yml` | 49 files — the deterministic fixture route CI uses |
+
+The primitive counts in the first `--target claude` row are this tree's: rule delivery is
+on-demand by default, so the two glob-less rules ship as skills (`content/rules/stamity-question-protocol.md`,
+`content/rules/stamity-ai-evals.md`). The 2026-09-09 probe predates that default and recorded
+12 rules and 8 skills; the `#v1.3.0` file counts below are that tag's and are unaffected.
 
 These probes establish the canonical route at the specific `main` revision and `v1.3.0`
 listed above, with the named client versions. They do not establish that every historical
