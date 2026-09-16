@@ -2,16 +2,16 @@
 <!-- Re-open when: a step joins or leaves `npm run check`, a regeneration command changes, either
      Node floor moves, a test lane joins or leaves, a coverage floor in `vitest.config.ts` moves, or
      the eval set's version bumps — the `evals/` paths below carry that version in their own names.
-     `test/docsPages.test.ts` asserts the gate command, the leak-gate row and four regeneration
-     commands; `test/ci/workflow.test.ts` asserts the two required status contexts. -->
+     `test/docsPages.test.ts` asserts the contributor-gate command, the leak-gate row and four
+     regeneration commands; `test/ci/workflow.test.ts` asserts the two required status contexts. -->
 
 # Contributing
 
-This page is for a contributor making a change to stamity. When you finish it you can run the gate
-CI runs, regenerate the files you must not hand-edit, and open a pull request the two required
-checks accept.
+This page is for a contributor making a change to stamity. When you finish it you can run the
+contributor gate CI runs, regenerate the files you must not hand-edit, and open a pull request the
+two required checks accept.
 
-## Run the gate
+## Run the contributor gate
 
 ```sh
 npm install
@@ -48,11 +48,11 @@ skipped on Windows. Nothing is installed globally, and no network service is con
 
 ## Who reviews your pull request
 
-Pull requests are welcome. The bar is the gate above, not a reviewer's mood.
+Pull requests are welcome. The bar is the contributor gate above, not a reviewer's mood.
 
 One person maintains this repository, and the branch protection says so candidly:
 **0 required approvals**. A rubber-stamp approval from the only maintainer would add a click and no
-scrutiny. So the review that counts is mechanical: the gate, plus a read.
+scrutiny. So the review that counts is mechanical: that gate, plus a read.
 
 External pull requests get that read through the product's own review command, `/st-pr-resolve`.
 The setup this repository generates is the setup used to review changes to it. If that command
