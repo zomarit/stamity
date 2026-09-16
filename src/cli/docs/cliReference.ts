@@ -117,7 +117,15 @@ const CODE_MEANINGS: Record<ErrorCode, string> = {
   UNKNOWN_ERROR: "an internal fault; the engine reached a state it does not classify",
   INTEGRITY_ERROR: "output cannot be regenerated to match its source",
   FS_ERROR: "a filesystem operation failed",
-  CLEAN_ERROR: "removal failed part-way",
+  // Both throw sites are the destructive gate in `src/cli/commands/clean.ts`
+  // (`confirmDestruction`), and both fire BEFORE the first removal: one when
+  // the prompt cannot be asked at all (non-TTY stdin, or
+  // `--json`, whose stdout belongs to the envelope), one when it was asked and
+  // answered no. The row used to read "removal failed part-way", which named a
+  // partially-deleted tree that this code has never once signalled — the worst
+  // way to be wrong here, because it sends an operator looking for wreckage
+  // instead of re-running with `-y`.
+  CLEAN_ERROR: "clean's confirmation was declined or could not be asked; nothing was removed",
   // Until the worktree lane landed, this row read "nothing in this build throws
   // it" and the table carried a "Reserved, never thrown" note beneath it. The
   // branch-plan fetch in `src/worktree/git.ts` now throws it, so both the row

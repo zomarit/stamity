@@ -453,6 +453,58 @@ describe("the restated kit contract", () => {
     expect(lockRow).toContain("retry schedule ran out");
     expect(lockRow).not.toContain("retryable");
   });
+
+  /**
+   * Same class again, and the most expensive spelling of it. The row read
+   * "removal failed part-way", which describes a half-deleted tree — a state
+   * this code has never signalled. Both producers are `confirmDestruction` in
+   * `src/cli/commands/clean.ts`, and both throw BEFORE the first `rm`: one when
+   * the prompt cannot be asked (non-TTY stdin, or `--json`, whose stdout belongs
+   * to the response envelope), one when it was asked and answered no. An
+   * operator reading the old row went looking for wreckage instead of re-running
+   * with `-y`.
+   *
+   * The census is pointed the same way as the NETWORK_ERROR case above: a third
+   * producer, or a producer outside `clean.ts`, fails this case and forces the
+   * row to be re-read rather than letting it quietly go stale a second time.
+   */
+  it("names the declined-or-unaskable confirmation in CLEAN_ERROR, not a part-way removal", () => {
+    const page = renderCliReference();
+    const cleanRow = tableRows(page).find((line) => cells(line)[0] === "`CLEAN_ERROR`") ?? "";
+
+    expect(cleanRow).not.toContain("part-way");
+    expect(cleanRow).toContain("declined");
+    expect(cleanRow).toContain("could not be asked");
+    // The positive half of the claim, and the half an operator acts on.
+    expect(cleanRow).toContain("nothing was removed");
+
+    // `--untracked` and the ignore rules for the same reasons given above.
+    const sources = execFileSync("git", ["grep", "-l", "--untracked", "CLEAN_ERROR", "--", "src"], {
+      cwd: REPO_ROOT,
+      encoding: "utf-8",
+    })
+      .split("\n")
+      .filter((line) => line !== "");
+    // The declaration, this page's own table, the permanent-failure classifier,
+    // and the one command that throws it.
+    expect(sources.toSorted()).toEqual([
+      "src/cli/commands/clean.ts",
+      "src/cli/docs/cliReference.ts",
+      "src/resilience/failureClass.ts",
+      "src/types/errors.ts",
+    ]);
+
+    // Two throw sites, and both of them sit in the confirmation gate ahead of
+    // any removal — which is the whole content of the row.
+    const cleanSource = readFileSync(join(REPO_ROOT, "src/cli/commands/clean.ts"), "utf-8");
+    expect(cleanSource.split(`code: "CLEAN_ERROR"`).length - 1).toBe(2);
+    const gate = cleanSource.slice(
+      cleanSource.indexOf("async function confirmDestruction("),
+      cleanSource.indexOf("async function removeStateDir("),
+    );
+    expect(gate.split(`code: "CLEAN_ERROR"`).length - 1).toBe(2);
+    expect(gate).not.toContain("await rm(");
+  });
 });
 
 /** The shipped page, re-rendered per assertion (pure, so this is free). */

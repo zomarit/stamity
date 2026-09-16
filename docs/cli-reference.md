@@ -93,7 +93,7 @@ string — there is no second numbering to read.
 | `UNKNOWN_ERROR` | an internal fault; the engine reached a state it does not classify |
 | `INTEGRITY_ERROR` | output cannot be regenerated to match its source |
 | `FS_ERROR` | a filesystem operation failed |
-| `CLEAN_ERROR` | removal failed part-way |
+| `CLEAN_ERROR` | clean's confirmation was declined or could not be asked; nothing was removed |
 | `NETWORK_ERROR` | a git transport failed — `worktree setup` could not reach `origin` to plan its branch; a remote with no such branch is not this |
 | `LOCK_TIMEOUT` | a write lock could not be taken before the retry schedule ran out; another `stamity` run was holding it |
 
