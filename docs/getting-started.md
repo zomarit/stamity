@@ -37,10 +37,10 @@ Nothing is installed globally.
 npx @zomarit/stamity init
 ```
 
-`init` reads your repository. It writes a setup and a manifest that `sync`, `check`, `config`,
-`workspace`, `clean` and `add` read, while `validate` runs with or without one and `learn` and
-`handoff` ask only that `.stamity/` exists — stated in full under **Which verbs need the
-manifest** below.
+`init` reads your repository and writes a setup and a manifest. `sync`, `check`, `config`,
+`workspace`, `clean` and `add` read that manifest. `validate` runs with or without one, and
+`learn` and `handoff` ask only that `.stamity/` exists. **Which verbs need the manifest** below
+states all of this in full.
 
 ### The two questions init asks
 
@@ -276,7 +276,7 @@ Everything the setup knows about itself lives under `.stamity/`:
 | `.stamity/learnings/` | notes agents recorded through `stamity learn` |
 | `.stamity/handoffs/` | handoff records between sessions and clients |
 | `.stamity/generated/` | hook scripts and the agent tool policy, written from code |
-| `.stamity/mcp/` | `copilot-repo-settings.env`, the Copilot coding agent's MCP entries — you paste each one into repository Settings → Copilot → MCP servers; the file's own header warns never to put a secret value in it, because it is not gitignored |
+| `.stamity/mcp/` | `copilot-repo-settings.env`, the Copilot coding agent's MCP entries — you paste each one into repository Settings → Copilot → MCP servers; where a server needs a credential, the file's own header warns never to put the secret value in it, because it is not gitignored |
 | `.stamity/packs/` | content installed by `add`, one directory per pack |
 | `.stamity/overrides/` | agents, rules, commands and skills of your own, merged above the bundled content |
 | `.stamity/runs/` | one record per work run — its proof block, with that run's findings ledger beside it |
