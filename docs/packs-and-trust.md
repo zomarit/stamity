@@ -5,7 +5,8 @@ title: Packs and trust
 <!-- HAND-WRITTEN PAGE — verified against the tree at commit e79dcf0. Re-attested 2026-09-16 in the Package 14 rewrite. -->
 <!-- Re-open when: a trust tier is added or removed, the signed payload or the `signing.signer`
      grammar changes, the bundle bound changes, the shipped signature verifier is replaced, `add`
-     gains or loses a flag, or the org trust policy grammar changes. `test/docsPages.test.ts` holds
+     gains or loses a flag, the org trust policy grammar changes, or the published package stops
+     exporting `createEngine` or `SetupManifest` from `src/index.ts`. `test/docsPages.test.ts` holds
      this page to the hand-page contract and `src/pack/trust.ts` is the ladder's source of truth. -->
 
 # Packs and trust
@@ -226,8 +227,23 @@ node dist/cli.js add /path/to/pack
 ```
 
 Build the CLI first if this checkout has no `dist/`. The signing script uses the installed
-official Sigstore client and its GitHub Actions OIDC identity provider. From TypeScript you can
-call `createEngine().pack.sign.signPack(...)` instead of running the script.
+official Sigstore client and its GitHub Actions OIDC identity provider.
+
+### Sign from TypeScript instead of the script
+
+The published package ships type declarations for its JavaScript API. `package.json` points both
+`types` and the `"."` export's `types` condition at `dist/types/index.d.ts`, so a TypeScript
+consumer needs no separate types package for stamity itself. `createEngine` and `SetupManifest` are
+both importable from `@zomarit/stamity`, along with the types those two reach.
+
+```ts
+import { createEngine } from "@zomarit/stamity";
+
+const result = await createEngine().pack.sign.signPack("/path/to/pack");
+```
+
+`createEngine().pack.sign.signPack(...)` is the same function `scripts/sign-pack.mjs` calls, so the
+API route and the script route sign identically.
 
 In CI, prepare and validate content in a job without `id-token: write`. Run signing in a separate
 protected job that grants it. Install dependencies before granting access to an external signing
@@ -272,7 +288,7 @@ ledger exists to prevent. Clear the paths instead.
 
 ## Limit which sources your repositories accept
 
-An organization that wants to narrow the sources its repositories may install from checks in a
+An organisation that wants to narrow the sources its repositories may install from checks in a
 policy file at `.stamity/policy.json`.
 
 The file is loaded as soon as the pack manifest has been read and validated. That is before the
