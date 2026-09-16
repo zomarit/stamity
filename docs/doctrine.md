@@ -2,162 +2,196 @@
 title: Doctrine
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit e79dcf0. Re-attested 2026-09-16 in the Package 14 rewrite. -->
 <!-- Re-open when: an invariant's text changes, a pillar gains or loses a public enforcement
-     surface, the root question's three answers change, the always-on ceilings move, or the
-     deferred with-versus-without measurement lands. `test/docsPages.test.ts` holds this page to
-     the hand-page contract; `../src/content/charter.ts` owns the budgets and `../evals/runs/`
-     owns what is red. -->
+     surface, the root question's three answers change, the always-on split across clients moves,
+     or the deferred with-versus-without measurement lands. `test/docsPages.test.ts` holds this
+     page to the hand-page contract; `../src/content/charter.ts` owns the budgets and
+     `../evals/runs/` owns what is red. -->
 
 # Doctrine
 
-Every artifact this project ships — a rule, a skill, a command, a page, a gate — is context
-somebody's session pays for. This page states the test each one has to pass, the four
-properties that test is derived from, and the mechanism that removes an artifact once it
-stops passing. It is the reasoning behind the corpus, not a second copy of it: the
-[charter](../content/charter/stamity-charter.md) is what agents load, and
-[working with stamity](working-with-stamity.md) is what the touchpoints do.
+This page is the reasoning behind everything stamity ships, for the operator or reviewer deciding
+whether one more rule, skill, command or page is worth its cost. It answers one question: why
+does this tool ship what it ships, and how does something get removed again?
 
-## The root question
+Start with the cost. A rule that loads every session is context somebody pays for before any work
+happens. Every artifact here has to earn that: a rule, a skill, a command, a page, a gate. Below
+is the test each one takes, the four properties the test comes from, and the mechanism that
+deletes an artifact once it stops passing.
+
+This page is not a second copy of the corpus. The
+[charter](../content/charter/stamity-charter.md) is what agents load.
+[Working with stamity](working-with-stamity.md) is what the touchpoints do.
+
+## What question does every artifact have to answer?
 
 > What fails without it now, and how would we know?
 
-One question, asked of a corpus artifact, a gate, a page, or a piece of this machinery
-itself. A checklist accretes — that is how the previous, larger apparatus here died — so
-there is one question and it is applied recursively rather than extended. It has three
-admissible answers.
+You ask it of a corpus artifact, a gate, a page, or a piece of this machinery itself. Then you
+ask it again of the answer. There is one question rather than a checklist, because a checklist
+accretes. That is how the larger apparatus that stood here before died.
 
-**Stays.** A named failure, with evidence that it occurs, measured in this tree. Not a
-failure that is plausible in general: one this repository can point at. The tightening that
-followed a screening hit stays because the hit is in an eval run artifact.
+The question has three admissible answers.
 
-**Goes.** Nothing nameable fails, or a gate already catches it. General programming wisdom
-that current frontier models apply unprompted was never worth shipping, and an instruction a
-commit-time gate enforces is worth less than the gate — gates run every time, prose runs when
-the model happens to weight it.
+**Stays.** Something nameable fails, and there is evidence that it happens in this tree. Not a
+failure that sounds plausible in general. One this repository can point at. A tightening that
+followed a screening hit stays, because the hit is recorded in an eval run artifact.
 
-**Measure first.** The failure is nameable but unmeasured. This is a real answer, not a
-polite refusal: it says the artifact stays for now and names the instrument that would settle
-it. What it may not do is quietly become "stays" because nobody built the instrument.
+**Goes.** Nothing nameable fails, or a gate already catches it. General programming wisdom that
+current frontier models apply unprompted was never worth shipping. An instruction that a
+commit-time gate enforces is worth less than the gate. Gates run every time. Prose runs when the
+model happens to weight it.
 
-The floor reading, stated because the question invites the wrong one. A control against a
-rare, high-severity event — a security floor, a destructive-action refusal, an accessibility
-basic — answers "what fails without it" with the event, and "how would we know" with evidence
-that the control is **armed and probed**, never with an incident. No floor is retired because
-nothing has gone wrong yet; absence of the event is what a working control looks like.
+**Measure first.** The failure is nameable but unmeasured. This is a real answer, not a polite
+refusal. It says the artifact stays for now, and it names the instrument that would settle the
+question. What it may not do is quietly become "stays" because nobody built the instrument.
 
-## The four pillars
+### How does a safety floor answer it?
 
-Each pillar names the public surface a reader can check it against. A pillar with no such
-surface is a slogan, and this list is short because the surfaces are.
+The question invites a wrong reading, so the right one is stated here. Take a control against a
+rare, high-severity event. A security floor, a destructive-action refusal and an accessibility
+basic are all that shape. Such a control answers "what fails without it" with the event itself.
+It answers "how would we know" with evidence that the control is **armed and probed**. It never
+answers with an incident. No floor is retired because nothing has gone wrong yet. Absence of the
+event is what a working control looks like.
+
+## What are the four pillars, and where do you check them?
+
+Each pillar names a public surface you can check it against. A pillar with no such surface is a
+slogan. The list is short because the surfaces are.
 
 ### Lean
 
-Context is the budget, and it is spent per session on every artifact that loads
+Context is the budget, and you spend it every session on every artifact that loads
 unconditionally.
 
-- The charter template is capped at 150 physical lines — `CHARTER_MAX_LINES` in
-  [`src/content/charter.ts`](../src/content/charter.ts), enforced by the loader, which refuses
-  an over-budget template rather than emitting it.
-- The composite always-on slice is a per-client ratchet, asserted in
-  [`test/corpus/invariants.test.ts`](../test/corpus/invariants.test.ts) and disclosed per
-  client on [the capability matrix](capability-matrix.md). Each ceiling equals the composite it
-  measures: a slice that grows past its ceiling fails, and so does one that shrinks without the
-  constant moving with it, so the table is a measurement, never a bound with slack.
-- Every corpus artifact — charter, command, agent, skill, rule, in `content/` and `packs/` —
-  declares `obsolete_when`. The corpus invariant suite refuses a `content/` one that does not,
-  and each pack's own suite under `test/packs/` applies the same check to its pack, so a corpus
-  artifact cannot ship without stating the condition under which it is deleted. A hand page
-  carries the equivalent as a re-open trigger; a generated page's equivalent is the renderer it
-  is byte-compared against.
+- The charter template is capped at 150 physical lines. The cap is `CHARTER_MAX_LINES` in
+  [`src/content/charter.ts`](../src/content/charter.ts). The loader enforces it and refuses an
+  over-budget template rather than emitting it.
+- The composite always-on slice is a per-client ratchet. The corpus invariant suite in
+  [`test/corpus/invariants.test.ts`](../test/corpus/invariants.test.ts) asserts it, and
+  [the capability matrix](capability-matrix.md) discloses it per client. Each ceiling equals the
+  composite it measures. A slice that grows past its ceiling fails, and so does one that shrinks
+  without the ceiling moving with it. The table is a measurement, never a bound with slack.
+- Every corpus artifact declares `obsolete_when`. That covers the charter, commands, agents,
+  skills and rules, under both `content/` and `packs/`. The corpus invariant suite refuses a
+  `content/` artifact that does not declare it. Each pack's own suite under `test/packs/` applies
+  the same check to its pack. So no corpus artifact ships without stating the condition under
+  which it is deleted.
+
+A hand-written page carries the same thing as a re-open trigger. A generated page carries it as
+the renderer the page is byte-compared against.
 
 ### Provable
 
 A claim about behaviour is worth what its instrument is worth.
 
-- The verification gates — lint, typecheck, tests — decide whether a change is done. `AGENTS.md`
-  is their home; the working-with-stamity guide quotes them verbatim, and README and CONTRIBUTING
-  name the wider contributor gate, `npm run check`, which chains them with the leak gate, the
-  build and the unused-code scan.
+- The verification gates decide whether a change is done. They are lint, typecheck and tests.
+  `AGENTS.md` is their home, and [working with stamity](working-with-stamity.md) quotes them
+  verbatim. [README](../README.md) and [CONTRIBUTING](../CONTRIBUTING.md) name the wider
+  contributor gate, `npm run check`, which chains them with the leak gate, the build and the
+  unused-code scan.
 - The corpus is prose executed by a model, so a test suite cannot decide it. The
-  [eval set](../evals/README.md) does: thresholds declared before the run, red runs published
-  rather than re-scored — most recently [run 24](../evals/runs/2026-09-11-run-24/RESULTS.md), the
-  1.7.0 release run, rolled up beside the verified merge-ready rate on
-  [the measurements page](measurements.md).
-- Every work run closes on a proof block naming the gates it ran and what it did not do.
-- The question protocol declares a default for every question it asks, so an unanswered
-  question produces a recorded decision instead of a silent pick.
+  [eval set](../evals/README.md) decides it instead. Thresholds are declared before the run, and
+  a red run is published rather than re-scored. The run of record is
+  [run 30](../evals/runs/2026-09-15-run-30/RESULTS.md), the 1.8.0 release run, which passed every
+  declared threshold. It is composed rather than measured end to end, under the set's incremental
+  rule. Run 27 measured every case in full. Runs 29 and 30 then re-measured only the cases whose
+  inputs had moved, and carried the rest with their hashes. Its figures roll up on
+  [the measurements page](measurements.md) beside the verified merge-ready rate.
+- Every work run closes on a proof block that names the gates it ran and what it did not do.
+- The question protocol declares a default for every question it asks. An unanswered question
+  therefore produces a recorded decision instead of a silent pick.
 
 ### Current
 
 An artifact that was true once and says nothing about when is unfalsifiable.
 
-- The capability matrix carries a dated access stamp on every client's sources: a platform
-  fact is only as current as the date beside it.
-- Every page in the hand bucket — README, SECURITY, CONTRIBUTING and the ten guides under
-  `docs/` — carries a currency stamp and a re-open trigger, the two comments at the top of this
-  page, held there by `test/docsPages.test.ts`. `GOVERNANCE.md` carries the same pair on its own
+- [The capability matrix](capability-matrix.md) carries a dated access stamp on every client's
+  sources. A platform fact is only as current as the date beside it.
+- Every page in the hand-written bucket carries a currency stamp and a re-open trigger. They are
+  the two comments at the top of this page. The bucket is `README.md`, `SECURITY.md`,
+  `CONTRIBUTING.md` and the ten guides under `docs/`, and `test/docsPages.test.ts` holds all
+  thirteen to that pair. [`GOVERNANCE.md`](../GOVERNANCE.md) carries the same pair on its own
   trigger.
-- The release controls checklist carries a per-release currency section, so re-verification is
-  part of cutting a release rather than a thing somebody remembers.
+- The release controls checklist carries a per-release currency section. Re-verification is part
+  of cutting a release, rather than something somebody has to remember.
 
 ### Candid
 
-- [`GOVERNANCE.md`](../GOVERNANCE.md) states who decides and what the private layer holds.
+What the project does not do is published beside what it does.
+
+- [`GOVERNANCE.md`](../GOVERNANCE.md) states who decides, and what the private layer holds.
   [`SECURITY.md`](../SECURITY.md) states what is defended and, in a section of its own, what is
   not.
-- A run that closes without green gates ships a `Not done:` list naming each open gap — the
-  charter's invariant 4 — and the work and spec commands carry that list in their closing block
-  by name, and debug and pr-resolve name a `not done` line for one exit each — instrumentation
-  held under a capture-later agreement, a reply that failed to post. The other commands close on
-  a typed open-gap block of their own — unanswerable and blocked, `open`, open questions carried,
-  per-item dispositions, DEFER rows — plus a next-step line that says so when there is nothing
-  outstanding, or, for a plan, names the handoff a clean artifact takes.
-- The run artifacts under `evals/runs/` say which run is red and by how much — the latest full run
-  states its verdict against each declared threshold — and no red baseline is re-run to make it
-  look better; the eval README carries the baselines and the rule that they stay put.
+- A run that closes without green gates ships a `Not done:` list naming each open gap. That is
+  the charter's invariant 4. The work and spec touchpoints carry that list in their closing block
+  by name. Debug and pr-resolve each name a `not done` line for one exit apiece. Debug's is
+  instrumentation left in place under a capture-later agreement. Pr-resolve's is a reply that
+  failed to post.
+- The other touchpoints close on a typed open-gap block of their own. Those blocks carry
+  unanswerable and blocked items, `open` rows, open questions carried forward, per-item
+  dispositions and DEFER rows. Each block ends on a next-step line, which says so when nothing is
+  outstanding. For a plan, that line names the handoff a clean artifact takes.
+- The run artifacts under `evals/runs/` say which run is red and by how much. The latest full run
+  states its verdict against each declared threshold. No red baseline is re-run to make it look
+  better. The [eval set README](../evals/README.md) carries the baselines and the rule that they
+  stay put.
 
-## Deletion triggers
+## How does an artifact get deleted?
 
-`obsolete_when` is the pre-written "goes" answer. It is written when the artifact ships,
-before anyone is attached to it, and it names a condition an observation can fire: models do
-this unprompted now, the platform ships it natively, a standard covers it, this gate replaced
-it. At every audit cycle — manual, on the maintainer's trigger — the root question is re-asked
-of each artifact against its own trigger, and the trigger is what makes that a reading rather
-than a negotiation.
+`obsolete_when` is the "goes" answer, written in advance. It is written when the artifact ships,
+before anyone is attached to it. It names a condition that an observation can fire. Models do
+this unprompted now. The platform ships it natively. A standard covers it. This gate replaced it.
 
-The honest state today: most artifacts answer **measure**, not **stays**. Conformance is
-measured — the eval set grades whether an agent follows its own rules — but the measurement
-that would settle "does this artifact beat the bare model on task success and token cost" does
-not exist here yet. It is deferred, its trigger recorded in the maintainer's roadmap outside
-this tree, and this paragraph is where the deferral stays visible until it lands.
+At each audit cycle the root question is re-asked of every artifact, against that artifact's own
+trigger. The cycle is manual, on the maintainer's trigger. The trigger is what makes the re-ask a
+reading rather than a negotiation.
 
-## The always-on budget
+### What is the honest state today?
 
-Stated plainly, because a rounder number is available and it is wrong. The charter template is
-capped at 150 lines, and that cap binds one file. What a client actually loads unconditionally
-is the charter plus every rule that client has no way to attach conditionally, which is three
-distinct figures across the four clients — from the one that defers a description-scoped rule
-until it is relevant and so pays the charter alone, through the two that pay the same composite,
-to the one with no per-rule attach mechanism at all, which is handed the whole rule set less the
-tail its 32 KiB instruction budget drops: eight rules on the full selection, named in the emitted
-file's own omission notice. The ceiling counts them regardless, because a rule silently dropped
-is a floor that stopped binding. `ALWAYS_ON_BUDGET_LINES` in
-[`src/content/charter.ts`](../src/content/charter.ts) holds the per-client ceilings, the
-invariant suite measures the real load against them, and
-[the capability matrix](capability-matrix.md) carries the figures. Read those rather than a
-sentence here: they move, and only they are checked.
+Most artifacts answer **measure first**, not **stays**. Conformance is measured: the eval set
+grades whether an agent follows its own rules. The other measurement is missing. Nothing here
+shows whether an artifact beats the bare model on task success and token cost. That
+with-versus-without measurement does not exist in this tree yet. It is deferred, its trigger is
+recorded in the maintainer's roadmap outside this tree, and this paragraph is where the deferral
+stays visible until it lands.
 
-## Amendments
+## What does a session pay before it starts?
+
+There is a rounder answer to this, and it is wrong. The 150-line cap binds the charter template,
+and nothing else. What a client loads unconditionally is that template plus every rule the client
+cannot attach conditionally. The composite differs by client, because the delivery mechanisms
+differ.
+
+Three of the four clients pay the charter alone today, for two different reasons. Cursor's own
+rule layer already defers a rule that declares no globs until the conversation matches it. Claude
+and copilot get those same rules projected as skills instead, opened on description. Codex is the
+fourth. It has no per-rule attach mechanism, so it loads the charter plus the rules that have to
+stay unconditional, and the rest reach it as skills too. The ceiling counts whatever the client
+is handed, because a rule silently dropped is a floor that stopped binding.
+
+Do not read the figures off this page. `ALWAYS_ON_BUDGET_LINES` in
+[`src/content/charter.ts`](../src/content/charter.ts) holds the per-client ceilings. The corpus
+invariant suite measures the real load against them. [The capability matrix](capability-matrix.md)
+carries the figures, and also describes what changes if a repository selects the older
+`always-on` rule delivery instead of the shipped default. Read those rather than a sentence here:
+they move, and only they are checked.
+
+## Amendments: how the invariants change
 
 The charter's seven invariants carry a version, because a floor that can be reworded without a
-record is a floor nobody can cite. It moves under three rules: **MAJOR** is a backward-incompatible
-removal or redefinition of an invariant, **MINOR** is a new invariant or materially expanded
-guidance, **PATCH** is a clarification, a wording change, or a non-semantic refinement — and every
-amendment carries a sync-impact note, because the text is rendered into every generated repo's
-always-on file and a repo that does not re-sync keeps the old floor. [GOVERNANCE](../GOVERNANCE.md)
-states who bumps it and when; `test/content/invariantsVersion.test.ts` hashes the block and fails an
-edit that arrives without a bump and a row here.
+record is a floor nobody can cite. The version moves under three rules. **MAJOR** is a
+backward-incompatible removal or redefinition of an invariant. **MINOR** is a new invariant, or
+materially expanded guidance inside one. **PATCH** is a clarification, a wording change, or a
+non-semantic refinement.
+
+Every amendment carries a sync-impact note. The invariants text is rendered into every generated
+repository's always-on file, so a repository that never re-syncs keeps the old floor.
+[GOVERNANCE](../GOVERNANCE.md) states who bumps the version and when.
+`test/content/invariantsVersion.test.ts` hashes the block and fails an edit that arrives without a
+bump and a row below.
 
 | Version | Date | Invariant(s) | Class | Sync impact |
 |---|---|---|---|---|
@@ -167,5 +201,5 @@ edit that arrives without a bump and a row here.
 | — (`33e13a1`) | 2026-09-13 | 1 | MINOR-equivalent | the `Not done:` report is the whole exit — no context block, no closing summary beside it; recorded, no bump — versioning begins at 1.0.0 |
 | 1.0.0 | 2026-09-15 | all seven | ratification | the version line is rendered in every client's charter; hash pinned in `test/content/invariantsVersion.test.ts` |
 
-The block as ratified at 1.0.0 is the 2026-08-31 text plus the four amendments above; nothing was
+The block ratified at 1.0.0 is the 2026-08-31 text plus the four amendments above. Nothing was
 reworded to ratify it, which is why the first version records no diff of its own.
