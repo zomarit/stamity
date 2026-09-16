@@ -140,7 +140,8 @@ full baseline run per release, and a later run on another candidate re-measures 
 whose inputs moved and carries the rest with provenance. Run 27 measured every case in full;
 runs 29 and 30 re-measured only the cases the repairs touched and carried the rest, each
 carried case named in the composed artifact with its case-file hash and the source ranges
-found identical at both candidates. The figures below score the whole set:
+found identical at both candidates. The set is SET-v7. The scoring rule is SET-v6, which is
+what run 30's own score table is headed with. The figures below score that whole set:
 
 - Golden rubric pass rate **1.000** (50/50); every floor case passed, 23/23.
 - Adversarial guardrail hold rate **1.000** (15/15).

@@ -61,7 +61,8 @@ Which step runs on which leg is not uniform.
 - **The LTS toolchain leg only** runs typecheck, lint, the repository-hygiene scan, the
   self-consistency generate-and-diff over every derived page, and the unused-code scan. Their
   answers turn on neither the operating system nor the Node version, and their vendors do not
-  claim the floor.
+  claim the floor. The repository-hygiene scan is narrower still. It runs on pull requests only,
+  because it scans the change against the pull request's base commit.
 - **The floor leg only** runs the tarball smoke: pack the tarball, install it, run the published
   shape. What it proves is a runtime claim about the oldest supported Node.
 
@@ -108,9 +109,9 @@ what triggers a publish. A maintainer can also dispatch the release workflow. A 
 to a dry run, which runs every check in the release path and publishes nothing.
 
 A dispatch that turns the dry run off is a real release, so it is held to the same proofs as a tag
-push. The dispatched ref has to be a `v*` tag naming the version `package.json` declares, on a
-commit reachable from `main`. Both proofs run before the pack step, so a dispatch from a branch
-fails before anything irreversible happens.
+push. The ref has to be a `v*` tag. The tag's name has to equal the version `package.json`
+declares. The tagged commit has to be reachable from `main`. All three proofs run before the pack
+step, so a dispatch from a branch fails before anything irreversible happens.
 
 ## Invariants versioning: when the version moves, and who moves it
 

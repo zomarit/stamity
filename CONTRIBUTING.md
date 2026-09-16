@@ -1,9 +1,11 @@
 <!-- HAND-WRITTEN PAGE — verified against the tree at commit e79dcf0. Re-attested 2026-09-16 in the Package 14 rewrite. -->
-<!-- Re-open when: a step joins or leaves `npm run check`, a regeneration command changes, either
-     Node floor moves, a test lane joins or leaves, a coverage floor in `vitest.config.ts` moves, or
-     the eval set's version bumps — the `evals/` paths below carry that version in their own names.
-     `test/docsPages.test.ts` asserts the contributor-gate command, the leak-gate row and four
-     regeneration commands; `test/ci/workflow.test.ts` asserts the two required status contexts. -->
+<!-- Re-open when: a step joins or leaves `npm run check`, a generated artifact class gains or loses a
+     regeneration command, either Node floor moves, a test lane joins or leaves, a coverage floor in
+     `vitest.config.ts` moves, a type-only dependency exception joins or leaves `knip.json`, or the
+     eval set's version bumps — the `evals/` paths below carry that version in their own names.
+     `test/docsPages.test.ts` asserts the contributor-gate command, the
+     leak-gate row and four regeneration commands; `test/ci/workflow.test.ts` asserts the two
+     required status contexts. -->
 
 # Contributing
 
@@ -30,6 +32,15 @@ npm run check
 | Unused code | `npm run knip` | No orphan file, export or dependency |
 
 CI runs the same six steps on your pull request.
+
+Two declared dependencies exist for their types alone. `@sigstore/rekor-types` and
+`@types/make-fetch-happen` complete the declaration graph that Sigstore's own published types
+reference. No file under `src/` imports either one, so `knip.json` lists both under
+`ignoreDependencies`. That exception records transitive type use, not unused runtime code. The
+packed-consumer gate is what holds the graph honest. The tarball smoke below compiles a TypeScript
+consumer outside this checkout, against the packed declarations, with `skipLibCheck: false`
+(`scripts/tarball-smoke.mjs`). A declaration the package fails to ship, or a type it cannot resolve,
+fails there instead of in someone's project.
 
 ## What you need installed
 
