@@ -239,3 +239,12 @@ each item had shipped already and the roadmap had not been ticked.
   M9 (bytes → characters) fixed with the byte pin kept for the stdin row that counts bytes. The final
   candidate is `022018f`; pushed; the gate chain, the QA harness, CI and review round 2 (both halves)
   run on it together.
+- 04:15Z At the final candidate `022018f`: lint and typecheck clean; `npm run test -- --coverage` 211
+  files, 8,496 passed, 3 skipped, no per-file floor missed; build within both size budgets; knip clean;
+  `node dist/cli.js check` all green, drift clean; leak gate 0 hits over 1,468 files; the site's
+  typecheck and build green. QA harness at `022018f`: H1a passed (Claude Code 2.1.273); H2 passed on
+  every built page; H3a–H3d passed; H1b, H1c, H1d not-run (the same client reasons as at 1.8.0; their
+  inputs unchanged). Evidence committed as `.stamity/evidence/qa-022018f….json` (`e845b5e`); the human
+  QA form filed privately with the rows bound to their hashes and the maintainer's up-front sign-off of
+  decision 3 recorded as a sign-off without a performance, the third time, with track D3's acceptance
+  line noted as unmet. Branch pushed; CI runs on the head; review round 2 out on both halves.
