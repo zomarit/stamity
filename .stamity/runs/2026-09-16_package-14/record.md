@@ -166,3 +166,20 @@ each item had shipped already and the roadmap had not been ticked.
   gate 0 hits; the site's typecheck and build green (no broken route between the rewritten pages).
   The editor's cross-page pass dispatched (voice, terms, the glossary, the index descriptions and
   README map rows derived from each page's opening, the sidebar's daily-use order).
+- 02:20Z The editor returned two commits (one vocabulary and one voice across the fourteen pages;
+  one reading order for the guides and index lines derived from the openings): the glossary of fifteen
+  rows at the end of getting-started; the Guides sidebar in daily-use order (customization,
+  troubleshooting, workspaces, packs-and-trust, enterprise-forks, security-mapping) with README's map
+  and `llms.txt` in the same order; twelve index descriptions re-derived from the pages' openings;
+  Copilot's `.github/hooks/stamity.json` added to SECURITY's hook caveat beside the pinned literals;
+  about twenty-six sentences across six pages brought under the contract. Cherry-picked; the candidate
+  is `be27e0c` (28 commits on `main`, every one DCO-signed). Draft PR #42 opened so CI's legs run
+  beside the reviews.
+- 02:25Z QA harness at the candidate (`node scripts/qa/run.mjs --site website/build --sha be27e0c`,
+  hooks included): H1a passed (Claude Code 2.1.273, one call denied and one allowed); H2 passed — the
+  structural checks hold on every built page and the scanner reports no violation; H3a–H3d passed at
+  375 and 1440 in light and dark; H1b, H1c, H1d not-run for the reasons the 1.8.0 form records (Codex
+  exec loads no project hook layer headlessly; no Cursor or Copilot CLI binary on this machine). The
+  evidence file is committed once the reviews settle, because a page change reopens H2 and H3 by hash.
+  Two reviewers dispatched over the candidate (the daily-use pages and README; the governance pages
+  with a security lens and the two template fixes), each reading the diff against `75aa866`.
