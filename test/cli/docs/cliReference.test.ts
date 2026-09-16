@@ -505,6 +505,105 @@ describe("the restated kit contract", () => {
     expect(gate.split(`code: "CLEAN_ERROR"`).length - 1).toBe(2);
     expect(gate).not.toContain("await rm(");
   });
+
+  /**
+   * The same class one more time, and the widest spelling of it. The row read
+   * "output cannot be regenerated to match its source" — a description of the
+   * drift verdict in `src/cli/commands/check.ts` and of nothing else this code
+   * classifies. Three further producer families throw it, and an operator who
+   * reads the old row hits a pack refusal or a blocked write holding a sentence
+   * about regenerating output, which names neither what happened nor what to do:
+   *
+   *   1. drift — `check`'s verdict that the tree differs from what a sync writes;
+   *   2. pack trust and integrity gates — `src/pack/trust.ts` (catalog-pin SHA
+   *      mismatch, publisher-signed claim refused), `src/pack/sign.ts`,
+   *      `src/pack/manifest.ts` (unsigned pack, banned lifecycle script, failed
+   *      integrity map), `src/pack/install.ts`, and the "no trust basis" refusal
+   *      in `src/cli/commands/add.ts`;
+   *   3. write-safety refusals — `src/merge/safeWrite.ts` and `src/mcp/env.ts`
+   *      refuse a whole write when the content it would KEEP carries a
+   *      block-severity prompt-injection pattern (the symlink and hard-link
+   *      refusals beside them are `FS_ERROR`, deliberately not this code);
+   *   4. the handoff read-back in `src/cli/commands/handoff.ts` — what prepare
+   *      wrote did not come back with a verifying digest.
+   *
+   * The census is pointed the way the NETWORK_ERROR and CLEAN_ERROR cases above
+   * are: a fifth family, or a new file throwing this code, fails here and forces
+   * the row to be re-read rather than letting it narrow again.
+   */
+  it("names every producer family in INTEGRITY_ERROR, not only drift", () => {
+    const page = renderCliReference();
+    const row = tableRows(page).find((line) => cells(line)[0] === "`INTEGRITY_ERROR`") ?? "";
+
+    expect(row).not.toContain("regenerated");
+    expect(row).toContain("drift");
+    expect(row).toContain("trust");
+    expect(row).toContain("injection");
+    expect(row).toContain("read-back");
+
+    // `--untracked` and the ignore rules for the same reasons given above.
+    const sources = execFileSync("git", ["grep", "-l", "--untracked", "INTEGRITY_ERROR", "--", "src"], {
+      cwd: REPO_ROOT,
+      encoding: "utf-8",
+    })
+      .split("\n")
+      .filter((line) => line !== "");
+    expect(sources.toSorted()).toEqual([
+      "src/cli/commands/add.ts", // family 2 — a pack with no trust basis
+      "src/cli/commands/check.ts", // family 1 — the drift verdict
+      "src/cli/commands/handoff.ts", // family 4 — the prepare read-back
+      "src/cli/docs/cliReference.ts", // this page's own table
+      "src/cli/engine/emissionWrite.ts", // prose about family 3, no throw
+      "src/mcp/env.ts", // family 3
+      "src/merge/safeWrite.ts", // family 3
+      "src/pack/install.ts", // family 2
+      "src/pack/manifest.ts", // family 2
+      "src/pack/sign.ts", // family 2
+      "src/pack/sigstoreVerifier.ts", // prose about family 2, no throw
+      "src/pack/trust.ts", // family 2
+      "src/resilience/failureClass.ts", // the permanent-failure classifier
+      "src/types/errors.ts", // the declaration
+    ]);
+
+    const source = (relPath: string): string => readFileSync(join(REPO_ROOT, relPath), "utf-8");
+    const throwSites = (relPath: string): number =>
+      source(relPath).split(`code: "INTEGRITY_ERROR"`).length - 1;
+
+    // Each clause of the row, checked against the words its producer uses.
+    expect(source("src/cli/commands/check.ts")).toContain("check found drift between the repository");
+    expect(source("src/pack/trust.ts")).toContain("does not match its catalog pin");
+    expect(source("src/pack/trust.ts")).toContain("publisher-signed claim refused");
+    expect(source("src/cli/commands/add.ts")).toContain("has no trust basis");
+    expect(source("src/mcp/env.ts")).toContain("prompt-injection pattern(s) found in the content");
+    expect(source("src/cli/commands/handoff.ts")).toContain("did not read back with a verifying digest");
+
+    // The single-throw files are single-throw, so each clause above accounts for
+    // the whole of its file's contribution to this code.
+    for (const relPath of [
+      "src/cli/commands/check.ts",
+      "src/cli/commands/add.ts",
+      "src/cli/commands/handoff.ts",
+      "src/merge/safeWrite.ts",
+      "src/mcp/env.ts",
+    ]) {
+      expect(throwSites(relPath)).toBe(1);
+    }
+
+    // Family 3 is the deny-scan branch and only that branch: the link and
+    // hard-link refusals sitting beside it in both writers carry `FS_ERROR`,
+    // which is why the row says injection patterns rather than the broader "a
+    // write was refused".
+    for (const [relPath, linkRefusal] of [
+      ["src/merge/safeWrite.ts", "function refuseMergeIntoLink("],
+      ["src/mcp/env.ts", "function refuseRepublishOfLink("],
+    ] as const) {
+      const body = source(relPath);
+      const start = body.indexOf(linkRefusal);
+      const helper = body.slice(start, body.indexOf("\n}", start));
+      expect(helper).toContain(`code: "FS_ERROR"`);
+      expect(helper).not.toContain(`code: "INTEGRITY_ERROR"`);
+    }
+  });
 });
 
 /** The shipped page, re-rendered per assertion (pure, so this is free). */

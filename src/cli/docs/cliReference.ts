@@ -115,7 +115,20 @@ const CODE_MEANINGS: Record<ErrorCode, string> = {
   CONFIG_ERROR: "an input file is malformed — manifest, YAML, pack manifest",
   ADAPTER_ERROR: "a target-tool adapter could not produce its output",
   UNKNOWN_ERROR: "an internal fault; the engine reached a state it does not classify",
-  INTEGRITY_ERROR: "output cannot be regenerated to match its source",
+  // The row used to read "output cannot be regenerated to match its source",
+  // which describes the drift verdict in `src/cli/commands/check.ts` and none of
+  // the other three families that throw this code: the pack trust and integrity
+  // gates (`src/pack/trust.ts`, `sign.ts`, `manifest.ts`, `install.ts`, and the
+  // "no trust basis" refusal in `src/cli/commands/add.ts`), the write-safety
+  // refusals over prompt-injection patterns in content a write would KEEP
+  // (`src/merge/safeWrite.ts`, `src/mcp/env.ts` — the link refusals beside them
+  // are `FS_ERROR`), and the handoff read-back in `src/cli/commands/handoff.ts`.
+  // An operator meeting a refused pack under the old row read a sentence about
+  // regenerating output, which named neither the gate that fired nor the step
+  // out of it.
+  INTEGRITY_ERROR:
+    "a check found drift, a pack failed a trust or integrity gate, a write was refused over " +
+    "injection patterns in content it would keep, or a handoff failed its read-back digest",
   FS_ERROR: "a filesystem operation failed",
   // Both throw sites are the destructive gate in `src/cli/commands/clean.ts`
   // (`confirmDestruction`), and both fire BEFORE the first removal: one when

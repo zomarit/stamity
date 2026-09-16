@@ -91,7 +91,7 @@ string — there is no second numbering to read.
 | `CONFIG_ERROR` | an input file is malformed — manifest, YAML, pack manifest |
 | `ADAPTER_ERROR` | a target-tool adapter could not produce its output |
 | `UNKNOWN_ERROR` | an internal fault; the engine reached a state it does not classify |
-| `INTEGRITY_ERROR` | output cannot be regenerated to match its source |
+| `INTEGRITY_ERROR` | a check found drift, a pack failed a trust or integrity gate, a write was refused over injection patterns in content it would keep, or a handoff failed its read-back digest |
 | `FS_ERROR` | a filesystem operation failed |
 | `CLEAN_ERROR` | clean's confirmation was declined or could not be asked; nothing was removed |
 | `NETWORK_ERROR` | a git transport failed — `worktree setup` could not reach `origin` to plan its branch; a remote with no such branch is not this |
