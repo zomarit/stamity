@@ -613,16 +613,20 @@ describe("the restated kit contract", () => {
     // Pinned as exact lines rather than as file names, so a table gaining a second mention of
     // the code — or the union member growing a call site beside it — fails rather than passing
     // because the file was already on the list.
+    // Compared trimmed on both sides: the property is which declarative forms mention the
+    // code, not how far they are indented, so a reformat of these source files fails here on
+    // semantics rather than on leading whitespace.
     const declarativeMentions: Record<string, readonly string[]> = {
-      "src/cli/docs/cliReference.ts": ["  INTEGRITY_ERROR:"],
-      "src/resilience/failureClass.ts": ['  INTEGRITY_ERROR: "substantive",'],
-      "src/types/errors.ts": ['  | "INTEGRITY_ERROR"'],
+      "src/cli/docs/cliReference.ts": ["INTEGRITY_ERROR:"],
+      "src/resilience/failureClass.ts": ['INTEGRITY_ERROR: "substantive",'],
+      "src/types/errors.ts": ['| "INTEGRITY_ERROR"'],
     };
 
     for (const relPath of sources.filter((candidate) => !throwingFiles.includes(candidate))) {
       const inCode = withoutComments(source(relPath))
         .split("\n")
-        .filter((line) => line.includes("INTEGRITY_ERROR"));
+        .filter((line) => line.includes("INTEGRITY_ERROR"))
+        .map((line) => line.trim());
       expect(
         inCode,
         `${relPath} names INTEGRITY_ERROR outside a comment without throwing it`,
