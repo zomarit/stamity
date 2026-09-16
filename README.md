@@ -48,9 +48,9 @@ collects no telemetry, and no figure here stands in for that one.
 npx @zomarit/stamity init
 ```
 
-`init` reads your repository, asks what it cannot infer, and writes the setup plus a manifest every
-later verb works from. Node `>= 22.22.2` is the only prerequisite, and nothing is installed
-globally. The package is `@zomarit/stamity`, and its one binary answers to `stamity` and to `st`.
+`init` reads your repository and writes the setup plus the manifest `sync`, `check`, `config`,
+`workspace`, `clean` and `add` work from. `validate` runs with or without one; `learn` and `handoff`
+want only `.stamity/`. Node `>= 22.22.2` is the only prerequisite; nothing installs globally.
 
 Git is optional for every verb but `worktree`, which needs a `git` binary on PATH and refuses
 without one. Three things reach the network, all documented in [`SECURITY.md`](SECURITY.md). `add`
