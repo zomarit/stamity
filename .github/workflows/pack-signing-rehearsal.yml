@@ -3,7 +3,7 @@ name: Pack signing rehearsal
 
 on:
   push:
-    branches: [feat/package-10-finish-implementation]
+    branches: [main]
     paths:
       - .github/workflows/pack-signing-rehearsal.yml
       - scripts/pack-signing-rehearsal.mjs
@@ -24,7 +24,7 @@ env:
 
 jobs:
   prepare:
-    if: github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' && github.ref == 'refs/heads/feat/package-10-finish-implementation'
+    if: github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -104,7 +104,7 @@ jobs:
 
   sign:
     needs: prepare
-    if: github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' && github.ref == 'refs/heads/feat/package-10-finish-implementation'
+    if: github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -195,7 +195,7 @@ jobs:
 
   verify:
     needs: [prepare, sign]
-    if: github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' && github.ref == 'refs/heads/feat/package-10-finish-implementation'
+    if: github.repository == 'zomarit/stamity' && format('{0}', github.event.repository.private) == 'false' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

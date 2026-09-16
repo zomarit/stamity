@@ -22,8 +22,8 @@ const workflow = parse(workflowText) as { on: { push: { branches: string[] } }; 
 }> };
 const env = {
   SIGNING_SOURCE_SHA: "2".repeat(40), GITHUB_SHA: "3".repeat(40), GITHUB_REPOSITORY: "zomarit/stamity",
-  GITHUB_REF: "refs/heads/feat/package-10-finish-implementation",
-  GITHUB_WORKFLOW_REF: "zomarit/stamity/.github/workflows/pack-signing-rehearsal.yml@refs/heads/feat/package-10-finish-implementation",
+  GITHUB_REF: "refs/heads/main",
+  GITHUB_WORKFLOW_REF: "zomarit/stamity/.github/workflows/pack-signing-rehearsal.yml@refs/heads/main",
   GITHUB_RUN_ID: "1234", GITHUB_RUN_ATTEMPT: "1",
 };
 const digest = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex");
@@ -91,7 +91,7 @@ describe("nonpublishing remote signing rehearsal", () => {
 
   it("isolates OIDC to the signing job with no publication or deployment capability", () => {
     expect(Object.keys(workflow.jobs)).toEqual(["prepare", "sign", "verify"]);
-    expect(workflow.on.push.branches).toEqual(["feat/package-10-finish-implementation"]);
+    expect(workflow.on.push.branches).toEqual(["main"]);
     for (const [name, job] of Object.entries(workflow.jobs)) {
       expect(job.permissions).toEqual(name === "sign" ? { contents: "read", "id-token": "write" } : { contents: "read" });
       expect(job.environment).toBeUndefined();
