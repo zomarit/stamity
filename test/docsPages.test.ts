@@ -284,9 +284,19 @@ const EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/;
  * The currency header, in either of its two forms. A commit sha is what a page
  * cites once there is history to cite; the release cut is what the first cut
  * has instead, and both name a point a reader can go and check.
+ *
+ * TEST CHANGE, justified: the commit form carried no date the suite could read, so the
+ * re-attestation clause the Package 14 rewrite stamped onto thirteen pages was decorative — the
+ * date assertion below saw only the one page still on the cut form, and a fourteenth page left
+ * undated would have failed nothing. The clause is optional in the pattern because a page nobody
+ * re-read between cuts keeps its commit citation alone; it is NOT optional in the assertion, which
+ * requires every hand page to carry one of the two dates.
+ *
+ * Capture 1 is the commit form's re-attestation date, capture 2 the cut form's date. Two groups
+ * rather than one, because the two dates are held to different constants.
  */
 const CURRENCY_HEADER =
-  /<!--\s*HAND-WRITTEN PAGE — verified against the tree at (?:commit [0-9a-f]{7,40}|the \d+\.\d+\.\d+ release cut \((\d{4}-\d{2}-\d{2})\))\./;
+  /<!--\s*HAND-WRITTEN PAGE — verified against the tree at (?:commit [0-9a-f]{7,40}\.(?: Re-attested (\d{4}-\d{2}-\d{2})[^.]*\.)?|the \d+\.\d+\.\d+ release cut \((\d{4}-\d{2}-\d{2})\)\.)/;
 
 /**
  * The date this cut re-verified the hand bucket against.
@@ -303,10 +313,32 @@ const CURRENCY_HEADER =
  */
 // MOVED 2026-09-15, from "2026-09-10" (the 1.5.0 cut) to the 1.8.0 cut. Four read-only
 // attestors re-read every claim on the hand bucket against this tree at this cut and four
-// claims moved with it, so every page in the bucket carries the new date and the constant
-// moves with them — which is the direction this pin is written for: it fails a re-cut that
-// restamps nothing, never a re-cut that restamps honestly.
+// claims moved with it.
+//
+// TEST CHANGE, justified: the paragraph that stood here said every page in the bucket carries the
+// new date. That stopped being true when the Package 14 rewrite moved thirteen pages onto the
+// commit form, which cites a sha and re-attests with its own date. The two forms are now described
+// as they are: a cut-form page is dated by RELEASE_CUT_DATE, a commit-form page by the
+// REATTESTATION_DATE below, and each form's newest date is pinned to its own constant. The
+// direction the pin is written for is unchanged — it fails a re-cut that restamps nothing, never
+// one that restamps honestly.
 const RELEASE_CUT_DATE = "2026-09-15";
+
+/**
+ * The date the current re-verification pass re-read the hand bucket on.
+ *
+ * A page re-verified BETWEEN release cuts carries the commit form of the header plus a
+ * `Re-attested <date>` clause naming that pass. The pair this constant holds mirrors
+ * RELEASE_CUT_DATE's: the newest re-attestation on the bucket must equal this constant, so it has
+ * to move on the next pass or the assertion fails, and no page may claim a re-attestation later
+ * than it. It must also be at or after RELEASE_CUT_DATE — a re-verification that predates the cut
+ * the page ships in is not a re-verification of this tree.
+ *
+ * MOVED 2026-09-16: introduced by the Package 14 rewrite, which re-attested thirteen of the
+ * fourteen hand pages against commit e79dcf0 on that date. `docs/migration.md` was not rewritten
+ * and still carries the 1.8.0 cut form, which is why both constants are live.
+ */
+const REATTESTATION_DATE = "2026-09-16";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");
@@ -360,6 +392,9 @@ const CODEX_COMMAND_SURFACE = /^\| `command-surface` \| ([^|]*)\|/m;
 const read = (relPath: string): string => readFileSync(join(REPO_ROOT, relPath), "utf-8");
 
 const lines = (text: string): string[] => text.replace(/\n$/, "").split("\n");
+
+/** The latest of a set of dates. ISO-8601 sorts lexicographically, which is why the header has it. */
+const newest = (dates: readonly string[]): string | undefined => dates.toSorted().at(-1);
 
 /**
  * A page's own text, with a leading YAML frontmatter block dropped.
@@ -538,27 +573,66 @@ describe("hand pages", () => {
 
   it("dates the bucket at this cut, and no page later than it", () => {
     // The half of the currency header the shape check cannot reach. See RELEASE_CUT_DATE for why
-    // the pin is "the newest date is this one" rather than "every page carries this one".
-    const dated = HAND_PAGES.map((page) => {
+    // each pin is "the newest date is this one" rather than "every page carries this one".
+    //
+    // TEST CHANGE, justified: this read only capture 1 — the cut form's date — so the thirteen
+    // pages the Package 14 rewrite moved onto the commit form dropped out of the check entirely,
+    // leaving the whole pin resting on `docs/migration.md`. Both forms are read now, each held to
+    // its own constant, and a page carrying NEITHER date fails rather than being skipped.
+    const stamped = HAND_PAGES.map((page) => {
       const head = lines(afterFrontmatter(read(page))).slice(0, 6).join("\n");
-      return [page, CURRENCY_HEADER.exec(head)?.[1]] as const;
-    }).filter((entry): entry is readonly [string, string] => entry[1] !== undefined);
+      const match = CURRENCY_HEADER.exec(head);
+      return { page, reattested: match?.[1], cut: match?.[2] };
+    });
 
-    expect(dated.length, "no hand page states a release-cut date to check").toBeGreaterThan(0);
+    for (const { page, reattested, cut } of stamped) {
+      expect(
+        reattested ?? cut,
+        `${page} carries a currency header with no date — stamp it with a "Re-attested <date>" ` +
+          `clause naming the pass that re-read it, or with the release cut it was verified at`,
+      ).toBeDefined();
+    }
 
-    for (const [page, date] of dated) {
-      // ISO-8601 sorts lexicographically, which is most of why the header carries that shape.
+    const reattestations = stamped
+      .map(({ page, reattested }) => [page, reattested] as const)
+      .filter((entry): entry is readonly [string, string] => entry[1] !== undefined);
+    const cuts = stamped
+      .map(({ page, cut }) => [page, cut] as const)
+      .filter((entry): entry is readonly [string, string] => entry[1] !== undefined);
+
+    expect(
+      REATTESTATION_DATE >= RELEASE_CUT_DATE,
+      `REATTESTATION_DATE ${REATTESTATION_DATE} precedes the ${RELEASE_CUT_DATE} cut it re-verifies`,
+    ).toBe(true);
+
+    for (const [page, date] of cuts) {
       expect(
         date <= RELEASE_CUT_DATE,
         `${page} attests to ${date}, later than the ${RELEASE_CUT_DATE} cut it ships in`,
       ).toBe(true);
     }
-
+    expect(cuts.length, "no hand page states a release-cut date to check").toBeGreaterThan(0);
     expect(
-      dated.map(([, date]) => date).toSorted().at(-1),
-      `no hand page was re-verified at the ${RELEASE_CUT_DATE} cut — move the banner date on the ` +
+      newest(cuts.map(([, date]) => date)),
+      `no hand page was verified at the ${RELEASE_CUT_DATE} cut — move the banner date on the ` +
         `pages this cut rewrote, or move RELEASE_CUT_DATE to the cut that actually happened`,
     ).toBe(RELEASE_CUT_DATE);
+
+    for (const [page, date] of reattestations) {
+      expect(
+        date <= REATTESTATION_DATE,
+        `${page} re-attests to ${date}, later than the ${REATTESTATION_DATE} pass it ships in`,
+      ).toBe(true);
+    }
+    expect(
+      reattestations.length,
+      "no hand page carries a re-attestation date to check",
+    ).toBeGreaterThan(0);
+    expect(
+      newest(reattestations.map(([, date]) => date)),
+      `no hand page was re-attested at ${REATTESTATION_DATE} — stamp the pages this pass re-read, ` +
+        `or move REATTESTATION_DATE to the pass that actually happened`,
+    ).toBe(REATTESTATION_DATE);
   });
 
   it("every sidebar-listed hand page declares its H1 as its title", () => {
@@ -842,6 +916,16 @@ const withoutComments = (source: string): string =>
  *
  * `test/tools/allowlist.test.ts` keeps its own scan for a narrower question —
  * which modules IMPORT the check — so the two are separate on purpose.
+ *
+ * TEST CHANGE, justified: the relative path is normalised to POSIX before it is compared or
+ * returned. `relative()` emits native separators, so on Windows `declaredIn` — a POSIX literal at
+ * every call site — never matched the declaring file, the declaration was never stripped from it,
+ * and the file's own declaration counted as a reference. That failed CI's Windows leg on
+ * "holds the in-process check's disclosure to the call graph, both ways": `checkToolAccess` read as
+ * wired, so the page's true sentence "it has no production caller" was rejected. The Linux legs
+ * passed, which is why the defect was latent until a page said the thing the inverse branch checks.
+ * A logical path crossing a comparison is POSIX here, per the learning
+ * `the-local-test-gate-is-weaker-than-ci`.
  */
 function referencesTo(symbol: string, declaredIn: string): string[] {
   const declaration = new RegExp(
@@ -850,7 +934,7 @@ function referencesTo(symbol: string, declaredIn: string): string[] {
   );
   const found: string[] = [];
   for (const file of sourceFiles()) {
-    const relPath = relative(REPO_ROOT, file);
+    const relPath = relative(REPO_ROOT, file).replaceAll("\\", "/");
     const source = withoutComments(readFileSync(file, "utf-8"));
     const body = relPath === declaredIn ? source.replace(declaration, " ") : source;
     if (new RegExp(String.raw`\b${symbol}\b`).test(body)) found.push(relPath);
@@ -1025,11 +1109,19 @@ describe("SECURITY.md", () => {
         `${unwired} is claimed above "What it does not defend"`,
       ).toBeGreaterThan(text.indexOf("## What it does not defend"));
     }
-    // The one live bound is stated as the live one, in the unit it actually
-    // counts: the ceiling is bytes, and a character literal here would pin the
-    // page back to the unit it over-claimed. Anchored on "ceiling" so this
-    // tracks the control row, not the ledger line further down the page.
+    // The one live bound is stated as the live one, in the unit it actually counts.
+    //
+    // TEST CHANGE, justified: the unit depends on which caller applies the constant, and this
+    // pinned only one of them while the page named the other. `MAX_USER_CONTENT_LENGTH`
+    // (`src/guard/promptGuard.ts:49`) bounds a user-content overlay body in CHARACTERS —
+    // `src/content/userContent.ts:626` measures `text.length`, `src/content/catalog.ts:1141`
+    // compares the same, and `src/cli/commands/validate.ts:862` prints "over the N-character
+    // ceiling". The stdin path in `src/cli/commands/learn.ts:213` is the byte one, counting
+    // `buffer.byteLength`. So both literals are pinned: the character form for the user-content
+    // ceiling the unwired-controls bullet names, the byte form for the stdin row in the control
+    // table. The page said "byte" in both places, which over-claimed the overlay bound's unit.
     expect(text).toContain("MAX_USER_CONTENT_LENGTH");
+    expect(text).toMatch(/250 000-character ceiling/);
     expect(text).toMatch(/250 000-byte ceiling/);
   });
 
