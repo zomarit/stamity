@@ -2,23 +2,86 @@
 title: Packs and trust
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
-<!-- Re-open when: a trust tier is added or removed, the signed payload or the
-     `signing.signer` grammar or requirement changes, the bundle bound changes, the shipped
-     signature verifier is replaced, or the org policy grammar changes. `test/docsPages.test.ts` holds this page to the hand-page
-     contract; `src/pack/trust.ts` is the ladder's source of truth and `../SECURITY.md` is the
-     one home for what the engine defends. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit e79dcf0. Re-attested 2026-09-16 in the Package 14 rewrite. -->
+<!-- Re-open when: a trust tier is added or removed, the signed payload or the `signing.signer`
+     grammar changes, the bundle bound changes, the shipped signature verifier is replaced, `add`
+     gains or loses a flag, or the org trust policy grammar changes. `test/docsPages.test.ts` holds
+     this page to the hand-page contract and `src/pack/trust.ts` is the ladder's source of truth. -->
 
 # Packs and trust
 
-A pack is content installed on top of the corpus — agents, skills, rules, commands, hooks
-and MCP server definitions, shipped together and installed as a unit. The corpus is what
-every setup gets; a pack is what you add when a repository needs more.
+A pack is content you install on top of the corpus, and this page is for the operator installing
+one and the author publishing one. By the end you can install a pack, read the trust tier it
+resolved to, sign a pack of your own, set an org policy, and remove a pack again.
 
-The three first-party packs and what each ships are on
-[the packs reference](reference/packs.md), which renders from their manifests.
+## Install a pack
 
-## Installing one
+Preview first. `--dry-run` runs every install gate and writes nothing:
+
+```sh
+stamity add ops --dry-run
+```
+
+`add` names the pack and its version, then prints the gate chain, the facts it settled, and
+everything it would write:
+
+```text
+  manifest           pass
+  trustTier          pass
+  orgPolicy          n/a
+  signing            n/a
+  lifecycleScripts   n/a
+  integrityMap       pass
+  bodyScan           pass
+  mcpServers         n/a
+  hooks              n/a
+  footprint          pass
+  declaredTools      pass
+  ruleActivation     n/a
+  permissions        pass
+  agentCapabilities  pass
+
+  files              9
+  footprint          53.9 KiB of 5.0 MiB allowed
+  target             .stamity/packs/ops
+  trust              curator-verified — catalog pin verified: aggregate content SHA 90f6a36e3c96… matches and the catalog grants "curator-verified"
+
+  will install
+    agents
+      agents/stamity-devops.md                   4.4 KiB  ~1134 tok
+      …
+    skills
+      skills/st-release/SKILL.md                 7.0 KiB  ~1777 tok
+      …
+
+  context cost  ~13725 tokens across 9 file(s)
+
+  scope
+    declared tools  claude, cursor, copilot, codex
+    tool footprint  read, edit, execute, spawn
+    touched paths   CHANGELOG.md, package.json, .github/workflows/**, …
+
+  runs on this machine
+    no hook or MCP server definitions — this pack wires no commands
+
+  nothing written (--dry-run)
+```
+
+Drop `--dry-run` to install. Nothing is prompted along the way. An install gate either passes or
+refuses, so there is no yes-or-no question a prompt could ask.
+
+Read the `runs on this machine` block every time. Path, size and token count describe prose.
+A `hooks/*.json` entry becomes a command in your client's own settings file, and it runs on every
+matching tool call. An `mcp_servers/*.json` entry becomes a launcher your editor spawns at
+start-up. Those two classes are the difference between installing text and installing execution,
+so they are in the default view rather than behind a flag.
+
+Add `--preview` to print every planned file body in full. The footprint gate has already capped
+the total, so the preview needs no pager.
+
+### Where a pack can come from
+
+There are three routes, and **none of them fetches**:
 
 ```sh
 stamity add ops                 # a catalog id
@@ -26,30 +89,22 @@ stamity add ./packs/ops         # a local directory
 stamity add @acme/ops           # a package already under node_modules/
 ```
 
-Those are the three routes, and **none of them fetches**. A catalog id resolves to content
-shipped inside this package; a path is a directory on your disk; a scoped name is a package
-you already installed yourself. There is no download step and no background update check.
+A catalog id resolves to content shipped inside this package. A path is a directory on your disk.
+A scoped name is a package you already installed yourself. There is no download step and no
+background update check.
 
-Before anything is written, `add` shows you: the gate table, the resolved trust tier and
-what it rests on, every file that would land with its size and token estimate, one
-context-cost line, the pack's declared scope, and — in the default view, not behind a flag —
-**every command line the pack would wire into something that runs it**. Add `--preview` to
-print every file body in full; the footprint gate has already capped the total, so it needs
-no pager. `--dry-run` plans without writing.
+The three first-party packs, and what each one ships, are on
+[the packs reference](reference/packs.md). That page renders from their manifests.
 
-That command-line block is in the default view for a reason. Path and size describe prose.
-A `hooks/*.json` entry becomes a command in your client's own settings file that runs on
-every matching tool call, and an `mcp_servers/*.json` entry becomes a launcher your editor
-spawns at start-up. Those two classes are the difference between installing text and
-installing execution.
+### Update a pack by adding it again
 
 **Updating a pack means adding it again.** There is no auto-update path for any source.
-Re-running the install line re-runs every gate against the new content and replaces what
-was landed, so re-add is the update — and it is the only way to pick up a change.
+Re-running the install line re-runs every install gate against the new content and replaces what
+was landed. So re-add is the update, and it is the only way to pick up a change.
 
-## The trust ladder
+## Which rung of the trust ladder a pack lands on
 
-Four rungs, ascending. Each names who did the work.
+Four rungs, ascending. Each one names who did the work.
 
 | Tier | What it rests on |
 |---|---|
@@ -58,87 +113,94 @@ Four rungs, ascending. Each names who did the work.
 | `publisher-signed` | the author signed the aggregate content hash with a detached Sigstore bundle, **and the bundle verified** |
 | `curator-verified` | a catalog curator reviewed this exact content hash |
 
-Two rules govern every path through it.
+Two rules govern every path through the ladder.
 
-**Pinned-or-refuse.** A catalog pin names one immutable content hash. Content that hashes
-to anything else is refused outright, never quietly downgraded to a lower rung — a
-mismatch means the pack is not the thing that was pinned. This holds at install and at
-re-install alike, which is what keeps the update path from being the way around it.
+**Pinned-or-refuse.** A catalog pin names one immutable content hash. Content that hashes to
+anything else is refused outright. It is never quietly downgraded to a lower rung, because a
+mismatch means the pack is not the thing that was pinned. This holds at install and at re-install
+alike, which is what keeps the update path from being the way around it.
 
-**Claims are not evidence.** A signing declaration raises the *claimed* tier only. The
-claim holds when its detached bundle verifies, and not before.
+**Claims are not evidence.** A signing declaration raises the *claimed* tier only. The claim holds
+when its detached bundle verifies, and not before.
 
-## What a publisher-signed claim is checked against
+## What a verified signature proves
 
-The check is armed. A pack that declares `signing.method: "sigstore"` names a detached
-bundle it ships (`signing.bundlePath`), and the install runs that bundle through the
-official Sigstore client before anything is written.
+The check is armed. A pack that declares `signing.method: "sigstore"` names a detached bundle it
+ships at `signing.bundlePath`. The install runs that bundle through the official Sigstore client
+before anything is written.
 
-What a pass means, exactly: the signature covers the pack's aggregate content hash, the
-signing certificate chains to a Fulcio root in the Sigstore trust root, the signature is on
-a transparency log and the certificate on a certificate-transparency log, and the
-certificate carries the identity the pack declares. A failure at any step is a **refusal**,
-never a downgrade to a lower rung.
+A pass means four things at once. The signature covers the pack's aggregate content hash. The
+signing certificate chains to a Fulcio root in the Sigstore trust root. The signature is on a
+transparency log and the certificate is on a certificate-transparency log. The certificate carries
+the identity the pack declares. A failure at any step is a **refusal**, never a downgrade to a
+lower rung.
 
-What a pass does *not* mean is that the signer was entitled to publish the pack. The pin is
-the pack's own declaration, so a pack naming its own author verifies whoever that is. So the
-name is the thing to read, and `stamity add` prints it while you can still act on it: the
-trust line of a verified pack states the certificate identity and the issuer that vouched
-for it — `publisher-signed — … bundle verified: signed by <identity> via <issuer>` — and the
-install receipt records the same sentence. Deciding whether that name is the right one is
-yours; the install will not decide it for you.
+A pass does not mean the signer was entitled to publish the pack. The identity is pinned by the
+pack's own declaration, so a pack naming its own author verifies whoever that is. The name is
+therefore the thing to read, and `stamity add` prints it while you can still act on it. The trust
+line of a verified pack states the certificate identity and the issuer that vouched for it. It
+reads `publisher-signed — … bundle verified: signed by <identity> via <issuer>`. The install
+receipt records the same sentence. Deciding whether that name is the right one is yours, and the
+install will not decide it for you.
 
-**What gets signed.** Not the pack directory and not the bare hash: the aggregate content
-hash, lower-cased and length-framed as `64:<hex>` in UTF-8
-(`src/pack/trust.ts::sigstoreSignedPayload`). An author signing anything else produces a
-bundle this gate refuses. The author helper below reuses that serialization directly.
+**What gets signed.** Not the pack directory, and not the bare hash. The signed payload is the
+aggregate content hash, lower-cased and length-framed as `64:<hex>` in UTF-8
+(`src/pack/trust.ts::sigstoreSignedPayload`). An author who signs anything else produces a bundle
+the signature gate refuses. The author helper below reuses that serialization directly.
 
-**Declaring a signer is mandatory.** `signing.signer` reads
-`"<oidc-issuer> <certificate-identity>"` — the OIDC issuer, one space, then the identity in
-the certificate's subject alternative name. Neither half may contain a space, which is what
-makes the split unambiguous. It is **required** for `signing.method: "sigstore"`, and a
-signer that does not parse is refused rather than ignored. Both refusals are the same rule:
-a claim that pins nobody is satisfied by *any* Sigstore identity — anyone who can sign
-anything — and would still put the pack on the `publisher-signed` rung with no waiver
-anywhere on the command line. A pack that names no verifiable signer is refused when its
-`pack.json` is read, before any tier is resolved.
+**Declaring a signer is mandatory.** `signing.signer` reads `"<oidc-issuer> <certificate-identity>"`.
+That is the OIDC issuer URL, one space, then the identity in the certificate's subject alternative
+name. The identity is an email address or a URI. Neither half may contain a space, which is what
+makes the split unambiguous. A signer is **required** for `signing.method: "sigstore"`, and one
+that does not parse is refused rather than ignored. Both refusals are the same rule. A claim that
+pins nobody is satisfied by *any* Sigstore identity, which is anyone who can sign anything. Such a
+pack would still reach the `publisher-signed` rung, with no waiver anywhere on the command line.
+A pack that names no verifiable signer is refused when its `pack.json` is read, before any tier is
+resolved.
 
-**The bundle itself is bounded.** The declared `bundlePath` must be a regular file inside
-the pack — never a symlink, a pipe or a device node — and at most 1 MiB. Real bundles are a
-few kilobytes; the limit refuses rather than truncates, because half a bundle is not a
-bundle.
+**The bundle itself is bounded.** The declared `bundlePath` must be a regular file inside the
+pack. A symlink, a pipe or a device node is refused. The file is at most 1 MiB. Real bundles are a
+few kilobytes, and the limit refuses rather than truncates, because half a bundle is not a bundle.
 
-**This is the only network access a pack install performs**, and one of the two the engine
-performs while it works. Verifying a signed pack fetches the Sigstore trust root over TUF;
-the transparency-log proofs travel inside the bundle. `init`, `sync`, `check`, and
-installing any pack that declares no signature do not even load the Sigstore client. The
-trust metadata is cached under your user cache directory, never inside the repository. The
-other is `stamity worktree setup`: when no local branch of the requested name exists and
-the repository has an `origin` remote, it runs `git fetch origin <branch>` against your
-repository's own remote (`src/worktree/git.ts::fetchBranch`), refusing with `NETWORK_ERROR`
-on a transport failure — and a `--dry-run` never runs it. One further path is
-network-capable and is no part of any command's work: the startup update notice asks the
-public npm registry whether a newer version exists — a GET at most once a day, unless
-`STAMITY_NO_UPDATE_CHECK=1`, or `NO_UPDATE_NOTIFIER` or `CI` on any non-empty value, turns
-it off. [`SECURITY.md`](../SECURITY.md) states the same boundary as a control, and lists
+### The one network call an install makes
+
+**Verifying a signed pack is the only network access a pack install performs.** It is also one of
+the two the engine performs while it works. Verification fetches the Sigstore trust root over TUF.
+The transparency-log proofs travel inside the bundle. `init`, `sync`, `check`, and installing any
+pack that declares no signature do not even load the Sigstore client. The trust metadata is cached
+under your user cache directory, never inside the repository. A host that cannot reach the mirror
+cannot check a signature, so an offline machine cannot install a signed pack at all.
+
+The second is `stamity worktree setup`. When no local branch of the requested name exists and the
+repository has an `origin` remote, it runs `git fetch origin <branch>` against your repository's
+own remote (`src/worktree/git.ts::fetchBranch`). A transport failure refuses with `NETWORK_ERROR`,
+and a `--dry-run` never runs the fetch at all.
+
+One further path is network-capable and is no part of any command's work. The startup update
+notice asks the public npm registry whether a newer version exists. It is a GET at most once a
+day. `STAMITY_NO_UPDATE_CHECK=1` turns it off, and so do `NO_UPDATE_NOTIFIER` and `CI` on any
+non-empty value. [`SECURITY.md`](../SECURITY.md) states the same boundary as a control, and lists
 both exceptions.
 
-**A verified claim is not waivable, and neither is a failed one.** `--allow-untrusted`
-waives the **absence** of a trust basis, so it has no effect on a declared signing claim:
-no flag on the command line reaches it. A catalog pin does not reach a failed check either.
-The ladder still has one narrow substitution — when a verifier reports that it could not
-EVALUATE a claim at all, a pin that verified at a rung the catalog's own work backs
-(`scanned` or `curator-verified`) stands in and the gate records `n/a`. The shipped
-verifier never reports that: it evaluates, so its refusals stay refusals. The rule survives
+### Nothing waives a failed signature check
+
+**A verified claim is not waivable, and neither is a failed one.** `--allow-untrusted` waives the
+**absence** of a trust basis, so it has no effect on a declared signing claim. No flag on the
+command line reaches it. A catalog pin does not reach a failed check either.
+
+The ladder has one narrow substitution. A verifier can report that it could not *evaluate* a claim
+at all. In that case a pin that verified at a rung the catalog's own work backs stands in, and the
+signature gate records `n/a`. Those rungs are `scanned` and `curator-verified`. The shipped
+verifier never reports that, because it evaluates, so its refusals stay refusals. The rule survives
 for a caller that injects a verifier which cannot judge.
 
-No first-party pack declares `signing` — each rests on its catalog pin — so today this is a
-path the ladder defines rather than one you will meet.
+No first-party pack declares `signing`. Each one rests on its catalog pin instead, so today this
+is a path the ladder defines rather than one you will meet.
 
-## Signing a pack
+## Sign a pack you publish
 
-From a Stamity source checkout on Node >=22.22.2, prepare the pack's content and
-integrity map, then declare the exact OIDC issuer and certificate identity:
+Work from a stamity source checkout on Node >=22.22.2. Prepare the pack's content and its
+integrity map first. Then declare the exact OIDC issuer and certificate identity in `pack.json`:
 
 ```json
 {
@@ -150,11 +212,11 @@ integrity map, then declare the exact OIDC issuer and certificate identity:
 }
 ```
 
-That is the `signing` section of the existing `pack.json`, alongside its `name`,
-`version` and `integrity`; the [concrete GitHub Actions example](../.github/pack-signing-example.json)
-shows the issuer and identity forms. Replace its repository, workflow and tag with
-the authorized signing job's actual identity. The bundle sits outside the content
-directories and is excluded from its own integrity map.
+That is the `signing` section of the existing `pack.json`, alongside its `name`, `version` and
+`integrity`. The [concrete GitHub Actions example](../.github/pack-signing-example.json) shows the
+issuer and identity forms. Replace its repository, workflow and tag with the authorized signing
+job's actual identity. The bundle sits outside the content directories and is excluded from its
+own integrity map.
 
 ```sh
 npm ci --ignore-scripts
@@ -163,99 +225,101 @@ node dist/cli.js add /path/to/pack --dry-run
 node dist/cli.js add /path/to/pack
 ```
 
-Build the CLI before these commands if this checkout has no `dist/`. The signing
-script uses the installed official Sigstore client and its GitHub Actions OIDC
-identity provider. In CI, prepare and validate content without `id-token: write`,
-then run signing in a separate protected job that grants it. Install dependencies
-before granting access to an external signing identity; run only reviewed signer
-code in that job. No token argument, stored signing key or credential file is
-needed. GitHub's per-run identity is process state; publish only the content,
-manifest and detached bundle, never environment dumps or signing logs containing
+Build the CLI first if this checkout has no `dist/`. The signing script uses the installed
+official Sigstore client and its GitHub Actions OIDC identity provider. From TypeScript you can
+call `createEngine().pack.sign.signPack(...)` instead of running the script.
+
+In CI, prepare and validate content in a job without `id-token: write`. Run signing in a separate
+protected job that grants it. Install dependencies before granting access to an external signing
+identity, and run only reviewed signer code in that job. No token argument, stored signing key or
+credential file is needed. The per-run identity is process state. Publish only the content, the
+manifest and the detached bundle. Never publish environment dumps or signing logs that contain
 provider requests.
 
-The script reuses `sigstoreSignedPayload` from the verifier, checks integrity before
-signing, verifies the returned bundle against the declared issuer and identity,
-rechecks inputs, and writes atomically. Unsafe bundle paths, wrong signers,
-malformed responses and changed content refuse without claiming success.
+The script reuses `sigstoreSignedPayload` from the verifier, checks integrity before signing,
+verifies the returned bundle against the declared issuer and identity, rechecks its inputs, and
+writes atomically. Unsafe bundle paths, wrong signers, malformed responses and changed content all
+refuse without claiming success.
 
-To update, change content and its integrity map, set the new pack version and
-appropriate signing identity, sign again, and repeat `add`. A changed content hash
-cannot reuse the old signature. Local regression fixtures exercise real ephemeral
-cryptography and the production install/update path with the external identity
-service substituted. They do not establish Fulcio, transparency-log or live OIDC
-proof; authenticated sign → verify → install/update evidence remains a separately
-recorded release verification.
+To publish an update, change the content and its integrity map, set the new pack version and the
+appropriate signing identity, sign again, and repeat `add`. A changed content hash cannot reuse
+the old signature.
 
-The package also ships declarations for its existing JavaScript API. A TypeScript
-consumer installs the usual Node platform types and can import `createEngine`,
-`SetupManifest` and reachable types from `@zomarit/stamity`; authoring code can call
-`createEngine().pack.sign.signPack(...)`. The build uses the native compiler CLI,
-and declaration bytes count against the existing distribution budget. Two explicit
-type dependencies, `@sigstore/rekor-types` and `@types/make-fetch-happen`, complete
-Sigstore's published declaration graph; their Knip exceptions describe that
-transitive type use, not unused runtime functionality. The packed-consumer gate
-checks the graph with `skipLibCheck: false` outside this checkout.
+## Install a pack that nothing vouches for
 
-## `--allow-untrusted`
+A pack with no trust basis at all is refused by default. That means no catalog pin and no signing
+declaration:
 
-A pack with no trust basis at all — no catalog pin, no signing declaration — is refused by
-default. The waiver is a flag, so the decision is visible in the command line and therefore
-in a CI log, rather than buried in an interactive answer nobody can audit later:
+```text
+error: pack "my-pack" has no trust basis — no catalog pin, no signing declaration — and such packs are refused by default
+  why: pack bodies land directly in agent context, and its hook and MCP server definitions become commands your client runs as you — a hook on every matching tool call, an MCP launcher at editor start-up — so nothing attests who wrote the code you would be running
+  next: install from the curated catalog or a signed build, or — for a pack you authored yourself — re-run with --allow-untrusted, reading the `runs on this machine` block before you accept
+```
+
+The waiver is a flag, so the decision is visible in the command line and therefore in a CI log. An
+interactive answer nobody can audit later would hide it:
 
 ```sh
 stamity add ./my-pack --allow-untrusted
 ```
 
-The refusal states what the waiver accepts, and it is worth reading before you type it:
-pack bodies land directly in agent context, and the pack's hook and MCP server definitions
-become **commands your client runs as you** — a hook on every matching tool call, an MCP
-launcher at editor start-up. Nothing attests who wrote the code you would be running.
+Use it for packs you authored yourself. Read the `runs on this machine` block before you accept,
+because nothing attests who wrote the code you would be running.
 
-Use it for packs you authored yourself, and read the `runs on this machine` block before
-you accept.
+There is no `--force`. Collisions are never overridable. A pack that would write over a path it
+does not own is refused. Supply that silently replaces your own files is the failure the ownership
+ledger exists to prevent. Clear the paths instead.
 
-There is no `--force`. Collisions are never overridable: a pack that would write over a
-path it does not own is refused, because supply that silently replaces your own files is
-the failure the ownership ledger exists to prevent. Clear the paths instead.
+## Limit which sources your repositories accept
 
-## The org trust policy
+An organization that wants to narrow the sources its repositories may install from checks in a
+policy file at `.stamity/policy.json`.
 
-An organization that wants to narrow the sources its repositories may install from checks
-in a policy file at `.stamity/policy.json`. The file is loaded as soon as the pack manifest
-has been read and validated — before the trust tier resolves, and before a single content
-byte is read — so a malformed policy refuses every install whose manifest parses; the policy
-itself is applied once the tier has resolved — the second gate after the manifest read,
-because the `catalog-pinned` kind it judges exists only once the catalog pin has verified —
-and again at projection, so a pack installed before a policy existed stops being projected
-once the policy denies it, without a re-install and without losing its files.
+The file is loaded as soon as the pack manifest has been read and validated. That is before the
+trust tier resolves and before a single content byte is read, so a malformed policy refuses every
+install whose manifest parses. The policy is then *applied* once the tier has resolved, as the
+second gate after the manifest read. It waits that long because the `catalog-pinned` kind it
+judges exists only once the catalog pin has verified. It is applied again at projection, so a pack
+installed before a policy existed stops being projected once the policy denies it. That takes no
+re-install and loses no files.
 
-Entries name a pack id (`ops`, `@acme/ops`), a scope wildcard (`@acme/*`), everything
-(`*`), or a source kind (`local-path`, `npm-package`, `catalog-pinned`). Two rules:
+Entries name a pack id such as `ops` or `@acme/ops`, a scope wildcard such as `@acme/*`,
+everything as `*`, or a source kind. The three source kinds are `local-path`, `npm-package` and
+`catalog-pinned`. Two rules decide every install:
 
-- **Deny-wins.** A deny match refuses the source whatever the allow list says. With an
-  `allow` list present, only allow-matched sources pass; without one, everything not denied
-  passes. No file at all means no policy — the policy is opt-in.
-- **Fail-closed.** A policy that exists but cannot be read as exactly the documented shape
-  refuses every install until it is fixed. "Could not read it, so allowed everything" is
-  the one outcome the file exists to prevent.
+- **Deny-wins.** A deny match refuses the source whatever the allow list says. With an `allow`
+  list present, only allow-matched sources pass. Without one, everything not denied passes. No
+  file at all means no policy, because the policy is opt-in.
+- **Fail-closed.** A policy that exists but cannot be read as exactly the documented shape refuses
+  every install until it is fixed. "Could not read it, so allowed everything" is the one outcome
+  the file exists to prevent.
 
-One bound on the source-kind tokens, and it applies at projection rather than at install. At
-install the kind comes from the source being installed. At projection it is read back out of
-the receipt `add` wrote into the pack's own directory, so a receipt that has been deleted or
-edited into something unparsable leaves the kind unknown — and an unknown kind matches no kind
-token. A `deny: ["npm-package"]` rule therefore does not reach that pack at projection, while a
-rule naming the pack, its scope, or `*` still does. That direction is deliberate: an unreadable
+A policy cannot be written in terms of the trust ladder. There is no minimum-tier setting, and the
+grammar has no tier token. Policy decides which *sources* may supply packs, and the ladder
+classifies what a pack is worth trusting once a source is allowed.
+
+Read the source kind from the policy's point of view, not from the line `add` prints. A catalog
+install resolves to a directory inside the engine package, so that line honestly reports
+`local-path`. The policy still judges the same install as `catalog-pinned`, because its verified
+pin granted a catalog rung. So `deny: ["local-path"]` means "no unreviewed directory installs" and
+leaves the curated catalog reachable.
+
+One bound applies to the source-kind tokens at projection rather than at install. At install the
+kind comes from the source being installed. At projection it is read back out of the receipt `add`
+wrote into the pack's own directory. A receipt that has been deleted or edited into something
+unparsable leaves the kind unknown, and an unknown kind matches no kind token. A
+`deny: ["npm-package"]` rule therefore does not reach that pack at projection, while a rule naming
+the pack, its scope, or `*` still does. That direction is deliberate, because an unreadable
 receipt must not silently widen a kind rule onto packs whose provenance nobody can check. It is
-also not a hiding place, because the receipt is ledgered like every other installed byte, so
-deleting or editing it is a failing `pack-integrity` row in `stamity check`. If a rule has to
-hold whatever state a pack directory is left in, write it by name, by scope, or as `*`.
+also not a hiding place. The receipt is ledgered like every other installed byte, so deleting or
+editing it is a failing `pack-integrity` row in `stamity check`. If a rule has to hold whatever
+state a pack directory is left in, write it by name, by scope, or as `*`.
 
-### Writing one
+### Write the policy with `stamity config policy`
 
-`stamity config policy` is the writer. Do not hand-author the file: every pattern is
-checked against the grammar above *before* anything is written, and fail-closed is exactly
-why that matters — a typo in a hand-edited policy refuses every install in the repository
-until somebody finds it.
+`stamity config policy` is the writer. Do not hand-author the file. Every pattern is checked
+against the grammar above *before* anything is written. Fail-closed is exactly why that matters.
+A typo in a hand-edited policy refuses every install in the repository until somebody finds it.
 
 ```sh
 stamity config policy list                    # the standing rules, and the mode they put you in
@@ -265,7 +329,7 @@ stamity config policy allow catalog-pinned    # nothing but the curated catalog
 stamity config policy remove local-path       # drop a rule from wherever it sits
 ```
 
-`allow` and `deny` create the file if there is none and are idempotent; `--dry-run` prints
+`allow` and `deny` create the file if there is none, and both are idempotent. `--dry-run` prints
 the document instead of writing it. Those two middle lines produce:
 
 ```json
@@ -283,66 +347,77 @@ the document instead of writing it. Those two middle lines produce:
 ```
 
 Two consequences are printed as they happen, because both are repository-wide. Adding the
-**first** `allow` entry switches the repo into allowlist mode, where a source matching no
-allow entry is refused — installed packs included, which stop projecting at the next
-`sync`. Removing the **last** one switches it back, and drops the key rather than leaving
-`"allow": []` behind, which is a valid document that denies everything.
+**first** `allow` entry switches the repo into allowlist mode, where a source matching no allow
+entry is refused. Installed packs are included, and they stop projecting at the next `sync`.
+Removing the **last** one switches it back. It drops the key rather than leaving `"allow": []`
+behind, which is a valid document that denies everything.
 
-If a policy is already on disk and does not parse, every action refuses with the defect
-named, and `stamity config policy init --force` is the way back out.
+If a policy is already on disk and does not parse, every action refuses with the defect named.
+`stamity config policy init --force` is the way back out.
 
-## After the install
+## Check an installed pack for edits
 
-`add` records a SHA-256 for every byte it writes. `stamity check` re-hashes those files on
-every run — its `pack-integrity` row — so an edit to `.stamity/packs/**` after the install
-returned shows up as what it is, rather than as ordinary regeneration drift that `sync`
-would then propagate into your emitted agent files.
+`add` records a SHA-256 for every byte it writes. `stamity check` re-hashes those files on every
+run and reports them in its `pack-integrity` row:
 
-The check is read-only and never repairs. What to do about a mismatch is your decision:
-re-install the pack, or accept the edit knowing the row will keep reporting it.
+```text
+  ok    pack-integrity       10 installed pack file(s) still match the hashes recorded at install
+```
 
-## Removing one
+An edit to `.stamity/packs/**` after the install returned shows up as what it is, rather than as
+ordinary regeneration drift that `sync` would then propagate into your emitted agent files:
+
+```text
+  fail  pack-integrity       1 of 10 installed pack file(s) no longer match what was verified at install: …
+```
+
+The check is read-only and never repairs. What to do about a mismatch is your decision. Re-install
+the pack, or accept the edit knowing the row will keep reporting it.
+
+## Remove one pack
 
 ```sh
 stamity clean --pack ops
 ```
 
-That removes exactly one pack — its files and its ledger rows — and, because this is the
-last moment they can be proved, also takes that pack's selected MCP servers out of the
-merged client config files and out of the `mcp.servers` selection in
-`.stamity/manifest.json`. An entry you had tuned yourself is kept and reported as yours.
-Every other pack's files and rows are left alone; outside the pack's own directory, the
-files that change are `.stamity/manifest.json` — the ledger shrunk by exactly this pack's
-rows and the `mcp.servers` selection trimmed — and, when the pack supplied a selected
-server, the merged client MCP documents that removal edited, whose adapter-owned ledger rows
-are re-hashed to the bytes now on disk so the ledger keeps asserting what is actually there.
-Ownership is matched on exact equality, so `@acme/ops` can never match `@acme/ops-extra`.
-The state directory stays, because every other owner is still live. A file the safety gates
-kept — bytes you edited, an unlink that was refused — loses its row anyway and becomes
-yours to keep or delete, and the output says so.
+That removes exactly one pack, meaning its files and its ledger rows. It also takes that pack's
+selected MCP servers out of the merged client config files, and out of the `mcp.servers` selection
+in `.stamity/manifest.json`. This is the last moment they can be proved. An entry you had tuned
+yourself is kept and reported as yours.
 
-Follow it with `stamity sync`, which reclaims any projected copies of that pack's content
-now that its rows are gone. Plain `stamity clean` with no flag removes the whole setup,
-packs included.
+Every other pack's files and rows are left alone. Outside the pack's own directory, two things
+change. `.stamity/manifest.json` loses exactly this pack's ledger rows and has its `mcp.servers`
+selection trimmed. When the pack supplied a selected server, the merged client MCP documents that
+removal edited change too. Their adapter-owned ledger rows are re-hashed to the bytes now on disk,
+so the ledger keeps asserting what is actually there.
 
-## Authoring one
+Ownership is matched on exact equality, so `@acme/ops` can never match `@acme/ops-extra`. The
+state directory stays, because every other owner is still live. A file the safety gates kept loses
+its row anyway and becomes yours to keep or delete, and the output says so. That covers bytes you
+edited, and an unlink that was refused.
 
-Read [`packs/ops/`](../packs/ops/) as the worked example: a `pack.json` manifest beside
-class directories (`agents/`, `skills/`, `commands/`) holding the content itself. The
-manifest declares the pack's name, version, description, an integrity map with a digest
-per file, and its declared scope — which tools it targets and what it touches.
+Follow it with `stamity sync`, which reclaims any projected copies of that pack's content now that
+its rows are gone. Plain `stamity clean` with no flag removes the whole setup, packs included.
 
-Two constraints shape what you can ship. Lifecycle scripts are banned outright — a pack
-never runs code at install time. And every file is measured against a footprint cap, so a
-pack is bounded content rather than an open-ended payload.
+## Author your own pack
 
-Regenerate the first-party manifests after editing a pack. The plain invocation verifies each
-pack against its existing map and fails on the drift an edit just introduced — rewriting a map
-is the maintenance mode, and it is deliberate:
+Read [`packs/ops/`](../packs/ops/) as the worked example. It is a `pack.json` manifest beside
+class directories such as `agents/`, `skills/` and `commands/`, which hold the content itself. The
+manifest declares the pack's name, version, description, an integrity map with a digest per file,
+and its declared scope. The scope says which tools the pack targets and what it touches.
+
+Three constraints shape what you can ship. Lifecycle scripts are banned outright, so a pack never
+runs code at install time. Total content is measured against a footprint cap, which is 5 MiB
+unless the pack declares a tighter one of its own. Installed file count is capped at 500. A pack
+is bounded content, not an open-ended payload.
+
+Regenerate the first-party manifests after editing a pack. The plain invocation verifies each pack
+against its existing map and fails on the drift an edit just introduced. Rewriting a map is the
+maintenance mode, and that split is deliberate:
 
 ```sh
 node scripts/generate-pack-manifests.mjs --write
 ```
 
-What the gate chain checks, where it stops, and what it explicitly does not defend:
+What the gate chain checks, where it stops, and what it explicitly does not defend are in
 [`SECURITY.md`](../SECURITY.md).
