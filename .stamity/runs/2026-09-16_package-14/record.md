@@ -201,3 +201,16 @@ each item had shipped already and the roadmap had not been ticked.
   producers; GOVERNANCE's hygiene-scan event condition; CONTRIBUTING's narrowed re-open trigger; the
   measurements page naming the SET-v6 scoring rule over the SET-v7 set as the currency record does).
   All routed to one fixer; the daily-use half's review is still out.
+- 02:30Z The full gate chain at the candidate `be27e0c` (omitted from the log above when it ran, which
+  the daily-use review then flagged as an evidence gap): lint and typecheck clean; `npm run test --
+  --coverage` 211 files, 8,496 passed, 3 skipped, no per-file floor missed; build within both size
+  budgets; knip clean; `node dist/cli.js check` at the root "all green — nothing to do", drift clean;
+  leak gate 0 hits over 1,468 files. The same chain runs again at the fixed candidate.
+- 03:05Z Review round 1, daily-use half: request-changes, no Critical; W1 the getting-started
+  `.stamity/` inventory omits Copilot's coding-agent MCP document (`.stamity/mcp/copilot-repo-settings.env`,
+  `src/mcp/emit.ts:174–180`); W2 the evidence gap above; six Minors (a customization sentence that
+  contradicts its own sample; git listed as a prerequisite while denied as one; a stale APM count in
+  `docs/specs/apm-canonical-distribution.md:54`; SECURITY's "250 000-byte" where the producer counts
+  characters — pinned, so routed to the governance fixer with the test; the migration page's re-open
+  comment silent on why its stamp form is load-bearing; the `cleanup` bullet on the 150-line workflow
+  page as one run of five behaviours). Routed to a second fixer, file-disjoint from the first.
