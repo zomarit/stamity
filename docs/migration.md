@@ -3,11 +3,11 @@ slug: /migration-from-hatch3r
 title: Migrating from hatch3r
 ---
 <!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
-<!-- Re-open when: hatch3r's own `clean` semantics change, or when what `src/migration/`
-     detects, carries or strips changes. `test/docsPages.test.ts` holds this page to the
-     hand-page contract and pins two claims no other check can reach: Path B names the
-     manifest a plain clean deletes, and the last step names `.env.mcp` before the uninstall.
-     `src/migration/detect.ts` and `src/migration/carry.ts` are the code this page describes. -->
+<!-- Re-open when: hatch3r's own `clean` semantics change, or when what `src/migration/` detects, carries or
+     strips changes (`src/migration/detect.ts` and `src/migration/carry.ts` are the code this page describes).
+     `test/docsPages.test.ts` holds this page to the hand-page contract, pins two claims no other check can reach —
+     Path B names the manifest a plain clean deletes, the last step names `.env.mcp` before the uninstall — and needs
+     one hand page stamped at the release cut for its `RELEASE_CUT_DATE` pin: this is that page, so the stamp's release-cut form is load-bearing and moves only at a cut. -->
 
 # Migrating from hatch3r
 
