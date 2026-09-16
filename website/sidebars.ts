@@ -68,14 +68,18 @@ const categories = [
     ]),
   },
   {
+    // Daily-use first, rarest last: the two a reader reaches for while working
+    // lead, then the ones a growing setup reaches for, then the two an
+    // organisation reaches for once. README's map lists them in this same
+    // order, and so does `src/cli/docs/llmsIndex.ts`.
     label: 'Guides',
     items: present([
       'customization',
-      'workspaces',
-      'enterprise-forks',
-      'packs-and-trust',
-      'security-mapping',
       'troubleshooting',
+      'workspaces',
+      'packs-and-trust',
+      'enterprise-forks',
+      'security-mapping',
     ]),
   },
 ];
