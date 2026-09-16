@@ -116,17 +116,17 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`apm.yml`](apm.yml) | Generated: the APM package manifest, over the [`.apm/`](.apm/) projection of the corpus, served from this repository. |
 | [`website/`](website/) | The Docusaurus site that renders the `docs/` pages from the tree. Its one page of its own is the landing page at `website/src/pages/index.tsx`. |
 | [`SECURITY.md`](SECURITY.md) | What the engine defends today, what it does not, and how to report a vulnerability. |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | The dev loop, the three test lanes, and how to regenerate derived files. |
-| [`GOVERNANCE.md`](GOVERNANCE.md) | Who decides, how a change lands, and what the private layer holds. |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | The contributor gate CI runs, the three test lanes, and how to regenerate a derived file. |
+| [`GOVERNANCE.md`](GOVERNANCE.md) | Who decides, the two required checks a change passes to land, what the private layer holds, and what happens if the maintainer stops. |
 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, and the two channels a report goes through. |
-| [`docs/getting-started.md`](docs/getting-started.md) | Prerequisites, what `init` asks and writes per client, and the guided first change. |
-| [`docs/working-with-stamity.md`](docs/working-with-stamity.md) | The nine touchpoints as one workflow — which to open, what each writes, and how to run two changes at once. |
-| [`docs/doctrine.md`](docs/doctrine.md) | The root question every artifact answers, the four pillars and the surfaces that enforce them, and how an artifact is deleted. |
-| [`docs/customization.md`](docs/customization.md) | Where an override lives per class, the two authoring paths and the one save gate, shadowing, and what a skill override carries. |
+| [`docs/getting-started.md`](docs/getting-started.md) | Setting stamity up in your own repository for the first time, through to one change proved by a passing verification gate. |
+| [`docs/working-with-stamity.md`](docs/working-with-stamity.md) | Which of the nine touchpoints to open, what that one may do, and what is on disk when it stops. |
+| [`docs/doctrine.md`](docs/doctrine.md) | Why stamity ships what it ships — the root question, the four pillars and the surfaces that enforce them, and how an artifact is deleted. |
+| [`docs/customization.md`](docs/customization.md) | Making the agents, rules, commands and skills say what your repository needs — replacing one, patching one, and removing either again. |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | The exit model, every `check` row and its remedy, and where to report a problem. |
-| [`docs/workspaces.md`](docs/workspaces.md) | One policy across several repositories — the manifest, the init offer, the status rows, and the cascade. |
-| [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | What a pack is, the trust ladder as shipped, and what `add` refuses. |
-| [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking upstream releases into a customized fork — the config, the verbs, conflicts, the `fork/` layer, the gates that decide, and the opt-in workflow. |
+| [`docs/workspaces.md`](docs/workspaces.md) | One policy across several repositories — what a workspace is, how to create one, and what the cascade pushes down. |
+| [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | Installing content on top of the corpus — the trust tier it lands on, signing one of your own, and what `add` refuses. |
+| [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, landing, and the fork layer. |
 | [`docs/security-mapping.md`](docs/security-mapping.md) | The version-pinned crosswalk from this repository's controls to the OWASP, joint-guidance and NIST AI RMF catalogues — seven surfaces, their residuals, and the gaps. |
 
 Hook scripts are not in that corpus row, because they are not corpus content. The three portable

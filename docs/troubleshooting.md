@@ -83,7 +83,7 @@ run at all warns instead, saying `could not be checked:` and why. Every other ro
 | Row | What a bad verdict means, and what to do |
 |---|---|
 | `node-version` | **Can fail.** Your Node is below the range this build declares. Install a Node in that range, or switch to one with your version manager. Then re-run. |
-| `git-available` | Warns when git did not answer. Either no git is on your PATH, or this is not a repository. Nothing `check`, `init`, `sync`, `validate` or `config` does needs git. The `worktree` verbs do, and refuse with `VALIDATION_ERROR` without it. Sync's dirty-tree warning simply stays silent. |
+| `git-available` | Warns when git did not answer. Either no git is on your PATH, or this is not a repository. Nothing `check`, `init`, `sync`, `validate` or `config` does needs git. The `worktree` verbs do, and refuse with `VALIDATION_ERROR` without it. Sync's dirty-tree warning stays silent. |
 | `manifest` | **Can fail.** Absent means this repository was never set up: run `init`. Defective prints the engine's own field-level message, so fix the field it names. |
 | `state-dirs` | Warns when `.stamity/learnings/` or `.stamity/handoffs/` is missing. Nothing is lost. Both stores recreate their directory on the first write, and `sync` rewrites them now. |
 | `learnings` | Warns when a recorded learning is invalid, or when it sits past the file cap. Neither kind loads. Run `validate` for the per-file detail. |
@@ -102,11 +102,11 @@ A drift line names how many files would change, how many ledgered files are miss
 many are queued for reclaim. It then lists them. A run that exits `1` on drift alone reports
 `INTEGRITY_ERROR` in its `--json` output.
 
-If the line reads `drift: not evaluated`, it names the real reason, and there are two. Either
-the manifest could not be read — the `manifest` row above already says so, with the fix — or the
-plan itself threw. A pack that bricks projection, invalid content and a malformed override all
-throw. While the plan does not build, nothing is compared, so that run would not detect
-tampering with a generated file.
+If the line reads `drift: not evaluated`, it names the real reason, and there are two. Either the
+manifest could not be read, or the plan itself threw. For the first, the `manifest` row above
+already says so, with the fix. A pack that bricks projection, invalid content and a malformed
+override all throw. While the plan does not build, nothing is compared, so that run would not
+detect tampering with a generated file.
 
 ## Common failures
 
@@ -127,7 +127,9 @@ npx @zomarit/stamity sync
 ```
 
 To keep the change, move it **outside** the block. Text outside a managed block is yours, and it
-survives every sync. If you deleted a generated file instead, sync rewrites it.
+survives every sync. Where the edit belongs inside a shipped agent, rule, command or skill, author
+it as an override instead. [Customization](customization.md) is that lane. If you deleted a
+generated file, sync rewrites it.
 
 ### `sync` refuses a file it did not write
 

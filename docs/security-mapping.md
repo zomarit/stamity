@@ -104,7 +104,7 @@ writes files and runs no server.
 | A06 | Vulnerable and Outdated Components | Applicable, through dependency pins. |
 | A07 | Identification and Authentication Failures | Not applicable. There is no authentication surface. |
 | A08 | Software and Data Integrity Failures | Applicable directly: signing, SHA-pinned actions, provenance. |
-| A09 | Security Logging and Monitoring Failures | Largely not applicable. There is no logging surface, by design. |
+| A09 | Security Logging and Monitoring Failures | Not applicable as written. There is no logging surface, by design. This repository's artifact trail is what stands in its place. |
 | A10 | Server-Side Request Forgery | Not applicable. Nothing here takes a URL from a caller and fetches it. |
 
 ### The joint guidance
@@ -252,9 +252,9 @@ no authentication surface, and no caller-supplied URL that the engine fetches. I
 paths. One is a signed-metadata fetch at verification time. The other is a `git fetch` against a
 remote the repository already had.
 
-**A09 Security Logging and Monitoring Failures, largely.** There is no logging or monitoring
-surface, by design. No telemetry is collected and nothing is uploaded, so the category's controls
-have nothing here to attach to. What replaces them is the artifact trail in this repository.
+**A09 Security Logging and Monitoring Failures.** There is no logging or monitoring surface, by
+design. No telemetry is collected and nothing is uploaded, so the category's controls have nothing
+here to attach to. What replaces them is the artifact trail in this repository.
 
 **LLM04 Data and Model Poisoning, LLM07 System Prompt Leakage, LLM08 Vector and Embedding
 Weaknesses, and LLM09 Misinformation.** The engine trains nothing. It holds no system prompt of

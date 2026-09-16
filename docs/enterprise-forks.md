@@ -306,7 +306,7 @@ less detailed, because **history is the marker**.
 | `update-available` | 0 | A newer release exists. `status` and `preview` say so; nothing was merged. |
 | `integrated` | 0 | The merge is committed on the update branch, and the gates passed or none were configured. |
 | `conflict` | 1 | The merge stopped. Nothing is committed. The update worktree holds it, and the report names every conflicted path and its kind. |
-| `validation-failed` | 1 | The merge is clean and your gates failed. On `status` it also means this: the release is in the ancestry, but its record says the gates failed or were skipped, so it is in history and still not integrated. |
+| `validation-failed` | 1 | The merge is clean and your gates failed. On `status` it carries a second meaning. The release is in the ancestry, but its record says the gates failed or were skipped. So it is in history and still not integrated. |
 | `regenerate-failed` | 1 | A `regenerate` command exited non-zero, or regeneration rewrote a tracked path that no `generatedPaths` glob covers. The sequence stops at the first failure with its output captured, and an unlisted path is named with the fix: list it. Nothing is staged or committed either way. |
 | `conflict-pending` | 1 | An update worktree from an earlier run still holds an in-progress merge. Finish it or run `abort`. Nothing is redone behind your back. |
 | `update-branch-stale` | 1 | The update branch was cut from a target head that has since moved. `--recreate` starts over when the branch carries nothing but the lane's own merge commit. Otherwise merge your branch into the update worktree by hand. |
@@ -452,10 +452,10 @@ tree and the overlay patches.
 | Boundary | Where it lives | Conflict cost | What the lane reports |
 |---|---|---|---|
 | Replacement override | `.stamity/overrides/<class>/<id>.md` | None. The file is yours; upstream never writes it. | An override-drift row when the release changes the artifact behind it: *the default behind `<path>` changed in `<tag>`; the override still applies and hides the change — review it*. It reads *orphaned* when the upstream side was deleted, naming the rename target when git found one. |
-| Patch overlay | `.stamity/overrides/<class>/<id>.customize.yaml` or `.customize.md` | None on the merge. The risk is a patch that quietly stops matching what it patches. | The same drift rows, derived rather than declared. Both shadow roots — `.stamity/overrides/` and `fork/` — spell their ids as bare slugs, so the counterpart is whichever corpus spelling EXISTS at your branch's head, rather than the bare name. `rules/secrets.md` pairs with `content/rules/stamity-secrets.md`, and `skills/qa/SKILL.customize.yaml` with `content/skills/st-qa/SKILL.md`. |
+| Patch overlay | `.stamity/overrides/<class>/<id>.customize.yaml` or `.customize.md` | None on the merge. The risk is a patch that quietly stops matching what it patches. | The same drift rows, derived rather than declared. Both shadow roots spell their ids as bare slugs: `.stamity/overrides/` and `fork/`. The counterpart is whichever corpus spelling exists at your branch's head, not the bare name. `rules/secrets.md` pairs with `content/rules/stamity-secrets.md`, and `skills/qa/SKILL.customize.yaml` with `content/skills/st-qa/SKILL.md`. |
 | Pack | `packs/<id>/` and its `pack.json` | None while the pack only adds. | Nothing, unless the pack shadows a bundled id. Declare that in `shadows` and it is reported like an override. |
 | Fork layer | `fork/<class>/<id>.md` and `fork/skills/<id>/SKILL.md` inside the package, with `.customize.yaml` or `.customize.md` siblings for a patch instead of a replacement. | None. Upstream never writes under `fork/`, so no release can conflict with it. A replaced or patched default that moves upstream is drift, not a conflict. | A `shadowed` row per fork file whose bundled counterpart changed, resolved to the prefixed corpus file: `fork/rules/secrets.md` pairs with `content/rules/stamity-secrets.md`. It reads *orphaned* when that counterpart was deleted or renamed. A fork ADDITION has no counterpart, so it derives no pair and the lane says nothing about it. |
-| Direct core edit | `src/**`, the roster, the MCP catalog, the hook bodies. Also `content/**` for the two things the fork layer cannot express: the charter template under `content/charter/`, which is not a content class, and an edit to the middle of a bundled body that has to keep tracking upstream, which a whole replacement stops doing and an appended patch cannot state. | The real cost. Same lines on both sides is a conflict. Same file, different lines is a clean merge that may still be wrong. | `overlaps`, one row per path both sides changed — *merged cleanly on both sides' edits; semantic review needed* — plus one `watched` row per changed path a `watch` glob matches, each with the upstream line delta. |
+| Direct core edit | `src/**`, the roster, the MCP catalog, the hook bodies. Also `content/**`, for the two things the fork layer cannot express. One is the charter template under `content/charter/`, which is not a content class. The other is an edit to the middle of a bundled body that has to keep tracking upstream. A whole replacement stops tracking it, and an appended patch cannot state it. | The real cost. Same lines on both sides is a conflict. Same file, different lines is a clean merge that may still be wrong. | `overlaps`, one row per path both sides changed, each reading *merged cleanly on both sides' edits; semantic review needed*. Plus one `watched` row per changed path a `watch` glob matches, each with the upstream line delta. |
 
 Those rows are the lane's honest limit. It can say *look here*. It cannot say *this is fine*.
 
@@ -468,10 +468,10 @@ taking either side whole.
 ## Author in the fork layer
 
 `fork/` is a directory inside the package that a fork of this repository fills with its own agents,
-rules, commands and skills. It exists for one reason. The most common core edit is our wording of
-that rule, our extra agent, that default with our tags. The fork layer turns each of those into a
-file upstream never touches, so what used to be a conflict every release becomes a file every
-release merges past.
+rules, commands and skills. It exists for one reason. The most common core edit is your wording of
+a shipped rule, your extra agent, or a shipped default carrying your tags. The fork layer turns each
+of those into a file upstream never touches, so what used to be a conflict every release becomes a
+file every release merges past.
 
 **The layout** is the override tree's, rooted at the package instead of at a consumer repository:
 
@@ -741,9 +741,9 @@ retained.
 Target movement, human fixups, a wrong base or ambiguous ownership all require manual review and
 create nothing. A closed or merged pull request is never reopened or replaced. The
 `upstream-publication` artifact retains `publish-result.json` and the prepared and remote record
-evidence. The lane finds its own issues by a marker it writes into the body,
-`<!-- stamity-upstream-lane: <tag> <kind> -->`, rather than by title alone, so renaming one does not
-produce a second.
+evidence. The lane finds its own issues by a marker it writes into the body rather than by title
+alone. The marker is `<!-- stamity-upstream-lane: <tag> <kind> -->`. Renaming an issue therefore
+never produces a second one.
 
 **Automation never pushes a workflow change.** When the release touches anything under
 `.github/workflows/`, `publish` pushes nothing at all. It opens or updates one issue,

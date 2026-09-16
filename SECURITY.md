@@ -151,8 +151,8 @@ properties of that file, rather than properties of a maintainer's laptop.
 - **A run that can publish must come from a `v*` tag.** The tag's name must equal the version
   `package.json` declares, and its commit must be reachable from `main`. All three proofs run before
   the pack step, on a tag push and on a maintainer-dispatched release alike. A dispatch from a branch
-  fails there. A rehearsal dispatch runs every gate, publishes nothing, and prints the proofs it
-  skipped.
+  fails there. A rehearsal dispatch runs every release gate, publishes nothing, and prints the
+  proofs it skipped.
 - **The GitHub release carries the bytes.** It carries the tarball, its SHA-256 in the release body,
   and a CycloneDX SBOM when generation succeeds. When generation does not succeed, the body states
   the SBOM is absent.
@@ -174,18 +174,19 @@ where it depends on it.
   It is not a sandbox and does not pretend to be one.
 - **Hook and MCP execution.** The engine writes hook scripts and hook CONFIG. Your AI client runs
   them, with your privileges. Reading `.stamity/generated/hooks/` covers only the scripts this engine
-  generates. What decides whether a command runs at all is the client's own config —
-  `.claude/settings.json`, `.cursor/hooks.json`, `.codex/hooks.json` — and a hook a PACK supplies
-  lands there, never under `.stamity/generated/`. On Codex, three things decide it rather than one.
-  The first is `features.hooks = true` in `.codex/config.toml`, which this engine now emits and the
-  client defaults OFF. The second is the project's trust level. The third is the per-hook review
-  through the interactive `/hooks` command, or `--dangerously-bypass-hook-trust` for automation that
-  cannot take that step. With all three in place, headless `codex exec` on codex-cli 0.154.0 loaded
-  no project hook layer at all in the 2026-09-15 measurement. So a hook on that client is
-  enforcement in the interactive session and
-  nothing in the headless lane (`src/adapters/codex.ts`, the `hook enforcement` fact).
+  generates. What decides whether a command runs at all is the client's own config. There are four
+  of those: `.claude/settings.json`, `.cursor/hooks.json`, `.github/hooks/stamity.json` and
+  `.codex/hooks.json`. A hook a PACK supplies lands in one of them, never under
+  `.stamity/generated/`. On Codex, three things decide it rather than one. The first is
+  `features.hooks = true` in `.codex/config.toml`, which this engine now emits and the client
+  defaults OFF. The second is the project's trust level. The third is the per-hook review through
+  the interactive `/hooks` command, or `--dangerously-bypass-hook-trust` for automation that cannot
+  take that step. With all three in place, headless `codex exec` on codex-cli 0.154.0 loaded no
+  project hook layer at all in the 2026-09-15 measurement. So a hook on that client is enforcement
+  in the interactive session and nothing in the headless lane (`src/adapters/codex.ts`, the
+  `hook enforcement` fact).
   An MCP server definition likewise becomes a launcher your editor spawns at start-up. Read all
-  four, and read the `runs on this machine` block `stamity add` prints before accepting a pack.
+  five, and read the `runs on this machine` block `stamity add` prints before accepting a pack.
 - **Who a signature names.** A verified bundle proves that an identity signed exactly these bytes. It
   does not prove that identity was entitled to publish this pack. The pin comes from the pack's own
   `signing.signer`, so a pack naming its own author verifies whoever that is. There is no

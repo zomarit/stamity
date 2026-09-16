@@ -4,10 +4,10 @@ title: Getting started
 
 <!-- HAND-WRITTEN PAGE — verified against the tree at commit e79dcf0. Re-attested 2026-09-16 in the Package 14 rewrite. -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run line changes, a verb joins
-     or leaves the command surface, a doctor probe joins or leaves `check`, a path joins or leaves
-     `.stamity/`, or the APM route's client floor or per-target output moves. `test/docsPages.test.ts`
-     holds this page to the hand-page contract; the generated `cli-reference.md` and
-     `capability-matrix.md` are what it must not contradict. -->
+     or leaves the CLI, a probe joins or leaves `check`, a path joins or leaves `.stamity/`, or the
+     APM route's client floor or per-target output moves. `test/docsPages.test.ts` holds this page
+     to the hand-page contract; the generated `cli-reference.md` and `capability-matrix.md` are
+     what it must not contradict. -->
 
 # Getting started
 
@@ -36,7 +36,7 @@ Nothing is installed globally.
 npx @zomarit/stamity init
 ```
 
-`init` reads your repository. It writes a setup and a manifest. Later commands read that
+`init` reads your repository. It writes a setup and a manifest. Later verbs read that
 manifest.
 
 ### The two questions init asks
@@ -77,10 +77,9 @@ asked after the two above.
 non-interactive too. On `init` that means every prompt resolves to its default — the same set
 `-y` would take.
 
-`--json` is **not** consent, and it does not imply `-y`. A command whose prompt is a
-destructive confirmation refuses the run rather than assume a yes. A pipeline that means to
-delete says `-y` explicitly. [The CLI reference](cli-reference.md) states that rule for the
-whole command surface.
+`--json` is **not** consent, and it does not imply `-y`. A verb whose prompt is a destructive
+confirmation refuses the run rather than assume a yes. A pipeline that means to delete says `-y`
+explicitly. [The CLI reference](cli-reference.md) states that rule for every verb.
 
 One default differs between the two paths on purpose. A detected previous setup is **migrated**
 when you answer the prompt, and **skipped** when nobody is there to answer. Migrating strips
@@ -310,7 +309,7 @@ whole setup in place and that one file missing. Placing it is exactly what
 
 `review-gate.json` is the one path that is neither committed nor ignored. A run writes it,
 nothing commits it, and nothing ignores it. Leave it in that state. It is runtime state for the
-run that wrote it, and its absence simply means the review gate is open. A path that is
+run that wrote it, and its absence means the review gate is open. A path that is
 untracked and un-ignored is one `stamity worktree setup` refuses to carry across, so a review
 round counted in one worktree never gates another.
 
@@ -327,7 +326,29 @@ clean.
 
 ## Where to go next
 
-- [Working with stamity](working-with-stamity.md) — the nine touchpoints as one workflow, and how to run two changes at once.
-- [Customization](customization.md) — overrides and overlays, when the bundled content is not what you want.
-- [Packs and trust](packs-and-trust.md) — installing content on top of the corpus, and what the trust gates check.
-- [Troubleshooting](troubleshooting.md) — exit codes, doctor rows, and the common failures.
+- [Working with stamity](working-with-stamity.md) — which of the nine touchpoints to open, what it may do, and what it leaves on disk.
+- [Customization](customization.md) — replacing or patching a shipped artifact, without editing a file stamity ships.
+- [Packs and trust](packs-and-trust.md) — installing content on top of the corpus, the trust tier it lands on, and what `add` refuses.
+- [Troubleshooting](troubleshooting.md) — the exit model, every `check` row, and the common failures.
+
+## Words this documentation uses
+
+One spelling per idea, across every page.
+
+| Word | What it means here |
+|---|---|
+| stamity | the product: this CLI, and the setup it generates. Written lowercase everywhere, including at the start of a sentence. |
+| corpus | the canonical content stamity ships — `content/` plus `packs/`. Authored once, emitted per client. |
+| charter | the always-on file every generated setup carries: your repository's facts, the floor invariants, and the touchpoint index. It is written as `AGENTS.md`. |
+| touchpoint | one of the nine `/st-` slash commands your agent runs. Your client decides the invocation form. |
+| verb | one of the nine names you type after `stamity`: `init`, `sync`, `check`, `validate`, `add`, `config`, `workspace`, `worktree`, `clean`. |
+| manifest | `.stamity/manifest.json` — the record of your setup: its clients, its config, and every file stamity wrote. |
+| managed block | the span between a `STAMITY:BEGIN` and a `STAMITY:END` marker. Every sync rewrites it; the text outside it is yours. |
+| drift | disk and the engine's output disagreeing. `check` asks whether a sync would change anything, and names each file that would. |
+| gate | always said with which one. The **verification gates** are lint, typecheck and tests. The **save gate** admits a file to `.stamity/overrides/`. The **leak gate** is this repository's own scan of its own tree. |
+| override | a file of yours under `.stamity/overrides/` that replaces a shipped artifact whole. |
+| overlay | a patch that states a delta over a shipped artifact, and leaves everything it did not name flowing from the corpus. |
+| pack | content installed on top of the corpus by `add`, one directory per pack under `.stamity/packs/`. |
+| fork layer | the `fork/` directory inside a forked package, holding that fork maintainer's own artifacts. Your overrides still outrank it. |
+| hand-written page, generated page | a page a person wrote and dated, against one rendered from code. A generated page is byte-compared with a fresh render, so it cannot go stale quietly. |
+| the predecessor project | the setup tool stamity replaces. The migration guide is the one page that names it. |
