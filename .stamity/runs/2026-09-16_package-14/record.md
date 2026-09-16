@@ -139,3 +139,30 @@ each item had shipped already and the roadmap had not been ticked.
   model rule, which keeps `claude-fable-5-1` for the roles that find and judge — all fourteen at once,
   the daily-use pages and README first and the seven governance pages a minute later, and the read-only
   verifier for the L1 and L2 record closes beside them.
+- 2026-09-17T00:05Z–01:45Z The fourteen writers returned, each with its report (opening sentences,
+  claims re-attested and corrected with sources, pins kept, cross-page notes, gates); each page was
+  cherry-picked onto the package branch as it arrived, in this order: workspaces (229→347 lines, 5
+  corrections), doctrine (171→205, 3 — run 30 cited; the always-on split restated; "eight rules
+  dropped" removed, 0 are dropped today), GOVERNANCE (121→182, 4), migration (282→377, 5; keeps the
+  release-cut stamp), security-mapping (205→276, 3), getting-started (272→333, 7), customization
+  (293→370, 7), troubleshooting (161→226, 4), working-with-stamity (150→150, 3; the spine heading
+  renamed with its CSS selector in the same commit), CONTRIBUTING (232→293, 6; took the CI lane names
+  from getting-started), packs-and-trust (348→423, 4; the armed-verifier case confirmed), SECURITY
+  (271→284, 2), README (157→157, 2 — proof-led; the false "Copilot takes no hook configuration"
+  claim corrected against `src/adapters/copilot.ts:73` and the capability matrix), enterprise-forks
+  (781→873, 9). No writer needed a test pin moved. Every writer ran the docs suites, the leak gate and
+  lint green in its worktree. Their cross-page findings are collected in `editor-notes.md`.
+- Two defects in a generated page's prose template, found by the troubleshooting writer and fixed as
+  their own units through `src/cli/docs/cliReference.ts` with census tests: `CLEAN_ERROR` described a
+  "part-way removal" where both throw sites are a declined or unaskable confirmation before anything
+  is removed (`src/cli/commands/clean.ts:156, :168`); `INTEGRITY_ERROR` described only the drift
+  family of its three producers (the pack trust gates and the write-safety refusals were unnamed).
+- Carried out of this package, on purpose (a `content/` byte moves a measured input):
+  `content/agents/stamity-creator.md` says a skill override is projected under the directory name it
+  was saved as; the code projects under the replaced skill's directory and spec name
+  (`src/emit/skillsProjection.ts:249–270`). It goes to the next case pass with the two set residues.
+- 01:50Z Integrated gate on the fourteen pages before the editor's pass: lint, typecheck,
+  `npm run test -- --coverage` (211 files, 8,494 passed, 3 skipped, no per-file floor missed), leak
+  gate 0 hits; the site's typecheck and build green (no broken route between the rewritten pages).
+  The editor's cross-page pass dispatched (voice, terms, the glossary, the index descriptions and
+  README map rows derived from each page's opening, the sidebar's daily-use order).
