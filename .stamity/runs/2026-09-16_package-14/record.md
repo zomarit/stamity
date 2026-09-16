@@ -183,3 +183,21 @@ each item had shipped already and the roadmap had not been ticked.
   evidence file is committed once the reviews settle, because a page change reopens H2 and H3 by hash.
   Two reviewers dispatched over the candidate (the daily-use pages and README; the governance pages
   with a security lens and the two template fixes), each reading the diff against `75aa866`.
+- 02:50Z CI on PR #42 at `be27e0c`: every pull-request check and both Linux legs green; **the Windows
+  leg red** on `test/docsPages.test.ts` › SECURITY.md › "holds the in-process check's disclosure to
+  the call graph, both ways". Root cause in the test, not the page: `referencesTo()` (`:846–859`)
+  compares `relative(REPO_ROOT, file)` — native separators on Windows — with the POSIX literal
+  `src/tools/allowlist.ts`, so on Windows the declaring file is never stripped of its own declaration,
+  counts as a caller, and the inverse branch rejects the page's true sentence "it has no production
+  caller". The 1.8.0 page did not contain that exact phrase, which is why the defect was latent through
+  every earlier Windows run. Fix routed to the governance fixer as W4: normalise the path at the
+  comparison seam, as the learning on the local gate prescribes; the page stays as written.
+- 02:45Z Review round 1, governance half: request-changes, no Critical; W1 SECURITY miscounts the
+  release proofs ("all three" where the workflow states two and GOVERNANCE says both); W2 the published
+  TypeScript API facts were dropped from packs-and-trust with no new home; W3 the currency-date pin now
+  rests on the migration page alone and its comment describes a bucket that no longer exists — the
+  re-attestation date is made an enforced pin; M1–M8 (one spelling; the PASS status held to the
+  artifact; the INTEGRITY_ERROR census tolerant of comment-only mentions and pinning both write-refusal
+  producers; GOVERNANCE's hygiene-scan event condition; CONTRIBUTING's narrowed re-open trigger; the
+  measurements page naming the SET-v6 scoring rule over the SET-v7 set as the currency record does).
+  All routed to one fixer; the daily-use half's review is still out.
