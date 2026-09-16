@@ -214,3 +214,14 @@ each item had shipped already and the roadmap had not been ticked.
   characters — pinned, so routed to the governance fixer with the test; the migration page's re-open
   comment silent on why its stamp form is load-bearing; the `cleanup` bullet on the 150-line workflow
   page as one run of five behaviours). Routed to a second fixer, file-disjoint from the first.
+- 03:30Z Fixer round 1, daily-use half, returned four commits (cherry-picked): the `.stamity/mcp/` row
+  for Copilot's coding-agent MCP document; the customization sentence matched to the output it
+  describes (a `patches` row prints inside the `shadowing` block); "Recommended: a git repository";
+  the spec's APM row corrected to this tree with the 2026-09-09 probe's numbers kept on the record;
+  the migration page's re-open comment now says its stamp form is load-bearing for the suite's
+  `RELEASE_CUT_DATE`, repacked so both comments still sit within the six-line window. Answered rather
+  than applied: the `cleanup` bullet on the workflow page stays a paragraph — every prose block on the
+  150-line page is already at its wrap floor, so a five-item list costs four lines the page cannot
+  recover without a page-wide reflow; recorded, not done. One more contradiction the fixer found
+  (getting-started still says nothing requires git, where `worktree` refuses without it) goes to a
+  one-sentence unit.
