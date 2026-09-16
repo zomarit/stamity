@@ -84,6 +84,38 @@ question tool, one per turn, with the recommended option first and a declared de
 rows; the docsPages pins move only when a page's content forces them and are recorded here per pin.
 The census's traps are handed to every writer with their page brief.
 
+## Blocks 4 (L1 box 2) and 5 (L2) — record closes (2026-09-17T00:10Z)
+
+A read-only verifier read the 1.8.0 tree for the evidence each box needs; nothing was built, because
+each item had shipped already and the roadmap had not been ticked.
+
+- **L2, all three boxes: present.** (1) The Codex/Copilot always-on budget: the on-demand rule delivery
+  shipped in 1.8.0 (`src/types/manifest.ts:216` defaults it on); the ceilings `ALWAYS_ON_BUDGET_LINES`
+  read cursor 95 · claude 95 · copilot 95 · codex 407 (`src/content/charter.ts:184–215`), asserted by
+  `test/corpus/invariants.test.ts` and disclosed on `docs/capability-matrix.md:42–97`; Codex's always-on
+  file renders the charter body once (`src/adapters/codex.ts:1061`) and its omission notice still names
+  any rule the 32 KiB budget would drop (`codex.ts:1135–1155`); the ratchets were ratified by the
+  maintainer's decision row of 2026-09-16. (2) The model ladder is operator-facing through `stamity
+  config list` and `config get <model-class>` (`src/cli/commands/config.ts:71–121, 224–376`), with
+  Copilot's effort-axis omission disclosed on the capability matrix; the Copilot adapter emits a real
+  repository-hooks document (`src/adapters/copilot.ts:73, 151, 243, 286`) rather than scripts the client
+  cannot run; `hookSpecificOutput` is a first-class field of the portable runner
+  (`src/hooks/portableRunner.ts:85–123`); shipped with 10A in 1.7.0
+  (`.stamity/runs/2026-09-10_package-10/integration.md:127–132`). (3) Every emitted manual fallback names
+  its client (`copilot.ts:297`; `codex.ts:371–378, 406–413`; `src/emit/capabilityMatrix.ts:543`).
+  No defect found on re-read, so no code change and no release follows from this block. The roadmap's
+  L2 heading and its three boxes are ticked with these locators.
+- **L1 box 2: closed as a record.** Both North-Star metrics are defined and the rule published
+  (`docs/measurements.md:19–91`; the snapshot `evals/measurements/merge-ready-2026-09-15.json`;
+  `scripts/merge-ready-rate.mjs`); the merge-ready rate is first-measured (5 of 7 runs, 0.714); weekly
+  active installs are NOT measured and the page says so in as many words (`docs/measurements.md:107–111`),
+  with npm downloads published as a labelled proxy (`evals/reach/npm-downloads-2026-09-14.json`). The
+  verifier called this "partly present" on the reading that both axes should carry a number; the
+  package reads it as the disposition the boundaries table already records — no telemetry is invented —
+  and ticks the box with that wording. The no-gaming pairing constraint is on the same page
+  (`:113–118`). L1 box 1 (the README) ticks when the README merges; box 3's three marketing items stay
+  open by decision 2.
+
 ## Phase 3 — dispatch log
 
 - 13:10Z Block 1 research (one researcher, primary sources read the same day) → `style-contract.md`; the
