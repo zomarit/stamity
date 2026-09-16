@@ -1,6 +1,6 @@
 # Package 14 — Docs rewrite, README, client-polish close
 
-Status: **in progress** — opened 2026-09-16T12:22Z as one session on the kickoff of 2026-09-16 (the
+Status: **closed** — opened 2026-09-16T12:22Z, merged 2026-09-16T23:44Z as PR #42 (`main` `a7f5915`), the site deployed 23:44Z; closed with the section at the end. Opened as one session on the kickoff of 2026-09-16 (the
 maintainer's re-sequencing after the double-check of the roadmap-refactor proposal: user-facing words
 first, then the benchmark with 1.9.0, then the review-and-proof package with the audit cycle, then
 everything waiting on other people). Every decision below was taken by the maintainer through the
@@ -84,7 +84,7 @@ question tool, one per turn, with the recommended option first and a declared de
 rows; the docsPages pins move only when a page's content forces them and are recorded here per pin.
 The census's traps are handed to every writer with their page brief.
 
-## Blocks 4 (L1 box 2) and 5 (L2) — record closes (2026-09-17T00:10Z)
+## Blocks 4 (L1 box 2) and 5 (L2) — record closes (2026-09-16T22:01Z)
 
 A read-only verifier read the 1.8.0 tree for the evidence each box needs; nothing was built, because
 each item had shipped already and the roadmap had not been ticked.
@@ -139,7 +139,7 @@ each item had shipped already and the roadmap had not been ticked.
   model rule, which keeps `claude-fable-5-1` for the roles that find and judge — all fourteen at once,
   the daily-use pages and README first and the seven governance pages a minute later, and the read-only
   verifier for the L1 and L2 record closes beside them.
-- 2026-09-17T00:05Z–01:45Z The fourteen writers returned, each with its report (opening sentences,
+- 2026-09-16T22:07Z–2026-09-16T22:15Z The fourteen writers returned, each with its report (opening sentences,
   claims re-attested and corrected with sources, pins kept, cross-page notes, gates); each page was
   cherry-picked onto the package branch as it arrived, in this order: workspaces (229→347 lines, 5
   corrections), doctrine (171→205, 3 — run 30 cited; the always-on split restated; "eight rules
@@ -161,12 +161,12 @@ each item had shipped already and the roadmap had not been ticked.
   `content/agents/stamity-creator.md` says a skill override is projected under the directory name it
   was saved as; the code projects under the replaced skill's directory and spec name
   (`src/emit/skillsProjection.ts:249–270`). It goes to the next case pass with the two set residues.
-- 01:50Z Integrated gate on the fourteen pages before the editor's pass: lint, typecheck,
+- 2026-09-16T22:20Z Integrated gate on the fourteen pages before the editor's pass: lint, typecheck,
   `npm run test -- --coverage` (211 files, 8,494 passed, 3 skipped, no per-file floor missed), leak
   gate 0 hits; the site's typecheck and build green (no broken route between the rewritten pages).
   The editor's cross-page pass dispatched (voice, terms, the glossary, the index descriptions and
   README map rows derived from each page's opening, the sidebar's daily-use order).
-- 02:20Z The editor returned two commits (one vocabulary and one voice across the fourteen pages;
+- 2026-09-16T22:39Z The editor returned two commits (one vocabulary and one voice across the fourteen pages;
   one reading order for the guides and index lines derived from the openings): the glossary of fifteen
   rows at the end of getting-started; the Guides sidebar in daily-use order (customization,
   troubleshooting, workspaces, packs-and-trust, enterprise-forks, security-mapping) with README's map
@@ -175,7 +175,7 @@ each item had shipped already and the roadmap had not been ticked.
   about twenty-six sentences across six pages brought under the contract. Cherry-picked; the candidate
   is `be27e0c` (28 commits on `main`, every one DCO-signed). Draft PR #42 opened so CI's legs run
   beside the reviews.
-- 02:25Z QA harness at the candidate (`node scripts/qa/run.mjs --site website/build --sha be27e0c`,
+- 2026-09-16T22:44Z QA harness at the candidate (`node scripts/qa/run.mjs --site website/build --sha be27e0c`,
   hooks included): H1a passed (Claude Code 2.1.273, one call denied and one allowed); H2 passed — the
   structural checks hold on every built page and the scanner reports no violation; H3a–H3d passed at
   375 and 1440 in light and dark; H1b, H1c, H1d not-run for the reasons the 1.8.0 form records (Codex
@@ -183,7 +183,7 @@ each item had shipped already and the roadmap had not been ticked.
   evidence file is committed once the reviews settle, because a page change reopens H2 and H3 by hash.
   Two reviewers dispatched over the candidate (the daily-use pages and README; the governance pages
   with a security lens and the two template fixes), each reading the diff against `75aa866`.
-- 02:50Z CI on PR #42 at `be27e0c`: every pull-request check and both Linux legs green; **the Windows
+- 2026-09-16T22:56Z CI on PR #42 at `be27e0c`: every pull-request check and both Linux legs green; **the Windows
   leg red** on `test/docsPages.test.ts` › SECURITY.md › "holds the in-process check's disclosure to
   the call graph, both ways". Root cause in the test, not the page: `referencesTo()` (`:846–859`)
   compares `relative(REPO_ROOT, file)` — native separators on Windows — with the POSIX literal
@@ -192,7 +192,7 @@ each item had shipped already and the roadmap had not been ticked.
   caller". The 1.8.0 page did not contain that exact phrase, which is why the defect was latent through
   every earlier Windows run. Fix routed to the governance fixer as W4: normalise the path at the
   comparison seam, as the learning on the local gate prescribes; the page stays as written.
-- 02:45Z Review round 1, governance half: request-changes, no Critical; W1 SECURITY miscounts the
+- 2026-09-16T22:56Z Review round 1, governance half: request-changes, no Critical; W1 SECURITY miscounts the
   release proofs ("all three" where the workflow states two and GOVERNANCE says both); W2 the published
   TypeScript API facts were dropped from packs-and-trust with no new home; W3 the currency-date pin now
   rests on the migration page alone and its comment describes a bucket that no longer exists — the
@@ -201,12 +201,12 @@ each item had shipped already and the roadmap had not been ticked.
   producers; GOVERNANCE's hygiene-scan event condition; CONTRIBUTING's narrowed re-open trigger; the
   measurements page naming the SET-v6 scoring rule over the SET-v7 set as the currency record does).
   All routed to one fixer; the daily-use half's review is still out.
-- 02:30Z The full gate chain at the candidate `be27e0c` (omitted from the log above when it ran, which
+- 2026-09-16T22:44Z The full gate chain at the candidate `be27e0c` (omitted from the log above when it ran, which
   the daily-use review then flagged as an evidence gap): lint and typecheck clean; `npm run test --
   --coverage` 211 files, 8,496 passed, 3 skipped, no per-file floor missed; build within both size
   budgets; knip clean; `node dist/cli.js check` at the root "all green — nothing to do", drift clean;
   leak gate 0 hits over 1,468 files. The same chain runs again at the fixed candidate.
-- 03:05Z Review round 1, daily-use half: request-changes, no Critical; W1 the getting-started
+- 2026-09-16T22:58Z Review round 1, daily-use half: request-changes, no Critical; W1 the getting-started
   `.stamity/` inventory omits Copilot's coding-agent MCP document (`.stamity/mcp/copilot-repo-settings.env`,
   `src/mcp/emit.ts:174–180`); W2 the evidence gap above; six Minors (a customization sentence that
   contradicts its own sample; git listed as a prerequisite while denied as one; a stale APM count in
@@ -214,7 +214,7 @@ each item had shipped already and the roadmap had not been ticked.
   characters — pinned, so routed to the governance fixer with the test; the migration page's re-open
   comment silent on why its stamp form is load-bearing; the `cleanup` bullet on the 150-line workflow
   page as one run of five behaviours). Routed to a second fixer, file-disjoint from the first.
-- 03:30Z Fixer round 1, daily-use half, returned four commits (cherry-picked): the `.stamity/mcp/` row
+- 2026-09-16T23:05Z Fixer round 1, daily-use half, returned four commits (cherry-picked): the `.stamity/mcp/` row
   for Copilot's coding-agent MCP document; the customization sentence matched to the output it
   describes (a `patches` row prints inside the `shadowing` block); "Recommended: a git repository";
   the spec's APM row corrected to this tree with the 2026-09-09 probe's numbers kept on the record;
@@ -225,7 +225,7 @@ each item had shipped already and the roadmap had not been ticked.
   recover without a page-wide reflow; recorded, not done. One more contradiction the fixer found
   (getting-started still says nothing requires git, where `worktree` refuses without it) goes to a
   one-sentence unit.
-- 03:55Z Fixer round 1, governance half, returned two commits (cherry-picked). W1 answered, not
+- 2026-09-16T23:10Z Fixer round 1, governance half, returned two commits (cherry-picked). W1 answered, not
   applied: `.github/workflows/release.yml:153–157` enumerates three proofs (a `v*` tag; the tag names
   the version `package.json` declares; the tagged commit reachable from `origin/main`), each with its
   own failure path in `Resolve version`; the header comment the reviewer read collapses the first two;
@@ -239,7 +239,7 @@ each item had shipped already and the roadmap had not been ticked.
   M9 (bytes → characters) fixed with the byte pin kept for the stdin row that counts bytes. The final
   candidate is `022018f`; pushed; the gate chain, the QA harness, CI and review round 2 (both halves)
   run on it together.
-- 04:15Z At the final candidate `022018f`: lint and typecheck clean; `npm run test -- --coverage` 211
+- 2026-09-16T23:12Z At the final candidate `022018f`: lint and typecheck clean; `npm run test -- --coverage` 211
   files, 8,496 passed, 3 skipped, no per-file floor missed; build within both size budgets; knip clean;
   `node dist/cli.js check` all green, drift clean; leak gate 0 hits over 1,468 files; the site's
   typecheck and build green. QA harness at `022018f`: H1a passed (Claude Code 2.1.273); H2 passed on
@@ -248,7 +248,7 @@ each item had shipped already and the roadmap had not been ticked.
   QA form filed privately with the rows bound to their hashes and the maintainer's up-front sign-off of
   decision 3 recorded as a sign-off without a performance, the third time, with track D3's acceptance
   line noted as unmet. Branch pushed; CI runs on the head; review round 2 out on both halves.
-- 04:40Z Review round 2. Governance half: **approve**; the reviewer withdrew its round-1 W1 after
+- 2026-09-16T23:17Z Review round 2. Governance half: **approve**; the reviewer withdrew its round-1 W1 after
   reading the workflow's enumeration (three proofs, `release.yml:153–157`, the suite's own wording at
   `test/ci/workflow.test.ts:1478`) and found the outlier to be the workflow's header comment; three
   Minors ledgered (SECURITY's "only the character ceiling has a production caller" understates the
@@ -262,7 +262,7 @@ each item had shipped already and the roadmap had not been ticked.
   MCP-file secret warning). Every Minor except the cosmetic line width is fixed: two file-disjoint
   fixers dispatched (README, getting-started and the spec; SECURITY, the three tests and the workflow
   comment). The candidate moves; the harness re-runs at the new one.
-- 05:05Z CI at `e845b5e`: every check green on every leg, the Windows leg included — the path fix
+- 2026-09-16T23:25Z CI at `e845b5e`: every check green on every leg, the Windows leg included — the path fix
   holds. Fixer round 2 returned: README's manifest sentence restored within 157 lines (which verbs
   work from the manifest; `validate` with or without one; `learn` and `handoff` want only
   `.stamity/`), paid for by dropping the package-name and `st`-alias sentence from README — both stay
@@ -273,3 +273,41 @@ each item had shipped already and the roadmap had not been ticked.
   red); the PASS status derived from the artifact (seen red); the release workflow's header comment
   now names its three proofs. New candidate `cc37050`; the 022018f evidence retired; the harness, the
   gate chain, CI and the round-3 checks run on it together.
+
+## Close — 2026-09-16T23:50Z
+
+- **Round 3 and the merge.** Both review halves approved on round 3 (the daily-use half after its W3
+  fix; the governance half after its round-2 Minors); the two round-3 Minors and one more (a
+  conditional warning stated as unconditional; a census test pinning leading whitespace; one long
+  sentence) fixed in the last unit. Final candidate `f14b0fd`: lint, typecheck, `npm run test --
+  --coverage` (211 files, 8,496 passed, 3 skipped, every floor met), knip, `check` drift-clean, leak
+  gate 0 hits, the site's typecheck and build; harness at `f14b0fd` — H1a, H2, H3a–H3d passed, H1b/H1c/H1d
+  not-run, evidence `.stamity/evidence/qa-f14b0fd….json`. CI at the head `ab2cd0a`: every check green on
+  every leg, Windows included. PR #42 marked ready and **rebase-merged by GitHub at the first try** (no
+  fast-forward fallback, no bypass); `main` is `a7f5915`, 51 commits, each DCO-signed.
+- **The site.** One armed dispatch of the docs-site workflow from `main` (run 35163660079: build and
+  deploy green); at 23:46Z the root, `/llms.txt` and every rewritten route answer 200 with content and
+  carry the new text (getting-started's opening, the workflow page's renamed spine heading, README's
+  new index line in `llms.txt`). No release: the README reaches npm with 1.9.0 (decision 4).
+- **Human QA.** The form is filed privately with the nine rows bound to their hashes at `f14b0fd`; the
+  three client rows and the VoiceOver walk are signed off by the maintainer up front, not performed —
+  the third time — with track D3's acceptance line noted as unmet; the walk kit is prepared beside it.
+- **Blocks.** 1 the style contract (approved); 2 the fourteen pages; 3 the doctrine page kept and
+  rewritten; 4 the README proof-led and L1 box 2 closed as a record; 5 L2 closed as a record, no code
+  defect; 6 review, QA, merge, deploy; 7 no 1.8.1 by decision.
+- **Attribution.** The page writers, the editor and the fixers ran at `claude-opus-5`; the reviewers,
+  the researchers and the orchestrator at `claude-fable-5-1`; every commit's co-author trailer names the
+  orchestrating model, per the session's attribution rule, and this line records the writer tier.
+- **Timestamps.** The dispatch-log stamps from the writers' returns onward were re-derived from the
+  commits' author times at the close; the first draft of those lines had carried estimates several
+  hours ahead of real UTC.
+- **Carried, on purpose, each with its owner:** `content/agents/stamity-creator.md`'s stale sentence on
+  where a skill override is projected (next case pass, with the two set residues; a `content/` byte
+  moves a measured input); the `cleanup` bullet on the 150-line workflow page left as one paragraph
+  (a list costs four lines the page recovers only by a page-wide reflow — not worth the style
+  inconsistency); one comment line's width on the migration page; the `st` alias and the package
+  sentence now live on getting-started rather than README (the 157-line budget paid for the restored
+  manifest qualification); the `VALIDATION_ERROR` row's "structurally invalid" is loose, not false
+  (a census-backed unit of its own); `src/resilience/failureClass.ts` classes the non-TTY `CLEAN_ERROR`
+  as permanent (a taxonomy question for its owner).
+- **Not done:** none within the package's scope.
