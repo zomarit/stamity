@@ -748,3 +748,11 @@ always-on budget item stays open until the measurement lands.
   compact summaries committed; hygiene check green), CI green on every leg including the new hygiene
   step, and rebase-merged. The private cleanup rebased onto the private `main` and archived the night's
   nine private run directories into the private evidence release the same way.
+
+## Published — 2026-09-16T08:03Z
+
+- The maintainer approved the `npm-publish` deployment; release run 35027163228's `publish` job
+  completed 08:03:35Z over OIDC with provenance; the GitHub release `v1.8.0` published 08:03:32Z with
+  `zomarit-stamity-1.8.0.tgz` and `sbom.cdx.json`; the registry resolved `@zomarit/stamity@1.8.0` by
+  08:05Z. The private morning sequence (the read-only post-publication verifier, the ≥15-minute
+  currency recheck, the three currency rows) runs next and lands in the private record.
