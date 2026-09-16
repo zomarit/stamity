@@ -21,8 +21,9 @@ One prerequisite, and one strong recommendation.
 
 - **Node 22.22.2 or newer.** That is the only prerequisite, and the published floor.
   `stamity check` verifies it as its `node-version` row.
-- **Recommended: a git repository.** Nothing in stamity requires git. But setup writes dozens
-  of files, and git is your revert path. Run `git init` first if this directory is fresh.
+- **Recommended: a git repository.** Git is optional for every verb but `worktree`, which needs
+  a `git` binary on PATH and refuses without one; `init` proceeds without it. But setup writes
+  dozens of files, and git is your revert path. Run `git init` first if this directory is fresh.
 
 If you skip the second one, an interactive `init` stops and asks before it writes anything. A
 `-y` or `--json` run goes ahead instead and prints a line saying the files it wrote have no
