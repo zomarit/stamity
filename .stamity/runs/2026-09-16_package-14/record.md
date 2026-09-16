@@ -86,4 +86,24 @@ The census's traps are handed to every writer with their page brief.
 
 ## Phase 3 — dispatch log
 
-(begins after decision 6)
+- 13:10Z Block 1 research (one researcher, primary sources read the same day) → `style-contract.md`; the
+  contract census (one read-only researcher over the suites, the index, the sidebar and the pages) →
+  `contract-census.md`. Two factual amendments to the contract before it was put to the maintainer:
+  sidebar groups and slugs stay (the draft had moved pages across groups), and the verb/touchpoint rows
+  of the glossary keep README's pinned `## Commands` heading. Decision 5 → option 1 (all fourteen pages
+  plus README, daily-use first); decision 6 → approve.
+- 13:12Z The measurements page's run-of-record pin moved to run 30 through its prose template
+  (`src/cli/docs/measurements.ts`; the figures derived by the suite from the RESULTS file instead of
+  pinned; the page regenerated; full gate with coverage green; leak gate green) — cherry-picked as
+  `514c369`. The Package 11 record's status line closed (`44d7c08`).
+- 13:20Z Fourteen page writers dispatched, one per page in its own worktree, each with the common
+  writer brief (`writer-brief.md`) and a page note (`page-notes/`). Every one of them was terminated by
+  the account's usage cap before its first edit (the model route's credits ran out); nothing was lost
+  because nothing had been written. Found on the way: a fresh worktree is cut from `main`, not from the
+  package branch, so the briefs were not in it — every writer now starts with
+  `git reset --hard docs/package-14-rewrite`.
+- The maintainer re-authenticated ("limit reset, continue, im going to sleep"); from here the session
+  runs unattended. Writers re-dispatched at `claude-opus-5` — the implementer tier under the existing
+  model rule, which keeps `claude-fable-5-1` for the roles that find and judge — all fourteen at once,
+  the daily-use pages and README first and the seven governance pages a minute later, and the read-only
+  verifier for the L1 and L2 record closes beside them.
