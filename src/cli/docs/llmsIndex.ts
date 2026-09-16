@@ -112,27 +112,28 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         path: "README.md",
         title: "README",
         description:
-          "what this repository is, the command surface, where each subject lives, and the local loop.",
+          "what stamity generates from one canonical source and for which clients, the nine verbs, where each subject lives, and what this repository can prove.",
         regenerateCommand: null,
       },
       {
         path: "CONTRIBUTING.md",
         title: "Contributing",
         description:
-          "the development loop, the three test lanes, and the regeneration command for every derived file.",
+          "the contributor gate CI runs, the three test lanes, the regeneration command for every derived file, and what a pull request has to pass.",
         regenerateCommand: null,
       },
       {
         path: "SECURITY.md",
         title: "Security",
-        description: "what the engine defends today, how, and what it explicitly does not defend.",
+        description:
+          "what the engine defends today, what it does not defend, and where to send a vulnerability report.",
         regenerateCommand: null,
       },
       {
         path: "GOVERNANCE.md",
         title: "Governance",
         description:
-          "who decides, the two required checks a change passes to land, and what the private layer holds.",
+          "who decides, the two required checks a change passes to land, what the private layer holds, and what happens if the maintainer stops.",
         regenerateCommand: null,
       },
       {
@@ -151,56 +152,56 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         path: "docs/getting-started.md",
         title: "Getting started",
         description:
-          "prerequisites, what init asks and writes per client, the guided first change, and where state lives.",
+          "setting stamity up in a repository for the first time — what init asks and writes per client, where state lives, and one change proved by a passing verification gate.",
         regenerateCommand: null,
       },
       {
         path: "docs/working-with-stamity.md",
         title: "Working with stamity",
         description:
-          "the nine touchpoints as one workflow — which one to open, what each writes, and how to run two changes at once.",
+          "which of the nine touchpoints to open, what that one may do, what is on disk when it stops, and how to run two changes at once.",
         regenerateCommand: null,
       },
       {
         path: "docs/doctrine.md",
         title: "Doctrine",
         description:
-          "the root question every artifact answers, the four pillars and their public enforcement surfaces, and how an artifact is deleted.",
-        regenerateCommand: null,
-      },
-      {
-        path: "docs/migration.md",
-        title: "Migration",
-        description:
-          "moving a repository off the predecessor setup — the guided path, the manual path, and what does not transfer.",
+          "why stamity ships what it ships — the root question every artifact answers, the four pillars and their public enforcement surfaces, and how an artifact is deleted.",
         regenerateCommand: null,
       },
       {
         path: "docs/customization.md",
         title: "Customization",
         description:
-          "where an override lives per class, the two authoring paths and the one save gate, shadowing, and what a skill override carries.",
+          "making the shipped agents, rules, commands and skills say what a repository needs — where an override lives, the one save gate, patching instead of replacing, removal, and the fork layer below it.",
+        regenerateCommand: null,
+      },
+      {
+        path: "docs/troubleshooting.md",
+        title: "Troubleshooting",
+        description:
+          "the exit model, every check row and its remedy, the common failures, and where to report one.",
         regenerateCommand: null,
       },
       {
         path: "docs/workspaces.md",
         title: "Workspaces",
         description:
-          "one policy across several repositories — the manifest, the init offer, the status rows, and the cascade.",
-        regenerateCommand: null,
-      },
-      {
-        path: "docs/enterprise-forks.md",
-        title: "Enterprise forks",
-        description:
-          "taking upstream releases into a customized fork — the config, the verbs, conflicts, the gates that decide, landing, and the opt-in workflow.",
+          "one policy across several repositories — what a workspace is, the manifest, the two ways to create one, the status rows, and what the cascade pushes down.",
         regenerateCommand: null,
       },
       {
         path: "docs/packs-and-trust.md",
         title: "Packs and trust",
         description:
-          "what a pack is, the four-rung trust ladder, what a verified signature does and does not prove, the org policy, and how to remove one.",
+          "what a pack is, the four-rung trust ladder, what a verified signature does and does not prove, signing one of your own, the org policy, and how to remove a pack.",
+        regenerateCommand: null,
+      },
+      {
+        path: "docs/enterprise-forks.md",
+        title: "Enterprise forks",
+        description:
+          "taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, the gates that decide, landing, the fork layer, and the opt-in workflow.",
         regenerateCommand: null,
       },
       {
@@ -211,10 +212,14 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         regenerateCommand: null,
       },
       {
-        path: "docs/troubleshooting.md",
-        title: "Troubleshooting",
+        // Off the sidebar and off README's map by design: the readers who need
+        // it arrive from the predecessor's own sunset material, not from here.
+        // Last in the list for the same reason, and indexed because an agent
+        // reading this file has no other route to it.
+        path: "docs/migration.md",
+        title: "Migration",
         description:
-          "the exit model, every doctor row and its remedy, the common failures, and where to report one.",
+          "moving a repository off the predecessor setup — the in-place path, the uninstall-first path, what transfers, and the removal left to you.",
         regenerateCommand: null,
       },
     ],
