@@ -1,0 +1,7 @@
+# docs/troubleshooting.md (slug `troubleshooting`)
+
+Page kind: REFERENCE (the exit model; every `check` row and its remedy; the error codes) plus HOW-TO (the common failures and what to do). Its reader is the operator whose command just failed or whose `check` printed a row they do not understand.
+
+Pins (binding): the section headed exactly `## What \`check\` prints` must contain one table row per probe id that `src/cli/commands/check.ts` defines, as `` | `probe-id` | `` rows, set-equal both ways, and the section ends at the heading exactly `## Common failures`; the issues URL `https://github.com/zomarit/stamity/issues` and the advisory form `https://github.com/zomarit/stamity/security/advisories/new`; the phrase "do not open a public issue" for a vulnerability; frontmatter `title: Troubleshooting` equals the H1. The three-status exit model is the generated CLI reference's to state — link it, restate only what a reader needs to act.
+
+Re-attest every probe row against `src/cli/commands/check.ts` (the probe ids, what each detects, its remedy) and every error code against `src/types/errors.ts` and where it is thrown. Common failures: keep each one that the code can still produce; drop any it cannot; add the Codex hook fact from `.stamity/learnings/codex-hooks-need-the-features-flag-and-exec-runs-none.md` if the page is where an operator would look for "my Codex hook does nothing" (say only what the learning proves). Sources: `src/cli/commands/check.ts`, `src/types/errors.ts`, `docs/cli-reference.md`, `src/hooks/`, `src/adapters/codex.ts`.
