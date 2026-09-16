@@ -20,9 +20,9 @@ export function signingContext(env) {
   assert.match(env.SIGNING_SOURCE_SHA ?? '', /^[a-f0-9]{40}$/)
   assert.match(env.GITHUB_SHA ?? '', /^[a-f0-9]{40}$/)
   assert.equal(env.GITHUB_REPOSITORY, 'zomarit/stamity')
-  assert.equal(env.GITHUB_REF, 'refs/heads/feat/package-10-finish-implementation')
+  assert.equal(env.GITHUB_REF, 'refs/heads/main')
   assert.equal(env.GITHUB_WORKFLOW_REF,
-    'zomarit/stamity/.github/workflows/pack-signing-rehearsal.yml@refs/heads/feat/package-10-finish-implementation')
+    'zomarit/stamity/.github/workflows/pack-signing-rehearsal.yml@refs/heads/main')
   assert.match(env.GITHUB_RUN_ID ?? '', /^\d+$/)
   assert.match(env.GITHUB_RUN_ATTEMPT ?? '', /^\d+$/)
   return {
