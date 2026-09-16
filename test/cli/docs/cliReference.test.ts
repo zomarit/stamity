@@ -547,27 +547,50 @@ describe("the restated kit contract", () => {
       encoding: "utf-8",
     })
       .split("\n")
-      .filter((line) => line !== "");
-    expect(sources.toSorted()).toEqual([
+      .filter((line) => line !== "")
+      .toSorted();
+
+    const source = (relPath: string): string => readFileSync(join(REPO_ROOT, relPath), "utf-8");
+    const throwSites = (relPath: string): number =>
+      source(relPath).split(`code: "INTEGRITY_ERROR"`).length - 1;
+
+    /**
+     * TEST CHANGE, justified: this was one exact set over every file that NAMES the code, which
+     * made a doc comment the census's business. A new file citing `INTEGRITY_ERROR` in prose —
+     * which produces nothing — failed a test about producers, and the honest repair for that
+     * failure is to add a row to a list, which teaches the next author that the list is
+     * bookkeeping rather than a census.
+     *
+     * Two sets now, each held the way its question wants. The THROW SITES are exact, because
+     * that is the set the row's four families are read from: a file that starts throwing this
+     * code, or stops, moves this list and forces the row to be re-read. The MENTION set is held
+     * as a superset of the throw sites, so prose may name the code freely while a producer that
+     * names it without throwing it cannot hide from the exact list.
+     */
+    const throwingFiles = execFileSync(
+      "git",
+      ["grep", "-l", "--untracked", "--fixed-strings", `code: "INTEGRITY_ERROR"`, "--", "src"],
+      { cwd: REPO_ROOT, encoding: "utf-8" },
+    )
+      .split("\n")
+      .filter((line) => line !== "")
+      .toSorted();
+    expect(throwingFiles).toEqual([
       "src/cli/commands/add.ts", // family 2 — a pack with no trust basis
       "src/cli/commands/check.ts", // family 1 — the drift verdict
       "src/cli/commands/handoff.ts", // family 4 — the prepare read-back
-      "src/cli/docs/cliReference.ts", // this page's own table
-      "src/cli/engine/emissionWrite.ts", // prose about family 3, no throw
       "src/mcp/env.ts", // family 3
       "src/merge/safeWrite.ts", // family 3
       "src/pack/install.ts", // family 2
       "src/pack/manifest.ts", // family 2
       "src/pack/sign.ts", // family 2
-      "src/pack/sigstoreVerifier.ts", // prose about family 2, no throw
       "src/pack/trust.ts", // family 2
-      "src/resilience/failureClass.ts", // the permanent-failure classifier
-      "src/types/errors.ts", // the declaration
     ]);
-
-    const source = (relPath: string): string => readFileSync(join(REPO_ROOT, relPath), "utf-8");
-    const throwSites = (relPath: string): number =>
-      source(relPath).split(`code: "INTEGRITY_ERROR"`).length - 1;
+    for (const relPath of throwingFiles) {
+      expect(sources, `${relPath} throws the code without the mention scan seeing it`).toContain(
+        relPath,
+      );
+    }
 
     // Each clause of the row, checked against the words its producer uses.
     expect(source("src/cli/commands/check.ts")).toContain("check found drift between the repository");
@@ -575,6 +598,12 @@ describe("the restated kit contract", () => {
     expect(source("src/pack/trust.ts")).toContain("publisher-signed claim refused");
     expect(source("src/cli/commands/add.ts")).toContain("has no trust basis");
     expect(source("src/mcp/env.ts")).toContain("prompt-injection pattern(s) found in the content");
+    // TEST CHANGE, justified: family 3 has two producers and only one of them was read. The
+    // merge writer's refusal carried no assertion, so the row's "injection" clause was held to
+    // half the family — `safeWrite.ts` could stop refusing, or refuse for another reason, with
+    // nothing here noticing. Its own words are the preserved-content half of the clause.
+    expect(source("src/merge/safeWrite.ts")).toContain("prompt-injection pattern(s) found in the ");
+    expect(source("src/merge/safeWrite.ts")).toContain("content outside the managed block");
     expect(source("src/cli/commands/handoff.ts")).toContain("did not read back with a verifying digest");
 
     // The single-throw files are single-throw, so each clause above accounts for

@@ -386,6 +386,15 @@ describe("the restated figures are held to the artifacts they come from", () => 
     const floors = /floors (\d+\/\d+)/.exec(rows[0]?.[3] ?? "")?.[1];
     expect(floors, `${RUN_OF_RECORD_PATH} states no floor count for the golden rate`).toBeDefined();
     expect(page).toContain(`every floor case passed, ${floors}.`);
+
+    // TEST CHANGE, justified: the four scores were derived from the artifact while the headline
+    // verdict beside them — the page's "PASS" — was a literal nothing read. A run whose status
+    // moved to FAIL would have left the page calling it a pass with four scores that still
+    // matched their rows. The artifact's own status line is what the word is held to now.
+    expect(results, `${RUN_OF_RECORD_PATH} states no status`).toMatch(/^Status: \*\*PASS\*\*$/m);
+    expect(page, "the page does not state the run's status beside its scores").toContain(
+      "PASS, three samples per case.",
+    );
   });
 
   it("says the run of record is composed, and names the runs it was composed from", () => {
@@ -401,6 +410,17 @@ describe("the restated figures are held to the artifacts they come from", () => 
     );
     expect(page).toContain("SET-v7's incremental rule");
     expect(page).toContain("composed");
+
+    // TEST CHANGE, justified: the page named SET-v7 alone while the artifact heads its score
+    // column "Score (SET-v6 rule)" over the SET-v7 set — two version numbers doing two different
+    // jobs, and the page carried only one of them. The scoring rule is read out of the score
+    // table's header rather than typed, so the next set or rule bump moves the page or fails here.
+    const scoringRule = /\| Metric \| Score \((SET-v\d+) rule\) \|/.exec(results)?.[1];
+    expect(scoringRule, `${RUN_OF_RECORD_PATH} heads its score table with no scoring rule`)
+      .toBeDefined();
+    expect(page, `the page does not name ${scoringRule} as the scoring rule`).toContain(
+      `The scoring rule is ${scoringRule}`,
+    );
 
     // The prior complete run, and the complete run IT was composed from, are read out of the
     // artifacts rather than typed: the chain the page describes is the chain the files record.
