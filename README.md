@@ -1,8 +1,7 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->
-<!-- Re-open when: the corpus counts, the nine-verb command surface, or a client capability
-     this page describes changes. `test/docsPages.test.ts` derives the corpus counts from the
-     content catalog and holds the client-surface prose to the generated capability matrix; the
-     nine-verb list is a second hand-kept copy in that test, updated alongside `src/cli.ts`. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit e79dcf0. Re-attested 2026-09-16 in the Package 14 rewrite. -->
+<!-- Re-open when: the corpus counts, the nine-verb surface or a client capability changes, or a
+     newer measurement supersedes the proof figures. `test/docsPages.test.ts` catches the first
+     three; the figures are re-read against `docs/measurements.md` and the run record they cite. -->
 
 <!-- The banner leads the rendered page and replaces nothing under it: GitHub picks the source by
      the reader's theme, and every other surface — a plain markdown viewer, a text terminal, the
@@ -17,9 +16,31 @@
 
 # stamity
 
-stamity, by zomarit, is an ESM-only TypeScript CLI that generates agentic coding setups — a
-charter, commands, agents, skills, rules, hooks and MCP wiring — for Claude Code, Cursor,
-GitHub Copilot and Codex from one canonical source model.
+stamity, by zomarit, is an ESM-only TypeScript CLI that generates agentic coding setups from one
+canonical source, for Claude Code, Cursor, GitHub Copilot and Codex. Run one command and you get a
+charter, commands, agents, skills, rules, hooks and MCP wiring, shaped for the client that reads it.
+
+## What this repository can prove
+
+Every figure below comes from a committed artifact, so you can check it instead of believing it.
+
+**Merge-ready rate: 5 of 7 runs, 0.714.** A run is verified merge-ready when three things hold.
+Its final gate table is all passes. Its last review verdict is an approval at or above the
+confidence gate that record states. Its findings ledger leaves no row open. Self-declared wording
+never counts. The frozen snapshot is
+[`evals/measurements/merge-ready-2026-09-15.json`](evals/measurements/merge-ready-2026-09-15.json),
+and [Measurements](docs/measurements.md) shows the working and names every run left out.
+
+**Eval run of record: [run 30](evals/runs/2026-09-15-run-30/RESULTS.md), the 1.8.0 release run.**
+Golden rubric pass rate 1.000 (50/50), with every floor case passing at 23/23. Adversarial
+guardrail hold 1.000 (15/15). Benign-twin false-refusal 0.000 (0/4). Trigger-probe accuracy 1.000
+(30/30). The run is composed under the set's incremental rule. One full baseline runs per release,
+and a later run re-measures only the cases whose inputs moved, carrying the rest with provenance.
+
+**Reach is a proxy, and real use is unmeasured.** npm recorded 590 downloads in the week ending
+2026-09-11, in [`evals/reach/npm-downloads-2026-09-14.json`](evals/reach/npm-downloads-2026-09-14.json).
+A download is a package fetch, not a person. Weekly active installs are unmeasured: this project
+collects no telemetry, and no figure here stands in for that one.
 
 ## Install and first run
 
@@ -27,69 +48,57 @@ GitHub Copilot and Codex from one canonical source model.
 npx @zomarit/stamity init
 ```
 
-`init` reads the repository, asks what it cannot infer, and writes the setup plus a manifest that
-`sync`, `check`, `config`, `workspace`, `clean` and `add` work from; `validate` runs with or
-without one, and `learn` and `handoff` ask only that `.stamity/` exists. Node `>= 22.22.2` is the
-only prerequisite for `init` and the other core verbs — none of them needs git: `init`, `sync` and
-`check` read it where it is and carry on where it is not, and the rest never call it; `worktree`
-additionally needs a `git` binary on PATH and refuses without one. Nothing is installed globally,
-and two network paths belong to a command's work: the Sigstore trust root, fetched when `add`
-installs a pack that declares a signature, and the repository's own `origin` remote, fetched by
-`worktree setup` when the requested branch has no local copy. A startup notice asks npm whether a
-newer version exists until you switch it off; [`SECURITY.md`](SECURITY.md) documents them all. Two
-of the nine touchpoints reach further — `/st-board` and `/st-pr-resolve` shell out to the GitHub
-CLI (`gh`), authenticated, when they work a real board or pull request. The package is
-`@zomarit/stamity`, and it installs two names for one binary — `stamity` and the alias `st`.
+`init` reads your repository, asks what it cannot infer, and writes the setup plus a manifest every
+later verb works from. Node `>= 22.22.2` is the only prerequisite, and nothing is installed
+globally. The package is `@zomarit/stamity`, and its one binary answers to `stamity` and to `st`.
 
-A second route needs no npm: `apm install zomarit/stamity --target claude` deploys the APM package
-this repository generates, on apm-cli 0.29.1 or newer — an older client exits 0 and deploys
-nothing. [Getting started](docs/getting-started.md) has the pinned form and the remedy.
+Git is optional for every verb but `worktree`, which needs a `git` binary on PATH and refuses
+without one. Three things reach the network, all documented in [`SECURITY.md`](SECURITY.md). `add`
+fetches the Sigstore trust root when it installs a signed pack. `worktree setup` fetches your own
+`origin` remote when it needs a branch with no local copy. A startup notice asks npm about newer
+versions until you switch it off. Two touchpoints go further, because `/st-board` and
+`/st-pr-resolve` call the authenticated GitHub CLI, `gh`. [Getting started](docs/getting-started.md)
+has the prerequisites in full, what `init` asks and writes per client, and a second install route
+that needs no npm.
 
 ## How it works
 
-The corpus in `content/` is authored once; the emission core plans standards-first output —
-`AGENTS.md` and the skills projection under `.agents/skills/` — which Cursor, Copilot and Codex
-read where it lands, while Claude Code reaches the charter through a managed import block in
-`CLAUDE.md` and takes the skills as a copy. Four adapters add what a client cannot read without
-help: agents, rules, MCP documents, and — each on the three clients that have somewhere to put it —
-hook wiring and a command surface. The two three-of-four classes are different clients: Codex has no
-repository-level command home, so its touchpoints stay the charter's index, and Copilot takes no
-hook configuration, so its adapter declares that rather than emitting one. Setup state lives in
-`.stamity/`: a manifest, a per-file ledger, learnings, handoffs.
+You author the corpus in `content/` once. The emission core plans standards-first output:
+`AGENTS.md`, plus the skills projection under `.agents/skills/`. Cursor, Copilot and Codex read
+that where it lands. Claude Code reaches the charter through the managed block in `CLAUDE.md`, and
+takes the skills as a copy.
+
+Four adapters add what a client cannot read without help: agents, rules, MCP documents, hook wiring
+and a command surface. Hook wiring reaches all four clients. A command surface reaches three of
+them: Codex has no repository-level command home, so its touchpoints stay the charter's index.
+Your setup state lives in `.stamity/`: a manifest, a per-file ledger, learnings and handoffs.
 
 ## Commands
 
 `init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
-`clean` — nine verbs, and behind them two plumbing verbs an agent calls and nobody types,
-`learn` and `handoff`. What each one does, every flag it takes and every status it exits
-with is [the CLI reference](docs/cli-reference.md)'s to state: that page renders from the
-program itself, so it cannot describe a verb the CLI does not have or miss one it does.
+`clean` — nine verbs. Behind them are two plumbing verbs an agent calls and nobody types,
+`learn` and `handoff`. What each verb does, every flag it takes and every status it exits with is
+[the CLI reference](docs/cli-reference.md)'s to state. That page renders from the program itself,
+so it cannot describe a verb the CLI does not have, or miss one it does.
 
 ## Working on this repository
 
 ```sh
 npm install
 npm run check
-```
-
-`npm run check` chains the leak gate, typecheck (TypeScript 7 native), lint (oxlint plus
-ESLint), tests (Vitest), build (tsdown), and the unused-code scan (knip). All of them pass
-before a commit.
-
-One Node floor, where there used to be two. The published runtime floor is `>= 22.22.2`,
-which is what `package.json` declares and what the CLI needs. The DEV toolchain asks for less
-than that — tsdown's `^22.18.0` is the highest engines range in the dev tree, ESLint's
-`^22.13.0` the next — so the published floor is the one to develop on: Node 22.22.2 or 24.
-
-```sh
 npm run build          # writes dist/cli.js
 node dist/cli.js --help
 ```
 
-Run `init` and `sync` from a scratch repository, not from this root: at the root they
-rewrite the committed setup described under [Dogfooding](#dogfooding).
+`npm run check` chains the leak gate, typecheck (TypeScript 7 native), lint (oxlint plus ESLint),
+tests (Vitest), build (tsdown), and the unused-code scan (knip). All of it passes before a commit.
+Develop on the published runtime floor, Node 22.22.2 or 24. The dev toolchain asks for less, so
+`package.json`'s `>= 22.22.2` is the floor that binds.
 
-## Map
+Run `init` and `sync` from a scratch repository, never from this root. At the root they rewrite the
+committed setup described under [Why stamity runs on itself](#why-stamity-runs-on-itself).
+
+## Where everything lives
 
 Each entry below is the one home for its subject. This page links; it does not restate.
 
@@ -104,53 +113,44 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/reference/`](docs/reference/) | Generated: one page per content class projected from artifact frontmatter, plus the pack inventory and the MCP server reference. |
 | [`llms.txt`](llms.txt) | Generated: the agent-native index of the published pages — the five root pages, the ten guides, the charter and every generated reference page. |
 | [`plugin.json`](plugin.json) | Generated: the plugin surfaces — this Agent Plugins manifest, [`.claude-plugin/`](.claude-plugin/) and [`.cursor-plugin/`](.cursor-plugin/). |
-| [`apm.yml`](apm.yml) | Generated: the APM package manifest, over the [`.apm/`](.apm/) projection of the corpus — the package `apm install zomarit/stamity` installs, served from this repository. |
-| [`website/`](website/) | The Docusaurus site that renders the `docs/` pages above directly from the tree. It holds one page of its own, the landing page at `website/src/pages/index.tsx`, and no docs page. |
+| [`apm.yml`](apm.yml) | Generated: the APM package manifest, over the [`.apm/`](.apm/) projection of the corpus, served from this repository. |
+| [`website/`](website/) | The Docusaurus site that renders the `docs/` pages from the tree. Its one page of its own is the landing page at `website/src/pages/index.tsx`. |
 | [`SECURITY.md`](SECURITY.md) | What the engine defends today, what it does not, and how to report a vulnerability. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | The dev loop, the three test lanes, and how to regenerate derived files. |
 | [`GOVERNANCE.md`](GOVERNANCE.md) | Who decides, how a change lands, and what the private layer holds. |
 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, and the two channels a report goes through. |
 | [`docs/getting-started.md`](docs/getting-started.md) | Prerequisites, what `init` asks and writes per client, and the guided first change. |
-| [`docs/working-with-stamity.md`](docs/working-with-stamity.md) | The nine touchpoints as one workflow — which one to open, what each writes, and how to run two changes at once. |
+| [`docs/working-with-stamity.md`](docs/working-with-stamity.md) | The nine touchpoints as one workflow — which to open, what each writes, and how to run two changes at once. |
 | [`docs/doctrine.md`](docs/doctrine.md) | The root question every artifact answers, the four pillars and the surfaces that enforce them, and how an artifact is deleted. |
 | [`docs/customization.md`](docs/customization.md) | Where an override lives per class, the two authoring paths and the one save gate, shadowing, and what a skill override carries. |
-| [`docs/workspaces.md`](docs/workspaces.md) | One policy across several repositories — the manifest, the init offer, the status rows, and the cascade. |
-| [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking upstream releases into a customized fork — the config, the verbs, conflicts, the `fork/` layer a fork authors in, the gates that decide, and the opt-in workflow. |
-| [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | What a pack is, the trust ladder as shipped, and what `add` refuses. |
-| [`docs/security-mapping.md`](docs/security-mapping.md) | The version-pinned crosswalk from this repository's controls to the OWASP, joint-guidance and NIST AI RMF catalogues — seven surfaces, their residuals, and the gaps. |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | The exit model, every `check` row and its remedy, and where to report a problem. |
+| [`docs/workspaces.md`](docs/workspaces.md) | One policy across several repositories — the manifest, the init offer, the status rows, and the cascade. |
+| [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | What a pack is, the trust ladder as shipped, and what `add` refuses. |
+| [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking upstream releases into a customized fork — the config, the verbs, conflicts, the `fork/` layer, the gates that decide, and the opt-in workflow. |
+| [`docs/security-mapping.md`](docs/security-mapping.md) | The version-pinned crosswalk from this repository's controls to the OWASP, joint-guidance and NIST AI RMF catalogues — seven surfaces, their residuals, and the gaps. |
 
-Hook scripts are absent from that row because they are not corpus content: the three portable
-bodies are generated from `src/hooks/scripts.ts` for every selected client, and Claude Code takes
-a fourth — the review gate — from its own adapter.
+Hook scripts are not in that corpus row, because they are not corpus content. The three portable
+bodies are generated from `src/hooks/scripts.ts` for every selected client, and Claude Code takes a
+fourth, the review gate, from its own adapter. Eight rows above are marked Generated, written by
+four generators, and [CONTRIBUTING.md](CONTRIBUTING.md) maps each generated path to the command
+that rewrites it. Every link on this page is repo-relative, so the docs are read from the tree.
 
-Eight rows above are marked Generated, and they come from four different generators: the capability
-matrix from `node scripts/generate-capability-matrix.mjs`; the five docs pages —
-`docs/cli-reference.md`, `docs/configuration.md`, `docs/measurements.md`, `docs/reference/`,
-`llms.txt` — from `node scripts/generate-docs.mjs`; the plugin surfaces from `node
-scripts/generate-plugin-manifests.mjs`; and the APM package from `node
-scripts/generate-apm-package.mjs`. CONTRIBUTING.md's regeneration table is the one home for that
-split. Each generator's own suite existence-checks the paths it lists; this page's test resolves
-every link target and holds the corpus counts above to what the content catalog indexes. Every link
-on this page is repo-relative — the docs are read from the tree.
-
-## Tests
+## What the tests cover
 
 Three lanes: virtual-filesystem unit tests of the generators, golden-file assertions on emitted
-artifacts, and serialized child-process end-to-end runs against a pseudo-home. Property tests cover the
-invariant-bearing cores, and every derived artifact is byte-diffed against a fresh render, so a stale
-generated file fails the build instead of drifting. Details in [CONTRIBUTING.md](CONTRIBUTING.md).
+artifacts, and serialized child-process end-to-end runs against a pseudo-home. Property tests cover
+the invariant-bearing cores. Every derived artifact is byte-diffed against a fresh render, so a
+stale generated file fails the build instead of drifting. Details in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Dogfooding
+## Why stamity runs on itself
 
-This repository runs its own output. `AGENTS.md`, the managed block in `CLAUDE.md`, `.claude/`
-and `.stamity/generated/` are engine-generated and committed, so `node dist/cli.js check` at the
-root re-proves them drift-clean against the current engine — the living integration test, and the
-reason a regression in emission shows up as a failing check rather than as a surprise downstream.
-`.agents/` is not among them: that projection is emitted only for a selected client that reads
-it, and the one selected here does not. Regenerate those paths instead of editing them by hand.
-The rest of `.stamity/` — the manifest, learnings, handoffs, runs, overrides and the inbox — is
-setup state and authored content, not a regeneration target.
+This repository runs its own output. `AGENTS.md`, the managed block in `CLAUDE.md`, `.claude/` and
+`.stamity/generated/` are engine-generated and committed, so `node dist/cli.js check` at the root
+re-proves them drift-clean against the current engine. A regression in emission then shows up as a
+failing check instead of a surprise downstream. Regenerate those paths rather than editing them by
+hand. `.agents/` is the exception: that projection is emitted only for a selected client that reads
+it, and the one selected here does not. The rest of `.stamity/` is setup state and authored
+content, not a regeneration target: the manifest, learnings, handoffs, runs, overrides, the inbox.
 
 ## License
 
