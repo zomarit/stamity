@@ -1,0 +1,9 @@
+# docs/migration.md (slug `migration`; its published route is the `slug:` line in its frontmatter and must not change)
+
+Page kind: HOW-TO — moving a repository off the predecessor setup: the guided path, the manual path, what does not transfer, the last step. Its reader arrives from the predecessor project's own sunset material holding a link, already running that setup.
+
+THE STAMP EXCEPTION: this page KEEPS its current first comment exactly as it is — `<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.8.0 release cut (2026-09-15). -->` — because the suite needs at least one page dated at the cut; do not change it to the commit form. Re-attest the claims anyway and correct any that are false.
+
+Pins (binding, all from `test/docsPages.test.ts` and `test/ci/docsSite.test.ts`): frontmatter `slug:` and `title:` lines unchanged, byte for byte; this is the ONLY page allowed to name the predecessor project, and it MUST still name it; the install line `npx @zomarit/stamity init`; the predecessor's clean command as the page spells it today; the flag `--purge` must be warned about in prose and must NOT appear inside any fenced code block anywhere on the page; the section headed exactly `## Path B` must name the predecessor's manifest file as today; the section headed exactly `## Your last step` must contain the clean command, the phrase `without \`--purge\``, no occurrence of the clean command followed within 40 characters by `--purge`, and must mention `.env.mcp` BEFORE the clean command (back up first, uninstall after — the order is asserted). The H1 may be reworded (this page is exempt from the H1-equals-title check) but keep it recognisable to a reader searching for the predecessor's name.
+
+Sources: `src/migration/detect.ts`, `src/migration/carry.ts`, `src/migration/*.ts`, `test/migration/` (what is proved), `src/cli/commands/init.ts` (the guided path's prompts).
