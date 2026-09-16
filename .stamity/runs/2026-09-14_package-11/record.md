@@ -756,3 +756,14 @@ always-on budget item stays open until the measurement lands.
   `zomarit-stamity-1.8.0.tgz` and `sbom.cdx.json`; the registry resolved `@zomarit/stamity@1.8.0` by
   08:05Z. The private morning sequence (the read-only post-publication verifier, the ≥15-minute
   currency recheck, the three currency rows) runs next and lands in the private record.
+- 08:27Z — the morning sequence: registry `latest` 1.8.0 with SLSA provenance (version time 08:05Z;
+  the ≥15-minute recheck at 08:20Z); the docs site deployed by the run that followed the release
+  (08:03:39Z), the four new pages serving; the read-only post-publication verifier passes its nine
+  checks at 08:27Z — artifact identity equal on npm and the GitHub asset, Sigstore provenance bound to
+  the release workflow at the tag, registry signatures, the published-byte leak gate, the installed
+  CLI at 1.8.0, both pinned APM clients, and the docs and release currency over the five pages. Three
+  earlier attempts ended on stale temp installs of the pinned APM clients (recreated) and on the
+  verifier expecting the docs follow-up on the tag's own commit, where it ran on a descendant because
+  record-only commits had landed on `main` before the approval; the private verifier accepts a
+  descendant since, with the reason recorded beside it. The private currency helper names only the two
+  Package 12C carriers. **1.8.0 is published, verified and recorded.**
