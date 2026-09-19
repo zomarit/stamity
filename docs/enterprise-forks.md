@@ -403,11 +403,14 @@ only. That is exactly the policy a fork must not copy onto its integration branc
 On GitHub the workflow checks three surfaces: the active rulesets across all response pages, the
 repository merge settings, and classic branch protection. A linear-history requirement, or a
 restriction to squash and rebase, or a merge queue set to either, produces a warning in the pull
-request and in the job summary. Classic protection needs Administration: read. An unavailable, 404
-or malformed response is marked **not fully checked**, while restrictions the check already
-observed still produce their warnings. Confirm any unreadable setting with the repository
-administrator, and do not broaden the automation token just to silence the note. The pull request
-still opens, and the landing decision stays yours.
+request and in the job summary. Classic protection needs Administration: read. A branch that has no
+classic protection answers 404 with `Branch not protected`. That is an answer, not a failure, so
+the check records no classic protection and stays complete. A branch protected by rulesets alone
+therefore carries no note. A permission failure, a 404 with any other message, and a malformed
+response are each marked **not fully checked**, while restrictions the check already observed still
+produce their warnings. The note appears only when a surface stayed unverified. Confirm any
+unreadable setting with the repository administrator, and do not broaden the automation token just
+to silence the note. The pull request still opens, and the landing decision stays yours.
 
 New and recovered pull requests get a conventional title, `chore(upstream): integrate <tag>`. An
 existing pull request's title, body and labels are left untouched. Commits the lane creates use the
@@ -732,8 +735,11 @@ If the push succeeded but pull request creation failed, a retry can create the m
 only after proving the same owned integration. That means a matching release and target, matching
 merge parents, a matching non-record tree, and a semantic integration record, with no human
 follow-up. A fresh sync may change only the generated manifest's top-level `updatedAt`. Recovery
-accepts that one timestamp difference in canonical schema-1.0.0 manifests carrying valid UTC
-millisecond timestamps, and requires every other manifest byte to match. A missing, linked,
+accepts that one timestamp difference and requires every byte except `updatedAt` to match. It
+keeps no copy of the manifest schema. The schema is the engine's, and the engine applied it when
+your own regenerate command wrote the manifest, so a key a newer engine admits cannot break
+recovery. The one masked value must still be a valid UTC millisecond timestamp, because it is the
+only value the comparison never reads. A missing, linked,
 executable, malformed or noncanonical changed manifest requires review. Every other generated file
 stays part of the exact tree comparison. The recovered pull request names the remote SHA it
 retained.

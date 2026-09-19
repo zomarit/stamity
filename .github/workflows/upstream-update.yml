@@ -593,6 +593,10 @@ jobs:
           NO_MERGE=0
           QUEUE_NO_MERGE=0
           REPOSITORY_NO_MERGE=0
+          # What the classic-protection surface answered: `read` when the endpoint returned a
+          # protection document, `none` when it answered "Branch not protected", and `unchecked`
+          # when it could not be read at all. Only the last is an unverified surface.
+          CLASSIC='unchecked'
           METHODS=''
           : > "$POLICY"
 
@@ -615,12 +619,30 @@ jobs:
             UNCHECKED+=('repository merge methods')
           fi
 
-          if gh api "repos/${GH_REPO}/branches/${BRANCH_PATH}/protection" > "$PROTECTION" 2> "$ARTIFACT_DIR/branch-protection.err" &&
-            jq -e '.required_linear_history.enabled | type == "boolean"' "$PROTECTION" > /dev/null; then
-            [ "$(jq -r '.required_linear_history.enabled' "$PROTECTION")" != 'true' ] || LINEAR=$((LINEAR + 1))
+          # A branch that carries no CLASSIC protection answers 404 with the body
+          # {"message":"Branch not protected", ...}. That is an ANSWER, not a permission failure,
+          # and it is the ordinary shape for a branch protected by rulesets only — the surface
+          # read above. Treating it as unverified left every rulesets-only fork permanently
+          # carrying the not-fully-checked note, which is the note losing its meaning.
+          #
+          # `gh api` exits 1 on every HTTP error and writes the response body to stdout, so the
+          # BODY is what separates "not protected" from "not allowed to look" and from "no such
+          # branch"; the exit code cannot. Contract and body read 2026-09-17:
+          # https://docs.github.com/en/rest/branches/branch-protection#get-branch-protection
+          # A 403, a 404 with any other message, and a malformed body all stay unverified.
+          if gh api "repos/${GH_REPO}/branches/${BRANCH_PATH}/protection" > "$PROTECTION" 2> "$ARTIFACT_DIR/branch-protection.err"; then
+            if jq -e '.required_linear_history.enabled | type == "boolean"' "$PROTECTION" > /dev/null; then
+              CLASSIC='read'
+              [ "$(jq -r '.required_linear_history.enabled' "$PROTECTION")" != 'true' ] || LINEAR=$((LINEAR + 1))
+            else
+              UNCHECKED+=('classic branch protection (Administration: read required)')
+            fi
+          elif jq -e '.message == "Branch not protected" and ((.status // "404") | tostring) == "404"' "$PROTECTION" > /dev/null 2>&1; then
+            CLASSIC='none'
           else
-            UNCHECKED+=('classic branch protection (Administration: read required; 404 is also unverified)')
+            UNCHECKED+=('classic branch protection (Administration: read required)')
           fi
+          echo "classic=$CLASSIC" >> "$GITHUB_OUTPUT"
 
           if [ "${#UNCHECKED[@]}" -gt 0 ]; then
             {
@@ -977,10 +999,28 @@ jobs:
             [ "$(git show -s --format=%P "$MERGE_COMMIT")" = "$EXPECTED_PARENTS" ] || refuse 'The prepared merge has unexpected parents.'
             [ "$(git show -s --format=%s "$REMOTE_SHA")" = "Merge upstream release $TAG into $INTEGRATION_BRANCH" ] || refuse 'The remote merge does not identify the lane.'
             # writeManifest (src/manifest/manifest.ts) stamps updatedAt on every successful
-            # sync, including one with no content changes. Validate only the known generated
-            # manifest envelope here, using trusted inline tools, then mask precisely that
-            # top-level timestamp. Every other byte (including createdAt, selection and ledger)
-            # stays exact; no configured generatedPaths are exempted from the tree comparison.
+            # sync, including one with no content changes. Mask precisely that top-level
+            # timestamp, using trusted inline tools. Every other byte (including createdAt,
+            # selection and ledger) stays exact; no configured generatedPaths are exempted from
+            # the tree comparison.
+            #
+            # WHY THERE IS NO SCHEMA HERE. This step used to re-check the manifest against a
+            # FROZEN COPY of the engine's schema: a version literal, the four tool names and a
+            # key allowlist. The copy went stale the first time an optional field was added, and
+            # recovery then refused every fork that set it, blaming the fork's own manifest. The
+            # engine's schema is the only schema, and the engine has already applied it — the
+            # prepared manifest was written by the fork's own regenerate command over in
+            # `prepare`, through `writeManifest`, which refuses an invalid manifest rather than
+            # writing one. The comparison below inherits that verdict: a remote manifest that is
+            # deep-equal to the prepared one, `updatedAt` aside, is valid by the same engine that
+            # wrote the prepared one. The engine is deliberately NOT run here. This job holds the
+            # push credential, and REQ-UPSTREAM-016 requires that no code from the prepared
+            # branch runs during this comparison.
+            #
+            # `updatedAt` is the ONLY field excluded from the byte comparison, so it is the only
+            # field needing a bound of its own: a real UTC millisecond timestamp, nothing else.
+            # `jq -S 'del(.updatedAt)'` removes exactly the top-level key and sorts, which is why
+            # the old line-oriented `sed` mask and its uniqueness guard are gone with it.
             MANIFEST_PATH='.stamity/manifest.json'
             if ! git diff --quiet "$REMOTE_SHA" "$MERGE_COMMIT" -- "$MANIFEST_PATH"; then
               for SIDE in remote prepared; do
@@ -993,21 +1033,13 @@ jobs:
                   def timestamp:
                     type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$") and
                     (sub("\\.[0-9]{3}Z$"; "Z") as $seconds | try (($seconds | fromdateiso8601 | todateiso8601) == $seconds) catch false);
-                  type == "object" and .version == "1.0.0" and
-                  (.generatedBy | type == "string" and length > 0) and
-                  (.createdAt | timestamp) and (.updatedAt | timestamp) and
-                  (.tools | type == "array" and length > 0 and all(.[]; IN("claude", "cursor", "copilot", "codex"))) and
-                  (.selection | type == "object") and
-                  (.selection.items | type == "object" and keys == ["agent", "command", "rule", "skill"] and all(.[]; type == "array" and all(.[]; type == "string"))) and
-                  (.ledger | type == "array" and all(.[]; type == "object")) and
-                  ((keys - ["version", "generatedBy", "createdAt", "updatedAt", "tools", "platform", "maturityTier", "communicationStyle", "selection", "ledger", "mcp", "learnings", "hooks", "models", "importChoice", "toolOptions", "detected"]) | length == 0)
-                ' "$MANIFEST" > /dev/null || refuse 'The changed sync manifest has an unsupported schema, envelope or timestamp.'
-                # A reserialization check rejects duplicate keys and noncanonical indentation,
-                # so the single two-space updatedAt line is necessarily the top-level property.
+                  type == "object" and (.updatedAt | timestamp)
+                ' "$MANIFEST" > /dev/null || refuse 'The changed sync manifest is not an object carrying a generated updatedAt timestamp.'
+                # A reserialization check rejects duplicate keys and noncanonical indentation, so
+                # a manifest a person reformatted by hand is still read as the human edit it is.
                 jq . "$MANIFEST" > "$MANIFEST.canonical" || refuse 'Cannot parse the changed sync manifest.'
                 cmp -s "$MANIFEST" "$MANIFEST.canonical" || refuse 'The changed sync manifest is not canonical generated JSON.'
-                [ "$(grep -c '^  "updatedAt": "' "$MANIFEST")" = '1' ] || refuse 'The changed sync manifest has no unique top-level timestamp.'
-                sed 's/^  "updatedAt": "[^"]*"/  "updatedAt": "<regenerated>"/' "$MANIFEST" > "$MANIFEST.comparable"
+                jq -S 'del(.updatedAt)' "$MANIFEST" > "$MANIFEST.comparable" || refuse 'Cannot mask the changed sync manifest timestamp.'
               done
               cmp -s "$ARTIFACT_DIR/remote-manifest.json.comparable" "$ARTIFACT_DIR/prepared-manifest.json.comparable" || refuse 'The sync manifest differs beyond its generated updatedAt timestamp.'
             fi

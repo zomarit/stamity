@@ -365,8 +365,13 @@ workflow (REQ-UPSTREAM-013) reads all pages of active rulesets
 (`GET /repos/{owner}/{repo}`), and classic protection
 (`GET /repos/{owner}/{repo}/branches/{branch}/protection`). Linear-history requirements
 and merge-method restrictions, including the merge queue, produce a warning in the PR
-and job summary. Classic protection requires Administration: read; unreadable, 404 or
-malformed responses mark the overall check incomplete and name the unverified surface.
+and job summary. Classic protection requires Administration: read. A 404 whose body is
+`Branch not protected` records "no classic protection" and counts as CHECKED, because that
+is the documented answer for a branch protected by rulesets only; reading it as unverified
+left every such fork carrying the note permanently. Unreadable responses, a 404 with any
+other message, and malformed responses mark the overall check incomplete and name the
+unverified surface. The not-fully-checked note is emitted only when a surface stayed
+unverified.
 Known restrictions still warn under partial access, and no incomplete check claims that
 merge commits are permitted. The PR still opens because the decision belongs to the fork.
 Everywhere else — GitLab, a
@@ -377,6 +382,10 @@ settings per host as far as they were verified.
 Official endpoint contracts rechecked 2026-09-10: [active branch rulesets](https://docs.github.com/en/rest/repos/rules#get-rules-for-a-branch),
 [repository merge settings](https://docs.github.com/en/rest/repos/repos#get-a-repository),
 and [classic branch protection](https://docs.github.com/en/rest/branches/branch-protection#get-branch-protection).
+The unprotected-branch 404 body was reread 2026-09-17 against that same endpoint contract:
+`{"message":"Branch not protected", ...}`, returned with HTTP 404. `gh api` exits non-zero on
+every HTTP error and writes the response body to stdout, so the body — not the exit code — is
+what separates "not protected" from "not permitted to look".
 
 ### REQ-UPSTREAM-012 — Abort and recovery
 
@@ -482,10 +491,14 @@ tree and semantic record must agree with the prepared integration; timestamps al
 make independently prepared commits equal. There is one generated-file exception:
 `src/manifest/manifest.ts::writeManifest` restamps `.stamity/manifest.json.updatedAt` on
 every sync. When this file differs, both git entries must be regular non-executable files
-(`100644`) with the known schema-1.0.0 manifest envelope, canonical two-space JSON without
-duplicate keys, and valid `createdAt`/`updatedAt` values in `YYYY-MM-DDTHH:mm:ss.SSSZ` form.
-The inline publisher masks precisely the single top-level `updatedAt` value and compares
-every remaining byte, including creation time, selection, ledger, field order and formatting.
+(`100644`) holding canonical two-space JSON without duplicate keys, whose top-level
+`updatedAt` is a valid value in `YYYY-MM-DDTHH:mm:ss.SSSZ` form. The inline publisher deletes
+precisely that one top-level key from each side and compares every remaining byte, including
+creation time, selection, ledger, field order and formatting. It keeps no copy of the
+manifest schema: any key set the engine admits is accepted, because the engine already
+applied its own schema through `writeManifest` in the job that ran the fork's regenerate
+command, and an off-schema key on the remote branch fails the byte comparison anyway.
+`updatedAt` is bounded on its own because it is the single value the comparison never reads.
 No `generatedPaths` pattern is excluded, no code from the prepared branch runs during this
 comparison, and missing/linked/malformed/noncanonical manifests or any other changed field
 still refuse recovery. The retained remote merge commit must have no
