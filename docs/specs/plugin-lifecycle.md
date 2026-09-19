@@ -134,6 +134,17 @@ resolves it, Then `publisher`, `repository`, `branch`, `tagPattern` and per-clie
 `credential`, or any value matching the leak gate's credential shapes, is refused with exit 1
 without echoing the value; and an unknown key is refused by name.
 
+As built on 2026-09-19, three points the paragraph above leaves open are settled in
+`scripts/distribution-identity.mjs`. `stamity.publisher` and `stamity.distribution` are
+independently optional: a manifest carrying a distribution block and no publisher still defaults
+the publisher to the owner in `repository.url` (`:258-293`). A credential-shaped key is refused by
+its path rather than only at the block's top level, so the refusal names `sources.<client>.<key>`
+(`:70-98`). The host boundary is per kind: the identity's own `repository.url` stays on
+github.com (`:289`), a `github` source on any other host is refused with a message naming
+`git-subdir` as the host-neutral kind (`:178-185`), and `git-subdir` and `archive` admit any
+https host whose URL carries no credentials in its userinfo, which also refuses an ssh remote
+(`:114-128`).
+
 ### REQ-PLUGIN-010 Catalog files per client with configurable sources
 
 Given the distribution root, When it is generated, Then `.claude-plugin/marketplace.json` lists
@@ -155,6 +166,14 @@ validates as an APM package (`apm.yml` plus `.apm/` at its root, byte-identical 
 committed package for the same corpus), and `renovate/plugins.json` plus `renovate/companion.json` parse as
 Renovate presets whose datasources are `github-tags` and `npm` and whose regex manager matches the
 marketplace `ref` field.
+
+As built on 2026-09-19, the schema half of that paragraph lives in
+`scripts/plugins/releaseManifest.mjs` and draws two lines. `distribution.commit` is `null` while
+the commit is unknown and is never absent, because a commit cannot carry its own sha inside its
+tree (`:97-100`, `:150-151`). `validateReleaseManifest` returns one message per defect, each
+prefixed by its JSON path, and performs no cross-check between `packages[]` and `catalogs`, since
+a cross-check turns one wrong client into two messages (`:232-233`). The digest-to-archive
+comparison and the catalog-existence check are the release job's, not the schema's.
 
 ### REQ-PLUGIN-012 Release workflow publishes the distribution
 
