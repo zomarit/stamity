@@ -267,10 +267,16 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
    * surface that names a FETCH channel rather than an identity, so it is the only one
    * this flag changes.
    *
-   * `private` is a boolean in the npm schema; the string form turns up in hand-edited
-   * manifests and means the same thing, so both count.
+   * CHANGED (M-A2b-2): the string form `"true"` used to count here as well, and nowhere
+   * else. `test/ci/pluginManifests.test.ts` and `test/support/identity.ts` both test
+   * `=== true`, so a manifest carrying the string made the generator and the gates that
+   * judge its output disagree about the same file. One predicate, in one place, and it is
+   * the boolean: that is what `npm pkg set private=true --json` writes and what the guide
+   * prescribes. A string `private: "true"` is npm's own business — npm treats any truthy
+   * value as private for publishing — and this repository's documentation says nothing
+   * about it, so nothing here reads it.
    */
-  const isPrivate = pkg.private === true || pkg.private === 'true'
+  const isPrivate = pkg.private === true
 
   /** The plugin id, on every surface. All three schemas want kebab-case with no scope. */
   const pluginName = packageName.replace(/^@[^/]+\//, '')
