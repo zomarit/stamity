@@ -548,11 +548,12 @@ needs editing for a rename: every suite that has to know this package's identity
 data and are named in the guide's identity step, `renovate/plugins.json` and
 `renovate/companion.json` (`docs/enterprise-forks.md:145-147`). A private package has no npm
 channel, so the regenerated marketplace entry carries a `github` source naming the repository
-instead of an npm package the fork never publishes
-(`scripts/generate-plugin-manifests.mjs:456`). The guide states the host boundary beside its
-portability claim: the lane script is portable, while both generators resolve identity through
+instead of an npm package the fork never publishes (`scripts/generate-plugin-manifests.mjs`, its
+`marketplaceSource` binding). The guide states the host boundary beside its portability claim:
+the lane script is portable, while both generators resolve identity through
 `scripts/distribution-identity.mjs`, which accepts a `repository.url` on the public GitHub host
-and refuses every other host before it writes a byte (`docs/enterprise-forks.md:839-847`).
+and refuses every other host before it writes a byte (`docs/enterprise-forks.md`, the
+portability paragraph under "Add the optional token, and what it buys").
 
 ### REQ-UPSTREAM-018 — Monitoring and real platform evidence
 
