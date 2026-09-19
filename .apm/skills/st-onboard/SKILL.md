@@ -1,6 +1,8 @@
 ---
 description: Guides the first real change in a repository this setup was just installed into — orients on the actual code, settles on one small change with the operator, runs it through the touchpoints the install shipped, and closes on a passing verification gate. Triggers right after `stamity init` finishes, when someone opens a freshly set-up repository and asks what to do next, or when a repository carries the setup but has no first proven change through it yet.
 name: st-onboard
+license: MIT
+compatibility: Requires a supported coding client, repository access, and the project verification tools.
 ---
 
 # First proven change

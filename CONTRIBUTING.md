@@ -257,10 +257,16 @@ node scripts/eval-run.mjs --run-id YYYY-MM-DD-run-N \
   --profile codex-astra --trigger content --capacity 4
 ```
 
-It runs all current cases with strict three-sample scoring, after exact input/provider admission and
-all-fixture calibration. It requires committed inputs and an authorized `OPENAI_API_KEY`. An
-unavailable credential or control writes a blocked artifact and admits no scores. See
-[evals/README.md](evals/README.md) for the transport's isolation limits and artifact layout.
+It runs all current cases under the set's two-class scoring rule, after exact input/provider
+admission and calibration against every fixture the rubric declares. A case passes when at least
+two of its three samples pass every binding criterion, and, where the case carries non-negotiable
+rows, all three samples pass every one of those; `evals/SET-v7.md` carries the rule and the
+decision behind it. The strict three-of-three rule it replaced is `SET-v5.md`'s, retained as the
+baseline runs 19 to 21 were scored under. This transport requires committed inputs and an
+authorized `OPENAI_API_KEY`. An unavailable credential or control writes a blocked artifact and
+admits no scores, which is the only thing it has produced so far: run 12 is blocked, and no run of
+record has come through this route. See [evals/README.md](evals/README.md) for the transport's
+isolation limits and artifact layout.
 
 ## Write the commit, then open the pull request
 
