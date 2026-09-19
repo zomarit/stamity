@@ -200,6 +200,11 @@ is a path the ladder defines rather than one you will meet.
 
 ## Sign a pack you publish
 
+Signing needs an OIDC identity, so it does not run from an ordinary terminal. Use a GitHub
+Actions job that grants `id-token: write`, or a process whose environment already carries an
+identity token in `SIGSTORE_ID_TOKEN`. The official Sigstore client this package installs offers
+those two identity sources and no interactive browser flow.
+
 Work from a stamity source checkout on Node >=22.22.2. Prepare the pack's content and its
 integrity map first. Then declare the exact OIDC issuer and certificate identity in `pack.json`:
 
@@ -226,8 +231,12 @@ node dist/cli.js add /path/to/pack --dry-run
 node dist/cli.js add /path/to/pack
 ```
 
-Build the CLI first if this checkout has no `dist/`. The signing script uses the installed
-official Sigstore client and its GitHub Actions OIDC identity provider.
+Build the CLI first if this checkout has no `dist/`. Run those commands in the job that holds
+the identity. Without one the script refuses and writes no bundle.
+
+A refusal the engine itself raises prints its code and message, so you can see which gate said no.
+Any other failure prints one fixed line instead. Provider text can carry an identity token, and a
+log is not the place for one.
 
 ### Sign from TypeScript instead of the script
 
@@ -248,9 +257,11 @@ API route and the script route sign identically.
 In CI, prepare and validate content in a job without `id-token: write`. Run signing in a separate
 protected job that grants it. Install dependencies before granting access to an external signing
 identity, and run only reviewed signer code in that job. No token argument, stored signing key or
-credential file is needed. The per-run identity is process state. Publish only the content, the
-manifest and the detached bundle. Never publish environment dumps or signing logs that contain
-provider requests.
+credential file is passed to the script. In Actions the per-run identity is process state that
+`id-token: write` grants. Anywhere else the client reads `SIGSTORE_ID_TOKEN` from the environment,
+and that token is a credential: keep it short-lived and out of every log and artifact. Publish only
+the content, the manifest and the detached bundle. Never publish environment dumps or signing logs
+that contain provider requests.
 
 The script reuses `sigstoreSignedPayload` from the verifier, checks integrity before signing,
 verifies the returned bundle against the declared issuer and identity, rechecks its inputs, and
