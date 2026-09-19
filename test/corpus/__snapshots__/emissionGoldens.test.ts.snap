@@ -2965,6 +2965,13 @@ function main() {
   if (specific && specific.permissionDecisionReason !== undefined && typeof specific.permissionDecisionReason !== "string") throw safeError("Invalid permission reason");
   if (specific && specific.additionalContext !== undefined && typeof specific.additionalContext !== "string") throw safeError("Invalid additional context");
   if (parsed.continue !== undefined && typeof parsed.continue !== "boolean") throw safeError("Invalid continuation decision");
+  // The legacy vocabulary is exactly \`approve\` and \`block\`, and the value is
+  // validated HERE, beside \`permissionDecision\`, rather than at any client's
+  // branch. A key this runner knows never reads as \`<unrecognized>\`, so an
+  // unreadable value on it would otherwise set no decision and reach Cursor's
+  // explicit allow below — turning a child that meant to refuse into an
+  // approval. Faulting hands each client its own fail-closed exit instead.
+  if (parsed.decision !== undefined && !["approve", "block"].includes(parsed.decision)) throw safeError("Unsupported decision");
   // Codex accepts the canonical schema, except unsupported PreToolUse controls
   // fail open natively. Convert requests to stop/ask into a supported denial.
   // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
@@ -3172,6 +3179,13 @@ function main() {
   if (specific && specific.permissionDecisionReason !== undefined && typeof specific.permissionDecisionReason !== "string") throw safeError("Invalid permission reason");
   if (specific && specific.additionalContext !== undefined && typeof specific.additionalContext !== "string") throw safeError("Invalid additional context");
   if (parsed.continue !== undefined && typeof parsed.continue !== "boolean") throw safeError("Invalid continuation decision");
+  // The legacy vocabulary is exactly \`approve\` and \`block\`, and the value is
+  // validated HERE, beside \`permissionDecision\`, rather than at any client's
+  // branch. A key this runner knows never reads as \`<unrecognized>\`, so an
+  // unreadable value on it would otherwise set no decision and reach Cursor's
+  // explicit allow below — turning a child that meant to refuse into an
+  // approval. Faulting hands each client its own fail-closed exit instead.
+  if (parsed.decision !== undefined && !["approve", "block"].includes(parsed.decision)) throw safeError("Unsupported decision");
   // Codex accepts the canonical schema, except unsupported PreToolUse controls
   // fail open natively. Convert requests to stop/ask into a supported denial.
   // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
@@ -3379,6 +3393,13 @@ function main() {
   if (specific && specific.permissionDecisionReason !== undefined && typeof specific.permissionDecisionReason !== "string") throw safeError("Invalid permission reason");
   if (specific && specific.additionalContext !== undefined && typeof specific.additionalContext !== "string") throw safeError("Invalid additional context");
   if (parsed.continue !== undefined && typeof parsed.continue !== "boolean") throw safeError("Invalid continuation decision");
+  // The legacy vocabulary is exactly \`approve\` and \`block\`, and the value is
+  // validated HERE, beside \`permissionDecision\`, rather than at any client's
+  // branch. A key this runner knows never reads as \`<unrecognized>\`, so an
+  // unreadable value on it would otherwise set no decision and reach Cursor's
+  // explicit allow below — turning a child that meant to refuse into an
+  // approval. Faulting hands each client its own fail-closed exit instead.
+  if (parsed.decision !== undefined && !["approve", "block"].includes(parsed.decision)) throw safeError("Unsupported decision");
   // Codex accepts the canonical schema, except unsupported PreToolUse controls
   // fail open natively. Convert requests to stop/ask into a supported denial.
   // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
