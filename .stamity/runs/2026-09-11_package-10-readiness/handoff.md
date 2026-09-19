@@ -1,5 +1,19 @@
 # Stamity 1.7.0 release handoff
 
+**Earlier state (noted 2026-09-19).** This file was rewritten in place on 2026-09-12 and
+2026-09-13, and what stands below describes the 1.7.0 release. It is not what the file said
+when this run closed. At commit `6ad4e0d` the same path held the 1.7.0 *preparation* handoff
+for the 2026-09-11 state: the required fresh behavioral evaluation incomplete, run 14 terminal
+before scenario scoring with 0 of 234 samples, run 13 terminal before it, the `codex-astra`
+route under profile v2, rubric v6 and session-native protocol v2, and a Not-done list naming
+task-transfer enforcement, a bound full fresh behavioral pass, all nine human QA observations
+and sign-off, and the maintainer's final go-ahead with the governed release and
+post-publication verification. Read that text at the commit
+(`git show 6ad4e0d:.stamity/runs/2026-09-11_package-10-readiness/handoff.md`); this paragraph
+is a pointer, not a summary that replaces it. The record set is chronological, so a later state
+is added rather than written over an earlier one, and the 2026-09-17 audit raised exactly that
+as the defect this paragraph closes.
+
 The maintainer's conditional sign-off and release go-ahead (2026-09-11) required the complete
 fresh behavioral evaluation and all mandatory release gates to pass. Both hold at candidate
 `a81fa5a88ed5eb525fbdffa6e1f0d23f7401fbca` on `feat/package-10-finish-implementation`

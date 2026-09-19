@@ -7,16 +7,18 @@ under a declared threshold.
 
 **Current set: `SET-v7.md`.** v6, v5, v4, v3, v2 and v1 are retained beside it, all
 unchanged, as baselines. v7 keeps v6's scoring rule, criteria, floors and metric numbers;
-what moves is the corpus — `cases-v6/` carries v5's 78 cases with every `## Expected` block
-byte-identical, plus the cases v7 adds. Eight carried Briefs and `source:` ranges moved with
-the corpus tonight, named in `SET-v7.md` under "What v7 adds".
+what moves is the corpus: `cases-v6/` carries v5's 78 cases, 70 of them with their `##
+Expected` block byte-identical and eight moved by reviewed dispositions or amendment, plus
+the cases v7 adds. Each moved block carries an `EXPECTED_MOVES` row in `SET-v7.md`. Eight
+carried Briefs and `source:` ranges moved with the corpus on the same night, named in
+`SET-v7.md` under "What v7 adds".
 
 | Path | What it is |
 |---|---|
 | `SET-v7.md` | **The current set document** — scope, versioned inputs, the scoring rule, the run-artifact contract, the hard triggers, the case index, the coverage table and the appendix of non-negotiable rows. Read it first. |
 | `SET-v6.md` | **Retained baseline, do not edit** — the two-class rule's document; runs 22–24 were scored under it. |
 | `SET-v5.md` | **Retained baseline, do not edit.** The strict three-of-three rule runs 19–21 were scored under. |
-| `rubric-v4.md` | **Retained: the rubric runs 1–14 graded with.** Verdict vocabulary, the binding/advisory grouping, grading procedure, the judge's four inputs, and the calibration protocol with its fixtures. |
+| `rubric-v4.md` | **Retained: the rubric runs 5–10 graded with.** Verdict vocabulary, the binding/advisory grouping, grading procedure, the judge's four inputs, and the calibration protocol with its fixtures. |
 | `MODEL-PROFILES-v1.md`, `model-profiles-v1.json` | Explicit model/rubric profiles: the original Claude default, Astra scenarios with Sol judging, or Sol scenarios with Astra judging. |
 | `session-native-v1.md` | Opt-in session protocol accepting recorded ambient client/repository instructions, with fresh native agents and unchanged calibration and scoring bars. |
 | `rubric-v5.md` | **Retained: the alternate profiles' model-neutral rubric until the maintainer's recorded rubric decision moved all three profiles to `rubric-v7.md`**; grading rules and calibration fixtures are v4's verbatim. |
@@ -26,7 +28,7 @@ the corpus tonight, named in `SET-v7.md` under "What v7 adds".
 | `cases-v6/golden/` | Cases pinning the behaviour the corpus promises. |
 | `cases-v6/adversarial/` | Cases pinning the guardrails it claims, plus the benign twins that keep a guardrail from turning into a refusal reflex. |
 | `cases-v6/probes/` | Skill-selection classification cases: the ones that should trigger a skill, and the near misses that should not. |
-| `cases-v5/**`, `coverage-exemptions-v5.md` | **Retained baseline, do not edit.** The roster runs 19–24 were scored over; `cases-v6/` carries every one of those files with its `## Expected` block byte-identical (eight also moved `source:` range and/or Brief text, named in `SET-v7.md`). |
+| `cases-v5/**`, `coverage-exemptions-v5.md` | **Retained baseline, do not edit.** The roster runs 19–24 were scored over; `cases-v6/` carries every one of those files, 70 with the `## Expected` block byte-identical and eight moved by reviewed dispositions or amendment (eight also moved `source:` range and/or Brief text, named in `SET-v7.md`). |
 | `coverage-exemptions-v6.md` | The written exemption list the coverage gate reads: every content artifact with no case, its reason, and the trigger under which a case must land. |
 | `SET-v4.md`, `cases-v4/**`, `coverage-exemptions-v4.md` | **Retained baseline, do not edit.** Includes the original calibration case inputs. |
 | `SET-v3.md`, `rubric-v3.md`, `cases-v3/**`, `coverage-exemptions-v3.md` | **Retained baseline, do not edit.** The instrument runs 3 and 4 were produced with. |
@@ -39,9 +41,9 @@ the corpus tonight, named in `SET-v7.md` under "What v7 adds".
 
 v7 keeps v6's scoring rule, its four metrics and their declared thresholds; the rule itself
 keeps the name SET-v6, because that name is how a scored run says which rule decided it. What
-moves is the corpus and the pointers into it: `cases-v6/` carries v5's 78 cases with every
-`## Expected` block byte-identical (eight carried Briefs and `source:` ranges moved with the
-corpus) plus the cases v7 adds — those additions, and every count they move, are documented in
+moves is the corpus and the pointers into it: `cases-v6/` carries v5's 78 cases, 70 with the
+`## Expected` block byte-identical and eight moved by reviewed dispositions or amendment
+(eight carried Briefs and `source:` ranges moved with the corpus) plus the cases v7 adds — those additions, and every count they move, are documented in
 `SET-v7.md` under "What v7 adds". The coverage gate reads `coverage-exemptions-v6.md`, and the
 default `claude` profile selects `rubric-v7.md`.
 
@@ -433,22 +435,6 @@ fresh input isolation. The run records requested and resolved IDs, reasoning/dec
 harness, isolation controls and rubric/profile hashes. Tool access prohibited only by the
 Brief is recorded as instruction-only isolation and checked against tool traces.
 
-For the prospectively corrected native configuration, select and commit
-[`session-native-v2.md`](session-native-v2.md), `model-profiles-v2.json` and `rubric-v6.md`
-before calibration or scoring. The unchanged `session-native-v1.md` and v1 profiles remain
-the record of earlier configurations. This explicit selection overrides `st-eval-run`'s
-protocol/profile/rubric version pointers for that run only; all other skill gates hold.
-v2 uses
-fresh `fork_turns: "none"` native agents, the selected Astra/high and Sol/high pair,
-and no added neutrality wrapper. Ambient repository/client instructions are retained
-and disclosed, not claimed to be removed. All five retained calibration transcripts
-against their original case inputs, 78 cases with three samples each, scoring thresholds,
-human QA and platform approval remain required. Its staged task comparison and separate driver invocation claim do not
-establish plaintext visibility in an encrypted native trace. Run 13 remains terminal with
-its original C3 mismatch, invalid C4 and zero scenario samples. The new key correction
-is agent-authored and independently assessed; no fresh human per-criterion label is claimed.
-Calibration and a full passing evaluation are still required and are not promised.
-
 The repository also provides an optional manual stateless transport for the two declared
 Codex profiles from `model-profiles-v1.json`; it does not select the prospective v2 native
 configuration. Select this API route explicitly; it is not needed for session-native
@@ -520,6 +506,30 @@ Two things to get right before starting one.
 Read `SET-v7.md` before starting one. The thresholds are declared there, before any run, and
 a run that discovers its threshold afterwards has measured the author's tolerance instead of
 the product.
+
+### Retained and prospective configurations, neither of them the current route
+
+`session-native-v1.md` is the HISTORICAL record of an earlier configuration: it is pinned to
+the retired 78-case roster and to `rubric-v5.md`, and it is not a route for a run declared
+under `SET-v7.md`. The v1 profiles are the record of what they measured.
+
+The prospectively corrected native configuration is selected explicitly or not at all: commit
+[`session-native-v2.md`](session-native-v2.md), `model-profiles-v2.json` and `rubric-v6.md`
+before calibration or scoring. This explicit selection overrides `st-eval-run`'s
+protocol/profile/rubric version pointers for that run only; all other skill gates hold.
+v2 uses
+fresh `fork_turns: "none"` native agents, the selected Astra/high and Sol/high pair,
+and no added neutrality wrapper. Ambient repository/client instructions are retained
+and disclosed, not claimed to be removed. All five retained calibration transcripts
+against their original case inputs, 78 cases with three samples each, scoring thresholds,
+human QA and platform approval remain required. Those case and sample figures are the v5
+roster's, which the current set retired: a run declared under `SET-v7.md` measures the 99-case
+roster, so selecting v2 means re-pinning its roster and rubric and saying so in the artifact.
+Its staged task comparison and separate driver invocation claim do not
+establish plaintext visibility in an encrypted native trace. Run 13 remains terminal with
+its original C3 mismatch, invalid C4 and zero scenario samples. The new key correction
+is agent-authored and independently assessed; no fresh human per-criterion label is claimed.
+Calibration and a full passing evaluation are still required and are not promised.
 
 ## Where results land
 

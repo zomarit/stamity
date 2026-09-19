@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.8.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-19T10:53:38.186Z",
+  "updatedAt": "2026-09-19T11:33:07.496Z",
   "tools": [
     "claude"
   ],
@@ -316,7 +316,7 @@
       "adapter": "claude",
       "artifactId": "st-eval-run",
       "artifactType": "skill",
-      "contentHash": "451ac5fe6c0359e606e67ef425b89ac66dc9fd7f2942368239248942cade7616",
+      "contentHash": "d7728d4400d673d2ba438427f4b09c5242920048dcce6387a9515feda7869305",
       "path": ".claude/skills/st-eval-run/SKILL.md"
     },
     {

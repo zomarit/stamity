@@ -1,6 +1,8 @@
 ---
 description: Runs one content-quality axis as a gate — that axis's runnable checks plus its judgment calls for ui, ux, security, reliability, testability, scalability, performance, maintainability, enhancability or product-spec — and writes .stamity/verify/<axis>-<sha>.json. Triggers when one axis needs evidence before a review or a release, when a consumer finds no artifact for the current sha, or when someone asks how a change scores on a single quality axis.
 name: st-verify
+license: MIT
+compatibility: Requires a supported coding client, repository access, and the project verification tools.
 ---
 
 # Verify

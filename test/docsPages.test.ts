@@ -164,6 +164,56 @@ const MAPPED_GUIDES: readonly string[] = GUIDES.filter((page) => page !== MIGRAT
 const HAND_PAGES: readonly string[] = [...PAGES, ...GUIDES];
 
 /**
+ * The client-contract evidence page: a hand-written record, and NOT a published page.
+ *
+ * It joins a bucket of its own rather than `HAND_PAGES`, and the reason is one rule it cannot
+ * satisfy by design. `ALLOWED_URL` above is an allowlist of this repository's own GitHub home,
+ * written for pages whose readers are users; this page's entire job is to cite the four
+ * vendors' official documentation, so every claim on it hangs off an outside URL. Putting it
+ * in `HAND_PAGES` would mean weakening that allowlist for the three published pages it was
+ * written for. What it DOES inherit is everything the bucket is defined by — a currency header
+ * with a date, a falsifiable re-open trigger, and no reserved name — plus the Codex
+ * hook-loading facts below, which are the claims the page was re-attested for.
+ */
+const CLIENT_CONTRACTS = ".github/client-contracts.md";
+
+/** Every dated evidence record. One today; the list is what makes adding a second cheap. */
+const EVIDENCE_PAGES: readonly string[] = [CLIENT_CONTRACTS];
+
+/**
+ * The date the evidence bucket was last re-read against its cited sources.
+ *
+ * Held to its own constant rather than to `REATTESTATION_DATE`, because the two passes are
+ * different work: the hand bucket is re-read against THIS TREE, and an evidence page is re-read
+ * against the VENDOR PAGES it cites, which move on the vendors' schedule. The pin is the same
+ * shape as the hand bucket's — the newest date in the bucket is this constant, so it has to
+ * move on the next pass, and no page may claim a date later than it.
+ *
+ * MOVED 2026-09-17: introduced with the bucket. The 2026-09-17 audit re-read every vendor page
+ * this record cites and the Codex paragraph was rewritten against the 2026-09-15 measurement.
+ */
+const EVIDENCE_REATTESTATION_DATE = "2026-09-17";
+
+/**
+ * The Codex hook-loading facts the contract page must carry, each a literal a reader can check
+ * against the cited page or the recorded measurement.
+ *
+ * All three loading steps, because a reply that names only the feature flag is the half-answer
+ * that left every emitted hook inert through the whole 1.7.0 window: the flag, the project
+ * trust level, and per-hook trust. Then the headless result, which is the other half — the
+ * emitted file being correct and the client running it are two claims, and this page is where
+ * they are kept apart.
+ */
+const CODEX_HOOK_FACTS: readonly string[] = [
+  "features.hooks",
+  "[features] hooks = true",
+  'projects.<path>.trust_level = "trusted"',
+  "--dangerously-bypass-hook-trust",
+  "codex exec",
+  "0.154.0",
+];
+
+/**
  * The line budget of the workflow guide, declared by
  * `docs/plans/001-package-8-operator-experience.md` — ":24 written to ≤150 physical lines", and
  * a `wc -l` acceptance criterion at :335 — and that page sits at exactly 150, so it has zero
@@ -708,6 +758,101 @@ describe("hand pages", () => {
     // `test/ci/leakGate.test.ts`, which spawns the same gate.
     180_000,
   );
+});
+
+describe("evidence pages", () => {
+  it("exist and carry real content", () => {
+    for (const page of EVIDENCE_PAGES) {
+      expect(existsSync(join(REPO_ROOT, page)), `${page} is missing`).toBe(true);
+      expect(read(page).trim().length, `${page} is empty`).toBeGreaterThan(500);
+    }
+  });
+
+  it("carries a currency header and a published re-open trigger", () => {
+    // The same two properties the hand bucket is defined by, and for the same reason: a record
+    // nobody can date and nobody can falsify is a record nobody can tell is stale. This page
+    // held the spec's dated dispositions for a release window with neither.
+    for (const page of EVIDENCE_PAGES) {
+      const head = lines(afterFrontmatter(read(page))).slice(0, 8).join("\n");
+
+      expect(head, `${page} has no currency header`).toMatch(CURRENCY_HEADER);
+      expect(head, `${page} publishes no re-open trigger`).toMatch(/Re-open when:/);
+      expect(head, `${page}'s re-open trigger names no check`).toMatch(/test\/docsPages\.test\.ts/);
+    }
+  });
+
+  it("dates the bucket at this pass, and no page later than it", () => {
+    const stamped = EVIDENCE_PAGES.map((page) => {
+      const head = lines(afterFrontmatter(read(page))).slice(0, 8).join("\n");
+      return { page, reattested: CURRENCY_HEADER.exec(head)?.[1] };
+    });
+
+    for (const { page, reattested } of stamped) {
+      expect(
+        reattested,
+        `${page} carries a currency header with no re-attestation date — stamp it with a ` +
+          `"Re-attested <date>" clause naming the pass that re-read it against its sources`,
+      ).toBeDefined();
+      expect(
+        (reattested ?? "") <= EVIDENCE_REATTESTATION_DATE,
+        `${page} re-attests to ${reattested ?? ""}, later than the ` +
+          `${EVIDENCE_REATTESTATION_DATE} pass it ships in`,
+      ).toBe(true);
+    }
+    expect(
+      newest(stamped.map(({ reattested }) => reattested ?? "")),
+      `no evidence page was re-attested at ${EVIDENCE_REATTESTATION_DATE} — stamp the pages ` +
+        `this pass re-read, or move EVIDENCE_REATTESTATION_DATE to the pass that happened`,
+    ).toBe(EVIDENCE_REATTESTATION_DATE);
+  });
+
+  it("names no reserved token", () => {
+    for (const page of EVIDENCE_PAGES) {
+      const text = read(page).toLowerCase();
+      for (const token of RESERVED_TOKENS) {
+        expect(text.includes(token), `${page} names a reserved token`).toBe(false);
+      }
+    }
+  });
+
+  it("cites every outside source over https, and links inside the tree otherwise", () => {
+    // The allowlist rule the hand bucket applies cannot apply here (see CLIENT_CONTRACTS), so
+    // what is checked is what an evidence citation must be either way: a real address, not a
+    // bare domain in prose, and a tree link that resolves.
+    for (const page of EVIDENCE_PAGES) {
+      const text = read(page);
+      for (const url of text.match(ABSOLUTE_URLS) ?? []) {
+        expect(url, `${page} cites a source over a non-https scheme`).toMatch(/^https:\/\//);
+      }
+      for (const target of linkTargets(text)) {
+        if (target.startsWith("https://") || target.startsWith("#")) continue;
+        expect(target, `${page} link is root- or protocol-absolute`).not.toMatch(/^\//);
+        expect(existsSync(resolveTarget(page, target)), `${page} links missing ${target}`).toBe(
+          true,
+        );
+      }
+    }
+  });
+
+  it("states all three Codex hook-loading steps and the headless result, with their dates", () => {
+    // DOC-1. The page described Codex hooks as command strings plus `/hooks` trust for the
+    // whole window in which the adapter shipped a feature flag the page never named, and the
+    // emitted hooks were inert on the one lane anybody measured. Each literal below is a fact
+    // with a source: the three loading steps from the vendor pages the bullet cites, the
+    // headless result from the 2026-09-15 fixture measurement.
+    const text = read(CLIENT_CONTRACTS);
+    for (const fact of CODEX_HOOK_FACTS) {
+      expect(text, `${CLIENT_CONTRACTS} does not state \`${fact}\``).toContain(fact);
+    }
+    // Dated, because an undated vendor fact is the shape this page keeps going stale in.
+    expect(text, "the Codex measurement carries no date").toContain("2026-09-15");
+    expect(text, "the vendor re-read carries no date").toContain("2026-09-17");
+    // The honest gap, kept in words: the hooks page states a default the measurement never
+    // tested, so the page must not assert one of its own.
+    expect(text, "the page asserts a `features.hooks` default it never measured").toMatch(
+      /never ran without the key/,
+    );
+  });
 });
 
 describe("README", () => {

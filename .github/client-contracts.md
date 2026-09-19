@@ -1,5 +1,11 @@
 # Client contract evidence
 
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 0ca2600. Re-attested 2026-09-17 against the vendor pages each bullet cites. -->
+<!-- Re-open when: a cited vendor page changes what a client guarantees, an adapter emits a
+     different configuration key, or a measurement supersedes a dated one below.
+     `test/docsPages.test.ts` holds this page to the evidence-page contract and to the Codex
+     hook-loading facts. -->
+
 Revalidated 2026-09-10 against released 1.6.0 source and the current official pages.
 These source-derived fixtures exercise emitted configuration and local hook processes;
 they do not claim authenticated client sessions, native trust approval, or human QA.
@@ -11,15 +17,28 @@ they do not claim authenticated client sessions, native trust approval, or human
   [memory and imports](https://code.claude.com/docs/en/memory),
   [hooks](https://code.claude.com/docs/en/hooks).
 - **Codex:** `.agents/skills` supports named `$st-*` invocation. Optional `agents/openai.yaml`
-  companions add display names and default prompts. Hooks use command strings and native
-  `/hooks` trust; they do not consume Stamity digests as approval. Session-relative hook CWD
-  requires locating the nearest initialized project. PreToolUse carries no calling-agent
-  identity, and some tool paths bypass hooks. No native per-agent `tools` key is documented;
-  generated developer instructions carry the category restriction and `sandbox_mode` the
-  filesystem boundary. Unsupported PreToolUse `ask`/stop controls become explicit denials
-  pending manual review; unsupported output flags are diagnosed without losing a denial.
+  companions add display names and default prompts. Hooks use command strings, and three
+  loading steps all have to hold before the client runs one. First, `features.hooks` must be
+  on: the adapter writes `[features] hooks = true` into `.codex/config.toml`, and that key was
+  measured on 2026-09-15 to flip the feature on codex-cli 0.154.0. Second, the project must
+  carry `projects.<path>.trust_level = "trusted"`. Third, each hook needs per-hook `/hooks`
+  trust, or an invocation started with `--dangerously-bypass-hook-trust`. They do not consume
+  Stamity digests as approval. The hooks page read 2026-09-17 says the feature is on by
+  default; the 2026-09-15 measurement never ran without the key, so this page states the
+  emitted key rather than a default. Headless `codex exec` on codex-cli 0.154.0 ran zero
+  project hooks with the feature on, the project trusted and hook trust bypassed (measured
+  2026-09-15; three runs, no observation file written, no hook-discovery line in the debug
+  log). An emitted hook therefore enforces nothing on that lane, and a QA row that asks it to
+  is measuring the client. Session-relative hook CWD requires locating the nearest initialized
+  project. PreToolUse carries no calling-agent identity, and some tool paths bypass hooks. No
+  native per-agent `tools` key is documented; generated developer instructions carry the
+  category restriction and `sandbox_mode` the filesystem boundary. Unsupported PreToolUse
+  `ask`/stop controls become explicit denials pending manual review; unsupported output flags
+  are diagnosed without losing a denial.
   [Skills](https://learn.chatgpt.com/docs/build-skills),
-  [hooks](https://learn.chatgpt.com/docs/hooks),
+  [hooks](https://learn.chatgpt.com/docs/hooks) (read 2026-09-15, re-read 2026-09-17),
+  [config reference](https://learn.chatgpt.com/docs/config-file/config-reference) (read
+  2026-09-15, re-read 2026-09-17),
   [subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents).
 - **Cursor:** neutral-tree skills support `/st-*` invocation. Native hook timeouts use
   seconds; explicit exit 2 denies supported actions and `failClosed` covers errors and
