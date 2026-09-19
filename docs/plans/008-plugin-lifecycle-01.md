@@ -97,7 +97,8 @@ Stated against `docs/specs/plugin-lifecycle.md` (`status: design`, area `PLUGIN`
 the three files' delta sections on 2026-09-17, so the spec and the plans carry the same paragraphs;
 `/st-work` marks it `shipped-with-1.9.0` at the close). This file ADDS REQ-PLUGIN-001–012. File 2 adds the setup-mode, documentation and
 existing-routes requirements; file 3 adds the proof and eval requirements. The audit fix batch
-MODIFIES six shipped requirements, stated below against their own specs; nothing is retired.
+MODIFIES seven shipped requirements, stated below against their own specs; nothing is retired.
+This file also ADDS REQ-UPSTREAM-019 (allocated during the run for the DCO half of A1; see unit A1b).
 
 ### MODIFIED REQ-UPSTREAM-016
 
@@ -147,6 +148,39 @@ Given a plan whose spec delta uses a prose range, an absent or suffixed `## Spec
 or a line carrying both ADDED and REMOVED, When the structural coverage checker runs, Then it
 expands the range (or reports `partial-scope`), reports `missing-spec-delta`, and classifies the
 added ids as scoped, so none of the three shapes passes with requirements out of scope.
+
+### MODIFIED REQ-FINISH-008
+
+Given two eval runs of one configuration over different candidates, When the manual runner looks
+for a previous run to compare against, Then the advisory-repeat comparison keys on the run's
+configuration (its profile, its rubric core and its harness) rather than on its input bytes, so
+the repeat is detected across candidates instead of only where the inputs matched byte for byte;
+`configurationHash` stays the exact-input receipt on every summary.
+
+### ADDED REQ-UPSTREAM-019
+
+Given an update pull request whose commits exceed what the pull-request commits endpoint will
+list, When the DCO check runs, Then it reads the commit set from
+`compare/{base.sha}...{head.sha}` with `per_page=100`, walks `page=N` until the rows it holds
+equal the `total_commits` that response reports, and checks every listed commit for a
+`Signed-off-by` trailer; no commit count refuses the check. Given a listing the job cannot
+reconcile — the rows in hand short of `total_commits`, a `total_commits` that is absent,
+non-numeric, zero or moving between pages, a walk that listed nothing, or a page it could not
+read — Then the check fails naming the condition it hit, because a partial listing and a clean
+one look alike and are opposite facts. Given an unsigned commit, When the base branch at
+`base.sha` carries a `.stamity/upstream.json` whose `upstream` names a github.com repository,
+Then it is exempt as upstream-authored only where it is REACHABLE from that upstream's default
+branch: the job resolves `default_branch` from `GET repos/{upstream}` once and exempts the commit
+only when `GET repos/{upstream}/compare/{sha}...{default branch}` reports `status` `ahead` or
+`identical`. Existence is not the test — GitHub serves a fork network's commits through the
+parent's endpoint — so `behind`, `diverged`, an error or any non-200 on the comparison leaves the
+commit unsigned, and a default branch that cannot be read exempts nothing at all. The
+configuration is read from the base branch only, so no pull request can introduce the file that
+would exempt it; only unsigned commits are looked up; the clone URL is never echoed; and the
+canonical repository, which configures no lane, exempts nothing ever. Given any outcome, Then the
+check prints the listed, signed, exempt and unsigned counts, names every commit that stayed
+unsigned, and says which of the four exemption states applied (a readable github.com upstream, an
+upstream whose default branch could not be read, an upstream on another host, no configuration).
 
 ### REQ-PLUGIN-001 Plugin roots from the resolved corpus
 
@@ -265,9 +299,11 @@ and pushes nothing; and `test/ci/workflow.test.ts` pins each of those facts.
 
 ## Units
 
-Batches: A (the audit fixes, A1–A7) runs first and in parallel where the file sets are disjoint
-(A1, A2a, A3, A5, A6 in parallel; A2b after A2a; A4 after A3, because both touch the contracts
-page and the capability matrix; A7 is the maintainer's private-checkout list); then B0 is the
+Batches: A (the audit fixes, A1–A7, plus A1b split out of A1 during the run) runs first and in
+parallel where the file sets are disjoint (A1, A2a, A3, A5, A6 in parallel; A1b after A1, because
+both write the `dco` job's shell and its workflow test; A2b after A2a; A4 after A3, because both
+touch the contracts page and the capability matrix; A7 is the maintainer's private-checkout
+list); then B0 is the
 contract; B1 runs in parallel after B0; B2 after B1; B3 last. P2b depends on A3 because both
 rewrite the emitted hook bodies. Every unit's
 `verify` is the charter gate plus the coverage flag CI enforces (learning: the local gate is weaker
@@ -277,17 +313,30 @@ batch owns it. Contract census before B1 dispatch (invariant 6): `EmissionContex
 `HookInterchange.command`, `HOOKS_GENERATED_DIR`, `resolveDistributionIdentity`, the four
 committed manifests' bytes, and `release.yml` step names — each has exactly one writer below.
 
-### A1 — upstream-lane-recovery-schema (A; audit FORK-1, FORK-4, minor 404 note)
+### A1 — upstream-lane-recovery-schema (A; audit FORK-1, minor 404 note)
 
 | Field | Content |
 |---|---|
 | `id` | a1-upstream-recovery |
 | `requirements` | REQ-UPSTREAM-016, REQ-UPSTREAM-011 |
-| `files` | `.github/workflows/upstream-update.yml`, `.github/workflows/pr-checks.yml`, `test/upstream/workflowRecovery.test.ts`, `test/upstream/workflowLandingPolicy.test.ts`, `test/ci/upstreamWorkflow.test.ts`, `test/ci/workflow.test.ts` (the pr-checks pins), `docs/enterprise-forks.md` (the recovery paragraph at 734-739 and the DCO paragraph at 412-419), `docs/specs/enterprise-upstream-lane.md` (482-491) |
-| `interfaces` | Recovery step (`upstream-update.yml:979-1012`): replace the literal version, tools list and 17-key allowlist with `jq -S 'del(.updatedAt)'` deep-equality between the two manifests plus the existing `updatedAt` timestamp regex; validation of the key set is delegated to the engine by running `node dist/cli.js validate --json` (or the published binary the job already installs) on the branch checkout and failing on a non-zero exit — the engine's own schema is the only schema. Test: `workflowRecovery.test.ts` gains a case whose fixture manifest carries every optional key (`ruleDelivery`, `mcp`, `hooks`, `models`, `learnings`, `toolOptions`, `importChoice`) and a case that derives the fixture from `MANIFEST_FIELD_ORDER` (import `src/types/manifest.ts` and `createManifest`) so an added field is exercised the day it lands. DCO (`pr-checks.yml:88-93`): the commit list excludes commits reachable from the upstream namespace (`refs/stamity-upstream/*` when present, else the pull request's merge base with the configured upstream URL fetched read-only); the 250 cap applies to the remaining fork-authored commits; the message names the exclusion. Landing policy (`upstream-update.yml:618-634`): a 404 body containing `Branch not protected` sets `classic=none` and counts as checked; only a 403 or a malformed body marks the surface unverified; the not-fully-checked note is emitted only when a surface stayed unverified. Docs: the guide's recovery paragraph says "every byte except `updatedAt`, validated by the engine", the DCO paragraph states the upstream-commit exclusion, and the spec's 482-491 sentence moves with it |
-| `testCriteria` | the workflow's jq program (extracted as the existing tests extract it) accepts a manifest with `ruleDelivery` and every other optional key and refuses one with a `ledgar` typo through the engine's validator exit code; a synthetic update PR listing 300 upstream commits plus 3 fork commits passes the DCO job's shell (executed in a scratch repository the way `test/ci/workflow.test.ts:1348-1499` executes release proofs); the 404 body yields `checked=true` and no note; a 403 yields the note; the guide and spec sentences match the workflow's comparison in words |
-| `edgeCases` | a fork whose engine is older than the branch's manifest: the validator refuses with its own schema-generation message and recovery stops with that text, never a silent pass; a repository with no upstream namespace fetched: the DCO exclusion is empty and the cap applies to all listed commits, stated in the message |
+| `files` | `.github/workflows/upstream-update.yml`, `test/upstream/workflowRecovery.test.ts`, `test/upstream/workflowLandingPolicy.test.ts`, `test/ci/upstreamWorkflow.test.ts`, `docs/enterprise-forks.md` (the recovery paragraph at 734-739), `docs/specs/enterprise-upstream-lane.md` (482-491) |
+| `interfaces` | Recovery step (`upstream-update.yml:979-1012`): replace the literal version, tools list and 17-key allowlist with `jq -S 'del(.updatedAt)'` deep-equality between the two manifests plus the existing `updatedAt` timestamp regex; validation of the key set is delegated to the engine by running `node dist/cli.js validate --json` (or the published binary the job already installs) on the branch checkout and failing on a non-zero exit — the engine's own schema is the only schema. Test: `workflowRecovery.test.ts` gains a case whose fixture manifest carries every optional key (`ruleDelivery`, `mcp`, `hooks`, `models`, `learnings`, `toolOptions`, `importChoice`) and a case that derives the fixture from `MANIFEST_FIELD_ORDER` (import `src/types/manifest.ts` and `createManifest`) so an added field is exercised the day it lands. Landing policy (`upstream-update.yml:618-634`): a 404 body containing `Branch not protected` sets `classic=none` and counts as checked; only a 403 or a malformed body marks the surface unverified; the not-fully-checked note is emitted only when a surface stayed unverified. Docs: the guide's recovery paragraph says "every byte except `updatedAt`, validated by the engine", and the spec's 482-491 sentence moves with it. The DCO half moved to unit A1b during the run |
+| `testCriteria` | the workflow's jq program (extracted as the existing tests extract it) accepts a manifest with `ruleDelivery` and every other optional key and refuses one with a `ledgar` typo through the engine's validator exit code; the 404 body yields `checked=true` and no note; a 403 yields the note; the guide and spec sentences match the workflow's comparison in words |
+| `edgeCases` | a fork whose engine is older than the branch's manifest: the validator refuses with its own schema-generation message and recovery stops with that text, never a silent pass |
 | `depends_on` | none |
+| `verify` | `npm run lint && npm run typecheck && npm run test -- --coverage` |
+
+### A1b — dco-check-past-the-listing-cap (A; audit FORK-4; split out of A1 during the run)
+
+| Field | Content |
+|---|---|
+| `id` | a1b-dco-cap |
+| `requirements` | REQ-UPSTREAM-019 |
+| `files` | `.github/workflows/pr-checks.yml` (the `dco` job), `test/ci/workflow.test.ts`, `docs/enterprise-forks.md` (the DCO paragraph), `test/docsPages.test.ts` (one pin) |
+| `interfaces` | The `dco` job lists the pull request's commits through `compare/{base.sha}...{head.sha}` with `per_page=100`, walking `page=N` explicitly until the rows in hand equal the `total_commits` the response reports — a comparison page is a single object rather than an array, so `--paginate` is not the right tool — and fails closed on a short listing, an absent, non-numeric, zero or moving `total_commits`, a zero-row walk, or a page it could not read. The exemption turns on REACHABILITY, not existence: GitHub serves a fork network's commits through the parent repository's endpoint, so a 200 from `repos/<upstream>/commits/<sha>` says only that the sha exists somewhere in that network and proves nothing about who authored it. The job therefore resolves the upstream's default branch once (`GET repos/<upstream>` → `default_branch`) and exempts an unsigned commit only when `GET repos/<upstream>/compare/<sha>...<default branch>` reports `status` `ahead` or `identical`; `behind`, `diverged`, any error and any non-200 answer on the comparison leave it unsigned, and a default branch the job could not read exempts nothing at all, because there is then nothing to measure reachability against. Four exemption states, one of which can exempt: a github.com upstream configured and readable; an upstream whose default branch could not be read; an upstream on any other host; no lane configuration on the base branch. The output names the one that applied. The upstream is read from `.stamity/upstream.json` on the BASE branch only, so a pull request cannot introduce the file that would exempt it, and it must be a github.com repository (three URL forms accepted, `.git` stripped, slug-validated); only unsigned commits are looked up; the clone URL is never echoed. The plan's own exclusion mechanism (commits reachable from `refs/stamity-upstream/*`) cannot apply here: that namespace exists only in an operator's clone, and this check has no clone. The maintainer chose the API-only fix on 2026-09-19 |
+| `testCriteria` | a synthetic 303-commit update pull request passes the shipping shell (`Listed 303 of 303` over four pages) where the pre-change shell refused at 250, executed in a scratch repository against a scripted `gh` the way `test/ci/workflow.test.ts` executes its other workflow proofs; an unsigned commit whose comparison against the upstream default branch reports `diverged` fails the job by name, with its sha printed; a pull request whose base branch carries no lane configuration fails on its unsigned commit and the output states that no commit was exempt; a configured upstream whose `default_branch` read fails exempts nothing and the output names that state; each of the four exemption states is asserted by the string the job prints for it; a short listing (`total_commits` above the rows in hand) and an unreadable page each exit non-zero naming that condition; the guide's DCO paragraph and its `test/docsPages.test.ts` pin state the shipped rule in words |
+| `edgeCases` | an upstream that is not a github.com repository: nothing is exempt, every listed commit is checked, and the output says which of the four exemption states applied; a rate-limited or otherwise throttled lookup: the commit stays unsigned, which is the fail-closed side, and no cap is placed on the number of lookups because a cap is the shape of the finding being closed |
+| `depends_on` | a1-upstream-recovery |
 | `verify` | `npm run lint && npm run typecheck && npm run test -- --coverage` |
 
 ### A2a — fork-identity-runtime (A; audit FORK-2, minor remedy strings)
