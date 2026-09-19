@@ -436,8 +436,15 @@ describe("resolveOwnPackageFacts", () => {
       expect(facts.name).toBe("@zomarit/stamity");
       expect(facts.isPrivate).toBe(false);
     } else {
+      // TEST CHANGE (M-A2b-1): this branch asserted `isPrivate === true` on EVERY
+      // non-canonical checkout. `canonical()` is false for any rename — of the name, of the
+      // publisher, or of the private flag — so a downstream that renamed the package and
+      // left it publishable landed here and failed a suite `docs/enterprise-forks.md` says
+      // needs no edit. What this module actually cares about is the flag itself, which the
+      // `toEqual` above already pins against `identity.private`; the branch now states the
+      // consequence for whichever of the two a renamed checkout is.
       expect(facts.name).toBe(identity.name);
-      expect(facts.isPrivate).toBe(true);
+      expect(facts.isPrivate).toBe(identity.private);
     }
   });
 });
