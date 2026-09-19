@@ -64,7 +64,43 @@ export function loadInputs(root, profileName) {
       requireEvidence(sha256(readFileSync(join(root, path))) === hash, 'input-changed-during-run')
     }
   }
-  return { candidate, selected, profile, cases, rubric, configuration, configurationHash, assertUnchanged }
+  return { candidate, selected, profile, cases, rubric, configuration, configurationHash,
+    comparatorKey: comparatorKey(configuration), assertUnchanged }
+}
+
+/**
+ * What "the same configuration" means to the advisory-repeat comparator: the profile, the rubric's
+ * core text and the harness — the driver's notion, and the one `SET-v7.md` § 8 and the
+ * incremental-run paragraph state (the same model pair, harness and rubric core).
+ *
+ * Case bytes, corpus bytes and the candidate are deliberately OUT of it. `configurationHash`
+ * covers every input byte, so two runs on two candidates never share one; keying the comparator
+ * on it meant the 17 committed summaries carried 17 distinct hashes and no run ever found a
+ * predecessor — the promote-or-delete rule had nothing to act on. The rule tracks one advisory
+ * criterion ACROSS candidates, which is exactly the axis the hash cannot hold still.
+ */
+export function comparatorKey(configuration = {}) {
+  return { profile: configuration.profile ?? null, rubricCoreHash: configuration.rubricCoreHash ?? null,
+    harness: configuration.harness ?? null }
+}
+const COMPARATOR_FIELDS = ['profile', 'rubricCoreHash', 'harness']
+
+/**
+ * The comparator key a committed run recorded. Summaries written before `comparatorKey` existed
+ * carry none, so the three fields are read from the run's own `inputs.json` — this runner writes
+ * them at its top level, the driver nests them under `configuration` — and a field that neither
+ * file recorded is left null. Backward compatibility rule: a null field on the OLDER run is not
+ * compared, so a historical run matches on exactly the fields it recorded and no more.
+ */
+function recordedKey(directory, summary) {
+  if (summary.comparatorKey) return comparatorKey(summary.comparatorKey)
+  let raw
+  try { raw = readFileSync(join(directory, 'inputs.json'), 'utf8') }
+  catch (error) { if (error.code !== 'ENOENT') throw error }
+  let parsed = {}
+  if (raw) { try { parsed = JSON.parse(raw) } catch { parsed = {} } }
+  const recorded = comparatorKey(parsed.configuration ?? parsed)
+  return { ...recorded, profile: recorded.profile ?? summary.profile ?? null }
 }
 
 /** New directories and exclusive writes only; no historical artifact can be replaced. */
@@ -156,7 +192,8 @@ export function advisoryRepeats(aggregateResult, previous) {
   return { failures, repeats: failures.filter(id => previous?.advisory?.failures.includes(id)) }
 }
 
-function previousRun(root, configurationHash) {
+/** The latest scored run this run may be compared with: same comparator key, PASS or FAIL. */
+export function previousRun(root, key) {
   const directory = join(root, 'evals', 'runs')
   const matches = []
   for (const name of readdirSync(directory)) {
@@ -165,7 +202,9 @@ function previousRun(root, configurationHash) {
     try { raw = readFileSync(join(directory, name, 'summary.json'), 'utf8') }
     catch (error) { if (error.code === 'ENOENT') continue; throw error }
     const summary = JSON.parse(raw)
-    if (summary.configurationHash === configurationHash && ['PASS', 'FAIL'].includes(summary.status)) matches.push(summary)
+    const recorded = recordedKey(join(directory, name), summary)
+    const same = COMPARATOR_FIELDS.every(field => recorded[field] == null || recorded[field] === key[field])
+    if (same && ['PASS', 'FAIL'].includes(summary.status)) matches.push(summary)
   }
   return matches.toSorted((a, b) => a.startedAt.localeCompare(b.startedAt)).at(-1)
 }
@@ -209,13 +248,16 @@ export async function runEvaluation({ root, runId, profileName, trigger, capacit
     profile: profileName ?? 'claude', capacity, status: 'BLOCKED', calibration: [], notDone: [] }
   try {
     const loaded = load(root, profileName)
+    // `comparatorKey` is recorded so a later run reads this run's configuration without reopening
+    // `inputs.json`; `configurationHash` stays as the exact-input receipt it has always been.
+    const comparator = loaded.comparatorKey ?? comparatorKey(loaded.configuration)
     Object.assign(summary, { candidate: loaded.candidate, profile: loaded.selected, configurationHash: loaded.configurationHash,
-      coverage: loaded.cases.map(scenario => ({ caseId: scenario.id, samples: [] })) })
+      comparatorKey: comparator, coverage: loaded.cases.map(scenario => ({ caseId: scenario.id, samples: [] })) })
     artifacts.write('inputs.json', loaded.configuration)
     // Test transports exercise orchestration only. The CLI supplies no override and requires an API key.
     requireEvidence(suppliedTransport || (typeof apiKey === 'string' && apiKey.trim().length > 0), 'OPENAI_API_KEY-unavailable')
     const transport = suppliedTransport ?? (request => responsesTransport(request, { apiKey }))
-    const prior = previousRun(root, loaded.configurationHash)
+    const prior = previousRun(root, comparator)
     const undisposed = undisposedRepeats(prior, loaded.cases, root)
     requireEvidence(undisposed.length === 0, `advisory-repeat-disposition-required: ${undisposed.join(', ')}`)
     const invoke = async (name, role, blocks, validate, allowRefusal = false) => {

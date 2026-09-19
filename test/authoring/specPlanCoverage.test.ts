@@ -19,7 +19,8 @@ function check(planText = plan, specText = spec) {
   } catch (error) {
     output = String((error as { stdout?: string }).stdout ?? "");
   }
-  return JSON.parse(output) as { status: string; semanticReview: string; findings: { code: string; message: string }[] };
+  return JSON.parse(output) as { status: string; semanticReview: string; scope: string[]; units: string[];
+    findings: { code: string; message: string }[] };
 }
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 
@@ -71,5 +72,90 @@ describe("REQ-FINISH-003 — structural spec/plan coverage", () => {
   });
   it("reads the persisted candidate plan with all ten requirements", () => {
     expect(check(readFileSync("docs/plans/006-finish-implementation.md", "utf8"), readFileSync("docs/specs/implementation-finish.md", "utf8")).status).toBe("pass");
+  });
+
+  // CHECK-1, the three false-pass classes. Each one let a plan through with requirements out of
+  // scope, so the checker reported a clean structure over work nobody had assigned.
+  describe("prose delta shapes that used to pass with requirements out of scope", () => {
+    const wideSpec = ["## Requirements", "", ...[1, 2, 3].map((n) => `### REQ-DEMO-00${n}\nRule ${n}.`)].join("\n") + "\n";
+    it("expands a prose range and finds the middle ID nobody covers", () => {
+      const prose = "## Spec delta\nADDED REQ-DEMO-001 … REQ-DEMO-003.\n## Units\n### U1\n- **requirements**: REQ-DEMO-001, REQ-DEMO-003.\n- **depends_on**: none.\n";
+      const result = check(prose, wideSpec);
+      expect(result.scope).toEqual(["REQ-DEMO-001", "REQ-DEMO-002", "REQ-DEMO-003"]);
+      expect(result.findings).toEqual([expect.objectContaining({ code: "missing-coverage", message: expect.stringContaining("REQ-DEMO-002") })]);
+    });
+    it.each(["to", "through", "-"])("expands the %s range form as well", (connector) => {
+      expect(check(`## Spec delta\nADDED REQ-DEMO-001 ${connector} REQ-DEMO-003.\n## Units\n### U1\n- **requirements**: REQ-DEMO-001, -002, -003.\n- **depends_on**: none.\n`, wideSpec))
+        .toMatchObject({ status: "pass", scope: ["REQ-DEMO-001", "REQ-DEMO-002", "REQ-DEMO-003"] });
+    });
+    it("refuses a range whose endpoints name two areas instead of reading it as one ID", () => {
+      const crossing = check("## Spec delta\nADDED REQ-DEMO-001 … REQ-OTHER-003.\n## Units\n### U1\n- **requirements**: REQ-DEMO-001.\n- **depends_on**: none.\n", wideSpec);
+      expect(crossing.findings).toEqual(expect.arrayContaining([expect.objectContaining({ code: "invalid-reference",
+        message: expect.stringContaining("spans two areas") })]));
+    });
+    it("reports a range nothing closes rather than silently scoping its opening ID", () => {
+      const open = check("## Spec delta\nADDED REQ-DEMO-001 … and the rest of that area.\n## Units\n### U1\n- **requirements**: REQ-DEMO-001.\n- **depends_on**: none.\n", wideSpec);
+      expect(open.status).toBe("fail");
+      expect(open.findings).toEqual([expect.objectContaining({ code: "partial-scope" })]);
+    });
+    it("reports an absent or suffixed Spec delta heading instead of passing with nothing in scope", () => {
+      expect(check(plan.replace("## Spec delta\n\nADDED REQ-DEMO-001, REQ-DEMO-002.\n\n", "")).findings.map((row) => row.code))
+        .toContain("missing-spec-delta");
+      expect(check(plan.replace("## Spec delta", "## Spec delta (proposed)")))
+        .toMatchObject({ status: "pass", scope: ["REQ-DEMO-001", "REQ-DEMO-002"] });
+    });
+    it("classifies each keyword on a line carrying both an addition and a removal", () => {
+      const mixed = "## Spec delta\nADDED REQ-DEMO-001. REMOVED REQ-DEMO-002 — retired; superseded by REQ-DEMO-001.\n## Units\n### U1\n- **requirements**: REQ-DEMO-001.\n- **depends_on**: none.\n";
+      expect(check(mixed)).toMatchObject({ status: "pass", scope: ["REQ-DEMO-001"] });
+      // The addition is in scope, so dropping its unit is now caught; before the split the whole
+      // line read as a removal and the added ID was never scoped at all.
+      expect(check(mixed.replace("- **requirements**: REQ-DEMO-001.", "- **requirements**: spec carries no ids.")).findings.map((row) => row.code))
+        .toContain("missing-coverage");
+    });
+  });
+
+  describe("reference and heading shapes the checker used to reject with a misleading message", () => {
+    it("reads a linked, suffixed or parenthesised ID as the ID it carries", () => {
+      for (const written of ["[REQ-DEMO-001](#req-demo-001)", "REQ-DEMO-001: the guard", "(REQ-DEMO-001)"]) {
+        const result = check(plan.replace("ADDED REQ-DEMO-001, REQ-DEMO-002.", `ADDED ${written}, REQ-DEMO-002.`));
+        expect(result.findings, written).toEqual([]);
+        expect(result.scope, written).toContain("REQ-DEMO-001");
+      }
+    });
+    it("does not read a negative measurement in prose as a requirement", () => {
+      const measured = check(plan.replace("ADDED REQ-DEMO-001, REQ-DEMO-002.", "ADDED REQ-DEMO-001, REQ-DEMO-002. The budget -200ms stays."));
+      expect(measured.status).toBe("pass");
+      expect(measured.scope).toEqual(["REQ-DEMO-001", "REQ-DEMO-002"]);
+    });
+    it("takes the unit ID off a colon-suffixed heading", () => {
+      expect(check(plan.replace("### U1 — guard", "### U1: guard").replace("### U2 — retry", "### U2: retry")))
+        .toMatchObject({ status: "pass", units: ["U1", "U2"] });
+    });
+  });
+
+  describe("a plan whose spec is not written yet", () => {
+    const unspecified = "## Spec delta\n\n### REQ-NEW-001\nGiven a fresh plan, Then the heading defines it.\n\n## Units\n### U1\n- **requirements**: REQ-NEW-001.\n- **depends_on**: none.\n";
+    it("reads the plan's own delta headings as provisional definitions and stays a pass", () => {
+      const result = check(unspecified);
+      expect(result.status).toBe("pass");
+      expect(result.findings).toEqual([expect.objectContaining({ code: "provisional-definition",
+        message: expect.stringContaining("REQ-NEW-001") })]);
+      expect(result.scope).toEqual(["REQ-NEW-001"]);
+    });
+    it("still refuses a second provisional definition of one ID", () => {
+      expect(check(unspecified.replace("## Units", "### REQ-NEW-001\nStated twice.\n\n## Units")).findings.map((row) => row.code))
+        .toContain("duplicate-requirement");
+    });
+    it("lets the spec win where one exists, with no provisional reading", () => {
+      expect(check("## Spec delta\n\n### REQ-DEMO-001\nRestated from the spec.\n\n## Units\n### U1\n- **requirements**: REQ-DEMO-001.\n- **depends_on**: none.\n"))
+        .toMatchObject({ status: "pass", findings: [] });
+    });
+  });
+
+  it("scopes all twenty-two requirements of the persisted Prove plan, not its range endpoints", () => {
+    const result = check(readFileSync("docs/plans/007-prove-behavior-and-value.md", "utf8"),
+      readFileSync("docs/specs/prove-behavior-and-value.md", "utf8"));
+    expect(result.status).toBe("pass");
+    expect(result.scope).toHaveLength(22);
   });
 });
