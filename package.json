@@ -44,6 +44,12 @@
   "publishConfig": {
     "access": "public"
   },
+  "stamity": {
+    "distribution": {
+      "branch": "plugin-dist",
+      "tagPattern": "plugins/v<version>"
+    }
+  },
   "scripts": {
     "build": "tsdown --config-loader native",
     "typecheck": "tsc --noEmit",
