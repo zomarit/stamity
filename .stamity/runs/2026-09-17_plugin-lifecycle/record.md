@@ -1,7 +1,9 @@
 # Package 15 — Plugin-backed distribution lifecycle (plan 008, file 1: batch A and P1)
 
-Status: **in progress** — opened 2026-09-19T09:40Z on the kickoff of 2026-09-17 (regenerated at the
-planning close). The directory is dated by the plan's date because file 3 of the plan names this path
+Status: **closed** — opened 2026-09-19T09:40Z on the kickoff of 2026-09-17 (regenerated at the planning
+close); merged 2026-09-19T22:38Z as pull request #45 (`main` `e8715ec`); closed with the entry at the end.
+Timestamps after 2026-09-19T21:50Z were re-derived from commit and run times at the close (the local clock
+ran two hours ahead of UTC past midnight). The directory is dated by the plan's date because file 3 of the plan names this path
 (`.stamity/runs/2026-09-17_plugin-lifecycle/`) as the record every unit of the package appends to.
 Every new decision goes to the maintainer through the question tool, one per turn, recommended option
 first, default declared; the eleven standing decisions of 2026-09-17 are applied as written.
@@ -585,7 +587,7 @@ structural checker at `c3efabd` passes the three 008 files (20, 9 and 5 requirem
 
 ### Fixer round 3 (opus, worktree `p15-fix3` from `c3efabd`): W-WB-1, W-WB-2, M-WB-1, M-WB-2, M-WB-4
 
-### Fixer round 3: both Warnings and the three Minors fixed (2026-09-20T00:10Z; integrated as `f7220ba`, `7607722`, `4eec37a`)
+### Fixer round 3: both Warnings and the three Minors fixed (2026-09-19T22:10Z; integrated as `f7220ba`, `7607722`, `4eec37a`)
 
 - W-WB-1: `test/ci/changelogLinks.test.ts` reads the home from the footer's own `[Unreleased]` definition and
   holds every other definition to it, so the gate measures the footer's internal consistency and not the
@@ -606,7 +608,7 @@ structural checker at `c3efabd` passes the three 008 files (20, 9 and 5 requirem
 - Pushed as `4eec37a`; the whole-branch re-review, the gate run at the head and the harness at the candidate
   run in parallel.
 
-## Whole-branch re-review — `c3efabd..4eec37a` (2026-09-20T00:25Z): **approve, confidence 0.85**
+## Whole-branch re-review — `c3efabd..4eec37a` (2026-09-19T22:25Z): **approve, confidence 0.85**
 
 - All five closures verified by reading: the changelog test's anchor on the footer's own `[Unreleased]`
   home with the three failing shapes intact (a heading without a definition, a broken range, a second
@@ -618,7 +620,7 @@ structural checker at `c3efabd` passes the three 008 files (20, 9 and 5 requirem
   "skips with that reason recorded" overstates a silent `it.skipIf` whose reason lives in comments.
 - The review loop and the deep review have both converged; the candidate is `4eec37a`.
 
-## QA checkpoint (2026-09-20T00:30Z–00:40Z)
+## QA checkpoint (2026-09-19T22:30Z–22:40Z)
 
 - What to verify, in one line each: `stamity check` on an uninitialised repository names the running
   package; a renamed private fork passes its inherited gate untouched; the upstream lane's recovery accepts
@@ -635,12 +637,12 @@ structural checker at `c3efabd` passes the three 008 files (20, 9 and 5 requirem
 - Browser evidence: the harness's site lanes at the candidate (`.stamity/evidence/qa-4eec37a.json`, rows
   H2 and H3a to H3d) are the captured evidence; no separate browser bundle was needed.
 - Sign-off: the maintainer answered **Shippable YES, accept the six unperformed rows** (the recommended
-  option) through the question tool at 2026-09-20T00:35Z; the three client hook rows are recorded as signed
+  option) through the question tool at 2026-09-19T22:35Z; the three client hook rows are recorded as signed
   off and not performed, a fourth time, with file 3's unit V1 as the row that measures them.
 
 ## Proof block
 
-### Gate results (the test-runner at `4eec37a`, 2026-09-20T00:20Z; every gate pass)
+### Gate results (the test-runner at `4eec37a`, 2026-09-19T22:20Z; every gate pass)
 
 | gate | command | result |
 |---|---|---|
@@ -733,3 +735,22 @@ batch after 1.9.0; the `.gitignore` line for a symlinked `node_modules` is the o
 because every worktree agent meets it. Not done in this session's scope: nothing; the six QA rows are
 accepted unperformed by the maintainer, and the post-merge signing rehearsal is the one step still open
 at this entry.
+
+## Closing entry (2026-09-19T22:55Z)
+
+- CI on the state commit `9bdd2fc`: the floor and LTS legs failed on the records gate — the two recaptured
+  learnings lacked `reviewBy` and `validatedAgainst`, and three deferred ledger rows had been folded into a
+  sibling's inbox row (`test/learnings/repoLearnings.test.ts`, `test/records/ledgers.test.ts`). The gate
+  run at the candidate could not see the state files (untracked in the pinned worktree). Fixed in
+  `8387090` (the two fields in the head; two more inbox rows; a dated retirement on the frame row): floor
+  3m54s, LTS 3m40s, Windows 9m47s, both aggregators green. Lesson recorded in the private layer's kickoff:
+  run `test/records`, `test/learnings` and `test/qa` in the main checkout before pushing state files.
+- Pull request #45 rebase-merged at 2026-09-19T22:38:07Z: public `main` `e8715ec` (29 commits from
+  `cba661d`: batch A, A1b, P1, three fixer rounds, the spec-delta merge, the record and its fix).
+- The pack-signing rehearsal dispatched on `main` after the merge (unit A5's post-merge criterion):
+  run 35473934277 at `e8715ec`, `prepare`, `sign` and `verify` all `success`
+  (https://github.com/zomarit/stamity/actions/runs/35473934277).
+- The private layer: A7's eight commits plus the archive pointer and the close (AD-129, DR-030's note, the
+  HANDOFF paragraph, the dashboard banner, the kickoff regenerated for session 2) pushed at the close.
+- Not done: nothing within this session's scope. Carried: the 24 inbox rows of 2026-09-20; the six QA rows
+  accepted unperformed; batches B1 to B3 of file 1, then files 2 and 3, for session 2.

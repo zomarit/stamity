@@ -1,7 +1,7 @@
 # QA walk-through — Package 15, session 1 (pull request #45; batch A of plan 008 file 1 plus P1)
 
 Candidate: `4eec37a` (the head of `package-15-plugin-lifecycle` after fixer round 3).
-Harness evidence: `.stamity/evidence/qa-4eec37a.json` (2026-09-20T00:20Z; the earlier file at `c3efabd` dropped
+Harness evidence: `.stamity/evidence/qa-4eec37a.json` (2026-09-19T22:20Z; the earlier file at `c3efabd` dropped
 because the candidate moved) (the hooks lane and the site lanes, written by
 `node scripts/qa/run.mjs --site website/build --sha <candidate>`). Gate of record: the test-runner's full
 gate at `e6f934c` and CI green on every leg at `985b359` and `c3efabd` (the run record's Prove and CI
@@ -50,7 +50,7 @@ pages at 375 and 1440 in light and dark.
 | H5 | The changed pages render on the built site | 1. `cd website && npm run build && npm run serve`. 2. Open the enterprise-forks guide, packs-and-trust, customization, the changelog. | Every page renders; every link resolves; no raw markup. | L | 5 | — [ ] |
 | H6 | The signing rehearsal on `main` after the merge | 1. `gh workflow run pack-signing-rehearsal.yml --ref main`. 2. Wait for the run. | The run concludes `success`; its summary names the commit it signed. | M | 12 | the orchestrator's post-merge step; the run URL lands in the record — [ ] |
 
-## Sign-off — Package 15 session 1, candidate `4eec37a`, 2026-09-20T00:35Z
+## Sign-off — Package 15 session 1, candidate `4eec37a`, 2026-09-19T22:35Z
 
 The maintainer answered through the question tool: **Shippable YES, accept the six unperformed rows**
 (the recommended option).
