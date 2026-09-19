@@ -225,6 +225,7 @@ const FORK_SUITE = process.env["STAMITY_FORK_SUITE"] === "1";
 const IDENTITY_SUITES = [
   "test/ci/apmDownstream.test.ts",
   "test/ci/apmPackage.test.ts",
+  "test/ci/changelogLinks.test.ts",
   "test/ci/distributionIdentity.test.ts",
   "test/ci/pluginManifests.test.ts",
   "test/ci/releaseManifest.test.ts",

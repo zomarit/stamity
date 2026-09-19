@@ -22,9 +22,12 @@ import { describe, expect, it } from "vitest";
  * the published notes silently. So the footer is required to be one contiguous block after the
  * last heading, which is the arrangement the extractor was written for.
  *
- * The repository home is read from `package.json`, not typed here: a downstream fork renames
- * the package and its remote, and a literal would make this gate fail on the rename rather than
- * on the drift it is written for.
+ * The repository home is read from the footer's own `[Unreleased]` definition, not from a literal
+ * and not from `package.json`. The changelog is an inherited upstream file: a downstream fork
+ * repoints its remote and keeps the history it inherited, so a home taken from the running
+ * package would fail this gate on the rename rather than on the drift it is written for. What is
+ * checked here is the footer's internal consistency — every heading has a definition, every
+ * definition has a heading, the compare ranges chain, and one home serves all of them.
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -40,17 +43,8 @@ const LINK_DEFINITION = /^\[([^\]]+)]:[ \t]+(\S+)$/;
 /** The label every unreleased change accumulates under. */
 const UNRELEASED = "Unreleased";
 
-interface Package {
-  readonly repository: { readonly url: string };
-}
-
-/** `git+https://github.com/owner/repo.git` → `https://github.com/owner/repo`. */
-const repositoryHome = (): string => {
-  const pkg = JSON.parse(
-    readFileSync(join(REPO_ROOT, "package.json"), "utf-8"),
-  ) as Package;
-  return pkg.repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
-};
+/** `https://github.com/owner/repo/compare/v1.8.0...HEAD` — the footer's anchor definition. */
+const UNRELEASED_URL = /^(\S+)\/compare\/v(\d+\.\d+\.\d+)\.\.\.HEAD$/;
 
 /** The file's lines, CRLF tolerated: a Windows checkout reads the same file. */
 const changelogLines = (): string[] =>
@@ -109,7 +103,18 @@ describe("CHANGELOG link references", () => {
     const lines = changelogLines();
     const released = headings(lines);
     const defined = definitions(lines);
-    const home = repositoryHome();
+
+    // The home every other definition is held to, read from `[Unreleased]`. One definition
+    // anchors the rest, so the footer is checked against itself and a renamed fork that
+    // inherited this file is measured on its chain, not on its remote.
+    const unreleased = defined.get(UNRELEASED)?.url ?? "";
+    const anchor = UNRELEASED_URL.exec(unreleased);
+    expect(
+      anchor,
+      `${CHANGELOG}: \`[${UNRELEASED}]\` must be a \`…/compare/vX.Y.Z...HEAD\` URL, which is the ` +
+        `definition every other one is chained to; found \`${unreleased}\``,
+    ).not.toBeNull();
+    const home = anchor?.[1] ?? "";
 
     // Newest first, so entry i compares against entry i + 1. The oldest release has nothing
     // below it to compare against and names its tag instead.
@@ -127,10 +132,10 @@ describe("CHANGELOG link references", () => {
 
     const newest = released[0]?.label ?? "";
     expect(
-      defined.get(UNRELEASED)?.url,
+      anchor?.[2],
       `${CHANGELOG}: \`[${UNRELEASED}]\` must compare \`v${newest}...HEAD\`, or it spans releases ` +
         `that have already shipped`,
-    ).toBe(`${home}/compare/v${newest}...HEAD`);
+    ).toBe(newest);
   });
 
   it("keeps the definitions in one trailing block, which is what the release extractor discards", () => {
