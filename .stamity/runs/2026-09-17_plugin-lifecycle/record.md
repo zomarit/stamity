@@ -750,7 +750,8 @@ at this entry.
 - The pack-signing rehearsal dispatched on `main` after the merge (unit A5's post-merge criterion):
   run 35473934277 at `e8715ec`, `prepare`, `sign` and `verify` all `success`
   (https://github.com/zomarit/stamity/actions/runs/35473934277).
-- The private layer: A7's eight commits plus the archive pointer and the close (AD-129, DR-030's note, the
-  HANDOFF paragraph, the dashboard banner, the kickoff regenerated for session 2) pushed at the close.
+- The private layer: A7's eight commits plus the archive pointer and the close (the session's decision row,
+  the directive's note, the HANDOFF paragraph, the dashboard banner, the kickoff regenerated for session 2)
+  pushed at the close.
 - Not done: nothing within this session's scope. Carried: the 24 inbox rows of 2026-09-20; the six QA rows
   accepted unperformed; batches B1 to B3 of file 1, then files 2 and 3, for session 2.
