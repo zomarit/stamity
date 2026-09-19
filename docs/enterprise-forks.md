@@ -451,13 +451,18 @@ This repository's own DCO check reads an update pull request's commits from the 
 endpoint and walks its pages until the rows in hand reach the `total_commits` that endpoint
 reports, so a pull request carrying several hundred upstream commits is checked whole rather than
 refused for its length, and a listing that comes up short fails the check rather than passing on
-the part that arrived. There is one exemption. An unsigned commit is waived when it exists in the
-upstream repository your `.stamity/upstream.json` names — read from the pull request's base branch,
-so no pull request can introduce the configuration that exempts it, and only when that `upstream`
-names a repository on GitHub, because the question the check asks is a GitHub API read. A commit
-the upstream does not have, an upstream on any other host, and a repository that configures no lane
-at all each leave every commit needing its own trailer, and the check says which of the three it
-applied. A missing upstream sign-off still needs a maintainer's decision, and it
+the part that arrived. There is one exemption. An unsigned commit is waived when it is reachable
+from the default branch of the upstream repository your `.stamity/upstream.json` names — an
+ancestor of that branch, or its tip — read from the pull request's base branch, so no pull request
+can introduce the configuration that exempts it, and only when that `upstream`
+names a repository on GitHub, because the question the check asks is a GitHub API read. Reachability, and not mere
+existence: GitHub serves a commit pushed to any repository in a fork network through the parent
+repository's endpoint, so "the upstream has this sha" would be answered yes for a commit anyone
+pushed to a personal fork, and against a public upstream that would let a contributor waive the
+DCO on their own commit. Only the upstream's maintainers move its default branch. A commit that
+branch never reached, an upstream whose default branch cannot be read, an upstream on any other
+host, and a repository that configures no lane at all each leave every commit needing its own
+trailer, and the check says which of the four it applied. A missing upstream sign-off still needs a maintainer's decision, and it
 does not justify exempting the update pull request from its required checks.
 
 When policy forbids merge commits, construct the merge by hand from the record's upstream commit
