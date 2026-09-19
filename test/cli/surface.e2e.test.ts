@@ -6,6 +6,16 @@ import { describe, expect, it } from "vitest";
 import { COMMANDS, assertUniqueCommandNames } from "../../src/cli.ts";
 import type { CommandModule } from "../../src/cli/kit/program.ts";
 import { useCliFixture } from "../support/cliHarness.ts";
+import { npxCommand } from "../support/identity.ts";
+/**
+ * TEST CHANGE, justified (audit FORK-3): every `npx @zomarit/stamity …` literal below
+ * became `npxCommand("…")`, which reads the running checkout's own `package.json`.
+ * The assertion is unchanged on this tree — the derived string is byte-for-byte the
+ * literal it replaced — and a downstream that renamed the package as
+ * `docs/enterprise-forks.md` instructs now reads its own remedy instead of failing on
+ * a registry name it cannot install. Nothing here proves the production string: that
+ * is `test/cli/kit/packageName.test.ts`, against a pseudo package root.
+ */
 
 /**
  * Full-surface e2e over the REAL entry (`src/cli.ts` in a child process via the
@@ -151,11 +161,11 @@ describe("exit-code matrix on an empty fixture", () => {
   /** [label, argv, contracted exit, required stderr fragment (when failing)] */
   const rows: readonly (readonly [string, readonly string[], number, string | null])[] = [
     ["init -y succeeds on a fresh repo", ["init", "-y"], 0, null],
-    ["sync refuses uninitialised", ["sync"], 1, "npx @zomarit/stamity init"],
+    ["sync refuses uninitialised", ["sync"], 1, npxCommand("init")],
     ["check gates red uninitialised", ["check"], 1, null],
     ["validate passes with nothing user-authored", ["validate"], 0, null],
     ["add without a pack-spec is a usage error", ["add"], 2, "missing required argument"],
-    ["add with a spec refuses uninitialised", ["add", "./missing-pack"], 1, "npx @zomarit/stamity init"],
+    ["add with a spec refuses uninitialised", ["add", "./missing-pack"], 1, npxCommand("init")],
     ["config refuses uninitialised", ["config"], 1, "stamity init"],
     // The fixture is not a clone, and the whole verb acts on one — so the bare
     // read refuses through the real binary rather than reporting an empty
@@ -172,14 +182,14 @@ describe("exit-code matrix on an empty fixture", () => {
       "learn capture refuses uninitialised",
       ["learn", "capture", "--title", "t", "--summary", "s"],
       1,
-      "npx @zomarit/stamity init",
+      npxCommand("init"),
     ],
     ["handoff without its mode is a usage error", ["handoff"], 2, "run stamity handoff --help"],
     [
       "handoff prepare refuses uninitialised",
       ["handoff", "prepare", "--title", "t", "--summary", "s", "--from-tool", "claude"],
       1,
-      "npx @zomarit/stamity init",
+      npxCommand("init"),
     ],
   ];
 

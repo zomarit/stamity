@@ -21,8 +21,18 @@ import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
 import type { AdapterOutput, ContentSelection } from "../../../src/types/content.ts";
 import { MANIFEST_VERSION } from "../../../src/types/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
+import { canonical, npxCommand } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
+/**
+ * TEST CHANGE, justified (audit FORK-3): every `npx @zomarit/stamity …` literal below
+ * became `npxCommand("…")`, which reads the running checkout's own `package.json`.
+ * The assertion is unchanged on this tree — the derived string is byte-for-byte the
+ * literal it replaced — and a downstream that renamed the package as
+ * `docs/enterprise-forks.md` instructs now reads its own remedy instead of failing on
+ * a registry name it cannot install. Nothing here proves the production string: that
+ * is `test/cli/kit/packageName.test.ts`, against a pseudo package root.
+ */
 
 /**
  * Command-layer suite for `stamity sync`, run through the in-process CLI funnel
@@ -212,7 +222,7 @@ describe("sync — uninitialised repo", () => {
     const result = await runSync(handle.dir);
 
     expect(result.code).toBe(1);
-    expect(result.stderr).toContain("npx @zomarit/stamity init");
+    expect(result.stderr).toContain(npxCommand("init"));
   });
 });
 
@@ -329,7 +339,11 @@ describe("sync — help text", () => {
     const result = await runSync(process.cwd(), ["--help"]);
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("npx @zomarit/stamity@latest sync");
+    // TEST CHANGE, justified (audit FORK-3): the update line names the package that is
+    // running, and `sync.ts` composes it from `packageName()`. Derived here from the
+    // manifest so a renamed private copy reads its own guidance rather than failing on a
+    // registry name it cannot install; the canonical checkout asserts the same bytes.
+    expect(result.stdout).toContain(`npx ${canonical().name}@latest sync`);
     expect(result.stdout).toContain("--force");
   });
 });

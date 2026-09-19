@@ -86,6 +86,8 @@ interface PackageJson {
   readonly description: string;
   readonly license: string;
   readonly keywords: readonly string[];
+  readonly private?: boolean;
+  readonly repository: { readonly url: string };
 }
 
 const pkg = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf-8")) as PackageJson;
@@ -340,7 +342,14 @@ describe("plugin manifest identity", () => {
     }
     // The marketplace holds three: the marketplace itself, the entry, and the
     // npm source pin. All three moving together is the drift the predecessor hit.
-    expect(versionsIn(readManifest(REPO_ROOT, MARKETPLACE))).toHaveLength(3);
+    //
+    // TEST CHANGE, justified (audit Minor, private-fork marketplace): the third is the
+    // npm source's `version`, and a private package has no npm source to carry one — a
+    // `github` source names a repository, not a release. The count is therefore stated
+    // per source form rather than relaxed to "at least two", so the canonical tree is
+    // still held to exactly three and a fourth would still fail here.
+    const expected = pkg.private === true ? 2 : 3;
+    expect(versionsIn(readManifest(REPO_ROOT, MARKETPLACE))).toHaveLength(expected);
   });
 
   it("repeats package.json's description, license and keywords rather than re-wording them", () => {
@@ -460,30 +469,44 @@ describe("plugin manifest components", () => {
     expect(Object.keys(marketplaceEntry())).not.toContain("rules");
   });
 
-  it("pins the marketplace to the npm source form, resolved against the package root", () => {
+  it("pins the marketplace to the fetch channel this package has, resolved against its root", () => {
+    // TEST CHANGE, justified (audit Minor, "a private fork's regenerated marketplace
+    // advertises an npm package it never publishes"): the assertion was the npm source
+    // unconditionally. `private: true` — which `docs/enterprise-forks.md` instructs a
+    // downstream to set, and which makes `npm publish` refuse — leaves that entry naming
+    // a package no client can resolve, so the generator now emits the `github` source
+    // for a private package. Neither form is optional here: the branch asserts the exact
+    // object for the channel this checkout actually has, and the canonical run asserts
+    // byte-for-byte what it asserted before.
     const entry = marketplaceEntry();
-    expect(entry["source"]).toEqual({
-      source: "npm",
-      package: pkg.name,
-      version: pkg.version,
-    });
+    const isPrivate = pkg.private === true;
+    const slug = /^(?:git\+)?https:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/.exec(pkg.repository.url)?.[1];
+    expect(entry["source"]).toEqual(
+      isPrivate
+        ? { source: "github", repo: slug }
+        : { source: "npm", package: pkg.name, version: pkg.version },
+    );
 
     // The published tarball is a different tree from this checkout: `files`
     // ships `dist` alone, so the corpus lands at `dist/content/`. An npm source
     // resolves component paths against the package root, which is why these
-    // paths carry a prefix the checkout-rooted manifests must not.
+    // paths carry a prefix the checkout-rooted manifests must not. A `github`
+    // source resolves against the repository checkout instead, where the corpus
+    // is where the other three manifests already say it is — so the prefix
+    // follows the source rather than being a second, independent claim.
+    const prefix = isPrivate ? "./" : TARBALL_PREFIX;
     const checkout = componentsByField(readManifest(REPO_ROOT, CLAUDE_PLUGIN));
     const published = componentsByField(entry);
     expect([...published.keys()]).toEqual([...checkout.keys()]);
     for (const [field, paths] of published) {
       for (const path of paths) {
-        expect(path.startsWith(TARBALL_PREFIX), `${field} -> ${path}`).toBe(true);
+        expect(path.startsWith(prefix), `${field} -> ${path}`).toBe(true);
       }
       // Element-wise, so the agent FILE list is proven to name the same
       // artifacts in the same order on both trees rather than merely to be the
       // same length.
       expect(paths, field).toEqual(
-        (checkout.get(field) ?? []).map((path) => `${TARBALL_PREFIX}${path.replace(/^\.\//, "")}`),
+        (checkout.get(field) ?? []).map((path) => `${prefix}${path.replace(/^\.\//, "")}`),
       );
     }
   });

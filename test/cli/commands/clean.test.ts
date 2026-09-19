@@ -7,8 +7,18 @@ import { cleanCommand, planCleanCandidates } from "../../../src/cli/commands/cle
 import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
 import { MANIFEST_VERSION, type LedgerEntry, type SetupManifest } from "../../../src/types/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
+import { npxCommand } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
+/**
+ * TEST CHANGE, justified (audit FORK-3): every `npx @zomarit/stamity …` literal below
+ * became `npxCommand("…")`, which reads the running checkout's own `package.json`.
+ * The assertion is unchanged on this tree — the derived string is byte-for-byte the
+ * literal it replaced — and a downstream that renamed the package as
+ * `docs/enterprise-forks.md` instructs now reads its own remedy instead of failing on
+ * a registry name it cannot install. Nothing here proves the production string: that
+ * is `test/cli/kit/packageName.test.ts`, against a pseudo package root.
+ */
 
 /**
  * Real-filesystem lane. Clean's whole contract is what survives on disk — a
@@ -201,7 +211,7 @@ describe("clean — nothing to clean", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("Nothing to clean");
-    expect(result.stdout).toContain("npx @zomarit/stamity init");
+    expect(result.stdout).toContain(npxCommand("init"));
     expect(await snapshot(root)).toEqual(before);
   });
 
@@ -305,7 +315,7 @@ describe("clean — full removal", () => {
 
     const result = await runClean(root, ["-y"]);
 
-    expect(result.stdout).toContain("npx @zomarit/stamity init");
+    expect(result.stdout).toContain(npxCommand("init"));
     expect(result.stdout).toContain(".gitignore");
     expect(await readIfPresent(join(root, ".gitignore"))).toBe(`${STATE_DIR}/\nnode_modules/\n`);
   });
@@ -634,7 +644,7 @@ describe("clean --pack — scoped removal", () => {
     const result = await runClean(root, ["--pack", OPS_ID, "-y"]);
 
     expect(result.stdout).toContain("stamity sync");
-    expect(result.stdout).not.toContain("npx @zomarit/stamity init");
+    expect(result.stdout).not.toContain(npxCommand("init"));
   });
 
   it("composes with a full clean afterwards, which still removes everything else", async () => {

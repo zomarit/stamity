@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { parseFrontmatter } from "../../src/content/frontmatter.ts";
+import { canonical as repositoryIdentity } from "../support/identity.ts";
 import { downstreamCheckout, EXPECTED_PRIMITIVES, write } from "./downstreamFixture.ts";
 
 const work = mkdtempSync(join(tmpdir(), "stamity-apm-downstream-"));
@@ -194,11 +195,18 @@ describe.each(["generate-apm-package.mjs", "generate-plugin-manifests.mjs"])("%s
     expect(existsSync(join(root, "plugin.json"))).toBe(false);
   });
 
-  it("retains the canonical default and asks a moved repository for explicit identity", () => {
+  it("retains the configured default and asks a moved repository for explicit identity", () => {
     const root = checkout();
-    const canonical = generate(root, script);
-    expect(canonical.status, canonical.stderr).toBe(0);
-    metadata(root, { repository: { url: "https://github.com/acme/stamity" } });
+    const asCommitted = generate(root, script);
+    expect(asCommitted.status, asCommitted.stderr).toBe(0);
+    // TEST CHANGE, justified (audit FORK-3): the moved owner was the literal `acme`,
+    // which is a MOVE only from the canonical `zomarit`. A downstream owned by `acme`
+    // moved the repository to itself, the identity agreed, and the generator was right
+    // to write — the test failed on its own fixture. The owner is now derived to be one
+    // this checkout is not, so the refusal under test is reached from any identity. The
+    // canonical run is unchanged: `zomarit` is not `acme`, so the URL is the same one.
+    const movedOwner = repositoryIdentity().publisher === "acme" ? "contoso" : "acme";
+    metadata(root, { repository: { url: `https://github.com/${movedOwner}/stamity` } });
     const moved = generate(root, script);
     expect(moved.status).toBe(1);
     expect(moved.stderr).toContain("stamity.publisher");

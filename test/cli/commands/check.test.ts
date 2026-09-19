@@ -27,8 +27,18 @@ import { EngineError } from "../../../src/types/errors.ts";
 import { packOwner, type LedgerEntry, type SetupManifest } from "../../../src/types/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import type * as PathsApi from "../../../src/shared/paths.ts";
+import { npxCommand } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
+/**
+ * TEST CHANGE, justified (audit FORK-3): every `npx @zomarit/stamity …` literal below
+ * became `npxCommand("…")`, which reads the running checkout's own `package.json`.
+ * The assertion is unchanged on this tree — the derived string is byte-for-byte the
+ * literal it replaced — and a downstream that renamed the package as
+ * `docs/enterprise-forks.md` instructs now reads its own remedy instead of failing on
+ * a registry name it cannot install. Nothing here proves the production string: that
+ * is `test/cli/kit/packageName.test.ts`, against a pseudo package root.
+ */
 
 /**
  * Real-filesystem lane: check's whole subject is what is on disk — a manifest,
@@ -373,7 +383,7 @@ describe("check — an un-initialised repository", () => {
     expect(code).toBe(1);
     expect(doc.ok).toBe(false);
     expect(row(doc, "manifest").status).toBe("fail");
-    expect(row(doc, "manifest").detail).toContain("npx @zomarit/stamity init");
+    expect(row(doc, "manifest").detail).toContain(npxCommand("init"));
     // The gate could not run, and check says so rather than claiming a verdict.
     expect(doc.drift).toBeNull();
     expect(doc.provenance).toBeNull();
@@ -389,7 +399,7 @@ describe("check — an un-initialised repository", () => {
     expect(result.stdout).toContain("fail");
     expect(result.stdout).toContain("drift: not evaluated");
     expect(result.stdout).toContain("next:");
-    expect(result.stdout).toContain("npx @zomarit/stamity init");
+    expect(result.stdout).toContain(npxCommand("init"));
   });
 
   it("names the installation's own package in the remedy, never a hardcoded one", async () => {
@@ -448,7 +458,7 @@ describe("check — an un-initialised repository", () => {
     expect(doc.doctor.filter((entry) => entry.status === "fail").map((entry) => entry.id)).toEqual([
       "manifest",
     ]);
-    expect(row(doc, "manifest").detail).toContain("npx @zomarit/stamity init");
+    expect(row(doc, "manifest").detail).toContain(npxCommand("init"));
     expect(row(doc, "state-dirs").status).toBe("pass");
   });
 
@@ -512,7 +522,7 @@ describe("check — the drift gate", () => {
     expect(result.code).toBe(1);
     expect(result.stdout).toContain("ledgered file(s) missing");
     expect(result.stdout).toContain("docs/pack-guide.md");
-    expect(result.stdout).toContain("npx @zomarit/stamity sync");
+    expect(result.stdout).toContain(npxCommand("sync"));
     // Pack rows still appear in the provenance rollup, missing file or not.
     expect(result.stdout).toContain("pack demo: 1 file(s)");
   });
@@ -547,7 +557,7 @@ describe("check — the drift gate", () => {
     // tells the reader what to do about it, and sync is what drains the queue.
     const human = await runHuman(root);
     expect(human.stdout).toContain("queued for reclaim");
-    expect(human.stdout).toContain("npx @zomarit/stamity sync");
+    expect(human.stdout).toContain(npxCommand("sync"));
   });
 
   it("counts a path claimed twice in the ledger as one missing file", async () => {
@@ -601,8 +611,8 @@ describe("check — advisory warnings", () => {
     // thing. This row named `npx @zomarit/stamity init`, which refuses an initialised
     // repo with exit 1 and recreates nothing — so the warning was permanent for
     // every teammate who cloned the repository.
-    expect(row(doc, "state-dirs").detail).toContain("npx @zomarit/stamity sync");
-    expect(row(doc, "state-dirs").detail).not.toContain("npx @zomarit/stamity init");
+    expect(row(doc, "state-dirs").detail).toContain(npxCommand("sync"));
+    expect(row(doc, "state-dirs").detail).not.toContain(npxCommand("init"));
     // A temp directory is not a git repository; git-less repos are legal, so the
     // row is never a failure whichever way the probe answers.
     expect(row(doc, "git-available").status).not.toBe("fail");
@@ -649,7 +659,7 @@ describe("check — advisory warnings", () => {
 
     expect(row(doc, "tool-traces").status).toBe("warn");
     expect(row(doc, "tool-traces").detail).toContain("cursor");
-    expect(row(doc, "tool-traces").detail).toContain("npx @zomarit/stamity sync");
+    expect(row(doc, "tool-traces").detail).toContain(npxCommand("sync"));
   });
 
   it("passes tool-traces once every target tool has emitted files", async () => {
@@ -690,7 +700,7 @@ describe("check — advisory warnings", () => {
 
     expect(code).toBe(0);
     expect(row(doc, "learnings").status).toBe("warn");
-    expect(row(doc, "learnings").detail).toContain("npx @zomarit/stamity validate");
+    expect(row(doc, "learnings").detail).toContain(npxCommand("validate"));
   });
 });
 
