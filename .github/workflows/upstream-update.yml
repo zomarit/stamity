@@ -1019,8 +1019,9 @@ jobs:
             #
             # `updatedAt` is the ONLY field excluded from the byte comparison, so it is the only
             # field needing a bound of its own: a real UTC millisecond timestamp, nothing else.
-            # `jq -S 'del(.updatedAt)'` removes exactly the top-level key and sorts, which is why
-            # the old line-oriented `sed` mask and its uniqueness guard are gone with it.
+            # `jq 'del(.updatedAt)'` removes exactly the top-level key and preserves the order of
+            # every other one, so field order stays inside the comparison; that is why the old
+            # line-oriented `sed` mask and its uniqueness guard are gone with it.
             MANIFEST_PATH='.stamity/manifest.json'
             if ! git diff --quiet "$REMOTE_SHA" "$MERGE_COMMIT" -- "$MANIFEST_PATH"; then
               for SIDE in remote prepared; do
@@ -1039,7 +1040,7 @@ jobs:
                 # a manifest a person reformatted by hand is still read as the human edit it is.
                 jq . "$MANIFEST" > "$MANIFEST.canonical" || refuse 'Cannot parse the changed sync manifest.'
                 cmp -s "$MANIFEST" "$MANIFEST.canonical" || refuse 'The changed sync manifest is not canonical generated JSON.'
-                jq -S 'del(.updatedAt)' "$MANIFEST" > "$MANIFEST.comparable" || refuse 'Cannot mask the changed sync manifest timestamp.'
+                jq 'del(.updatedAt)' "$MANIFEST" > "$MANIFEST.comparable" || refuse 'Cannot mask the changed sync manifest timestamp.'
               done
               cmp -s "$ARTIFACT_DIR/remote-manifest.json.comparable" "$ARTIFACT_DIR/prepared-manifest.json.comparable" || refuse 'The sync manifest differs beyond its generated updatedAt timestamp.'
             fi
