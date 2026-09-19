@@ -239,8 +239,10 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
       url: "https://code.visualstudio.com/docs/copilot/customization/prompt-files",
       accessDate: ACCESS_DATE,
     },
-    // Repository hook discovery, PascalCase matcher aliases and fail behavior.
-    { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-09-10" },
+    // Repository hook discovery, the entry keys `type`, `cwd`, `matcher` and
+    // `timeoutSec`, PascalCase matcher aliases, fail behavior, and the
+    // sessionStart `additionalContext` injection the portable runner writes.
+    { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-09-17" },
   ],
 };
 
@@ -294,7 +296,7 @@ export const copilotResiduePlanner: ResiduePlanner = {
     // and an adapter that re-derived either would be a second writer.
     for (const emission of core.mcpFor(TOOL)) rows.push(mcpRow(emission));
 
-    return { outputs: rows, warnings: ["hook fallback [copilot]: sessionStart output does not inject the learning/handoff index. Read .stamity/learnings/ and active handoffs manually. Hook timeouts remain fail-open; use native permission controls for mandatory enforcement."] };
+    return { outputs: rows, warnings: ["hook fallback [copilot]: sessionStart output is injected as additionalContext (docs.github.com hooks reference, 2026-09-17), so the learning/handoff index reaches the session. Hook timeouts remain fail-open; use native permission controls for mandatory enforcement."] };
   },
 };
 
@@ -689,7 +691,16 @@ function yamlScalar(value: string): string {
   return JSON.stringify(value.replace(/\s*[\r\n]+\s*/g, " ").trim());
 }
 
-/** PascalCase selects canonical tool names and matcher aliases in Copilot. */
+/**
+ * PascalCase selects canonical tool names and matcher aliases in Copilot.
+ *
+ * Every literal below is this client's wire vocabulary, read from the hooks
+ * reference listed in {@link COPILOT_DIALECT_FACTS.citations}: the entry `type`
+ * (`"command"`), the working directory key `cwd` (repository-relative, `"."`
+ * being the repository root), the `matcher` key, and the seconds-valued
+ * `timeoutSec` this engine rounds the portable milliseconds up into.
+ * https://docs.github.com/en/copilot/reference/hooks-reference (accessed 2026-09-17)
+ */
 export function buildCopilotHooksJson(rows: readonly HookInterchange[]): string {
   const hooks: Record<string, object[]> = {};
   for (const row of rows) {

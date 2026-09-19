@@ -244,8 +244,10 @@ const CODEX_FACTS: AdapterDialectFacts = {
     // Subagent key set + the project-scoped `.codex/agents/` location.
     { url: "https://learn.chatgpt.com/docs/agent-configuration/subagents", accessDate: "2026-09-10" },
     // Project-level `.codex/hooks.json`, PascalCase events, exit-2 blocking,
-    // and trust recorded against the hook's own hash.
-    { url: "https://learn.chatgpt.com/docs/hooks", accessDate: "2026-09-10" },
+    // the entry keys (`type`, `command`, `commandWindows`, `timeout`) and the
+    // SessionEnd default, the plaintext UserPromptSubmit channel, and trust
+    // recorded against the hook DEFINITION's hash — not the script's bytes.
+    { url: "https://learn.chatgpt.com/docs/hooks", accessDate: "2026-09-17" },
     // `project_doc_max_bytes`, default 32768 — the budget shaped below.
     { url: "https://learn.chatgpt.com/docs/config-file/config-reference", accessDate: "2026-09-15" },
     // Custom prompts: home-directory scope, deprecated — why no commands emit.
@@ -596,7 +598,26 @@ function hookTrustSentence(): string {
   return HOOK_TRUST_STEPS.join(" ").replaceAll(/\s+/gu, " ");
 }
 
-/** Native Codex configuration: string commands and runtime-managed trust. */
+/**
+ * The ceiling this adapter writes on every `SessionEnd` entry.
+ *
+ * Emitted unconditionally, because the key's absence is not neutral here: the
+ * client applies a one-second default to this event, and a session-end script
+ * that writes a handoff does not finish inside it.
+ * https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
+ */
+const SESSION_END_TIMEOUT_SECONDS = 3;
+
+/**
+ * Native Codex configuration: string commands and runtime-managed trust.
+ *
+ * The literals are this client's: the entry `type` (`"command"`), the
+ * `command`/`commandWindows` pair, the seconds-valued `timeout`, and the
+ * three-second ceiling `SessionEnd` gets — the client's own default there is
+ * one second, short enough to cut a handoff write in half, and the ceiling is
+ * the longest this event may ask for.
+ * https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
+ */
 export function buildHooksJson(core: CoreEmissionPlan): string {
   const hooks: Record<string, { matcher?: string; hooks: { type: string; command: string; commandWindows: string; timeout?: number }[] }[]> = {};
   for (const row of core.hooks.interchangeFor(TOOL)) {
@@ -611,12 +632,26 @@ export function buildHooksJson(core: CoreEmissionPlan): string {
       type: "command",
       command: portableHookCommand("codex", row),
       commandWindows: portableHookCommand("codex", row),
-      ...(row.timeoutMs === undefined ? {} : { timeout: Math.min(row.event === "session_end" ? 3 : Infinity, Math.ceil(row.timeoutMs / 1000)) }),
+      // SessionEnd is written explicitly even when the row requests nothing:
+      // leaving it out inherits this client's one-second default, which is not
+      // the budget the shipped session-end scripts were sized against.
+      ...(row.event === "session_end"
+        ? { timeout: Math.min(SESSION_END_TIMEOUT_SECONDS, row.timeoutMs === undefined ? SESSION_END_TIMEOUT_SECONDS : Math.ceil(row.timeoutMs / 1000)) }
+        : row.timeoutMs === undefined
+          ? {}
+          : { timeout: Math.ceil(row.timeoutMs / 1000) }),
     });
   }
+  // The trust boundary, said where the operator meets it: Codex records trust
+  // against the hash of THIS file, and nothing else. The scripts these commands
+  // run live in the workspace an agent can write, so their bytes are outside
+  // that hash and `stamity check` is the control that notices them changing.
+  // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
   const description =
     `Stamity hooks. ${hookTrustSentence()} ` +
-    "stamity check detects emitted-file drift. " +
+    "Trust is recorded against this file's hash only: the hook script bytes under " +
+    ".stamity/generated/hooks/codex/ are outside it and can change without re-review, " +
+    "so stamity check is the control for them and for emitted-file drift generally. " +
     "The role guard is telemetry because PreToolUse carries no agent identity.";
   return `${JSON.stringify({ description, hooks }, null, 2)}\n`;
 }
