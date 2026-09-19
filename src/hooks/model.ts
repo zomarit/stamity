@@ -109,7 +109,7 @@ export const CLIENT_HOOK_GUARANTEES: readonly ClientHookGuarantee[] = [
     failMode: "fail-closed",
     blockingExitCode: 2,
     notes:
-      "preToolUse exit 2, errors and JSON deny block. Timeouts always fail-open; other events are advisory unless documented. The identity-free core role guard is telemetry. Copilot sessionStart does not inject the learning index: read .stamity/learnings and handoffs manually.",
+      "preToolUse exit 2, errors and JSON deny block. Timeouts always fail-open; other events are advisory unless documented. The identity-free core role guard is telemetry. sessionStart output reaches the session: it is injected as additionalContext (docs.github.com hooks reference, 2026-09-17).",
   },
   {
     tool: "cursor",

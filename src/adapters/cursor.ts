@@ -3,7 +3,7 @@
  * Portable hook argv stays exec-form behind the native command-string launcher.
  * timeoutMs converts to native seconds; failClosed gates authored tool hooks and
  * adapter guards, while the identity-free core role guard remains telemetry.
- * Current contracts: https://cursor.com/docs/hooks and /docs/skills (2026-09-10).
+ * Current contracts: https://cursor.com/docs/hooks (2026-09-17) and /docs/skills (2026-09-10).
  */
 
 import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE } from "../hooks/portableRunner.ts";
@@ -126,8 +126,8 @@ const MCP_TOOL_PREFIX = "mcp__";
  * written out rather than computed: this client names the prompt-submission
  * hook `beforeSubmitPrompt` — "Called right after user hits send but before
  * backend request. Can prevent submission." — and the string `userPromptSubmit`
- * names no event on it at all (cursor.com/docs/agent/hooks, accessed
- * 2026-08-22).
+ * names no event on it at all (cursor.com/docs/hooks, accessed
+ * 2026-09-17).
  *
  * Emitting the computed name was silent in both directions: the config still
  * parsed, the key still sat in `.cursor/hooks.json`, and the one canonical
@@ -136,7 +136,7 @@ const MCP_TOOL_PREFIX = "mcp__";
  * side reports a `hooks.json` key the client does not recognise, so the suite
  * pins all six strings against the documented event list instead.
  *
- * All six were re-read against that page on 2026-08-22 (`sessionStart`,
+ * All six were re-read against that page on 2026-09-17 (`sessionStart`,
  * `preToolUse`, `postToolUse`, `stop` and `sessionEnd` verbatim, plus the
  * `beforeSubmitPrompt` correction above). A literal table also keeps a future
  * canonical rename from silently changing what gets emitted — the same reason
@@ -161,8 +161,8 @@ export const EVENT_RENAME: Readonly<Record<CanonicalHookEvent, string>> = {
  * names the agent about to run; `beforeMCPExecution` carries the server
  * identity of a pending MCP call as `tool_name` plus EITHER `url` (a remote
  * server) OR `command` (a stdio one) — the three spellings
- * {@link buildMcpGuardScript} matches on (cursor.com/docs/agent/hooks, both
- * input schemas accessed 2026-08-22).
+ * {@link buildMcpGuardScript} matches on (cursor.com/docs/hooks, both
+ * input schemas accessed 2026-09-17).
  */
 export const CURSOR_GUARD_EVENTS = {
   subagentSpawn: "subagentStart",
@@ -261,7 +261,7 @@ export const cursorDialectFacts: AdapterDialectFacts = {
       // pre-tool-use guard as a blocking emission after that guard's body had
       // been regenerated as telemetry on this client.
       value:
-        "Exit 2 denies; failClosed: true also denies hook errors and timeouts. Emitted on " +
+        "Exit 2 denies; failClosed: true also denies hook errors and timeouts, and this client counts no output as such a failure (cursor.com/docs/hooks, accessed 2026-09-17), so every allow is written explicitly. Emitted on " +
         (CORE_GUARD_REACHES_VERDICT
           ? "the pre-tool-use gate and both guards"
           : "both guards and on any authored pre-tool-use row, but NOT on the core pre-tool-use guard: this client's tool-call payload names no calling agent, so that guard is emitted as telemetry and has no verdict to block on"),
@@ -281,7 +281,7 @@ export const cursorDialectFacts: AdapterDialectFacts = {
     {
       name: "user hook enforcement",
       value:
-        "explicit exit-2 denial applies on supported events; authored pre-tool-use rows also opt into failClosed for hook errors and timeouts. Session-start and session-end responses cannot block",
+        "explicit exit-2 denial applies on supported events; authored pre-tool-use rows also opt into failClosed for hook errors and timeouts, and no output counts as one of those failures (cursor.com/docs/hooks, accessed 2026-09-17), so a row that decides nothing is emitted as an explicit allow. Session-start and session-end responses cannot block",
     },
     {
       name: "MCP tool surface",
@@ -298,7 +298,7 @@ export const cursorDialectFacts: AdapterDialectFacts = {
   citations: [
     { url: "https://cursor.com/docs/context/rules", accessDate: "2026-09-10" },
     { url: "https://cursor.com/docs/agent/subagents", accessDate: "2026-09-10" },
-    { url: "https://cursor.com/docs/hooks", accessDate: "2026-09-10" },
+    { url: "https://cursor.com/docs/hooks", accessDate: "2026-09-17" },
     { url: "https://cursor.com/docs/skills", accessDate: "2026-09-10" },
     { url: "https://cursor.com/docs/mcp", accessDate: "2026-09-10" },
   ],
@@ -866,23 +866,36 @@ const NOTICE_HELPER = `function notice(hook, event) {
 /**
  * How a decision reaches this client: the verdict is a JSON document written to
  * stdout, `permission` is one of `allow | deny | ask`, and `user_message` is
- * the "message shown in client when denied" (cursor.com/docs/agent/hooks,
- * accessed 2026-08-22). The refusal event goes to stderr through
+ * the "message shown in client when denied" (cursor.com/docs/hooks,
+ * accessed 2026-09-17). The refusal event goes to stderr through
  * {@link NOTICE_HELPER}, where the operator and any log pipeline can see it —
  * stdout is the decision channel and must carry the verdict alone.
  *
- * One reading here is the build's, not the vendor's: a hook that writes NOTHING
- * on stdout has made no decision and the action proceeds. That page documents
- * the three permission values and the fail-closed clause ("hook failures
- * (crash, timeout, invalid JSON) block the action") but never the empty-stdout
- * case, so the pass-through path rests on an undocumented reading. Revisit
- * trigger: that page gaining an explicit empty-output rule, or a `failClosed`
- * entry observed blocking on a hook that exited 0 with no stdout — either would
- * mean these guards must write an explicit `permission: "allow"` instead.
+ * EVERY PATH WRITES A VERDICT, including the allow — see {@link ALLOW_HELPER}.
+ * Silence used to be the allow, on the build's own reading that a hook writing
+ * nothing has made no decision. The page read on 2026-09-17 settles it the
+ * other way: its `failClosed` clause counts NO OUTPUT among the hook failures
+ * that block the action, and both guards are wired `failClosed: true`, so a
+ * silent allow is a blocked spawn and a blocked MCP call on any client that
+ * implements that sentence. The explicit allow is correct under either reading,
+ * which is why it is written rather than waited on.
  */
 const DENY_HELPER = `function deny(hook, event, userMessage) {
   notice(hook, event);
   process.stdout.write(JSON.stringify({ permission: "deny", user_message: userMessage }));
+}`;
+
+/**
+ * The other half of the verdict channel: the allow this client has to be told.
+ *
+ * Paired with {@link DENY_HELPER} so the two decisions leave by the same door,
+ * and called on every path that is not a refusal — including the payload the
+ * spawn guard cannot judge and the MCP call allowed while one manifest is
+ * broken, both of which still announce themselves on stderr through
+ * {@link NOTICE_HELPER} first.
+ */
+const ALLOW_HELPER = `function allow() {
+  process.stdout.write(JSON.stringify({ permission: "allow" }));
 }`;
 
 /**
@@ -936,21 +949,22 @@ ${NOTICE_HELPER}
 
 ${DENY_HELPER}
 
+${ALLOW_HELPER}
+
 const { payload, problem } = readPayload();
 const agentId = typeof payload.subagent_type === "string" ? payload.subagent_type : "";
 
 // Nothing to judge: say so on stderr rather than passing the spawn through in
-// silence. The verdict channel stays empty, so the spawn still proceeds.
+// silence. The spawn still proceeds, and it takes an explicit allow to say so —
+// no output is a failClosed failure on this client.
 if (agentId === "") {
   notice("stamity-cursor-subagent-guard", {
     reasonCode: "SPAWN_PAYLOAD_UNUSABLE",
     detail: problem === null ? "payload carried no subagent_type" : problem,
     at: new Date().toISOString(),
   });
-}
-
-// Out of scope, or rostered: no verdict written, so the spawn proceeds.
-if (agentId.startsWith(NAMESPACE) && !ROSTER.has(agentId)) {
+  allow();
+} else if (agentId.startsWith(NAMESPACE) && !ROSTER.has(agentId)) {
   deny(
     "stamity-cursor-subagent-guard",
     { reasonCode: "AGENT_NOT_ON_ROSTER", agentId, at: new Date().toISOString() },
@@ -961,6 +975,9 @@ if (agentId.startsWith(NAMESPACE) && !ROSTER.has(agentId)) {
       [...ROSTER].join(", ") +
       ".",
   );
+} else {
+  // Out of scope, or rostered. The spawn proceeds and the verdict says so.
+  allow();
 }
 `;
 }
@@ -1032,6 +1049,8 @@ ${READ_PAYLOAD}
 ${NOTICE_HELPER}
 
 ${DENY_HELPER}
+
+${ALLOW_HELPER}
 
 function normalize(value) {
   return String(value).replace(/\\s+/g, " ").trim();
@@ -1149,6 +1168,11 @@ if (allowed.size === 0 && faults.length > 0) {
   // operator whatever it configured, so it is announced rather than left to be
   // discovered as a server that silently stopped being reachable.
   notice(HOOK, { reasonCode: "MCP_MANIFEST_UNREADABLE", faults, ...event });
+  allow();
+} else {
+  // On the allowlist. The verdict is written rather than implied: no output is
+  // a failClosed failure here, and this guard is wired failClosed: true.
+  allow();
 }
 `;
 }
