@@ -1468,6 +1468,37 @@ describe("the guides", () => {
     }
   });
 
+  it("the enterprise-forks guide states the DCO check's walk and its one exemption", () => {
+    // ADDED with the fork-lane audit's inherited-checks warning (plan 008, unit A1b). This page
+    // is where a fork reads why an update pull request of several hundred upstream commits it
+    // did not write now passes an inherited required check that used to refuse it for its
+    // length, and what the single exemption costs. Held against the job itself, so the page
+    // cannot go on describing a rule the workflow stopped applying.
+    const guide = read(ENTERPRISE_FORKS);
+    const job = read(".github/workflows/pr-checks.yml");
+
+    expect(job, "the DCO job no longer reconciles its listing against total_commits").toContain(
+      "total_commits",
+    );
+    expect(guide, "the guide never says the listing is walked to its declared length").toContain(
+      "`total_commits`",
+    );
+    expect(guide, "the guide never states the exemption's one condition").toContain(
+      "exists in the\nupstream repository your `.stamity/upstream.json` names",
+    );
+    expect(guide, "the guide never limits the exemption to an upstream on GitHub").toContain(
+      "names a repository on GitHub",
+    );
+    expect(guide, "the guide never says where the configuration is read from").toContain(
+      "read from the pull request's base branch",
+    );
+    // The fork-lane minor beside it: the lane writes the trailer, and a written trailer is not
+    // the certification a person makes by submitting the contribution.
+    expect(guide, "the guide still reads the written trailer as a person's sign-off").toContain(
+      "not a certification by the person it\nnames",
+    );
+  });
+
   it("getting started shows the install line and the whole command surface", () => {
     const text = read(GETTING_STARTED);
     expect(text, "the getting-started guide never shows the install command").toContain(
