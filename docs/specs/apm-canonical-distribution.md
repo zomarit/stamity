@@ -222,8 +222,9 @@ APM generator's corpus-origin filter drops the resolved fork winners. This exten
 that consumer of the existing catalog and keeps package authoring separate from overrides in
 a consuming repository. The original 1.4.0 decision and dated probe results above remain
 historical evidence; these requirements describe the extension and require fresh proof.
-The extension targets 1.6.0; its release and live lifecycle evidence remain pending until
-publication and the required verification are recorded.
+The extension shipped in 1.6.0. Its release and live lifecycle evidence are recorded at
+`docs/plans/005-enterprise-downstream-support.md:222-256`, which names the fixture tag the
+anonymous APM installation was proved against.
 
 The four requirements this extension declares, REQ-APM-006 to REQ-APM-009, are stated under
 `## Requirements` above, with their text unchanged. They were written here and moved on

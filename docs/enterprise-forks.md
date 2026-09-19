@@ -99,16 +99,20 @@ git clone "$STAMITY_PRIVATE_URL.git" stamity-private
 cd stamity-private
 git remote add upstream https://github.com/zomarit/stamity
 git fetch upstream
-git merge-base --is-ancestor v1.5.0 HEAD
+STAMITY_BASELINE_TAG='v1.8.0'
+git merge-base --is-ancestor "$STAMITY_BASELINE_TAG" HEAD
 ```
 
-The last command checks the baseline this example imported. Substitute the exact approved upstream
-tag or SHA for another import. Confirm `origin` points to the private destination before every
-initial push. The duplication follows GitHub's own bare-clone procedure, linked from
-[the enterprise downstream plan](plans/005-enterprise-downstream-support.md); it imports branches
-and tags without the pull-request refs GitHub rejects on push. Keep the bare import as a backup
-until the downstream and consumer checks pass. Do not repeat `push --mirror` after customization.
-It would replace your downstream refs. Every later update comes through the upstream lane instead.
+The last command checks the baseline this example imported. Set `STAMITY_BASELINE_TAG` to the
+exact upstream tag or SHA your organisation approved, not to whatever the newest release happens
+to be. The value above is an example and it ages: a check against a tag your import predates
+fails, and that failure is the point of the command. Confirm `origin` points to the private
+destination before every initial push. The duplication follows GitHub's own bare-clone procedure,
+linked from [the enterprise downstream plan](plans/005-enterprise-downstream-support.md); it
+imports branches and tags without the pull-request refs GitHub rejects on push. Keep the bare
+import as a backup until the downstream and consumer checks pass. Do not repeat `push --mirror`
+after customization. It would replace your downstream refs. Every later update comes through the
+upstream lane instead.
 
 ### Set the private package's identity
 
@@ -121,6 +125,11 @@ npm pkg set "repository.url=git+$STAMITY_PRIVATE_URL.git" "homepage=$STAMITY_PRI
 npm pkg set "bugs.url=$STAMITY_PRIVATE_URL/issues"
 npm pkg set private=true --json
 npm pkg delete publishConfig
+node -e 'const fs=require("fs"),p=require("./package.json");
+const slug=p.repository.url.replace(/^git\+|\.git$/g,"").split("/").slice(-2).join("/");
+const swap=(f,a,b)=>fs.writeFileSync(f,fs.readFileSync(f,"utf8").replaceAll(a,b));
+swap("renovate/plugins.json","zomarit/stamity",slug);
+swap("renovate/companion.json","@zomarit/stamity",p.name);'
 npm install --package-lock-only --ignore-scripts
 npm ci --ignore-scripts
 node scripts/generate-plugin-manifests.mjs
@@ -132,6 +141,14 @@ owner slug that matches `repository.url`. An unsupported key or a mismatched or 
 fails before generation writes anything, and both generators share that validator. Name, version,
 description and license keep their existing package fields. `private: true` blocks npm publishing
 for this APM-only setup. Deleting the public `publishConfig` makes the destination review explicit.
+
+The `node -e` line moves the two Renovate presets, which carry the identity as data rather than
+deriving it: `renovate/plugins.json` names the repository its tag manager watches, and
+`renovate/companion.json` names the npm package it pins. Everything else follows your manifest on
+its own. The runtime's own remedies (`run: npx <your package> init`) and `scripts/tarball-smoke.mjs`
+read `name` from `package.json`, and the four plugin manifests are projected from it. A private
+package has no npm channel, so the regenerated marketplace entry carries a `github` source naming
+your repository instead of an npm package you never publish.
 
 The release and docs-deployment workflows you inherit also check the running repository's identity
 and visibility. Their public publication jobs run only in the public canonical repository. Preserve
@@ -151,6 +168,15 @@ a real update pull request: inherited filters limited to `main` do not cover ano
 the workflow tests to match your deliberate customization. This repository's
 `test/ci/workflow.test.ts` asserts the canonical `main` filter exactly, so keep an equally explicit
 assertion for your own filters and your full gate still checks the policy you intended.
+
+Your rename needs no test edit at all. Every suite that has to know who this package is reads
+`test/support/identity.ts`, which answers from your own `package.json`: the name, the publisher and
+whether the package is private. So a test asserts the remedy string, the marketplace source or the
+Renovate pin that YOUR identity implies, and the inherited gate is green on your tree for the same
+reason it is green upstream. Two things are still yours to keep true, and both are data rather than
+tests: the identity step above (the manifest and the two Renovate presets), and the branch filters
+in the paragraph before this one. Run the regenerate list in the same commit as the rename, because
+the generated trees are compared byte for byte and a skipped regeneration reads as drift.
 
 Only then enable the approved CI, upstream and private-release workflows and repository Actions,
 after the organisation owner has verified the bot permissions and the real required pull-request
@@ -802,13 +828,23 @@ What the secret does **not** buy is a workflow-touching release. That path is cl
 above, not by permission. Either way your gates already ran in `prepare` and their verdict is
 committed on the branch, so the pull request is never the first place the merged tree is tested.
 
-**Any other host.** The script is portable. A self-hosted remote or a mirror runs
+**Any other host.** The lane script is portable. A self-hosted remote or a mirror runs
 `node scripts/upstream.mjs integrate` the same way, and no verb asks the host anything. Only the
 landing-policy check does not carry over, because it is a GitHub API read. Elsewhere, set the
 project's merge-method setting to the option that produces a merge commit rather than a
 fast-forward or a squash, and check it by hand. Only the GitHub reading is automated and only it was
 verified for this release. Everywhere else the same misconfiguration surfaces as `ancestry-lost`
 after the first landing.
+
+The two generators are not portable in that sense, and the boundary is `repository.url`. Both
+`scripts/generate-plugin-manifests.mjs` and `scripts/generate-apm-package.mjs` resolve the identity
+through `scripts/distribution-identity.mjs`, which accepts a URL on the public GitHub host and
+refuses every other host before it writes a byte. A copy on GitHub Enterprise Server, on GitLab or
+on a bare mirror therefore cannot run the regenerate step against its real remote. Two ways
+through: keep `repository.url` on the public destination you mirror from and hold the other host as
+a remote only, or run the generators against a manifest whose `repository.url` names that public
+destination and publish the generated tree from there. The lane, the gates and the APM tree work
+either way. The identity resolution is the only part that requires the public host.
 
 ### Recover from a failed run
 

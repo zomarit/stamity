@@ -1644,6 +1644,45 @@ describe("the guides", () => {
     );
   });
 
+  it("the enterprise-forks guide states what a rename carries and what it does not", () => {
+    // Three claims a downstream ACTS on, each of which the 2026-09-17 audit found wrong or
+    // missing: the identity pins it would have to edit (FORK-3), the host the regenerate
+    // step really requires (FORK-5), and the baseline tag the bootstrap check asserts
+    // (DOC-2). They are prose, so nothing else in the suite can notice them going stale —
+    // and each one is the sentence a reader follows rather than a word from it.
+    const guide = read(ENTERPRISE_FORKS);
+
+    // The rename: derived, not edited. The rule names the file that makes it true, so a
+    // reader can check the claim instead of trusting it.
+    expect(guide, "the guide never names the identity helper the suites read").toContain(
+      "`test/support/identity.ts`",
+    );
+    expect(guide, "the guide never says a rename needs no test edit").toContain(
+      "Your rename needs no test edit at all.",
+    );
+    // The two exceptions the same paragraph has to carry, or the rule above is a trap: the
+    // presets hold the identity as data, and nothing derives them.
+    for (const preset of ["`renovate/plugins.json`", "`renovate/companion.json`"]) {
+      expect(guide, `the guide never names ${preset} as identity data`).toContain(preset);
+    }
+    // What a rename carries on its own, named so a reader stops looking for it.
+    expect(guide, "the guide never says the tarball smoke follows the renamed name").toContain(
+      "`scripts/tarball-smoke.mjs`",
+    );
+
+    // The portability boundary, beside the portability claim rather than somewhere else.
+    expect(guide, "the guide still calls the generators portable without naming the host").toContain(
+      "`scripts/distribution-identity.mjs`, which accepts a URL on the public GitHub host and",
+    );
+
+    // The bootstrap baseline: a variable the reader sets, never a frozen release tag.
+    expect(guide, "the bootstrap check no longer names its baseline through a variable").toContain(
+      'git merge-base --is-ancestor "$STAMITY_BASELINE_TAG" HEAD',
+    );
+    expect(guide, "the bootstrap check still hardcodes the 1.5.0 baseline").not.toContain(
+      "--is-ancestor v1.5.0",    );
+  });
+
   it("getting started shows the install line and the whole command surface", () => {
     const text = read(GETTING_STARTED);
     expect(text, "the getting-started guide never shows the install command").toContain(
