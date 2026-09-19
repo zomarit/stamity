@@ -122,6 +122,20 @@ const APM_FRONTMATTER: Readonly<Record<ContentClass, readonly string[]>> = {
 };
 
 /**
+ * The Agent Skills keys a skill primitive carries IN ADDITION, when its authored head declares
+ * them.
+ *
+ * TEST CHANGE, justified: `APM_FRONTMATTER.skill` was the exact set for a skill, and it is now
+ * the base of one. The behaviour that moved is the generator's: a `SKILL.md` primitive is the
+ * Agent Skills document, so the four keys below are its own reference's, and dropping them told
+ * every APM consumer the skills declare no `license` and no `compatibility` while the CLI
+ * projection shipped both from the same bytes. The assertion stays exact in both directions —
+ * the expectation is DERIVED from each artifact's authored frontmatter, so a generator that
+ * dropped a declared key fails, and one that invented an undeclared key fails too.
+ */
+const SKILL_SPEC_KEYS: readonly string[] = ["license", "compatibility", "allowed-tools", "metadata"];
+
+/**
  * Fields `apm.yml` must NOT carry, and why each one is a claim rather than an
  * omission. Verified against apm 0.29.0 in-tree on 2026-08-31.
  */
@@ -223,9 +237,21 @@ function apmPathOf(item: CatalogItem, demoted: ReadonlySet<string>): string {
   return posix.join(APM_DIR, APM_SUBDIR[item.type], `${id}${APM_SUFFIX[item.type] ?? ""}`);
 }
 
-/** The frontmatter keys one artifact's primitive carries, delivery included. */
-const apmFrontmatterOf = (item: CatalogItem, demoted: ReadonlySet<string>): readonly string[] =>
-  item.type === "rule" && demoted.has(item.id) ? APM_FRONTMATTER.skill : APM_FRONTMATTER[item.type];
+/**
+ * The frontmatter keys one artifact's primitive carries, delivery included.
+ *
+ * A demoted rule takes the skills HOME and the skills base head, and nothing more: the
+ * pass-through above reads a skill's authored head, and a rule's head is a rule's. Sorted,
+ * because the assertion compares sorted key lists.
+ */
+const apmFrontmatterOf = (item: CatalogItem, demoted: ReadonlySet<string>): readonly string[] => {
+  if (item.type === "rule" && demoted.has(item.id)) return APM_FRONTMATTER.skill;
+  if (item.type !== "skill") return APM_FRONTMATTER[item.type];
+  return [
+    ...APM_FRONTMATTER.skill,
+    ...SKILL_SPEC_KEYS.filter((key) => item.frontmatter[key] !== undefined),
+  ].toSorted();
+};
 
 /**
  * The declared glob scope of one artifact, trimmed and deduplicated in
@@ -497,6 +523,40 @@ describe("APM primitive frontmatter", () => {
       // re-substituted it would be a second author for one document.
       expect(parsed.body, `${relPath} is not the corpus body`).toBe(item.body);
     }
+  });
+
+  it("ships every authored Agent Skills key on the skill primitive, license and compatibility included", async () => {
+    // The positive half of the key set above, written as the claim a consumer acts on: the
+    // CHANGELOG says shipped skills declare compatibility and license metadata, and before this
+    // the sentence held on the CLI projection alone while the enterprise guide routed
+    // downstreams through APM. Values are compared against the authored head, not against a
+    // literal, so a projection that emitted the key with a re-worded value fails too.
+    const items = await corpus();
+    const demoted = await demotedRules();
+    const skills = items.filter((item) => item.type === "skill");
+    expect(skills.length, "the corpus ships no skills to check").toBeGreaterThan(0);
+
+    let checked = 0;
+    for (const item of skills) {
+      const relPath = apmPathOf(item, demoted);
+      const head = parseFrontmatter(readText(REPO_ROOT, relPath), relPath).frontmatter;
+      for (const key of SKILL_SPEC_KEYS) {
+        const authored = item.frontmatter[key];
+        if (authored === undefined) {
+          expect(head[key], `${relPath} invents \`${key}\`, which its source does not declare`)
+            .toBeUndefined();
+          continue;
+        }
+        expect(head[key], `${relPath} drops the authored \`${key}\``).toEqual(authored);
+        checked += 1;
+      }
+    }
+    // Every bundled skill declares `license` and `compatibility`, so the loop above must have
+    // compared at least two keys per skill; a corpus that stopped declaring them would make the
+    // case vacuous rather than red.
+    expect(checked, "no authored Agent Skills key was compared").toBeGreaterThanOrEqual(
+      skills.length * 2,
+    );
   });
 
   // REWRITTEN 2026-09-15. This case used to assert that a rule with no globs

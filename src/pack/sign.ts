@@ -22,8 +22,8 @@ function foldedPath(path: string): string {
  * The bundle is output, never an alias of an input. Containment alone does not
  * establish this: an in-pack directory symlink can point back to pack.json,
  * and case-insensitive filesystems can give one file several path spellings.
- * Check again after an interactive signing flow, before the atomic writer pins
- * its destination parent and performs its own containment/race checks.
+ * Check again after the signing round trip, before the atomic writer pins its
+ * destination parent and performs its own containment/race checks.
  */
 async function assertBundleDestination(root: string, manifest: PackManifest, bundlePath: string): Promise<string> {
   const segments = bundlePath.split("/");
@@ -113,8 +113,9 @@ export async function signPack(packRoot: string, options: SignPackOptions = {}):
       code: "INTEGRITY_ERROR",
     });
   }
-  // An interactive identity flow can take time. Refuse concurrent source or
-  // manifest edits before replacing the old bundle with a now-stale signature.
+  // Signing is a round trip to an external identity service and a transparency
+  // log, so it can take time. Refuse concurrent source or manifest edits before
+  // replacing the old bundle with a now-stale signature.
   const current = await readPackManifest(root);
   if (JSON.stringify(current) !== JSON.stringify(manifest)) {
     throw new EngineError("The pack manifest changed while signing; sign the current inputs again.", { code: "INTEGRITY_ERROR" });

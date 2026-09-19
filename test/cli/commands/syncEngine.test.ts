@@ -36,7 +36,17 @@ import {
   type LedgerEntry,
   type SetupManifest,
 } from "../../../src/types/manifest.ts";
+import { npxCommand } from "../../support/identity.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
+/**
+ * TEST CHANGE, justified (audit FORK-3): every `npx @zomarit/stamity …` literal below
+ * became `npxCommand("…")`, which reads the running checkout's own `package.json`.
+ * The assertion is unchanged on this tree — the derived string is byte-for-byte the
+ * literal it replaced — and a downstream that renamed the package as
+ * `docs/enterprise-forks.md` instructs now reads its own remedy instead of failing on
+ * a registry name it cannot install. Nothing here proves the production string: that
+ * is `test/cli/kit/packageName.test.ts`, against a pseudo package root.
+ */
 
 /**
  * Real-filesystem lane: the sync engine's contract is about what lands on disk
@@ -151,7 +161,7 @@ describe("planSync", () => {
     const err = await rejectionOf(planSync(handle.path("repo"), ENGINE_VERSION));
 
     expect(err?.code).toBe("VALIDATION_ERROR");
-    expect(err?.message).toContain("npx @zomarit/stamity init");
+    expect(err?.message).toContain(npxCommand("init"));
   });
 
   it("records manifestMigrated: false for a current-version manifest (empty migration registry)", async () => {

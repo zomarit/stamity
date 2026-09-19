@@ -9,7 +9,7 @@ import { aggregate, calibrationMatches, EvalBlocked, locateCitation, nonNegotiab
 // @ts-expect-error — native ESM contributor tool.
 import { admitRequest, admitResponse, boundedMap, callWithRetries, CONTROLS, ENDPOINT, makeRequest, responsesTransport } from "../../scripts/eval/transport.mjs";
 // @ts-expect-error — native ESM contributor tool.
-import { advisoryRepeats, createArtifacts, loadInputs, runEvaluation, undisposedRepeats } from "../../scripts/eval/run.mjs";
+import { advisoryRepeats, comparatorKey, createArtifacts, loadInputs, previousRun, runEvaluation, undisposedRepeats } from "../../scripts/eval/run.mjs";
 import { CASES_DIR, REPO_ROOT } from "./support.ts";
 
 const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
@@ -1236,11 +1236,20 @@ const disposedHash = sha256(parseCase(caseMarkdown("case-disposed", priorDispose
 const recycledHash = sha256(parseCase(caseMarkdown("case-recycled", priorRecycledAdvisory), recycledPath).advisory[0]).slice(0, 12);
 const disposedNote = `Disposition 2026-09-15: A2 deleted (sha256:${disposedHash}) — the governing text asks no such thing.\n\n1. The response is complete.`;
 const recycledNote = `Disposition 2026-09-15: A1 promoted to B5 (sha256:${recycledHash}) — reason.\n\n1. The row that survives and gets renumbered.`;
-const priorRun = (root: string, repeats: unknown[], candidate: string, runId = "2026-09-14-run-1") => {
+/**
+ * The comparator key the fixture runs share — the driver's notion of one configuration: profile,
+ * rubric core, harness. Case and content bytes are outside it on purpose, so a later candidate
+ * still compares against its predecessor.
+ */
+const FIXTURE_KEY = { profile: "codex-astra", rubricCoreHash: "rubric-core-fixture", harness: "codex" };
+const priorRun = (root: string, repeats: unknown[], candidate: string, runId = "2026-09-14-run-1",
+  // Recorded on the prior summary because that is where a real run records it; `configurationHash`
+  // stays beside it as the exact-input receipt, and is no longer what the comparator reads.
+  { key = FIXTURE_KEY, configurationHash = "fixture-only" } = {}) => {
   mkdirSync(join(root, "evals", "runs", runId), { recursive: true });
   writeFileSync(join(root, "evals", "runs", runId, "summary.json"), JSON.stringify({
-    runId, startedAt: "2026-09-14T00:00:00.000Z", status: "FAIL", candidate,
-    configurationHash: "fixture-only", advisory: { failures: [], repeats } }));
+    runId, startedAt: "2026-09-14T00:00:00.000Z", status: "FAIL", candidate, comparatorKey: key,
+    configurationHash, advisory: { failures: [], repeats } }));
 };
 // The `.expected` slice alone (no frontmatter/Brief), for overriding a scenario object in place
 // rather than parsing a committed file — the two remaining tests exercise both shapes.
@@ -1301,8 +1310,10 @@ describe("full run admission and strict aggregation", () => {
     expect(advisoryRepeats(result, null)).toEqual({ failures: ["case-1:A1"], repeats: [] });
     expect(advisoryRepeats(result, { advisory: { failures: ["case-1:A1"] } }).repeats).toEqual(["case-1:A1"]);
   });
+  // The configuration carries the three comparator fields a real `loadInputs` puts in it, so the
+  // runs these fixtures write are keyed the way a committed run is rather than by an empty key.
   const loaded = () => ({ candidate: "committed-test-fixture", selected: "codex-astra", configurationHash: "fixture-only",
-    configuration: { testOnly: true }, profile: { scenario: role, judge: { model: "gpt-5.6-sol", reasoningEffort: "high" } },
+    configuration: { testOnly: true, ...FIXTURE_KEY }, profile: { scenario: role, judge: { model: "gpt-5.6-sol", reasoningEffort: "high" } },
     cases, rubric, assertUnchanged: vi.fn() });
   it("writes an honest zero-call missing-credential artifact", async () => {
     const result = await runEvaluation({ root: temp(), runId: "2026-09-10-run-1", profileName: "codex-astra", trigger: "release", load: loaded });
@@ -1428,6 +1439,61 @@ describe("full run admission and strict aggregation", () => {
       trigger: "release", load: withNote, transport });
     expect(ran.summary.notDone).not.toContain("advisory-repeat-disposition-required: case-0:A2");
     expect(ran.summary.calibration).toHaveLength(5);
+  });
+
+  // EVAL-1: the comparator used to key on `configurationHash`, which covers every input byte — so
+  // two candidates never shared one, the 17 committed summaries carried 17 distinct hashes, and no
+  // run ever found a predecessor to compare with. The promote-or-delete rule was unenforceable
+  // through this route. The key is now the driver's notion of one configuration.
+  it("finds the prior run across a changed case byte, and refuses one from another configuration", async () => {
+    const root = temp();
+    const { cases: dispositioned, priorCandidate } = buildDispositioned(root);
+    const configurationFor = (caseByte: string, key = FIXTURE_KEY) => ({ ...key, node: process.version,
+      inputs: { [openPath]: sha256(`advisory criteria ${caseByte}`) } });
+    const prior = configurationFor("v1");
+    const later = configurationFor("v2");
+    // One case byte apart: the exact-input receipts differ, the comparator key does not.
+    expect(sha256(JSON.stringify(later))).not.toBe(sha256(JSON.stringify(prior)));
+    expect(comparatorKey(later)).toEqual(comparatorKey(prior));
+    priorRun(root, [{ caseId: "case-open", criterion: "A1", previousSamples: [2], samples: [1] }], priorCandidate,
+      "2026-09-14-run-1", { configurationHash: sha256(JSON.stringify(prior)) });
+
+    expect(previousRun(root, comparatorKey(later))?.runId).toBe("2026-09-14-run-1");
+    const successorRubric = configurationFor("v2", { ...FIXTURE_KEY, rubricCoreHash: "rubric-core-successor" });
+    expect(previousRun(root, comparatorKey(successorRubric))).toBeUndefined();
+    expect(previousRun(root, comparatorKey({ ...later, harness: "claude-code-cli 2.1.268" }))).toBeUndefined();
+
+    // End to end: the same advisory row failed in both runs and carries no disposition, so the
+    // later run stops on it by name instead of scoring a third time.
+    const load = () => Object.assign(loaded(), { cases: dispositioned, configuration: later,
+      configurationHash: sha256(JSON.stringify(later)) });
+    const stopped = await runEvaluation({ root, runId: "2026-09-15-run-2", profileName: "codex-astra",
+      trigger: "release", load, transport: vi.fn() });
+    expect(stopped.summary.status).toBe("BLOCKED");
+    expect(stopped.summary.notDone).toContain("advisory-repeat-disposition-required: case-open:A1");
+    expect(stopped.summary.comparatorKey).toEqual(FIXTURE_KEY);
+  });
+
+  // The backward-compatibility rule, stated in `run.mjs` and in `SET-v7.md`: a summary written
+  // before `comparatorKey` existed is keyed from its own `inputs.json`, and a field neither file
+  // recorded is not compared.
+  it("keys a pre-comparatorKey summary from its inputs.json and compares only the fields it kept", () => {
+    const root = temp();
+    const write = (runId: string, summary: object, inputs?: object) => {
+      mkdirSync(join(root, "evals", "runs", runId), { recursive: true });
+      writeFileSync(join(root, "evals", "runs", runId, "summary.json"), JSON.stringify({
+        runId, startedAt: `2026-09-1${runId.at(-1)}T00:00:00.000Z`, status: "FAIL", ...summary }));
+      if (inputs) writeFileSync(join(root, "evals", "runs", runId, "inputs.json"), JSON.stringify(inputs));
+    };
+    // This runner's own `inputs.json` is the configuration; the driver nests it under one key.
+    write("2026-09-11-run-1", { profile: "codex-astra" }, { ...FIXTURE_KEY, node: "v22.22.2" });
+    write("2026-09-12-run-2", { profile: "codex-astra" }, { configuration: { ...FIXTURE_KEY, node: "v22.22.2" } });
+    expect(previousRun(root, FIXTURE_KEY)?.runId).toBe("2026-09-12-run-2");
+    expect(previousRun(root, { ...FIXTURE_KEY, rubricCoreHash: "rubric-core-successor" })).toBeUndefined();
+    // No `inputs.json` at all: only the profile the summary itself carries is compared.
+    write("2026-09-13-run-3", { profile: "codex-astra" });
+    expect(previousRun(root, FIXTURE_KEY)?.runId).toBe("2026-09-13-run-3");
+    expect(previousRun(root, { ...FIXTURE_KEY, profile: "claude" })?.runId).toBeUndefined();
   });
 });
 

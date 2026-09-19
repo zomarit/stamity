@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { createHash, generateKeyPairSync, sign, verify as verifySignature } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
@@ -11,15 +12,18 @@ import { verifySigstoreBundle, type SigstoreVerifyFn } from "../../src/pack/sigs
 import { sigstoreSignedPayload } from "../../src/pack/trust.ts";
 import { readPackManifest, enumeratePackContent, verifyIntegrityMap } from "../../src/pack/manifest.ts";
 import { useTempDir } from "../support/tempDir.ts";
+import { evaluateWorkflowExpression } from "./workflowExpression.ts";
 // @ts-expect-error — native ESM rehearsal script intentionally has no declarations.
 import { signingContext, prepareFixtures, verify, RULE, UPDATED_RULE } from "../../scripts/pack-signing-rehearsal.mjs";
 
 const getDir = useTempDir("pack-signing-rehearsal");
 const workflowText = readFileSync(fileURLToPath(new URL("../../.github/workflows/pack-signing-rehearsal.yml", import.meta.url)), "utf8");
 interface Step { name: string; uses?: string; run?: string; with?: Record<string, unknown> }
-const workflow = parse(workflowText) as { on: { push: { branches: string[] } }; jobs: Record<string, {
+const workflow = parse(workflowText) as { on: { push: { branches: string[]; paths: string[] } }; jobs: Record<string, {
   permissions: Record<string, string>; if: string; steps: Step[]; environment?: string;
 }> };
+const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const git = (...args: string[]) => spawnSync("git", args, { cwd: REPO_ROOT, encoding: "utf8" });
 const env = {
   SIGNING_SOURCE_SHA: "2".repeat(40), GITHUB_SHA: "3".repeat(40), GITHUB_REPOSITORY: "zomarit/stamity",
   GITHUB_REF: "refs/heads/main",
@@ -103,5 +107,183 @@ describe("nonpublishing remote signing rehearsal", () => {
     expect(workflowText).not.toMatch(/npm publish|gh release|secrets\.|environment:|pull_request_target/);
     expect(workflow.jobs.sign!.steps.filter((step) => step.uses?.startsWith("actions/checkout"))).toHaveLength(0);
     expect(workflow.jobs.sign!.steps.map((step) => step.run ?? "").join("\n")).not.toMatch(/npm ci|npm install/);
+  });
+
+  // W2: the workflow pins no SIGNING_SOURCE_SHA, so the fallback to GITHUB_SHA is the
+  // branch every real run takes; only the pinned branch above was covered.
+  it("falls back to the execution commit when no source is pinned, and refuses an unusable one", () => {
+    const { SIGNING_SOURCE_SHA: _pinned, ...live } = env;
+    expect(signingContext(live).sourceSha).toBe(live.GITHUB_SHA);
+    expect(signingContext(live).executionSha).toBe(live.GITHUB_SHA);
+    expect(() => signingContext({ ...live, GITHUB_SHA: "untrusted" })).toThrow();
+  });
+});
+
+/**
+ * The source the rehearsal signs, read out of the workflow rather than trusted.
+ *
+ * The rehearsal exists to witness the code that ships, so what it checks out is the claim. A
+ * pinned `SIGNING_SOURCE_SHA` used to hold it on a commit that sits on no branch: the proof kept
+ * passing while the signing code moved underneath it, and GitHub may prune a dangling commit at
+ * any time. The workflow now signs `github.sha` and pins nothing. An override stays readable in
+ * the script for a run that must witness an earlier reviewed commit, and these gates are what it
+ * would have to survive.
+ */
+const pinnedSourceShas = (text: string): string[] =>
+  [...text.matchAll(/SIGNING_SOURCE_SHA:\s*([a-f0-9]{40})/g)].map((match) => match[1] ?? "");
+
+/** Non-zero covers both answers that disqualify a pin: reachable-but-not-an-ancestor, and unknown. */
+const mainCanReach = (sha: string): boolean =>
+  git("merge-base", "--is-ancestor", sha, "origin/main").status === 0;
+
+/**
+ * Ancestry needs git and a local `origin/main`. A shallow or ref-filtered checkout has neither,
+ * and an unanswerable question is a skip rather than a failure — the assertion above it, that the
+ * workflow pins nothing at all, runs everywhere and is the one that holds at HEAD.
+ */
+const ancestryProbe = git("rev-list", "-n", "2", "origin/main");
+const ancestryShas = ancestryProbe.status === 0 ? ancestryProbe.stdout.trim().split("\n") : [];
+const reachableSha = ancestryShas.at(-1) ?? "";
+
+/** The subset of the Actions path-filter syntax this workflow uses: a literal or a trailing `**`. */
+const filterMatches = (pattern: string, path: string): boolean =>
+  pattern.endsWith("/**") ? path.startsWith(pattern.slice(0, -2)) : pattern === path;
+
+const runShape = (over: { repository?: string; private?: unknown; ref?: string } = {}) => ({
+  github: {
+    repository: over.repository ?? "zomarit/stamity",
+    ref: over.ref ?? "refs/heads/main",
+    event: { repository: { private: "private" in over ? over.private : false } },
+  },
+});
+
+describe("the rehearsal signs the code that ships", () => {
+  it("checks the signing source out at this run's commit and pins no frozen source", () => {
+    const checkouts = workflow.jobs.prepare!.steps.filter((step) =>
+      step.uses?.startsWith("actions/checkout"),
+    );
+    expect(checkouts).toHaveLength(1);
+    expect(checkouts[0]!.with).toMatchObject({
+      ref: "${{ github.sha }}",
+      path: "source",
+      "persist-credentials": false,
+    });
+    expect(pinnedSourceShas(workflowText)).toEqual([]);
+    expect(workflowText).not.toContain("env.SIGNING_SOURCE_SHA");
+    // The second checkout existed only to copy the reviewed script over the frozen source.
+    expect(workflowText).not.toContain("runner/");
+    expect(
+      workflow.jobs.prepare!.steps.find((step) => step.name === "Prepare bounded signing inputs")?.run,
+    ).toContain("node source/scripts/pack-signing-rehearsal.mjs prepare");
+  });
+
+  it.skipIf(reachableSha === "")(
+    "refuses a source pin main cannot reach and accepts one it can",
+    () => {
+      // skipped where git or the local `origin/main` ref is unavailable; see ancestryProbe.
+      // The sha this unit removed. It sits on no branch, so the check answers false whether the
+      // object is still in the clone or was pruned.
+      const dangling = "237c6ad915c01f47040e03fb94141c4ab86ffb0f";
+      expect(pinnedSourceShas(`env:\n  SIGNING_SOURCE_SHA: ${dangling}\n`)).toEqual([dangling]);
+      expect(mainCanReach(dangling)).toBe(false);
+      expect(mainCanReach(reachableSha)).toBe(true);
+      for (const pin of pinnedSourceShas(workflowText)) {
+        expect(mainCanReach(pin), `${pin} is pinned as the signing source, and main cannot reach it`).toBe(true);
+      }
+    },
+  );
+
+  it("re-runs on every input it signs, and on no prose", () => {
+    const paths = workflow.on.push.paths;
+    for (const changed of [
+      "src/pack/sign.ts",
+      "src/merge/atomicWrite.ts",
+      "package-lock.json",
+      "scripts/pack-signing-rehearsal.mjs",
+      ".github/workflows/pack-signing-rehearsal.yml",
+      "test/ci/packSigningRehearsal.test.ts",
+    ]) {
+      expect(
+        paths.some((pattern) => filterMatches(pattern, changed)),
+        `a change to ${changed} leaves the signing proof unrepeated`,
+      ).toBe(true);
+    }
+    for (const unchanged of ["docs/packs-and-trust.md", "SECURITY.md", "website/sidebars.ts"]) {
+      expect(
+        paths.some((pattern) => filterMatches(pattern, unchanged)),
+        `${unchanged} re-runs a live signing job for a prose edit`,
+      ).toBe(false);
+    }
+  });
+
+  it("evaluates every job's condition over repository, privacy and ref", () => {
+    for (const [name, job] of Object.entries(workflow.jobs)) {
+      const message = (shape: string) => `${name} on ${shape}`;
+      expect(evaluateWorkflowExpression(job.if, runShape()), message("the canonical public main")).toBe(true);
+      // GitHub sends the flag as a boolean; a webhook that stringifies it means the same thing.
+      expect(evaluateWorkflowExpression(job.if, runShape({ private: "false" })), message("a stringified flag")).toBe(true);
+      expect(evaluateWorkflowExpression(job.if, runShape({ repository: "afork/stamity" })), message("a fork")).toBe(false);
+      expect(evaluateWorkflowExpression(job.if, runShape({ private: true })), message("a private repository")).toBe(false);
+      // An absent flag renders as the empty string, which is not 'false'. Fail closed.
+      expect(evaluateWorkflowExpression(job.if, runShape({ private: null })), message("an absent privacy flag")).toBe(false);
+      expect(evaluateWorkflowExpression(job.if, runShape({ ref: "refs/heads/candidate" })), message("another branch")).toBe(false);
+      expect(evaluateWorkflowExpression(job.if, runShape({ ref: "refs/tags/v1.8.0" })), message("a tag")).toBe(false);
+    }
+  });
+});
+
+describe("scripts/sign-pack.mjs failure reporting", () => {
+  const signPackCli = (packPath: string) =>
+    spawnSync(process.execPath, [join(REPO_ROOT, "scripts/sign-pack.mjs"), packPath], { encoding: "utf8" });
+  const GENERIC = "failed; check pack integrity, signer, bundle path and authorized Sigstore access";
+
+  it("prints the engine's own refusal when the integrity map does not match the content", async () => {
+    // No signing service is reached or substituted: signPack verifies the integrity map before
+    // it asks for a signature, so the real script refuses offline.
+    const root = join(getDir().dir, "cli-integrity");
+    await prepareFixtures(root, signingContext(env));
+    const pack = join(root, "packs", "revision1");
+    await writeFile(join(pack, "rules/example.md"), UPDATED_RULE);
+
+    const result = signPackCli(pack);
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("INTEGRITY_ERROR");
+    expect(result.stderr).toContain("failed integrity verification");
+    expect(result.stderr).toContain("rules/example.md");
+    expect(result.stderr).toContain("No successful signing is claimed.");
+    expect(result.stderr, "a typed refusal still hides behind the generic line").not.toContain(GENERIC);
+  });
+
+  it("keeps the generic line for a failure that is not the engine's own", () => {
+    // An untyped failure may come from the signing provider, whose text can carry an identity
+    // token or a request body. Nothing but the fixed line is printed for it.
+    const missing = join(getDir().dir, "no-such-pack");
+    const result = signPackCli(missing);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(GENERIC);
+    expect(result.stderr, "an untyped failure echoed its own text").not.toContain("ENOENT");
+    expect(result.stderr).not.toContain(missing);
+  });
+});
+
+const page = (path: string) => readFileSync(fileURLToPath(new URL(`../../${path}`, import.meta.url)), "utf8");
+
+describe("what the pages promise about signing", () => {
+  it("tells an author where an identity comes from, because the client has no interactive flow", () => {
+    // Read out of the installed client rather than asserted from memory: these are the only two
+    // identity sources it offers, so a page naming a third, or none, misdirects an author.
+    const text = page("docs/packs-and-trust.md");
+    expect(text).toContain("`id-token: write`");
+    expect(text).toContain("SIGSTORE_ID_TOKEN");
+    expect(text, "the page still promises signing without an identity").not.toContain(
+      "No token argument, stored signing key or credential file is needed.",
+    );
+  });
+
+  it("names the rehearsal's public outputs where the control is claimed", () => {
+    const text = page("SECURITY.md");
+    expect(text).toContain("transparency log");
+    expect(text).toContain("signed fixture packs as run artifacts");
   });
 });

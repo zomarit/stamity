@@ -1,0 +1,11 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      "description": "The repository-pinned companion of a plugin install: the runtime bundled in a plugin root is the published npm package, so a repository that also depends on it directly holds one exact version rather than a range that can drift away from the pinned plugin tag.",
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["@zomarit/stamity"],
+      "rangeStrategy": "pin"
+    }
+  ]
+}

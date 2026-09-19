@@ -54,6 +54,14 @@ jobs:
   # exactly which commits the pull request contains, while a range needs a base SHA that a
   # force-push or a rebase of the base branch can make unreachable in the fetched history. No
   # checkout at all, so this job runs nothing from the diff it is judging.
+  #
+  # It comes from the COMPARISON endpoint rather than from the pull request's own commit list,
+  # which answers at most 250 commits. That ceiling belongs to the listing and no flag lifts it,
+  # so a downstream fork taking two upstream releases in one update pull request — several
+  # hundred commits it did not write — could not pass this gate at all, and could not split the
+  # merge to get under it either. `compare/<base>...<head>` in its three-dot form lists exactly
+  # the commits reachable from the head and not from the merge base, which is the same set, and
+  # it pages without a ceiling. `total_commits` is what says when the walk is finished.
   dco:
     name: DCO sign-off
     runs-on: ubuntu-latest
@@ -66,38 +74,164 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          # Two shas off the event, never a ref: a ref is what a force-push moves under a running
+          # job, and the three-dot form derives the merge base from these two itself.
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
 
+          # ── The listing ────────────────────────────────────────────────────────────────────
           # One row per commit: the sha, then whether any line of its message is a sign-off
-          # trailer. `--paginate` walks past the first page, so a long branch is not silently
-          # judged on its first thirty commits.
-          ROWS="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits" --paginate --jq '
-            .[] | [
-              .sha,
-              ((.commit.message | split("\n") | map(select(test("^Signed-off-by: .+ <.+>"))) | length) > 0)
-            ] | @tsv
-          ')"
+          # trailer. A comparison page is a `commits` array inside one JSON object rather than
+          # the whole body, so the pages are walked EXPLICITLY — `page=N` until the rows in hand
+          # reach `total_commits` — rather than through `--paginate`, whose behaviour on this
+          # endpoint's `Link` header is not something this job should depend on.
+          ROWS=""
+          LISTED=0
+          PAGE=1
+          TOTAL_COMMITS=""
+          while : ; do
+            if ! PAGE_JSON="$(gh api "repos/$GITHUB_REPOSITORY/compare/$BASE_SHA...$HEAD_SHA?per_page=100&page=$PAGE")"; then
+              echo "::error title=DCO check could not run::Page $PAGE of the comparison for pull request #$PR_NUMBER could not be read. A lookup that was never answered is not a pass."
+              exit 1
+            fi
 
-          TOTAL="$(printf '%s\n' "$ROWS" | grep -c . || true)"
-          if [ "$TOTAL" -eq 0 ]; then
-            echo "::error title=DCO check could not run::The API listed no commits for pull request #$PR_NUMBER. A lookup that returned nothing and a pull request whose commits are all signed off are the same shape here and opposite facts, so this fails rather than reporting a pass."
+            PAGE_TOTAL="$(printf '%s' "$PAGE_JSON" | jq -r '.total_commits // empty')"
+            case "$PAGE_TOTAL" in
+              '' | *[!0-9]*)
+                echo "::error title=DCO check could not run::Page $PAGE of the comparison carried no numeric total_commits, so the listing cannot be reconciled against the length it claims."
+                exit 1
+                ;;
+            esac
+            if [ -z "$TOTAL_COMMITS" ]; then
+              TOTAL_COMMITS="$PAGE_TOTAL"
+            elif [ "$PAGE_TOTAL" != "$TOTAL_COMMITS" ]; then
+              echo "::error title=DCO check could not run::total_commits moved from $TOTAL_COMMITS to $PAGE_TOTAL while the pages were being walked, so the rows in hand describe no single state of this branch."
+              exit 1
+            fi
+
+            PAGE_ROWS="$(printf '%s' "$PAGE_JSON" | jq -r '
+              (.commits // [])[] | [
+                .sha,
+                ((.commit.message | split("\n") | map(select(test("^Signed-off-by: .+ <.+>"))) | length) > 0)
+              ] | @tsv
+            ')"
+            PAGE_COUNT="$(printf '%s\n' "$PAGE_ROWS" | grep -c . || true)"
+            [ "$PAGE_COUNT" -gt 0 ] || break
+            ROWS="$ROWS$PAGE_ROWS"$'\n'
+            LISTED=$((LISTED + PAGE_COUNT))
+            [ "$LISTED" -lt "$TOTAL_COMMITS" ] || break
+            PAGE=$((PAGE + 1))
+          done
+
+          if [ "$LISTED" -eq 0 ] || [ "$TOTAL_COMMITS" -eq 0 ]; then
+            echo "::error title=DCO check could not run::The comparison listed $LISTED commit(s) against total_commits=$TOTAL_COMMITS for pull request #$PR_NUMBER. A lookup that returned nothing and a pull request whose commits are all signed off are the same shape here and opposite facts, so this fails rather than reporting a pass."
             exit 1
           fi
-
-          # The commits endpoint lists at most 250 commits, and a truncated list is a PARTIAL
-          # answer that looks exactly like a complete one. Refuse it rather than report a pass on
-          # the part that fitted.
-          if [ "$TOTAL" -ge 250 ]; then
-            echo "::error title=DCO check is incomplete::The commits endpoint lists at most 250 commits and returned $TOTAL, so any commit past that was not checked. Split this pull request rather than merging on a partial answer."
+          # A short list looks exactly like a complete one, at any length. Reconciling it against
+          # the total the endpoint itself reports is what makes a pass an answer.
+          if [ "$LISTED" -ne "$TOTAL_COMMITS" ]; then
+            echo "::error title=DCO check is incomplete::The comparison reports total_commits=$TOTAL_COMMITS and the walk listed $LISTED commit(s) over $PAGE page(s), so some commit in this pull request was never checked."
             exit 1
           fi
 
           UNSIGNED="$(printf '%s\n' "$ROWS" | awk -F'\t' '$2 == "false" { print $1 }')"
+          UNSIGNED_COUNT="$(printf '%s\n' "$UNSIGNED" | grep -c . || true)"
+          SIGNED_COUNT=$((LISTED - UNSIGNED_COUNT))
 
+          # ── The one exemption ──────────────────────────────────────────────────────────────
+          # A fork of this repository takes upstream releases as real commits, and whether those
+          # carry a trailer is the upstream's own gate to answer, not this fork's contributor's.
+          # So an unsigned commit is exempt here on exactly one condition: it is REACHABLE FROM
+          # THE DEFAULT BRANCH of the upstream repository the fork's own lane configuration
+          # names — an ancestor of that branch, or its tip.
+          #
+          # Reachability and not existence, deliberately. `repos/<upstream>/commits/<sha>`
+          # answers 200 for a commit pushed to ANY repository in the upstream's fork network,
+          # which is the documented "may belong to a fork outside of the repository" behaviour:
+          # against a public upstream, anyone can push an unsigned commit to a personal fork and
+          # that endpoint will then serve it. Existence would therefore let a contributor to
+          # this repository waive the DCO on their own commit. Ancestry cannot be arranged that
+          # way — only the upstream's own maintainers move its default branch.
+          #
+          # Four limits keep the exemption bounded. The configuration is read at the BASE sha,
+          # so a pull request cannot introduce the file that would exempt it. Only a github.com
+          # upstream can be asked, because the question is a github.com API read. The default
+          # branch is resolved ONCE and, if that read fails, nothing is exempt. And only an
+          # UNSIGNED commit is ever compared, which is what bounds the calls — this repository
+          # configures no lane at all, so nothing is ever exempt here and every commit must
+          # carry the trailer.
+          UPSTREAM_REPO=""
+          UPSTREAM_CONFIGURED="no"
+          DEFAULT_BRANCH=""
           if [ -n "$UNSIGNED" ]; then
+            LANE_CONFIG="$(gh api -H "Accept: application/vnd.github.raw" "repos/$GITHUB_REPOSITORY/contents/.stamity/upstream.json?ref=$BASE_SHA" 2>/dev/null || true)"
+            if [ -n "$LANE_CONFIG" ]; then
+              UPSTREAM_CONFIGURED="yes"
+              UPSTREAM_URL="$(printf '%s' "$LANE_CONFIG" | jq -r 'if type == "object" then (.upstream // empty) else empty end' 2>/dev/null || true)"
+              case "$UPSTREAM_URL" in
+                https://github.com/*) UPSTREAM_REPO="${UPSTREAM_URL#https://github.com/}" ;;
+                ssh://git@github.com/*) UPSTREAM_REPO="${UPSTREAM_URL#ssh://git@github.com/}" ;;
+                git@github.com:*) UPSTREAM_REPO="${UPSTREAM_URL#git@github.com:}" ;;
+                *) UPSTREAM_REPO="" ;;
+              esac
+              UPSTREAM_REPO="${UPSTREAM_REPO%.git}"
+              # Exactly one owner and one name. The URL itself is never echoed anywhere below: a
+              # clone URL is a place a credential can be written down.
+              if ! printf '%s' "$UPSTREAM_REPO" | grep -Eq '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$'; then
+                UPSTREAM_REPO=""
+              fi
+            fi
+            # One read for the whole job: the branch every ancestry question below is asked
+            # against. A failure here leaves it empty, and an empty branch exempts nothing.
+            if [ -n "$UPSTREAM_REPO" ]; then
+              DEFAULT_BRANCH="$(gh api "repos/$UPSTREAM_REPO" --jq '.default_branch // empty' 2>/dev/null || true)"
+              if ! printf '%s' "$DEFAULT_BRANCH" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
+                DEFAULT_BRANCH=""
+              fi
+            fi
+          fi
+
+          EXEMPT_COUNT=0
+          STILL_UNSIGNED=""
+          if [ -n "$UNSIGNED" ]; then
+            while IFS= read -r SHA; do
+              [ -n "$SHA" ] || continue
+              # `base...head` with the sha as BASE: `ahead` means the default branch is ahead of
+              # the sha, which is exactly "the sha is an ancestor of it", and `identical` is the
+              # branch sitting on the sha. Every other answer leaves the commit unsigned —
+              # `behind` and `diverged` are both "the upstream never took this commit", and a
+              # 404, an error or an empty reply are the fail-closed side. A 404 is the expected
+              # answer for a sha no repository in the network has, so it is read rather than
+              # crashed on.
+              COMPARE_STATUS=""
+              if [ -n "$UPSTREAM_REPO" ] && [ -n "$DEFAULT_BRANCH" ]; then
+                COMPARE_STATUS="$(gh api "repos/$UPSTREAM_REPO/compare/$SHA...$DEFAULT_BRANCH" --jq '.status // empty' 2>/dev/null || true)"
+              fi
+              case "$COMPARE_STATUS" in
+                ahead | identical) EXEMPT_COUNT=$((EXEMPT_COUNT + 1)) ;;
+                *) STILL_UNSIGNED="$STILL_UNSIGNED$SHA"$'\n' ;;
+              esac
+            done <<< "$UNSIGNED"
+          fi
+          STILL_COUNT="$(printf '%s\n' "$STILL_UNSIGNED" | grep -c . || true)"
+
+          echo "Listed $LISTED of $TOTAL_COMMITS commit(s) over $PAGE page(s) of the comparison: $SIGNED_COUNT signed off, $EXEMPT_COUNT exempt as upstream commits, $STILL_COUNT unsigned."
+
+          if [ "$STILL_COUNT" -gt 0 ]; then
+            if [ -n "$UPSTREAM_REPO" ] && [ -n "$DEFAULT_BRANCH" ]; then
+              EXEMPTION_NOTE="Commits reachable from the configured upstream repository's default branch were exempt as upstream-authored; these are not among them."
+            elif [ -n "$UPSTREAM_REPO" ]; then
+              EXEMPTION_NOTE="The configured upstream repository's default branch could not be read, so no commit was exempt and every commit listed was checked for a trailer."
+            elif [ "$UPSTREAM_CONFIGURED" = "yes" ]; then
+              EXEMPTION_NOTE="The configured upstream is not a github.com repository, so no commit was exempt and every commit listed was checked for a trailer."
+            else
+              EXEMPTION_NOTE="No upstream lane configuration exists on the base branch, so no commit was exempt and every commit listed was checked for a trailer."
+            fi
+            echo "$EXEMPTION_NOTE"
             echo "Commits missing a Signed-off-by trailer:"
-            printf '%s\n' "$UNSIGNED" | while IFS= read -r SHA; do
+            printf '%s\n' "$STILL_UNSIGNED" | while IFS= read -r SHA; do
               [ -n "$SHA" ] || continue
               echo "  $SHA"
               echo "::error title=Missing DCO sign-off::Commit $SHA carries no Signed-off-by trailer."
@@ -107,7 +241,9 @@ jobs:
               echo ""
               echo "These commits carry no \`Signed-off-by:\` trailer:"
               echo ""
-              printf '%s\n' "$UNSIGNED" | sed 's/^/- `/; s/$/`/'
+              printf '%s\n' "$STILL_UNSIGNED" | sed '/^$/d; s/^/- `/; s/$/`/'
+              echo ""
+              echo "$EXEMPTION_NOTE"
               echo ""
               echo "Sign off every commit on the branch and force-push the amended history:"
               echo ""
@@ -120,7 +256,7 @@ jobs:
             exit 1
           fi
 
-          echo "All $TOTAL commit(s) in this pull request carry a Signed-off-by trailer."
+          echo "All $LISTED commit(s) in this pull request are accounted for: every one carries a Signed-off-by trailer or is reachable from the configured upstream's default branch."
 
   # ── 2. PR title ──────────────────────────────────────────────────────────────
   # The title is read out into a release note, so it has to be a conventional-commit subject.

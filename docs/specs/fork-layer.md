@@ -213,8 +213,16 @@ bare names; replacements retain the original bundled skill's name. Corpus output
 fork layer stays byte-identical apart from deliberate release metadata. This 2026-09-10
 extension repairs APM's reader of the layer shipped in 1.5.0; the earlier dated design
 context remains historical evidence.
-The extension targets 1.6.0, with publication and required compatibility evidence recorded
-separately before it is treated as shipped.
+The extension shipped in 1.6.0. Its publication and compatibility evidence are recorded at
+`docs/plans/005-enterprise-downstream-support.md:222-256`, separately from this document.
+
+The APM skill primitive's frontmatter is the Agent Skills six-key head: `name` and `description`
+plus the authored `license`, `compatibility`, `allowed-tools` and `metadata`. Those four are
+passed through from the winning `SKILL.md` and are never synthesized, so a key the corpus does
+not declare reaches neither the APM primitive nor the CLI projection, and a key it does declare
+reaches both (`scripts/generate-apm-package.mjs:556-559`). Corrected 2026-09-19: the generator
+dropped the four authored keys, which made one package promise a downstream one thing through
+the CLI and another through APM.
 
 ### REQ-FORK-011 — Public and private compatibility is proved independently
 

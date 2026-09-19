@@ -453,7 +453,13 @@ run. Results are artifacts, not chat. The file records, at minimum:
    reported as exactly that, in one line, rather than as an unqualified pass.
 8. **Advisory repeats** — any advisory criterion that has now failed in two consecutive runs,
    named, so the obligation above has something to act on. Track repeats within the same
-   full model/rubric/harness/input configuration; a profile change starts a separate baseline.
+   full model/rubric/harness configuration; a profile change starts a separate baseline.
+   The comparator keys on exactly those three fields — `{ profile, rubricCoreHash, harness }`,
+   recorded as `comparatorKey` on each run summary — and never on the candidate or the case and
+   content bytes: a rule that tracks one criterion across candidates cannot key on what every
+   candidate moves. (A summary written before that field existed is keyed from its own
+   `inputs.json`, and a field neither file recorded is not compared.) `configurationHash` stays
+   the exact-input receipt of one run; it is evidence, not the comparison key.
 9. **Judge calibration result** — one verdict line per fixture, for **every fixture the rubric
    declares under a `### Fixture` heading — five today** — whether all of them matched, the
    advisory labels on the fixtures whose cases declare advisory criteria, and any recalibration

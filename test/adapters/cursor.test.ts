@@ -343,6 +343,21 @@ function runGuard(
   return { stdout: result.stdout, stderr: result.stderr, status: result.status };
 }
 
+/**
+ * The verdict an allowed action gets from either guard.
+ *
+ * TEST CHANGE (audit HOOK-1). These assertions read `stdout === ""` until
+ * 2026-09-17: the build's reading was that a hook writing nothing had made no
+ * decision and the action proceeded. The hooks page read that day counts "no
+ * output" among the failures a `failClosed` hook blocks on, and both guards are
+ * wired `failClosed: true`, so silence was a blocked spawn and a blocked MCP
+ * call rather than an allow. The explicit object is correct under either
+ * reading. cursor.com/docs/hooks (accessed 2026-09-17).
+ */
+function expectAllow(result: { stdout: string }): void {
+  expect(JSON.parse(result.stdout)).toEqual({ permission: "allow" });
+}
+
 /** Writes one planned row into the temp repo and returns its absolute path. */
 async function materialize(plan: readonly AdapterOutput[], path: string): Promise<string> {
   const temp = getTemp();
@@ -1034,6 +1049,19 @@ const embeddedRoster = (script: string): string[] => {
 };
 
 describe("subagent guard", () => {
+  // HOOK-1. The emitted bytes, not only the runtime behaviour: both guards are
+  // wired `failClosed: true`, and this client counts no output as one of the
+  // failures that clause blocks on (cursor.com/docs/hooks, accessed
+  // 2026-09-17), so an allow branch that writes nothing is a blocked action.
+  it.each([
+    ["subagent", () => buildSubagentGuardScript(RUNTIME_AGENT_IDS)],
+    ["mcp", () => buildMcpGuardScript()],
+  ])("writes an explicit allow verdict in the %s guard body", (_name, build) => {
+    const script = build();
+    expect(script).toContain('JSON.stringify({ permission: "allow" })');
+    expect(script).toContain("allow();");
+  });
+
   it("embeds exactly the shipped roster", () => {
     const script = buildSubagentGuardScript(RUNTIME_AGENT_IDS);
 
@@ -1078,11 +1106,11 @@ describe("subagent guard", () => {
     });
     expect(denied.status).toBe(0);
 
-    // No verdict written is how this client reads "no decision".
-    expect(runGuard(script, { subagent_type: "stamity-reviewer" }).stdout).toBe("");
+    // An explicit allow is how this client is told the spawn may proceed.
+    expectAllow(runGuard(script, { subagent_type: "stamity-reviewer" }));
     // Another client's own sub-agents are not this setup's to police.
-    expect(runGuard(script, { subagent_type: "cursor-background" }).stdout).toBe("");
-    expect(runGuard(script, {}).stdout).toBe("");
+    expectAllow(runGuard(script, { subagent_type: "cursor-background" }));
+    expectAllow(runGuard(script, {}));
   });
 
   it("announces a payload it cannot judge instead of waving the spawn through in silence", async () => {
@@ -1091,9 +1119,10 @@ describe("subagent guard", () => {
 
     // A payload with no agent id is the state that turned the allowlist into a
     // no-op: nothing to match, no crash for failClosed to catch, and — before
-    // this — nothing written on either channel.
+    // this — nothing written on stderr. The spawn is allowed on purpose, and
+    // the allow is written rather than implied by silence.
     const nameless = runGuard(script, { subagent_id: "abc" });
-    expect(nameless.stdout).toBe("");
+    expectAllow(nameless);
     expect(JSON.parse(nameless.stderr.trim())).toMatchObject({
       hook: "stamity-cursor-subagent-guard",
       reasonCode: "SPAWN_PAYLOAD_UNUSABLE",
@@ -1105,7 +1134,7 @@ describe("subagent guard", () => {
     // because the helper JSON-encodes its input, and the point is bytes that do
     // not encode.
     const broken = spawnSync(process.execPath, [script], { input: "{ not json", encoding: "utf8" });
-    expect(broken.stdout).toBe("");
+    expectAllow(broken);
     const brokenEvent = JSON.parse(broken.stderr.trim()) as { reasonCode: string; detail: string };
     expect(brokenEvent.reasonCode).toBe("SPAWN_PAYLOAD_UNUSABLE");
     expect(brokenEvent.detail).toContain("not valid JSON");
@@ -1113,7 +1142,7 @@ describe("subagent guard", () => {
     // The diagnostic fires on an unusable payload, not on every spawn: a
     // rostered id stays silent on both channels.
     const rostered = runGuard(script, { subagent_type: "stamity-reviewer" });
-    expect(rostered.stdout).toBe("");
+    expectAllow(rostered);
     expect(rostered.stderr).toBe("");
   });
 });
@@ -1165,11 +1194,9 @@ describe("mcp guard", () => {
 
     // One fixture per documented payload spelling: `tool_name` carrying the
     // server, `url` for a remote server, `command` for a stdio one.
-    expect(runGuard(script, { tool_name: "mcp__github__search_code" }, home).stdout).toBe("");
-    expect(runGuard(script, { url: "https://mcp.example.test/sse" }, home).stdout).toBe("");
-    expect(
-      runGuard(script, { command: "npx -y @modelcontextprotocol/server-github" }, home).stdout,
-    ).toBe("");
+    expectAllow(runGuard(script, { tool_name: "mcp__github__search_code" }, home));
+    expectAllow(runGuard(script, { url: "https://mcp.example.test/sse" }, home));
+    expectAllow(runGuard(script, { command: "npx -y @modelcontextprotocol/server-github" }, home));
 
     // The set is an allowlist, not a shape check: a fourth server addressed the
     // same way is still refused.
@@ -1219,7 +1246,7 @@ describe("mcp guard", () => {
     const home = temp.path("home");
 
     const allowed = runGuard(script, { tool_name: "mcp__github__search_code" }, home);
-    expect(allowed.stdout).toBe("");
+    expectAllow(allowed);
     const event = JSON.parse(allowed.stderr.trim()) as {
       reasonCode: string;
       faults: { path: string }[];
@@ -1228,10 +1255,10 @@ describe("mcp guard", () => {
     expect(event.faults[0]?.path).toContain("mcp.json");
 
     // An absent manifest is not a fault: the ordinary state of a repo that
-    // selected no user-level servers stays silent on both channels.
+    // selected no user-level servers allows, and says nothing on stderr.
     await temp.seedFiles({ "quiet/.keep": "" });
     const quiet = runGuard(script, { tool_name: "mcp__github__search_code" }, temp.path("quiet"));
-    expect(quiet.stdout).toBe("");
+    expectAllow(quiet);
     expect(quiet.stderr).toBe("");
   });
 
@@ -1291,7 +1318,7 @@ describe("mcp guard", () => {
     await temp.seedFiles({ "home/.keep": "" });
     const home = temp.path("home");
 
-    expect(runGuard(script, { tool_name: "mcp__github__search_code" }, home).stdout).toBe("");
+    expectAllow(runGuard(script, { tool_name: "mcp__github__search_code" }, home));
 
     const denied = runGuard(script, { tool_name: "mcp__unlisted__run" }, home);
     expect(JSON.parse(denied.stdout)).toMatchObject({ permission: "deny" });

@@ -66,7 +66,9 @@
 // class is emitted with the keys its own reference documents and nothing else:
 //
 //   instructions  applyTo, description   (both required for an instruction)
-//   skills        name, description      (`name` MUST equal the directory name)
+//   skills        name, description, plus the authored `license`,
+//                 `compatibility`, `allowed-tools` and `metadata`
+//                 (`name` MUST equal the directory name)
 //   prompts       description
 //   agents        name, description
 //
@@ -78,6 +80,14 @@
 // guessed restriction; `allowed-tools` and `input` on a prompt are the same
 // case. A guessed restriction reads to a consumer as a restriction that is
 // really there.
+//
+// A skill is the one class whose head is wider than `name` and `description`,
+// and the four extra keys are the opposite case: the corpus DECLARES them. A
+// `SKILL.md` primitive is the Agent Skills document, so its reference is that
+// spec's six top-level keys, and `license` and `compatibility` are two of them
+// that every bundled skill in `content/skills/` states. They passed through the
+// CLI projection and were dropped here, so the same package promised a
+// downstream one thing through the CLI and another through APM.
 //
 // BODIES ARE PROJECTED VERBATIM, `${STAMITY:*}` TOKENS INCLUDED. Those tokens
 // resolve against the CONSUMER's repository — its linter, its test framework,
@@ -536,6 +546,19 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   }
 
   /**
+   * The Agent Skills keys a skill's authored head passes through, beyond the
+   * `name` and `description` every primitive carries.
+   *
+   * These four plus those two are the spec's whole top-level vocabulary
+   * (code.claude.com/docs/en/skills, "Using skill frontmatter outside Claude
+   * Code"), and `src/emit/skillsProjection.ts` emits the same six for the CLI
+   * lane from the same authored bytes. One vocabulary, two surfaces: a key
+   * declared in `content/skills/<id>/SKILL.md` reaches an APM consumer and a
+   * CLI consumer alike, and a key nobody declared appears on neither.
+   */
+  const SKILL_SPEC_KEYS = ['license', 'compatibility', 'allowed-tools', 'metadata']
+
+  /**
    * One primitive document: the translated head over the artifact's body.
    *
    * `composeFrontmatter` is the corpus's own composer, so the head is YAML the
@@ -558,12 +581,28 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
     switch (item.type) {
       case 'rule':
         return { description: item.description, applyTo: applyToOf(item) }
-      case 'skill':
-      case 'agent':
+      case 'skill': {
         // A skill's `name` MUST equal its directory name or APM refuses the
         // package naming both; the directory is the identity and the frontmatter
-        // restates it. An agent's `name` defaults to the filename stem, and the
-        // stem is this same id, so stating it is a restatement there too.
+        // restates it.
+        //
+        // Then the four Agent Skills keys an author may declare. A skill primitive
+        // IS a `SKILL.md`, so its allowed head is that spec's six keys, not a
+        // shorter list this script invents: dropping `license` and `compatibility`
+        // told every APM consumer that the skills carry neither, while the CLI
+        // projection shipped both from the same authored bytes. Pass-through, never
+        // synthesis — a key the corpus does not declare is absent here too.
+        const head = { name: id, description: item.description }
+        for (const key of SKILL_SPEC_KEYS) {
+          if (item.frontmatter[key] !== undefined) head[key] = item.frontmatter[key]
+        }
+        return head
+      }
+      case 'agent':
+        // An agent's `name` defaults to the filename stem, and the stem is this
+        // same id, so stating it is a restatement. The skill keys above are NOT
+        // an agent's: `.agent.md` is a different reference with a different key
+        // set, and no agent in this corpus declares one of them anyway.
         return { name: id, description: item.description }
       default:
         return { description: item.description }

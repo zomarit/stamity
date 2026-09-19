@@ -15,13 +15,22 @@ metadata:
 The manual runner for `evals/`: one operator-started harness session, one
 committed result. No schedule or automatic provider calls.
 
-Drive the run through the session's own agent tooling. For an operator-authorized
-Codex run that accepts unavoidable ambient client/repository instructions, follow
-`evals/session-native-v1.md`. Commit and
-review that prospective protocol and all inputs first. Its exception accepts
-recorded ambient instructions only; fresh agents, exact models, no tool use,
-calibration, scoring bars and release approvals remain binding. No neutral wrapper
-is added, and accepted ambient context is never described as erased or harmless.
+Drive the run through the session's own agent tooling. The current contract is
+`evals/SET-v7.md` and the rubric the selected profile names; nothing below
+replaces either.
+
+Two session protocols sit beside the set, and neither is the route for a run
+declared under it. `evals/session-native-v1.md` is HISTORICAL: it is pinned to
+the retired 78-case roster and to `rubric-v5.md`, and it stands as the record of
+the configuration it was written for. `evals/session-native-v2.md` is
+prospective and is selected explicitly or not at all. Taking either for an
+operator-authorized Codex run that accepts unavoidable ambient client/repository
+instructions means re-pinning it to the current roster and the selected
+profile's rubric, and saying so in the artifact. Commit and review the protocol
+and all inputs first. Its exception accepts recorded ambient instructions only;
+fresh agents, exact models, no tool use, calibration, scoring bars and release
+approvals remain binding. No neutral wrapper is added, and accepted ambient
+context is never described as erased or harmless.
 
 The optional `scripts/eval-run.mjs` stateless API transport is a separate baseline,
 documented in `evals/README.md`. Use it only when the operator selects that route;
@@ -56,8 +65,9 @@ Then pin the run:
 - Before any model call, check that the named profile exists and the harness
   supports its exact, distinct scenario/judge IDs and requested effort settings.
   Check fresh input isolation and visibility of scenario tool use. Follow the
-  profile contract's isolation rules, or the explicitly authorized ambient-only
-  exception in `evals/session-native-v1.md`; do not claim shared-workspace tools are
+  profile contract's isolation rules, or an explicitly authorized ambient-only
+  exception under a session protocol re-pinned to the current inputs (see the
+  note above `## 1. Preconditions`); do not claim shared-workspace tools are
   disabled when they are only prohibited by the sealed Brief. Unknown or
   unavailable profiles, models, controls or isolation evidence stop the run with
   the unmet requirement named. No fallback or per-role substitution is allowed.
@@ -80,8 +90,9 @@ non-scoring provider calls. It admits only complete responses exposing the exact
 model and reasoning effort, no additional instructions/context, and an inspectable
 output trace with no tool call. Provider-internal instructions are not exposed by
 the API; the artifact records that limit. A native receipt carrying ambient
-messages requires the prospectively authorized `session-native-v1.md` baseline;
-without that exception it does not pass admission even with zero tool calls.
+messages requires an authorized session-protocol baseline, re-pinned to the
+current roster and rubric and named in the artifact; without that exception it
+does not pass admission even with zero tool calls.
 
 Hand the judge an **excised rubric**: the grading sections only — the text of
 the selected rubric above the `## Calibration protocol` heading. That heading
@@ -185,10 +196,21 @@ them. Position preference alone can flip a verdict.
 
 Compute exactly the metrics `evals/SET-v7.md` declares, by its own definitions:
 
-A case passes only when all three admitted samples pass every binding criterion.
-The artifact lists each floor and per-skill recall, binding/advisory citations,
-all attempts and same-configuration advisory repeats. Missing samples prevent a
-full-set score. The manual script runs the full set for every supported trigger;
+A case passes when at least two of its three samples pass every binding
+criterion, and, where the case carries non-negotiable rows, all three samples
+pass every one of those rows. A sample with no admitted grade counts as a
+failing sample for the two-of-three rule and leaves the non-negotiable rows
+unverified. `evals/SET-v7.md` § Scoring rule is the authority for both classes
+and for which rows are non-negotiable; this step restates it and never
+overrides it. The strict all-three rule is `SET-v5.md`'s and was retired on
+2026-09-12; a run declared under this set is not scored by it.
+
+Missing samples no longer suppress the aggregate: compute with the samples
+there are, and report how many were ungraded and on which cases. The artifact
+lists each floor and per-skill recall, binding/advisory citations, all attempts
+and same-configuration advisory repeats, the last keyed on
+`{ profile, rubricCoreHash, harness }` as the set's run-artifact contract
+defines it. The manual script runs the full set for every supported trigger;
 there is no slice option that could accidentally stand in for a release run.
 
 | Metric | Aggregation | Bar |

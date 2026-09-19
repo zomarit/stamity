@@ -365,8 +365,13 @@ workflow (REQ-UPSTREAM-013) reads all pages of active rulesets
 (`GET /repos/{owner}/{repo}`), and classic protection
 (`GET /repos/{owner}/{repo}/branches/{branch}/protection`). Linear-history requirements
 and merge-method restrictions, including the merge queue, produce a warning in the PR
-and job summary. Classic protection requires Administration: read; unreadable, 404 or
-malformed responses mark the overall check incomplete and name the unverified surface.
+and job summary. Classic protection requires Administration: read. A 404 whose body is
+`Branch not protected` records "no classic protection" and counts as CHECKED, because that
+is the documented answer for a branch protected by rulesets only; reading it as unverified
+left every such fork carrying the note permanently. Unreadable responses, a 404 with any
+other message, and malformed responses mark the overall check incomplete and name the
+unverified surface. The not-fully-checked note is emitted only when a surface stayed
+unverified.
 Known restrictions still warn under partial access, and no incomplete check claims that
 merge commits are permitted. The PR still opens because the decision belongs to the fork.
 Everywhere else — GitLab, a
@@ -377,6 +382,10 @@ settings per host as far as they were verified.
 Official endpoint contracts rechecked 2026-09-10: [active branch rulesets](https://docs.github.com/en/rest/repos/rules#get-rules-for-a-branch),
 [repository merge settings](https://docs.github.com/en/rest/repos/repos#get-a-repository),
 and [classic branch protection](https://docs.github.com/en/rest/branches/branch-protection#get-branch-protection).
+The unprotected-branch 404 body was reread 2026-09-17 against that same endpoint contract:
+`{"message":"Branch not protected", ...}`, returned with HTTP 404. `gh api` exits non-zero on
+every HTTP error and writes the response body to stdout, so the body — not the exit code — is
+what separates "not protected" from "not permitted to look".
 
 ### REQ-UPSTREAM-012 — Abort and recovery
 
@@ -471,7 +480,8 @@ nothing else: no config, no record, no worktree. Nothing under `.stamity/upstrea
 ### REQ-UPSTREAM-016 — Recover an owned branch whose pull request was never created
 
 Requirements -016 through -018 target the 1.6.0 extension. The original 1.4.0 release status
-above remains historical; publication and the required live lifecycle evidence are pending.
+above remains historical. The extension shipped in 1.6.0; its publication and live lifecycle
+evidence are recorded at `docs/plans/005-enterprise-downstream-support.md:222-256`.
 
 If the push succeeded and pull-request creation failed, a retry may create the missing PR
 without rewriting the remote branch. Ownership is checked from the remote branch's actual
@@ -482,13 +492,23 @@ tree and semantic record must agree with the prepared integration; timestamps al
 make independently prepared commits equal. There is one generated-file exception:
 `src/manifest/manifest.ts::writeManifest` restamps `.stamity/manifest.json.updatedAt` on
 every sync. When this file differs, both git entries must be regular non-executable files
-(`100644`) with the known schema-1.0.0 manifest envelope, canonical two-space JSON without
-duplicate keys, and valid `createdAt`/`updatedAt` values in `YYYY-MM-DDTHH:mm:ss.SSSZ` form.
-The inline publisher masks precisely the single top-level `updatedAt` value and compares
-every remaining byte, including creation time, selection, ledger, field order and formatting.
+(`100644`) holding canonical two-space JSON without duplicate keys, whose top-level
+`updatedAt` is a valid value in `YYYY-MM-DDTHH:mm:ss.SSSZ` form. The inline publisher deletes
+precisely that one top-level key from each side and compares every remaining byte, including
+creation time, selection, ledger, field order and formatting. It keeps no copy of the
+manifest schema: any key set the engine admits is accepted, because the engine already
+applied its own schema through `writeManifest` in the job that ran the fork's regenerate
+command, and an off-schema key on the remote branch fails the byte comparison anyway.
+`updatedAt` is bounded on its own because it is the single value the comparison never reads.
 No `generatedPaths` pattern is excluded, no code from the prepared branch runs during this
 comparison, and missing/linked/malformed/noncanonical manifests or any other changed field
-still refuse recovery. The retained remote merge commit must have no
+still refuse recovery. The comparison stays bound to the engine's own manifest constants
+through its tests rather than through a copy in the workflow: both recovery fixtures are typed
+as total records over `SetupManifest` and built from `MANIFEST_VERSION`
+(`test/upstream/workflowRecovery.test.ts:256`, `test/ci/upstreamWorkflow.test.ts:675`), and the
+workflow fixture enumerates `TOOLS` (`test/ci/upstreamWorkflow.test.ts:722`), so a key added to
+`MANIFEST_FIELD_ORDER` breaks the type check in both files until a case carries it.
+The retained remote merge commit must have no
 human follow-up or unexplained changed tree. Target movement requires manual review.
 Reports and PR provenance identify the remote SHA and its validation result, never a freshly
 prepared commit that was not pushed. The restored bundle head must equal its reported SHA;
@@ -516,6 +536,23 @@ authentication/permissions, lost ancestry and workflow-file refusal, naming reta
 and the next local command or owner action. Network access or approved operational mirrors
 are selected and probed explicitly. The canonical no-config workflow remains a clean skip.
 Private release destinations follow REQ-APM-008 and survive upstream regeneration.
+
+A downstream that renames the package and sets `private: true` as the guide instructs runs the
+recommended gate and the regenerate list unchanged. Every runtime remedy names the running
+package: `src/cli/kit/packageName.ts` resolves the name from the running manifest, and the
+canonical name is reached only through the unnamed-sentinel fallback. `scripts/tarball-smoke.mjs`
+installs and imports the package under `pkg.name`, so a renamed copy is smoked as itself. No test
+needs editing for a rename: every suite that has to know this package's identity reads
+`test/support/identity.ts`, which answers name, publisher and privacy from the running
+`package.json` (`docs/enterprise-forks.md:172-179`). Two identity carriers stay the fork's own
+data and are named in the guide's identity step, `renovate/plugins.json` and
+`renovate/companion.json` (`docs/enterprise-forks.md:145-147`). A private package has no npm
+channel, so the regenerated marketplace entry carries a `github` source naming the repository
+instead of an npm package the fork never publishes
+(`scripts/generate-plugin-manifests.mjs:456`). The guide states the host boundary beside its
+portability claim: the lane script is portable, while both generators resolve identity through
+`scripts/distribution-identity.mjs`, which accepts a `repository.url` on the public GitHub host
+and refuses every other host before it writes a byte (`docs/enterprise-forks.md:839-847`).
 
 ### REQ-UPSTREAM-018 — Monitoring and real platform evidence
 
@@ -558,6 +595,75 @@ closed/human-modified refusals and a separate reviewed workflow-change recovery.
 response forbidding merge commits must produce the ancestry warning while still permitting
 PR creation. Unavailable credentials, fixture authorization, Renovate observation or
 monitoring produce specific `Not done:` items while independent work continues.
+
+### REQ-UPSTREAM-019 — The DCO check lists an update pull request whole
+
+Allocated 2026-09-19 with the audit fix batch of plan
+`docs/plans/008-plugin-lifecycle-01.md`; it extends the lane's inherited pull-request checks and
+changes nothing in the 1.6.0 extension above.
+
+An update pull request carries every upstream commit of the releases it integrates, which is
+routinely more commits than the pull-request commits endpoint will list. The `dco` job of
+`.github/workflows/pr-checks.yml` therefore reads the commit set from
+`GET repos/{owner}/{repo}/compare/{base.sha}...{head.sha}` with `per_page=100`, walks `page=N`
+until the rows it holds equal the `total_commits` that response reports, and checks every listed
+commit for a `Signed-off-by` trailer. No commit count refuses the check. The citations in this
+requirement name that job rather than its lines, because the job's shell is edited more often
+than this paragraph is.
+
+A partial listing never reports a pass. The check fails and names the condition it hit when the
+rows in hand do not equal `total_commits`, when `total_commits` is absent, non-numeric or zero,
+when zero rows were listed, when a page could not be read, or when `total_commits` changes
+between pages.
+
+One exemption exists, and only for an unsigned commit, and it turns on reachability rather than
+existence. GitHub serves a fork network's commits through the parent repository's endpoint, so
+`GET repos/{upstream}/commits/{sha}` answers 200 for a commit that merely exists somewhere in the
+upstream's fork network, which is no evidence that the upstream authored it. The `dco` job
+therefore resolves the upstream's default branch once, from `default_branch` in
+`GET repos/{upstream}`, and exempts an unsigned commit only when
+`GET repos/{upstream}/compare/{sha}...{default branch}` reports a `status` of `ahead` or
+`identical`, which is what says the commit is reachable from that branch. A `status` of `behind`
+or `diverged`, any error, and any non-200 answer on the comparison leave the commit unsigned. So
+do an upstream on any other host, a configuration absent from the base branch, and a
+configuration that is not a JSON object. When the default-branch read itself fails, there is
+nothing to measure reachability against, so no commit is exempt at all and every commit needs
+its own trailer. The configuration is read from the base branch only, so a pull request
+cannot introduce the file that would exempt it; only unsigned commits are looked up; and the
+clone URL is never echoed. The canonical repository configures no lane, so nothing is ever exempt
+here and every commit must carry the trailer.
+
+Every outcome prints the listed, signed, exempt and unsigned counts, names every commit that
+stayed unsigned, and says which of the four exemption states applied: a github.com upstream
+configured and readable, an upstream whose default branch could not be read, an upstream on any
+other host, or no lane configuration on the base branch. Only the first can exempt anything.
+
+#### Acceptance
+
+These criteria execute the `dco` job's shell against a scripted `gh` rather than over the lane's
+fixture repositories (the job's executable cases in `test/ci/workflow.test.ts`), which is why
+they sit here rather than in the list below. The fixture-suite rows in that list are unchanged by
+this requirement, and a count of them takes this subsection's rows out first.
+
+- GIVEN an update pull request of 303 commits WHEN the `dco` job's shell runs THEN it walks the
+  comparison page by page, reports `Listed 303 of 303`, and leaves no commit unchecked.
+- GIVEN a comparison whose `total_commits` is absent, non-numeric, zero or different from an
+  earlier page, a walk that listed zero rows, or a page that could not be read, WHEN the job runs
+  THEN it exits non-zero naming that condition and reports no pass.
+- GIVEN an unsigned commit reachable from the default branch of the github.com upstream the base
+  branch's `.stamity/upstream.json` names, meaning the comparison against that branch reports
+  `ahead` or `identical`, WHEN the job runs THEN the commit is exempt as upstream-authored and
+  the printed counts show it as exempt rather than unsigned.
+- GIVEN an unsigned commit whose comparison against the upstream default branch reports `behind`
+  or `diverged`, whose comparison errors or answers anything but 200, or whose configured
+  upstream is on another host, absent from the base branch, or not a JSON object, WHEN the job
+  runs THEN the commit stays unsigned, the job exits 1 naming its sha, and no clone URL is
+  printed.
+- GIVEN a configured github.com upstream whose default branch could not be read WHEN the job runs
+  THEN no commit is exempt, every unsigned commit stays unsigned, and the output names that
+  exemption state rather than reporting a pass.
+- GIVEN the canonical repository, which configures no lane, WHEN the job runs THEN nothing is
+  exempt, the exemption note says so, and every commit must carry the trailer.
 
 ## Acceptance criteria
 

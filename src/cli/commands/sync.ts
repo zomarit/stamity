@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import { packageName } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { WorkingTreeStatus } from "../engine/gitStatus.ts";
 import { applySync, planSync, type SyncApplyReport, type SyncPlan } from "./sync/engine.ts";
@@ -23,10 +24,11 @@ import { renderSyncReport, syncJsonPayload } from "./sync/report.ts";
  *   one path: the collision gate is per-path, so the rest of the plan is on
  *   disk and the exit code reports the remainder rather than the whole run.
  *   Every engine throw — uninitialised repo (`VALIDATION_ERROR`, message
- *   carries `npx @zomarit/stamity init`), newer-schema manifest (`CONFIG_ERROR`, upgrade
+ *   carries the `init` remedy for this installation), newer-schema manifest
+ *   (`CONFIG_ERROR`, upgrade
  *   guidance) — passes through to the kit funnel, which renders it and exits 1.
- * - **Update path.** There is no update command: `npx @zomarit/stamity@latest sync` IS
- *   the update, so the help text says exactly that, and manifest schema
+ * - **Update path.** There is no update command: `npx <this package>@latest sync`
+ *   IS the update, so the help text says exactly that, and manifest schema
  *   migrations run inside sync — a migrated manifest gets its own report line
  *   so the on-version-change rewrite is visible.
  */
@@ -36,10 +38,17 @@ import { renderSyncReport, syncJsonPayload } from "./sync/report.ts";
  * Module-private: the only consumer is `configure()` below, and the contract is
  * asserted through the rendered help output ("sync — help text" in
  * test/cli/commands/sync.test.ts), not by importing the string.
+ *
+ * A function rather than a constant because the name is read from the running
+ * installation: a downstream that renamed the package per
+ * `docs/enterprise-forks.md` must be told to run ITS package, not ours.
  */
-const UPDATE_PATH_HELP =
-  "update = npx @zomarit/stamity@latest sync — regenerating from the newest release is the update; " +
-  "no separate update command exists.";
+function updatePathHelp(): string {
+  return (
+    `update = npx ${packageName()}@latest sync — regenerating from the newest release is the ` +
+    `update; no separate update command exists.`
+  );
+}
 
 /** Continuous-onboarding close after a run that changed files on disk. */
 export const NEXT_AFTER_WRITE_LINE = "next: git diff to review, stamity check to verify";
@@ -89,7 +98,7 @@ export const syncCommand: CommandModule = {
 
   configure(cmd: Command): void {
     cmd.option("--force", "overwrite colliding unmanaged files after a verified .bak");
-    cmd.addHelpText("after", `\n${UPDATE_PATH_HELP}\n`);
+    cmd.addHelpText("after", `\n${updatePathHelp()}\n`);
   },
 
   async run(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {

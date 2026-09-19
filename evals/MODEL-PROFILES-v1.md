@@ -62,9 +62,13 @@ scenario to read them.
 
 ## Calibration and evidence
 
-The alternate rubric is a new instrument version: its model-neutral introduction replaces
-the legacy model declarations, while grading rules and calibration fixtures carry over
-verbatim. `rubric-v4.md` and historical run artifacts retain their original meaning. Profile
+All three profiles above select `rubric-v7.md`, so this document has no alternate rubric any
+more: the maintainer's recorded rubric decision moved every profile onto one instrument. That
+instrument is rubric v6 with the closed citation form under its grading procedure, and its
+verdict vocabulary, emission shape, calibration protocol and fixtures are v6's byte for byte;
+v6's model-neutral introduction replaced the legacy model declarations, and the grading rules
+and calibration fixtures carry over verbatim from `rubric-v4.md`. `rubric-v5.md`,
+`rubric-v4.md` and historical run artifacts retain their original meaning. Profile
 availability is not a calibration result; neither Codex profile has a measured result merely
 because it is listed here.
 

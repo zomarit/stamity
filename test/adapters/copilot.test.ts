@@ -950,6 +950,25 @@ describe("hooks", () => {
     expect(native.hooks).not.toHaveProperty("preToolUse");
   });
 
+  // HOOK-2. Four surfaces said this client could not inject session-start
+  // context; its hooks reference says a sessionStart hook injects through
+  // `additionalContext`. The planner warning is one of the four.
+  it("tells the operator session-start context reaches the session, with the page and date behind it", async () => {
+    const ctx = ctxOf();
+    const emission = await copilotResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx);
+    const fallback = (emission.warnings ?? []).find((warning) => warning.startsWith("hook fallback [copilot]"));
+    expect(fallback).toBeDefined();
+    expect(fallback).toContain("injected as additionalContext");
+    expect(fallback).toContain("docs.github.com hooks reference, 2026-09-17");
+    expect(fallback).not.toMatch(/manually|does not inject/);
+    // The honest half of the row is unchanged: timeouts still fail open.
+    expect(fallback).toContain("fail-open");
+
+    const guarantee = CLIENT_HOOK_GUARANTEES.find((row) => row.tool === "copilot");
+    expect(guarantee?.notes).toContain("injected as additionalContext");
+    expect(guarantee?.notes).not.toContain("does not inject");
+  });
+
   it("records timeout fail-open honesty in the dialect facts, sourced from CLIENT_HOOK_GUARANTEES", () => {
     const guarantee = CLIENT_HOOK_GUARANTEES.find((row) => row.tool === "copilot");
     expect(guarantee?.failMode).toBe("fail-closed");
@@ -972,12 +991,19 @@ describe("hooks", () => {
       expect(citation.accessDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     }
 
-    // Currency is all-or-nothing: a pass that re-read only some pages would have
-    // to split the constant rather than re-stamp the rest, so one date covers
-    // the list and it is no older than the last recorded pass.
+    // TEST CHANGE (audit HOOK-2, HOOK-4): the pin read "one date covers the
+    // list". The 2026-09-17 audit re-read exactly one of these pages — the
+    // hooks reference, which is where the sessionStart `additionalContext`
+    // claim and the entry-key vocabulary come from — so the constant SPLITS
+    // rather than being re-stamped whole, which is the behaviour the original
+    // comment already prescribed for a partial pass.
+    expect(
+      COPILOT_DIALECT_FACTS.citations.find((citation) => citation.url.includes("hooks-reference"))
+        ?.accessDate,
+    ).toBe("2026-09-17");
     const dates = new Set(COPILOT_DIALECT_FACTS.citations.map((citation) => citation.accessDate));
     expect(dates.has("2026-09-10")).toBe(true);
-    expect([...dates][0]! >= "2026-08-17").toBe(true);
+    for (const date of dates) expect(date >= "2026-08-17", date).toBe(true);
 
     // Every surface this adapter emits for has a page behind it.
     const urls = COPILOT_DIALECT_FACTS.citations.map((citation) => citation.url).join(" ");

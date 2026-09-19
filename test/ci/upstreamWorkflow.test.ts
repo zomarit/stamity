@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parse, stringify } from "yaml";
+import { TOOLS } from "../../src/types/core.ts";
+import { MANIFEST_VERSION, type SetupManifest } from "../../src/types/manifest.ts";
 import { evaluateWorkflowExpression, type ExpressionContext } from "./workflowExpression.ts";
 
 /**
@@ -644,6 +646,116 @@ describe("upstream-update.yml — the landing policy", () => {
     expect(run).toContain("NOT fully checked");
     // The pull request still opens. The decision belongs to the fork.
     expect(run).not.toContain("exit 1");
+  });
+
+  it("reads a 404 'Branch not protected' as an answer, not as an unverified surface", () => {
+    // REQ-UPSTREAM-011. A branch protected by rulesets only carries no CLASSIC protection, and
+    // the classic endpoint says exactly that with a 404. Filing it under "unverified" pinned the
+    // note onto every such fork forever, and a note that is always on is a note nobody reads.
+    const run = runOf("publish", "Check the target branch's landing policy");
+    expect(run).toContain('.message == "Branch not protected"');
+    expect(run).toContain("CLASSIC='none'");
+    expect(run).toContain('echo "classic=$CLASSIC" >> "$GITHUB_OUTPUT"');
+    // The surface label no longer teaches a reader that every 404 is unverified.
+    expect(run).not.toContain("404 is also unverified");
+    // The endpoint's own contract, cited where the behaviour is decided rather than remembered.
+    expect(run).toContain("https://docs.github.com/en/rest/branches/branch-protection#get-branch-protection");
+  });
+});
+
+describe("upstream-update.yml — the recovery comparison keeps no copy of the manifest schema", () => {
+  // FORK-1. Recovery re-validated `.stamity/manifest.json` against a FROZEN copy of the engine's
+  // schema: the version literal, the four tool names and a 17-key allowlist. Schemas move and
+  // copies do not, so `ruleDelivery` (landed 2026-09-15) turned recovery into a refusal for
+  // every fork that set it, with a message blaming the fork's own manifest. The engine's schema
+  // is the only schema, and the engine already applied it when `writeManifest` produced the
+  // prepared manifest over in `prepare`. This step's job is the byte comparison; the key set is
+  // not its business.
+  //
+  // Typed as a TOTAL record over `SetupManifest`, exactly as `MANIFEST_FIELD_ORDER` in
+  // src/manifest/manifest.ts is: a field added to the manifest is a compile error here until it
+  // is placed, and the assertion below then covers the new name too. That binding is what FORK-1
+  // was missing — it let an 18th key land with nothing checking the workflow's copy of 17.
+  const MANIFEST_FIELDS: Record<keyof SetupManifest, true> = {
+    version: true,
+    generatedBy: true,
+    createdAt: true,
+    updatedAt: true,
+    tools: true,
+    platform: true,
+    maturityTier: true,
+    communicationStyle: true,
+    ruleDelivery: true,
+    selection: true,
+    ledger: true,
+    mcp: true,
+    learnings: true,
+    hooks: true,
+    models: true,
+    importChoice: true,
+    toolOptions: true,
+    detected: true,
+  };
+
+  const recovery = runOf("publish", "Open or update the pull request");
+
+  it("names no manifest field but the single one it masks", () => {
+    for (const field of Object.keys(MANIFEST_FIELDS)) {
+      if (field === "updatedAt") continue;
+      expect(
+        recovery,
+        `the recovery step re-states the manifest field \`${field}\`, which is a second schema`,
+      ).not.toContain(`"${field}"`);
+    }
+    // `updatedAt` is named because it is the ONE field held out of the comparison, and holding
+    // it out is what the step exists for. `jq` deletes exactly the top-level key and leaves the
+    // rest in place, so there is no line-oriented mask left to be pointed at the wrong property,
+    // and field order stays part of what the byte comparison sees (no `-S`).
+    expect(recovery).toContain("jq 'del(.updatedAt)'");
+    expect(recovery).not.toContain("jq -S 'del(.updatedAt)'");
+  });
+
+  it("pins neither the schema version nor the tool roster", () => {
+    expect(recovery, "the recovery step pins the manifest schema version").not.toContain(
+      MANIFEST_VERSION,
+    );
+    for (const tool of TOOLS) {
+      expect(recovery, `the recovery step pins the tool name \`${tool}\``).not.toContain(
+        `"${tool}"`,
+      );
+    }
+  });
+
+  it("still bounds the one field it excludes from the byte comparison", () => {
+    // Dropping the schema copy must not drop the bound on the masked field: it is the only part
+    // of the manifest the comparison never sees, so it is the only place arbitrary bytes could
+    // ride in. A real UTC millisecond timestamp, round-tripped, or the recovery refuses.
+    expect(recovery).toContain("(.updatedAt | timestamp)");
+    expect(recovery).toContain("fromdateiso8601");
+    expect(recovery).toContain(
+      "The sync manifest differs beyond its generated updatedAt timestamp.",
+    );
+    // The canonical reserialization stays too: a manifest a person reformatted is a human edit,
+    // and `jq -S` would otherwise normalise the formatting difference away.
+    expect(recovery).toContain("The changed sync manifest is not canonical generated JSON.");
+  });
+
+  it("runs no engine, because this job holds the push credential", () => {
+    // The tempting fix for FORK-1 is to call the engine's own validator here. This job checks
+    // out the integration branch WITH a push token, so running anything out of that tree is the
+    // supply-chain path the lane's trust split exists to close, and REQ-UPSTREAM-016 says as
+    // much. The delegation happens where it is safe: `prepare` runs the fork's regenerate
+    // command with no credential at all, and `writeManifest` validates there.
+    for (const invocation of ["node ", "npm ", "npx ", "dist/cli.js", "stamity validate", "stamity check"]) {
+      const lines = recovery
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => !line.startsWith("echo") && !line.startsWith("printf") && !line.startsWith("#"));
+      expect(
+        lines.some((line) => line.includes(invocation)),
+        `the recovery step must not invoke ${invocation}`,
+      ).toBe(false);
+    }
   });
 });
 

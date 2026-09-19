@@ -99,16 +99,20 @@ git clone "$STAMITY_PRIVATE_URL.git" stamity-private
 cd stamity-private
 git remote add upstream https://github.com/zomarit/stamity
 git fetch upstream
-git merge-base --is-ancestor v1.5.0 HEAD
+STAMITY_BASELINE_TAG='v1.8.0'
+git merge-base --is-ancestor "$STAMITY_BASELINE_TAG" HEAD
 ```
 
-The last command checks the baseline this example imported. Substitute the exact approved upstream
-tag or SHA for another import. Confirm `origin` points to the private destination before every
-initial push. The duplication follows GitHub's own bare-clone procedure, linked from
-[the enterprise downstream plan](plans/005-enterprise-downstream-support.md); it imports branches
-and tags without the pull-request refs GitHub rejects on push. Keep the bare import as a backup
-until the downstream and consumer checks pass. Do not repeat `push --mirror` after customization.
-It would replace your downstream refs. Every later update comes through the upstream lane instead.
+The last command checks the baseline this example imported. Set `STAMITY_BASELINE_TAG` to the
+exact upstream tag or SHA your organisation approved, not to whatever the newest release happens
+to be. The value above is an example and it ages: a check against a tag your import predates
+fails, and that failure is the point of the command. Confirm `origin` points to the private
+destination before every initial push. The duplication follows GitHub's own bare-clone procedure,
+linked from [the enterprise downstream plan](plans/005-enterprise-downstream-support.md); it
+imports branches and tags without the pull-request refs GitHub rejects on push. Keep the bare
+import as a backup until the downstream and consumer checks pass. Do not repeat `push --mirror`
+after customization. It would replace your downstream refs. Every later update comes through the
+upstream lane instead.
 
 ### Set the private package's identity
 
@@ -121,6 +125,11 @@ npm pkg set "repository.url=git+$STAMITY_PRIVATE_URL.git" "homepage=$STAMITY_PRI
 npm pkg set "bugs.url=$STAMITY_PRIVATE_URL/issues"
 npm pkg set private=true --json
 npm pkg delete publishConfig
+node -e 'const fs=require("fs"),p=require("./package.json");
+const slug=p.repository.url.replace(/^git\+|\.git$/g,"").split("/").slice(-2).join("/");
+const swap=(f,a,b)=>fs.writeFileSync(f,fs.readFileSync(f,"utf8").replaceAll(a,b));
+swap("renovate/plugins.json","zomarit/stamity",slug);
+swap("renovate/companion.json","@zomarit/stamity",p.name);'
 npm install --package-lock-only --ignore-scripts
 npm ci --ignore-scripts
 node scripts/generate-plugin-manifests.mjs
@@ -132,6 +141,14 @@ owner slug that matches `repository.url`. An unsupported key or a mismatched or 
 fails before generation writes anything, and both generators share that validator. Name, version,
 description and license keep their existing package fields. `private: true` blocks npm publishing
 for this APM-only setup. Deleting the public `publishConfig` makes the destination review explicit.
+
+The `node -e` line moves the two Renovate presets, which carry the identity as data rather than
+deriving it: `renovate/plugins.json` names the repository its tag manager watches, and
+`renovate/companion.json` names the npm package it pins. Everything else follows your manifest on
+its own. The runtime's own remedies (`run: npx <your package> init`) and `scripts/tarball-smoke.mjs`
+read `name` from `package.json`, and the four plugin manifests are projected from it. A private
+package has no npm channel, so the regenerated marketplace entry carries a `github` source naming
+your repository instead of an npm package you never publish.
 
 The release and docs-deployment workflows you inherit also check the running repository's identity
 and visibility. Their public publication jobs run only in the public canonical repository. Preserve
@@ -151,6 +168,15 @@ a real update pull request: inherited filters limited to `main` do not cover ano
 the workflow tests to match your deliberate customization. This repository's
 `test/ci/workflow.test.ts` asserts the canonical `main` filter exactly, so keep an equally explicit
 assertion for your own filters and your full gate still checks the policy you intended.
+
+Your rename needs no test edit at all. Every suite that has to know who this package is reads
+`test/support/identity.ts`, which answers from your own `package.json`: the name, the publisher and
+whether the package is private. So a test asserts the remedy string, the marketplace source or the
+Renovate pin that YOUR identity implies, and the inherited gate is green on your tree for the same
+reason it is green upstream. Two things are still yours to keep true, and both are data rather than
+tests: the identity step above (the manifest and the two Renovate presets), and the branch filters
+in the paragraph before this one. Run the regenerate list in the same commit as the rename, because
+the generated trees are compared byte for byte and a skipped regeneration reads as drift.
 
 Only then enable the approved CI, upstream and private-release workflows and repository Actions,
 after the organisation owner has verified the bot permissions and the real required pull-request
@@ -403,20 +429,41 @@ only. That is exactly the policy a fork must not copy onto its integration branc
 On GitHub the workflow checks three surfaces: the active rulesets across all response pages, the
 repository merge settings, and classic branch protection. A linear-history requirement, or a
 restriction to squash and rebase, or a merge queue set to either, produces a warning in the pull
-request and in the job summary. Classic protection needs Administration: read. An unavailable, 404
-or malformed response is marked **not fully checked**, while restrictions the check already
-observed still produce their warnings. Confirm any unreadable setting with the repository
-administrator, and do not broaden the automation token just to silence the note. The pull request
-still opens, and the landing decision stays yours.
+request and in the job summary. Classic protection needs Administration: read. A branch that has no
+classic protection answers 404 with `Branch not protected`. That is an answer, not a failure, so
+the check records no classic protection and stays complete. A branch protected by rulesets alone
+therefore carries no note. A permission failure, a 404 with any other message, and a malformed
+response are each marked **not fully checked**, while restrictions the check already observed still
+produce their warnings. The note appears only when a surface stayed unverified. Confirm any
+unreadable setting with the repository administrator, and do not broaden the automation token just
+to silence the note. The pull request still opens, and the landing decision stays yours.
 
 New and recovered pull requests get a conventional title, `chore(upstream): integrate <tag>`. An
-existing pull request's title, body and labels are left untouched. Commits the lane creates use the
-configured committer's DCO sign-off under this repository's contribution policy, and the workflow
-configures its own automation identity. The local placeholder fallback is still available, but it
-carries no DCO sign-off. Before you submit to a DCO-gated repository, configure an approved
-contributor identity, then review and sign off the contribution. Upstream commits keep their
-original messages. A missing upstream sign-off needs a maintainer's decision, and it does not
-justify exempting the update pull request from its required checks.
+existing pull request's title, body and labels are left untouched. Commits the lane creates carry a
+`Signed-off-by` trailer naming the configured committer, and the workflow configures its own
+automation identity. A trailer a script writes is a trailer, not a certification by the person it
+names: the Developer Certificate of Origin is a statement whoever submits the contribution makes,
+so before you submit to a DCO-gated repository, configure an approved contributor identity, then
+review the contribution and sign it off yourself. The local placeholder fallback is still
+available, and it writes no trailer at all. Upstream commits keep their original messages.
+
+This repository's own DCO check reads an update pull request's commits from the comparison
+endpoint and walks its pages until the rows in hand reach the `total_commits` that endpoint
+reports, so a pull request carrying several hundred upstream commits is checked whole rather than
+refused for its length, and a listing that comes up short fails the check rather than passing on
+the part that arrived. There is one exemption. An unsigned commit is waived when it is reachable
+from the default branch of the upstream repository your `.stamity/upstream.json` names — an
+ancestor of that branch, or its tip — read from the pull request's base branch, so no pull request
+can introduce the configuration that exempts it, and only when that `upstream`
+names a repository on GitHub, because the question the check asks is a GitHub API read. Reachability, and not mere
+existence: GitHub serves a commit pushed to any repository in a fork network through the parent
+repository's endpoint, so "the upstream has this sha" would be answered yes for a commit anyone
+pushed to a personal fork, and against a public upstream that would let a contributor waive the
+DCO on their own commit. Only the upstream's maintainers move its default branch. A commit that
+branch never reached, an upstream whose default branch cannot be read, an upstream on any other
+host, and a repository that configures no lane at all each leave every commit needing its own
+trailer, and the check says which of the four it applied. A missing upstream sign-off still needs a maintainer's decision, and it
+does not justify exempting the update pull request from its required checks.
 
 When policy forbids merge commits, construct the merge by hand from the record's upstream commit
 with git 2.40 or newer, then move your branch onto the result:
@@ -732,9 +779,12 @@ If the push succeeded but pull request creation failed, a retry can create the m
 only after proving the same owned integration. That means a matching release and target, matching
 merge parents, a matching non-record tree, and a semantic integration record, with no human
 follow-up. A fresh sync may change only the generated manifest's top-level `updatedAt`. Recovery
-accepts that one timestamp difference in canonical schema-1.0.0 manifests carrying valid UTC
-millisecond timestamps, and requires every other manifest byte to match. A missing, linked,
-executable, malformed or noncanonical changed manifest requires review. Every other generated file
+accepts that one timestamp difference and requires every byte except `updatedAt` to match. It
+keeps no copy of the manifest schema. The schema is the engine's, and the engine applied it when
+your own regenerate command wrote the manifest, so a key a newer engine admits cannot break
+recovery. The one masked value must still be a valid UTC millisecond timestamp, because it is the
+only value the comparison never reads. A missing, linked, executable, malformed or noncanonical
+changed manifest requires review. Every other generated file
 stays part of the exact tree comparison. The recovered pull request names the remote SHA it
 retained.
 
@@ -783,13 +833,23 @@ What the secret does **not** buy is a workflow-touching release. That path is cl
 above, not by permission. Either way your gates already ran in `prepare` and their verdict is
 committed on the branch, so the pull request is never the first place the merged tree is tested.
 
-**Any other host.** The script is portable. A self-hosted remote or a mirror runs
+**Any other host.** The lane script is portable. A self-hosted remote or a mirror runs
 `node scripts/upstream.mjs integrate` the same way, and no verb asks the host anything. Only the
 landing-policy check does not carry over, because it is a GitHub API read. Elsewhere, set the
 project's merge-method setting to the option that produces a merge commit rather than a
 fast-forward or a squash, and check it by hand. Only the GitHub reading is automated and only it was
 verified for this release. Everywhere else the same misconfiguration surfaces as `ancestry-lost`
 after the first landing.
+
+The two generators are not portable in that sense, and the boundary is `repository.url`. Both
+`scripts/generate-plugin-manifests.mjs` and `scripts/generate-apm-package.mjs` resolve the identity
+through `scripts/distribution-identity.mjs`, which accepts a URL on the public GitHub host and
+refuses every other host before it writes a byte. A copy on GitHub Enterprise Server, on GitLab or
+on a bare mirror therefore cannot run the regenerate step against its real remote. Two ways
+through: keep `repository.url` on the public destination you mirror from and hold the other host as
+a remote only, or run the generators against a manifest whose `repository.url` names that public
+destination and publish the generated tree from there. The lane, the gates and the APM tree work
+either way. The identity resolution is the only part that requires the public host.
 
 ### Recover from a failed run
 

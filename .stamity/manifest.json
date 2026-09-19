@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.8.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-15T21:16:47.441Z",
+  "updatedAt": "2026-09-19T12:12:57.679Z",
   "tools": [
     "claude"
   ],
@@ -316,7 +316,7 @@
       "adapter": "claude",
       "artifactId": "st-eval-run",
       "artifactType": "skill",
-      "contentHash": "451ac5fe6c0359e606e67ef425b89ac66dc9fd7f2942368239248942cade7616",
+      "contentHash": "d7728d4400d673d2ba438427f4b09c5242920048dcce6387a9515feda7869305",
       "path": ".claude/skills/st-eval-run/SKILL.md"
     },
     {
@@ -379,7 +379,7 @@
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
-      "contentHash": "e8790ff06d9bff6122ab340f6645e5356f50207fc9363344c54a01d80ce661ee",
+      "contentHash": "a5aae4c54de65bf27b579d2edbd693a61fbbf6281c6a6860adaa08587c1b2f95",
       "path": ".claude/skills/st-verify/SKILL.md"
     },
     {
@@ -463,7 +463,7 @@
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
-      "contentHash": "05456cf3f41fb3c1366480179006c1ba1055b0519e8383c2682a91e789ca4ca8",
+      "contentHash": "3663df992ff3ecce84302b8a87cc0e7812bfe393b3cf82245e3780a9950d1ae1",
       "path": ".claude/skills/st-verify/scripts/spec-plan-coverage.mjs"
     },
     {

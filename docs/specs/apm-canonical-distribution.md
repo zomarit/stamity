@@ -131,31 +131,6 @@ symptom into a failure on its own.
   layer, then deleted; its README's install command is replaced, not redirected, because no
   consumer depends on it (the owner's statement, 2026-09-09).
 
-## Acceptance criteria
-
-- GIVEN apm-cli 0.29.1 or 0.30.0 WHEN the smoke runs against the checkout THEN every supported
-  class deploys for every target and the lockfile says `apm_package`.
-- GIVEN apm-cli 0.29.0 WHEN the smoke runs with `--expect-failure` THEN it exits 0 having
-  detected zero deployed primitives.
-- GIVEN a consumer with a lockfile saying `agent_plugin` and no primitives WHEN the exported
-  verifier runs THEN it fails naming the classes at zero.
-- GIVEN a canonical release candidate WHEN `apm-route` runs before publication THEN the
-  report names the canonical repository and exact candidate SHA, resolves that commit and
-  verifies its supported deployed classes without a write credential or the npm artifact.
-- GIVEN a published canonical release WHEN its tag route is checked THEN the tag and
-  lockfile resolve to the recorded release commit and installed-content checks pass.
-
-## Public and private downstream contract (2026-09-10)
-
-The source-edit route predates the fork layer: edits under `content/` already reach `.apm/`.
-The 1.5.0 fork layer resolves replacements and additions correctly in the catalog, but the
-APM generator's corpus-origin filter drops the resolved fork winners. This extension repairs
-that consumer of the existing catalog and keeps package authoring separate from overrides in
-a consuming repository. The original 1.4.0 decision and dated probe results above remain
-historical evidence; these requirements describe the extension and require fresh proof.
-The extension targets 1.6.0; its release and live lifecycle evidence remain pending until
-publication and the required verification are recorded.
-
 ### REQ-APM-006 — Resolved package content and skill identity
 
 Generate rules, commands, agents and skills from reachable corpus and fork items in the
@@ -224,6 +199,38 @@ determinism, and a resolver smoke reading `.apm/` only proves delivery of that p
   visibility, and only its explicitly configured private release path may run.
 - GIVEN an inaccessible private package WHEN install runs THEN authentication fails and
   no successful installed-content or Renovate claim is recorded.
+
+## Acceptance criteria
+
+- GIVEN apm-cli 0.29.1 or 0.30.0 WHEN the smoke runs against the checkout THEN every supported
+  class deploys for every target and the lockfile says `apm_package`.
+- GIVEN apm-cli 0.29.0 WHEN the smoke runs with `--expect-failure` THEN it exits 0 having
+  detected zero deployed primitives.
+- GIVEN a consumer with a lockfile saying `agent_plugin` and no primitives WHEN the exported
+  verifier runs THEN it fails naming the classes at zero.
+- GIVEN a canonical release candidate WHEN `apm-route` runs before publication THEN the
+  report names the canonical repository and exact candidate SHA, resolves that commit and
+  verifies its supported deployed classes without a write credential or the npm artifact.
+- GIVEN a published canonical release WHEN its tag route is checked THEN the tag and
+  lockfile resolve to the recorded release commit and installed-content checks pass.
+
+## Public and private downstream contract (2026-09-10)
+
+The source-edit route predates the fork layer: edits under `content/` already reach `.apm/`.
+The 1.5.0 fork layer resolves replacements and additions correctly in the catalog, but the
+APM generator's corpus-origin filter drops the resolved fork winners. This extension repairs
+that consumer of the existing catalog and keeps package authoring separate from overrides in
+a consuming repository. The original 1.4.0 decision and dated probe results above remain
+historical evidence; these requirements describe the extension and require fresh proof.
+The extension shipped in 1.6.0. Its release and live lifecycle evidence are recorded at
+`docs/plans/005-enterprise-downstream-support.md:222-256`, which names the fixture tag the
+anonymous APM installation was proved against.
+
+The four requirements this extension declares, REQ-APM-006 to REQ-APM-009, are stated under
+`## Requirements` above, with their text unchanged. They were written here and moved on
+2026-09-19: a requirement outside that heading is invisible to the structural coverage checker
+(`content/skills/st-verify/scripts/spec-plan-coverage.mjs`), which reads definitions from it, so
+a plan could cite one and be scored as covering nothing.
 
 ## Non-goals
 

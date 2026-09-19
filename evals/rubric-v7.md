@@ -1,6 +1,8 @@
 # Judge rubric v7
 
-The grading instrument selected by `codex-astra` in `MODEL-PROFILES-v2.md`.
+The grading instrument every profile in `MODEL-PROFILES-v1.md` selects, the default `claude`
+profile included; `model-profiles-v1.json` is what the runner resolves at dispatch, and
+`test/evals/readmeCurrency.test.ts` holds the evals README to that resolution.
 The runner pins distinct scenario and judge models through the selected profile's dispatch
 controls. The judge never grades its own output or a run in which it acted as the scenario
 model. No model ID in this rubric overrides the selected profile.

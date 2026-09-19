@@ -8,6 +8,9 @@ on:
       - .github/workflows/pack-signing-rehearsal.yml
       - scripts/pack-signing-rehearsal.mjs
       - test/ci/packSigningRehearsal.test.ts
+      - src/pack/**
+      - src/merge/**
+      - package-lock.json
   workflow_dispatch:
 
 permissions:
@@ -18,8 +21,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Source identity is distinct from this workflow's execution SHA.
-  SIGNING_SOURCE_SHA: 237c6ad915c01f47040e03fb94141c4ab86ffb0f
+  # No source pin. The rehearsal signs the commit it runs on, so the proof witnesses the code
+  # that ships; the script derives its source identity from GITHUB_SHA.
   STAMITY_NO_UPDATE_CHECK: '1'
 
 jobs:
@@ -64,17 +67,11 @@ jobs:
             productionresultssa18.blob.core.windows.net:443
             productionresultssa19.blob.core.windows.net:443
             registry.npmjs.org:443
-      - name: Checkout reviewed signing source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ env.SIGNING_SOURCE_SHA }}
-          path: source
-          persist-credentials: false
-      - name: Checkout this exact rehearsal implementation
+      - name: Checkout the signing source at this run's commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
-          path: runner
+          path: source
           persist-credentials: false
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -84,10 +81,7 @@ jobs:
         working-directory: source
         run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund
       - name: Prepare bounded signing inputs
-        run: |
-          set -euo pipefail
-          cp runner/scripts/pack-signing-rehearsal.mjs source/scripts/pack-signing-rehearsal.mjs
-          node source/scripts/pack-signing-rehearsal.mjs prepare
+        run: node source/scripts/pack-signing-rehearsal.mjs prepare
       - name: Archive only reviewed input paths
         id: pack
         run: |

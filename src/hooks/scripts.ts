@@ -865,8 +865,8 @@ process.stdout.write(render().join("\\n") + "\\n");
  * 2026-09-10). Agent identity belongs to separate subagent lifecycle events.
  * Cursor’s adapter states the same fact from the other side:
  * `subagentStart` carries `subagent_type` and is "the only Cursor payload field"
- * that names an agent (`../adapters/cursor.ts`; cursor.com/docs/agent/hooks,
- * accessed 2026-08-17), so the tool-call events this guard rides carry none.
+ * that names an agent (`../adapters/cursor.ts`; cursor.com/docs/hooks,
+ * accessed 2026-09-17), so the tool-call events this guard rides carry none.
  * The guard was nevertheless emitted for Cursor as a blocking gate and wired
  * `failClosed`, advertising an enforcement point that returns early on every
  * call it will ever see. Being on this list makes the emitted body say what it

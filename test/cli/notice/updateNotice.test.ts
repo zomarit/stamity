@@ -10,6 +10,7 @@ import {
   resolveOwnPackageFacts,
   type UpdateNoticeOptions,
 } from "../../../src/cli/notice/updateNotice.ts";
+import { canonical } from "../../support/identity.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
 /**
@@ -413,14 +414,38 @@ describe("resolveOwnPackageFacts", () => {
     const manifest = JSON.parse(
       readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
     ) as { name: string; version: string };
+    const identity = canonical();
 
-    expect(facts).toEqual({ name: manifest.name, version: manifest.version, isPrivate: false });
-    // The pins that make this a fixture and not a tautology: this repo IS the
-    // published package, under the scoped name the registry is asked about, and
-    // its manifest carries no `private` flag — so the notice is live, and the
-    // strictly-greater guard above is the only thing keeping it quiet.
-    expect(facts.name).toBe("@zomarit/stamity");
-    expect(facts.isPrivate).toBe(false);
+    expect(facts).toEqual({
+      name: manifest.name,
+      version: manifest.version,
+      isPrivate: identity.private,
+    });
+    // TEST CHANGE, justified (audit FORK-3): the two pins below said "this repo is the
+    // canonical published package" unconditionally, which a downstream that renamed the
+    // package and set `private: true` as `docs/enterprise-forks.md` instructs cannot
+    // satisfy. Neither pin is dropped: the canonical branch is the assertion that stood
+    // here, and the fork branch states the consequence that matters for THIS module —
+    // a private manifest routes into the unpublishable-manifest no-op, so the notice
+    // never probes a registry for a package it could not install.
+    if (identity.canonical) {
+      // The pins that make this a fixture and not a tautology: this repo IS the
+      // published package, under the scoped name the registry is asked about, and
+      // its manifest carries no `private` flag — so the notice is live, and the
+      // strictly-greater guard above is the only thing keeping it quiet.
+      expect(facts.name).toBe("@zomarit/stamity");
+      expect(facts.isPrivate).toBe(false);
+    } else {
+      // TEST CHANGE (M-A2b-1): this branch asserted `isPrivate === true` on EVERY
+      // non-canonical checkout. `canonical()` is false for any rename — of the name, of the
+      // publisher, or of the private flag — so a downstream that renamed the package and
+      // left it publishable landed here and failed a suite `docs/enterprise-forks.md` says
+      // needs no edit. What this module actually cares about is the flag itself, which the
+      // `toEqual` above already pins against `identity.private`; the branch now states the
+      // consequence for whichever of the two a renamed checkout is.
+      expect(facts.name).toBe(identity.name);
+      expect(facts.isPrivate).toBe(identity.private);
+    }
   });
 });
 

@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process'
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { isMain } from './native-typescript.mjs'
+import { prepareNativeTypescriptCli } from './native-typescript.mjs'
 
 const SOURCE = fileURLToPath(new URL('..', import.meta.url))
 export const PACK_NAME = 'signing-rehearsal'
@@ -16,9 +16,15 @@ export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex'
 const json = async (path, value) => writeFile(path, `${JSON.stringify(value, null, 2)}\n`)
 const readJson = async (path) => JSON.parse(await readFile(path, 'utf8'))
 
+/**
+ * The rehearsal signs the commit it runs on, so its proof witnesses the code that ships.
+ * SIGNING_SOURCE_SHA remains readable for a run that must witness an earlier reviewed commit;
+ * the workflow sets no such pin, and the workflow test refuses any pin that main cannot reach.
+ */
 export function signingContext(env) {
-  assert.match(env.SIGNING_SOURCE_SHA ?? '', /^[a-f0-9]{40}$/)
   assert.match(env.GITHUB_SHA ?? '', /^[a-f0-9]{40}$/)
+  const sourceSha = env.SIGNING_SOURCE_SHA ?? env.GITHUB_SHA
+  assert.match(sourceSha, /^[a-f0-9]{40}$/)
   assert.equal(env.GITHUB_REPOSITORY, 'zomarit/stamity')
   assert.equal(env.GITHUB_REF, 'refs/heads/main')
   assert.equal(env.GITHUB_WORKFLOW_REF,
@@ -26,7 +32,7 @@ export function signingContext(env) {
   assert.match(env.GITHUB_RUN_ID ?? '', /^\d+$/)
   assert.match(env.GITHUB_RUN_ATTEMPT ?? '', /^\d+$/)
   return {
-    sourceSha: env.SIGNING_SOURCE_SHA, executionSha: env.GITHUB_SHA,
+    sourceSha, executionSha: env.GITHUB_SHA,
     workflowRef: env.GITHUB_WORKFLOW_REF, runId: env.GITHUB_RUN_ID, runAttempt: env.GITHUB_RUN_ATTEMPT,
     signer: `https://token.actions.githubusercontent.com https://github.com/${env.GITHUB_WORKFLOW_REF}`,
   }
@@ -138,7 +144,7 @@ export async function verify(root, context, options = {}) {
   await json(join(root, 'verification.json'), { ...context, passed: true, results })
 }
 
-if (isMain(import.meta.url)) {
+if (prepareNativeTypescriptCli(import.meta.url, { label: 'signing rehearsal' })) {
   try {
     assert.equal(process.argv.length, 3)
     const context = signingContext(process.env)

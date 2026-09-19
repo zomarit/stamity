@@ -9,8 +9,18 @@ import { PACK_MANIFEST_FILE } from "../../../src/pack/manifest.ts";
 import { computeAggregateContentSha, type TrustTier } from "../../../src/pack/trust.ts";
 import type { Tool } from "../../../src/types/core.ts";
 import { packOwner, type LedgerEntry, type SetupManifest } from "../../../src/types/manifest.ts";
+import { npxCommand } from "../../support/identity.ts";
 import { runInProcess, type InProcessResult } from "../../support/inProcess.ts";
 import { useTempDir } from "../../support/tempDir.ts";
+/**
+ * TEST CHANGE, justified (audit FORK-3): every `npx @zomarit/stamity …` literal below
+ * became `npxCommand("…")`, which reads the running checkout's own `package.json`.
+ * The assertion is unchanged on this tree — the derived string is byte-for-byte the
+ * literal it replaced — and a downstream that renamed the package as
+ * `docs/enterprise-forks.md` instructs now reads its own remedy instead of failing on
+ * a registry name it cannot install. Nothing here proves the production string: that
+ * is `test/cli/kit/packageName.test.ts`, against a pseudo package root.
+ */
 
 /**
  * Real temp directories and the in-process CLI runner: `add` is judged by what
@@ -356,7 +366,7 @@ describe("add — preconditions", () => {
     const result = await run([PACK_SPEC]);
 
     expect(result.code).toBe(1);
-    expect(result.stderr).toContain("npx @zomarit/stamity init");
+    expect(result.stderr).toContain(npxCommand("init"));
     // Nothing was written: no state dir exists to have installed into.
     expect(await pathExists(getProject().path(".stamity"))).toBe(false);
   });

@@ -1,5 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -657,21 +658,66 @@ describe("pr-checks.yml — the gates only a pull request can be asked", () => {
       contents: "read",
       "pull-requests": "read",
     });
-    // The API's own commit list, not a `base..head` range a rebased base branch can break.
-    expect(run).toContain("/pulls/$PR_NUMBER/commits");
-    // A long branch must not be judged on its first page.
-    expect(run).toContain("--paginate");
+    // CHANGED by the fork-lane audit's inherited-checks warning on the commit ceiling (plan 008,
+    // unit A1b). Three assertions were retired here and the behaviour each one pinned moved with
+    // it, so they are named rather than quietly dropped:
+    //
+    //   `/pulls/$PR_NUMBER/commits`  the pull-request commits endpoint answers at most 250
+    //                                commits, and that ceiling belongs to the LISTING — no flag
+    //                                lifts it. An update pull request carrying two upstream
+    //                                releases is already past it, so the gate could not be
+    //                                passed on one at all. The set now comes from the three-dot
+    //                                comparison, which is the same set by merge-base semantics.
+    //   `--paginate`                 a comparison page is a `commits` array inside one JSON
+    //                                object rather than the whole body, so the walk is explicit:
+    //                                `page=N` until the listed count reaches `total_commits`.
+    //   `[ "$TOTAL" -ge 250 ]`       the ceiling itself, replaced by a RECONCILIATION — a
+    //                                listing is complete only when it equals `total_commits`,
+    //                                which fails closed on a short answer at any length rather
+    //                                than at one number.
+    expect(run).toContain("compare/$BASE_SHA...$HEAD_SHA");
+    expect(run).toContain("per_page=100&page=$PAGE");
+    expect(run).toContain("total_commits");
+    expect(run).toContain('[ "$LISTED" -ne "$TOTAL_COMMITS" ]');
+    expect(run, "the retired commit ceiling must not come back").not.toContain("250");
+    // The two shas the comparison is taken between arrive as data, never interpolated into the
+    // script body, and both come off the event rather than off a ref a force-push can move.
+    const dco = stepOf(steps, "Every commit carries a Signed-off-by trailer");
+    expect(dco.env?.["BASE_SHA"]).toBe("${{ github.event.pull_request.base.sha }}");
+    expect(dco.env?.["HEAD_SHA"]).toBe("${{ github.event.pull_request.head.sha }}");
     expect(run).toContain("Signed-off-by: ");
     // A lookup that returned nothing and a fully signed-off branch are the same shape here.
-    expect(run).toContain('[ "$TOTAL" -eq 0 ]');
-    // So is a truncated one: the endpoint caps at 250, and the part that fitted is not an answer.
-    expect(run).toContain('[ "$TOTAL" -ge 250 ]');
+    expect(run).toContain('[ "$LISTED" -eq 0 ]');
+    // The one exemption, and the two properties that stop it being a hole. The lane
+    // configuration is read at the BASE sha, so a pull request cannot add the file that would
+    // exempt it; and only an UNSIGNED commit is ever looked up, which is what bounds the calls.
+    expect(run).toContain("contents/.stamity/upstream.json?ref=$BASE_SHA");
+    // CHANGED by W-A1b-1. The exemption asked `repos/$UPSTREAM_REPO/commits/$SHA` and took a
+    // 200 as proof the commit was the upstream's. That endpoint serves any commit in the
+    // upstream's whole FORK NETWORK, so a 200 measured visibility, not membership. The
+    // question is now ancestry against the upstream's default branch, resolved once.
+    expect(run).toContain("repos/$UPSTREAM_REPO/compare/$SHA...$DEFAULT_BRANCH");
+    expect(run).toContain("ahead | identical)");
+    expect(run, "the retired existence test must not come back").not.toContain(
+      "$UPSTREAM_REPO/commits/",
+    );
+    expect(run, "only a github.com upstream may exempt anything").toContain("https://github.com/");
     // The failure names the commits, or the contributor has to go and find them.
     expect(run).toContain("::error title=Missing DCO sign-off::");
-    expect(run).toContain("$UNSIGNED");
+    expect(run).toContain("$STILL_UNSIGNED");
     expect(run).toContain("git rebase --signoff origin/main");
-    // No checkout: this job runs nothing out of the diff it is judging.
+    // No checkout: this job runs nothing out of the diff it is judging. The grants say so and
+    // the header says so, but the property is what the shell can REACH, so the four tools that
+    // would run something out of the diff are refused in COMMAND position as well. Command
+    // position and not substring, deliberately: the failure summary quotes
+    // `git rebase --signoff origin/main` for the contributor to run, and quoting a command is
+    // not invoking one.
     expect(steps.some((step) => (step.uses ?? "").startsWith("actions/checkout@"))).toBe(false);
+    for (const tool of ["node", "npm", "npx", "git"]) {
+      expect(run, `the DCO job must not invoke ${tool}`).not.toMatch(
+        new RegExp(String.raw`(^|[;&|(])\s*${tool}\s`, "m"),
+      );
+    }
   });
 
   it("matches the title against a pattern this suite evaluates rather than paraphrases", () => {
@@ -754,6 +800,478 @@ describe("pr-checks.yml — the gates only a pull request can be asked", () => {
     expect(contributing, "the unattributed CI claim must not come back").not.toContain(
       "Both are checked in CI",
     );
+  });
+});
+
+// ── pr-checks.yml: the DCO job, executed ─────────────────────────────────────
+
+/**
+ * The static pins above say the shell NAMES a comparison; these say it walks one.
+ *
+ * The job is a bash script the runner hands to a real `gh`, and the two properties that matter
+ * are not visible in any substring of it: that a pull request past the old 250-commit ceiling is
+ * listed WHOLE, and that an unsigned commit is exempt only when the configured upstream actually
+ * has it. Both live in the control flow, so the shipping shell is executed here against a fake
+ * `gh` first on PATH that answers one canned response per endpoint — the pattern
+ * `test/upstream/workflowLandingPolicy.test.ts` uses on the landing-policy step, and for the same
+ * reason. Only the GitHub responses are substituted; bash, jq, awk and grep are the real ones.
+ *
+ * The fake is a POSIX shell script rather than a node one because the exemption path makes one
+ * call per unsigned commit, and the 303-commit case makes three hundred of them: a node start per
+ * call would be most of this file's runtime.
+ *
+ * Not run on Windows: a Git-for-Windows bash is a different interpreter than the one the runner
+ * uses, and these fixtures are POSIX paths and modes.
+ */
+const DCO_EXECUTABLE =
+  process.platform !== "win32" &&
+  spawnSync("bash", ["--version"]).status === 0 &&
+  spawnSync("jq", ["--version"]).status === 0;
+
+/** One response file per endpoint, keyed exactly the way the fake `gh` keys its lookup. */
+const keyOf = (endpoint: string): string => endpoint.replaceAll(/[^A-Za-z0-9]/g, "_");
+
+describe.skipIf(!DCO_EXECUTABLE)("pr-checks.yml — the DCO job, executed", () => {
+  const root = mkdtempSync(join(tmpdir(), "stamity-dco-"));
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  const DCO = runOf(stepsOf(prChecks, "dco"), "Every commit carries a Signed-off-by trailer");
+  const BASE = "b".repeat(40);
+  const HEAD = "h".repeat(40);
+  const SIGN_OFF = "Signed-off-by: A Maintainer <maintainer@example.invalid>";
+  const FORK = "example/fork";
+  const UPSTREAM_CONFIG = JSON.stringify({
+    version: 1,
+    upstream: "https://github.com/example/upstream",
+  });
+
+  interface Commit {
+    readonly sha: string;
+    readonly commit: { readonly message: string };
+  }
+
+  const commitOf = (sha: string, signed: boolean): Commit => ({
+    sha,
+    commit: { message: signed ? `work on ${sha}\n\n${SIGN_OFF}\n` : `work on ${sha}\n` },
+  });
+
+  /** `count` commits with distinct 40-hex shas built off `prefix`. */
+  function commits(prefix: string, count: number, signed: boolean): Commit[] {
+    return Array.from({ length: count }, (_, index) =>
+      commitOf(`${prefix}${String(index).padStart(40 - prefix.length, "0")}`, signed),
+    );
+  }
+
+  interface Case {
+    /** Every commit the comparison lists, in order. Served 100 to a page. */
+    readonly commits: readonly Commit[];
+    /** What the comparison reports as `total_commits`; the listed length by default. */
+    readonly totalCommits?: number;
+    /**
+     * `total_commits` for one specific page, overriding `totalCommits` there — the branch
+     * MOVING under the walk, which the job reconciles page against page rather than only
+     * against the rows in hand. Keyed by 1-based page number.
+     */
+    readonly pageTotals?: Readonly<Record<number, number>>;
+    /**
+     * A page the fake serves no file for at all, so `gh` exits nonzero mid-walk. A walk that
+     * swallowed it would judge a pull request on the pages that happened to answer.
+     */
+    readonly missingPage?: number;
+    /** The lane configuration on the BASE branch, or absent when the repository has none. */
+    readonly config?: string;
+    /**
+     * Shas the configured upstream both HAS (a 200 on `commits/`) and holds REACHABLE from its
+     * default branch (an `ahead` comparison). The two are written together because for a real
+     * upstream commit they always travel together; `upstreamCompare` splits them apart.
+     */
+    readonly upstreamHas?: readonly string[];
+    /**
+     * An explicit comparison status per sha, overriding the `ahead` that `upstreamHas` writes.
+     * This is how a sha that EXISTS on the upstream endpoint — because someone pushed it to a
+     * fork in the same network — is served with the `diverged` its ancestry really answers.
+     */
+    readonly upstreamCompare?: Readonly<Record<string, string>>;
+    /** The upstream's default branch, or `null` when that read itself fails. */
+    readonly upstreamDefaultBranch?: string | null;
+  }
+
+  interface Run {
+    readonly status: number | null;
+    readonly out: string;
+    readonly summary: string;
+    readonly calls: readonly string[];
+  }
+
+  let ordinal = 0;
+
+  function invoke(testCase: Case): Run {
+    const dir = join(root, String(ordinal++));
+    const bin = join(dir, "bin");
+    const responses = join(dir, "responses");
+    mkdirSync(bin, { recursive: true });
+    mkdirSync(responses, { recursive: true });
+
+    const total = testCase.totalCommits ?? testCase.commits.length;
+    // One page past the last, carrying an empty `commits` array, because that is what the real
+    // endpoint answers past the end — and it is the only way a listing SHORTER than the total
+    // reaches the reconciliation instead of dying on an unanswered page.
+    const pages = Math.max(1, Math.ceil(testCase.commits.length / 100)) + 1;
+    for (let page = 1; page <= pages; page += 1) {
+      if (page === testCase.missingPage) continue;
+      const endpoint = `repos/${FORK}/compare/${BASE}...${HEAD}?per_page=100&page=${String(page)}`;
+      writeFileSync(
+        join(responses, keyOf(endpoint)),
+        JSON.stringify({
+          total_commits: testCase.pageTotals?.[page] ?? total,
+          commits: testCase.commits.slice((page - 1) * 100, page * 100),
+        }),
+      );
+    }
+    if (testCase.config !== undefined) {
+      writeFileSync(
+        join(responses, keyOf(`repos/${FORK}/contents/.stamity/upstream.json?ref=${BASE}`)),
+        testCase.config,
+      );
+    }
+    const branch = testCase.upstreamDefaultBranch === undefined ? "main" : testCase.upstreamDefaultBranch;
+    if (branch !== null) {
+      writeFileSync(
+        join(responses, keyOf("repos/example/upstream")),
+        JSON.stringify({ default_branch: branch }),
+      );
+    }
+    // Existence and ancestry are written as the two SEPARATE facts they are. A 200 on
+    // `commits/` says only that some repository in the upstream's fork network carries the
+    // sha; the comparison against the default branch is what says the upstream itself reached
+    // it. `upstreamCompare` is how a case serves one without the other.
+    const statuses: Record<string, string> = {};
+    for (const sha of testCase.upstreamHas ?? []) {
+      writeFileSync(join(responses, keyOf(`repos/example/upstream/commits/${sha}`)), "{}");
+      statuses[sha] = "ahead";
+    }
+    for (const [sha, status] of Object.entries(testCase.upstreamCompare ?? {})) {
+      writeFileSync(join(responses, keyOf(`repos/example/upstream/commits/${sha}`)), "{}");
+      statuses[sha] = status;
+    }
+    for (const [sha, status] of Object.entries(statuses)) {
+      if (status === "") continue;
+      writeFileSync(
+        join(responses, keyOf(`repos/example/upstream/compare/${sha}...${branch ?? "main"}`)),
+        JSON.stringify({ status }),
+      );
+    }
+
+    // A response the fake has no file for is an HTTP error with the API's own shape on stderr:
+    // that is how a commit absent from the upstream, and a repository with no lane config,
+    // both reach the shell. The diagnostic is private, and the assertions below check it never
+    // reaches the job's output.
+    const gh = join(bin, "gh");
+    writeFileSync(
+      gh,
+      `#!/bin/sh
+printf '%s\\n' "$*" >> "$CALLS"
+ENDPOINT=''
+FILTER=''
+TAKE_FILTER=''
+for ARG in "$@"; do
+  if [ -n "$TAKE_FILTER" ]; then FILTER="$ARG"; TAKE_FILTER=''; continue; fi
+  case "$ARG" in
+    repos/*) ENDPOINT="$ARG" ;;
+    --jq) TAKE_FILTER=1 ;;
+  esac
+done
+if [ "$1" != api ] || [ -z "$ENDPOINT" ]; then
+  echo "the fake gh was asked for something that is not an api read: $*" >&2
+  exit 9
+fi
+FILE="$RESPONSES/$(printf '%s' "$ENDPOINT" | tr -c 'A-Za-z0-9' '_')"
+if [ ! -f "$FILE" ]; then
+  case "$ENDPOINT" in
+    "$WALK_PREFIX"*) echo "gh: Not Found (HTTP 404) — walk diagnostic" >&2 ;;
+    *) echo "gh: Not Found (HTTP 404) — private diagnostic" >&2 ;;
+  esac
+  exit 1
+fi
+if [ -n "$FILTER" ]; then
+  jq -r "$FILTER" < "$FILE"
+else
+  cat "$FILE"
+fi
+`,
+    );
+    chmodSync(gh, 0o755);
+
+    const summaryPath = join(dir, "summary.md");
+    const callsPath = join(dir, "calls");
+    writeFileSync(summaryPath, "");
+    writeFileSync(callsPath, "");
+    const result = spawnSync("bash", ["-c", DCO], {
+      cwd: dir,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        LC_ALL: "C",
+        PATH: `${bin}${delimiter}${process.env["PATH"] ?? ""}`,
+        GH_TOKEN: "not-a-token",
+        GITHUB_REPOSITORY: FORK,
+        PR_NUMBER: "42",
+        BASE_SHA: BASE,
+        HEAD_SHA: HEAD,
+        GITHUB_STEP_SUMMARY: summaryPath,
+        RESPONSES: responses,
+        CALLS: callsPath,
+        // The comparison WALK is the job's own read and its failure is reported in the job's
+        // own words, so gh's message there is not a leak. Every other endpoint — the lane
+        // configuration and the ancestry lookups — is read with stderr suppressed, and the
+        // assertion below is what holds that suppression in place.
+        WALK_PREFIX: `repos/${FORK}/compare/`,
+      },
+    });
+    const out = `${result.stdout}${result.stderr}`;
+    const summary = readFileSync(summaryPath, "utf8");
+    expect(
+      out + summary,
+      "a gh diagnostic from a suppressed lookup must not reach the job's output",
+    ).not.toContain("private diagnostic");
+    return {
+      status: result.status,
+      out,
+      summary,
+      calls: readFileSync(callsPath, "utf8").split("\n").filter((line) => line !== ""),
+    };
+  }
+
+  /**
+   * The update pull request the finding is about: three hundred upstream commits the fork did
+   * not write, plus the three it did.
+   *
+   * Twelve of the three hundred carry no trailer, placed so that at least one lands on each of
+   * the four pages, including the first and the last row of the listing. Twelve rather than
+   * three hundred because that is the real shape — every upstream commit across v1.3.0..v1.8.0
+   * carries one, so the exemption is a safety net rather than the normal path — and because one
+   * `gh` call per unsigned commit is what the exemption costs, here and on the runner.
+   */
+  const UNSIGNED_AT = new Set([0, 1, 99, 100, 150, 199, 200, 250, 260, 297, 298, 299]);
+  const updateCommits = (): Commit[] => [
+    ...Array.from({ length: 300 }, (_, index) =>
+      commitOf(`u${String(index).padStart(39, "0")}`, !UNSIGNED_AT.has(index)),
+    ),
+    ...commits("f", 3, true),
+  ];
+
+  it("lists a 303-commit update pull request whole and exempts its upstream commits", () => {
+    // The finding this unit closes, in one fixture: this pull request is past the old ceiling,
+    // and under it the job could not be passed at all — nor split to get under it, because the
+    // commits are one merge.
+    const all = updateCommits();
+    const unsigned = all.filter((entry) => !entry.commit.message.includes("Signed-off-by"));
+    const run = invoke({
+      commits: all,
+      config: UPSTREAM_CONFIG,
+      upstreamHas: unsigned.map((entry) => entry.sha),
+    });
+
+    expect(run.status, run.out).toBe(0);
+    expect(run.out).toContain("Listed 303 of 303");
+    expect(run.out).toContain("291 signed off");
+    expect(run.out).toContain("12 exempt");
+    expect(run.out).toContain("0 unsigned");
+    // Four pages, and the fourth is the one the old ceiling could never have reached.
+    expect(run.calls.filter((call) => call.includes(`${FORK}/compare/`))).toHaveLength(4);
+    expect(run.calls.some((call) => call.includes("page=4"))).toBe(true);
+    // Bounded, and bounded on the right side: a signed commit is never looked up.
+    const lookups = run.calls.filter((call) => call.includes("example/upstream/compare/"));
+    expect(lookups).toHaveLength(unsigned.length);
+    expect(lookups.some((call) => call.includes("/compare/f"))).toBe(false);
+    // The default branch is resolved ONCE for the whole run, not per sha.
+    expect(run.calls.filter((call) => /\brepos\/example\/upstream\s*$/.test(call.trim()) || call.includes("repos/example/upstream --jq"))).toHaveLength(1);
+  });
+
+  it("refuses a sha the upstream endpoint answers 200 for but its default branch never reached", () => {
+    // W-A1b-1, the finding this case exists for. GitHub serves a commit pushed to ANY
+    // repository in a fork network through the PARENT's commit endpoint, so a 200 on
+    // `repos/<upstream>/commits/<sha>` measures fork-network visibility, not upstream
+    // membership: on a public upstream, anyone may push an unsigned commit to a personal fork
+    // and that endpoint will answer 200 for it. Under the existence rule a contributor to this
+    // private downstream could waive the DCO on their own commit that way. The rule is
+    // ANCESTRY — the sha must be reachable from the upstream's default branch — so a sha the
+    // endpoint has but the comparison calls `diverged` stays unsigned and fails the job.
+    const all = updateCommits();
+    const unsigned = all.filter((entry) => !entry.commit.message.includes("Signed-off-by"));
+    const planted = unsigned[3]?.sha ?? "";
+    const run = invoke({
+      commits: all,
+      config: UPSTREAM_CONFIG,
+      upstreamHas: unsigned.filter((entry) => entry.sha !== planted).map((entry) => entry.sha),
+      upstreamCompare: { [planted]: "diverged" },
+    });
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain(planted);
+    expect(run.summary).toContain(planted);
+    expect(run.out).toContain("11 exempt");
+    expect(run.out).toContain("1 unsigned");
+    // Exactly the planted sha, so the other eleven prove the ancestry rule still exempts a
+    // genuine upstream commit rather than the job having gone blanket-strict.
+    const named = unsigned.filter((entry) => run.summary.includes(entry.sha));
+    expect(named.map((entry) => entry.sha)).toEqual([planted]);
+    // It WAS asked about — this is a rejection on the answer, not a lookup that never happened.
+    expect(run.calls.some((call) => call.includes(`compare/${planted}...main`))).toBe(true);
+  });
+
+  it("exempts a sha the upstream's default branch is sitting exactly on", () => {
+    // `identical` is the head commit of the default branch itself: reachable, and the boundary
+    // case an `ahead`-only rule would refuse. `behind` is the other side of it — a sha the
+    // default branch is an ancestor OF, which is a commit the upstream has not taken.
+    const tip = commits("t", 1, false)[0]?.sha ?? "";
+    const future = commits("z", 1, false)[0]?.sha ?? "";
+
+    const identical = invoke({
+      commits: [...commits("s", 2, true), commitOf(tip, false)],
+      config: UPSTREAM_CONFIG,
+      upstreamCompare: { [tip]: "identical" },
+    });
+    expect(identical.status, identical.out).toBe(0);
+    expect(identical.out).toContain("1 exempt");
+
+    const behind = invoke({
+      commits: [...commits("s", 2, true), commitOf(future, false)],
+      config: UPSTREAM_CONFIG,
+      upstreamCompare: { [future]: "behind" },
+    });
+    expect(behind.status).toBe(1);
+    expect(behind.out).toContain(future);
+    expect(behind.out).toContain("0 exempt");
+  });
+
+  it("exempts nothing when the upstream's default branch cannot be read", () => {
+    // The ancestry question needs a head to ask it against. If that read fails there is no
+    // question to ask, so nothing is exempt and the message says which of the four cases it
+    // is rather than blaming a configuration that is present and well-formed.
+    const unsigned = commits("c", 1, false)[0]?.sha ?? "";
+    const run = invoke({
+      commits: [...commits("s", 2, true), ...commits("c", 1, false)],
+      config: UPSTREAM_CONFIG,
+      upstreamDefaultBranch: null,
+    });
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain(unsigned);
+    expect(run.out).toContain("default branch could not be read");
+    expect(run.out).toContain("every commit listed was checked");
+    // Not one ancestry lookup was attempted against an unresolved branch.
+    expect(run.calls.some((call) => call.includes("upstream/compare/"))).toBe(false);
+  });
+
+  it("fails naming the one upstream commit the configured upstream does not have", () => {
+    const all = updateCommits();
+    const unsigned = all.filter((entry) => !entry.commit.message.includes("Signed-off-by"));
+    const missing = unsigned[5]?.sha ?? "";
+    const run = invoke({
+      commits: all,
+      config: UPSTREAM_CONFIG,
+      upstreamHas: unsigned.filter((entry) => entry.sha !== missing).map((entry) => entry.sha),
+    });
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain(missing);
+    expect(run.out).toContain("::error title=Missing DCO sign-off::");
+    expect(run.summary).toContain(missing);
+    expect(run.out).toContain("11 exempt");
+    expect(run.out).toContain("1 unsigned");
+    // The other eleven were exempt, so the failure names exactly the commit that earned it.
+    const named = unsigned.filter((entry) => run.summary.includes(entry.sha));
+    expect(named.map((entry) => entry.sha)).toEqual([missing]);
+  });
+
+  it("exempts nothing in a repository that configures no upstream lane", () => {
+    // The canonical repository: no `.stamity/upstream.json` anywhere, so the exemption path is
+    // dead and every commit has to carry the trailer. This is today's behaviour, kept.
+    const unsigned = commits("c", 1, false)[0]?.sha ?? "";
+    const run = invoke({ commits: [...commits("s", 4, true), ...commits("c", 1, false)] });
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain(unsigned);
+    expect(run.out).toContain("No upstream lane configuration");
+    expect(run.calls.some((call) => call.includes("example/upstream"))).toBe(false);
+  });
+
+  it("fails closed when the listing is shorter than the total the comparison reports", () => {
+    const run = invoke({ commits: commits("s", 40, true), totalCommits: 41 });
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("::error title=DCO check is incomplete::");
+    expect(run.out).toContain("total_commits=41");
+    expect(run.out).toContain("40");
+    expect(run.out).not.toContain("carry a Signed-off-by trailer.");
+  });
+
+  it("fails closed when total_commits moves between two pages of the walk", () => {
+    // M-A1b-1. The branch can be force-pushed WHILE the walk is running, and then the pages in
+    // hand describe two different states spliced together — a commit present in the first
+    // state and absent from the second is checked, one the other way round is never seen. The
+    // job reconciles each page's total against the first page's, so the splice is caught
+    // rather than reconciled away by a rows-versus-total count that happens to add up.
+    const run = invoke({
+      commits: commits("s", 150, true),
+      totalCommits: 150,
+      pageTotals: { 2: 151 },
+    });
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("::error title=DCO check could not run::");
+    expect(run.out).toContain("total_commits moved from 150 to 151");
+    expect(run.out).not.toContain("carry a Signed-off-by trailer.");
+  });
+
+  it("fails closed when a page mid-walk cannot be read", () => {
+    // M-A1b-1. The first page answers and the second does not. A walk that broke out of the
+    // loop on the error would hold 100 signed rows and call the pull request clean; the
+    // unreadable page has to be the failure itself.
+    const run = invoke({
+      commits: [...commits("s", 100, true), ...commits("c", 50, false)],
+      missingPage: 2,
+    });
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("::error title=DCO check could not run::");
+    expect(run.out).toContain("Page 2 of the comparison");
+    expect(run.out).toContain("never answered is not a pass");
+  });
+
+  it("fails closed when the comparison lists nothing at all", () => {
+    const run = invoke({ commits: [], totalCommits: 0 });
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("::error title=DCO check could not run::");
+  });
+
+  it("exempts nothing when the configured upstream is not on github.com", () => {
+    // A GHES or GitLab upstream: the lookup this exemption rests on is a github.com API read,
+    // so there is nothing to ask and no commit is exempt. The message says that rather than
+    // leaving a fork to guess why its upstream commits were not waved through. The URL itself
+    // is never echoed: a clone URL can carry credentials.
+    const unsigned = commits("c", 1, false)[0]?.sha ?? "";
+    const run = invoke({
+      commits: [...commits("s", 2, true), ...commits("c", 1, false)],
+      config: JSON.stringify({ version: 1, upstream: "https://git.example.invalid/team/fork" }),
+    });
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain(unsigned);
+    expect(run.out).toContain("not a github.com repository");
+    expect(run.out).toContain("every commit listed was checked");
+    expect(run.out).not.toContain("git.example.invalid");
+    expect(run.calls.some((call) => call.includes("example/upstream"))).toBe(false);
+  });
+
+  it("passes a fully signed-off branch without reading the lane configuration at all", () => {
+    const run = invoke({ commits: commits("s", 7, true) });
+
+    expect(run.status, run.out).toBe(0);
+    expect(run.out).toContain("7 signed off");
+    expect(run.calls.some((call) => call.includes("contents/"))).toBe(false);
   });
 });
 

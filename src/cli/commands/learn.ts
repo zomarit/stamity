@@ -8,6 +8,7 @@ import { Argument, Option, type Command } from "commander";
 import { LEARNING_CONFIDENCE_LEVELS } from "../../learnings/validation.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import { CliFailure, renderFailureHuman, type FailureDoc } from "../kit/output.ts";
+import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 
 /**
@@ -167,7 +168,7 @@ async function requireStateDir(rootDir: string): Promise<void> {
       code: "VALIDATION_ERROR",
       message: `this repo is not initialised — there is no ${STATE_DIR}/ directory to capture a learning into`,
       why: `capture is invoked by generated agent content, so it refuses rather than minting ${STATE_DIR}/ in whatever directory the caller happened to be in`,
-      next: "run: npx @zomarit/stamity init",
+      next: `run: ${packageCommand("init")}`,
     });
   }
 }

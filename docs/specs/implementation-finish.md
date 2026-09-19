@@ -25,7 +25,7 @@ approval remain separate evidence that automation cannot provide.
 
 ### REQ-FINISH-001
 
-Given each supported client, discovery/invocation and native hook allow/deny/error/timeout fixtures match current official contracts, including identity-free events and unsupported fields.
+Given each supported client, discovery/invocation and native hook allow/deny/error/timeout fixtures match current official contracts, including identity-free events and unsupported fields. Every Cursor allow path writes an explicit `{"permission":"allow"}`, and a Cursor pre-tool-use verdict the runner cannot read, meaning an unrecognized output field beside no readable decision, faults with exit 1 and no output, which that client counts as a fail-closed denial; a silent child still allows. Copilot `sessionStart` output reaches the session as `additionalContext`. The Codex starter resolves its hook script from the directory holding `.codex/hooks.json`, not from the nearest match above the session directory. Every vendor literal in the portable runner and the adapters carries its URL and an access date.
 
 ### REQ-FINISH-002
 
@@ -33,7 +33,7 @@ Given multi-client init/sync/check/clean and authored skill metadata/companions,
 
 ### REQ-FINISH-003
 
-Given complete and defective existing-format spec/plan fixtures, structural validation detects scoped missing coverage, dangling and duplicate references; complete fixtures pass. Semantic review independently catches seeded ambiguity and supplies a usable clarification.
+Given complete and defective existing-format spec/plan fixtures, structural validation detects scoped missing coverage, dangling and duplicate references; complete fixtures pass. Semantic review independently catches seeded ambiguity and supplies a usable clarification. The checker expands a prose requirement range or reports `partial-scope` when nothing closes it, reports `missing-spec-delta` for an absent or suffixed `## Spec delta` heading, splits a line carrying both ADDED and REMOVED at those keywords, and reports `invalid-reference` for a range whose endpoints name two areas, so none of those shapes passes with requirements out of scope. A plan's own `### REQ-` heading inside its spec delta is a provisional definition only where no spec defines that id (`provisional-definition`, advisory); a spec definition wins and produces no finding, and a second provisional definition of one id is `duplicate-requirement`.
 
 ### REQ-FINISH-004
 
@@ -41,7 +41,7 @@ Given exhausted onboarding time, missing mandatory gates force a Not done report
 
 ### REQ-FINISH-005
 
-Given an authored pack and detached bundle, signing uses the verifier's existing exact payload and verify/install/update round-trip passes; changed bytes, wrong identity, malformed bundles and unsafe paths fail closed. Credentials never enter artifacts.
+Given an authored pack and detached bundle, signing uses the verifier's existing exact payload and verify/install/update round-trip passes; changed bytes, wrong identity, malformed bundles and unsafe paths fail closed. Credentials never enter artifacts. The pack-signing rehearsal signs the source it checks out at `github.sha`: the workflow sets no pin, and the script derives `sourceSha` from `GITHUB_SHA` when none is set, so a pinned commit is a reviewed exception rather than the ordinary path. It re-runs on any change under `src/pack/**`, `src/merge/**` or `package-lock.json`. The author documentation names the two identity sources signing needs, a GitHub Actions job granting `id-token: write` or an environment carrying `SIGSTORE_ID_TOKEN`, and the signing script prints an `EngineError`'s code and message while keeping the generic line for every other failure.
 
 ### REQ-FINISH-006
 
@@ -53,7 +53,7 @@ Given script import or direct invocation, one shared native-TypeScript bootstrap
 
 ### REQ-FINISH-008
 
-Given injected ambient input, mismatched model/effort or uninspectable traces, eval admission blocks. A supported fresh execution path records exact inputs and provider controls, handles bounded dispatch and admits scores only after all selected-rubric fixtures calibrate.
+Given injected ambient input, mismatched model/effort or uninspectable traces, eval admission blocks. A supported fresh execution path records exact inputs and provider controls, handles bounded dispatch and admits scores only after all selected-rubric fixtures calibrate. The advisory-repeat comparison is keyed on the run's configuration, meaning its profile, rubric core hash and harness, rather than on its input bytes, so a repeat is detected across candidates; `configurationHash` stays the exact-input receipt on every summary.
 
 ### REQ-FINISH-009
 
@@ -65,20 +65,23 @@ Given current dependency primary sources, apply an available supported site fix 
 
 ## Acceptance criteria
 
-- REQ-FINISH-001: Given each supported client, discovery/invocation and native hook allow/deny/error/timeout fixtures match current official contracts, including identity-free events and unsupported fields.
+- REQ-FINISH-001: Given each supported client, discovery/invocation and native hook allow/deny/error/timeout fixtures match current official contracts, including identity-free events and unsupported fields. Every Cursor allow path writes an explicit `{"permission":"allow"}`, and a Cursor pre-tool-use verdict the runner cannot read, meaning an unrecognized output field beside no readable decision, faults with exit 1 and no output, which that client counts as a fail-closed denial; a silent child still allows. Copilot `sessionStart` output reaches the session as `additionalContext`. The Codex starter resolves its hook script from the directory holding `.codex/hooks.json`, not from the nearest match above the session directory. Every vendor literal in the portable runner and the adapters carries its URL and an access date.
 - REQ-FINISH-002: Given multi-client init/sync/check/clean and authored skill metadata/companions, user content survives, command names remain compatible, the charter template stays at most 150 lines and each measured client budget only ratchets down. All three client proposals and native-memory overlap receive dated dispositions.
-- REQ-FINISH-003: Given complete and defective existing-format spec/plan fixtures, structural validation detects scoped missing coverage, dangling and duplicate references; complete fixtures pass. Semantic review independently catches seeded ambiguity and supplies a usable clarification.
+- REQ-FINISH-003: Given complete and defective existing-format spec/plan fixtures, structural validation detects scoped missing coverage, dangling and duplicate references; complete fixtures pass. Semantic review independently catches seeded ambiguity and supplies a usable clarification. The checker expands a prose requirement range or reports `partial-scope` when nothing closes it, reports `missing-spec-delta` for an absent or suffixed `## Spec delta` heading, splits a line carrying both ADDED and REMOVED at those keywords, and reports `invalid-reference` for a range whose endpoints name two areas, so none of those shapes passes with requirements out of scope. A plan's own `### REQ-` heading inside its spec delta is a provisional definition only where no spec defines that id (`provisional-definition`, advisory); a spec definition wins and produces no finding, and a second provisional definition of one id is `duplicate-requirement`.
 - REQ-FINISH-004: Given exhausted onboarding time, missing mandatory gates force a Not done report. A fresh-repository CLI fixture demonstrates initialization, checks and recovery with agent-run timings.
-- REQ-FINISH-005: Given an authored pack and detached bundle, signing uses the verifier's existing exact payload and verify/install/update round-trip passes; changed bytes, wrong identity, malformed bundles and unsafe paths fail closed. Credentials never enter artifacts.
+- REQ-FINISH-005: Given an authored pack and detached bundle, signing uses the verifier's existing exact payload and verify/install/update round-trip passes; changed bytes, wrong identity, malformed bundles and unsafe paths fail closed. Credentials never enter artifacts. The pack-signing rehearsal signs the source it checks out at `github.sha`: the workflow sets no pin, and the script derives `sourceSha` from `GITHUB_SHA` when none is set, so a pinned commit is a reviewed exception rather than the ordinary path. It re-runs on any change under `src/pack/**`, `src/merge/**` or `package-lock.json`. The author documentation names the two identity sources signing needs, a GitHub Actions job granting `id-token: write` or an environment carrying `SIGSTORE_ID_TOKEN`, and the signing script prints an `EngineError`'s code and message while keeping the generic line for every other failure.
 - REQ-FINISH-006: Given observed release traffic and the official endpoint contract, all release jobs use justified fail-closed egress and retain credential separation/digest handoff. A non-publishing rehearsal passes; authenticated signing/final publish proof remains separately identified.
 - REQ-FINISH-007: Given script import or direct invocation, one shared native-TypeScript bootstrap preserves import safety, forwarded flags and useful failures. A packed external TypeScript consumer resolves the public API and reachable types; declaration bytes enter size accounting.
-- REQ-FINISH-008: Given injected ambient input, mismatched model/effort or uninspectable traces, eval admission blocks. A supported fresh execution path records exact inputs and provider controls, handles bounded dispatch and admits scores only after all selected-rubric fixtures calibrate.
+- REQ-FINISH-008: Given injected ambient input, mismatched model/effort or uninspectable traces, eval admission blocks. A supported fresh execution path records exact inputs and provider controls, handles bounded dispatch and admits scores only after all selected-rubric fixtures calibrate. The advisory-repeat comparison is keyed on the run's configuration, meaning its profile, rubric core hash and harness, rather than on its input bytes, so a repeat is detected across candidates; `configurationHash` stays the exact-input receipt on every summary.
 - REQ-FINISH-009: Given the six retained failed scenarios and changed-source cases, independent review classifies corpus/instrument causes, supported behavior is repaired and affected three-sample evaluations retain strict floors and historical inputs/results. Model change includes every adversarial case.
 - REQ-FINISH-010: Given current dependency primary sources, apply an available supported site fix or date the exact unmet trigger. Integrate regenerated surfaces, required local/CI/site/consumer gates, reviewed fixes, candidate identity and human/external proof dispositions.
 
 ## References
 
 - `source`: `docs/plans/006-finish-implementation.md` — implementation units and contract census.
+- `source`: `docs/plans/008-plugin-lifecycle-01.md`: the audit fix batch of 2026-09-19 that
+  amended REQ-FINISH-001, -003, -005 and -008. Its run record is
+  `.stamity/runs/2026-09-17_plugin-lifecycle/record.md`.
 - `source`: `docs/specs/apm-canonical-distribution.md`, `docs/specs/fork-layer.md`,
   `docs/specs/enterprise-upstream-lane.md` — retained distribution contracts.
 - `test`: each unit's `verify` field names its focused checks; final verification records

@@ -164,6 +164,56 @@ const MAPPED_GUIDES: readonly string[] = GUIDES.filter((page) => page !== MIGRAT
 const HAND_PAGES: readonly string[] = [...PAGES, ...GUIDES];
 
 /**
+ * The client-contract evidence page: a hand-written record, and NOT a published page.
+ *
+ * It joins a bucket of its own rather than `HAND_PAGES`, and the reason is one rule it cannot
+ * satisfy by design. `ALLOWED_URL` above is an allowlist of this repository's own GitHub home,
+ * written for pages whose readers are users; this page's entire job is to cite the four
+ * vendors' official documentation, so every claim on it hangs off an outside URL. Putting it
+ * in `HAND_PAGES` would mean weakening that allowlist for the three published pages it was
+ * written for. What it DOES inherit is everything the bucket is defined by — a currency header
+ * with a date, a falsifiable re-open trigger, and no reserved name — plus the Codex
+ * hook-loading facts below, which are the claims the page was re-attested for.
+ */
+const CLIENT_CONTRACTS = ".github/client-contracts.md";
+
+/** Every dated evidence record. One today; the list is what makes adding a second cheap. */
+const EVIDENCE_PAGES: readonly string[] = [CLIENT_CONTRACTS];
+
+/**
+ * The date the evidence bucket was last re-read against its cited sources.
+ *
+ * Held to its own constant rather than to `REATTESTATION_DATE`, because the two passes are
+ * different work: the hand bucket is re-read against THIS TREE, and an evidence page is re-read
+ * against the VENDOR PAGES it cites, which move on the vendors' schedule. The pin is the same
+ * shape as the hand bucket's — the newest date in the bucket is this constant, so it has to
+ * move on the next pass, and no page may claim a date later than it.
+ *
+ * MOVED 2026-09-17: introduced with the bucket. The 2026-09-17 audit re-read every vendor page
+ * this record cites and the Codex paragraph was rewritten against the 2026-09-15 measurement.
+ */
+const EVIDENCE_REATTESTATION_DATE = "2026-09-17";
+
+/**
+ * The Codex hook-loading facts the contract page must carry, each a literal a reader can check
+ * against the cited page or the recorded measurement.
+ *
+ * All three loading steps, because a reply that names only the feature flag is the half-answer
+ * that left every emitted hook inert through the whole 1.7.0 window: the flag, the project
+ * trust level, and per-hook trust. Then the headless result, which is the other half — the
+ * emitted file being correct and the client running it are two claims, and this page is where
+ * they are kept apart.
+ */
+const CODEX_HOOK_FACTS: readonly string[] = [
+  "features.hooks",
+  "[features] hooks = true",
+  'projects.<path>.trust_level = "trusted"',
+  "--dangerously-bypass-hook-trust",
+  "codex exec",
+  "0.154.0",
+];
+
+/**
  * The line budget of the workflow guide, declared by
  * `docs/plans/001-package-8-operator-experience.md` — ":24 written to ≤150 physical lines", and
  * a `wc -l` acceptance criterion at :335 — and that page sits at exactly 150, so it has zero
@@ -708,6 +758,101 @@ describe("hand pages", () => {
     // `test/ci/leakGate.test.ts`, which spawns the same gate.
     180_000,
   );
+});
+
+describe("evidence pages", () => {
+  it("exist and carry real content", () => {
+    for (const page of EVIDENCE_PAGES) {
+      expect(existsSync(join(REPO_ROOT, page)), `${page} is missing`).toBe(true);
+      expect(read(page).trim().length, `${page} is empty`).toBeGreaterThan(500);
+    }
+  });
+
+  it("carries a currency header and a published re-open trigger", () => {
+    // The same two properties the hand bucket is defined by, and for the same reason: a record
+    // nobody can date and nobody can falsify is a record nobody can tell is stale. This page
+    // held the spec's dated dispositions for a release window with neither.
+    for (const page of EVIDENCE_PAGES) {
+      const head = lines(afterFrontmatter(read(page))).slice(0, 8).join("\n");
+
+      expect(head, `${page} has no currency header`).toMatch(CURRENCY_HEADER);
+      expect(head, `${page} publishes no re-open trigger`).toMatch(/Re-open when:/);
+      expect(head, `${page}'s re-open trigger names no check`).toMatch(/test\/docsPages\.test\.ts/);
+    }
+  });
+
+  it("dates the bucket at this pass, and no page later than it", () => {
+    const stamped = EVIDENCE_PAGES.map((page) => {
+      const head = lines(afterFrontmatter(read(page))).slice(0, 8).join("\n");
+      return { page, reattested: CURRENCY_HEADER.exec(head)?.[1] };
+    });
+
+    for (const { page, reattested } of stamped) {
+      expect(
+        reattested,
+        `${page} carries a currency header with no re-attestation date — stamp it with a ` +
+          `"Re-attested <date>" clause naming the pass that re-read it against its sources`,
+      ).toBeDefined();
+      expect(
+        (reattested ?? "") <= EVIDENCE_REATTESTATION_DATE,
+        `${page} re-attests to ${reattested ?? ""}, later than the ` +
+          `${EVIDENCE_REATTESTATION_DATE} pass it ships in`,
+      ).toBe(true);
+    }
+    expect(
+      newest(stamped.map(({ reattested }) => reattested ?? "")),
+      `no evidence page was re-attested at ${EVIDENCE_REATTESTATION_DATE} — stamp the pages ` +
+        `this pass re-read, or move EVIDENCE_REATTESTATION_DATE to the pass that happened`,
+    ).toBe(EVIDENCE_REATTESTATION_DATE);
+  });
+
+  it("names no reserved token", () => {
+    for (const page of EVIDENCE_PAGES) {
+      const text = read(page).toLowerCase();
+      for (const token of RESERVED_TOKENS) {
+        expect(text.includes(token), `${page} names a reserved token`).toBe(false);
+      }
+    }
+  });
+
+  it("cites every outside source over https, and links inside the tree otherwise", () => {
+    // The allowlist rule the hand bucket applies cannot apply here (see CLIENT_CONTRACTS), so
+    // what is checked is what an evidence citation must be either way: a real address, not a
+    // bare domain in prose, and a tree link that resolves.
+    for (const page of EVIDENCE_PAGES) {
+      const text = read(page);
+      for (const url of text.match(ABSOLUTE_URLS) ?? []) {
+        expect(url, `${page} cites a source over a non-https scheme`).toMatch(/^https:\/\//);
+      }
+      for (const target of linkTargets(text)) {
+        if (target.startsWith("https://") || target.startsWith("#")) continue;
+        expect(target, `${page} link is root- or protocol-absolute`).not.toMatch(/^\//);
+        expect(existsSync(resolveTarget(page, target)), `${page} links missing ${target}`).toBe(
+          true,
+        );
+      }
+    }
+  });
+
+  it("states all three Codex hook-loading steps and the headless result, with their dates", () => {
+    // DOC-1. The page described Codex hooks as command strings plus `/hooks` trust for the
+    // whole window in which the adapter shipped a feature flag the page never named, and the
+    // emitted hooks were inert on the one lane anybody measured. Each literal below is a fact
+    // with a source: the three loading steps from the vendor pages the bullet cites, the
+    // headless result from the 2026-09-15 fixture measurement.
+    const text = read(CLIENT_CONTRACTS);
+    for (const fact of CODEX_HOOK_FACTS) {
+      expect(text, `${CLIENT_CONTRACTS} does not state \`${fact}\``).toContain(fact);
+    }
+    // Dated, because an undated vendor fact is the shape this page keeps going stale in.
+    expect(text, "the Codex measurement carries no date").toContain("2026-09-15");
+    expect(text, "the vendor re-read carries no date").toContain("2026-09-17");
+    // The honest gap, kept in words: the hooks page states a default the measurement never
+    // tested, so the page must not assert one of its own.
+    expect(text, "the page asserts a `features.hooks` default it never measured").toMatch(
+      /never ran without the key/,
+    );
+  });
 });
 
 describe("README", () => {
@@ -1466,6 +1611,83 @@ describe("the guides", () => {
         `\`${outcome}\``,
       );
     }
+  });
+
+  it("the enterprise-forks guide states the DCO check's walk and its one exemption", () => {
+    // ADDED with the fork-lane audit's inherited-checks warning (plan 008, unit A1b). This page
+    // is where a fork reads why an update pull request of several hundred upstream commits it
+    // did not write now passes an inherited required check that used to refuse it for its
+    // length, and what the single exemption costs. Held against the job itself, so the page
+    // cannot go on describing a rule the workflow stopped applying.
+    const guide = read(ENTERPRISE_FORKS);
+    const job = read(".github/workflows/pr-checks.yml");
+
+    expect(job, "the DCO job no longer reconciles its listing against total_commits").toContain(
+      "total_commits",
+    );
+    expect(guide, "the guide never says the listing is walked to its declared length").toContain(
+      "`total_commits`",
+    );
+    // CHANGED with W-A1b-1: the pin moved with the sentence. The exemption measured
+    // EXISTENCE, which the commits endpoint answers for any sha in the upstream's fork
+    // network; it now measures ancestry against the upstream's default branch, and the page
+    // has to say the rule the job applies.
+    expect(guide, "the guide never states the exemption's one condition").toContain(
+      "reachable\nfrom the default branch of the upstream repository your `.stamity/upstream.json` names",
+    );
+    expect(guide, "the guide never says why existence was not enough").toContain(
+      "Reachability, and not mere\nexistence",
+    );
+    expect(guide, "the guide never limits the exemption to an upstream on GitHub").toContain(
+      "names a repository on GitHub",
+    );
+    expect(guide, "the guide never says where the configuration is read from").toContain(
+      "read from the pull request's base branch",
+    );
+    // The fork-lane minor beside it: the lane writes the trailer, and a written trailer is not
+    // the certification a person makes by submitting the contribution.
+    expect(guide, "the guide still reads the written trailer as a person's sign-off").toContain(
+      "not a certification by the person it\nnames",
+    );
+  });
+
+  it("the enterprise-forks guide states what a rename carries and what it does not", () => {
+    // Three claims a downstream ACTS on, each of which the 2026-09-17 audit found wrong or
+    // missing: the identity pins it would have to edit (FORK-3), the host the regenerate
+    // step really requires (FORK-5), and the baseline tag the bootstrap check asserts
+    // (DOC-2). They are prose, so nothing else in the suite can notice them going stale —
+    // and each one is the sentence a reader follows rather than a word from it.
+    const guide = read(ENTERPRISE_FORKS);
+
+    // The rename: derived, not edited. The rule names the file that makes it true, so a
+    // reader can check the claim instead of trusting it.
+    expect(guide, "the guide never names the identity helper the suites read").toContain(
+      "`test/support/identity.ts`",
+    );
+    expect(guide, "the guide never says a rename needs no test edit").toContain(
+      "Your rename needs no test edit at all.",
+    );
+    // The two exceptions the same paragraph has to carry, or the rule above is a trap: the
+    // presets hold the identity as data, and nothing derives them.
+    for (const preset of ["`renovate/plugins.json`", "`renovate/companion.json`"]) {
+      expect(guide, `the guide never names ${preset} as identity data`).toContain(preset);
+    }
+    // What a rename carries on its own, named so a reader stops looking for it.
+    expect(guide, "the guide never says the tarball smoke follows the renamed name").toContain(
+      "`scripts/tarball-smoke.mjs`",
+    );
+
+    // The portability boundary, beside the portability claim rather than somewhere else.
+    expect(guide, "the guide still calls the generators portable without naming the host").toContain(
+      "`scripts/distribution-identity.mjs`, which accepts a URL on the public GitHub host and",
+    );
+
+    // The bootstrap baseline: a variable the reader sets, never a frozen release tag.
+    expect(guide, "the bootstrap check no longer names its baseline through a variable").toContain(
+      'git merge-base --is-ancestor "$STAMITY_BASELINE_TAG" HEAD',
+    );
+    expect(guide, "the bootstrap check still hardcodes the 1.5.0 baseline").not.toContain(
+      "--is-ancestor v1.5.0",    );
   });
 
   it("getting started shows the install line and the whole command surface", () => {

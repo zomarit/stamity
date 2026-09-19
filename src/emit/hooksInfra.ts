@@ -156,8 +156,7 @@ export interface CoreHooksPlan {
    * Non-fatal findings: user- and pack-hook parse rejections (each naming its
    * file and its lane), roster and pack rows the document emitter would
    * sanitize away, every diagnostic a pack agent's grant resolution produced, a
-   * document that outgrew the size the guard will parse, every selected tool
-   * with unsupported native behavior documented by its adapter,
+   * document that outgrew the size the guard will parse,
    * and the case no per-tool row can reach — accepted hook rows on a build that
    * selects no tool at all. Absence of the user hooks directory is a non-event,
    * not a warning.

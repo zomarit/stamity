@@ -44,6 +44,12 @@
   "publishConfig": {
     "access": "public"
   },
+  "stamity": {
+    "distribution": {
+      "branch": "plugin-dist",
+      "tagPattern": "plugins/v<version>"
+    }
+  },
   "scripts": {
     "build": "tsdown --config-loader native",
     "typecheck": "tsc --noEmit",
@@ -61,8 +67,10 @@
     "p-limit": "^7.3.1",
     "proper-lockfile": "^4.1.2",
     "semver": "^7.8.5",
-    "sigstore": "5.0.0",
     "yaml": "^2.9.0"
+  },
+  "optionalDependencies": {
+    "sigstore": "5.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

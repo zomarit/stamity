@@ -3,6 +3,16 @@ import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 import { useCliFixture } from "../support/cliHarness.ts";
+import { npxCommand } from "../support/identity.ts";
+/**
+ * TEST CHANGE, justified (audit FORK-3): every `npx @zomarit/stamity …` literal below
+ * became `npxCommand("…")`, which reads the running checkout's own `package.json`.
+ * The assertion is unchanged on this tree — the derived string is byte-for-byte the
+ * literal it replaced — and a downstream that renamed the package as
+ * `docs/enterprise-forks.md` instructs now reads its own remedy instead of failing on
+ * a registry name it cannot install. Nothing here proves the production string: that
+ * is `test/cli/kit/packageName.test.ts`, against a pseudo package root.
+ */
 
 /**
  * The journey e2e: one serialized full lifecycle — init through clean —
@@ -119,7 +129,7 @@ describe("the full lifecycle journey", () => {
 
     const checkAfterSet = await fixture.run(["check"]);
     expect(checkAfterSet.code).toBe(1);
-    expect(checkAfterSet.stdout).toContain("npx @zomarit/stamity sync");
+    expect(checkAfterSet.stdout).toContain(npxCommand("sync"));
 
     const resync = await fixture.run(["sync"]);
     expect(resync.code).toBe(0);
