@@ -258,6 +258,22 @@ describe("portable native hook boundary", () => {
     expect(JSON.parse(undecided.stdout)).toEqual({ permission: "allow" });
   });
 
+  // SEC-W1-1: the explicit allow above must not swallow a verdict the runner
+  // could not read. A child writing Cursor's own native document, or a
+  // misspelled canonical key, carries a decision this runner does not
+  // understand — writing `allow` for it would convert a deny into an approval.
+  it("refuses to allow a Cursor pre-tool-use call whose decision it could not read", async () => {
+    const native = execute(await fixture("cursor", output({ permission: "deny", user_message: "no-such-value-on-stderr" })));
+    expect(native.status).toBe(1);
+    expect(native.stdout).toBe("");
+    expect(native.stderr).toContain("unsupported output field: <unrecognized>");
+    expect(native.stderr).not.toContain("no-such-value-on-stderr");
+
+    const misspelled = execute(await fixture("cursor", output({ permissionDecison: "deny" })));
+    expect(misspelled.status).toBe(1);
+    expect(misspelled.stdout).toBe("");
+  });
+
   it("leaves a silent child silent on the events and clients that document no allow", async () => {
     // Only Cursor's failClosed clause makes silence a failure, and only the
     // permission event has an allow to write.

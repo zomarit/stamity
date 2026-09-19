@@ -164,8 +164,13 @@ function main() {
   const publicFields = new Set(["updatedInput", "updatedToolOutput", "modifiedArgs", "modifiedResponse", "suppressOutput"]);
   const fieldName = (key) => publicFields.has(key) ? key : "<unrecognized>";
   const supported = new Set(["hookSpecificOutput", "hookEventName", "permissionDecision", "permissionDecisionReason", "additionalContext", "decision", "reason", "continue", "stopReason", "systemMessage"]);
-  for (const key of Object.keys(parsed)) if (!supported.has(key)) warn("unsupported output field: " + fieldName(key));
-  if (specific) for (const key of Object.keys(specific)) if (!supported.has(key)) warn("unsupported output field: hookSpecificOutput." + fieldName(key));
+  // A key the runner KNOWS (supported, or a named public field) is diagnosed and
+  // dropped. A key it cannot name at all may be carrying the child's verdict in
+  // a spelling this boundary does not read, which is a different class.
+  let undecidable = false;
+  const note = (prefix, key) => { const name = fieldName(key); if (name === "<unrecognized>") undecidable = true; warn("unsupported output field: " + prefix + name); };
+  for (const key of Object.keys(parsed)) if (!supported.has(key)) note("", key);
+  if (specific) for (const key of Object.keys(specific)) if (!supported.has(key)) note("hookSpecificOutput.", key);
   const out = {};
   if (row.event === "pre_tool_use") {
     // The canonical global stop overrides every event-specific decision.
@@ -187,10 +192,16 @@ function main() {
         out.permissionDecisionReason = reason;
       }
     } else if (TOOL === "cursor") {
-      // The child made no decision. On this client "no output" is a failClosed
-      // FAILURE, so silence would block every call the guard meant to allow —
-      // the allow is written explicitly instead, which is also correct under
-      // the reading where silence merely passes through.
+      // A child that wrote an unreadable key alongside no decision may have
+      // MEANT to deny — Cursor's own native document spells the verdict
+      // \`permission\`, and a misspelled canonical key lands here too. Writing
+      // the allow for it would convert that denial into an approval, so the
+      // runner faults instead and failClosed denies.
+      if (undecidable) throw safeError("Undecidable hook output");
+      // Otherwise the child made no decision. On this client "no output" is a
+      // failClosed FAILURE, so silence would block every call the guard meant
+      // to allow — the allow is written explicitly instead, which is also
+      // correct under the reading where silence merely passes through.
       // https://cursor.com/docs/hooks (accessed 2026-09-17)
       out.permission = "allow";
     }
