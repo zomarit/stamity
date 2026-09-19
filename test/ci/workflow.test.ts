@@ -692,7 +692,15 @@ describe("pr-checks.yml — the gates only a pull request can be asked", () => {
     // configuration is read at the BASE sha, so a pull request cannot add the file that would
     // exempt it; and only an UNSIGNED commit is ever looked up, which is what bounds the calls.
     expect(run).toContain("contents/.stamity/upstream.json?ref=$BASE_SHA");
-    expect(run).toContain("repos/$UPSTREAM_REPO/commits/$SHA");
+    // CHANGED by W-A1b-1. The exemption asked `repos/$UPSTREAM_REPO/commits/$SHA` and took a
+    // 200 as proof the commit was the upstream's. That endpoint serves any commit in the
+    // upstream's whole FORK NETWORK, so a 200 measured visibility, not membership. The
+    // question is now ancestry against the upstream's default branch, resolved once.
+    expect(run).toContain("repos/$UPSTREAM_REPO/compare/$SHA...$DEFAULT_BRANCH");
+    expect(run).toContain("ahead | identical)");
+    expect(run, "the retired existence test must not come back").not.toContain(
+      "$UPSTREAM_REPO/commits/",
+    );
     expect(run, "only a github.com upstream may exempt anything").toContain("https://github.com/");
     // The failure names the commits, or the contributor has to go and find them.
     expect(run).toContain("::error title=Missing DCO sign-off::");
@@ -859,10 +867,33 @@ describe.skipIf(!DCO_EXECUTABLE)("pr-checks.yml — the DCO job, executed", () =
     readonly commits: readonly Commit[];
     /** What the comparison reports as `total_commits`; the listed length by default. */
     readonly totalCommits?: number;
+    /**
+     * `total_commits` for one specific page, overriding `totalCommits` there — the branch
+     * MOVING under the walk, which the job reconciles page against page rather than only
+     * against the rows in hand. Keyed by 1-based page number.
+     */
+    readonly pageTotals?: Readonly<Record<number, number>>;
+    /**
+     * A page the fake serves no file for at all, so `gh` exits nonzero mid-walk. A walk that
+     * swallowed it would judge a pull request on the pages that happened to answer.
+     */
+    readonly missingPage?: number;
     /** The lane configuration on the BASE branch, or absent when the repository has none. */
     readonly config?: string;
-    /** Shas the configured upstream repository answers 200 for. */
+    /**
+     * Shas the configured upstream both HAS (a 200 on `commits/`) and holds REACHABLE from its
+     * default branch (an `ahead` comparison). The two are written together because for a real
+     * upstream commit they always travel together; `upstreamCompare` splits them apart.
+     */
     readonly upstreamHas?: readonly string[];
+    /**
+     * An explicit comparison status per sha, overriding the `ahead` that `upstreamHas` writes.
+     * This is how a sha that EXISTS on the upstream endpoint — because someone pushed it to a
+     * fork in the same network — is served with the `diverged` its ancestry really answers.
+     */
+    readonly upstreamCompare?: Readonly<Record<string, string>>;
+    /** The upstream's default branch, or `null` when that read itself fails. */
+    readonly upstreamDefaultBranch?: string | null;
   }
 
   interface Run {
@@ -887,11 +918,12 @@ describe.skipIf(!DCO_EXECUTABLE)("pr-checks.yml — the DCO job, executed", () =
     // reaches the reconciliation instead of dying on an unanswered page.
     const pages = Math.max(1, Math.ceil(testCase.commits.length / 100)) + 1;
     for (let page = 1; page <= pages; page += 1) {
+      if (page === testCase.missingPage) continue;
       const endpoint = `repos/${FORK}/compare/${BASE}...${HEAD}?per_page=100&page=${String(page)}`;
       writeFileSync(
         join(responses, keyOf(endpoint)),
         JSON.stringify({
-          total_commits: total,
+          total_commits: testCase.pageTotals?.[page] ?? total,
           commits: testCase.commits.slice((page - 1) * 100, page * 100),
         }),
       );
@@ -902,8 +934,32 @@ describe.skipIf(!DCO_EXECUTABLE)("pr-checks.yml — the DCO job, executed", () =
         testCase.config,
       );
     }
+    const branch = testCase.upstreamDefaultBranch === undefined ? "main" : testCase.upstreamDefaultBranch;
+    if (branch !== null) {
+      writeFileSync(
+        join(responses, keyOf("repos/example/upstream")),
+        JSON.stringify({ default_branch: branch }),
+      );
+    }
+    // Existence and ancestry are written as the two SEPARATE facts they are. A 200 on
+    // `commits/` says only that some repository in the upstream's fork network carries the
+    // sha; the comparison against the default branch is what says the upstream itself reached
+    // it. `upstreamCompare` is how a case serves one without the other.
+    const statuses: Record<string, string> = {};
     for (const sha of testCase.upstreamHas ?? []) {
       writeFileSync(join(responses, keyOf(`repos/example/upstream/commits/${sha}`)), "{}");
+      statuses[sha] = "ahead";
+    }
+    for (const [sha, status] of Object.entries(testCase.upstreamCompare ?? {})) {
+      writeFileSync(join(responses, keyOf(`repos/example/upstream/commits/${sha}`)), "{}");
+      statuses[sha] = status;
+    }
+    for (const [sha, status] of Object.entries(statuses)) {
+      if (status === "") continue;
+      writeFileSync(
+        join(responses, keyOf(`repos/example/upstream/compare/${sha}...${branch ?? "main"}`)),
+        JSON.stringify({ status }),
+      );
     }
 
     // A response the fake has no file for is an HTTP error with the API's own shape on stderr:
@@ -916,8 +972,14 @@ describe.skipIf(!DCO_EXECUTABLE)("pr-checks.yml — the DCO job, executed", () =
       `#!/bin/sh
 printf '%s\\n' "$*" >> "$CALLS"
 ENDPOINT=''
+FILTER=''
+TAKE_FILTER=''
 for ARG in "$@"; do
-  case "$ARG" in repos/*) ENDPOINT="$ARG" ;; esac
+  if [ -n "$TAKE_FILTER" ]; then FILTER="$ARG"; TAKE_FILTER=''; continue; fi
+  case "$ARG" in
+    repos/*) ENDPOINT="$ARG" ;;
+    --jq) TAKE_FILTER=1 ;;
+  esac
 done
 if [ "$1" != api ] || [ -z "$ENDPOINT" ]; then
   echo "the fake gh was asked for something that is not an api read: $*" >&2
@@ -925,10 +987,17 @@ if [ "$1" != api ] || [ -z "$ENDPOINT" ]; then
 fi
 FILE="$RESPONSES/$(printf '%s' "$ENDPOINT" | tr -c 'A-Za-z0-9' '_')"
 if [ ! -f "$FILE" ]; then
-  echo "gh: Not Found (HTTP 404) — private diagnostic" >&2
+  case "$ENDPOINT" in
+    "$WALK_PREFIX"*) echo "gh: Not Found (HTTP 404) — walk diagnostic" >&2 ;;
+    *) echo "gh: Not Found (HTTP 404) — private diagnostic" >&2 ;;
+  esac
   exit 1
 fi
-cat "$FILE"
+if [ -n "$FILTER" ]; then
+  jq -r "$FILTER" < "$FILE"
+else
+  cat "$FILE"
+fi
 `,
     );
     chmodSync(gh, 0o755);
@@ -952,13 +1021,19 @@ cat "$FILE"
         GITHUB_STEP_SUMMARY: summaryPath,
         RESPONSES: responses,
         CALLS: callsPath,
+        // The comparison WALK is the job's own read and its failure is reported in the job's
+        // own words, so gh's message there is not a leak. Every other endpoint — the lane
+        // configuration and the ancestry lookups — is read with stderr suppressed, and the
+        // assertion below is what holds that suppression in place.
+        WALK_PREFIX: `repos/${FORK}/compare/`,
       },
     });
     const out = `${result.stdout}${result.stderr}`;
     const summary = readFileSync(summaryPath, "utf8");
-    expect(out + summary, "a private gh diagnostic must not reach the job's output").not.toContain(
-      "private diagnostic",
-    );
+    expect(
+      out + summary,
+      "a gh diagnostic from a suppressed lookup must not reach the job's output",
+    ).not.toContain("private diagnostic");
     return {
       status: result.status,
       out,
@@ -1003,12 +1078,90 @@ cat "$FILE"
     expect(run.out).toContain("12 exempt");
     expect(run.out).toContain("0 unsigned");
     // Four pages, and the fourth is the one the old ceiling could never have reached.
-    expect(run.calls.filter((call) => call.includes("compare/"))).toHaveLength(4);
+    expect(run.calls.filter((call) => call.includes(`${FORK}/compare/`))).toHaveLength(4);
     expect(run.calls.some((call) => call.includes("page=4"))).toBe(true);
     // Bounded, and bounded on the right side: a signed commit is never looked up.
-    const lookups = run.calls.filter((call) => call.includes("example/upstream/commits/"));
+    const lookups = run.calls.filter((call) => call.includes("example/upstream/compare/"));
     expect(lookups).toHaveLength(unsigned.length);
-    expect(lookups.some((call) => call.includes("/commits/f"))).toBe(false);
+    expect(lookups.some((call) => call.includes("/compare/f"))).toBe(false);
+    // The default branch is resolved ONCE for the whole run, not per sha.
+    expect(run.calls.filter((call) => /\brepos\/example\/upstream\s*$/.test(call.trim()) || call.includes("repos/example/upstream --jq"))).toHaveLength(1);
+  });
+
+  it("refuses a sha the upstream endpoint answers 200 for but its default branch never reached", () => {
+    // W-A1b-1, the finding this case exists for. GitHub serves a commit pushed to ANY
+    // repository in a fork network through the PARENT's commit endpoint, so a 200 on
+    // `repos/<upstream>/commits/<sha>` measures fork-network visibility, not upstream
+    // membership: on a public upstream, anyone may push an unsigned commit to a personal fork
+    // and that endpoint will answer 200 for it. Under the existence rule a contributor to this
+    // private downstream could waive the DCO on their own commit that way. The rule is
+    // ANCESTRY — the sha must be reachable from the upstream's default branch — so a sha the
+    // endpoint has but the comparison calls `diverged` stays unsigned and fails the job.
+    const all = updateCommits();
+    const unsigned = all.filter((entry) => !entry.commit.message.includes("Signed-off-by"));
+    const planted = unsigned[3]?.sha ?? "";
+    const run = invoke({
+      commits: all,
+      config: UPSTREAM_CONFIG,
+      upstreamHas: unsigned.filter((entry) => entry.sha !== planted).map((entry) => entry.sha),
+      upstreamCompare: { [planted]: "diverged" },
+    });
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain(planted);
+    expect(run.summary).toContain(planted);
+    expect(run.out).toContain("11 exempt");
+    expect(run.out).toContain("1 unsigned");
+    // Exactly the planted sha, so the other eleven prove the ancestry rule still exempts a
+    // genuine upstream commit rather than the job having gone blanket-strict.
+    const named = unsigned.filter((entry) => run.summary.includes(entry.sha));
+    expect(named.map((entry) => entry.sha)).toEqual([planted]);
+    // It WAS asked about — this is a rejection on the answer, not a lookup that never happened.
+    expect(run.calls.some((call) => call.includes(`compare/${planted}...main`))).toBe(true);
+  });
+
+  it("exempts a sha the upstream's default branch is sitting exactly on", () => {
+    // `identical` is the head commit of the default branch itself: reachable, and the boundary
+    // case an `ahead`-only rule would refuse. `behind` is the other side of it — a sha the
+    // default branch is an ancestor OF, which is a commit the upstream has not taken.
+    const tip = commits("t", 1, false)[0]?.sha ?? "";
+    const future = commits("z", 1, false)[0]?.sha ?? "";
+
+    const identical = invoke({
+      commits: [...commits("s", 2, true), commitOf(tip, false)],
+      config: UPSTREAM_CONFIG,
+      upstreamCompare: { [tip]: "identical" },
+    });
+    expect(identical.status, identical.out).toBe(0);
+    expect(identical.out).toContain("1 exempt");
+
+    const behind = invoke({
+      commits: [...commits("s", 2, true), commitOf(future, false)],
+      config: UPSTREAM_CONFIG,
+      upstreamCompare: { [future]: "behind" },
+    });
+    expect(behind.status).toBe(1);
+    expect(behind.out).toContain(future);
+    expect(behind.out).toContain("0 exempt");
+  });
+
+  it("exempts nothing when the upstream's default branch cannot be read", () => {
+    // The ancestry question needs a head to ask it against. If that read fails there is no
+    // question to ask, so nothing is exempt and the message says which of the four cases it
+    // is rather than blaming a configuration that is present and well-formed.
+    const unsigned = commits("c", 1, false)[0]?.sha ?? "";
+    const run = invoke({
+      commits: [...commits("s", 2, true), ...commits("c", 1, false)],
+      config: UPSTREAM_CONFIG,
+      upstreamDefaultBranch: null,
+    });
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain(unsigned);
+    expect(run.out).toContain("default branch could not be read");
+    expect(run.out).toContain("every commit listed was checked");
+    // Not one ancestry lookup was attempted against an unresolved branch.
+    expect(run.calls.some((call) => call.includes("upstream/compare/"))).toBe(false);
   });
 
   it("fails naming the one upstream commit the configured upstream does not have", () => {
@@ -1041,7 +1194,7 @@ cat "$FILE"
     expect(run.status).toBe(1);
     expect(run.out).toContain(unsigned);
     expect(run.out).toContain("No upstream lane configuration");
-    expect(run.calls.some((call) => call.includes("/commits/"))).toBe(false);
+    expect(run.calls.some((call) => call.includes("example/upstream"))).toBe(false);
   });
 
   it("fails closed when the listing is shorter than the total the comparison reports", () => {
@@ -1052,6 +1205,39 @@ cat "$FILE"
     expect(run.out).toContain("total_commits=41");
     expect(run.out).toContain("40");
     expect(run.out).not.toContain("carry a Signed-off-by trailer.");
+  });
+
+  it("fails closed when total_commits moves between two pages of the walk", () => {
+    // M-A1b-1. The branch can be force-pushed WHILE the walk is running, and then the pages in
+    // hand describe two different states spliced together — a commit present in the first
+    // state and absent from the second is checked, one the other way round is never seen. The
+    // job reconciles each page's total against the first page's, so the splice is caught
+    // rather than reconciled away by a rows-versus-total count that happens to add up.
+    const run = invoke({
+      commits: commits("s", 150, true),
+      totalCommits: 150,
+      pageTotals: { 2: 151 },
+    });
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("::error title=DCO check could not run::");
+    expect(run.out).toContain("total_commits moved from 150 to 151");
+    expect(run.out).not.toContain("carry a Signed-off-by trailer.");
+  });
+
+  it("fails closed when a page mid-walk cannot be read", () => {
+    // M-A1b-1. The first page answers and the second does not. A walk that broke out of the
+    // loop on the error would hold 100 signed rows and call the pull request clean; the
+    // unreadable page has to be the failure itself.
+    const run = invoke({
+      commits: [...commits("s", 100, true), ...commits("c", 50, false)],
+      missingPage: 2,
+    });
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("::error title=DCO check could not run::");
+    expect(run.out).toContain("Page 2 of the comparison");
+    expect(run.out).toContain("never answered is not a pass");
   });
 
   it("fails closed when the comparison lists nothing at all", () => {
@@ -1077,7 +1263,7 @@ cat "$FILE"
     expect(run.out).toContain("not a github.com repository");
     expect(run.out).toContain("every commit listed was checked");
     expect(run.out).not.toContain("git.example.invalid");
-    expect(run.calls.some((call) => call.includes("/commits/"))).toBe(false);
+    expect(run.calls.some((call) => call.includes("example/upstream"))).toBe(false);
   });
 
   it("passes a fully signed-off branch without reading the lane configuration at all", () => {

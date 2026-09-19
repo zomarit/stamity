@@ -1628,8 +1628,15 @@ describe("the guides", () => {
     expect(guide, "the guide never says the listing is walked to its declared length").toContain(
       "`total_commits`",
     );
+    // CHANGED with W-A1b-1: the pin moved with the sentence. The exemption measured
+    // EXISTENCE, which the commits endpoint answers for any sha in the upstream's fork
+    // network; it now measures ancestry against the upstream's default branch, and the page
+    // has to say the rule the job applies.
     expect(guide, "the guide never states the exemption's one condition").toContain(
-      "exists in the\nupstream repository your `.stamity/upstream.json` names",
+      "reachable\nfrom the default branch of the upstream repository your `.stamity/upstream.json` names",
+    );
+    expect(guide, "the guide never says why existence was not enough").toContain(
+      "Reachability, and not mere\nexistence",
     );
     expect(guide, "the guide never limits the exemption to an upstream on GitHub").toContain(
       "names a repository on GitHub",

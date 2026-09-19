@@ -143,15 +143,28 @@ jobs:
           # ── The one exemption ──────────────────────────────────────────────────────────────
           # A fork of this repository takes upstream releases as real commits, and whether those
           # carry a trailer is the upstream's own gate to answer, not this fork's contributor's.
-          # So an unsigned commit is exempt here on exactly one condition: it EXISTS in the
-          # upstream repository the fork's own lane configuration names. Three limits keep that
-          # from being a hole. The configuration is read at the BASE sha, so a pull request
-          # cannot introduce the file that would exempt it. Only a github.com upstream can be
-          # asked, because the question is a github.com API read. And only an UNSIGNED commit is
-          # ever looked up, which is what bounds the calls — this repository configures no lane
-          # at all, so nothing is ever exempt here and every commit must carry the trailer.
+          # So an unsigned commit is exempt here on exactly one condition: it is REACHABLE FROM
+          # THE DEFAULT BRANCH of the upstream repository the fork's own lane configuration
+          # names — an ancestor of that branch, or its tip.
+          #
+          # Reachability and not existence, deliberately. `repos/<upstream>/commits/<sha>`
+          # answers 200 for a commit pushed to ANY repository in the upstream's fork network,
+          # which is the documented "may belong to a fork outside of the repository" behaviour:
+          # against a public upstream, anyone can push an unsigned commit to a personal fork and
+          # that endpoint will then serve it. Existence would therefore let a contributor to
+          # this repository waive the DCO on their own commit. Ancestry cannot be arranged that
+          # way — only the upstream's own maintainers move its default branch.
+          #
+          # Four limits keep the exemption bounded. The configuration is read at the BASE sha,
+          # so a pull request cannot introduce the file that would exempt it. Only a github.com
+          # upstream can be asked, because the question is a github.com API read. The default
+          # branch is resolved ONCE and, if that read fails, nothing is exempt. And only an
+          # UNSIGNED commit is ever compared, which is what bounds the calls — this repository
+          # configures no lane at all, so nothing is ever exempt here and every commit must
+          # carry the trailer.
           UPSTREAM_REPO=""
           UPSTREAM_CONFIGURED="no"
+          DEFAULT_BRANCH=""
           if [ -n "$UNSIGNED" ]; then
             LANE_CONFIG="$(gh api -H "Accept: application/vnd.github.raw" "repos/$GITHUB_REPOSITORY/contents/.stamity/upstream.json?ref=$BASE_SHA" 2>/dev/null || true)"
             if [ -n "$LANE_CONFIG" ]; then
@@ -170,6 +183,14 @@ jobs:
                 UPSTREAM_REPO=""
               fi
             fi
+            # One read for the whole job: the branch every ancestry question below is asked
+            # against. A failure here leaves it empty, and an empty branch exempts nothing.
+            if [ -n "$UPSTREAM_REPO" ]; then
+              DEFAULT_BRANCH="$(gh api "repos/$UPSTREAM_REPO" --jq '.default_branch // empty' 2>/dev/null || true)"
+              if ! printf '%s' "$DEFAULT_BRANCH" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
+                DEFAULT_BRANCH=""
+              fi
+            fi
           fi
 
           EXEMPT_COUNT=0
@@ -177,14 +198,21 @@ jobs:
           if [ -n "$UNSIGNED" ]; then
             while IFS= read -r SHA; do
               [ -n "$SHA" ] || continue
-              # A 404 is the expected answer for a commit the upstream does not have, so it is
-              # read rather than crashed on; anything that is not a 200 leaves the commit
-              # unsigned, which is the fail-closed side.
-              if [ -n "$UPSTREAM_REPO" ] && gh api --silent "repos/$UPSTREAM_REPO/commits/$SHA" 2>/dev/null; then
-                EXEMPT_COUNT=$((EXEMPT_COUNT + 1))
-              else
-                STILL_UNSIGNED="$STILL_UNSIGNED$SHA"$'\n'
+              # `base...head` with the sha as BASE: `ahead` means the default branch is ahead of
+              # the sha, which is exactly "the sha is an ancestor of it", and `identical` is the
+              # branch sitting on the sha. Every other answer leaves the commit unsigned —
+              # `behind` and `diverged` are both "the upstream never took this commit", and a
+              # 404, an error or an empty reply are the fail-closed side. A 404 is the expected
+              # answer for a sha no repository in the network has, so it is read rather than
+              # crashed on.
+              COMPARE_STATUS=""
+              if [ -n "$UPSTREAM_REPO" ] && [ -n "$DEFAULT_BRANCH" ]; then
+                COMPARE_STATUS="$(gh api "repos/$UPSTREAM_REPO/compare/$SHA...$DEFAULT_BRANCH" --jq '.status // empty' 2>/dev/null || true)"
               fi
+              case "$COMPARE_STATUS" in
+                ahead | identical) EXEMPT_COUNT=$((EXEMPT_COUNT + 1)) ;;
+                *) STILL_UNSIGNED="$STILL_UNSIGNED$SHA"$'\n' ;;
+              esac
             done <<< "$UNSIGNED"
           fi
           STILL_COUNT="$(printf '%s\n' "$STILL_UNSIGNED" | grep -c . || true)"
@@ -192,8 +220,10 @@ jobs:
           echo "Listed $LISTED of $TOTAL_COMMITS commit(s) over $PAGE page(s) of the comparison: $SIGNED_COUNT signed off, $EXEMPT_COUNT exempt as upstream commits, $STILL_COUNT unsigned."
 
           if [ "$STILL_COUNT" -gt 0 ]; then
-            if [ -n "$UPSTREAM_REPO" ]; then
-              EXEMPTION_NOTE="Commits that exist in the configured upstream repository were exempt as upstream-authored; these are not among them."
+            if [ -n "$UPSTREAM_REPO" ] && [ -n "$DEFAULT_BRANCH" ]; then
+              EXEMPTION_NOTE="Commits reachable from the configured upstream repository's default branch were exempt as upstream-authored; these are not among them."
+            elif [ -n "$UPSTREAM_REPO" ]; then
+              EXEMPTION_NOTE="The configured upstream repository's default branch could not be read, so no commit was exempt and every commit listed was checked for a trailer."
             elif [ "$UPSTREAM_CONFIGURED" = "yes" ]; then
               EXEMPTION_NOTE="The configured upstream is not a github.com repository, so no commit was exempt and every commit listed was checked for a trailer."
             else
@@ -226,7 +256,7 @@ jobs:
             exit 1
           fi
 
-          echo "All $LISTED commit(s) in this pull request are accounted for: every one carries a Signed-off-by trailer or exists in the configured upstream."
+          echo "All $LISTED commit(s) in this pull request are accounted for: every one carries a Signed-off-by trailer or is reachable from the configured upstream's default branch."
 
   # ── 2. PR title ──────────────────────────────────────────────────────────────
   # The title is read out into a release note, so it has to be a conventional-commit subject.
