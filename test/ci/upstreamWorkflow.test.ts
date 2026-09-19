@@ -708,9 +708,11 @@ describe("upstream-update.yml — the recovery comparison keeps no copy of the m
       ).not.toContain(`"${field}"`);
     }
     // `updatedAt` is named because it is the ONE field held out of the comparison, and holding
-    // it out is what the step exists for. `jq -S` deletes exactly the top-level key and sorts,
-    // so there is no line-oriented mask left to be pointed at the wrong property.
-    expect(recovery).toContain("jq -S 'del(.updatedAt)'");
+    // it out is what the step exists for. `jq` deletes exactly the top-level key and leaves the
+    // rest in place, so there is no line-oriented mask left to be pointed at the wrong property,
+    // and field order stays part of what the byte comparison sees (no `-S`).
+    expect(recovery).toContain("jq 'del(.updatedAt)'");
+    expect(recovery).not.toContain("jq -S 'del(.updatedAt)'");
   });
 
   it("pins neither the schema version nor the tool roster", () => {
