@@ -413,13 +413,26 @@ unreadable setting with the repository administrator, and do not broaden the aut
 to silence the note. The pull request still opens, and the landing decision stays yours.
 
 New and recovered pull requests get a conventional title, `chore(upstream): integrate <tag>`. An
-existing pull request's title, body and labels are left untouched. Commits the lane creates use the
-configured committer's DCO sign-off under this repository's contribution policy, and the workflow
-configures its own automation identity. The local placeholder fallback is still available, but it
-carries no DCO sign-off. Before you submit to a DCO-gated repository, configure an approved
-contributor identity, then review and sign off the contribution. Upstream commits keep their
-original messages. A missing upstream sign-off needs a maintainer's decision, and it does not
-justify exempting the update pull request from its required checks.
+existing pull request's title, body and labels are left untouched. Commits the lane creates carry a
+`Signed-off-by` trailer naming the configured committer, and the workflow configures its own
+automation identity. A trailer a script writes is a trailer, not a certification by the person it
+names: the Developer Certificate of Origin is a statement whoever submits the contribution makes,
+so before you submit to a DCO-gated repository, configure an approved contributor identity, then
+review the contribution and sign it off yourself. The local placeholder fallback is still
+available, and it writes no trailer at all. Upstream commits keep their original messages.
+
+This repository's own DCO check reads an update pull request's commits from the comparison
+endpoint and walks its pages until the rows in hand reach the `total_commits` that endpoint
+reports, so a pull request carrying several hundred upstream commits is checked whole rather than
+refused for its length, and a listing that comes up short fails the check rather than passing on
+the part that arrived. There is one exemption. An unsigned commit is waived when it exists in the
+upstream repository your `.stamity/upstream.json` names — read from the pull request's base branch,
+so no pull request can introduce the configuration that exempts it, and only when that `upstream`
+names a repository on GitHub, because the question the check asks is a GitHub API read. A commit
+the upstream does not have, an upstream on any other host, and a repository that configures no lane
+at all each leave every commit needing its own trailer, and the check says which of the three it
+applied. A missing upstream sign-off still needs a maintainer's decision, and it
+does not justify exempting the update pull request from its required checks.
 
 When policy forbids merge commits, construct the merge by hand from the record's upstream commit
 with git 2.40 or newer, then move your branch onto the result:
