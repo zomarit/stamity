@@ -458,6 +458,12 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/cli/kit/prompts.ts": { unit: "p2-01", wave: 13 },
   "src/cli/kit/program.ts": { unit: "p2-01", wave: 13 },
   "src/cli/kit/banner.ts": { unit: "p2-01", wave: 13 },
+  // The package self-read and the `npx <own name> <verb>` renderer (A2a). Wave
+  // 13 is a requirement, not a convenience: the seven command modules that
+  // print remedies sit at 14 and 15, and the update notice that shares the
+  // self-read sits at 14, so the only place all of them can reach is the kit.
+  // Its own imports bottom out at the wave-1 package-root walk.
+  "src/cli/kit/packageName.ts": { unit: "a2a-fork-identity-runtime", wave: 13 },
   "src/cli/engine/emission.ts": { unit: "p2-03", wave: 13 },
   // The write contract the two regeneration verbs share (EW-U1): the ledger
   // hash, the row shape, the write-lane selection, and the pack-MCP ownership

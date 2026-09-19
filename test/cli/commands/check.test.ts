@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   checkCommand,
   checkNodeVersion,
@@ -26,6 +26,7 @@ import type { Tool } from "../../../src/types/core.ts";
 import { EngineError } from "../../../src/types/errors.ts";
 import { packOwner, type LedgerEntry, type SetupManifest } from "../../../src/types/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
+import type * as PathsApi from "../../../src/shared/paths.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 
@@ -389,6 +390,49 @@ describe("check — an un-initialised repository", () => {
     expect(result.stdout).toContain("drift: not evaluated");
     expect(result.stdout).toContain("next:");
     expect(result.stdout).toContain("npx @zomarit/stamity init");
+  });
+
+  it("names the installation's own package in the remedy, never a hardcoded one", async () => {
+    const handle = getRepo();
+    const pseudoInstall = handle.path("pseudo-install");
+    await mkdir(pseudoInstall, { recursive: true });
+    // The identity a downstream leaves behind after the bootstrap block in
+    // docs/enterprise-forks.md: its own scope, and private.
+    await writeFile(
+      join(pseudoInstall, "package.json"),
+      `${JSON.stringify({ name: "@acme/stamity", version: "1.8.0", private: true })}\n`,
+    );
+
+    // The rename cannot be applied to THIS checkout in-process: the self-read
+    // behind the remedy anchors on the kit module's own `import.meta.url`, and
+    // anchoring it on the cwd instead would be the bug (the cwd is the user's
+    // repository, never the package being named). So only the root walk is
+    // redirected, and only for the kit's own call — every other caller of
+    // `findPackageRoot`, check's own Node-range probe included, keeps the real
+    // answer — leaving the manifest read, the name and the rendering real.
+    const kitDir = join("src", "cli", "kit");
+    vi.resetModules();
+    vi.doMock("../../../src/shared/paths.ts", async (importOriginal) => {
+      const actual = await importOriginal<typeof PathsApi>();
+      return {
+        ...actual,
+        findPackageRoot: (from: string): string =>
+          from.endsWith(kitDir) ? pseudoInstall : actual.findPackageRoot(from),
+      };
+    });
+    try {
+      const renamed = await import("../../../src/cli/commands/check.ts");
+      const result = await runInProcess([renamed.checkCommand], ["check"], { cwd: handle.dir });
+
+      expect(result.code).toBe(1);
+      // Both seams: the manifest doctor row and the closing next-steps block.
+      expect(result.stdout).toContain("npx @acme/stamity init");
+      expect(result.stdout).toContain("npx @acme/stamity init — this repository has no usable");
+      expect(result.stdout).not.toContain("npx @zomarit/stamity");
+    } finally {
+      vi.doUnmock("../../../src/shared/paths.ts");
+      vi.resetModules();
+    }
   });
 
   it("fails the same way when .stamity exists but the manifest was hand-deleted", async () => {

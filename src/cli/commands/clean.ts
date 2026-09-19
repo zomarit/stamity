@@ -26,6 +26,7 @@ import {
 } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import { CliFailure } from "../kit/output.ts";
+import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { confirm, promptGate } from "../kit/prompts.ts";
 
@@ -110,7 +111,7 @@ async function exists(dir: string): Promise<boolean> {
   }
 }
 
-const REINIT_OFFER = "start fresh: npx @zomarit/stamity init";
+const REINIT_OFFER = `start fresh: ${packageCommand("init")}`;
 
 /** The one-per-line next-step block every exit path ends with. */
 function nextSteps(ctx: CliContext, steps: readonly string[]): void {

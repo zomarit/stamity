@@ -21,6 +21,7 @@ import { MANIFEST_FILE, type SetupManifest } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import { readWorkingTreeStatus } from "../engine/gitStatus.ts";
 import type { FailureDoc } from "../kit/output.ts";
+import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { Palette } from "../kit/terminal.ts";
 import { planSync, type SyncPlanEntry } from "./sync/engine.ts";
@@ -209,7 +210,7 @@ function checkManifest(state: ManifestState, app: App): DoctorCheck {
       id,
       status: "fail",
       detail:
-        `no ${MANIFEST_DISPLAY} — this repository is not initialised. Run: npx @zomarit/stamity init`,
+        `no ${MANIFEST_DISPLAY} — this repository is not initialised. Run: ${packageCommand("init")}`,
     };
   }
   const manifest = state.manifest;
@@ -243,7 +244,7 @@ function checkStateDirs(rootDir: string): DoctorCheck {
     status: "warn",
     detail:
       `missing ${missing.map((name) => `${STATE_DIR}/${name}`).join(", ")} — nothing is lost: ` +
-      // Changed from "npx @zomarit/stamity init recreates them now", which was false in
+      // Changed from "<the init remedy> recreates them now", which was false in
       // the state that produces this warning. An initialised repo refuses a
       // second init (`VALIDATION_ERROR`, exit 1) and recreates nothing, so the
       // one remedy this row named could not be run by anybody reading it. The
@@ -251,7 +252,7 @@ function checkStateDirs(rootDir: string): DoctorCheck {
       // (`../../emit/planner.ts` → `STATE_KEEP_DIRS`), so sync — the verb that
       // rewrites missing generated files — is the remedy that exists.
       `the learnings and handoff stores recreate a directory on their first write, and ` +
-      `npx @zomarit/stamity sync rewrites them now`,
+      `${packageCommand("sync")} rewrites them now`,
   };
 }
 
@@ -287,7 +288,7 @@ async function checkLearnings(
     detail:
       `${result.invalid.length} of ${total} learning(s) carry ${errorCount} error(s), and ` +
       `${result.overCap.length} sit past the ${caps.maxCount}-file cap (those will not load) — ` +
-      `run npx @zomarit/stamity validate for the per-file detail`,
+      `run ${packageCommand("validate")} for the per-file detail`,
   };
 }
 
@@ -350,7 +351,8 @@ async function checkEnvMcp(
       status: "warn",
       detail:
         `${servers.length} MCP server(s) selected but ${file} is absent — those servers start ` +
-        `without credentials. npx @zomarit/stamity config mcp add <id> recreates it with the names they need.`,
+        `without credentials. ${packageCommand("config mcp add <id>")} recreates it with the names ` +
+        `they need.`,
     };
   }
   const values = engine.mcp.env.parseEnvFile(raw);
@@ -388,7 +390,7 @@ async function checkEnvMcp(
  * Copilot reads the root `AGENTS.md` natively, so its adapter emits no
  * `.github/copilot-instructions.md` mirror by design — which made the indicator
  * unsatisfiable and every copilot-targeting repo permanently warn "no config
- * found for copilot, npx @zomarit/stamity sync recreates it". Sync does not, and cannot:
+ * found for copilot, sync recreates it". Sync does not, and cannot:
  * there is no such output in the plan. A permanent warning with a remedy that
  * provably does nothing is worse than silence, because it trains an operator to
  * stop reading the row.
@@ -420,7 +422,7 @@ function checkToolTraces(manifest: SetupManifest | null): DoctorCheck {
     status: "warn",
     detail:
       `nothing has been emitted for ${unemitted.join(", ")}, which the manifest targets — ` +
-      `npx @zomarit/stamity sync writes their files and records them`,
+      `${packageCommand("sync")} writes their files and records them`,
   };
 }
 
@@ -928,8 +930,9 @@ function collisionStep(paths: readonly string[]): string {
   const named = rest > 0 ? `${shown} (+${rest} more)` : shown;
   return (
     `${paths.length} file(s) collide — the engine cannot prove it wrote ${named}, so a plain ` +
-    `sync refuses them. Either move each aside and run npx @zomarit/stamity sync, or run npx @zomarit/stamity sync ` +
-    `--force to overwrite them after a verified .bak. Running sync without one of those two ` +
+    `sync refuses them. Either move each aside and run ${packageCommand("sync")}, or run ` +
+    `${packageCommand("sync --force")} to overwrite them after a verified .bak. Running sync ` +
+    `without one of those two ` +
     `changes nothing.`
   );
 }
@@ -953,21 +956,21 @@ function renderNextSteps(
 ): void {
   const steps: string[] = [];
   if (doctor.some((row) => row.id === "manifest" && row.status === "fail")) {
-    steps.push("npx @zomarit/stamity init — this repository has no usable manifest");
+    steps.push(`${packageCommand("init")} — this repository has no usable manifest`);
   }
   if (doctor.some((row) => row.id === "pack-integrity" && row.status === "fail")) {
     // Deliberately NOT sync: for an edited pack body sync copies the current
     // bytes into the generated setup, which propagates the change rather than
     // correcting it. Re-installing is what restores the recorded content.
     steps.push(
-      "npx @zomarit/stamity clean --pack <id> then npx @zomarit/stamity add <id> — re-install the pack whose " +
-        "installed files no longer match; do not run sync first, it would carry the current " +
-        "bytes into the generated setup",
+      `${packageCommand("clean --pack <id>")} then ${packageCommand("add <id>")} — re-install ` +
+        `the pack whose installed files no longer match; do not run sync first, it would carry ` +
+        `the current bytes into the generated setup`,
     );
   }
   if (outcome.kind === "failed") {
     steps.push(
-      `fix what the drift line names, then re-run npx @zomarit/stamity check — until the plan builds, ` +
+      `fix what the drift line names, then re-run ${packageCommand("check")} — until the plan builds, ` +
         `no generated file is being compared against anything`,
     );
   }
@@ -982,7 +985,7 @@ function renderNextSteps(
     steps.push(
       ...(collisions.length > 0 ? [collisionStep(collisions)] : []),
       ...(hasNonCollisionDrift(outcome.report)
-        ? ["npx @zomarit/stamity sync — regenerate the files that drifted"]
+        ? [`${packageCommand("sync")} — regenerate the files that drifted`]
         : []),
     );
   }
@@ -1153,7 +1156,7 @@ function checkFailureDoc(doctor: readonly DoctorCheck[], drift: DriftOutcome): F
       code: drift.code,
       message: "check could not evaluate drift: the sync plan failed to build",
       why: drift.reason,
-      next: "fix the cause named in `why`, then re-run npx @zomarit/stamity check",
+      next: `fix the cause named in \`why\`, then re-run ${packageCommand("check")}`,
     };
   }
   const failing = doctor.filter((row) => row.status === "fail");
@@ -1176,6 +1179,6 @@ function checkFailureDoc(doctor: readonly DoctorCheck[], drift: DriftOutcome): F
     next:
       collisions.length > 0
         ? collisionStep(collisions)
-        : "npx @zomarit/stamity sync — regenerate the files that drifted",
+        : `${packageCommand("sync")} — regenerate the files that drifted`,
   };
 }

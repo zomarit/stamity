@@ -8,6 +8,7 @@ import type { CatalogPin, TrustTier } from "../../pack/trust.ts";
 import { MANIFEST_FILE, type SetupManifest } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import { CliFailure, renderFailureHuman, type FailureDoc } from "../kit/output.ts";
+import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 
 /**
@@ -549,7 +550,7 @@ export const addCommand: CommandModule = {
         code: "VALIDATION_ERROR",
         message: `this repo is not initialised — there is no ${MANIFEST_REL_PATH} to record pack ownership in`,
         why: "installed pack files are tracked as ledger rows, which only exist once the repo has a manifest",
-        next: "run: npx @zomarit/stamity init",
+        next: `run: ${packageCommand("init")}`,
       });
     }
 

@@ -52,6 +52,7 @@ import {
   readIfExists,
 } from "../../engine/emissionWrite.ts";
 import { readWorkingTreeStatus, type WorkingTreeStatus } from "../../engine/gitStatus.ts";
+import { packageCommand } from "../../kit/packageName.ts";
 import type { GitRunner } from "../../../workspace/git.ts";
 
 /**
@@ -384,7 +385,7 @@ export async function planSync(
   const manifest = await readManifest(rootDir);
   if (manifest === null) {
     throw new EngineError(
-      `This repository is not initialised — run: npx @zomarit/stamity init. Sync regenerates from ` +
+      `This repository is not initialised — run: ${packageCommand("init")}. Sync regenerates from ` +
         `${manifestPath(rootDir)}, which does not exist yet.`,
       { code: "VALIDATION_ERROR" },
     );

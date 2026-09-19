@@ -30,6 +30,13 @@ import { isMain } from './native-typescript.mjs'
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const GATE = join(ROOT, 'scripts', 'leak-gate.mjs')
 
+// The name this checkout publishes under, read rather than hardcoded. A downstream that
+// followed docs/enterprise-forks.md renamed the package to its own scope and set
+// `private: true`; it inherits this gate as a required PR check, so a literal canonical
+// name here would install one package and then look for another, failing every run in
+// every fork. `npm pack` works on a private manifest — only publishing is blocked.
+const PACKAGE_NAME = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).name
+
 /** Content classes and packs the installed artifact must be able to serve. */
 const REQUIRED_CONTENT_DIRS = ['agents', 'skills', 'rules', 'commands', 'charter']
 const REQUIRED_PACK_DIRS = ['ops', 'product-audit', 'scaffold']
@@ -86,10 +93,11 @@ function main() {
     run('npm', ['install', '--no-audit', '--no-fund', '--silent', '--ignore-scripts', tarball], { cwd: project })
 
     // 3. The corpus has to be INSIDE the installed package, not merely inside the repo.
-    //    The package name is SCOPED, so npm lays it down under the scope directory — resolving
-    //    the unscoped path here would find nothing and report the staging failure this gate
-    //    exists to catch, on every run, whether or not staging is broken.
-    const installed = join(project, 'node_modules', '@zomarit', 'stamity')
+    //    The name is split on '/' because a SCOPED name is laid down under its scope
+    //    directory — resolving the unscoped path here would find nothing and report the
+    //    staging failure this gate exists to catch, on every run, whether or not staging
+    //    is broken. An unscoped name splits to one segment and still resolves.
+    const installed = join(project, 'node_modules', ...PACKAGE_NAME.split('/'))
     const missing = [
       ...REQUIRED_CONTENT_DIRS.filter((dir) => !existsSync(join(installed, 'dist', 'content', dir))),
       ...REQUIRED_PACK_DIRS.filter((dir) => !existsSync(join(installed, 'dist', 'packs', dir))),
@@ -127,7 +135,7 @@ function main() {
     writeFileSync(join(project, 'consumer.mts'), `
 import { createApp, createEngine, TOOLS, EngineError, type App, type AppOptions,
   type Tool, type SetupManifest, type HooksConfig, type LedgerEntry,
-  type AdapterOutput, type EmissionOwner } from '@zomarit/stamity';
+  type AdapterOutput, type EmissionOwner } from '${PACKAGE_NAME}';
 const options: AppOptions = { cwd: process.cwd(), env: {} };
 const app: App = createApp(options);
 const tool: Tool = TOOLS[0];
@@ -149,7 +157,7 @@ export type { Reachable };
       return fail('the packed TypeScript API does not compile', `${error.stdout ?? ''}\n${error.stderr ?? ''}`)
     }
     run(process.execPath, ['--input-type=module', '--eval',
-      "import { createApp, VERSION } from '@zomarit/stamity'; if (createApp().version !== VERSION) process.exit(1)"], { cwd: project })
+      `import { createApp, VERSION } from '${PACKAGE_NAME}'; if (createApp().version !== VERSION) process.exit(1)`], { cwd: project })
 
     // 5. The first command a user runs, in a repo that is not this one.
     const target = join(work, 'target-repo')

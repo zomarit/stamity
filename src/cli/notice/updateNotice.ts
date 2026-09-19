@@ -1,9 +1,6 @@
-import { readFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import semver from "semver";
-import { findPackageRoot } from "../../shared/paths.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 
 /**
@@ -47,6 +44,15 @@ import { STATE_DIR } from "../../types/markers.ts";
  * startup, where a rejection would surface as a fatal unhandled rejection, and
  * decides placement (stderr, after the command, only when stderr is a TTY).
  */
+
+/**
+ * The package self-read lives in the CLI kit, because the remedy strings the
+ * commands print name the same package this notice names, and the kit sits
+ * below both. Re-exported here so this module stays the one import site for
+ * everything the startup notice needs — `src/cli.ts` reads the facts from here
+ * and hands them straight back in {@link UpdateNoticeOptions}.
+ */
+export { resolveOwnPackageFacts } from "../kit/packageName.ts";
 
 /** Trust window for a probe answer: one day, matching the ecosystem default. */
 export const DEFAULT_NOTICE_TTL_MS: number = 24 * 60 * 60 * 1000;
@@ -160,37 +166,6 @@ export function noticeCacheDir(
   const base = xdg !== undefined && xdg !== "" ? xdg : join(homeDir, ".cache");
   return join(base, CACHE_NAMESPACE);
 }
-
-/**
- * Read this package's own name/version/private flag by walking up from this
- * module's directory, so the notice self-describes identically from a `src`
- * checkout and from the published `dist` layout.
- *
- * Any failure — no package root, unreadable or malformed `package.json` — falls
- * back to a private-marked record, which routes the caller into the step-2
- * no-op. Failing toward silence is the only safe direction for a feature that
- * exists to print one advisory line.
- */
-export function resolveOwnPackageFacts(): { name: string; version: string; isPrivate: boolean } {
-  try {
-    const root = findPackageRoot(dirname(fileURLToPath(import.meta.url)));
-    const parsed: unknown = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
-    if (typeof parsed !== "object" || parsed === null) return UNKNOWN_PACKAGE_FACTS;
-    const { name, version, private: isPrivate } = parsed as Record<string, unknown>;
-    return {
-      name: typeof name === "string" ? name : "",
-      version: typeof version === "string" ? version : "",
-      // `private` is a boolean in the npm schema, but the string form appears in
-      // hand-edited manifests; both mean "do not publish", so both suppress.
-      isPrivate: isPrivate === true || isPrivate === "true",
-    };
-  } catch {
-    return UNKNOWN_PACKAGE_FACTS;
-  }
-}
-
-/** Fallback facts: unnamed and private, so the notice stays silent. */
-const UNKNOWN_PACKAGE_FACTS = { name: "", version: "", isPrivate: true } as const;
 
 /**
  * `STAMITY_NO_UPDATE_CHECK` matches exactly `1` (our documented switch); the two
