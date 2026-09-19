@@ -108,6 +108,15 @@ describe("nonpublishing remote signing rehearsal", () => {
     expect(workflow.jobs.sign!.steps.filter((step) => step.uses?.startsWith("actions/checkout"))).toHaveLength(0);
     expect(workflow.jobs.sign!.steps.map((step) => step.run ?? "").join("\n")).not.toMatch(/npm ci|npm install/);
   });
+
+  // W2: the workflow pins no SIGNING_SOURCE_SHA, so the fallback to GITHUB_SHA is the
+  // branch every real run takes; only the pinned branch above was covered.
+  it("falls back to the execution commit when no source is pinned, and refuses an unusable one", () => {
+    const { SIGNING_SOURCE_SHA: _pinned, ...live } = env;
+    expect(signingContext(live).sourceSha).toBe(live.GITHUB_SHA);
+    expect(signingContext(live).executionSha).toBe(live.GITHUB_SHA);
+    expect(() => signingContext({ ...live, GITHUB_SHA: "untrusted" })).toThrow();
+  });
 });
 
 /**
