@@ -114,8 +114,24 @@ describe("distribution defaults", () => {
       branch: "plugin-dist",
       tagPattern: "plugins/v<version>",
     });
-    const fromCheckout = resolveDistributionIdentity(committed) as { distribution: { sources: unknown } };
-    expect(fromCheckout.distribution.sources).toEqual((resolve()["distribution"] as { sources: unknown }).sources);
+    // TEST CHANGE, justified (audit FORK-3): the expectation used to be the SYNTHETIC
+    // resolution, which is anchored to the canonical repository URL, so a downstream that
+    // repointed `repository.url` failed a test about derivation with a mismatch of owners.
+    // The claim is "the four source URLs are derived from this manifest's repository", so
+    // the expectation is now built from the resolution's own repository — identical bytes
+    // on the canonical tree, and still false the moment a source URL is a second copy.
+    const fromCheckout = resolveDistributionIdentity(committed) as {
+      repository: string;
+      distribution: { sources: unknown };
+    };
+    expect(fromCheckout.distribution.sources).toEqual(
+      Object.fromEntries(
+        (DISTRIBUTION_CLIENTS as string[]).map((client) => [
+          client,
+          { kind: "git-subdir", url: `${fromCheckout.repository}.git`, path: client },
+        ]),
+      ),
+    );
   });
 
   it("changes one client's entry and leaves the other three at the default", () => {
@@ -304,7 +320,17 @@ describe("the generators' exit code", () => {
     workspaces.push(root);
     downstreamCheckout(root);
     const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as Record<string, unknown>;
-    manifest["stamity"] = { distribution: { sources: { claude: { kind: "git-subdir", path: TOKEN_SHAPED } } } };
+    // TEST CHANGE, justified (audit FORK-3): the block used to be REPLACED, which dropped
+    // any `stamity.publisher` the checkout carries. On a downstream that renamed the
+    // package the publisher then fell back to the canonical default, and the generator
+    // refused on the owner mismatch before it ever reached the credential check this test
+    // is about. Merging keeps the credential shape the only defect in the manifest, and
+    // changes nothing on the canonical tree, which configures no publisher.
+    const configured = (manifest["stamity"] ?? {}) as Record<string, unknown>;
+    manifest["stamity"] = {
+      ...configured,
+      distribution: { sources: { claude: { kind: "git-subdir", path: TOKEN_SHAPED } } },
+    };
     writeFileSync(join(root, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 
     for (const script of ["scripts/generate-plugin-manifests.mjs", "scripts/generate-apm-package.mjs"]) {

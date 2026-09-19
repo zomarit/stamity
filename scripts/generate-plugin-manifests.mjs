@@ -116,6 +116,12 @@
 // what proves the tarball half, and test/ci/pluginManifests.test.ts pins the
 // relationship between the two.
 //
+// A PRIVATE PACKAGE HAS NO TARBALL. `private: true` — set by every downstream that
+// follows `docs/enterprise-forks.md` — makes `npm publish` refuse, so the entry's npm
+// source would name a package no client can fetch. There the source is the repository
+// the identity already states, and the component paths go back to the checkout form
+// with it. `test/ci/forkIdentity.test.ts` runs both cases over one tree.
+//
 // The catalog reader is TypeScript and there is no build step here on purpose —
 // a generator that needs `npm run build` first goes stale the moment someone
 // skips the build. Node strips the types itself from v22.18 onward, which every
@@ -242,6 +248,29 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
     fail(err.message)
   }
   const { publisher: PUBLISHER, repository, ownerSlug } = identity
+
+  /**
+   * `owner/repo` — the slug form a `github` source names.
+   *
+   * Sliced off the resolved `repository`, which the identity module has already
+   * normalized to `https://github.com/<owner>/<repo>` and refused if it was anything
+   * else, so there is no second parse of `repository.url` here to disagree with it.
+   */
+  const repositorySlug = repository.replace(/^https:\/\/github\.com\//, '')
+
+  /**
+   * Whether this checkout publishes to npm at all.
+   *
+   * `docs/enterprise-forks.md` has a downstream set `private: true` and delete
+   * `publishConfig`: the package is never published, and the APM tree plus a private
+   * git ref are the whole distribution. The marketplace entry below is the only
+   * surface that names a FETCH channel rather than an identity, so it is the only one
+   * this flag changes.
+   *
+   * `private` is a boolean in the npm schema; the string form turns up in hand-edited
+   * manifests and means the same thing, so both count.
+   */
+  const isPrivate = pkg.private === true || pkg.private === 'true'
 
   /** The plugin id, on every surface. All three schemas want kebab-case with no scope. */
   const pluginName = packageName.replace(/^@[^/]+\//, '')
@@ -402,15 +431,40 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   }
 
   /**
-   * The marketplace entry, on the npm source form.
+   * The marketplace entry's SOURCE: where a client fetches this plugin from.
    *
-   * npm rather than github because npm is this package's published channel and
-   * the source form the schema documents for it — the tarball is what trusted
-   * publishing signs and what a user already installs. The tarball carries no
-   * `.claude-plugin/plugin.json` (the `files` allowlist ships `dist` alone), so
-   * this entry is the plugin's whole definition there, which is why it repeats
-   * the identity fields rather than leaning on a manifest that will not be
-   * present.
+   * npm on the canonical package, because npm is its published channel and the
+   * source form the schema documents for it — the tarball is what trusted publishing
+   * signs and what a user already installs.
+   *
+   * A private package has no such channel. `private: true` makes `npm publish` refuse,
+   * so an npm source on a renamed private copy advertises a package name that resolves
+   * to nothing (or, worse, to somebody else's package of that name) on every client
+   * that reads the regenerated catalog. The `github` form points at the repository the
+   * identity already states, which is the tree the downstream actually grants access to.
+   * Its shape is `repo` as `owner/repo`: the marketplace reference documents it
+   * (https://code.claude.com/docs/en/plugin-marketplaces, read for this repository on
+   * 2026-09-17), and `scripts/distribution-identity.mjs` resolves the same shape for its
+   * own `github` source kind, so the two cannot disagree.
+   *
+   * The source decides the component ROOT with it. An npm source resolves paths against
+   * the package root, where `files` has staged the corpus under `dist/`; a github source
+   * resolves them against the repository checkout, where the corpus is at `content/`.
+   * One prefix follows the other, so the entry cannot name a tree it is not fetched from.
+   */
+  const marketplaceSource = isPrivate
+    ? { source: 'github', repo: repositorySlug }
+    : { source: 'npm', package: packageName, version }
+  const marketplacePrefix = isPrivate ? '' : `${TARBALL_ROOT}/`
+  const marketplacePath = isPrivate ? checkoutPath : tarballPath
+
+  /**
+   * The marketplace entry.
+   *
+   * The published tree carries no `.claude-plugin/plugin.json` of its own (the `files`
+   * allowlist ships `dist` alone), so this entry is the plugin's whole definition
+   * there, which is why it repeats the identity fields rather than leaning on a
+   * manifest that will not be present.
    */
   const marketplace = {
     name: pluginName,
@@ -420,7 +474,7 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
     plugins: [
       {
         name: pluginName,
-        source: { source: 'npm', package: packageName, version },
+        source: marketplaceSource,
         description,
         version,
         author,
@@ -428,9 +482,9 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
         repository,
         license,
         keywords,
-        agents: checkoutFiles('agent', `${TARBALL_ROOT}/`),
-        commands: tarballPath('command'),
-        skills: tarballPath('skill'),
+        agents: checkoutFiles('agent', marketplacePrefix),
+        commands: marketplacePath('command'),
+        skills: marketplacePath('skill'),
       },
     ],
   }

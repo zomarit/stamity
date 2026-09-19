@@ -10,8 +10,18 @@ import {
 } from "../../../src/learnings/validation.ts";
 import { MANIFEST_VERSION, type SetupManifest } from "../../../src/types/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
+import { npxCommand } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
+/**
+ * TEST CHANGE, justified (audit FORK-3): every `npx @zomarit/stamity …` literal below
+ * became `npxCommand("…")`, which reads the running checkout's own `package.json`.
+ * The assertion is unchanged on this tree — the derived string is byte-for-byte the
+ * literal it replaced — and a downstream that renamed the package as
+ * `docs/enterprise-forks.md` instructs now reads its own remedy instead of failing on
+ * a registry name it cannot install. Nothing here proves the production string: that
+ * is `test/cli/kit/packageName.test.ts`, against a pseudo package root.
+ */
 
 /**
  * Real-filesystem lane. Capture's contract is what lands under
@@ -317,7 +327,7 @@ describe("learn capture — the .stamity gate", () => {
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("not initialised");
-    expect(result.stderr).toContain("npx @zomarit/stamity init");
+    expect(result.stderr).toContain(npxCommand("init"));
     // The point of the gate: a stray capture mints nothing, not even the
     // learnings directory the store would otherwise create on its way in.
     expect(await snapshot(root)).toEqual(before);
@@ -707,7 +717,7 @@ describe("learn capture --dry-run", () => {
     const result = await capture(temp.path("repo"), ["--dry-run"]);
 
     expect(result.code).toBe(1);
-    expect(result.stderr).toContain("npx @zomarit/stamity init");
+    expect(result.stderr).toContain(npxCommand("init"));
   });
 });
 
