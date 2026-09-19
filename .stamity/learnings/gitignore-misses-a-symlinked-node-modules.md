@@ -4,6 +4,8 @@ title: gitignore misses a symlinked node modules
 date: 2026-09-19
 confidence: high
 summary: the node_modules/ line in .gitignore (directory-only) misses the symlinked node_modules the worktree lane sets up, so git add -A stages the symlink; stage by explicit path until a bare line lands
+reviewBy: 2026-12-01
+validatedAgainst: "git check-ignore -v node_modules in a worktree whose node_modules is a symlink (no match) versus the main checkout (matches the node_modules/ line)"
 integrity: sha256:2d219a4e66c2cb972d0362f9f5d3911a0e71cb1f7a87fda2b84dc6bc03147557
 ---
 

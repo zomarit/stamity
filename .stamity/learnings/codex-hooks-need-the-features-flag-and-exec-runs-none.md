@@ -4,6 +4,8 @@ title: codex hooks need the features flag and exec runs none
 date: 2026-09-19
 confidence: high
 summary: the adapter writes [features] hooks = true and the key is read; the default is unmeasured (the page read 2026-09-17 says on); codex exec 0.154.0 ran zero project hooks with trust bypassed
+reviewBy: 2026-12-01
+validatedAgainst: "RUST_LOG=debug codex exec --dangerously-bypass-hook-trust in a stamity init -y --tools codex fixture on codex-cli 0.154.0"
 integrity: sha256:b7481f5c88199378724cabab2d3f2038cb0a135cfcadca1adf94676fa0394604
 ---
 
