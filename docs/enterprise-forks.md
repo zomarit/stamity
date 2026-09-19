@@ -739,8 +739,8 @@ accepts that one timestamp difference and requires every byte except `updatedAt`
 keeps no copy of the manifest schema. The schema is the engine's, and the engine applied it when
 your own regenerate command wrote the manifest, so a key a newer engine admits cannot break
 recovery. The one masked value must still be a valid UTC millisecond timestamp, because it is the
-only value the comparison never reads. A missing, linked,
-executable, malformed or noncanonical changed manifest requires review. Every other generated file
+only value the comparison never reads. A missing, linked, executable, malformed or noncanonical
+changed manifest requires review. Every other generated file
 stays part of the exact tree comparison. The recovered pull request names the remote SHA it
 retained.
 
