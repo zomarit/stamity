@@ -1,0 +1,162 @@
+{
+  "sha": "4eec37ab480576e2ff508e3998a0709b79f54da6",
+  "timestamp": "2026-09-19T22:09:31.744Z",
+  "harness": {
+    "name": "playwright",
+    "version": "1.63.0",
+    "browser": "153.0.8010.12",
+    "scanner": "axe-core",
+    "scannerVersion": "4.13.0"
+  },
+  "rows": [
+    {
+      "row": "H1a",
+      "automated": true,
+      "status": "passed",
+      "reason": "claude 2.1.278 (Claude Code); claude -p Read qa-denied.txt, then read qa-allowed.txt, and reply with what you could read --output-format stream-json --verbose → exit 0; the hook recorded 2 call(s): 1 denied (qa-denied.txt) and 1 allowed (qa-allowed.txt)",
+      "inputHashes": {
+        "fixture/.claude/settings.json": "d4b709187248e8662032bb61b4604cd258710670a44a7fd1e34c61c9d3671aac",
+        "fixture/qa-hooks/decision.mjs": "4aaf1b36dd27cfc606744bd0d510d53e2c588114fdcef480ac0f38cfa1dde97b",
+        "fixture/qa-hooks/decision.json": "ecad76e33a7e4d8e0a6a6f6aba87e0e3cfd8cdc631f53f7ed08b60c5a430ebc6",
+        "fixture/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f",
+        "fixture/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs": "7e9b7de0cd0bcc81aa93f6b512cbb607ec9759b6d629c138b9e3a2ca8d3e7db0",
+        "fixture/.stamity/generated/hooks/claude/stamity-review-gate.mjs": "3b28dbc5a37805f5cfd086061f2cf900ef94697fbc7a93544a622cfe2fd30d87",
+        "fixture/.stamity/generated/hooks/claude/stamity-session-start.mjs": "02e6e473b0f8b35b498a8cc1559d5f423e73d54631e5ea82a03daa82d3607517"
+      },
+      "rowHash": "937eb79494ac61b5edeb09f4b6bf3e99a5bb231182e6b99eb9b6c58f43c76749"
+    },
+    {
+      "row": "H1b",
+      "automated": false,
+      "status": "not-run",
+      "reason": "codex exec on codex-cli 0.154.0 loads no project hook layer headlessly (features.hooks on, project trusted, hook trust bypassed; RUST_LOG=debug shows no hook discovery; the vendor pages read 2026-09-15 do not state whether exec runs hooks) — the interactive /hooks trust and the TUI observation stay human",
+      "inputHashes": {
+        "fixture/.codex/hooks.json": "61cbc093d1789f648b8ae414d603592639241e7ca2af5c816433852473b04021",
+        "fixture/qa-hooks/decision.mjs": "4aaf1b36dd27cfc606744bd0d510d53e2c588114fdcef480ac0f38cfa1dde97b",
+        "fixture/qa-hooks/decision.json": "ecad76e33a7e4d8e0a6a6f6aba87e0e3cfd8cdc631f53f7ed08b60c5a430ebc6",
+        "fixture/.stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f",
+        "fixture/.stamity/generated/hooks/codex/stamity-portable-hook.mjs": "cf5bc6774ff2ad0940322fe3085eda4daf6d3cec657d3ee452ae46953d1284df",
+        "fixture/.stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "0d5d1688b099bb1e4234c4c2f0deaf94d4ce779e4b96a0aa34b40d57774be6cc",
+        "fixture/.stamity/generated/hooks/codex/stamity-session-start.mjs": "02e6e473b0f8b35b498a8cc1559d5f423e73d54631e5ea82a03daa82d3607517"
+      },
+      "rowHash": "ec6bf58b19bbd37d9d396839f9010ae8826ed3d6a43436067254ffe20a89ddc9"
+    },
+    {
+      "row": "H1c",
+      "automated": false,
+      "status": "not-run",
+      "reason": "cursor-agent 2026.09.15-d2fe57e is on PATH, but no measured non-interactive invocation is on record for it — driving it would guess at flags rather than measure them",
+      "inputHashes": {
+        "fixture/.cursor/hooks.json": "328247494471830eca627bda675bbc2cfaea7862cf66c8ae33e0562e91b5292f",
+        "fixture/qa-hooks/decision.mjs": "4aaf1b36dd27cfc606744bd0d510d53e2c588114fdcef480ac0f38cfa1dde97b",
+        "fixture/qa-hooks/decision.json": "ecad76e33a7e4d8e0a6a6f6aba87e0e3cfd8cdc631f53f7ed08b60c5a430ebc6",
+        "fixture/.stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f",
+        "fixture/.stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "c57f4a7302ad6ddc40a85dcb28166ec7befdb382754cc4368f3583a7ae832566",
+        "fixture/.stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "0d5d1688b099bb1e4234c4c2f0deaf94d4ce779e4b96a0aa34b40d57774be6cc",
+        "fixture/.stamity/generated/hooks/cursor/stamity-session-start.mjs": "02e6e473b0f8b35b498a8cc1559d5f423e73d54631e5ea82a03daa82d3607517"
+      },
+      "rowHash": "5071a44f5c290547614ab2f8b4ec50921637d885a818eba5eefcef91ec4a7ebe"
+    },
+    {
+      "row": "H1d",
+      "automated": false,
+      "status": "not-run",
+      "reason": "copilot GitHub Copilot CLI 1.0.85. is on PATH, but no measured non-interactive invocation is on record for it — driving it would guess at flags rather than measure them",
+      "inputHashes": {
+        "fixture/.github/hooks/stamity.json": "db10a0694132f18c9362c8be5979a22296a86327ba80d2ceaae304fba9c4a59f",
+        "fixture/qa-hooks/decision.mjs": "4aaf1b36dd27cfc606744bd0d510d53e2c588114fdcef480ac0f38cfa1dde97b",
+        "fixture/qa-hooks/decision.json": "ecad76e33a7e4d8e0a6a6f6aba87e0e3cfd8cdc631f53f7ed08b60c5a430ebc6",
+        "fixture/.stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f",
+        "fixture/.stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "bd8d0b379e3bd10b2700e388eb5acddfc99e7848e05e2fc257e33195918a525c",
+        "fixture/.stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "0d5d1688b099bb1e4234c4c2f0deaf94d4ce779e4b96a0aa34b40d57774be6cc",
+        "fixture/.stamity/generated/hooks/copilot/stamity-session-start.mjs": "02e6e473b0f8b35b498a8cc1559d5f423e73d54631e5ea82a03daa82d3607517"
+      },
+      "rowHash": "3e2b4b51c91b35e0187323c9b85d45ad53fea50c54412c1dc396361b685f1fe8"
+    },
+    {
+      "row": "H2",
+      "automated": true,
+      "status": "passed",
+      "reason": "/: 1 heading(s), 6 link(s), 0 header cell(s) — all three structural checks hold || /docs/getting-started: 20 heading(s), 84 link(s), 9 header cell(s) — all three structural checks hold || /docs/customization: 15 heading(s), 69 link(s), 7 header cell(s) — all three structural checks hold || /docs/packs-and-trust: 16 heading(s), 65 link(s), 2 header cell(s) — all three structural checks hold || /docs/capability-matrix: 11 heading(s), 70 link(s), 37 header cell(s) — all three structural checks hold || /docs/security-mapping: 20 heading(s), 70 link(s), 55 header cell(s) — all three structural checks hold || /docs/measurements: 10 heading(s), 51 link(s), 8 header cell(s) — all three structural checks hold || /docs/doctrine: 12 heading(s), 71 link(s), 5 header cell(s) — all three structural checks hold || scanner: /: 0 violation(s) || /docs/getting-started: 0 violation(s) || /docs/customization: 0 violation(s) || /docs/packs-and-trust: 0 violation(s) || /docs/capability-matrix: 0 violation(s) || /docs/security-mapping: 0 violation(s) || /docs/measurements: 0 violation(s) || /docs/doctrine: 0 violation(s)",
+      "inputHashes": {
+        "website/build/index.html": "2868a21994ec5131b9a7c2766ad30371a5584253615e854ca6b62c26e737add4",
+        "website/build/docs/getting-started/index.html": "1277f8535074d8a81a56a14a52a3415dd55732a8b86c5e4c12cc701ba01b391e",
+        "website/build/docs/customization/index.html": "c46b3a28dbc408c7df6c701e589b0345811fa5bb346e972c65414d03c1a10f0e",
+        "website/build/docs/packs-and-trust/index.html": "1e2e2233eb97f754f440108eb16e6c37f3b14fe5f9fa1f5ca9b738f2ac4799c1",
+        "website/build/docs/capability-matrix/index.html": "304333860119ce57cb90ac441b2afc6f3295c87d914139b3942271a9b9fbb853",
+        "website/build/docs/security-mapping/index.html": "27e938800d953a06c11679f4537ac0e5b28ce14499842abb2cd77407a1099b02",
+        "website/build/docs/measurements/index.html": "b5624ea76708f8674cbc1ce87e4cfcea132209b902abcf9e03593e00db958881",
+        "website/build/docs/doctrine/index.html": "8a147c7d462cd4c9282d4f9aaa7a28e9f8e8c7e8875da2d113f26635825c48bd"
+      },
+      "rowHash": "6c83126ae032602961eb6d58aac62ffce6df4fdebc18ab0f68363ad9252c82ad"
+    },
+    {
+      "row": "H3a",
+      "automated": true,
+      "status": "passed",
+      "reason": "data-theme light || /: 7 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (the page renders no table) || /docs/getting-started: 60 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (87 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/customization: 45 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (35 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/packs-and-trust: 66 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (10 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/capability-matrix: 50 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (229 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/security-mapping: 35 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (269 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/measurements: 21 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (33 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/doctrine: 38 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (30 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element)",
+      "inputHashes": {
+        "website/build/index.html": "2868a21994ec5131b9a7c2766ad30371a5584253615e854ca6b62c26e737add4",
+        "website/build/docs/getting-started/index.html": "1277f8535074d8a81a56a14a52a3415dd55732a8b86c5e4c12cc701ba01b391e",
+        "website/build/docs/customization/index.html": "c46b3a28dbc408c7df6c701e589b0345811fa5bb346e972c65414d03c1a10f0e",
+        "website/build/docs/packs-and-trust/index.html": "1e2e2233eb97f754f440108eb16e6c37f3b14fe5f9fa1f5ca9b738f2ac4799c1",
+        "website/build/docs/capability-matrix/index.html": "304333860119ce57cb90ac441b2afc6f3295c87d914139b3942271a9b9fbb853",
+        "website/build/docs/security-mapping/index.html": "27e938800d953a06c11679f4537ac0e5b28ce14499842abb2cd77407a1099b02",
+        "website/build/docs/measurements/index.html": "b5624ea76708f8674cbc1ce87e4cfcea132209b902abcf9e03593e00db958881",
+        "website/build/docs/doctrine/index.html": "8a147c7d462cd4c9282d4f9aaa7a28e9f8e8c7e8875da2d113f26635825c48bd"
+      },
+      "rowHash": "6c83126ae032602961eb6d58aac62ffce6df4fdebc18ab0f68363ad9252c82ad"
+    },
+    {
+      "row": "H3b",
+      "automated": true,
+      "status": "passed",
+      "reason": "data-theme dark || /: 7 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (the page renders no table) || /docs/getting-started: 60 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (87 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/customization: 45 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (35 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/packs-and-trust: 66 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (10 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/capability-matrix: 50 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (229 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/security-mapping: 35 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (269 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/measurements: 21 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (33 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/doctrine: 38 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (30 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element)",
+      "inputHashes": {
+        "website/build/index.html": "2868a21994ec5131b9a7c2766ad30371a5584253615e854ca6b62c26e737add4",
+        "website/build/docs/getting-started/index.html": "1277f8535074d8a81a56a14a52a3415dd55732a8b86c5e4c12cc701ba01b391e",
+        "website/build/docs/customization/index.html": "c46b3a28dbc408c7df6c701e589b0345811fa5bb346e972c65414d03c1a10f0e",
+        "website/build/docs/packs-and-trust/index.html": "1e2e2233eb97f754f440108eb16e6c37f3b14fe5f9fa1f5ca9b738f2ac4799c1",
+        "website/build/docs/capability-matrix/index.html": "304333860119ce57cb90ac441b2afc6f3295c87d914139b3942271a9b9fbb853",
+        "website/build/docs/security-mapping/index.html": "27e938800d953a06c11679f4537ac0e5b28ce14499842abb2cd77407a1099b02",
+        "website/build/docs/measurements/index.html": "b5624ea76708f8674cbc1ce87e4cfcea132209b902abcf9e03593e00db958881",
+        "website/build/docs/doctrine/index.html": "8a147c7d462cd4c9282d4f9aaa7a28e9f8e8c7e8875da2d113f26635825c48bd"
+      },
+      "rowHash": "6c83126ae032602961eb6d58aac62ffce6df4fdebc18ab0f68363ad9252c82ad"
+    },
+    {
+      "row": "H3c",
+      "automated": true,
+      "status": "passed",
+      "reason": "data-theme light || /: 9 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (the page renders no table) || /docs/getting-started: 97 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (87 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/customization: 80 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (35 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/packs-and-trust: 99 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (10 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/capability-matrix: 72 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (229 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/security-mapping: 77 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (269 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/measurements: 52 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (33 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/doctrine: 72 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (30 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element)",
+      "inputHashes": {
+        "website/build/index.html": "2868a21994ec5131b9a7c2766ad30371a5584253615e854ca6b62c26e737add4",
+        "website/build/docs/getting-started/index.html": "1277f8535074d8a81a56a14a52a3415dd55732a8b86c5e4c12cc701ba01b391e",
+        "website/build/docs/customization/index.html": "c46b3a28dbc408c7df6c701e589b0345811fa5bb346e972c65414d03c1a10f0e",
+        "website/build/docs/packs-and-trust/index.html": "1e2e2233eb97f754f440108eb16e6c37f3b14fe5f9fa1f5ca9b738f2ac4799c1",
+        "website/build/docs/capability-matrix/index.html": "304333860119ce57cb90ac441b2afc6f3295c87d914139b3942271a9b9fbb853",
+        "website/build/docs/security-mapping/index.html": "27e938800d953a06c11679f4537ac0e5b28ce14499842abb2cd77407a1099b02",
+        "website/build/docs/measurements/index.html": "b5624ea76708f8674cbc1ce87e4cfcea132209b902abcf9e03593e00db958881",
+        "website/build/docs/doctrine/index.html": "8a147c7d462cd4c9282d4f9aaa7a28e9f8e8c7e8875da2d113f26635825c48bd"
+      },
+      "rowHash": "6c83126ae032602961eb6d58aac62ffce6df4fdebc18ab0f68363ad9252c82ad"
+    },
+    {
+      "row": "H3d",
+      "automated": true,
+      "status": "passed",
+      "reason": "data-theme dark || /: 9 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (the page renders no table) || /docs/getting-started: 97 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (87 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/customization: 80 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (35 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/packs-and-trust: 99 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (10 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/capability-matrix: 72 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (229 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/security-mapping: 77 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (269 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/measurements: 52 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (33 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/doctrine: 72 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (30 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element)",
+      "inputHashes": {
+        "website/build/index.html": "2868a21994ec5131b9a7c2766ad30371a5584253615e854ca6b62c26e737add4",
+        "website/build/docs/getting-started/index.html": "1277f8535074d8a81a56a14a52a3415dd55732a8b86c5e4c12cc701ba01b391e",
+        "website/build/docs/customization/index.html": "c46b3a28dbc408c7df6c701e589b0345811fa5bb346e972c65414d03c1a10f0e",
+        "website/build/docs/packs-and-trust/index.html": "1e2e2233eb97f754f440108eb16e6c37f3b14fe5f9fa1f5ca9b738f2ac4799c1",
+        "website/build/docs/capability-matrix/index.html": "304333860119ce57cb90ac441b2afc6f3295c87d914139b3942271a9b9fbb853",
+        "website/build/docs/security-mapping/index.html": "27e938800d953a06c11679f4537ac0e5b28ce14499842abb2cd77407a1099b02",
+        "website/build/docs/measurements/index.html": "b5624ea76708f8674cbc1ce87e4cfcea132209b902abcf9e03593e00db958881",
+        "website/build/docs/doctrine/index.html": "8a147c7d462cd4c9282d4f9aaa7a28e9f8e8c7e8875da2d113f26635825c48bd"
+      },
+      "rowHash": "6c83126ae032602961eb6d58aac62ffce6df4fdebc18ab0f68363ad9252c82ad"
+    }
+  ]
+}
