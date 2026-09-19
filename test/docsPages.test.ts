@@ -443,6 +443,12 @@ const read = (relPath: string): string => readFileSync(join(REPO_ROOT, relPath),
 
 const lines = (text: string): string[] => text.replace(/\n$/, "").split("\n");
 
+/**
+ * Runs of whitespace collapsed to one space, applied to both sides of a containment pin.
+ * A pinned sentence that a reflow re-wraps is the same sentence, and the pin should hold.
+ */
+const flowed = (text: string): string => text.replace(/\s+/g, " ");
+
 /** The latest of a set of dates. ISO-8601 sorts lexicographically, which is why the header has it. */
 const newest = (dates: readonly string[]): string | undefined => dates.toSorted().at(-1);
 
@@ -1632,11 +1638,11 @@ describe("the guides", () => {
     // EXISTENCE, which the commits endpoint answers for any sha in the upstream's fork
     // network; it now measures ancestry against the upstream's default branch, and the page
     // has to say the rule the job applies.
-    expect(guide, "the guide never states the exemption's one condition").toContain(
-      "reachable\nfrom the default branch of the upstream repository your `.stamity/upstream.json` names",
+    expect(flowed(guide), "the guide never states the exemption's one condition").toContain(
+      flowed("reachable\nfrom the default branch of the upstream repository your `.stamity/upstream.json` names"),
     );
-    expect(guide, "the guide never says why existence was not enough").toContain(
-      "Reachability, and not mere\nexistence",
+    expect(flowed(guide), "the guide never says why existence was not enough").toContain(
+      flowed("Reachability, and not mere\nexistence"),
     );
     expect(guide, "the guide never limits the exemption to an upstream on GitHub").toContain(
       "names a repository on GitHub",
@@ -1646,8 +1652,8 @@ describe("the guides", () => {
     );
     // The fork-lane minor beside it: the lane writes the trailer, and a written trailer is not
     // the certification a person makes by submitting the contribution.
-    expect(guide, "the guide still reads the written trailer as a person's sign-off").toContain(
-      "not a certification by the person it\nnames",
+    expect(flowed(guide), "the guide still reads the written trailer as a person's sign-off").toContain(
+      flowed("not a certification by the person it\nnames"),
     );
   });
 
