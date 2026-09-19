@@ -13,7 +13,12 @@ const workflow = parse(readFileSync(join(ROOT, ".github/workflows/upstream-updat
 const run = workflow.jobs.publish.steps.find((step) => step.name === "Check the target branch's landing policy")!.run!;
 const AVAILABLE = process.platform !== "win32" && spawnSync("bash", ["--version"]).status === 0
   && spawnSync("jq", ["--version"]).status === 0;
-type Reply = { value: unknown; status?: number };
+// `body` reproduces what `gh api` does on an HTTP error: it writes the API's own JSON error
+// document to stdout and still exits non-zero. Verified against the live endpoint on 2026-09-17
+// with gh 2.86.0 — an unprotected branch answers `{"message":"Branch not protected",...}` with
+// `gh: Branch not protected (HTTP 404)` on stderr. Replies without a `body` keep the older
+// fixture shape exactly: no stdout at all, which is the unreadable-surface case.
+type Reply = { value: unknown; status?: number; body?: unknown };
 
 // Execute the shipping shell with real jq. Only GitHub responses are substituted; these
 // fixtures exercise the permission boundary independently of the workflow's parser.
@@ -42,7 +47,11 @@ fs.appendFileSync(process.env.CALLS, JSON.stringify(args) + '\\n');
 const endpoint = args.find((arg) => arg.startsWith('repos/'));
 const reply = JSON.parse(fs.readFileSync(process.env.RESPONSES, 'utf8'))[endpoint];
 if (args[0] !== 'api' || reply === undefined) process.exit(9);
-if (reply.status) { process.stderr.write('Private diagnostic must not reach the PR or console'); process.exit(reply.status); }
+if (reply.status) {
+  if (reply.body !== undefined) process.stdout.write(JSON.stringify(reply.body));
+  process.stderr.write('Private diagnostic must not reach the PR or console');
+  process.exit(reply.status);
+}
 process.stdout.write(JSON.stringify(reply.value));
 `);
     chmodSync(gh, 0o755);
@@ -65,6 +74,9 @@ process.stdout.write(JSON.stringify(reply.value));
     const result = invoke({}, "integration/main");
     expect(result.output).toContain("checked=true");
     expect(result.output).toContain("warning=false");
+    // Added with REQ-UPSTREAM-011: the classic surface now reports WHICH answer it got, so
+    // "read a protection document" and "there is no classic protection" stay distinguishable.
+    expect(result.output).toContain("classic=read");
     expect(result.calls).toHaveLength(3);
     const rules = result.calls.find((args) => args.some((arg) => arg.includes("rules/branches")))!;
     expect(rules).toEqual(expect.arrayContaining(["--paginate", "--slurp"]));
@@ -103,6 +115,55 @@ process.stdout.write(JSON.stringify(reply.value));
     const result = invoke({ [endpoint]: { value: null, status: 1 } });
     expect(result.output).toContain("checked=false");
     expect(result.policy).toContain("NOT fully checked");
+    expect(result.stdout).not.toContain("permits a merge commit");
+  });
+
+  // REQ-UPSTREAM-011. A branch protected by rulesets ONLY has no classic protection, and the
+  // classic endpoint says so with a 404. Reading that as "unverified" pinned the
+  // not-fully-checked note onto every such fork forever, which is the note losing its meaning.
+  const PROTECTION = "repos/example/downstream/branches/main/protection";
+  const NOT_PROTECTED = {
+    message: "Branch not protected",
+    documentation_url: "https://docs.github.com/rest/branches/branch-protection#get-branch-protection",
+    status: "404",
+  };
+
+  it("records no classic protection from a 404 and leaves the check complete", () => {
+    const result = invoke({ [PROTECTION]: { value: null, status: 1, body: NOT_PROTECTED } });
+    expect(result.output).toContain("checked=true");
+    expect(result.output).toContain("classic=none");
+    expect(result.output).toContain("warning=false");
+    // The whole point: no note at all, and the permissive sentence is still earned.
+    expect(result.policy).toBe("");
+    expect(result.stdout).not.toContain("NOT fully checked");
+    expect(result.stdout).toContain("permit a merge commit");
+    // The other two surfaces were still read, so the answer is not a shortcut.
+    expect(result.calls).toHaveLength(3);
+  });
+
+  it("keeps a ruleset warning while recording no classic protection", () => {
+    const result = invoke({
+      [PROTECTION]: { value: null, status: 1, body: NOT_PROTECTED },
+      "repos/example/downstream/rules/branches/main": { value: [[{ type: "required_linear_history" }]] },
+    });
+    expect(result.output).toContain("checked=true");
+    expect(result.output).toContain("classic=none");
+    expect(result.output).toContain("warning=true");
+    expect(result.policy).toContain("required linear history");
+    expect(result.policy).not.toContain("NOT fully checked");
+  });
+
+  it.each([
+    ["403", { message: "Resource not accessible by integration", status: "403" }],
+    ["404 for a branch that is not there", { message: "Branch not found", status: "404" }],
+    ["a body with no message", { documentation_url: "https://docs.github.com/rest", status: "404" }],
+    ["a body that is not an object", ["Branch not protected"]],
+  ])("still reports classic protection unverified on %s", (_label, body) => {
+    const result = invoke({ [PROTECTION]: { value: null, status: 1, body } });
+    expect(result.output).toContain("checked=false");
+    expect(result.output).toContain("classic=unchecked");
+    expect(result.policy).toContain("NOT fully checked");
+    expect(result.policy).toContain("classic branch protection");
     expect(result.stdout).not.toContain("permits a merge commit");
   });
 

@@ -4,6 +4,8 @@ import { delimiter, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parse } from "yaml";
+import { collectManifestErrors } from "../../src/manifest/manifest.ts";
+import { MANIFEST_VERSION, type SetupManifest } from "../../src/types/manifest.ts";
 import { branchHead, commitAll, createFork, createUpstream, git, gitAvailable, makeScratch, runLane, type ForkOptions, type UpstreamFixture } from "./fixtures.ts";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -238,12 +240,46 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
     expect(JSON.parse(readFileSync(join(f.artifact, "publish-result.json"), "utf8"))).toMatchObject({ action: "recovered", commit: f.sha });
   });
 
-  function syncedFixture() {
-    const manifest = {
-      version: "1.0.0", generatedBy: "1.6.0", createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z", tools: ["claude"],
-      selection: { items: { agent: [], command: [], rule: [], skill: [] } }, ledger: [],
-    };
+  // The narrowest manifest the engine accepts: required fields only, nothing optional.
+  const MINIMAL_MANIFEST = {
+    version: MANIFEST_VERSION, generatedBy: "1.6.0", createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z", tools: ["claude"],
+    selection: { items: { agent: [], command: [], rule: [], skill: [] } }, ledger: [],
+  };
+
+  // The widest one: every optional key of `SetupManifest` set to a non-empty value, so the
+  // recovery comparison is exercised over the whole schema rather than over its required core.
+  // Typed as a TOTAL record over `SetupManifest`, which is the same device
+  // `MANIFEST_FIELD_ORDER` uses in src: a field added to the manifest is a compile error here
+  // until it is placed, so the day a new key lands this case exercises it. FORK-1 was exactly
+  // this gap — `ruleDelivery` landed on 2026-09-15 and no recovery case carried it.
+  const FULL_MANIFEST: Required<{ [K in keyof SetupManifest]: SetupManifest[K] }> = {
+    version: MANIFEST_VERSION,
+    generatedBy: "1.6.0",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    tools: ["claude", "cursor", "copilot", "codex"],
+    platform: "github",
+    maturityTier: "enterprise",
+    communicationStyle: "technical",
+    ruleDelivery: "always-on",
+    selection: { items: { agent: ["implementer"], command: ["st-work"], rule: ["testing-floor"], skill: ["st-qa"] } },
+    ledger: [{ path: "AGENTS.md", adapter: "claude", artifactId: "charter", artifactType: "infra" }],
+    mcp: { servers: ["context7"], protocolVersion: "2025-06-18" },
+    learnings: { maxCount: 40 },
+    hooks: { userHooksDir: ".stamity/hooks" },
+    models: { pins: { frontier: "opus-5" }, effort: { frontier: "high" }, reviewCap: 3 },
+    importChoice: [{ path: "AGENTS.md", mode: "supplement" }],
+    toolOptions: { codex: { inlineAppendix: true } },
+    detected: {
+      languages: ["typescript"], linters: ["eslint"], testFrameworks: ["vitest"],
+      ciProviders: ["github-actions"], packageManager: "npm", packageScripts: ["test", "lint"],
+    },
+  };
+
+  // Parameterised with REQ-UPSTREAM-016: the lane is the same either way, and the manifest is
+  // the variable the recovery comparison is being judged on.
+  function syncedFixture(manifest: Record<string, unknown> = MINIMAL_MANIFEST) {
     // Call the real sync write seam: its wall-clock updatedAt is the only generated
     // content difference between two fresh integrations of this unchanged target.
     const source = pathToFileURL(join(ROOT, "src/manifest/manifest.ts")).href;
@@ -281,12 +317,40 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
     expect(readFileSync(f.env.CREATED_BODY, "utf8")).not.toContain(f.prepared);
   });
 
-  it.each(["other-field", "invalid-date", "malformed", "noncanonical", "symlink", "missing"])("refuses retained manifest %s changes while preserving the remote branch", (kind) => {
+  it("recovers a manifest carrying every optional key the engine's schema admits", () => {
+    // FORK-1. Recovery used to re-check the manifest against a FROZEN 17-key copy of the
+    // engine's schema, so `ruleDelivery` — an 18th key, landed 2026-09-15 — made recovery
+    // refuse every fork that set it, with a message blaming the fork's own manifest. The
+    // fixture is put past the engine's own validator first, so this case fails if it ever
+    // stops being a manifest the engine accepts rather than passing against an invented shape.
+    expect(collectManifestErrors(FULL_MANIFEST)).toEqual([]);
+    const f = syncedFixture(FULL_MANIFEST as unknown as Record<string, unknown>);
+    // The whole key set really reached the branch: the lane's own sync wrote it back.
+    const written = JSON.parse(git(f.fork, ["show", `${f.prepared}:.stamity/manifest.json`]).stdout) as Record<string, unknown>;
+    expect(Object.keys(written).toSorted()).toEqual(Object.keys(FULL_MANIFEST).toSorted());
+    expect(written["ruleDelivery"]).toBe("always-on");
+    expect(f.invoke(undefined, { PUSHED: "true", CREATE_FAILURE: "true" }).status).toBe(1);
+    const result = f.invoke(undefined, { MERGE_COMMIT: f.prepared });
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    expect(result.output).toContain("action=recovered");
+    expect(readFileSync(f.env.CREATED_BODY, "utf8")).toContain(f.sha);
+    expect(git(f.fork, ["ls-remote", "--heads", "origin", f.env.UPDATE_BRANCH]).stdout).toContain(f.sha);
+  });
+
+  // `unknown-field` added with REQ-UPSTREAM-016: dropping the workflow's own key allowlist must
+  // not make an off-schema key land. It is the inverse of the case above and shares its setup.
+  it.each(["other-field", "unknown-field", "invalid-date", "malformed", "noncanonical", "symlink", "missing"])("refuses retained manifest %s changes while preserving the remote branch", (kind) => {
     const f = syncedFixture();
     const path = join(f.worktree, ".stamity/manifest.json");
     const raw = readFileSync(path, "utf8");
-    const manifest = JSON.parse(raw) as { updatedAt: string; selection: { items: { rule: string[] } } };
-    if (kind === "other-field") {
+    const manifest = JSON.parse(raw) as Record<string, unknown> & { updatedAt: string; selection: { items: { rule: string[] } } };
+    if (kind === "unknown-field") {
+      // The typo the engine's own validator names. The engine is the schema of record, so
+      // assert its verdict here, then assert the workflow refuses the same branch.
+      manifest["ledgar"] = [];
+      expect(collectManifestErrors(manifest)).toContain("unknown field `ledgar`");
+      writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
+    } else if (kind === "other-field") {
       manifest.selection.items.rule.push("human-customization");
       writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
     } else if (kind === "invalid-date") {
