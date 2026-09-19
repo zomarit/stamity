@@ -274,6 +274,45 @@ describe("portable native hook boundary", () => {
     expect(misspelled.stdout).toBe("");
   });
 
+  // SEC-W2-1: the residual of the one above, at VALUE level. `decision` is a
+  // key this runner KNOWS, so an unreadable value on it is never
+  // `<unrecognized>` and never sets `undecidable` — `{"decision":"deny"}` used
+  // to fall straight through to the explicit Cursor allow, turning a child that
+  // plainly meant to refuse into an approval. The value is now validated at the
+  // same shared seam `permissionDecision` is validated at, so the fault is the
+  // same on every client rather than a Cursor-only patch.
+  it("faults on a decision value outside approve and block rather than allowing the call", async () => {
+    const cursor = execute(await fixture("cursor", output({ decision: "deny", reason: "no-such-value-on-stderr" })));
+    expect(cursor.status).toBe(1);
+    expect(cursor.stdout).toBe("");
+    expect(cursor.stderr).toContain("Unsupported decision");
+    expect(cursor.stderr).not.toContain("no-such-value-on-stderr");
+
+    // The same input on the other two clients: neither writes an allow either.
+    // Codex blocks a non-core pre-tool-use call on exit 2 and nothing else, so
+    // that is the fail-closed exit there; Copilot rejects every nonzero exit,
+    // so 1 is. Both write nothing at all.
+    const codex = execute(await fixture("codex", output({ decision: "deny" })));
+    expect(codex.status).toBe(2);
+    expect(codex.stdout).toBe("");
+    const copilot = execute(await fixture("copilot", output({ decision: "deny" })));
+    expect(copilot.status).toBe(1);
+    expect(copilot.stdout).toBe("");
+  });
+
+  it("keeps the two legacy decision values readable on every client", async () => {
+    // The guard validates the VALUE, so the legacy vocabulary itself is
+    // untouched: `block` still denies, and `approve` is still ignored with a
+    // warning rather than faulting.
+    const blocked = execute(await fixture("cursor", output({ decision: "block", reason: "Policy refuses this call" })));
+    expect(blocked.status).toBe(0);
+    expect(JSON.parse(blocked.stdout)).toEqual({ permission: "deny", user_message: "Policy refuses this call" });
+
+    const approved = execute(await fixture("cursor", output({ decision: "approve" })));
+    expect(approved.status).toBe(0);
+    expect(JSON.parse(approved.stdout)).toEqual({ permission: "allow" });
+  });
+
   it("leaves a silent child silent on the events and clients that document no allow", async () => {
     // Only Cursor's failClosed clause makes silence a failure, and only the
     // permission event has an allow to write.
