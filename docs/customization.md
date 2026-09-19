@@ -343,9 +343,9 @@ denies hook errors and timeouts on supported events. An unsupported `ask` decisi
 manual permission review.
 
 Copilot CLI and cloud repository hooks register at `.github/hooks/stamity.json`. Tool-hook denial
-and errors block, but timeouts remain fail-open. Its session-start output does not inject the
-learning index, so read `.stamity/learnings/` and active handoffs yourself. Copilot cloud reads
-hook configuration from the default branch.
+and errors block, but timeouts remain fail-open. Its session-start output is injected as
+additionalContext (the GitHub Copilot hooks reference, read 2026-09-17), so the learning index
+reaches the session. Copilot cloud reads hook configuration from the default branch.
 
 Codex hooks use command strings and native `/hooks` trust review, and that review is the last of
 three gates. First `features.hooks = true` in `.codex/config.toml`, which stamity emits and the

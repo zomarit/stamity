@@ -31,8 +31,8 @@ they do not claim authenticated client sessions, native trust approval, or human
 - **Copilot:** repository command hooks run in CLI/cloud, with PascalCase event aliases
   preserving canonical tool-name matcher semantics. PreToolUse rejects nonzero exits and
   explicit deny; timeouts always fail-open. String and object tool arguments normalize at
-  the portable boundary. Session-start command output does not inject learning context,
-  so the emitted guidance requires a manual read. The cloud configuration must reach the
+  the portable boundary. Session-start command output is injected as additionalContext
+  (docs.github.com hooks reference, 2026-09-17). The cloud configuration must reach the
   default branch through the normal review/approval path.
   [Hook schema and decisions](https://docs.github.com/en/copilot/reference/hooks-reference),
   [cloud discovery](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/use-hooks).

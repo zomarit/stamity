@@ -145,10 +145,10 @@ Declared caps:
 | Cap | Declared value |
 |---|---|
 | `rule body` | 500 lines per rule, refused above |
-| `hook enforcement` | Exit 2 denies; failClosed: true also denies hook errors and timeouts. Emitted on both guards and on any authored pre-tool-use row, but NOT on the core pre-tool-use guard: this client's tool-call payload names no calling agent, so that guard is emitted as telemetry and has no verdict to block on |
+| `hook enforcement` | Exit 2 denies; failClosed: true also denies hook errors and timeouts, and this client counts no output as such a failure (cursor.com/docs/hooks, accessed 2026-09-17), so every allow is written explicitly. Emitted on both guards and on any authored pre-tool-use row, but NOT on the core pre-tool-use guard: this client's tool-call payload names no calling agent, so that guard is emitted as telemetry and has no verdict to block on |
 | `hook timeout` | timeoutMs converts to native timeout seconds, rounded up; the portable runner also bounds the child to the requested milliseconds |
 | `command surface` | `.cursor/skills/<id>/SKILL.md` with `disable-model-invocation: true` — this client folded slash commands into skills, so no `.cursor/commands/` directory appears in current docs and the touchpoint bodies ship as explicitly invoked skills |
-| `user hook enforcement` | explicit exit-2 denial applies on supported events; authored pre-tool-use rows also opt into failClosed for hook errors and timeouts. Session-start and session-end responses cannot block |
+| `user hook enforcement` | explicit exit-2 denial applies on supported events; authored pre-tool-use rows also opt into failClosed for hook errors and timeouts, and no output counts as one of those failures (cursor.com/docs/hooks, accessed 2026-09-17), so a row that decides nothing is emitted as an explicit allow. Session-start and session-end responses cannot block |
 | `MCP tool surface` | servers expose tools through mcp.json; the current contract documents no fixed per-session tool-count cap |
 | `workdir guard` | not emitted — mitigated a pre-3.0 path-escape class; revisit if that class recurs on a supported release |
 
@@ -156,7 +156,7 @@ Sources:
 
 - <https://cursor.com/docs/context/rules> — accessed 2026-09-10
 - <https://cursor.com/docs/agent/subagents> — accessed 2026-09-10
-- <https://cursor.com/docs/hooks> — accessed 2026-09-10
+- <https://cursor.com/docs/hooks> — accessed 2026-09-17
 - <https://cursor.com/docs/skills> — accessed 2026-09-10
 - <https://cursor.com/docs/mcp> — accessed 2026-09-10
 
@@ -179,7 +179,7 @@ Declared caps:
 | `charter-budget` | ~2 pages; AGENTS.md is native, so no mirror is emitted |
 | `command-surface` | native — the nine touchpoints ship as prompt files in .github/prompts/, invoked as /st-<id>; the format's `agent` and `tools` keys stay unemitted (per-prompt restrictions this engine cannot answer), `model` follows an operator pin |
 | `effort-axis` | omitted — this surface publishes no effort key and no model-value parameter, the one documented omission of the reasoning-effort axis |
-| `hook-enforcement` | preToolUse exit 2, errors and JSON deny block. Timeouts always fail-open; other events are advisory unless documented. The identity-free core role guard is telemetry. Copilot sessionStart does not inject the learning index: read .stamity/learnings and handoffs manually. |
+| `hook-enforcement` | preToolUse exit 2, errors and JSON deny block. Timeouts always fail-open; other events are advisory unless documented. The identity-free core role guard is telemetry. sessionStart output reaches the session: it is injected as additionalContext (docs.github.com hooks reference, 2026-09-17). |
 | `deny-gate` | Repository hooks target Copilot CLI/cloud. preToolUse denies via native JSON or nonzero exit; timeouts fail-open. The core role guard has no calling-agent identity and remains telemetry. |
 | `rule-activation` | glob only; no description-pull mode, so an agent-requested rule emits applyTo: "**" |
 | `rule-precedence` | not expressible — Copilot has no ordering primitive |
@@ -192,7 +192,7 @@ Sources:
 - <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/customize-the-agent-environment> — accessed 2026-09-10
 - <https://docs.github.com/en/copilot/how-tos/configure-custom-instructions-in-your-ide/add-repository-instructions-in-your-ide> — accessed 2026-09-10
 - <https://code.visualstudio.com/docs/copilot/customization/prompt-files> — accessed 2026-09-10
-- <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-09-10
+- <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-09-17
 
 ### `codex`
 
@@ -217,7 +217,7 @@ Declared caps:
 Sources:
 
 - <https://learn.chatgpt.com/docs/agent-configuration/subagents> — accessed 2026-09-10
-- <https://learn.chatgpt.com/docs/hooks> — accessed 2026-09-10
+- <https://learn.chatgpt.com/docs/hooks> — accessed 2026-09-17
 - <https://learn.chatgpt.com/docs/config-file/config-reference> — accessed 2026-09-15
 - <https://learn.chatgpt.com/docs/custom-prompts> — accessed 2026-09-10
 
@@ -231,7 +231,7 @@ and the emitted guards cannot disagree. Rows keep the ladder order: strongest fi
 |---|---|---|---|
 | `claude` | `fail-closed` | `2` | Exit 2 blocks the pending action and returns stderr to the agent; exit 0 with structured stdout feeds the session instead. |
 | `codex` | `fail-closed` | `2` | Exit-2 denies supported tool calls after native /hooks trust. PreToolUse carries no agent identity, so the core role guard is telemetry; hosted tools and specialized paths may bypass hooks. |
-| `copilot` | `fail-closed` | `2` | preToolUse exit 2, errors and JSON deny block. Timeouts always fail-open; other events are advisory unless documented. The identity-free core role guard is telemetry. Copilot sessionStart does not inject the learning index: read .stamity/learnings and handoffs manually. |
+| `copilot` | `fail-closed` | `2` | preToolUse exit 2, errors and JSON deny block. Timeouts always fail-open; other events are advisory unless documented. The identity-free core role guard is telemetry. sessionStart output reaches the session: it is injected as additionalContext (docs.github.com hooks reference, 2026-09-17). |
 | `cursor` | `opt-in-fail-closed` | `2` | Exit 2 denies the action. failClosed opts supported events into denial on hook errors and timeouts; the identity-free core role guard remains telemetry. |
 
 ## Agent tool-allowlist enforcement coverage
