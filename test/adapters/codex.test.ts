@@ -365,6 +365,47 @@ describe("hooks.json — native command strings and trust controls", () => {
     expect(entry.timeout).toBe(2);
     expect(JSON.parse(Buffer.from(entry.command.split(" ").at(-1), "base64url").toString())).toEqual(row);
   });
+
+  // HOOK-5. Trust here is recorded against this file's hash, and the scripts it
+  // points at sit in the workspace an agent can write — a boundary the operator
+  // only meets in this one field. learn.chatgpt.com/docs/hooks, 2026-09-17.
+  it("says in the description that the script bytes are outside the trust hash", async () => {
+    const core = await buildCoreEmissionPlan(ctxOf({ contentRoot: await seedCorpus() }));
+    const description = JSON.parse(buildHooksJson(core)).description as string;
+    expect(description).toContain("Trust is recorded against this file's hash only");
+    expect(description).toContain(".stamity/generated/hooks/codex/");
+    expect(description).toContain("stamity check is the control");
+    expect(description).not.toContain("\n");
+  });
+
+  it("writes the SessionEnd ceiling even when the row requests no timeout", () => {
+    // Left out, the key inherits this client's one-second default, which is not
+    // the budget a session-end handoff write was sized against.
+    const untimed: HookInterchange = { event: "session_end", command: ["node", ".stamity/hooks/close.mjs"] };
+    const generous: HookInterchange = { event: "session_end", command: ["node", ".stamity/hooks/slow.mjs"], timeoutMs: 30_000 };
+    const modest: HookInterchange = { event: "session_end", command: ["node", ".stamity/hooks/quick.mjs"], timeoutMs: 1200 };
+    const entries = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], [untimed, generous, modest]))))
+      .hooks.SessionEnd[0].hooks as { timeout: number }[];
+    expect(entries.map((entry) => entry.timeout)).toEqual([3, 3, 2]);
+
+    // Other events keep the absent-means-absent rule: only SessionEnd carries a
+    // default this engine has to override.
+    const startRow: HookInterchange = { event: "session_start", command: ["node", ".stamity/hooks/open.mjs"] };
+    const start = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], [startRow]))))
+      .hooks.SessionStart[0].hooks[0] as Record<string, unknown>;
+    expect(start).not.toHaveProperty("timeout");
+  });
+
+  it("resolves the hook script from the directory holding .codex/hooks.json, not the nearest one above the cwd", () => {
+    const row: HookInterchange = { event: "pre_tool_use", command: ["node", ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs"] };
+    const command = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], [row])))).hooks.PreToolUse[0].hooks[0].command as string;
+    // The trusted definition is what identifies the project; the generated
+    // directory is then read beside it rather than searched for on its own.
+    expect(command).toContain("'.codex','hooks.json'");
+    expect(command.indexOf("'.codex','hooks.json'")).toBeLessThan(
+      command.indexOf(".stamity/generated/hooks/codex/stamity-portable-hook.mjs"),
+    );
+  });
 });
 
 /** A hooks plan carrying just the rows a hook-config test needs. */
