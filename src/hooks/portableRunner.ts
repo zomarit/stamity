@@ -11,6 +11,25 @@ export function portableHookCommand(
 ): string {
   const path = `.stamity/generated/hooks/${tool}/${PORTABLE_RUNNER_FILE}`;
   const data = Buffer.from(JSON.stringify(row)).toString("base64url");
+  // A row whose script is addressed through a client's plugin root variable is
+  // a PLUGIN row: the variable names the vendor container's own `hooks/`
+  // directory, which is where the runner ships too. So the runner is the
+  // script's sibling and EVERY client launches it directly — Codex included.
+  // Its cwd-walking starter exists to find a project root the trusted
+  // `.codex/hooks.json` identifies, and a root variable the client expands has
+  // already answered that question; re-deriving it would let an unrelated
+  // nearer checkout supply the executable.
+  const script = row.command[1] ?? "";
+  const lastSlash = script.lastIndexOf("/");
+  if (script.startsWith("${") && lastSlash > 0) {
+    // Double-quoted, on every client and on Windows too: the variable expands to
+    // the plugin's ABSOLUTE install path, which can contain a space, and double
+    // quotes are the one rendering that keeps the expansion and survives one
+    // (code.claude.com/docs/en/hooks, accessed 2026-09-20; cmd and PowerShell
+    // read them the same way). The base64url row is untouched — it carries the
+    // unquoted literal the runner resolves itself.
+    return `node "${script.slice(0, lastSlash)}/${PORTABLE_RUNNER_FILE}" ${data}`;
+  }
   if (tool !== "codex") return `node ${path} ${data}`;
   // Codex records trust against the hash of `.codex/hooks.json` alone, and the
   // scripts it points at live in the agent-writable workspace:
@@ -33,12 +52,20 @@ export function portableHookCommand(
 export function buildPortableHookRunner(tool: Tool): string {
   return `#!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const TOOL = ${JSON.stringify(tool)};
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(HERE, "../../../..");
+// A script addressed through a client's plugin root variable, e.g.
+// \${CLAUDE_PLUGIN_ROOT}/hooks/stamity-session-start.mjs. The client expands
+// that variable in its config's command string ALONE — never inside the
+// base64url row below — so the literal reaches this runner and this is where
+// it is resolved.
+const PLUGIN_ROOT_REF = /^\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}\\/(.+)$/;
+const CORE_GUARD_FILE = "stamity-pre-tool-use-guard.mjs";
 // PascalCase wire names. Codex reads this set natively and Copilot accepts it
 // as its matcher aliases; Cursor's adapter renames them at its own boundary.
 // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
@@ -62,7 +89,11 @@ function main() {
   // every nonzero exit, so the same posture there is exit 0 with the warning.
   // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
   // https://docs.github.com/en/copilot/reference/hooks-reference (accessed 2026-09-17)
-  const coreGuard = row.event === "pre_tool_use" && row.command.includes(".stamity/generated/hooks/" + TOOL + "/stamity-pre-tool-use-guard.mjs");
+  // Identified by WHICH SCRIPT the row runs, not by where that script sits: the
+  // path used to be matched whole against the repository layout, so a row under
+  // a plugin root matched nothing and each client's posture above silently
+  // flipped — Codex to a blocking exit 2, Copilot to a call-rejecting exit 1.
+  const coreGuard = row.event === "pre_tool_use" && row.command.some((arg) => basename(arg) === CORE_GUARD_FILE);
   if (TOOL === "codex" && row.event === "pre_tool_use" && !coreGuard) failureExit = 2;
   if (TOOL === "copilot" && coreGuard) failureExit = 0;
   if (row.timeoutMs !== undefined && (!Number.isSafeInteger(row.timeoutMs) || row.timeoutMs <= 0)) throw safeError("Invalid hook timeout");
@@ -79,8 +110,23 @@ function main() {
   if (input.tool_name === undefined && typeof payload.toolName === "string") input.tool_name = payload.toolName;
   if (input.tool_input === undefined && payload.toolArgs !== undefined) input.tool_input = typeof payload.toolArgs === "string" ? parse(payload.toolArgs, "Invalid serialized tool input") : payload.toolArgs;
   if (object(input.tool_input) && input.tool_input.file_path === undefined && typeof input.tool_input.filePath === "string") input.tool_input = { ...input.tool_input, file_path: input.tool_input.filePath };
-  const child = spawnSync(row.command[0], row.command.slice(1), {
-    cwd: ROOT, input: JSON.stringify(input), encoding: "utf8", shell: false,
+  // Resolved here, once: the row's script, and the directory the child runs in.
+  // A plugin-rooted row's repository is the SESSION's working directory — the
+  // four-level climb below locates the repository a runner was synced into, and
+  // under a vendor container it would name the container instead. With the
+  // variable unset there is still one right answer rather than a guess: a
+  // container places every hook script in the single \`hooks/\` directory this
+  // runner ships in, so the script is its sibling.
+  const pluginRef = PLUGIN_ROOT_REF.exec(row.command[1] ?? "");
+  const command = [...row.command];
+  if (pluginRef !== null) {
+    const supplied = process.env[pluginRef[1]];
+    command[1] = typeof supplied === "string" && supplied !== ""
+      ? join(supplied, ...pluginRef[2].split("/"))
+      : join(HERE, basename(command[1]));
+  }
+  const child = spawnSync(command[0], command.slice(1), {
+    cwd: pluginRef === null ? ROOT : process.cwd(), input: JSON.stringify(input), encoding: "utf8", shell: false,
     maxBuffer: 1024 * 1024,
     ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
   });

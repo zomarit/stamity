@@ -940,6 +940,27 @@ describe("hooks", () => {
     expect(native.hooks.PreToolUse).toHaveLength(1);
   });
 
+  it("addresses the runner through the plugin root and keeps no repository path", () => {
+    const ROOT = "${PLUGIN_ROOT}/hooks";
+    const raw = buildCopilotHooksJson([
+      { event: "session_start", command: ["node", `${ROOT}/stamity-session-start.mjs`] },
+      { event: "pre_tool_use", command: ["node", `${ROOT}/stamity-pre-tool-use-guard.mjs`] },
+    ]);
+    const native = JSON.parse(raw);
+
+    const entries = (Object.values(native.hooks) as { command: string; cwd: string }[][]).flat();
+    expect(entries).toHaveLength(2);
+    for (const entry of entries) {
+      // Double-quoted: the variable expands to an absolute install path that may
+      // hold a space, and the runner is a sibling of the scripts it launches.
+      expect(entry.command.startsWith(`node "${ROOT}/stamity-portable-hook.mjs" `)).toBe(true);
+      // `cwd` stays the repository root this client resolves it against — the
+      // session's repository is what the hook reads, not the plugin container.
+      expect(entry.cwd).toBe(".");
+    }
+    expect(raw).not.toContain(".stamity/generated");
+  });
+
   it("uses documented PascalCase aliases so portable tool matchers keep their meaning", () => {
     const native = JSON.parse(buildCopilotHooksJson([
       { event: "pre_tool_use", matcher: "Bash|Edit", command: ["node", "policy.mjs"], timeoutMs: 1100 },

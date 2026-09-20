@@ -378,6 +378,33 @@ describe("hooks.json — native command strings and trust controls", () => {
     expect(description).not.toContain("\n");
   });
 
+  it("launches the runner from the plugin root, with no cwd-walking starter, on both command fields", () => {
+    const ROOT = "${PLUGIN_ROOT}/hooks";
+    const rows: HookInterchange[] = [
+      { event: "session_start", command: ["node", `${ROOT}/stamity-session-start.mjs`] },
+      { event: "pre_tool_use", command: ["node", `${ROOT}/stamity-pre-tool-use-guard.mjs`] },
+    ];
+
+    const document = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], rows))));
+
+    const entries = (Object.values(document.hooks) as { hooks: { command: string; commandWindows: string }[] }[][])
+      .flat()
+      .flatMap((group) => group.hooks);
+    expect(entries).toHaveLength(2);
+    for (const entry of entries) {
+      // The starter exists to walk up to the directory holding the trusted
+      // `.codex/hooks.json`; a root variable the client expands has already
+      // answered that, so it is not emitted — and the two command fields agree,
+      // because double quotes read the same on cmd and PowerShell.
+      expect(entry.command.startsWith(`node "${ROOT}/stamity-portable-hook.mjs" `)).toBe(true);
+      expect(entry.command).not.toContain("node -e");
+      expect(entry.command).not.toContain("process.cwd()");
+      expect(entry.commandWindows).toBe(entry.command);
+    }
+    const raw = JSON.stringify(document.hooks);
+    expect(raw).not.toContain(".stamity/generated");
+  });
+
   it("writes the SessionEnd ceiling even when the row requests no timeout", () => {
     // Left out, the key inherits this client's one-second default, which is not
     // the budget a session-end handoff write was sized against.

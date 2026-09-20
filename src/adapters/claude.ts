@@ -409,7 +409,7 @@ export const claudeResiduePlanner: ResiduePlanner = {
     }
     rows.push({
       path: CLAUDE_SETTINGS_PATH,
-      content: buildSettingsJson(core),
+      content: buildSettingsJson(core, ctx.facts.hookScriptsRoot),
       owner: owner("claude-settings", "infra"),
     });
     rows.push(buildReviewGate(ctx));
@@ -657,8 +657,18 @@ interface ClaudeHookEntry {
  * whole-file JSON is byte-stable across runs and the drift check has nothing
  * to report.
  */
-function buildSettingsJson(core: CoreEmissionPlan): string {
+function buildSettingsJson(core: CoreEmissionPlan, hookScriptsRoot?: string): string {
   const rows = core.hooks.interchangeFor(TOOL);
+  // The core's rows already carry the client's view of their own scripts
+  // (`../emit/hooksInfra.ts`). This one does not: the review gate rides two
+  // events only this client fires, so this adapter places the script AND wires
+  // it, and its command is the one place a plugin's configuration could keep a
+  // repository path. The script ROW keeps `CLAUDE_REVIEW_GATE_PATH` either way
+  // — that is where this repository writes the bytes.
+  const reviewGate =
+    hookScriptsRoot === undefined
+      ? CLAUDE_REVIEW_GATE_PATH
+      : `${hookScriptsRoot}/${REVIEW_GATE_FILE}`;
 
   const hooks: Record<string, ClaudeHookEntry[]> = {};
   for (const event of CANONICAL_HOOK_EVENTS) {
@@ -679,7 +689,7 @@ function buildSettingsJson(core: CoreEmissionPlan): string {
   // on each of the two events, and the ONE script decides per event what to do
   // with the payload it was handed.
   for (const event of REVIEW_GATE_EVENTS) {
-    hooks[event] = [{ hooks: [commandHook(["node", CLAUDE_REVIEW_GATE_PATH])] }];
+    hooks[event] = [{ hooks: [commandHook(["node", reviewGate])] }];
   }
 
   return `${JSON.stringify({ permissions: { allow: CLAUDE_PERMISSION_ROWS }, hooks }, null, 2)}\n`;
@@ -708,6 +718,36 @@ function commandHook(argv: readonly string[], timeoutMs?: number): ClaudeHookCom
 
 /** Shell-safe tokens: anything outside this set forces quoting. */
 const SHELL_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
+
+/**
+ * The ONE `$`-carrying shape that keeps its expansion: a vendor plugin root
+ * variable followed by a path.
+ *
+ * A plugin's hook commands are addressed through the client's own root variable
+ * (`${CLAUDE_PLUGIN_ROOT}/hooks/…`), which the client expands in the command
+ * string. Single-quoting that token would hand the client the literal variable
+ * name where a path belongs and disarm every hook in the install — so the shape
+ * is admitted, and admitted as narrowly as it can be stated: the WHOLE token is
+ * `${NAME}` with `NAME` in the vendor's upper-case convention, followed by one
+ * or more `/segment` whose characters come from {@link SHELL_SAFE} minus the
+ * separator, so the token itself carries no whitespace, no quote and no shell
+ * metacharacter.
+ *
+ * It is rendered DOUBLE-quoted, never bare. The variable expands to the
+ * plugin's ABSOLUTE install path, which can contain a space, and the vendor
+ * asks for the placeholder in double quotes in shell-form commands
+ * (code.claude.com/docs/en/hooks, accessed 2026-09-20). Double quotes are the
+ * one rendering that keeps the expansion AND survives a space in the expanded
+ * value; bare would word-split on it and single quotes would kill the
+ * expansion.
+ *
+ * Everything else that carries `$` — a bare `$VAR`, a lower-case name, a brace
+ * with nothing after it, a command substitution wearing the prefix — stays
+ * single-quoted, which is what `test/adapters/claude.test.ts` pins on both
+ * sides. The twin in `./cursor.ts` (`shellCommand`) carries the same predicate;
+ * the deferral note on {@link shellWord} is why there are two.
+ */
+const ROOT_VARIABLE_PATH = /^\$\{[A-Z_][A-Z0-9_]*\}(?:\/[A-Za-z0-9_@%+=:,.-]+)+$/;
 
 /**
  * One argv element into the joined command string.
@@ -765,7 +805,9 @@ const SHELL_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
  *              emission goldens, so it lands as its own unit, not as a rider.
  */
 function shellWord(word: string): string {
-  return SHELL_SAFE.test(word) ? word : `'${word.replaceAll("'", `'\\''`)}'`;
+  if (SHELL_SAFE.test(word)) return word;
+  if (ROOT_VARIABLE_PATH.test(word)) return `"${word}"`;
+  return `'${word.replaceAll("'", `'\\''`)}'`;
 }
 
 /** Final path segment of a row's script argument, or empty when there is none. */

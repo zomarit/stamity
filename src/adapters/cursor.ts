@@ -215,18 +215,37 @@ const CORE_SCRIPT_PREFIX = `${HOOKS_GENERATED_DIR}/cursor/`;
  */
 const CORE_GUARD_REACHES_VERDICT = !IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS.has("cursor");
 
-/** True for an interchange row running a script the core generated for this client. */
-function isCoreScriptRow(row: HookInterchange): boolean {
-  return row.command.some((token) => token.startsWith(CORE_SCRIPT_PREFIX));
+/**
+ * True for an interchange row running a script the core generated for this
+ * client — under either root the row can be addressed through.
+ *
+ * `hookScriptsRoot` is the client's own view of that directory when something
+ * relocated the scripts after the plan (`../emit/planner.ts`,
+ * `EmissionContext.facts`): a plugin container addresses them through its root
+ * variable, and testing the repository prefix ALONE made every core row read as
+ * AUTHORED there. That is not a cosmetic miss — {@link rowOptsIntoBlocking}
+ * reads this answer, so the core pre-tool-use guard would have silently opted
+ * back into `failClosed` on the one client whose body cannot reach a verdict.
+ */
+function isCoreScriptRow(row: HookInterchange, hookScriptsRoot?: string): boolean {
+  const prefixes =
+    hookScriptsRoot === undefined
+      ? [CORE_SCRIPT_PREFIX]
+      : [CORE_SCRIPT_PREFIX, `${hookScriptsRoot}/`];
+  return row.command.some((token) => prefixes.some((prefix) => token.startsWith(prefix)));
 }
 
 /**
  * Whether this row's exit status is authoritative enough to opt into blocking:
  * a gate event, and a body that can reach a refusal on this client.
  */
-function rowOptsIntoBlocking(event: CanonicalHookEvent, row: HookInterchange): boolean {
+function rowOptsIntoBlocking(
+  event: CanonicalHookEvent,
+  row: HookInterchange,
+  hookScriptsRoot?: string,
+): boolean {
   if (!BLOCKING_EVENTS.has(event)) return false;
-  return CORE_GUARD_REACHES_VERDICT || !isCoreScriptRow(row);
+  return CORE_GUARD_REACHES_VERDICT || !isCoreScriptRow(row, hookScriptsRoot);
 }
 
 // ── Declared dialect facts ───────────────────────────────────────
@@ -431,7 +450,7 @@ export const cursorResiduePlanner: ResiduePlanner = {
       },
       {
         path: CURSOR_HOOKS_CONFIG_PATH,
-        content: buildHooksJson(core.hooks.interchangeFor("cursor")),
+        content: buildHooksJson(core.hooks.interchangeFor("cursor"), ctx.facts.hookScriptsRoot),
         owner: { adapter: "cursor", artifactId: ARTIFACT_IDS.hooksConfig, artifactType: "infra" },
       },
     );
@@ -754,8 +773,18 @@ interface CursorHookEntry {
  * row that cannot on this client is the core pre-tool-use guard — see
  * {@link CORE_GUARD_REACHES_VERDICT}.
  */
-export function buildHooksJson(rows: readonly HookInterchange[]): string {
+export function buildHooksJson(
+  rows: readonly HookInterchange[],
+  hookScriptsRoot?: string,
+): string {
   const events: Record<string, CursorHookEntry[]> = {};
+  // The core's rows already carry the client's view of their own scripts. These
+  // two do not: they are placed AND wired by this adapter, so their commands are
+  // where a plugin's configuration could keep a repository path. Their script
+  // rows keep `.cursor/hooks/<file>` either way — that is where this repository
+  // writes the bytes, and the plugin emitter relocates them from there.
+  const guard = (file: string): string =>
+    hookScriptsRoot === undefined ? file : `${hookScriptsRoot}/${file.slice(file.lastIndexOf("/") + 1)}`;
 
   for (const event of CANONICAL_HOOK_EVENTS) {
     const matching = rows.filter((row) => row.event === event);
@@ -768,7 +797,7 @@ export function buildHooksJson(rows: readonly HookInterchange[]): string {
       const entry: CursorHookEntry = { command: portableHookCommand("cursor", row) };
       if (row.timeoutMs !== undefined) entry.timeout = Math.ceil(row.timeoutMs / 1000);
       if (row.matcher !== undefined) entry.matcher = row.matcher;
-      if (rowOptsIntoBlocking(event, row)) entry.failClosed = true;
+      if (rowOptsIntoBlocking(event, row, hookScriptsRoot)) entry.failClosed = true;
       return entry;
     });
   }
@@ -778,10 +807,10 @@ export function buildHooksJson(rows: readonly HookInterchange[]): string {
   // announced on stderr, never silently — so the residual fail-closed surface is
   // a crashed or timed-out script, not a guess.
   events[CURSOR_GUARD_EVENTS.subagentSpawn] = [
-    { command: shellCommand(["node", SUBAGENT_GUARD_PATH]), failClosed: true },
+    { command: shellCommand(["node", guard(SUBAGENT_GUARD_PATH)]), failClosed: true },
   ];
   events[CURSOR_GUARD_EVENTS.mcpExecution] = [
-    { command: shellCommand(["node", MCP_GUARD_PATH]), failClosed: true },
+    { command: shellCommand(["node", guard(MCP_GUARD_PATH)]), failClosed: true },
   ];
 
   return `${JSON.stringify({ version: 1, hooks: events }, null, 2)}\n`;
@@ -790,12 +819,34 @@ export function buildHooksJson(rows: readonly HookInterchange[]): string {
 /** Shell-safe tokens: anything outside this set forces quoting. */
 const SHELL_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
 
+/**
+ * The ONE `$`-carrying shape that keeps its expansion: a vendor plugin root
+ * variable followed by a path — `${CURSOR_PLUGIN_ROOT}/hooks/…`, which the
+ * client expands in the command string. Single-quoting it would hand the client
+ * the literal variable name where a path belongs and disarm every hook in a
+ * plugin install. Admitted as narrowly as it can be stated: the WHOLE token is
+ * `${NAME}` in the vendor's upper-case convention followed by one or more
+ * `/segment` drawn from {@link SHELL_SAFE} minus the separator, so the token can
+ * carry no whitespace, no quote and no metacharacter.
+ *
+ * Rendered DOUBLE-quoted rather than bare: the variable expands to the plugin's
+ * ABSOLUTE install path, which can hold a space, and double quotes are the one
+ * rendering that keeps the expansion and survives one.
+ *
+ * Byte-twin of `./claude.ts`'s `ROOT_VARIABLE_PATH`, for the reason its
+ * `shellWord` deferral note gives: these two renderers are copies, and change
+ * one without the other and the other is wrong.
+ */
+const ROOT_VARIABLE_PATH = /^\$\{[A-Z_][A-Z0-9_]*\}(?:\/[A-Za-z0-9_@%+=:,.-]+)+$/;
+
 /** argv rendered as one POSIX command line, each token quoted only if it needs it. */
 function shellCommand(argv: readonly string[]): string {
   return argv
-    .map((token) =>
-      SHELL_SAFE.test(token) ? token : `'${token.replaceAll("'", `'\\''`)}'`,
-    )
+    .map((token) => {
+      if (SHELL_SAFE.test(token)) return token;
+      if (ROOT_VARIABLE_PATH.test(token)) return `"${token}"`;
+      return `'${token.replaceAll("'", `'\\''`)}'`;
+    })
     .join(" ");
 }
 
