@@ -128,12 +128,23 @@ const RUNTIME = stubRuntime();
 const agentDocument = (id: string): string =>
   `---\nid: ${id}\ntype: agent\ndescription: Fixture agent\ntags: [fixture]\nload: on-demand\n---\n\nBody of ${id}.\n`;
 
-function generate(args: string[], cwd = REPO_ROOT): SpawnSyncReturns<string> {
+function generate(args: string[], cwd = REPO_ROOT, env?: NodeJS.ProcessEnv): SpawnSyncReturns<string> {
   return spawnSync(process.execPath, [join(cwd, "scripts", "generate-plugin-packages.mjs"), ...args], {
     cwd,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
+    ...(env === undefined ? {} : { env: { ...process.env, ...env } }),
   });
+}
+
+/**
+ * A temp directory the spawned generator is the only writer of, so "what did this run leave
+ * behind" is answerable without racing the other suites that stage a corpus under the shared
+ * system temp directory. The three names are what `os.tmpdir()` reads on POSIX and on Windows.
+ */
+function isolatedTemp(prefix: string): { dir: string; env: NodeJS.ProcessEnv } {
+  const dir = tempDir(prefix);
+  return { dir, env: { TMPDIR: dir, TEMP: dir, TMP: dir } };
 }
 
 /** Every regular file under `dir`, as POSIX-relative paths, sorted. */
@@ -496,13 +507,22 @@ describe("corpus refusals", () => {
       write(join(root, "content/agents/stamity-dup-one.md"), agentDocument("dup-agent"));
       write(join(root, "content/agents/stamity-dup-two.md"), agentDocument("dup-agent"));
       const out = tempDir("collision-out");
+      const temps = isolatedTemp("collision-temps");
       const result = generate(
         ["--out-dir", out, "--runtime", RUNTIME, "--source-commit", FIXED_COMMIT, "--source-commit-date", FIXED_COMMIT_DATE],
         root,
+        temps.env,
       );
       expect(result.status).toBe(1);
       expect(result.stderr.toLowerCase()).toContain("collision");
       expect(treeFiles(out)).toEqual([]);
+
+      // The refusal fires INSIDE `renderRoots`, where the staged corpus and the per-client plan
+      // root are both live and owned by the `finally` that disposes them. A `process.exit(1)`
+      // raised there never reaches that `finally`, so every refused build left two temp trees
+      // behind with nothing able to remove them. "Leaves the output directory as it was" has to
+      // include the directories the render itself opened.
+      expect(readdirSync(temps.dir)).toEqual([]);
     },
     ONE_ROOT_MS,
   );
