@@ -2342,3 +2342,104 @@ first push and flipped to ready at this close; no board source is linked (no pro
   session-2 block; file 3 (V1–V7) and the 1.9.0 release for session 3. No `plugin-dist` branch and no
   `plugins/*` tag exist yet. The 27 lane worktrees under the farm (`p15s2-*`) are integrated and can be
   pruned.
+
+# Session 3 — the hook-path bug unit, then file 3 (the route proofs, the fixtures, the private chain, the eval, the QA form, the release close) toward 1.9.0
+
+Session status: opened 2026-09-20T20:20Z as an unattended overnight run under the maintainer's overnight
+contract of 2026-09-20 (no question blocks before the QA checkpoint; where a decision is needed the
+recommended option executes as the declared default and is recorded here as "default executed under the
+overnight contract of 2026-09-20"; three holds — V4, the V6 sign-off, the 1.9.0 publish approval — each
+with a handoff). Branch `package-15-plugin-lifecycle-3` cut from `main` `67f404b`. One pull request for
+the session, opened early as a draft, merged by rebase only after the maintainer reads the morning summary.
+The same rules as sessions 1 and 2: the eleven standing decisions of 2026-09-17, the six of session 1, the
+one of session 2 and the readings of record applied as written; writers, implementers, fixers and runners
+at `claude-opus-5`; reviewers and lenses at `claude-fable-5-1`; a fixer past the loop's cap or for a
+whole-branch review's findings at `claude-fable-5-1`.
+
+## Baseline, re-verified at intake (2026-09-20T20:10Z)
+
+- Public `main` = `origin/main` = `67f404b`; pull request #46 `MERGED` by rebase at `3d23f75`
+  (2026-09-20T18:54:57Z); the four close commits `db160c2`, `dd91178`, `7436c9c`, `67f404b`; working tree
+  clean ✓
+- CI on `main`: `7436c9c` run 35532287662 success (every leg); `67f404b` run 35533988057 success
+  (docs-only); `db160c2` the recorded leak-gate red, `dd91178` run 35531546115 green ✓
+- Released 1.8.0: `v1.8.0` → `e79dcf0`; the GitHub release list shows v1.8.0 latest (2026-09-16) ✓
+- Eval run of record: run 30 (the newest directory under `evals/runs/`) ✓
+- No `plugin-dist` branch and no `plugins/*` tag on `origin` (`git ls-remote`) ✓
+- The plan-008 ledger: 173 rows — 113 `fixed`, 54 `deferred`, 6 `rejected`, 0 `open` ✓
+- Node 22.22.3 on the machine; engine floor `>=22.22.2` ✓
+- The four client binaries resolve from `PATH` (`claude` 2.1.278, `codex-cli` 0.154.0, GitHub Copilot CLI
+  1.0.85, the Cursor agent CLI 2026.09.15); the profile exports `STAMITY_<CLIENT>_BIN` from `command -v`,
+  and a non-interactive shell re-exports them before any harness or proof run ✓
+- Learnings read: all nine under `.stamity/learnings/` ✓
+- The private layer read: the kickoff of record, the two decision rows and the two directives of
+  2026-09-20, the orchestrator-context brief and the session-2 measurement, the dashboard banner ✓
+- Deferral inbox: the five rows of 2026-09-17, the session-1 rows less the four retired, the 29 rows of
+  session 2, and the maintainer's hook-path row of 2026-09-20. The kickoff assigns every overlapping row to
+  a unit (the hook-path row → U1; the Codex `commandWindows` line, the `plugin status` refinements and the
+  distribution README's Codex `--ref` line → V1; the trust pages' re-attestation header, the contracts
+  page's currency constant and REQ-PROVE-018's citations → V7; the `docs/plugins.md` Renovate example → V4);
+  no fold-in question is asked under the overnight contract ✓
+- The 27 lane worktrees of session 2 (`p15s2-*`) pruned at intake with their branches — every one was
+  integrated; the farm holds the main checkout alone; 20 GiB free on the volume ✓
+
+## Frame (2026-09-20T20:20Z)
+
+- Outcome: U1 (the hook-path bug unit) lands first; then batch B1 of file 3 — V1, V2 part 1 (the fixture
+  builder and its test), V3 and V5's three cases in parallel, V2 part 2 (the `H5` row and the walk in the
+  harness lane V1 creates) after V1 lands; then V5's eval run under the incremental rule once V1–V3 are
+  green; then V6's walk-through with the sign-off question asked and left open; then V7's candidate
+  preparation (the CHANGELOG section, the checklist's per-release lines, the spec status flips, the
+  measurements). V4 waits for the maintainer's go; the 1.9.0 release run waits for the maintainer's
+  publish approval. Nothing is merged, tagged or published tonight.
+- Intensity: **deep** — a security guard's fail mode (U1), emitted hook bytes, four vendor CLIs driven
+  headlessly, the release candidate, a wide diff.
+- Freshness guard on the plan artifact (`stamp: ec6668d 2026-09-17`): 16 of file 3's 32 `reads:` entries
+  moved between the stamp and `67f404b` (three learnings, two eval tests, two CI tests, two eval files, the
+  two workflow files, one CLI test, one spec, one guide, the changelog, the inbox) — every one moved by
+  session 1's or session 2's own units, by the plan run's outputs, or by the maintainer's inbox row of
+  2026-09-20, and file 3 was written to run after files 1 and 2 (`depends_on`). Verdict: fresh by the
+  plan's own sequencing. Two cells are read against the as-built tree rather than as written: V5's
+  adversarial case names a `plugin migrate` preview the maintainer cut on 2026-09-17 (the as-built refusal
+  names `stamity clean -y` then `plugin setup`), and V1's Codex `commandWindows` decision has no Windows
+  host to measure on — each is stated in the unit's brief.
+- Isolation primitive, declared before the first dispatch: git worktrees under the worktree lane's farm
+  (`../.stamity-worktrees/stamity/p15s3-<unit>`), one branch `p15s3/<unit>` per lane off the package
+  branch, a `node_modules` symlink to the main checkout, every agent starting with `git reset --hard` to
+  the package branch, staging by explicit path, never `git stash` (a patch file plus `git restore` is the
+  baseline), a private scratch subdirectory per lane; the orchestrator integrates each unit's commits onto
+  the package branch by cherry-pick (single writer per artifact — this record, the ledger, the inbox, the
+  QA walk-through and the handoffs are the orchestrator's alone).
+- Model plan and spawn plan: U1 — one researcher (opus, web), one implementer (opus), one reviewer and the
+  security lens (fable), fixer rounds as the loop needs (opus; a fresh fixer at fable past the cap), one
+  runner (opus). B1 — four implementers (opus) in four lanes, one reviewer per unit plus the security lens
+  where a trigger path matches (fable), fixers (opus), one runner per prove pass (opus). V5's run — the
+  private driver of record, no sub-agent model call. V6 — the harness and the QA skill inline. V7 — one
+  implementer (opus) for the candidate's mechanical lines, a spec-author (opus) for the status flips. Cost
+  order: two to three million sub-agent tokens plus the eval run's usage window.
+- Waves: 0 = U1; 1 = V1, V2a, V3, V5a (cut from the branch head; U1 integrates first and each lane's
+  cherry-pick lands on top of it); 2 = V2b; 3 = V5's eval run; 4 = V6; 5 = V7.
+
+## Contract census — before the B1 fan-out (2026-09-20)
+
+| Contract | Class | Producer | Consumers found | Owner | Change kind |
+|---|---|---|---|---|---|
+| `QA_ROWS` (`scripts/qa/form.mjs:30`) | shared constant | `form.mjs` | `run.mjs` (the lane dispatch), `test/qa/form.test.ts:113-117` (the nine ids), `test/qa/run.test.ts`, `bind.mjs` through the row ids | V1 adds `H4a`–`H4d` (lane `plugins`); V2 appends `H5` AFTER V1 lands (V2 part 2) | facade-hold: V1 owns the shape, V2 appends |
+| `CLIENT_RUNNERS` (`scripts/qa/hook-runs.mjs:71-92`) | shared constant | `hook-runs.mjs` | `runClient`, `test/qa/hookRuns.test.ts:77-85,153-167` | V1 only (cursor gains `binary: "agent"` and `args`; copilot gains `args`; the pins move with it) | reconciled(2) |
+| the evidence row shape (`run.mjs` `buildRow`, `bind.mjs` `carryForward`) | persisted schema | `run.mjs` | `form.mjs`, `test/qa/*`, `.stamity/evidence/qa-*.json` | V1 adds rows in the same shape; nobody moves the shape | clean |
+| `ci.yml` job map and `all-ci-checks.needs` | config | `.github/workflows/ci.yml` | `test/ci/workflow.test.ts:230-236,428,467-475,648` | V1 only (job `plugin-route`, the aggregator, the lane map) | reconciled(1) |
+| `nightly.yml` headless lane steps | config | `.github/workflows/nightly.yml` | `test/ci/workflow.test.ts` (the nightly pins) | V1 only | reconciled(1) |
+| `evals/SET-v7.md` roster counts and case index | derived counts | the case files | `test/evals/roster.test.ts`, `evals/README.md:526`, `test/evals/readmeCurrency.test.ts` | V5 only | reconciled |
+| `parseSource` (`test/evals/support.ts:121`) | api_signature | `support.ts` | `coverage.test.ts`, `locators.test.ts`, `roster.test.ts` | V5 only, and only if the `.md`-only locator must admit `scripts/plugins/setupCommand.mjs` | reconciled or clean (decided by running) |
+| `EXPECTED_PRIMITIVES` / `downstreamCheckout` (`test/ci/downstreamFixture.ts`) | shared fixture | `downstreamFixture.ts` | `test/ci/apmDownstream.test.ts`, `test/ci/pluginPackages.test.ts` | V3 only (additive: `EXPECTED_PLUGIN_FILES`, the identity block, a `git init`) | reconciled(2) — both consumers re-run by V3 |
+| `scripts/build-plugin-distribution.mjs` flags (`--version`, `--client`, `--source-commit*`) | api_signature | P8 | V2 (spawns it twice), V3 (spawns it from a fixture checkout), the release workflow | nobody in B1 moves it | clean |
+| `validateCapabilityFile` / `PLUGIN_CLASSES` (`scripts/plugins/capability.mjs`) | api_signature | P2a | V1's structure leg, the four package tests | nobody moves it | clean |
+| `.github/client-contracts.md` | hand page | U1 (the Claude hook working-directory sentence), V3 (one downstream sentence) | `test/docsPages.test.ts` (the evidence-page contract, `EVIDENCE_REATTESTATION_DATE`) | sequential: U1 lands first, V3's sentence sits in a different bullet | reconciled(1) |
+| `test/emit/__snapshots__/crossClientGoldens.test.ts.snap` | emitted bytes | the adapters | the goldens test, the dogfood tree | U1 (the claude sections); V1 only if the Codex `commandWindows` line moves (the codex sections) | reconciled — regenerated per lane, disjoint hunks |
+| `docs/plugins.md` | hand page | C7 | `test/docsPages.test.ts` | V1 (the executed command blocks) in B1; V4 and V7 later | clean in B1 |
+| `CHANGELOG.md` | hand page | — | `test/ci/changelogLinks.test.ts`, the release workflow's extractor | V7 only | clean |
+| this record, the ledger, the inbox | state files | the orchestrator | `test/records`, `test/qa` | the orchestrator alone | clean |
+
+Skip note: V2 part 1 (`scripts/plugin-lifecycle-fixture.mjs`, `test/ci/pluginLifecycle.test.ts`) and V5's
+cases share no contract with V1 or V3 beyond the rows above; every row closes as `clean`, `reconciled(N)`
+or a facade-hold with its owner named, so the batch dispatches in parallel.
