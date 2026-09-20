@@ -203,7 +203,7 @@ Claude profile remains the default. The artifact records the selected pair, rubr
 reasoning/decoding and harness controls, with calibration for that configuration. A Codex
 profile's result starts a separate baseline and cannot be presented as the Claude run.
 
-The current full release run covers all 99 v6 cases, three admitted samples each.
+The current full release run covers all 102 v6 cases, three admitted samples each.
 For a selected Codex profile, the manual stateless transport is documented in
 `evals/README.md`; fresh provider isolation/model/effort evidence and every retained
 calibration fixture must pass before scores are admitted. A blocked preflight, missing
