@@ -360,6 +360,10 @@ at all, whatever its client settings say.
   (`ledger`, `apm` or `unmanaged`) and the remedy for that source. It is a warning while the
   manifest still says `mode: "generated"` — coexistence is the expected state before you clean —
   and a failure once the manifest records `mode: "plugin-backed"`. The mode is one decision for
-  the repository, and the client the entry names is where the duplicate was found.
+  the repository, and the client the entry names is where the duplicate was found. The `apm`
+  source reads `apm.yml` in both shapes an APM manifest takes — a flat `dependencies:` list and
+  the `dependencies:` → `apm:` section the [enterprise guide](enterprise-forks.md) shows — and
+  matches a dependency that names this repository's slug or package name as a whole token,
+  case-insensitively, in its bare, GitHub-URL and subpath spellings alike.
 
 Neither row removes anything. Every remedy is a step you run.

@@ -1928,6 +1928,68 @@ describe("check — plugin-duplicates", () => {
     expect(duplicates.detail).toBe("no duplicated classes");
   });
 
+  it("names the dependency under the nested `dependencies: apm:` section the consumer manifest documents", async () => {
+    // W-D1: `docs/enterprise-forks.md` documents the consumer's `apm.yml` with
+    // its dependencies NESTED under an `apm:` section, and
+    // `scripts/apm-install-smoke.mjs` writes exactly that shape — while this
+    // row read `dependencies` as a flat list only, so the documented shape
+    // reported nothing. The block below is the page's own, with its example
+    // dependency replaced by the spec this release publishes.
+    const root = await seedRepo(getRepo(), {
+      plugin: pluginOf("generated"),
+      files: {
+        "apm.yml": `targets: [claude]\ndependencies:\n  apm:\n    - ${apmInstallSpec()}\n`,
+      },
+    });
+
+    const duplicates = await duplicatesRow(root);
+
+    expect(duplicates.status).toBe("warn");
+    expect(duplicates.detail).toContain("claude: agent (1 file(s), apm)");
+  });
+
+  it("names a dependency spelled as the repository's https URL", async () => {
+    // M-1: the bound (the case below) excluded `/` on both sides, so the URL
+    // spelling of the SAME repository — `https://github.com/<slug>#ref` — no
+    // longer matched. A `/` before the slug is a URL's path separator, not a
+    // longer name.
+    const root = await seedRepo(getRepo(), {
+      plugin: pluginOf("generated"),
+      files: {
+        "apm.yml": `name: consumer\ndependencies:\n  - https://github.com/${ownRepositorySlug()}#plugins/v1.9.0\n`,
+      },
+    });
+
+    expect((await duplicatesRow(root)).detail).toContain("claude: agent (1 file(s), apm)");
+  });
+
+  it("names a dependency that points at a subpath of the repository", async () => {
+    // M-1: `<slug>/<dir>#ref` is the same repository, one directory in, and a
+    // `/` after the slug ends the name as surely as the `#` does.
+    const root = await seedRepo(getRepo(), {
+      plugin: pluginOf("generated"),
+      files: {
+        "apm.yml": `name: consumer\ndependencies:\n  - ${ownRepositorySlug()}/plugins/claude#plugins/v1.9.0\n`,
+      },
+    });
+
+    expect((await duplicatesRow(root)).detail).toContain("claude: agent (1 file(s), apm)");
+  });
+
+  it("names a dependency whose slug differs from the repository's only in case", async () => {
+    // M-1: GitHub owner and repository names are case-insensitive, so an
+    // upper-cased spelling resolves to the same repository and deploys the
+    // same content.
+    const root = await seedRepo(getRepo(), {
+      plugin: pluginOf("generated"),
+      files: {
+        "apm.yml": `name: consumer\ndependencies:\n  - ${ownRepositorySlug().toUpperCase()}#plugins/v1.9.0\n`,
+      },
+    });
+
+    expect((await duplicatesRow(root)).detail).toContain("claude: agent (1 file(s), apm)");
+  });
+
   it("reports nothing for a same-owner sibling whose name merely starts with the slug", async () => {
     // W4-1: the match was an unbounded substring, so `<owner>/<repo>` was found
     // inside `<owner>/<repo>-suffix#plugins/v1.9.0` and a repository depending
