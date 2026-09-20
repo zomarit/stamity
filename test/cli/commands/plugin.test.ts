@@ -19,9 +19,9 @@ import {
 } from "../../../src/content/contentRoot.ts";
 import { createApp } from "../../../src/index.ts";
 import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
-import { CAPABILITY_FILE } from "../../../src/plugins/capabilityFile.ts";
+import { CAPABILITY_FILE, CARRIABLE_CLASSES } from "../../../src/plugins/capabilityFile.ts";
 import type { Tool } from "../../../src/types/core.ts";
-import type { SetupManifest } from "../../../src/types/manifest.ts";
+import { PLUGIN_OWNED_CLASSES, type SetupManifest } from "../../../src/types/manifest.ts";
 import { npxCommand } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -168,11 +168,26 @@ async function pluginRoot(
     },
     prerequisites: { node: ">=22.22.2", git: "optional" },
     classes: {
-      agent: { status: "carried", count: 10 },
-      skill: { status: "carried", count: 14 },
-      command: { status: "carried", count: 10 },
-      rule: { status: "repository-owned", reason: "the plugin manifest has no rules field" },
-      hooks: { status: "carried", count: 4 },
+      // FIXTURE CHANGE (2026-09-20): a carried entry is declared only where the
+      // CLIENT's own container has that surface. A codex root declaring
+      // `agent: carried` is a document no generator can emit — that container
+      // declares agents and commands repository-owned — and `planPluginSetup`
+      // refuses such a root by name. Only the codex fixture moves; the claude
+      // and cursor roots build byte-identically to before.
+      ...(Object.fromEntries(
+        PLUGIN_OWNED_CLASSES.map((name) => [
+          name,
+          name !== "rule" && CARRIABLE_CLASSES[client].includes(name)
+            ? { status: "carried", count: name === "hooks" ? 4 : 10 }
+            : {
+                status: "repository-owned",
+                reason:
+                  name === "rule"
+                    ? "the plugin manifest has no rules field"
+                    : `this container has no ${name} surface`,
+              },
+        ]),
+      ) as Record<string, unknown>),
       mcp: {
         status: "repository-owned",
         reason: "server selection and credential references are the repository's",
@@ -557,11 +572,15 @@ describe("plugin setup — what it writes (REQ-PLUGIN-015)", () => {
     // that stopped at the first workspace entry.
     expect(onDisk).toContain("packages/a/AGENTS.md");
     expect(onDisk).toContain("packages/b/AGENTS.md");
-    // The boundary still holds on the nested path: the plugin carries codex's
-    // agents, so none is written here.
-    expect(onDisk.filter((path) => path.startsWith(".codex/agents"))).toEqual([]);
+    // The boundary still holds on the nested path. The class moved with the
+    // fixture on 2026-09-20: the codex container carries SKILLS, not agents, so
+    // the shared `.agents/skills/` tree is what this root owns and no copy of
+    // it is written here — while `.codex/agents/` stays the repository's, which
+    // is what that container declaring `agent: repository-owned` means.
+    expect(onDisk.filter((path) => path.startsWith(".agents/skills"))).toEqual([]);
+    expect(onDisk.some((path) => path.startsWith(".codex/agents"))).toBe(true);
     const manifest = (await readManifest(root)) as SetupManifest;
-    expect(manifest.plugin?.clients?.codex?.classes).toEqual(["agent", "skill", "command"]);
+    expect(manifest.plugin?.clients?.codex?.classes).toEqual(["skill"]);
   });
 
   it("previews under --dry-run without writing a byte", async () => {

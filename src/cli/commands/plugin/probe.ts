@@ -46,10 +46,12 @@ import { packageCommand, packageName, repositorySlug } from "../../kit/packageNa
 // ── The runtime a plugin root resolves ─────────────────────────────────────
 
 /**
- * Wall-time ceiling on the locator spawn. A doctor row that can hang is a
+ * Wall-time ceiling on the locator spawn, and the DEFAULT for
+ * {@link probePluginRuntime}'s `timeoutMs`. A doctor row that can hang is a
  * `check` that can hang, and `check` is the CI gate — so the probe gives up and
  * reports the timeout rather than holding a pipeline open on a runtime
- * resolution.
+ * resolution. The override exists so a case can prove the ceiling holds without
+ * spending it; no production caller passes one.
  */
 const PLUGIN_LOCATOR_TIMEOUT_MS = 5_000;
 
@@ -121,19 +123,35 @@ export interface PluginRuntimeProbe {
  * one, and a shell would give the root path's own characters a meaning on
  * Windows that they do not have here.
  */
-function runPluginLocator(locator: string): Promise<LocatorRun> {
+function runPluginLocator(locator: string, timeoutMs: number): Promise<LocatorRun> {
   return new Promise((settle) => {
-    execFile(
+    let done = false;
+    /** First answer wins: the spawn's own callback, or the ceiling below it. */
+    const finish = (run: LocatorRun): void => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      settle(run);
+    };
+
+    const child = execFile(
       process.execPath,
       [locator, "--print"],
-      { timeout: PLUGIN_LOCATOR_TIMEOUT_MS, windowsHide: true, encoding: "utf8" },
+      {
+        timeout: timeoutMs,
+        // SIGKILL, not the default SIGTERM: a locator that installs a SIGTERM
+        // handler would otherwise decide for itself whether the ceiling applies.
+        killSignal: "SIGKILL",
+        windowsHide: true,
+        encoding: "utf8",
+      },
       (error, stdout) => {
         if (error === null) {
-          settle({ status: 0, stdout, timedOut: false, failure: null });
+          finish({ status: 0, stdout, timedOut: false, failure: null });
           return;
         }
         const failed = error as NodeJS.ErrnoException & { killed?: boolean };
-        settle({
+        finish({
           // `code` is the exit status on a non-zero exit and an errno string
           // (`ENOENT`) when the spawn itself failed; only the first is a status.
           status: typeof failed.code === "number" ? failed.code : null,
@@ -145,6 +163,27 @@ function runPluginLocator(locator: string): Promise<LocatorRun> {
         });
       },
     );
+
+    // The ceiling this promise actually keeps. `execFile`'s own `timeout`
+    // signals the child and then waits for `close`, and `close` waits for every
+    // writer on the child's stdout — including a DETACHED grandchild that
+    // inherited it. A locator leaving one behind held this promise open with no
+    // bound at all, which is a `check` that hangs and therefore a CI job that
+    // hangs. This timer settles the probe independently of the pipe; the kill
+    // beside it is best-effort cleanup, not what makes the ceiling hold.
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      finish({
+        status: null,
+        stdout: "",
+        timedOut: true,
+        failure: "the locator was still running at the ceiling and was killed",
+      });
+    }, timeoutMs);
+    // The timer must never be the reason a process stays alive: a settled probe
+    // has already cleared it, and an unsettled one is not worth holding an
+    // event loop open for.
+    timer.unref();
   });
 }
 
@@ -206,9 +245,13 @@ export function majorOf(version: string | null | undefined): number | null {
  * broken plugin install is a fact about the operator's environment, and a probe
  * that threw on it would take its caller down with it.
  */
-export async function probePluginRuntime(root: string): Promise<PluginRuntimeProbe> {
+export async function probePluginRuntime(
+  root: string,
+  options: { timeoutMs?: number } = {},
+): Promise<PluginRuntimeProbe> {
   const locator = pluginLocatorPath(root);
-  const run = await runPluginLocator(locator);
+  const timeoutMs = options.timeoutMs ?? PLUGIN_LOCATOR_TIMEOUT_MS;
+  const run = await runPluginLocator(locator, timeoutMs);
   const base = { locator, kind: "none", path: null, version: null, node: null } as const;
 
   if (run.timedOut) {
@@ -216,7 +259,7 @@ export async function probePluginRuntime(root: string): Promise<PluginRuntimePro
       ...base,
       outcome: "timeout",
       message:
-        `${locator} did not answer within ${PLUGIN_LOCATOR_TIMEOUT_MS / 1000}s and was stopped, ` +
+        `${locator} did not answer within ${timeoutMs / 1000}s and was stopped, ` +
         `so no runtime was resolved: ${run.failure ?? "no message"}`,
     };
   }
