@@ -433,7 +433,7 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
         if (container.SETUP_COMMAND_PATH !== null) {
           const setupPath = container.SETUP_COMMAND_PATH
           placements.push({ path: setupPath, class: 'command' })
-          add(setupPath, renderSetupCommand(client, rootVar))
+          add(setupPath, renderSetupCommand(client, rootVar, container.SETUP_COMMAND_FRONTMATTER ?? {}))
         }
 
         for (const asset of container.ASSETS) {

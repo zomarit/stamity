@@ -117,6 +117,21 @@ export const PREREQUISITES = {}
 
 export const SETUP_COMMAND_PATH = 'skills/st-setup/SKILL.md'
 
+/**
+ * What the generated `st-setup` declares beyond `description`, because on this client that key
+ * alone is not enough. A file under `skills/` carrying only a description is a SKILL the model
+ * may pull in on its own judgement; `disable-model-invocation: true` is the one field that makes
+ * it a command the operator invokes, and `name` is the id they type (cursor.com/docs/skills,
+ * accessed 2026-09-20). Measured on the CLI (2026-09-20), the undecorated file was listed among
+ * the skills the model could invoke unbidden — and `st-setup` writes files into the repository.
+ *
+ * The same two keys, in the same order, that this client's carried commands get from
+ * `buildCursorCommand` in `src/adapters/cursor.ts`. The other three containers declare none: no
+ * vendor document for them defines such a field, and borrowing it would state a restriction
+ * their runtimes never apply.
+ */
+export const SETUP_COMMAND_FRONTMATTER = { name: 'st-setup', 'disable-model-invocation': true }
+
 /** The brand asset the manifest's `logo` field resolves to. Absent from the checkout is a refusal. */
 export const LOGO_PATH = 'assets/logo.svg'
 export const ASSETS = [{ from: LOGO_PATH, to: LOGO_PATH }]

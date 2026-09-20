@@ -32,14 +32,43 @@ const DESCRIPTION =
   'Set this repository up for the stamity plugin: resolve facts and gates, write the repository-owned files, report duplicates.'
 
 /**
+ * Every frontmatter key this file may emit, in the order it emits them.
+ *
+ * `description` is the one every container carries and is rendered here. The other two are
+ * CURSOR vocabulary, declared by that container as `SETUP_COMMAND_FRONTMATTER` and passed in:
+ * on that client a file is a COMMAND rather than a model-invocable skill only when it declares
+ * `disable-model-invocation: true`, and the `name` beside it is the id the operator types
+ * (cursor.com/docs/skills, accessed 2026-09-20). The order is `src/adapters/cursor.ts`'s own —
+ * `buildCursorCommand` renders name, description, disable-model-invocation — so the generated
+ * command's head is indistinguishable from the nine carried ones.
+ *
+ * A key absent from this list is a REFUSAL rather than an appended line: the position of a new
+ * key is a decision, and a container that could append one would decide it silently.
+ */
+const FRONTMATTER_ORDER = ['name', 'description', 'disable-model-invocation']
+
+/** A decoration value safe to emit as a bare YAML scalar, unquoted, on its own line. */
+const BARE_SCALAR = /^[A-Za-z0-9][\w.-]*$/
+
+/** One decoration entry as a frontmatter line, refusing anything that could escape it. */
+function frontmatterLine(key, value) {
+  if (typeof value === 'boolean') return `${key}: ${value ? 'true' : 'false'}`
+  if (typeof value === 'string' && BARE_SCALAR.test(value)) return `${key}: ${value}`
+  throw new Error(
+    `renderSetupCommand: the frontmatter value for ${key} must be a boolean or a bare scalar — ` +
+      `received ${JSON.stringify(value)}`,
+  )
+}
+
+/**
  * Render the `st-setup` command body for one client.
  *
- * Pure: the same two arguments render the same bytes, which is what keeps a regenerated root
- * byte-identical to the committed one. Frontmatter is `description` alone — every client the
- * roots target reads that key, and a vendor-specific one would make this file unportable across
- * the four containers that carry it.
+ * Pure: the same arguments render the same bytes, which is what keeps a regenerated root
+ * byte-identical to the committed one. `description` is the key every client the roots target
+ * reads; anything beyond it is per-container residue the container itself declares, because a
+ * vendor-specific key emitted for all four would state a restriction three runtimes never apply.
  */
-export function renderSetupCommand(client, rootVar) {
+export function renderSetupCommand(client, rootVar, decoration = {}) {
   if (!CLIENTS.includes(client)) {
     throw new Error(`renderSetupCommand: client must be one of ${CLIENTS.join(', ')} — received ${String(client)}`)
   }
@@ -48,9 +77,28 @@ export function renderSetupCommand(client, rootVar) {
       `renderSetupCommand: the plugin root variable must be an upper-case variable name — received ${String(rootVar)}`,
     )
   }
+  if (decoration === null || typeof decoration !== 'object' || Array.isArray(decoration)) {
+    throw new Error(`renderSetupCommand: the frontmatter decoration must be a record — received ${String(decoration)}`)
+  }
+  if (Object.hasOwn(decoration, 'description')) {
+    throw new Error('renderSetupCommand: description is rendered here and cannot be decorated over.')
+  }
+  for (const key of Object.keys(decoration)) {
+    if (!FRONTMATTER_ORDER.includes(key)) {
+      throw new Error(
+        `renderSetupCommand: ${key} is not a frontmatter key this command renders. Add it to ` +
+          `FRONTMATTER_ORDER at the position the client's own command files put it.`,
+      )
+    }
+  }
+
+  const front = FRONTMATTER_ORDER.filter((key) => key === 'description' || Object.hasOwn(decoration, key)).map((key) =>
+    key === 'description' ? `description: "${DESCRIPTION}"` : frontmatterLine(key, decoration[key]),
+  )
+
   const locate = `node "\${${rootVar}}/runtime/locate.mjs"`
   return `---
-description: "${DESCRIPTION}"
+${front.join('\n')}
 ---
 
 Set this repository up to run on the installed stamity plugin. Work the four steps in order and

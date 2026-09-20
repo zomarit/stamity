@@ -15,6 +15,15 @@ import { buildCapabilityFile, PLUGIN_CLASSES, validateCapabilityFile } from "../
 import { stageSubstitutedCorpus } from "../../scripts/plugins/corpusStage.mjs";
 // @ts-expect-error — as above.
 import { renderSetupCommand } from "../../scripts/plugins/setupCommand.mjs";
+// @ts-expect-error — as above. The four container modules, read for the per-client declarations
+// the generator hands to the renderers above.
+import * as claudeContainer from "../../scripts/plugins/clients/claude.mjs";
+// @ts-expect-error — as above.
+import * as codexContainer from "../../scripts/plugins/clients/codex.mjs";
+// @ts-expect-error — as above.
+import * as copilotContainer from "../../scripts/plugins/clients/copilot.mjs";
+// @ts-expect-error — as above.
+import * as cursorContainer from "../../scripts/plugins/clients/cursor.mjs";
 // @ts-expect-error — as above.
 import * as tokens from "../../scripts/plugins/tokens.mjs";
 import { INVARIANTS_VERSION_TOKEN, REPO_SUBSTITUTION_TOKENS } from "../../src/emit/substitution.ts";
@@ -41,6 +50,14 @@ import { INVARIANTS_VERSION_TOKEN, REPO_SUBSTITUTION_TOKENS } from "../../src/em
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const CONTENT_ROOT = join(REPO_ROOT, "content");
 const CLIENTS = ["claude", "cursor", "copilot", "codex"] as const;
+
+/** The four container modules, keyed the way the generator keys them. */
+const CONTAINERS: Record<(typeof CLIENTS)[number], { SETUP_COMMAND_FRONTMATTER?: Record<string, unknown> }> = {
+  claude: claudeContainer,
+  cursor: cursorContainer,
+  copilot: copilotContainer,
+  codex: codexContainer,
+};
 
 interface Staged {
   root: string;
@@ -520,6 +537,10 @@ describe("the capability file (REQ-PLUGIN-002)", () => {
   });
 });
 
+/** One decorated render, as the generator performs it: the container's record, one client. */
+const render = (decoration: unknown): string =>
+  renderSetupCommand("cursor", "CURSOR_PLUGIN_ROOT", decoration) as string;
+
 describe("the generated setup command (REQ-PLUGIN-003)", () => {
   const rootVars: Record<string, string> = {
     claude: "CLAUDE_PLUGIN_ROOT",
@@ -574,5 +595,33 @@ describe("the generated setup command (REQ-PLUGIN-003)", () => {
   it("refuses an unknown client and a root variable that is not a variable name", () => {
     expect(() => renderSetupCommand("emacs", "PLUGIN_ROOT")).toThrow(/claude, cursor, copilot, codex/);
     expect(() => renderSetupCommand("claude", "$(rm -rf /)")).toThrow(/root variable/);
+  });
+
+  it("renders a container's frontmatter decoration in the client's own key order", () => {
+    // Non-degenerate: the Cursor record adds a key BEFORE `description` and one after it, so a
+    // renderer that appended decorations would produce a different head than this asserts.
+    const body = renderSetupCommand(
+      "cursor",
+      "CURSOR_PLUGIN_ROOT",
+      CONTAINERS["cursor"].SETUP_COMMAND_FRONTMATTER,
+    ) as string;
+    expect(body.split("\n").slice(0, 5)).toEqual([
+      "---",
+      "name: st-setup",
+      'description: "Set this repository up for the stamity plugin: resolve facts and gates, write the repository-owned files, report duplicates."',
+      "disable-model-invocation: true",
+      "---",
+    ]);
+    // The other three containers declare none, which is what keeps the key per-client.
+    for (const client of ["claude", "copilot", "codex"] as const) {
+      expect(CONTAINERS[client].SETUP_COMMAND_FRONTMATTER, client).toBeUndefined();
+    }
+  });
+
+  it("refuses a decoration key it has no declared position for, and a value that could escape its line", () => {
+    expect(() => render({ "allowed-tools": "Bash" })).toThrow(/not a frontmatter key/);
+    expect(() => render({ description: "mine" })).toThrow(/cannot be decorated over/);
+    expect(() => render({ name: "st-setup\nallowed-tools: Bash" })).toThrow(/bare scalar/);
+    expect(() => render(["name"])).toThrow(/must be a record/);
   });
 });
