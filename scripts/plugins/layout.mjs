@@ -23,6 +23,7 @@
 // unpack. The import is static and the module is loaded dynamically by the generator, after the
 // TypeScript bootstrap — see `scripts/generate-plugin-packages.mjs`.
 
+import { DISTRIBUTION_CLIENTS } from '../distribution-identity.mjs'
 import { assertSafePath } from '../../src/content/catalog.ts'
 
 import * as claude from './clients/claude.mjs'
@@ -33,13 +34,40 @@ import * as cursor from './clients/cursor.mjs'
 /** The four containers, keyed by the client id every surface in this repository uses. */
 export const CLIENT_CONTAINERS = { claude, cursor, copilot, codex }
 
-/** The clients a build may target, in emission order. */
-export const LAYOUT_CLIENTS = ['claude', 'cursor', 'copilot', 'codex']
+/**
+ * The clients a build may target, in emission order — DERIVED from the distribution roster
+ * rather than restated beside it. The two lists carried the same four ids in the same order and
+ * nothing computed either from the other, which is the shape a surface pin drifts in: a fifth
+ * distribution client would have been served with no container and no complaint.
+ */
+export const LAYOUT_CLIENTS = DISTRIBUTION_CLIENTS
+
+// Load-time, because a mismatch here is a build that cannot be correct rather than a run that
+// might be. The derivation above only makes the LISTS agree; this is what makes the containers
+// agree with them, in both directions.
+for (const client of LAYOUT_CLIENTS) {
+  if (!Object.hasOwn(CLIENT_CONTAINERS, client)) {
+    throw new Error(
+      `plugins/layout.mjs: ${client} is a distribution client with no container module. Add ` +
+        `scripts/plugins/clients/${client}.mjs and register it in CLIENT_CONTAINERS.`,
+    )
+  }
+}
+for (const client of Object.keys(CLIENT_CONTAINERS)) {
+  if (!LAYOUT_CLIENTS.includes(client)) {
+    throw new Error(
+      `plugins/layout.mjs: ${client} has a container module but is not a distribution client, so ` +
+        'nothing would ever serve the root it builds. Add it to DISTRIBUTION_CLIENTS or remove it.',
+    )
+  }
+}
 
 function containerFor(client) {
   const container = CLIENT_CONTAINERS[client]
   if (container === undefined) {
-    throw new Error(`pluginPathFor: ${String(client)} is not one of ${LAYOUT_CLIENTS.join(', ')}`)
+    // Named for the caller a reader will actually be standing in: `placeRow` is what the
+    // generator calls and what `pluginPathFor` and `pluginClassFor` both route through.
+    throw new Error(`placeRow: ${String(client)} is not one of ${LAYOUT_CLIENTS.join(', ')}`)
   }
   return container
 }
