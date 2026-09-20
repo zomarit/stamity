@@ -297,7 +297,7 @@ export const codexResiduePlanner: ResiduePlanner = {
     };
 
     const rows: AdapterOutput[] = [
-      emissionRow(CODEX_HOOKS_FILE, buildHooksJson(core), HOOKS_ARTIFACT_ID, "infra"),
+      emissionRow(CODEX_HOOKS_FILE, buildHooksJson(core, ctx.facts.hookScriptsRoot), HOOKS_ARTIFACT_ID, "infra"),
       emissionRow(`.stamity/generated/hooks/codex/${PORTABLE_RUNNER_FILE}`, buildPortableHookRunner("codex"), "codex-portable-hook", "infra"),
       emissionRow(CODEX_CONFIG_FILE, composeConfigToml(core, ctx), CONFIG_ARTIFACT_ID, "infra"),
     ];
@@ -617,8 +617,16 @@ const SESSION_END_TIMEOUT_SECONDS = 3;
  * one second, short enough to cut a handoff write in half, and the ceiling is
  * the longest this event may ask for.
  * https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
+ *
+ * `hookScriptsRoot` is the directory the commands below actually launch from —
+ * absent in a repository, `${PLUGIN_ROOT}/hooks` inside a plugin root. Only the
+ * trust-boundary sentence reads it: the sentence tells an operator which bytes
+ * sit outside the hash this file is trusted by, and naming the repository copy
+ * from inside an installed plugin points them at a directory their checkout may
+ * not even have. The default is that repository path verbatim, so a repository
+ * emission's bytes are the same before and after this parameter existed.
  */
-export function buildHooksJson(core: CoreEmissionPlan): string {
+export function buildHooksJson(core: CoreEmissionPlan, hookScriptsRoot?: string): string {
   const hooks: Record<string, { matcher?: string; hooks: { type: string; command: string; commandWindows: string; timeout?: number }[] }[]> = {};
   for (const row of core.hooks.interchangeFor(TOOL)) {
     const event = CLAUDE_EVENT_NAMES[row.event]!;
@@ -647,10 +655,11 @@ export function buildHooksJson(core: CoreEmissionPlan): string {
   // run live in the workspace an agent can write, so their bytes are outside
   // that hash and `stamity check` is the control that notices them changing.
   // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
+  const scriptsDir = hookScriptsRoot ?? `.stamity/generated/hooks/${TOOL}`;
   const description =
     `Stamity hooks. ${hookTrustSentence()} ` +
     "Trust is recorded against this file's hash only: the hook script bytes under " +
-    ".stamity/generated/hooks/codex/ are outside it and can change without re-review, " +
+    `${scriptsDir}/ are outside it and can change without re-review, ` +
     "so stamity check is the control for them and for emitted-file drift generally. " +
     "The role guard is telemetry because PreToolUse carries no agent identity.";
   return `${JSON.stringify({ description, hooks }, null, 2)}\n`;
