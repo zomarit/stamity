@@ -41,7 +41,15 @@ import { gunzipSync } from 'node:zlib'
 /** The prefix every entry of an npm tarball carries. */
 export const PACKAGE_PREFIX = 'package'
 
-/** Files pruned anywhere in the built tree: documentation, sourcemaps, declarations. */
+/**
+ * Files pruned UNDER `node_modules`: documentation, sourcemaps, declarations.
+ *
+ * The scope is the whole point. `dist/content/` is the bundled corpus — every
+ * agent, command, rule and skill body, and the charter — and it is `.md` by
+ * FORMAT, not by being documentation. A suffix prune that walked the whole tree
+ * would empty the runtime of the content it exists to serve, and every
+ * `package.json`-shaped assertion about that runtime would stay green.
+ */
 export const PRUNE_FILE_SUFFIXES = ['.md', '.map', '.d.ts', '.d.mts', '.d.cts']
 
 /** Directories pruned under `node_modules`: a dependency's own test and doc trees. */
@@ -115,8 +123,22 @@ export function* readTarEntries(archive) {
     }
 
     const name = pending?.path ?? (prefix === '' ? base : `${prefix}/${base}`)
+    // A pax `size` record OVERRIDES the header field, so it decides both how
+    // many bytes this entry has and how far the reader advances. An unparseable
+    // or negative one would produce a NaN advance and desynchronise every entry
+    // after it, so it is refused rather than coerced.
     const size = pending?.size === undefined ? rawSize : Number(pending.size)
+    if (!Number.isSafeInteger(size) || size < 0) {
+      throw new Error(
+        `the tarball entry "${name}" declares an unusable pax size ${JSON.stringify(String(pending?.size))}`,
+      )
+    }
     pending = null
+    // `subarray` CLAMPS, so a truncated archive would otherwise yield a short
+    // body and this build would write a silently incomplete file to disk.
+    if (offset + size > archive.length) {
+      throw new Error(`the tarball entry "${name}" runs past the end of the archive — the tarball is truncated`)
+    }
     const body = archive.subarray(offset, offset + size)
     offset += Math.ceil(size / 512) * 512
     yield { name, type, body }
@@ -246,6 +268,12 @@ function prunable(name) {
   return PRUNE_FILE_SUFFIXES.some((suffix) => name.toLowerCase().endsWith(suffix))
 }
 
+/**
+ * Walk and prune. `insideModules` gates BOTH prunes — the suffix one and the
+ * directory-name one — because outside `node_modules` this tree is the release
+ * itself: `dist/content/**` is markdown the engine reads, and a skill's own
+ * `docs/` reference tree carries the same name a dependency's does.
+ */
 function pruneTree(dir, insideModules, removed) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const child = join(dir, entry.name)
@@ -258,7 +286,7 @@ function pruneTree(dir, insideModules, removed) {
       } else {
         pruneTree(child, insideModules, removed)
       }
-    } else if (prunable(entry.name)) {
+    } else if (insideModules && prunable(entry.name)) {
       rmSync(child, { force: true })
       removed.push(child)
     }
