@@ -31,16 +31,23 @@ import {
 import type { DetectedSummary } from "../types/detect.ts";
 import { EngineError } from "../types/errors.ts";
 import {
+  INSTALL_MODES,
+  INSTALL_MODE_DEFAULT,
   MANIFEST_FILE,
   MANIFEST_VERSION,
   PACK_OWNER_PREFIX,
+  PLUGIN_OWNED_CLASSES,
   RULE_DELIVERIES,
   RULE_DELIVERY_DEFAULT,
+  type GatesConfig,
   type ImportDecision,
+  type InstallMode,
   type LearningsConfig,
   type LedgerEntry,
   type ManifestMigration,
   type McpConfig,
+  type PluginConfig,
+  type PluginOwnedClass,
   type RuleDelivery,
   type SetupManifest,
 } from "../types/manifest.ts";
@@ -193,6 +200,8 @@ const MANIFEST_FIELD_ORDER: Record<keyof SetupManifest, true> = {
   learnings: true,
   hooks: true,
   models: true,
+  plugin: true,
+  gates: true,
   importChoice: true,
   toolOptions: true,
   detected: true,
@@ -213,6 +222,12 @@ const VALID_PLATFORMS = new Set(Object.keys(PLATFORM_MEMBERS));
 
 /** Rule-delivery membership set, from the sanctioned list the types leaf publishes. */
 const VALID_RULE_DELIVERIES = new Set<string>(RULE_DELIVERIES);
+
+/** Install-mode membership set, from the sanctioned list the types leaf publishes. */
+const VALID_INSTALL_MODES = new Set<string>(INSTALL_MODES);
+
+/** Plugin-ownable class membership set, from the same leaf's total record. */
+const VALID_PLUGIN_OWNED_CLASSES = new Set<string>(PLUGIN_OWNED_CLASSES);
 
 /** Ledger `artifactType` values: the content classes plus the infra bucket. */
 const VALID_ARTIFACT_TYPES = new Set<string>([...CONTENT_CLASSES, "infra"]);
@@ -477,6 +492,155 @@ function collectModelsErrors(value: unknown, errors: string[]): void {
   }
 }
 
+/** Known fields of one plugin client record. */
+const PLUGIN_CLIENT_FIELDS = ["version", "classes"] as const;
+
+/**
+ * One client's plugin record. Both halves are load-bearing and both are
+ * checked: the `version` is what a compatibility read compares against the
+ * engine's own, and `classes` is the ownership boundary itself — every class
+ * named here is one `sync` will not write and `clean` will not reclaim, so a
+ * typo'd or duplicated entry is a file the repository silently stops owning.
+ */
+function collectPluginClientErrors(tool: string, value: unknown, errors: string[]): void {
+  const field = `plugin.clients.${tool}`;
+  if (!isPlainObject(value)) {
+    errors.push(`\`${field}\` must be an object with \`version\` and \`classes\``);
+    return;
+  }
+
+  // Semver, not any string: the compatibility read majors this value, so one
+  // it cannot parse is a defect rather than a shrug (same rule as `version`).
+  if (typeof value.version !== "string" || semver.valid(value.version) === null) {
+    errors.push(
+      `\`${field}.version\` must be the plugin's semantic version ` +
+        `(got ${JSON.stringify(value.version)})`,
+    );
+  }
+
+  if (!Array.isArray(value.classes)) {
+    errors.push(
+      `\`${field}.classes\` must be an array of ${PLUGIN_OWNED_CLASSES.join(", ")}`,
+    );
+  } else if (value.classes.length === 0) {
+    errors.push(
+      `\`${field}.classes\` must name at least one class — a client that owns ` +
+        `nothing is spelled by dropping its record, not by an empty list`,
+    );
+  } else {
+    const seen = new Set<string>();
+    for (const entry of value.classes) {
+      if (typeof entry !== "string" || !VALID_PLUGIN_OWNED_CLASSES.has(entry)) {
+        errors.push(
+          `\`${field}.classes\` names unknown class ${JSON.stringify(entry)} ` +
+            `(known: ${PLUGIN_OWNED_CLASSES.join(", ")})`,
+        );
+        continue;
+      }
+      if (seen.has(entry)) {
+        errors.push(
+          `\`${field}.classes\` lists ${JSON.stringify(entry)} twice — one entry per class`,
+        );
+        continue;
+      }
+      seen.add(entry);
+    }
+  }
+
+  for (const key of unknownFields(value, PLUGIN_CLIENT_FIELDS)) {
+    errors.push(`unknown field \`${field}.${key}\``);
+  }
+}
+
+/**
+ * The install-mode record. `mode` is REQUIRED once a `plugin` block exists —
+ * the block's whole job is to say where content comes from, and a block that
+ * does not say would have to be read as one default here and another there.
+ *
+ * `clients` is legal under either mode: recording a root before migrating is
+ * an ordinary state, and {@link pluginOwnedClasses} is the single reader that
+ * decides what the mode means for ownership.
+ */
+function collectPluginErrors(value: unknown, errors: string[]): void {
+  if (!isPlainObject(value)) {
+    errors.push("`plugin` must be an object");
+    return;
+  }
+
+  collectEnumError(value.mode, VALID_INSTALL_MODES, "plugin.mode", errors);
+  if (value.mode === undefined) {
+    errors.push(`\`plugin.mode\` is required (one of ${INSTALL_MODES.join(" | ")})`);
+  }
+
+  if (value.clients !== undefined) {
+    if (!isPlainObject(value.clients)) {
+      errors.push("`plugin.clients` must be an object keyed by tool");
+    } else {
+      for (const [tool, record] of Object.entries(value.clients)) {
+        if (!VALID_TOOLS.has(tool)) {
+          errors.push(`\`plugin.clients.${tool}\` names unknown tool (known: ${TOOLS.join(", ")})`);
+          continue;
+        }
+        collectPluginClientErrors(tool, record, errors);
+      }
+    }
+  }
+
+  for (const key of unknownFields(value, ["mode", "clients"])) {
+    errors.push(`unknown field \`plugin.${key}\``);
+  }
+}
+
+/** Known fields of the gates block, doubling as its strict key set. */
+const GATE_FIELDS = ["test", "lint", "typecheck", "all"] as const;
+
+/**
+ * Longest gate command the charter will print. A gate line is rendered into
+ * generated markdown as one line a human reads; past this it stops being a
+ * command someone can check and starts being a script that belongs in a file.
+ */
+const MAX_GATE_COMMAND_LENGTH = 512;
+
+/**
+ * Why `value` cannot be a gate command, or `null` when it can. Shape only, on
+ * the {@link modelPinDefect} precedent: the engine neither runs nor parses
+ * these, so a membership check would be a guarantee it cannot keep. What is
+ * checkable is that the string carries a command at all, stays on the one line
+ * the charter prints it on, and fits.
+ */
+function gateCommandDefect(value: unknown): string | null {
+  if (typeof value !== "string") return "must be a string";
+  if (value.trim() === "") return "is empty";
+  if (/[\r\n]/.test(value)) return "spans more than one line";
+  if (value.length > MAX_GATE_COMMAND_LENGTH) {
+    return `is longer than ${MAX_GATE_COMMAND_LENGTH} characters — put a script in a file and name it here`;
+  }
+  return null;
+}
+
+/**
+ * The operator's gate commands. Every member is optional and independently so:
+ * a pinned `all` with no `test` is a repository that spells its full gate and
+ * leaves the per-gate rows to detection, which is a state the charter renders.
+ */
+function collectGatesErrors(value: unknown, errors: string[]): void {
+  if (!isPlainObject(value)) {
+    errors.push("`gates` must be an object");
+    return;
+  }
+  for (const field of GATE_FIELDS) {
+    const command = value[field];
+    if (command === undefined) continue;
+    const defect = gateCommandDefect(command);
+    if (defect !== null) {
+      errors.push(`\`gates.${field}\` ${JSON.stringify(command)} ${defect}`);
+    }
+  }
+  for (const key of unknownFields(value, GATE_FIELDS)) {
+    errors.push(`unknown field \`gates.${key}\` (known: ${GATE_FIELDS.join(", ")})`);
+  }
+}
+
 /**
  * The import decisions, validated as a LIST of pairs — one record per
  * pre-existing instruction file the repo carried. Each `path` runs the same
@@ -678,6 +842,8 @@ export function collectManifestErrors(data: unknown): string[] {
     }
   }
   if (data.models !== undefined) collectModelsErrors(data.models, errors);
+  if (data.plugin !== undefined) collectPluginErrors(data.plugin, errors);
+  if (data.gates !== undefined) collectGatesErrors(data.gates, errors);
   if (data.importChoice !== undefined) collectImportChoiceErrors(data.importChoice, errors);
   if (data.toolOptions !== undefined) collectToolOptionsErrors(data.toolOptions, errors);
   if (data.detected !== undefined) collectDetectedErrors(data.detected, errors);
@@ -872,6 +1038,14 @@ export interface PreservedManifestFields {
   communicationStyle?: CommunicationStyle;
   learnings?: LearningsConfig;
   toolOptions?: SetupManifest["toolOptions"];
+  /**
+   * The install record. A regeneration that dropped it would hand every class
+   * the plugin owns back to emission — the ownership boundary is an answer the
+   * operator gave, not a fact a fresh run recomputes.
+   */
+  plugin?: PluginConfig;
+  /** The operator's pinned gate commands; a fresh run only detects, never asks. */
+  gates?: GatesConfig;
 }
 
 /** Lift the user-settled fields off `manifest`. Deep-copied: the bag outlives
@@ -888,6 +1062,8 @@ export function extractPreservedManifestFields(manifest: SetupManifest): Preserv
   if (manifest.toolOptions !== undefined) {
     preserved.toolOptions = structuredClone(manifest.toolOptions);
   }
+  if (manifest.plugin !== undefined) preserved.plugin = structuredClone(manifest.plugin);
+  if (manifest.gates !== undefined) preserved.gates = structuredClone(manifest.gates);
   return preserved;
 }
 
@@ -911,6 +1087,8 @@ export function applyPreservedManifestFields(
   if (preserved.toolOptions !== undefined) {
     merged.toolOptions = structuredClone(preserved.toolOptions);
   }
+  if (preserved.plugin !== undefined) merged.plugin = structuredClone(preserved.plugin);
+  if (preserved.gates !== undefined) merged.gates = structuredClone(preserved.gates);
   return merged;
 }
 
@@ -941,6 +1119,58 @@ export function readRuleDelivery(manifest: SetupManifest | null | undefined): Ru
   return value !== undefined && VALID_RULE_DELIVERIES.has(value)
     ? value
     : RULE_DELIVERY_DEFAULT;
+}
+
+/**
+ * Resolve where this repository's content comes from, defaulting on absence —
+ * the one reader `sync`, `check`, `clean` and the plugin verbs all go through,
+ * so a manifest written before the key existed cannot resolve one way here and
+ * another way there. Same re-check as {@link readMaturityTier}: a hand-edited
+ * value outside the sanctioned set falls back to the default rather than
+ * reaching emission as an unknown mode (the persistence boundary refuses it in
+ * {@link collectManifestErrors}).
+ */
+export function readInstallMode(manifest: SetupManifest | null | undefined): InstallMode {
+  const value = manifest?.plugin?.mode;
+  return value !== undefined && VALID_INSTALL_MODES.has(value) ? value : INSTALL_MODE_DEFAULT;
+}
+
+/**
+ * The classes `tool` owes to a plugin rather than to emission — empty unless
+ * the manifest records {@link INSTALL_MODES} `plugin-backed` AND carries a
+ * record for that tool.
+ *
+ * The mode is what moves ownership; a client record under `generated` is a
+ * repository noting the root it knows about before it migrates, and reading
+ * that as ownership would stop emission for a plugin nobody installed yet.
+ * Returned as a fresh set so no caller can widen another's answer, and total
+ * for the same reason {@link readReviewCap} is: `sync`, `check` and `clean`
+ * each ask this question, and three call sites deciding it for themselves is
+ * three chances to draw the boundary somewhere else.
+ */
+export function pluginOwnedClasses(
+  manifest: SetupManifest | null | undefined,
+  tool: Tool,
+): ReadonlySet<PluginOwnedClass> {
+  if (readInstallMode(manifest) !== "plugin-backed") return new Set();
+  const record = manifest?.plugin?.clients?.[tool];
+  if (record === undefined) return new Set();
+  // Membership re-check for the same reason the resolvers above carry one: a
+  // manifest OBJECT can reach here without having passed validation.
+  return new Set(record.classes.filter((entry) => VALID_PLUGIN_OWNED_CLASSES.has(entry)));
+}
+
+/**
+ * The operator's pinned gate commands, or `{}` when the manifest pins none —
+ * absence is "detection decides", not an error, so every caller reads the same
+ * empty answer instead of branching on `undefined` itself.
+ *
+ * A COPY: the result outlives the read at the charter and doctor seams, and a
+ * caller that fills in a detected command must not write it back into the
+ * manifest by accident.
+ */
+export function readGates(manifest: SetupManifest | null | undefined): GatesConfig {
+  return manifest?.gates === undefined ? {} : { ...manifest.gates };
 }
 
 /**
