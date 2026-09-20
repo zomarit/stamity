@@ -9,20 +9,30 @@
 //
 // Two rulings this table encodes, both of them subtractions.
 //
-// `skills` and `hooks` are OMITTED from the manifest. The reference documents both as additive:
-// a declared `skills` path is searched IN ADDITION TO the default `skills/` directory, and a
-// declared `hooks` file is loaded IN ADDITION TO the default `hooks/hooks.json`. This root puts
-// its files at exactly those defaults, so naming them would ask the client to discover the same
-// artifact twice. `agents` is a file list because that is the shape the schema takes.
+// NO COMPONENT FIELD IS DECLARED. The manifest carries identity and version and nothing else.
+// The two vendor documents disagreed — the plugins reference reads as though a declared field
+// REPLACES the default scan — and the schema settles it, because each of the four component
+// fields describes its own first form in the same words:
 //
-// `commands` IS declared, and the two vendor documents disagree about what that means: the
-// plugins reference reads as a replacement of the default scan, while the schema's own
-// description for the field says "in addition to those in the commands/ directory". The
-// declaration is the plan's, kept because `claude plugin validate --strict` accepts it and
-// because a client that replaces the default still finds every command; if the additive reading
-// is the true one, the cost is a duplicate registration of the same ten files and the fix is to
-// drop the field exactly as `skills` and `hooks` are dropped. Measuring an installed client is
-// what settles it — an invocation leg, not this table.
+//   agents    "Path to additional agent file (in addition to those in the agents/ directory,
+//              if it exists), relative to the plugin root"
+//   commands  "Path to additional command file or skill directory (in addition to those in the
+//              commands/ directory, if it exists), relative to the plugin root"
+//   skills    "Path to additional skill directory (in addition to those in the skills/
+//              directory, if it exists), relative to the plugin root"
+//   hooks     "Path to file with additional hooks (in addition to those in hooks/hooks.json,
+//              if it exists), relative to the plugin root"
+//
+// Every one of them ADDS to the default scan. This root puts its agents at `agents/`, its
+// commands at `commands/`, its skills at `skills/` and its hooks at `hooks/hooks.json` — the
+// four defaults exactly — so declaring any of them asks the client to discover each file twice.
+// `skills` and `hooks` were already omitted on that reading; `agents` (a ten-entry file list)
+// and `commands` (`./commands/`) were declared on the other one and are omitted now for the
+// same reason. `claude plugin validate --strict` accepts the root either way: the fields are
+// optional, so dropping them removes a duplicate registration and forfeits nothing.
+//
+// A field would be declared here only for an artifact placed somewhere OTHER than its default —
+// which is what "additional" means and what this root has no instance of.
 //
 // `rules` does not exist as a manifest field at all. A glob-scoped rule therefore cannot ride in
 // this container; `stamity plugin setup` writes it into the repository's own `.claude/rules/`,
@@ -144,10 +154,10 @@ export const DISTRIBUTION = {
 }
 
 /**
- * Build the container manifest. `agents` is the sorted file list the schema takes; `commands` is
- * declared at the plan's instruction; `skills` and `hooks` are omitted — see the header for both.
+ * Build the container manifest: identity and version, and no component field at all — every one
+ * of the four is additive over a default scan this root already sits on. See the header.
  */
-export function buildManifest({ identity, version, agentPaths }) {
+export function buildManifest({ identity, version }) {
   return {
     $schema: 'https://json.schemastore.org/claude-code-plugin-manifest.json',
     name: identity.name,
@@ -158,8 +168,6 @@ export function buildManifest({ identity, version, agentPaths }) {
     repository: identity.repository,
     license: identity.license,
     keywords: identity.keywords,
-    agents: agentPaths.map((path) => `./${path}`).toSorted(),
-    commands: './commands/',
   }
 }
 
