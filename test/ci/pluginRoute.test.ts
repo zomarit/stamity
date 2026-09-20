@@ -1,6 +1,6 @@
 import { spawn, spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -270,11 +270,16 @@ describe("the structure leg over a real distribution", () => {
  * `test/qa/hookRuns.test.ts` takes for its own signal case.
  */
 describe.skipIf(process.platform === "win32")("a stop requested mid-run", () => {
-  /** A `claude` stand-in: slow enough to be interrupted, silent enough to prove nothing else. */
-  function sleepingBinary(seconds: number): string {
+  /**
+   * A `claude` stand-in: slow enough to be interrupted, silent enough to prove nothing else. It
+   * touches `marker` the moment it is invoked, which is the readiness signal the case waits for
+   * before sending `SIGTERM` — see the comment at the send site for why that ordering is sound.
+   */
+  function sleepingBinary(seconds: number, marker: string): string {
     const dir = tempDir("fake-client");
     const bin = join(dir, "fake-claude");
     writeFileSync(bin, `#!/bin/sh
+touch "${marker}"
 sleep ${String(seconds)}
 exit 0
 `);
@@ -285,10 +290,12 @@ exit 0
   it(
     "runs the handler between calls, records the legs it never reached, and dies of the signal",
     async () => {
-      const jsonPath = join(tempDir("stopped"), "legs.json");
+      const stoppedDir = tempDir("stopped");
+      const jsonPath = join(stoppedDir, "legs.json");
+      const invoked = join(stoppedDir, "invoked");
       const child = spawn(
         process.execPath,
-        [SMOKE, "--dist", dist, "--client", "claude", "--invoke", "--bin-claude", sleepingBinary(3), "--json", jsonPath],
+        [SMOKE, "--dist", dist, "--client", "claude", "--invoke", "--bin-claude", sleepingBinary(3, invoked), "--json", jsonPath],
         { cwd: REPO_ROOT, env: disarmed(), stdio: ["ignore", "pipe", "pipe"] },
       );
       let stderr = "";
@@ -297,12 +304,29 @@ exit 0
         stderr += chunk;
       });
 
-      // Mid-first-call: the fake client is 3 s long, so the signal is queued while a spawn blocks —
-      // which is the whole case. A handler that only ran after `main` returned would prove nothing.
+      // Mid-spawn, deterministically: the signal is sent once the fake client has been invoked for
+      // the first time, which is the `--version` probe (`probeVersion`, called from `main` before any
+      // leg's `call`). The smoke registers its `SIGTERM`/`SIGINT` handlers in `main` before that probe
+      // with no await between them, so a marker written by the binary proves the handlers are in
+      // place — a fixed sleep did not, and under a loaded machine the signal landed on a child that
+      // had not registered yet and died by default disposition without writing the report. The
+      // signal is queued while the 3 s probe blocks, and the handler runs at the first `call`'s
+      // yield — after the install leg's spawn — which is the whole case: a handler that only ran
+      // after `main` returned would prove nothing.
       const ended = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((settle) => {
         child.on("close", (code, signal) => settle({ code, signal }));
       });
-      await new Promise((resume) => setTimeout(resume, 1_000));
+      // The marker appears within milliseconds of the spawn on an idle machine; 20 s is a bound on a
+      // loaded worker, a third of the case's budget, not a measurement of anything.
+      const deadline = Date.now() + 20_000;
+      while (!existsSync(invoked) && Date.now() < deadline) {
+        // oxlint-disable-next-line no-await-in-loop -- a poll, by construction.
+        await new Promise((resume) => setTimeout(resume, 50));
+      }
+      if (!existsSync(invoked)) {
+        child.kill("SIGKILL");
+        throw new Error(`the fake claude binary was never invoked within 20 s; stderr so far: ${stderr}`);
+      }
       child.kill("SIGTERM");
       const { code, signal } = await ended;
 

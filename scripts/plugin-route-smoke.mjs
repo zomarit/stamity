@@ -1119,7 +1119,7 @@ function copilotInstallLeg(context, { names, copilotHome, installed, listed }) {
   try {
     entry = (JSON.parse(listed.transcript.trim())).find((row) => row.name === names.plugin)
   } catch (error) {
-    return legFrom('install', 'FAIL', `copilot plugin list --json did not parse: ${error.message}`, listed, context.version)
+    return legFrom('install', 'FAIL', `copilot plugin list --json did not parse: ${context.redact(error.message)}`, listed, context.version)
   }
   if (entry === undefined) {
     return legFrom('install', 'FAIL', `copilot plugin list --json does not name ${names.plugin}: ${listed.tail}`, listed, context.version)
