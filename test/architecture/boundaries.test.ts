@@ -533,6 +533,12 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // reason — it drives the wave-14 init planner and writer — and the engine
   // half of its unit sits far below at wave 2; see the plugin-lane note after
   // the docs rows.
+  // The shared plugin probe (pl-c4): the locator spawn and the duplicate scan
+  // `check.ts` reads for its two plugin rows and `plugin status` reads for the
+  // same facts as data. Wave 14, one below `check.ts`, which is what makes that
+  // cross-unit import legal — and its true depth besides: nothing it calls sits
+  // above the wave-13 kit.
+  "src/cli/commands/plugin/probe.ts": { unit: "pl-c4", wave: 14 },
   "src/cli/commands/plugin/setup.ts": { unit: "pl-c6", wave: 15 },
   // ---- package 15 file 2 (008-plugin-lifecycle-02): the plugin lane ----
   // ONE unit split across the two LAYERS, which is the shape the architecture
