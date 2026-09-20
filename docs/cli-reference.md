@@ -223,7 +223,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | Flag | What it does | Default |
 |---|---|---|
 | `--client <csv>` | clients to act on (claude, cursor, copilot, codex) | — |
-| `--plugin-root <path>` | the installed plugin root; defaults to CLAUDE_PLUGIN_ROOT, CURSOR_PLUGIN_ROOT or PLUGIN_ROOT | — |
+| `--plugin-root <path>` | an installed plugin root; repeat once per client (claude, cursor, copilot, codex), each root naming its own client. One unflagged root is read from CLAUDE_PLUGIN_ROOT, CURSOR_PLUGIN_ROOT, PLUGIN_ROOT, COPILOT_PLUGIN_ROOT | — |
 
 ## `stamity clean`
 

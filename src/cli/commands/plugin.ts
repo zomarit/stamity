@@ -61,6 +61,15 @@ import { buildPluginStatus, type PluginStatusReport } from "./plugin/status.ts";
  */
 const SUBCOMMANDS = ["status", "setup"] as const;
 
+/**
+ * Commander's collecting reducer for a repeatable option. No initial value is
+ * passed to `.option`, so an absent flag stays `undefined` rather than becoming
+ * an empty array the generated reference page would print as a default.
+ */
+function collectRoot(value: string, previous: readonly string[] | undefined): string[] {
+  return [...(previous ?? []), value];
+}
+
 /** Column width for the status table's label column. */
 const LABEL_WIDTH = Math.max(
   "compatibility".length,
@@ -109,35 +118,94 @@ function parseClients(raw: unknown): Tool[] {
   return TOOLS.filter((tool) => names.includes(tool));
 }
 
+/** `--plugin-root` as the paths it collected, trimmed; a blank value says nothing. */
+function parseRootFlags(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
 /**
- * The roots this run acts on: one per selected client, read from the resolved
- * plugin root.
+ * The roots this run acts on: ONE PER ROOT, each paired with the client its own
+ * `stamity-plugin.json` declares.
  *
- * `--client` defaults to the root's OWN client, which is the invocation a
- * client's own st-setup command produces (it exports its root variable and
- * nothing else). An explicit `--client` naming a different client is refused by
- * `planPluginSetup` against the root's declared `client` — the refusal belongs
- * there because it is a statement about the root, not about the flag.
+ * The pairing is the point. `--plugin-root` repeats, and a root is not a
+ * location a client is chosen for — it is a built tree that already says which
+ * client it belongs to. Binding every `--client` entry to one resolved root (as
+ * this did until 2026-09-20) made `--client claude,cursor` refuse on the
+ * mismatch check whatever was passed, so the two-client plan the setup engine
+ * supports could not be reached from the CLI at all.
+ *
+ * `--client` is therefore derived from the roots when absent — which is the
+ * invocation a client's own st-setup command produces, exporting its root
+ * variable and nothing else — and VALIDATED against them when present, in both
+ * directions: a listed client that no root declares, and a root whose client
+ * the list does not name, are each refused by name. Neither is a plan this run
+ * could carry out, and silently dropping either half would set up a client the
+ * operator did not ask for or skip one they did.
+ *
+ * The environment fallback stays exactly one root: a client exports its own
+ * variable, so there is never a second one to pair.
  */
 async function resolveRoots(
   opts: Record<string, unknown>,
   env: Readonly<Record<string, string | undefined>>,
 ): Promise<PluginSetupRoot[]> {
-  const flag = opts["pluginRoot"];
-  const root = resolvePluginRoot({
-    ...(typeof flag === "string" ? { flag } : {}),
-    env,
-  });
-  if (root === null) {
+  const flagged = parseRootFlags(opts["pluginRoot"]);
+  const paths =
+    flagged.length > 0 ? flagged : [resolvePluginRoot({ env })].filter((path) => path !== null);
+  if (paths.length === 0) {
     throw new EngineError(
       `No installed plugin root: pass --plugin-root, or set ${PLUGIN_ROOT_VARIABLES.join(", ")}.`,
       { code: "CONFIG_ERROR" },
     );
   }
-  const file = await readCapabilityFile(root);
-  const clients = parseClients(opts["client"]);
-  const selected = clients.length === 0 ? [file.client] : clients;
-  return selected.map((tool) => ({ tool, root, file }));
+
+  // `allSettled` rather than `all`: the reads run together, and its results
+  // arrive in ARGUMENT order, so a run with two malformed roots refuses naming
+  // the first one passed rather than whichever read lost the race.
+  const read = await Promise.allSettled(
+    // Each read carries its own path out with it, so a fulfilled result is a
+    // complete root rather than a value that has to be re-paired by index.
+    paths.map(async (root) => {
+      const file = await readCapabilityFile(root);
+      return { tool: file.client, root, file } satisfies PluginSetupRoot;
+    }),
+  );
+  const refused = read.find((result) => result.status === "rejected");
+  if (refused !== undefined) throw refused.reason as Error;
+  const roots: PluginSetupRoot[] = read.map(
+    (result) => (result as PromiseFulfilledResult<PluginSetupRoot>).value,
+  );
+
+  const listed = parseClients(opts["client"]);
+  if (listed.length === 0) return roots;
+
+  // The roots first: `--client cursor` against a claude root is both defects at
+  // once, and "this root declares claude" names the thing the operator can look
+  // at, where "no root declares cursor" only names what is missing.
+  for (const entry of roots) {
+    if (!listed.includes(entry.tool)) {
+      throw new EngineError(
+        `The plugin root at ${entry.root} declares client ${entry.tool}, which --client does ` +
+          `not name. Add ${entry.tool} to --client, or leave --client off and let the roots ` +
+          `name the clients.`,
+        { code: "CONFIG_ERROR" },
+      );
+    }
+  }
+  for (const tool of listed) {
+    if (!roots.some((entry) => entry.tool === tool)) {
+      throw new EngineError(
+        `--client names ${tool}, but no --plugin-root declares that client. Pass ` +
+          `--plugin-root once per client, each naming that client's own root.`,
+        { code: "CONFIG_ERROR" },
+      );
+    }
+  }
+  return roots;
 }
 
 /** One `wrote` line: what the run did, or what a preview says it would do. */
@@ -252,9 +320,12 @@ function setupLines(report: PluginStatusReport): string[] {
 
 /** `plugin status` — a read that always exits 0. */
 async function runStatus(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
-  const pluginRoot = opts["pluginRoot"];
+  // `status` probes ONE root — it reports a runtime, and there is one runtime
+  // per invocation. A repeated flag therefore reports on the first root given,
+  // which is the one an operator naming several would read about first.
+  const [pluginRoot] = parseRootFlags(opts["pluginRoot"]);
   const report = await buildPluginStatus(ctx.app.runtime.cwd, ctx.engine, {
-    ...(typeof pluginRoot === "string" ? { pluginRoot } : {}),
+    ...(pluginRoot === undefined ? {} : { pluginRoot }),
     env: ctx.app.runtime.env,
     nodeVersion: process.versions.node,
   });
@@ -335,7 +406,10 @@ export const pluginCommand: CommandModule = {
     cmd.option("--client <csv>", `clients to act on (${TOOLS.join(", ")})`);
     cmd.option(
       "--plugin-root <path>",
-      "the installed plugin root; defaults to CLAUDE_PLUGIN_ROOT, CURSOR_PLUGIN_ROOT or PLUGIN_ROOT",
+      `an installed plugin root; repeat once per client (${TOOLS.join(", ")}), each root ` +
+        `naming its own client. One unflagged root is read from ` +
+        `${PLUGIN_ROOT_VARIABLES.join(", ")}`,
+      collectRoot,
     );
   },
 

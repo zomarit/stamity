@@ -430,7 +430,16 @@ the path; and without `--plugin-root` the root is read from `CLAUDE_PLUGIN_ROOT`
 
 As built (2026-09-20): FOUR root variables, not three — `CLAUDE_PLUGIN_ROOT`, `CURSOR_PLUGIN_ROOT`,
 `PLUGIN_ROOT`, then `COPILOT_PLUGIN_ROOT` — are read in that order when `--plugin-root` is absent,
-and the refusal names all four (ledger row build/36). The idempotence clause is refuted and was
+and the refusal names all four (ledger row build/36). `--plugin-root` REPEATS, once per client, and
+each root is paired with the client its own `stamity-plugin.json` declares, so one invocation sets
+two clients up from their own roots. `--client` is derived from the roots when absent — the
+invocation a client's own st-setup command produces — and validated against them in both directions
+when present: a listed client no root declares, and a root whose client the list does not name, are
+each refused by name, writing nothing. The bound this replaces bound every `--client` entry to one
+resolved root, so `--client claude,cursor` always refused on the client-mismatch check and the
+two-root plan the setup engine supports was unreachable from the CLI. The environment fallback
+stays exactly one root, because a client exports its own variable and there is never a second to
+pair. The idempotence clause is refuted and was
 built to the plan's own reading (a): a second invocation is an invocation on a repository that now
 carries a manifest, so it REFUSES with `VALIDATION_ERROR` (exit 1) and writes nothing, rather than
 exiting 0 with 0 changed paths; the sha-256 stability the clause was reaching for is covered by
