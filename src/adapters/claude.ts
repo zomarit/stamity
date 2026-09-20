@@ -118,6 +118,7 @@ import {
   CLIENT_HOOK_GUARANTEES,
   type HookInterchange,
 } from "../hooks/model.ts";
+import { ROOT_VARIABLE_PATH } from "../hooks/portableRunner.ts";
 import {
   REVIEW_GATE_FILE,
   REVIEW_GATE_STATE_FILE,
@@ -719,19 +720,13 @@ function commandHook(argv: readonly string[], timeoutMs?: number): ClaudeHookCom
 /** Shell-safe tokens: anything outside this set forces quoting. */
 const SHELL_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
 
-/**
- * The ONE `$`-carrying shape that keeps its expansion: a vendor plugin root
- * variable followed by a path.
- *
- * A plugin's hook commands are addressed through the client's own root variable
- * (`${CLAUDE_PLUGIN_ROOT}/hooks/…`), which the client expands in the command
- * string. Single-quoting that token would hand the client the literal variable
- * name where a path belongs and disarm every hook in the install — so the shape
- * is admitted, and admitted as narrowly as it can be stated: the WHOLE token is
- * `${NAME}` with `NAME` in the vendor's upper-case convention, followed by one
- * or more `/segment` whose characters come from {@link SHELL_SAFE} minus the
- * separator, so the token itself carries no whitespace, no quote and no shell
- * metacharacter.
+/*
+ * The ONE `$`-carrying shape that keeps its expansion — a vendor plugin root
+ * variable followed by a path — is `ROOT_VARIABLE_PATH`, imported from
+ * `../hooks/portableRunner.ts`. It used to be declared here and byte-twinned in
+ * `./cursor.ts`; the shape now has one home, because the branch it guards
+ * interpolates the token raw inside double quotes and two copies of a predicate
+ * like that drift apart in one direction only.
  *
  * It is rendered DOUBLE-quoted, never bare. The variable expands to the
  * plugin's ABSOLUTE install path, which can contain a space, and the vendor
@@ -744,10 +739,8 @@ const SHELL_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
  * Everything else that carries `$` — a bare `$VAR`, a lower-case name, a brace
  * with nothing after it, a command substitution wearing the prefix — stays
  * single-quoted, which is what `test/adapters/claude.test.ts` pins on both
- * sides. The twin in `./cursor.ts` (`shellCommand`) carries the same predicate;
- * the deferral note on {@link shellWord} is why there are two.
+ * sides.
  */
-const ROOT_VARIABLE_PATH = /^\$\{[A-Z_][A-Z0-9_]*\}(?:\/[A-Za-z0-9_@%+=:,.-]+)+$/;
 
 /**
  * One argv element into the joined command string.

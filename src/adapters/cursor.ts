@@ -6,7 +6,7 @@
  * Current contracts: https://cursor.com/docs/hooks (2026-09-17) and /docs/skills (2026-09-10).
  */
 
-import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE } from "../hooks/portableRunner.ts";
+import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE, ROOT_VARIABLE_PATH } from "../hooks/portableRunner.ts";
 import {
   buildContentIndex,
   emittedIdFor,
@@ -819,25 +819,16 @@ export function buildHooksJson(
 /** Shell-safe tokens: anything outside this set forces quoting. */
 const SHELL_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
 
-/**
- * The ONE `$`-carrying shape that keeps its expansion: a vendor plugin root
- * variable followed by a path — `${CURSOR_PLUGIN_ROOT}/hooks/…`, which the
- * client expands in the command string. Single-quoting it would hand the client
- * the literal variable name where a path belongs and disarm every hook in a
- * plugin install. Admitted as narrowly as it can be stated: the WHOLE token is
- * `${NAME}` in the vendor's upper-case convention followed by one or more
- * `/segment` drawn from {@link SHELL_SAFE} minus the separator, so the token can
- * carry no whitespace, no quote and no metacharacter.
+/*
+ * `ROOT_VARIABLE_PATH` — the one `$`-carrying token admitted past single-quoting
+ * — is imported from `../hooks/portableRunner.ts`. It was a byte-twin of
+ * `./claude.ts`'s copy; the shape now has one home, so it can no longer be
+ * narrowed in one renderer and left wide in the other.
  *
  * Rendered DOUBLE-quoted rather than bare: the variable expands to the plugin's
  * ABSOLUTE install path, which can hold a space, and double quotes are the one
  * rendering that keeps the expansion and survives one.
- *
- * Byte-twin of `./claude.ts`'s `ROOT_VARIABLE_PATH`, for the reason its
- * `shellWord` deferral note gives: these two renderers are copies, and change
- * one without the other and the other is wrong.
  */
-const ROOT_VARIABLE_PATH = /^\$\{[A-Z_][A-Z0-9_]*\}(?:\/[A-Za-z0-9_@%+=:,.-]+)+$/;
 
 /** argv rendered as one POSIX command line, each token quoted only if it needs it. */
 function shellCommand(argv: readonly string[]): string {
