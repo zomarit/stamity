@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   checkCommand,
   checkNodeVersion,
@@ -1395,6 +1395,43 @@ describe("probePluginRuntime — the timeout ceiling", () => {
   // keeps no handle around after the run.
   const STUBBORN_LOCATOR = stubbornLocator(2000);
 
+  /** The ceiling both cases hand the probe. */
+  const CEILING_MS = 300;
+  /**
+   * The release case's wall-clock budget, derived rather than typed (M-5).
+   *
+   * The case runs the probe in a cold `node` that imports the type-stripped
+   * engine graph, so its elapsed time is that cold start plus the ceiling, and
+   * a literal budget is a guess about a runner. The basis is measured once,
+   * here, by running the same driver shape with the probe call left out —
+   * measured 2026-09-20 on this machine at ~130ms, against ~30ms for a bare
+   * `node -e ''` — and MARGIN is the one guessed number, wide because the
+   * required CI legs include runners this cannot measure. The budget is
+   * `CEILING_MS + MARGIN x coldStart`; the driver's own timeout and the
+   * grandchild's life are multiples of it, so the three cannot drift apart.
+   */
+  const MARGIN = 8;
+  let coldStartMs = 0;
+  const probeModule = pathToFileURL(
+    fileURLToPath(new URL("../../../src/cli/commands/plugin/probe.ts", import.meta.url)),
+  ).href;
+
+  beforeAll(async () => {
+    // The driver's shape with the probe call left out: a cold `node`, the same
+    // import. Inline rather than a file, because no per-test directory exists
+    // at suite scope.
+    const started = Date.now();
+    await new Promise<void>((settle, reject) => {
+      execFile(
+        process.execPath,
+        ["--input-type=module", "-e", `await import(${JSON.stringify(probeModule)});`],
+        { encoding: "utf8" },
+        (error) => (error === null ? settle() : reject(error)),
+      );
+    });
+    coldStartMs = Date.now() - started;
+  });
+
   it("settles as a timeout rather than waiting on a locator that will not close", async () => {
     const handle = getRepo();
     const pluginDir = await pluginRoot(handle, "plugin-stubborn", STUBBORN_LOCATOR);
@@ -1434,12 +1471,18 @@ describe("probePluginRuntime — the timeout ceiling", () => {
    */
   it("releases the process once the probe settles, while the grandchild still holds stdout", async () => {
     const handle = getRepo();
-    // Six seconds: past the probe's ceiling, past the driver's budget below,
-    // and past the margin — an exit before it can only be release.
-    const pluginDir = await pluginRoot(handle, "plugin-stubborn-long", stubbornLocator(6_000));
-    const probeModule = pathToFileURL(
-      fileURLToPath(new URL("../../../src/cli/commands/plugin/probe.ts", import.meta.url)),
-    ).href;
+    const budgetMs = CEILING_MS + MARGIN * coldStartMs;
+    // The driver's own budget, well under the grandchild's life: hitting it
+    // IS the defect, reported as a kill rather than as a vitest timeout.
+    const driverTimeoutMs = 2 * budgetMs;
+    // Past the probe's ceiling, past the driver's budget, past the margin —
+    // an exit before it can only be release.
+    const grandchildMs = 3 * budgetMs;
+    const pluginDir = await pluginRoot(
+      handle,
+      "plugin-stubborn-long",
+      stubbornLocator(grandchildMs),
+    );
     // Node strips the module's types itself (22.18+; the floor is 22.22), so the
     // driver imports the source the suite imports, not a bundle of it.
     const driver = handle.path("driver.mjs");
@@ -1447,7 +1490,7 @@ describe("probePluginRuntime — the timeout ceiling", () => {
       driver,
       [
         `const { probePluginRuntime } = await import(${JSON.stringify(probeModule)});`,
-        `const probe = await probePluginRuntime(${JSON.stringify(pluginDir)}, { timeoutMs: 300 });`,
+        `const probe = await probePluginRuntime(${JSON.stringify(pluginDir)}, { timeoutMs: ${CEILING_MS} });`,
         "process.stdout.write(JSON.stringify({ outcome: probe.outcome }));",
         "",
       ].join("\n"),
@@ -1458,9 +1501,7 @@ describe("probePluginRuntime — the timeout ceiling", () => {
       execFile(
         process.execPath,
         [driver],
-        // The driver's own budget, well under the grandchild's life: hitting
-        // it IS the defect, reported as a kill rather than as a vitest timeout.
-        { timeout: 4_000, killSignal: "SIGKILL", encoding: "utf8" },
+        { timeout: driverTimeoutMs, killSignal: "SIGKILL", encoding: "utf8" },
         (error, stdout) => settle({ error, stdout }),
       );
     });
@@ -1468,8 +1509,11 @@ describe("probePluginRuntime — the timeout ceiling", () => {
 
     expect(run.error, `the probe process did not exit on its own (${elapsed}ms)`).toBeNull();
     expect(JSON.parse(run.stdout)).toEqual({ outcome: "timeout" });
-    // Near the ceiling, with room for a cold start; nowhere near the grandchild.
-    expect(elapsed).toBeLessThan(3_000);
+    // Near the ceiling plus a cold start; nowhere near the grandchild.
+    expect(
+      elapsed,
+      `${elapsed}ms against a budget of ${budgetMs}ms (ceiling ${CEILING_MS} + ${MARGIN} x ${coldStartMs}ms cold start)`,
+    ).toBeLessThan(budgetMs);
   });
 });
 
