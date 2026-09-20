@@ -524,6 +524,18 @@ operator to remove a dependency that deploys nothing, and closing it needs the i
 marketplace recorded on the client's `PluginClientRecord`, which no manifest field carries yet —
 the later fix, not this one. An unparseable `apm.yml` reports nothing rather than guessing.
 
+One coexistence state is ACCEPTED and stated rather than reported (disposition 2026-09-20). The
+vendor-neutral `.agents/skills/` tree stays written while any generated-mode reader still owns
+`skill`, so a repository whose cursor is plugin-backed for `skill` beside a generated codex keeps
+that tree on disk and cursor reads those skills twice — once from its plugin, once from the shared
+tree. `plugin-duplicates` passes there: the ledger source filters rows by adapter (the tree's rows
+belong to the remaining generated reader) and the unmanaged source exempts any path a ledger row
+owns. This is deliberate. A `fail` would break the CI of a legitimate mixed repository, and the
+tree cannot be removed without stripping the generated client of its skills. The way out is moving
+the LAST reader onto the plugin, at which point the tree stops being written and the double
+delivery ends; a verdict from this row would not have that effect. The behaviour is pinned as a
+decision by the mixed-repository case in `test/cli/commands/check.test.ts`.
+
 ### REQ-PLUGIN-020 Per-client install, discovery and invocation proof
 
 Given each built root, When the client proof runs, Then the installed tree's per-file sha-256
