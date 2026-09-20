@@ -233,17 +233,26 @@ describe("main — inputHashes keys never carry the checkout location", () => {
       (row: { inputHashes: Record<string, string> }) => Object.keys(row.inputHashes).length > 0,
     );
     expect(rowsWithInputs.length, "at least one row carries page inputs").toBeGreaterThan(0);
+    // The page-bound rows are H2 and H3; the plugins lane added H4a–H4d on 2026-09-20, and those are
+    // bound to the route smoke rather than to a built page. The relativization property under test
+    // holds for EVERY row and is asserted for every row; only the `website/build/` prefix is
+    // specific to the rows this case was written for, so it is applied to those.
+    const pageRows = new Set(["H2", "H3a", "H3b", "H3c", "H3d"]);
+    let pageKeys = 0;
     for (const row of rowsWithInputs) {
       for (const key of Object.keys((row as { inputHashes: Record<string, string> }).inputHashes)) {
         expect(key, `${row.row} key ${key}`).not.toMatch(/^[/\\]|^[A-Za-z]:[/\\]/);
         expect(key, `${row.row} key ${key}`).not.toContain(HOME);
         expect(key, `${row.row} key ${key}`).not.toContain(REPO_ROOT);
+        if (!pageRows.has(row.row)) continue;
         // The fixture's own directory name is expected to survive as a relative SEGMENT
         // (`website/build/stamity-qa-run-site-XXXX/index.html`) — what must not survive is the
         // absolute prefix in front of it, already ruled out above.
-        expect(key.startsWith("website/build/")).toBe(true);
+        expect(key.startsWith("website/build/"), `${row.row} key ${key}`).toBe(true);
+        pageKeys += 1;
       }
     }
+    expect(pageKeys, "no page-bound key was checked, so the prefix assertion never fired").toBeGreaterThan(0);
   });
 
   it("gives the same rowHash for the same page bytes whether --site is spelled relative or absolute", async () => {
@@ -283,6 +292,82 @@ describe("main — inputHashes keys never carry the checkout location", () => {
 
     expect(rowHashOf(evidenceRelative, "H2")).toBe(rowHashOf(evidenceAbsolute, "H2"));
     expect(rowHashOf(evidenceRelative, "H3a")).toBe(rowHashOf(evidenceAbsolute, "H3a"));
+  });
+});
+
+/**
+ * The plugins lane (`H4a`–`H4d`), which needs a BUILT distribution the harness deliberately does not
+ * build. Both cases below drive `main()` with no distribution at all, because that is the state the
+ * rows must describe honestly: a release run that forgot `--dist` must not produce four absent rows,
+ * and must certainly not produce four green ones. The lane's own measurement — the route smoke
+ * against real client binaries — is proven in `test/ci/pluginRoute.test.ts`; what is under test here
+ * is the row the harness writes when it cannot measure.
+ */
+describe("main — the plugins lane with nothing to measure", () => {
+  const temps: string[] = [];
+
+  afterEach(() => {
+    for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  function siteFixture(): string {
+    mkdirSync(join(REPO_ROOT, "website", "build"), { recursive: true });
+    const dir = mkdtempSync(join(REPO_ROOT, "website", "build", "stamity-qa-run-plugins-"));
+    temps.push(dir);
+    for (const file of ["index.html", "docs/getting-started/index.html"]) {
+      const target = join(dir, ...file.split("/"));
+      mkdirSync(join(target, ".."), { recursive: true });
+      writeFileSync(target, `<!doctype html><title>${file}</title>\n`);
+    }
+    return dir;
+  }
+
+  function evidencePath(): string {
+    const dir = mkdtempSync(join(tmpdir(), "stamity-qa-run-plugins-out-"));
+    temps.push(dir);
+    return join(dir, "evidence.json");
+  }
+
+  async function runHarness(extra: string[]): Promise<{ rows: { row: string; status: string; reason: string; inputHashes: Record<string, string> }[] }> {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { main } = await import("../../scripts/qa/run.mjs");
+    return (await main([
+      "--site",
+      siteFixture(),
+      "--skip-browser",
+      "--skip-hooks",
+      "--sha",
+      "cccccccccccccccccccccccccccccccccccccccc",
+      "--out",
+      evidencePath(),
+      ...extra,
+    ])) as { rows: { row: string; status: string; reason: string; inputHashes: Record<string, string> }[] };
+  }
+
+  const PLUGIN_ROWS = ["H4a", "H4b", "H4c", "H4d"];
+
+  it("writes all four rows as not-run, naming the missing --dist, when none was passed", async () => {
+    const evidence = await runHarness([]);
+
+    for (const id of PLUGIN_ROWS) {
+      const row = evidence.rows.find((entry) => entry.row === id);
+      expect(row, `${id} is absent from the evidence`).toBeDefined();
+      expect(row?.status, id).toBe("not-run");
+      expect(row?.reason, id).toBe("no --dist directory: build the distribution and pass it");
+      // Bound to the instrument that lives in this repository, so the row reopens when the smoke
+      // moves rather than carrying a constant hash a signature could sit on forever.
+      expect(Object.keys(row?.inputHashes ?? {}), id).toEqual(["scripts/plugin-route-smoke.mjs"]);
+    }
+  });
+
+  it("says the lane was skipped when --skip-plugins was passed, rather than blaming --dist", async () => {
+    const evidence = await runHarness(["--skip-plugins", "--dist", "website/build"]);
+
+    for (const id of PLUGIN_ROWS) {
+      const row = evidence.rows.find((entry) => entry.row === id);
+      expect(row?.status, id).toBe("not-run");
+      expect(row?.reason, id).toBe("the plugins lane was skipped (--skip-plugins)");
+    }
   });
 });
 

@@ -12,6 +12,7 @@ import { QA_ROWS, humanCell, renderForm } from "../../scripts/qa/form.mjs";
 interface CatalogueRow {
   id: string;
   lane: string;
+  client?: string;
   title: string;
   proves: string;
 }
@@ -106,15 +107,55 @@ const evidence = {
       inputHashes: PAGE_INPUTS,
       rowHash: "f5".repeat(32),
     },
+    {
+      row: "H4a",
+      automated: true,
+      status: "passed",
+      reason: "structure PASS || install PASS || discovery PASS || invocation PASS",
+      inputHashes: { "dist/claude/stamity-plugin.json": "1a".repeat(32) },
+      rowHash: "a4".repeat(32),
+    },
+    {
+      row: "H4b",
+      automated: false,
+      status: "not-run",
+      reason: "install SKIPPED: a Cursor run is a model call; pass --invoke",
+      inputHashes: { "dist/cursor/stamity-plugin.json": "2a".repeat(32) },
+      rowHash: "b4".repeat(32),
+    },
+    {
+      row: "H4c",
+      automated: true,
+      status: "failed",
+      reason: "install FAIL: nothing was deployed under installed-plugins/stamity/stamity",
+      inputHashes: { "dist/copilot/stamity-plugin.json": "3a".repeat(32) },
+      rowHash: "c4".repeat(32),
+    },
+    {
+      row: "H4d",
+      automated: false,
+      status: "not-run",
+      reason: "invocation SKIPPED: needs --invoke",
+      inputHashes: { "dist/codex/stamity-plugin.json": "4a".repeat(32) },
+      rowHash: "d4".repeat(32),
+    },
   ],
 };
 
 describe("renderForm", () => {
-  it("renders all nine rows, in catalogue order", () => {
+  it("renders all thirteen rows, in catalogue order", () => {
     const markdown = renderForm(evidence) as string;
 
     const ids = (QA_ROWS as CatalogueRow[]).map((row) => row.id);
-    expect(ids).toEqual(["H1a", "H1b", "H1c", "H1d", "H2", "H3a", "H3b", "H3c", "H3d"]);
+    // The plugin route added `H4a`–`H4d` on 2026-09-20, one per client, after `H3d` — the ids are
+    // the join key the form, the harness and the run record share, so their ORDER is pinned here
+    // rather than left to whatever order the catalogue happens to be written in.
+    expect(ids).toEqual([
+      "H1a", "H1b", "H1c", "H1d",
+      "H2",
+      "H3a", "H3b", "H3c", "H3d",
+      "H4a", "H4b", "H4c", "H4d",
+    ]);
     for (const id of ids) expect(markdown).toContain(`**${id}**`);
 
     const positions = ids.map((id) => markdown.indexOf(`| **${id}**`));
@@ -187,6 +228,38 @@ describe("renderForm", () => {
     expect(markdown).toContain("playwright 1.63.0");
     expect(markdown).toContain("browser 153.0.8010.12");
     expect(markdown).toContain("axe-core 4.13.0");
+  });
+});
+
+describe("the plugin-route rows", () => {
+  it("names one client per row, all four of them, on the lane run.mjs dispatches", () => {
+    const plugins = (QA_ROWS as CatalogueRow[]).filter((row) => row.lane === "plugins");
+    expect(plugins.map((row) => row.id)).toEqual(["H4a", "H4b", "H4c", "H4d"]);
+    expect(plugins.map((row) => row.client)).toEqual(["claude", "cursor", "copilot", "codex"]);
+    for (const row of plugins) {
+      expect(row.title, row.id).toContain("Plugin route");
+      // Every row states what a pass would MEAN, and the instrument is the manifest the setup
+      // writes rather than anything a model said.
+      expect(row.proves, row.id).toContain(".stamity/manifest.json");
+      expect(row.proves, row.id).toContain("plugin-backed");
+    }
+  });
+
+  it("renders a measured plugin failure as a failure and a skipped leg as not-run", () => {
+    const markdown = renderForm(evidence) as string;
+
+    const failed = markdown.split("\n").find((line) => line.startsWith("| **H4c**")) ?? "";
+    expect(failed).toContain("| failed |");
+    expect(failed).not.toContain("UNPERFORMED");
+    expect(failed).toContain("nothing was deployed");
+
+    const notRun = markdown.split("\n").find((line) => line.startsWith("| **H4b**")) ?? "";
+    expect(notRun).toContain("| not-run |");
+    expect(notRun).toContain("UNPERFORMED");
+    expect(notRun).toContain("pass --invoke");
+
+    // The row is bound to the root it was measured against, under a logical label.
+    expect(markdown).toContain("- `dist/codex/stamity-plugin.json` — `" + "4a".repeat(32) + "`");
   });
 });
 

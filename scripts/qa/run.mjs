@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// The QA harness: measures the nine form rows it can measure, binds all nine to the bytes they
-// were measured against, and writes one evidence file.
+// The QA harness: measures the thirteen form rows it can measure, binds all thirteen to the bytes
+// they were measured against, and writes one evidence file.
 //
 // WHAT THIS REPLACES. Nine rows of a manual walk-through have been carried to two releases reading
 // UNPERFORMED, which is honest and useless: nobody could tell which of them had gone stale and
@@ -16,14 +16,16 @@
 // `not-applicable` and says why, because a page with no grid contract cannot keep or break one.
 // Every status in the evidence file came from something that ran.
 //
-// WHAT IT BUILDS. Nothing. The caller builds the site (`cd website && npm run build`) and the CLI
-// (`npm run build`); this script reads both. That split keeps the harness honest about staleness —
-// it hashes what is on disk and reports it, rather than regenerating inputs until they agree.
+// WHAT IT BUILDS. Nothing. The caller builds the site (`cd website && npm run build`), the CLI
+// (`npm run build`) and the plugin distribution (`scripts/build-plugin-distribution.mjs`, passed as
+// `--dist`); this script reads all three. That split keeps the harness honest about staleness — it
+// hashes what is on disk and reports it, rather than regenerating inputs until they agree. A run
+// with no `--dist` is a run that measured no plugin route, and the four `H4` rows say exactly that.
 //
 // Usage:
 //   node scripts/qa/run.mjs [--site website/build] [--sha <sha>] [--out <path>]
-//                           [--fixtures <dir>] [--clients claude,codex,cursor,copilot]
-//                           [--skip-hooks] [--skip-browser]
+//                           [--fixtures <dir>] [--dist <dir>] [--clients claude,codex,cursor,copilot]
+//                           [--skip-hooks] [--skip-browser] [--skip-plugins]
 
 import { execFileSync } from 'node:child_process'
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -34,6 +36,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { carryForward, hashFile, inputHashMap, rowHash } from './bind.mjs'
 import { QA_ROWS } from './form.mjs'
 import { exitDescription, runHookClients } from './hook-runs.mjs'
+import { runPluginClients } from './plugin-runs.mjs'
 
 const SELF = fileURLToPath(import.meta.url)
 const REPO_ROOT = resolve(SELF, '..', '..', '..')
@@ -133,6 +136,16 @@ const HOOK_INPUT_PATTERNS = {
   copilot: ['.github/hooks/stamity.json'],
 }
 
+/**
+ * The one input an `H4` row is bound to when the plugin lane cannot run.
+ *
+ * A row bound to nothing has a constant hash, and a signature on it would never reopen however far
+ * the instrument moved underneath it (the argument `hook-runs.mjs` makes for building its fixture
+ * before probing for a binary). The smoke script is the part of the instrument that lives in this
+ * repository, so every `H4` row carries it whether or not a distribution was passed.
+ */
+const PLUGIN_SMOKE = 'scripts/plugin-route-smoke.mjs'
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -152,12 +165,13 @@ const MIME = {
 /** The usage banner, so `--help` answers rather than sending the reader to the file. */
 export const USAGE =
   'Usage: node scripts/qa/run.mjs [--site website/build] [--sha <sha>] [--out <path>]\n' +
-  '                               [--fixtures <dir>] [--clients claude,codex,cursor,copilot]\n' +
-  '                               [--skip-hooks] [--skip-browser]'
+  '                               [--fixtures <dir>] [--dist <dir>]\n' +
+  '                               [--clients claude,codex,cursor,copilot]\n' +
+  '                               [--skip-hooks] [--skip-browser] [--skip-plugins]'
 
-/** `--flag value` and `--flag` over argv. Deliberately small: this script takes seven options. */
+/** `--flag value` and `--flag` over argv. Deliberately small: this script takes nine options. */
 export function parseArgs(argv) {
-  const options = { clients: ['claude', 'codex', 'cursor', 'copilot'], skipHooks: false, skipBrowser: false }
+  const options = { clients: ['claude', 'codex', 'cursor', 'copilot'], skipHooks: false, skipBrowser: false, skipPlugins: false }
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     const next = argv[i + 1]
@@ -166,9 +180,11 @@ export function parseArgs(argv) {
     else if (arg === '--sha') { options.sha = next; i += 1 }
     else if (arg === '--out') { options.out = next; i += 1 }
     else if (arg === '--fixtures') { options.fixtures = next; i += 1 }
+    else if (arg === '--dist') { options.dist = next; i += 1 }
     else if (arg === '--clients') { options.clients = (next ?? '').split(',').filter((c) => c !== ''); i += 1 }
     else if (arg === '--skip-hooks') options.skipHooks = true
     else if (arg === '--skip-browser') options.skipBrowser = true
+    else if (arg === '--skip-plugins') options.skipPlugins = true
     else throw new Error(`Unknown option ${arg}.\n${USAGE}`)
   }
   return options
@@ -486,6 +502,25 @@ export async function main(argv) {
         ...(fixturesDir === undefined ? {} : { fixturesDir }),
       })
 
+  // The plugin lane needs a BUILT distribution, and this harness does not build one: a tree it had
+  // just made would be a tree it was reporting on rather than the tree under test (the same split
+  // the site and the CLI already follow). `--dist` is free to sit outside the repository — that is
+  // where `scripts/build-plugin-distribution.mjs` is normally pointed — because the row's labels are
+  // logical (`dist/<client>/…`), composed by the smoke and never from this argument.
+  const distDir = options.dist === undefined ? undefined : resolve(REPO_ROOT, options.dist)
+  const pluginResults =
+    options.skipPlugins || distDir === undefined
+      ? []
+      : runPluginClients({
+          clients: options.clients,
+          repoRoot: REPO_ROOT,
+          distDir,
+          ...(fixturesDir === undefined ? {} : { scratchDir: fixturesDir }),
+        })
+  const smokeInputs = existsSync(join(REPO_ROOT, ...PLUGIN_SMOKE.split('/')))
+    ? [{ path: PLUGIN_SMOKE, sha256: hashFile(join(REPO_ROOT, ...PLUGIN_SMOKE.split('/'))) }]
+    : []
+
   const rows = []
   for (const definition of QA_ROWS) {
     if (definition.lane === 'hooks') {
@@ -519,6 +554,38 @@ export async function main(argv) {
           inputs,
         }),
       )
+      continue
+    }
+
+    if (definition.lane === 'plugins') {
+      if (options.skipPlugins) {
+        rows.push(buildRow({ id: definition.id, status: 'not-run', reason: 'the plugins lane was skipped (--skip-plugins)', inputs: smokeInputs }))
+        continue
+      }
+      if (distDir === undefined) {
+        rows.push(
+          buildRow({
+            id: definition.id,
+            status: 'not-run',
+            reason: 'no --dist directory: build the distribution and pass it',
+            inputs: smokeInputs,
+          }),
+        )
+        continue
+      }
+      const result = pluginResults.find((row) => row.client === definition.client)
+      if (result === undefined) {
+        rows.push(
+          buildRow({
+            id: definition.id,
+            status: 'not-run',
+            reason: `client "${definition.client}" was not in --clients`,
+            inputs: smokeInputs,
+          }),
+        )
+        continue
+      }
+      rows.push(buildRow({ id: definition.id, status: result.status, reason: result.reason, inputs: result.inputs ?? smokeInputs }))
       continue
     }
 

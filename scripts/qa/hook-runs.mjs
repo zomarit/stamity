@@ -49,15 +49,29 @@ const RUN_TIMEOUT_MS = 300_000
  * requirement and the per-hook `/hooks` review, and do not state whether `exec` loads the project
  * hook layer at all. So the honest row is `not-run` with that reason: driving `exec` here would
  * record a `failed` row about the client's headless behaviour and read as a defect in the emission.
- * `cursor` and `copilot` carry documented binary names (`cursor-agent`, `copilot`) so the row is
- * PROBED rather than asserted: {@link runClient} calls {@link binaryVersion} the same way it does
- * for `claude`, and the reason is built from what that probe actually found (absent → "not on
- * PATH"; present → the probed version) instead of a literal typed once and never rechecked. Neither
- * carries an `args` entry: unlike `claude`'s `-p`/`--output-format` and codex's `exec`, this module
- * has no MEASURED non-interactive invocation for either client's CLI to cite — inventing flags here
- * would guess at a headless syntax and drive it, the same defect this module's own header warns
- * against for codex's `exec`. So a present binary is still `not-run`, with the reason naming the
- * probed version and the missing citation, rather than a run against unverified flags.
+ * `cursor` and `copilot` NOW DRIVE, and both invocations are measured rather than read off a page.
+ * Until 2026-09-20 neither carried an `args` entry, because this module had no measured
+ * non-interactive invocation for either CLI and inventing flags would have guessed at a headless
+ * syntax and driven it. That gap is closed:
+ *
+ *   cursor — the binary is `agent`, not `cursor-agent` (`agent --version` prints
+ *   `2026.09.15-d2fe57e`), and `--trust` is not optional: without it the CLI exits 1 on the
+ *   Workspace Trust prompt and never reaches the model, so the row would measure the prompt and not
+ *   the hook. Measured 2026-09-20 against 2026.09.15-d2fe57e — `agent --help` on that build lists
+ *   `-p, --print` and `--trust`, and the plugin-route leg at
+ *   `test/ci/pluginPackages.cursor.test.ts:600-680` drives the same pair through to a model answer.
+ *   The vendor reference is cursor.com/docs/cli/reference.
+ *
+ *   copilot — `-p <text>` is the documented non-interactive lane and `-s` silences the run's stats
+ *   so the transcript is the model's answer alone (`copilot --help` on GitHub Copilot CLI 1.0.85,
+ *   read 2026-09-20, lists `-p, --prompt <text>` and `-s, --silent`; the same pair is driven by
+ *   `test/ci/pluginPackages.copilot.test.ts`). The vendor reference is
+ *   docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference.
+ *
+ * What this does NOT change is the instrument or the posture: both rows are still decided by the
+ * hook's own observation log, a client whose binary is absent is still `not-run` with the probe's
+ * reason, and a run that produces no observation is a `failed` row rather than an absent one — the
+ * clients' own headless behaviour is exactly what these two rows exist to report.
  */
 export const CLIENT_RUNNERS = {
   claude: {
@@ -73,10 +87,12 @@ export const CLIENT_RUNNERS = {
       'and the TUI observation stay human',
   },
   cursor: {
-    binary: 'cursor-agent',
+    binary: 'agent',
+    args: ['--trust', '-p', PROMPT],
   },
   copilot: {
     binary: 'copilot',
+    args: ['-p', PROMPT, '-s'],
   },
 }
 
@@ -91,8 +107,10 @@ export const CLIENT_RUNNERS = {
  * universally a zero-exit flag — so that case still counts, and the version string is what proves
  * it). Anything else is reported, never silently upgraded to a version.
  */
+// Imported by `scripts/plugin-route-smoke.mjs` as well as read here, so the subject is the shell-less
+// spawn rather than this one lane: two copies of a sentence are a pin that drifts.
 export const WINDOWS_PROBE_LIMIT =
-  'the hook lane spawns the client without a shell, which on Windows cannot resolve an npm `.cmd` shim; run the harness on a POSIX host, or put the client\'s `.exe` on PATH'
+  'a client spawned without a shell cannot be resolved from an npm `.cmd` shim on Windows; run on a POSIX host, or put the client\'s `.exe` on PATH'
 
 export function binaryVersion(binary, { platform = process.platform } = {}) {
   const probe = spawnSync(binary, ['--version'], { encoding: 'utf8', timeout: 60_000 })
@@ -172,8 +190,8 @@ export function verdictFor(observations) {
  * the absent clients' rows bound to an empty input list, and a row bound to nothing has a constant
  * hash: a signature on it would never reopen, however far the emission moved underneath it.
  */
-export function runClient({ client, repoRoot, fixturesDir }) {
-  const runner = CLIENT_RUNNERS[client]
+export function runClient({ client, repoRoot, fixturesDir, runners = CLIENT_RUNNERS }) {
+  const runner = runners[client]
   if (runner === undefined) {
     return { client, status: 'not-run', reason: `no runner is defined for client "${client}"` }
   }
@@ -252,7 +270,15 @@ export function runClient({ client, repoRoot, fixturesDir }) {
   }
 }
 
-/** Every requested client, in the order given. */
-export function runHookClients({ clients, repoRoot, fixturesDir }) {
-  return clients.map((client) => runClient({ client, repoRoot, fixturesDir }))
+/**
+ * Every requested client, in the order given.
+ *
+ * `runners` defaults to {@link CLIENT_RUNNERS} and is a parameter for one reason: the
+ * no-measured-invocation branch of {@link runClient} has no entry left in the table now that cursor
+ * and copilot drive, and a branch with no subject is a branch nothing holds. A caller — in practice
+ * the suite — injects a synthetic runner to exercise it, which is cheaper and more honest than
+ * keeping a real client entry crippled to serve a test.
+ */
+export function runHookClients({ clients, repoRoot, fixturesDir, runners = CLIENT_RUNNERS }) {
+  return clients.map((client) => runClient({ client, repoRoot, fixturesDir, runners }))
 }

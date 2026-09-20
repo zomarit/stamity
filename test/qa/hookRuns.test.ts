@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { CLIENT_RUNNERS, WINDOWS_PROBE_LIMIT, binaryVersion, exitDescription, runClient } from "../../scripts/qa/hook-runs.mjs";
+import { CLIENT_RUNNERS, PROMPT, WINDOWS_PROBE_LIMIT, binaryVersion, exitDescription, runClient } from "../../scripts/qa/hook-runs.mjs";
 
 /**
  * W6: `cursor` and `copilot` used to carry a constant, never-probed "not on PATH" reason. This
@@ -11,6 +11,10 @@ import { CLIENT_RUNNERS, WINDOWS_PROBE_LIMIT, binaryVersion, exitDescription, ru
  * `notRun` string) and `runClient`'s behaviour once a binary is actually found on `PATH`, which is
  * exercised with a throwaway script rather than the real client (neither is expected to be
  * installed on a CI or dev machine, and the point is the PROBE, not the real binary).
+ *
+ * 2026-09-20: both clients gained a MEASURED non-interactive invocation, so the shape pinned below
+ * is now "binary plus args" rather than "binary with no args". The argless branch of `runClient`
+ * survives with a synthetic runner injected through `runners` — see that case's own comment.
  */
 
 const temps: string[] = [];
@@ -74,15 +78,26 @@ function posixSignalKillDir(name: string): string {
   return dir;
 }
 
-describe("CLIENT_RUNNERS — cursor and copilot are probed, not asserted", () => {
-  it("names the documented binary and carries no constant notRun reason", () => {
-    expect(CLIENT_RUNNERS.cursor.binary).toBe("cursor-agent");
+describe("CLIENT_RUNNERS — cursor and copilot drive the invocations that were measured", () => {
+  it("names the measured binary and flags, and carries no constant notRun reason", () => {
+    // The binary is `agent`, not `cursor-agent`: `agent --version` prints `2026.09.15-d2fe57e`
+    // (measured 2026-09-20). `--trust` is not optional — without it the CLI exits 1 on the Workspace
+    // Trust prompt and the row would measure the prompt rather than the hook.
+    expect(CLIENT_RUNNERS.cursor.binary).toBe("agent");
+    expect(CLIENT_RUNNERS.cursor.args).toEqual(["--trust", "-p", PROMPT]);
     expect(CLIENT_RUNNERS.cursor.notRun).toBeUndefined();
+    // `copilot --help` on 1.0.85 (read 2026-09-20) lists `-p, --prompt <text>` and `-s, --silent`.
     expect(CLIENT_RUNNERS.copilot.binary).toBe("copilot");
+    expect(CLIENT_RUNNERS.copilot.args).toEqual(["-p", PROMPT, "-s"]);
     expect(CLIENT_RUNNERS.copilot.notRun).toBeUndefined();
-    // codex's measured reason is untouched by this fix.
+    // codex's measured reason is untouched: `exec` on 0.154.0 loads no project hook layer at all.
     expect(CLIENT_RUNNERS.codex.binary).toBeNull();
     expect(typeof CLIENT_RUNNERS.codex.notRun).toBe("string");
+    // Every runner that drives states its own prompt, so a difference between two rows is the
+    // client and not the ask.
+    for (const client of ["claude", "cursor", "copilot"] as const) {
+      expect(CLIENT_RUNNERS[client].args, client).toContain(PROMPT);
+    }
   });
 });
 
@@ -152,7 +167,12 @@ describe("runClient — a binary probed present with no measured invocation", ()
   it.skipIf(WINDOWS)(
     "stays not-run and names the probed version rather than guessing at flags",
     () => {
-      pathDirWith("cursor-agent", { echo: "fixture-9.9.9" });
+      // The branch this case covers has no entry left in CLIENT_RUNNERS: cursor and copilot both
+      // gained measured `args` on 2026-09-20. It is still the rule the module states — a present
+      // binary with no measured invocation is `not-run`, never a run against invented flags — so the
+      // subject is a SYNTHETIC runner injected through `runners`. Keeping a real client's entry
+      // argless to serve a test would have been the other way, and would have cost a real row.
+      pathDirWith("stamity-qa-hookruns-argless", { echo: "fixture-9.9.9" });
       // Real repoRoot: `createFixture` shells out to this checkout's own `dist/cli.js`, already
       // built by the suite's own setup — the same dependency `test/qa/*` and `scripts/qa/run.mjs`
       // itself carries, not a mock.
@@ -162,6 +182,7 @@ describe("runClient — a binary probed present with no measured invocation", ()
         client: "cursor",
         repoRoot,
         fixturesDir: mkdtempSync(join(tmpdir(), "stamity-qa-hookruns-fixtures-")),
+        runners: { cursor: { binary: "stamity-qa-hookruns-argless" } },
       });
 
       expect(row.status).toBe("not-run");

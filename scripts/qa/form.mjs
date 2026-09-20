@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // The QA form, rendered from an evidence file rather than typed.
 //
-// Nine rows have been carried through two releases as "UNPERFORMED", which is an honest record of
-// a walk-through nobody did and a useless one for deciding whether the next release needs it. This
-// module renders the same nine rows out of `.stamity/evidence/qa-<sha>.json`, so each one arrives
-// with the thing a typed form never carries: what it was measured against. Four of the rows the
-// harness can now measure end to end; the rest stay human, and a human row reads UNPERFORMED until
-// somebody signs it — with the row's input hash beside the signature, so the next run can tell
-// whether that signature still describes the tree.
+// Nine rows were carried through two releases as "UNPERFORMED", which is an honest record of a
+// walk-through nobody did and a useless one for deciding whether the next release needs it. This
+// module renders thirteen rows out of `.stamity/evidence/qa-<sha>.json` — the original nine plus one
+// per client for the plugin route (`H4a`–`H4d`) — so each one arrives with the thing a typed form
+// never carries: what it was measured against. The rows the harness can measure end to end it
+// measures; the rest stay human, and a human row reads UNPERFORMED until somebody signs it — with
+// the row's input hash beside the signature, so the next run can tell whether that signature still
+// describes the tree.
 //
 // Nothing here decides a status. `run.mjs` measures, `bind.mjs` carries human answers forward, and
 // this file only renders what those two produced. A row with no measurement renders as `not-run`
@@ -19,13 +20,15 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 /**
- * The nine rows, in form order.
+ * The thirteen rows, in form order.
  *
- * The ids are the form's (`H1a`–`H1d`, `H2`, `H3a`–`H3d`) and the split follows what each row is
- * measured BY: H1 is one row per client whose hook lane is exercised, H2 is the accessibility tree
- * and scanner pass over the built pages, and H3 is one row per viewport/theme pair of the keyboard
- * journey. `lane` names which half of the harness owns the row, and is what `run.mjs` dispatches
- * on — a row nobody owns would be a row nobody measures.
+ * The ids are the form's (`H1a`–`H1d`, `H2`, `H3a`–`H3d`, `H4a`–`H4d`) and the split follows what
+ * each row is measured BY: H1 is one row per client whose hook lane is exercised, H2 is the
+ * accessibility tree and scanner pass over the built pages, H3 is one row per viewport/theme pair
+ * of the keyboard journey, and H4 is one row per client for the plugin route — install, discovery
+ * and invocation of a built plugin root through that client's own commands. `lane` names which half
+ * of the harness owns the row, and is what `run.mjs` dispatches on — a row nobody owns would be a
+ * row nobody measures.
  */
 export const QA_ROWS = [
   {
@@ -93,6 +96,42 @@ export const QA_ROWS = [
     theme: 'dark',
     title: 'Keyboard journey — 1440px, dark',
     proves: 'every focus stop is visible, reading order equals DOM order, and the table page answers the arrow keys or says why not',
+  },
+  {
+    id: 'H4a',
+    lane: 'plugins',
+    client: 'claude',
+    title: 'Plugin route — install, discovery and invocation under Claude Code',
+    proves:
+      "the built root installs through the client's own route, lists `st-work` and `stamity-reviewer` where agents ride, and its `st-setup` command writes `.stamity/manifest.json` with `plugin.mode` `plugin-backed`",
+  },
+  {
+    id: 'H4b',
+    lane: 'plugins',
+    client: 'cursor',
+    title: 'Plugin route — install, discovery and invocation under Cursor',
+    proves:
+      "the built root installs through the client's own route, lists `st-work` and `stamity-reviewer` where agents ride, and its `st-setup` command writes `.stamity/manifest.json` with `plugin.mode` `plugin-backed`",
+  },
+  {
+    id: 'H4c',
+    lane: 'plugins',
+    client: 'copilot',
+    title: 'Plugin route — install, discovery and invocation under the Copilot CLI',
+    proves:
+      "the built root installs through the client's own route, lists `st-work` and `stamity-reviewer` where agents ride, and its `st-setup` command writes `.stamity/manifest.json` with `plugin.mode` `plugin-backed`",
+  },
+  {
+    id: 'H4d',
+    lane: 'plugins',
+    client: 'codex',
+    title: 'Plugin route — install, discovery and invocation under Codex',
+    // This container carries no command and no agent class, so the sentence its three siblings share
+    // would promise ids this root cannot hold: `st-work` rides as a command and `st-setup` is
+    // generated into one. What Codex carries is skills, and the setup route is the line its own
+    // README prints — which is what this row is a claim about.
+    proves:
+      'the built root installs through the marketplace route into the client\'s own cache, its carried skills are discovered under the form the root declares, and the setup line its README names writes `.stamity/manifest.json` with `plugin.mode` `plugin-backed`',
   },
 ]
 
