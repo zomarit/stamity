@@ -441,10 +441,20 @@ describe("the page an operator reads before installing", () => {
       "codex plugin marketplace upgrade",
       "codex plugin remove",
       "/plugins",
-      'node "$PLUGIN_ROOT/runtime/locate.mjs" -- plugin setup --client codex -y',
+      // TEST CHANGE, justified. This pinned `node "$PLUGIN_ROOT/runtime/locate.mjs" -- ...` as
+      // the setup line an operator types. `$PLUGIN_ROOT` is exported to HOOK processes and to
+      // nothing else, so in the operator's own shell it expands to nothing and the command ran
+      // as `node "/runtime/locate.mjs"`. The README now gives a placeholder the operator
+      // substitutes and names the installed cache path to substitute from; what moved is the
+      // page's advice, not this case's standard.
+      'node "<plugin root>/runtime/locate.mjs" -- plugin setup --client codex -y',
+      "<CODEX_HOME>/plugins/cache/stamity/stamity/",
     ]) {
       expect(readme, `README.md does not name \`${line}\``).toContain(line);
     }
+    // And it says why the variable is not the answer, rather than leaving the reader to find out.
+    expect(readme).toContain("exported to hook processes and to nothing else");
+    expect(readme, "a bare $PLUGIN_ROOT is still offered as a shell path").not.toContain('node "$PLUGIN_ROOT/');
     // No command class, so no generated `st-setup` — the manual line above IS the setup route.
     expect(treeFiles(root).filter((rel) => rel.includes("st-setup"))).toEqual([]);
     // The two rules an operator loses a morning to otherwise.

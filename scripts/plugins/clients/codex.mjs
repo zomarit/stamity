@@ -85,6 +85,15 @@ export function place(row) {
   if (path.startsWith('.codex/agents/')) return null
   if (path === '.codex/config.toml') return null
   if (path === 'AGENTS.md') return null
+  // `.stamity/generated/` is NOT part of the catch-all below. The two rows this container takes
+  // from it — the policy document and this client's hook scripts — are matched by name above;
+  // anything else under it is a generated document a hook or an agent is meant to READ, and
+  // where it lands inside a plugin root is a placement decision. Returning `undefined` sends it
+  // to the layout's refusal, so the next such document is placed deliberately rather than
+  // dropped into the same silence as the state tree.
+  if (path.startsWith('.stamity/generated/')) return undefined
+  // The rest of `.stamity/` is this repository's own state — the ledger, the run records, the
+  // learnings — and describes one checkout. Dropped, with the reason the capability file carries.
   if (path.startsWith('.stamity/')) return null
 
   return undefined
@@ -162,12 +171,25 @@ not put it in reach of the session that ran the install. Start a new one before 
 
 ## Set the repository up
 
-This root carries no \`st-setup\` command — ${COMMAND_REASON}. Run the setup directly instead,
-once per repository:
+This root carries no \`st-setup\` command — ${COMMAND_REASON}. Run the setup yourself instead,
+once per repository, from that repository's directory:
 
 \`\`\`sh
-node "$PLUGIN_ROOT/runtime/locate.mjs" -- plugin setup --client codex -y
+node "<plugin root>/runtime/locate.mjs" -- plugin setup --client codex -y
 \`\`\`
+
+\`<plugin root>\` is a path YOU substitute, and \`$PLUGIN_ROOT\` is not it: that variable is
+exported to hook processes and to nothing else, so in your own shell it expands to nothing and
+the line above would send \`node\` to \`/runtime/locate.mjs\`. An install through the
+marketplace above puts this root at
+
+\`\`\`
+<CODEX_HOME>/plugins/cache/${identity.name}/${identity.name}/${version}/
+\`\`\`
+
+where \`<CODEX_HOME>\` is \`~/.codex\` unless you have set it, the first \`${identity.name}\`
+is the marketplace's name and the second is this plugin's. Run \`codex plugin list --json\` if
+the version directory is not the one above.
 
 It writes the repository-owned half this root does not carry: the charter with this repository's
 facts and gates, and the client configuration.
