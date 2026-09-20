@@ -22,7 +22,15 @@ const DEFAULT_BRANCH = 'plugin-dist'
 const DEFAULT_TAG_PATTERN = 'plugins/v<version>'
 const DEFAULT_NPM_REGISTRY = 'https://registry.npmjs.org'
 
-const DISTRIBUTION_KEYS = ['branch', 'tagPattern', 'sources']
+const DISTRIBUTION_KEYS = ['branch', 'tagPattern', 'ownerEmail', 'sources']
+
+/**
+ * A contact address, not a login. Two client marketplaces document an `owner.email` field and
+ * one organization in three wants a mailbox on its internal catalog; the check is deliberately
+ * loose (one `@`, a dot in the domain, no whitespace) because an address is the owner's to
+ * spell, and deliberately non-echoing like every other refusal here.
+ */
+const OWNER_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const SOURCE_KEYS = ['kind', 'url', 'repo', 'path', 'registry']
 
 /**
@@ -241,6 +249,13 @@ function resolveDistribution(configured, context) {
     )
   }
 
+  const ownerEmail = configured.ownerEmail
+  if (ownerEmail !== undefined && !(typeof ownerEmail === 'string' && OWNER_EMAIL.test(ownerEmail))) {
+    throw new Error(
+      'package.json stamity.distribution.ownerEmail must be an email address the catalogs publish as the owner contact; the value is not echoed.',
+    )
+  }
+
   const configuredSources = configured.sources ?? {}
   if (!isPlainObject(configuredSources)) {
     throw new Error('package.json stamity.distribution.sources must be an object keyed by client.')
@@ -251,7 +266,13 @@ function resolveDistribution(configured, context) {
   for (const client of DISTRIBUTION_CLIENTS) {
     sources[client] = resolveSource(client, configuredSources[client], context)
   }
-  return { branch, tagPattern, sources }
+  // Key order is fixed: the catalog renderers read this object and their bytes are compared.
+  // `ownerEmail` is absent rather than null when unset, because a catalog omits the field
+  // entirely in that case and an explicit null would have to be filtered at every reader.
+  const distribution = { branch, tagPattern }
+  if (ownerEmail !== undefined) distribution.ownerEmail = ownerEmail
+  distribution.sources = sources
+  return distribution
 }
 
 export function resolveDistributionIdentity(pkg) {
