@@ -109,6 +109,62 @@ codex minor.
   [Hook schema and decisions](https://docs.github.com/en/copilot/reference/hooks-reference),
   [cloud discovery](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/use-hooks).
 
+### Copilot CLI plugin container (2026-09-20)
+
+A published plugin root is a different address space from the repository surface above, and the
+two disagree on more than one path. Measured for the generated `copilot` root against
+[the CLI plugin reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference)
+and [the hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference)
+(both read 2026-09-20), with the client itself — GitHub Copilot CLI 1.0.85, in a scratch
+`COPILOT_HOME` — settling what the pages leave open.
+
+The manifest is `plugin.json` at the root, and its exact `$schema` value opts the plugin into
+Agent Plugins 1.0. That schema, vendored at `test/fixtures/plugins/agent-plugins-1.0.0.schema.json`
+from [the published document](https://agent-plugins.org/schemas/1.0.0/plugin.schema.json)
+(read 2026-09-20), is closed: ten properties, `additionalProperties: false`, `$schema` and `name`
+required, `author` closed to `name`/`email`/`url`, `name` bounded by a pattern with a lookahead,
+no logo field and no component path fields at all. The CLI reports and ignores an unknown
+top-level key; the vendored schema refuses it, which is the stricter of the two gates and the one
+this repository holds itself to.
+
+Layout, as the reference's own table states it: `com.github.copilot/agents/`,
+`com.github.copilot/commands/`, `com.github.copilot/rules/`, `com.github.copilot/hooks/hooks.json`
+and `com.github.copilot/lsp.json`, with `skills/` and `mcp.json` FIXED at the root for Agent
+Plugins 1.0. The hooks path is the namespaced one — confirmed on the page, where bare `hooks.json`
+and `hooks/hooks.json` are named as the LEGACY-plugin fallback and not as an Agent Plugins 1.0
+location. The table gives directories and states no file extension for any of them. Agents are
+`<id>.agent.md` on the page. Commands are not: the page never says, so the root measured it, and
+the CLI derives an id by stripping ONE extension — `st-work.prompt.md` registers `st-work.prompt`,
+`st-work.md` registers `st-work`. The container therefore takes `<id>.md`, and `.prompt.md` stays
+what it has always been here, the spelling of the REPOSITORY's `.github/prompts/`. Rules stay
+repository-owned: the directory exists and its file format is not stated. `${PLUGIN_ROOT}` is
+documented for MCP `args`, `env` and `cwd`, for agent frontmatter and for LSP configuration; its
+expansion inside a hook `command` string, and its export to a hook process, are NOT stated, and
+the generated root uses it in hook commands anyway because it is the only documented handle on an
+installed root's own files. That one remains unmeasured and is declared as such on the root's
+`hooks` class.
+
+Discovery and cache paths, from the same reference. A marketplace manifest is read from
+`marketplace.json`, `.plugin/marketplace.json`, `.github/plugin/marketplace.json` or
+`.claude-plugin/marketplace.json`, in that order; a plugin manifest from `plugin.json` for Agent
+Plugins 1.0, and from `.plugin/plugin.json`, `plugin.json`, `.github/plugin/plugin.json` or
+`.claude-plugin/plugin.json` for a legacy plugin. An install lands at
+`~/.copilot/installed-plugins/MARKETPLACE/PLUGIN-NAME`, or at
+`~/.copilot/installed-plugins/_direct/SOURCE-ID/` when it came straight from a path, a repository
+or a URL; `COPILOT_HOME` moves the whole directory. The install is a CACHED COPY — a local plugin
+edited in place changes nothing until it is installed again — and `copilot plugin install` warned
+on 1.0.85 that direct installs are deprecated in favour of the `plugin@marketplace` form.
+
+Two consequences for any test that claims a plugin was discovered. Skill precedence is
+first-found, with a project's own `.github/skills/`, `.agents/skills/` and `.claude/skills/` AHEAD
+of a plugin's, so a skill id proven inside this checkout proves the checkout; the leg in
+`test/ci/pluginPackages.copilot.test.ts` runs in a scratch working directory and a scratch
+`COPILOT_HOME`, and asserts the deployed tree and the plugin list rather than a name. And a
+headless prompt run needs credentials: `copilot -p … -s` exited 1 with `No authentication
+information found` in that scratch home on 2026-09-20, so the prompt lane is recorded as a
+measurement and never as an assertion. `copilot skill list` needs none, and on 2026-09-20 it
+listed all twenty ids this root carries.
+
 The second-client native-memory trigger has fired: Claude and Codex both offer local
 memory. Retain `st-learn` because its repository evidence is versioned and portable across
 clients and machines. Reassess when durable, repository-scoped, cross-vendor memory is

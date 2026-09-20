@@ -1,0 +1,36 @@
+{
+  "$comment": "The GitHub Copilot hook event vocabulary, vendored so a rename on the vendor's side fails a test here rather than shipping an event name the client ignores. Read from the source below on the access date below; the shape is this repository's, the names are the vendor's.",
+  "source": {
+    "url": "https://docs.github.com/en/copilot/reference/hooks-reference",
+    "accessDate": "2026-09-20"
+  },
+  "note": "The hooks file's event-name CASING selects the payload format: a camelCase name delivers camelCase fields, and the PascalCase alias delivers the VS Code compatible format with snake_case fields (hook_event_name, session_id, an ISO timestamp). Four events have no PascalCase alias.",
+  "camelCase": [
+    "agentStop",
+    "errorOccurred",
+    "notification",
+    "permissionRequest",
+    "postToolUse",
+    "postToolUseFailure",
+    "preCompact",
+    "preToolUse",
+    "sessionEnd",
+    "sessionStart",
+    "subagentStart",
+    "subagentStop",
+    "userPromptSubmitted",
+    "userPromptTransformed"
+  ],
+  "pascalCaseAliases": {
+    "agentStop": "Stop",
+    "errorOccurred": "ErrorOccurred",
+    "postToolUse": "PostToolUse",
+    "postToolUseFailure": "PostToolUseFailure",
+    "preCompact": "PreCompact",
+    "preToolUse": "PreToolUse",
+    "sessionEnd": "SessionEnd",
+    "sessionStart": "SessionStart",
+    "subagentStop": "SubagentStop",
+    "userPromptSubmitted": "UserPromptSubmit"
+  }
+}
