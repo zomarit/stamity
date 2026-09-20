@@ -2680,14 +2680,35 @@ describe("the generated scripts under a vendor plugin root", () => {
   const CHILD_START_BUDGET_MS = (HERD_TIMEOUT_MS - GATE_LOCK_CEILING_MS) / 30;
 
   /**
-   * M-P2: the case below spawns NINE child processes serially — `git init`,
-   * `add`, `commit`, two `status` reads, and the four generated scripts — and
-   * carried the 5 s default, which is under the ramp alone on that runner.
-   * Derived from the budget above rather than picked, so the two numbers cannot
-   * drift apart. The git spawns are cheaper than a node start, so this is a
-   * ceiling, not an estimate.
+   * M-P2, corrected by W-P3: the case below spawns NINE child processes
+   * serially — `git init`, `add`, `commit`, two `status` reads, and the four
+   * generated scripts. It carried this suite's DEFAULT budget, which is
+   * `testTimeout: 20_000` in `vitest.config.ts`; the first closure of M-P2 said
+   * 5 s and so halved the case's budget while claiming to raise it.
+   *
+   * The derivation is kept — nine starts at the per-process budget the herd
+   * case's own number implies, so the two cannot drift apart — and floored at
+   * the default it replaces, because a budget that REPLACES a larger one is a
+   * narrowing whatever its basis says. The git spawns are cheaper than a node
+   * start, so the derived half is a ceiling, not an estimate.
    */
-  const WORKTREE_TIMEOUT_MS = Math.ceil(9 * CHILD_START_BUDGET_MS);
+  const SUITE_DEFAULT_TIMEOUT_MS = 20_000;
+  const WORKTREE_TIMEOUT_MS = Math.max(
+    Math.ceil(9 * CHILD_START_BUDGET_MS),
+    SUITE_DEFAULT_TIMEOUT_MS,
+  );
+
+  it("never gives the nine-spawn case less wall clock than the suite default it replaces", () => {
+    // W-P3. The number above is derived, and a derivation that lands under the
+    // budget the case already had is a narrowing that no runner reports until
+    // it goes red on the slowest one. Read out of the config rather than
+    // retyped, so editing either side fails here instead of silently.
+    const config = readFileSync(fileURLToPath(new URL("../../vitest.config.ts", import.meta.url)), "utf8");
+    const declared = /^\s*testTimeout: ([\d_]+),$/m.exec(config);
+    expect(declared, "vitest.config.ts declares a testTimeout").not.toBeNull();
+    expect(SUITE_DEFAULT_TIMEOUT_MS).toBe(Number(declared![1]!.replaceAll("_", "")));
+    expect(WORKTREE_TIMEOUT_MS).toBeGreaterThanOrEqual(SUITE_DEFAULT_TIMEOUT_MS);
+  });
 
   it("leaves a git worktree unchanged apart from the state files each script owns", async () => {
     const repo = getRepo();
