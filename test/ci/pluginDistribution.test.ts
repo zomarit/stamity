@@ -55,11 +55,18 @@ const DISTRIBUTION_COMMIT = "89abcdef0123456789abcdef0123456789abcdef";
 const VERSION = "1.9.0";
 
 /**
- * Wall-time budgets, derived rather than guessed. One root is a full content index plus a
- * planner pass plus a tree write, measured at ~2s per client on this repository's corpus; four
- * of them behind one corpus staging is ~10s, the APM projection is ~3s, and compressing four
- * roots is ~2s — so ~15s is the honest cost of the shared build and the budget is 8x that to
- * survive a loaded CI worker. The narrowed build is one root and gets a third of the headroom.
+ * Wall-time budgets, derived rather than guessed, from the MEASURED figures for the one
+ * generator both suites spawn — `node scripts/generate-plugin-packages.mjs`, timed 2026-09-20
+ * on this repository's corpus with `/usr/bin/time -p` and recorded at the head of
+ * `./pluginPackages.test.ts`: a cold four-root build is 7.5s (3.9s warm) and a cold
+ * single-client build is 2.1s. A "~2s per client" basis is not that measurement — the four
+ * roots share one corpus staging, so they do not cost four single-client runs — and one
+ * generator carries one basis.
+ *
+ * On top of the cold 7.5s this suite also pays the APM projection (~3s) and compressing four
+ * roots (~2s), so ~13s is the honest cost of the shared build and the budget below leaves
+ * roughly 9x headroom for a loaded CI worker, including the Windows leg that is not measurable
+ * from here. The narrowed build is one cold root (2.1s) and keeps comparable headroom.
  */
 const FULL_BUILD_MS = 120_000;
 const ONE_ROOT_MS = 40_000;
