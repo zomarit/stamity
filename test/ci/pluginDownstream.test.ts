@@ -26,6 +26,7 @@ import {
   FORK_ONLY_IDS,
   FORK_PUBLISHER,
   FORK_REPOSITORY,
+  FORK_REPOSITORY_SLUG,
   fixtureProvenance,
   write,
 } from "./downstreamFixture.ts";
@@ -403,6 +404,18 @@ describe("a fork's own distribution", () => {
     for (const client of ["copilot", "codex"] as const) {
       expect(readJson(forkedDist, client, "plugin.json")["author"], client).toEqual({ name: FORK_PUBLISHER });
     }
+
+    // The `<owner>/<repository>` SLUG, which is a third spelling of the same identity and the one a
+    // person types: every `marketplace add` line in the distribution README and `release.json`'s
+    // APM install spec are built from it, not from the url above. Composed from the fixture
+    // module's own two parts so the fork's owner and repository name have one source in this
+    // suite — the url the catalogs carry is composed from those same two.
+    const slug = `${FORK_PUBLISHER}/${FORK_REPOSITORY_SLUG}`;
+    const release = readJson(forkedDist, "release.json");
+    expect((release["apm"] as Record<string, unknown>)["installSpec"]).toBe(`${slug}#${TAG}`);
+    const readme = readText(forkedDist, "README.md");
+    expect(readme).toContain(`apm install ${slug}#${TAG}`);
+    expect(readme).toContain(`claude plugin marketplace add ${slug}#${TAG}`);
   });
 
   // Gated on the canonical checkout, not relaxed on a fork: the token this greps for IS the
