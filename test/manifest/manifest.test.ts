@@ -948,6 +948,25 @@ describe("plugin and gates — the plugin-backed install record", () => {
     expect([...pluginOwnedClasses(manifest, "cursor")]).toEqual([]);
   });
 
+  it("reads a hand-edited non-array `classes` as owning nothing", () => {
+    // M-i: the comment above the filter says this path is reachable WITHOUT
+    // validation, and it was — `classes` was filtered unconditionally, so a
+    // hand-edited string threw a TypeError out of a total resolver that `sync`,
+    // `check` and `clean` all call. The empty set is the answer an unreadable
+    // record earns, the same one an absent record gets.
+    const handEdited = {
+      ...pluginBacked(),
+      plugin: {
+        mode: "plugin-backed",
+        clients: { claude: { version: "1.9.0", classes: "agent" } },
+      },
+    } as unknown as SetupManifest;
+
+    expect([...pluginOwnedClasses(handEdited, "claude")]).toEqual([]);
+    // And validation still names it, so the defect is not merely absorbed.
+    expect(collectManifestErrors(handEdited).join(" ")).toContain("classes");
+  });
+
   it("owns nothing while the mode is still `generated`, clients map or not", () => {
     // A repository can record the roots it knows about before it migrates: the
     // MODE moves ownership, not the presence of a client record.
@@ -1050,6 +1069,16 @@ describe("plugin and gates — the plugin-backed install record", () => {
       ["a blank command", { lint: "   " }, "`gates.lint`"],
       ["a two-line command", { typecheck: "npm run typecheck\nnpm run knip" }, "`gates.typecheck`"],
       ["a carriage-returned command", { test: "npm run test\r\nrm -rf /" }, "`gates.test`"],
+      // SEC2-M4: both survive every other check and break at RENDER time — the
+      // backtick closes the markdown code span the charter and the skill bodies
+      // wrap a gate line in, and the token arrives after the single
+      // substitution pass, so it ships to a reader as an unresolved literal.
+      ["a backticked command", { test: "npm test `id`" }, "carries a backtick"],
+      [
+        "a command carrying a substitution token",
+        { lint: "npm run lint -- ${STAMITY:MATURITY_TIER}" },
+        "carries a `${STAMITY:` token",
+      ],
       ["a command past the length cap", { all: "x".repeat(513) }, "`gates.all`"],
       ["a command that is not a string", { test: 7 }, "`gates.test`"],
       ["a gate nothing runs", { deploy: "x" }, "unknown field `gates.deploy`"],
