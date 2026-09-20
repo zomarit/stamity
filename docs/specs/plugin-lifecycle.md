@@ -477,7 +477,11 @@ report prints one `plugin-owned` line per client naming the classes and `clean -
 stamity@<your marketplace>`, read from `codex --help` on 0.154.0, superseding the `/plugins` view
 wording. And `plugin-runtime` is `pass` with its note when the manifest records no plugin client
 and no root variable is set — a repository using no plugin has nothing to act on — so the `warn`
-this paragraph states is the state where a client is recorded and no root is found. One behaviour
+this paragraph states is the state where a client is recorded and no root is found. The `fail` on a
+refused locator carries the same qualification (2026-09-20): it fails only where the repository
+CLAIMS the plugin — a recorded client, or `mode: "plugin-backed"` — and warns with the refusal
+quoted otherwise, because a root variable exported by an unrelated session would otherwise fail the
+CI of a repository that records no plugin at all. One behaviour
 no requirement covered is recorded here rather than given an id of its own (ledger row build/55):
 `src/emit/hooksInfra.ts` raises a planning warning when an accepted user or pack hook row cannot
 reach a plugin-backed client, because that client's hook configuration now comes from the plugin.

@@ -1416,9 +1416,23 @@ describe("check — plugin-runtime", () => {
     );
   });
 
+  /**
+   * TEST CHANGE, justified (2026-09-20, REQ-PLUGIN-016): this case seeded a
+   * repository that records NO plugin client and still asserted `fail`, so an
+   * unrelated session's exported `CLAUDE_PLUGIN_ROOT` could fail the CI of a
+   * repository that has nothing to do with any plugin. The fixture now records
+   * the client whose refusal this is — which is the subject the verdict was
+   * always about — and the unrecorded case below pins the `warn` it became.
+   * Nothing about the quoted refusal or the resolved and skew branches moved.
+   */
   it("fails with the locator's own refusal quoted when it exits 2", async () => {
     const handle = getRepo();
-    const root = await seedRepo(handle);
+    const root = await seedRepo(handle, {
+      plugin: {
+        mode: "generated",
+        clients: { claude: { version: "1.9.0", classes: ["agent"] } },
+      },
+    });
     const refusal = "stamity plugin: no runtime found — probed /a and /b; reinstall the plugin";
     const pluginDir = await pluginRoot(
       handle,
@@ -1433,6 +1447,45 @@ describe("check — plugin-runtime", () => {
     // was probed, and only the locator knows that.
     expect(probe.detail).toContain(refusal);
     expect(probe.detail).toContain(pluginDir);
+  });
+
+  it("warns on the same refusal in a repository that records no plugin at all", async () => {
+    // The third state, and the reason the second exists: a root variable
+    // exported by an unrelated session is not this repository's claim about
+    // itself, so a broken plugin somewhere in the environment cannot fail the
+    // CI of a repository that records no client and is not plugin-backed. The
+    // refusal is still quoted — it is worth reading — it is simply advisory.
+    const handle = getRepo();
+    const root = await seedRepo(handle);
+    const refusal = "stamity plugin: no runtime found — probed /a and /b; reinstall the plugin";
+    const pluginDir = await pluginRoot(
+      handle,
+      "plugin-refused-unrecorded",
+      printing({ kind: "none", path: null, version: null, refusal }, 2),
+    );
+
+    const probe = await doctorRow(root, "plugin-runtime", { PLUGIN_ROOT: pluginDir });
+
+    expect(probe.status).toBe("warn");
+    expect(probe.detail).toContain(refusal);
+    expect(probe.detail).toContain(pluginDir);
+  });
+
+  it("fails the refusal in a plugin-backed repository even before a client is recorded", async () => {
+    // `mode: "plugin-backed"` is the repository saying it RUNS on a plugin, so
+    // a locator that refuses is this repository's own broken install whatever
+    // the clients map happens to hold.
+    const handle = getRepo();
+    const root = await seedRepo(handle, { plugin: { mode: "plugin-backed", clients: {} } });
+    const pluginDir = await pluginRoot(
+      handle,
+      "plugin-refused-backed",
+      printing({ kind: "none", path: null, version: null, refusal: "no runtime found" }, 2),
+    );
+
+    expect((await doctorRow(root, "plugin-runtime", { PLUGIN_ROOT: pluginDir })).status).toBe(
+      "fail",
+    );
   });
 
   it("fails a plugin-backed repository whose runtime is a different major", async () => {
@@ -1469,6 +1522,35 @@ describe("check — plugin-runtime", () => {
     );
 
     expect((await doctorRow(root, "plugin-runtime", { CLAUDE_PLUGIN_ROOT: pluginDir })).status).toBe("pass");
+  });
+
+  /**
+   * The document is CHECKED, not just shaped. `parseLocatorReport` used to
+   * assert that `runtime` and `node` were objects and cast the rest, so a
+   * locator answering `kind: "sideways"` or `node.ok: "yes"` reached the row as
+   * a resolved runtime and printed a kind no reader of this engine recognises.
+   */
+  it.each([
+    ["a kind outside the three words", { kind: "sideways", path: null, version: null, refusal: null }, null],
+    ["a non-string path", { kind: "bundled", path: 7, version: null, refusal: null }, null],
+    ["a non-boolean node.ok", { kind: "bundled", path: null, version: null, refusal: null }, { version: "22.0.0", floor: null, ok: "yes" }],
+  ])("warns on a locator document carrying %s", async (_label, runtime, node) => {
+    const handle = getRepo();
+    const root = await seedRepo(handle);
+    const document = JSON.stringify({
+      runtime,
+      node: node ?? { version: process.versions.node, floor: "22.22.2", ok: true },
+    });
+    const pluginDir = await pluginRoot(
+      handle,
+      `plugin-malformed-${String(_label).replaceAll(/\W+/g, "-")}`,
+      `process.stdout.write(${JSON.stringify(document)});\nprocess.exit(0);\n`,
+    );
+
+    const probe = await doctorRow(root, "plugin-runtime", { CLAUDE_PLUGIN_ROOT: pluginDir });
+
+    expect(probe.status).toBe("warn");
+    expect(probe.detail).toContain("stdout was not the locator's --print document");
   });
 
   it("warns rather than failing when the root holds no locator at all", async () => {

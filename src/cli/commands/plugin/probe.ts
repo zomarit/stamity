@@ -33,6 +33,7 @@ import semver from "semver";
 import { parse as parseYaml } from "yaml";
 import { buildContentIndex, emittedIdFor } from "../../../content/catalog.ts";
 import { HOOKS_GENERATED_DIR } from "../../../emit/hooksInfra.ts";
+import { PLUGIN_ROOT_VARIABLES } from "../../../plugins/capabilityFile.ts";
 import { TOOLS, type Tool } from "../../../types/core.ts";
 import {
   PLUGIN_OWNED_CLASSES,
@@ -43,22 +44,6 @@ import { STATE_DIR } from "../../../types/markers.ts";
 import { packageCommand, packageName, repositorySlug } from "../../kit/packageName.ts";
 
 // ── The runtime a plugin root resolves ─────────────────────────────────────
-
-/**
- * The environment variables a client sets to the root of an installed plugin,
- * in the order they are probed.
- *
- * The same four, in the same order, that `resolvePluginRoot` reads
- * (`../../../plugins/capabilityFile.ts`). A generic `PLUGIN_ROOT` sits third
- * because two of the four clients set a named variable of their own and the
- * generic one is the fallback an operator exports by hand.
- */
-export const PLUGIN_ROOT_VARIABLES = [
-  "CLAUDE_PLUGIN_ROOT",
-  "CURSOR_PLUGIN_ROOT",
-  "PLUGIN_ROOT",
-  "COPILOT_PLUGIN_ROOT",
-] as const;
 
 /**
  * Wall-time ceiling on the locator spawn. A doctor row that can hang is a
@@ -163,7 +148,25 @@ function runPluginLocator(locator: string): Promise<LocatorRun> {
   });
 }
 
-/** The locator's document, or `null` when stdout was not one. */
+/** The three words `runtime.kind` may be; anything else is not this document. */
+const LOCATOR_RUNTIME_KINDS: ReadonlySet<string> = new Set(["companion", "bundled", "none"]);
+
+/** A value that is a string or explicitly `null` — the locator's optional fields. */
+function isStringOrNull(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+/**
+ * The locator's document, or `null` when stdout was not one.
+ *
+ * Every SCALAR is checked, not just the two container objects. The root being
+ * probed is somebody else's install — an older plugin, a hand-edited root, a
+ * newer generator — so "it parsed as JSON and has two object keys" is not
+ * evidence that `kind` is one of three words or that `node.ok` is a boolean. A
+ * cast over an unchecked document put a `kind` no reader of this engine
+ * recognises straight into a doctor row; an unreadable answer is the honest
+ * one, and its caller already warns rather than failing on it.
+ */
 function parseLocatorReport(stdout: string): LocatorReport | null {
   try {
     const parsed: unknown = JSON.parse(stdout);
@@ -171,6 +174,16 @@ function parseLocatorReport(stdout: string): LocatorReport | null {
     const { runtime, node } = parsed as Record<string, unknown>;
     if (typeof runtime !== "object" || runtime === null) return null;
     if (typeof node !== "object" || node === null) return null;
+    const { kind, path, version, refusal } = runtime as Record<string, unknown>;
+    if (typeof kind !== "string" || !LOCATOR_RUNTIME_KINDS.has(kind)) return null;
+    if (!isStringOrNull(path) || !isStringOrNull(version) || !isStringOrNull(refusal)) return null;
+    const { version: nodeVersion, floor, ok } = node as Record<string, unknown>;
+    if (typeof ok !== "boolean") return null;
+    // `node.version` is required to be a string where `floor` may be null: the
+    // locator always resolved SOME interpreter to report on, and the declared
+    // {@link LocatorReport} types it non-nullable — a document without it is
+    // one this engine cannot render a node row from.
+    if (typeof nodeVersion !== "string" || !isStringOrNull(floor)) return null;
     return parsed as LocatorReport;
   } catch {
     return null;

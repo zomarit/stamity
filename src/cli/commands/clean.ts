@@ -27,7 +27,7 @@ import {
 import { TOOLS, type Tool } from "../../types/core.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import { CliFailure } from "../kit/output.ts";
-import { packageCommand } from "../kit/packageName.ts";
+import { packageCommand, packageName } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { confirm, promptGate } from "../kit/prompts.ts";
 
@@ -131,13 +131,26 @@ const REINIT_OFFER = `start fresh: ${packageCommand("init")}`;
  * Commands as the vendors document them: `codex plugin remove` is read from
  * `codex --help` on 0.154.0 (2026-09-20). Cursor documents no CLI form, so its
  * line names the view that does the job.
+ *
+ * The plugin ID is DERIVED, never the literal `stamity`: it is the running
+ * package's name with its npm scope removed, the same derivation the catalogs
+ * make (`scripts/plugins/catalogs.mjs`), so the four lines name the id a
+ * renamed downstream's own marketplace actually carries. A hardcoded canonical
+ * id would send that operator at a plugin their client has never heard of.
  */
-const PLUGIN_UNINSTALL_COMMANDS: Readonly<Record<Tool, string>> = {
-  claude: "claude plugin uninstall stamity@<your marketplace>",
-  cursor: "uninstall the stamity plugin from Cursor's Customize view",
-  copilot: "copilot plugin uninstall stamity",
-  codex: "codex plugin remove stamity@<your marketplace>",
-};
+function pluginId(): string {
+  return packageName().replace(/^@[^/]+\//, "");
+}
+
+function pluginUninstallCommands(): Readonly<Record<Tool, string>> {
+  const id = pluginId();
+  return {
+    claude: `claude plugin uninstall ${id}@<your marketplace>`,
+    cursor: `uninstall the ${id} plugin from Cursor's Customize view`,
+    copilot: `copilot plugin uninstall ${id}`,
+    codex: `codex plugin remove ${id}@<your marketplace>`,
+  };
+}
 
 /**
  * The uninstall lines this run owes, one per client the manifest records a
@@ -149,8 +162,9 @@ const PLUGIN_UNINSTALL_COMMANDS: Readonly<Record<Tool, string>> = {
  */
 function pluginUninstallLines(manifest: SetupManifest): string[] {
   const recorded = manifest.plugin?.clients ?? {};
+  const commands = pluginUninstallCommands();
   return TOOLS.filter((tool) => recorded[tool] !== undefined).map(
-    (tool) => `  ${tool}: ${PLUGIN_UNINSTALL_COMMANDS[tool]}`,
+    (tool) => `  ${tool}: ${commands[tool]}`,
   );
 }
 

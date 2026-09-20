@@ -380,13 +380,20 @@ export function invocationForms(file: PluginCapabilityFile): Record<string, stri
  * in the order they are consulted. Claude first because it is the client that
  * documents the variable; `PLUGIN_ROOT` is the client-neutral fallback an
  * operator can set by hand.
+ *
+ * EXPORTED, and the one home: the probe module in the CLI layer
+ * (`../cli/commands/plugin/probe.ts`) held a second copy of this list, and two
+ * lists mean a variable added to one is read by the resolver while the doctor
+ * row, the status report and the refusal sentences keep naming the other four.
+ * It lives here because this is the module that RESOLVES a root; every other
+ * reader only names the variables back to an operator.
  */
-const PLUGIN_ROOT_VARIABLES: readonly string[] = [
+export const PLUGIN_ROOT_VARIABLES = [
   "CLAUDE_PLUGIN_ROOT",
   "CURSOR_PLUGIN_ROOT",
   "PLUGIN_ROOT",
   "COPILOT_PLUGIN_ROOT",
-];
+] as const;
 
 /** A value that actually names a root, trimmed; blank and absent read alike. */
 function namedRoot(value: string | undefined): string | null {
