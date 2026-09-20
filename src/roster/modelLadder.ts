@@ -95,9 +95,14 @@
  * two of these clients publish no symbolic vocabulary to map onto at all. An
  * operator who wants the ladder enforced in the emitted files sets the pins.
  *
- * ONE EFFORT AXIS, TWO CARRIERS. Effort is carried per client where
- * supported and omitted on Copilot cloud (documented) — one axis, and
- * exactly one client that drops it. The rest do not agree on WHERE it goes:
+ * ONE EFFORT AXIS, TWO CARRIERS, FOUR SCALES. Effort is carried per client
+ * where supported and omitted on Copilot cloud (documented) — one axis, and
+ * exactly one client that drops it. The three that carry it do NOT document
+ * the same levels, so each row declares its own
+ * {@link ClientModelProjection.effortScale} with its own citation, and
+ * {@link nearestExpressibleEffort} is where a level asked for on one client's
+ * vocabulary lands on another's. `stamity config` refuses a level the CURRENT
+ * selection cannot express; the clamp exists for the client that joins after. The rest do not agree on WHERE it goes:
  * two publish a key of their own, and one carries it as a bracket parameter of
  * the model value itself (`<id>[effort=high]`, options comma-separated inside
  * a single group as `[effort=high,context=300k]` —
@@ -117,7 +122,8 @@
  * and effort maps those two accept.
  */
 
-import type { EffortLevel, ModelClass, Tool } from "../types/core.ts";
+import { EFFORT_LEVELS, effortRank, type EffortLevel, type ModelClass, type Tool } from "../types/core.ts";
+import type { SetupManifest } from "../types/manifest.ts";
 
 // ── The ladder ───────────────────────────────────────────────────
 
@@ -267,6 +273,39 @@ export interface ClientModelProjection {
    * than a fallback.
    */
   readonly aliases: Readonly<Partial<Record<ModelClass, string>>>;
+  /**
+   * The effort levels THIS client documents, weakest to strongest, as a subset
+   * of `EFFORT_LEVELS` in that tuple's own order.
+   *
+   * The asymmetry is the point, and it is why the shared band was retired: the
+   * four clients do not accept the same levels, so a level legal on one is a
+   * refusal at `stamity config set` on another and a clamp at emission on a
+   * third. Empty means the client carries the axis NOWHERE — the same claim
+   * {@link effortCarrier} `null` makes, said in the scale's own vocabulary so
+   * a consumer reading only this field cannot mistake "no levels" for "not
+   * filled in yet".
+   */
+  readonly effortScale: readonly EffortLevel[];
+  /**
+   * What the scale does NOT guarantee, where that needs saying; `null` where
+   * the scale is the whole claim.
+   *
+   * One client parses the level and hands it to the model rather than ruling
+   * on it, so its "scale" is the whole union and what actually binds is the
+   * model's own parameter vocabulary. Declaring the union with no note would
+   * read as a promise this engine cannot keep.
+   */
+  readonly effortScaleNote: string | null;
+  /**
+   * Where {@link effortScale} was read, or `null` when the scale is empty and
+   * there is no scale to cite — the documented omission is already carried by
+   * {@link citation} on that row.
+   *
+   * Separate from {@link citation} because three of the four scales are
+   * published on a DIFFERENT vendor page from the key names and aliases, and
+   * moving one date to cover both would date a claim nobody re-read.
+   */
+  readonly effortScaleCitation: { url: string; accessDate: string } | null;
   /** Where the two key names and the alias vocabulary were read. */
   readonly citation: { url: string; accessDate: string };
 }
@@ -296,6 +335,15 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     // and it makes this the only client where three of the four classes bind by
     // default, with the fourth resolving on no client until an operator pins it.
     aliases: { advanced: "opus", standard: "sonnet", economy: "haiku" },
+    // Two rungs above the retired band and none below it: this client's floor
+    // is `low`, so the one level another client documents underneath it rises
+    // to `low` here rather than being dropped.
+    effortScale: ["low", "medium", "high", "xhigh", "max"],
+    effortScaleNote: null,
+    effortScaleCitation: {
+      url: "https://code.claude.com/docs/en/sub-agents",
+      accessDate: "2026-09-17",
+    },
     citation: { url: "https://code.claude.com/docs/en/sub-agents", accessDate: "2026-08-17" },
   },
   cursor: {
@@ -312,6 +360,16 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     effortTemplate: `[effort=${EFFORT_PLACEHOLDER}]`,
     acceptsConcreteIds: true,
     aliases: {},
+    // The whole union, because this client rules on nothing: it parses the
+    // bracket group and hands the value to the model. So no level is refused
+    // HERE and none is clamped here either — and the note is what keeps that
+    // from reading as a guarantee the level lands.
+    effortScale: [...EFFORT_LEVELS],
+    effortScaleNote: "pass-through — parameter ids and values vary by model",
+    effortScaleCitation: {
+      url: "https://cursor.com/docs/sdk/typescript",
+      accessDate: "2026-09-17",
+    },
     citation: { url: "https://cursor.com/docs/agent/subagents", accessDate: "2026-08-17" },
   },
   copilot: {
@@ -327,6 +385,13 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     effortTemplate: null,
     acceptsConcreteIds: true,
     aliases: {},
+    // Empty, and empty for the SAME documented reason the carrier is `null`:
+    // there is no effort surface here to hold a level. Nothing to cite beyond
+    // the row's own page, so the scale citation is `null` rather than a second
+    // copy of it dated to a read that did not happen.
+    effortScale: [],
+    effortScaleNote: null,
+    effortScaleCitation: null,
     citation: {
       url: "https://docs.github.com/en/copilot/reference/custom-agents-configuration",
       accessDate: "2026-08-17",
@@ -340,6 +405,17 @@ export const CLIENT_MODEL_PROJECTION: Readonly<Record<Tool, ClientModelProjectio
     effortTemplate: null,
     acceptsConcreteIds: true,
     aliases: {},
+    // One rung lower and one rung shorter than the other key carrier: this is
+    // the only client documenting `minimal`, and the only one that cannot be
+    // asked for `max`. Published on the config-file page rather than on the
+    // subagents page this row's other claims come from, which is why the scale
+    // carries its own citation.
+    effortScale: ["minimal", "low", "medium", "high", "xhigh"],
+    effortScaleNote: null,
+    effortScaleCitation: {
+      url: "https://learn.chatgpt.com/docs/config-file/config-reference",
+      accessDate: "2026-09-17",
+    },
     citation: {
       url: "https://learn.chatgpt.com/docs/agent-configuration/subagents",
       accessDate: "2026-08-17",
@@ -393,9 +469,67 @@ function baseModelValue(
   return valueForKey(projection.modelKey, stated(pins[modelClass]), projection.aliases[modelClass]);
 }
 
-/** The effort for a class: the operator's, else the ladder's own. */
-function effortForClass(modelClass: ModelClass, efforts: EffortMap): string | undefined {
-  return stated(efforts[modelClass]) ?? LADDER_BY_CLASS.get(modelClass)?.defaultEffort;
+/**
+ * The effort a class ASKS for: the operator's, else the ladder's own.
+ *
+ * The request, not the emission. What a given client actually writes is this
+ * value put through {@link nearestExpressibleEffort} for that client's scale,
+ * and keeping the two apart is what lets {@link effortDisclosures} say which
+ * clients moved it and to what.
+ */
+function requestedEffort(modelClass: ModelClass, efforts: EffortMap): EffortLevel | undefined {
+  const asked = stated(efforts[modelClass]) ?? LADDER_BY_CLASS.get(modelClass)?.defaultEffort;
+  // A manifest written by a NEWER engine can name a level this build has never
+  // heard of. `collectManifestErrors` refuses that manifest by name long
+  // before a plan is composed; this narrowing is what keeps a caller that
+  // skipped validation from getting a fabricated rank out of `effortRank`.
+  return asked !== undefined && (EFFORT_LEVELS as readonly string[]).includes(asked)
+    ? (asked as EffortLevel)
+    : undefined;
+}
+
+/**
+ * The level `tool` actually writes when `level` is asked for, or `undefined`
+ * when that client carries the axis nowhere.
+ *
+ * The requested level when the client's scale holds it. Otherwise the nearest
+ * one it does hold: the highest entry RANKED BELOW the request, and only when
+ * there is none — a request under the scale's floor, which today is `minimal`
+ * against a scale starting at `low` — the lowest entry above it. Downward
+ * first because a client asked for more than it can express should run at its
+ * own ceiling rather than be quietly escalated past what the operator's other
+ * clients are doing; upward as the fallback because the alternative is
+ * dropping the axis, and a dropped key hands the sizing decision back to the
+ * client's own default, which is the thing the ladder exists to take.
+ *
+ * Never silent about it: every clamp this makes is reported by
+ * {@link effortDisclosures}, and `stamity config` refuses the level outright
+ * when the narrow client is already selected, so a clamp is only ever reached
+ * by a client that joined AFTER the level was set.
+ */
+export function nearestExpressibleEffort(level: EffortLevel, tool: Tool): EffortLevel | undefined {
+  const { effortScale } = CLIENT_MODEL_PROJECTION[tool];
+  if (effortScale.length === 0) return undefined;
+  if (effortScale.includes(level)) return level;
+
+  // A scale is declared in the union tuple's own order (pinned in
+  // `test/roster/modelLadder.test.ts`), so "highest below" is the last entry
+  // under the request and "lowest above" is the first over it — no search for
+  // an extremum, and no comparison that only a mis-ordered row could take.
+  const wanted = effortRank(level);
+  const below = effortScale.findLast((entry) => effortRank(entry) < wanted);
+  const above = effortScale.find((entry) => effortRank(entry) > wanted);
+  return below ?? above;
+}
+
+/** The level a client emits for a class: the request, narrowed to its scale. */
+function emittedEffort(
+  tool: Tool,
+  modelClass: ModelClass,
+  efforts: EffortMap,
+): EffortLevel | undefined {
+  const asked = requestedEffort(modelClass, efforts);
+  return asked === undefined ? undefined : nearestExpressibleEffort(asked, tool);
 }
 
 /**
@@ -414,7 +548,7 @@ function effortForClass(modelClass: ModelClass, efforts: EffortMap): string | un
 function withEffortParameter(
   projection: ClientModelProjection,
   model: string,
-  effort: string | undefined,
+  effort: EffortLevel | undefined,
 ): string {
   if (projection.effortCarrier !== "model-suffix") return model;
   if (projection.effortTemplate === null || effort === undefined) return model;
@@ -450,7 +584,12 @@ export function resolveModelValue(
   const projection = CLIENT_MODEL_PROJECTION[tool];
   const model = baseModelValue(projection, modelClass, pins);
   if (model === undefined) return undefined;
-  return withEffortParameter(projection, model, effortForClass(modelClass, efforts));
+  // The client's OWN level, not the raw request: one operator setting has to
+  // mean the same thing on both carriers, so the bracket client narrows
+  // through the same scale the key carriers do (its scale is the whole union
+  // today, which makes this a no-op there — and a correct one the day a
+  // pass-through client documents a narrower parameter vocabulary).
+  return withEffortParameter(projection, model, emittedEffort(tool, modelClass, efforts));
 }
 
 /**
@@ -459,9 +598,12 @@ export function resolveModelValue(
  *
  * Mirrors {@link resolveModelValue}, with one difference that follows from
  * what effort IS: the fallback is the ladder row's own `defaultEffort` rather
- * than a per-client table. Effort is a property of the class, and the three
- * levels are the band every client with an effort field accepts, so only the
- * key name changes across clients.
+ * than a per-client table. Effort is a property of the class, so the LEVEL is
+ * chosen without naming a client — and then narrowed by the client's own
+ * {@link ClientModelProjection.effortScale}, because the clients do not
+ * document the same levels. The key name is therefore not the only thing that
+ * changes across clients; it used to be, while this engine only ever emitted
+ * the three-level intersection.
  *
  * `undefined` here is not the same claim as "this class runs at no stated
  * effort on this client". It answers for one carrier; a client whose carrier
@@ -482,5 +624,40 @@ export function resolveEffortValue(
   // side. Both carriers then read one precedence helper, so the level a class
   // runs at cannot come out different depending on which shape carries it.
   if (projection.effortKey === null) return undefined;
-  return effortForClass(modelClass, efforts);
+  return emittedEffort(tool, modelClass, efforts);
+}
+
+/**
+ * One line per (client, class) whose emitted level is not the level asked for.
+ *
+ * The other half of the refusal `stamity config set` makes. That refusal
+ * cannot cover the case where the narrow client is selected LATER — the level
+ * was legal against the selection it was set against — so the emission
+ * discloses it instead. Never a refusal at this point and never a drop: the
+ * plan is already composed, the level lands at the client's nearest rung, and
+ * the operator is told which client moved it and to what.
+ *
+ * Silent about the client that carries the axis nowhere. An absent effort key
+ * there is a documented omission the capability matrix already states, not a
+ * narrowing of this operator's level, and reporting it per class would put
+ * four lines of noise in front of every repository that selects that client.
+ */
+export function effortDisclosures(manifest: SetupManifest): string[] {
+  const efforts = manifest.models?.effort ?? {};
+  const lines: string[] = [];
+  for (const tool of manifest.tools) {
+    if (CLIENT_MODEL_PROJECTION[tool].effortCarrier === null) continue;
+    for (const row of MODEL_LADDER) {
+      const asked = requestedEffort(row.modelClass, efforts);
+      if (asked === undefined) continue;
+      const emitted = nearestExpressibleEffort(asked, tool);
+      if (emitted === undefined || emitted === asked) continue;
+      const edge = effortRank(emitted) < effortRank(asked) ? "ends at" : "starts at";
+      lines.push(
+        `effort [${tool}]: ${row.modelClass} asks for ${asked}; ` +
+          `this client's scale ${edge} ${emitted}, emitted ${emitted}`,
+      );
+    }
+  }
+  return lines;
 }

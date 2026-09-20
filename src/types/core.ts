@@ -96,17 +96,41 @@ export const VALID_MODEL_CLASSES: Set<string> = new Set(MODEL_CLASSES);
 
 /**
  * How much reasoning a class asks for, on the clients whose dialect has a
- * field for it. Three levels, and only three: this is the band the supported
- * clients share. A client whose own scale is wider still accepts all three, so
- * no per-client translation table is needed — only the key name changes, which
- * is what the per-client projection carries.
+ * field for it: the union of the clients' documented scales; each projection
+ * row declares its own scale.
+ *
+ * ORDERED WEAKEST TO STRONGEST, and the order is load-bearing rather than
+ * cosmetic — {@link effortRank} compares on it, and the per-client clamp in
+ * `src/roster/modelLadder.ts` picks "the nearest expressible level" by that
+ * comparison. Reordering this tuple silently re-decides which way a level
+ * moves on a client that cannot express it.
+ *
+ * This used to be the three-level INTERSECTION (`low, medium, high`) — the
+ * band every supported client accepted, chosen so no per-client translation
+ * was needed. It capped the deep-review class below what three of four clients
+ * document, so the tuple is now the union and the translation lives where the
+ * asymmetry does: one `effortScale` per projection row, with its own citation.
+ * A level in this tuple is therefore NOT a level every client can express; ask
+ * the row, never this list.
  *
  * No `DEFAULT_EFFORT_LEVEL` either: effort is a property of the CLASS, not of
  * the system, so each ladder row carries its own default.
  */
-export const EFFORT_LEVELS = ["low", "medium", "high"] as const;
+export const EFFORT_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"] as const;
 export type EffortLevel = (typeof EFFORT_LEVELS)[number];
 export const VALID_EFFORT_LEVELS: Set<string> = new Set(EFFORT_LEVELS);
+
+/**
+ * Where `level` sits on the union scale — `0` for the weakest, rising.
+ *
+ * The one comparison the effort axis makes, published here beside the tuple it
+ * reads so a consumer needing "is this level above that one" never re-derives
+ * an ordering from an `indexOf` of its own. Every member of the union answers,
+ * so the result is always a real position.
+ */
+export function effortRank(level: EffortLevel): number {
+  return EFFORT_LEVELS.indexOf(level);
+}
 
 /*
  * There is deliberately no team-size axis here.

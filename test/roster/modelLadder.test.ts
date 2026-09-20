@@ -5,7 +5,9 @@ import {
   CLIENT_MODEL_PROJECTION,
   EFFORT_PLACEHOLDER,
   MODEL_LADDER,
+  effortDisclosures,
   isModelClass,
+  nearestExpressibleEffort,
   resolveEffortValue,
   resolveModelValue,
   type ClientModelProjection,
@@ -13,7 +15,15 @@ import {
   type ModelLadderRow,
   type ModelPinMap,
 } from "../../src/roster/modelLadder.ts";
-import { EFFORT_LEVELS, MODEL_CLASSES, TOOLS, type Tool } from "../../src/types/core.ts";
+import {
+  EFFORT_LEVELS,
+  MODEL_CLASSES,
+  TOOLS,
+  effortRank,
+  type EffortLevel,
+  type Tool,
+} from "../../src/types/core.ts";
+import { MANIFEST_VERSION, type SetupManifest } from "../../src/types/manifest.ts";
 
 /**
  * The ladder is data, so these are data assertions plus the two resolvers that
@@ -29,6 +39,26 @@ import { EFFORT_LEVELS, MODEL_CLASSES, TOOLS, type Tool } from "../../src/types/
  */
 
 const REPO_ROOT = new URL("../../", import.meta.url);
+
+/** Every `src/` module outside the ladder itself that imports `name` from it. */
+function callersOf(name: string): string[] {
+  const roots = ["src/adapters", "src/cli/commands", "src/emit", "src/manifest", "src/composition"];
+  const hits: string[] = [];
+  const walk = (relative: string): void => {
+    for (const entry of readdirSync(new URL(relative, REPO_ROOT), { withFileTypes: true })) {
+      const child = `${relative}/${entry.name}`;
+      if (entry.isDirectory()) walk(child);
+      else if (entry.name.endsWith(".ts")) {
+        const body = readFileSync(new URL(child, REPO_ROOT), "utf8");
+        if (body.includes("roster/modelLadder.ts") && new RegExp(`\\b${name}\\b`).test(body)) {
+          hits.push(child);
+        }
+      }
+    }
+  };
+  for (const root of roots) walk(root);
+  return hits;
+}
 
 /** Vendor and model-id vocabulary, mirroring the corpus quality lane's ban. */
 const VENDOR_OR_MODEL_ID =
@@ -583,11 +613,25 @@ describe("the effort axis has no exported predicate", () => {
     const exportedFunctions = [...source.matchAll(/^export function (\w+)/gm)].map(
       (match) => match[1],
     );
+    // JUSTIFIED CHANGE (REQ-LADDER-001, unit c9-effort-scale): the list grew by
+    // two, so the literal roster is replaced by the RULE it stood for — every
+    // exported function has a caller in `src/` outside this module. A pinned
+    // list would have had to move for any honest addition and could not tell a
+    // called export from an unused one, which is the only thing the case was
+    // ever protecting. `nearestExpressibleEffort` is called by the config
+    // command's refusal and its list row; `effortDisclosures` by the planner.
     expect(exportedFunctions.toSorted()).toEqual([
+      "effortDisclosures",
       "isModelClass",
+      "nearestExpressibleEffort",
       "resolveEffortValue",
       "resolveModelValue",
     ]);
+    for (const name of exportedFunctions) {
+      expect(callersOf(name!).length, `${name} is exported with no caller in src/`).toBeGreaterThan(
+        0,
+      );
+    }
     expect(source).not.toContain("isEffortExpressible");
   });
 });
@@ -663,12 +707,202 @@ describe("the ladder's own exposure disclosures", () => {
   });
 });
 
+/** A manifest with nothing on it but the tools and the operator's effort map. */
+function manifestWith(tools: readonly Tool[], effort: EffortMap = {}): SetupManifest {
+  return {
+    version: MANIFEST_VERSION,
+    generatedBy: "0.0.0",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    tools: [...tools],
+    selection: { items: {} as SetupManifest["selection"]["items"] },
+    ledger: [],
+    models: { effort: { ...effort } },
+  };
+}
+
+describe("the per-client effort scales", () => {
+  it("declares each client's documented scale, as the vendor pages state it", () => {
+    expect(projection("claude").effortScale).toEqual(["low", "medium", "high", "xhigh", "max"]);
+    expect(projection("codex").effortScale).toEqual(["minimal", "low", "medium", "high", "xhigh"]);
+    // The pass-through client accepts whatever the model does, so its row is
+    // the whole union plus the note that says why it is not a guarantee.
+    expect(projection("cursor").effortScale).toEqual([...EFFORT_LEVELS]);
+    expect(projection("cursor").effortScaleNote).toBe(
+      "pass-through — parameter ids and values vary by model",
+    );
+    // The one client with no effort surface at all: an empty scale, not a
+    // narrow one, and the same row that records the documented omission.
+    expect(projection("copilot").effortScale).toEqual([]);
+    expect(projection("copilot").effortCarrier).toBeNull();
+  });
+
+  it("orders every scale by the union's own ranking, with no off-ladder level", () => {
+    for (const tool of TOOLS) {
+      const scale = projection(tool).effortScale;
+      for (const level of scale) expect(EFFORT_LEVELS as readonly string[], tool).toContain(level);
+      expect(scale.map((level) => effortRank(level)), tool).toEqual(
+        scale.map((level) => effortRank(level)).toSorted((a, b) => a - b),
+      );
+      expect(new Set(scale).size, `${tool} repeats a level`).toBe(scale.length);
+    }
+  });
+
+  it("cites a vendor page with a 2026-09-17 access date for every non-empty scale", () => {
+    // The spec's invariant: every per-client scale carries a vendor citation
+    // with an access date. The empty row has no scale to cite and says so with
+    // `null` rather than with a page it did not read.
+    for (const tool of TOOLS) {
+      const declared = projection(tool);
+      const cited = declared.effortScaleCitation;
+      if (declared.effortScale.length === 0) {
+        expect(cited, tool).toBeNull();
+        continue;
+      }
+      expect(cited, tool).not.toBeNull();
+      expect(cited?.url, tool).toMatch(/^https:\/\/\S+$/);
+      expect(cited?.accessDate, tool).toBe("2026-09-17");
+    }
+    expect(projection("claude").effortScaleCitation?.url).toBe(
+      "https://code.claude.com/docs/en/sub-agents",
+    );
+    expect(projection("codex").effortScaleCitation?.url).toBe(
+      "https://learn.chatgpt.com/docs/config-file/config-reference",
+    );
+    expect(projection("cursor").effortScaleCitation?.url).toBe(
+      "https://cursor.com/docs/sdk/typescript",
+    );
+  });
+
+  it("answers a level the scale holds with that level, unchanged", () => {
+    expect(nearestExpressibleEffort("xhigh", "claude")).toBe("xhigh");
+    expect(nearestExpressibleEffort("xhigh", "codex")).toBe("xhigh");
+    expect(nearestExpressibleEffort("max", "cursor")).toBe("max");
+    for (const tool of TOOLS) {
+      for (const level of projection(tool).effortScale) {
+        expect(nearestExpressibleEffort(level, tool), `${tool}/${level}`).toBe(level);
+      }
+    }
+  });
+
+  it("falls to the highest entry below a level the scale tops out under", () => {
+    expect(nearestExpressibleEffort("max", "codex")).toBe("xhigh");
+  });
+
+  it("rises to the lowest entry above a level the scale starts over", () => {
+    // The only upward case the four scales produce: `minimal` on a scale whose
+    // floor is `low`. Rising is the honest answer — a client that cannot be
+    // asked for less than `low` is asked for `low`, never dropped.
+    expect(nearestExpressibleEffort("minimal", "claude")).toBe("low");
+  });
+
+  it("answers nothing at all on an empty scale", () => {
+    for (const level of EFFORT_LEVELS) {
+      expect(nearestExpressibleEffort(level, "copilot"), level).toBeUndefined();
+    }
+  });
+
+  it("emits the nearest expressible level from the standalone effort key", () => {
+    // Two clients, one request. The operator asked for `max`; one client has
+    // it and the other tops out a rung below, and neither is silently dropped.
+    const asked: EffortMap = { frontier: "max" };
+    expect(resolveEffortValue("frontier", "claude", asked)).toBe("max");
+    expect(resolveEffortValue("frontier", "codex", asked)).toBe("xhigh");
+    expect(resolveEffortValue("economy", "claude", { economy: "minimal" })).toBe("low");
+    expect(resolveEffortValue("economy", "codex", { economy: "minimal" })).toBe("minimal");
+  });
+
+  it("leaves every class default expressible on every carrier, so nothing clamps unasked", () => {
+    // The rider's own constraint: class defaults do not move, and with no
+    // operator map no emitted byte changes. Asserted as the property rather
+    // than as the four literals, so a default that moved onto an unexpressible
+    // rung fails here instead of in a golden snapshot.
+    for (const rung of MODEL_LADDER) {
+      for (const tool of TOOLS) {
+        if (projection(tool).effortCarrier === null) continue;
+        expect(
+          nearestExpressibleEffort(rung.defaultEffort, tool),
+          `${tool}/${rung.modelClass}`,
+        ).toBe(rung.defaultEffort);
+      }
+    }
+  });
+
+  it("carries the level into the bracket client's model value, clamped the same way", () => {
+    // One axis, two carriers: the pass-through client reads its level through
+    // the model value, and it has to be the SAME level the key carrier would
+    // write — otherwise one operator setting means two things.
+    const pinned: ModelPinMap = { frontier: "vendor-x-1" };
+    expect(resolveModelValue("frontier", "cursor", pinned, { frontier: "max" })).toBe(
+      "vendor-x-1[effort=max]",
+    );
+  });
+
+  it("discloses exactly the clients whose scale moved the operator's level", () => {
+    const lines = effortDisclosures(manifestWith(["claude", "codex"], { frontier: "max" }));
+    expect(lines).toEqual([
+      "effort [codex]: frontier asks for max; this client's scale ends at xhigh, emitted xhigh",
+    ]);
+  });
+
+  it("says `starts at` when the client's floor is above the request", () => {
+    const lines = effortDisclosures(manifestWith(["claude"], { economy: "minimal" }));
+    expect(lines).toEqual([
+      "effort [claude]: economy asks for minimal; this client's scale starts at low, emitted low",
+    ]);
+  });
+
+  it("says nothing for a manifest with no operator effort map", () => {
+    expect(effortDisclosures(manifestWith([...TOOLS]))).toEqual([]);
+    // And nothing for a manifest carrying no `models` block at all, which is
+    // every repository that never touched the ladder — the state the
+    // byte-identity criterion is written against.
+    const { models: _dropped, ...bare } = manifestWith([...TOOLS]);
+    expect(effortDisclosures(bare)).toEqual([]);
+  });
+
+  it("says nothing for the client that carries no effort at all", () => {
+    // An empty scale is not a clamp: copilot emits no effort key, which the
+    // capability matrix already states. A disclosure here would tell an
+    // operator their level was narrowed when it was never carried.
+    expect(effortDisclosures(manifestWith(["copilot"], { frontier: "max" }))).toEqual([]);
+  });
+
+  it("omits the key for a level the running engine does not know", () => {
+    // Same defence one layer down: an unknown level yields no emitted value at
+    // all rather than a fabricated rank or a clamp toward a scale end. The
+    // manifest carrying it is refused by `collectManifestErrors` first.
+    const unknown = { frontier: "ultra" as EffortLevel };
+    expect(resolveEffortValue("frontier", "codex", unknown)).toBeUndefined();
+    expect(resolveModelValue("frontier", "cursor", { frontier: "vendor-x-1" }, unknown)).toBe(
+      "vendor-x-1",
+    );
+  });
+
+  it("ignores a level the running engine does not know rather than mis-ranking it", () => {
+    // A manifest written by a newer engine is refused by `collectManifestErrors`
+    // long before a plan is composed; this is the belt-and-braces answer for a
+    // caller that skipped validation — silence, not a fabricated rank.
+    const unknown = manifestWith(["codex"], { frontier: "ultra" as EffortLevel });
+    expect(effortDisclosures(unknown)).toEqual([]);
+  });
+});
+
 describe("kernel boundary", () => {
-  it("imports types only", () => {
+  it("imports the types leaf only", () => {
     const source = readFileSync(new URL("src/roster/modelLadder.ts", REPO_ROOT), "utf8");
     const specifiers = [...source.matchAll(/from\s+"([^"]+)"/g)].map((match) => match[1]);
-    expect(specifiers).toEqual(["../types/core.ts"]);
-    // Type-only, so the module contributes no runtime edge at all.
-    expect(source).toContain('import type { EffortLevel, ModelClass, Tool } from "../types/core.ts"');
+    // JUSTIFIED CHANGE (REQ-LADDER-001, unit c9-effort-scale): the module gained
+    // a second types-leaf specifier and its first RUNTIME import. `effortRank`
+    // and `EFFORT_LEVELS` are values the clamp compares on, and the disclosure
+    // reads a manifest's tools and effort map. Both specifiers are `src/types`,
+    // the leaf every layer may import, so the kernel rule the case exists for —
+    // the roster imports nothing but types — is unchanged; what moved is the
+    // stricter type-only claim that sat on top of it.
+    expect(specifiers.toSorted()).toEqual(["../types/core.ts", "../types/manifest.ts"]);
+    expect(source).toContain('from "../types/core.ts"');
+    // The manifest edge stays type-only: the disclosure reads a shape, never a
+    // function from that module.
+    expect(source).toContain('import type { SetupManifest } from "../types/manifest.ts"');
   });
 });
