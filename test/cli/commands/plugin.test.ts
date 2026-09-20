@@ -464,6 +464,59 @@ describe("plugin setup — what it writes (REQ-PLUGIN-015)", () => {
     expect(manifest.tools).toEqual(["claude"]);
   });
 
+  /**
+   * TWO ROOTS IN ONE CALL (C6's edge case, reachable from the CLI at last).
+   *
+   * `--plugin-root` repeats, and each root is paired with the client its own
+   * `stamity-plugin.json` declares — so one invocation sets two clients up from
+   * their own roots. It used to bind every `--client` entry to the single
+   * resolved root, which meant `--client claude,cursor` always refused on the
+   * mismatch check and no CLI invocation could reach the two-client plan.
+   */
+  it("sets two clients up from their own roots in one call", async () => {
+    const repo = await makeRepo();
+    const claudeRoot = await pluginRoot("claude-root");
+    const cursorRoot = await pluginRoot("cursor-root", { client: "cursor" });
+
+    const result = await plugin(repo, [
+      "setup",
+      "--plugin-root",
+      claudeRoot,
+      "--plugin-root",
+      cursorRoot,
+      "-y",
+    ]);
+
+    expect(result.stderr).toBe("");
+    expect(result.code).toBe(0);
+    const manifest = (await readManifest(repo)) as SetupManifest;
+    expect(Object.keys(manifest.plugin?.clients ?? {})).toEqual(["claude", "cursor"]);
+    expect(manifest.tools).toEqual(["claude", "cursor"]);
+  });
+
+  it("accepts an explicit --client listing exactly the clients the roots declare", async () => {
+    const repo = await makeRepo();
+    const claudeRoot = await pluginRoot("claude-root");
+    const cursorRoot = await pluginRoot("cursor-root", { client: "cursor" });
+
+    // Argument order reversed against TOOLS order on purpose: the plan is the
+    // same one either spelling produces.
+    const result = await plugin(repo, [
+      "setup",
+      "--client",
+      "cursor,claude",
+      "--plugin-root",
+      cursorRoot,
+      "--plugin-root",
+      claudeRoot,
+      "-y",
+    ]);
+
+    expect(result.code).toBe(0);
+    const manifest = (await readManifest(repo)) as SetupManifest;
+    expect(Object.keys(manifest.plugin?.clients ?? {})).toEqual(["claude", "cursor"]);
+  });
+
   it("prints the plugin-owned line naming the classes the plugin delivers", async () => {
     const root = await makeRepo();
     const installed = await pluginRoot("claude-root");
@@ -601,6 +654,47 @@ describe("plugin setup — what it refuses", () => {
     expect(result.stderr).toContain("declares client claude");
     expect(result.stderr).toContain(installed);
     expect(await walk(root)).toEqual([]);
+  });
+
+  it("refuses a listed client that no root declares, naming it", async () => {
+    const repo = await makeRepo();
+    const claudeRoot = await pluginRoot("claude-root");
+
+    const result = await plugin(repo, [
+      "setup",
+      "--client",
+      "claude,cursor",
+      "--plugin-root",
+      claudeRoot,
+      "-y",
+    ]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("cursor");
+    expect(result.stderr).toContain("--plugin-root");
+    expect(await walk(repo)).toEqual([]);
+  });
+
+  it("refuses a second root whose client --client does not name", async () => {
+    const repo = await makeRepo();
+    const claudeRoot = await pluginRoot("claude-root");
+    const cursorRoot = await pluginRoot("cursor-root", { client: "cursor" });
+
+    const result = await plugin(repo, [
+      "setup",
+      "--client",
+      "claude",
+      "--plugin-root",
+      claudeRoot,
+      "--plugin-root",
+      cursorRoot,
+      "-y",
+    ]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("declares client cursor");
+    expect(result.stderr).toContain(cursorRoot);
+    expect(await walk(repo)).toEqual([]);
   });
 
   it("refuses a --client value that is not a client this engine sets up", async () => {
