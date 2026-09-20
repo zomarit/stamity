@@ -1,7 +1,7 @@
 ---
 id: model-ladder
 # A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17 and excluded from the site build.
-status: design
+status: shipped-with-1.9.0
 obsolete_when: every supported client publishes one effort scale the ladder can name without a per-client table, or a decision row cuts the surface
 ---
 # Model ladder

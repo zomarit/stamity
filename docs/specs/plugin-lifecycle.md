@@ -1,7 +1,7 @@
 ---
 id: plugin-lifecycle
 # A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17 and excluded from the site build.
-status: design
+status: shipped-with-1.9.0
 obsolete_when: every supported client installs the corpus through its own plugin container and the generated-setup route is retired, or a decision row cuts the surface
 ---
 # Plugin lifecycle
