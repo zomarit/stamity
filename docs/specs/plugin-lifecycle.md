@@ -559,7 +559,11 @@ file and every file under the plugin root is unchanged, so removal happens only 
 operator's own `stamity clean -y`.
 
 As built (2026-09-20): the three sources, their three remedies and the `warn`-under-`generated`,
-`fail`-under-`plugin-backed` split landed as stated; `check` mutates nothing, proven by a
+`fail`-under-`plugin-backed` split landed as stated; each finding carries the paths the paragraph
+asks for (2026-09-20) — the ledger rows' and the unowned files' repository-relative paths, or the
+matched dependency line for `apm`, which has no file — rendered by `check` as the first three,
+sorted, then `+N more`, and carried whole as `paths` beside `files` in `plugin status --json`;
+`check` mutates nothing, proven by a
 whole-tree sha-256 map taken around the run, and no verb deletes a duplicate. One bound is narrower
 than the paragraph reads, and the mechanism is stated rather than implied: an `apm` finding is
 raised for a dependency line CONTAINING either of this installation's two identities — the

@@ -82,7 +82,8 @@ export interface PluginStatusReport {
     pluginVersion: string | null;
     manifestVersion: string | null;
   };
-  duplicates: { tool: Tool; class: PluginOwnedClass; files: number }[];
+  /** `check`'s list: the count, and the paths it names (see `DuplicateFinding.paths`). */
+  duplicates: { tool: Tool; class: PluginOwnedClass; files: number; paths: string[] }[];
   /** True when a duplicate was found: content reaching one client twice. */
   coexistence: boolean;
   setup: { needed: boolean; unconfigured: PluginStatusUnconfigured[] };
@@ -285,6 +286,7 @@ export async function buildPluginStatus(
       tool: finding.tool,
       class: finding.cls,
       files: finding.files,
+      paths: finding.paths,
     })),
     coexistence: findings.length > 0,
     setup: { needed: !present, unconfigured: unconfiguredFacts(manifest) },

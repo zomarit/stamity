@@ -805,6 +805,33 @@ describe("the documented route off a generated setup (REQ-PLUGIN-015, REQ-PLUGIN
     expect(duplicates[0]).toMatchObject({ tool: "claude", class: "agent" });
     expect(duplicates[0]?.files).toBeGreaterThan(0);
   });
+
+  it("carries each duplicate's paths in the JSON report, beside its count", async () => {
+    // W-D2: REQ-PLUGIN-019's "the same list" as `check` — a machine caller
+    // reading `duplicates` gets the paths `check` names, not a count alone.
+    const root = await makeRepo();
+    await seedGenerated(root);
+    const installed = await pluginRoot("claude-root");
+    const generated = (await readManifest(root)) as SetupManifest;
+    await writeManifest(
+      root,
+      {
+        ...generated,
+        plugin: {
+          mode: "generated",
+          clients: { claude: { version: "1.9.0", classes: ["agent"] } },
+        },
+      },
+      { now: T0 },
+    );
+
+    const doc = await pluginJson(root, ["status", "--plugin-root", installed]);
+
+    const duplicates = doc.duplicates as { files: number; paths: string[] }[];
+    expect(duplicates[0]?.paths).toHaveLength(duplicates[0]?.files ?? -1);
+    expect(duplicates[0]?.paths.every((path) => path.startsWith(".claude/agents/"))).toBe(true);
+    expect(duplicates[0]?.paths).toEqual(duplicates[0]?.paths.toSorted());
+  });
 });
 
 describe("the verb's surface", () => {

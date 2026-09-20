@@ -357,7 +357,9 @@ at all, whatever its client settings say.
   variable came from elsewhere in your environment, and another session's broken plugin is not
   this repository's defect.
 - **`plugin-duplicates`** — one entry per class delivered twice for one client, with its source
-  (`ledger`, `apm` or `unmanaged`) and the remedy for that source. It is a warning while the
+  (`ledger`, `apm` or `unmanaged`), the paths it found (the first three, sorted, then `+N more`;
+  an `apm` entry has no file, so its path is the dependency line that matched) and the remedy for
+  that source. It is a warning while the
   manifest still says `mode: "generated"` — coexistence is the expected state before you clean —
   and a failure once the manifest records `mode: "plugin-backed"`. The mode is one decision for
   the repository, and the client the entry names is where the duplicate was found. The `apm`

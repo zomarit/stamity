@@ -304,8 +304,30 @@ export interface DuplicateFinding {
   tool: Tool;
   cls: PluginOwnedClass;
   source: "ledger" | "apm" | "unmanaged";
+  /** `paths.length`, kept for the callers that counted before the paths were carried. */
   files: number;
+  /**
+   * What REQ-PLUGIN-019 names "its path": the ledger rows' repository-relative
+   * paths, the unowned native files' repository-relative paths, or — for an
+   * `apm` finding, which has no file — the dependency spelling that matched.
+   * Sorted, so the order is the paths' own and never a directory's read order.
+   */
+  paths: string[];
   remedy: string;
+}
+
+/** How many of a finding's paths a human row names before folding the rest into a count. */
+export const DUPLICATE_PATHS_SHOWN = 3;
+
+/**
+ * The paths of one finding as a human row prints them: the first
+ * {@link DUPLICATE_PATHS_SHOWN} in order, then `+N more` for the rest. A class
+ * with many files would otherwise turn one doctor row into a directory listing.
+ */
+export function describeDuplicatePaths(paths: readonly string[]): string {
+  const shown = paths.slice(0, DUPLICATE_PATHS_SHOWN).join(", ");
+  const folded = paths.length - DUPLICATE_PATHS_SHOWN;
+  return folded > 0 ? `${shown} +${folded} more` : shown;
 }
 
 /**
@@ -446,7 +468,7 @@ async function unmanagedDuplicates(
     .filter(([, cls]) => classes.has(cls))
     .map(async ([dir, cls]): Promise<DuplicateFinding[]> => {
       const entries = await readDirEntries(join(rootDir, ...dir.split("/")));
-      let files = 0;
+      const paths: string[] = [];
       for (const entry of entries) {
         const isDirectory = entry.isDirectory();
         if (!carriedIds.has(nativeEntryId(entry.name, isDirectory))) continue;
@@ -456,15 +478,16 @@ async function unmanagedDuplicates(
         const owned = isDirectory
           ? [...ledgerPaths].some((row) => row.startsWith(`${path}/`))
           : ledgerPaths.has(path);
-        if (!owned) files += 1;
+        if (!owned) paths.push(path);
       }
-      if (files === 0) return [];
+      if (paths.length === 0) return [];
       return [
         {
           tool,
           cls,
           source: "unmanaged",
-          files,
+          files: paths.length,
+          paths: paths.toSorted(),
           remedy:
             `not written by this engine; remove the file or keep it as an override under ` +
             `${STATE_DIR}/overrides/`,
@@ -583,11 +606,13 @@ function apmDuplicates(
   // APM deploys content, never hook wiring or always-on rules, so the classes
   // it can duplicate are the three it actually writes.
   const deployable = (["agent", "skill", "command"] as const).filter((cls) => classes.has(cls));
+  const paths = matched.toSorted();
   return deployable.map((cls) => ({
     tool,
     cls,
     source: "apm" as const,
-    files: matched.length,
+    files: paths.length,
+    paths,
     remedy:
       `the APM dependency ${matched.join(", ")} deploys the same classes; remove it from ` +
       `apm.yml and run apm install, or keep the plugin uninstalled`,
@@ -611,7 +636,7 @@ async function duplicatesForClient(
   // client's own config document (`.claude/settings.json`) is deliberately
   // not counted, since it carries repository configuration as well.
   const ledgerRows = (manifest?.ledger ?? []).filter((row) => row.adapter === tool);
-  const byClass = new Map<PluginOwnedClass, number>();
+  const byClass = new Map<PluginOwnedClass, string[]>();
   for (const row of ledgerRows) {
     const cls: PluginOwnedClass | null =
       row.artifactType === "infra"
@@ -620,16 +645,17 @@ async function duplicatesForClient(
           : null
         : row.artifactType;
     if (cls === null || !classes.has(cls)) continue;
-    byClass.set(cls, (byClass.get(cls) ?? 0) + 1);
+    byClass.set(cls, [...(byClass.get(cls) ?? []), row.path]);
   }
   for (const cls of PLUGIN_OWNED_CLASSES) {
-    const files = byClass.get(cls);
-    if (files === undefined) continue;
+    const paths = byClass.get(cls)?.toSorted();
+    if (paths === undefined) continue;
     findings.push({
       tool,
       cls,
       source: "ledger",
-      files,
+      files: paths.length,
+      paths,
       remedy: `${packageCommand("clean -y")} then ${packageCommand(`plugin setup --client ${tool}`)}`,
     });
   }
