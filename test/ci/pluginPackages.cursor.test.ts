@@ -613,15 +613,35 @@ describe("the brand asset and the fork layer", () => {
  *
  * The budget is derived: one measured run took 39s end to end, and 240s is ~6x that, the
  * headroom a network round trip on a loaded worker needs.
+ *
+ * THE ENVIRONMENT IS ISOLATED, and the binary cooperates. Measured 2026-09-20 against
+ * 2026.09.15-d2fe57e: a run with `HOME` pointed at a scratch directory wrote its `.cursor/` and
+ * `Library/` trees THERE and read no credential out of the operator's own home, refusing with
+ * "Authentication required. Please run 'agent login' first, or set CURSOR_API_KEY environment
+ * variable." So `HOME` is honoured and the leg gets a scratch one. The environment it receives
+ * is an explicit list rather than the ambient one, and the single credential on it is
+ * `CURSOR_API_KEY` — named here because an operator arming this leg exports it deliberately,
+ * exactly as they export `STAMITY_CURSOR_BIN`.
+ *
+ * A REFUSAL IS RECORDED, NEVER RED. An isolated home has no logged-in session, so the common
+ * outcome of arming only the binary is the authentication refusal above; a workspace-trust
+ * refusal reads the same way. Either is printed as a measurement and the case is SKIPPED. A
+ * missing credential is a fact about the machine, and a suite that went red on it would be
+ * testing the machine — while a green that never reached the model would be worse.
  */
 const CURSOR_BIN = process.env["STAMITY_CURSOR_BIN"];
 const CURSOR_LEG_MS = 240_000;
 
+/** What the CLI prints when it never reached the model: no session, or an untrusted workspace. */
+const CURSOR_REFUSAL = /authentication required|CURSOR_API_KEY|agent login|workspace trust required/i;
+
 describe.skipIf(CURSOR_BIN === undefined)("the real client, against the binary on STAMITY_CURSOR_BIN", () => {
   it(
     "loads the root from --plugin-dir and reports the touchpoints it carries",
-    () => {
+    (ctx) => {
       const scratch = tempDir("cursor-scratch");
+      const home = tempDir("cursor-home");
+      const apiKey = process.env["CURSOR_API_KEY"];
       const result = spawnSync(
         CURSOR_BIN as string,
         [
@@ -633,9 +653,39 @@ describe.skipIf(CURSOR_BIN === undefined)("the real client, against the binary o
           "--output-format",
           "text",
         ],
-        { cwd: scratch, encoding: "utf8", timeout: CURSOR_LEG_MS - 20_000, maxBuffer: 16 * 1024 * 1024 },
+        {
+          cwd: scratch,
+          encoding: "utf8",
+          timeout: CURSOR_LEG_MS - 20_000,
+          maxBuffer: 16 * 1024 * 1024,
+          env: {
+            HOME: home,
+            XDG_CONFIG_HOME: join(home, ".config"),
+            PATH: process.env["PATH"] ?? "",
+            ...(process.env["TMPDIR"] === undefined ? {} : { TMPDIR: process.env["TMPDIR"] }),
+            ...(process.env["LANG"] === undefined ? {} : { LANG: process.env["LANG"] }),
+            ...(apiKey === undefined ? {} : { CURSOR_API_KEY: apiKey }),
+          },
+        },
       );
-      expect(result.status, `${result.stdout ?? ""}\n${result.stderr ?? ""}`).toBe(0);
+      const transcript = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+
+      if (CURSOR_REFUSAL.test(transcript)) {
+        console.log(
+          [
+            "── MEASUREMENT: the Cursor CLI refused before it reached the model ──",
+            `binary: ${CURSOR_BIN ?? ""}`,
+            `status: ${String(result.status)}`,
+            `transcript:\n${transcript.trim()}`,
+            "Export CURSOR_API_KEY alongside STAMITY_CURSOR_BIN to run this leg for real.",
+            "─────────────────────────────────────────────────────────────────────",
+          ].join("\n"),
+        );
+        ctx.skip();
+        return;
+      }
+
+      expect(result.status, transcript).toBe(0);
       expect(result.stdout).toContain("st-work");
     },
     CURSOR_LEG_MS,

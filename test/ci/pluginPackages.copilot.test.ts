@@ -175,7 +175,20 @@ const SUBSTITUTED_SKILLS: readonly string[] = ["skills/st-onboard/SKILL.md"];
  * row, renamed one, or invented one shows up as a set difference rather than as agreement
  * between the layout and itself.
  */
+let nativePlanOnce: Promise<AdapterOutput[]> | null = null;
+
+/**
+ * Memoised: two cases read this oracle and a whole corpus pass costs seconds, while the planner
+ * is a pure function of a fixed corpus and a fixed manifest — the second call could only produce
+ * the same rows at the same price. The PROMISE is cached rather than the rows, so two concurrent
+ * callers share one pass instead of racing two.
+ */
 async function nativePlan(): Promise<AdapterOutput[]> {
+  nativePlanOnce ??= planCopilotResidue();
+  return nativePlanOnce;
+}
+
+async function planCopilotResidue(): Promise<AdapterOutput[]> {
   return composeEmissionPlanner({ copilot: copilotResiduePlanner }).plan({
     rootDir: join(work, "plan-root"),
     manifest: {
@@ -477,6 +490,32 @@ describe("the copilot root's README", () => {
  * override for the configuration and state directory, and `installed-plugins/` lives under it —
  * so an operator's own installed plugins are neither read nor written.
  */
+/**
+ * The environment a spawned client binary gets: an explicit allowlist, never the whole of
+ * `process.env`.
+ *
+ * The scratch home below exists so this leg reads and writes no operator state. Inheriting the
+ * ambient environment reopens exactly what the scratch home closes: a real client CLI reads its
+ * credentials out of variables an author's shell is full of, and a measurement taken with
+ * somebody's own token is not the measurement it claims to be. `PATH` is what makes the binary
+ * and its Node resolvable, `TMPDIR` and `LANG` keep the process well behaved, and `STAMITY_*`
+ * rides because this leg's own arming lives there.
+ *
+ * The same helper sits in the sibling client suite. Duplicated rather than shared, because the
+ * only home it could share is a file this lane does not own.
+ */
+function allowlistedEnv(scratch: Record<string, string>): NodeJS.ProcessEnv {
+  const allowed: NodeJS.ProcessEnv = {};
+  for (const name of ["PATH", "TMPDIR", "LANG"]) {
+    const value = process.env[name];
+    if (value !== undefined) allowed[name] = value;
+  }
+  for (const [name, value] of Object.entries(process.env)) {
+    if (name.startsWith("STAMITY_") && value !== undefined) allowed[name] = value;
+  }
+  return { ...allowed, ...scratch };
+}
+
 describe.skipIf(process.env["STAMITY_COPILOT_BIN"] === undefined)("the real client on STAMITY_COPILOT_BIN", () => {
   const BIN = process.env["STAMITY_COPILOT_BIN"] ?? "";
   const CLI_MS = 300_000;
@@ -492,7 +531,7 @@ describe.skipIf(process.env["STAMITY_COPILOT_BIN"] === undefined)("the real clie
       cwd: scratchCwd,
       encoding: "utf8",
       timeout: CLI_MS,
-      env: { ...process.env, HOME: home, COPILOT_HOME: join(home, ".copilot"), XDG_CONFIG_HOME: join(home, ".config") },
+      env: allowlistedEnv({ HOME: home, COPILOT_HOME: join(home, ".copilot"), XDG_CONFIG_HOME: join(home, ".config") }),
       maxBuffer: 64 * 1024 * 1024,
     });
     return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
