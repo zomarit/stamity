@@ -14,7 +14,7 @@ import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
 
 /**
- * The gate on the thirteen hand-written pages: three at the root, ten guides
+ * The gate on the fourteen hand-written pages: three at the root, eleven guides
  * under `docs/`.
  *
  * The rest of `docs/` is generated and drift-tested against its renderer; these
@@ -100,30 +100,31 @@ const PAGES: readonly string[] = [README, SECURITY, CONTRIBUTING];
 
 // Declared in path order, which is not the order GUIDES reads in: this block is a lookup and
 // the array below is GUIDES' own reading order, so the customization guide sits first here and
-// FIFTH there, and the workspaces guide last here and SIXTH there.
+// SIXTH there, and the workspaces guide last here and SEVENTH there.
 //
-// Two corrections this comment has already needed, kept as the warning they are. The ordinals
+// Three corrections this comment has already needed, kept as the warning they are. The ordinals
 // are indices into a literal array, so inserting one entry moves every entry after it —
-// DOCTRINE at position 3 is what last moved these two. And the array is NOT the sidebar's
-// sequence, which this comment used to claim: the sidebar follows it except for MIGRATION,
-// which is fourth here and deliberately unlisted there (`website/sidebars.ts`; MAPPED_GUIDES
-// below carries the same decision for the README map).
+// DOCTRINE at position 3 moved these two once, and PLUGINS at position 3 has moved them again.
+// And the array is NOT the sidebar's sequence, which this comment used to claim: the sidebar
+// follows it except for MIGRATION, which is FIFTH here and deliberately unlisted there
+// (`website/sidebars.ts`; MAPPED_GUIDES below carries the same decision for the README map).
 const CUSTOMIZATION = "docs/customization.md";
 const DOCTRINE = "docs/doctrine.md";
 const ENTERPRISE_FORKS = "docs/enterprise-forks.md";
 const GETTING_STARTED = "docs/getting-started.md";
 const MIGRATION = "docs/migration.md";
 const PACKS_AND_TRUST = "docs/packs-and-trust.md";
+const PLUGINS = "docs/plugins.md";
 const SECURITY_MAPPING = "docs/security-mapping.md";
 const TROUBLESHOOTING = "docs/troubleshooting.md";
 const WORKING_WITH_STAMITY = "docs/working-with-stamity.md";
 const WORKSPACES = "docs/workspaces.md";
 
 /**
- * The ten hand-written guides under `docs/`.
+ * The eleven hand-written guides under `docs/`.
  *
  * Everything else in that directory is rendered from code and carries a
- * "GENERATED FILE, rewrite it with X" header; these ten are the only pages
+ * "GENERATED FILE, rewrite it with X" header; these eleven are the only pages
  * there a human types, which is exactly the line the hand bucket is drawn on.
  *
  * `docs/specs/` is outside the bucket and outside the site: five engineering
@@ -134,6 +135,9 @@ const WORKSPACES = "docs/workspaces.md";
 const GUIDES: readonly string[] = [
   GETTING_STARTED,
   WORKING_WITH_STAMITY,
+  // Third, beside the two pages a first-time reader takes first: the plugin route is an
+  // alternative to `init`, not a topic a reader reaches for after the setup already works.
+  PLUGINS,
   DOCTRINE,
   MIGRATION,
   CUSTOMIZATION,
@@ -249,8 +253,15 @@ const MAX_LINES = 150;
  * the index knows about — which is precisely what `MAPPED_GUIDES` above refuses to allow. The
  * `llms.txt` row's guide count moved from nine to ten in the same change, in place, and paid
  * for nothing. So again the budget moves by exactly the row.
+ *
+ * TEST CHANGE, justified: 157 to 158, the cost of ONE more map row, on the same reasoning a
+ * third time. `docs/plugins.md` is a new hand page, so the map owes it a row. Everything else
+ * the plugin route cost README moved IN PLACE and paid for nothing: the `## Commands` run
+ * gained `plugin` and re-wrapped inside its own five lines, the count word moved from nine to
+ * ten, and the `llms.txt` row's guide count from ten to eleven. So the budget moves by exactly
+ * the row, and by nothing else.
  */
-const README_MAX_LINES = 157;
+const README_MAX_LINES = 158;
 
 /**
  * The product, its installable package, and the owner the pages name.
@@ -387,8 +398,17 @@ const RELEASE_CUT_DATE = "2026-09-15";
  * MOVED 2026-09-16: introduced by the Package 14 rewrite, which re-attested thirteen of the
  * fourteen hand pages against commit e79dcf0 on that date. `docs/migration.md` was not rewritten
  * and still carries the 1.8.0 cut form, which is why both constants are live.
+ *
+ * TEST CHANGE, justified: MOVED 2026-09-20, from 2026-09-16, by the pass that added the plugin
+ * guide. The constant is NOT decoration here — a new hand page has to carry a date, and the only
+ * honest date a page written today can carry is today's, which the 2026-09-16 pin would have
+ * refused as "later than the pass it ships in". Three pages carry the new date because three
+ * pages were re-read against this tree in that pass: `docs/plugins.md` (written), `README.md`
+ * (its command surface and its map) and `docs/getting-started.md` (its verb list and its
+ * glossary). Every other page keeps the date it was actually verified on, which is the property
+ * the pair of assertions below exists to protect.
  */
-const REATTESTATION_DATE = "2026-09-16";
+const REATTESTATION_DATE = "2026-09-20";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");
@@ -549,7 +569,7 @@ describe("hand pages", () => {
   // eight" when the customization guide did, "all nine" when the workspaces guide did, "all
   // twelve" when the enterprise-forks guide did: the name states the membership count, and the
   // loop below is unchanged through all of them and still runs over every member.
-  it("all thirteen exist and carry real content", () => {
+  it("all fourteen exist and carry real content", () => {
     for (const page of HAND_PAGES) {
       expect(existsSync(join(REPO_ROOT, page)), `${page} is missing`).toBe(true);
       expect(read(page).trim().length, `${page} is empty`).toBeGreaterThan(500);
@@ -924,7 +944,7 @@ describe("README", () => {
   // that joins the CLI and not these two arrays leaves both pages understating the surface with
   // nothing failing — which is exactly how README went on saying "seven verbs" while `workspace`
   // shipped. A verb lands in `src/cli.ts` and in both arrays, in that order.
-  it("states the command surface — nine verbs plus the plumbing verbs", () => {
+  it("states the command surface — ten verbs plus the plumbing verbs", () => {
     const text = read(README);
     const ADVERTISED = [
       "init",
@@ -935,6 +955,11 @@ describe("README", () => {
       "config",
       "workspace",
       "worktree",
+      // TEST CHANGE, justified: `plugin` joined the advertised surface in `src/cli.ts` between
+      // `worktree` and `clean`, and this array asserts ORDER as well as membership — so the
+      // verb lands here in the CLI's own position, not appended where it would read as a
+      // reshuffle of the list a reader scans.
+      "plugin",
       "clean",
     ];
     // TEST CHANGE, justified (strictly stronger): nine `toContain` calls over the
@@ -952,9 +977,9 @@ describe("README", () => {
     expect(listed, "README's `·` verb list is not the advertised surface").toEqual(ADVERTISED);
     // The count WORD beside the list is still hand-typed; the length assertion
     // next to it is what makes the two disagreeing visible.
-    expect(listed).toHaveLength(9);
+    expect(listed).toHaveLength(10);
     expect(commands, "README's verb count word does not match its own list").toContain(
-      "nine verbs",
+      "ten verbs",
     );
     expect(text).toContain("`learn`");
     // TEST CHANGE, justified: `handoff` joined `learn` behind the advertised surface, so
@@ -1697,6 +1722,93 @@ describe("the guides", () => {
       "--is-ancestor v1.5.0",    );
   });
 
+  it("the enterprise-forks guide states the plugin-distribution route it tells a fork to run", () => {
+    // Left for this unit by the release-workflow one, which wrote the section and had no docs
+    // pin to hang it on. Three claims a fork ACTS on, and all three are checkable rather than
+    // atmospheric: the builder it runs, the `package.json` block that decides what the built
+    // catalogs say, and why the branch push is forced. Each is read from the mechanism where
+    // one exists, so the pin fails when the mechanism moves rather than when the prose does.
+    const guide = read(ENTERPRISE_FORKS);
+
+    // The two builders, asserted to EXIST as well as to be named: a renamed script would
+    // otherwise leave the guide pointing at a command a reader cannot run.
+    for (const script of [
+      "scripts/build-plugin-runtime.mjs",
+      "scripts/build-plugin-distribution.mjs",
+    ]) {
+      expect(guide, `the fork guide never names \`${script}\``).toContain(script);
+      expect(
+        existsSync(join(REPO_ROOT, script)),
+        `the fork guide names missing ${script}`,
+      ).toBe(true);
+    }
+
+    // The configuration block, read off the validator that decides the key set rather than
+    // transcribed here: a fifth key would be one the guide does not mention, and a dropped one
+    // would be a key the guide still tells a fork to set.
+    const identity = read("scripts/distribution-identity.mjs");
+    const declared = /const DISTRIBUTION_KEYS = \[([^\]]*)\]/.exec(identity)?.[1];
+    expect(declared, "distribution-identity.mjs has no DISTRIBUTION_KEYS to read").not.toBeUndefined();
+    const keys = [...(declared ?? "").matchAll(/'([^']*)'/g)].map((match) => match[1] ?? "");
+    expect(keys.length, "the key list read as empty, so the loop below asserts nothing").toBe(4);
+    expect(guide, "the fork guide never names the `stamity.distribution` block").toContain(
+      "`stamity.distribution`",
+    );
+    for (const key of keys) {
+      // The key as a code span, allowing the path form the guide uses for the one key whose
+      // value is a map (`sources.<client>`). The alternative — demanding the bare key — would
+      // make the guide name `sources` twice to satisfy a test rather than a reader.
+      expect(guide, `the fork guide omits the \`${key}\` key a fork has to set`).toMatch(
+        new RegExp(`\`${key}[.\`]`),
+      );
+    }
+
+    // The force semantics: the flag AND the reason. A guide that printed `--force` without
+    // saying why would read as a shortcut, which is the one reading the section exists to deny.
+    expect(guide, "the fork guide never shows the forced branch push").toContain(
+      "git push --force <your remote> HEAD:refs/heads/plugin-dist",
+    );
+    expect(guide, "the fork guide never says why the branch push is forced").toContain(
+      "`--force` on the branch is the intended shape rather than a shortcut",
+    );
+    expect(guide, "the fork guide never says the tag is what keeps history").toMatch(
+      /tag\*{0,2} is what keeps history/,
+    );
+  });
+
+  it("the pages that describe signature verification say the client is optional", () => {
+    // Left for this unit by the dependency change that made it true. The claim is read off
+    // `package.json` rather than typed here, so the day the client moves back to a required
+    // dependency this fails as a stale-page report instead of quietly staying green.
+    const pkg = JSON.parse(read("package.json")) as {
+      optionalDependencies?: Record<string, string>;
+      dependencies?: Record<string, string>;
+    };
+    expect(
+      pkg.optionalDependencies?.["sigstore"],
+      "sigstore is no longer an optional dependency — these two pages now overstate the risk",
+    ).toBeDefined();
+    expect(pkg.dependencies?.["sigstore"], "sigstore is declared in both groups").toBeUndefined();
+
+    // Both halves on both pages: that the client is optional since 1.9.0, and that an install
+    // without it REFUSES rather than passing. Half of that pair is the dangerous half — a
+    // reader told only that the client is optional would reasonably assume verification
+    // degrades to a pass.
+    for (const page of [PACKS_AND_TRUST, SECURITY_MAPPING]) {
+      const text = flowed(read(page));
+      expect(text, `${page} never says the Sigstore client is optional since 1.9.0`).toMatch(
+        /Since 1\.9\.0 the Sigstore client is an \*{0,2}optional\*{0,2} dependency/,
+      );
+      expect(text, `${page} never names the --omit=optional install`).toContain("--omit=optional");
+      expect(text, `${page} does not call the missing-client outcome a refusal`).toContain(
+        "**refuses**",
+      );
+      expect(text, `${page} never says a missing client refuses rather than passes`).toContain(
+        "the claim — never a pass, and never the pin-waivable `unarmed`",
+      );
+    }
+  });
+
   it("getting started shows the install line and the whole command surface", () => {
     const text = read(GETTING_STARTED);
     expect(text, "the getting-started guide never shows the install command").toContain(
@@ -1716,6 +1828,9 @@ describe("the guides", () => {
       "config",
       "workspace",
       "worktree",
+      // TEST CHANGE, justified: the same verb, in the same CLI position, in the second
+      // hand-maintained copy of the surface this file's comment above names.
+      "plugin",
       "clean",
     ]) {
       expect(text, `the getting-started guide omits \`${command}\``).toContain(`\`${command}\``);

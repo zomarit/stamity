@@ -22,6 +22,7 @@ hand-written or corpus source. Nothing here links outside this tree.
 
 - [Getting started](docs/getting-started.md): setting stamity up in a repository for the first time — what init asks and writes per client, where state lives, and one change proved by a passing verification gate.
 - [Working with stamity](docs/working-with-stamity.md): which of the nine touchpoints to open, what that one may do, what is on disk when it stops, and how to run two changes at once.
+- [Plugins](docs/plugins.md): installing stamity as a client plugin — which artifact class each container carries and which stays in the repository, the install route per client, setup, pinning and rollback, the companion runtime, and the private-catalog route.
 - [Doctrine](docs/doctrine.md): why stamity ships what it ships — the root question every artifact answers, the four pillars and their public enforcement surfaces, and how an artifact is deleted.
 - [Customization](docs/customization.md): making the shipped agents, rules, commands and skills say what a repository needs — where an override lives, the one save gate, patching instead of replacing, removal, and the fork layer below it.
 - [Troubleshooting](docs/troubleshooting.md): the exit model, every check row and its remedy, the common failures, and where to report one.

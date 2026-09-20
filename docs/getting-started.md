@@ -2,7 +2,7 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit e79dcf0. Re-attested 2026-09-16 in the Package 14 rewrite. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 3f76070. Re-attested 2026-09-20 in the plugin-lifecycle package. -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run line changes, a verb joins
      or leaves the CLI, a probe joins or leaves `check`, a path joins or leaves `.stamity/`, or the
      APM route's client floor or per-target output moves. `test/docsPages.test.ts` holds this page
@@ -132,6 +132,17 @@ engine itself stay with the packaged CLI route. For public downstreams or indepe
 packages, [the enterprise guide](enterprise-forks.md) covers source and fork customization,
 publisher identity, private authentication and the update lifecycle.
 
+## Install as a plugin instead
+
+The third route is a **client plugin**. Your client installs the plugin from a marketplace, the
+plugin carries the agents, skills, commands and hooks inside its own root, and one command —
+`/stamity:st-setup` on Claude Code, `/st-setup` on Cursor and the Copilot CLI — writes the files
+no container can carry: the charter, the rules your client reads by glob, your MCP documents and
+`.stamity/` itself. There is no `init` walk on that route, and no npm install either.
+
+The ownership split per class per client, the install commands, pinning and rollback, and the
+private-catalog route are [the plugins guide](plugins.md)'s to state.
+
 ## What init writes for each client
 
 `AGENTS.md` is written for every client. It is the charter: your repository's facts, the floor
@@ -180,10 +191,10 @@ touchpoints are listed.
 Both install routes are proved on a clean machine before either ships.
 [The measurements page](measurements.md) has the first-run proof, lane by lane.
 
-## The nine verbs
+## The ten verbs
 
 `init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
-`clean`
+`plugin` · `clean`
 
 The package installs two names for one binary: `stamity` and the shorter alias `st`.
 
@@ -196,8 +207,10 @@ cannot describe a verb the CLI does not have or miss one it does.
 Four things, because each is about how two parts fit together rather than about any one verb.
 
 - **Which verbs need the manifest.** `sync`, `check`, `config`, `workspace`, `clean` and `add`
-  all read the manifest `init` wrote. `validate` runs with or without one. `learn` and `handoff`
-  ask only that `.stamity/` exists.
+  all read the manifest `init` wrote. `validate` runs with or without one. `plugin status` reads
+  it where there is one and reports its absence where there is not; `plugin setup` refuses on a
+  manifest, because writing one is what it does. `learn` and `handoff` ask only that `.stamity/`
+  exists.
 - **Which verbs need git.** `init`, `sync` and `check` read git where it is, and carry on where
   it is not. The `worktree` verbs need a `git` binary on PATH and refuse without one. The rest
   never call git.
@@ -345,7 +358,7 @@ One spelling per idea, across every page.
 | corpus | the canonical content stamity ships — `content/` plus `packs/`. Authored once, emitted per client. |
 | charter | the always-on file every generated setup carries: your repository's facts, the floor invariants, and the touchpoint index. It is written as `AGENTS.md`. |
 | touchpoint | one of the nine `/st-` slash commands your agent runs. Your client decides the invocation form. |
-| verb | one of the nine names you type after `stamity`: `init`, `sync`, `check`, `validate`, `add`, `config`, `workspace`, `worktree`, `clean`. |
+| verb | one of the ten names you type after `stamity`: `init`, `sync`, `check`, `validate`, `add`, `config`, `workspace`, `worktree`, `plugin`, `clean`. |
 | manifest | `.stamity/manifest.json` — the record of your setup: its clients, its config, and every file stamity wrote. |
 | managed block | the span between a `STAMITY:BEGIN` and a `STAMITY:END` marker. Every sync rewrites it; the text outside it is yours. |
 | drift | disk and the engine's output disagreeing. `check` asks whether a sync would change anything, and names each file that would. |
