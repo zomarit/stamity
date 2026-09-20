@@ -1,5 +1,6 @@
 import { readCharterTemplate } from "../content/charter.ts";
 import { verificationGatesFor } from "../detect/verificationGates.ts";
+import { readGates } from "../manifest/manifest.ts";
 import type { PackageEntry } from "../types/detect.ts";
 import type { SetupManifest } from "../types/manifest.ts";
 import type { Tool } from "../types/core.ts";
@@ -175,9 +176,16 @@ export async function renderAgentsMd(ctx: AgentsMdEmissionContext): Promise<Agen
  *
  * Package-manager evidence IS read — it decides the run and exec prefixes — so
  * a pnpm or bun repo is never handed `npm run test`.
+ *
+ * Step 0, above all four: a gate the operator PINNED (`manifest.gates`, written
+ * by `stamity config set gates.<k>`) is used as written, per key. Detection
+ * describes the repository; a pin states what its people actually run, and the
+ * charter is the file that has to be right — so the pin outranks every branch
+ * below it, including the sentinel a repository with nothing detectable would
+ * otherwise render.
  */
 export function verificationGatesFromManifest(manifest: SetupManifest): VerificationGateSet {
-  return verificationGatesFor(manifest.detected);
+  return verificationGatesFor(manifest.detected, readGates(manifest));
 }
 
 /**

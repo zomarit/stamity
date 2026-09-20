@@ -1408,3 +1408,164 @@ describe("config — ruleDelivery", () => {
     expect((await readManifest(handle.dir))?.ruleDelivery).toBeUndefined();
   });
 });
+
+/**
+ * The four verification-gate keys.
+ *
+ * What they close: the charter states four commands as FACTS about the
+ * reader's repository, and until now the only source for them was detection —
+ * so a repo whose suite is split, whose gate lives behind a task runner, or
+ * that detection could read nothing from shipped an `unknown` sentinel with no
+ * way to correct it. `config detect` could not help: it re-observes, and the
+ * command an operator runs is not observable. These rows are that way in, and
+ * they are ordinary registry rows, so the list, the get, the picker and the
+ * reference page pick them up with no second code path.
+ *
+ * The refusals below exit 1, not 64: this CLI collapses every failure to
+ * status 1 and carries the kind in `error.code` (`src/types/errors.ts` — the
+ * sysexits translation was retired), so "the key is named and nothing is
+ * written" is the whole contract a caller can rely on.
+ */
+describe("config — the four gate keys", () => {
+  const GATE_KEYS = ["gates.test", "gates.lint", "gates.typecheck", "gates.all"];
+
+  it("addresses one key per gate", () => {
+    for (const key of GATE_KEYS) expect(CONFIG_KEYS).toContain(key);
+  });
+
+  it("persists a pinned command and reads it back as set", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    const written = await run(handle, ["set", "gates.test", "npm run test:unit"]);
+
+    expect(written.code).toBe(0);
+    expect((await readManifest(handle.dir))?.gates?.test).toBe("npm run test:unit");
+    expect((await run(handle, ["get", "gates.test"])).stdout).toContain(
+      "gates.test  npm run test:unit",
+    );
+    expect(rowFor((await run(handle, ["list"])).stdout, "gates.test")).toMatch(
+      /npm run test:unit\s+\(set\)/,
+    );
+  });
+
+  it("clears one key with `none`, leaving no empty gates object behind", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { gates: { test: "npm run test:unit", lint: "oxlint" } });
+
+    const first = await run(handle, ["set", "gates.test", "none"]);
+
+    expect(first.code).toBe(0);
+    // The sibling pin survives: `none` clears the key it names, not the block.
+    expect((await readManifest(handle.dir))?.gates).toEqual({ lint: "oxlint" });
+
+    const second = await run(handle, ["set", "gates.lint", "none"]);
+
+    expect(second.code).toBe(0);
+    expect((await readManifest(handle.dir))?.gates).toBeUndefined();
+    // An emptied object would round-trip forever as a key the manifest carries
+    // and nothing reads — and `config get` would report it as (set).
+    expect(await manifestBytes(handle)).not.toContain("gates");
+    expect((await run(handle, ["get", "gates.lint"])).stdout).toContain("(default: detected:");
+  });
+
+  it("refuses an empty command, naming the key, and writes nothing", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+    const before = await manifestBytes(handle);
+
+    const result = await run(handle, ["set", "gates.lint", ""]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("gates.lint");
+    expect(result.stderr).toContain("is empty");
+    expect(await manifestBytes(handle)).toBe(before);
+    expect((await readManifest(handle.dir))?.gates).toBeUndefined();
+  });
+
+  it("refuses a command that spans more than one line", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+    const before = await manifestBytes(handle);
+
+    const result = await run(handle, ["set", "gates.all", "npm run lint\nnpm run test"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("gates.all");
+    expect(result.stderr).toContain("spans more than one line");
+    expect(await manifestBytes(handle)).toBe(before);
+  });
+
+  it("prints the detected command behind a `detected:` prefix for every unpinned gate", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, {
+      detected: {
+        languages: ["python"],
+        linters: ["ruff"],
+        testFrameworks: ["pytest"],
+        ciProviders: [],
+      },
+      gates: { test: "npm run test:unit" },
+    });
+
+    const result = await run(handle, ["list"]);
+
+    expect(result.code).toBe(0);
+    // A pinned row prints the command alone: it is not a detection, and
+    // prefixing it would say the engine observed something it did not.
+    expect(rowFor(result.stdout, "gates.test")).toMatch(/npm run test:unit\s+\(set\)/);
+    expect(rowFor(result.stdout, "gates.lint")).toMatch(/detected: ruff check \.\s+\(default\)/);
+    expect(rowFor(result.stdout, "gates.typecheck")).toMatch(/detected: mypy \.\s+\(default\)/);
+    expect(rowFor(result.stdout, "gates.all")).toContain("detected:");
+  });
+
+  it("prints `detected: unknown` where detection ran and found nothing to run", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, {
+      detected: { languages: [], linters: [], testFrameworks: [], ciProviders: [] },
+    });
+
+    const result = await run(handle, ["list"]);
+
+    expect(result.code).toBe(0);
+    // The charter's own word for an unconfigured fact, and the one the hint
+    // tells an operator how to replace — never an invented command.
+    expect(rowFor(result.stdout, "gates.test")).toMatch(/detected: unknown\s+\(default\)/);
+  });
+
+  it("keeps a pinned gate across `config detect`", async () => {
+    const handle = tempDir();
+    await handle.seedFiles({
+      "package.json": `${JSON.stringify({ name: "fixture", private: true }, null, 2)}\n`,
+      "tsconfig.json": `${JSON.stringify({ compilerOptions: { strict: true } }, null, 2)}\n`,
+    });
+    await seedManifest(handle, {
+      detected: { languages: [], linters: [], testFrameworks: [], ciProviders: [] },
+      gates: { test: "npm run test:unit" },
+    });
+
+    const result = await run(handle, ["detect"]);
+
+    expect(result.code).toBe(0);
+    // Detection refreshed the facts it observes...
+    expect((await readManifest(handle.dir))?.detected?.languages).toContain("typescript");
+    // ...and left the one fact it cannot observe exactly where the operator put
+    // it. `detect` re-observing a repo must never silently un-pin a gate.
+    expect((await readManifest(handle.dir))?.gates).toEqual({ test: "npm run test:unit" });
+  });
+
+  it("applies and clears a gate as a pure function over a manifest", () => {
+    const manifest = baseManifest();
+    const snapshot = structuredClone(manifest);
+
+    const pinned = setConfigValue(manifest, "gates.typecheck", "tsc --noEmit");
+    expect(pinned.gates).toEqual({ typecheck: "tsc --noEmit" });
+    expect(manifest).toEqual(snapshot);
+
+    // Clearing a key the manifest never carried is a no-op, not a crash, and
+    // does not mint an empty block on the way through.
+    expect(setConfigValue(manifest, "gates.typecheck", "none").gates).toBeUndefined();
+    expect(setConfigValue(pinned, "gates.typecheck", "none").gates).toBeUndefined();
+    expect(() => setConfigValue(manifest, "gates.test", "  ")).toThrow(CliFailure);
+  });
+});

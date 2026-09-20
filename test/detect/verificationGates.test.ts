@@ -465,3 +465,72 @@ describe("verificationGatesFor — the substitution view", () => {
     }
   });
 });
+
+/**
+ * The operator's pinned gates — the second input the resolver takes.
+ *
+ * Detection answers what the repository SHOWS; a pinned gate answers what the
+ * operator RUNS, and the two disagree on every repo whose suite is split
+ * (`npm run test:unit` beside a slower `test`) or whose gate lives behind a
+ * task runner detection cannot see. The pin wins per key, which is the whole
+ * rule — and the `all` chain is recomposed from the merged three rather than
+ * inherited from detection, so the composite can never quote a command the
+ * three rows above it no longer name.
+ */
+describe("verificationGatesFor — the operator's pinned gates", () => {
+  it("lets a pinned gate win over the detected one, per key", () => {
+    const gates = verificationGatesFor(detection({ languages: ["python"] }), {
+      test: "pytest -m 'not slow'",
+    });
+
+    expect(gates.test).toBe("pytest -m 'not slow'");
+    // The unpinned two still come from detection — the pin is per key, not
+    // per repository.
+    expect(gates.lint).toBe("ruff check .");
+    expect(gates.typecheck).toBe("mypy .");
+    // Recomposed, not inherited: the chain carries the pinned test command.
+    expect(gates.all).toBe("ruff check . && mypy . && pytest -m 'not slow'");
+  });
+
+  it("takes a pinned `all` verbatim and leaves the three rows to detection", () => {
+    const gates = verificationGatesFor(detection({ languages: ["python"] }), {
+      all: "make verify",
+    });
+
+    expect(gates.all).toBe("make verify");
+    expect(gates.test).toBe("pytest");
+    expect(gates.lint).toBe("ruff check .");
+    expect(gates.typecheck).toBe("mypy .");
+  });
+
+  it("replaces the sentinel a repository with nothing to detect renders", () => {
+    const gates = verificationGatesFor(
+      detection({ languages: [], packageScripts: [], testFrameworks: [], linters: [] }),
+      { test: "npm run test:unit" },
+    );
+
+    expect(gates.test).toBe("npm run test:unit");
+    expect(gates.lint).toBe(unresolvedGate("lint"));
+    expect(gates.typecheck).toBe(unresolvedGate("typecheck"));
+    // The composite is the one gate that resolved, not a chain with holes in
+    // it — the sentinel is a sentence, and chaining it with `&&` would produce
+    // a line somebody could paste into a shell.
+    expect(gates.all).toBe("npm run test:unit");
+  });
+
+  it("answers exactly as it did before pinning existed when nothing is pinned", () => {
+    const fixtures: PersistedDetection[] = [
+      { languages: ["python"] },
+      { languages: ["typescript"], packageManager: "pnpm", packageScripts: ["test"] },
+      { languages: [], packageScripts: [], testFrameworks: [], linters: [] },
+      { languages: ["javascript"], packageScripts: [], linters: ["oxlint"] },
+    ];
+
+    for (const fixture of fixtures) {
+      expect(verificationGatesFor(fixture, {}), JSON.stringify(fixture)).toEqual(
+        verificationGatesFor(fixture),
+      );
+    }
+    expect(verificationGatesFor(undefined, {})).toEqual(DEFAULT_GATE_COMMANDS);
+  });
+});

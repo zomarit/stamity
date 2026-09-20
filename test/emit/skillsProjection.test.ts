@@ -212,6 +212,22 @@ describe("projectSkills transforms", () => {
     expect(skill?.content).toContain("Prose mentioning ${STAMITY: without forming a token stays put.");
   });
 
+  it("prefers the operator's pinned gate over the detected one, as the charter does", async () => {
+    // Same resolver, same pin, same answer: a skill body that told an agent to
+    // run `pytest` while the charter it loads beside says `npm run test:unit`
+    // is the disagreement `manifest.gates` exists to end.
+    const ctx = contextOf(["alpha"], DETECTED);
+    const rows = await projectFixture(CORPUS, {
+      ...ctx,
+      manifest: { ...ctx.manifest, gates: { test: "npm run test:unit" } },
+    });
+    const skill = rows.find((row) => row.path.endsWith("/SKILL.md"));
+
+    expect(skill?.content).toContain("Lint with eslint, oxlint, then run npm run test:unit.");
+    // The detected command is gone, not merely joined by the pinned one.
+    expect(skill?.content).not.toContain("pytest");
+  });
+
   it("falls back to the conventional npm gates when detection carries no recognised language", async () => {
     const rows = await projectFixture(CORPUS, contextOf(["alpha"]));
     const skill = rows.find((row) => row.path.endsWith("/SKILL.md"));

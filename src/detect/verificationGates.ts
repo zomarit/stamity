@@ -1,5 +1,6 @@
 import { DETECTION_UNKNOWN } from "../emit/substitution.ts";
 import type { DetectedSummary } from "../types/detect.ts";
+import type { GatesConfig } from "../types/manifest.ts";
 import type { PackageManagerName } from "./packageManager.ts";
 
 /**
@@ -300,13 +301,55 @@ export function verificationCommandsFor(
 }
 
 /**
- * {@link verificationCommandsFor} with the sentinel filled in — the shape the
- * substitution pass takes, where every token must resolve to some string.
+ * {@link verificationCommandsFor} with the operator's pins applied and the
+ * sentinel filled in — the shape the substitution pass takes, where every
+ * token must resolve to some string.
+ *
+ * `configured` is the manifest's `gates` block (`readGates`), and it OUTRANKS
+ * detection per key: detection answers what the repository shows, a pin
+ * answers what the operator actually runs, and only one of those two is a
+ * statement. Nothing here validates a pinned command — the manifest schema
+ * already refused an empty, multi-line or over-long one before it could be
+ * persisted, and this module neither runs nor parses a gate.
  */
 export function verificationGatesFor(
   detected: PersistedDetection | undefined,
+  configured: GatesConfig = {},
 ): VerificationGateCommands {
-  return filled(verificationCommandsFor(detected));
+  return filled(withConfigured(verificationCommandsFor(detected), configured));
+}
+
+/**
+ * Detection's answer with the operator's pins laid over it.
+ *
+ * Two properties, both load-bearing:
+ *
+ * 1. **An empty pin set returns the input object itself.** A repository that
+ *    pins nothing must resolve byte-identically to what it resolved before
+ *    pinning existed — the cross-client golden and every committed emitted
+ *    tree depend on it — so the no-pin path does no work at all rather than
+ *    reconstructing an equal value.
+ * 2. **`all` is recomposed, not inherited.** With a pin on any of the three,
+ *    detection's chain quotes a command the rows above it no longer name, so
+ *    the chain is rebuilt from the merged three through the same
+ *    {@link compose} every other caller uses (same order, same de-duplication,
+ *    same "absent gates are omitted" rule). A pinned `all` wins outright: an
+ *    operator who spells their full gate is answering this question directly.
+ */
+function withConfigured(
+  commands: VerificationCommands,
+  configured: GatesConfig,
+): VerificationCommands {
+  const { test, lint, typecheck, all } = configured;
+  if (test === undefined && lint === undefined && typecheck === undefined && all === undefined) {
+    return commands;
+  }
+  const merged = compose(
+    test ?? commands.test,
+    lint ?? commands.lint,
+    typecheck ?? commands.typecheck,
+  );
+  return all === undefined ? merged : { ...merged, all };
 }
 
 /** Absent gate → {@link unresolvedGate}; the charter documents what that word means. */
