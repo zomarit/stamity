@@ -119,7 +119,7 @@ async function seedCorpus(handle: TempDirHandle): Promise<void> {
  */
 async function seedRepo(
   handle: TempDirHandle,
-  opts: { ledger?: LedgerEntry[]; tools?: Tool[] } = {},
+  opts: { ledger?: LedgerEntry[]; tools?: Tool[]; plugin?: SetupManifest["plugin"] } = {},
 ): Promise<string> {
   await seedCorpus(handle);
   const root = handle.path("repo");
@@ -130,6 +130,7 @@ async function seedRepo(
       generatorVersion: ENGINE_VERSION,
       now: T0,
     }),
+    ...(opts.plugin === undefined ? {} : { plugin: opts.plugin }),
     ledger: opts.ledger ?? [],
   };
   await writeManifest(root, manifest, { now: T0 });
@@ -883,5 +884,56 @@ describe("MCP documents are merged, never overwritten", () => {
     const second = await planSync(root, ENGINE_VERSION);
     const mcpEntry = second.entries.find((entry) => entry.path === ".mcp.json");
     expect(mcpEntry?.action).toBe("unchanged");
+  });
+});
+
+/**
+ * What the report owes an operator whose plugin delivers part of the setup
+ * (REQ-PLUGIN-016). The counts alone would show a much shorter written list
+ * with nothing on screen connecting it to the plugin.
+ */
+describe("the plugin-owned report lines", () => {
+  const PLUGIN: SetupManifest["plugin"] = {
+    mode: "plugin-backed",
+    clients: {
+      claude: { version: "1.9.0", classes: ["command", "hooks", "agent", "skill"] },
+    },
+  };
+
+  it("prints one line per client with its classes in declaration order, and carries it in JSON", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle, { plugin: PLUGIN });
+
+    const plan = await planSync(root, ENGINE_VERSION);
+    const report = await applySync(root, plan, {
+      engineVersion: ENGINE_VERSION,
+      force: false,
+      dryRun: false,
+      now: T1,
+    });
+
+    // Declaration order, not the order the record listed them in.
+    expect(renderSyncReport(plan, report, plainPalette)).toContain(
+      "plugin-owned  claude: agent, skill, command, hooks",
+    );
+    expect(syncJsonPayload(plan, report)["pluginOwned"]).toEqual([
+      { tool: "claude", classes: ["agent", "skill", "command", "hooks"] },
+    ]);
+  });
+
+  it("prints nothing and carries an empty list on a repository with no plugin field", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+
+    const plan = await planSync(root, ENGINE_VERSION);
+    const report = await applySync(root, plan, {
+      engineVersion: ENGINE_VERSION,
+      force: false,
+      dryRun: false,
+      now: T1,
+    });
+
+    expect(renderSyncReport(plan, report, plainPalette)).not.toContain("plugin-owned");
+    expect(syncJsonPayload(plan, report)["pluginOwned"]).toEqual([]);
   });
 });

@@ -39,6 +39,7 @@ import {
   type McpConfig,
   type ModelConfig,
   type RuleDelivery,
+  type SetupManifest,
 } from "../../src/types/manifest.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -192,6 +193,8 @@ interface CtxOptions {
   mcp?: McpConfig;
   models?: ModelConfig;
   rootDir?: string;
+  /** The manifest's plugin record; absent everywhere but the ownership cases. */
+  plugin?: SetupManifest["plugin"];
 }
 
 function ctxOf(options: CtxOptions): EmissionContext {
@@ -218,6 +221,7 @@ function ctxOf(options: CtxOptions): EmissionContext {
       ...manifest,
       ...(options.models === undefined ? {} : { models: options.models }),
       ...(options.ruleDelivery === undefined ? {} : { ruleDelivery: options.ruleDelivery }),
+      ...(options.plugin === undefined ? {} : { plugin: options.plugin }),
     },
     engineVersion: ENGINE_VERSION,
     facts: { monorepoPackages: options.packages ?? [] },
@@ -1949,5 +1953,30 @@ describe("the omission notice under on-demand", () => {
 
     expect(rootReplacement).toContain("`gone`");
     expect(rootReplacement).not.toContain("on demand at");
+  });
+});
+
+describe("codex residue under plugin ownership", () => {
+  it("drops the agent and hook rows the record names and keeps the composed config", async () => {
+    const contentRoot = await seedCorpus();
+    const ctx = ctxOf({
+      contentRoot,
+      plugin: {
+        mode: "plugin-backed",
+        clients: { codex: { version: "1.9.0", classes: ["agent", "hooks"] } },
+      },
+    });
+
+    const paths = (await codexResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx))
+      .outputs.map((row) => row.path);
+
+    expect(paths.filter((path) => path.startsWith(`${CODEX_AGENTS_DIR}/`))).toEqual([]);
+    expect(paths).not.toContain(CODEX_HOOKS_FILE);
+    expect(paths.filter((path) => path.includes("/hooks/codex/"))).toEqual([]);
+
+    // `.codex/config.toml` is this client's WHOLE configuration — MCP tables,
+    // the features flag, the subagent pointers — and this adapter owns it whole
+    // under either install mode, so it is not on the hook id list.
+    expect(paths).toContain(CODEX_CONFIG_FILE);
   });
 });

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   checkCommand,
@@ -27,7 +27,7 @@ import { EngineError } from "../../../src/types/errors.ts";
 import { packOwner, type LedgerEntry, type SetupManifest } from "../../../src/types/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import type * as PathsApi from "../../../src/shared/paths.ts";
-import { npxCommand } from "../../support/identity.ts";
+import { canonical, npxCommand } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 /**
@@ -91,6 +91,28 @@ const CHARTER_FIXTURE = [
   "",
 ].join("\n");
 
+/**
+ * A minimal corpus agent, so a native `.claude/agents/stamity-reviewer.md` has
+ * an emitted id to collide with. The duplicate probe asks the catalog what ids
+ * a plugin built from this corpus would carry, and a corpus with no agent in it
+ * would make the unmanaged case pass vacuously.
+ */
+const AGENT_FIXTURE = [
+  "---",
+  "id: reviewer",
+  "type: agent",
+  "description: fixture agent",
+  "tags: [review]",
+  "load: on-demand",
+  "obsolete_when: fixture trigger",
+  "---",
+  "",
+  "# Reviewer",
+  "",
+  "Review guidance body.",
+  "",
+].join("\n");
+
 /** The same fixture with no version at all — a template that predates versioning. */
 const UNVERSIONED_CHARTER_FIXTURE = CHARTER_FIXTURE.split("\n")
   .filter((line) => !line.startsWith("invariants_"))
@@ -133,6 +155,8 @@ interface SeedOptions {
   /** `false` leaves `.stamity/learnings` and `.stamity/handoffs` absent. */
   stateDirs?: boolean;
   files?: Record<string, string>;
+  /** The manifest's plugin record, as `stamity plugin setup` persists it. */
+  plugin?: SetupManifest["plugin"];
 }
 
 /**
@@ -193,12 +217,32 @@ async function seedRepo(handle: TempDirHandle, opts: SeedOptions = {}): Promise<
     ...(synced ?? base),
     generatedBy: opts.generatedBy ?? engineVersion,
     ...(opts.version === undefined ? {} : { version: opts.version }),
+    ...(opts.plugin === undefined ? {} : { plugin: opts.plugin }),
     ledger: [...(synced?.ledger ?? []), ...(opts.ledger ?? [])],
   };
   await writeManifest(handle.dir, manifest, { now: T0 });
 
   if (opts.files !== undefined) await handle.seedFiles(opts.files);
   return handle.dir;
+}
+
+/**
+ * Every file under `root`, POSIX-relative, with the sha-256 of its bytes —
+ * the whole-tree equality a non-mutation claim needs.
+ */
+async function hashTree(root: string): Promise<Record<string, string>> {
+  const names = (await readdir(root, { recursive: true, withFileTypes: true }))
+    .filter((entry) => entry.isFile())
+    .map((entry) => join(entry.parentPath, entry.name));
+  const tree: Record<string, string> = {};
+  await Promise.all(
+    names.map(async (path) => {
+      tree[relative(root, path).split(sep).join("/")] = createHash("sha256")
+        .update(await readFile(path))
+        .digest("hex");
+    }),
+  );
+  return tree;
 }
 
 /** Runs `check --json` and parses the single document the funnel emits. */
@@ -260,6 +304,16 @@ describe("checkNodeVersion", () => {
   });
 });
 
+/**
+ * The doctor's plugin rows read the process environment, so every direct
+ * `runDoctor` call in this file pins `env: {}`. Without it a machine that
+ * happens to export `CLAUDE_PLUGIN_ROOT` — a developer running the suite inside
+ * a client that sets it — would take a different branch of `plugin-runtime`
+ * than CI does, and a suite whose verdict depends on the shell it was started
+ * from is not a gate. The command-level cases go through `runInProcess`, whose
+ * env already defaults to `{}` for the same reason.
+ */
+
 describe("check — a healthy repository", () => {
   it("exits 0 with no failing row, clean drift, and the manifest as provenance", async () => {
     const root = await seedRepo(getRepo());
@@ -301,10 +355,10 @@ describe("check — a healthy repository", () => {
     expect(result.stderr).toBe("");
   });
 
-  it("returns the eleven doctor rows in a fixed order", async () => {
+  it("returns the thirteen doctor rows in a fixed order", async () => {
     const root = await seedRepo(getRepo());
 
-    const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root }));
+    const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root, env: {} }));
 
     // Grew by one again: `preserved-duplicate` reads the ledgered managed files
     // and asks whether any of them repeats its block below the END marker. It
@@ -329,6 +383,15 @@ describe("check — a healthy repository", () => {
       "tool-traces",
       "preserved-duplicate",
       "pack-integrity",
+      // TEST CHANGE, justified (2026-09-20, REQ-PLUGIN-016): the two plugin rows
+      // joined the doctor. `plugin-runtime` answers about the ENVIRONMENT — is a
+      // plugin root reachable, and does its runtime match this repository's
+      // recorded state — and `plugin-duplicates` about the repository beside it,
+      // so they sit after the repository-state probes and before `invariants`,
+      // which alone reads the installed corpus. No row above moved, and the pin
+      // stays a literal array so the next one has to be placed here too.
+      "plugin-runtime",
+      "plugin-duplicates",
       "invariants",
     ]);
   });
@@ -336,7 +399,7 @@ describe("check — a healthy repository", () => {
   it("reports the installed charter's invariants version, read rather than restated", async () => {
     const root = await seedRepo(getRepo());
 
-    const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root }));
+    const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root, env: {} }));
     const invariantsRow = doctor.find((entry) => entry.id === "invariants");
 
     // The fixture's own values, not the shipped charter's: the row is a read.
@@ -352,7 +415,7 @@ describe("check — a healthy repository", () => {
     const root = await seedRepo(repo);
     await repo.seedFiles({ "corpus/charter/stamity-charter.md": UNVERSIONED_CHARTER_FIXTURE });
 
-    const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root }));
+    const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root, env: {} }));
     const invariantsRow = doctor.find((entry) => entry.id === "invariants");
 
     expect(invariantsRow?.status).toBe("warn");
@@ -1187,5 +1250,334 @@ describe("check — a drift gate that cannot run", () => {
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("nothing to do");
     expect(result.stdout).not.toContain("next:");
+  });
+});
+
+/**
+ * The two plugin rows (REQ-PLUGIN-016, REQ-PLUGIN-019).
+ *
+ * `plugin-runtime` spawns a real child process: the locator's `--print`
+ * contract is an exit code plus a JSON document, and a stub that returned the
+ * document in-process would prove the parse while leaving the exit-code branch
+ * — the half that decides `fail` against `warn` — untested. The fixture
+ * locators below are three-line scripts, so the spawn costs milliseconds.
+ */
+/** A plugin root whose locator body is `body`. */
+async function pluginRoot(handle: TempDirHandle, name: string, body: string): Promise<string> {
+  await handle.seedFiles({ [`${name}/runtime/locate.mjs`]: body });
+  return handle.path(name);
+}
+
+/** The locator's documented `--print` payload, as file 1's locator emits it. */
+function printing(runtime: Record<string, unknown>, exitCode = 0): string {
+  return [
+    `const report = ${JSON.stringify({
+      project: ".",
+      runtime,
+      node: { version: process.versions.node, floor: "22.22.2", ok: true },
+    })};`,
+    "process.stdout.write(`${JSON.stringify(report, null, 2)}\\n`);",
+    `process.exit(${exitCode});`,
+    "",
+  ].join("\n");
+}
+
+/** One named doctor row off a fresh run, with the environment pinned. */
+async function doctorRow(
+  root: string,
+  id: string,
+  env: Record<string, string | undefined> = {},
+): Promise<DoctorCheck> {
+  const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root, env }));
+  const found = doctor.find((entry) => entry.id === id);
+  if (found === undefined) throw new Error(`no doctor row ${id}`);
+  return found;
+}
+
+describe("check — plugin-runtime", () => {
+  it("warns with the two ways to make it answerable when no root variable is set", async () => {
+    const root = await seedRepo(getRepo());
+
+    const probe = await doctorRow(root, "plugin-runtime", {});
+
+    expect(probe.status).toBe("warn");
+    expect(probe.detail).toBe(
+      "no plugin root in the environment; run this check through the plugin's st-setup or " +
+        "set CLAUDE_PLUGIN_ROOT",
+    );
+  });
+
+  it("passes with the resolved kind, version and path when the locator exits 0", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle);
+    const version = createApp().version;
+    const pluginDir = await pluginRoot(
+      handle,
+      "plugin-ok",
+      printing({
+        kind: "bundled",
+        path: `${handle.path("plugin-ok")}/runtime/node_modules/stamity`,
+        version,
+        refusal: null,
+      }),
+    );
+
+    const probe = await doctorRow(root, "plugin-runtime", { CLAUDE_PLUGIN_ROOT: pluginDir });
+
+    expect(probe.status).toBe("pass");
+    expect(probe.detail).toBe(
+      `runtime bundled ${version} at ${pluginDir}/runtime/node_modules/stamity`,
+    );
+  });
+
+  it("fails with the locator's own refusal quoted when it exits 2", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle);
+    const refusal = "stamity plugin: no runtime found — probed /a and /b; reinstall the plugin";
+    const pluginDir = await pluginRoot(
+      handle,
+      "plugin-refused",
+      printing({ kind: "none", path: null, version: null, refusal }, 2),
+    );
+
+    const probe = await doctorRow(root, "plugin-runtime", { PLUGIN_ROOT: pluginDir });
+
+    expect(probe.status).toBe("fail");
+    // The locator's message, not a restatement of it: the refusal names what
+    // was probed, and only the locator knows that.
+    expect(probe.detail).toContain(refusal);
+    expect(probe.detail).toContain(pluginDir);
+  });
+
+  it("fails a plugin-backed repository whose runtime is a different major", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, {
+      generatedBy: "1.9.0",
+      plugin: {
+        mode: "plugin-backed",
+        clients: { claude: { version: "1.9.0", classes: ["agent"] } },
+      },
+    });
+    const pluginDir = await pluginRoot(
+      handle,
+      "plugin-skewed",
+      printing({ kind: "companion", path: "/somewhere", version: "2.0.1", refusal: null }),
+    );
+
+    const probe = await doctorRow(root, "plugin-runtime", { CLAUDE_PLUGIN_ROOT: pluginDir });
+
+    expect(probe.status).toBe("fail");
+    expect(probe.detail).toContain("major 2 against major 1");
+    expect(probe.detail).toContain("1.9.0");
+  });
+
+  it("passes the same skew while the manifest still says generated", async () => {
+    // Coexistence, not a defect: a repository that has not migrated is not
+    // running on that runtime, so the majors have nothing to agree about.
+    const handle = getRepo();
+    const root = await seedRepo(handle, { generatedBy: "1.9.0" });
+    const pluginDir = await pluginRoot(
+      handle,
+      "plugin-generated",
+      printing({ kind: "companion", path: "/somewhere", version: "2.0.1", refusal: null }),
+    );
+
+    expect((await doctorRow(root, "plugin-runtime", { CLAUDE_PLUGIN_ROOT: pluginDir })).status).toBe("pass");
+  });
+
+  it("warns rather than failing when the root holds no locator at all", async () => {
+    const root = await seedRepo(getRepo());
+
+    const probe = await doctorRow(root, "plugin-runtime", { CLAUDE_PLUGIN_ROOT: getRepo().path("no-such-root") });
+
+    // A broken plugin install is the client's state, not this repository's, and
+    // failing a CI gate on it would be a verdict about the wrong subject.
+    expect(probe.status).toBe("warn");
+    expect(probe.detail).toContain("no-such-root");
+  });
+});
+
+const pluginOf = (mode: "generated" | "plugin-backed"): SetupManifest["plugin"] => ({
+  mode,
+  clients: { claude: { version: "1.9.0", classes: ["agent"] } },
+});
+
+/** One agent ledger row, as the claude adapter would have written it. */
+const agentRow = (id: string): LedgerEntry => ({
+  path: `.claude/agents/stamity-${id}.md`,
+  adapter: "claude",
+  artifactId: id,
+  artifactType: "agent",
+  contentHash: createHash("sha256").update(id).digest("hex"),
+});
+
+const duplicatesRow = (root: string): Promise<DoctorCheck> =>
+  doctorRow(root, "plugin-duplicates");
+
+describe("check — plugin-duplicates", () => {
+  /**
+   * `agent` alone, not the four classes file 1's claude root carries.
+   *
+   * `seedRepo` performs a real sync, so its ledger already holds this client's
+   * four generated hook rows — a record naming `hooks` would therefore report a
+   * true duplicate in every case below and leave none of them able to say
+   * anything about the source it is actually about. The selection is empty, so
+   * `agent` starts with no rows and each case adds exactly the ones it means.
+   */
+  it("passes when a client records a plugin and nothing duplicates it", async () => {
+    const root = await seedRepo(getRepo(), { plugin: pluginOf("plugin-backed") });
+
+    const probe = await duplicatesRow(root);
+
+    expect(probe.status).toBe("pass");
+    expect(probe.detail).toBe("no duplicated classes");
+  });
+
+  it("warns on ledger rows of a carried class while the mode is generated", async () => {
+    const root = await seedRepo(getRepo(), {
+      plugin: pluginOf("generated"),
+      ledger: [agentRow("reviewer"), agentRow("implementer")],
+    });
+
+    const duplicates = await duplicatesRow(root);
+
+    expect(duplicates.status).toBe("warn");
+    // Two rows, counted rather than listed, with the source and the remedy the
+    // cell prescribes for it.
+    expect(duplicates.detail).toContain("claude: agent (2 file(s), ledger)");
+    expect(duplicates.detail).toContain(npxCommand("clean -y"));
+    expect(duplicates.detail).toContain(npxCommand("plugin setup --client claude"));
+  });
+
+  it("fails the same repository once the manifest records plugin-backed", async () => {
+    const root = await seedRepo(getRepo(), {
+      plugin: pluginOf("plugin-backed"),
+      ledger: [agentRow("reviewer"), agentRow("implementer")],
+    });
+
+    const duplicates = await duplicatesRow(root);
+
+    // The same repository, the same two rows, one field different: the severity
+    // is the manifest's mode and nothing else.
+    expect(duplicates.status).toBe("fail");
+    expect(duplicates.detail).toContain("claude: agent (2 file(s), ledger)");
+  });
+
+  it("names an APM dependency and an unowned native file as their own sources", async () => {
+    const repo = getRepo();
+    const root = await seedRepo(repo, {
+      plugin: pluginOf("generated"),
+      files: {
+        // The running package's own name, read at runtime: a downstream that
+        // renamed the package has to recognise its own dependency.
+        // Quoted, because `@` is a reserved indicator at the head of a plain
+        // YAML scalar and an unquoted scoped name makes the whole file
+        // unparseable — which apm itself would refuse too.
+        "apm.yml": `name: consumer\ndependencies:\n  - "${canonical().name}#plugins/v1.9.0"\n`,
+        // A file under a native directory carrying an id the plugin carries and
+        // no ledger row — hand-placed, or left by a tool that is not this one.
+        ".claude/agents/stamity-reviewer.md": "---\nname: reviewer\n---\n\nBody.\n",
+        "corpus/agents/stamity-reviewer.md": AGENT_FIXTURE,
+      },
+    });
+
+    const duplicates = await duplicatesRow(root);
+
+    expect(duplicates.status).toBe("warn");
+    expect(duplicates.detail).toContain("claude: agent (1 file(s), apm)");
+    expect(duplicates.detail).toContain(
+      "deploys the same classes; remove it from apm.yml and run apm install, or keep the " +
+        "plugin uninstalled",
+    );
+    expect(duplicates.detail).toContain("claude: agent (1 file(s), unmanaged)");
+    expect(duplicates.detail).toContain(
+      "not written by this engine; remove the file or keep it as an override under " +
+        `${STATE_DIR}/overrides/`,
+    );
+  });
+
+  /**
+   * The severity-to-exit-code half, on a fixture whose ONLY finding is the
+   * duplicate.
+   *
+   * An `apm.yml` dependency leaves no file on disk and no ledger row, so the
+   * drift gate stays clean and the exit code is the doctor's verdict alone —
+   * which is what the claim is about. The ledger and unmanaged fixtures above
+   * both drift by construction (a ledgered path with no file; an unowned file
+   * at a path sync plans), and an exit code asserted there would be a statement
+   * about the drift gate wearing this row's name.
+   */
+  const apmOnly = async (mode: "generated" | "plugin-backed"): Promise<string> =>
+    await seedRepo(getRepo(), {
+      plugin: pluginOf(mode),
+      files: {
+        "apm.yml": `name: consumer\ndependencies:\n  - "${canonical().name}#plugins/v1.9.0"\n`,
+      },
+    });
+
+  it("leaves the exit code at 0 while the mode is generated", async () => {
+    const { code, doc } = await runJson(await apmOnly("generated"));
+
+    expect(row(doc, "plugin-duplicates").status).toBe("warn");
+    expect(code).toBe(0);
+    expect(doc.ok).toBe(true);
+    // Both rows travel in the payload, so a machine caller reads them without
+    // parsing the human table.
+    expect(doc.doctor.map((entry) => entry.id)).toEqual(
+      expect.arrayContaining(["plugin-runtime", "plugin-duplicates"]),
+    );
+  });
+
+  it("takes the exit code to 1 once the mode is plugin-backed", async () => {
+    const { code, doc } = await runJson(await apmOnly("plugin-backed"));
+
+    expect(row(doc, "plugin-duplicates").status).toBe("fail");
+    expect(code).toBe(1);
+    expect(doc.ok).toBe(false);
+  });
+
+  it("passes a repository that records no plugin at all", async () => {
+    const root = await seedRepo(getRepo(), {
+      ledger: [agentRow("reviewer")],
+      files: { ".claude/agents/stamity-reviewer.md": "body\n" },
+    });
+
+    const probe = await duplicatesRow(root);
+
+    expect(probe.status).toBe("pass");
+    expect(probe.detail).toBe("no client records a plugin, so nothing can duplicate");
+  });
+});
+
+describe("check — the non-mutation guarantee (REQ-PLUGIN-019)", () => {
+  it("changes no file on disk, on a repository that records a plugin and has duplicates", async () => {
+    const repo = getRepo();
+    const root = await seedRepo(repo, {
+      plugin: {
+        mode: "plugin-backed",
+        clients: { claude: { version: "1.9.0", classes: ["agent", "skill"] } },
+      },
+      ledger: [
+        {
+          path: ".claude/agents/stamity-reviewer.md",
+          adapter: "claude",
+          artifactId: "reviewer",
+          artifactType: "agent",
+          contentHash: createHash("sha256").update("x").digest("hex"),
+        },
+      ],
+      files: {
+        ".claude/agents/stamity-reviewer.md": "---\nname: reviewer\n---\n\nBody.\n",
+        "apm.yml": `name: consumer\ndependencies:\n  - ${canonical().name}#plugins/v1.9.0\n`,
+      },
+    });
+    const before = await hashTree(root);
+
+    await runJson(root);
+
+    // Every byte, not a spot check: `check` is the read-only verb, and the two
+    // new rows walk native directories and spawn a child process, which are the
+    // two ways a diagnostic acquires a write by accident.
+    expect(await hashTree(root)).toEqual(before);
   });
 });

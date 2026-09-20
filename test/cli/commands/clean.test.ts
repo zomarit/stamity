@@ -912,3 +912,85 @@ describe("clean — consent is separate from output format", () => {
     expect(existsSync(join(root, ".stamity"))).toBe(false);
   });
 });
+
+describe("the plugin uninstall disclosure", () => {
+  /** The initialised fixture, with a plugin recorded for two of the four clients. */
+  async function seedWithPlugin(temp: TempDirHandle): Promise<string> {
+    const root = await seedInitialisedRepo(temp);
+    const manifest: SetupManifest = {
+      ...manifestFixture(ledgerFixture()),
+      plugin: {
+        mode: "plugin-backed",
+        clients: {
+          // Written out of TOOLS order on purpose, so the printed order is the
+          // canonical one rather than the object's.
+          codex: { version: "1.9.0", classes: ["agent"] },
+          claude: { version: "1.9.0", classes: ["agent", "skill", "command", "hooks"] },
+        },
+      },
+    };
+    await temp.seedFiles({
+      [`repo/${STATE_DIR}/manifest.json`]: `${JSON.stringify(manifest, null, 2)}\n`,
+    });
+    return root;
+  }
+
+  it("prints one uninstall line per recorded client, in TOOLS order, and removes no file inside a plugin", async () => {
+    const root = await seedWithPlugin(tempDir());
+
+    const result = await runClean(root, ["-y"]);
+
+    expect(result.code).toBe(0);
+    const lines = result.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => /^(claude|cursor|copilot|codex):/.test(line));
+    expect(lines).toEqual([
+      "claude: claude plugin uninstall stamity@<your marketplace>",
+      // `codex plugin remove`, read from `codex --help` on 0.154.0 (2026-09-20):
+      // the client grew a CLI form after the plan named the `/plugins` view.
+      "codex: codex plugin remove stamity@<your marketplace>",
+    ]);
+    // The two clients with no record say nothing: a line for a plugin nobody
+    // installed is an instruction that cannot be followed.
+    expect(result.stdout).not.toContain("cursor:");
+    expect(result.stdout).not.toContain("copilot:");
+    // And it is a disclosure, not an action.
+    expect(result.stdout).toContain("stays installed");
+  });
+
+  it("removes nothing outside the ledger, plugin record or not", async () => {
+    const withPlugin = await seedWithPlugin(tempDir());
+    await runClean(withPlugin, ["-y"]);
+    const after = await snapshot(withPlugin);
+
+    // The control: the same repository with no plugin field at all. The sweep's
+    // result is identical, which is the whole claim — the record changes what
+    // is PRINTED and nothing about what is removed.
+    const control = await seedInitialisedRepo(tempDir());
+    await runClean(control, ["-y"]);
+
+    expect(after).toEqual(await snapshot(control));
+    expect(Object.keys(after)).toContain("README.md");
+  });
+
+  it("carries the same lines in the --json payload", async () => {
+    const root = await seedWithPlugin(tempDir());
+
+    const doc = parseSingleDoc((await runClean(root, ["-y", "--json"])).stdout);
+
+    expect(doc["pluginUninstall"]).toEqual([
+      "claude: claude plugin uninstall stamity@<your marketplace>",
+      "codex: codex plugin remove stamity@<your marketplace>",
+    ]);
+  });
+
+  it("says nothing at all on a repository that records no plugin", async () => {
+    const root = await seedInitialisedRepo(tempDir());
+
+    const result = await runClean(root, ["-y"]);
+
+    expect(result.stdout).not.toContain("stays installed");
+    expect(result.stdout).not.toContain("plugin uninstall");
+  });
+});
