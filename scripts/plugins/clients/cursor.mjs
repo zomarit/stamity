@@ -3,10 +3,23 @@
 //
 // Sources, all read 2026-09-20:
 //   - https://cursor.com/docs/reference/plugins — the manifest field list. No published JSON
-//     schema exists for it, which is why this manifest declares no `$schema`.
+//     schema exists for it, which is why this manifest declares no `$schema` and why the field
+//     set is vendored as a test fixture instead: with no schema to validate against, the only
+//     thing that can catch an invented key is the transcribed list of documented ones.
 //   - https://cursor.com/docs/skills — a command is a skill carrying
 //     `disable-model-invocation: true`; the `commands/` discovery path reads FILES.
+//   - https://cursor.com/docs/agent/subagents and /docs/skills — the `/<id>` invocation form.
+//     The plugins reference states none, which is why INVOCATION cites those two pages.
 //   - https://cursor.com/docs/plugins — the team-marketplace route quoted in DISTRIBUTION.
+//
+// `name` is the ONE required manifest field; everything else below is optional and declared
+// because a field left out falls back to folder discovery, which this root would rather not
+// depend on. Two documented fields are deliberately ABSENT. `mcpServers` exists and this root
+// declares none — server selection and credential references are one repository's, never a
+// plugin's, which is what `classes.mcp: repository-owned` records. `variables` exists and this
+// root declares none either: every path a stamity artifact needs is already addressed through
+// `${CURSOR_PLUGIN_ROOT}`, the variable the client expands itself, so a declared variable would
+// add a second name for a path that already has one.
 //
 // One placement decision worth stating. The engine already renders this client's touchpoint
 // commands as SKILL DIRECTORIES (`.cursor/skills/<id>/SKILL.md`), because that is the shape this
@@ -71,14 +84,30 @@ export const CARRIED_CLASS_REASONS = {
   command: COMMAND_REASON,
 }
 
+/**
+ * The literal an operator types to reach each carried class, plus the page each form was read
+ * from. One form covers all three here: this client folds commands into skills and addresses a
+ * subagent the same way, so `/<id>` is the whole invocation surface.
+ *
+ * The `citation` key is a note rather than a fourth class — the plugins reference states no
+ * invocation form at all, so the form below was read off the subagents and skills pages and the
+ * capability file says which. A consumer enumerating invocation FORMS reads the three class keys
+ * this repository's containers all declare (`agents`, `commands`, `skills`), never every key.
+ */
 export const INVOCATION = {
   agents: '/<id>',
   commands: '/<id>',
   skills: '/<id>',
+  citation:
+    'the /<id> form is stated on cursor.com/docs/agent/subagents and cursor.com/docs/skills, not ' +
+    'on cursor.com/docs/reference/plugins (accessed 2026-09-20)',
 }
 
 export const CLIENT_FLOOR = {
   version: 'unknown',
+  // The page the manifest itself was read from, so one citation covers the floor and the field
+  // set. The absence is the finding: three pages, no minimum version on any of them.
+  citation: { url: 'https://cursor.com/docs/reference/plugins', accessDate: '2026-09-20' },
   reason:
     'no minimum version stated on cursor.com/docs/reference/plugins, cursor.com/docs/plugins or ' +
     'the CLI reference (accessed 2026-09-20)',
@@ -131,10 +160,12 @@ A plugin root built from the stamity corpus at version ${version}, commit ${sour
 
 ${DISTRIBUTION.note.replace(/^an organization/, 'An organization')}.
 
-For a local trial of this root without a marketplace:
+That is the route for a team. One developer trying this root out needs no marketplace at all:
+point the CLI straight at the directory, or drop it into the client's own local plugin directory.
 
 \`\`\`sh
 agent --plugin-dir ./cursor
+cp -R ./cursor ~/.cursor/plugins/local/stamity
 \`\`\`
 
 ## Invoke
@@ -148,6 +179,12 @@ carry — the charter with this repository's facts and gates, and the client con
 the runtime bundled at \`runtime/\`.
 
 ## Pin and roll back
+
+This client's CLI documents no plugin \`install\`, \`update\`, \`rollback\` or \`uninstall\`
+subcommand (\`cursor.com\` CLI reference, accessed 2026-09-20), so there is no command to pin
+with and none to roll back with. Both are done by moving the source this root is served from,
+and a local copy is changed by REINSTALLING it — replacing the directory under
+\`~/.cursor/plugins/local/\`, or re-running \`--plugin-dir\` against the new one.
 
 A team marketplace imported from a repository tracks that repository's latest commit, so the
 version an organization serves is whichever commit its mirror branch points at. Pin by pointing

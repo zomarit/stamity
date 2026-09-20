@@ -1,0 +1,27 @@
+{
+  "note": "Every agent-hook event Cursor documents. Vendored because neither side reports an unrecognised key in hooks.json — the document parses, the entry sits there, and the hook never fires — so a transcribed list is the only thing that can catch an emitted event name the client does not have. Transcribed from the list test/adapters/cursor.test.ts pins for the repository emission (DOCUMENTED_CURSOR_EVENTS), which is the same page read at the date below; the plugin root emits a SUBSET of it.",
+  "source": {
+    "url": "https://cursor.com/docs/agent/hooks",
+    "accessDate": "2026-08-22"
+  },
+  "events": [
+    "sessionStart",
+    "sessionEnd",
+    "preToolUse",
+    "postToolUse",
+    "postToolUseFailure",
+    "subagentStart",
+    "subagentStop",
+    "beforeShellExecution",
+    "afterShellExecution",
+    "beforeMCPExecution",
+    "afterMCPExecution",
+    "beforeReadFile",
+    "afterFileEdit",
+    "beforeSubmitPrompt",
+    "preCompact",
+    "stop",
+    "afterAgentResponse",
+    "afterAgentThought"
+  ]
+}
