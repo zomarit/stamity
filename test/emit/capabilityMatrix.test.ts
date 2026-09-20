@@ -7,12 +7,24 @@ import { afterAll, describe, expect, it } from "vitest";
 import {
   CAPABILITY_MATRIX_DOC_PATH,
   LIVE_CAPABILITY_INPUTS,
+  PLUGIN_CONTAINER_CLASSES,
   REGENERATE_COMMAND,
   REVISIT_TRIGGERS,
   renderCapabilityMatrix,
   renderCapabilityMatrixFrom,
+  type PluginContainerFact,
   type RevisitTrigger,
 } from "../../src/emit/capabilityMatrix.ts";
+// The one import in this suite that leaves `src/`. The four plugin containers are declared by
+// build-time modules the engine cannot import (see `CapabilityMatrixInputs.plugins`), so the
+// committed page is rendered with rows this script builds. Importing the same builder the
+// generator uses is what makes the byte-compare below a drift gate rather than a second
+// transcription of the same facts.
+// @ts-expect-error — the plugin emitter modules ship as plain .mjs with no type declarations:
+// the generator that builds the plugin roots runs them under bare Node, with no TypeScript
+// nearby. `test/ci/pluginModules.test.ts` imports them the same way; the typed alias below is
+// where the shape re-enters, so nothing downstream of it is `any`.
+import { buildPluginContainerFacts as buildContainerRows } from "../../scripts/plugin-container-facts.mjs";
 import { CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
 import { ADAPTER_ALLOWLIST_COVERAGE } from "../../src/tools/translator.ts";
 import { TOOLS, type Tool } from "../../src/types/core.ts";
@@ -24,6 +36,10 @@ import { EngineError } from "../../src/types/errors.ts";
  * byte-comparison below catches, and why the failure message carries the
  * regeneration command instead of leaving a reader to guess at it.
  */
+
+/** The untyped builder's rows, typed at this one seam. */
+const buildPluginContainerFacts = (): PluginContainerFact[] =>
+  (buildContainerRows as () => PluginContainerFact[])();
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const MODULE_SOURCE_PATH = fileURLToPath(
@@ -108,10 +124,30 @@ const triggerFor = (when: string): RevisitTrigger => {
 const currencyRows = (): string[] =>
   tableRows(section(renderCapabilityMatrix(), "## Currency and revisit triggers"));
 
+/**
+ * The page exactly as `node scripts/generate-capability-matrix.mjs` writes it: the live inputs
+ * plus the four plugin containers that generator reads off the emitter modules.
+ *
+ * `renderCapabilityMatrix()` is the same page WITHOUT that section, which is what every
+ * per-section assertion below reads — none of them touches the containers, and keeping them on
+ * the narrower render is what stops this file from making the whole suite depend on a script.
+ */
+const generatedPage = (): string =>
+  renderCapabilityMatrixFrom({
+    ...LIVE_CAPABILITY_INPUTS,
+    plugins: buildPluginContainerFacts(),
+  });
+
 describe("renderCapabilityMatrix — drift gate", () => {
   it("byte-matches the committed page", () => {
+    // TEST CHANGE, justified: the compared render is now `generatedPage()` rather than
+    // `renderCapabilityMatrix()`. The page gained a section whose data the engine cannot read —
+    // the plugin containers — so the zero-argument render is no longer the whole page, and
+    // comparing it would have made the gate fail on a correctly regenerated file. The gate is
+    // not weakened: it still byte-compares a fresh render against the committed bytes, and it
+    // now covers a section the previous form could not see at all.
     expect(STALE_MESSAGE).toContain(REGENERATE_COMMAND);
-    expect(renderCapabilityMatrix(), STALE_MESSAGE).toBe(committedPage());
+    expect(generatedPage(), STALE_MESSAGE).toBe(committedPage());
   });
 
   it("ends with exactly one trailing newline", () => {
@@ -525,28 +561,22 @@ describe("the trust claim states what the byte-compare proves", () => {
 describe("retired dialect claims", () => {
   const page = renderCapabilityMatrix();
 
-  it("describes no plugin container as a delivery path for skills", () => {
-    // The Agent-Plugins container was deleted, so no cell
-    // may point a reader at one. Matched case-insensitively on the word and on
-    // the path shape the container used to occupy.
-    //
-    // NARROWED, not weakened. The currency block records the
-    // condition "Agent Plugins scope expansion → container widens" verbatim,
-    // and its status is that NO container is emitted — the opposite of a
-    // delivery-path claim, and the sentence a reader needs to know the decision
-    // was made rather than forgotten. The word ban therefore holds over every
-    // section except that one, the two path shapes still hold page-wide, and
-    // the currency row's own text is pinned below so the exemption cannot
-    // shelter a re-acquired claim.
-    const currency = section(page, "## Currency and revisit triggers");
-    const elsewhere = page.split("\n").filter((line) => !currency.includes(line)).join("\n");
-    expect(elsewhere).not.toMatch(/agent[- ]plugins/i);
-    expect(page).not.toMatch(/plugin\.json/i);
-    expect(page).not.toMatch(/\/plugins\//i);
+  it("states the four plugin containers rather than the retired no-container claim", () => {
+    // TEST CHANGE, justified — the BEHAVIOUR moved, and this case moved with it. Until this
+    // change no plugin container existed, and the case banned the word page-wide so a deleted
+    // delivery path could not be re-acquired in prose. Four containers are emitted now
+    // (`scripts/generate-plugin-packages.mjs`, one root per client), so a ban on naming them
+    // would hold the page to a fact that stopped being true. The replacement is the same
+    // discipline pointed at the current truth: the page must SAY what each container carries,
+    // and the revisit trigger must no longer claim the opposite. The one thing the old case
+    // protected that still matters — that this client's native skills location is named — is
+    // kept verbatim at the foot.
+    const containers = section(generatedPage(), "## Plugin containers");
+    expect(containers.join("\n")).toContain("`stamity plugin setup`");
 
     const container = triggerFor("Agent Plugins scope expansion");
-    expect(container.status).toMatch(/^No container is emitted/);
-    expect(container.status).not.toMatch(/plugin/i);
+    expect(container.status).not.toMatch(/No container is emitted/);
+    expect(container.status).toMatch(/Four containers are emitted/);
 
     // The replacement is stated, not merely the old claim removed: this
     // client's native skills location is named in its own row group.
@@ -566,6 +596,237 @@ describe("retired dialect claims", () => {
     const cursorGroup = section(page, "### `cursor`").join("\n");
     expect(cursorGroup).not.toMatch(/\binherit/i);
     expect(cursorGroup).toContain("pinned");
+  });
+});
+
+/**
+ * The `## Plugin containers` section.
+ *
+ * Rendered from a FIXTURE here rather than from the live builder, for the reason every other
+ * discipline case in this file is: a gate asserted only against the real data cannot show that
+ * it would refuse bad data, because the real data is never bad. The live rows get one case of
+ * their own at the foot — the partition property, read off the emitter modules — and the drift
+ * gate above is what holds the rendered bytes.
+ */
+/**
+ * Four fixture containers, one per client, each partitioning `PLUGIN_CONTAINER_CLASSES`.
+ *
+ * A fixture rather than the live rows, for the reason every other discipline case in this file
+ * uses one: a gate asserted only against real data cannot show that it would refuse bad data,
+ * because the real data is never bad. The live rows get one case of their own at the foot of the
+ * block below, and the drift gate above is what holds the rendered bytes.
+ */
+const containerFixture = (): PluginContainerFact[] => [
+  {
+    tool: "claude",
+    container: ".fixture-plugin/plugin.json",
+    carries: ["agent", "skill", "command", "hooks"],
+    repositoryOwned: ["rule", "mcp"],
+    invocation: "agents `@fixture:<id>`",
+    floor: "9.9.9 — a fixture floor",
+    rootVariable: "FIXTURE_CLAUDE_ROOT",
+    citations: [{ url: "https://example.invalid/claude", accessDate: "2026-09-20" }],
+  },
+  {
+    tool: "cursor",
+    container: ".fixture-plugin/cursor.json",
+    carries: ["agent", "skill", "command", "rule", "hooks"],
+    repositoryOwned: ["mcp"],
+    invocation: "skills `/<id>`",
+    floor: "unknown — a fixture absence",
+    rootVariable: "FIXTURE_CURSOR_ROOT",
+    citations: [{ url: "https://example.invalid/cursor", accessDate: "2026-09-19" }],
+  },
+  {
+    tool: "copilot",
+    container: "fixture.json",
+    carries: ["agent", "skill", "command", "hooks"],
+    repositoryOwned: ["rule", "mcp"],
+    invocation: "commands `/<id>`",
+    floor: "unknown — a fixture absence",
+    rootVariable: "FIXTURE_PLUGIN_ROOT",
+    citations: [{ url: "https://example.invalid/copilot", accessDate: "2026-09-18" }],
+  },
+  {
+    tool: "codex",
+    container: "fixture.json",
+    carries: ["skill", "hooks"],
+    repositoryOwned: ["agent", "command", "rule", "mcp"],
+    invocation: "skills `$<id>`",
+    floor: "unknown — a fixture absence",
+    rootVariable: "FIXTURE_PLUGIN_ROOT",
+    citations: [{ url: "https://example.invalid/codex", accessDate: "2026-09-17" }],
+  },
+];
+
+/** Live inputs carrying a given container set — the same derive rule as `withFacts`. */
+const withContainers = (
+  rows: readonly PluginContainerFact[],
+): typeof LIVE_CAPABILITY_INPUTS & { plugins: readonly PluginContainerFact[] } => ({
+  ...LIVE_CAPABILITY_INPUTS,
+  plugins: rows,
+});
+
+/** The fixture with one client's row patched, in place — one defect per variant. */
+const patchedContainers = (
+  tool: Tool,
+  patch: Partial<PluginContainerFact>,
+): PluginContainerFact[] => {
+  const rows = containerFixture();
+  const index = rows.findIndex((row) => row.tool === tool);
+  const row = rows[index];
+  if (row === undefined) throw new Error(`no fixture container for ${tool}`);
+  rows[index] = { ...row, ...patch };
+  return rows;
+};
+
+/** The `## Plugin containers` body of a render over the given containers. */
+const containerSection = (rows: readonly PluginContainerFact[]): string[] =>
+  section(renderCapabilityMatrixFrom(withContainers(rows)), "## Plugin containers");
+
+describe("plugin containers", () => {
+  it("renders one row per client, in `TOOLS` order, with both class lists", () => {
+    const rows = tableRows(containerSection(containerFixture()));
+    expect(rows).toHaveLength(4);
+    expect(rows.map((row) => cells(row)[0])).toEqual(TOOLS.map((tool) => `\`${tool}\``));
+
+    // Non-degenerate: the codex row is the one whose two lists are both long, and it is read
+    // cell by cell so a renderer that dropped a column or swapped the two lists fails here.
+    const codex = cells(rows[3] ?? "");
+    expect(codex[1]).toBe("`fixture.json`");
+    expect(codex[2]).toBe("skill, hooks");
+    expect(codex[3]).toBe("agent, command, rule, mcp");
+    expect(codex[4]).toBe("skills `$<id>`");
+    expect(codex[5]).toBe("`FIXTURE_PLUGIN_ROOT`");
+    expect(codex[6]).toBe("unknown — a fixture absence");
+  });
+
+  it("orders each class list canonically, whatever order a container declared it in", () => {
+    const rows = tableRows(
+      containerSection(patchedContainers("claude", { carries: ["hooks", "command", "skill", "agent"] })),
+    );
+    expect(cells(rows[0] ?? "")[2]).toBe("agent, skill, command, hooks");
+  });
+
+  it("lists every container's dated source", () => {
+    const body = containerSection(containerFixture()).join("\n");
+    for (const row of containerFixture()) {
+      for (const citation of row.citations) {
+        expect(body).toContain(`- \`${row.tool}\`: <${citation.url}> — accessed ${citation.accessDate}`);
+      }
+    }
+  });
+
+  it("omits the section entirely when no container data is supplied", () => {
+    // The engine cannot read the containers, so a render without them is a real state rather
+    // than a misuse — and it must drop the heading rather than publish an empty table.
+    expect(renderCapabilityMatrix()).not.toContain("## Plugin containers");
+    expect(generatedPage()).toContain("## Plugin containers");
+  });
+
+  it("refuses a class no column claims", () => {
+    const call = (): string =>
+      renderCapabilityMatrixFrom(withContainers(patchedContainers("cursor", { repositoryOwned: [] })));
+    expect(call).toThrowError(EngineError);
+    expect(call).toThrowError(/`cursor` plugin container declares no owner for `mcp`/);
+  });
+
+  it("refuses a class both columns claim", () => {
+    const call = (): string =>
+      renderCapabilityMatrixFrom(
+        withContainers(
+          patchedContainers("copilot", { carries: ["agent", "skill", "command", "rule", "hooks"] }),
+        ),
+      );
+    expect(call).toThrowError(/`copilot` plugin container declares `rule` twice/);
+  });
+
+  it("refuses an undated source and a missing one", () => {
+    expect(() =>
+      renderCapabilityMatrixFrom(
+        withContainers(
+          patchedContainers("codex", {
+            citations: [{ url: "https://example.invalid/codex", accessDate: "September" }],
+          }),
+        ),
+      ),
+    ).toThrowError(/not an ISO calendar date/);
+
+    expect(() =>
+      renderCapabilityMatrixFrom(withContainers(patchedContainers("codex", { citations: [] }))),
+    ).toThrowError(/`codex` plugin container declares no source/);
+  });
+
+  it("refuses a container that leaves one of its four descriptive fields blank", () => {
+    // Whitespace, not the empty string: the guard trims before testing, so a blank-looking
+    // value is caught the same way a truly empty one is. Each of the four is asserted by the
+    // label the message names, because a guard that reported the wrong field would send a
+    // maintainer to the wrong module.
+    for (const [patch, label] of [
+      [{ container: "   " }, "container manifest path"],
+      [{ rootVariable: "" }, "root variable"],
+      [{ invocation: " " }, "invocation form"],
+      [{ floor: "" }, "client floor"],
+    ] as const) {
+      const call = (): string =>
+        renderCapabilityMatrixFrom(withContainers(patchedContainers("claude", patch)));
+      expect(call).toThrowError(EngineError);
+      expect(call, `a blank ${label} was not named`).toThrowError(
+        new RegExp(`\`claude\` plugin container declares no ${label}`),
+      );
+    }
+  });
+
+  it("refuses a container that carries nothing at all", () => {
+    // Every class repository-owned is a partition too, so the partition check would pass it:
+    // this is the separate claim that a ROOT delivering nothing is not a container worth
+    // publishing a row for.
+    const call = (): string =>
+      renderCapabilityMatrixFrom(
+        withContainers(
+          patchedContainers("codex", {
+            carries: [],
+            repositoryOwned: ["agent", "skill", "command", "rule", "hooks", "mcp"],
+          }),
+        ),
+      );
+    expect(call).toThrowError(EngineError);
+    expect(call).toThrowError(/`codex` plugin container carries no class at all/);
+  });
+
+  it("refuses a source with no URL", () => {
+    const call = (): string =>
+      renderCapabilityMatrixFrom(
+        withContainers(
+          patchedContainers("cursor", { citations: [{ url: "  ", accessDate: "2026-09-20" }] }),
+        ),
+      );
+    expect(call).toThrowError(EngineError);
+    expect(call).toThrowError(/`cursor` plugin container declares a source with no URL/);
+  });
+
+  it("refuses a container set that does not cover every client", () => {
+    expect(() =>
+      renderCapabilityMatrixFrom(
+        withContainers(containerFixture().filter((row) => row.tool !== "cursor")),
+      ),
+    ).toThrowError(/plugin-container set is missing a row for `cursor`/);
+  });
+
+  it("the LIVE containers partition every class, per client", () => {
+    // The one case on the real data: the emitter modules name only the classes a container does
+    // NOT carry, so this is what proves the builder's subtraction covers the whole list rather
+    // than whichever classes someone remembered.
+    const live = buildPluginContainerFacts();
+    expect(live.map((row) => row.tool)).toEqual([...TOOLS]);
+    expect(PLUGIN_CONTAINER_CLASSES).toHaveLength(6);
+    for (const row of live) {
+      expect([...row.carries, ...row.repositoryOwned].toSorted()).toEqual(
+        [...PLUGIN_CONTAINER_CLASSES].toSorted(),
+      );
+      expect(row.carries.length, `${row.tool} carries nothing`).toBeGreaterThan(0);
+      expect(row.repositoryOwned, `${row.tool} carries its own MCP selection`).toContain("mcp");
+    }
   });
 });
 
@@ -668,7 +929,11 @@ describe("scripts/generate-capability-matrix.mjs", () => {
     const out = join(workspace, "nested", "capability-matrix.md");
 
     const first = run(out);
-    expect(first).toBe(renderCapabilityMatrix());
+    // TEST CHANGE, justified: compared against `generatedPage()` for the same reason the drift
+    // gate is — the script now supplies the plugin containers, so the zero-argument render is
+    // a strict prefix-plus-suffix of what it writes and the equality would fail on a correct
+    // run. Strictly stronger: it pins the script's OWN construction of the inputs.
+    expect(first).toBe(generatedPage());
 
     const second = run(out);
     expect(second).toBe(first);
