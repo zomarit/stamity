@@ -9,6 +9,7 @@ import { configCommand } from "./cli/commands/config.ts";
 import { handoffCommand } from "./cli/commands/handoff.ts";
 import { initCommand } from "./cli/commands/init.ts";
 import { learnCommand } from "./cli/commands/learn.ts";
+import { pluginCommand } from "./cli/commands/plugin.ts";
 import { syncCommand } from "./cli/commands/sync.ts";
 import { validateCommand } from "./cli/commands/validate.ts";
 import { workspaceCommand } from "./cli/commands/workspace.ts";
@@ -25,7 +26,7 @@ import {
  *
  * Everything else is owned elsewhere: the exit-code contract, flag matrix and
  * JSON funnel live in `./cli/kit/program.ts`; each verb's behavior lives in its
- * own module under `./cli/commands/`. This file only (1) enumerates the eleven
+ * own module under `./cli/commands/`. This file only (1) enumerates the twelve
  * CommandModules in help order, (2) fires the update-notice probe early and
  * settles it non-blockingly after the run, and (3) records the exit code.
  *
@@ -41,8 +42,8 @@ import {
 
 /**
  * The advertised surface in help order — init, sync, check, validate, add,
- * config, workspace, worktree, clean — plus `learn` and `handoff`, the two
- * hidden plumbing verbs. Nine advertised, eleven registered.
+ * config, workspace, worktree, plugin, clean — plus `learn` and `handoff`, the
+ * two hidden plumbing verbs. Ten advertised, twelve registered.
  *
  * `workspace` sits after `config` and before `clean`: it is a configuration
  * verb, and `clean` stays last on the advertised surface because it is the one
@@ -53,6 +54,12 @@ import {
  * separate concerns — a workspace holds repositories, a worktree is a checkout
  * of one — so a reader scanning `--help` meets them together, where each one's
  * summary line is the thing that tells them apart.
+ *
+ * `plugin` sits last before `clean`, at the end of the configuration run: it is
+ * the alternative to `init` for a repository whose content arrives from an
+ * installed plugin rather than from emission, and a reader who has just met
+ * `init` at the top meets its counterpart after the verbs that maintain what
+ * init wrote.
  */
 export const COMMANDS: readonly CommandModule[] = [
   initCommand,
@@ -63,6 +70,7 @@ export const COMMANDS: readonly CommandModule[] = [
   configCommand,
   workspaceCommand,
   worktreeCommand,
+  pluginCommand,
   cleanCommand,
   learnCommand,
   handoffCommand,

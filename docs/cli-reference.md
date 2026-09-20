@@ -26,6 +26,7 @@ mistake.
 | `stamity config` | yes | writes | inspect and change the setup: keys, detection refresh, MCP servers |
 | `stamity workspace` | yes | writes | one policy across several repositories: status, guided creation, and the cascade |
 | `stamity worktree` | yes | writes | parallel checkouts of this repository: the inventory, guided setup, and receipt-based teardown |
+| `stamity plugin` | yes | writes | run this repository on an installed stamity plugin: status, setup |
 | `stamity clean` | yes | writes | remove every generated file and the .stamity/ state directory |
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates (plumbing) |
 | `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
@@ -47,7 +48,7 @@ identically everywhere they apply.
 ### JSON output
 
 `--json` produces exactly one JSON document on stdout, and nothing else, for every
-run that reaches a command — all 11 of the commands above, success and
+run that reaches a command — all 12 of the commands above, success and
 failure alike. Human output is suppressed in the same run, so a reader never has to
 separate prose from payload. Every document carries `ok`, `command` and `version`;
 a success adds the command's own fields, and a failure adds `error` with `code` and
@@ -208,6 +209,21 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--all` | worktree cleanup: sweep every worktree this lane manages | — |
 | `--files-only` | worktree cleanup: invert the receipt's files and leave the checkout in place | — |
 | `--force` | worktree cleanup: proceed on a worktree carrying uncommitted changes | — |
+
+## `stamity plugin`
+
+run this repository on an installed stamity plugin: status, setup
+
+May write when it runs, so `--dry-run` previews any change without making it.
+
+| Argument | What it is |
+|---|---|
+| `[subcommand]` | status (default), setup |
+
+| Flag | What it does | Default |
+|---|---|---|
+| `--client <csv>` | clients to act on (claude, cursor, copilot, codex) | — |
+| `--plugin-root <path>` | the installed plugin root; defaults to CLAUDE_PLUGIN_ROOT, CURSOR_PLUGIN_ROOT or PLUGIN_ROOT | — |
 
 ## `stamity clean`
 

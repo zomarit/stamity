@@ -37,10 +37,12 @@ const packageJson = createRequire(import.meta.url)("../../package.json") as { ve
  * `workspace` joined between `config` and `clean` with the multi-repo verb, and
  * `worktree` joined directly after it with the managed parallel-checkout lane —
  * the two sit together because they differ at the fifth character and a reader
- * scanning `--help` should meet them side by side. The assertions below are
- * unchanged in shape through both — exact list equality, help order, the hidden
- * verbs last — and only the enumerated surface moved, because the surface
- * itself grew a command rather than an assertion being loosened.
+ * scanning `--help` should meet them side by side. `plugin` joined after
+ * `worktree` with the plugin-backed lane (REQ-PLUGIN-015), still ahead of
+ * `clean`, which stays last. The assertions below are unchanged in shape
+ * through all three — exact list equality, help order, the hidden verbs last —
+ * and only the enumerated surface moved, because the surface itself grew a
+ * command rather than an assertion being loosened.
  */
 const ADVERTISED = [
   "init",
@@ -51,6 +53,7 @@ const ADVERTISED = [
   "config",
   "workspace",
   "worktree",
+  "plugin",
   "clean",
 ] as const;
 
@@ -66,9 +69,9 @@ const twin = (name: string): CommandModule => ({
 });
 
 describe("COMMANDS enumeration (in-process)", () => {
-  it("registers exactly 11 uniquely-named commands in help order, the hidden two last", () => {
+  it("registers exactly 12 uniquely-named commands in help order, the hidden two last", () => {
     expect(COMMANDS.map((command) => command.name)).toEqual([...ADVERTISED, ...HIDDEN]);
-    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(11);
+    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(12);
     expect(COMMANDS.filter((command) => command.hidden === true).map((c) => c.name)).toEqual([
       ...HIDDEN,
     ]);
@@ -96,7 +99,7 @@ describe("COMMANDS enumeration (in-process)", () => {
 describe("advertised surface (child process)", () => {
   const getFixture = useCliFixture();
 
-  it("--help lists exactly the 9 advertised commands and neither plumbing verb", async () => {
+  it("--help lists exactly the 10 advertised commands and neither plumbing verb", async () => {
     const result = await getFixture().run(["--help"]);
 
     expect(result.code).toBe(0);
