@@ -40,7 +40,7 @@ import {
   type SetupManifest,
 } from "../../../types/manifest.ts";
 import { STATE_DIR } from "../../../types/markers.ts";
-import { packageCommand, packageName } from "../../kit/packageName.ts";
+import { packageCommand, packageName, repositorySlug } from "../../kit/packageName.ts";
 
 // ── The runtime a plugin root resolves ─────────────────────────────────────
 
@@ -379,12 +379,25 @@ async function unmanagedDuplicates(
  * two sources can see it — the only trace it leaves in the repository is the
  * dependency line that asks for it.
  *
- * The match is on THIS installation's own package name (`packageName()`), never
- * a hardcoded canonical one: a downstream that renamed the package as
- * `docs/enterprise-forks.md` instructs has to recognise its own dependency. A
- * private mirror published under an unrelated name is NOT matched — the finding
- * would rather miss that case than fail a repository's CI on a dependency whose
- * name merely resembles this one.
+ * A dependency line matches when it CONTAINS either of this installation's two
+ * identities: the repository slug (`repositorySlug()`, `<owner>/<repo>`) or the
+ * registry name (`packageName()`, `@<scope>/<name>`). Both, because the two are
+ * different strings that share no substring, and each is the one a different
+ * route writes. The APM route this release publishes installs from the slug —
+ * `release.json` carries `apm.installSpec` as `<owner>/<repo>#plugins/
+ * v<version>`, which never contains the scoped npm name — while a hand-written
+ * manifest that depends on the published package names the registry name.
+ * Matching only one of them would leave the other route's duplicate unreported.
+ *
+ * Both are read from the running package rather than hardcoded, so a downstream
+ * that renamed the package and repointed `repository.url` as
+ * `docs/enterprise-forks.md` instructs recognises its own dependency.
+ *
+ * A private mirror published under ANOTHER owner — `acme/stamity-mirror#…` — is
+ * NOT matched: it carries neither identity. That is the safe direction, since a
+ * false duplicate would send an operator to remove a dependency that deploys
+ * nothing; closing it needs the installed marketplace recorded on the client's
+ * `PluginClientRecord`, which no manifest field carries yet.
  */
 function apmDuplicates(
   apmYaml: string | null,
@@ -402,7 +415,12 @@ function apmDuplicates(
   }
   const declared = (parsed as { dependencies?: unknown } | null)?.dependencies;
   if (!Array.isArray(declared)) return [];
-  const own = packageName();
+  // Both identities, filtered to the ones this installation could derive: a
+  // manifest that names no github repository answers `null` for the slug, and
+  // an empty needle would match every dependency line there is.
+  const identities = [repositorySlug(), packageName()].filter(
+    (identity): identity is string => identity !== null && identity !== "",
+  );
   const matched: string[] = [];
   for (const entry of declared) {
     const text =
@@ -413,7 +431,7 @@ function apmDuplicates(
               .filter((value) => typeof value === "string")
               .join(" ")
           : "";
-    if (text.includes(own)) matched.push(text);
+    if (identities.some((identity) => text.includes(identity))) matched.push(text);
   }
   if (matched.length === 0) return [];
   // APM deploys content, never hook wiring or always-on rules, so the classes

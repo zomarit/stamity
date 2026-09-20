@@ -510,10 +510,19 @@ operator's own `stamity clean -y`.
 As built (2026-09-20): the three sources, their three remedies and the `warn`-under-`generated`,
 `fail`-under-`plugin-backed` split landed as stated; `check` mutates nothing, proven by a
 whole-tree sha-256 map taken around the run, and no verb deletes a duplicate. One bound is narrower
-than the paragraph reads: the `apm` match is EXACT on the full package name, so a mirror dependency
-that merely contains the id is not reported — the safe direction, since a false duplicate would
-send an operator to remove a dependency that deploys nothing — and an unparseable `apm.yml`
-reports nothing rather than guessing.
+than the paragraph reads, and the mechanism is stated rather than implied: an `apm` finding is
+raised for a dependency line CONTAINING either of this installation's two identities — the
+repository slug `<owner>/<repo>`, derived from `package.json` `repository.url` the way
+`scripts/distribution-identity.mjs` derives it, or the registry package name `@<scope>/<name>`.
+Both are needed because they share no substring and each is what a different route writes: the APM
+route this release publishes installs from the slug (`release.json` carries `apm.installSpec` as
+`<owner>/<repo>#plugins/v<version>`, which never contains the scoped npm name), while a
+hand-written manifest depending on the published package names the registry name. A mirror
+published under ANOTHER owner — `acme/stamity-mirror#plugins/v1.9.0` — carries neither identity and
+is therefore NOT reported; that is the safe direction, since a false duplicate would send an
+operator to remove a dependency that deploys nothing, and closing it needs the installed
+marketplace recorded on the client's `PluginClientRecord`, which no manifest field carries yet —
+the later fix, not this one. An unparseable `apm.yml` reports nothing rather than guessing.
 
 ### REQ-PLUGIN-020 Per-client install, discovery and invocation proof
 

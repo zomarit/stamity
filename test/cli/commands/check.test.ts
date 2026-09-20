@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   checkCommand,
@@ -58,6 +59,31 @@ import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
  *   or an exit code is a statement about check's logic rather than about how
  *   much a fixture happened to trip.
  */
+
+/**
+ * The install spec this release's APM route actually publishes:
+ * `<owner>/<repo>#plugins/v<version>`, read out of this checkout's own
+ * `repository.url`.
+ *
+ * Derived, never typed. The scoped npm name and the repository slug are two
+ * different identities (`@zomarit/stamity` against `zomarit/stamity`), and a
+ * fixture that spelled the npm name where the release writes the slug would
+ * prove the matcher against a string no APM install ever produces — which is
+ * exactly the defect these fixtures were rewritten for.
+ */
+function ownRepositorySlug(): string {
+  const raw = readFileSync(fileURLToPath(new URL("../../../package.json", import.meta.url)), "utf8");
+  const manifest = JSON.parse(raw) as { repository?: { url?: string } };
+  return (manifest.repository?.url ?? "")
+    .replace(/^git\+/, "")
+    .replace(/\.git$/, "")
+    .replace("https://github.com/", "");
+}
+
+/** The published APM dependency line: what `release.json`'s `apm.installSpec` carries. */
+function apmInstallSpec(version = "1.9.0"): string {
+  return `${ownRepositorySlug()}#plugins/v${version}`;
+}
 
 const getRepo = useTempDir("stamity-check");
 
@@ -1494,12 +1520,11 @@ describe("check — plugin-duplicates", () => {
     const root = await seedRepo(repo, {
       plugin: pluginOf("generated"),
       files: {
-        // The running package's own name, read at runtime: a downstream that
-        // renamed the package has to recognise its own dependency.
-        // Quoted, because `@` is a reserved indicator at the head of a plain
-        // YAML scalar and an unquoted scoped name makes the whole file
-        // unparseable — which apm itself would refuse too.
-        "apm.yml": `name: consumer\ndependencies:\n  - "${canonical().name}#plugins/v1.9.0"\n`,
+        // The install spec THIS release publishes — `<owner>/<repo>#plugins/
+        // v<version>`, read out of the running checkout at runtime, so a
+        // downstream that renamed the package and repointed `repository.url`
+        // recognises its own dependency and this one recognises its own.
+        "apm.yml": `name: consumer\ndependencies:\n  - ${apmInstallSpec()}\n`,
         // A file under a native directory carrying an id the plugin carries and
         // no ledger row — hand-placed, or left by a tool that is not this one.
         ".claude/agents/stamity-reviewer.md": "---\nname: reviewer\n---\n\nBody.\n",
@@ -1522,6 +1547,41 @@ describe("check — plugin-duplicates", () => {
     );
   });
 
+  it("still names a dependency spelled as the scoped npm package, not only the slug", async () => {
+    // Two identities, one row: an APM manifest written by hand against the
+    // registry name has to be recognised beside the release's own slug form.
+    // Quoted, because `@` is a reserved indicator at the head of a plain YAML
+    // scalar and an unquoted scoped name makes the whole file unparseable.
+    const root = await seedRepo(getRepo(), {
+      plugin: pluginOf("generated"),
+      files: {
+        "apm.yml": `name: consumer\ndependencies:\n  - "${canonical().name}#plugins/v1.9.0"\n`,
+      },
+    });
+
+    expect((await duplicatesRow(root)).detail).toContain("claude: agent (1 file(s), apm)");
+  });
+
+  it("reports nothing for a mirror published under another owner", async () => {
+    // The documented bound, pinned rather than assumed: the match is the slug
+    // or the package name, and a private mirror at `acme/stamity-mirror`
+    // carries neither. Missing it is the safe direction — a false duplicate
+    // would send an operator to remove a dependency that deploys nothing —
+    // and closing it needs the installed marketplace on the client record,
+    // which no manifest field carries yet.
+    const root = await seedRepo(getRepo(), {
+      plugin: pluginOf("generated"),
+      files: {
+        "apm.yml": "name: consumer\ndependencies:\n  - acme/stamity-mirror#plugins/v1.9.0\n",
+      },
+    });
+
+    const duplicates = await duplicatesRow(root);
+
+    expect(duplicates.status).toBe("pass");
+    expect(duplicates.detail).toBe("no duplicated classes");
+  });
+
   /**
    * The severity-to-exit-code half, on a fixture whose ONLY finding is the
    * duplicate.
@@ -1537,7 +1597,7 @@ describe("check — plugin-duplicates", () => {
     await seedRepo(getRepo(), {
       plugin: pluginOf(mode),
       files: {
-        "apm.yml": `name: consumer\ndependencies:\n  - "${canonical().name}#plugins/v1.9.0"\n`,
+        "apm.yml": `name: consumer\ndependencies:\n  - ${apmInstallSpec()}\n`,
       },
     });
 
@@ -1594,7 +1654,7 @@ describe("check — the non-mutation guarantee (REQ-PLUGIN-019)", () => {
       ],
       files: {
         ".claude/agents/stamity-reviewer.md": "---\nname: reviewer\n---\n\nBody.\n",
-        "apm.yml": `name: consumer\ndependencies:\n  - ${canonical().name}#plugins/v1.9.0\n`,
+        "apm.yml": `name: consumer\ndependencies:\n  - ${apmInstallSpec()}\n`,
       },
     });
     const before = await hashTree(root);

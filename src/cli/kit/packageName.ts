@@ -41,6 +41,25 @@ const CANONICAL_PACKAGE_NAME = "@zomarit/stamity";
 const UNKNOWN_PACKAGE_FACTS = { name: "", version: "", isPrivate: true } as const;
 
 /**
+ * This package's own `package.json`, parsed, or `null` when there is nothing
+ * to read one from — no package root, an unreadable or malformed manifest, or a
+ * document whose root is not an object.
+ *
+ * One read behind both self-describing answers below, so a manifest that
+ * answers the name cannot fail to answer the slug and vice versa.
+ */
+function readOwnManifest(): Record<string, unknown> | null {
+  try {
+    const root = findPackageRoot(OWN_DIR);
+    const parsed: unknown = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    if (typeof parsed !== "object" || parsed === null) return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Read this package's own name/version/private flag by walking up from this
  * module's directory, so a caller self-describes identically from a `src`
  * checkout and from the published `dist` layout.
@@ -52,21 +71,16 @@ const UNKNOWN_PACKAGE_FACTS = { name: "", version: "", isPrivate: true } as cons
  * safe direction for a self-read that decorates other output.
  */
 export function resolveOwnPackageFacts(): { name: string; version: string; isPrivate: boolean } {
-  try {
-    const root = findPackageRoot(OWN_DIR);
-    const parsed: unknown = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
-    if (typeof parsed !== "object" || parsed === null) return UNKNOWN_PACKAGE_FACTS;
-    const { name, version, private: isPrivate } = parsed as Record<string, unknown>;
-    return {
-      name: typeof name === "string" ? name : "",
-      version: typeof version === "string" ? version : "",
-      // `private` is a boolean in the npm schema, but the string form appears in
-      // hand-edited manifests; both mean "do not publish", so both suppress.
-      isPrivate: isPrivate === true || isPrivate === "true",
-    };
-  } catch {
-    return UNKNOWN_PACKAGE_FACTS;
-  }
+  const parsed = readOwnManifest();
+  if (parsed === null) return UNKNOWN_PACKAGE_FACTS;
+  const { name, version, private: isPrivate } = parsed;
+  return {
+    name: typeof name === "string" ? name : "",
+    version: typeof version === "string" ? version : "",
+    // `private` is a boolean in the npm schema, but the string form appears in
+    // hand-edited manifests; both mean "do not publish", so both suppress.
+    isPrivate: isPrivate === true || isPrivate === "true",
+  };
 }
 
 /**
@@ -89,6 +103,44 @@ export function packageName(): string {
     cachedName = name === "" ? CANONICAL_PACKAGE_NAME : name;
   }
   return cachedName;
+}
+
+/**
+ * The repository this installation was built from, as `<owner>/<repo>`.
+ *
+ * A SECOND identity, and not derivable from the first. `packageName()` answers
+ * the registry name (`@zomarit/stamity`); the plugin distribution this release
+ * publishes is addressed by the repository slug instead — an APM dependency on
+ * it reads `zomarit/stamity#plugins/v<version>` and a marketplace is added with
+ * `<slug>#<ref>`. The two share no substring, so a surface that matches one
+ * while the operator wrote the other sees nothing.
+ *
+ * Derived exactly as `scripts/distribution-identity.mjs` derives it, because
+ * the string being recognised is the one that generator wrote: `repository.url`
+ * with npm's `git+` prefix and `.git` suffix removed, then required to be a
+ * bare `https://github.com/<owner>/<repo>`. `null` for anything else — another
+ * forge, the `"owner/repo"` shorthand that generator does not read, a manifest
+ * that names no repository — because a guessed slug would match a dependency
+ * line belonging to somebody else.
+ */
+const GITHUB_REPOSITORY_URL = /^https:\/\/github\.com\/([^/]+)\/([^/]+)$/;
+
+/** `undefined` until computed; `null` is the answer "this manifest names none". */
+let cachedSlug: string | null | undefined;
+
+export function repositorySlug(): string | null {
+  if (cachedSlug === undefined) {
+    const repository = readOwnManifest()?.["repository"];
+    const url =
+      typeof repository === "object" && repository !== null
+        ? (repository as Record<string, unknown>)["url"]
+        : undefined;
+    const normalized =
+      typeof url === "string" ? url.replace(/^git\+/, "").replace(/\.git$/, "") : "";
+    const match = GITHUB_REPOSITORY_URL.exec(normalized);
+    cachedSlug = match === null ? null : `${match[1]}/${match[2]}`;
+  }
+  return cachedSlug;
 }
 
 /**
