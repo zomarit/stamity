@@ -28,6 +28,7 @@ import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
 import type { AdapterOutput } from "../../../src/types/content.ts";
 import type { PredecessorDefaults } from "../../../src/migration/carry.ts";
 import type { RepoInfo } from "../../../src/types/detect.ts";
+import type { PluginConfig } from "../../../src/types/manifest.ts";
 import { EngineError } from "../../../src/types/errors.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
@@ -419,6 +420,65 @@ describe("applyInit — predecessor defaults", () => {
     expect(manifest?.maturityTier).toBe("solo");
     // No flag competes for the MCP servers: the defaults still land.
     expect(manifest?.mcp).toEqual({ servers: ["github"] });
+  });
+});
+
+describe("applyInit — the plugin ownership boundary (REQ-PLUGIN-015)", () => {
+  /** Two clients and four carried classes: a one-client, one-class record would
+   *  pass against a writer that dropped everything past the first entry. */
+  const plugin: PluginConfig = {
+    mode: "plugin-backed",
+    clients: {
+      claude: { version: "1.9.0", classes: ["agent", "skill", "command", "hooks"] },
+      cursor: { version: "1.9.0", classes: ["agent", "skill"] },
+    },
+  };
+
+  it("copies the boundary onto the manifest, through the full validator", async () => {
+    const root = await makeRepo();
+    const report = await applyInit(optionsFor(root, { plugin }));
+
+    const manifest = await readManifest(root);
+    expect(manifest?.plugin).toEqual(plugin);
+    // The document on disk, not merely the reader's object: a `plugin` block
+    // the writer produced has to be one the strict validator accepts.
+    const raw: unknown = JSON.parse(await readFile(report.manifestPath, "utf8"));
+    expect(collectManifestErrors(raw)).toEqual([]);
+  });
+
+  it("deep-copies it, so the caller's config cannot retro-edit a written manifest", async () => {
+    const root = await makeRepo();
+    const mutable: PluginConfig = structuredClone(plugin);
+    await applyInit(optionsFor(root, { plugin: mutable }));
+
+    mutable.mode = "generated";
+    (mutable.clients ?? {}).claude = { version: "9.9.9", classes: ["rule"] };
+
+    const manifest = await readManifest(root);
+    expect(manifest?.plugin?.mode).toBe("plugin-backed");
+    expect(manifest?.plugin?.clients?.claude?.version).toBe("1.9.0");
+  });
+
+  it("keeps the field off a manifest no caller set it on", async () => {
+    const root = await makeRepo();
+    const report = await applyInit(optionsFor(root));
+    // Absence, not a written default: a greenfield manifest must stay
+    // byte-identical to the one written before the field existed.
+    const raw = JSON.parse(await readFile(report.manifestPath, "utf8")) as Record<string, unknown>;
+    expect(Object.hasOwn(raw, "plugin")).toBe(false);
+  });
+
+  it("lands beside a predecessor's preserved communication style, not instead of it", async () => {
+    // Both settled fields travel through the same preserve seam; a naive
+    // last-writer-wins would drop whichever was applied first.
+    const root = await makeRepo();
+    await applyInit(
+      optionsFor(root, { plugin, defaults: { communicationStyle: "technical" } }),
+    );
+
+    const manifest = await readManifest(root);
+    expect(manifest?.communicationStyle).toBe("technical");
+    expect(manifest?.plugin).toEqual(plugin);
   });
 });
 

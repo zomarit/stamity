@@ -1,0 +1,363 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+// @ts-expect-error — the capability emitter ships as a plain .mjs module with no type
+// declarations: the generator that builds the plugin roots runs it under bare Node, with no
+// TypeScript nearby. Imported HERE rather than restated as a literal because the writer and
+// this reader are two halves of one contract (REQ-PLUGIN-002 / REQ-PLUGIN-015), and a
+// hand-copied fixture would let the two drift silently green.
+import { buildCapabilityFile, PLUGIN_CLASSES } from "../../scripts/plugins/capability.mjs";
+import {
+  CAPABILITY_FILE,
+  PLUGIN_CAPABILITY_CLASSES,
+  carriedClasses,
+  readCapabilityFile,
+  resolvePluginRoot,
+} from "../../src/plugins/capabilityFile.ts";
+import { EngineError } from "../../src/types/errors.ts";
+import { useTempDir } from "../support/tempDir.ts";
+
+/**
+ * The reader half of `stamity-plugin.json` (REQ-PLUGIN-015).
+ *
+ * Every parse case here runs against a file the REAL writer built
+ * (`scripts/plugins/capability.mjs::buildCapabilityFile`) and serialized to a real temp root,
+ * never against a hand-written object: the file is a contract between a generator that runs
+ * under bare Node and a reader that runs under TypeScript, and the only way that contract can
+ * be checked is to move bytes across it. A defect case mutates the BUILT file, so the mutation
+ * is a single stated deviation from a document that was valid a line earlier.
+ *
+ * The reader is deliberately STRICT — an unknown top-level key, an unknown class key, a
+ * schema version other than 1, a client outside this engine's tools — because a root carrying
+ * a key this engine does not understand is a root built by a newer generator, and silently
+ * ignoring it would set a repository up against capabilities that are not there.
+ */
+
+const getTemp = useTempDir("capability-file");
+
+/** A capability input shaped as file 1's claude root builds it: four carried classes, no route. */
+const claudeInput = (): Record<string, unknown> => ({
+  client: "claude",
+  version: "1.9.0",
+  sourceCommit: "a".repeat(40),
+  invocation: { commands: "/stamity:<id>", agents: "stamity:<id>", skills: "/stamity:<id>" },
+  clientFloor: {
+    version: "2.1.224",
+    citation: {
+      url: "https://code.claude.com/docs/en/plugin-marketplaces",
+      accessDate: "2026-09-17",
+    },
+  },
+  prerequisites: { node: ">=22.22.2", git: "optional" },
+  classes: {
+    agent: { status: "carried", count: 10 },
+    skill: { status: "carried", count: 14 },
+    command: { status: "carried", count: 10 },
+    rule: { status: "repository-owned", reason: "the plugin manifest has no rules field" },
+    hooks: { status: "carried", count: 4 },
+    mcp: {
+      status: "repository-owned",
+      reason: "server selection and credential references are the repository's",
+    },
+  },
+  runtime: { companion: { package: "@zomarit/stamity", compatible: "^1.9.0" } },
+});
+
+const build = (input: Record<string, unknown>): Record<string, unknown> =>
+  buildCapabilityFile(input) as Record<string, unknown>;
+
+/** Writes a built capability document into a fresh plugin root and returns the root path. */
+async function seedRoot(
+  file: Record<string, unknown>,
+  name = "plugin-root",
+): Promise<string> {
+  const root = getTemp().path(name);
+  await mkdir(root, { recursive: true });
+  await writeFile(join(root, CAPABILITY_FILE), `${JSON.stringify(file, null, 2)}\n`, "utf8");
+  return root;
+}
+
+describe("readCapabilityFile — a document the real writer produced", () => {
+  it("round-trips every key the writer emits, with no key gained or lost", async () => {
+    const written = build(claudeInput());
+    const root = await seedRoot(written);
+
+    const read = await readCapabilityFile(root);
+
+    // Deep equality both ways: the reader neither drops a key the writer set nor
+    // invents a default the file did not carry.
+    expect(read).toEqual(written);
+    expect(Object.keys(read).toSorted()).toEqual(Object.keys(written).toSorted());
+    expect(read.schemaVersion).toBe(1);
+    expect(read.client).toBe("claude");
+    expect(read.version).toBe("1.9.0");
+    expect(read.runtime.locator).toBe("runtime/locate.mjs");
+    expect(read.prerequisites.node).toBe(">=22.22.2");
+  });
+
+  it("reports the carried classes in ownership order, mcp excluded", async () => {
+    const read = await readCapabilityFile(await seedRoot(build(claudeInput())));
+    expect(carriedClasses(read)).toEqual(["agent", "skill", "command", "hooks"]);
+  });
+
+  it("leaves a repository-owned class out of that client's carried set", async () => {
+    // The codex spike outcome: a client whose hooks the plugin cannot carry keeps
+    // hooks in generated mode, so the class must not reach the manifest record.
+    const input = claudeInput();
+    input.classes = {
+      ...(input.classes as Record<string, unknown>),
+      hooks: { status: "repository-owned", reason: "the client wires hooks from its own config" },
+    };
+    const read = await readCapabilityFile(await seedRoot(build(input)));
+    expect(carriedClasses(read)).toEqual(["agent", "skill", "command"]);
+  });
+
+  it("accepts the optional distribution route the writer emits only on request", async () => {
+    const input = claudeInput();
+    input.client = "cursor";
+    input.distribution = { note: "an organization imports the repository as a team marketplace" };
+    const read = await readCapabilityFile(await seedRoot(build(input)));
+    expect(read.client).toBe("cursor");
+    expect(read.distribution).toEqual({
+      note: "an organization imports the repository as a team marketplace",
+    });
+  });
+
+  it("names the same class set the writer does, derived rather than restated", () => {
+    // A literal list here would drift silently the day the writer grows a class.
+    expect([...PLUGIN_CAPABILITY_CLASSES]).toEqual(PLUGIN_CLASSES);
+  });
+});
+
+describe("readCapabilityFile — refusals", () => {
+  /** Runs the reader over a root and returns the error it refused with. */
+  async function refusalFor(file: Record<string, unknown>, name: string): Promise<EngineError> {
+    const root = await seedRoot(file, name);
+    try {
+      await readCapabilityFile(root);
+    } catch (error) {
+      return error as EngineError;
+    }
+    throw new Error("readCapabilityFile resolved where a refusal was required");
+  }
+
+  it("refuses a schema version other than 1, naming the key", async () => {
+    const file = build(claudeInput());
+    file.schemaVersion = 2;
+    const error = await refusalFor(file, "schema-2");
+    expect(error).toBeInstanceOf(EngineError);
+    expect(error.code).toBe("CONFIG_ERROR");
+    expect(error.message).toContain("schemaVersion");
+    expect(error.message).toContain("2");
+  });
+
+  it("refuses an unknown top-level key, naming the key", async () => {
+    const file = build(claudeInput());
+    file.telemetry = { endpoint: "https://example.invalid" };
+    const error = await refusalFor(file, "extra-top-key");
+    expect(error.code).toBe("CONFIG_ERROR");
+    expect(error.message).toContain("telemetry");
+  });
+
+  it("refuses an unknown class key, naming the key", async () => {
+    const file = build(claudeInput());
+    (file.classes as Record<string, unknown>).prompt = { status: "carried", count: 1 };
+    const error = await refusalFor(file, "extra-class-key");
+    expect(error.code).toBe("CONFIG_ERROR");
+    expect(error.message).toContain("classes.prompt");
+  });
+
+  it("refuses a client outside this engine's tools, naming the key and the value", async () => {
+    const file = build(claudeInput());
+    file.client = "windsurf";
+    const error = await refusalFor(file, "unknown-client");
+    expect(error.code).toBe("CONFIG_ERROR");
+    expect(error.message).toContain("client");
+    expect(error.message).toContain("windsurf");
+    expect(error.message).toContain("claude");
+  });
+
+  it("refuses a class status outside the three the writer may emit", async () => {
+    const file = build(claudeInput());
+    (file.classes as Record<string, Record<string, unknown>>).agent = { status: "bundled" };
+    const error = await refusalFor(file, "bad-status");
+    expect(error.code).toBe("CONFIG_ERROR");
+    expect(error.message).toContain("classes.agent.status");
+  });
+
+  it("names every defect at once, each by its own JSON path", async () => {
+    // The promise is a LIST, not a first-failure: an operator repairing a root
+    // built by a newer generator has to see all of it in one run. Four
+    // independent sections are broken here, and all four must be reported.
+    const file = build(claudeInput());
+    file.invocation = {};
+    file.clientFloor = { version: "" };
+    file.prerequisites = { node: ">=22.22.2", git: "maybe" };
+    (file.runtime as Record<string, unknown>).companion = "the npm package";
+
+    const error = await refusalFor(file, "many-defects");
+    expect(error.code).toBe("CONFIG_ERROR");
+    const named = error.message
+      .split("\n")
+      .filter((line) => line.startsWith("  - "))
+      .map((line) => line.slice(4).split(":")[0]);
+    expect(named.toSorted()).toEqual([
+      "clientFloor.version",
+      "invocation",
+      "prerequisites.git",
+      "runtime.companion",
+    ]);
+  });
+
+  it("refuses a section that is the wrong JSON type outright, naming the section", async () => {
+    const file = build(claudeInput());
+    file.classes = [];
+    file.prerequisites = "node >= 22";
+    file.clientFloor = null;
+    file.distribution = "a marketplace";
+
+    const error = await refusalFor(file, "wrong-types");
+    expect(error.message).toContain("classes:");
+    expect(error.message).toContain("prerequisites:");
+    expect(error.message).toContain("clientFloor:");
+    expect(error.message).toContain("distribution:");
+  });
+
+  it("refuses a carried class that states no count, and an uncarried one with no reason", async () => {
+    const file = build(claudeInput());
+    (file.classes as Record<string, unknown>).agent = { status: "carried" };
+    (file.classes as Record<string, unknown>).rule = { status: "unsupported" };
+
+    const error = await refusalFor(file, "count-and-reason");
+    expect(error.message).toContain("classes.agent.count");
+    expect(error.message).toContain("classes.rule.reason");
+  });
+
+  it("refuses a per-client prerequisite that is not the command that installs it", async () => {
+    const file = build(claudeInput());
+    file.prerequisites = { node: ">=22.22.2", git: "optional", claude: 17 };
+
+    const error = await refusalFor(file, "bad-prerequisite");
+    expect(error.message).toContain("prerequisites.claude");
+  });
+
+  it("refuses an unknown key inside a nested object, naming its full path", async () => {
+    const file = build(claudeInput());
+    (file.clientFloor as Record<string, unknown>).measuredAt = "2026-09-17";
+    (
+      (file.runtime as Record<string, unknown>).companion as Record<string, unknown>
+    ).registry = "https://registry.npmjs.org";
+
+    const error = await refusalFor(file, "nested-unknown-keys");
+    expect(error.message).toContain("clientFloor.measuredAt");
+    expect(error.message).toContain("runtime.companion.registry");
+  });
+
+  it("refuses a source commit that is not a 40-character sha, and a blank version", async () => {
+    const file = build(claudeInput());
+    file.sourceCommit = "abc123";
+    file.version = "";
+
+    const error = await refusalFor(file, "bad-identity");
+    expect(error.message).toContain("sourceCommit");
+    expect(error.message).toContain("version:");
+  });
+
+  it("refuses a citation that is present but not a url and an access date", async () => {
+    const file = build(claudeInput());
+    (file.clientFloor as Record<string, unknown>).citation = { url: "", accessDate: 20260917 };
+
+    const error = await refusalFor(file, "bad-citation");
+    expect(error.message).toContain("clientFloor.citation.url");
+    expect(error.message).toContain("clientFloor.citation.accessDate");
+  });
+
+  it("refuses a missing stamity-plugin.json, naming the path it looked at", async () => {
+    const root = getTemp().path("empty-root");
+    await mkdir(root, { recursive: true });
+    await expect(readCapabilityFile(root)).rejects.toThrow(join(root, CAPABILITY_FILE));
+  });
+
+  it("refuses a malformed document, naming the path", async () => {
+    const root = getTemp().path("broken-root");
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, CAPABILITY_FILE), "{ not json", "utf8");
+    await expect(readCapabilityFile(root)).rejects.toThrow(join(root, CAPABILITY_FILE));
+  });
+
+  it("refuses a document whose root is not an object, naming the path", async () => {
+    const root = getTemp().path("array-root");
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, CAPABILITY_FILE), "[]\n", "utf8");
+    // The root-shape refusal belongs to the strict parser, which is why the
+    // schema pass below it takes an object and carries no unreachable branch.
+    await expect(readCapabilityFile(root)).rejects.toThrow(join(root, CAPABILITY_FILE));
+  });
+
+  it("refuses a root where the capability file is unreadable, not only absent", async () => {
+    // A botched extract leaves a DIRECTORY at the path; the errno is not ENOENT,
+    // and the operator's answer is the same — this is not a root to set up from.
+    const root = getTemp().path("dir-instead-of-file");
+    await mkdir(join(root, CAPABILITY_FILE), { recursive: true });
+    let caught: unknown;
+    try {
+      await readCapabilityFile(root);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(EngineError);
+    const error = caught as EngineError;
+    expect(error.code).toBe("CONFIG_ERROR");
+    expect(error.message).toContain(join(root, CAPABILITY_FILE));
+    expect(error.message).not.toContain("no such file");
+  });
+});
+
+describe("resolvePluginRoot", () => {
+  it("prefers an explicit flag over every environment variable", () => {
+    expect(
+      resolvePluginRoot({
+        flag: "/flagged/root",
+        env: {
+          CLAUDE_PLUGIN_ROOT: "/claude",
+          CURSOR_PLUGIN_ROOT: "/cursor",
+          PLUGIN_ROOT: "/generic",
+          COPILOT_PLUGIN_ROOT: "/copilot",
+        },
+      }),
+    ).toBe("/flagged/root");
+  });
+
+  it("falls through the four variables in the documented order", () => {
+    const env = {
+      CLAUDE_PLUGIN_ROOT: "/claude",
+      CURSOR_PLUGIN_ROOT: "/cursor",
+      PLUGIN_ROOT: "/generic",
+      COPILOT_PLUGIN_ROOT: "/copilot",
+    };
+    // Each step drops the winner and asserts the NEXT one wins, so the order is
+    // pinned position by position rather than by a single first-place check.
+    expect(resolvePluginRoot({ env })).toBe("/claude");
+    expect(resolvePluginRoot({ env: { ...env, CLAUDE_PLUGIN_ROOT: undefined } })).toBe("/cursor");
+    expect(
+      resolvePluginRoot({
+        env: { ...env, CLAUDE_PLUGIN_ROOT: undefined, CURSOR_PLUGIN_ROOT: undefined },
+      }),
+    ).toBe("/generic");
+    expect(
+      resolvePluginRoot({
+        env: {
+          ...env,
+          CLAUDE_PLUGIN_ROOT: undefined,
+          CURSOR_PLUGIN_ROOT: undefined,
+          PLUGIN_ROOT: undefined,
+        },
+      }),
+    ).toBe("/copilot");
+  });
+
+  it("answers null when nothing names a root, and treats a blank value as unset", () => {
+    expect(resolvePluginRoot({ env: {} })).toBeNull();
+    expect(resolvePluginRoot({ flag: "  ", env: { CLAUDE_PLUGIN_ROOT: "  " } })).toBeNull();
+  });
+});
