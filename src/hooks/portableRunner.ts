@@ -4,6 +4,26 @@ import type { Tool } from "../types/core.ts";
 /** Repository-owned launcher; the interchange remains exec-form argv. */
 export const PORTABLE_RUNNER_FILE = "stamity-portable-hook.mjs";
 
+/**
+ * A script addressed through a client's plugin root variable — the ONE token
+ * shape that is admitted past single-quoting, and the one that selects the
+ * plugin branch below.
+ *
+ * Anchored end to end on purpose. The whole token is `${NAME}` with `NAME` in
+ * the vendor's upper-case convention, followed by one or more `/segment` whose
+ * characters carry no whitespace, no quote and no shell metacharacter. A
+ * prefix test would admit every other `$`-carrying string that happens to open
+ * with `${` — a parameter-expansion default (`${NAME:-"}`) whose `"` closes the
+ * double quote the renderer opens, a command substitution wearing the prefix,
+ * or a committed repository path that simply begins that way — and the branch
+ * this predicate guards interpolates the token RAW inside double quotes.
+ *
+ * One home. `src/adapters/claude.ts` and `src/adapters/cursor.ts` import it
+ * from here rather than keeping byte-twin copies, so the shape cannot be
+ * narrowed in one renderer and left wide in another.
+ */
+export const ROOT_VARIABLE_PATH = /^\$\{[A-Z_][A-Z0-9_]*\}(?:\/[A-Za-z0-9_@%+=:,.-]+)+$/;
+
 /** Shell syntax appears only at the native boundary, never in the child argv. */
 export function portableHookCommand(
   tool: Tool,
@@ -19,9 +39,13 @@ export function portableHookCommand(
   // `.codex/hooks.json` identifies, and a root variable the client expands has
   // already answered that question; re-deriving it would let an unrelated
   // nearer checkout supply the executable.
+  // A FULL match of {@link ROOT_VARIABLE_PATH}, never a `${` prefix: a row that
+  // merely opens that way falls through to the repository rendering below,
+  // where the whole argv is single-quoted and nothing of it reaches a shell
+  // unquoted.
   const script = row.command[1] ?? "";
   const lastSlash = script.lastIndexOf("/");
-  if (script.startsWith("${") && lastSlash > 0) {
+  if (ROOT_VARIABLE_PATH.test(script)) {
     // Double-quoted, on every client and on Windows too: the variable expands to
     // the plugin's ABSOLUTE install path, which can contain a space, and double
     // quotes are the one rendering that keeps the expansion and survives one
@@ -93,7 +117,10 @@ function main() {
   // path used to be matched whole against the repository layout, so a row under
   // a plugin root matched nothing and each client's posture above silently
   // flipped — Codex to a blocking exit 2, Copilot to a call-rejecting exit 1.
-  const coreGuard = row.event === "pre_tool_use" && row.command.some((arg) => basename(arg) === CORE_GUARD_FILE);
+  // The SCRIPT is argv[1] and nothing else: matching any argv position would
+  // let a launcher or an option value named after the guard claim the guard's
+  // telemetry posture for a row that runs an authored script.
+  const coreGuard = row.event === "pre_tool_use" && basename(row.command[1] ?? "") === CORE_GUARD_FILE;
   if (TOOL === "codex" && row.event === "pre_tool_use" && !coreGuard) failureExit = 2;
   if (TOOL === "copilot" && coreGuard) failureExit = 0;
   if (row.timeoutMs !== undefined && (!Number.isSafeInteger(row.timeoutMs) || row.timeoutMs <= 0)) throw safeError("Invalid hook timeout");

@@ -390,6 +390,51 @@ describe("plugin-rooted rows", () => {
     expect(portableHookCommand("codex", row)).toContain("node -e ");
   });
 
+  it.each([
+    // The claude adapter's negative table, ported. A user hook row reaches this
+    // renderer unmodified from `.stamity/hooks/*.json`, and a committed
+    // repository path may legitimately begin with `${`, so the branch has to
+    // test the WHOLE token rather than a two-character prefix plus a slash.
+    //
+    // A space inside the braces: not one word to the shell.
+    "${CLAUDE PLUGIN}/hooks/run.mjs",
+    // A metacharacter after the brace: `;` would end the command.
+    "${CLAUDE_PLUGIN_ROOT}/hooks;rm -rf /tmp/x/run.mjs",
+    // Command substitution wearing the prefix.
+    "${CLAUDE_PLUGIN_ROOT}/$(touch pwned)/run.mjs",
+    // Lower-case is not the vendor variable convention.
+    "${plugin_root}/hooks/run.mjs",
+    // A parameter-expansion default. The `"` closes the double quote the
+    // plugin branch opens, and `-e` past it is node's inline-code flag.
+    '${NAME:-"} -e "require(`child_process`).execSync(`touch pwned`)"; #}/hooks/run.mjs',
+  ])("renders %s through the repository runner, never the plugin branch", (script) => {
+    const row: HookInterchange = { event: "session_start", command: ["node", script] };
+
+    const command = portableHookCommand("claude", row);
+
+    expect(command).toBe(
+      `node .stamity/generated/hooks/claude/${PORTABLE_RUNNER_FILE} ${Buffer.from(JSON.stringify(row)).toString("base64url")}`,
+    );
+    // Nothing of the authored token survives into the shell string: the whole
+    // row travels base64url-encoded and the runner resolves it.
+    expect(command).not.toContain("pwned");
+    expect(command).not.toContain('"');
+  });
+
+  it("identifies the core guard by the SCRIPT argument alone, not by any argv position", async () => {
+    // Floor 1 on the identity: the launcher is argv[0] and the script is
+    // argv[1]. A row whose LAUNCHER happens to be named like the guard runs an
+    // authored script, so Codex's blocking posture must still apply to it.
+    const f = await pluginFixture("codex", "", {
+      command: [`/opt/${CORE_GUARD}`, `${REF}/authored.mjs`],
+    });
+
+    const result = executeIn(f, { cwd: f.session, env: { [ROOT_VAR]: f.root } });
+
+    expect(result.stderr).toContain("Hook process failed");
+    expect(result.status).toBe(2);
+  });
+
   /** A vendor container: one `hooks/` directory holding the runner and the scripts. */
   async function pluginFixture(tool: Tool, body: string, row: Partial<HookInterchange> = {}) {
     const root = await realpath(await mkdtemp(join(tmpdir(), "stamity-plugin-")));

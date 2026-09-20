@@ -91,8 +91,27 @@ const HOOK_FILE_EXTENSION = ".json";
 const DOCUMENT_FIELDS = ["hooks"] as const;
 const HOOK_FIELDS = ["event", "matcher", "command", "timeoutMs"] as const;
 
-/** Control operators that only mean anything to a shell, so their presence implies one. */
-const SHELL_CONTROL_PATTERN = /[;|&`<>]|\$\(/;
+/**
+ * Control operators that only mean anything to a shell, so their presence
+ * implies one.
+ *
+ * `${` is on the list for the same reason as the rest, one step later: exec
+ * form never interprets a parameter expansion, so an argument carrying one can
+ * only be aimed at a boundary that renders this argv BACK into a command line —
+ * a client whose hook entry is one `command` string. `${NAME:-"}` is the shape
+ * that matters: the `"` inside the default closes the double quote a renderer
+ * opens around a plugin root token, and everything past it becomes the shell's
+ * own words. Belt and braces beside `ROOT_VARIABLE_PATH`'s anchored full match,
+ * because a user hook row reaches every tool's interchange unmodified.
+ *
+ * A lone `"` is NOT on this list. It carries no expansion, and every renderer
+ * that joins this argv back into a line (`src/adapters/claude.ts` `shellWord`,
+ * `src/adapters/cursor.ts` `shellCommand`) single-quotes any token outside
+ * `SHELL_SAFE`, which a `"` always is — so it reaches no shell unquoted, while
+ * refusing it would reject `--message=say "hi"`, an ordinary exec-form
+ * argument the join is pinned to carry.
+ */
+const SHELL_CONTROL_PATTERN = /[;|&`<>]|\$\(|\$\{/;
 
 /**
  * Network reach in a hook command. Matched against the whole command line so

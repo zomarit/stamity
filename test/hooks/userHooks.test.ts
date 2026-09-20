@@ -318,6 +318,38 @@ describe("exec-form enforcement", () => {
     expect(error.code).toBe("SHELL_FORM_COMMAND");
   });
 
+  it.each([
+    // A parameter-expansion default. It carries no operator from the old
+    // pattern, and at a renderer that double-quotes a root-variable token the
+    // `"` closes the quote and hands the rest to the shell as its own words.
+    // The shape W1 names: the `"` inside the default closes the double quote a
+    // renderer opens around a plugin root token, and `-e` past it is node's
+    // inline-code flag.
+    ['a parameter-expansion default', '--out=${NAME:-"} -e "x"; #}/report.json'],
+    // A bare brace expansion, the same shape without the default.
+    ['a brace expansion', '--out=${HOME}/report.json'],
+  ])("rejects %s in a user hook command", async (_label, argument) => {
+    const error = await readOneError({
+      event: "stop",
+      command: ["node", GUARD_SCRIPT, argument],
+    });
+
+    expect(error.code).toBe("SHELL_FORM_COMMAND");
+  });
+
+  it("admits a double quote, which no renderer ever leaves unquoted", async () => {
+    // The counterpart to the two refusals above, and the reason `"` is not on
+    // the control list: it carries no expansion, every argv-joining renderer
+    // single-quotes it, and `hook argv joining` in test/adapters/claude.test.ts
+    // pins that rendering end to end through a real /bin/sh.
+    const result = await read({
+      [HOOK_FILE]: doc({ event: "stop", command: ["node", GUARD_SCRIPT, '--message=say "hi"'] }),
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result.hooks).toHaveLength(1);
+  });
+
   it("rejects a command that is not a non-empty string array", async () => {
     expect((await readOneError({ event: "stop", command: [] })).code).toBe("INVALID_JSON");
     expect((await readOneError({ event: "stop", command: [42] })).code).toBe("INVALID_JSON");
