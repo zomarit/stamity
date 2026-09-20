@@ -327,7 +327,13 @@ function setupLines(report: PluginStatusReport): string[] {
   ];
 }
 
-/** `plugin status` — a read that always exits 0. */
+/**
+ * `plugin status` — a read whose every REPORT exits 0.
+ *
+ * Not "always exits 0": an invalid `--client` name is refused below, at status
+ * 1, before a report is built. That is a rejected invocation and not a verdict
+ * on the repository, which is why it does not make this a gate.
+ */
 async function runStatus(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
   // `status` probes ONE root — it reports a runtime, and there is one runtime
   // per invocation. A repeated flag therefore reports on the first root given,

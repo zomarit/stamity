@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildCapabilityFile } from "../../../scripts/plugins/capability.mjs";
 import { cleanCommand } from "../../../src/cli/commands/clean.ts";
 import { pluginCommand } from "../../../src/cli/commands/plugin.ts";
+import { engineNodeFacts, nodeFactsFor } from "../../../src/cli/commands/plugin/probe.ts";
 import { applySync, planSync } from "../../../src/cli/commands/sync/engine.ts";
 import { renderCliReference } from "../../../src/cli/docs/cliReference.ts";
 import {
@@ -436,6 +437,46 @@ describe("plugin status — the read", () => {
     );
     expect(facts).not.toContain("gates.test");
     expect(facts).toContain("gates.lint");
+  });
+});
+
+describe("the node row's two arms that no report can reach", () => {
+  // The floor read is real (`requiredNodeRange` reads this build's own
+  // package.json), so neither an unreadable manifest nor a below-floor
+  // interpreter is producible from a `status` run on a healthy checkout. Both
+  // arms are therefore exercised as the pure function they are, the same way
+  // `checkNodeVersion`'s failing branch is in `./check.test.ts`.
+
+  it("states a floor nobody declared as null, and never reads it as missed", () => {
+    // An unreadable or invalid `engines.node` leaves the floor unstated — and an
+    // unstated floor cannot be below, so `ok` stays true. The `version` is
+    // carried through untouched, which is what keeps the row honest about which
+    // interpreter it is describing.
+    expect(nodeFactsFor("22.22.3", null)).toEqual({
+      version: "22.22.3",
+      floor: null,
+      ok: true,
+    });
+  });
+
+  it("folds an unparseable version in with a satisfying one, and clears ok only below a real floor", async () => {
+    // Three inputs against one floor, so the assertions distinguish a computed
+    // `ok` from a hard-coded one: a version semver cannot read is not evidence of
+    // being below a floor (`check`'s row warns on it instead), a version inside
+    // the range is ok, and a version below it is the ONLY one that clears the
+    // flag the table prints "— below the floor" for.
+    const unparseable = await engineNodeFacts("not-a-version");
+    expect(unparseable).toEqual({
+      version: "not-a-version",
+      floor: ENGINE_NODE_FLOOR,
+      ok: true,
+    });
+
+    expect(nodeFactsFor("22.22.3", ">=22.22.2").ok).toBe(true);
+    expect(nodeFactsFor("20.19.4", ">=22.22.2").ok).toBe(false);
+    // A nightly of a satisfying major is a real installation, not a violation —
+    // the `includePrerelease` half of the judgment both callers now share.
+    expect(nodeFactsFor("24.0.0-nightly20260101abcdef", ">=22.22.2").ok).toBe(true);
   });
 });
 

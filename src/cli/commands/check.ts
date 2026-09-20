@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
-import semver from "semver";
 import type { App, EngineRegistry } from "../../index.ts";
 import { readCharterTemplate } from "../../content/charter.ts";
 import { renderInvariantsVersion } from "../../emit/substitution.ts";
@@ -28,6 +27,7 @@ import type { Palette } from "../kit/terminal.ts";
 import {
   collectPluginDuplicates,
   describeDuplicatePaths,
+  judgeNodeFloor,
   majorOf,
   pluginRootVariable,
   probePluginRuntime,
@@ -118,15 +118,21 @@ const MAX_NAMES_INLINE = 5;
 // ── Doctor ─────────────────────────────────────────────────────────────────
 
 /**
- * Compare a Node version against the package's `engines.node` range.
+ * The `node-version` DOCTOR ROW for a Node version against the package's
+ * `engines.node` range: this function owns the severity and the sentence, and
+ * nothing else.
+ *
+ * The comparison itself is `judgeNodeFloor` in `./plugin/probe.ts`, called here
+ * and by `engineNodeFacts` for `plugin status`'s own node row. It was composed
+ * twice — `semver.valid`/`coerce`, then `satisfies` with `includePrerelease`,
+ * once in each place — which is two chances to disagree about one interpreter,
+ * and `includePrerelease` in particular is the kind of option one copy loses.
+ * The tri-state verdict is what lets this row keep severities the report has no
+ * use for: `unparseable` WARNS here and folds into `ok` there.
  *
  * Pure and exported because it is the one probe whose failing branch cannot be
  * reached in-process: a suite runs on a Node that already satisfies the range,
  * so the below-floor case is only testable by injecting the version string.
- *
- * `includePrerelease` keeps a nightly or RC build of a satisfying major from
- * reading as below the floor — semver excludes prereleases from a plain range
- * by default, which would be a false failure rather than a real one.
  */
 export function checkNodeVersion(nodeVersion: string, range: string | null): DoctorCheck {
   const id = "node-version";
@@ -139,24 +145,24 @@ export function checkNodeVersion(nodeVersion: string, range: string | null): Doc
         `engines.node range, so the version floor was not verified`,
     };
   }
-  const parsed = semver.valid(nodeVersion) ?? semver.coerce(nodeVersion)?.version ?? null;
-  if (parsed === null) {
-    return {
-      id,
-      status: "warn",
-      detail: `Node reported the unparseable version ${nodeVersion}; expected a build in ${range}`,
-    };
+  switch (judgeNodeFloor(nodeVersion, range)) {
+    case "unparseable":
+      return {
+        id,
+        status: "warn",
+        detail: `Node reported the unparseable version ${nodeVersion}; expected a build in ${range}`,
+      };
+    case "satisfies":
+      return { id, status: "pass", detail: `Node ${nodeVersion} satisfies ${range}` };
+    default:
+      return {
+        id,
+        status: "fail",
+        detail:
+          `Node ${nodeVersion} is below the required ${range} — install a Node in that range ` +
+          `(or switch to one with your version manager), then re-run`,
+      };
   }
-  if (semver.satisfies(parsed, range, { includePrerelease: true })) {
-    return { id, status: "pass", detail: `Node ${nodeVersion} satisfies ${range}` };
-  }
-  return {
-    id,
-    status: "fail",
-    detail:
-      `Node ${nodeVersion} is below the required ${range} — install a Node in that range ` +
-      `(or switch to one with your version manager), then re-run`,
-  };
 }
 
 /**

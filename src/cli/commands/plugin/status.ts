@@ -19,12 +19,18 @@
  * with the setup engine, for the same reason, and it is recorded in the plan
  * map beside that row.
  *
- * It DESCRIBES, it does not gate. `status` exits 0 whatever the rows say, which
- * is deliberate and not an oversight: `check` is this repository's gate, it
- * carries the same two plugin rows with the severity REQ-PLUGIN-019 prescribes,
- * and a second command disagreeing with it about severity is how a CI step
- * starts getting ignored. The two share one probe so they cannot disagree about
- * the facts either.
+ * It DESCRIBES, it does not gate. Every report this module can build exits 0 —
+ * whatever the rows say, and including the one with no manifest, no root and no
+ * locator anywhere near it — which is deliberate and not an oversight: `check` is
+ * this repository's gate, it carries the same two plugin rows with the severity
+ * REQ-PLUGIN-019 prescribes, and a second command disagreeing with it about
+ * severity is how a CI step starts getting ignored. The two share one probe so
+ * they cannot disagree about the facts either.
+ *
+ * The one status-1 ending on the verb is UPSTREAM of every report: an invalid
+ * `--client` name is refused before this module is called at all
+ * (`../plugin.ts`, `parseClients`), so it is a rejected invocation rather than a
+ * report with a verdict — the distinction the "exits 0" claim above turns on.
  */
 import { stat } from "node:fs/promises";
 import type { EngineRegistry } from "../../../index.ts";

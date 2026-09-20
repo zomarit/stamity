@@ -14,7 +14,7 @@
  * This module DESCRIBES and never judges. There is no `warn`, no `fail` and no
  * exit code here: the probe says what it found and names what it could not do,
  * and the two callers apply their own severity — `check` because it is a CI
- * gate, `status` because it is a report that always exits 0. Moving a severity
+ * gate, `status` because every report it prints exits 0. Moving a severity
  * decision into this file would make one of those two callers wrong.
  *
  * WHY IT IS IN THE CLI LAYER, at wave 14. Everything it reads is engine — the
@@ -276,6 +276,54 @@ export async function requiredNodeRange(): Promise<string | null> {
 }
 
 /**
+ * One interpreter version against one declared floor: the THREE answers the
+ * comparison can give, and the only place in the tree that composes it.
+ *
+ * Tri-state rather than a boolean, because its two readers need the middle case
+ * apart from the other two: `../check.ts`'s `node-version` row WARNS on an
+ * unparseable version and FAILS below the floor — two different severities and
+ * two different sentences — while {@link engineNodeFacts} folds `unparseable`
+ * in with `satisfies` for its single `ok` flag. A boolean here would have forced
+ * one of the two callers to re-derive the distinction, which is the duplication
+ * this function exists to remove.
+ *
+ * `includePrerelease` is part of the judgment and not of a caller: semver
+ * excludes prereleases from a plain range by default, so a Node nightly on a
+ * satisfying major would read as below the floor — a false failure rather than
+ * a real one. Two copies of this comparison could have disagreed about that one
+ * option, and a doctor row and a status row disagreeing about the same
+ * interpreter is exactly the divergence the shared probe exists to prevent.
+ */
+export type NodeFloorVerdict = "satisfies" | "below" | "unparseable";
+
+/** The verdict for `nodeVersion` against `range`. See {@link NodeFloorVerdict}. */
+export function judgeNodeFloor(nodeVersion: string, range: string): NodeFloorVerdict {
+  const parsed = semver.valid(nodeVersion) ?? semver.coerce(nodeVersion)?.version ?? null;
+  if (parsed === null) return "unparseable";
+  return semver.satisfies(parsed, range, { includePrerelease: true }) ? "satisfies" : "below";
+}
+
+/**
+ * The node facts for a given version and floor — the pure half of {@link
+ * engineNodeFacts}, exported so both of its arms are reachable without a
+ * package.json that cannot be read.
+ *
+ * `ok` is computed rather than assumed: stating a floor and then reporting `ok`
+ * against a version below it would be a worse row than the `unstated` this
+ * replaced. A floor that could not be read stays `null` with `ok: true` — a
+ * floor nobody stated cannot be missed — and an unparseable version is not
+ * evidence of being below a floor either; `check`'s row is where that case is
+ * reported, and it warns there rather than failing.
+ */
+export function nodeFactsFor(
+  nodeVersion: string,
+  floor: string | null,
+): { version: string; floor: string | null; ok: boolean } {
+  if (floor === null) return { version: nodeVersion, floor: null, ok: true };
+  return { version: nodeVersion, floor, ok: judgeNodeFloor(nodeVersion, floor) !== "below" };
+}
+
+/**
  * The node facts to report when NO plugin root's locator produced any — the
  * running interpreter against this engine's own declared floor.
  *
@@ -286,27 +334,11 @@ export async function requiredNodeRange(): Promise<string | null> {
  * `check`'s `node-version` row already reads exactly that value. A row that says
  * `unstated` while the answer sits in the shipped manifest sends an operator
  * looking for a fact they already have.
- *
- * `ok` is therefore computed rather than assumed true: stating a floor and then
- * reporting `ok` against a version below it would be a worse row than the one
- * this replaces. `includePrerelease` for the same reason `../check.ts`'s own
- * comparison carries it — a nightly of a satisfying major is
- * not below the floor. A floor that could not be read stays `null` with `ok:
- * true`: a floor nobody stated cannot be missed.
  */
 export async function engineNodeFacts(
   nodeVersion: string,
 ): Promise<{ version: string; floor: string | null; ok: boolean }> {
-  const floor = await requiredNodeRange();
-  if (floor === null) return { version: nodeVersion, floor: null, ok: true };
-  const parsed = semver.valid(nodeVersion) ?? semver.coerce(nodeVersion)?.version ?? null;
-  return {
-    version: nodeVersion,
-    floor,
-    // An unparseable version is not evidence of being below the floor; the
-    // doctor row is where that case is reported, and it warns rather than fails.
-    ok: parsed === null || semver.satisfies(parsed, floor, { includePrerelease: true }),
-  };
+  return nodeFactsFor(nodeVersion, await requiredNodeRange());
 }
 
 /**
