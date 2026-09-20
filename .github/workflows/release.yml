@@ -817,24 +817,17 @@ jobs:
           echo "TARBALL=$TARBALL" >> "$GITHUB_ENV"
           echo "Digest verified against the gates job output: $TARBALL ($ACTUAL_SHA)"
 
-      # No token env, deliberately. Authentication is npm trusted publishing over the OIDC token
-      # this job's `id-token: write` grant mints, which is why no npm credential is stored in this
-      # repository at all. That requires a ONE-TIME maintainer setup on npmjs.com: on the package
-      # settings page, add a trusted publisher naming this repository, this workflow file
-      # (`.github/workflows/release.yml`) and the `npm-publish` environment. Until that entry
-      # exists the publish fails with an authentication error — which is the correct failure, not
-      # a reason to add a token.
+      # ── the plugin distribution: fetched and verified BEFORE the publish ───
       #
-      # `--provenance` is explicit as a fallback for a local emergency publish; the trusted
-      # publisher entry is the attestation mechanism of record.
-      - name: Publish to npm with provenance
-        run: npm publish "./$TARBALL" --provenance --access public
-
-      # ── the plugin distribution ────────────────────────────────────────────
-      #
-      # Everything below runs AFTER the npm publish, which is the release's irreversible step:
-      # the distribution is ordered against it rather than racing it, and a branch push that
-      # failed while npm had already shipped is visible as a failed job on a published version.
+      # These two are ordered AHEAD of `npm publish`, and the reason is what a failure in each
+      # half costs. Everything this job does with the distribution after the publish — the
+      # attestation, the branch and tag push, the stamp — can be run again: the orphan commit is
+      # a pure function of the tree it carries, so a second run rebuilds the same sha and moves
+      # no ref. Fetching and verifying is the half that can only say no — a missing artifact, a
+      # digest that does not match the gates output — and saying it after npm had published
+      # would leave a version on the registry that no re-run of this job can finish, because
+      # `npm publish` refuses the version it already shipped. So the steps that can only refuse
+      # run before the one irreversible step, and the ones that can be repeated run after it.
       #
       # This job still checks nothing out. The tree it publishes is the artifact the gates job
       # built, and the only thing that makes it trustworthy is the digest check below — a value
@@ -892,6 +885,25 @@ jobs:
           '
           echo "Plugin distribution verified against the gates job output: $ACTUAL_SHA"
 
+      # No token env, deliberately. Authentication is npm trusted publishing over the OIDC token
+      # this job's `id-token: write` grant mints, which is why no npm credential is stored in this
+      # repository at all. That requires a ONE-TIME maintainer setup on npmjs.com: on the package
+      # settings page, add a trusted publisher naming this repository, this workflow file
+      # (`.github/workflows/release.yml`) and the `npm-publish` environment. Until that entry
+      # exists the publish fails with an authentication error — which is the correct failure, not
+      # a reason to add a token.
+      #
+      # `--provenance` is explicit as a fallback for a local emergency publish; the trusted
+      # publisher entry is the attestation mechanism of record.
+      - name: Publish to npm with provenance
+        run: npm publish "./$TARBALL" --provenance --access public
+
+      # ── the plugin distribution: published after the npm publish ───────────
+      #
+      # From here on the release is irreversible on the registry, so these steps are ordered
+      # after it rather than racing it — and each of them can be run again on the same commit if
+      # one of them fails, which is why they are the half that sits on this side of the line.
+      #
       # Build provenance for the archives a consumer downloads from the release page. npm signs
       # the tarball through trusted publishing; nothing signs these, so the action does — over the
       # same OIDC token and the same Sigstore public-good instance, which is why this job's egress
