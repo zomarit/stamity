@@ -123,6 +123,23 @@ const CHARTER_FIXTURE = [
  * a plugin built from this corpus would carry, and a corpus with no agent in it
  * would make the unmanaged case pass vacuously.
  */
+/** One corpus command, emitted as `st-work` — the `cmd-` id renders with the `st-` prefix. */
+const COMMAND_FIXTURE = [
+  "---",
+  "id: cmd-work",
+  "type: command",
+  "description: fixture command",
+  "tags: [orchestration]",
+  "load: on-demand",
+  "obsolete_when: fixture trigger",
+  "---",
+  "",
+  "# Work",
+  "",
+  "Command body.",
+  "",
+].join("\n");
+
 const AGENT_FIXTURE = [
   "---",
   "id: reviewer",
@@ -1545,6 +1562,31 @@ describe("check — plugin-duplicates", () => {
       "not written by this engine; remove the file or keep it as an override under " +
         `${STATE_DIR}/overrides/`,
     );
+  });
+
+  it("names a copilot agent and prompt whose double extensions no ledger row owns", async () => {
+    // `<id>.agent.md` and `<id>.prompt.md` are what the copilot adapter writes.
+    // A single-extension strip leaves `stamity-reviewer.agent` and
+    // `st-work.prompt`, which match no carried id, so the unmanaged scan saw
+    // nothing at all in this client's directories.
+    const root = await seedRepo(getRepo(), {
+      tools: ["copilot"],
+      plugin: {
+        mode: "generated",
+        clients: { copilot: { version: "1.9.0", classes: ["agent", "command"] } },
+      },
+      files: {
+        "corpus/agents/stamity-reviewer.md": AGENT_FIXTURE,
+        "corpus/commands/st-work.md": COMMAND_FIXTURE,
+        ".github/agents/stamity-reviewer.agent.md": "---\nname: reviewer\n---\n\nBody.\n",
+        ".github/prompts/st-work.prompt.md": "---\nname: work\n---\n\nBody.\n",
+      },
+    });
+
+    const duplicates = await duplicatesRow(root);
+
+    expect(duplicates.detail).toContain("copilot: agent (1 file(s), unmanaged)");
+    expect(duplicates.detail).toContain("copilot: command (1 file(s), unmanaged)");
   });
 
   it("still names a dependency spelled as the scoped npm package, not only the slug", async () => {
