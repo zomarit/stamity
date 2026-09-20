@@ -29,6 +29,7 @@ import {
   CLIENT_MODEL_PROJECTION,
   MODEL_LADDER,
   isModelClass,
+  nearestExpressibleEffort,
   resolveEffortValue,
   resolveModelValue,
   type EffortMap,
@@ -44,6 +45,7 @@ import {
   MATURITY_TIERS,
   MODEL_CLASSES,
   TOOLS,
+  effortRank,
   type CommunicationStyle,
   type EffortLevel,
   type MaturityTier,
@@ -242,6 +244,19 @@ const CLIENT_DEFAULT = "(client default)";
  */
 const NOT_EXPRESSED = "(not expressed)";
 
+/**
+ * How a row marks a client whose scale narrowed the operator's level.
+ *
+ * Distinct from {@link NOT_EXPRESSED}, and the distinction is the whole point:
+ * that marker says the level reaches no emitted file, this one says it reaches
+ * one at a DIFFERENT rung. Printing the emitted level alone would be true and
+ * unreadable — the operator set `max` and the row would say `xhigh` with
+ * nothing to connect the two.
+ */
+function clampedMarker(emitted: string, requested: string): string {
+  return `${emitted} (clamped from ${requested})`;
+}
+
 const MODEL_HINT =
   "a model id your client accepts — passed through verbatim, shape-checked only " +
   "(non-empty, one line)";
@@ -256,7 +271,8 @@ const EFFORT_OMITTERS = TOOLS.filter(
 
 const EFFORT_HINT =
   `one of ${EFFORT_LEVELS.join(" | ")} — carried on ${renderList(EFFORT_CARRIERS)}, ` +
-  `omitted on ${renderList(EFFORT_OMITTERS)}`;
+  `omitted on ${renderList(EFFORT_OMITTERS)}; the levels are the union of the clients' ` +
+  `documented scales, so one a selected client cannot express is refused here`;
 
 /** The persisted pin for one class, or null when the operator set none. */
 function readPin(manifest: SetupManifest, modelClass: ModelClass): string | null {
@@ -374,10 +390,22 @@ function resolveEffort(manifest: SetupManifest, modelClass: ModelClass): string 
     MODEL_LADDER.find((row) => row.modelClass === modelClass)?.defaultEffort ??
     NONE;
 
-  const perTool = manifest.tools.map((tool) => ({
-    tool,
-    value: expressesEffort(tool, modelClass, pins, efforts) ? level : NOT_EXPRESSED,
-  }));
+  // The level as the CLIENT writes it, which is the request narrowed to that
+  // client's own documented scale. A repository reaches a narrowed state by
+  // selecting a narrower client after the level was set — `applyEffort`
+  // refuses it at the point of the decision otherwise — so the row has to be
+  // able to say so rather than reprint a level one client never emits.
+  const requested = (EFFORT_LEVELS as readonly string[]).includes(level)
+    ? (level as EffortLevel)
+    : undefined;
+  const perTool = manifest.tools.map((tool) => {
+    if (!expressesEffort(tool, modelClass, pins, efforts)) {
+      return { tool, value: NOT_EXPRESSED };
+    }
+    const emitted = requested === undefined ? undefined : nearestExpressibleEffort(requested, tool);
+    if (emitted === undefined || emitted === level) return { tool, value: level };
+    return { tool, value: clampedMarker(emitted, level) };
+  });
   const distinct = new Set(perTool.map((entry) => entry.value));
   // No clients selected — a state the manifest schema refuses (`tools` must
   // name at least one target tool), so the only caller that reaches here is
@@ -393,9 +421,58 @@ function resolveEffort(manifest: SetupManifest, modelClass: ModelClass): string 
   return perTool.map((entry) => `${entry.tool}=${entry.value}`).join(", ");
 }
 
+/**
+ * The selected client that cannot express `level`, with the end of its scale
+ * that is in the way — or `null` when every selected carrier can express it.
+ *
+ * Asked against `draft.tools` rather than against the union vocabulary,
+ * because the refusal is about THIS repository's selection: `max` is a real
+ * level one client documents, and refusing the word outright would be a
+ * vocabulary claim the engine has no basis for. The one client that carries
+ * the axis nowhere is skipped — setting a level there is legal and inert, as
+ * it has always been, and turning that into a refusal would break every
+ * copilot-only repository that ever set the key.
+ */
+function unexpressibleOn(
+  tools: readonly Tool[],
+  level: EffortLevel,
+): { tool: Tool; edge: "ends at" | "starts at"; bound: EffortLevel } | null {
+  for (const tool of tools) {
+    if (CLIENT_MODEL_PROJECTION[tool].effortCarrier === null) continue;
+    const nearest = nearestExpressibleEffort(level, tool);
+    if (nearest === undefined || nearest === level) continue;
+    return {
+      tool,
+      edge: effortRank(nearest) < effortRank(level) ? "ends at" : "starts at",
+      bound: nearest,
+    };
+  }
+  return null;
+}
+
 function applyEffort(draft: SetupManifest, modelClass: ModelClass, raw: string): void {
   // Membership is the schema's call: an out-of-band level comes back from
-  // validation naming the three the clients share.
+  // validation naming the six the clients document between them.
+  if ((EFFORT_LEVELS as readonly string[]).includes(raw)) {
+    // Expressibility is NOT the schema's call, because it depends on which
+    // clients this repository selects. A level the selection cannot express
+    // would otherwise be persisted, silently clamped at the next emission, and
+    // discovered as a disclosure line — which is the right answer for a client
+    // that joins LATER and the wrong one for a client already selected, where
+    // refusing at the point of the decision is what keeps the manifest honest.
+    const blocked = unexpressibleOn(draft.tools, raw as EffortLevel);
+    if (blocked !== null) {
+      const remedy = blocked.edge === "ends at" ? "or lower" : "or higher";
+      throw new CliFailure({
+        code: "VALIDATION_ERROR",
+        message:
+          `effort.${modelClass} ${raw} is not expressible on ${blocked.tool} ` +
+          `(its scale ${blocked.edge} ${blocked.bound})`,
+        why: "a level a selected client cannot express reaches its emitted files only as a narrowed one",
+        next: `set ${blocked.bound} ${remedy}, or deselect the client`,
+      });
+    }
+  }
   draft.models = {
     ...draft.models,
     effort: { ...draft.models?.effort, [modelClass]: raw as EffortLevel },
