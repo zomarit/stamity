@@ -188,6 +188,48 @@ With all three in place, headless `codex exec` on codex-cli 0.154.0 still loaded
 layer at all, measured on 2026-09-15. Treat a Codex hook as enforcement in the interactive
 client, and as nothing in the headless one.
 
+### Claude Code blocks every tool call with "the pre-tool-use guard could not run"
+
+That line is the guard failing CLOSED, and it says the guard could not LAUNCH — not that a call
+was refused. A real refusal names the agent and the tool it denied; this one names neither.
+
+The emitted command anchors the script on the client's own project root and turns a failure to
+launch into a block:
+
+```json
+"command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\" || { echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }"
+```
+
+Two things reach that branch. The generated tree is gone — `clean` removed it, a fresh checkout
+has not synced, or the file was deleted by hand:
+
+```sh
+npx @zomarit/stamity sync
+npx @zomarit/stamity check
+```
+
+Or the session carries no `CLAUDE_PROJECT_DIR`. The client sets it to the project root the session
+started in, so an empty value means the hook process did not inherit the client's environment — a
+wrapper, a launcher or a CI step that scrubs it. With it empty the path resolves to `/.stamity/…`,
+where nothing is.
+
+Why it blocks rather than warns: the command used to be repository-relative, and a hook handler
+runs in the session's current directory, which a `cd` in the Bash tool moves. Once it left the
+root the guard ran as `Cannot find module` and exited 1 — a status the client does not block on —
+so every tool call after that `cd` went through ungated. A guard that cannot run now stops the
+call instead of disappearing.
+
+The tail is POSIX (`||` and a brace group). It holds in the two shells the client's own hooks
+documentation names first for a hook command, and on a Windows host with no Git Bash the client
+falls back to PowerShell, which parses neither — that case is unmeasured, so treat a Windows
+host without Git Bash as unguarded rather than fail-closed.
+
+The other three clients need no anchor, each for a measured reason: Cursor runs a hook from the
+workspace root whatever the shell's directory is, Copilot gives each hook entry a `cwd` relative
+to the repository root, and the Codex starter walks up to the directory holding the trusted
+`.codex/hooks.json`. [The client contract evidence page](../.github/client-contracts.md) carries
+the citations and the dates.
+
 ### `CONFIG_ERROR` says the bundled content was not found
 
 A message about bundled content not being found, naming a package root and the paths it probed,

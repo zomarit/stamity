@@ -13,9 +13,27 @@ they do not claim authenticated client sessions, native trust approval, or human
 - **Claude:** existing command files retain `/st-*` compatibility with skills; no command
   migration is needed. The bridge keeps the managed `AGENTS.md` import and removes the
   duplicated skill-discovery paragraph. Skill license and compatibility metadata use the
-  supported fields. [Skills](https://code.claude.com/docs/en/skills),
+  supported fields. A hook handler "run[s] in the current directory with Claude Code's
+  environment" — the session's own working directory, which a `cd` in the Bash tool moves for the
+  rest of the session — while `${CLAUDE_PROJECT_DIR}` is "the project root where the session
+  started" and is exported to the handler in both shell and exec form; shell form is "passed to a
+  shell: `sh -c` on macOS and Linux, Git Bash on Windows, or PowerShell when Git Bash isn't
+  installed", and that page asks that "in shell form, wrap each placeholder in double quotes"; exit
+  2 "means a blocking error" and on `PreToolUse` "blocks the tool call", while "any other exit code
+  doesn't block on its own" (hooks page, read 2026-09-20). The consequence is the anchoring this
+  repository emits: every repository-relative hook command is rendered as one double-quoted word
+  under that variable, because a relative command run from a moved working directory fails as
+  `Cannot find module` with exit 1 — which does not block, so the pre-tool-use guard went unenforced
+  for every call after a `cd` (189 occurrences in one consumer run). Measured 2026-09-20 in a
+  disposable fixture on claude 2.1.278: the pre-change emission recorded one hook call for the `cd`
+  itself and none after it, with the denied file read successfully; the anchored emission recorded
+  the denial and the allowance from the same sub-directory, which also measures that headless
+  `claude -p` exports the variable. The core guard's command alone carries a POSIX fail-closed tail
+  (`|| { echo …; exit 2; }`) so a guard that cannot launch blocks instead of passing; it holds under
+  the first two shells the page names and is unmeasured under the PowerShell fallback.
+  [Skills](https://code.claude.com/docs/en/skills),
   [memory and imports](https://code.claude.com/docs/en/memory),
-  [hooks](https://code.claude.com/docs/en/hooks).
+  [hooks](https://code.claude.com/docs/en/hooks) (read 2026-09-20).
 - **Codex:** `.agents/skills` supports named `$st-*` invocation. Optional `agents/openai.yaml`
   companions add display names and default prompts. Hooks use command strings, and three
   loading steps all have to hold before the client runs one. First, `features.hooks` must be
@@ -29,8 +47,11 @@ they do not claim authenticated client sessions, native trust approval, or human
   project hooks with the feature on, the project trusted and hook trust bypassed (measured
   2026-09-15; three runs, no observation file written, no hook-discovery line in the debug
   log). An emitted hook therefore enforces nothing on that lane, and a QA row that asks it to
-  is measuring the client. Session-relative hook CWD requires locating the nearest initialized
-  project. PreToolUse carries no calling-agent identity, and some tool paths bypass hooks. No
+  is measuring the client. Hook commands "run with the session `cwd`" (hooks page, read
+  2026-09-20), so the emitted starter walks UP from `process.cwd()` to the directory holding the
+  trusted `.codex/hooks.json` and launches the script beside it — which covers a session in a
+  sub-directory of the project and not a session outside its ancestry. Session-relative hook CWD
+  requires locating the nearest initialized project. PreToolUse carries no calling-agent identity, and some tool paths bypass hooks. No
   native per-agent `tools` key is documented; generated developer instructions carry the
   category restriction and `sandbox_mode` the filesystem boundary. Unsupported PreToolUse
   `ask`/stop controls become explicit denials pending manual review; unsupported output flags
@@ -98,14 +119,25 @@ codex minor.
   timeouts. PreToolUse `ask` is unenforced, so portable `ask` denies pending human review.
   Session-start and post-tool context map to `additional_context`. Identity-free tool
   payloads cannot enforce calling-role grants. The former fixed MCP tool-count claim is
-  absent from the current contract and is removed. [Skills](https://cursor.com/docs/skills),
+  absent from the current contract and is removed. Hooks run from the WORKSPACE root, not from the
+  session's shell directory: measured 2026-09-20 on the Cursor agent CLI 2026.09.15 in a disposable
+  fixture whose extra user hook logged its own `process.cwd()`, every one of six hook invocations
+  recorded the fixture root — including the three after the model had run `cd sub` in the shell —
+  and the denial was still enforced on the calls that followed. The client also exports a
+  project-root variable name (`CURSOR_PROJECT_DIR`, observed in the same log; values never read), so
+  an anchor is available if that behaviour ever changes, but the emitted repository-relative command
+  needs none today. The vendor pages were unreachable from the measuring host on that date, so this
+  bullet's Cursor claims about hook working directories rest on the measurement rather than on a
+  re-read page. [Skills](https://cursor.com/docs/skills),
   [hooks](https://cursor.com/docs/hooks), [MCP](https://cursor.com/docs/mcp).
 - **Copilot:** repository command hooks run in CLI/cloud, with PascalCase event aliases
   preserving canonical tool-name matcher semantics. PreToolUse rejects nonzero exits and
   explicit deny; timeouts always fail-open. String and object tool arguments normalize at
   the portable boundary. Session-start command output is injected as additionalContext
-  (docs.github.com hooks reference, 2026-09-17). The cloud configuration must reach the
-  default branch through the normal review/approval path.
+  (docs.github.com hooks reference, 2026-09-17). Each hook entry carries its own working
+  directory, `cwd`, documented as "relative to repository root" and emitted as `"."`, so a
+  repository-relative command needs no anchor here (hooks reference, read 2026-09-20). The cloud
+  configuration must reach the default branch through the normal review/approval path.
   [Hook schema and decisions](https://docs.github.com/en/copilot/reference/hooks-reference),
   [cloud discovery](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/use-hooks).
 
