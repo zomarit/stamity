@@ -230,18 +230,17 @@ function run(command, args, options = {}) {
 }
 
 /**
- * Every git invocation here is run with the repository's configuration pinned on the command
- * line rather than inherited: an operator's global `core.autocrlf`, commit signing or hooks path
- * would otherwise change the bytes committed, the commit object, or whether the commit runs at
- * all — and the whole point of these two commits is that a rebuild reproduces their shas.
+ * Every git invocation here is run with the repository's configuration pinned on the command line
+ * rather than inherited: an operator's global `core.autocrlf` or commit signing would otherwise
+ * change the bytes committed or the commit object, and the whole point of these two commits is that
+ * a rebuild reproduces their shas. The operator's hooks are handled by `--no-verify` on the commit
+ * itself rather than by blanking `core.hooksPath`, which is one mechanism instead of two.
  */
 const GIT_PINS = [
   '-c',
   'core.autocrlf=false',
   '-c',
   'core.safecrlf=false',
-  '-c',
-  'core.hooksPath=',
   '-c',
   'commit.gpgsign=false',
   '-c',

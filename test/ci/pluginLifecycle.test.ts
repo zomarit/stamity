@@ -5,6 +5,7 @@
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -70,8 +71,13 @@ import { CATALOG_PATHS } from "../../scripts/plugins/catalogs.mjs";
  *            at scope user". There is NO `rollback` subcommand on 2.1.278 (`claude plugin
  *            rollback stamity` answers `error: unknown command 'rollback'`, and the sha-256 of
  *            `claude plugin --help` is recorded in the run record), so the rollback route is the
- *            marketplace moved back to the `.1` tag plus `plugin update`, which re-records the
- *            version downwards — the route the CLI's own reinstall message names.
+ *            marketplace moved back to the `.1` tag plus `plugin update --scope project`, which
+ *            re-records the version downwards — the route the CLI's own reinstall message names.
+ *            `docs/plugins.md`'s documented rollback (re-add the marketplace at the previous tag,
+ *            then install again) is EXECUTED here and measured insufficient: `marketplace add`
+ *            answers "already on disk", `install` answers "already installed … it loads in place
+ *            from <path>", and the recorded version stays at `.2`. The return carries the docs
+ *            delta; the walk keeps both measurements rather than only the one that works.
  *   copilot  A local directory marketplace loads the plugin LIVE: `plugin install` answers "it is
  *            loaded live from <path> … nothing was copied", and `plugin update` answers "there is
  *            nothing to update". The version therefore follows the marketplace directory, so
@@ -80,11 +86,21 @@ import { CATALOG_PATHS } from "../../scripts/plugins/catalogs.mjs";
  *   codex    A local marketplace is COPIED into `$CODEX_HOME/plugins/cache/<market>/<plugin>/
  *            <version>/`, and `plugin marketplace upgrade` answers "No configured Git marketplaces
  *            to upgrade" — it refreshes git snapshots only. So update and rollback are the
- *            marketplace directory moved plus `plugin add <plugin>@<marketplace>` again.
+ *            marketplace directory moved plus `plugin add <plugin>@<marketplace>` again. The
+ *            documented rollback — remove, re-add the marketplace at the earlier tag, add again —
+ *            is executed and behaves as the page says, with one correction the return hands back:
+ *            the page's `codex plugin remove stamity` refuses ("plugin requires --marketplace
+ *            unless passed as <plugin>@<marketplace>"), and `remove` purges the version's cache.
  *   cursor   `agent plugin marketplace add` takes a git URL and needs an account
  *            ("Authentication required. Run 'agent login' …"), so a local bare repository is not a
- *            source it can take at all and that step is recorded SKIPPED with the reason. The
- *            route walked is `--plugin-dir` over the tree, replaced between states.
+ *            source it can take at all and that step is recorded SKIPPED with the reason. The route
+ *            walked is `--plugin-dir` over the tree, replaced between states, and the CLIENT IS
+ *            DRIVEN at each of the three: `agent --trust --plugin-dir <root> -p <the discovery
+ *            prompt test/ci/pluginPackages.cursor.test.ts uses>` lists `fixture-marker` at `.2` and
+ *            omits it at `.1`. That leg needs the operator's own home — a scratch `HOME` refuses
+ *            with "Authentication required" — so it inherits the ambient environment and removes
+ *            the two traces it leaves; a refusal records the rows as `SKIPPED (needs an account)`
+ *            and skips, because a row must never name a route no client ran.
  *
  * Wall-time budgets, derived rather than guessed, with the command that produced each number.
  * Measured 2026-09-20 on this repository's corpus (darwin 25.6.0, `/usr/bin/time -p` around a real
@@ -93,6 +109,7 @@ import { CATALOG_PATHS } from "../../scripts/plugins/catalogs.mjs";
  *   two versions, four roots, stub runtime   `--runtime <stub>`                  4.95s
  *   two versions, one root, stub runtime     the same plus `--client claude`      4.34s
  *   two versions, four roots, own runtime    no `--runtime` (npm pack + npm ci)  67.60s
+ *   one Cursor discovery run                 `agent --trust --plugin-dir … -p …`  56.59s
  *
  * The bases below round each figure up. MARGIN is the one guessed number and it is wide, because
  * the required CI legs include a Windows runner that is not measurable from here.
@@ -229,6 +246,36 @@ function row(client: Client, step: string, verdict: "PASS" | "FAIL" | "SKIPPED",
   const line = `plugin-lifecycle: ${client} ${step} ${verdict}${reason === "" ? "" : ` (${reason})`}`;
   ROWS.push(line);
   process.stdout.write(`${line}\n`);
+  transcribe(line);
+}
+
+/**
+ * `STAMITY_LIFECYCLE_LOG`, when exported, receives every row and the exit code, stdout and stderr of
+ * every client command this suite runs. Unset — the default, and what CI does — nothing is written.
+ *
+ * It is an opt-in FILE rather than a fixed path because the evidence a run record cites has to be
+ * quotable in full, and vitest's own output is line-wrapped and interleaved across workers; the
+ * digest in a record is then the digest of one file a reader can open. A path inside this
+ * repository would be an untracked file the leak gate walks, so the caller names one outside it.
+ */
+const LOG = process.env["STAMITY_LIFECYCLE_LOG"];
+function transcribe(text: string): void {
+  if (LOG === undefined) return;
+  appendFileSync(LOG, `${text}\n`);
+}
+
+/** One client command's full observation, appended to the transcript log under its own heading. */
+function observe(label: string, command: string[], result: SpawnSyncReturns<string>): SpawnSyncReturns<string> {
+  transcribe(
+    [
+      `── ${label}`,
+      `$ ${command.join(" ")}`,
+      `exit: ${String(result.status)}`,
+      `stdout:\n${(result.stdout ?? "").trimEnd()}`,
+      `stderr:\n${(result.stderr ?? "").trimEnd()}`,
+    ].join("\n"),
+  );
+  return result;
 }
 
 /** The steps this client's walk has recorded so far, in order, with their verdicts. */
@@ -435,21 +482,31 @@ describe("plugin-lifecycle-fixture, the refusals", () => {
  * rather than a shared `beforeAll`, because four independent `describe`s cannot share one hook and
  * building it four times would cost four minutes to prove the same two trees.
  */
-let realFixture: string | null = null;
+let realFixture: { readonly out: string } | { readonly error: Error } | null = null;
 function withRealRuntime(): string {
-  realFixture ??= (() => {
-    const out = join(tempDir("real"), "lifecycle");
-    // No `--runtime`: the builder packs this checkout and builds one, which is the route the
-    // verify line in the plan cell runs and the only runtime the locator can actually spawn.
-    buildFixture(out, [], REAL_BUILD_MS);
-    return out;
-  })();
-  return realFixture;
+  if (realFixture === null) {
+    try {
+      const out = join(tempDir("real"), "lifecycle");
+      // No `--runtime`: the builder packs this checkout and builds one, which is the route the
+      // verify line in the plan cell runs and the only runtime the locator can actually spawn.
+      buildFixture(out, [], REAL_BUILD_MS);
+      realFixture = { out };
+    } catch (error) {
+      // A FAILURE IS MEMOIZED TOO. Four walk suites call this, and a build that failed once will
+      // fail the same way again: retrying it would spend four minutes per suite to reproduce one
+      // message, and the three later suites would report a timeout instead of the real reason.
+      realFixture = { error: error instanceof Error ? error : new Error(String(error)) };
+    }
+  }
+  if ("error" in realFixture) throw realFixture.error;
+  return realFixture.out;
 }
 
 interface Walk {
   /** The fixture's two distribution trees. */
   readonly out: string;
+  /** This walk's own temp directory: every path below is inside it, which is what attributes them. */
+  readonly base: string;
   /** A clone of the fixture's bare repository, checked out at one tag at a time. */
   readonly mirror: string;
   /** A scratch repository the plugin is installed into, outside every checkout. */
@@ -470,7 +527,7 @@ function startWalk(client: Client): Walk {
   // checkout in the clone must never be able to touch the trees the assertions compare against.
   expect(git(["clone", "-q", "--no-local", join(out, "remote.git"), mirror], base).status).toBe(0);
   expect(git(["init", "-q", "."], project).status).toBe(0);
-  return { out, mirror, project, home };
+  return { out, base: realpathSync(base), mirror, project, home };
 }
 
 /** The mirror, moved to one version's tag. This is the "tree replacement" every route rests on. */
@@ -498,28 +555,46 @@ function shippedRoot(walk: Walk, client: Client, version: string): string {
 }
 
 /**
- * The repository's own files, with the manifest's `updatedAt` dropped. That one field is a clock
- * read by design, so comparing it would make every re-read of a repository look like a change;
- * everything else in the map is a byte a person would notice moving.
+ * The WHOLE project surface: every file in the scratch repository, with two carve-outs stated here
+ * rather than left implicit.
+ *
+ * `.stamity/manifest.json`'s `updatedAt` is dropped, because that one field is a clock read by
+ * design and comparing it would make every re-read of a repository look like a change.
+ * `.claude/settings.json` is not dropped but SPLIT OUT, so a step that changed a byte of it is a
+ * visible difference rather than an exemption: the client's own install write is one declared key,
+ * and anything else appearing there is the finding this map exists to catch.
  */
-function repositoryOwned(project: string): Map<string, string> {
-  const map = new Map<string, string>();
+interface ProjectSurface {
+  /** Every file except `.claude/settings.json`, keyed by POSIX-relative path. */
+  readonly files: [string, string][];
+  /** `.claude/settings.json` parsed, or `null` when no client has written one. */
+  readonly clientSettings: unknown;
+}
+function projectSurface(project: string): ProjectSurface {
+  const settingsPath = ".claude/settings.json";
+  const files: [string, string][] = [];
   for (const rel of treeFiles(project)) {
-    if (rel === ".claude/settings.json") continue; // the client's own explicit install write
+    if (rel === settingsPath) continue;
     if (rel === ".stamity/manifest.json") {
       const manifest = JSON.parse(readFileSync(join(project, rel), "utf8")) as Record<string, unknown>;
       delete manifest["updatedAt"];
-      map.set(rel, digest(JSON.stringify(manifest)));
+      files.push([rel, digest(JSON.stringify(manifest))]);
       continue;
     }
-    map.set(rel, digest(readFileSync(join(project, rel))));
+    files.push([rel, digest(readFileSync(join(project, rel)))]);
   }
-  return map;
+  return {
+    files,
+    clientSettings: existsSync(join(project, settingsPath))
+      ? JSON.parse(readFileSync(join(project, settingsPath), "utf8"))
+      : null,
+  };
 }
 
 /** `stamity plugin <args>` through an installed root's own locator, the way a client spawns it. */
 function locate(root: string, project: string, args: string[]): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, [join(root, "runtime", "locate.mjs"), "--", ...args], {
+  const argv = [join(root, "runtime", "locate.mjs"), "--", ...args];
+  return observe(`locate ${args.join(" ")}`, [process.execPath, ...argv], spawnSync(process.execPath, argv, {
     cwd: project,
     encoding: "utf8",
     timeout: STEP_MS,
@@ -527,7 +602,7 @@ function locate(root: string, project: string, args: string[]): SpawnSyncReturns
     // The variable a client sets when it spawns a plugin's command. The locator resolves the
     // runtime from its OWN path, so this is the client's convention rather than an input it needs.
     env: { ...process.env, CLAUDE_PLUGIN_ROOT: root },
-  });
+  }));
 }
 
 /** `plugin status --json` through the locator, asserted `compatible` and returned for the record. */
@@ -558,7 +633,7 @@ const armed = (client: Client): boolean => BUILT && process.env[`STAMITY_${clien
 describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk", () => {
   let walk: Walk;
   let bin = "";
-  let owned: Map<string, string>;
+  let surface: ProjectSurface;
 
   beforeAll(() => {
     walk = startWalk("claude");
@@ -566,19 +641,29 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
   }, REAL_BUILD_MS);
 
   /**
-   * A scratch `CLAUDE_CONFIG_DIR` and the operator's real `HOME`. Measured: every command this
-   * walk runs works with no login at all, and every write it makes — the marketplace record, the
-   * per-version plugin cache — lands inside that scratch directory, so nothing has to be cleaned
-   * out of the operator's own configuration afterwards and no credential is read or copied.
+   * A scratch `CLAUDE_CONFIG_DIR`, with the ambient environment otherwise inherited — so the
+   * operator's real `HOME` is on it.
+   *
+   * What was MEASURED on 2026-09-20: every command this walk runs exits 0 with the scratch
+   * configuration directory, and every write it makes — the marketplace record in that directory's
+   * `settings.json`, the per-version plugin cache under `plugins/cache/` — lands inside it, so
+   * there is nothing to clean out of the operator's own configuration afterwards. What is INFERRED
+   * from that, not measured: that no credential was read. A scratch configuration directory with
+   * no session in it is not a proof of isolation — these subcommands may simply need none — and
+   * this suite never reads, writes, copies or prints an auth file either way.
    */
-  const claude = (args: string[]): SpawnSyncReturns<string> =>
-    spawnSync(bin, args, {
-      cwd: walk.project,
-      encoding: "utf8",
-      timeout: STEP_MS,
-      maxBuffer: 64 * 1024 * 1024,
-      env: { ...process.env, CLAUDE_CONFIG_DIR: join(walk.home, "claude-config") },
-    });
+  const claude = (args: string[], label = args.slice(0, 3).join(" ")): SpawnSyncReturns<string> =>
+    observe(
+      `claude ${label}`,
+      [bin, ...args],
+      spawnSync(bin, args, {
+        cwd: walk.project,
+        encoding: "utf8",
+        timeout: STEP_MS,
+        maxBuffer: 64 * 1024 * 1024,
+        env: { ...process.env, CLAUDE_CONFIG_DIR: join(walk.home, "claude-config") },
+      }),
+    );
 
   /** Where a project-scope install of this marketplace lands: one directory per version. */
   const installedRoot = (version: string): string =>
@@ -599,22 +684,20 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
       expect(rootVersion(installedRoot(V1))).toBe(V1);
       row("claude", "install", "PASS", `directory marketplace at ${V1}, ${String(digestMap(installedRoot(V1)).size)} files`);
 
-      // The one repository write a project-scope install makes, and the marketplace record that
-      // does NOT land here: `extraKnownMarketplaces` went to the scratch config directory.
-      const settings = JSON.parse(readFileSync(join(walk.project, ".claude", "settings.json"), "utf8")) as Record<
-        string,
-        unknown
-      >;
-      expect(Object.keys(settings)).toEqual(["enabledPlugins"]);
-      expect(settings["enabledPlugins"]).toEqual({ "stamity@stamity": true });
-
       // ── setup, so a manifest exists for `plugin status` to compare against ──
       const setup = locate(installedRoot(V1), walk.project, ["plugin", "setup", "--client", "claude", "-y"]);
       expect(setup.status, setup.stderr).toBe(0);
-      owned = repositoryOwned(walk.project);
-      expect(owned.size).toBeGreaterThan(5);
-      row("claude", "setup", "PASS", `${String(owned.size)} repository-owned files`);
+      surface = projectSurface(walk.project);
+      expect(surface.files.length).toBeGreaterThan(5);
+      // The client's own install write, and the ONLY project-side change the install made: the
+      // marketplace record went to the scratch configuration directory, not here. Asserted here
+      // and re-asserted after every later step through `unchanged` below.
+      expect(surface.clientSettings).toEqual({ enabledPlugins: { "stamity@stamity": true } });
+      row("claude", "setup", "PASS", `${String(surface.files.length)} repository-owned files`);
       assertCompatible("claude", installedRoot(V1), walk.project, V1, "installed");
+
+      /** The whole project surface, settings file included, at a later step. */
+      const unchanged = (): void => expect(projectSurface(walk.project)).toEqual(surface);
 
       // ── auto-update stays off ─────────────────────────────────────────
       // The explicit update against an UNMOVED source: a third-party marketplace must not move a
@@ -622,36 +705,74 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
       const idle = claude(["plugin", "update", "stamity", "--scope", "project", "--json"]);
       expect(idle.status, idle.stderr).toBe(0);
       expect(JSON.parse(idle.stdout)).toMatchObject({ updateOutcome: "up_to_date", oldVersion: V1, newVersion: V1 });
-      row("claude", "no-auto-update", "PASS", "up_to_date while the source had not moved");
+      unchanged();
 
       // ── update ────────────────────────────────────────────────────────
+      // `plugin update --scope project` AFTER the marketplace source moved is the UPDATE route,
+      // and its `oldVersion` is the second half of the auto-update-off proof: the client was still
+      // recorded at the first version at the moment the update ran, so nothing had moved it.
       moveMirror(walk, V2, true);
       expect(claude(["plugin", "marketplace", "update", "stamity"]).status).toBe(0);
       const update = claude(["plugin", "update", "stamity", "--scope", "project", "--json"]);
       expect(update.status, update.stderr).toBe(0);
-      expect(JSON.parse(update.stdout)).toMatchObject({ updateOutcome: "updated", oldVersion: V1, newVersion: V2 });
+      const updated = JSON.parse(update.stdout) as { updateOutcome: string; oldVersion: string; newVersion: string };
+      expect(updated).toMatchObject({ updateOutcome: "updated", oldVersion: V1, newVersion: V2 });
+      row(
+        "claude",
+        "no-auto-update",
+        "PASS",
+        `up_to_date with the source unmoved, and the post-move update reported oldVersion ${updated.oldVersion}`,
+      );
       expect([...digestMap(installedRoot(V2))]).toEqual([...digestMap(shippedRoot(walk, "claude", V2))]);
       expect(rootVersion(installedRoot(V2))).toBe(V2);
       expect(existsSync(join(installedRoot(V2), "skills", "fixture-marker", "SKILL.md"))).toBe(true);
-      expect([...repositoryOwned(walk.project)]).toEqual([...owned]);
-      row("claude", "update", "PASS", `plugin update --scope project to ${V2}, marker discovered`);
+      unchanged();
+      row("claude", "update", "PASS", `plugin update --scope project to ${V2} after the source moved`);
       assertCompatible("claude", installedRoot(V2), walk.project, V2, "updated");
 
       // ── rollback ──────────────────────────────────────────────────────
-      // Measured on 2.1.278: there is no `rollback` subcommand, so the route is the marketplace
-      // moved back to the `.1` tag and `plugin update` re-recording the version downwards.
+      // Measured on 2.1.278: there is no `rollback` subcommand at all.
       const absent = claude(["plugin", "rollback", "stamity"]);
       expect(`${absent.stdout}${absent.stderr}`).toContain("unknown command 'rollback'");
       row("claude", "rollback-subcommand", "SKIPPED", "claude 2.1.278 has no rollback subcommand");
+
+      // THE DOCUMENTED ROUTE, executed as `docs/plugins.md` writes it: re-add the marketplace at
+      // the previous tag, then install again. Measured 2026-09-20 on 2.1.278 against a directory
+      // marketplace: neither command moves the recorded version. `marketplace add` answers
+      // "already on disk", `install` answers "already installed … it loads in place from <path>"
+      // and names `plugin update … --scope project` as what re-records it. So the page's two
+      // commands are necessary and NOT sufficient, and the return carries a docs delta.
       moveMirror(walk, V1, true);
-      expect(claude(["plugin", "marketplace", "update", "stamity"]).status).toBe(0);
+      const readded = claude(["plugin", "marketplace", "add", walk.mirror], "plugin marketplace add (documented rollback)");
+      expect(`${readded.stdout}${readded.stderr}`).toContain("already on disk");
+      const reinstall = claude(
+        ["plugin", "install", "stamity@stamity", "--scope", "project", "--json"],
+        "plugin install (documented rollback)",
+      );
+      expect(reinstall.status, reinstall.stderr).toBe(0);
+      expect(JSON.parse(reinstall.stdout)).toMatchObject({
+        outcome: "ok",
+        installedVersion: V2,
+        availableVersion: V1,
+      });
+      expect(JSON.parse(reinstall.stdout)).toMatchObject({ message: expect.stringContaining("already installed") });
+      // Still at the second version: the documented route alone did not roll anything back.
+      expect(claude(["plugin", "list"]).stdout).toContain(V2);
+      row(
+        "claude",
+        "rollback-documented",
+        "SKIPPED",
+        "docs/plugins.md's re-add plus install answers 'already installed' and leaves the recorded version at .2",
+      );
+
+      // The completing command, which is the one the CLI itself names.
       const back = claude(["plugin", "update", "stamity", "--scope", "project", "--json"]);
       expect(back.status, back.stderr).toBe(0);
       expect(JSON.parse(back.stdout)).toMatchObject({ updateOutcome: "updated", oldVersion: V2, newVersion: V1 });
       expect([...digestMap(installedRoot(V1))]).toEqual([...digestMap(shippedRoot(walk, "claude", V1))]);
       expect(existsSync(join(installedRoot(V1), "skills", "fixture-marker", "SKILL.md"))).toBe(false);
-      expect([...repositoryOwned(walk.project)]).toEqual([...owned]);
-      row("claude", "rollback", "PASS", `reinstall route: marketplace at ${V1} plus plugin update`);
+      unchanged();
+      row("claude", "rollback", "PASS", `marketplace re-added at ${V1} plus plugin update --scope project`);
       assertCompatible("claude", installedRoot(V1), walk.project, V1, "rolled-back");
 
       // The rows are the walk's own record, so the walk asserts them: a step that stopped running
@@ -664,6 +785,7 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
         "update PASS",
         "status-updated PASS",
         "rollback-subcommand SKIPPED",
+        "rollback-documented SKIPPED",
         "rollback PASS",
         "status-rolled-back PASS",
       ]);
@@ -683,13 +805,17 @@ describe.skipIf(!armed("copilot"))("the Copilot install, update and rollback wal
 
   /** A scratch `HOME` and `COPILOT_HOME`: no credential is read, and nothing is cleaned up after. */
   const copilot = (args: string[]): SpawnSyncReturns<string> =>
-    spawnSync(bin, args, {
-      cwd: walk.project,
-      encoding: "utf8",
-      timeout: STEP_MS,
-      maxBuffer: 64 * 1024 * 1024,
-      env: { ...process.env, HOME: walk.home, COPILOT_HOME: join(walk.home, ".copilot") },
-    });
+    observe(
+      `copilot ${args.slice(0, 3).join(" ")}`,
+      [bin, ...args],
+      spawnSync(bin, args, {
+        cwd: walk.project,
+        encoding: "utf8",
+        timeout: STEP_MS,
+        maxBuffer: 64 * 1024 * 1024,
+        env: { ...process.env, HOME: walk.home, COPILOT_HOME: join(walk.home, ".copilot") },
+      }),
+    );
 
   it(
     "installs live from the marketplace directory and follows it through both states",
@@ -707,8 +833,12 @@ describe.skipIf(!armed("copilot"))("the Copilot install, update and rollback wal
 
       const setup = locate(live, walk.project, ["plugin", "setup", "--client", "copilot", "-y"]);
       expect(setup.status, setup.stderr).toBe(0);
-      const owned = repositoryOwned(walk.project);
-      row("copilot", "setup", "PASS", `${String(owned.size)} repository-owned files`);
+      const surface = projectSurface(walk.project);
+      const unchanged = (): void => expect(projectSurface(walk.project)).toEqual(surface);
+      // Copilot writes nothing into the repository at all, so its settings file stays absent and
+      // `unchanged()` below asserts the whole surface — settings included — at every later step.
+      expect(surface.clientSettings).toBeNull();
+      row("copilot", "setup", "PASS", `${String(surface.files.length)} repository-owned files`);
       assertCompatible("copilot", live, walk.project, V1, "installed");
 
       const idle = copilot(["plugin", "update", "stamity"]);
@@ -721,7 +851,7 @@ describe.skipIf(!armed("copilot"))("the Copilot install, update and rollback wal
       expect(existsSync(join(live, "skills", "fixture-marker", "SKILL.md"))).toBe(true);
       expect([...digestMap(live)]).toEqual([...digestMap(shippedRoot(walk, "copilot", V2))]);
       expect(copilot(["plugin", "list"]).stdout).toContain(V2);
-      expect([...repositoryOwned(walk.project)]).toEqual([...owned]);
+      unchanged();
       row("copilot", "update", "PASS", `tree replacement to ${V2}; plugin update reports nothing to update`);
       assertCompatible("copilot", live, walk.project, V2, "updated");
 
@@ -730,7 +860,7 @@ describe.skipIf(!armed("copilot"))("the Copilot install, update and rollback wal
       expect(existsSync(join(live, "skills", "fixture-marker", "SKILL.md"))).toBe(false);
       expect([...digestMap(live)]).toEqual([...digestMap(shippedRoot(walk, "copilot", V1))]);
       expect(copilot(["plugin", "list"]).stdout).toContain(V1);
-      expect([...repositoryOwned(walk.project)]).toEqual([...owned]);
+      unchanged();
       row("copilot", "rollback", "PASS", `reinstall route by tree replacement to ${V1}`);
       assertCompatible("copilot", live, walk.project, V1, "rolled-back");
 
@@ -759,14 +889,18 @@ describe.skipIf(!armed("codex"))("the Codex install, update and rollback walk", 
   }, REAL_BUILD_MS);
 
   /** A scratch `CODEX_HOME`: the cache, the config and the marketplace record all land inside it. */
-  const codex = (args: string[]): SpawnSyncReturns<string> =>
-    spawnSync(bin, args, {
-      cwd: walk.project,
-      encoding: "utf8",
-      timeout: STEP_MS,
-      maxBuffer: 64 * 1024 * 1024,
-      env: { ...process.env, CODEX_HOME: walk.home },
-    });
+  const codex = (args: string[], label = args.slice(0, 3).join(" ")): SpawnSyncReturns<string> =>
+    observe(
+      `codex ${label}`,
+      [bin, ...args],
+      spawnSync(bin, args, {
+        cwd: walk.project,
+        encoding: "utf8",
+        timeout: STEP_MS,
+        maxBuffer: 64 * 1024 * 1024,
+        env: { ...process.env, CODEX_HOME: walk.home },
+      }),
+    );
 
   const installedRoot = (version: string): string =>
     join(walk.home, "plugins", "cache", "stamity", "stamity", version);
@@ -783,8 +917,10 @@ describe.skipIf(!armed("codex"))("the Codex install, update and rollback walk", 
 
       const setup = locate(installedRoot(V1), walk.project, ["plugin", "setup", "--client", "codex", "-y"]);
       expect(setup.status, setup.stderr).toBe(0);
-      const owned = repositoryOwned(walk.project);
-      row("codex", "setup", "PASS", `${String(owned.size)} repository-owned files`);
+      const surface = projectSurface(walk.project);
+      const unchanged = (): void => expect(projectSurface(walk.project)).toEqual(surface);
+      expect(surface.clientSettings).toBeNull();
+      row("codex", "setup", "PASS", `${String(surface.files.length)} repository-owned files`);
       assertCompatible("codex", installedRoot(V1), walk.project, V1, "installed");
 
       // Measured: `marketplace upgrade` refreshes GIT snapshots only, so a moved local tree does
@@ -799,16 +935,35 @@ describe.skipIf(!armed("codex"))("the Codex install, update and rollback walk", 
       expect(codex(["plugin", "list"]).stdout).toContain(V2);
       expect([...digestMap(installedRoot(V2))]).toEqual([...digestMap(shippedRoot(walk, "codex", V2))]);
       expect(existsSync(join(installedRoot(V2), "skills", "fixture-marker", "SKILL.md"))).toBe(true);
-      expect([...repositoryOwned(walk.project)]).toEqual([...owned]);
+      unchanged();
       row("codex", "update", "PASS", `tree replacement plus plugin add to ${V2}`);
       assertCompatible("codex", installedRoot(V2), walk.project, V2, "updated");
 
+      // THE DOCUMENTED ROLLBACK, executed as `docs/plugins.md` writes it: remove the plugin, add
+      // the marketplace at the earlier tag, add the plugin again. One correction the page needs and
+      // this walk records: the page's `codex plugin remove stamity` refuses on 0.154.0 with "plugin
+      // requires --marketplace unless passed as <plugin>@<marketplace>", so the form that works is
+      // the qualified one. Everything after that behaves exactly as documented.
+      const bareRemove = codex(["plugin", "remove", "stamity"], "plugin remove stamity (the page's spelling)");
+      expect(`${bareRemove.stdout}${bareRemove.stderr}`).toContain("requires --marketplace unless passed as");
+      const remove = codex(["plugin", "remove", "stamity@stamity"]);
+      expect(remove.status, remove.stderr).toBe(0);
+      expect(`${remove.stdout}${remove.stderr}`).toContain("Removed plugin");
+      expect(codex(["plugin", "list"]).stdout).toContain("not installed");
+      // `remove` purges the local cache, which is why the rollback below re-copies the tree rather
+      // than re-pointing at a directory that is still there: the `.2` root is gone.
+      expect(existsSync(installedRoot(V2))).toBe(false);
+      row("codex", "rollback-remove", "PASS", "plugin remove stamity@stamity purged the .2 cache");
+
       moveMirror(walk, V1, false);
+      const readded = codex(["plugin", "marketplace", "add", walk.mirror], "plugin marketplace add (documented rollback)");
+      expect(`${readded.stdout}${readded.stderr}`).toContain("already added");
       expect(codex(["plugin", "add", "stamity@stamity"]).status).toBe(0);
       expect(codex(["plugin", "list"]).stdout).toContain(V1);
       expect([...digestMap(installedRoot(V1))]).toEqual([...digestMap(shippedRoot(walk, "codex", V1))]);
-      expect([...repositoryOwned(walk.project)]).toEqual([...owned]);
-      row("codex", "rollback", "PASS", `reinstall route: tree replacement plus plugin add to ${V1}`);
+      expect(existsSync(join(installedRoot(V1), "skills", "fixture-marker", "SKILL.md"))).toBe(false);
+      unchanged();
+      row("codex", "rollback", "PASS", `documented route: plugin remove, marketplace add, plugin add at ${V1}`);
       assertCompatible("codex", installedRoot(V1), walk.project, V1, "rolled-back");
 
       expect(stepsOf("codex")).toEqual([
@@ -818,6 +973,7 @@ describe.skipIf(!armed("codex"))("the Codex install, update and rollback walk", 
         "no-auto-update PASS",
         "update PASS",
         "status-updated PASS",
+        "rollback-remove PASS",
         "rollback PASS",
         "status-rolled-back PASS",
       ]);
@@ -826,34 +982,129 @@ describe.skipIf(!armed("codex"))("the Codex install, update and rollback walk", 
   );
 });
 
+/**
+ * The prompt `test/ci/pluginPackages.cursor.test.ts` already drives this client with, kept in the
+ * same words so two suites measure one discovery surface. It asks for the disabled-invocation
+ * skills too, because "list the skills you can invoke" measurably returns the corpus skills and
+ * none of the nine touchpoints.
+ */
+const CURSOR_DISCOVERY_PROMPT =
+  "List every skill this plugin provides, including ones marked disable-model-invocation. " +
+  "Print only the skill ids, one per line.";
+/** What that suite's own leg recognises as "the CLI never reached the model". */
+const CURSOR_REFUSAL = /authentication required|CURSOR_API_KEY|agent login|workspace trust required/i;
+/** One measured discovery run took 56.59s (`/usr/bin/time -p`, 2026-09-20); 4x for a loaded worker. */
+const CURSOR_PROMPT_MS = 240_000;
+
+/** The operator's own Cursor state directory, and one sorted listing of a directory inside it. */
+const cursorHome = (): string => join(process.env["HOME"] ?? "", ".cursor");
+const listing = (dir: string): string[] => (existsSync(dir) ? readdirSync(dir).toSorted() : []);
+
+/**
+ * The working directory a Cursor chat record was made from, read out of the record itself.
+ *
+ * `~/.cursor/chats/<id>/<session>/meta.json` carries `{ schemaVersion, createdAtMs, hasConversation,
+ * updatedAtMs, cwd }` — measured 2026-09-20 on 2026.09.15-d2fe57e. That `cwd` is what makes the
+ * cleanup below ATTRIBUTABLE: a set difference over the directory would also match a record another
+ * agent's Cursor run left while this walk was running, and this repository's own
+ * `test/ci/pluginPackages.cursor.test.ts` drives the same binary from its own temp directory. That
+ * is not hypothetical — a concurrent run of that suite left two records inside this walk's window.
+ */
+function chatCwd(record: string): string | null {
+  for (const session of listing(record)) {
+    const meta = join(record, session, "meta.json");
+    if (!existsSync(meta)) continue;
+    try {
+      const parsed = JSON.parse(readFileSync(meta, "utf8")) as { cwd?: unknown };
+      if (typeof parsed.cwd === "string") return parsed.cwd;
+    } catch {
+      // A record being written as this reads it is not ours to judge; leave it alone.
+      return null;
+    }
+  }
+  return null;
+}
+
 describe.skipIf(!armed("cursor"))("the Cursor local-path walk", () => {
   let walk: Walk;
   let bin = "";
-
   beforeAll(() => {
     walk = startWalk("cursor");
     bin = process.env["STAMITY_CURSOR_BIN"] ?? "";
   }, REAL_BUILD_MS);
 
+  /**
+   * THE CLEANUP STEP the lane's rule asks of a leg that runs against the operator's real home.
+   *
+   * Measured 2026-09-20 by diffing `~/.cursor` around a discovery run: one `chats/<id>` session
+   * record per run, and one empty `projects/<slug>` directory per working directory. The chat
+   * records are removed, and only the ones whose own `meta.json` names a `cwd` inside THIS walk's
+   * temp directory — attribution by content, not by "it was not there before", which would sweep up
+   * a concurrent run's records and did have two of another suite's in range.
+   *
+   * The `projects/<slug>` entries are LEFT, and that is a deliberate limit rather than an omission:
+   * the slug is the working directory truncated to 42 characters plus a hash, so two different temp
+   * paths under the same prefix produce names this walk cannot tell apart, and the entries are empty
+   * directories. Removing one by guess would be reaching into the operator's state on a coin toss.
+   * Each run leaves one empty directory there; the return names it.
+   */
+  afterAll(() => {
+    const chats = join(cursorHome(), "chats");
+    for (const record of listing(chats)) {
+      const cwd = chatCwd(join(chats, record));
+      if (cwd === null || !cwd.startsWith(walk.base)) continue;
+      rmSync(join(chats, record), { recursive: true, force: true });
+    }
+  }, STEP_MS);
+
   it(
-    "replaces the --plugin-dir tree for each state, with no marketplace route available",
-    () => {
-      const version = spawnSync(bin, ["--version"], { encoding: "utf8", timeout: STEP_MS });
+    "replaces the --plugin-dir tree for each state and the client discovers the marker",
+    (ctx) => {
+      const version = observe("agent --version", [bin, "--version"], spawnSync(bin, ["--version"], { encoding: "utf8", timeout: STEP_MS }));
       expect(version.status, version.stderr).toBe(0);
       row("cursor", "binary", "PASS", `agent ${version.stdout.trim()}`);
 
       // The marketplace route, measured and NOT walked: `agent plugin marketplace add` takes a git
-      // URL and answers "Authentication required" against a local path, on a scratch HOME. A local
-      // bare repository is not a source this client can take, so the row is honest about it rather
-      // than reaching for the operator's account to make a green.
-      const refused = spawnSync(bin, ["plugin", "marketplace", "add", join(walk.out, V1)], {
-        cwd: walk.project,
-        encoding: "utf8",
-        timeout: STEP_MS,
-        env: { ...process.env, HOME: walk.home },
-      });
+      // URL and answers "Authentication required" against a local path even with the operator's own
+      // home, so a local bare repository is not a source this client can take at all.
+      const refused = observe(
+        "agent plugin marketplace add <local path>",
+        [bin, "plugin", "marketplace", "add", join(walk.out, V1)],
+        spawnSync(bin, ["plugin", "marketplace", "add", join(walk.out, V1)], {
+          cwd: walk.project,
+          encoding: "utf8",
+          timeout: STEP_MS,
+          env: { ...process.env, HOME: walk.home },
+        }),
+      );
       expect(`${refused.stdout}${refused.stderr}`).toMatch(/Authentication required|git repository URL/);
       row("cursor", "marketplace", "SKIPPED", "agent plugin marketplace add needs a git URL and an account");
+
+      /**
+       * The client, driven for real over the tree under test.
+       *
+       * THE HOME IS THE OPERATOR'S. Measured 2026-09-20 on 2026.09.15-d2fe57e: with `HOME` pointed
+       * at a scratch directory this exits with `Error: Authentication required. Please run 'agent
+       * login' first, or set CURSOR_API_KEY environment variable.` — the client keeps its session in
+       * the home it is given, and a scratch one has none. Cursor is also the one client here with no
+       * install subcommand, so `--plugin-dir` is the ONLY way a version of this root ever reaches
+       * it; a row that claimed a route without running the client would be a claim about a file
+       * tree. So the leg inherits the ambient environment, which carries the operator's login, and
+       * `afterAll` above removes the two traces it leaves. No credential is read, written or printed
+       * by this suite: the client resolves its own session from its own home.
+       *
+       * `--trust` because the CLI otherwise exits 1 with "Workspace Trust Required", and the run
+       * happens in the scratch project so this checkout's own `.cursor/` tree is not discovered
+       * alongside the plugin's — both measurements `test/ci/pluginPackages.cursor.test.ts` records.
+       */
+      const discover = (root: string): SpawnSyncReturns<string> => {
+        const argv = ["--trust", "--plugin-dir", root, "-p", CURSOR_DISCOVERY_PROMPT, "--output-format", "text"];
+        return observe(
+          `agent --plugin-dir ${root} -p <discovery>`,
+          [bin, ...argv],
+          spawnSync(bin, argv, { cwd: walk.project, encoding: "utf8", timeout: CURSOR_PROMPT_MS - 20_000, maxBuffer: 16 * 1024 * 1024 }),
+        );
+      };
 
       const root = join(walk.mirror, "cursor");
       for (const [state, target, marker] of [
@@ -868,9 +1119,30 @@ describe.skipIf(!armed("cursor"))("the Cursor local-path walk", () => {
         if (state === "install") {
           const setup = locate(root, walk.project, ["plugin", "setup", "--client", "cursor", "-y"]);
           expect(setup.status, setup.stderr).toBe(0);
-          row("cursor", "setup", "PASS", `${String(repositoryOwned(walk.project).size)} repository-owned files`);
+          row("cursor", "setup", "PASS", `${String(projectSurface(walk.project).files.length)} repository-owned files`);
         }
-        row("cursor", state, "PASS", `--plugin-dir tree replacement to ${target}`);
+
+        // The client's own discovery of the tree it was just handed. A refusal is a fact about the
+        // machine's Cursor session, not about this root: it is recorded and the case skips, so no
+        // row ever claims a route no client ran.
+        const seen = discover(root);
+        const transcript = `${seen.stdout}\n${seen.stderr}`;
+        if (CURSOR_REFUSAL.test(transcript)) {
+          row("cursor", state, "SKIPPED", `needs an account: ${transcript.trim().split("\n")[0] ?? ""}`);
+          ctx.skip();
+          return;
+        }
+        expect(seen.status, transcript).toBe(0);
+        // The marker's id, as the corpus projects it into a Cursor root, from the client's own
+        // listing — and absent at the first version, which is what makes the id load-bearing.
+        expect(seen.stdout.split("\n").map((line) => line.trim())).toContain("st-work");
+        expect(seen.stdout.split("\n").map((line) => line.trim()).includes("fixture-marker")).toBe(marker);
+        row(
+          "cursor",
+          state,
+          "PASS",
+          `agent --plugin-dir at ${target}, discovery ${marker ? "lists" : "omits"} fixture-marker`,
+        );
         assertCompatible("cursor", root, walk.project, target, state);
       }
 
