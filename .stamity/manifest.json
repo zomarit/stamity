@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.8.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-20T21:15:56.703Z",
+  "updatedAt": "2026-09-20T21:59:35.125Z",
   "tools": [
     "claude"
   ],
@@ -267,7 +267,7 @@
       "adapter": "claude",
       "artifactId": "claude-settings",
       "artifactType": "infra",
-      "contentHash": "c6e819e88bc27666a6d9396d8e2bb436c22635703b066e0b5a8ba0a9e6261c2e",
+      "contentHash": "1b0db17169ae17abcb2cc634feee98324d7d46a840dcf744e629c9754945c9ce",
       "path": ".claude/settings.json"
     },
     {

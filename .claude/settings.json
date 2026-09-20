@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\" || { echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }"
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }"
           }
         ]
       }

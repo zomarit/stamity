@@ -430,6 +430,14 @@ export type HookScriptLayout = "generated" | "container";
  * last. Load-bearing as a SHAPE check, not as decoration: a plugin root built at
  * `<repo>/dist/plugins/claude/hooks` is also four levels under this checkout, and
  * without the check it would claim the checkout as its repository root.
+ *
+ * A literal twin of `HOOKS_GENERATED_DIR` (`../emit/hooksInfra.ts`), and not
+ * derived from it, because it cannot be: that module IMPORTS this one, and
+ * `test/architecture/boundaries.test.ts` puts it at wave 5 against this file's
+ * wave 4, so the edge is both a cycle and backwards. The two are bound instead by
+ * a case in `test/hooks/scripts.test.ts` that reads the constant and the EMITTED
+ * line and fails the moment they disagree — which is the guarantee the derivation
+ * would have bought.
  */
 const GENERATED_ANCHOR_SEGMENTS = [".stamity", "generated", "hooks"] as const;
 

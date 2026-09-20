@@ -11,6 +11,7 @@ import {
   scanForDeniedPatterns,
 } from "../../src/denyscan/denyScan.ts";
 import { computeHandoffIntegrity } from "../../src/handoffs/validation.ts";
+import { HOOKS_GENERATED_DIR } from "../../src/emit/hooksInfra.ts";
 import { CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
 import {
   buildConfigTamperNoticeScript,
@@ -2887,6 +2888,23 @@ describe("the emitted scripts' own repository root", () => {
     expect(syntaxCheck(script).code).toBe(0);
     expect(run(script, { cwd: getRepo().path("cwd-repo") }).stdout).toContain(
       "- [high] planted —",
+    );
+  });
+
+  it("anchors on the directory the emitter actually writes, segment for segment", () => {
+    // The emitted `ANCHOR_SEGMENTS` line is a literal twin of
+    // `HOOKS_GENERATED_DIR`, and it cannot be derived from it: `src/emit/hooksInfra.ts`
+    // imports `src/hooks/scripts.ts`, so the edge would be a cycle and backwards
+    // through the wave map. This case is the binding the derivation would have
+    // been — move the emitter's directory and the derivation fails HERE rather
+    // than in a silent `return ""` that sends every script back to the cwd.
+    const segments = HOOKS_GENERATED_DIR.split("/");
+    expect(segments.length, HOOKS_GENERATED_DIR).toBe(3);
+    expect(buildSessionStartScript()).toContain(
+      `const ANCHOR_SEGMENTS = ${JSON.stringify(segments.toReversed())};`,
+    );
+    expect(buildReviewGateScript(GATE_OPTIONS)).toContain(
+      `const ANCHOR_SEGMENTS = ${JSON.stringify(segments.toReversed())};`,
     );
   });
 

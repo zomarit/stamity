@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
@@ -101,9 +101,17 @@ const PROJECT_DIR = "${CLAUDE_PROJECT_DIR}";
  * The tail that makes a guard which could not LAUNCH a block rather than a
  * silent pass. Spelled once here and asserted against
  * {@link HOOK_COMMANDS}.guard, so the two cannot drift into two answers.
+ *
+ * It classifies the status rather than echoing on every non-zero one: exit 2 is
+ * the guard's OWN block, so the message must not ride along with a real
+ * refusal — exit 2 is exactly when the client hands stderr to the model.
  */
 const GUARD_TAIL =
-  "|| { echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }";
+  "|| { s=$?; [ \"$s\" -eq 2 ] && exit 2; " +
+  "echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }";
+
+/** The one sentence the tail prints, and the one a legitimate refusal must not carry. */
+const GUARD_REPAIR_LINE = "the pre-tool-use guard could not run; run stamity sync";
 
 /**
  * The generated hook script commands, as the settings transform renders them.
@@ -124,7 +132,8 @@ const HOOK_COMMANDS = {
     'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-session-start.mjs"',
   guard:
     'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs" ' +
-    "|| { echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }",
+    '|| { s=$?; [ "$s" -eq 2 ] && exit 2; ' +
+    "echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }",
   tamper:
     'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs"',
   reviewGate:
@@ -149,16 +158,23 @@ const GUARD_RELATIVE = ".stamity/generated/hooks/claude/stamity-pre-tool-use-gua
  *
  * `undefined` means this host has neither shell the vendor names first, which is
  * the one case the round-trip cases below skip — and they say why rather than
- * passing: the tail they assert is POSIX (`||` and a brace group), PowerShell
- * parses neither, and the CI Windows leg is the confirmation of record.
+ * passing: the tail they assert is POSIX (`||`, `$?`, `[ … ]` and a brace
+ * group), PowerShell parses none of it, and the CI Windows leg is the
+ * confirmation of record.
  */
 const HOOK_SHELL: string | undefined = resolveHookShell();
 
 function resolveHookShell(): string | undefined {
   if (process.platform !== "win32") return "/bin/sh";
-  const probe = spawnSync("where", ["bash"], { encoding: "utf8" });
-  const first = probe.stdout.split(/\r?\n/).find((line) => line.trim() !== "");
-  return probe.status === 0 && first !== undefined ? first.trim() : undefined;
+  // PATH read with `existsSync` rather than probed with `where`: a spawned name
+  // is a binary this repository then depends on (`knip` reads every one), and
+  // the filesystem answers the same question without adding one.
+  for (const entry of (process.env["PATH"] ?? "").split(delimiter)) {
+    if (entry === "") continue;
+    const candidate = join(entry, "bash.exe");
+    if (existsSync(candidate)) return candidate;
+  }
+  return undefined;
 }
 
 const EMPTY_SELECTION: ContentSelection = {
@@ -1341,6 +1357,11 @@ describe("the project-directory anchor", () => {
       expect(denied.code).toBe(2);
       expect(denied.stderr).toContain('"reasonCode":"CATEGORY_DENIED"');
       expect(denied.stderr).toContain('"blocked":true');
+      // And ONLY the refusal. Exit 2 is the status on which the client returns
+      // stderr to the model, so a tail that echoed on every non-zero status
+      // would answer every legitimate denial with a false remediation and bury
+      // the operator's actual diagnosis under it.
+      expect(denied.stderr).not.toContain(GUARD_REPAIR_LINE);
 
       // The defect this case closes, from the same directory: the rendering that
       // shipped before the anchor. `node` cannot even find the script.
@@ -1378,7 +1399,7 @@ describe("the project-directory anchor", () => {
       // Fail CLOSED: a gate that cannot launch used to exit 1, which this client
       // does not block on, so every call went through ungated.
       expect(result.code).toBe(2);
-      expect(result.stderr).toContain("the pre-tool-use guard could not run; run stamity sync");
+      expect(result.stderr).toContain(GUARD_REPAIR_LINE);
     },
   );
 
@@ -1392,7 +1413,7 @@ describe("the project-directory anchor", () => {
       // The variable expands to nothing, so the path is `/.stamity/…` — outside
       // any repository. Fail closed there too, rather than reporting exit 1.
       expect(result.code).toBe(2);
-      expect(result.stderr).toContain("the pre-tool-use guard could not run; run stamity sync");
+      expect(result.stderr).toContain(GUARD_REPAIR_LINE);
     },
   );
 });

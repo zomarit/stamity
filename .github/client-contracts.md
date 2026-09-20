@@ -29,8 +29,15 @@ they do not claim authenticated client sessions, native trust approval, or human
   itself and none after it, with the denied file read successfully; the anchored emission recorded
   the denial and the allowance from the same sub-directory, which also measures that headless
   `claude -p` exports the variable. The core guard's command alone carries a POSIX fail-closed tail
-  (`|| { echo …; exit 2; }`) so a guard that cannot launch blocks instead of passing; it holds under
-  the first two shells the page names and is unmeasured under the PowerShell fallback.
+  (`|| { s=$?; [ "$s" -eq 2 ] && exit 2; echo …; exit 2; }`) so a guard that cannot launch blocks
+  instead of passing, while the guard's OWN exit 2 is re-raised in silence — exit 2 is the status on
+  which the page says stderr returns to the model, so a tail that printed on every non-zero status
+  would answer each legitimate refusal with a false remediation. The whole anchoring is unmeasured
+  under the PowerShell fallback the page names for a Windows host with no Git Bash, and the
+  expectation there is worse than "no tail": `${CLAUDE_PROJECT_DIR}` is PowerShell variable syntax
+  rather than an environment lookup (`$env:NAME`), so every one of the five anchored rows would
+  expand to an empty root and never launch — a possible regression on that host from "ran while the
+  session sat at the root" to "never runs", recorded as unmeasured rather than claimed either way.
   [Skills](https://code.claude.com/docs/en/skills),
   [memory and imports](https://code.claude.com/docs/en/memory),
   [hooks](https://code.claude.com/docs/en/hooks) (read 2026-09-20).

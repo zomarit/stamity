@@ -275,15 +275,23 @@ const PROJECT_DIR_VARIABLE = "${CLAUDE_PROJECT_DIR}";
  * The shell tail that turns "the guard could not launch" into a block, appended
  * to the core guard's command line and to nothing else.
  *
- * Why it reclassifies no verdict the guard reaches: the emitted body exits 0 or
- * `BLOCK_EXIT` (2) and nothing else — one `process.exitCode` assignment under a
- * top-level catch (`../hooks/scripts.ts`) — so the `||` branch is unreachable
- * whenever the script ran at all. What it does catch is the script never
- * running: a missing file after a `clean`, an unset `CLAUDE_PROJECT_DIR`
- * (leaving `/.stamity/…`), a syntax error, no `node` on PATH. Each of those is a
- * disarmed gate today, reported by the vendor's own rule that "any other exit
- * code doesn't block on its own"; with the tail it is a block (exit 2 "Blocks
- * the tool call") carrying a message the client feeds back to the model.
+ * It reclassifies no verdict the guard reaches, and — the part the first
+ * rendering got wrong — it says nothing on one either. The emitted body exits 0
+ * or `BLOCK_EXIT` (2) and nothing else (`../hooks/scripts.ts`: one
+ * `process.exitCode` assignment under a top-level catch), so the ONLY non-zero
+ * status the guard itself produces is 2, which this tail re-raises in silence.
+ * A tail that echoed on every non-zero status put its remediation on the stderr
+ * of every legitimate REFUSAL — and exit 2 is exactly the status on which the
+ * client returns stderr to the model, so each denial would have arrived as the
+ * refusal plus a false "run stamity sync", masking the real diagnosis.
+ *
+ * What it does catch is the script never running: a missing file after a
+ * `clean`, an unset `CLAUDE_PROJECT_DIR` (leaving `/.stamity/…`), a syntax
+ * error, no `node` on PATH. Each of those is a disarmed gate otherwise, by the
+ * vendor's own rule that "any other exit code doesn't block on its own"; here it
+ * becomes a block (exit 2 "Blocks the tool call") carrying a message the client
+ * feeds back to the model. Every non-zero path exits 2 — the status is
+ * classified, never forwarded.
  *
  * Only this row. The session-start and tamper-notice scripts and the review gate
  * keep the client's non-blocking semantics — a notice that cannot run is not a
@@ -291,13 +299,17 @@ const PROJECT_DIR_VARIABLE = "${CLAUDE_PROJECT_DIR}";
  * trade a lost line for a wedged session. A user row keeps them too: its exit
  * semantics are its author's, not this adapter's to re-interpret.
  *
- * POSIX. `||` and `{ … }` hold under `sh` and Git Bash, the two shells the page
- * names first for a hook command; under the PowerShell fallback (a Windows host
- * with no Git Bash) the behaviour is UNMEASURED, and the residual is recorded
- * rather than papered over — `docs/troubleshooting.md` says so too.
+ * POSIX, and only POSIX: `||`, `$?`, `[ … ]` and a brace group hold under `sh`
+ * and Git Bash, the two shells the page names first for a hook command. Under
+ * the PowerShell fallback (a Windows host with no Git Bash) none of it parses —
+ * and `${CLAUDE_PROJECT_DIR}` is PowerShell's own variable syntax rather than an
+ * environment lookup (`$env:NAME`), so the anchored path would expand empty
+ * there too. That host is UNMEASURED and the residual is recorded rather than
+ * papered over — `docs/troubleshooting.md` states it as a possible regression.
  */
 const GUARD_FAIL_CLOSED_TAIL =
-  "|| { echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }";
+  "|| { s=$?; [ \"$s\" -eq 2 ] && exit 2; " +
+  "echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }";
 
 /**
  * Access date carried by every platform citation in {@link CLAUDE_DIALECT_FACTS}.

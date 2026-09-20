@@ -191,13 +191,16 @@ client, and as nothing in the headless one.
 ### Claude Code blocks every tool call with "the pre-tool-use guard could not run"
 
 That line is the guard failing CLOSED, and it says the guard could not LAUNCH — not that a call
-was refused. A real refusal names the agent and the tool it denied; this one names neither.
+was refused. The two never arrive together: a refusal names the agent and the tool it denied and
+nothing else, because the tail below re-raises the guard's own exit 2 in silence and prints only
+when the status is neither 0 nor 2. If you see both, the emitted command is not the one this
+version writes — re-sync and compare.
 
 The emitted command anchors the script on the client's own project root and turns a failure to
 launch into a block:
 
 ```json
-"command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\" || { echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }"
+"command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }"
 ```
 
 Two things reach that branch. The generated tree is gone — `clean` removed it, a fresh checkout
@@ -217,12 +220,18 @@ Why it blocks rather than warns: the command used to be repository-relative, and
 runs in the session's current directory, which a `cd` in the Bash tool moves. Once it left the
 root the guard ran as `Cannot find module` and exited 1 — a status the client does not block on —
 so every tool call after that `cd` went through ungated. A guard that cannot run now stops the
-call instead of disappearing.
+call instead of disappearing. Every non-zero path exits 2: the status is classified, never
+forwarded, so a guard that exits 1 does not reach the model as a status the client ignores.
 
-The tail is POSIX (`||` and a brace group). It holds in the two shells the client's own hooks
-documentation names first for a hook command, and on a Windows host with no Git Bash the client
-falls back to PowerShell, which parses neither — that case is unmeasured, so treat a Windows
-host without Git Bash as unguarded rather than fail-closed.
+One host is a known gap. The command is POSIX — `||`, `$?`, `[ … ]`, a brace group — and it holds
+in the two shells the client's own hooks documentation names first. On a Windows host with no Git
+Bash the client falls back to PowerShell, and there nothing about the line works: PowerShell
+parses none of that syntax, and `${CLAUDE_PROJECT_DIR}` is its own VARIABLE syntax rather than an
+environment lookup (which would be `$env:CLAUDE_PROJECT_DIR`), so the path expands empty. That
+affects all five anchored rows, not just the guard — the session-start and tamper notices and the
+review gate too — so on such a host the anchoring may be a REGRESSION: a hook that used to run
+while the session sat at the repository root may now never launch at all. This is unmeasured; no
+run on such a host has been made. If you are on one, install Git Bash, and report what you see.
 
 The other three clients need no anchor, each for a measured reason: Cursor runs a hook from the
 workspace root whatever the shell's directory is, Copilot gives each hook entry a `cwd` relative
