@@ -12,7 +12,7 @@ import { CliFailure } from "../../../src/cli/kit/output.ts";
 import { runCli, type CommandIo } from "../../../src/cli/kit/program.ts";
 import { readManifest } from "../../../src/manifest/manifest.ts";
 import { getSourceEnvMcpCommand } from "../../../src/mcp/env.ts";
-import { resolveModelValue } from "../../../src/roster/modelLadder.ts";
+import { resolveEffortValue, resolveModelValue } from "../../../src/roster/modelLadder.ts";
 import {
   DEFAULT_MAX_REVIEW_ITERATIONS,
   HARD_MAX_REVIEW_ITERATIONS,
@@ -893,7 +893,11 @@ describe("config — the model ladder's nine keys", () => {
     expect(await manifestBytes(handle)).toBe(before);
   });
 
-  it("refuses an out-of-band effort level, naming the three", async () => {
+  // JUSTIFIED CHANGE (REQ-LADDER-001, unit c9-effort-scale): the vocabulary the
+  // refusal names widened from the three levels every client shared to the six
+  // the clients document between them. The behaviour asserted — an off-vocabulary
+  // level is refused, names the vocabulary, and writes nothing — is unchanged.
+  it("refuses an out-of-band effort level, naming the six", async () => {
     const handle = tempDir();
     await seedManifest(handle);
     const before = await manifestBytes(handle);
@@ -901,8 +905,90 @@ describe("config — the model ladder's nine keys", () => {
     const result = await run(handle, ["set", "effort.standard", "nonsense"]);
 
     expect(result.code).toBe(1);
-    expect(result.stderr).toContain("low | medium | high");
+    expect(result.stderr).toContain("minimal | low | medium | high | xhigh | max");
     expect(await manifestBytes(handle)).toBe(before);
+  });
+
+  it("writes a level every selected client documents, and each emits it in its own dialect", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["claude", "codex"] });
+
+    const set = await run(handle, ["set", "effort.frontier", "xhigh"]);
+
+    expect(set.code).toBe(0);
+    expect((await readManifest(handle.dir))?.models?.effort?.frontier).toBe("xhigh");
+    // The two carriers, asserted through the resolvers the adapters call: one
+    // client writes `effort: xhigh` into its agent frontmatter, the other
+    // `model_reasoning_effort = "xhigh"` into its config table.
+    expect(resolveEffortValue("frontier", "claude", { frontier: "xhigh" })).toBe("xhigh");
+    expect(resolveEffortValue("frontier", "codex", { frontier: "xhigh" })).toBe("xhigh");
+    expect(rowFor((await run(handle, ["list"])).stdout, "effort.frontier")).toContain("xhigh");
+  });
+
+  it("refuses a level a selected client cannot express, naming the client and its ceiling", async () => {
+    // Exit 1 with `VALIDATION_ERROR` in `error.code` — this CLI retired the
+    // sysexits translation (`src/types/errors.ts`), so every refusal exits 1
+    // and the kind travels in the code, exactly as the gate rows refuse.
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["codex"] });
+    const before = await manifestBytes(handle);
+
+    const result = await run(handle, ["set", "effort.frontier", "max"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain(
+      "effort.frontier max is not expressible on codex (its scale ends at xhigh)",
+    );
+    expect(result.stderr).toContain("set xhigh or lower, or deselect the client");
+    expect(await manifestBytes(handle)).toBe(before);
+  });
+
+  it("accepts the same level once the client that could not express it is gone", async () => {
+    // The control for the refusal above: `max` is not an illegal level, it is a
+    // level one client cannot express. The refusal has to be about the
+    // selection, not about the word.
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["claude"] });
+
+    const result = await run(handle, ["set", "effort.frontier", "max"]);
+
+    expect(result.code).toBe(0);
+    expect((await readManifest(handle.dir))?.models?.effort?.frontier).toBe("max");
+  });
+
+  it("refuses a level below a selected client's floor, naming its lowest", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { tools: ["claude", "codex"] });
+    const before = await manifestBytes(handle);
+
+    // `minimal` is on one client's documented scale and below the other's
+    // floor, so the refusal has to name the client that cannot go that low —
+    // not the one that can.
+    const result = await run(handle, ["set", "effort.economy", "minimal"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain(
+      "effort.economy minimal is not expressible on claude (its scale starts at low)",
+    );
+    expect(result.stderr).toContain("set low or higher, or deselect the client");
+    expect(result.stderr).not.toContain("codex");
+    expect(await manifestBytes(handle)).toBe(before);
+  });
+
+  it("marks the clamped client in the list when a narrower client joined later", async () => {
+    // Written straight into the manifest, because `config set` would have
+    // refused it — this is the state a repository reaches by widening `tools`
+    // after the level was set, which is the case the disclosure exists for.
+    const handle = tempDir();
+    await seedManifest(handle, {
+      tools: ["claude", "codex"],
+      models: { effort: { frontier: "max" } },
+    });
+
+    const row = rowFor((await run(handle, ["list"])).stdout, "effort.frontier");
+
+    expect(row).toContain("claude=max");
+    expect(row).toContain("codex=xhigh (clamped from max)");
   });
 
   it("refuses a cap below the floor, above the ceiling, or fractional", async () => {
