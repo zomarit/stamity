@@ -828,6 +828,37 @@ describe("model and effort projection", () => {
     expect(agentHead(rows, "stamity-fixer")["effort"]).toBe("medium");
   });
 
+  it("emits a level above the old band once the operator asks for one", async () => {
+    // The rider's whole point: no class could be asked for more than `high`
+    // while this client documents two levels above it. Asserted on the class
+    // the corpus frontmatter actually declares for a shipped role — the top
+    // rung is a flow escalation no agent file declares, so an emitted file
+    // never carries it.
+    const { rows } = await planned({ models: { effort: { advanced: "xhigh" } } });
+
+    expect(agentHead(rows, "stamity-implementer")["effort"]).toBe("xhigh");
+    // Untouched classes keep the ladder's own level, so the widening is the
+    // operator's request and not a shift of the defaults.
+    expect(agentHead(rows, "stamity-fixer")["effort"]).toBe("medium");
+  });
+
+  it("raises a level below this client's floor to its lowest, never dropping it", async () => {
+    // `minimal` is on one other client's documented scale and below this
+    // client's. The nearest expressible level is emitted with a disclosure
+    // elsewhere; what must never happen is the key going missing.
+    const { rows } = await planned({ models: { effort: { economy: "minimal" } } });
+
+    expect(agentHead(rows, "stamity-test-runner")["effort"]).toBe("low");
+  });
+
+  it("declares its documented effort scale as a capability row with a dated citation", () => {
+    const row = cap("effort-scale");
+
+    expect(row).toContain("low, medium, high, xhigh, max");
+    expect(row).toContain("available levels depend on the model");
+    expect(row).toContain("code.claude.com/docs/en/sub-agents, accessed 2026-09-17");
+  });
+
   it("leaves the three alias classes byte-identical to the table this replaced", async () => {
     const { rows } = await planned();
 

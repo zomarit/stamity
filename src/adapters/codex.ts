@@ -41,6 +41,7 @@ import {
   type ResolvedAgentGrant,
 } from "../roster/agentGrants.ts";
 import {
+  CLIENT_MODEL_PROJECTION,
   resolveEffortValue,
   resolveModelValue,
   type EffortMap,
@@ -222,6 +223,20 @@ const RULES_APPENDIX_ARTIFACT_ID = "codex-rules-appendix";
  * matrix renders. Claims that rest on an unverified dialect assumption say so
  * in place rather than reading as settled.
  */
+/**
+ * This client's documented effort scale, rendered from the projection row so
+ * the capability page and the resolver cannot disagree about which levels it
+ * accepts. The citation is inline because the scale sits on a page read for
+ * this claim alone, not on the pages the row group's own sources cover.
+ */
+const EFFORT_SCALE_CAP =
+  `${CLIENT_MODEL_PROJECTION.codex.effortScale.join(", ")} — the levels this client's ` +
+  "`model_reasoning_effort` key accepts; xhigh is model-dependent, so a model that does not " +
+  "offer it falls back to that model's own default " +
+  "(learn.chatgpt.com/docs/config-file/config-reference, accessed 2026-09-17). This is the " +
+  "only supported client documenting `minimal`, and the only one that cannot be asked for " +
+  "`max`: a `max` request is emitted as `xhigh` with a disclosure, never dropped";
+
 const CODEX_FACTS: AdapterDialectFacts = {
   tool: TOOL,
   ruleShape:
@@ -255,6 +270,7 @@ const CODEX_FACTS: AdapterDialectFacts = {
         "repository, and are deprecated in favour of skills, so the nine touchpoint " +
         "bodies are not emitted here; the charter's touchpoint index still names them",
     },
+    { name: "effort-scale", value: EFFORT_SCALE_CAP },
   ],
   citations: [
     // Subagent key set + the project-scoped `.codex/agents/` location.

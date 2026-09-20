@@ -37,7 +37,12 @@ import {
   type ResolvedAgentGrant,
 } from "../roster/agentGrants.ts";
 import { RUNTIME_AGENT_IDS } from "../roster/agentPolicies.ts";
-import { resolveModelValue, type EffortMap, type ModelPinMap } from "../roster/modelLadder.ts";
+import {
+  CLIENT_MODEL_PROJECTION,
+  resolveModelValue,
+  type EffortMap,
+  type ModelPinMap,
+} from "../roster/modelLadder.ts";
 import {
   substituteCanonicalPlatformMarker,
   toCursorReadonlyFrontmatter,
@@ -275,6 +280,20 @@ const HOOK_INFRA_ARTIFACT_IDS: ReadonlySet<string> = new Set([
   "cursor-portable-hook",
 ]);
 
+/**
+ * This client's documented effort scale, rendered from the projection row so
+ * the capability page and the resolver cannot disagree about which levels it
+ * accepts. The citation is inline because the scale sits on a page read for
+ * this claim alone, not on the pages the row group's own sources cover.
+ */
+const EFFORT_SCALE_CAP =
+  `${CLIENT_MODEL_PROJECTION.cursor.effortScale.join(", ")}: ` +
+  `${CLIENT_MODEL_PROJECTION.cursor.effortScaleNote ?? ""} ` +
+  "(cursor.com/docs/sdk/typescript, accessed 2026-09-17). The level rides inside the model " +
+  "value as `[effort=<level>]` and this client parses the group rather than ruling on the " +
+  "value, so nothing is narrowed here: a level the chosen model does not offer is the " +
+  "model's to reject, and no key is emitted at all until a model id is pinned";
+
 /** What this client can and cannot do, as the generated capability matrix reads it. */
 export const cursorDialectFacts: AdapterDialectFacts = {
   tool: "cursor",
@@ -329,6 +348,7 @@ export const cursorDialectFacts: AdapterDialectFacts = {
       value:
         "not emitted — mitigated a pre-3.0 path-escape class; revisit if that class recurs on a supported release",
     },
+    { name: "effort-scale", value: EFFORT_SCALE_CAP },
   ],
   // Revalidated against every cited page; unsupported historical caps are removed.
   citations: [

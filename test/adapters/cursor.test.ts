@@ -655,6 +655,24 @@ describe("`.cursor/agents` definitions", () => {
     ).toEqual(["model: composer-2[effort=high,context=300k]"]);
   });
 
+  it("passes the widest level straight through, this client's scale being the model's", () => {
+    const advanced = itemOf({
+      type: "agent",
+      id: "reviewer",
+      frontmatter: { model_class: "advanced" },
+    });
+
+    // This client parses the parameter and hands the value to the model, so it
+    // declares the whole union as its scale — `max` rides through verbatim and
+    // is never narrowed here. Whether the model accepts it is the model's
+    // answer, which is what the capability row says.
+    expect(
+      buildCursorAgent(advanced, grantOf("stamity-reviewer"), "body\n", { advanced: "composer-2" }, { advanced: "max" })
+        .split("\n")
+        .filter((line) => line.startsWith("model:")),
+    ).toEqual(["model: composer-2[effort=max]"]);
+  });
+
   it("reads the operator's effort map off the manifest, not the pins alone", async () => {
     // Asserted through the plan, not the builder: a builder that accepts an
     // efforts argument passes every case above while the residue planner still
