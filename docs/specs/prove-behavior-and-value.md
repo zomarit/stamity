@@ -252,7 +252,7 @@ that the manual runner documented there runs the full set.
 Every hand page carries `verified against the tree at the 1.8.0 release cut (<date>)` after a
 claim-by-claim check, replacing the pre-1.7.0 attestations (`README.md:1`, `SECURITY.md:1`);
 `RELEASE_CUT_DATE` (`test/docsPages.test.ts:309`) equals it and the gate at `:539-562` enforces both
-halves over the fourteen-page bucket — three root pages (`:99`) and eleven guides (`:134-148`).
+halves over the fourteen-page bucket — three root pages (`:99`) and eleven guides (`:135-152`).
 `GOVERNANCE.md:1` is restamped as a fifteenth page, deliberately outside that bucket (`:79-96`).
 
 - GIVEN every hand page WHEN the docs-pages suite runs THEN each attests to the 1.8.0 cut date, at
