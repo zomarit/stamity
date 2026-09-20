@@ -164,6 +164,16 @@ const PLUGIN_MODE = 'plugin-backed'
 const SETUP_ID = 'st-setup'
 
 /**
+ * The one tool grant the Claude invocation leg passes, in the client's own pattern form.
+ *
+ * Every command `st-setup` runs is `node "<root>/runtime/locate.mjs" -- …`, so the grant names
+ * `node` and leaves every other command needing an approval this headless run cannot give. Measured
+ * on Claude Code 2.1.278 (2026-09-21): with this grant the setup command runs and the scratch
+ * repository's `.stamity/manifest.json` appears.
+ */
+const CLAUDE_BASH_GRANT = 'Bash(node *)'
+
+/**
  * The discovery ask, one wording for every client so a difference between rows is the client.
  *
  * It names NO id and NO invocation form, deliberately: every marker this script then looks for in
@@ -549,21 +559,43 @@ function allowlistedEnv(scratch) {
   return { ...allowed, ...scratch }
 }
 
-/** Paths that must never reach a printed line or a committed evidence file. */
+/**
+ * Every user home a line could name, swept in one pass: POSIX, macOS and the Windows spelling.
+ *
+ * Exported because two files need the SAME sweep — this script's own reasons and the QA lane's row
+ * reasons (`scripts/qa/plugin-runs.mjs`), which quote this script's output. A second copy of the
+ * pattern is a pin that drifts, and the thing it guards is an absolute path reaching a committed
+ * evidence file.
+ */
+const HOME_PATHS = /(?:\/Users|\/home|\/root)\/[^/\s"']+|[A-Za-z]:\\Users\\[^\\/\s"']+/g
+
+/**
+ * `text` with the paths that must never reach a printed line or a committed evidence file removed.
+ *
+ * `replacements` are the run's own known locations, replaced by their LOGICAL label first, so a
+ * reader still learns which tree a line is about; the sweep then takes any home this run did not
+ * know it would see (a second checkout, another account, a runner's).
+ */
+export function redactPaths(text, replacements = []) {
+  let out = String(text ?? '')
+  for (const [from, to] of replacements) {
+    if (typeof from === 'string' && from.length > 0) out = out.replaceAll(from, to)
+  }
+  return out.replaceAll(HOME_PATHS, '<home>')
+}
+
+/** The redactor one client's legs use: its own dist, scratch, binary and home, then the sweep. */
 function redactor(context) {
   const pairs = [
     [context.dist, '<dist>'],
     [context.scratch, '<scratch>'],
+    // The binary's own path: a spawn failure's message carries it verbatim
+    // (`spawnSync /Users/…/.local/bin/claude ENOENT`), and what a reader needs is which client
+    // could not be run, not where it was installed.
+    [context.binary, `<${context.display}>`],
     [homedir(), '<home>'],
-  ].filter(([from]) => typeof from === 'string' && from.length > 0)
-  return (text) => {
-    let out = String(text ?? '')
-    for (const [from, to] of pairs) out = out.replaceAll(from, to)
-    // A last sweep over ANY user home a transcript happens to name — a second checkout, a runner's
-    // own account, a path this process's own `homedir()` does not match. Cheap, and the alternative
-    // is discovering the one it missed inside a committed evidence file.
-    return out.replaceAll(/(?:\/Users|\/home|\/root)\/[^/\s"']+/g, '<home>')
-  }
+  ]
+  return (text) => redactPaths(text, pairs)
 }
 
 /**
@@ -581,7 +613,7 @@ function call(context, { args, cwd, env, name }) {
     maxBuffer: 64 * 1024 * 1024,
   })
   const transcript = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
-  const redact = redactor(context)
+  const redact = context.redact
   // REDACT FIRST, THEN SLICE. The other order leaks: a path that straddles the 400-character
   // boundary loses its head, so `<home>/…` arrives as the tail of a home directory that no longer
   // matches the pattern that would have removed it — measured on 2026-09-20, where a codex leg's
@@ -598,6 +630,11 @@ function call(context, { args, cwd, env, name }) {
     signal: result.signal ?? null,
     exit: exitDescription({ status: result.status, signal: result.signal }),
     transcript,
+    // The redacted transcript is what every REASON is built from — the tail, the first line, and
+    // the blocker patterns of {@link invocationLeg}, which used to match against the raw text and
+    // then inline the match. A pattern that matched a path matched a path that had not been
+    // redacted yet.
+    redacted,
     firstLine: redacted.trim().split('\n')[0] ?? '',
     tail: redacted.trim().slice(-400).replaceAll('\n', ' ⏎ '),
     transcriptSha256: sha256(transcript),
@@ -695,9 +732,32 @@ const BLOCKERS = [
   },
   {
     label: 'the client refused to run what it was asked to run',
-    pattern: /permission denied|could not request permission|requires approval|needs approval|approval required|operation not permitted|blocked by the sandbox|sandbox denied/i,
+    // THE CLIENT'S OWN PERMISSION LAYER, and nothing else. A bare `permission denied` or
+    // `operation not permitted` is also what a setup STEP prints when it cannot write a file
+    // (EACCES/EPERM), and that is a genuine FAILURE of the thing this leg exists to measure — so
+    // those two spellings are deliberately absent and only phrases a client says when it is asking
+    // for approval it cannot get are here.
+    pattern:
+      /could not request permission|requires approval|needs approval|approval required|permission to (?:use|run)|blocked by the sandbox|sandbox denied|denied by the sandbox/i,
   },
 ]
+
+/**
+ * Which blocker a transcript shows, or `null` for a transcript that shows none.
+ *
+ * Exported so the suite can hold the SCOPE, which is the part that is easy to get wrong in the
+ * generous direction: a setup step's own `EACCES: permission denied` must reach a FAILURE, because
+ * that is the root's setup failing and the leg's whole subject; only a client asking for an approval
+ * it cannot be given is a blocker. A pattern that matched both would turn every such failure into a
+ * skip, and a skip is what nobody looks at again.
+ */
+export function blockerFor(text) {
+  for (const blocker of BLOCKERS) {
+    const hit = blocker.pattern.exec(String(text ?? ''))
+    if (hit !== null) return { label: blocker.label, match: hit[0] }
+  }
+  return null
+}
 
 /** The one ask of an invocation leg, in the client's own idiom. */
 function setupPrompt(form) {
@@ -794,14 +854,15 @@ function claudeLegs(context) {
       '--output-format',
       'stream-json',
       '--verbose',
-      // The setup command's body RUNS things: `node <root>/runtime/locate.mjs -- plugin status`
-      // and then `plugin setup`. A headless run cannot answer a permission prompt, so without a
-      // grant the leg measures the client's permission model instead of the root — which is what
-      // the Copilot leg measured on 2026-09-20 ("Permission denied and could not request
-      // permission from user"). The grant is the NARROW documented one, one tool, and the leg's
-      // instrument is still the manifest file rather than anything the model said.
+      // The setup command's body RUNS things, and every one of them has the same shape:
+      // `node "${CLAUDE_PLUGIN_ROOT}/runtime/locate.mjs" -- plugin status|setup …`. A headless run
+      // cannot answer a permission prompt, so without a grant the leg measures the client's
+      // permission model instead of the root — which is what the Copilot leg measured on
+      // 2026-09-20 ("Permission denied and could not request permission from user"). The grant is
+      // therefore the narrowest form that covers those commands and nothing else: one tool, and
+      // within it only `node`. The leg's instrument is still the manifest file on disk.
       '--allowed-tools',
-      'Bash',
+      CLAUDE_BASH_GRANT,
     ],
     cwd: repo,
     // Inherited: this client's login lives in the operator's own home, outside the scratch
@@ -910,7 +971,7 @@ function copilotLegs(context) {
   // listing run in this checkout reported 20 project skills and one plugin skill.
   const listing = call(context, { args: ['skill', 'list'], cwd, env })
   const listingLabel = 'the unauthenticated copilot skill list in a scratch COPILOT_HOME'
-  const sources = listing.status === 0 ? [{ label: listingLabel, transcript: listing.transcript }] : []
+  const sources = listing.status === 0 ? [{ label: listingLabel, transcript: listing.redacted }] : []
 
   if (!context.invoke) {
     const discovery =
@@ -920,44 +981,71 @@ function copilotLegs(context) {
     return [install, discovery, leg('invocation', 'SKIPPED', 'needs --invoke')]
   }
 
-  // The REAL home, because the login lives there and the leg is worthless without one. Installed,
-  // measured, and removed in the `finally` below; both removal subcommands were read off
-  // `copilot plugin --help` and `copilot plugin marketplace --help` on 2026-09-20.
+  // The REAL home, because the login lives there and the leg is worthless without one — which makes
+  // the operator's own state the thing to be careful with. Probe first, install inside the guarded
+  // region, remove from the `finally` AND from a signal.
   const realEnv = process.env
   const repo = scratchRepository(context, 'copilot')
-  const realAdd = call(context, { args: ['plugin', 'marketplace', 'add', context.dist], cwd: repo, env: realEnv })
+  const existing = operatorAlreadyHas(context, {
+    cwd: repo,
+    env: realEnv,
+    names,
+    pluginList: ['plugin', 'list', '--json'],
+    marketplaceList: ['plugin', 'marketplace', 'list'],
+  })
+  if (existing.present) {
+    const reason =
+      `a stamity plugin or marketplace is already installed in the operator's home ` +
+      `(${existing.detail}); this leg installs and then removes, and removing would take the ` +
+      `operator's own install with it`
+    return [install, discoveryFrom(context, sources, listing, reason), leg('invocation', 'SKIPPED', reason)]
+  }
+  // `plugin --help` read ONCE, before anything is installed, so the guard's removals are
+  // subcommands this build has — recorded the way the codex leg records its own.
+  const help = call(context, { args: ['plugin', '--help'], cwd: repo, env: realEnv })
+  const removals = removalNote(help, ['uninstall', 'marketplace'])
+  const guard = realHomeGuard(context, {
+    cwd: repo,
+    env: realEnv,
+    removals: [
+      ['plugin', 'uninstall', names.plugin],
+      ['plugin', 'marketplace', 'remove', names.marketplace],
+    ],
+    label: 'copilot',
+  })
   let discovery
   let invocation
   try {
+    const realAdd = call(context, { args: ['plugin', 'marketplace', 'add', context.dist], cwd: repo, env: realEnv })
     const realInstall = realAdd.status === 0 ? call(context, { args: ['plugin', 'install', names.spec], cwd: repo, env: realEnv }) : realAdd
     if (realInstall.status !== 0) {
       const reason = `the real-home install refused (marketplace add ${realAdd.exit}, plugin install ${realInstall.exit}): ${realInstall.tail}`
       discovery = discoveryFrom(context, sources, listing, reason)
       invocation = legFrom('invocation', 'SKIPPED', reason, realInstall, context.version)
-    } else if (context.setupForm === null) {
-      const asked = copilotListing(context, repo, realEnv)
-      if (asked.status === 0) sources.push({ label: 'a copilot -p listing run in the REAL COPILOT_HOME', transcript: asked.transcript })
-      discovery = discoveryFrom(context, sources, asked, `the listing run exited ${asked.exit}: ${asked.tail}`)
-      invocation = noSetupCommand(context)
     } else {
       const asked = copilotListing(context, repo, realEnv)
-      if (asked.status === 0) sources.push({ label: 'a copilot -p listing run in the REAL COPILOT_HOME', transcript: asked.transcript })
+      if (asked.status === 0) sources.push({ label: 'a copilot -p listing run in the REAL COPILOT_HOME', transcript: asked.redacted })
       discovery = discoveryFrom(context, sources, asked, `the listing run exited ${asked.exit}: ${asked.tail}`)
-      // `--allow-all-tools` for the reason measured on 2026-09-20: without it this client answers
-      // the setup command's own shell steps with "Permission denied and could not request
-      // permission from user" and the leg measures the permission model rather than the root. The
-      // narrower `--allow-tool <tools>` is documented but its tool NAMES are not, so the measured
-      // flag is the one used and the run happens in a throwaway repository outside every checkout.
-      const run = call(context, { args: ['-p', setupPrompt(context.setupForm), '-s', '--allow-all-tools'], cwd: repo, env: realEnv })
-      invocation = invocationLeg(context, run, repo, 'the REAL COPILOT_HOME (the login lives there), with the plugin removed afterwards')
+      if (context.setupForm === null) invocation = noSetupCommand(context)
+      else {
+        // `--allow-all-tools` for the reason measured on 2026-09-20: without it this client answers
+        // the setup command's own shell steps with "Permission denied and could not request
+        // permission from user" and the leg measures the permission model rather than the root. The
+        // narrower `--allow-tool <tools>` is documented but its tool NAMES are not, so the measured
+        // flag is the one used and the run happens in a throwaway repository outside every checkout.
+        const run = call(context, { args: ['-p', setupPrompt(context.setupForm), '-s', '--allow-all-tools'], cwd: repo, env: realEnv })
+        invocation = invocationLeg(
+          context,
+          run,
+          repo,
+          `the REAL COPILOT_HOME (the login lives there; ${existing.detail}), with plugin --help ` +
+            `listing ${removals} and the plugin removed afterwards`,
+        )
+      }
     }
   } finally {
-    const uninstalled = call(context, { args: ['plugin', 'uninstall', names.plugin], cwd: repo, env: realEnv })
-    const removed = call(context, { args: ['plugin', 'marketplace', 'remove', names.marketplace], cwd: repo, env: realEnv })
-    console.error(
-      `plugin-route: copilot cleanup - plugin uninstall ${names.plugin} ${uninstalled.exit}; ` +
-        `plugin marketplace remove ${names.marketplace} ${removed.exit}`,
-    )
+    const lines = guard.finish()
+    console.error(`plugin-route: copilot cleanup - ${lines.join('; ') || 'nothing to remove'}`)
   }
   return [install, discovery, invocation]
 }
@@ -988,8 +1076,19 @@ function copilotInstallLeg(context, { names, copilotHome, installed, listed }) {
   if (entry === undefined) {
     return legFrom('install', 'FAIL', `copilot plugin list --json does not name ${names.plugin}: ${listed.tail}`, listed, context.version)
   }
+  // `entry.version` and `entry.source` are the CLIENT's strings, not this script's: they reach a
+  // committed evidence file through the row reason, so they go through the same redactor every
+  // transcript does.
+  const entryVersion = context.redact(String(entry.version ?? ''))
+  const entrySource = context.redact(String(entry.source ?? ''))
   if (entry.version !== context.pluginVersion) {
-    return legFrom('install', 'FAIL', `the installed entry is version ${entry.version}, the root is ${context.pluginVersion}`, listed, context.version)
+    return legFrom(
+      'install',
+      'FAIL',
+      `the installed entry is version ${entryVersion}, the root is ${context.pluginVersion}`,
+      listed,
+      context.version,
+    )
   }
   const deployed = join(copilotHome, 'installed-plugins', names.marketplace, names.plugin)
   if (isDirectory(deployed)) {
@@ -1007,7 +1106,7 @@ function copilotInstallLeg(context, { names, copilotHome, installed, listed }) {
       'install',
       'PASS',
       `marketplace add + plugin install ${names.spec} in a scratch COPILOT_HOME; the entry is ` +
-        `${entry.enabled === true ? 'enabled' : 'DISABLED'} at version ${entry.version} with source "live", so ` +
+        `${entry.enabled === true ? 'enabled' : 'DISABLED'} at version ${entryVersion} with source "live", so ` +
         `${where} was never written and there is no copied tree to compare — a local-path marketplace is loaded ` +
         `live from the distribution (the client's own line: ${installed.tail})`,
       listed,
@@ -1017,7 +1116,7 @@ function copilotInstallLeg(context, { names, copilotHome, installed, listed }) {
   return legFrom(
     'install',
     'FAIL',
-    `nothing was deployed under ${where} and the entry's source is ${JSON.stringify(entry.source)} rather than "live"`,
+    `nothing was deployed under ${where} and the entry's source is ${JSON.stringify(entrySource)} rather than "live"`,
     listed,
     context.version,
   )
@@ -1084,14 +1183,41 @@ function codexLegs(context) {
     ]
   }
 
-  // The REAL CODEX_HOME for the model calls: the login lives there. Installed, measured, removed.
+  // The REAL CODEX_HOME for the model calls: the login lives there. Probe first, install inside the
+  // guarded region, remove from the `finally` and from a signal — see {@link realHomeGuard}.
   const realEnv = process.env
   const realCwd = scratchRepository(context, 'codex')
+  const existing = operatorAlreadyHas(context, {
+    cwd: realCwd,
+    env: realEnv,
+    names,
+    pluginList: ['plugin', 'list', '--json'],
+    marketplaceList: ['plugin', 'marketplace', 'list'],
+  })
+  if (existing.present) {
+    const reason =
+      `a stamity plugin or marketplace is already installed in the operator's home ` +
+      `(${existing.detail}); this leg installs and then removes, and removing would take the ` +
+      `operator's own install with it`
+    return [install, ...blocked(reason)]
+  }
+  // `plugin --help` read before anything is installed, so the guard's removals are subcommands this
+  // build has.
   const help = call(context, { args: ['plugin', '--help'], cwd: realCwd, env: realEnv })
-  const realAdd = call(context, { args: ['plugin', 'marketplace', 'add', context.dist], cwd: context.dist, env: realEnv })
+  const removals = removalNote(help, ['remove', 'marketplace'])
+  const guard = realHomeGuard(context, {
+    cwd: realCwd,
+    env: realEnv,
+    removals: [
+      ['plugin', 'remove', names.spec],
+      ['plugin', 'marketplace', 'remove', names.marketplace],
+    ],
+    label: 'codex',
+  })
   let discovery
   let invocation
   try {
+    const realAdd = call(context, { args: ['plugin', 'marketplace', 'add', context.dist], cwd: context.dist, env: realEnv })
     const realInstall = realAdd.status === 0 ? call(context, { args: ['plugin', 'add', names.spec], cwd: context.dist, env: realEnv }) : realAdd
     if (realInstall.status !== 0) {
       const reason = `the real-home install refused (marketplace add ${realAdd.exit}, plugin add ${realInstall.exit}): ${realInstall.tail}`
@@ -1103,22 +1229,21 @@ function codexLegs(context) {
         cwd: mkdtempSync(join(context.scratch, 'codex-cwd-')),
         env: realEnv,
       })
-      // `plugin --help` was read before anything was installed into the real home, so the removal
-      // subcommand the `finally` below runs is one this build actually has.
-      const removal = help.transcript.includes('remove') ? 'plugin remove' : 'NO remove subcommand'
       discovery =
         listing.status === 0
           ? discoveryFromTranscript(
               context,
               listing,
-              `a codex exec listing run (the REAL CODEX_HOME; plugin --help lists ${removal}, and the ` +
+              `a codex exec listing run (the REAL CODEX_HOME; plugin --help lists ${removals}, and the ` +
                 'plugin was removed afterwards)',
             )
           : legFrom('discovery', 'SKIPPED', `codex exec exited ${listing.exit}: ${listing.tail}`, listing, context.version)
       // The codex container carries NO command class, so there is no `st-setup` to ask for: its
       // README's own setup line is the route, and the prompt names it with the installed root's
-      // real path. The instrument is the same file either way.
-      const cached = join(homedir(), '.codex', 'plugins', 'cache', names.marketplace, names.plugin)
+      // real path. `CODEX_HOME` when the operator exports one, `~/.codex` otherwise — the same
+      // precedence the client itself applies, so the path named is the one the install wrote to.
+      const codexHome = process.env['CODEX_HOME'] ?? join(homedir(), '.codex')
+      const cached = join(codexHome, 'plugins', 'cache', names.marketplace, names.plugin)
       const cachedVersions = directoriesIn(cached)
       const locator = join(cached, cachedVersions[0] ?? '', 'runtime', 'locate.mjs')
       const run = call(context, {
@@ -1134,19 +1259,119 @@ function codexLegs(context) {
         context,
         run,
         realCwd,
-        'the REAL CODEX_HOME (the login lives there); this root carries no st-setup command, so the ' +
-          "prompt names the README's own setup line",
+        `the REAL CODEX_HOME (the login lives there; ${existing.detail}); this root carries no ` +
+          "st-setup command, so the prompt names the README's own setup line",
       )
     }
   } finally {
-    const removedPlugin = call(context, { args: ['plugin', 'remove', names.spec], cwd: realCwd, env: realEnv })
-    const removedMarket = call(context, { args: ['plugin', 'marketplace', 'remove', names.marketplace], cwd: realCwd, env: realEnv })
-    console.error(
-      `plugin-route: codex cleanup - plugin remove ${names.spec} ${removedPlugin.exit}; ` +
-        `plugin marketplace remove ${names.marketplace} ${removedMarket.exit}`,
-    )
+    const lines = guard.finish()
+    console.error(`plugin-route: codex cleanup - ${lines.join('; ') || 'nothing to remove'}`)
   }
   return [install, discovery, invocation]
+}
+
+/**
+ * Is this plugin — or its marketplace — ALREADY installed in the operator's own home?
+ *
+ * Asked BEFORE anything is added, and it decides whether the `--invoke` legs run at all. The legs
+ * install into the real home because that is where the login is, and they remove what they added
+ * afterwards; if the operator was already using this plugin, that removal would take THEIR install
+ * with it. So a pre-existing install is not something to work around — it is a reason to skip, and
+ * the reason says so.
+ *
+ * The listings are parsed as JSON where the client emits it and matched word-wise where it does not,
+ * and the note records which, so a changed output shape reads as a changed shape rather than as an
+ * absent install.
+ */
+function operatorAlreadyHas(context, { cwd, env, names, pluginList, marketplaceList }) {
+  const listed = call(context, { args: pluginList, cwd, env })
+  const rows = installedRows(listed)
+  if (rows.names !== null) {
+    if (rows.names.includes(names.plugin)) {
+      return { present: true, detail: `${context.display} ${pluginList.join(' ')} already names ${names.plugin}` }
+    }
+  } else if (new RegExp(`\\b${names.plugin}\\b`).test(listed.redacted)) {
+    return {
+      present: true,
+      detail: `${context.display} ${pluginList.join(' ')} mentions ${names.plugin} (${rows.note})`,
+    }
+  }
+  const markets = call(context, { args: marketplaceList, cwd, env })
+  if (markets.status === 0 && new RegExp(`\\b${names.marketplace}\\b`).test(markets.redacted)) {
+    return {
+      present: true,
+      detail: `${context.display} ${marketplaceList.join(' ')} already names the ${names.marketplace} marketplace`,
+    }
+  }
+  return {
+    present: false,
+    detail: `neither ${names.plugin} nor the ${names.marketplace} marketplace was in the operator's home before this run`,
+  }
+}
+
+/** The `name`s a client's plugin listing carries, or `null` with the reason it could not be parsed. */
+function installedRows(made) {
+  try {
+    const parsed = JSON.parse(made.transcript.trim())
+    const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.installed) ? parsed.installed : null
+    if (rows === null) return { names: null, note: 'the listing parsed as JSON of an unexpected shape' }
+    return { names: rows.map((row) => String(row?.name ?? '')), note: 'parsed as JSON' }
+  } catch (error) {
+    // Not JSON — a text listing, which the caller matches word-wise instead. The parse failure is
+    // carried into the note rather than dropped: a client that stops emitting JSON should be visible.
+    return { names: null, note: `the listing did not parse as JSON (${error.message})` }
+  }
+}
+
+/**
+ * Remove what a real-home install added — from the `finally` AND from a signal.
+ *
+ * A JavaScript `finally` does not run when the process is killed, and this script is run by an
+ * unattended harness that kills it on a timeout (`scripts/qa/plugin-runs.mjs`). Without a signal
+ * handler, a timeout during a 300-second model call would leave the plugin and the marketplace
+ * installed in the operator's home with nothing on the machine that knows to take them out again.
+ *
+ * Two limits, stated because they shape the harness's own timeout policy rather than being
+ * hidden: a handler cannot interrupt a blocking `spawnSync`, so the removal runs when the client
+ * call in flight returns — and `SIGKILL` cannot be handled at all, which is why the harness sends
+ * `SIGTERM` first and escalates only after a grace period. The removal runs at most once whichever
+ * path reaches it.
+ */
+function realHomeGuard(context, { cwd, env, removals, label }) {
+  let done = false
+  const remove = () => {
+    if (done) return []
+    done = true
+    return removals.map((args) => {
+      const made = call(context, { args, cwd, env })
+      return `${context.display} ${args.join(' ')} ${made.exit}`
+    })
+  }
+  const registered = []
+  for (const signal of ['SIGTERM', 'SIGINT']) {
+    const handler = () => {
+      console.error(`plugin-route: ${label} cleanup on ${signal} - ${remove().join('; ') || 'nothing to remove'}`)
+      // Re-raised with every handler gone, so the caller's signal still means what it said: the
+      // process dies of the signal it was sent, after what it installed has been taken out.
+      for (const [name, fn] of registered) process.off(name, fn)
+      process.kill(process.pid, signal)
+    }
+    registered.push([signal, handler])
+    process.once(signal, handler)
+  }
+  return {
+    finish: () => {
+      const lines = remove()
+      for (const [name, fn] of registered) process.off(name, fn)
+      return lines
+    },
+  }
+}
+
+/** Which removal subcommands a client's own `plugin --help` lists, read before anything is added. */
+function removalNote(help, words) {
+  const found = words.filter((word) => help.redacted.includes(word))
+  return found.length === 0 ? 'NO removal subcommand' : found.join(' and ')
 }
 
 /** The two legs after a leg that could not run: never a pass, always the reason. */
@@ -1190,7 +1415,7 @@ function discoveryFromTranscript(context, made, source) {
       context.version,
     )
   }
-  const resolved = resolveMarkers(context.markers, made.transcript, alternateForms(context.client, context.markers))
+  const resolved = resolveMarkers(context.markers, made.redacted, alternateForms(context.client, context.markers))
   if (made.status !== 0) {
     return legFrom('discovery', 'SKIPPED', `the run exited ${made.exit} before it could list anything (${source}): ${made.tail}`, made, context.version)
   }
@@ -1232,13 +1457,12 @@ function invocationLeg(context, made, repo, homeNote) {
   if (made.spawnFailure !== null) {
     return legFrom('invocation', 'FAIL', `the client could not run: ${made.spawnFailure}`, made, context.version)
   }
-  for (const blocker of BLOCKERS) {
-    const hit = blocker.pattern.exec(made.transcript)
-    if (hit === null) continue
+  const blocker = blockerFor(made.redacted)
+  if (blocker !== null) {
     return legFrom(
       'invocation',
       'SKIPPED',
-      `${blocker.label} (${hit[0]}), so nothing about this root was measured: ${landed.detail} ` +
+      `${blocker.label} (${blocker.match}), so nothing about this root was measured: ${landed.detail} ` +
         `(${homeNote}; the run exited ${made.exit}): ${made.tail}`,
       made,
       context.version,
@@ -1307,12 +1531,17 @@ export function main(argv) {
   const options = parsed.options
 
   const dist = resolve(options.dist)
-  if (!isDirectory(dist)) return usage(`--dist ${options.dist} is not a directory.`)
+  // The two refusals below name the LABEL, not the argument. The caller knows what it passed, and
+  // this stderr is a CI log an operator's absolute home directory has no business being in.
+  if (!isDirectory(dist)) return usage('--dist <dir> is not a directory.')
   // A distribution root is the tree a release publishes, and `release.json` is what makes it one:
   // the four roots, the catalogs and the archives are all described there. A directory that merely
   // contains a `claude/` is not a distribution, and telling the caller so beats half a proof.
   if (!existsSync(join(dist, 'release.json'))) {
-    return usage(`--dist ${options.dist} carries no release.json, so it is not a distribution root (build it with scripts/build-plugin-distribution.mjs).`)
+    return usage(
+      '--dist <dir> carries no release.json, so it is not a distribution root (build it with ' +
+        'scripts/build-plugin-distribution.mjs).',
+    )
   }
 
   const ownScratch = options.scratch === null
@@ -1350,7 +1579,6 @@ export function main(argv) {
         for (const name of ['install', 'discovery', 'invocation']) legs.push(leg(name, 'SKIPPED', `${binary.source} unset`))
       } else {
         const capability = readJson(join(root, CAPABILITY_FILE))
-        const version = probeVersion(binary.path)
         const context = {
           client,
           dist,
@@ -1361,12 +1589,16 @@ export function main(argv) {
           // The printed command names the CLIENT's binary, never the path it was found at: the
           // command string lands in a committed evidence file.
           display: client === 'cursor' ? 'agent' : client,
-          version,
           pluginVersion: capability.version,
           markers: markersFor(client, root, capability),
           setupForm: setupFormFor(client, root, capability),
           rootDigest: treeDigest(root),
         }
+        // Built from the context, then carried ON it: every reason this client's legs compose runs
+        // through the same redactor, including the version banner below — a client-controlled string
+        // that reaches a committed evidence file and has been seen to carry a path.
+        context.redact = redactor(context)
+        context.version = context.redact(probeVersion(binary.path) ?? '') || null
         legs.push(...HANDLERS[client](context))
       }
 
@@ -1399,7 +1631,11 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === SELF) {
   try {
     process.exitCode = main(process.argv.slice(2))
   } catch (error) {
-    console.error(`plugin-route: ERROR - ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`)
+    // The MESSAGE, redacted, and not the stack: a stack frame is a file path, and this line is read
+    // out of a CI log and quoted into a run record. The name of the error class travels with it so a
+    // reader still knows what kind of failure it was.
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+    console.error(`plugin-route: ERROR - ${redactPaths(detail, [[homedir(), '<home>']])}`)
     process.exitCode = 2
   }
 }

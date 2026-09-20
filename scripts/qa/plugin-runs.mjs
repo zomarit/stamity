@@ -20,25 +20,43 @@
 // was built into — see `repoRelativeLabel` in `scripts/qa/run.mjs` and its S-4 comment for why a
 // committed evidence file must not carry a checkout location.
 
-import { spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
+// The SAME sweep the smoke applies to its own reasons: this module quotes the smoke's stderr and its
+// last stdout line into a row reason, and a row reason lands in a committed evidence file.
+import { redactPaths } from '../plugin-route-smoke.mjs'
 
 /** The smoke is a four-client, `--invoke` run: model calls, installs, uninstalls. */
 const SMOKE_TIMEOUT_MS = 1_800_000
+
+/**
+ * After `SIGTERM`, how long the smoke gets before `SIGKILL`.
+ *
+ * Not a courtesy. The smoke installs the plugin into the operator's REAL home for the two clients
+ * whose login lives there, and removes it in a signal handler; a handler cannot interrupt the
+ * blocking client call in flight, so the grace period has to outlast one of those calls (the smoke's
+ * own per-call ceiling is 300 s). Killing without it would leave the operator's home carrying a
+ * plugin this harness installed — which is why the escalation exists rather than `spawnSync`'s
+ * one-shot `timeout`, whose kill signal arrives with no grace at all.
+ */
+const CLEANUP_GRACE_MS = 420_000
+
+/** How much of each stream to keep: the reasons quote a tail and a last line, never the whole run. */
+const STREAM_TAIL = 8192
 
 /** Where the smoke lives, relative to the repository root the caller passes. */
 const SMOKE = ['scripts', 'plugin-route-smoke.mjs']
 
 /**
- * Fold one client's legs into a row.
+ * Fold one client's legs into a row. Exported for `test/qa/pluginRuns.test.ts`.
  *
  * The reason carries ALL FOUR leg lines, in the smoke's own order, plus the transcript hash of
  * every leg that made a client call — the hashes are what a run record cites, and a row whose
  * reason names only the verdict sends the next reader back to a transcript nobody kept.
  */
-function rowFor(client, entry) {
+export function rowFor(client, entry) {
   const legs = entry?.legs ?? []
   if (legs.length === 0) {
     return { client, status: 'not-run', reason: 'the route smoke wrote no leg for this client' }
@@ -57,12 +75,13 @@ function rowFor(client, entry) {
 }
 
 /**
- * The inputs one client's row is bound to, out of the smoke's own `sha256s` map.
+ * The inputs one client's row is bound to, out of the smoke's own `sha256s` map. Exported for the
+ * suite, which is the only caller that can drive it against a report it composed itself.
  *
  * The map is already keyed by logical label, so this selects rather than composes: the client's own
  * entries plus the smoke script every row shares.
  */
-function inputsFor(client, sha256s) {
+export function inputsFor(client, sha256s) {
   return Object.keys(sha256s ?? {})
     .filter((label) => label.startsWith(`dist/${client}/`) || !label.startsWith('dist/'))
     .toSorted()
@@ -70,14 +89,15 @@ function inputsFor(client, sha256s) {
 }
 
 /**
- * Run the route smoke once with `--invoke` and return one row per client.
+ * Run the route smoke once with `--invoke` and return one row per client. Async because the run has
+ * to be ENDED in two steps rather than killed in one — see {@link runSmoke}.
  *
  * `distDir` is the built distribution — the caller's to build, because a harness that built one
  * would be reporting on a tree it had just made rather than on the tree under test. The binaries
  * come from the `STAMITY_<CLIENT>_BIN` variables the smoke reads itself, so a machine with none of
  * them produces four honest `not-run` rows rather than an error.
  */
-export function runPluginClients({ clients, repoRoot, distDir, scratchDir }) {
+export async function runPluginClients({ clients, repoRoot, distDir, scratchDir }) {
   const smoke = join(repoRoot, ...SMOKE)
   if (!existsSync(smoke)) {
     return clients.map((client) => ({ client, status: 'not-run', reason: `${SMOKE.join('/')} is absent` }))
@@ -87,24 +107,25 @@ export function runPluginClients({ clients, repoRoot, distDir, scratchDir }) {
   try {
     const args = [smoke, '--dist', distDir, '--client', clients.join(','), '--invoke', '--json', jsonPath]
     if (scratchDir !== undefined) args.push('--scratch', scratchDir)
-    const result = spawnSync(process.execPath, args, {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      timeout: SMOKE_TIMEOUT_MS,
-      // Inherited wholesale: every client's credentials, config directory and PATH live in this
-      // environment, and the smoke's own scratch homes are what isolate the legs that must be
-      // isolated. A curated subset here would measure a login failure instead of a route.
-      env: process.env,
-      maxBuffer: 64 * 1024 * 1024,
-    })
+    const result = await runSmoke({ args, cwd: repoRoot })
     if (!existsSync(jsonPath)) {
       // Exit 2 is the smoke's "could not run" — bad arguments, or a `--dist` that is not a
-      // distribution root. The row says so with the smoke's own last words rather than a verdict.
-      const detail = `${(result.stdout ?? '').trim().split('\n').at(-1) ?? ''} ${(result.stderr ?? '').trim().slice(-400)}`.trim()
+      // distribution root. The row says so with the smoke's own last words rather than a verdict,
+      // and those words go through the redactor first: they are a child process's stderr, and this
+      // reason is written into `.stamity/evidence/`.
+      const detail = redactPaths(
+        `${result.stdout.trim().split('\n').at(-1) ?? ''} ${result.stderr.trim().slice(-400)}`.trim(),
+        [
+          [distDir, 'dist'],
+          ...(scratchDir === undefined ? [] : [[scratchDir, '<scratch>']]),
+          [repoRoot, '<repo>'],
+          [homedir(), '<home>'],
+        ],
+      )
       return clients.map((client) => ({
         client,
         status: 'not-run',
-        reason: `the route smoke wrote no --json document (exit ${String(result.status)}): ${detail}`,
+        reason: `the route smoke wrote no --json document (${result.exit}): ${detail}`,
       }))
     }
     const report = JSON.parse(readFileSync(jsonPath, 'utf8'))
@@ -115,4 +136,60 @@ export function runPluginClients({ clients, repoRoot, distDir, scratchDir }) {
   } finally {
     rmSync(work, { recursive: true, force: true })
   }
+}
+
+/**
+ * Run the smoke to completion, or end it in two steps.
+ *
+ * `spawnSync`'s `timeout` sends one signal and offers no grace, which is the wrong shape for a child
+ * that has the operator's home to tidy. So: `SIGTERM` at the ceiling, then `SIGKILL` only after
+ * {@link CLEANUP_GRACE_MS}, and the row reason records which of the two ended it.
+ */
+function runSmoke({ args, cwd }) {
+  return new Promise((settle) => {
+    const child = spawn(process.execPath, args, {
+      cwd,
+      // Inherited wholesale: every client's credentials, config directory and PATH live in this
+      // environment, and the smoke's own scratch homes are what isolate the legs that must be
+      // isolated. A curated subset here would measure a login failure instead of a route.
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    const keep = (buffer, chunk) => `${buffer}${chunk}`.slice(-STREAM_TAIL)
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (chunk) => {
+      stdout = keep(stdout, chunk)
+    })
+    child.stderr.on('data', (chunk) => {
+      stderr = keep(stderr, chunk)
+    })
+
+    let ended = null
+    let killTimer = null
+    const termTimer = setTimeout(() => {
+      ended = 'SIGTERM after the harness ceiling'
+      child.kill('SIGTERM')
+      killTimer = setTimeout(() => {
+        ended = `SIGKILL ${CLEANUP_GRACE_MS} ms after SIGTERM`
+        child.kill('SIGKILL')
+      }, CLEANUP_GRACE_MS)
+    }, SMOKE_TIMEOUT_MS)
+
+    const done = (status, signal, error) => {
+      clearTimeout(termTimer)
+      if (killTimer !== null) clearTimeout(killTimer)
+      const how =
+        error !== undefined
+          ? `the smoke could not be spawned: ${error.message}`
+          : signal !== null && signal !== undefined
+            ? `killed by signal ${signal}${ended === null ? '' : ` (${ended})`}`
+            : `exit ${String(status)}`
+      settle({ stdout, stderr, status: status ?? null, signal: signal ?? null, exit: how })
+    }
+    child.on('error', (error) => done(null, null, error))
+    child.on('close', (status, signal) => done(status, signal))
+  })
 }

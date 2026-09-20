@@ -511,7 +511,7 @@ export async function main(argv) {
   const pluginResults =
     options.skipPlugins || distDir === undefined
       ? []
-      : runPluginClients({
+      : await runPluginClients({
           clients: options.clients,
           repoRoot: REPO_ROOT,
           distDir,

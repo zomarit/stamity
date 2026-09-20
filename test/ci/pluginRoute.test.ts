@@ -201,12 +201,23 @@ describe("the structure leg over a real distribution", () => {
       cpSync(dist, broken, { recursive: true });
       rmSync(join(broken, "claude", "commands", "st-work.md"));
 
+      // The two numbers are DERIVED, not typed: the declaration comes from the root's own capability
+      // file and the tree count is that number less the one file this case removed. A literal 10 here
+      // would be a pin that drifts the next time the corpus gains a touchpoint, and the case would
+      // then fail for a reason that has nothing to do with the behaviour it guards.
+      const declared = (
+        JSON.parse(readFileSync(join(dist, "claude", "stamity-plugin.json"), "utf8")) as {
+          classes: Record<string, { count?: number }>;
+        }
+      ).classes["command"]?.count;
+      expect(declared, "the claude root declares no command count").toBeGreaterThan(1);
+
       const { run, report } = smokeWithJson(["--dist", broken, "--client", "claude"]);
       expect(run.status).toBe(1);
       const structure = legOf(report, "claude", "structure");
       expect(structure.status).toBe("FAIL");
-      expect(structure.reason).toContain("declares command 10");
-      expect(structure.reason).toContain("commands/ holds 9 file(s)");
+      expect(structure.reason).toContain(`declares command ${String(declared)}`);
+      expect(structure.reason).toContain(`commands/ holds ${String((declared ?? 0) - 1)} file(s)`);
       // A root the smoke refused is never handed to a client, and the three legs say so rather
       // than reading as "not armed".
       expect(legOf(report, "claude", "install").reason).toContain("the structure leg failed");
@@ -241,6 +252,37 @@ describe("the structure leg over a real distribution", () => {
     const structure = legOf(report, "copilot", "structure");
     expect(structure.reason).toContain("agent-plugins-1.0.0.schema.json");
     expect(structure.reason).toContain("logo");
+  });
+});
+
+describe("blockerFor — which transcripts mean 'nothing was measured'", () => {
+  /**
+   * The scope of this classifier is the whole point, and it is easy to get wrong in the generous
+   * direction. An invocation leg that finds no manifest reports `SKIPPED` when the CLIENT refused to
+   * run what it was asked to run, and `FAIL` otherwise — so a pattern matching a bare
+   * `permission denied` would turn the setup command's OWN `EACCES` into a skip, and a skip is what
+   * nobody reads again.
+   */
+  it("reads a client's approval refusal and a usage limit as blockers, in that order", async () => {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { blockerFor } = await import("../../scripts/plugin-route-smoke.mjs");
+
+    expect(blockerFor("Permission denied and could not request permission from user")?.label).toBe(
+      "the client refused to run what it was asked to run",
+    );
+    expect(blockerFor("ERROR: You've hit your usage limit. Visit …")?.label).toBe("the client never reached its model");
+    // A model never reached also prints the words a refusal prints; the first pattern wins so the
+    // reason names the cause rather than the symptom.
+    expect(blockerFor("usage limit reached; could not request permission")?.match).toBe("usage limit");
+  });
+
+  it("reads a setup step's own EACCES as no blocker at all, so the leg stays a FAILURE", async () => {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { blockerFor } = await import("../../scripts/plugin-route-smoke.mjs");
+
+    expect(blockerFor("Error: EACCES: permission denied, open '/x/.stamity/manifest.json'")).toBeNull();
+    expect(blockerFor("EPERM: operation not permitted, mkdir")).toBeNull();
+    expect(blockerFor("plugin setup wrote 12 files")).toBeNull();
   });
 });
 
