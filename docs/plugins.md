@@ -56,6 +56,16 @@ The reasons, one line each, are the ones each container declares in its own capa
 - **Every client, mcp** — MCP server selection and its credential references are one repository's
   decision, never a plugin's.
 
+One consequence of that split is worth knowing before you move clients over one at a time. The
+vendor-neutral `.agents/skills/` tree is **co-owned**: it stays written while any client still in
+generated mode reads it, and a client whose plugin carries `skill` simply stops being one of its
+owners (`src/emit/ownership.ts`, `sharedProjectionOwners`). So a plugin-backed client sitting
+beside a generated one that reads that tree receives the same skills twice by construction — once
+from its plugin, once from the shared tree. `plugin-duplicates` does not report it, and that is
+deliberate rather than a blind spot: removing the tree would strip the generated client of the
+skills it has no other route to. The way out is not to delete anything, it is to move the last
+reader onto the plugin too, at which point the tree has no owners left and is reclaimed.
+
 The same split is rendered from the container modules themselves, with each client's dated source
 URL, under **Plugin containers** in [the capability matrix](capability-matrix.md).
 
