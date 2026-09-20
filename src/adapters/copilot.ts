@@ -706,14 +706,33 @@ function yamlScalar(value: string): string {
 }
 
 /**
- * PascalCase selects canonical tool names and matcher aliases in Copilot.
+ * The event name's CASING selects the PAYLOAD FORMAT, not a cosmetic spelling.
+ *
+ * Measured against the hooks reference on 2026-09-20 (this comment previously
+ * said PascalCase "selects canonical tool names and matcher aliases", which is
+ * not what the page documents): a camelCase event name delivers camelCase
+ * payload fields, while the PascalCase alias delivers the VS Code compatible
+ * format — `hook_event_name`, `session_id`, and an ISO timestamp. Writing the
+ * PascalCase key under `hooks` therefore chooses a wire format for every entry
+ * under it.
+ *
+ * Emitting `CLAUDE_EVENT_NAMES` here is safe on measured grounds rather than by
+ * assumption. The portable runner normalizes the payload before any script
+ * reads it — it injects `hook_event_name` and fills `session_id` from the
+ * camelCase `sessionId` (`../hooks/portableRunner.ts`) — so the generated
+ * scripts see the same fields under either casing. And the alias is not
+ * universal: four vendor events (`notification`, `permissionRequest`,
+ * `subagentStart`, `userPromptTransformed`) have no PascalCase alias on that
+ * page at all, so a row on one of them can only ever be keyed camelCase.
  *
  * Every literal below is this client's wire vocabulary, read from the hooks
  * reference listed in {@link COPILOT_DIALECT_FACTS.citations}: the entry `type`
  * (`"command"`), the working directory key `cwd` (repository-relative, `"."`
  * being the repository root), the `matcher` key, and the seconds-valued
  * `timeoutSec` this engine rounds the portable milliseconds up into.
- * https://docs.github.com/en/copilot/reference/hooks-reference (accessed 2026-09-17)
+ * https://docs.github.com/en/copilot/reference/hooks-reference (casing fact
+ * re-read 2026-09-20; the `citations` entry above still carries the 2026-09-17
+ * currency-pass date, which no claim here depends on)
  */
 export function buildCopilotHooksJson(rows: readonly HookInterchange[]): string {
   const hooks: Record<string, object[]> = {};
