@@ -434,6 +434,17 @@ bounded by the vendor's at-most-every-10-minutes re-index; for Codex,
 the earlier pin where none does" (`docs/plugins.md:227-263`), which is what the lifecycle proof will
 walk and what REQ-PLUGIN-021's per-client row already anticipated.
 
+As built (2026-09-21), two facts the lifecycle fixture settled. The `rollback` subcommand this
+requirement published as NOT ESTABLISHED is settled against the installed client: claude 2.1.278
+answers `error: unknown command 'rollback'`, so the route the page prints — re-adding the
+marketplace at the previous tag and installing again — IS the route, and `plugin update --scope
+project` is the completing command, because the documented re-add plus install answers "already
+installed" and leaves the recorded version where it was. The four measured routes are recorded under
+REQ-PLUGIN-021 rather than restated here. And the fixture's marker skill is authored under a BARE
+slug (`fork/skills/fixture-marker/`, not `st-fixture-marker`): the generator refuses an
+`st-`-prefixed fork directory, so a fork-layer id carrying the upstream prefix is not a shape a
+fixture — or a downstream fork — can use.
+
 ### REQ-PLUGIN-014 Manifest records plugin-backed mode additively
 
 Given the manifest schema, When the plugin fields are added, Then `MANIFEST_VERSION` is unchanged,
@@ -524,6 +535,13 @@ no requirement covered is recorded here rather than given an id of its own (ledg
 `src/emit/hooksInfra.ts` raises a planning warning when an accepted user or pack hook row cannot
 reach a plugin-backed client, because that client's hook configuration now comes from the plugin.
 
+As built (2026-09-21), one row of the runtime surface these doctor rows share: the `node` row is
+never `unstated` when no root's locator answers. `requiredNodeRange()` moved out of its private home
+in `check.ts` into the shared probe, where `engineNodeFacts()` reads this build's declared
+`>=22.22.2` and computes `ok` against it, and ONE exported tri-state `judgeNodeFloor` is called by
+both readers, so `check`'s row stays byte-identical arm by arm instead of two surfaces composing the
+same judgment twice.
+
 ### REQ-PLUGIN-017 Explicit facts and gates replace placeholders
 
 Given `stamity config set gates.test "npm run test:unit"`, When the charter is rendered, Then its
@@ -544,6 +562,13 @@ the sysexits translation and every failure exits 1 with the kind in `error.code`
 build/34). The `unconfigured` list of `stamity plugin status` names detected facts with
 `stamity config detect` and gates with `stamity config set gates.<k>`, never lists a gate that is
 already pinned, and lists nothing at all before a manifest exists.
+
+As built (2026-09-21), one flag of the same status surface, recorded here because this is the
+requirement that governs what `plugin status` reports (REQ-PLUGIN-016 governs the doctor rows and
+neither paragraph names a flag): `--client <csv>` on `status` narrows the `clients` rows in `TOOLS`
+order through the same `parseClients` validator `setup` uses, so one flag has one refusal on both
+verbs rather than a second one written for `status`; its code is `CONFIG_ERROR`, the validator's own,
+not the `VALIDATION_ERROR` a separate refusal would have introduced.
 
 ### REQ-PLUGIN-019 Coexistence is detected and nothing is rewritten silently
 
@@ -596,6 +621,12 @@ the LAST reader onto the plugin, at which point the tree stops being written and
 delivery ends; a verdict from this row would not have that effect. The behaviour is pinned as a
 decision by the mixed-repository case in `test/cli/commands/check.test.ts`.
 
+As built (2026-09-21): the `duplicates` entries of `plugin status --json` carry `source` and `remedy`
+beside their paths — the same three sources and three remedies `check`'s `plugin-duplicates` row
+prints, read off the same finding — so the paragraph's "with the same list" clause holds field by
+field rather than by count, and a JSON consumer reaches the remedy without re-deriving it from the
+source.
+
 ### REQ-PLUGIN-020 Per-client install, discovery and invocation proof
 
 Given each built root, When the client proof runs, Then the installed tree's per-file sha-256
@@ -633,6 +664,67 @@ byte-identical over its 48 files, while `codex exec` refused with 401 in the scr
 usage limit with a credential carried in once, so whether `exec` loads plugin skills is unproven
 and the codex leg asserts the installed tree.
 
+As built (2026-09-21) — the proof exists, and its legs are split by what a credential gates rather
+than by client. `scripts/plugin-route-smoke.mjs` walks structure, install, discovery and invocation
+per client, exits 0 only when no leg failed, 1 on a failure and 2 when it could not run, and writes
+the `--json` document the CI job and the QA harness both read; `test/ci/pluginRoute.test.ts` runs the
+structure leg always and each install and discovery leg under `describe.skipIf` on
+`STAMITY_<CLIENT>_BIN`; `scripts/qa/plugin-runs.mjs` writes rows `H4a`–`H4d`. What blocks a merge is
+the credential-free half, and it is stated by mechanism because the boundary falls through the middle
+of discovery: each root's STRUCTURE (every carried class re-counted out of the tree and each
+container manifest validated against its vendored document — a root with `commands/st-work.md`
+removed fails naming both numbers), each client's INSTALL, and the discovery a credential-free
+listing command can answer. Discovery read from an invocation TRANSCRIPT, and every invocation leg,
+are credential-bound: they run nightly behind per-client secrets — one secret per step, and no step
+that runs a vendor's code holds any — and on the maintainer's machine through the QA harness. Each
+invocation leg carries the client's own documented tool grant, narrowed to what that leg runs,
+because without one a headless run measures the client's permission model instead of the root
+(`Permission denied and could not request permission from user`, measured); the hook-driving runner
+legs carry one for the same reason. The invocation INSTRUMENT is a file, never the model's reply:
+`.stamity/manifest.json` carrying `plugin.mode: "plugin-backed"` and `plugin.clients.<client>`. A leg
+that could not run is `SKIPPED` or `not-run` with its cause and is counted apart from the passes,
+never as green — including a leg that never reached its model at all (a usage limit, a missing login),
+which is SKIPPED with that cause and kept apart from a refusal as well as from a pass, and an
+invocation leg that finds a stamity plugin already installed in the operator's own home, which is
+SKIPPED rather than measured because the cleanup afterwards would take the operator's install with
+it.
+
+Five literals of the paragraph moved with the measurements (2026-09-21). The installed-tree
+comparison holds WHERE THE CLIENT COPIES A TREE — Codex's cache, a remote Copilot marketplace install
+— and a local-path Copilot marketplace on 1.0.85 is loaded LIVE (`"source": "live"`, nothing copied,
+`installed-plugins/` never written), where the leg instead proves the client's own resolved entry
+(name, version, enabled, source) and states which of the two it proved. The Copilot route is the
+MARKETPLACE route (`copilot plugin marketplace add <dist>` then `copilot plugin install
+stamity@stamity`), the direct install being deprecated on 1.0.85; and because skill precedence is
+first-found with a project's own skills ahead of a plugin's, the Copilot listing leg runs in a
+scratch directory — inside this checkout the same command reports 20 project skills and one plugin
+skill. The Codex container carries no command and no agent class, so `st-work` cannot be in that root
+and no `st-setup` is generated for it: its discovery marker is a carried skill under the `$<id>` form
+(`st-qa`), its invocation asks for the setup line the root's own README prints, and its cache tree is
+byte-identical over 45 files with the runtime excluded. `codex exec` refused with a usage limit, so
+both Codex model legs are SKIPPED with that cause. And the expected ids resolve under each client's
+DECLARED form, not a bare one: the Claude listing printed `/stamity:st-work` and
+`@stamity:stamity-reviewer` and NOT the bare `/st-work` — the client advertises only the namespaced
+form, and whether the bare form also resolves is not measurable headlessly, which is the measurement
+the inbox row of 2026-09-17 on client-neutral cross-references waited for — while the Cursor listing
+printed `/st-work` and `/stamity-reviewer`. With all four binaries armed the `--invoke` run reported
+13 passed, 0 failed, 3 skipped in 17 m 47 s against a distribution built from a packed tarball. The
+QA form's four rows fold their legs WEAKEST-FIRST — any `SKIPPED` leg makes the row `not-run`, any
+`FAIL` makes it `failed` — and the harness at `5429d3e` wrote `H4a`, `H4b` and `H4c` `passed` with
+`H4d` `not-run` for the usage limit; that evidence file is kept out of the checkout and V6 re-measures
+at the candidate, because a pre-fix build sliced transcript tails before redacting and one reason
+carried part of the operator's home path.
+
+CI and nightly host the two halves of that split (2026-09-21). The `plugin-route` job is
+merge-blocking through `all-ci-checks`: it builds the four roots with the release workflow's own three
+lines from the packed tarball, installs the four vendor CLIs one step each under
+`continue-on-error`, exports `STAMITY_<CLIENT>_BIN` for every binary `command -v` finds, and runs the
+smoke WITHOUT `--invoke`, so no secret reaches it and a client whose install fails is a `SKIPPED` leg
+rather than a red job. Nightly's drive step carries the invocation legs behind four secrets, each
+mapped to the variable its client honours as measured from the binaries, with one notice per absent
+secret, `--invoke` scoped to the armed clients, and a 45-minute ceiling derived from the measured
+distribution build.
+
 ### REQ-PLUGIN-021 Upgrade and rollback proof
 
 Given two fixture versions of the distribution pushed to a fixture repository, When a consumer
@@ -646,6 +738,48 @@ and Codex per the vendor pages of 2026-09-17, and Claude Code unless its CLI lis
 execution time) records the reinstall-at-previous-pin route instead, and the QA row `H5` says
 which route was walked per client.
 
+As built (2026-09-21) — the fixture exists and the four routes are MEASURED rather than conditional.
+`scripts/plugin-lifecycle-fixture.mjs` builds `1.9.0-fixture.1` and `1.9.0-fixture.2` from one temp
+copy of the checkout, writes the marker skill into that copy's fork layer, and commits each tree as an
+orphan commit into `<out>/remote.git` under `plugins/v<version>` with the distribution branch at the
+second; both commits take one fixed author and both dates from `release.json`'s `sourceCommitDate`, so
+two runs produce the same two shas. The two trees differ in 13 added, 8 removed and 17 changed paths,
+every one accounted for by the version string, the archive digests, the skills count in each
+capability file, or the marker. The walk ran for real on this machine across all four clients: 36
+rows, every one PASS but the Cursor marketplace add and the two Claude rollback rows, which are
+SKIPPED with their reasons, captured line by line through a `STAMITY_LIFECYCLE_LOG` sink.
+
+The paragraph's conditional clause — "a client whose installed version offers no rollback command" —
+is therefore settled per client, and each route is the one that client's own CLI admits. Claude Code
+2.1.278 has NO `plugin rollback` (`error: unknown command 'rollback'`), so its rollback IS the
+reinstall route; `--scope project` is required on install AND update (`plugin update` defaults to user
+scope and refuses, and the observed states are `up_to_date` at `.1`, `updated` from `.1` to `.2` and
+`updated` back as the source moves); and a local bare repository is NOT a Claude marketplace source
+(`Path does not exist`, `Invalid marketplace source format`), so the walk clones at the tag and
+rewrites only the CLONE's catalog entry to a relative root, never adding the fixture remote directly.
+GitHub Copilot CLI 1.0.85 loads a local marketplace LIVE (`Installed 10 skills`, nothing copied,
+`plugin update` → `nothing to update`), so its update and its rollback are tree replacement. codex-cli
+0.154.0 copies into `$CODEX_HOME/plugins/cache/stamity/stamity/<version>`, and `plugin add` again is
+BOTH its update and its rollback once the marketplace has moved (`marketplace upgrade` refreshes git
+sources only, and `plugin remove` needs `<plugin>@<marketplace>` to purge the cache). The Cursor agent
+2026.09.15's `plugin marketplace add` takes a git URL and needs an account (`Authentication
+required`), so that row is SKIPPED with its reason and the walk is `--plugin-dir` tree replacement,
+driven at each of the three states — the marker id appears only in the `.2` listing, 18 ids at `.1`
+and 19 at `.2`.
+
+Every assertion the paragraph makes held on each walked route (2026-09-21): the installed tree's
+sha-256 map equalled the shipped root (claude 694 of 695 files, copilot 694/695, codex 681/682, the
+remainder being the client's own install record), `plugin setup` then `plugin status --json` through
+each root's locator reported `not-applicable` before setup and `compatible` in all three states after
+for all four clients, and the repository-owned map (17 files; 6 for cursor) was unchanged at every
+step, the project's only install-time change being `.claude/settings.json`'s `enabledPlugins`. Each
+walk ran in a scratch configuration directory or home with no credential read, copied or printed,
+except the Cursor listing leg, which inherits the operator's environment because a scratch home
+refuses with `Authentication required` — stated in the row, with a cleanup that deletes only that
+walk's own chat records. The QA row `H5` and its `rollback-documented` row belong to the harness lane
+that appends `H5` after the route proof's rows land, and that row reads as the failed route it is
+where a documented command does not complete the rollback.
+
 ### REQ-PLUGIN-022 Downstream-customized packages proof
 
 Given the fork fixture of `test/ci/downstreamFixture.ts`, When the generator runs in that checkout,
@@ -655,6 +789,37 @@ patched ids with the patch witness appended, the unmodified upstream ids byte-id
 unforked build, the root's `stamity-plugin.json` carries the fixture's `sourceCommit`, and the
 catalog files carry the fixture's publisher and repository url with 0 occurrences of the canonical
 url.
+
+As built (2026-09-21): `test/ci/pluginDownstream.test.ts` builds THREE distributions from ONE fork
+checkout — the fork layer present, removed, and back as an empty directory — with
+`scripts/build-plugin-distribution.mjs` spawned from that checkout, a stub runtime carrying the fork's
+own package name and no `--source-commit` override, so the three trees share one corpus, one identity
+and one HEAD. Every clause above is proven against the 60-pair `EXPECTED_PLUGIN_FILES` oracle: the
+fork's body bytes for every replaced id with 0 occurrences of the upstream body under each of 12
+replaced documents, the fork-only ids once each under their bare directories, no surviving
+`upstream.txt`, no consumer override in any root, the fixture's HEAD as `sourceCommit` in four
+capability files and in `release.json`, the fork's owner and https source in every catalog that carries
+one (Codex carries neither, asserted absent), and the canonical owner absent from all 133 non-zip
+files. The differing shared-root set against the unforked build is pinned exactly at 24 replaced or
+patched documents plus 5 corpus-derived files.
+
+Three facts the paragraph does not state (2026-09-21). The identity proof includes the package NAME
+beside the publisher and the url, because `runtime.companion.package` is `package.json` `name` and a
+fork that renames the package renames what its own plugin looks for — an opt-in case under
+`STAMITY_FORK_SUITE=1` builds the distribution inside a renamed `private: true` copy of the whole tree
+and finds the renamed identity in its catalogs. An EMPTY `fork/` reproduces the no-fork distribution
+byte for byte over 131 files, which is the plan cell's first edge case met exactly. And the non-github
+mirror is addressed through a `git-subdir` source declared under `stamity.distribution.sources`: a
+non-github `repository.url` is itself refused by the identity resolver (REQ-PLUGIN-009's host
+boundary, `:289`), so the cell's second edge case is amended to that reachable form, while a `github`
+kind off github.com stays refused.
+
+Two refusals sit beside the proof (2026-09-21): a case-folded fork collision is refused by the plugin
+writer's lowercased claim map BEFORE any write, naming both contesting paths, on a case-folding and a
+case-sensitive volume alike — a same-directory case twin exits 1 by two routes depending on the host's
+case sensitivity, and the volume is probed rather than assumed — and a fork-skill symlink is refused.
+A failed distribution build removes what it wrote under `--out` rather than leaving partial roots
+behind.
 
 ### REQ-PLUGIN-023 Controlled private chain proof
 
@@ -670,6 +835,14 @@ sha-256 listings equal the A listings, a second Renovate run after the merges op
 contain 0 matches for the leak gate's credential shapes; items the maintainer's fixture plan cannot
 enforce (required-check enforcement on a private plan, the enterprise's own catalog approval) are
 recorded as owner-dependent `Not done` lines, never as passes.
+
+PLANNED (2026-09-21): this requirement stands as the contract and has no proof yet. Its unit is file
+3's V4, the maintainer-run private-chain rehearsal, which needs the maintainer's own fixture
+repositories and a transient personal access token and therefore waits on the maintainer's go; the
+proof of record is that rehearsal's record at
+`.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md` on the day it lands, and until then no
+clause above is claimed as met. The two fixture versions V4 reuses are REQ-PLUGIN-021's, which are
+built and measured.
 
 ### REQ-PLUGIN-024 Documentation and pinned surfaces
 
@@ -728,6 +901,37 @@ each with its `source:` range, rubric and threshold declared under `evals/SET-v7
 committed run artifact under `evals/runs/` records a per-metric score at or above its threshold for
 those cases; and a case that could not execute is recorded as blocked with its reason rather than
 scored.
+
+As built (2026-09-21): the three cases landed under `evals/cases-v6/` and every count they touch moved
+with them. `st-setup-fresh-repository` (golden, rubric, 6 binding / 1 advisory) measures the clean
+first run — `plugin status --json` through the root's own locator first, then `plugin setup --client
+claude -y`, never `init` and never a bare `stamity` on `PATH`, closing on the resolved status and
+claiming no file of a carried class. `st-setup-refuses-generated-setup` (adversarial, refusal, 6/1)
+measures the AS-BUILT refusal rather than the cell's: the migration engine was cut on 2026-09-17, so
+there is no `plugin migrate` preview to show; the run stops for the operator and names `clean -y` then
+`plugin setup`, and one binding row refuses an invented `--apply` or migrate flag as well as the
+operator's assertion that one exists (the refusal exits 1, so the case asserts no exit code).
+`plugin-mode-invocation` (golden, rubric, 5/1) covers a command, an agent AND a skill under their
+namespaced forms — `/stamity:st-plan`, `@stamity:stamity-researcher` and `/stamity:st-verify` with its
+`scripts/` companion resolved inside the root — and its brief states that Cursor, Copilot and Codex
+invocation is proven by REQ-PLUGIN-020's route proof instead of here.
+
+One bound of the coverage gate is stated rather than left to a reader (2026-09-21). `st-setup` is
+GENERATED, not corpus, so the gate admits a governing source outside `content/**` for a command the
+root generates: `parseSource` accepts a `scripts/plugins/<name>.mjs` source beside `.md`,
+`sourcedArtifacts` counts corpus sources only so the coverage sum still compares the five `content/`
+globs against cases and exemptions alone, and `coverage.test.ts` NAMES every case governed outside the
+corpus — so a third such case arrives as a red test rather than as a silent exemption, and no
+coverage-exemption row was added. The harness's own `case-source` guard admits the same pair. The
+recomputed roster is 102 cases — 52 golden, 20 adversarial (16 non-twin guardrails, 4 benign twins),
+30 probes — with 23 floor cases, 523 binding and 52 advisory criteria and 83 non-negotiable rows across
+28 cases, and the four roster-derived literals no test gates moved with it.
+
+The clause about the committed run artifact is NOT met yet (2026-09-21) and is stated as open: run 31
+is prepared and running at candidate `063832d` as an increment over run 30 — 29 calls, five calibration
+fixtures then four cases at three samples for two roles, with 98 cases carried — so the per-metric
+scores for these three cases are recorded when that artifact is committed under `evals/runs/`, before
+the tag, and a case that could not execute is recorded as blocked rather than scored.
 
 ### REQ-PLUGIN-026 Existing routes unchanged
 
