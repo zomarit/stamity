@@ -601,14 +601,18 @@ describe("emission goldens — substitution", () => {
           residue: [],
         });
         // Raw-prefix accounting: the only `${STAMITY:` occurrences allowed to
-        // survive are the ones that never formed a token in the source. The
-        // test-runner body documents the prefix in prose (exactly one, its
-        // unresolved-token detection instruction), so a bare zero-substring
-        // assertion is unsatisfiable there by the artifact's own design;
-        // charter and work carry none, so for them this IS the strict zero.
+        // survive are the ones that never formed a token in the source.
+        //
+        // TEST CHANGE, justified: the one body that carried such an occurrence — the
+        // test-runner agent, which quoted the prefix in prose while describing its own
+        // unresolved-token detection — was reworded by P2a-ii, because a published plugin body
+        // carrying the literal defeats REQ-PLUGIN-004's check that no file under a generated
+        // root contains it. The accounting is unchanged and still computed from the body rather
+        // than asserted as a constant; the per-file expectation is now the strict zero for
+        // every body, which is the stronger statement of the same property.
         const proseOnly = countOf(body.replace(WELL_FORMED_TOKEN, ""), RAW_TOKEN_PREFIX);
         expect(countOf(output, RAW_TOKEN_PREFIX)).toBe(proseOnly);
-        expect(proseOnly).toBe(relPath === "agents/stamity-test-runner.md" ? 1 : 0);
+        expect(proseOnly).toBe(0);
       }
     }
   });

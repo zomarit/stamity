@@ -196,14 +196,18 @@ describe("staging the substituted corpus over the real corpus (REQ-PLUGIN-004)",
     }
     expect(withToken).toEqual([]);
 
-    // REQ-PLUGIN-004 asks for the literal string `${STAMITY:` to be absent from a rendered root.
-    // One corpus body defeats that check without carrying a token: the test-runner agent QUOTES
-    // the prefix while telling the runner what an unresolved gate command looks like, and the
-    // quote has no closing brace. It is prose, not a variable — the engine's own emission ships
-    // it today at `.claude/agents/stamity-test-runner.md` — so the staging leaves it standing
-    // rather than mangling a sentence. Pinned rather than waved through: the day the corpus line
-    // is reworded, this assertion fails and the exception is removed deliberately.
-    expect(withBarePrefix).toEqual(["agents/stamity-test-runner.md"]);
+    // TEST CHANGE, justified: the exception this assertion pinned is GONE, so the assertion
+    // states the stronger property instead. It used to allow one body —
+    // `agents/stamity-test-runner.md`, which quoted the bare prefix `${STAMITY:` as prose while
+    // telling the runner what an unresolved gate command looks like — and it said in as many
+    // words that the day the corpus line was reworded the exception would be removed
+    // deliberately. P2a-ii reworded it (`an unresolved \`STAMITY\` substitution token`), because
+    // REQ-PLUGIN-004 asks for the literal string to be absent from a rendered ROOT and a
+    // published plugin body quoting it would defeat the check a consumer runs. The behaviour
+    // under test did not move: staging still leaves a bare prefix standing rather than mangling
+    // a sentence. What moved is the corpus, and with no body carrying one there is no exception
+    // left to allow.
+    expect(withBarePrefix).toEqual([]);
 
     // The charter is never a plugin body — the layout drops it — so it is copied, not substituted,
     // which is why its own `${STAMITY:INVARIANTS_VERSION}` never trips the refusal above.

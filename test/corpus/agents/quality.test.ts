@@ -318,7 +318,12 @@ describe("test-runner — edge cases", () => {
     // six other bodies), so the body branches on its LEADING word rather than
     // on equality — which is what the rendered value guarantees.
     expect(edges).toMatch(/rendering begins with the\s+literal `unknown`/i);
-    expect(edges).toContain("unresolved `${STAMITY:` token");
+    // TEST CHANGE, justified: the corpus line this pinned was reworded by P2a-ii. It used to
+    // QUOTE the bare token prefix — `${STAMITY:` — and a published plugin body carrying that
+    // literal defeats REQ-PLUGIN-004's check that no file under a generated root contains it.
+    // The agent's behaviour is unchanged and still asserted: an unresolved substitution token is
+    // one of the three not-runnable states. What moved is how the body NAMES that token.
+    expect(edges).toContain("unresolved `STAMITY` substitution token");
     expect(edges).toMatch(/exit 127/);
     expect(edges).toMatch(/reported `not-runnable` with the literal command string quoted/i);
     expect(edges).toMatch(/red verdict, not a silent pass and not an omitted row/i);

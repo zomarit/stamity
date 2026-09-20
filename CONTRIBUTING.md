@@ -4,7 +4,7 @@
      `vitest.config.ts` moves, a type-only dependency exception joins or leaves `knip.json`, or the
      eval set's version bumps — the `evals/` paths below carry that version in their own names.
      `test/docsPages.test.ts` asserts the contributor-gate command, the
-     leak-gate row and four regeneration commands; `test/ci/workflow.test.ts` asserts the two
+     leak-gate row and five regeneration commands; `test/ci/workflow.test.ts` asserts the two
      required status contexts. -->
 
 # Contributing
@@ -185,6 +185,7 @@ next regeneration. For the generator-owned rows that gate is a test. For the las
 | `packs/*/pack.json` integrity maps | `node scripts/generate-pack-manifests.mjs --write` |
 | `.claude-plugin/`, `.cursor-plugin/plugin.json`, `plugin.json` | `node scripts/generate-plugin-manifests.mjs` |
 | `apm.yml`, `.apm/` | `node scripts/generate-apm-package.mjs` |
+| `dist/plugins/` | `node scripts/generate-plugin-packages.mjs --out-dir dist/plugins --runtime <dir>` |
 | `AGENTS.md`, `CLAUDE.md` (its managed block), `.claude/`, `.stamity/generated/` | `npm run build && node dist/cli.js sync` |
 
 Four notes on that table:
