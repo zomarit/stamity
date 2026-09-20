@@ -11,7 +11,9 @@
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
 // Reads outside repo state: the pending call's payload on stdin. Output is a
-// function of that payload and the emitted policy document, not of the repo.
+// function of that payload and one policy document — the emitted one beside
+// this script, or the repository's — and of nothing else. No environment
+// variable selects the document.
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -26,27 +28,33 @@ const BLOCK_EXIT = 2;
 const MCP_PREFIX = "mcp__";
 
 /**
- * The policy document THIS run reads.
+ * The policy document THIS run reads — resolved from the LAYOUT alone.
  *
- * A vendor plugin container ships its own copy of the document and addresses it
- * through the client's root variable, so when one of those variables is set and
- * the container holds `hooks/agent-tool-policies.json`, that copy IS the
- * document for the run. It is not a preference: a container document that
- * exists but is oversized or unparseable is refused by the checks below rather
- * than traded for the repository's, because answering a call from a policy set
- * nobody selected is the one outcome worse than a refusal. With no variable
- * set, or with none of them holding a document, the repository copy the script
- * was emitted beside stands — which is every repository install.
+ * A vendor plugin container places the guard and its copy of the document
+ * together in one `hooks/` directory, so when an
+ * `agent-tool-policies.json` sits beside this script, that copy IS the
+ * document for the run. It is not a preference: a sibling document that exists
+ * but is oversized or unparseable is refused by the checks below rather than
+ * traded for the repository's, because answering a call from a policy set
+ * nobody selected is the one outcome worse than a refusal. With no sibling, the
+ * repository copy the script was emitted beside stands — which is every
+ * repository install.
+ *
+ * NO environment variable enters this. Reading one
+ * (`CLAUDE_PLUGIN_ROOT`/`CURSOR_PLUGIN_ROOT`/`PLUGIN_ROOT`) let a value
+ * belonging to some unrelated tool redirect a repository-mode guard at a
+ * document nobody in this repository wrote, and it contradicted the header
+ * above: the output is a function of the payload and the emitted document, and
+ * an ambient variable is neither. The runner takes the same posture — see
+ * `src/hooks/portableRunner.ts`, where an unexpanded root variable resolves the
+ * script to its own sibling.
  */
 function policyDocumentPath() {
-  const pluginRoot =
-    process.env.CLAUDE_PLUGIN_ROOT ?? process.env.CURSOR_PLUGIN_ROOT ?? process.env.PLUGIN_ROOT;
-  if (typeof pluginRoot === "string" && pluginRoot !== "") {
-    // A native join of two native paths: the root variable is host-native text
-    // the client expanded, never a POSIX literal this generator composed.
-    const candidate = join(pluginRoot, "hooks", "agent-tool-policies.json");
-    if (existsSync(candidate)) return candidate;
-  }
+  const sibling = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "agent-tool-policies.json",
+  );
+  if (existsSync(sibling)) return sibling;
   return POLICY_FILE;
 }
 

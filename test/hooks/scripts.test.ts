@@ -2493,92 +2493,109 @@ describe("the generated scripts under a vendor plugin root", () => {
     },
   ];
 
-  /** A plugin container: `<dir>/hooks/agent-tool-policies.json`, absolute. */
-  async function placePluginRoot(
-    dir: string,
-    document?: string,
-  ): Promise<string> {
+  /**
+   * A plugin container: one `hooks/` directory holding the guard AND the
+   * document, which is the layout every generated root places them in.
+   *
+   * TEST CHANGE (W2, amending REQ-PLUGIN-005): these cases used to set
+   * `CLAUDE_PLUGIN_ROOT` and assert the guard followed it. The contract changed
+   * — the document is resolved BESIDE THE SCRIPT and no environment variable
+   * enters the computation — so a case that sets a variable now proves the
+   * opposite of what it was written to prove. The container is therefore
+   * expressed as a layout rather than as an environment.
+   */
+  async function placeContainerGuard(dir: string, document?: string): Promise<string> {
     if (document !== undefined) {
       await getRepo().seedFiles({ [`${dir}/hooks/${POLICY_FILE}`]: document });
-    } else {
-      await getRepo().seedFiles({ [`${dir}/hooks/.keep`]: "" });
     }
-    return getRepo().path(dir);
+    return place(
+      `${dir}/hooks/guard.mjs`,
+      buildPreToolUseGuardScript({ policiesJsonPath: `../${POLICY_FILE}`, failMode: "fail-closed" }),
+    );
   }
 
+  it("reads the document beside the script when the container carries one", async () => {
+    // `Edit` is ALLOWED by the repository document seeded at the root and
+    // DENIED by the container's — so the verdict names which document was read.
+    await getRepo().seedFiles({ [POLICY_FILE]: buildAgentToolPoliciesJson(ROSTER) });
+    const guard = await placeContainerGuard(
+      "container-sibling",
+      buildAgentToolPoliciesJson(PLUGIN_ROSTER),
+    );
+
+    const blocked = run(guard, { cwd: getRepo().dir, input: call("stamity-implementer", "Edit") });
+
+    expect(blocked.code).toBe(2);
+    expect(refusal(blocked)["reasonCode"]).toBe("TOOL_DENIED");
+  });
+
   it.each(["CLAUDE_PLUGIN_ROOT", "CURSOR_PLUGIN_ROOT", "PLUGIN_ROOT"] as const)(
-    "reads the policy document under %s when the container carries one",
+    "ignores a foreign %s in the environment entirely",
     async (variable) => {
+      // W2: a `PLUGIN_ROOT` belonging to some unrelated tool used to redirect a
+      // repository-mode guard at a document nobody in this repository wrote.
+      // The environment now decides nothing, so the foreign container's
+      // stricter document cannot reach this call.
       const guard = await placeGuard();
-      const root = await placePluginRoot(
-        `container-${variable}`,
-        buildAgentToolPoliciesJson(PLUGIN_ROSTER),
-      );
+      await getRepo().seedFiles({
+        [`foreign-${variable}/hooks/${POLICY_FILE}`]: buildAgentToolPoliciesJson(PLUGIN_ROSTER),
+      });
 
-      // `Edit` is ALLOWED by the repository document seeded beside the guard and
-      // DENIED by the container's — so the verdict names which document was read.
-      const blocked = run(guard, {
+      const result = run(guard, {
         cwd: getRepo().dir,
         input: call("stamity-implementer", "Edit"),
-        env: { [variable]: root },
+        env: { [variable]: getRepo().path(`foreign-${variable}`) },
       });
-      expect(blocked.code).toBe(2);
-      expect(refusal(blocked)["reasonCode"]).toBe("TOOL_DENIED");
 
-      // And the same call with no variable set reads the repository document.
-      const allowed = run(guard, {
-        cwd: getRepo().dir,
-        input: call("stamity-implementer", "Edit"),
-      });
-      expect(allowed.code).toBe(0);
-      expect(allowed.stderr).toBe("");
+      // The repository document allows `Edit`; the foreign one denies it.
+      expect(result).toEqual({ code: 0, stdout: "", stderr: "" });
     },
   );
 
-  it("falls back to the repository document when the container holds none", async () => {
-    const guard = await placeGuard();
-    const root = await placePluginRoot("container-empty");
-
-    const result = run(guard, {
-      cwd: getRepo().dir,
-      input: call("stamity-implementer", "Edit"),
-      env: { CLAUDE_PLUGIN_ROOT: root },
+  it("climbs to the repository document when no sibling document exists", async () => {
+    // The repository layout is the fallback and stays byte-identical: the guard
+    // sits under `hooks/` and the document one level above it.
+    const guard = await placeContainerGuard("container-empty");
+    await getRepo().seedFiles({
+      [`container-empty/${POLICY_FILE}`]: buildAgentToolPoliciesJson(ROSTER),
     });
+
+    const result = run(guard, { cwd: getRepo().dir, input: call("stamity-implementer", "Edit") });
 
     expect(result).toEqual({ code: 0, stdout: "", stderr: "" });
   });
 
-  it("refuses an unreadable container document rather than falling back to a laxer one", async () => {
-    // A container document that EXISTS is the document. Falling back on a parse
+  it("refuses an unreadable sibling document rather than climbing to a laxer one", async () => {
+    // A sibling document that EXISTS is the document. Falling back on a parse
     // failure or an oversized file would answer the call from a policy set
     // nobody selected — the refusal the guard already has for the repository
     // document is the honest outcome here too.
-    const guard = await placeGuard();
-    const unparseable = await placePluginRoot("container-broken", "{ not json\n");
-    const broken = run(guard, {
+    await getRepo().seedFiles({ [POLICY_FILE]: buildAgentToolPoliciesJson(ROSTER) });
+    const unparseable = await placeContainerGuard("container-broken", "{ not json\n");
+    const broken = run(unparseable, {
       cwd: getRepo().dir,
       input: call("stamity-implementer", "Edit"),
-      env: { CLAUDE_PLUGIN_ROOT: unparseable },
     });
     expect(broken.code).toBe(2);
     // The guard's existing catch-all for a document it could not evaluate: the
     // point is the refusal, not a new reason code.
     expect(refusal(broken)["reasonCode"]).toBe("POLICY_EVALUATION_FAILED");
 
-    const oversized = await placePluginRoot(
+    const oversized = await placeContainerGuard(
       "container-oversized",
       `${" ".repeat(MAX_POLICY_FILE_BYTES + 1)}\n`,
     );
-    const large = run(guard, {
+    const large = run(oversized, {
       cwd: getRepo().dir,
       input: call("stamity-implementer", "Edit"),
-      env: { CLAUDE_PLUGIN_ROOT: oversized },
     });
     expect(large.code).toBe(2);
     expect(refusal(large)["reasonCode"]).toBe("POLICY_TOO_LARGE");
-    // The message names the container's document, not the repository's, so an
+    // The message names the sibling document, not the repository's, so an
     // operator reads which file to fix.
-    expect(String(refusal(large)["message"])).toContain(oversized);
+    expect(String(refusal(large)["message"])).toContain(
+      getRepo().path("container-oversized", "hooks", POLICY_FILE),
+    );
   });
 
   it("leaves a git worktree unchanged apart from the state files each script owns", async () => {
@@ -2597,11 +2614,12 @@ describe("the generated scripts under a vendor plugin root", () => {
     });
     expect(git("status", "--porcelain").trim()).toBe("");
 
-    const root = await placePluginRoot(
-      "container-clean",
-      buildAgentToolPoliciesJson(PLUGIN_ROSTER),
-    );
-    const env = { CLAUDE_PLUGIN_ROOT: root };
+    // TEST CHANGE (W2): the container used to be named by `CLAUDE_PLUGIN_ROOT`.
+    // The document is now resolved beside the script, so the container is the
+    // `hooks/` directory the scripts are placed in and there is no environment.
+    await getRepo().seedFiles({
+      [`hooks/${POLICY_FILE}`]: buildAgentToolPoliciesJson(PLUGIN_ROSTER),
+    });
     const scripts: Array<[string, string, string]> = [
       ["session.mjs", buildSessionStartScript(), ""],
       ["notice.mjs", buildConfigTamperNoticeScript(), ""],
@@ -2620,7 +2638,7 @@ describe("the generated scripts under a vendor plugin root", () => {
       scripts.map(async ([name, body]) => place(`hooks/${name}`, body)),
     );
     for (const [index, [, , input]] of scripts.entries()) {
-      run(placed[index]!, { cwd: repo.dir, input, env });
+      run(placed[index]!, { cwd: repo.dir, input });
     }
 
     // Everything the scripts wrote is either untracked state under `.stamity/`
