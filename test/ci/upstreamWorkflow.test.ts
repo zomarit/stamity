@@ -692,6 +692,12 @@ describe("upstream-update.yml — the recovery comparison keeps no copy of the m
     learnings: true,
     hooks: true,
     models: true,
+    // TEST CHANGE, justified: `plugin` and `gates` landed on `SetupManifest` (REQ-PLUGIN-014).
+    // This record is TOTAL over the interface, so the two keys are placed the day they land and
+    // the assertion below then covers their names too — the binding, working as intended. The
+    // assertion itself is untouched: no field is excluded, and the masked field stays `updatedAt`.
+    plugin: true,
+    gates: true,
     importChoice: true,
     toolOptions: true,
     detected: true,

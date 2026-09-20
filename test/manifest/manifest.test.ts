@@ -13,7 +13,10 @@ import {
   manifestPath,
   maturityDirective,
   migrateManifest,
+  pluginOwnedClasses,
   readCommunicationStyle,
+  readGates,
+  readInstallMode,
   readManifest,
   readMaturityTier,
   readReviewCap,
@@ -36,7 +39,13 @@ import {
   type Tool,
 } from "../../src/types/core.ts";
 import { EngineError, type ErrorCode } from "../../src/types/errors.ts";
-import { MANIFEST_VERSION, type SetupManifest } from "../../src/types/manifest.ts";
+import {
+  INSTALL_MODES,
+  INSTALL_MODE_DEFAULT,
+  MANIFEST_VERSION,
+  PLUGIN_OWNED_CLASSES,
+  type SetupManifest,
+} from "../../src/types/manifest.ts";
 import { STATE_DIR } from "../../src/types/markers.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -840,6 +849,266 @@ describe("models — the operator's ladder overrides", () => {
     // sync on an existing repo does not gain an empty block in its diff.
     await writeManifest(root, reread as SetupManifest, { now: FIXED_NOW });
     expect(await readFile(manifestPath(root), "utf8")).toBe(bytes);
+  });
+});
+
+/**
+ * The plugin-backed install record and the operator's pinned gate commands.
+ *
+ * Both fields are additive at the current schema generation, so the first case
+ * IS the contract: a manifest written before they existed parses unchanged,
+ * round-trips without gaining a key, and needs no migration step.
+ */
+describe("plugin and gates — the plugin-backed install record", () => {
+  /** The record REQ-PLUGIN-014 names: claude plugin-backed, four classes carried. */
+  function pluginBacked(): SetupManifest {
+    return {
+      ...fullManifest(),
+      plugin: {
+        mode: "plugin-backed",
+        clients: {
+          claude: { version: "1.9.0", classes: ["agent", "skill", "command", "hooks"] },
+        },
+      },
+    };
+  }
+
+  it("leaves a manifest that sets neither field untouched — no migration, no added key", async () => {
+    const root = getRoot().dir;
+    const manifest = fullManifest();
+
+    await writeManifest(root, manifest, { now: FIXED_NOW });
+    const bytes = await readFile(manifestPath(root), "utf8");
+    const reread = await readManifest(root);
+
+    // Top-level keys rather than a substring search: `toolOptions.claude.plugin`
+    // is a key of the opaque pass-through bag this fixture already carried, and
+    // says nothing about the schema's own field set.
+    const keys = Object.keys(JSON.parse(bytes) as Record<string, unknown>);
+    expect(keys).not.toContain("plugin");
+    expect(keys).not.toContain("gates");
+    expect(MANIFEST_MIGRATIONS).toEqual([]);
+    expect(reread).toEqual(manifest);
+    expect(reread?.plugin).toBeUndefined();
+    expect(reread?.gates).toBeUndefined();
+
+    // ...and writing what was read back produces the same bytes, so a no-op
+    // sync on an existing repo does not gain an empty block in its diff.
+    await writeManifest(root, reread as SetupManifest, { now: FIXED_NOW });
+    expect(await readFile(manifestPath(root), "utf8")).toBe(bytes);
+  });
+
+  it("round-trips a populated plugin and gates block through write -> read deep-equal", async () => {
+    const root = getRoot().dir;
+    const manifest: SetupManifest = {
+      ...pluginBacked(),
+      gates: {
+        test: "npm run test",
+        lint: "npm run lint",
+        typecheck: "npm run typecheck",
+        all: "npm run lint && npm run typecheck && npm run test",
+      },
+    };
+
+    await writeManifest(root, manifest, { now: FIXED_NOW });
+
+    expect(await readManifest(root)).toEqual(manifest);
+  });
+
+  it("serializes `plugin` and `gates` directly after `models`", async () => {
+    const root = getRoot().dir;
+    const manifest: SetupManifest = {
+      ...pluginBacked(),
+      models: { reviewCap: 3 },
+      gates: { test: "npm run test" },
+    };
+
+    await writeManifest(root, manifest, { now: FIXED_NOW });
+    const keys = Object.keys(
+      JSON.parse(await readFile(manifestPath(root), "utf8")) as Record<string, unknown>,
+    );
+
+    const models = keys.indexOf("models");
+    expect(models).toBeGreaterThan(-1);
+    expect(keys.slice(models, models + 3)).toEqual(["models", "plugin", "gates"]);
+  });
+
+  it("accepts the plugin-backed record and reports the classes that client owns", () => {
+    const manifest = pluginBacked();
+
+    expect(collectManifestErrors(manifest)).toEqual([]);
+    expect(readInstallMode(manifest)).toBe("plugin-backed");
+    expect([...pluginOwnedClasses(manifest, "claude")].toSorted()).toEqual([
+      "agent",
+      "command",
+      "hooks",
+      "skill",
+    ]);
+    // A tool with no record owns nothing, even under a plugin-backed manifest.
+    expect([...pluginOwnedClasses(manifest, "cursor")]).toEqual([]);
+  });
+
+  it("owns nothing while the mode is still `generated`, clients map or not", () => {
+    // A repository can record the roots it knows about before it migrates: the
+    // MODE moves ownership, not the presence of a client record.
+    const staged: SetupManifest = {
+      ...fullManifest(),
+      plugin: {
+        mode: "generated",
+        clients: { claude: { version: "1.9.0", classes: ["agent", "skill"] } },
+      },
+    };
+
+    expect(collectManifestErrors(staged)).toEqual([]);
+    expect(readInstallMode(staged)).toBe("generated");
+    expect([...pluginOwnedClasses(staged, "claude")]).toEqual([]);
+  });
+
+  it("defaults the install mode for an absent, unread or plugin-less manifest", () => {
+    expect(readInstallMode(null)).toBe("generated");
+    expect(readInstallMode(undefined)).toBe("generated");
+    expect(readInstallMode(fullManifest())).toBe("generated");
+    expect([...pluginOwnedClasses(null, "claude")]).toEqual([]);
+    expect(INSTALL_MODE_DEFAULT).toBe("generated");
+    expect(INSTALL_MODES).toEqual(["generated", "plugin-backed"]);
+  });
+
+  it("keeps the ownable classes at the content classes plus hooks", () => {
+    // `PLUGIN_OWNED_CLASSES` is built from a total record over the union, so a
+    // new `ContentClass` cannot land without being placed there. This asserts
+    // the derivation rather than a literal that could drift away from it.
+    expect([...PLUGIN_OWNED_CLASSES].toSorted()).toEqual([...CONTENT_CLASSES, "hooks"].toSorted());
+  });
+
+  it("names exactly the one defective key under `plugin`", () => {
+    const cases: [string, unknown, string][] = [
+      ["a mode outside the two", { mode: "other" }, "`plugin.mode`"],
+      ["a missing mode", { clients: {} }, "`plugin.mode`"],
+      ["a plugin that is not an object", "plugin-backed", "`plugin` must be an object"],
+      ["a clients map that is not an object", { mode: "generated", clients: [] }, "`plugin.clients`"],
+      [
+        "an empty class list",
+        { mode: "plugin-backed", clients: { claude: { version: "1.9.0", classes: [] } } },
+        "`plugin.clients.claude.classes`",
+      ],
+      [
+        "a duplicated class",
+        {
+          mode: "plugin-backed",
+          clients: { claude: { version: "1.9.0", classes: ["agent", "agent"] } },
+        },
+        "`plugin.clients.claude.classes`",
+      ],
+      [
+        "a class nothing emits",
+        {
+          mode: "plugin-backed",
+          clients: { claude: { version: "1.9.0", classes: ["agent", "macro"] } },
+        },
+        "`plugin.clients.claude.classes`",
+      ],
+      [
+        "an unknown tool",
+        { mode: "plugin-backed", clients: { vim: { version: "1.9.0", classes: ["agent"] } } },
+        "`plugin.clients.vim`",
+      ],
+      [
+        "a version that is not a version",
+        {
+          mode: "plugin-backed",
+          clients: { claude: { version: "not-a-version", classes: ["agent"] } },
+        },
+        "`plugin.clients.claude.version`",
+      ],
+      [
+        "a client record that is not an object",
+        { mode: "plugin-backed", clients: { claude: "1.9.0" } },
+        "`plugin.clients.claude`",
+      ],
+      ["a stray key under plugin", { mode: "generated", root: "/plugins" }, "unknown field `plugin.root`"],
+      [
+        "a stray key under a client record",
+        {
+          mode: "plugin-backed",
+          clients: { claude: { version: "1.9.0", classes: ["agent"], root: "/plugins" } },
+        },
+        "unknown field `plugin.clients.claude.root`",
+      ],
+    ];
+
+    for (const [label, plugin, fragment] of cases) {
+      const errors = collectManifestErrors({ ...fullManifest(), plugin });
+
+      expect(errors, `${label} must produce one error`).toHaveLength(1);
+      expect(errors[0], label).toContain(fragment);
+    }
+  });
+
+  it("names exactly the one defective gate command", () => {
+    const cases: [string, unknown, string][] = [
+      ["an empty command", { test: "" }, "`gates.test`"],
+      ["a blank command", { lint: "   " }, "`gates.lint`"],
+      ["a two-line command", { typecheck: "npm run typecheck\nnpm run knip" }, "`gates.typecheck`"],
+      ["a carriage-returned command", { test: "npm run test\r\nrm -rf /" }, "`gates.test`"],
+      ["a command past the length cap", { all: "x".repeat(513) }, "`gates.all`"],
+      ["a command that is not a string", { test: 7 }, "`gates.test`"],
+      ["a gate nothing runs", { deploy: "x" }, "unknown field `gates.deploy`"],
+      ["a gates that is not an object", ["npm run test"], "`gates` must be an object"],
+    ];
+
+    for (const [label, gates, fragment] of cases) {
+      const errors = collectManifestErrors({ ...fullManifest(), gates });
+
+      expect(errors, `${label} must produce one error`).toHaveLength(1);
+      expect(errors[0], label).toContain(fragment);
+    }
+  });
+
+  it("accepts a command at the cap and a gates block that pins only `all`", () => {
+    // `gates.all` without `gates.test` is legal: the charter's Tests row falls
+    // back to detection, and the full-gate line is the one the operator pinned.
+    const onlyAll = { ...fullManifest(), gates: { all: "npm run lint && npm run test" } };
+
+    expect(collectManifestErrors(onlyAll)).toEqual([]);
+    expect(collectManifestErrors({ ...fullManifest(), gates: { test: "x".repeat(512) } })).toEqual(
+      [],
+    );
+    expect(readGates(onlyAll)).toEqual({ all: "npm run lint && npm run test" });
+  });
+
+  it("reads an absent gates block as no pinned gates, and hands back a copy", () => {
+    expect(readGates(null)).toEqual({});
+    expect(readGates(undefined)).toEqual({});
+    expect(readGates(fullManifest())).toEqual({});
+
+    const manifest: SetupManifest = { ...fullManifest(), gates: { test: "npm run test" } };
+    const gates = readGates(manifest);
+    gates.test = "echo nothing";
+
+    expect(manifest.gates?.test).toBe("npm run test");
+  });
+
+  it("carries both fields across a regeneration, deep-copied", () => {
+    const previous: SetupManifest = {
+      ...pluginBacked(),
+      gates: { test: "npm run test", all: "npm run lint && npm run test" },
+    };
+    const preserved = extractPreservedManifestFields(previous);
+
+    const fresh = createManifest({
+      tools: ["claude"],
+      selection: { items: { agent: [], skill: [], rule: [], command: [] } },
+      generatorVersion: "2.0.0",
+      now: LATER,
+    });
+    const merged = applyPreservedManifestFields(fresh, preserved);
+
+    expect(merged.plugin).toEqual(previous.plugin);
+    expect(merged.gates).toEqual(previous.gates);
+    expect(validateManifest(merged)).toBe(true);
+    // Deep-copied: the bag outlives the manifest it came from.
+    expect(preserved.plugin).not.toBe(previous.plugin);
+    expect(merged.plugin).not.toBe(previous.plugin);
   });
 });
 

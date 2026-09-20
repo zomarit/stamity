@@ -269,6 +269,16 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
     learnings: { maxCount: 40 },
     hooks: { userHooksDir: ".stamity/hooks" },
     models: { pins: { frontier: "opus-5" }, effort: { frontier: "high" }, reviewCap: 3 },
+    // TEST CHANGE, justified: `SetupManifest` gained `plugin` and `gates` (REQ-PLUGIN-014,
+    // additive and optional, MANIFEST_VERSION unchanged). This fixture is a TOTAL record by
+    // construction, so the two keys are placed here the day they land — which is exactly the
+    // binding it exists for. No assertion is weakened and none is removed: the recovery
+    // comparison below still runs over a manifest carrying EVERY optional key, now two wider.
+    plugin: {
+      mode: "plugin-backed",
+      clients: { claude: { version: "1.9.0", classes: ["agent", "skill", "command", "hooks"] } },
+    },
+    gates: { test: "npm run test", all: "npm run lint && npm run typecheck && npm run test" },
     importChoice: [{ path: "AGENTS.md", mode: "supplement" }],
     toolOptions: { codex: { inlineAppendix: true } },
     detected: {

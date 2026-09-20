@@ -216,6 +216,111 @@ export const RULE_DELIVERIES: readonly RuleDelivery[] = ["always-on", "on-demand
 export const RULE_DELIVERY_DEFAULT: RuleDelivery = "on-demand";
 
 /**
+ * Where a client's generated content comes from: files this engine wrote into
+ * the repository, or a plugin root the client loads for itself.
+ *
+ * `generated` is the shape every setup had before this key existed, and stays
+ * the default — see {@link INSTALL_MODE_DEFAULT}. `plugin-backed` says the
+ * classes named in {@link PluginClientRecord.classes} reach that client from
+ * the plugin, so the engine writes none of them and reclaims none of them: the
+ * ownership boundary is the whole point of recording the mode.
+ */
+export type InstallMode = "generated" | "plugin-backed";
+
+/** The sanctioned {@link InstallMode} values, in the order the CLI lists them. */
+export const INSTALL_MODES: readonly InstallMode[] = ["generated", "plugin-backed"];
+
+/**
+ * What binds when a manifest carries no `plugin` block — including every
+ * manifest written before the key existed, which is why this is a constant
+ * rather than an init-time write. A repo that never heard of a plugin root
+ * generates its own content, exactly as it did before.
+ */
+export const INSTALL_MODE_DEFAULT: InstallMode = "generated";
+
+/**
+ * A class of content a plugin can own on behalf of a client: the four content
+ * classes, plus hooks.
+ *
+ * Hooks are configuration rather than a {@link ContentClass} (see
+ * {@link HooksConfig}), but they are emitted files a plugin can carry, so the
+ * ownership boundary has to be able to name them. That is the one addition —
+ * everything else here is the content model's own vocabulary.
+ */
+export type PluginOwnedClass = ContentClass | "hooks";
+
+/**
+ * Ownable-class order, built from a total record over {@link PluginOwnedClass}
+ * so a new `ContentClass` is a compile error here until it is placed. A hand
+ * written array would silently disagree with the union the day the content
+ * model grows a class — the same device `MANIFEST_FIELD_ORDER` uses one layer
+ * up in `../manifest/manifest.ts`.
+ */
+const PLUGIN_OWNED_CLASS_ORDER: Record<PluginOwnedClass, true> = {
+  agent: true,
+  skill: true,
+  command: true,
+  rule: true,
+  hooks: true,
+};
+
+/** The classes a plugin can own, in declaration order. */
+export const PLUGIN_OWNED_CLASSES = Object.keys(
+  PLUGIN_OWNED_CLASS_ORDER,
+) as readonly PluginOwnedClass[];
+
+/** What one client's plugin carries: the plugin version, and the classes it owns. */
+export interface PluginClientRecord {
+  /** Semantic version of the plugin that installed this client's content. */
+  version: string;
+  /**
+   * The classes the plugin owns for this client — non-empty, no duplicates. A
+   * class listed here is a class the engine neither writes nor reclaims, so an
+   * empty list is a client record that says nothing and is refused as such.
+   */
+  classes: readonly PluginOwnedClass[];
+}
+
+/**
+ * How this repository's setup is installed, and which client owes its content
+ * to a plugin.
+ *
+ * `clients` is legal under either mode: a repository can record the roots it
+ * knows about before it migrates, and only `mode: "plugin-backed"` actually
+ * moves ownership (`pluginOwnedClasses` in `../manifest/manifest.ts` is the
+ * one reader that decides this, so the rule is stated once).
+ */
+export interface PluginConfig {
+  /** Where generated content comes from (see {@link InstallMode}). */
+  mode: InstallMode;
+  /** Per-client plugin records; a tool with no record owns nothing. */
+  clients?: Partial<Record<Tool, PluginClientRecord>>;
+}
+
+/**
+ * The operator's verification-gate commands, as the generated charter should
+ * state them. Absent members fall back to detection — a pinned `all` with no
+ * `test` leaves the Tests row to the detected script, which is why every
+ * member is optional and independently so.
+ *
+ * Validated by SHAPE only — non-empty, single-line, bounded length. The engine
+ * does not run these and ships no catalogue of build tools, so checking a
+ * command against one would be a guarantee it cannot keep; what is checkable
+ * is that the string can carry a command at all and fits on the one line the
+ * generated charter prints it on.
+ */
+export interface GatesConfig {
+  /** Command that runs the test suite. */
+  test?: string;
+  /** Command that runs the linter. */
+  lint?: string;
+  /** Command that runs the type checker. */
+  typecheck?: string;
+  /** Command that runs the full gate in one line. */
+  all?: string;
+}
+
+/**
  * Open per-tool option bag. Adapters narrow their own bag; the engine passes
  * it through and never reads unknown keys.
  */
@@ -265,6 +370,22 @@ export interface SetupManifest {
   hooks?: HooksConfig;
   /** Operator overrides for the model ladder and the review cap (see {@link ModelConfig}). */
   models?: ModelConfig;
+  /**
+   * How this setup is installed and what a plugin owns per client (see
+   * {@link PluginConfig}); absent reads as {@link INSTALL_MODE_DEFAULT}.
+   *
+   * {@link MANIFEST_VERSION} does NOT move for this field, on the
+   * {@link ModelConfig} precedent: it is additive and optional, a manifest
+   * written before it existed parses unchanged and resolves to the default,
+   * and a migration step would have nothing to transform.
+   */
+  plugin?: PluginConfig;
+  /**
+   * Operator-pinned verification-gate commands (see {@link GatesConfig});
+   * absent members fall back to detection. Additive and optional on the same
+   * {@link ModelConfig} precedent as {@link SetupManifest.plugin}.
+   */
+  gates?: GatesConfig;
   /**
    * What to do with the agent-instruction files this repo already had — ONE
    * decision per pre-existing path, not one for the repo. Absent when init
