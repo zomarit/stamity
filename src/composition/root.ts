@@ -120,6 +120,8 @@ import * as reviewCaps from "../roster/reviewCaps.ts";
 import * as agentPolicies from "../roster/agentPolicies.ts";
 import * as agentGrants from "../roster/agentGrants.ts";
 import * as modelLadder from "../roster/modelLadder.ts";
+import * as pluginCapabilityFile from "../plugins/capabilityFile.ts";
+import * as pluginSetup from "../plugins/setup.ts";
 
 /**
  * Every engine module, grouped by feature. Fields are concrete module namespace
@@ -291,6 +293,20 @@ export interface EngineRegistry {
     readonly agentGrants: typeof agentGrants;
     readonly modelLadder: typeof modelLadder;
   };
+  /**
+   * The plugin lane: the reader of a root's `stamity-plugin.json` and the setup
+   * engine that turns one into a repository's manifest boundary
+   * (REQ-PLUGIN-015). `status` joins them with unit C4's verb.
+   *
+   * A group rather than two leaves elsewhere because the two hold one contract
+   * between them — the capability file is the only input the setup engine reads
+   * about a root, and `carriedClasses` is the single place the file's
+   * vocabulary becomes the manifest's.
+   */
+  readonly plugins: {
+    readonly capabilityFile: typeof pluginCapabilityFile;
+    readonly setup: typeof pluginSetup;
+  };
   readonly config: {
     readonly parse: typeof configParse;
   };
@@ -386,6 +402,7 @@ export function createEngine(): EngineRegistry {
     guard: { promptGuard, outputBounds, tokenEstimate },
     resilience: { retry, failureClass, failureLog, adapterTimeout },
     roster: { triggers: rosterTriggers, reviewCaps, agentPolicies, agentGrants, modelLadder },
+    plugins: { capabilityFile: pluginCapabilityFile, setup: pluginSetup },
     config: { parse: configParse },
   });
 }

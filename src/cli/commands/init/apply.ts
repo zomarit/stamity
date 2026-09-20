@@ -40,6 +40,7 @@ import {
   type ImportDecision,
   type LedgerEntry,
   type McpConfig,
+  type PluginConfig,
   type SetupManifest,
 } from "../../../types/manifest.ts";
 import { STATE_DIR } from "../../../types/markers.ts";
@@ -86,6 +87,19 @@ export interface InitApplyOptions {
    * leave the manifest key off.
    */
   importChoice?: readonly ImportDecision[];
+  /**
+   * The ownership boundary a plugin-backed setup recorded, copied onto the
+   * manifest before the emission plan is built (`../../../plugins/setup.ts`,
+   * REQ-PLUGIN-015). Absent on an ordinary init, which is what leaves a
+   * generated setup's manifest byte-identical to the one written before this
+   * field existed.
+   *
+   * It is set BEFORE planning on purpose: the planner reads the boundary off
+   * the manifest to decide which classes it must not emit, so a `plugin` block
+   * applied afterwards would record a boundary the same run had already
+   * written across.
+   */
+  plugin?: PluginConfig;
   engineVersion: string;
   dryRun: boolean;
   force: boolean;
@@ -140,7 +154,8 @@ const STATE_DIRS: readonly string[] = [
  * being replaced.
  */
 export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport> {
-  const { rootDir, decisions, defaults, importChoice, engineVersion, dryRun, force } = opts;
+  const { rootDir, decisions, defaults, importChoice, plugin, engineVersion, dryRun, force } =
+    opts;
   const now = opts.now ?? new Date();
 
   if (!force && (await readManifest(rootDir)) !== null) {
@@ -153,7 +168,14 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     );
   }
 
-  const manifest = await composeManifest(decisions, defaults, importChoice, engineVersion, now);
+  const manifest = await composeManifest(
+    decisions,
+    defaults,
+    importChoice,
+    plugin,
+    engineVersion,
+    now,
+  );
 
   // Installed packs survive a re-init, so their ledger rows must too. Seeded
   // BEFORE the emission plan below, because every consumer downstream reads the
@@ -513,6 +535,7 @@ async function composeManifest(
   decisions: InitDecisions,
   defaults: PredecessorDefaults | undefined,
   importChoice: readonly ImportDecision[] | undefined,
+  plugin: PluginConfig | undefined,
   engineVersion: string,
   now: Date,
 ): Promise<SetupManifest> {
@@ -546,9 +569,21 @@ async function composeManifest(
     now,
     generatorVersion: engineVersion,
   });
-  return defaults?.communicationStyle === undefined
-    ? fresh
-    : applyPreservedManifestFields(fresh, { communicationStyle: defaults.communicationStyle });
+  // Both settled fields travel through the SAME seam `sync` and `clean` use to
+  // carry operator answers across a regeneration (`applyPreservedManifestFields`),
+  // rather than `createManifest` growing an option per caller-supplied block:
+  // the helper already names `plugin` among the fields a fresh manifest must be
+  // able to receive, and it deep-copies, so the caller's config cannot be
+  // retro-edited through the manifest handed to the writer. `createManifest`
+  // itself is untouched — a greenfield init passes neither field and gets the
+  // identical document it did before.
+  const settled = {
+    ...(defaults?.communicationStyle === undefined
+      ? {}
+      : { communicationStyle: defaults.communicationStyle }),
+    ...(plugin === undefined ? {} : { plugin }),
+  };
+  return Object.keys(settled).length === 0 ? fresh : applyPreservedManifestFields(fresh, settled);
 }
 
 /**
