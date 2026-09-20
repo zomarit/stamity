@@ -11,11 +11,11 @@
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
 // Reads outside repo state: the pending call's payload on stdin. Output is a
-// function of that payload and one policy document — the emitted one beside
-// this script, or the repository's — and of nothing else. No environment
-// variable selects the document.
+// function of that payload and one policy document — the repository's when it
+// exists, and otherwise the container copy beside this script — and of
+// nothing else. No environment variable selects the document.
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,15 +30,24 @@ const MCP_PREFIX = "mcp__";
 /**
  * The policy document THIS run reads — resolved from the LAYOUT alone.
  *
- * A vendor plugin container places the guard and its copy of the document
- * together in one `hooks/` directory, so when an
- * `agent-tool-policies.json` sits beside this script, that copy IS the
- * document for the run. It is not a preference: a sibling document that exists
- * but is oversized or unparseable is refused by the checks below rather than
- * traded for the repository's, because answering a call from a policy set
- * nobody selected is the one outcome worse than a refusal. With no sibling, the
- * repository copy the script was emitted beside stands — which is every
- * repository install.
+ * The REPOSITORY document wins whenever it exists. Every repository install
+ * has one — the emitted climb above this script lands on it — so an
+ * `agent-tool-policies.json` that some workspace writer drops BESIDE a
+ * repository-mode guard cannot re-judge the next call from a policy set nobody
+ * emitted. A vendor plugin container has no such climb target: it places the
+ * guard and its copy of the document together in one `hooks/` directory and
+ * nothing sits above it, so the sibling copy is still the document there and
+ * plugin mode pays nothing for the ordering.
+ *
+ * The sibling is probed with `lstatSync`, not `existsSync`: a SYMBOLIC LINK
+ * named `agent-tool-policies.json` is content that some other path owns,
+ * and following it would let a link swap the governing document while the
+ * directory entry a reviewer reads never moves. A linked sibling is REFUSED as
+ * `POLICY_INVALID` rather than followed or quietly traded for the repository
+ * copy — the posture `src/hooks/userHooks.ts` already takes for a linked hook
+ * script. A real-file sibling that is oversized or unparseable is refused by
+ * the checks below for the same reason: answering a call from a policy set
+ * nobody selected is the one outcome worse than a refusal.
  *
  * NO environment variable enters this. Reading one
  * (`CLAUDE_PLUGIN_ROOT`/`CURSOR_PLUGIN_ROOT`/`PLUGIN_ROOT`) let a value
@@ -50,12 +59,19 @@ const MCP_PREFIX = "mcp__";
  * script to its own sibling.
  */
 function policyDocumentPath() {
+  if (existsSync(POLICY_FILE)) return { path: POLICY_FILE, linked: false };
   const sibling = join(
     dirname(fileURLToPath(import.meta.url)),
     "agent-tool-policies.json",
   );
-  if (existsSync(sibling)) return sibling;
-  return POLICY_FILE;
+  let entry;
+  try {
+    entry = lstatSync(sibling);
+  } catch {
+    return { path: POLICY_FILE, linked: false };
+  }
+  if (entry.isSymbolicLink()) return { path: sibling, linked: true };
+  return { path: sibling, linked: false };
 }
 
 // Client-native tool name → category, unioned across the client dialects the
@@ -123,7 +139,7 @@ function evaluate() {
   const agentInstance = field(payload, ["agent_id", "subagent_id"]);
   const tool = field(payload, ["tool_name", "toolName", "tool"]);
   const subject = { agentId, agentInstance, tool };
-  const policyFile = policyDocumentPath();
+  const { path: policyFile, linked: policyLinked } = policyDocumentPath();
 
   try {
     if (tool === "") {
@@ -131,6 +147,15 @@ function evaluate() {
         ...subject,
         reasonCode: "UNKNOWN_TOOL",
         message: "The payload named no tool, so the call cannot be authorized.",
+      };
+    }
+    // A linked document is not the emitted one: refused before it is read, so
+    // no link decides what this call may do.
+    if (policyLinked) {
+      return {
+        ...subject,
+        reasonCode: "POLICY_INVALID",
+        message: `Policy document ${policyFile} is a symbolic link, not the emitted file; nothing here authorizes this call.`,
       };
     }
 
