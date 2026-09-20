@@ -1,4 +1,6 @@
+# Both forms: the slash form matches a directory only, and a worktree of this repository carries node_modules as a symlink to the main checkout's tree, which only the bare form matches.
 node_modules/
+node_modules
 dist/
 coverage/
 *.tsbuildinfo
