@@ -248,6 +248,19 @@ describe("verdictFor — what an empty observation log means", () => {
     expect(verdict.reason).toContain("a tool call was attempted");
   });
 
+  it("fails on a tool call whose RESULT carried EACCES, rather than reading it as a refusal", () => {
+    // The order is the fix: `permission denied` in a tool result is what the filesystem said about a
+    // call the client DID make, and a call with no observation beside it is the failure this row
+    // exists to catch. Reading it as a skip would hide exactly that.
+    const verdict = verdictFor([], {
+      transcript:
+        '{"type":"tool_use","name":"Read","input":{"file_path":"qa-denied.txt"}}\n' +
+        "Error: EACCES: permission denied, open 'qa-denied.txt'\n",
+    }) as { status: string; reason: string };
+    expect(verdict.status).toBe("failed");
+    expect(verdict.reason).toContain("a tool call was attempted");
+  });
+
   it("is not-run when the client's own permission layer refused before the hook was consulted", () => {
     const verdict = verdictFor([], {
       transcript: "Permission denied and could not request permission from user",

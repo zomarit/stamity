@@ -9,12 +9,12 @@ import { inputsFor, rowFor, runPluginClients } from "../../scripts/qa/plugin-run
  * The QA lane that turns the route smoke's four legs into one row per client
  * (`scripts/qa/plugin-runs.mjs`).
  *
- * Two of the three cases below are pure folds over a report this suite composes, which is the only
- * way to drive the interesting shapes: a `failed` leg beside a `SKIPPED` one, a client whose legs are
- * missing entirely, a label set that belongs to another client. The third drives `runPluginClients`
- * for real, against a `--dist` that is not a distribution root — the smoke then exits 2 without
- * touching a client, and what is under test is the ROW that failure produces: `not-run`, never a
- * pass, and carrying no absolute path.
+ * Seven cases in three groups. Six are pure folds over a report this suite composes, which is the
+ * only way to drive the interesting shapes: a `failed` leg beside a `SKIPPED` one, a client whose
+ * legs are missing entirely, a label set that belongs to another client. The seventh drives
+ * `runPluginClients` for real, against a `--dist` that is not a distribution root — the smoke then
+ * exits 2 without touching a client, and what is under test is the ROW that failure produces:
+ * `not-run`, never a pass, and carrying no absolute path.
  */
 
 const REPO_ROOT = resolve(import.meta.dirname, "../..");

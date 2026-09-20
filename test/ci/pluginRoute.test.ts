@@ -1,6 +1,6 @@
-import { spawnSync, type SpawnSyncReturns } from "node:child_process";
+import { spawn, spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -253,6 +253,74 @@ describe("the structure leg over a real distribution", () => {
     expect(structure.reason).toContain("agent-plugins-1.0.0.schema.json");
     expect(structure.reason).toContain("logo");
   });
+});
+
+/**
+ * The stop path, driven with a SIGNAL rather than described in a comment.
+ *
+ * The cleanup and the skip both hang off one claim: that a `SIGTERM` handler can run at all in a
+ * process whose work is a chain of blocking spawns. It could not, until `call` began yielding once
+ * per client call — so this case sends the signal for real, mid-run, and reads what came out: the
+ * run says it is stopping, the legs it had not reached are recorded as stopped rather than measured,
+ * and the process dies of the signal it was sent.
+ *
+ * The client is a FIXTURE binary, not a vendor CLI: a POSIX shell script that sleeps and exits 0, so
+ * the run has a call in flight to be interrupted and no credential, model or network is involved.
+ * Windows is skipped because no POSIX signal reaches a child there — the same posture
+ * `test/qa/hookRuns.test.ts` takes for its own signal case.
+ */
+describe.skipIf(process.platform === "win32")("a stop requested mid-run", () => {
+  /** A `claude` stand-in: slow enough to be interrupted, silent enough to prove nothing else. */
+  function sleepingBinary(seconds: number): string {
+    const dir = tempDir("fake-client");
+    const bin = join(dir, "fake-claude");
+    writeFileSync(bin, `#!/bin/sh
+sleep ${String(seconds)}
+exit 0
+`);
+    chmodSync(bin, 0o755);
+    return bin;
+  }
+
+  it(
+    "runs the handler between calls, records the legs it never reached, and dies of the signal",
+    async () => {
+      const jsonPath = join(tempDir("stopped"), "legs.json");
+      const child = spawn(
+        process.execPath,
+        [SMOKE, "--dist", dist, "--client", "claude", "--invoke", "--bin-claude", sleepingBinary(3), "--json", jsonPath],
+        { cwd: REPO_ROOT, env: disarmed(), stdio: ["ignore", "pipe", "pipe"] },
+      );
+      let stderr = "";
+      child.stderr.setEncoding("utf8");
+      child.stderr.on("data", (chunk: string) => {
+        stderr += chunk;
+      });
+
+      // Mid-first-call: the fake client is 3 s long, so the signal is queued while a spawn blocks —
+      // which is the whole case. A handler that only ran after `main` returned would prove nothing.
+      const ended = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((settle) => {
+        child.on("close", (code, signal) => settle({ code, signal }));
+      });
+      await new Promise((resume) => setTimeout(resume, 1_000));
+      child.kill("SIGTERM");
+      const { code, signal } = await ended;
+
+      expect(stderr).toContain("stopping on SIGTERM");
+      // Dead of the signal it was sent, not of a tidy exit code that hides it.
+      expect(signal ?? `exit ${String(code)}`).toBe("SIGTERM");
+
+      const report = JSON.parse(readFileSync(jsonPath, "utf8")) as Report;
+      const legs = report.clients["claude"]?.legs ?? [];
+      // The structure leg spawns nothing and is still measured; the legs after the interrupted call
+      // are recorded as stopped rather than as a client that failed.
+      expect(legs.find((entry) => entry.leg === "structure")?.status).toBe("PASS");
+      const stoppedLegs = legs.filter((entry) => entry.reason.includes("stopped by SIGTERM"));
+      expect(stoppedLegs.length, JSON.stringify(legs.map((entry) => [entry.leg, entry.status, entry.reason]))).toBeGreaterThan(0);
+      for (const entry of stoppedLegs) expect(entry.status).toBe("SKIPPED");
+    },
+    60_000,
+  );
 });
 
 describe("blockerFor — which transcripts mean 'nothing was measured'", () => {

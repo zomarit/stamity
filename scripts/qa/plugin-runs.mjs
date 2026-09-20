@@ -34,12 +34,15 @@ const SMOKE_TIMEOUT_MS = 1_800_000
 /**
  * After `SIGTERM`, how long the smoke gets before `SIGKILL`.
  *
- * Not a courtesy. The smoke installs the plugin into the operator's REAL home for the two clients
- * whose login lives there, and removes it in a signal handler; a handler cannot interrupt the
- * blocking client call in flight, so the grace period has to outlast one of those calls (the smoke's
- * own per-call ceiling is 300 s). Killing without it would leave the operator's home carrying a
- * plugin this harness installed — which is why the escalation exists rather than `spawnSync`'s
- * one-shot `timeout`, whose kill signal arrives with no grace at all.
+ * Not a courtesy, and the number is derived rather than picked. The smoke installs the plugin into
+ * the operator's REAL home for the two clients whose login lives there, and removes it from a
+ * `SIGTERM` handler — which it can only run between client calls, because its work is a chain of
+ * blocking spawns that a handler cannot interrupt. So the grace has to cover the worst case that
+ * actually exists: one in-flight client call at the smoke's own 300 s per-call ceiling, plus its two
+ * removal calls at 60 s each. 420 s is that sum, and `SIGKILL` — which cannot be handled at all —
+ * follows only after it. Killing without the grace would leave the operator's home carrying a plugin
+ * this harness installed, which is also why this lane spawns asynchronously instead of using
+ * `spawnSync`'s one-shot `timeout`, whose kill signal arrives with no grace of any kind.
  */
 const CLEANUP_GRACE_MS = 420_000
 

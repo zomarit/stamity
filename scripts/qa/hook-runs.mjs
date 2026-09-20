@@ -163,7 +163,15 @@ export function exitDescription(probe) {
  * about the hook, and reporting that as `failed` blames this engine for the client's behaviour.
  */
 const TOOL_CALL_SIGNS = /"type"\s*:\s*"tool_use"|tool_use|"tool_name"|tool call|Read\(|shell\(|str_replace/i
-const PERMISSION_REFUSAL = /could not request permission|permission denied|requires approval|approval required|not permitted/i
+
+/**
+ * The CLIENT's own permission prompt, and deliberately not `permission denied` or
+ * `not permitted` on their own: those are what a tool RESULT carries when the call was made and the
+ * filesystem refused it (`EACCES`, `EPERM`) — a call that was made with no observation beside it is
+ * the failure this row exists to catch, and reading it as a skip would hide exactly that. The order
+ * below settles it anyway: a visible tool call is judged before this pattern is consulted at all.
+ */
+const PERMISSION_REFUSAL = /could not request permission|requires approval|approval required|permission to (?:use|run)|awaiting approval/i
 
 /**
  * Turn a fixture's observation log into the row's verdict.
@@ -175,7 +183,10 @@ const PERMISSION_REFUSAL = /could not request permission|permission denied|requi
  *
  * `transcript` is optional and is consulted for ONE decision: what an empty observation log means.
  * See {@link TOOL_CALL_SIGNS}. A caller that passes none keeps the old reading, `failed`, because a
- * caller with no transcript cannot distinguish the two and the stricter answer is the safe one.
+ * caller with no transcript cannot distinguish the two and the stricter answer is the safe one. The
+ * three arms are ordered so the stricter reading wins on ambiguity: a visible tool call is `failed`
+ * first, then a client-side permission refusal is `not-run`, then a transcript with no tool call in
+ * it at all is `not-run`.
  */
 export function verdictFor(observations, { transcript } = {}) {
   const denied = observations.filter((row) => row.decision === 'denied')
@@ -190,6 +201,17 @@ export function verdictFor(observations, { transcript } = {}) {
   }
   if (observations.length === 0) {
     const text = typeof transcript === 'string' ? transcript : ''
+    // A VISIBLE TOOL CALL IS JUDGED FIRST, and nothing later in the transcript can talk it out of
+    // being a failure. A client that called a tool and left no observation behind did not run the
+    // wired hook — whatever the call's own result then said about permissions or anything else.
+    if (text === '' || TOOL_CALL_SIGNS.test(text)) {
+      return {
+        status: 'failed',
+        reason:
+          'the hook recorded no call at all while the transcript shows a tool call was attempted: ' +
+          'the client never ran the wired user hook, so nothing about the client was enforced',
+      }
+    }
     const refused = PERMISSION_REFUSAL.exec(text)
     if (refused !== null) {
       return {
@@ -200,19 +222,11 @@ export function verdictFor(observations, { transcript } = {}) {
           'emitted wiring was measured',
       }
     }
-    if (text !== '' && !TOOL_CALL_SIGNS.test(text)) {
-      return {
-        status: 'not-run',
-        reason:
-          'the hook recorded no call and the transcript shows the client attempted no tool call, ' +
-          'so nothing about the emitted wiring was measured',
-      }
-    }
     return {
-      status: 'failed',
+      status: 'not-run',
       reason:
-        'the hook recorded no call at all while the transcript shows a tool call was attempted: ' +
-        'the client never ran the wired user hook, so nothing about the client was enforced',
+        'the hook recorded no call and the transcript shows the client attempted no tool call, ' +
+        'so nothing about the emitted wiring was measured',
     }
   }
   return {

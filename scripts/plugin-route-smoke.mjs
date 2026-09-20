@@ -83,6 +83,12 @@ export const LEGS = ['structure', 'install', 'discovery', 'invocation']
 /** Wall-clock ceiling on one client call. A client that hangs is a finding, not a reason to wait. */
 const CLIENT_TIMEOUT_MS = 300_000
 
+/**
+ * Ceiling on one REMOVAL call, and it is short on purpose: the removals run while the process is
+ * trying to stop, and a removal that hangs would hold a stop open for as long as a client call may.
+ */
+const CLEANUP_CALL_MS = 60_000
+
 /** The capability file every root carries, at its one fixed name. */
 const CAPABILITY_FILE = 'stamity-plugin.json'
 
@@ -164,6 +170,33 @@ const PLUGIN_MODE = 'plugin-backed'
 const SETUP_ID = 'st-setup'
 
 /**
+ * Set by a `SIGTERM`/`SIGINT` handler, read between client calls.
+ *
+ * The signal path only works because {@link call} YIELDS after every spawn. Node runs a signal
+ * handler on the event loop, and this script's work is a chain of blocking `spawnSync` calls — so a
+ * handler registered in a synchronous run cannot fire until the whole run is over, by which time the
+ * `finally` has already cleaned up and every remaining leg has been walked. Each call therefore
+ * hands control back to the loop once, which is the point at which a queued handler runs, sets this
+ * flag, and removes whatever a real-home install added; the next call refuses to spawn and the run
+ * unwinds through its `finally` blocks with the remaining legs recorded as stopped.
+ *
+ * The residual, precisely: a signal CANNOT interrupt the client call already in flight (up to
+ * {@link CLIENT_TIMEOUT_MS}), and `SIGKILL` cannot be handled at all — so a caller that wants the
+ * cleanup to happen sends `SIGTERM` and waits out one call before escalating, which is what
+ * `scripts/qa/plugin-runs.mjs` does and why its grace period is what it is.
+ */
+const stopped = { signal: null }
+
+/** Thrown by {@link call} once a stop has been requested: the remaining legs are not measured. */
+class RunStopped extends Error {
+  constructor(signal) {
+    super(`the run was stopped by ${signal} before this leg ran, so nothing about it was measured`)
+    this.name = 'RunStopped'
+    this.signal = signal
+  }
+}
+
+/**
  * The one tool grant the Claude invocation leg passes, in the client's own pattern form.
  *
  * Every command `st-setup` runs is `node "<root>/runtime/locate.mjs" -- …`, so the grant names
@@ -206,7 +239,16 @@ function treeFiles(dir, prefix = '') {
     })
 }
 
-/** `{ <relative path>: <sha256 of its bytes> }` over a tree, minus the bundled runtime. */
+/**
+ * `{ <relative path>: <sha256 of its bytes> }` over a tree, minus the bundled runtime.
+ *
+ * `runtime/` is excluded because it is 600-odd files of packed tarball whose bytes have their own
+ * owner (`test/ci/pluginRuntime.test.ts`) and whose presence would swamp the comparison this leg is
+ * about: what the CONTAINER carries. That leaves a gap the install leg cannot close on its own — the
+ * invocation leg runs `runtime/locate.mjs` out of the very tree the client installed, so a cached
+ * runtime that arrived truncated would fail THERE, which is where a broken runtime should be
+ * noticed. The two legs cover it together; neither claims the other's ground.
+ */
 function treeDigest(dir) {
   const map = {}
   for (const rel of treeFiles(dir)) {
@@ -603,7 +645,10 @@ function redactor(context) {
  * this script composed, and on Windows it is the difference between finding a binary and finding a
  * shim — the limitation {@link WINDOWS_PROBE_LIMIT} states rather than works around.
  */
-function call(context, { args, cwd, env, name }) {
+async function call(context, { args, cwd, env, name }) {
+  // A stop already requested: nothing more is spawned, and the leg that asked for this call is
+  // recorded as stopped rather than as a failure of the client.
+  if (stopped.signal !== null) throw new RunStopped(stopped.signal)
   const started = Date.now()
   const result = spawnSync(context.binary, args, {
     cwd,
@@ -619,6 +664,12 @@ function call(context, { args, cwd, env, name }) {
   // matches the pattern that would have removed it — measured on 2026-09-20, where a codex leg's
   // reason carried the second half of an operator's user name into the evidence file.
   const redacted = redact(transcript)
+  // THE YIELD. One turn of the event loop per client call, which is what lets a queued signal
+  // handler run at all — see {@link stopped}. It costs a microtask per call and buys the difference
+  // between a cleanup that happens and a comment claiming one does.
+  await new Promise((resume) => {
+    setImmediate(resume)
+  })
   const spawnFailure =
     result.error === undefined || result.error === null
       ? null
@@ -810,8 +861,8 @@ function catalogNames(dist, client) {
  * judgement on the root, needs no credential, and is the only one of the four vendors to publish
  * such a command. Discovery and invocation share ONE model call, for the reason the header states.
  */
-function claudeLegs(context) {
-  const validate = call(context, { args: ['plugin', 'validate', '--strict', context.root], cwd: context.scratch, env: process.env })
+async function claudeLegs(context) {
+  const validate = await call(context, { args: ['plugin', 'validate', '--strict', context.root], cwd: context.scratch, env: process.env })
   const install =
     validate.spawnFailure !== null
       ? legFrom('install', 'FAIL', `claude plugin validate could not run: ${validate.spawnFailure}`, validate, context.version)
@@ -837,7 +888,7 @@ function claudeLegs(context) {
   // A LISTING RUN of its own, rather than the setup transcript. The setup command's own output names
   // the ids it wrote artifacts for, so reading discovery out of it would pass on a transcript that
   // named `st-work` for a reason that has nothing to do with the client discovering it.
-  const listing = call(context, {
+  const listing = await call(context, {
     args: ['--plugin-dir', context.root, '-p', DISCOVERY_PROMPT, '--output-format', 'text'],
     cwd: mkdtempSync(join(context.scratch, 'claude-cwd-')),
     env: process.env,
@@ -845,7 +896,7 @@ function claudeLegs(context) {
   const discovery = discoveryFromTranscript(context, listing, 'a --plugin-dir listing run in a scratch directory (the real home)')
   if (context.setupForm === null) return [install, discovery, noSetupCommand(context)]
   const repo = scratchRepository(context, 'claude')
-  const run = call(context, {
+  const run = await call(context, {
     args: [
       '--plugin-dir',
       context.root,
@@ -878,12 +929,12 @@ function claudeLegs(context) {
  * marketplace is a dashboard act that stays a human QA row. So install and discovery are ONE
  * credential-bound call, and without `--invoke` both are SKIPPED rather than guessed.
  */
-function cursorLegs(context) {
+async function cursorLegs(context) {
   if (!context.invoke) {
     const reason = 'a Cursor run is a model call; pass --invoke'
     return [leg('install', 'SKIPPED', reason), leg('discovery', 'SKIPPED', reason), leg('invocation', 'SKIPPED', reason)]
   }
-  const listing = call(context, {
+  const listing = await call(context, {
     args: ['--trust', '--plugin-dir', context.root, '-p', DISCOVERY_PROMPT, '--output-format', 'text'],
     cwd: mkdtempSync(join(context.scratch, 'cursor-cwd-')),
     // `--trust` is required — without it the CLI exits 1 on the Workspace Trust prompt
@@ -914,7 +965,7 @@ function cursorLegs(context) {
   // `--force` is this client's documented grant ("Force allow commands unless explicitly denied",
   // `agent --help` on 2026.09.15-d2fe57e, read 2026-09-20) and is here for the reason the Claude
   // leg states: the setup command runs shell commands, and a headless run cannot be prompted.
-  const run = call(context, {
+  const run = await call(context, {
     args: ['--trust', '--force', '--plugin-dir', context.root, '-p', setupPrompt(context.setupForm)],
     cwd: repo,
     env: process.env,
@@ -942,7 +993,7 @@ function cursorLegs(context) {
  * listing subcommand at all (`copilot --help`, 2026-09-20), so resolving its marker waits for
  * `--invoke`, which installs into the REAL home (where the login is) and removes itself afterwards.
  */
-function copilotLegs(context) {
+async function copilotLegs(context) {
   const names = catalogNames(context.dist, 'copilot')
   if (names === null) {
     const reason = `dist/${CATALOG_PATHS.copilot} names no marketplace, so there is no marketplace route to walk`
@@ -953,23 +1004,23 @@ function copilotLegs(context) {
   const cwd = mkdtempSync(join(context.scratch, 'copilot-cwd-'))
   const env = allowlistedEnv({ HOME: home, COPILOT_HOME: copilotHome, XDG_CONFIG_HOME: join(home, '.config') })
 
-  const added = call(context, { args: ['plugin', 'marketplace', 'add', context.dist], cwd, env })
+  const added = await call(context, { args: ['plugin', 'marketplace', 'add', context.dist], cwd, env })
   if (added.spawnFailure !== null || added.status !== 0) {
     const reason = `copilot plugin marketplace add exited ${added.exit}: ${added.spawnFailure ?? added.tail}`
     return [legFrom('install', 'FAIL', reason, added, context.version), ...blocked('the install leg failed')]
   }
-  const installed = call(context, { args: ['plugin', 'install', names.spec], cwd, env })
+  const installed = await call(context, { args: ['plugin', 'install', names.spec], cwd, env })
   if (installed.spawnFailure !== null || installed.status !== 0) {
     const reason = `copilot plugin install ${names.spec} exited ${installed.exit}: ${installed.spawnFailure ?? installed.tail}`
     return [legFrom('install', 'FAIL', reason, installed, context.version), ...blocked('the install leg failed')]
   }
-  const install = copilotInstallLeg(context, { names, copilotHome, installed, listed: call(context, { args: ['plugin', 'list', '--json'], cwd, env }) })
+  const install = copilotInstallLeg(context, { names, copilotHome, installed, listed: await call(context, { args: ['plugin', 'list', '--json'], cwd, env }) })
 
   // `skill list` in a SCRATCH cwd: project skills are searched first on this client
   // (`.github/skills/`, `.agents/skills/`, `.claude/skills/`), so a listing taken inside a
   // checkout lets the repository answer for the root — measured on 2026-09-20, where the same
   // listing run in this checkout reported 20 project skills and one plugin skill.
-  const listing = call(context, { args: ['skill', 'list'], cwd, env })
+  const listing = await call(context, { args: ['skill', 'list'], cwd, env })
   const listingLabel = 'the unauthenticated copilot skill list in a scratch COPILOT_HOME'
   const sources = listing.status === 0 ? [{ label: listingLabel, transcript: listing.redacted }] : []
 
@@ -986,23 +1037,20 @@ function copilotLegs(context) {
   // region, remove from the `finally` AND from a signal.
   const realEnv = process.env
   const repo = scratchRepository(context, 'copilot')
-  const existing = operatorAlreadyHas(context, {
+  const existing = await operatorAlreadyHas(context, {
     cwd: repo,
     env: realEnv,
     names,
     pluginList: ['plugin', 'list', '--json'],
     marketplaceList: ['plugin', 'marketplace', 'list'],
   })
-  if (existing.present) {
-    const reason =
-      `a stamity plugin or marketplace is already installed in the operator's home ` +
-      `(${existing.detail}); this leg installs and then removes, and removing would take the ` +
-      `operator's own install with it`
-    return [install, discoveryFrom(context, sources, listing, reason), leg('invocation', 'SKIPPED', reason)]
+  const blockedByHome = preexistingReason(existing)
+  if (blockedByHome !== null) {
+    return [install, discoveryFrom(context, sources, listing, blockedByHome), leg('invocation', 'SKIPPED', blockedByHome)]
   }
   // `plugin --help` read ONCE, before anything is installed, so the guard's removals are
   // subcommands this build has — recorded the way the codex leg records its own.
-  const help = call(context, { args: ['plugin', '--help'], cwd: repo, env: realEnv })
+  const help = await call(context, { args: ['plugin', '--help'], cwd: repo, env: realEnv })
   const removals = removalNote(help, ['uninstall', 'marketplace'])
   const guard = realHomeGuard(context, {
     cwd: repo,
@@ -1016,14 +1064,14 @@ function copilotLegs(context) {
   let discovery
   let invocation
   try {
-    const realAdd = call(context, { args: ['plugin', 'marketplace', 'add', context.dist], cwd: repo, env: realEnv })
-    const realInstall = realAdd.status === 0 ? call(context, { args: ['plugin', 'install', names.spec], cwd: repo, env: realEnv }) : realAdd
+    const realAdd = await call(context, { args: ['plugin', 'marketplace', 'add', context.dist], cwd: repo, env: realEnv })
+    const realInstall = realAdd.status === 0 ? await call(context, { args: ['plugin', 'install', names.spec], cwd: repo, env: realEnv }) : realAdd
     if (realInstall.status !== 0) {
       const reason = `the real-home install refused (marketplace add ${realAdd.exit}, plugin install ${realInstall.exit}): ${realInstall.tail}`
       discovery = discoveryFrom(context, sources, listing, reason)
       invocation = legFrom('invocation', 'SKIPPED', reason, realInstall, context.version)
     } else {
-      const asked = copilotListing(context, repo, realEnv)
+      const asked = await copilotListing(context, repo, realEnv)
       if (asked.status === 0) sources.push({ label: 'a copilot -p listing run in the REAL COPILOT_HOME', transcript: asked.redacted })
       discovery = discoveryFrom(context, sources, asked, `the listing run exited ${asked.exit}: ${asked.tail}`)
       if (context.setupForm === null) invocation = noSetupCommand(context)
@@ -1033,7 +1081,7 @@ function copilotLegs(context) {
         // permission from user" and the leg measures the permission model rather than the root. The
         // narrower `--allow-tool <tools>` is documented but its tool NAMES are not, so the measured
         // flag is the one used and the run happens in a throwaway repository outside every checkout.
-        const run = call(context, { args: ['-p', setupPrompt(context.setupForm), '-s', '--allow-all-tools'], cwd: repo, env: realEnv })
+        const run = await call(context, { args: ['-p', setupPrompt(context.setupForm), '-s', '--allow-all-tools'], cwd: repo, env: realEnv })
         invocation = invocationLeg(
           context,
           run,
@@ -1057,8 +1105,8 @@ function copilotLegs(context) {
  * run was killed by the 300 s ceiling with an empty transcript, which is what a client waiting for a
  * permission it can never be granted looks like from outside.
  */
-function copilotListing(context, cwd, env) {
-  return call(context, { args: ['-p', DISCOVERY_PROMPT, '-s', '--allow-all-tools'], cwd, env })
+async function copilotListing(context, cwd, env) {
+  return await call(context, { args: ['-p', DISCOVERY_PROMPT, '-s', '--allow-all-tools'], cwd, env })
 }
 
 /** What the Copilot install proves: a copied tree where there is one, the live entry where there is not. */
@@ -1133,7 +1181,7 @@ function copilotInstallLeg(context, { names, copilotHome, installed, listed }) {
  * ran zero project hooks on 0.154.0 (the learning), so a leg that asked it to would be measuring
  * the client and calling the result an emission defect.
  */
-function codexLegs(context) {
+async function codexLegs(context) {
   const names = catalogNames(context.dist, 'codex')
   if (names === null) {
     const reason = `dist/${CATALOG_PATHS.codex} names no marketplace, so there is no marketplace route to walk`
@@ -1142,13 +1190,13 @@ function codexLegs(context) {
   const home = mkdtempSync(join(context.scratch, 'codex-home-'))
   const env = allowlistedEnv({ HOME: home, CODEX_HOME: home, XDG_CONFIG_HOME: join(home, '.config') })
 
-  const added = call(context, { args: ['plugin', 'marketplace', 'add', context.dist], cwd: context.dist, env })
-  const installed = added.status === 0 ? call(context, { args: ['plugin', 'add', names.spec], cwd: context.dist, env }) : added
+  const added = await call(context, { args: ['plugin', 'marketplace', 'add', context.dist], cwd: context.dist, env })
+  const installed = added.status === 0 ? await call(context, { args: ['plugin', 'add', names.spec], cwd: context.dist, env }) : added
   if (added.spawnFailure !== null || added.status !== 0 || installed.status !== 0) {
     const reason = `codex plugin marketplace add / plugin add ${names.spec} exited ${installed.exit}: ${installed.spawnFailure ?? installed.tail}`
     return [legFrom('install', 'FAIL', reason, installed, context.version), ...blocked('the install leg failed')]
   }
-  const listed = call(context, { args: ['plugin', 'list', '--json'], cwd: context.dist, env })
+  const listed = await call(context, { args: ['plugin', 'list', '--json'], cwd: context.dist, env })
   const named = listed.status === 0 && listed.transcript.includes(names.plugin)
   const cacheBase = join(home, 'plugins', 'cache', names.marketplace, names.plugin)
   const versions = directoriesIn(cacheBase)
@@ -1187,23 +1235,18 @@ function codexLegs(context) {
   // guarded region, remove from the `finally` and from a signal — see {@link realHomeGuard}.
   const realEnv = process.env
   const realCwd = scratchRepository(context, 'codex')
-  const existing = operatorAlreadyHas(context, {
+  const existing = await operatorAlreadyHas(context, {
     cwd: realCwd,
     env: realEnv,
     names,
     pluginList: ['plugin', 'list', '--json'],
     marketplaceList: ['plugin', 'marketplace', 'list'],
   })
-  if (existing.present) {
-    const reason =
-      `a stamity plugin or marketplace is already installed in the operator's home ` +
-      `(${existing.detail}); this leg installs and then removes, and removing would take the ` +
-      `operator's own install with it`
-    return [install, ...blocked(reason)]
-  }
+  const blockedByHome = preexistingReason(existing)
+  if (blockedByHome !== null) return [install, ...blocked(blockedByHome)]
   // `plugin --help` read before anything is installed, so the guard's removals are subcommands this
   // build has.
-  const help = call(context, { args: ['plugin', '--help'], cwd: realCwd, env: realEnv })
+  const help = await call(context, { args: ['plugin', '--help'], cwd: realCwd, env: realEnv })
   const removals = removalNote(help, ['remove', 'marketplace'])
   const guard = realHomeGuard(context, {
     cwd: realCwd,
@@ -1217,14 +1260,14 @@ function codexLegs(context) {
   let discovery
   let invocation
   try {
-    const realAdd = call(context, { args: ['plugin', 'marketplace', 'add', context.dist], cwd: context.dist, env: realEnv })
-    const realInstall = realAdd.status === 0 ? call(context, { args: ['plugin', 'add', names.spec], cwd: context.dist, env: realEnv }) : realAdd
+    const realAdd = await call(context, { args: ['plugin', 'marketplace', 'add', context.dist], cwd: context.dist, env: realEnv })
+    const realInstall = realAdd.status === 0 ? await call(context, { args: ['plugin', 'add', names.spec], cwd: context.dist, env: realEnv }) : realAdd
     if (realInstall.status !== 0) {
       const reason = `the real-home install refused (marketplace add ${realAdd.exit}, plugin add ${realInstall.exit}): ${realInstall.tail}`
       discovery = legFrom('discovery', 'SKIPPED', reason, realInstall, context.version)
       invocation = legFrom('invocation', 'SKIPPED', reason, realInstall, context.version)
     } else {
-      const listing = call(context, {
+      const listing = await call(context, {
         args: ['exec', '--skip-git-repo-check', DISCOVERY_PROMPT],
         cwd: mkdtempSync(join(context.scratch, 'codex-cwd-')),
         env: realEnv,
@@ -1246,7 +1289,7 @@ function codexLegs(context) {
       const cached = join(codexHome, 'plugins', 'cache', names.marketplace, names.plugin)
       const cachedVersions = directoriesIn(cached)
       const locator = join(cached, cachedVersions[0] ?? '', 'runtime', 'locate.mjs')
-      const run = call(context, {
+      const run = await call(context, {
         args: [
           'exec',
           '--skip-git-repo-check',
@@ -1283,34 +1326,63 @@ function codexLegs(context) {
  * and the note records which, so a changed output shape reads as a changed shape rather than as an
  * absent install.
  */
-function operatorAlreadyHas(context, { cwd, env, names, pluginList, marketplaceList }) {
-  const listed = call(context, { args: pluginList, cwd, env })
-  const rows = installedRows(listed)
+async function operatorAlreadyHas(context, { cwd, env, names, pluginList, marketplaceList }) {
+  const listed = await call(context, { args: pluginList, cwd, env })
+  // FAIL CLOSED. A probe that could not answer is not an answer of "no": treating a non-zero listing
+  // as an empty home is how this run would install into an operator's real home on the strength of a
+  // command that errored, and then remove what it found there afterwards. `answered: false` skips the
+  // model legs with the probe's own exit and its last words.
+  if (listed.spawnFailure !== null || listed.status !== 0) {
+    return {
+      answered: false,
+      present: false,
+      detail:
+        `${context.display} ${pluginList.join(' ')} could not answer (${listed.exit}): ` +
+        `${listed.spawnFailure ?? listed.tail}`,
+    }
+  }
+  const rows = installedRows(context, listed)
   if (rows.names !== null) {
     if (rows.names.includes(names.plugin)) {
-      return { present: true, detail: `${context.display} ${pluginList.join(' ')} already names ${names.plugin}` }
+      return {
+        answered: true,
+        present: true,
+        detail: `${context.display} ${pluginList.join(' ')} already names ${names.plugin}`,
+      }
     }
   } else if (new RegExp(`\\b${names.plugin}\\b`).test(listed.redacted)) {
     return {
+      answered: true,
       present: true,
       detail: `${context.display} ${pluginList.join(' ')} mentions ${names.plugin} (${rows.note})`,
     }
   }
-  const markets = call(context, { args: marketplaceList, cwd, env })
-  if (markets.status === 0 && new RegExp(`\\b${names.marketplace}\\b`).test(markets.redacted)) {
+  const markets = await call(context, { args: marketplaceList, cwd, env })
+  if (markets.spawnFailure !== null || markets.status !== 0) {
     return {
+      answered: false,
+      present: false,
+      detail:
+        `${context.display} ${marketplaceList.join(' ')} could not answer (${markets.exit}): ` +
+        `${markets.spawnFailure ?? markets.tail}`,
+    }
+  }
+  if (new RegExp(`\\b${names.marketplace}\\b`).test(markets.redacted)) {
+    return {
+      answered: true,
       present: true,
       detail: `${context.display} ${marketplaceList.join(' ')} already names the ${names.marketplace} marketplace`,
     }
   }
   return {
+    answered: true,
     present: false,
     detail: `neither ${names.plugin} nor the ${names.marketplace} marketplace was in the operator's home before this run`,
   }
 }
 
 /** The `name`s a client's plugin listing carries, or `null` with the reason it could not be parsed. */
-function installedRows(made) {
+function installedRows(context, made) {
   try {
     const parsed = JSON.parse(made.transcript.trim())
     const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.installed) ? parsed.installed : null
@@ -1318,8 +1390,10 @@ function installedRows(made) {
     return { names: rows.map((row) => String(row?.name ?? '')), note: 'parsed as JSON' }
   } catch (error) {
     // Not JSON — a text listing, which the caller matches word-wise instead. The parse failure is
-    // carried into the note rather than dropped: a client that stops emitting JSON should be visible.
-    return { names: null, note: `the listing did not parse as JSON (${error.message})` }
+    // carried into the note rather than dropped (a client that stops emitting JSON should be
+    // visible) and REDACTED on the way, because `JSON.parse`'s own message quotes the head of what
+    // it was given — a listing that begins with a path would arrive verbatim in a row reason.
+    return { names: null, note: `the listing did not parse as JSON (${context.redact(error.message)})` }
   }
 }
 
@@ -1339,33 +1413,70 @@ function installedRows(made) {
  */
 function realHomeGuard(context, { cwd, env, removals, label }) {
   let done = false
-  const remove = () => {
+  /**
+   * Deliberately NOT routed through {@link call}: no transcript hash, no redaction pass, no yield,
+   * and no stop check. A removal must be the dumbest thing in this file — it runs from a signal
+   * handler, where an `await` would hand control back to a loop that is trying to unwind, and it must
+   * run even though a stop has been requested, which is the one condition `call` refuses on.
+   */
+  const removeNow = () => {
     if (done) return []
     done = true
     return removals.map((args) => {
-      const made = call(context, { args, cwd, env })
-      return `${context.display} ${args.join(' ')} ${made.exit}`
+      const result = spawnSync(context.binary, args, {
+        cwd,
+        env,
+        encoding: 'utf8',
+        timeout: CLEANUP_CALL_MS,
+        maxBuffer: 8 * 1024 * 1024,
+      })
+      const how =
+        result.error === undefined || result.error === null
+          ? exitDescription({ status: result.status, signal: result.signal })
+          : `could not run (${context.redact(result.error.message)})`
+      return `${context.display} ${args.join(' ')} ${how}`
     })
   }
   const registered = []
   for (const signal of ['SIGTERM', 'SIGINT']) {
     const handler = () => {
-      console.error(`plugin-route: ${label} cleanup on ${signal} - ${remove().join('; ') || 'nothing to remove'}`)
-      // Re-raised with every handler gone, so the caller's signal still means what it said: the
-      // process dies of the signal it was sent, after what it installed has been taken out.
-      for (const [name, fn] of registered) process.off(name, fn)
-      process.kill(process.pid, signal)
+      // Set the flag FIRST: the loop this handler interrupted is between two client calls, and the
+      // next one must refuse to spawn rather than carry on measuring a run somebody stopped.
+      stopped.signal = signal
+      console.error(`plugin-route: ${label} cleanup on ${signal} - ${removeNow().join('; ') || 'nothing to remove'}`)
     }
     registered.push([signal, handler])
     process.once(signal, handler)
   }
   return {
     finish: () => {
-      const lines = remove()
+      const lines = removeNow()
       for (const [name, fn] of registered) process.off(name, fn)
       return lines
     },
   }
+}
+
+/**
+ * Why the model legs must not run against the operator's real home, or `null` when they may.
+ *
+ * Two different reasons, one decision. An install that is already there must not be removed by this
+ * run, and a probe that could not say either way must not be read as permission — a `SKIPPED` leg
+ * costs a measurement, and the other way costs somebody their installed plugin.
+ */
+function preexistingReason(existing) {
+  if (!existing.answered) {
+    return (
+      `the pre-existing-install probe could not answer (${existing.detail}), and this leg installs ` +
+      `into the operator's own home and removes afterwards — it does not run on an unanswered probe`
+    )
+  }
+  if (!existing.present) return null
+  return (
+    `a stamity plugin or marketplace is already installed in the operator's home ` +
+    `(${existing.detail}); this leg installs and then removes, and removing would take the ` +
+    `operator's own install with it`
+  )
 }
 
 /** Which removal subcommands a client's own `plugin --help` lists, read before anything is added. */
@@ -1525,7 +1636,7 @@ function resolveBinary(client, options) {
   return { path: null, source: variable }
 }
 
-export function main(argv) {
+export async function main(argv) {
   const parsed = parseArguments(argv)
   if (parsed.options === undefined) return parsed.code
   const options = parsed.options
@@ -1544,6 +1655,19 @@ export function main(argv) {
     )
   }
 
+  // A run-level stop handler, beside whatever a real-home guard registers of its own: most of this
+  // run touches no operator state at all, and a stop during those legs must still stop the run
+  // rather than walk every remaining client first.
+  const stopHandlers = []
+  for (const signal of ['SIGTERM', 'SIGINT']) {
+    const handler = () => {
+      stopped.signal = signal
+      console.error(`plugin-route: stopping on ${signal}; the legs not yet measured are recorded as stopped`)
+    }
+    stopHandlers.push([signal, handler])
+    process.once(signal, handler)
+  }
+
   const ownScratch = options.scratch === null
   const scratch = ownScratch ? mkdtempSync(join(tmpdir(), 'stamity-plugin-route-')) : resolve(options.scratch)
   mkdirSync(scratch, { recursive: true })
@@ -1557,6 +1681,8 @@ export function main(argv) {
   try {
     for (const client of options.clients) {
       const root = join(dist, client)
+      // The structure leg spawns nothing, so it is measured even for a client reached after a stop:
+      // it is the one leg a stopped run can still honestly report.
       const structure = structureLeg(client, root)
       const legs = [structure]
 
@@ -1571,7 +1697,11 @@ export function main(argv) {
       const binary = resolveBinary(client, options)
       // A refused root is the stronger statement and comes first: it is why no client saw the tree,
       // whether or not this machine has that client's binary.
-      if (structure.status === 'FAIL') {
+      if (stopped.signal !== null) {
+        for (const name of ['install', 'discovery', 'invocation']) {
+          legs.push(leg(name, 'SKIPPED', new RunStopped(stopped.signal).message))
+        }
+      } else if (structure.status === 'FAIL') {
         for (const name of ['install', 'discovery', 'invocation']) {
           legs.push(leg(name, 'SKIPPED', 'the structure leg failed, so this root was not handed to the client'))
         }
@@ -1599,7 +1729,20 @@ export function main(argv) {
         // that reaches a committed evidence file and has been seen to carry a path.
         context.redact = redactor(context)
         context.version = context.redact(probeVersion(binary.path) ?? '') || null
-        legs.push(...HANDLERS[client](context))
+        // The clients are walked STRICTLY in sequence: two of them install into the same real home,
+        // they share one operator's credentials and rate limits, and a stop requested during one
+        // must be honoured before the next one starts. `Promise.all` here would run four clients'
+        // installs over each other.
+        try {
+          // oxlint-disable-next-line no-await-in-loop -- sequential by necessity; see above.
+          legs.push(...(await HANDLERS[client](context)))
+        } catch (error) {
+          // A stop requested mid-client: the legs the handler had already composed are gone with its
+          // stack, and every leg it had not reached is recorded as stopped. Its `finally` blocks have
+          // run by the time this catch does, which is what takes a real-home install back out.
+          if (!(error instanceof RunStopped)) throw error
+          for (const name of LEGS.slice(legs.length)) legs.push(leg(name, 'SKIPPED', error.message))
+        }
       }
 
       report.clients[client] = { legs }
@@ -1609,6 +1752,7 @@ export function main(argv) {
       }
     }
   } finally {
+    for (const [name, fn] of stopHandlers) process.off(name, fn)
     if (ownScratch) rmSync(scratch, { recursive: true, force: true })
   }
 
@@ -1622,14 +1766,24 @@ export function main(argv) {
   console.log(
     `plugin-route: ${failed === 0 ? 'PASS' : 'FAIL'} - ${counts.filter((entry) => entry.status === 'PASS').length} passed, ` +
       `${failed} failed, ${counts.filter((entry) => entry.status === 'SKIPPED').length} skipped ` +
-      `across ${options.clients.length} client(s)${options.invoke ? ' with --invoke' : ''}`,
+      `across ${options.clients.length} client(s)${options.invoke ? ' with --invoke' : ''}` +
+      `${stopped.signal === null ? '' : ` — STOPPED by ${stopped.signal}`}`,
   )
   return failed === 0 ? 0 : 1
 }
 
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === SELF) {
+/**
+ * The entry point, and the one place the signal is RE-RAISED.
+ *
+ * A handler that re-raised immediately would kill the process before the run could record the legs it
+ * did not measure and before the `finally` blocks could take a real-home install back out. So the
+ * signal is honoured in two halves: stop and clean up on the way through, then die of the signal that
+ * was sent once the run has unwound — so a caller reading `killed by signal SIGTERM` is told the
+ * truth.
+ */
+async function runCli() {
   try {
-    process.exitCode = main(process.argv.slice(2))
+    process.exitCode = await main(process.argv.slice(2))
   } catch (error) {
     // The MESSAGE, redacted, and not the stack: a stack frame is a file path, and this line is read
     // out of a CI log and quoted into a run record. The name of the error class travels with it so a
@@ -1638,4 +1792,9 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === SELF) {
     console.error(`plugin-route: ERROR - ${redactPaths(detail, [[homedir(), '<home>']])}`)
     process.exitCode = 2
   }
+  if (stopped.signal !== null) process.kill(process.pid, stopped.signal)
+}
+
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === SELF) {
+  void runCli()
 }
