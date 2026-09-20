@@ -168,6 +168,26 @@ const MAPPED_GUIDES: readonly string[] = GUIDES.filter((page) => page !== MIGRAT
 const HAND_PAGES: readonly string[] = [...PAGES, ...GUIDES];
 
 /**
+ * The count words the pages spell out, indexed by the number they name.
+ *
+ * A page states its bucket in prose ("the eleven guides", "all fourteen"), and
+ * the prose is a literal that drifts when a guide lands — the doctrine page
+ * said "ten" and "thirteen" for a whole package after the plugins guide made
+ * them eleven and fourteen. Reading the word off the array length is what
+ * moves the pin with the surface instead of after it.
+ */
+const COUNT_WORDS: readonly string[] = [
+  "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+  "nineteen", "twenty",
+];
+const countWord = (count: number): string => {
+  const word = COUNT_WORDS[count];
+  if (word === undefined) throw new Error(`no count word for ${count}: extend COUNT_WORDS`);
+  return word;
+};
+
+/**
  * The client-contract evidence page: a hand-written record, and NOT a published page.
  *
  * It joins a bucket of its own rather than `HAND_PAGES`, and the reason is one rule it cannot
@@ -988,6 +1008,26 @@ describe("README", () => {
     expect(text).toContain("`handoff`");
   });
 
+  it("is indexed with the same verb count it states itself", () => {
+    // `llms.txt`'s README row restates the verb count in its own words, and
+    // that row is rendered from a literal in `src/cli/docs/llmsIndex.ts` — one
+    // the plugin route did not move, so the index went on publishing "nine
+    // verbs" beside a README that said ten. Both count words are read off the
+    // pages rather than typed here; the README's own is held to its list
+    // above, so this is the index held to the README.
+    const readme = read(README);
+    const index = read("llms.txt");
+    const stated = /\b([a-z]+) verbs\b/.exec(readme)?.[1];
+    expect(stated, "README states no verb count").toBeDefined();
+    const row = index.split("\n").find((line) => line.includes("](README.md)")) ?? "";
+    expect(row, "llms.txt has no README row").not.toBe("");
+    const indexed = /\b([a-z]+) verbs\b/.exec(row)?.[1];
+    expect(indexed, "llms.txt's README row states no verb count").toBeDefined();
+    expect(indexed, "llms.txt's README row disagrees with README about the verb count").toBe(
+      stated,
+    );
+  });
+
   it("links the map and the local-use entry points", () => {
     const text = read(README);
     const targets = new Set(linkTargets(text));
@@ -1533,6 +1573,18 @@ describe("the guides", () => {
       entries.filter((entry) => entry.startsWith("docs/")),
       "the leak gate's docs allowlist is not exactly the one guide this suite exempts",
     ).toEqual([PREDECESSOR_NAME_PAGE]);
+  });
+
+  it("the doctrine page counts the hand bucket the way this suite does", () => {
+    // The page names the bucket this file gates — "the N guides under docs/"
+    // and "holds all M" — and both numbers are prose, not derivations. They
+    // read "ten" and "thirteen" for the whole plugin-lifecycle package after
+    // the plugins guide had made them eleven and fourteen; a guide that lands
+    // now moves them here or fails here.
+    // Whitespace-tolerant across the line break: a re-wrap is not a count change.
+    const text = read(DOCTRINE).replace(/\s+/g, " ");
+    expect(text).toContain(`the ${countWord(GUIDES.length)} guides under \`docs/\``);
+    expect(text).toContain(`holds all ${countWord(HAND_PAGES.length)} to that pair`);
   });
 
   it("is reachable: every guide is in the agent-native index, and every mapped one on the map", () => {
