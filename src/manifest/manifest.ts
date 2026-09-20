@@ -606,12 +606,29 @@ const MAX_GATE_COMMAND_LENGTH = 512;
  * the {@link modelPinDefect} precedent: the engine neither runs nor parses
  * these, so a membership check would be a guarantee it cannot keep. What is
  * checkable is that the string carries a command at all, stays on the one line
- * the charter prints it on, and fits.
+ * the charter prints it on, fits, and survives the rendering it is put through.
+ *
+ * That last clause is why a BACKTICK and a `${STAMITY:` prefix are refused by
+ * name. A gate command is rendered into the charter and into skill bodies
+ * inside a markdown code span that backticks delimit, so a backtick in the
+ * pinned value closes the span early and the remainder lands as prose a model
+ * reads as instruction. And token substitution over generated text is
+ * SINGLE-PASS: a `${STAMITY:` arriving from the manifest is written into the
+ * output after the resolver has already run, so it ships as a literal
+ * placeholder every downstream reader sees unresolved. Refusing both here puts
+ * the defect where an operator reads a field name, rather than in rendered
+ * output nobody can trace back to its source.
  */
 function gateCommandDefect(value: unknown): string | null {
   if (typeof value !== "string") return "must be a string";
   if (value.trim() === "") return "is empty";
   if (/[\r\n]/.test(value)) return "spans more than one line";
+  if (value.includes("`")) {
+    return "carries a backtick, which closes the code span the charter and the skills render it inside — name a script file instead";
+  }
+  if (value.includes("${STAMITY:")) {
+    return "carries a `${STAMITY:` token, which substitution has already passed by the time this value is rendered, so it would ship as a literal placeholder";
+  }
   if (value.length > MAX_GATE_COMMAND_LENGTH) {
     return `is longer than ${MAX_GATE_COMMAND_LENGTH} characters — put a script in a file and name it here`;
   }
@@ -1156,7 +1173,12 @@ export function pluginOwnedClasses(
   const record = manifest?.plugin?.clients?.[tool];
   if (record === undefined) return new Set();
   // Membership re-check for the same reason the resolvers above carry one: a
-  // manifest OBJECT can reach here without having passed validation.
+  // manifest OBJECT can reach here without having passed validation — which is
+  // also why `classes` is shape-checked before it is filtered. A hand-edited
+  // `"classes": "agents"` used to throw a TypeError out of a total resolver
+  // three commands call; the honest unvalidated answer is the empty set, the
+  // same one an absent record gets.
+  if (!Array.isArray(record.classes)) return new Set();
   return new Set(record.classes.filter((entry) => VALID_PLUGIN_OWNED_CLASSES.has(entry)));
 }
 
