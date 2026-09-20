@@ -96,6 +96,15 @@ export function place(row) {
   // copy above is what travels.
   if (path.startsWith('.agents/skills/')) return null
   if (path === 'CLAUDE.md' || path === 'AGENTS.md' || path === '.mcp.json') return null
+  // `.stamity/generated/` is NOT part of the catch-all below. The two rows this container takes
+  // from it — the policy document and this client's hook scripts — are matched by name above;
+  // anything else under it is a generated document a hook or an agent is meant to READ, and
+  // where it lands inside a plugin root is a placement decision. Returning `undefined` sends it
+  // to the layout's refusal, so the next such document is placed deliberately rather than
+  // dropped into the same silence as the state tree.
+  if (path.startsWith('.stamity/generated/')) return undefined
+  // The rest of `.stamity/` is this repository's own state — the ledger, the run records, the
+  // learnings — and describes one checkout. Dropped, with the reason the capability file carries.
   if (path.startsWith('.stamity/')) return null
 
   return undefined

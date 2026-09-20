@@ -51,8 +51,13 @@ const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const CONTENT_ROOT = join(REPO_ROOT, "content");
 const CLIENTS = ["claude", "cursor", "copilot", "codex"] as const;
 
+interface ContainerModule {
+  SETUP_COMMAND_FRONTMATTER?: Record<string, unknown>;
+  place(row: { path: string; content: string }): { path: string; class: string } | null | undefined;
+}
+
 /** The four container modules, keyed the way the generator keys them. */
-const CONTAINERS: Record<(typeof CLIENTS)[number], { SETUP_COMMAND_FRONTMATTER?: Record<string, unknown> }> = {
+const CONTAINERS: Record<(typeof CLIENTS)[number], ContainerModule> = {
   claude: claudeContainer,
   cursor: cursorContainer,
   copilot: copilotContainer,
@@ -534,6 +539,31 @@ describe("the capability file (REQ-PLUGIN-002)", () => {
     expect(validateCapabilityFile(null)).toEqual([
       "capability file: must be a JSON object carrying the plugin's declared capabilities",
     ]);
+  });
+});
+
+/** A planned emission row as a container's `place` reads one: a path and its bytes. */
+const plannedRow = (path: string): { path: string; content: string } => ({ path, content: "{}\n" });
+
+describe("the .stamity/ boundary each container draws", () => {
+  it.each(CLIENTS)("refuses an unnamed .stamity/generated row for %s rather than dropping it", (client) => {
+    const { place } = CONTAINERS[client];
+
+    // The two rows every container DOES take out of that directory, matched by name.
+    expect(place(plannedRow(".stamity/generated/agent-tool-policies.json"))).toMatchObject({ class: "hooks" });
+    expect(place(plannedRow(`.stamity/generated/hooks/${client}/stamity-guard.mjs`))).toMatchObject({ class: "hooks" });
+
+    // A third document under the same directory is a generated file a hook or an agent is meant
+    // to READ, and where it lands inside a plugin root is a placement decision. The `.stamity/`
+    // catch-all used to swallow it as state, so a new one would have been dropped in silence and
+    // the hook that reads it would have found nothing at a consumer's install. `undefined` sends
+    // it to the layout's refusal, which is a human seeing it once.
+    expect(place(plannedRow(".stamity/generated/tool-budget.json"))).toBeUndefined();
+    expect(place(plannedRow(".stamity/generated/nested/thing.json"))).toBeUndefined();
+
+    // And the rest of the state tree is still dropped: it describes one checkout.
+    expect(place(plannedRow(".stamity/ledger.jsonl"))).toBeNull();
+    expect(place(plannedRow(".stamity/runs/2026-09-20_x/record.md"))).toBeNull();
   });
 });
 
