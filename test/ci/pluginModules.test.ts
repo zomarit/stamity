@@ -575,6 +575,23 @@ describe("the generated setup command (REQ-PLUGIN-003)", () => {
     expect(body).toContain("APM dependency");
     expect(body).toContain(".stamity/overrides/");
 
+    // TEST CHANGE, justified (SEC2-W1). Step 3 says to stop for the operator and then phrased
+    // its three remedies as bare imperatives — "run ... clean -y, then ... plugin setup", "remove
+    // that APM dependency", "remove it". The reader of this body is an AGENT, and an imperative
+    // is its instruction: `clean -y` is non-interactive and removes ledger rows and the files
+    // they name, so the old phrasing invited exactly the destructive act the step above it
+    // forbade. What moved is the body's contract, not these assertions' standard — every remedy
+    // now names the operator as its subject, and the stop is restated after the list.
+    for (const remedy of ["the operator runs `", "the operator removes ", "the operator keeps "]) {
+      expect(body, remedy).toContain(remedy);
+    }
+    expect(body).toContain("Do not run either yourself");
+    expect(body).toContain("Remove no file yourself");
+    // No bare imperative left in the remedy list: every `- a file ...` row names its subject.
+    for (const row of body.split("\n").filter((line) => line.startsWith("   - a file "))) {
+      expect(row, row).toContain("the operator ");
+    }
+
     // The status call must come first and the plain status call last: the order is the instruction.
     expect(body.indexOf("plugin status --json")).toBeLessThan(body.indexOf("plugin setup --client"));
     expect(body.indexOf("plugin setup --client")).toBeLessThan(body.lastIndexOf("plugin status"));
