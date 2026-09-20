@@ -1,8 +1,6 @@
 # Judge rubric v7
 
-The grading instrument every profile in `MODEL-PROFILES-v1.md` selects, the default `claude`
-profile included; `model-profiles-v1.json` is what the runner resolves at dispatch, and
-`test/evals/readmeCurrency.test.ts` holds the evals README to that resolution.
+The grading instrument selected by `codex-astra` in `MODEL-PROFILES-v2.md`.
 The runner pins distinct scenario and judge models through the selected profile's dispatch
 controls. The judge never grades its own output or a run in which it acted as the scenario
 model. No model ID in this rubric overrides the selected profile.
@@ -431,3 +429,15 @@ moved is the count beside it.
 the stated binding and advisory lists, with `FAIL` and `PASS`-after-redraft offered as the
 competing readings. The label is the maintainer's, not the author's, and the deletion above
 did not put it back to the author.
+
+## Selection and currency
+
+Every profile in `MODEL-PROFILES-v1.md` selects this rubric, the default `claude` profile
+included; `model-profiles-v1.json` is what the runner resolves at dispatch, and
+`test/evals/readmeCurrency.test.ts` holds the evals README to that resolution.
+
+This note sits below the calibration boundary on purpose: the text above the
+`## Calibration protocol` heading is the grading core every judge call receives and the
+incremental-runs rule of `SET-v7.md` hashes as part of a run's configuration, so a currency
+statement about which profiles select the rubric belongs here, where moving it changes no
+run's configuration.

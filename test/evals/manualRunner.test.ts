@@ -1655,6 +1655,14 @@ describe("SET-v6 scoring rule", () => {
   });
 });
 
+/**
+ * A rubric's `## Calibration protocol` SECTION: its heading line to the next `## ` heading, or to
+ * end of file when it is the file's last section. Trailing blank lines separate one section from
+ * the next rather than carrying content, so they normalize; every other byte compares as written.
+ */
+const calibrationProtocol = (path: string): string =>
+  `${read(path).split("## Calibration protocol\n")[1]!.split(/^## /m)[0]!.trimEnd()}\n`;
+
 describe("rubric v7 — a closed citation form over v6's calibration protocol", () => {
   const v6 = parseRubric(read("evals/rubric-v6.md"), historical);
   const v7 = parseRubric(read("evals/rubric-v7.md"), historical);
@@ -1662,8 +1670,14 @@ describe("rubric v7 — a closed citation form over v6's calibration protocol", 
     expect(v7.fixtures).toHaveLength(5);
     expect(v7.fixtures.map((fixture: Fixture) => [fixture.id, fixture.verdict, fixture.binding, fixture.advisory]))
       .toEqual(v6.fixtures.map((fixture: Fixture) => [fixture.id, fixture.verdict, fixture.binding, fixture.advisory]));
-    expect(read("evals/rubric-v7.md").split("## Calibration protocol\n")[1])
-      .toBe(read("evals/rubric-v6.md").split("## Calibration protocol\n")[1]);
+    // The pin moved with the text, not the claim. `rubric-v7.md` now ends with a
+    // `## Selection and currency` section BELOW the calibration heading — the profile-currency
+    // note kept out of the grading core, because that core's bytes are what every judge call
+    // receives and what the incremental-runs rule of `SET-v7.md` hashes as part of a run's
+    // configuration. So "everything under the calibration heading" is no longer the calibration
+    // protocol alone; compared section to section, v7's protocol — the five fixtures and their
+    // answer key included — is still byte-identical to v6's, which is what this line asserts.
+    expect(calibrationProtocol("evals/rubric-v7.md")).toBe(calibrationProtocol("evals/rubric-v6.md"));
     for (const fixture of v7.fixtures as Fixture[])
       expect(calibrationMatches(fixture, parseGrade(emission(fixture), fixture.scenario, fixture.transcript)), fixture.id).toBe(true);
   });
