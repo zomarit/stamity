@@ -252,7 +252,7 @@ own lifecycle proof measures it against an installed client.
 **Copilot CLI.** `copilot plugin update stamity` refreshes a marketplace install; pinning is the
 same move as installing — add the marketplace at `#plugins/v<version>`. `COPILOT_AUTO_UPDATE=false`
 stops the CLI updating *itself* behind you. Rolling back is uninstall, re-add at the previous tag,
-install.
+install. *From the vendor's CLI plugin reference, accessed 2026-09-20.*
 
 **Cursor and Codex: no vendor-documented pin, update or rollback command on 2026-09-20.** For
 Cursor the served version is whichever commit the marketplace branch points at, so pinning and
@@ -347,12 +347,19 @@ at all, whatever its client settings say.
 `stamity check` carries two rows for this route, and both are described with every other row in
 [the troubleshooting guide](troubleshooting.md):
 
-- **`plugin-runtime`** — the locator's resolved kind, path and version. It warns when no plugin
-  root is in the environment, and fails when the locator refuses or when the runtime's major
-  differs from the major that wrote your `.stamity/` state.
+- **`plugin-runtime`** — the locator's resolved kind, path and version. It passes with a note
+  when the manifest records no plugin client and no plugin root is in the environment — the
+  ordinary state for a repository that is not plugin-backed, and nothing to act on. It warns
+  only where a client IS recorded and no root is found. It fails on two states, and both are
+  plugins this repository claims — a recorded client, or `mode: "plugin-backed"`: the locator
+  refuses, or the resolved runtime's major differs from the major that wrote your `.stamity/`
+  state. A refusal with no client recorded and no `plugin-backed` mode warns instead — the root
+  variable came from elsewhere in your environment, and another session's broken plugin is not
+  this repository's defect.
 - **`plugin-duplicates`** — one entry per class delivered twice for one client, with its source
   (`ledger`, `apm` or `unmanaged`) and the remedy for that source. It is a warning while the
   manifest still says `mode: "generated"` — coexistence is the expected state before you clean —
-  and a failure once the manifest records `plugin-backed` for that client.
+  and a failure once the manifest records `mode: "plugin-backed"`. The mode is one decision for
+  the repository, and the client the entry names is where the duplicate was found.
 
 Neither row removes anything. Every remedy is a step you run.
