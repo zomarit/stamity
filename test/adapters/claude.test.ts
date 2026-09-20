@@ -1239,6 +1239,24 @@ describe("the project-directory anchor", () => {
     expect(settings.hooks["PreToolUse"]?.[1]?.hooks[0]?.command).toBe(USER_HOOK_COMMAND);
   });
 
+  it("anchors a script committed at the repository root, which carries no separator", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({
+      "repo/.stamity/hooks/10-user.json": `${JSON.stringify({
+        hooks: [{ event: "session_start", command: ["node", "root-hook.mjs"] }],
+      })}\n`,
+      "repo/root-hook.mjs": "// fixture user hook at the repository root\n",
+    });
+    const { rows } = await planned({ selection: EMPTY_SELECTION, rootDir: temp.path("repo") });
+
+    // The allow-list accepts a root-level committed script, so the anchor has to
+    // reach it too: with no separator to recognise, this row is the one that
+    // would have gone on resolving against the session's own directory.
+    expect(settingsOf(rows).hooks["SessionStart"]?.at(-1)?.hooks[0]?.command).toBe(
+      `node "${PROJECT_DIR}/root-hook.mjs"`,
+    );
+  });
+
   it("anchors a user hook at render time while its declaration stays repository-relative", async () => {
     const temp = getTemp();
     const declaration = {

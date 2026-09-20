@@ -927,7 +927,15 @@ function anchorScriptArgument(argv: readonly string[]): readonly string[] {
  * URI scheme; and a `../` path, which leaves the root the anchor names.
  */
 function anchoredOnProjectDir(word: string): string | undefined {
-  if (word.startsWith("-") || !word.includes("/")) return undefined;
+  // A path or a file name, and not a flag. The dotted-suffix alternative is what
+  // reaches a script the operator committed at the repository ROOT
+  // (`["node", "hook.mjs"]`), which is repository-relative with no separator in
+  // it; requiring a separator would leave exactly that row resolving against the
+  // session's own directory. Neither test admits a launcher SUBCOMMAND — `deno
+  // run`, `bun run` — which carries neither, so the scan below steps over it and
+  // reaches the script.
+  if (word.startsWith("-")) return undefined;
+  if (!word.includes("/") && !/\.[A-Za-z0-9]+$/.test(word)) return undefined;
   if (word.startsWith("/") || word.startsWith("~") || word.startsWith("$")) return undefined;
   if (word.startsWith("../") || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(word)) return undefined;
   const anchored = `${PROJECT_DIR_VARIABLE}/${word}`;
