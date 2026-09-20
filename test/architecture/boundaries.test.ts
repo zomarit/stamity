@@ -529,23 +529,31 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // its own wave under another unit is the violation `checkWaveLayering`
   // names. The module header states the same refusal at the call site.
   "src/cli/commands/workspace.ts": { unit: "w-u1", wave: 15 },
+  // The plugin-backed setup engine (pl-c6). Wave 15 for `workspace.ts`'s own
+  // reason — it drives the wave-14 init planner and writer — and the engine
+  // half of its unit sits far below at wave 2; see the plugin-lane note after
+  // the docs rows.
+  "src/cli/commands/plugin/setup.ts": { unit: "pl-c6", wave: 15 },
   // ---- package 15 file 2 (008-plugin-lifecycle-02): the plugin lane ----
-  // ONE unit, two DIFFERENT depths, and the difference is the finding this unit
-  // reports rather than a bookkeeping choice.
+  // ONE unit split across the two LAYERS, which is the shape the architecture
+  // forced rather than a bookkeeping choice.
   //
   // The capability reader sits at its true depth: it reads a JSON document
   // through the wave-1 strict parser and names its classes off the wave-1
   // manifest vocabulary, and nothing below it. Wave 2 is also what lets the
   // composition root (wave 12) wire it — the registry sits ABOVE every module
-  // it holds, so wave 12 is the registry's ceiling for membership.
+  // it holds, so wave 12 is the registry's ceiling for membership, and an
+  // engine module planned above it could not be a registry entry at all.
   //
-  // The setup engine has no legal depth in this layer at all. It composes
-  // init's planning and write halves, which are `src/cli/**` at wave 14, so the
-  // edge is both a wave-14 cross-unit claim AND a `no-cli` boundary violation,
-  // and the registry cannot reach wave 14 either. See the unit's report: the
-  // module belongs in the CLI layer at wave 15, not in `src/plugins/`.
+  // The setup engine has no legal depth in the ENGINE layer: composing init's
+  // planning and write halves is the whole of what it does, and those are
+  // `src/cli/**` at wave 14, so an engine home is a `no-cli` violation in the
+  // value imports and the type imports alike. Wave 15 in the CLI layer is its
+  // true depth, for the reason `src/cli/commands/workspace.ts` states two rows
+  // above: a module whose job is to drive a wave-14 command engine sits one
+  // layer over it. Its verb (`src/cli/commands/plugin.ts`, unit C4) lands at
+  // wave 15 beside it and is its first production caller.
   "src/plugins/capabilityFile.ts": { unit: "pl-c6", wave: 2 },
-  "src/plugins/setup.ts": { unit: "pl-c6", wave: 14 },
   // wave 16 (P2 wave 3) — program assembly
   "src/cli.ts": { unit: "p2-16", wave: 16 },
 

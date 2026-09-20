@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -18,7 +19,24 @@ import { EngineError } from "../../src/types/errors.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
+ * The companion package a generated root names, READ from this checkout rather
+ * than spelled. `test/ci/forkIdentity.test.ts` holds every CLI suite to that:
+ * a downstream fork renames the package and must not have to edit a test, and
+ * the name is incidental to everything asserted here anyway.
+ */
+const COMPANION_PACKAGE = (
+  JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as {
+    name: string;
+  }
+).name;
+
+/**
  * The reader half of `stamity-plugin.json` (REQ-PLUGIN-015).
+ *
+ * The engine half of this unit: this module imports nothing but the types leaf
+ * and the strict JSON parser, which is what lets it sit in `src/plugins/` and be
+ * wired into `EngineRegistry`. Its consumer, the setup engine, could not —
+ * see `src/cli/commands/plugin/setup.ts`.
  *
  * Every parse case here runs against a file the REAL writer built
  * (`scripts/plugins/capability.mjs::buildCapabilityFile`) and serialized to a real temp root,
@@ -60,7 +78,7 @@ const claudeInput = (): Record<string, unknown> => ({
       reason: "server selection and credential references are the repository's",
     },
   },
-  runtime: { companion: { package: "@zomarit/stamity", compatible: "^1.9.0" } },
+  runtime: { companion: { package: COMPANION_PACKAGE, compatible: "^1.9.0" } },
 });
 
 const build = (input: Record<string, unknown>): Record<string, unknown> =>

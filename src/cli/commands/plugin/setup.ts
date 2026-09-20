@@ -11,19 +11,35 @@
  * state scaffold, the merge engine, the ledger, the already-initialised refusal,
  * the dry-run contract) is therefore init's answer, verbatim.
  *
+ * WHY THIS FILE IS IN THE CLI LAYER, and not beside the capability reader it
+ * uses (`../../../plugins/capabilityFile.ts`, which is engine). Composing
+ * `../init/plan.ts` and `../init/apply.ts` is the whole of what this module
+ * does, and those are `src/cli/**` at wave 14 — so an engine home would be a
+ * `no-cli` boundary violation by construction, in the value imports and in the
+ * type imports alike. It sits at wave 15 for the reason `../workspace.ts`
+ * states for itself: a module whose job is to drive a wave-14 command engine
+ * belongs one layer above it, not beside it under another unit.
+ *
+ * The consequence is deliberate, and stated here rather than discovered
+ * downstream: this module is NOT in `EngineRegistry`. The composition root sits
+ * at wave 12 and may not reach the CLI layer at all, so `src/plugins/` holds
+ * the capability reader — which IS registry-wired — while the setup engine
+ * reaches a caller through `../plugin.ts` (unit C4), like every other command
+ * module.
+ *
  * What this module RECORDS versus what ENFORCES it. The `plugin` block it puts
  * on the manifest is the boundary's single source of truth; the emission pass
- * that reads it and skips the owned classes is `src/emit/ownership.ts` (unit
+ * that reads it and skips the owned classes is `../../../emit/ownership.ts` (unit
  * C3). Recording is deliberately separate from enforcing: the manifest outlives
  * this run, and `sync`, `check` and `clean` all have to reach the same answer
  * later without a plugin root in hand.
  */
-import { applyInit, type InitApplyReport } from "../cli/commands/init/apply.ts";
-import { buildInitDecisions, type InitDecisions } from "../cli/commands/init/plan.ts";
-import { TOOLS, type Tool } from "../types/core.ts";
-import { EngineError } from "../types/errors.ts";
-import type { PluginClientRecord, PluginConfig } from "../types/manifest.ts";
-import { carriedClasses, type PluginCapabilityFile } from "./capabilityFile.ts";
+import { carriedClasses, type PluginCapabilityFile } from "../../../plugins/capabilityFile.ts";
+import { TOOLS, type Tool } from "../../../types/core.ts";
+import { EngineError } from "../../../types/errors.ts";
+import type { PluginClientRecord, PluginConfig } from "../../../types/manifest.ts";
+import { applyInit, type InitApplyReport } from "../init/apply.ts";
+import { buildInitDecisions, type InitDecisions } from "../init/plan.ts";
 
 /** One installed root: the tool it is being set up for, where it is, and what it declares. */
 export interface PluginSetupRoot {
@@ -31,7 +47,7 @@ export interface PluginSetupRoot {
   tool: Tool;
   /** Absolute path of the installed plugin root, for the messages that name it. */
   root: string;
-  /** The parsed `stamity-plugin.json` (see `./capabilityFile.ts`). */
+  /** The parsed `stamity-plugin.json` (see `../../../plugins/capabilityFile.ts`). */
   file: PluginCapabilityFile;
 }
 
@@ -121,7 +137,7 @@ export async function planPluginSetup(input: PluginSetupInput): Promise<PluginSe
  * requirement. A repository that already carries a generated setup must be
  * cleaned before it can run on a plugin, so the already-initialised refusal
  * `applyInit` raises is the intended outcome and travels up unchanged;
- * `src/cli/commands/plugin.ts` (unit C4) is what turns it into the
+ * `../plugin.ts` (unit C4) is what turns it into the
  * `stamity clean -y`, then `stamity plugin setup` sentence for the operator.
  */
 export async function applyPluginSetup(input: PluginSetupInput): Promise<InitApplyReport> {

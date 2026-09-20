@@ -1,30 +1,53 @@
+import { readFileSync } from "node:fs";
 import { mkdir, readFile, readdir } from "node:fs/promises";
 import { join, sep } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  applyPluginSetup,
+  planPluginSetup,
+  type PluginSetupRoot,
+} from "../../../src/cli/commands/plugin/setup.ts";
+import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
-} from "../../src/content/contentRoot.ts";
-import { collectManifestErrors, readManifest } from "../../src/manifest/manifest.ts";
-import type { PluginCapabilityFile } from "../../src/plugins/capabilityFile.ts";
-import { applyPluginSetup, planPluginSetup } from "../../src/plugins/setup.ts";
-import { EngineError } from "../../src/types/errors.ts";
-import { PLUGIN_OWNED_CLASSES } from "../../src/types/manifest.ts";
-import { useTempDir } from "../support/tempDir.ts";
+} from "../../../src/content/contentRoot.ts";
+import { collectManifestErrors, readManifest } from "../../../src/manifest/manifest.ts";
+import type { PluginCapabilityFile } from "../../../src/plugins/capabilityFile.ts";
+import { EngineError } from "../../../src/types/errors.ts";
+import { PLUGIN_OWNED_CLASSES } from "../../../src/types/manifest.ts";
+import { useTempDir } from "../../support/tempDir.ts";
+
+/**
+ * The companion package a generated root names, READ from this checkout rather
+ * than spelled. `test/ci/forkIdentity.test.ts` holds every CLI suite to that:
+ * a downstream fork renames the package and must not have to edit a test, and
+ * the name is incidental to everything asserted here anyway.
+ */
+const COMPANION_PACKAGE = (
+  JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8")) as {
+    name: string;
+  }
+).name;
 
 /**
  * The setup engine behind `stamity plugin setup` (REQ-PLUGIN-015).
  *
  * No mocks, including the emission planner: `beforeEach` seeds the minimal
  * charter-bearing corpus at the pinned content root — the same technique
- * `test/cli/commands/init.test.ts` uses, and for the same reason. The whole
+ * `./init.test.ts` uses, and for the same reason. The whole
  * claim of this unit is WHICH FILES a plugin-backed setup writes, and a
  * substituted planner would let that claim pass against an emission set the
  * test itself invented.
  *
  * What this unit owns and what it does not: the boundary is RECORDED here (the
  * manifest's `plugin` field, built from each root's capability file), and it is
- * ENFORCED by unit C3's ownership pass in the emission planner. Until C3 lands,
+ * ENFORCED by unit C3's ownership pass in the emission planner.
+ *
+ * Filed beside the other command suites rather than under `test/plugins/`
+ * because the module under test is a CLI-layer one: `src/cli/commands/plugin/setup.ts`
+ * composes init's two halves and therefore cannot live in the engine (see that
+ * file's header). The flattened name follows `./initPlan.test.ts` and
+ * `./configMcp.test.ts`, which is how this tree spells a nested command module. Until C3 lands,
  * a plugin-backed apply still emits the classes the plugin carries, so the
  * cases that assert their absence are `it.skip` with C3 named as the owner
  * rather than weakened into an assertion that would pass either way.
@@ -134,16 +157,21 @@ function capabilityFor(
     runtime: {
       path: "runtime",
       locator: "runtime/locate.mjs",
-      companion: { package: "@zomarit/stamity", compatible: "^1.9.0" },
+      companion: { package: COMPANION_PACKAGE, compatible: "^1.9.0" },
     },
   };
 }
 
-/** One entry of `PluginSetupInput.roots`, with a plausible on-disk root path. */
+/**
+ * One entry of `PluginSetupInput.roots`, with a plausible on-disk root path.
+ * Typed as the exported {@link PluginSetupRoot} rather than structurally, so
+ * the fixture is held to the shape C4's verb will build rather than to a
+ * lookalike this file happens to agree with today.
+ */
 function rootFor(
   client: PluginCapabilityFile["client"],
   overrides: Partial<PluginCapabilityFile["classes"]> = {},
-): { tool: PluginCapabilityFile["client"]; root: string; file: PluginCapabilityFile } {
+): PluginSetupRoot {
   return {
     tool: client,
     root: getTemp().path(`${client}-plugin-root`),
