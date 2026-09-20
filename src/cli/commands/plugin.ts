@@ -4,6 +4,7 @@ import { pluginOwnedSummary, type PluginOwnedClasses } from "../../emit/ownershi
 import { manifestPath } from "../../manifest/manifest.ts";
 import {
   carriedClasses,
+  PLUGIN_ROOT_VARIABLES,
   readCapabilityFile,
   resolvePluginRoot,
 } from "../../plugins/capabilityFile.ts";
@@ -13,7 +14,6 @@ import { CliFailure } from "../kit/output.ts";
 import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { InitApplyReport } from "./init/apply.ts";
-import { PLUGIN_ROOT_VARIABLES } from "./plugin/probe.ts";
 import { applyPluginSetup, type PluginSetupRoot } from "./plugin/setup.ts";
 import { buildPluginStatus, type PluginStatusReport } from "./plugin/status.ts";
 

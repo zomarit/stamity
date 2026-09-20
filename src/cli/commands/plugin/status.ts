@@ -31,6 +31,7 @@ import type { EngineRegistry } from "../../../index.ts";
 import { verificationCommandsFor } from "../../../detect/verificationGates.ts";
 import { readGates, readInstallMode, manifestPath } from "../../../manifest/manifest.ts";
 import {
+  PLUGIN_ROOT_VARIABLES,
   readCapabilityFile,
   resolvePluginRoot,
   type PluginCapabilityFile,
@@ -38,12 +39,7 @@ import {
 import { TOOLS, type Tool } from "../../../types/core.ts";
 import type { GatesConfig, InstallMode, PluginClientRecord, PluginOwnedClass, SetupManifest } from "../../../types/manifest.ts";
 import { packageCommand } from "../../kit/packageName.ts";
-import {
-  collectPluginDuplicates,
-  majorOf,
-  PLUGIN_ROOT_VARIABLES,
-  probePluginRuntime,
-} from "./probe.ts";
+import { collectPluginDuplicates, majorOf, probePluginRuntime } from "./probe.ts";
 
 /** What the locator resolved, or why nothing was resolved. */
 interface PluginStatusRuntime {

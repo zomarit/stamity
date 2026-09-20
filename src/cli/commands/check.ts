@@ -16,6 +16,7 @@ import {
   describePackIntegrityFinding,
   verifyInstalledPacks,
 } from "../../pack/verifyInstalled.ts";
+import { PLUGIN_ROOT_VARIABLES } from "../../plugins/capabilityFile.ts";
 import { findPackageRoot } from "../../shared/paths.ts";
 import { TOOLS } from "../../types/core.ts";
 import { EngineError, type ErrorCode } from "../../types/errors.ts";
@@ -29,7 +30,6 @@ import type { Palette } from "../kit/terminal.ts";
 import {
   collectPluginDuplicates,
   majorOf,
-  PLUGIN_ROOT_VARIABLES,
   pluginRootVariable,
   probePluginRuntime,
 } from "./plugin/probe.ts";
@@ -679,9 +679,13 @@ async function checkInvariants(): Promise<DoctorCheck> {
  * saying: the repository names a plugin this run could not look at.
  *
  * It fails on exactly two things, and both are states in which the plugin is
- * installed and does not work: the locator REFUSED (exit 2 — no runtime found,
- * or a Node below the floor), and a plugin-backed repository whose state was
- * written by a different major than the runtime resolves. The second is
+ * installed, does not work, and is one THIS repository claims: the locator
+ * REFUSED (exit 2 — no runtime found, or a Node below the floor) while a client
+ * is recorded or the mode is plugin-backed, and a plugin-backed repository
+ * whose state was written by a different major than the runtime resolves. A
+ * refusal with neither claim warns instead: the root variable came from
+ * somewhere else in the environment, and an unrelated session's broken plugin
+ * is not this repository's defect to fail on. The second is
  * REQ-PLUGIN-013's compatibility half read from the doctor's side: the manifest
  * and the runtime disagreeing about the major is the state where a sync would
  * rewrite files under rules the recorded setup was not written to.
@@ -721,7 +725,20 @@ async function checkPluginRuntime(
     return { id, status: "warn", detail: probe.message ?? "the locator answered nothing" };
   }
   if (probe.outcome === "refused") {
-    return { id, status: "fail", detail: `${variable}=${root}: ${probe.message ?? ""}` };
+    // Whose broken install is this? A refusal is a defect only where the
+    // repository CLAIMS the plugin — a recorded client, or a plugin-backed
+    // mode. With neither, the root variable came from somewhere else in the
+    // environment (another session, a shell profile), and failing here would
+    // gate an unrelated repository's CI on a plugin it never asked for. The
+    // refusal is still quoted; only the severity moves.
+    const claimed =
+      Object.keys(manifest?.plugin?.clients ?? {}).length > 0 ||
+      readInstallMode(manifest) === "plugin-backed";
+    return {
+      id,
+      status: claimed ? "fail" : "warn",
+      detail: `${variable}=${root}: ${probe.message ?? ""}`,
+    };
   }
 
   const detail = `runtime ${probe.kind} ${probe.version ?? "unknown"} at ${probe.path ?? root}`;
