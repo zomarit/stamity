@@ -64,9 +64,17 @@ const RUN_TIMEOUT_MS = 300_000
  *
  *   copilot — `-p <text>` is the documented non-interactive lane and `-s` silences the run's stats
  *   so the transcript is the model's answer alone (`copilot --help` on GitHub Copilot CLI 1.0.85,
- *   read 2026-09-20, lists `-p, --prompt <text>` and `-s, --silent`; the same pair is driven by
- *   `test/ci/pluginPackages.copilot.test.ts`). The vendor reference is
+ *   read 2026-09-20, lists `-p, --prompt <text>`, `-s, --silent` and `--allow-all-tools`; the same
+ *   pair is driven by `test/ci/pluginPackages.copilot.test.ts`). The vendor reference is
  *   docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference.
+ *
+ *   `--allow-all-tools` rides with them, and it is the difference between measuring this engine's
+ *   emission and measuring the client's permission prompt. Measured 2026-09-20 on 1.0.85: a headless
+ *   run answers a shell or read step with "Permission denied and could not request permission from
+ *   user" and never attempts the call, so the hook is never consulted and the row reads `failed` as
+ *   though the emitted wiring were wrong. The grant lets the client ATTEMPT the two reads; what
+ *   happens next is the hook's decision, which is the whole subject of the row. The instrument does
+ *   not move: a denial still has to come from the hook's own log.
  *
  * What this does NOT change is the instrument or the posture: both rows are still decided by the
  * hook's own observation log, a client whose binary is absent is still `not-run` with the probe's
@@ -92,7 +100,7 @@ export const CLIENT_RUNNERS = {
   },
   copilot: {
     binary: 'copilot',
-    args: ['-p', PROMPT, '-s'],
+    args: ['-p', PROMPT, '-s', '--allow-all-tools'],
   },
 }
 
@@ -146,14 +154,30 @@ export function exitDescription(probe) {
 }
 
 /**
+ * Signs that the client ATTEMPTED a tool call, in the transcript it printed.
+ *
+ * Read only when the observation log is empty, and only to tell two different findings apart. A
+ * client that called a tool and left no observation behind did not run the wired hook, which is a
+ * `failed` row about the emission's effect. A client that never called a tool at all — because its
+ * own permission layer refused first, or because it answered from the prompt — measured nothing
+ * about the hook, and reporting that as `failed` blames this engine for the client's behaviour.
+ */
+const TOOL_CALL_SIGNS = /"type"\s*:\s*"tool_use"|tool_use|"tool_name"|tool call|Read\(|shell\(|str_replace/i
+const PERMISSION_REFUSAL = /could not request permission|permission denied|requires approval|approval required|not permitted/i
+
+/**
  * Turn a fixture's observation log into the row's verdict.
  *
  * Both halves are required, and they are required separately. One `denied` observation says the
  * hook ran and refused; one `allowed` says the same hook let a different call through. A run with
  * only the denial could be a client that refuses everything, and a run with only the allowance
  * could be a hook that never fires — the pair is what distinguishes an enforced policy from either.
+ *
+ * `transcript` is optional and is consulted for ONE decision: what an empty observation log means.
+ * See {@link TOOL_CALL_SIGNS}. A caller that passes none keeps the old reading, `failed`, because a
+ * caller with no transcript cannot distinguish the two and the stricter answer is the safe one.
  */
-export function verdictFor(observations) {
+export function verdictFor(observations, { transcript } = {}) {
   const denied = observations.filter((row) => row.decision === 'denied')
   const allowed = observations.filter((row) => row.decision === 'allowed')
   if (denied.length > 0 && allowed.length > 0) {
@@ -165,11 +189,30 @@ export function verdictFor(observations) {
     }
   }
   if (observations.length === 0) {
+    const text = typeof transcript === 'string' ? transcript : ''
+    const refused = PERMISSION_REFUSAL.exec(text)
+    if (refused !== null) {
+      return {
+        status: 'not-run',
+        reason:
+          `the hook recorded no call and the client refused the tool call itself (${refused[0]}): ` +
+          'its own permission layer answered before the hook was consulted, so nothing about the ' +
+          'emitted wiring was measured',
+      }
+    }
+    if (text !== '' && !TOOL_CALL_SIGNS.test(text)) {
+      return {
+        status: 'not-run',
+        reason:
+          'the hook recorded no call and the transcript shows the client attempted no tool call, ' +
+          'so nothing about the emitted wiring was measured',
+      }
+    }
     return {
       status: 'failed',
       reason:
-        'the hook recorded no call at all: the client never ran the wired user hook, so nothing ' +
-        'about the client was enforced',
+        'the hook recorded no call at all while the transcript shows a tool call was attempted: ' +
+        'the client never ran the wired user hook, so nothing about the client was enforced',
     }
   }
   return {
@@ -243,7 +286,7 @@ export function runClient({ client, repoRoot, fixturesDir, runners = CLIENT_RUNN
   const { observations, error } = readObservations(fixture.observations)
   const verdict =
     error === undefined
-      ? verdictFor(observations)
+      ? verdictFor(observations, { transcript: `${result.stdout ?? ''}\n${result.stderr ?? ''}` })
       : { status: 'failed', reason: `the hook's observation log could not be read: ${error}` }
 
   const transcriptTail = (result.stdout ?? '').slice(-2000)

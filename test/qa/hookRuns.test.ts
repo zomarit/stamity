@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { CLIENT_RUNNERS, PROMPT, WINDOWS_PROBE_LIMIT, binaryVersion, exitDescription, runClient } from "../../scripts/qa/hook-runs.mjs";
+import { CLIENT_RUNNERS, PROMPT, WINDOWS_PROBE_LIMIT, binaryVersion, exitDescription, runClient, verdictFor } from "../../scripts/qa/hook-runs.mjs";
 
 /**
  * W6: `cursor` and `copilot` used to carry a constant, never-probed "not on PATH" reason. This
@@ -86,9 +86,13 @@ describe("CLIENT_RUNNERS — cursor and copilot drive the invocations that were 
     expect(CLIENT_RUNNERS.cursor.binary).toBe("agent");
     expect(CLIENT_RUNNERS.cursor.args).toEqual(["--trust", "-p", PROMPT]);
     expect(CLIENT_RUNNERS.cursor.notRun).toBeUndefined();
-    // `copilot --help` on 1.0.85 (read 2026-09-20) lists `-p, --prompt <text>` and `-s, --silent`.
+    // `copilot --help` on 1.0.85 (read 2026-09-20) lists `-p, --prompt <text>`, `-s, --silent` and
+    // `--allow-all-tools`. The grant is what makes the row about the EMISSION: measured 2026-09-20,
+    // a headless run without it answers the read with "Permission denied and could not request
+    // permission from user" and never consults the hook, so the row would read `failed` as though the
+    // wiring were wrong. The hook still decides what happens to the call it is handed.
     expect(CLIENT_RUNNERS.copilot.binary).toBe("copilot");
-    expect(CLIENT_RUNNERS.copilot.args).toEqual(["-p", PROMPT, "-s"]);
+    expect(CLIENT_RUNNERS.copilot.args).toEqual(["-p", PROMPT, "-s", "--allow-all-tools"]);
     expect(CLIENT_RUNNERS.copilot.notRun).toBeUndefined();
     // codex's measured reason is untouched: `exec` on 0.154.0 loads no project hook layer at all.
     expect(CLIENT_RUNNERS.codex.binary).toBeNull();
@@ -210,6 +214,61 @@ describe("binaryVersion on Windows — a shell-less spawn cannot resolve an npm 
     const missing = "stamity-qa-hookruns-absent-binary";
     expect(binaryVersion(missing, { platform: "win32" }).reason).toContain(WINDOWS_PROBE_LIMIT);
     expect(binaryVersion(missing, { platform: "linux" }).reason).not.toContain(WINDOWS_PROBE_LIMIT);
+  });
+});
+
+/**
+ * An empty observation log is TWO findings, and calling both of them `failed` blamed this engine for
+ * the client's behaviour. A client that called a tool and left no observation behind did not run the
+ * wired hook; a client whose own permission layer refused first, or that answered without calling a
+ * tool at all, measured nothing about the hook.
+ */
+describe("verdictFor — what an empty observation log means", () => {
+  const denied = { decision: "denied" };
+  const allowed = { decision: "allowed" };
+
+  it("passes only on both halves, and names the counts", () => {
+    const verdict = verdictFor([denied, allowed]) as { status: string; reason: string };
+    expect(verdict.status).toBe("passed");
+    expect(verdict.reason).toContain("1 denied");
+    expect(verdict.reason).toContain("1 allowed");
+  });
+
+  it("fails on one half only, whichever half it is", () => {
+    expect((verdictFor([denied]) as { status: string }).status).toBe("failed");
+    expect((verdictFor([allowed, allowed]) as { status: string }).status).toBe("failed");
+  });
+
+  it("fails on no observation when the transcript shows a tool call was attempted", () => {
+    const verdict = verdictFor([], { transcript: '{"type":"tool_use","name":"Read"}' }) as {
+      status: string;
+      reason: string;
+    };
+    expect(verdict.status).toBe("failed");
+    expect(verdict.reason).toContain("a tool call was attempted");
+  });
+
+  it("is not-run when the client's own permission layer refused before the hook was consulted", () => {
+    const verdict = verdictFor([], {
+      transcript: "Permission denied and could not request permission from user",
+    }) as { status: string; reason: string };
+    expect(verdict.status).toBe("not-run");
+    expect(verdict.reason).toContain("its own permission layer answered before the hook");
+  });
+
+  it("is not-run when the transcript shows no tool call at all", () => {
+    const verdict = verdictFor([], { transcript: "I could read both files." }) as {
+      status: string;
+      reason: string;
+    };
+    expect(verdict.status).toBe("not-run");
+    expect(verdict.reason).toContain("attempted no tool call");
+  });
+
+  it("keeps the stricter reading for a caller that passes no transcript", () => {
+    // A caller with no transcript cannot tell the two apart, and `failed` is the answer that gets
+    // looked at.
+    expect((verdictFor([]) as { status: string }).status).toBe("failed");
   });
 });
 
