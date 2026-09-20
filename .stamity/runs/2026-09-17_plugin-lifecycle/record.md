@@ -1,7 +1,8 @@
 # Package 15 — Plugin-backed distribution lifecycle (plan 008, file 1: batch A and P1)
 
 Status: **closed** — opened 2026-09-19T09:40Z on the kickoff of 2026-09-17 (regenerated at the planning
-close); merged 2026-09-19T22:38Z as pull request #45 (`main` `e8715ec`); closed with the entry at the end.
+close); merged 2026-09-19T22:38Z as pull request #45 (`main` `e8715ec`); closed with the entry at the end. Session 2 (2026-09-20) is appended below, merged as pull request #46
+(`main` `3d23f75`) and closed with its own entry at the end.
 Timestamps after 2026-09-19T21:50Z were re-derived from commit and run times at the close (the local clock
 ran two hours ahead of UTC past midnight). The directory is dated by the plan's date because file 3 of the plan names this path
 (`.stamity/runs/2026-09-17_plugin-lifecycle/`) as the record every unit of the package appends to.
@@ -2313,3 +2314,26 @@ first push and flipped to ready at this close; no board source is linked (no pro
   session wait for the units that touch their files (the Codex `commandWindows` line and the `plugin
   status` refinements for V1, the trust pages' re-attestation header and REQ-PROVE-018's citations for
   V7's hand-page re-attestation) or the hygiene batch after 1.9.0. `Not done:` nothing within this session's scope. Carried: the nine QA rows accepted unperformed (V1 and V7 measure them); the 29 inbox rows of this session; file 3 for session 3.
+
+## Closing entry — session 2 (2026-09-20T19:05Z)
+
+- CI on the state commit `32947c7`: floor 3m18s, LTS 4m14s, Windows 10m40s, the three apm route legs, DCO,
+  the title check, the size budget, the two advisory checks — every leg green; `all-ci-checks` and
+  `all-pr-checks` both `pass`. The state-file gates (`test/records`, `test/learnings`, `test/qa`) and the
+  measurements test ran green in the main checkout before the push; the leak gate over the tree with the
+  untracked state files reported `0 hits for 18 rules across 1538 files`.
+- Pull request #46 rebase-merged at 2026-09-20T18:54:57Z: public `main` `3d23f75` (87 commits from
+  `e8715ec`, the four session-1 close commits included: U0, files 1 and 2, five fixer rounds, the
+  spec-delta merge and its follow-up, the record). Two merge calls through the GraphQL endpoint failed on
+  transport errors (a 499, an EOF) with the pull request untouched; the REST merge endpoint merged on its
+  first attempt.
+- The measurements page: byte-stable at this close — the 2026-09-20 snapshot written at session 1's close
+  already reads 6 of 8 (this record's ledger carried no open row then, as it carries none now), and the
+  generator refuses to rewrite a same-day snapshot by design; the live rate is 6 of 8.
+- The private layer: AD-130 (the sign-off decision), the HANDOFF paragraph of 2026-09-20 (session 2), the
+  dashboard banner, the DR-030 note, the kickoff regenerated for session 3 — pushed at the close.
+- Not done: nothing within this session's scope. Carried: the nine QA rows accepted unperformed (file 3's
+  V1 measures the four client routes, V7 walks the publish path); the 29 inbox rows of 2026-09-20 in the
+  session-2 block; file 3 (V1–V7) and the 1.9.0 release for session 3. No `plugin-dist` branch and no
+  `plugins/*` tag exist yet. The 27 lane worktrees under the farm (`p15s2-*`) are integrated and can be
+  pruned.
