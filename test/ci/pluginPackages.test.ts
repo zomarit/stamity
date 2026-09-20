@@ -657,18 +657,25 @@ describe("downstream fork operations", () => {
 });
 
 describe("the container manifest each client reads", () => {
-  it("declares the Claude agents as a file list and omits the fields the vendor treats as additive", () => {
+  it("declares no component field on the Claude manifest and relies on the default scan", () => {
     const manifest = JSON.parse(readFileSync(join(roots, "claude", ".claude-plugin", "plugin.json"), "utf8")) as Record<
       string,
       unknown
     >;
-    const agents = manifest["agents"] as string[];
-    expect(agents.length).toBeGreaterThan(1);
-    expect(agents).toEqual([...agents].toSorted());
-    for (const entry of agents) expect(existsSync(join(roots, "claude", entry.replace("./", "")))).toBe(true);
-    expect(manifest["commands"]).toBe("./commands/");
-    expect(Object.hasOwn(manifest, "skills")).toBe(false);
-    expect(Object.hasOwn(manifest, "hooks")).toBe(false);
+    // TEST CHANGE, justified — P3's ledgered finding. This asserted a ten-entry `agents` file
+    // list and `commands: "./commands/"`. The vendored schema's own description for each of the
+    // four component fields is "(in addition to those in the <default>/ directory, if it
+    // exists)": every one of them ADDS to the default scan rather than replacing it, so a
+    // declaration of a path that IS the default asks the client to register each file twice.
+    // The container's contract moved; `test/ci/pluginPackages.claude.test.ts` carries the
+    // schema quotes and the per-field proof.
+    for (const field of ["agents", "commands", "skills", "hooks"]) {
+      expect(Object.hasOwn(manifest, field), field).toBe(false);
+    }
+    // The artifacts the default scan is expected to find are there, so the omission is reliance
+    // on discovery rather than a root that ships nothing at those paths.
+    expect(treeFiles(join(roots, "claude", "agents")).length).toBe(10);
+    expect(treeFiles(join(roots, "claude", "commands")).length).toBe(10);
 
     // The identity half is one fact of this repository, not two: it must equal the committed
     // Claude manifest the repository's own generator maintains.

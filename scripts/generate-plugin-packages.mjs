@@ -504,8 +504,7 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
           add(asset.to, await readFile(from))
         }
 
-        const agentPaths = placements.filter((placement) => placement.class === 'agent').map((placement) => placement.path)
-        add(container.MANIFEST_PATH, jsonDocument(container.buildManifest({ identity, version: releaseVersion, agentPaths })))
+        add(container.MANIFEST_PATH, jsonDocument(container.buildManifest({ identity, version: releaseVersion })))
 
         const capability = buildCapabilityFile({
           client,

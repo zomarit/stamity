@@ -232,18 +232,6 @@ function defectsOf(value: unknown, node: SchemaNode, path = ""): string[] {
   return defects;
 }
 
-/** Every `pattern` string reachable under a node, first-seen order, deduped. */
-function patternsUnder(node: SchemaNode): string[] {
-  const found: string[] = [];
-  const walk = (current: SchemaNode): void => {
-    if (current.pattern !== undefined && !found.includes(current.pattern)) found.push(current.pattern);
-    for (const branch of [...(current.anyOf ?? []), ...(current.allOf ?? [])]) walk(branch);
-    if (current.items !== undefined) walk(current.items);
-  };
-  walk(node);
-  return found;
-}
-
 /**
  * The event names the vendor enumerates as the KEYS of a hooks object.
  *
@@ -325,8 +313,6 @@ interface Manifest {
   author?: { name?: string };
   homepage?: string;
   keywords?: unknown[];
-  agents?: string[];
-  commands?: string;
 }
 
 interface HookEntry {
@@ -382,30 +368,6 @@ describe("the container manifest, against the vendor's own schema", () => {
     expect(manifest.name).toBe("stamity");
   });
 
-  it("writes every agent path the way the vendor's two rules require", () => {
-    const rules = patternsUnder(schemaProperty("agents"));
-    // Two today (`^\./.*` and `.*\.md$`); read from the fixture so a refresh re-points the test.
-    expect(rules.length).toBeGreaterThan(1);
-    const agents = manifest.agents ?? [];
-    expect(agents.length).toBe(10);
-    for (const rule of rules) {
-      const pattern = new RegExp(rule, "u");
-      for (const entry of agents) expect(pattern.test(entry), `${entry} vs ${rule}`).toBe(true);
-      // Non-vacuity: at least one of the two rules rejects a path of the wrong shape.
-      expect(rules.some((other) => !new RegExp(other, "u").test("agents/stamity-reviewer.txt"))).toBe(true);
-    }
-    for (const entry of agents) expect(existsSync(join(root, entry.replace(/^\.\//, ""))), entry).toBe(true);
-  });
-
-  it("points `commands` at a relative directory the vendor's commands rule admits", () => {
-    const commands = schemaProperty("commands");
-    expect(manifest.commands).toBe("./commands/");
-    expect(defectsOf(manifest.commands, commands)).toEqual([]);
-    // The prefix rule is what binds a directory value, and it bites: the same field without `./`
-    // is refused by every form the vendor allows.
-    expect(defectsOf("commands/", commands).length).toBeGreaterThan(0);
-  });
-
   it("carries an author name, a homepage URI and string keywords", () => {
     expect(schemaProperty("author").required).toContain("name");
     expect(manifest.author?.name).toBe("zomarit");
@@ -416,14 +378,27 @@ describe("the container manifest, against the vendor's own schema", () => {
     for (const keyword of manifest.keywords ?? []) expect(typeof keyword).toBe("string");
   });
 
-  it("omits the two additive fields and the field the vendor does not have at all", () => {
-    // `skills` and `hooks` EXIST in the schema and are documented as additive — a declared path is
-    // searched in addition to the default directory. This root puts both at exactly those
-    // defaults, so declaring them would ask the client to discover one artifact twice.
-    for (const field of ["skills", "hooks"] as const) {
-      expect(schemaProperty(field).anyOf?.[0]?.description ?? "").toContain("in addition to");
+  it("omits every component field the vendor's own schema calls additive", () => {
+    // One rule over four fields. The schema's first form for each reads "... (in addition to
+    // those in the <default>/ directory, if it exists)" — a declared path is searched BESIDE the
+    // default scan, never instead of it. This root puts every artifact at exactly the default,
+    // so naming one asks the client to discover the same file twice.
+    //
+    // TEST CHANGE, justified — P3's ledgered finding. `agents` (a ten-entry file list) and
+    // `commands` ("./commands/") were declared on the plugins-reference reading that those
+    // fields REPLACE the default scan, and two cases here pinned the declared values. The
+    // vendored schema settles it the other way, in the same words `skills` and `hooks` already
+    // relied on, so the declarations are gone and their pins with them. What moved is the
+    // container's contract, not this suite's standard: `agents`'s path-pattern rules and
+    // `commands`'s `./` prefix rule bound values this manifest no longer emits.
+    for (const field of ["agents", "commands", "skills", "hooks"] as const) {
+      expect(schemaProperty(field).anyOf?.[0]?.description ?? "", field).toContain("in addition to");
       expect(Object.hasOwn(manifest, field), field).toBe(false);
     }
+    // And the root still HAS the artifacts the default scan is expected to find, so the omission
+    // is a reliance on discovery rather than a root that ships nothing at those paths.
+    expect(treeFiles(join(root, "agents")).length).toBe(10);
+    expect(treeFiles(join(root, "commands")).length).toBe(10);
     // `rules` is not a field of this manifest at all, which is why the container declares the
     // rule class repository-owned rather than carrying it.
     expect(Object.hasOwn(SCHEMA.properties ?? {}, "rules")).toBe(false);
