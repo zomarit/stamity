@@ -546,6 +546,64 @@ describe("argument and input refusals", () => {
     expect(result.status).toBe(2);
     expect(result.stderr).toContain("40");
   });
+
+  it("refuses a version carrying build metadata, which the capability validator would reject later", () => {
+    // The two regexes disagreed: this flag admitted `+build` and
+    // `scripts/plugins/capability.mjs` refused it three hundred lines later, as a defect
+    // message about a capability file nobody had asked for. They are the same pattern now.
+    const rejected = generate(["--out-dir", tempDir("build-meta"), "--runtime", RUNTIME, "--version", "1.9.0+build.7"]);
+    expect(rejected.status).toBe(2);
+    expect(rejected.stderr).toContain("build metadata");
+    // Non-degenerate: the flag still takes the two forms the distribution surface does carry.
+    for (const accepted of ["1.9.0", "1.9.0-rc.1"]) {
+      const out = tempDir(`version-${accepted}`);
+      const result = generate(["--out-dir", out, "--runtime", RUNTIME, "--client", "codex", "--version", accepted, "--source-commit", FIXED_COMMIT, "--source-commit-date", FIXED_COMMIT_DATE]);
+      expect(result.status, `${accepted}: ${result.stderr}`).toBe(0);
+    }
+  }, ONE_ROOT_MS * 2);
+
+  it("refuses a source commit date that is a year rather than a timestamp", () => {
+    // `Date.parse("2026")` succeeds, so the old check passed a year through and every root's
+    // README would have named it as the day the commit was made. A provenance record is a
+    // date-time with a zone or it is not one.
+    for (const bad of ["2026", "2026-09", "yesterday"]) {
+      const result = generate(["--out-dir", tempDir(`bad-date-${bad}`), "--runtime", RUNTIME, "--source-commit-date", bad]);
+      expect(result.status, bad).toBe(2);
+      expect(result.stderr, bad).toContain("ISO 8601");
+    }
+    // And the two spellings the build actually receives are admitted: git's own `%cI` with an
+    // offset, and the `Z` form the suites pin.
+    expect(generate(["--out-dir", tempDir("date-ok"), "--runtime", RUNTIME, "--source-commit-date", "2026-09-20T14:28:31+02:00", "--client", "nope"]).stderr).toContain("nope");
+  });
+
+  it("answers a usage refusal without loading the TypeScript module graph", () => {
+    // The seven dynamic imports pull in the planner, every adapter, the content catalog and the
+    // atomic writer — most of this engine — and a mistyped flag has no use for any of it.
+    // Probed structurally rather than by timing: a checkout carrying `scripts/` and no `src/`
+    // can only answer at all if the arguments are parsed before those imports are reached.
+    const bare = tempDir("scripts-only");
+    cpSync(join(REPO_ROOT, "scripts"), join(bare, "scripts"), { recursive: true });
+    symlinkSync(join(REPO_ROOT, "node_modules"), join(bare, "node_modules"), "dir");
+    expect(existsSync(join(bare, "src"))).toBe(false);
+
+    const result = spawnSync(process.execPath, [join(bare, "scripts", "generate-plugin-packages.mjs"), "--nope"], {
+      cwd: bare,
+      encoding: "utf8",
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    expect(result.status, result.stderr).toBe(2);
+    expect(result.stderr).toContain("Unknown argument: --nope");
+    // The probe bites: the same checkout cannot get past the imports on a valid invocation.
+    const loaded = spawnSync(
+      process.execPath,
+      [join(bare, "scripts", "generate-plugin-packages.mjs"), "--out-dir", tempDir("never"), "--runtime", RUNTIME],
+      { cwd: bare, encoding: "utf8", maxBuffer: 8 * 1024 * 1024 },
+    );
+    expect(loaded.status).not.toBe(2);
+    // The first `src/` module the graph reaches — `plugins/layout.mjs`'s content catalog — is
+    // what it dies on, which is the proof that the graph is reached at all on a valid call.
+    expect(loaded.stderr).toContain("src/content/catalog.ts");
+  });
 });
 
 describe("corpus refusals", () => {

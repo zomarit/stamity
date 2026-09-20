@@ -55,6 +55,8 @@
 // Usage: node scripts/generate-plugin-packages.mjs --out-dir <dir> --runtime <dir> [--client <csv>]
 //        [--check] [--source-commit <sha>] [--source-commit-date <iso>] [--version <semver>]
 
+import pLimit from 'p-limit'
+
 import { prepareNativeTypescriptCli } from './native-typescript.mjs'
 import { spawnSync } from 'node:child_process'
 import { lstat, mkdtemp, readFile, readdir, rm, rmdir, stat } from 'node:fs/promises'
@@ -63,7 +65,7 @@ import { tmpdir } from 'node:os'
 import { join, posix, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { resolveDistributionIdentity } from './distribution-identity.mjs'
+import { DISTRIBUTION_CLIENTS, resolveDistributionIdentity } from './distribution-identity.mjs'
 import { buildCapabilityFile, PLUGIN_CLASSES, validateCapabilityFile } from './plugins/capability.mjs'
 import { stageSubstitutedCorpus } from './plugins/corpusStage.mjs'
 import { renderSetupCommand } from './plugins/setupCommand.mjs'
@@ -84,7 +86,21 @@ function fail(message) {
 }
 
 const COMMIT_SHA = /^[0-9a-f]{40}$/
-const SEMVER = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/
+/**
+ * The version a root may be built at: `major.minor.patch` with an optional prerelease and NO
+ * build metadata. Identical to `scripts/plugins/capability.mjs`'s `SEMVER`, deliberately: that
+ * validator judges the value this flag supplies, so a `+build` accepted here was refused three
+ * hundred lines later with a defect message about a file nobody had asked for. Nothing in the
+ * distribution surface carries build metadata either — neither the `plugins/v<version>` tag
+ * pattern nor the `^x.y.z` companion range has a place to put it.
+ */
+const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
+/**
+ * A full ISO 8601 date-time: date, `T`, a time to the second, and a zone. `Date.parse` alone
+ * accepts `2026` and `2026-09` — a year is a parseable date and a useless provenance record,
+ * and it would land in every root's README as the day the commit was made.
+ */
+const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
 
 /** Every plugin root's hook scripts and policy document live here, on every client. */
 const HOOKS_DIR = 'hooks'
@@ -93,6 +109,21 @@ const RUNTIME_DIR = 'runtime'
 const LOCATOR_NAME = 'locate.mjs'
 
 const nonEmptyString = (value) => typeof value === 'string' && value.trim() !== ''
+
+/**
+ * How many per-root file operations run at once.
+ *
+ * `p-limit` rather than a hand-rolled batcher: it is already a PRODUCTION dependency of this
+ * package (`src/pack/install.ts`, `src/workspace/sync.ts`, `src/workspace/…`), so it costs
+ * nothing new here and behaves the way three other call sites in this repository already do.
+ *
+ * A root is ~690 files and four roots run in sequence, so an unbounded `Promise.all` opened
+ * close to seven hundred descriptors at once and handed libuv a queue it serves four at a time
+ * anyway (`UV_THREADPOOL_SIZE` defaults to 4). 32 is wide enough to keep that pool saturated
+ * through the lock-write-rename round trip `atomicWriteFile` makes per file, and narrow enough
+ * that a machine with a low `ulimit -n` — a CI container, most often — never reaches it.
+ */
+const FILE_CONCURRENCY = 32
 
 /** 2-space JSON with a trailing newline: the shape every generated document in this tree takes. */
 function jsonDocument(value) {
@@ -195,14 +226,6 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
     process.exit(2)
   }
 
-  const { buildClasses, CLIENT_CONTAINERS, LAYOUT_CLIENTS, placeRow } = await import('./plugins/layout.mjs')
-  const { composeEmissionPlanner } = await import('../src/emit/planner.ts')
-  const { ADAPTER_REGISTRY } = await import('../src/adapters/registry.ts')
-  const { buildContentIndex } = await import('../src/content/catalog.ts')
-  const { resolveSelection } = await import('../src/content/selection.ts')
-  const { MANIFEST_VERSION } = await import('../src/types/manifest.ts')
-  const { atomicWriteFile } = await import('../src/merge/atomicWrite.ts')
-
   // ── Arguments ────────────────────────────────────────────────────
 
   const args = process.argv.slice(2)
@@ -252,10 +275,13 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   if (outDir === null) usage('--out-dir is required.')
   if (runtimeDir === null) usage('--runtime is required: a plugin root bundles the runtime that runs its setup.')
 
-  const selectedClients = clients ?? LAYOUT_CLIENTS
+  // Against DISTRIBUTION_CLIENTS, which this file already imports statically — `LAYOUT_CLIENTS`
+  // is that same list, and asking the layout module for it would load the TypeScript graph the
+  // section below exists to defer.
+  const selectedClients = clients ?? DISTRIBUTION_CLIENTS
   for (const client of selectedClients) {
-    if (!LAYOUT_CLIENTS.includes(client)) {
-      usage(`--client ${client} is not one of ${LAYOUT_CLIENTS.join(', ')}.`)
+    if (!DISTRIBUTION_CLIENTS.includes(client)) {
+      usage(`--client ${client} is not one of ${DISTRIBUTION_CLIENTS.join(', ')}.`)
     }
   }
   if (selectedClients.length === 0) usage('--client needs at least one client.')
@@ -263,12 +289,30 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   if (sourceCommit !== null && !COMMIT_SHA.test(sourceCommit)) {
     usage('--source-commit must be a 40-character lowercase hex commit sha.')
   }
-  if (sourceCommitDate !== null && Number.isNaN(Date.parse(sourceCommitDate))) {
-    usage('--source-commit-date must be an ISO 8601 timestamp.')
+  if (sourceCommitDate !== null && (!ISO_DATE_TIME.test(sourceCommitDate) || Number.isNaN(Date.parse(sourceCommitDate)))) {
+    usage('--source-commit-date must be a full ISO 8601 timestamp, for example 2026-09-20T00:00:00Z.')
   }
   if (version !== null && !SEMVER.test(version)) {
-    usage('--version must be a semantic version, for example 1.9.0.')
+    usage('--version must be a semantic version with no build metadata, for example 1.9.0.')
   }
+
+  // ── The module graph ─────────────────────────────────────────────
+  //
+  // AFTER the arguments, on purpose. These seven imports pull in the planner, every adapter, the
+  // content catalog and the atomic writer — most of this engine — and a mistyped flag has no use
+  // for any of it. Parsing first keeps an exit-2 usage refusal to the cost of reading argv, and
+  // keeps a refusal's message from arriving behind a module-load error in an unrelated file.
+  // `plugins/layout.mjs` is in here rather than above because it has a TypeScript import of its
+  // own; the client list the arguments were validated against is `DISTRIBUTION_CLIENTS`, which
+  // is what `LAYOUT_CLIENTS` derives from and the layout module asserts its containers against.
+
+  const { buildClasses, CLIENT_CONTAINERS, placeRow } = await import('./plugins/layout.mjs')
+  const { composeEmissionPlanner } = await import('../src/emit/planner.ts')
+  const { ADAPTER_REGISTRY } = await import('../src/adapters/registry.ts')
+  const { buildContentIndex } = await import('../src/content/catalog.ts')
+  const { resolveSelection } = await import('../src/content/selection.ts')
+  const { MANIFEST_VERSION } = await import('../src/types/manifest.ts')
+  const { atomicWriteFile } = await import('../src/merge/atomicWrite.ts')
 
   // ── Identity, version, provenance ────────────────────────────────
 
@@ -581,15 +625,18 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   if (check) {
     const drift = []
     for (const [client, files] of rendered) {
+      const read = pLimit(FILE_CONCURRENCY)
       const compared = await Promise.all(
-        [...files].map(async ([relPath, bytes]) => {
-          try {
-            const committed = await readFile(join(base, client, ...relPath.split('/')))
-            return committed.equals(bytes) ? null : `${client}/${relPath}: ${firstDifference(bytes, committed)}`
-          } catch (err) {
-            return `${client}/${relPath}: not readable (${err.code ?? err.message})`
-          }
-        }),
+        [...files].map(([relPath, bytes]) =>
+          read(async () => {
+            try {
+              const committed = await readFile(join(base, client, ...relPath.split('/')))
+              return committed.equals(bytes) ? null : `${client}/${relPath}: ${firstDifference(bytes, committed)}`
+            } catch (err) {
+              return `${client}/${relPath}: not readable (${err.code ?? err.message})`
+            }
+          }),
+        ),
       )
       drift.push(...compared.filter((line) => line !== null))
       // Drift of the other sign: a file the corpus no longer projects is one regeneration would
@@ -611,13 +658,21 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
     for (const [client, files] of rendered) {
       const root = join(base, client)
       const stale = (await existingTree(client)).filter((relPath) => !files.has(relPath))
+      const write = pLimit(FILE_CONCURRENCY)
       try {
         // Stale files go FIRST, so a rename lands as one file rather than as the new one beside
         // the old; the directory sweep runs last, because a directory is empty only once every
         // file that was in it has gone and every file that belongs there has landed.
-        await Promise.all(stale.map((relPath) => rm(join(root, ...relPath.split('/')))))
+        await Promise.all(stale.map((relPath) => write(() => rm(join(root, ...relPath.split('/'))))))
         await Promise.all(
-          [...files].map(([relPath, bytes]) => atomicWriteFile(join(root, ...relPath.split('/')), bytes)),
+          [...files].map(([relPath, bytes]) =>
+            // `boundaryDir` is the OUTPUT root, not the client directory: the writer then
+            // resolves each parent fully and refuses a landing outside `<out>`, which catches a
+            // symlinked directory on the way in rather than following it. Without it the writer
+            // falls back to a local structural rule that cannot see the tree this write belongs
+            // to. `<out>` rather than `<out>/<client>` because the four roots are one artifact.
+            write(() => atomicWriteFile(join(root, ...relPath.split('/')), bytes, { boundaryDir: base })),
+          ),
         )
         await pruneEmptyDirectories(root, client)
       } catch (err) {
