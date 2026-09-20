@@ -412,16 +412,18 @@ describe("skills/, agents/ and the command surface", () => {
     expect(body).toContain("plugin setup --client cursor -y");
     expect(body).not.toContain("CLAUDE_PLUGIN_ROOT");
 
-    // KNOWN GAP, pinned so it cannot be closed silently. The nine carried touchpoints above all
-    // declare `disable-model-invocation: true`; the GENERATED one cannot, because the generator
-    // writes `renderSetupCommand(client, rootVar)` straight into the root with no per-container
-    // transform, and that renderer emits `description` alone for all four clients. Measured
-    // consequence on the real CLI (2026-09-20): `st-setup` is listed among the skills the model
-    // may invoke on its own judgement while the nine touchpoints are not — an unbidden
-    // `plugin setup` writes files. Returned as a finding for the core seam; when the seam gains
-    // the hook, this assertion goes red and is replaced by the positive one.
+    // TEST CHANGE, justified — this REPLACES the known-gap pin that stood here, which asserted
+    // `description` alone and recorded the consequence measured on the real CLI (2026-09-20):
+    // `st-setup` was listed among the skills the model may invoke on its own judgement while the
+    // nine touchpoints were not, and an unbidden `plugin setup` writes files into the operator's
+    // repository. The contract that moved is the container's, not this assertion's — the Cursor
+    // module now declares `SETUP_COMMAND_FRONTMATTER`, so the generated command carries the same
+    // three keys, in the same order, that `buildCursorCommand` renders for the carried nine
+    // (src/adapters/cursor.ts). The old assertion no longer states a true fact about this root.
     expect(head(body)).toEqual([
+      "name: st-setup",
       'description: "Set this repository up for the stamity plugin: resolve facts and gates, write the repository-owned files, report duplicates."',
+      "disable-model-invocation: true",
     ]);
   });
 

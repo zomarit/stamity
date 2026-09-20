@@ -157,6 +157,15 @@ function treeDigest(dir: string): Record<string, string> {
   return digest;
 }
 
+/** The frontmatter block of a generated command file, without the fences. */
+function frontmatter(text: string): string[] {
+  const lines = text.split("\n");
+  expect(lines[0]).toBe("---");
+  const end = lines.indexOf("---", 1);
+  expect(end).toBeGreaterThan(0);
+  return lines.slice(1, end);
+}
+
 interface CapabilityClass {
   status: string;
   count?: number;
@@ -356,6 +365,28 @@ describe("generated plugin roots", () => {
     ).toContain("plugin setup --client copilot -y");
     expect(treeFiles(join(roots, "codex")).filter((rel) => rel.includes("st-setup"))).toEqual([]);
     expect(readFileSync(join(roots, "codex", "README.md"), "utf8")).toContain("plugin setup --client codex -y");
+  });
+
+  it("decorates the generated setup command per container and leaves the other two undecorated", () => {
+    // `disable-model-invocation` is CURSOR vocabulary — it is what makes a file on that client a
+    // command rather than a skill the model may reach for on its own (cursor.com/docs/skills,
+    // 2026-09-20), and `test/ci/pluginPackages.cursor.test.ts` pins the decorated head there.
+    // Neither vendor document for these two clients declares any such key: a Claude command file
+    // is a `commands/<id>.md` whose frontmatter the reference lists as description/argument-hint/
+    // allowed-tools/model, and a Copilot command file is a `commands/<id>.md` read the same way
+    // (both accessed 2026-09-20). This case is the negative half of the per-client decoration:
+    // borrowing the key here would state a restriction neither runtime applies.
+    const heads = {
+      claude: frontmatter(readFileSync(join(roots, "claude", "commands", "st-setup.md"), "utf8")),
+      copilot: frontmatter(
+        readFileSync(join(roots, "copilot", "com.github.copilot", "commands", "st-setup.md"), "utf8"),
+      ),
+    };
+    for (const [client, keys] of Object.entries(heads)) {
+      expect(keys, client).toEqual([
+        'description: "Set this repository up for the stamity plugin: resolve facts and gates, write the repository-owned files, report duplicates."',
+      ]);
+    }
   });
 
   it("drops the charter, the client entry files and the repository state tree from every root", () => {
