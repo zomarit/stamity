@@ -272,8 +272,23 @@ const NATIVE_CONTENT_DIRS: Readonly<Record<Tool, readonly (readonly [string, Plu
     ],
   };
 
-/** Extensions the four clients spell a content file with. */
-const NATIVE_CONTENT_EXTENSIONS = [".md", ".mdc", ".toml"] as const;
+/**
+ * Extensions the four clients spell a content file with, LONGEST FIRST.
+ *
+ * The order is load-bearing, not tidiness: Copilot writes `<id>.agent.md` and
+ * `<id>.prompt.md`, and a list that met `.md` first would strip one suffix and
+ * leave `stamity-reviewer.agent`, which matches no id the plugin carries — so
+ * every Copilot file was invisible to the unmanaged scan. The two compound
+ * forms therefore precede the bare `.md` they end with, and any extension added
+ * later belongs above every extension it is a suffix of.
+ */
+const NATIVE_CONTENT_EXTENSIONS = [
+  ".agent.md",
+  ".prompt.md",
+  ".md",
+  ".mdc",
+  ".toml",
+] as const;
 
 /**
  * The emitted id a native directory entry stands for: a file's basename with
