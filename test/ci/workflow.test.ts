@@ -573,7 +573,10 @@ describe("ci.yml — the merge-blocking gate", () => {
     it("sends the invocation legs to the nightly file, and says so where a reader looks", () => {
       // The split is the honest part of this lane, so it is pinned rather than trusted: the half
       // that needs a credential runs in nightly.yml and the lane map says which half is which.
-      const nightlyDrive = runOf(stepsOf(nightly, "headless-lane"), "Headless target-tool drive");
+      const nightlyDrive = runOf(
+        stepsOf(nightly, "headless-lane"),
+        "Headless target-tool drive (claude)",
+      );
       expect(nightlyDrive).toContain("node scripts/plugin-route-smoke.mjs");
       expect(nightlyDrive).toContain("--invoke");
 
@@ -752,15 +755,11 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
     // credential is present rather than driving all four and failing three.
     expect(creds.run).toContain('echo "clients=$clients" >> "$GITHUB_OUTPUT"');
 
-    // The drive step exists, is guarded, and comes after the gate that arms it.
-    expect(conditionOf(steps, "Headless target-tool drive")).toBe(
-      "steps.creds.outputs.enabled == 'true'",
-    );
-    expect(indexOf(steps, "Headless target-tool drive")).toBeGreaterThan(
-      indexOf(steps, "Headless drive credentials"),
-    );
-    // Evaluated both ways so the guard is proven to be the switch, not decoration.
-    const condition = conditionOf(steps, "Headless target-tool drive");
+    // The summary step is the one still gated on the lane-wide switch, and it is evaluated both
+    // ways so the guard is proven to be the switch rather than decoration. `always() &&` is on it
+    // deliberately: a run whose legs FAILED is exactly the run whose summary must not go missing.
+    const condition = conditionOf(steps, "Headless drive summary");
+    expect(condition).toBe("always() && steps.creds.outputs.enabled == 'true'");
     expect(
       evaluateWorkflowExpression(condition, { steps: { creds: { outputs: { enabled: "false" } } } }),
     ).toBe(false);
@@ -769,63 +768,161 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
     ).toBe(true);
   });
 
+  /** The four clients, their per-client drive step, and the ONE secret each one may hold. */
+  const INVOCATION_LEGS = [
+    ["claude", "ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"],
+    ["cursor", "CURSOR_API_KEY", "CURSOR_API_KEY"],
+    ["copilot", "COPILOT_GITHUB_TOKEN", "COPILOT_GITHUB_TOKEN"],
+    // The one asymmetry, and it is deliberate: the SECRET is named for the client, the VARIABLE is
+    // the vendor's, and the two differ for codex alone.
+    ["codex", "OPENAI_API_KEY", "CODEX_API_KEY"],
+  ] as const;
+
   // ADDED by plan 008 file 3, unit V1w. CHANGED from the assertion that pinned the drive step's
   // "Headless drive not implemented" warning: the harness now exists, so the behaviour that
   // assertion guarded — that a credentialed run reports honestly rather than pretending to measure
-  // — moved to the last case here, which pins the one thing the harness still does NOT do.
+  // — moved to the summary case below, which pins the one thing the harness still does NOT do.
   it("drives the plugin route's invocation legs for exactly the credentialed clients", () => {
     const steps = stepsOf(nightly, "headless-lane");
-    const drive = stepOf(steps, "Headless target-tool drive");
-    const run = drive.run ?? "";
 
     // The same four roots the release builds, from the packed tarball, with provenance as an input.
-    expect(run).toContain("npm pack --pack-destination");
-    expect(run).toContain("node scripts/build-plugin-runtime.mjs");
-    expect(run).toContain("node scripts/build-plugin-distribution.mjs");
-    expect(run).toContain('--source-commit "$GITHUB_SHA"');
-
-    // WITH `--invoke`, which is the whole reason this half cannot live in the merge gate, and
-    // scoped to the armed clients rather than to all four.
-    expect(run).toContain("node scripts/plugin-route-smoke.mjs");
-    expect(run).toContain("--invoke");
-    expect(run).toContain('--client "$CLIENTS"');
-    expect(drive.env?.["CLIENTS"]).toBe("${{ steps.creds.outputs.clients }}");
-
-    // Each secret reaches the client through the variable that client actually honours, measured
-    // from the binaries on 2026-09-20 rather than read off a page: `claude --help` on 2.1.278
-    // ("Anthropic auth is strictly ANTHROPIC_API_KEY"), `agent --help` on 2026.09.15-d2fe57e
-    // ("can also use CURSOR_API_KEY env var"), `copilot help environment` on 1.0.85
-    // (COPILOT_GITHUB_TOKEN, GH_TOKEN, GITHUB_TOKEN in that precedence) and `codex login --help`
-    // on codex-cli 0.154.0 (`printenv OPENAI_API_KEY | codex login --with-api-key`). The last is
-    // the one asymmetry and it is deliberate: the SECRET is named for the client, the VARIABLE is
-    // the vendor's, and the two differ for codex alone.
-    expect(drive.env?.["ANTHROPIC_API_KEY"]).toBe("${{ secrets.ANTHROPIC_API_KEY }}");
-    expect(drive.env?.["CURSOR_API_KEY"]).toBe("${{ secrets.CURSOR_API_KEY }}");
-    expect(drive.env?.["COPILOT_GITHUB_TOKEN"]).toBe("${{ secrets.COPILOT_GITHUB_TOKEN }}");
-    expect(drive.env?.["OPENAI_API_KEY"]).toBe("${{ secrets.CODEX_API_KEY }}");
+    const build = runOf(steps, "Build the plugin distribution");
+    expect(build).toContain("npm pack --pack-destination");
+    expect(build).toContain("node scripts/build-plugin-runtime.mjs");
+    expect(build).toContain("node scripts/build-plugin-distribution.mjs");
+    expect(build).toContain('--source-commit "$GITHUB_SHA"');
 
     // A binary the client CLI installed under a different name is the commonest way this lane would
     // silently drive nothing — the Cursor CLI's command is `agent` — so the pair list is pinned the
-    // same way ci.yml's export step is, and the export itself is the `STAMITY_<CLIENT>_BIN`
-    // contract the smoke reads a binary path from.
-    expect(run).toContain('export "STAMITY_${name}_BIN=$path"');
+    // same way ci.yml's export step is, and the export is the `STAMITY_<CLIENT>_BIN` contract the
+    // smoke reads a binary path from.
+    const exports = runOf(steps, "Export the client binaries");
+    expect(exports).toContain('echo "STAMITY_${name}_BIN=$path" >> "$GITHUB_ENV"');
     for (const pair of ["CLAUDE claude", "CURSOR agent", "COPILOT copilot", "CODEX codex"]) {
-      expect(run, `the loop must walk "${pair}"`).toContain(`"${pair}"`);
+      expect(exports, `the loop must walk "${pair}"`).toContain(`"${pair}"`);
     }
 
-    // A FAIL here is a red nightly, which is this lane's purpose — so the smoke's exit status must
-    // reach the step. `set -o pipefail` is what makes that true through the `tee`.
-    expect(run).toContain("set -euo pipefail");
+    for (const [client, variable, secret] of INVOCATION_LEGS) {
+      const step = stepOf(steps, `Headless target-tool drive (${client})`);
+      const run = step.run ?? "";
 
-    // The one thing the harness still does not do, and the claim the retired warning used to
-    // carry: driving a client is not SCORING a run. The eval harness is still absent, and the step
+      // WITH `--invoke`, which is the whole reason this half cannot live in the merge gate, and
+      // scoped to the ONE client this step holds a credential for.
+      expect(run, client).toContain("node scripts/plugin-route-smoke.mjs");
+      expect(run, client).toContain(`--client ${client} --invoke`);
+      // A FAIL is a red nightly, which is this lane's purpose — so the smoke's exit status has to
+      // reach the step. `set -o pipefail` is what carries it through the `tee`.
+      expect(run, client).toContain("set -euo pipefail");
+      // Each leg reports its own result lines, so a lane with one failing client still shows what
+      // the other three did.
+      expect(run, client).toContain("$GITHUB_STEP_SUMMARY");
+      expect(run, client).toContain("^plugin-route: ");
+      // The secret reaches the client through the variable that client honours, measured from the
+      // binaries on 2026-09-20 rather than read off a page (the citations are at each step).
+      expect(step.env?.[variable], client).toBe(`\${{ secrets.${secret} }}`);
+    }
+  });
+
+  // ADDED by plan 008 file 3, unit V1w as the round-1 fix for the security lens's finding on this
+  // unit. The shape this replaced put all four secrets in ONE step whose body then ran three
+  // `npm install -g` lines and piped a vendor installer to bash, so a single compromised vendor
+  // release could read the other three vendors' credentials out of its own environment.
+  //
+  // Two independent properties close it, and both are pinned because either one alone is a shape
+  // someone can undo without noticing: nothing that executes third-party code runs in a step that
+  // holds a credential, and no drive step holds more than its own client's.
+  it("keeps every vendor's credential out of reach of every other vendor's code", () => {
+    const steps = stepsOf(nightly, "headless-lane");
+    const named = (name: string): number => indexOf(steps, name);
+
+    // Property one: the steps that run other people's code hold nothing, and they run BEFORE the
+    // first step that holds anything. Ordering is the stronger half of this — a step placed ahead
+    // of `creds` cannot read a credential whatever its `env:` later says.
+    const credsAt = named("Headless drive credentials");
+    expect(credsAt).toBeGreaterThan(0);
+    for (const name of [
+      "Build the plugin distribution",
+      "Install the client CLIs",
+      "Export the client binaries",
+    ]) {
+      const step = stepOf(steps, name);
+      const body = `${step.run ?? ""}${JSON.stringify(step.env ?? {})}`;
+      expect(body, `${name} must reference no secret`).not.toContain("secrets.");
+      expect(named(name), `${name} must run before the credentials exist`).toBeLessThan(credsAt);
+    }
+    // The install lines specifically — the ones that execute a vendor's release — are in that
+    // secret-free step and nowhere else.
+    const installs = runOf(steps, "Install the client CLIs");
+    for (const line of [
+      "npm install -g @anthropic-ai/claude-code",
+      "npm install -g @github/copilot",
+      "npm install -g @openai/codex",
+      "curl -fsS https://cursor.com/install | bash",
+    ]) {
+      expect(installs, `${line} must live in the secret-free step`).toContain(line);
+      for (const [client] of INVOCATION_LEGS) {
+        expect(
+          stepOf(steps, `Headless target-tool drive (${client})`).run ?? "",
+          `${client}'s drive step must not install anything`,
+        ).not.toContain(line);
+      }
+    }
+
+    // Property two: each drive step's `env:` names EXACTLY one secret — its own. `toEqual` on the
+    // key set, not a `toContain`, because the finding was an extra key rather than a missing one.
+    for (const [client, variable] of INVOCATION_LEGS) {
+      const step = stepOf(steps, `Headless target-tool drive (${client})`);
+      expect(Object.keys(step.env ?? {}), `${client} must hold one variable`).toEqual([variable]);
+      const others = INVOCATION_LEGS.filter(([id]) => id !== client);
+      for (const [otherClient, , otherSecret] of others) {
+        expect(
+          JSON.stringify(step.env ?? {}),
+          `${client} must not hold ${otherClient}'s secret`,
+        ).not.toContain(otherSecret);
+      }
+    }
+
+    // The guards, evaluated against every armed combination rather than trusted. `contains()` over
+    // the csv is only sound because the four names are mutually non-prefixing, and this is the
+    // assertion that keeps it sound: a fifth client whose name contained another's would fail here.
+    for (const armed of [
+      "claude",
+      "cursor,codex",
+      "claude,cursor,copilot,codex",
+      "copilot",
+      "codex",
+    ]) {
+      const context = { steps: { creds: { outputs: { clients: armed } } } };
+      for (const [client] of INVOCATION_LEGS) {
+        const guard = conditionOf(steps, `Headless target-tool drive (${client})`);
+        expect(guard, client).toBe(`contains(steps.creds.outputs.clients, '${client}')`);
+        expect(
+          evaluateWorkflowExpression(guard, context),
+          `armed "${armed}" must ${armed.split(",").includes(client) ? "" : "not "}run ${client}`,
+        ).toBe(armed.split(",").includes(client));
+      }
+    }
+  });
+
+  it("says what the invocation legs did not measure, even when a leg failed", () => {
+    // The claim the retired "not implemented" warning used to carry, kept now that the harness
+    // exists: driving a client is not SCORING a run. The eval harness is still absent, and the
     // summary has to say so where the person reading the run will see it.
-    expect(run).toContain("$GITHUB_STEP_SUMMARY");
-    expect(run.toLowerCase()).toContain("eval harness");
-    expect(
-      run,
-      "the retired not-implemented warning must not come back: the harness exists now",
-    ).not.toContain("Headless drive not implemented");
+    const summary = stepOf(stepsOf(nightly, "headless-lane"), "Headless drive summary");
+    expect(summary.run).toContain("$GITHUB_STEP_SUMMARY");
+    expect((summary.run ?? "").toLowerCase()).toContain("eval harness");
+    // `always()` so a run whose legs failed is not the run whose caveat goes missing — that is
+    // exactly the run someone would otherwise read as a measurement.
+    expect(summary.if).toContain("always()");
+    expect(summary.env?.["CLIENTS"]).toBe("${{ steps.creds.outputs.clients }}");
+    // And it holds no credential: it reports, so it has no reason to.
+    expect(JSON.stringify(summary.env ?? {})).not.toContain("secrets.");
+    for (const { file, source } of [nightly]) {
+      expect(
+        source,
+        `${file}: the retired not-implemented warning must not come back`,
+      ).not.toContain("Headless drive not implemented");
+    }
   });
 });
 
