@@ -32,14 +32,16 @@
 #     read by the clients themselves rather than by a generator's own byte-diff. What it PROVES:
 #     the four roots' structure on every run — each root's `stamity-plugin.json` parses, every
 #     carried class's file count equals its declaration, and the container manifest validates —
-#     plus each client's CREDENTIAL-FREE install, on the legs whose CLI installs on the runner.
-#     What it does NOT prove: the invocation legs. Driving a client through a prompt needs a
-#     vendor credential this job holds none of, so those run in two other places — the nightly
-#     lane (.github/workflows/nightly.yml), behind per-client secrets, and the QA harness on the
-#     maintainer's machine against the logged-in binaries. A CLI that fails to install here leaves
-#     its legs SKIPPED with the installer's stderr in the log and a notice naming it; a structure
-#     failure, or any leg FAIL, is red. So the merge gate is the structure claim, which needs no
-#     credential and holds on every runner.
+#     plus, on the clients whose CLI installs on the runner, each client's CREDENTIAL-FREE install
+#     and the discovery legs a credential-free LISTING command can answer (Copilot and Codex).
+#     What it does NOT prove: discovery wherever it has to be read out of an invocation TRANSCRIPT
+#     — Claude and Cursor, whose only listing of a plugin's ids is what a driven session prints —
+#     and every invocation leg. Both need a vendor credential this job holds none of, so they run
+#     in two other places: the nightly lane (.github/workflows/nightly.yml), behind per-client
+#     secrets, and the QA harness on the maintainer's machine against the logged-in binaries. A CLI
+#     that fails to install here leaves its legs SKIPPED with the installer's stderr in the log and
+#     a notice naming it; a structure failure, or any leg FAIL, is red. So what the merge gate
+#     holds is the credential-free half of the route, which holds on every runner.
 #   - The aggregator itself. It is the ONE required status context THIS file exposes: the legs
 #     name themselves per leg, so a rule written against them binds names that rotate with the
 #     matrix.
@@ -370,12 +372,21 @@ jobs:
   # client can read the result, which is the whole claim the distribution makes. So this lane
   # builds the four roots the release builds, with the same three lines, and then asks the clients.
   #
-  # The credential boundary is what shapes it. `structure` needs no client at all and runs on every
-  # leg; `install` needs the client's BINARY but no account (`claude plugin validate`, a marketplace
-  # add into a scratch HOME, a deployed-tree comparison); `discovery` and `invocation` need a
-  # credential, and this job holds none, so they do not run here. They run in the nightly lane
-  # behind per-client secrets and in the QA harness on the maintainer's machine. A lane that
-  # pretended otherwise would report a route as proven on the strength of a structure check.
+  # The credential boundary is what shapes it, and it does not fall neatly between legs — it falls
+  # through the middle of one. `structure` needs no client at all and runs on every leg. `install`
+  # needs the client's BINARY but no account (`claude plugin validate`, a marketplace add into a
+  # scratch HOME, a deployed-tree comparison). `discovery` splits: where the client has a listing
+  # command that answers without an account it runs here, and where the only listing of a plugin's
+  # ids is what a driven session PRINTS it cannot — that reading needs a credential exactly as
+  # `invocation` does. So this job runs structure, install, and the credential-free half of
+  # discovery; the transcript half and every invocation leg run in the nightly lane behind
+  # per-client secrets and in the QA harness on the maintainer's machine.
+  #
+  # Which clients fall on which side of that split is the SMOKE's answer, not this file's: a listing
+  # command that turns out to need an account is a SKIPPED leg with its reason, which is why the
+  # boundary is described by mechanism here rather than by a client list nothing would keep current.
+  # A lane that flattened the split would report a route as proven on the strength of a structure
+  # check.
   #
   # Every vendor install is best-effort on purpose: an npm outage or a vendor installer change is a
   # fact about the world on the day the run happened, not about the diff, and a merge gate that
@@ -483,8 +494,10 @@ jobs:
       # into `$HOME/.local/share/cursor-agent/versions/<version>/cursor-agent`. That layout is
       # read off an installed 2026.09.15 agent CLI on the maintainer's machine (`ls -la
       # ~/.local/bin/agent`, 2026-09-20) rather than off the vendor's installation page, which
-      # refused every TLS connection from the build machine that day — see this unit's entry in
-      # .stamity/runs/2026-09-17_plugin-lifecycle/record.md for the failed reads.
+      # refused every TLS connection from the build machine that day. The lane this step belongs to,
+      # and what it is meant to prove, are specified in docs/plans/008-plugin-lifecycle-03.md, cell
+      # V1 — read that rather than a run log, which records what one session did rather than what
+      # this step is for.
       - name: Install the Cursor agent CLI
         id: cli-cursor
         continue-on-error: true

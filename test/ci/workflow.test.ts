@@ -583,8 +583,10 @@ describe("ci.yml — the merge-blocking gate", () => {
       const laneMap = ci.source.slice(0, ci.source.indexOf("\nname: CI"));
       expect(laneMap).toContain("plugin-route");
       // What it does NOT prove has to be in the map too, or the reader takes a structure check for
-      // a proven route.
-      expect(laneMap).toContain("invocation legs");
+      // a proven route. BOTH halves of that, since prove/118: the invocation legs AND the discovery
+      // reading that needs a transcript. A map naming only the first was the finding.
+      expect(laneMap).toContain("invocation leg");
+      expect(laneMap).toContain("TRANSCRIPT");
       expect(laneMap).toContain("nightly.yml");
     });
   });
@@ -867,6 +869,49 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
         ).not.toContain(line);
       }
     }
+
+    // Property one and a half: `creds` is the one step that holds all four credentials, so it is
+    // also the one step where an innocent-looking line reopens the whole finding — a single
+    // `npm install -g` added there would run a vendor's release with every key in its environment,
+    // and every assertion above would stay green because the installs are still in the secret-free
+    // step too. So `creds` is pinned SPAWN-FREE: it may branch, test and echo with bash builtins,
+    // and it may launch no process at all.
+    // Two things this match has to get right, and both were got wrong first. It reads only the
+    // EXECUTED lines, because the step's own comment explains that it resolves the variable through
+    // "bash indirect expansion" and a guard that forbids describing its mechanism is a guard
+    // someone deletes. And it matches on WORD BOUNDARIES rather than as substrings, because
+    // `set -euo pipefail` contains "pip".
+    const credsBody = runOf(steps, "Headless drive credentials")
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("#"))
+      .join("\n");
+    for (const spawn of [
+      "npm",
+      "npx",
+      "curl",
+      "wget",
+      "node",
+      "eval",
+      "docker",
+      "pip",
+      "git",
+      "bash",
+      "sh",
+      "python",
+    ]) {
+      expect(
+        credsBody,
+        `the credential step must spawn nothing: found "${spawn}"`,
+      ).not.toMatch(new RegExp(String.raw`(?<![\w./-])${spawn}(?![\w-])`));
+    }
+    // Regex-rot guard on the check above: the step must still be the one that DOES hold the four
+    // secrets, or "it spawns nothing" is a true statement about the wrong step.
+    expect(Object.keys(stepOf(steps, "Headless drive credentials").env ?? {}).toSorted()).toEqual([
+      "ANTHROPIC_API_KEY",
+      "CODEX_API_KEY",
+      "COPILOT_GITHUB_TOKEN",
+      "CURSOR_API_KEY",
+    ]);
 
     // Property two: each drive step's `env:` names EXACTLY one secret — its own. `toEqual` on the
     // key set, not a `toContain`, because the finding was an extra key rather than a missing one.

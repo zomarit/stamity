@@ -97,11 +97,14 @@ it adds six things:
   the check keeps proving it can still see the routing failure that shipped zero primitives while
   exiting 0.
 - The plugin route gate, `node scripts/plugin-route-smoke.mjs`. It builds the four client plugin
-  roots the release builds, then asks the clients about them: each root's structure, and each
-  client's install where that client's CLI installs on the runner. It runs without `--invoke`, so no
-  leg needs a credential — driving a client through a prompt is the nightly lane's job
-  (`.github/workflows/nightly.yml`), behind per-client secrets. A client CLI that will not install
-  leaves its own legs skipped with a notice, never a red lane; a broken root is red.
+  roots the release builds, then asks the clients about them. It runs without `--invoke`, so what it
+  proves is the credential-free half of the route: each root's structure, plus — where that client's
+  CLI installs on the runner — the install leg and the discovery legs a listing command can answer
+  without an account. The other half needs a credential and runs elsewhere: discovery wherever the
+  only listing of a plugin's ids is what a driven session prints, and every invocation leg. Those run
+  nightly (`.github/workflows/nightly.yml`) behind per-client secrets, and on a maintainer's machine
+  through the QA harness. A client CLI that will not install leaves its own legs skipped with a
+  notice, never a red lane; a broken root is red.
 
 Run the APM smoke locally with `node scripts/apm-install-smoke.mjs --apm <path-to-apm>`, or point
 `STAMITY_APM_BIN` at that path instead. apm-cli is a Python package, and no step of `npm run check`

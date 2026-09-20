@@ -71,12 +71,14 @@ checks the deployed tree. [CONTRIBUTING.md](CONTRIBUTING.md) names the client ve
 against.
 
 The plugin route lane builds the four client plugin roots the release builds, then asks the clients
-about them. It proves two things: the four roots' structure, on every run, and each client's
-credential-free install, on the clients whose CLI installs on the runner. It deliberately does not
-prove the invocation legs — driving a client through a prompt needs that vendor's credential, which
-no merge-blocking job here holds — so those run nightly behind per-client secrets and in the manual
-QA walk-through. A client CLI that fails to install leaves its own legs skipped with a notice naming
-it, rather than reddening the lane; a broken root is red.
+about them. What it proves is the credential-free half of that route: each root's structure, on every
+run, and then — on the clients whose CLI installs on the runner — each client's install, and the
+discovery legs a listing command can answer without an account. What it deliberately does not prove
+is the other half: discovery wherever the only listing of a plugin's ids is what a driven session
+prints, and every invocation leg. Both of those need that vendor's credential, which no
+merge-blocking job here holds, so they run nightly behind per-client secrets and in the manual QA
+walk-through. A client CLI that fails to install leaves its own legs skipped with a notice naming it,
+rather than reddening the lane; a broken root is red.
 
 ### What `all-pr-checks` covers
 
