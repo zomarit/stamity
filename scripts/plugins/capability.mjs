@@ -60,8 +60,23 @@ const COMMIT_SHA = /^[0-9a-f]{40}$/
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 /** The floor shape `package.json` `engines.node` carries, the only range this file states. */
 const NODE_FLOOR = /^>=\d+\.\d+\.\d+$/
-/** The companion range: same major, at or above this plugin's version. */
-const CARET_RANGE = /^\^\d+\.\d+\.\d+$/
+/**
+ * The plugin's own version: `major.minor.patch` with an optional prerelease.
+ * Validated rather than merely non-empty, because `scripts/plugins/locate.mjs`
+ * parses this same field as semver — a root declaring `latest` would resolve
+ * nothing there and say nothing here.
+ */
+const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
+
+/**
+ * The companion range: same major, at or above this plugin's version.
+ *
+ * The prerelease tail is admitted because `satisfiesCaret` in
+ * `scripts/plugins/locate.mjs` HONOURS a prerelease range — `^1.9.0-rc.1`
+ * accepts exactly `1.9.0-rc.1` — and a validator that refused what the resolver
+ * accepts would block the release-candidate root the resolver was written for.
+ */
+const CARET_RANGE = /^\^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
 
 function isPlainObject(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -229,8 +244,17 @@ function validateClasses(value, defects) {
       if (!(typeof entry.count === 'number' && Number.isSafeInteger(entry.count) && entry.count >= 0)) {
         defects.push(`${at}.count: must be the number of files the root carries for a carried class`)
       }
+      // A carried class may explain itself, but the explanation is prose or it
+      // is nothing: a number here reaches a reader as a sentence.
+      if (entry.reason !== undefined && !isNonEmptyString(entry.reason)) {
+        defects.push(`${at}.reason: must be a sentence when a carried class states one`)
+      }
       continue
     }
+    // The count is what `carried` MEANS. A class that is not carried counting
+    // files is a projection of two different facts into one key, and a consumer
+    // reading the count without the status would be told the root ships them.
+    if (entry.count !== undefined) defects.push(`${at}.count: is stated only by a carried class`)
     if (!isNonEmptyString(entry.reason)) defects.push(`${at}.reason: must say why the class is not carried`)
   }
 }
@@ -275,7 +299,9 @@ export function validateCapabilityFile(value) {
   if (!DISTRIBUTION_CLIENTS.includes(value.client)) {
     defects.push(`client: must be one of ${DISTRIBUTION_CLIENTS.join(', ')}`)
   }
-  checkString(value.version, 'version', 'must be the plugin version this root was built at', defects)
+  if (!(typeof value.version === 'string' && SEMVER.test(value.version))) {
+    defects.push('version: must be the plugin version this root was built at, as major.minor.patch')
+  }
   if (!(typeof value.sourceCommit === 'string' && COMMIT_SHA.test(value.sourceCommit))) {
     defects.push('sourceCommit: must be a 40-character lowercase hex commit sha')
   }

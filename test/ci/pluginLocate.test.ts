@@ -235,6 +235,26 @@ describe("the locator resolves a runtime", () => {
     expect(json.runtime.kind).toBe("bundled");
   });
 
+  it.each([
+    ["stamity-plugin.json", "stamity-plugin.json"],
+    ["runtime/package.json", join("runtime", "package.json")],
+  ])("warns by name when %s exists but does not parse", (label, relative) => {
+    // M4: the companion case above already says so on stderr. A root's own two
+    // descriptors failed the same way in silence, and the consequence is worse
+    // — an unreadable `runtime/package.json` drops the Node floor, so the
+    // refusal that should have named an old interpreter never fires.
+    const root = makeRoot(`unparseable-${label.replaceAll(/\W/g, "-")}`);
+    writeFileSync(join(root, relative), "{ this is not JSON");
+    const project = makeProject(`unparseable-${label.replaceAll(/\W/g, "-")}`, null);
+
+    const result = runLocate(root, { cwd: project, args: ["--print"] });
+
+    expect(result.stderr).toContain(join(root, relative));
+    expect(result.stderr).toContain("not readable JSON");
+    // A warning, not a refusal: the locator still resolves what it can.
+    expect(result.status, result.stderr).toBe(0);
+  });
+
   it("accepts only an exactly equal companion for a prerelease plugin version", () => {
     const root = makeRoot("prerelease", { version: "1.9.0-rc.1" });
     const equal = makeProject("prerelease-equal", "1.9.0-rc.1");

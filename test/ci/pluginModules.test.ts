@@ -238,6 +238,24 @@ describe("staging refusals and companions (REQ-PLUGIN-003, REQ-PLUGIN-004)", () 
     await expect(stage({ contentRoot, tokens })).rejects.toThrow(/\$\{STAMITY:UNKNOWN\}/);
   });
 
+  it("removes the partial staging tree when a refusal aborts the copy", async () => {
+    // M7: the temp tree is the function's own and the caller gets no handle to
+    // it on the failure path, so a refusal that left it behind would leak one
+    // directory per failed build with nothing able to remove it.
+    const staging = async (): Promise<string[]> =>
+      (await readdir(tmpdir())).filter((name) => name.startsWith("stamity-plugin-corpus-")).toSorted();
+    const contentRoot = await syntheticCorpus(async (root) => {
+      await writeFile(join(root, "agents", "rogue.md"), "Ask ${STAMITY:UNKNOWN} for the answer.\n");
+    });
+    const before = await staging();
+
+    await expect(stage({ contentRoot, tokens })).rejects.toThrow(/agents\/rogue\.md/);
+
+    // The refusal copied `demo-agent.md` before it reached `rogue.md`, so the
+    // tree it removed was a partial one rather than an empty directory.
+    expect((await staging()).filter((name) => !before.includes(name))).toEqual([]);
+  });
+
   it("carries a skill's references and scripts byte-for-byte beside its SKILL.md", async () => {
     const bytes = Buffer.from([0x00, 0x01, 0xff, 0xfe, 0x0a]);
     const contentRoot = await syntheticCorpus(async (root) => {
@@ -463,6 +481,34 @@ describe("the capability file (REQ-PLUGIN-002)", () => {
     expect(defect((f) => (classOf(f, "agent").status = "shipped"))).toEqual([
       "classes.agent.status: must be carried, repository-owned or unsupported",
     ]);
+    // W4: `version` was accepted as any non-empty string, so a root could
+    // declare itself at `v1.9` or `latest` and the locator — which parses the
+    // same field as semver — would silently resolve nothing.
+    expect(defect((f) => (f.version = "1.9"))).toEqual([
+      "version: must be the plugin version this root was built at, as major.minor.patch",
+    ]);
+    // M6: a carried class may not state a `reason` that is not a string, and a
+    // non-carried class may not state a `count` at all — the count is what
+    // "carried" means, and a class that is not carried counts nothing.
+    expect(defect((f) => (classOf(f, "agent").reason = 7 as unknown as string))).toEqual([
+      "classes.agent.reason: must be a sentence when a carried class states one",
+    ]);
+    expect(defect((f) => (classOf(f, "rule").count = 3))).toEqual([
+      "classes.rule.count: is stated only by a carried class",
+    ]);
+  });
+
+  it("accepts a prerelease caret range, which the locator already honours", () => {
+    // W4: `CARET_RANGE` refused `^1.9.0-rc.1` while `satisfiesCaret` in
+    // scripts/plugins/locate.mjs accepts it and resolves only that exact
+    // prerelease. Two halves of one contract disagreeing is the defect.
+    const file = buildCapabilityFile({
+      ...capabilityInput(),
+      version: "1.9.0-rc.1",
+      runtime: { companion: { package: "@zomarit/stamity", compatible: "^1.9.0-rc.1" } },
+    });
+
+    expect(validateCapabilityFile(file)).toEqual([]);
   });
 
   it("refuses a value that is not an object at all", () => {
@@ -495,7 +541,14 @@ describe("the generated setup command (REQ-PLUGIN-003)", () => {
     expect(body).toContain("`duplicates`");
     expect(body).toContain(`node "\${${rootVar}}/runtime/locate.mjs" -- plugin status`);
 
-    expect(body).toContain("stamity clean -y");
+    // TEST CHANGE (W3): the assertion was `toContain("stamity clean -y")`, a
+    // bare command. A plugin-only install has no `stamity` on PATH, so every
+    // remedy the body prints has to run through the locator — the contract the
+    // module header already states for every other command in this file. The
+    // old assertion passed on a remedy an operator cannot run.
+    expect(body).toContain(`node "\${${rootVar}}/runtime/locate.mjs" -- clean -y`);
+    expect(body).not.toMatch(/(?<!-- )\bstamity clean -y/);
+    expect(body).not.toMatch(/`plugin setup`/);
     expect(body).toContain("APM dependency");
     expect(body).toContain(".stamity/overrides/");
 

@@ -61,20 +61,28 @@ function usage(problem) {
   process.exit(2)
 }
 
-/** A JSON file, or `undefined` when it is absent or does not parse. */
+/**
+ * A JSON file, or `undefined` when it is absent or does not parse.
+ *
+ * Absent is the ordinary case for every file this reads and says nothing.
+ * MALFORMED is a one-line stderr warning naming the path, as the companion
+ * probe below already does for its own manifest: a descriptor that exists and
+ * cannot be read changes what the locator resolves — an unreadable
+ * `runtime/package.json` drops the Node floor, so the refusal that should have
+ * named an old interpreter never fires — and silence there is a resolution
+ * nobody can account for.
+ */
 function readJson(path) {
   let raw
   try {
     raw = readFileSync(path, 'utf8')
   } catch {
-    // Absent is the ordinary case for every file this reads; the caller
-    // distinguishes absent from malformed by re-testing existence.
     return undefined
   }
   try {
     return JSON.parse(raw)
   } catch {
-    // Malformed is reported by the caller, which knows what the file was for.
+    console.error(`stamity plugin: ignoring ${path} — it is not readable JSON`)
     return undefined
   }
 }
@@ -230,7 +238,12 @@ function findCompanion(projectDir, packageName, range) {
   if (!existsSync(probe)) return { probe, found: null }
   const manifest = readJson(probe)
   if (!isObject(manifest)) {
-    console.error(`stamity plugin: ignoring ${probe} — it is not readable JSON`)
+    // `readJson` already named the path when it failed to PARSE; this branch
+    // covers the rest — valid JSON that is not an object — so the two do not
+    // print the same line twice for one file.
+    if (manifest !== undefined) {
+      console.error(`stamity plugin: ignoring ${probe} — it is not readable JSON`)
+    }
     return { probe, found: null }
   }
   if (!satisfiesCaret(manifest.version, range)) return { probe, found: null }

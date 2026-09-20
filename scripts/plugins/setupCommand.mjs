@@ -17,8 +17,10 @@
 // is what prefers a repository's own companion install over the bundled copy, and what refuses a
 // Node below the floor with a message instead of a stack.
 
+import { DISTRIBUTION_CLIENTS } from '../distribution-identity.mjs'
+
 /** The clients a root is built for; the body names exactly one of them. */
-const CLIENTS = ['claude', 'cursor', 'copilot', 'codex']
+const CLIENTS = DISTRIBUTION_CLIENTS
 
 /**
  * A shell-safe environment variable name. Narrow on purpose: the value is interpolated into a
@@ -67,14 +69,15 @@ stop at the one that asks for the operator.
    ${locate} -- plugin setup --client ${client} -y
    \`\`\`
 
-   When it is false, skip this step: a setup already exists, and replacing it is a job for
-   \`stamity clean -y\` followed by \`plugin setup\`, run deliberately.
+   When it is false, skip this step: a setup already exists, and replacing it is a job for the
+   two commands in step 3, run deliberately.
 
 3. When \`duplicates\` is non-empty, print every entry with its remedy and stop for the operator.
    Do not remove a file yourself — a duplicate is a file two installs both claim, and which one
    goes is the operator's call:
 
-   - a file this engine wrote: run \`stamity clean -y\`, then \`plugin setup\` again;
+   - a file this engine wrote: run \`${locate} -- clean -y\`, then
+     \`${locate} -- plugin setup --client ${client} -y\` again;
    - a file an APM dependency installed: remove that APM dependency;
    - a file nobody manages: remove it, or keep it as an override under \`.stamity/overrides/\`.
 
