@@ -1,6 +1,5 @@
 // Every walk here reads a generated tree in a fixed order, and the spawns are deliberately
 // sequential — a comparison must observe the tree a build left, not a concurrent one.
-/* oxlint-disable no-await-in-loop */
 
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import {
@@ -10,6 +9,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { canonical, canonicalOnly } from "../support/identity.ts";
 import {
+  document,
   downstreamCheckout,
   EXPECTED_PLUGIN_FILES,
   FORK_ONLY_IDS,
@@ -66,14 +67,20 @@ const TAG = `plugins/v${VERSION}`;
 /**
  * Wall-time budgets, derived rather than guessed, with the command that produced each number.
  *
- * Measured 2026-09-20 on darwin INSIDE this harness — a timing case in this directory run with
- * `npx vitest run`, so the figures include the spawn a vitest worker pays for rather than the
- * cheaper one an idle shell sees (a standalone probe of the same builds came back at 1.3–2.1s,
- * and quoting that here would have set the budget from the wrong process):
+ * Measured 2026-09-20 on darwin INSIDE this harness — a throwaway timing case in this directory,
+ * `Date.now()` around each step, run as
  *
- *   fixture checkout      `downstreamCheckout` + the charter copy + `git init`      2.0s
- *   four-root build       `--out <dir> --runtime <stub> --version 1.9.0`            4.3s, 5.0s, 5.5s
- *   one-root build        the same plus `--client claude`                           3.3s
+ *     npx vitest run test/ci/zzTiming.test.ts --reporter=verbose
+ *
+ * so the figures include the spawn a vitest worker pays for rather than the cheaper one an idle
+ * shell sees (a standalone probe of the same builds came back at 1.3–2.1s, and quoting that here
+ * would have set the budget from the wrong process). What each step spawned, verbatim:
+ *
+ *   fixture checkout   `downstreamCheckout(root, { identity: true, git: true })`, the charter
+ *                      `cpSync` and `fixtureProvenance(root)`                            2.0s
+ *   four-root build    `node <root>/scripts/build-plugin-distribution.mjs --out <dir>
+ *                      --runtime <stub> --version 1.9.0`, cwd `<root>`         4.3s, 5.0s, 5.5s
+ *   one-root build     the same argv plus `--client claude`                              3.3s
  *
  * A four-root build is roots, the APM projection, four archives and four catalogs; it is an order
  * of magnitude under the canonical build measured at the head of `./pluginDistribution.test.ts`
@@ -132,7 +139,9 @@ const RUNTIME = stubRuntime();
 
 interface Fixture {
   readonly root: string;
+  /** The checkout's HEAD, which every root and `release.json` built from it must name. */
   readonly commit: string;
+  /** That commit's ISO date, which `release.json` carries as `sourceCommitDate`. */
   readonly date: string;
 }
 
@@ -161,6 +170,46 @@ function build(fixture: Fixture, out: string, extra: string[] = []): SpawnSyncRe
   );
 }
 
+/**
+ * The plugin generator spawned ALONE — the route that writes roots and nothing else, and the one a
+ * consumer of `generate-plugin-packages.mjs` (CI's plugin-route job, the lifecycle fixture builder)
+ * actually runs. It does not project the APM package, so a refusal the APM projection owns cannot
+ * stand in for one this route has to make itself.
+ */
+function generateRoots(fixture: Fixture, outDir: string, extra: string[] = []): SpawnSyncReturns<string> {
+  return spawnSync(
+    process.execPath,
+    [
+      join(fixture.root, "scripts", "generate-plugin-packages.mjs"),
+      "--out-dir",
+      outDir,
+      "--runtime",
+      RUNTIME,
+      "--version",
+      VERSION,
+      ...extra,
+    ],
+    { cwd: fixture.root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+  );
+}
+
+/**
+ * Does THIS volume fold case? Probed, not inferred from `process.platform`: darwin and Windows are
+ * case-insensitive by default and neither is guaranteed to be — an APFS volume can be created
+ * case-sensitive, and a Linux runner can mount one that is not — and the two answers send the
+ * case-twin fixture down two different refusals. The probe is one write inside the suite's own
+ * temp tree, made once.
+ */
+let volumeFoldsCase: boolean | null = null;
+function caseInsensitiveVolume(): boolean {
+  if (volumeFoldsCase === null) {
+    const dir = tempDir("case-probe");
+    writeFileSync(join(dir, "probe-a"), "");
+    volumeFoldsCase = existsSync(join(dir, "PROBE-A"));
+  }
+  return volumeFoldsCase;
+}
+
 /** Every regular file under `dir`, as POSIX-relative paths, sorted. */
 function treeFiles(dir: string, prefix = ""): string[] {
   if (!existsSync(dir)) return [];
@@ -177,10 +226,6 @@ function treeFiles(dir: string, prefix = ""): string[] {
 function rootFiles(dist: string): string[] {
   return treeFiles(dist).filter((path) => CLIENTS.some((client) => path.startsWith(`${client}/`)));
 }
-
-/** One authored fixture document, in the shape the fixture module writes its own. */
-const fixtureDocument = (id: string, type: string, body: string): string =>
-  `---\nid: ${id}\ntype: ${type}\ndescription: Fixture ${type}\ntags: [fixture]\nload: on-demand\n---\n\n${body}\n`;
 
 /**
  * The body after a document's head.
@@ -305,14 +350,19 @@ describe("a fork's own distribution", () => {
     }
   });
 
-  it("stamps every root with the fixture checkout's own HEAD", () => {
+  it("stamps every root with the fixture checkout's own HEAD and that commit's date", () => {
     expect(forked.commit).toMatch(/^[0-9a-f]{40}$/);
+    expect(forked.date).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$/);
     for (const client of CLIENTS) {
       const capability = readJson(forkedDist, client, "stamity-plugin.json");
       expect(capability["sourceCommit"], client).toBe(forked.commit);
     }
-    const manifest = readJson(forkedDist, "release.json") as { sourceCommit?: unknown };
+    // Both provenance facts, because the build resolves them from the checkout separately —
+    // `rev-parse HEAD` and `show -s --format=%cI HEAD` — and either one could have come from
+    // somewhere else without the other noticing.
+    const manifest = readJson(forkedDist, "release.json") as { sourceCommit?: unknown; sourceCommitDate?: unknown };
     expect(manifest.sourceCommit).toBe(forked.commit);
+    expect(manifest.sourceCommitDate).toBe(forked.date);
   });
 
   it("publishes the fork's identity in every catalog that carries an owner or a url", () => {
@@ -439,8 +489,7 @@ describe("the unforked build the fork is measured against", () => {
  * case-insensitive twin below overwrites the sibling it contests, so that case pays for its own
  * tree and says so. The builds run `--client claude`: every refusal here is a corpus or a
  * configuration fault, decided before a second root would have been planned, and three more roots
- * would buy nothing but wall time. An `--out` directory is never reused, because a refused build
- * leaves whatever the step before it wrote and the builder refuses a non-empty `--out`.
+ * would buy nothing but wall time.
  */
 describe("a fork the build refuses", () => {
   const ONE_CLIENT = ["--client", "claude"];
@@ -450,26 +499,49 @@ describe("a fork the build refuses", () => {
   }, CHECKOUT_BASIS_MS * MARGIN);
 
   it(
-    "refuses a fork id that case-folds onto a bundled one, naming the contested path",
+    "refuses a fork id that case-folds onto a bundled one, naming both contestants",
     () => {
       // PORTABLE construction, and the reason is the filesystem: a twin in the SAME directory
       // collapses onto its sibling on darwin and Windows, where the case never reaches the
       // index. This twin lives in the fork layer and contests a path the CONTENT layer projects,
       // so both files exist on every host and the case-folded collision is real everywhere.
       const twin = join(fixture.root, "fork/agents/SOURCE-AGENT.md");
-      write(twin, fixtureDocument("SOURCE-AGENT", "agent", "Case twin."));
+      write(twin, document("SOURCE-AGENT", "agent", "Case twin."));
       const out = tempDir("case-fold-out");
       const result = build(fixture, out, ONE_CLIENT);
       rmSync(twin);
       expect(result.status).toBe(1);
       const output = `${result.stdout}${result.stderr}`;
-      expect(output).toContain("project onto");
-      expect(output).toContain("stamity-SOURCE-AGENT");
-      // The distribution was not completed: no catalog and no manifest were written. The root the
-      // earlier step wrote IS left in place — recorded rather than asserted away, because a retry
-      // therefore needs a fresh directory.
-      expect(existsSync(join(out, "release.json"))).toBe(false);
-      expect(existsSync(join(out, ".claude-plugin", "marketplace.json"))).toBe(false);
+      // The PLUGIN writer's own refusal, naming BOTH contestants — not the APM projection's, which
+      // names the survivor and would leave the plugin-only route below unguarded.
+      expect(output).toContain("agents/stamity-SOURCE-AGENT.md and agents/stamity-source-agent.md");
+      expect(output).toContain("differ only in case");
+      // Nothing of a refused build survives: `--out` is removed with whatever the failing step had
+      // already written, so the operator's retry into the same directory is not refused for being
+      // non-empty.
+      expect(treeFiles(out)).toEqual([]);
+    },
+    ONE_BUILD_MS,
+  );
+
+  it(
+    "makes that refusal on the plugin-only route too, where no APM projection follows",
+    () => {
+      // The route the reviewer's row is about: `generate-plugin-packages.mjs` run alone writes
+      // roots and never projects the APM package, so before this check the SAME corpus produced a
+      // silent overwrite on a case-insensitive volume and two case variants on a case-sensitive
+      // one — green either way, because the refusal lived in a step this route does not run.
+      const twin = join(fixture.root, "fork/agents/SOURCE-AGENT.md");
+      write(twin, document("SOURCE-AGENT", "agent", "Case twin."));
+      const out = tempDir("plugin-only-out");
+      const result = generateRoots(fixture, out, ONE_CLIENT);
+      rmSync(twin);
+      expect(result.status).toBe(1);
+      expect(`${result.stdout}${result.stderr}`).toContain(
+        "agents/stamity-SOURCE-AGENT.md and agents/stamity-source-agent.md",
+      );
+      // Before any byte, like every other refusal this generator makes.
+      expect(treeFiles(out)).toEqual([]);
     },
     ONE_BUILD_MS,
   );
@@ -480,30 +552,42 @@ describe("a fork the build refuses", () => {
       // Its own checkout: on a case-insensitive volume this write LANDS ON `add-agent.md`, so the
       // mutation destroys the fixture's own addition and cannot be reverted by deleting a file.
       const own = forkFixture("case-twin");
-      write(join(own.root, "fork/agents/Add-Agent.md"), fixtureDocument("Add-Agent", "agent", "Case twin."));
+      write(join(own.root, "fork/agents/Add-Agent.md"), document("Add-Agent", "agent", "Case twin."));
       const out = tempDir("case-twin-out");
       const result = build(own, out, ONE_CLIENT);
-      // ONE outcome, reached by two routes, and which one runs is a property of the host
-      // filesystem rather than of the generator. On a case-INSENSITIVE volume (darwin, Windows)
-      // the write lands on `add-agent.md`, keeping that name and the new `id`, and the corpus
-      // planner refuses the pair as `filename-mismatch`. On a case-SENSITIVE volume both files
-      // exist and project onto paths that differ only in case, which the APM projection refuses
-      // for the consumer volumes it has to install on. Either way: exit 1, and the message names
-      // the contested id.
+      // ONE outcome, reached by two routes, and which one runs is a property of the host volume
+      // rather than of the generator — so the volume is PROBED rather than inferred from
+      // `process.platform`, and each branch asserts the message that route actually prints.
       expect(result.status).toBe(1);
-      expect(`${result.stdout}${result.stderr}`).toMatch(/add-agent/i);
-      expect(existsSync(join(out, "release.json"))).toBe(false);
+      const output = `${result.stdout}${result.stderr}`;
+      if (caseInsensitiveVolume()) {
+        // The write landed ON `add-agent.md`, keeping that name and carrying the new `id`, so the
+        // corpus planner refuses the pair before any projection: one file, two claims about what
+        // it is called.
+        expect(output).toContain("filename-mismatch");
+        expect(output).toContain("agents/add-agent.md");
+      } else {
+        // Both files exist, and their projections differ only in case — the plugin writer's check,
+        // naming both.
+        expect(output).toContain("agents/stamity-Add-Agent.md and agents/stamity-add-agent.md");
+      }
+      expect(treeFiles(out)).toEqual([]);
     },
     ONE_BUILD_MS,
   );
 
   // Windows has no unprivileged file symlinks, so the input this refuses cannot be created there.
   it.skipIf(process.platform === "win32")(
-    "refuses a symlink under the fork's skill companions",
+    "refuses a symlink under the fork's skill companions, pointed outside the checkout",
     () => {
-      write(join(fixture.root, "outside/private.txt"), "Outside content.\n");
+      // The target lives OUTSIDE the fork checkout entirely — in the suite's own temp tree, not in
+      // a sibling directory of `fork/` — because that is the failure the refusal exists for: a
+      // published root carrying a link resolves against whatever is at that path on the
+      // CONSUMER's disk, and a link out of the source tree is the shape that makes the point.
+      const outside = join(tempDir("outside-the-checkout"), "private.txt");
+      writeFileSync(outside, "Outside the fork checkout.\n");
       const link = join(fixture.root, "fork/skills/add-skill/leak.txt");
-      symlinkSync(join(fixture.root, "outside/private.txt"), link);
+      symlinkSync(outside, link);
       const out = tempDir("symlink-out");
       const result = build(fixture, out, ONE_CLIENT);
       rmSync(link);
@@ -511,9 +595,38 @@ describe("a fork the build refuses", () => {
       const output = `${result.stdout}${result.stderr}`;
       expect(output).toContain("fork/skills/add-skill/leak.txt");
       expect(output).toContain("symlink");
-      expect(existsSync(join(out, "claude", "skills", "add-skill", "leak.txt"))).toBe(false);
+      expect(treeFiles(out)).toEqual([]);
     },
     ONE_BUILD_MS,
+  );
+
+  it(
+    "removes what a failed step wrote, so the retry into the same --out is not refused",
+    () => {
+      // A refusal AFTER the roots are written, which is the state the builder used to leave behind:
+      // four roots in `--out` and no catalogs, and then its own "already holds files" check
+      // refusing the retry. The failure is forced by taking the APM step's script away rather than
+      // by a corpus fault, and that is deliberate — with the projection check above in place, a
+      // case-folded corpus is refused by the FIRST step, so no corpus input reaches the APM step
+      // and fails only there. What is under test is the builder's cleanup, not which step failed.
+      const own = forkFixture("retry");
+      const step = join(own.root, "scripts", "generate-apm-package.mjs");
+      const parked = `${step}.parked`;
+      renameSync(step, parked);
+      const out = tempDir("retry-out");
+      const failed = build(own, out, ONE_CLIENT);
+      expect(failed.status).toBe(1);
+      // Empty or absent — one state to the caller, and the builder removes the directory.
+      expect(treeFiles(out)).toEqual([]);
+
+      renameSync(parked, step);
+      const retried = build(own, out, ONE_CLIENT);
+      expect(retried.status, `${retried.stdout}\n${retried.stderr}`).toBe(0);
+      expect(retried.stderr).not.toContain("already holds files");
+      expect(existsSync(join(out, "release.json"))).toBe(true);
+      expect(treeFiles(join(out, "claude")).length).toBeGreaterThan(20);
+    },
+    2 * ONE_BUILD_MS,
   );
 });
 
@@ -666,6 +779,13 @@ describe.skipIf(!FORK_SUITE)(
           expect(readJson(out, client, "stamity-plugin.json")["sourceCommit"], client).toBe("0".repeat(39) + "1");
         }
       },
+      // 600s, the same ceiling `./forkIdentity.test.ts` gives its own opt-in group, and for the
+      // same reason: this case copies the whole tracked tree file by file and then builds the REAL
+      // corpus (13s measured at the head of `./pluginDistribution.test.ts`, against 5s for the
+      // fixture's), so its cost is dominated by a file count that grows with the repository rather
+      // than by anything the budget above measures. Measured at 17.6s on 2026-09-20 with
+      // `STAMITY_FORK_SUITE=1 npx vitest run test/ci/pluginDownstream.test.ts`; the ceiling is
+      // wide because nothing in it is a property of this unit, and it only ever runs on demand.
       600_000,
     );
   },

@@ -37,14 +37,15 @@
 // `sha` beside its `ref`, which is how the release job re-renders the copy it attaches as an
 // asset (see REQ-PLUGIN-012).
 //
-// Exit codes: 0 the distribution was built, 1 a step failed, 2 bad arguments.
+// Exit codes: 0 the distribution was built, 1 a step failed (and `--out` is removed with whatever
+//            that step had already written), 2 bad arguments.
 // Usage: node scripts/build-plugin-distribution.mjs --out <dir> --runtime <dir>
 //        [--source-commit <sha>] [--source-commit-date <iso>] [--distribution-commit <sha>]
 //        [--version <semver>] [--client <csv>]
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -380,9 +381,27 @@ layer this assumes.
 `
 }
 
+/**
+ * Arguments first, then the build — and a failed build takes its own partial tree with it.
+ *
+ * `parseArguments` has already refused an `--out` that holds anything, so every file under it is
+ * this run's: removing the directory cannot destroy a previous release, and leaving it would make
+ * the RETRY impossible, because that same emptiness check would refuse the second attempt with
+ * "already holds files" while the operator looks at a tree no step of this build finished. The
+ * directory is removed rather than emptied; "empty or absent" is one state to a caller.
+ */
 function main(argv) {
   const parsed = parseArguments(argv)
   if (parsed.code !== undefined) return parsed.code
+  try {
+    return build(parsed)
+  } catch (error) {
+    rmSync(parsed.outDir, { recursive: true, force: true })
+    throw error
+  }
+}
+
+function build(parsed) {
   const { outDir, runtimeDir, distributionCommit, clients } = parsed
 
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))

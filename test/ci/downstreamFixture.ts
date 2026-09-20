@@ -17,6 +17,9 @@ export const FORK_REPOSITORY_SLUG = "stamity-private";
 export const FORK_REPOSITORY = `https://github.com/${FORK_PUBLISHER}/${FORK_REPOSITORY_SLUG}`;
 
 /**
+ * One authored fixture artifact. EXPORTED so a suite that plants a second one — a case twin, a
+ * duplicate id — writes it in this module's own shape rather than in a copy that can drift from it.
+ *
  * `globs:` on a rule, added 2026-09-15. The engine's rule-delivery default
  * demotes a rule that declares NO globs to a skill, because an APM instruction
  * attaches on `applyTo` and the value for "no globs" is `**` — every file, every
@@ -26,7 +29,7 @@ export const FORK_REPOSITORY = `https://github.com/${FORK_PUBLISHER}/${FORK_REPO
  * scope is what keeps the rule class a rule here; the real corpus covers the
  * demoted half in `apmPackage.test.ts`.
  */
-const document = (id: string, type: string, body: string): string =>
+export const document = (id: string, type: string, body: string): string =>
   `---\nid: ${id}\ntype: ${type}\ndescription: Fixture ${type}\ntags: [fixture]\nload: on-demand\n${
     type === "rule" ? 'globs: ["**/*.md"]\n' : ""
   }---\n\n${body}\n`;

@@ -503,13 +503,35 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
 
         const files = new Map()
         const placements = []
+        /**
+         * Lowercased path -> the path that claimed it, so a contest is refused NAMING BOTH
+         * CONTESTANTS rather than reporting the survivor.
+         *
+         * Case-folded, not exact. An exact `files.has` answers only for a byte-identical path, and
+         * the volume a plugin root is EXTRACTED onto is case-insensitive on macOS and on Windows,
+         * where `agents/stamity-Add-Agent.md` and `agents/stamity-add-agent.md` are one file. The
+         * two failure modes that produces are both silent: on a case-insensitive builder the
+         * second write overwrites the first and the root ships one body under one name, and on a
+         * case-sensitive builder both files ship and the consumer's own extraction decides which
+         * survives. A root is published once and installed on every kind of volume, so the contest
+         * belongs here — before a byte is written, like every other refusal in this function.
+         * `generate-apm-package.mjs` makes the same check over its own projection for the same
+         * reason; this is that check in the plugin address space, and it names both paths.
+         */
+        const claimed = new Map()
         const add = (relPath, bytes) => {
-          if (files.has(relPath)) {
+          const claimant = claimed.get(relPath.toLowerCase())
+          if (claimant !== undefined) {
             throw new Error(
-              `${client}: two rows both claim ${relPath} inside the plugin root. One path is one ` +
-                'file, so a second claimant would silently overwrite the first.',
+              `${client}: ${claimant} and ${relPath} both claim one path inside the plugin root` +
+                (claimant === relPath
+                  ? ''
+                  : ' — the two differ only in case, and a consumer volume on macOS or Windows ' +
+                    'folds them into one file') +
+                '. One path is one file, so a second claimant would silently overwrite the first.',
             )
           }
+          claimed.set(relPath.toLowerCase(), relPath)
           files.set(relPath, Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes, 'utf8'))
         }
 
@@ -579,8 +601,14 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
 
         for (const [relPath, bytes] of runtimeFiles) add(`${RUNTIME_DIR}/${relPath}`, bytes)
         // Set rather than added: the locator is this repository's file and wins over anything of
-        // the same name a bundled runtime happened to carry.
-        files.set(`${RUNTIME_DIR}/${LOCATOR_NAME}`, locatorBytes)
+        // the same name a bundled runtime happened to carry. A carried name that differs only in
+        // CASE is removed rather than left beside it — the claim map is what makes that name
+        // findable, and leaving it would be exactly the folded pair `add` refuses above.
+        const locatorPath = `${RUNTIME_DIR}/${LOCATOR_NAME}`
+        const carriedLocator = claimed.get(locatorPath.toLowerCase())
+        if (carriedLocator !== undefined) files.delete(carriedLocator)
+        claimed.set(locatorPath.toLowerCase(), locatorPath)
+        files.set(locatorPath, locatorBytes)
 
         rendered.set(
           client,
