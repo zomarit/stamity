@@ -134,7 +134,11 @@ import {
   type ResolvedAgentGrant,
 } from "../roster/agentGrants.ts";
 import { AGENT_POLICY_ROSTER } from "../roster/agentPolicies.ts";
-import { resolveEffortValue, resolveModelValue } from "../roster/modelLadder.ts";
+import {
+  CLIENT_MODEL_PROJECTION,
+  resolveEffortValue,
+  resolveModelValue,
+} from "../roster/modelLadder.ts";
 import type { ToolCategory } from "../tools/categories.ts";
 import {
   substituteCanonicalPlatformMarker,
@@ -304,6 +308,19 @@ const HOOK_GUARANTEE = CLIENT_HOOK_GUARANTEES.find((row) => row.tool === TOOL);
  * hook row derives from `CLIENT_HOOK_GUARANTEES` so the matrix and the
  * emitted guard bodies cannot disagree about what this client enforces.
  */
+/**
+ * This client's documented effort scale, rendered from the projection row so
+ * the capability page and the resolver cannot disagree about which levels it
+ * accepts. The citation is inline because the scale sits on a page read for
+ * this claim alone, not on the pages the row group's own sources cover.
+ */
+const EFFORT_SCALE_CAP =
+  `${CLIENT_MODEL_PROJECTION.claude.effortScale.join(", ")} — the levels this client's ` +
+  "`effort:` key accepts; available levels depend on the model, so a level the chosen model " +
+  "does not offer falls back to that model's own default " +
+  "(code.claude.com/docs/en/sub-agents, accessed 2026-09-17). A level below this scale is " +
+  "raised to `low` rather than dropped, and the emission discloses it";
+
 export const CLAUDE_DIALECT_FACTS: AdapterDialectFacts = {
   tool: TOOL,
   ruleShape:
@@ -347,6 +364,7 @@ export const CLAUDE_DIALECT_FACTS: AdapterDialectFacts = {
       name: "config-change-event",
       value: "`ConfigChange` tamper wiring — Claude-only extension, non-portable",
     },
+    { name: "effort-scale", value: EFFORT_SCALE_CAP },
   ],
   citations: [
     { url: "https://code.claude.com/docs/en/memory", accessDate: ACCESS_DATE },

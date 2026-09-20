@@ -619,6 +619,33 @@ describe("model allocation", () => {
     expect(tomlValue(toml, "model_reasoning_effort")).toBe('"low"');
   });
 
+  it("emits a level above the old band once the operator asks for one", () => {
+    // This client documents `xhigh`; the three-level band could not express it.
+    const toml = buildAgentToml(agentItem("frontier"), grantOf(agentItem("frontier")), "Body.", {
+      efforts: { frontier: "xhigh" },
+    });
+    expect(tomlValue(toml, "model_reasoning_effort")).toBe('"xhigh"');
+  });
+
+  it("emits its own top level for a request above its documented scale", () => {
+    // `max` is on another client's scale and one rung above this one's. The
+    // emitted key carries the nearest expressible level — never nothing, and
+    // never a level this client does not document.
+    const toml = buildAgentToml(agentItem("frontier"), grantOf(agentItem("frontier")), "Body.", {
+      efforts: { frontier: "max" },
+    });
+    expect(tomlValue(toml, "model_reasoning_effort")).toBe('"xhigh"');
+  });
+
+  it("emits the lowest documented level when the operator asks for it", () => {
+    // The other end of the same scale: `minimal` is this client's floor, and
+    // it is below what two of the other clients can express.
+    const toml = buildAgentToml(agentItem("economy"), grantOf(agentItem("economy")), "Body.", {
+      efforts: { economy: "minimal" },
+    });
+    expect(tomlValue(toml, "model_reasoning_effort")).toBe('"minimal"');
+  });
+
   it("emits the client's model key with the operator's pinned id", () => {
     const toml = buildAgentToml(agentItem("advanced"), grantOf(agentItem("advanced")), "Body.", {
       pins: { advanced: "gpt-fixture-pro" },

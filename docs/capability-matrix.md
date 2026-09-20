@@ -120,6 +120,7 @@ Declared caps:
 | `command-surface` | native — one file per touchpoint command at `.claude/commands/<id>.md`, invoked as `/<id>`; description-only frontmatter, so nothing is pre-approved that the permissions chain does not already grant |
 | `review-gate` | work-scoped gate on `TaskCompleted` + `SubagentStop` — Claude-only extensions, non-portable. fail-closed: a completion with an open review round is refused, and the gate opens at the round cap so it can never wedge a run |
 | `config-change-event` | `ConfigChange` tamper wiring — Claude-only extension, non-portable |
+| `effort-scale` | low, medium, high, xhigh, max — the levels this client's `effort:` key accepts; available levels depend on the model, so a level the chosen model does not offer falls back to that model's own default (code.claude.com/docs/en/sub-agents, accessed 2026-09-17). A level below this scale is raised to `low` rather than dropped, and the emission discloses it |
 
 Sources:
 
@@ -151,6 +152,7 @@ Declared caps:
 | `user hook enforcement` | explicit exit-2 denial applies on supported events; authored pre-tool-use rows also opt into failClosed for hook errors and timeouts, and no output counts as one of those failures (cursor.com/docs/hooks, accessed 2026-09-17), so a row that decides nothing is emitted as an explicit allow. Session-start and session-end responses cannot block |
 | `MCP tool surface` | servers expose tools through mcp.json; the current contract documents no fixed per-session tool-count cap |
 | `workdir guard` | not emitted — mitigated a pre-3.0 path-escape class; revisit if that class recurs on a supported release |
+| `effort-scale` | minimal, low, medium, high, xhigh, max: pass-through — parameter ids and values vary by model (cursor.com/docs/sdk/typescript, accessed 2026-09-17). The level rides inside the model value as `[effort=<level>]` and this client parses the group rather than ruling on the value, so nothing is narrowed here: a level the chosen model does not offer is the model's to reject, and no key is emitted at all until a model id is pinned |
 
 Sources:
 
@@ -213,6 +215,7 @@ Declared caps:
 | `hook enforcement` | exit 2 denies supported tool calls after native /hooks trust; the core role guard is telemetry because PreToolUse has no agent identity. Hosted tools and specialized paths may bypass hooks; use native sandbox/permissions for enforcement. Three steps stand between the emitted hooks.json and a hook that runs — `features.hooks = true`, which this engine writes into .codex/config.toml and the client defaults OFF; `projects.<path>.trust_level = "trusted"` in the operator's own Codex home config; and a per-hook hash review through the interactive /hooks command, or --dangerously-bypass-hook-trust for automation that cannot take that step — and with all three in place headless `codex exec` on codex-cli 0.154.0 still loaded no project hook layer at all in this repository's 2026-09-15 measurement, so a hook is enforcement in the interactive client and nothing in that lane. |
 | `per-agent tool allowlist` | no native per-agent tools list is documented as of 2026-09-10; no placeholder key is emitted. sandbox_mode carries the supported filesystem boundary; the policy grant remains a prompt-level restriction. |
 | `command-surface` | none — custom prompts live in the user's Codex home directory, not the repository, and are deprecated in favour of skills, so the nine touchpoint bodies are not emitted here; the charter's touchpoint index still names them |
+| `effort-scale` | minimal, low, medium, high, xhigh — the levels this client's `model_reasoning_effort` key accepts; xhigh is model-dependent, so a model that does not offer it falls back to that model's own default (learn.chatgpt.com/docs/config-file/config-reference, accessed 2026-09-17). This is the only supported client documenting `minimal`, and the only one that cannot be asked for `max`: a `max` request is emitted as `xhigh` with a disclosure, never dropped |
 
 Sources:
 

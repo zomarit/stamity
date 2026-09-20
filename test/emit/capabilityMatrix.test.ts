@@ -238,6 +238,35 @@ describe("allowlist-coverage section", () => {
   });
 });
 
+describe("the declared effort scales", () => {
+  const page = renderCapabilityMatrix();
+
+  it("renders one `effort-scale` row per client that carries the axis", () => {
+    // Three carriers declare a scale; the one documented omitter declares
+    // `effort-axis` instead, which is a different claim and stays where it is.
+    const carriers = TOOLS.filter(
+      (tool) => factsFor(tool).caps.some((row) => row.name === "effort-scale"),
+    );
+    expect(carriers).toEqual(["claude", "cursor", "codex"]);
+    expect(factsFor("copilot").caps.some((row) => row.name === "effort-scale")).toBe(false);
+
+    for (const tool of carriers) {
+      const value = factsFor(tool).caps.find((row) => row.name === "effort-scale")!.value;
+      const group = section(page, `### \`${tool}\``).join("\n");
+      expect(group, `${tool} renders no effort-scale row`).toContain(value);
+      // Every scale claim is a vendor claim, so it carries its own dated
+      // source inline the way the hook rows on this page already do.
+      expect(value, `${tool} scale row is undated`).toMatch(/accessed 2026-09-17/);
+    }
+  });
+
+  it("states the pass-through client's risk rather than promising the level lands", () => {
+    const value = factsFor("cursor").caps.find((row) => row.name === "effort-scale")!.value;
+    expect(value).toContain("pass-through");
+    expect(value).toContain("vary by model");
+  });
+});
+
 describe("citation discipline", () => {
   const page = renderCapabilityMatrix();
 
