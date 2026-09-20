@@ -42,13 +42,22 @@
 // phase — the per-file reads, comparisons and writes — is already fanned out with `Promise.all`.
 /* oxlint-disable no-await-in-loop */
 //
+// What a walk carries: REAL BYTES. Every tree this file reads — the bundled runtime on the way
+// in, an output root on the way out — is walked for regular files, and an entry that is neither
+// a regular file nor a directory is refused by name rather than dropped. A symlink is the case
+// that matters: `npm ci` writes them, a copy of one resolves against the machine that built the
+// runtime, and a walk that skipped them silently would ship a root missing a file and leave
+// `--check` unable to see one planted under `<out>`. `node_modules/.bin` is the ONE stated
+// exception, skipped by name because `npm ci` fills it with links to files the tree already
+// carries; the runtime builder does not prune it, and it is not this generator's file to change.
+//
 // Exit codes: 0 ok, 1 render/write failure or drift under --check, 2 bad arguments.
 // Usage: node scripts/generate-plugin-packages.mjs --out-dir <dir> --runtime <dir> [--client <csv>]
 //        [--check] [--source-commit <sha>] [--source-commit-date <iso>] [--version <semver>]
 
 import { prepareNativeTypescriptCli } from './native-typescript.mjs'
 import { spawnSync } from 'node:child_process'
-import { mkdtemp, readFile, readdir, rm, rmdir, stat } from 'node:fs/promises'
+import { lstat, mkdtemp, readFile, readdir, rm, rmdir, stat } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, posix, resolve } from 'node:path'
@@ -90,6 +99,27 @@ function jsonDocument(value) {
   return `${JSON.stringify(value, null, 2)}\n`
 }
 
+/**
+ * The one directory a walk may pass over, named rather than dropped.
+ *
+ * `npm ci` writes `node_modules/.bin/<name>` as a link to a file the tree already carries, and
+ * `scripts/build-plugin-runtime.mjs` prunes nothing there. Nothing is lost by skipping it: the
+ * link targets are real files under `node_modules/` and travel on their own, and a `.bin` entry
+ * copied as bytes would be a shim resolved against the machine that built the runtime. This is
+ * an EXCEPTION and not a rule — everything else that is neither a regular file nor a directory
+ * is refused by name below.
+ */
+const SKIPPED_DIRECTORY = 'node_modules/.bin'
+
+/**
+ * Every regular file under `dir`, as sorted root-relative POSIX paths.
+ *
+ * A walk that drops what it does not recognise is how a root ships missing a file and how
+ * `--check` reads a planted entry as absent. Anything that is neither a regular file nor a
+ * directory — a symbolic link above all — is a REFUSAL naming the entry: a link copied into a
+ * plugin root would resolve against the machine that built it, and skipping it silently would
+ * publish a tree nobody can tell from a complete one.
+ */
 async function walkRegularFiles(dir, prefix) {
   const entries = (await readdir(dir, { withFileTypes: true })).toSorted((a, b) =>
     a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
@@ -97,11 +127,28 @@ async function walkRegularFiles(dir, prefix) {
   const nested = await Promise.all(
     entries.map(async (entry) => {
       const relPath = prefix === '' ? entry.name : `${prefix}/${entry.name}`
+      if (relPath === SKIPPED_DIRECTORY || relPath.endsWith(`/${SKIPPED_DIRECTORY}`)) return []
       if (entry.isDirectory()) return walkRegularFiles(join(dir, entry.name), relPath)
-      return entry.isFile() ? [relPath] : []
+      if (entry.isFile()) return [relPath]
+      throw new Error(
+        `${join(dir, entry.name)} is ${describeEntry(entry)} rather than a regular file. A plugin ` +
+          'root carries real bytes only: a link resolves against the machine that built it, and ' +
+          `passing over one silently would ship a tree missing ${relPath}. Remove it, or place ` +
+          `its contents as real files. (${SKIPPED_DIRECTORY} is the one stated exception.)`,
+      )
     }),
   )
   return nested.flat()
+}
+
+/** What an unwalkable directory entry IS, so the refusal names the thing rather than the absence. */
+function describeEntry(entry) {
+  if (entry.isSymbolicLink()) return 'a symbolic link'
+  if (entry.isFIFO()) return 'a FIFO'
+  if (entry.isSocket()) return 'a socket'
+  if (entry.isBlockDevice()) return 'a block device'
+  if (entry.isCharacterDevice()) return 'a character device'
+  return 'not a regular file'
 }
 
 /** Deepest-first sweep of directories holding nothing, so a retired artifact leaves no husk. */
@@ -322,8 +369,11 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
     if (info === null || !info.isDirectory()) {
       fail(`--runtime ${base} is not a directory. Build one with scripts/build-plugin-runtime.mjs.`)
     }
+    // `lstat`, not `stat`: `stat` follows a link and would report a symlinked `dist/cli.js` as a
+    // present regular file, while the walk below carries real bytes only. The two have to agree
+    // about what a file is, or the refusal passes a runtime the copy then drops.
     for (const required of ['package.json', 'dist/cli.js']) {
-      const present = await stat(join(base, ...required.split('/'))).catch(() => null)
+      const present = await lstat(join(base, ...required.split('/'))).catch(() => null)
       if (present === null || !present.isFile()) {
         fail(
           `--runtime ${base} carries no ${required}, so a root built from it would bundle a runtime ` +
@@ -522,7 +572,10 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
       return await walkRegularFiles(join(base, client), '')
     } catch (err) {
       if (err.code === 'ENOENT') return []
-      throw err
+      // The walk's own refusal already reads as one operator-facing line, and this call sits at
+      // module top level where a rejection would print a stack over it instead.
+      fail(err instanceof Error ? err.message : String(err))
+      return []
     }
   }
 

@@ -14,6 +14,7 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -458,6 +459,57 @@ describe("argument and input refusals", () => {
     expect(badClient.status).toBe(2);
     expect(badClient.stderr).toContain("emacs");
   });
+
+  it("refuses a runtime entry that is a symlink rather than real bytes, naming it", () => {
+    // W-2: the two required files were proved with `stat`, which FOLLOWS a link, while the walk
+    // that copies the tree used `isFile()`, which does not — so a `--runtime` whose `dist` is a
+    // symlink passed the refusal and then contributed nothing, shipping a root whose bundled
+    // runtime has no `dist/cli.js` at all. The failure surfaced at a consumer's first command.
+    const real = stubRuntime();
+    const linked = tempDir("linked-runtime");
+    cpSync(join(real, "package.json"), join(linked, "package.json"));
+    symlinkSync(join(real, "dist"), join(linked, "dist"), "dir");
+    const out = tempDir("linked-out");
+    const result = generate(["--out-dir", out, "--runtime", linked, "--source-commit", FIXED_COMMIT, "--source-commit-date", FIXED_COMMIT_DATE]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("dist");
+    expect(result.stderr.toLowerCase()).toContain("symbolic link");
+    expect(treeFiles(out)).toEqual([]);
+  });
+
+  it("walks past node_modules/.bin as the one stated exception and carries none of it", () => {
+    // The runtime builder installs with `npm ci`, which writes `node_modules/.bin/<name>` as a
+    // link to a file the tree already carries, and prunes nothing there. The walk skips that one
+    // directory BY NAME rather than dropping its entries as "not a regular file": a named
+    // exception is reviewable and a silent drop is not. Nothing is lost — the link targets are
+    // real files under `node_modules/` and travel on their own.
+    const runtime = stubRuntime();
+    mkdirSync(join(runtime, "node_modules", ".bin"), { recursive: true });
+    writeFileSync(join(runtime, "node_modules", "tool.js"), "console.log('tool');\n");
+    symlinkSync(join("..", "tool.js"), join(runtime, "node_modules", ".bin", "tool"), "file");
+    const out = tempDir("bin-out");
+    const result = generate(["--out-dir", out, "--runtime", runtime, "--client", "codex", "--source-commit", FIXED_COMMIT, "--source-commit-date", FIXED_COMMIT_DATE]);
+    expect(result.status, result.stderr).toBe(0);
+    const files = treeFiles(join(out, "codex"));
+    expect(files).toContain("runtime/node_modules/tool.js");
+    expect(files.filter((rel) => rel.includes(".bin"))).toEqual([]);
+  }, ONE_ROOT_MS);
+
+  it("names a symlink that appeared under the output directory instead of walking past it", () => {
+    // The third face of W-2: `--check` compares the rendered set against the tree and then walks
+    // the tree for anything the corpus no longer projects. That walk dropped every non-file
+    // entry silently, so a symlink planted under `<out>` — pointing anywhere at all — was
+    // invisible to the one command whose whole job is to answer "is this tree what we rendered".
+    const out = tempDir("check-symlink");
+    const args = ["--out-dir", out, "--runtime", RUNTIME, "--client", "codex", "--source-commit", FIXED_COMMIT, "--source-commit-date", FIXED_COMMIT_DATE];
+    expect(generate(args).status).toBe(0);
+    expect(generate(["--check", ...args]).status).toBe(0);
+
+    symlinkSync(join(out, "codex", "README.md"), join(out, "codex", "READ-ME-TOO.md"), "file");
+    const drifted = generate(["--check", ...args]);
+    expect(drifted.status).toBe(1);
+    expect(drifted.stderr).toContain("READ-ME-TOO.md");
+  }, ONE_ROOT_MS);
 
   it("refuses a source commit that is not a 40-character hex sha", () => {
     const result = generate(["--out-dir", tempDir("bad-sha"), "--runtime", RUNTIME, "--source-commit", "HEAD"]);
