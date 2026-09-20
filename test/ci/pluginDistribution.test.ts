@@ -531,6 +531,30 @@ describe("the tree as a whole", () => {
     expect(readme).toContain("https-only");
     expect(readme).toContain("The private mirror route");
   });
+
+  it("pins the Codex routes to the --ref spelling the CLI's own help documents", () => {
+    // Inbox row of 2026-09-20 (build/63): these three lines named a `--ref` flag
+    // no leg had executed. MEASURED since, against codex-cli 0.154.0:
+    // `codex plugin marketplace add --help` (exit 0) lists `--ref <REF>` ("Git
+    // ref to fetch for Git marketplace sources") and carries the example
+    // `codex plugin marketplace add owner/repo --ref main`; `codex plugin --help`
+    // lists `add`, `remove` and `marketplace`, and `codex plugin marketplace
+    // --help` lists `upgrade`. So the lines stay, and this pin is what notices a
+    // release that retires the flag — the row's own trigger, moved into the tree.
+    const readme = readFileSync(join(dist, "README.md"), "utf8");
+    const section = readme.split(/^## /m).find((part) => part.includes("Root: `codex/`"));
+    expect(section).toBeDefined();
+    expect(section).toContain("codex plugin marketplace add zomarit/stamity --ref plugin-dist");
+    expect(section).toContain(
+      `codex plugin marketplace add zomarit/stamity --ref plugins/v${VERSION}`,
+    );
+    expect(section).toContain("codex plugin marketplace add zomarit/stamity --ref plugins/v<previous>");
+    // The three subcommands the same help output documents, so a pin that only
+    // held the flag could not go green against a renamed verb.
+    expect(section).toContain("codex plugin add stamity@stamity");
+    expect(section).toContain("codex plugin marketplace upgrade");
+    expect(section).toContain("codex plugin remove stamity");
+  });
 });
 
 describe("a narrowed build", () => {
