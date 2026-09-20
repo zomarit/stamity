@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // @ts-expect-error — the build helpers ship as a plain .mjs module with no type
 // declarations: the script that writes a release runtime runs under bare Node,
 // with no TypeScript nearby.
-import { runNpm } from "../../scripts/plugins/runtime.mjs";
+import { pruneRuntime, readTarEntries, runNpm } from "../../scripts/plugins/runtime.mjs";
 
 /**
  * REQ-PLUGIN-006: the bundled runtime a plugin root ships, built by
@@ -76,6 +76,15 @@ const BUILD_TIMEOUT_MS = 600_000;
 /** The same derivation as test/ci/leakGate.test.ts: a full scan of a vendor tree. */
 const GATE_TIMEOUT_MS = 180_000;
 
+/**
+ * The default `spawnSync` timeout every non-building child here is given, and —
+ * per the pairing the derivation above asks for — the vitest timeout each such
+ * case carries. Unpaired, vitest's own 5s default fires FIRST and reports "test
+ * timed out" with none of the child's output, which is the least useful reading
+ * of a hung spawn there is.
+ */
+const SPAWN_TIMEOUT_MS = 60_000;
+
 const WORK = realpathSync(mkdtempSync(join(tmpdir(), "stamity-plugin-runtime-")));
 
 afterAll(() => {
@@ -122,7 +131,7 @@ function writeArchive(name: string, entries: readonly Entry[]): string {
   return path;
 }
 
-function runBuild(args: readonly string[], timeout = 60_000): SpawnSyncReturns<string> {
+function runBuild(args: readonly string[], timeout = SPAWN_TIMEOUT_MS): SpawnSyncReturns<string> {
   return spawnSync(process.execPath, [SCRIPT_PATH, ...args], { encoding: "utf-8", timeout });
 }
 
@@ -138,14 +147,14 @@ describe("build-plugin-runtime, the CLI contract", () => {
 
     expect(result.status).toBe(2);
     expect(result.stderr).toContain("Usage: node scripts/build-plugin-runtime.mjs");
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   it("exits 2 on an unknown argument", () => {
     const result = runBuild(["--wat"]);
 
     expect(result.status).toBe(2);
     expect(result.stderr).toContain("--wat");
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   it("exits 2 when the tarball does not exist", () => {
     const missing = join(WORK, "absent.tgz");
@@ -154,7 +163,7 @@ describe("build-plugin-runtime, the CLI contract", () => {
 
     expect(result.status).toBe(2);
     expect(result.stderr).toContain(missing);
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   it("refuses an --out that already holds files, and leaves them alone", () => {
     const out = outDir("occupied");
@@ -167,7 +176,7 @@ describe("build-plugin-runtime, the CLI contract", () => {
     expect(result.status).toBe(2);
     expect(result.stderr).toContain(out);
     expect(readFileSync(join(out, "keep-me"), "utf-8")).toBe("mine\n");
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   it("accepts an --out that exists and is empty", () => {
     const out = outDir("empty");
@@ -182,7 +191,7 @@ describe("build-plugin-runtime, the CLI contract", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).not.toContain("already holds");
     expect(readFileSync(join(out, "readme.txt"), "utf-8")).toBe("hello\n");
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   it("runs npm through the interpreter, on whatever platform this is", () => {
     // The one portability claim the fast leg can make on its own. `npm` is
@@ -190,7 +199,7 @@ describe("build-plugin-runtime, the CLI contract", () => {
     // the helper resolves npm's JavaScript entry instead — and this asserts it
     // resolved to something that answers, rather than that the code compiles.
     expect(runNpm(["--version"]).trim()).toMatch(/^\d+\.\d+\.\d+/);
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   it("documents its exit codes and its prune list in the script header", () => {
     const source = readFileSync(SCRIPT_PATH, "utf-8");
@@ -201,6 +210,11 @@ describe("build-plugin-runtime, the CLI contract", () => {
       expect(source, `the header does not document pruning ${pruned}`).toContain(pruned);
     }
     expect(source).toContain("LICENSE");
+    // The suffix prune is scoped, and the header is where the scope is stated:
+    // `dist/content/**` is markdown by format, so a header that says "anywhere
+    // in the tree" documents a build that ships no corpus.
+    expect(source).toContain("under node_modules only");
+    expect(source).not.toContain("anywhere in the tree");
   });
 });
 
@@ -226,8 +240,98 @@ describe("build-plugin-runtime, the tar reader's refusals", () => {
 
       expect(result.status).toBe(1);
       expect(result.stderr).toContain(entry.name);
-    });
+    }, SPAWN_TIMEOUT_MS);
   }
+});
+
+describe("build-plugin-runtime, the tar reader's structural refusals", () => {
+  /** A 512-byte ustar header plus a body of whatever length is asked for. */
+  function archiveOf(entries: readonly Entry[], trailing = 1024): Buffer {
+    const blocks: Buffer[] = [];
+    for (const entry of entries) {
+      const body = Buffer.from(entry.body ?? "", "utf-8");
+      blocks.push(tarHeader(entry.name, body.length, entry.type ?? "0"));
+      if (body.length > 0) {
+        const padded = Buffer.alloc(Math.ceil(body.length / 512) * 512);
+        body.copy(padded);
+        blocks.push(padded);
+      }
+    }
+    blocks.push(Buffer.alloc(trailing));
+    return Buffer.concat(blocks);
+  }
+
+  it("names the entry whose body runs off the end of a truncated archive", () => {
+    // The header declares 4096 bytes and the archive stops after the header, so
+    // `subarray` would hand the writer a short buffer and the build would write
+    // a silently truncated file rather than refuse one.
+    const header = tarHeader("package/dist/cli.js", 4096, "0");
+
+    expect(() => [...readTarEntries(header)]).toThrow(/package\/dist\/cli\.js/);
+  });
+
+  it("refuses a pax size override that is not a safe non-negative integer", () => {
+    // The pax record wins over the header field, so an unparseable or negative
+    // override is the one value that decides how far the reader advances.
+    const record = "24 size=-1\n24 path=package/x\n";
+    const pax = Buffer.concat([
+      tarHeader("PaxHeader/x", Buffer.byteLength(record), "x"),
+      (() => {
+        const padded = Buffer.alloc(512);
+        padded.write(record, 0, "utf-8");
+        return padded;
+      })(),
+      tarHeader("package/x", 0, "0"),
+      Buffer.alloc(1024),
+    ]);
+
+    expect(() => [...readTarEntries(pax)]).toThrow(/size/);
+  });
+
+  it("reads a well-formed archive it has no reason to refuse", () => {
+    // Floor 8: the two refusals above both pass on a degenerate empty archive,
+    // so one case drives the reader through a body it must accept.
+    const names = [...readTarEntries(archiveOf([{ name: "package/a.js", body: "x\n" }]))].map(
+      (entry: { name: string }) => entry.name,
+    );
+
+    expect(names).toEqual(["package/a.js"]);
+  });
+});
+
+describe("build-plugin-runtime, the prune's blast radius", () => {
+  /**
+   * REQ-PLUGIN-006: the prune list is scoped to `node_modules`. The bundled
+   * corpus under `dist/content/` is `.md` BY FORMAT — every agent, command,
+   * rule, skill and the charter — so a suffix prune that walks the whole tree
+   * empties the runtime of the content it exists to serve while every
+   * `package.json` assertion stays green.
+   */
+  it("keeps the bundled corpus and prunes only under node_modules", () => {
+    const root = join(WORK, "prune-scope");
+    mkdirSync(join(root, "dist", "content", "commands"), { recursive: true });
+    mkdirSync(join(root, "dist", "content", "charter"), { recursive: true });
+    mkdirSync(join(root, "dist", "content", "skills", "st-qa", "docs"), { recursive: true });
+    mkdirSync(join(root, "node_modules", "dep", "docs"), { recursive: true });
+    writeFileSync(join(root, "dist", "content", "commands", "st-work.md"), "# st-work\n");
+    writeFileSync(join(root, "dist", "content", "charter", "stamity-charter.md"), "# charter\n");
+    writeFileSync(join(root, "dist", "content", "skills", "st-qa", "docs", "note.md"), "# note\n");
+    writeFileSync(join(root, "node_modules", "dep", "README.md"), "dep\n");
+    writeFileSync(join(root, "node_modules", "dep", "docs", "guide.md"), "guide\n");
+    writeFileSync(join(root, "node_modules", ".package-lock.json"), "{}\n");
+
+    const removed: string[] = pruneRuntime(root);
+
+    expect(existsSync(join(root, "dist", "content", "commands", "st-work.md"))).toBe(true);
+    expect(existsSync(join(root, "dist", "content", "charter", "stamity-charter.md"))).toBe(true);
+    // A `docs/` directory INSIDE the corpus is a skill's own reference tree, not
+    // a dependency's: the directory prune is scoped to node_modules too.
+    expect(existsSync(join(root, "dist", "content", "skills", "st-qa", "docs", "note.md"))).toBe(true);
+    expect(existsSync(join(root, "node_modules", "dep", "README.md"))).toBe(false);
+    expect(existsSync(join(root, "node_modules", "dep", "docs"))).toBe(false);
+    expect(existsSync(join(root, "node_modules", ".package-lock.json"))).toBe(false);
+    expect(removed.length).toBeGreaterThan(0);
+  });
 });
 
 // ── the built runtime ────────────────────────────────────────────────────────
@@ -280,12 +384,45 @@ describe.skipIf(!BUILT)("the runtime built from a real npm pack", () => {
     const result = spawnSync(process.execPath, [join(runtime, "dist", "cli.js"), "--version"], {
       cwd: empty,
       encoding: "utf-8",
-      timeout: 60_000,
+      timeout: SPAWN_TIMEOUT_MS,
     });
 
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout.trim()).toContain(PACKAGE.version);
+  }, SPAWN_TIMEOUT_MS);
+
+  it("ships the bundled corpus the prune used to delete", () => {
+    // `--version` answers out of `package.json` alone and would stay green on a
+    // runtime with an empty `dist/content/`. These two files are the corpus by
+    // name: one command body, and the charter every emitted setup carries.
+    expect(existsSync(join(runtime, "dist", "content", "commands", "st-work.md"))).toBe(true);
+    expect(existsSync(join(runtime, "dist", "content", "charter", "stamity-charter.md"))).toBe(true);
+    expect(
+      readFileSync(join(runtime, "dist", "content", "commands", "st-work.md"), "utf-8").length,
+    ).toBeGreaterThan(0);
   });
+
+  it("reads that corpus: init in a scratch repository writes an emitted agent", () => {
+    // The standalone proof that reads CONTENT rather than metadata. `init`
+    // plans the corpus and writes the client tree, so an emptied
+    // `dist/content/` cannot produce this file at all.
+    const scratch = join(WORK, "scratch-repo");
+    mkdirSync(scratch, { recursive: true });
+    const git = spawnSync("git", ["init", "-q"], { cwd: scratch, encoding: "utf-8", timeout: SPAWN_TIMEOUT_MS });
+    expect(git.status, git.stderr).toBe(0);
+
+    const result = spawnSync(
+      process.execPath,
+      [join(runtime, "dist", "cli.js"), "init", "-y", "--tools", "claude"],
+      { cwd: scratch, encoding: "utf-8", timeout: SPAWN_TIMEOUT_MS },
+    );
+
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(existsSync(join(scratch, ".claude", "agents", "stamity-reviewer.md"))).toBe(true);
+    expect(
+      readFileSync(join(scratch, ".claude", "agents", "stamity-reviewer.md"), "utf-8"),
+    ).toContain("stamity-reviewer");
+  }, SPAWN_TIMEOUT_MS);
 
   it("installs the production graph and nothing optional or type-only", () => {
     const modules = join(runtime, "node_modules");

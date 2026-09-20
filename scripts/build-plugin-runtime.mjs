@@ -33,11 +33,15 @@
 //                                       PRODUCTION dependency (via @types/make-fetch-happen
 //                                       -> @types/node-fetch) and is megabytes of
 //                                       declarations that no runtime ever reads.
-//   - *.md, *.map, *.d.ts, *.d.mts,     anywhere in the tree: documentation,
+//   - *.md, *.map, *.d.ts, *.d.mts,     under node_modules only: documentation,
 //     *.d.cts                           sourcemaps and type declarations are all
 //                                       read by tools, never by the interpreter
 //   - test/, tests/, docs/, .github/    under node_modules only: a dependency's
 //                                       own fixtures and CI config
+//   NOTHING outside node_modules is pruned. `dist/content/` is the bundled
+//   corpus — every agent, command, rule and skill body, and the charter — and it
+//   is markdown by FORMAT, so a suffix prune over the whole tree would ship a
+//   runtime that starts, prints its version, and can emit nothing.
 //   LICENSE, LICENCE, COPYING and NOTICE files are KEPT whatever their
 //   extension — a redistribution carries the licences of what it redistributes.
 //
