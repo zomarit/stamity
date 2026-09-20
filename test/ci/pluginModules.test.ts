@@ -71,6 +71,10 @@ const stageFor = async (input: { contentRoot: string; forkRoot?: string }): Prom
   return staged;
 };
 
+/** The staging trees `stageSubstitutedCorpus` currently owns under the system temp directory. */
+const stagingTrees = async (): Promise<string[]> =>
+  (await readdir(tmpdir())).filter((name) => name.startsWith("stamity-plugin-corpus-")).toSorted();
+
 const tempDir = async (): Promise<string> => {
   const path = await mkdtemp(join(tmpdir(), "stamity-plugin-modules-"));
   temps.push(path);
@@ -242,18 +246,16 @@ describe("staging refusals and companions (REQ-PLUGIN-003, REQ-PLUGIN-004)", () 
     // M7: the temp tree is the function's own and the caller gets no handle to
     // it on the failure path, so a refusal that left it behind would leak one
     // directory per failed build with nothing able to remove it.
-    const staging = async (): Promise<string[]> =>
-      (await readdir(tmpdir())).filter((name) => name.startsWith("stamity-plugin-corpus-")).toSorted();
     const contentRoot = await syntheticCorpus(async (root) => {
       await writeFile(join(root, "agents", "rogue.md"), "Ask ${STAMITY:UNKNOWN} for the answer.\n");
     });
-    const before = await staging();
+    const before = await stagingTrees();
 
     await expect(stage({ contentRoot, tokens })).rejects.toThrow(/agents\/rogue\.md/);
 
     // The refusal copied `demo-agent.md` before it reached `rogue.md`, so the
     // tree it removed was a partial one rather than an empty directory.
-    expect((await staging()).filter((name) => !before.includes(name))).toEqual([]);
+    expect((await stagingTrees()).filter((name) => !before.includes(name))).toEqual([]);
   });
 
   it("carries a skill's references and scripts byte-for-byte beside its SKILL.md", async () => {
