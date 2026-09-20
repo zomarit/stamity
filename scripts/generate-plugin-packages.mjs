@@ -349,6 +349,12 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
    * Everything is rendered before anything is written, which is what makes a refusal — an
    * unresolved token, a corpus collision, a row with no declared home, a capability file that
    * fails its own validator — leave the output directory exactly as it was.
+   *
+   * Every refusal inside this function THROWS rather than calling `fail()`. Both print one line
+   * and exit 1, but `process.exit` runs no `finally`: a refusal raised between the staging call
+   * and the `finally` below would leave the substituted corpus and the plan root on disk with
+   * nothing left able to remove them, one pair per refused build. The `.catch(fail)` at the call
+   * site prints the message after the unwinding has disposed both.
    */
   async function renderRoots() {
     let staged
@@ -369,7 +375,7 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
       if (index.collisions.length > 0) {
         // Before any write, by construction: a contested identity means two bodies claim one
         // artifact, and publishing whichever the walk saw first would ship a coin toss.
-        fail(
+        throw new Error(
           `Corpus collisions refuse a plugin build:\n${index.collisions
             .map((row) => `  - ${row.key} (${row.kind}): ${row.paths.join(', ')}`)
             .toSorted()
@@ -410,7 +416,7 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
         const placements = []
         const add = (relPath, bytes) => {
           if (files.has(relPath)) {
-            fail(
+            throw new Error(
               `${client}: two rows both claim ${relPath} inside the plugin root. One path is one ` +
                 'file, so a second claimant would silently overwrite the first.',
             )
@@ -419,12 +425,9 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
         }
 
         for (const row of plan.outputs) {
-          let placement
-          try {
-            placement = placeRow(client, row)
-          } catch (err) {
-            fail(err instanceof Error ? err.message : String(err))
-          }
+          // `placeRow`'s refusal — a row no container table names — travels as a throw, so the
+          // `finally` below disposes the staged corpus and the plan root on the way out.
+          const placement = placeRow(client, row)
           if (placement === null) continue
           placements.push(placement)
           add(placement.path, placement.content ?? row.content)
@@ -440,7 +443,7 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
           const from = join(ROOT, ...asset.from.split('/'))
           const present = await stat(from).catch(() => null)
           if (present === null || !present.isFile()) {
-            fail(
+            throw new Error(
               `The brand asset ${asset.from} is not in the tree, so ${container.MANIFEST_PATH} would ` +
                 'declare a logo nothing resolves. Cursor turns a relative logo path into a raw ' +
                 'content URL at the published repository and commit, so an asset that is missing — ' +
@@ -467,7 +470,7 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
         })
         const defects = validateCapabilityFile(capability)
         if (defects.length > 0) {
-          fail(
+          throw new Error(
             `${client}: the capability file this build produced is not valid:\n${defects
               .map((defect) => `  - ${defect}`)
               .join('\n')}`,

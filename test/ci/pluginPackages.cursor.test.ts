@@ -114,15 +114,26 @@ function forkCheckout(prefix: string): string {
   return checkout;
 }
 
-function generate(args: string[], cwd = REPO_ROOT): SpawnSyncReturns<string> {
+function generate(args: string[], cwd = REPO_ROOT, env?: NodeJS.ProcessEnv): SpawnSyncReturns<string> {
   return spawnSync(process.execPath, [join(cwd, "scripts", "generate-plugin-packages.mjs"), ...args], {
     cwd,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
+    ...(env === undefined ? {} : { env: { ...process.env, ...env } }),
   });
 }
 
-function buildCursorRoot(outDir: string, cwd = REPO_ROOT): SpawnSyncReturns<string> {
+/**
+ * A temp directory the spawned generator is the only writer of, so "what did this run leave
+ * behind" is answerable without racing the other suites that stage a corpus under the shared
+ * system temp directory. The three names are what `os.tmpdir()` reads on POSIX and on Windows.
+ */
+function isolatedTemp(prefix: string): { dir: string; env: NodeJS.ProcessEnv } {
+  const dir = tempDir(prefix);
+  return { dir, env: { TMPDIR: dir, TEMP: dir, TMP: dir } };
+}
+
+function buildCursorRoot(outDir: string, cwd = REPO_ROOT, env?: NodeJS.ProcessEnv): SpawnSyncReturns<string> {
   return generate(
     [
       "--out-dir",
@@ -137,6 +148,7 @@ function buildCursorRoot(outDir: string, cwd = REPO_ROOT): SpawnSyncReturns<stri
       FIXED_COMMIT_DATE,
     ],
     cwd,
+    env,
   );
 }
 
@@ -533,8 +545,9 @@ describe("the brand asset and the fork layer", () => {
       const checkout = forkCheckout("no-logo");
       rmSync(join(checkout, "assets", "logo.svg"));
       const out = tempDir("no-logo-out");
+      const temps = isolatedTemp("no-logo-temps");
 
-      const result = buildCursorRoot(out, checkout);
+      const result = buildCursorRoot(out, checkout, temps.env);
       expect(result.status).toBe(1);
       expect(result.stderr).toContain("assets/logo.svg");
       // The message shape the manifest generator uses: the consequence, not just the absence.
@@ -542,6 +555,10 @@ describe("the brand asset and the fork layer", () => {
       expect(result.stderr).toContain("404");
       // Nothing rendered, so nothing was written: the refusal is before the first byte.
       expect(treeFiles(out)).toEqual([]);
+      // And nothing was left open either. This refusal fires inside `renderRoots`, where the
+      // staged corpus and the plan root are live and the `finally` below owns their disposal —
+      // a `process.exit(1)` raised there would skip it and leak both per refused build.
+      expect(readdirSync(temps.dir)).toEqual([]);
     },
     ONE_ROOT_MS,
   );
