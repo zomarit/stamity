@@ -2497,12 +2497,15 @@ describe("the generated scripts under a vendor plugin root", () => {
    * A plugin container: one `hooks/` directory holding the guard AND the
    * document, which is the layout every generated root places them in.
    *
-   * TEST CHANGE (W2, amending REQ-PLUGIN-005): these cases used to set
-   * `CLAUDE_PLUGIN_ROOT` and assert the guard followed it. The contract changed
-   * — the document is resolved BESIDE THE SCRIPT and no environment variable
-   * enters the computation — so a case that sets a variable now proves the
-   * opposite of what it was written to prove. The container is therefore
-   * expressed as a layout rather than as an environment.
+   * TEST CHANGE (W2, then SEC3-W1, amending REQ-PLUGIN-005 twice). These cases
+   * first set `CLAUDE_PLUGIN_ROOT` and asserted the guard followed it; the
+   * environment left the computation, and they became a layout with two ordered
+   * candidates. The contract changed again: emission chooses ONE candidate, so
+   * a container guard is RENDERED with the bare sibling path rather than with
+   * the repository climb. A container guard carrying the climb would resolve
+   * `<root>/../agent-tool-policies.json` — the parent of the plugin root, which
+   * is a marketplace clone, a client's plugin cache or a `--plugin-dir` project
+   * directory — so the old rendering is exactly what this fix removes.
    */
   async function placeContainerGuard(dir: string, document?: string): Promise<string> {
     if (document !== undefined) {
@@ -2510,14 +2513,20 @@ describe("the generated scripts under a vendor plugin root", () => {
     }
     return place(
       `${dir}/hooks/guard.mjs`,
-      buildPreToolUseGuardScript({ policiesJsonPath: `../${POLICY_FILE}`, failMode: "fail-closed" }),
+      buildPreToolUseGuardScript({ policiesJsonPath: POLICY_FILE, failMode: "fail-closed" }),
     );
   }
 
-  it("reads the document beside the script when the container carries one", async () => {
-    // `Edit` is ALLOWED by the repository document seeded at the root and
-    // DENIED by the container's — so the verdict names which document was read.
-    await getRepo().seedFiles({ [POLICY_FILE]: buildAgentToolPoliciesJson(ROSTER) });
+  it("reads the container's own document and ignores every document above it", async () => {
+    // `Edit` is ALLOWED by the documents planted above the container and DENIED
+    // by the container's own — so the verdict names which document was read.
+    // The two decoys sit where the retired climb used to land: one level above
+    // the guard, and above the plugin root itself, the user-writable place a
+    // marketplace clone or a plugin cache puts the root in.
+    await getRepo().seedFiles({
+      [POLICY_FILE]: buildAgentToolPoliciesJson(ROSTER),
+      [`container-sibling/${POLICY_FILE}`]: buildAgentToolPoliciesJson(ROSTER),
+    });
     const guard = await placeContainerGuard(
       "container-sibling",
       buildAgentToolPoliciesJson(PLUGIN_ROSTER),
@@ -2552,24 +2561,33 @@ describe("the generated scripts under a vendor plugin root", () => {
     },
   );
 
-  it("climbs to the repository document when no sibling document exists", async () => {
-    // The repository layout is the fallback and stays byte-identical: the guard
-    // sits under `hooks/` and the document one level above it.
+  it("refuses when its one rendered document is absent rather than reaching a second", async () => {
+    // TEST CHANGE (SEC3-W1): this case asserted the OPPOSITE — a container guard
+    // with no sibling climbed to a repository document. That fallback is the
+    // defect: the climb out of a container lands above the plugin root, so a
+    // file a workspace writer drops there decided the call. There is no second
+    // candidate now, in either mode, and an absent document is a refusal.
     const guard = await placeContainerGuard("container-empty");
     await getRepo().seedFiles({
+      [POLICY_FILE]: buildAgentToolPoliciesJson(ROSTER),
       [`container-empty/${POLICY_FILE}`]: buildAgentToolPoliciesJson(ROSTER),
     });
 
     const result = run(guard, { cwd: getRepo().dir, input: call("stamity-implementer", "Edit") });
 
-    expect(result).toEqual({ code: 0, stdout: "", stderr: "" });
+    expect(result.code).toBe(2);
+    expect(refusal(result)["reasonCode"]).toBe("POLICY_UNREADABLE");
+    // The message names the path the script was rendered for, so an operator
+    // reads which file the container is missing.
+    expect(String(refusal(result)["message"])).toContain(
+      getRepo().path("container-empty", "hooks", POLICY_FILE),
+    );
   });
 
-  it("refuses an unreadable sibling document rather than climbing to a laxer one", async () => {
-    // A sibling document that EXISTS is the document. Falling back on a parse
-    // failure or an oversized file would answer the call from a policy set
-    // nobody selected — the refusal the guard already has for the repository
-    // document is the honest outcome here too.
+  it("refuses an unreadable document rather than answering from a laxer one", async () => {
+    // The rendered document is THE document. Falling back on a parse failure or
+    // an oversized file would answer the call from a policy set nobody selected
+    // — the refusal the guard already has is the honest outcome here too.
     await getRepo().seedFiles({ [POLICY_FILE]: buildAgentToolPoliciesJson(ROSTER) });
     const unparseable = await placeContainerGuard("container-broken", "{ not json\n");
     const broken = run(unparseable, {
@@ -2591,20 +2609,22 @@ describe("the generated scripts under a vendor plugin root", () => {
     });
     expect(large.code).toBe(2);
     expect(refusal(large)["reasonCode"]).toBe("POLICY_TOO_LARGE");
-    // The message names the sibling document, not the repository's, so an
+    // The message names the container's document, not the repository's, so an
     // operator reads which file to fix.
     expect(String(refusal(large)["message"])).toContain(
       getRepo().path("container-oversized", "hooks", POLICY_FILE),
     );
   });
 
-  it("judges a repository-mode call by the repository document, not a stray sibling", async () => {
+  it("judges a repository-mode call by the repository document, not a stray sibling or a stray ancestor", async () => {
     // W-3/SEC2-M1: the sibling used to win unconditionally, so any writer with
     // access to the workspace could drop a document beside an installed guard
-    // and have the next call judged by it, with no ledger or check probe
-    // seeing the swap. The repository document is now what a repository
-    // install reads, and the stray copy decides nothing.
+    // and have the next call judged by it, with no ledger or check probe seeing
+    // the swap. SEC3-W1 adds the other side: a repository guard reaches neither
+    // a sibling nor anything above its climb target, because it was rendered
+    // with one path and consults only that one.
     await getRepo().seedFiles({
+      [POLICY_FILE]: buildAgentToolPoliciesJson(PLUGIN_ROSTER),
       [`repo-stray/${POLICY_FILE}`]: buildAgentToolPoliciesJson(ROSTER),
       [`repo-stray/hooks/${POLICY_FILE}`]: buildAgentToolPoliciesJson(PLUGIN_ROSTER),
     });
@@ -2613,32 +2633,43 @@ describe("the generated scripts under a vendor plugin root", () => {
       buildPreToolUseGuardScript({ policiesJsonPath: `../${POLICY_FILE}`, failMode: "fail-closed" }),
     );
 
-    // `Edit` is allowed by the repository document and denied by the stray one.
+    // `Edit` is allowed by the climb target alone; both decoys deny it.
     const result = run(guard, { cwd: getRepo().dir, input: call("stamity-implementer", "Edit") });
 
     expect(result).toEqual({ code: 0, stdout: "", stderr: "" });
   });
 
-  it("refuses a symlinked sibling document instead of following it", async () => {
+  it.each([
+    ["a container", "container-linked", POLICY_FILE],
+    ["a repository", "repo-linked", `../${POLICY_FILE}`],
+  ] as const)("refuses %s guard's linked document instead of following it", async (_mode, dir, rendered) => {
     // A link is content another path owns: following it lets the governing
     // document be swapped while the directory entry a reviewer reads never
     // moves. `lstatSync` sees the link, and the refusal is the same one a
-    // wrong-schema document earns.
+    // wrong-schema document earns. TEST CHANGE (SEC3-W1): the repository leg is
+    // new. The link check used to guard the sibling candidate only, so a link
+    // planted at the repository document was probed with `existsSync` and
+    // FOLLOWED; one candidate means one `lstat`, in both modes.
     const target = await place(
-      "linked-source/elsewhere.json",
+      `${dir}-source/elsewhere.json`,
       buildAgentToolPoliciesJson(PLUGIN_ROSTER),
     );
-    const guard = await placeContainerGuard("container-linked");
-    await symlink(target, getRepo().path("container-linked", "hooks", POLICY_FILE));
+    const guard = await place(
+      `${dir}/hooks/guard.mjs`,
+      buildPreToolUseGuardScript({ policiesJsonPath: rendered, failMode: "fail-closed" }),
+    );
+    const linkAt =
+      rendered === POLICY_FILE
+        ? getRepo().path(dir, "hooks", POLICY_FILE)
+        : getRepo().path(dir, POLICY_FILE);
+    await symlink(target, linkAt);
 
     const result = run(guard, { cwd: getRepo().dir, input: call("stamity-implementer", "Read") });
 
     expect(result.code).toBe(2);
     expect(refusal(result)["reasonCode"]).toBe("POLICY_INVALID");
     // The message names the link, so an operator reads which entry to remove.
-    expect(String(refusal(result)["message"])).toContain(
-      getRepo().path("container-linked", "hooks", POLICY_FILE),
-    );
+    expect(String(refusal(result)["message"])).toContain(linkAt);
   });
 
   /**
@@ -2674,9 +2705,11 @@ describe("the generated scripts under a vendor plugin root", () => {
     });
     expect(git("status", "--porcelain").trim()).toBe("");
 
-    // TEST CHANGE (W2): the container used to be named by `CLAUDE_PLUGIN_ROOT`.
-    // The document is now resolved beside the script, so the container is the
-    // `hooks/` directory the scripts are placed in and there is no environment.
+    // TEST CHANGE (W2, then SEC3-W1): the container used to be named by
+    // `CLAUDE_PLUGIN_ROOT`, and then by a climb the guard could fall back to.
+    // A container guard is now RENDERED with the sibling name, so the container
+    // is the `hooks/` directory the scripts are placed in, there is no
+    // environment, and there is nothing above it to reach.
     await getRepo().seedFiles({
       [`hooks/${POLICY_FILE}`]: buildAgentToolPoliciesJson(PLUGIN_ROSTER),
     });
@@ -2685,7 +2718,7 @@ describe("the generated scripts under a vendor plugin root", () => {
       ["notice.mjs", buildConfigTamperNoticeScript(), ""],
       [
         "guard-run.mjs",
-        buildPreToolUseGuardScript({ policiesJsonPath: `../${POLICY_FILE}`, failMode: "fail-closed" }),
+        buildPreToolUseGuardScript({ policiesJsonPath: POLICY_FILE, failMode: "fail-closed" }),
         call("stamity-reviewer", "Read"),
       ],
       [

@@ -162,10 +162,10 @@ Given a root's hook configuration and scripts, When the configuration is parsed,
 names a script under the client's root variable (`${CLAUDE_PLUGIN_ROOT}`, `${CURSOR_PLUGIN_ROOT}`,
 `${PLUGIN_ROOT}`) and no repository-relative `.stamity/generated/hooks` path; When a session-start
 script runs from a repository with the root variable set and `STAMITY_REPO_ROOT` unset, Then it
-reads that repository's `.stamity/` from the working directory, reads the repository's own policy
-document when the climb finds one and the sibling `hooks/agent-tool-policies.json` beside the
-script otherwise, with no environment variable entering that resolution, and
-`git status --porcelain` is unchanged after the run.
+reads that repository's `.stamity/` from the working directory, reads the ONE policy document the
+script was rendered for — the sibling `hooks/agent-tool-policies.json` in a plugin container, the
+repository's own at the climb otherwise — with no environment variable and no second candidate
+entering that resolution, and `git status --porcelain` is unchanged after the run.
 
 As built (2026-09-20): `EmissionContext.facts.hookScriptsRoot` — on the planner's type and on its
 twin `EmissionFacts` in `src/cli/engine/emission.ts`, which the plan's file list omitted — roots
@@ -181,12 +181,20 @@ the session's working directory as `cwd` (the Codex hooks page states hook comma
 session cwd) and identifies the core guard by BASENAME across argv, so the identity is
 root-independent and codex's and copilot's fail-mode posture and cursor's `failClosed` survive a
 plugin root. The requirement's policy-document clause above is amended from "the root variable's
-`hooks/agent-tool-policies.json`" to what shipped: the guard prefers the repository document and
-reaches the sibling only when the climb target does not exist (a plugin root's never does),
-refuses a symlinked sibling as `POLICY_INVALID` through `lstatSync` before any read, and consults
-no environment variable at all — otherwise a generic `PLUGIN_ROOT` in an unrelated environment
-redirects a repository-mode guard to a foreign document, and a stray sibling redirects it with
-nothing observing the swap (ledger row prove/71). The codex hook configuration's own `description`
+`hooks/agent-tool-policies.json`" to what shipped: the guard reads ONE document, chosen when
+`planHooksInfra` rendered it — the sibling `agent-tool-policies.json` when `hookScriptsRoot` is
+set (the container layout every generated root places the guard and the document in), and the
+`../../agent-tool-policies.json` climb otherwise — and `policyDocumentPath()` in the emitted body
+orders nothing. It `lstat`s that single path and refuses a symbolic link as `POLICY_INVALID`
+before any read, in both modes, and it consults no environment variable at all. Three defects sit
+behind that shape: a generic `PLUGIN_ROOT` in an unrelated environment redirected a
+repository-mode guard to a foreign document; a stray sibling redirected it with nothing observing
+the swap (ledger row prove/71); and an ordered pair with the repository document first still
+reached OUT of a container, because `<root>/hooks/<script>` climbing two levels lands on the
+PARENT of the plugin root — a marketplace clone, a client's plugin cache, a `--plugin-dir`
+project directory — where a regular file or a symlink outranked the container's own emitted copy.
+A missing, oversized, unparseable or linked document is a refusal; there is nothing to fall back
+to. The codex hook configuration's own `description`
 now derives its scripts directory from the context, so it no longer tells a plugin-root reader that
 the scripts live under `.stamity/generated/hooks/codex/`.
 
