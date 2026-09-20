@@ -123,6 +123,23 @@ const CHARTER_FIXTURE = [
  * a plugin built from this corpus would carry, and a corpus with no agent in it
  * would make the unmanaged case pass vacuously.
  */
+/** One corpus skill — a directory artifact, so it projects into `.agents/skills/st-verify/`. */
+const SKILL_FIXTURE = [
+  "---",
+  "id: verify",
+  "type: skill",
+  "description: fixture skill",
+  "tags: [orchestration]",
+  "load: on-demand",
+  "obsolete_when: fixture trigger",
+  "---",
+  "",
+  "# Verify",
+  "",
+  "Skill body.",
+  "",
+].join("\n");
+
 /** One corpus command, emitted as `st-work` — the `cmd-` id renders with the `st-` prefix. */
 const COMMAND_FIXTURE = [
   "---",
@@ -1562,6 +1579,56 @@ describe("check — plugin-duplicates", () => {
       "not written by this engine; remove the file or keep it as an override under " +
         `${STATE_DIR}/overrides/`,
     );
+  });
+
+  /**
+   * The mixed repository, pinned as a DECISION rather than as a defect
+   * (REQ-PLUGIN-019, disposition 2026-09-20).
+   *
+   * `.agents/skills/` is the vendor-neutral tree, and it stays written while
+   * ANY generated-mode reader still owns `skill` — so a repository whose cursor
+   * is plugin-backed for `skill` beside a generated codex has that tree on disk
+   * and both clients read it. Cursor therefore does receive those skills twice,
+   * once from its plugin and once from the shared tree, and this row still
+   * passes: the ledger source filters rows by adapter and the unmanaged source
+   * exempts anything a ledger row owns, so neither sees the tree as cursor's
+   * duplicate. Failing here would break the CI of a legitimate mixed
+   * repository, and the tree cannot be removed without stripping the generated
+   * client. The way out is moving the last reader onto the plugin, not a
+   * verdict from this row.
+   */
+  it("passes a mixed repository whose shared skills tree still serves a generated reader", async () => {
+    const handle = getRepo();
+    await handle.seedFiles({ "corpus/skills/st-verify/SKILL.md": SKILL_FIXTURE });
+    const root = await seedRepo(handle, {
+      tools: ["cursor", "codex"],
+      plugin: {
+        mode: "plugin-backed",
+        clients: { cursor: { version: "1.9.0", classes: ["skill"] } },
+      },
+    });
+
+    // The sync the boundary is recorded by: `seedRepo` emits in generated mode
+    // and stamps the plugin record afterwards, so cursor still holds the shared
+    // tree's ledger rows until emission runs again under the new ownership.
+    // That second run is what a real `plugin setup` is followed by, and it is
+    // the state this decision is about.
+    const engineVersion = createApp().version;
+    await applySync(root, await planSync(root, engineVersion), {
+      engineVersion,
+      force: false,
+      dryRun: false,
+      now: T0,
+    });
+
+    // The shared tree is still there, and codex — the generated reader — is
+    // what keeps it there.
+    expect(existsSync(join(root, ".agents/skills/st-verify/SKILL.md"))).toBe(true);
+
+    const duplicates = await duplicatesRow(root);
+
+    expect(duplicates.status).toBe("pass");
+    expect(duplicates.detail).toBe("no duplicated classes");
   });
 
   it("names a copilot agent and prompt whose double extensions no ledger row owns", async () => {
