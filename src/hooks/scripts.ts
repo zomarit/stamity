@@ -969,13 +969,14 @@ export function buildPreToolUseGuardScript(opts: GuardScriptOptions): string {
     ],
     [
       "Reads outside repo state: the pending call's payload on stdin. Output is a",
-      "function of that payload and one policy document — the repository's when it",
-      "exists, and otherwise the container copy beside this script — and of",
-      "nothing else. No environment variable selects the document.",
+      "function of that payload and ONE policy document — the one emitted beside",
+      "this script in a container, or the repository's own at the climb, chosen",
+      "when this script was rendered — and of nothing else. No environment",
+      "variable and no second candidate.",
     ],
   )}
 
-import { existsSync, lstatSync, readFileSync, statSync } from "node:fs";
+import { lstatSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -988,26 +989,34 @@ const BLOCK_EXIT = ${BLOCKING_EXIT_CODE};
 const MCP_PREFIX = ${json(MCP_TOOL_PREFIX)};
 
 /**
- * The policy document THIS run reads — resolved from the LAYOUT alone.
+ * The policy document THIS run reads — fixed when this script was RENDERED.
  *
- * The REPOSITORY document wins whenever it exists. Every repository install
- * has one — the emitted climb above this script lands on it — so an
- * \`${AGENT_TOOL_POLICIES_FILE}\` that some workspace writer drops BESIDE a
- * repository-mode guard cannot re-judge the next call from a policy set nobody
- * emitted. A vendor plugin container has no such climb target: it places the
- * guard and its copy of the document together in one \`hooks/\` directory and
- * nothing sits above it, so the sibling copy is still the document there and
- * plugin mode pays nothing for the ordering.
+ * There is exactly ONE candidate, \`POLICY_FILE\`: the copy emitted beside this
+ * script in a vendor plugin container, or the repository's own at the climb
+ * above this script. Emission chose which, so run time chooses nothing. No
+ * environment variable and no second path enter the resolution, which is what
+ * stops an \`${AGENT_TOOL_POLICIES_FILE}\` that some workspace writer drops near
+ * an installed guard from re-judging the next call from a policy set nobody
+ * emitted.
  *
- * The sibling is probed with \`lstatSync\`, not \`existsSync\`: a SYMBOLIC LINK
- * named \`${AGENT_TOOL_POLICIES_FILE}\` is content that some other path owns,
- * and following it would let a link swap the governing document while the
- * directory entry a reviewer reads never moves. A linked sibling is REFUSED as
- * \`POLICY_INVALID\` rather than followed or quietly traded for the repository
- * copy — the posture \`src/hooks/userHooks.ts\` already takes for a linked hook
- * script. A real-file sibling that is oversized or unparseable is refused by
- * the checks below for the same reason: answering a call from a policy set
- * nobody selected is the one outcome worse than a refusal.
+ * An ORDERED PAIR of candidates is what this replaced, and the order itself was
+ * the defect. Inside a container the guard sits at \`<root>/hooks/<name>\` and the
+ * repository climb resolved to the PARENT of the plugin root — a marketplace
+ * clone, a client's plugin cache, a \`--plugin-dir\` project directory — so a file
+ * in a user-writable directory outranked the container's own emitted copy. One
+ * candidate per mode has no such rank to lose.
+ *
+ * The single path is probed with \`lstatSync\`, not \`existsSync\`: a SYMBOLIC LINK
+ * named \`${AGENT_TOOL_POLICIES_FILE}\` is content that some other path owns, and
+ * following it would let a link swap the governing document while the directory
+ * entry a reviewer reads never moves. A linked document is REFUSED as
+ * \`POLICY_INVALID\` in BOTH modes — the repository's own document is a ledgered
+ * regular file, so a link standing where it should be is as much a swap as one
+ * in a container — which is the posture \`src/hooks/userHooks.ts\` already takes
+ * for a linked hook script. A real-file document that is missing, oversized or
+ * unparseable is refused by the checks below for the same reason: answering a
+ * call from a policy set nobody selected is the one outcome worse than a
+ * refusal.
  *
  * NO environment variable enters this. Reading one
  * (\`CLAUDE_PLUGIN_ROOT\`/\`CURSOR_PLUGIN_ROOT\`/\`PLUGIN_ROOT\`) let a value
@@ -1019,19 +1028,15 @@ const MCP_PREFIX = ${json(MCP_TOOL_PREFIX)};
  * script to its own sibling.
  */
 function policyDocumentPath() {
-  if (existsSync(POLICY_FILE)) return { path: POLICY_FILE, linked: false };
-  const sibling = join(
-    dirname(fileURLToPath(import.meta.url)),
-    ${json(AGENT_TOOL_POLICIES_FILE)},
-  );
   let entry;
   try {
-    entry = lstatSync(sibling);
+    entry = lstatSync(POLICY_FILE);
   } catch {
+    // Absent is not decided here: the size probe below reports
+    // POLICY_UNREADABLE and names the one path this script was rendered for.
     return { path: POLICY_FILE, linked: false };
   }
-  if (entry.isSymbolicLink()) return { path: sibling, linked: true };
-  return { path: sibling, linked: false };
+  return { path: POLICY_FILE, linked: entry.isSymbolicLink() };
 }
 
 // Client-native tool name → category, unioned across the client dialects the

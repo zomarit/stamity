@@ -91,13 +91,33 @@ export const HOOKS_GENERATED_DIR = `${GENERATED_DIR}/hooks`;
 export const AGENT_TOOL_POLICIES_PATH = `${GENERATED_DIR}/${AGENT_TOOL_POLICIES_FILE}`;
 
 /**
- * Where the guard finds the policy document, relative to its own directory:
- * two levels up from `<hooks root>/<tool>/` is {@link GENERATED_DIR}. Derived
- * from the same constants as {@link AGENT_TOOL_POLICIES_PATH} so the pair
- * cannot drift apart silently — and the suite re-derives the climb from the
- * emitted guard bytes to prove the placement matches.
+ * Where a REPOSITORY-mode guard finds the policy document, relative to its own
+ * directory: two levels up from `<hooks root>/<tool>/` is {@link GENERATED_DIR}.
+ * Derived from the same constants as {@link AGENT_TOOL_POLICIES_PATH} so the
+ * pair cannot drift apart silently — and the suite re-derives the climb from
+ * the emitted guard bytes to prove the placement matches.
+ *
+ * A container-mode guard is rendered with {@link AGENT_TOOL_POLICIES_FILE}
+ * alone instead; see {@link policiesPathFor}.
  */
 const POLICIES_PATH_FROM_SCRIPT = `../../${AGENT_TOOL_POLICIES_FILE}`;
+
+/**
+ * The ONE policy-document path the guard is rendered to read, chosen here
+ * rather than ordered at run time.
+ *
+ * `hookScriptsRoot` set is the vendor-container layout, and every generated
+ * root places the guard and its copy of the document together under one
+ * `hooks/` directory — so the sibling name is the document there. Rendering the
+ * climb into a container guard instead resolved `<root>/../` at run time: the
+ * PARENT of the plugin root, which is a marketplace clone, a client's plugin
+ * cache or a `--plugin-dir` project directory, all user-writable. A document
+ * placed there outranked the container's own emitted copy, so the mode is
+ * decided at emission and the emitted script consults a single path.
+ */
+function policiesPathFor(hookScriptsRoot: string | undefined): string {
+  return hookScriptsRoot === undefined ? POLICIES_PATH_FROM_SCRIPT : AGENT_TOOL_POLICIES_FILE;
+}
 
 /**
  * Default user hooks directory when the manifest does not configure one — the
@@ -412,7 +432,7 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
     // already answers as an empty list.
     if (pluginOwnedHooks.has(tool)) continue;
     const rows: HookInterchange[] = [];
-    for (const script of planCoreHookScripts(POLICIES_PATH_FROM_SCRIPT, tool)) {
+    for (const script of planCoreHookScripts(policiesPathFor(ctx.hookScriptsRoot), tool)) {
       const path = `${HOOKS_GENERATED_DIR}/${tool}/${script.fileName}`;
       scripts.push({ path, content: script.content, tool });
       rows.push({

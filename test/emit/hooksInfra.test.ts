@@ -31,6 +31,25 @@ const NOTIFY_SCRIPT = `${USER_HOOKS_DIR}/notify.mjs`;
 
 const SESSION_START = "stamity-session-start.mjs";
 const GUARD = "stamity-pre-tool-use-guard.mjs";
+
+/** The guard body of a plan — the only script that reads the policy document. */
+function guardBody(p: CoreHooksPlan): string {
+  const row = p.scripts.find((s) => s.path.endsWith(`/${GUARD}`));
+  if (row === undefined) throw new Error("the plan carried no guard script");
+  return row.content;
+}
+
+/**
+ * The path segments the emitted guard's `POLICY_FILE` joins onto its own
+ * directory — read back out of the rendered bytes, so a change to either side
+ * of the rendering shows up here rather than in a comment.
+ */
+function policyFileSegments(body: string): string[] {
+  const match =
+    /^const POLICY_FILE = join\(dirname\(fileURLToPath\(import\.meta\.url\)\), (.+)\);$/m.exec(body);
+  if (match === null) throw new Error("the guard declares no directory-relative POLICY_FILE");
+  return JSON.parse(`[${match[1]!}]`) as string[];
+}
 const TAMPER = "stamity-config-tamper-notice.mjs";
 
 const hookDoc = (...hooks: unknown[]): string => JSON.stringify({ hooks }, null, 2);
@@ -267,6 +286,27 @@ describe("policy document", () => {
       const resolved = posix.normalize(posix.join(posix.dirname(guardRow.path), ...segments));
       expect(resolved, tool).toBe(p.policyDocument.path);
     }
+  });
+
+  it("renders the container guard's one candidate beside the script, never above the plugin root", async () => {
+    // SEC3-W1. With `hookScriptsRoot` set the guard ships inside a vendor
+    // container at `<root>/hooks/<name>`, where the repository climb
+    // `../../agent-tool-policies.json` resolves to the PARENT of the plugin
+    // root — a marketplace clone, a client's plugin cache, a `--plugin-dir`
+    // project directory, all user-writable. Emission therefore picks the
+    // sibling for that mode and the climb for the repository, so exactly one
+    // path is a candidate at run time and nothing outside the container is.
+    const plugin = await planHooksInfra({
+      ...ctxFor(getRepo().dir, ["claude"]),
+      hookScriptsRoot: "${CLAUDE_PLUGIN_ROOT}/hooks",
+    });
+    expect(policyFileSegments(guardBody(plugin))).toEqual(["agent-tool-policies.json"]);
+
+    expect(policyFileSegments(guardBody(await plan(["claude"])))).toEqual([
+      "..",
+      "..",
+      "agent-tool-policies.json",
+    ]);
   });
 });
 
@@ -899,7 +939,18 @@ describe("hookScriptsRoot: the client-visible root the plugin emission needs", (
     // command a client executes changes, because only the client's view of the
     // filesystem moved.
     expect(plugin.scripts.map((s) => s.path)).toEqual(repo.scripts.map((s) => s.path));
-    expect(plugin.scripts.map((s) => s.content)).toEqual(repo.scripts.map((s) => s.content));
+    // TEST CHANGE (SEC3-W1): the two bodies that read no policy document are
+    // still byte-identical, and the GUARD deliberately is not — its single
+    // policy-document candidate is chosen at emission, so the container guard
+    // names its sibling where the repository guard climbs. The assertion below
+    // pins that one line as the whole of the difference, which is stronger than
+    // the blanket equality it replaces.
+    const [pluginSession, pluginGuard, pluginTamper] = plugin.scripts.map((s) => s.content);
+    const [repoSession, repoGuard, repoTamper] = repo.scripts.map((s) => s.content);
+    expect([pluginSession, pluginTamper]).toEqual([repoSession, repoTamper]);
+    expect(policyFileSegments(pluginGuard!)).toEqual(["agent-tool-policies.json"]);
+    expect(policyFileSegments(repoGuard!)).toEqual(["..", "..", "agent-tool-policies.json"]);
+    expect(pluginGuard!.split("\n").filter((line, i) => line !== repoGuard!.split("\n")[i])).toHaveLength(1);
 
     expect(plugin.interchangeFor("claude").map((row) => row.command)).toEqual([
       ["node", `${PLUGIN_ROOT}/${SESSION_START}`],
@@ -908,8 +959,9 @@ describe("hookScriptsRoot: the client-visible root the plugin emission needs", (
     ]);
     expect(JSON.stringify(plugin.interchangeFor("claude"))).not.toContain(HOOKS_ROOT);
     // The shared document keeps its repository path: the plugin emitter places
-    // its own copy under the root's `hooks/`, and the generated guard resolves
-    // that at run time from the client's root variable.
+    // its own copy under the root's `hooks/`, which is the copy the container
+    // guard was rendered to read — beside itself, with nothing resolved from
+    // the environment and no second candidate.
     expect(plugin.policyDocument.path).toBe(AGENT_TOOL_POLICIES_PATH);
   });
 
