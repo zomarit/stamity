@@ -34,6 +34,7 @@ import {
   MODEL_CLASSES,
   VALID_EFFORT_LEVELS,
   VALID_MODEL_CLASSES,
+  effortRank,
   type EffortLevel,
   type ModelClass,
   type Tool,
@@ -46,9 +47,28 @@ describe("model ladder enums", () => {
     expectTypeOf<ModelClass>().toEqualTypeOf<"frontier" | "advanced" | "standard" | "economy">();
   });
 
-  it("lists the three shared effort levels, with the type in lockstep", () => {
-    expect(EFFORT_LEVELS).toEqual(["low", "medium", "high"]);
-    expectTypeOf<EffortLevel>().toEqualTypeOf<"low" | "medium" | "high">();
+  // JUSTIFIED CHANGE (REQ-LADDER-001, unit c9-effort-scale): the band this case
+  // pinned — `low, medium, high` — was the intersection of the clients' scales,
+  // and it capped the deep-review class below what three of four clients
+  // document. The constant is now the UNION of the documented scales and each
+  // projection row declares its own; the behaviour that moved is the vocabulary,
+  // not the per-class defaults, which this file's neighbours still pin. The
+  // ordering claim is strengthened rather than relaxed: weakest to strongest is
+  // now load-bearing, because `effortRank` compares on it.
+  it("lists the six documented effort levels weakest to strongest, with the type in lockstep", () => {
+    expect(EFFORT_LEVELS).toEqual(["minimal", "low", "medium", "high", "xhigh", "max"]);
+    expectTypeOf<EffortLevel>().toEqualTypeOf<
+      "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
+    >();
+  });
+
+  it("ranks every level by its position, strictly increasing and total", () => {
+    // `effortRank` is what the refusal and the clamp compare on, so a rank that
+    // did not follow the tuple's order would silently invert "nearest below".
+    const ranks = EFFORT_LEVELS.map((level) => effortRank(level));
+    expect(ranks).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(effortRank("minimal")).toBeLessThan(effortRank("max"));
+    expect(effortRank("high")).toBeLessThan(effortRank("xhigh"));
   });
 
   it("keeps each VALID_* set in parity with its tuple, with no duplicate member", () => {
@@ -62,7 +82,12 @@ describe("model ladder enums", () => {
     }
     expect(VALID_MODEL_CLASSES.has("frontier")).toBe(true);
     expect(VALID_MODEL_CLASSES.has("Frontier")).toBe(false);
-    expect(VALID_EFFORT_LEVELS.has("xhigh")).toBe(false);
+    // JUSTIFIED CHANGE (REQ-LADDER-001): `xhigh` is now a member, so the
+    // negative probe moves to a spelling no client documents. The claim the
+    // case makes — the set refuses a non-member — is unchanged.
+    expect(VALID_EFFORT_LEVELS.has("xhigh")).toBe(true);
+    expect(VALID_EFFORT_LEVELS.has("xxhigh")).toBe(false);
+    expect(VALID_EFFORT_LEVELS.has("High")).toBe(false);
   });
 
   it("ships no default for either family", () => {
