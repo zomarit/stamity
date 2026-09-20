@@ -937,6 +937,21 @@ jobs:
           # repository config: each git invocation receives it directly.
           REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git"
 
+          # Two shape checks on the names the gates job read out of a manifest it wrote AFTER
+          # third-party build code had run in that job's writable checkout (SEC5-W1). This job
+          # holds the only credential that can push, so it does not trust the manifest's word
+          # for where to. Neither name is spelled here — the identity owns both — but their
+          # shape is known: the tag is `<namespace>/v<version>` for the version the gates job
+          # emitted, and the branch (checked below, once the remote is read) only ever holds an
+          # orphan commit.
+          case "$TAG" in
+            */v"$VERSION") ;;
+            *)
+              echo "::error::$TAG is not a <namespace>/v$VERSION tag. Refusing to publish under a tag the distribution identity did not shape."
+              exit 1
+              ;;
+          esac
+
           cd plugins
           SOURCE_DATE="$(node -p 'JSON.parse(require("node:fs").readFileSync("release.json","utf8")).sourceCommitDate')"
 
@@ -963,6 +978,19 @@ jobs:
           if [ -n "$EXISTING" ] && [ "$EXISTING" != "$DIST_COMMIT" ]; then
             echo "::error::$TAG already exists at $EXISTING and this release built $DIST_COMMIT. Refusing to move a published distribution tag."
             exit 1
+          fi
+          # The head this force-push replaces must be a distribution head — one orphan commit —
+          # or absent, on a first publish. A head with a parent is a source branch whatever the
+          # manifest called it (SEC5-W1). Depth 2, not 1: a depth-1 fetch hides every parent and
+          # would accept anything.
+          REMOTE_HEAD="$(git ls-remote --heads "$REMOTE" "refs/heads/$BRANCH" | awk '{print $1}')"
+          if [ -n "$REMOTE_HEAD" ]; then
+            git fetch -q --depth=2 "$REMOTE" "refs/heads/$BRANCH"
+            PARENTS="$(git rev-list --parents -n 1 FETCH_HEAD | awk '{print NF - 1}')"
+            if [ "$PARENTS" != "0" ]; then
+              echo "::error::$BRANCH's head $REMOTE_HEAD has a parent, so it is not a distribution head. Refusing to force-push over a branch that carries history."
+              exit 1
+            fi
           fi
 
           git push --force "$REMOTE" "HEAD:refs/heads/$BRANCH"
