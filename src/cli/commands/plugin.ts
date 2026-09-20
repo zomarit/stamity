@@ -14,6 +14,7 @@ import { CliFailure } from "../kit/output.ts";
 import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { InitApplyReport } from "./init/apply.ts";
+import { describeDuplicatePaths } from "./plugin/probe.ts";
 import { applyPluginSetup, type PluginSetupRoot } from "./plugin/setup.ts";
 import { buildPluginStatus, type PluginStatusReport } from "./plugin/status.ts";
 
@@ -287,7 +288,11 @@ function renderStatus(ctx: CliContext, report: PluginStatusReport): void {
     report.duplicates.length === 0
       ? "none"
       : report.duplicates
-          .map((entry) => `${entry.tool}: ${entry.class} (${entry.files} file(s))`)
+          .map(
+            (entry) =>
+              `${entry.tool}: ${entry.class} (${entry.files} file(s)) at ` +
+              describeDuplicatePaths(entry.paths),
+          )
           .join(`\n${CONTINUATION}`),
   );
   row("setup", setupLines(report).join(`\n${CONTINUATION}`));

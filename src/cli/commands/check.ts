@@ -29,6 +29,7 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
 import type { Palette } from "../kit/terminal.ts";
 import {
   collectPluginDuplicates,
+  describeDuplicatePaths,
   majorOf,
   pluginRootVariable,
   probePluginRuntime,
@@ -788,7 +789,8 @@ async function checkPluginDuplicates(
   }
   const lines = findings.map(
     (finding) =>
-      `${finding.tool}: ${finding.cls} (${finding.files} file(s), ${finding.source}) — ${finding.remedy}`,
+      `${finding.tool}: ${finding.cls} (${finding.files} file(s), ${finding.source}) at ` +
+      `${describeDuplicatePaths(finding.paths)} — ${finding.remedy}`,
   );
   return {
     id,

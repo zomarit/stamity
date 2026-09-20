@@ -1786,6 +1786,64 @@ describe("check — plugin-duplicates", () => {
     expect(duplicates.detail).toContain("claude: agent (2 file(s), ledger)");
   });
 
+  it("names each duplicated file by its repository-relative path, sorted", async () => {
+    // W-D2: REQ-PLUGIN-019 names each duplicated class "with its path", and the
+    // row counted files without naming one — an operator told to remove "the
+    // file" had to find it. Sorted, so the order is the paths' own and not the
+    // ledger's write order.
+    const root = await seedRepo(getRepo(), {
+      plugin: pluginOf("generated"),
+      ledger: [agentRow("reviewer"), agentRow("implementer")],
+    });
+
+    const duplicates = await duplicatesRow(root);
+
+    expect(duplicates.detail).toContain(
+      "claude: agent (2 file(s), ledger) at .claude/agents/stamity-implementer.md, " +
+        ".claude/agents/stamity-reviewer.md — ",
+    );
+  });
+
+  it("names the first three paths of a class and folds the rest into a count", async () => {
+    // The bound, pinned: a class with many files would turn one doctor row
+    // into a directory listing, so the detail names three and counts the rest.
+    // Five rows: three shown, two folded, and the two folded are the last two
+    // in sorted order.
+    const root = await seedRepo(getRepo(), {
+      plugin: pluginOf("generated"),
+      ledger: ["e", "d", "c", "b", "a"].map((id) => agentRow(id)),
+    });
+
+    const duplicates = await duplicatesRow(root);
+
+    expect(duplicates.detail).toContain(
+      "claude: agent (5 file(s), ledger) at .claude/agents/stamity-a.md, " +
+        ".claude/agents/stamity-b.md, .claude/agents/stamity-c.md +2 more — ",
+    );
+    expect(duplicates.detail).not.toContain("stamity-d.md");
+  });
+
+  it("names the unowned native file and the matched dependency spelling as their paths", async () => {
+    // The `unmanaged` remedy says "remove the file"; this is where the file is
+    // named. An `apm` finding has no file — the dependency spelling that
+    // matched stands as its path.
+    const root = await seedRepo(getRepo(), {
+      plugin: pluginOf("generated"),
+      files: {
+        "apm.yml": `name: consumer\ndependencies:\n  - ${apmInstallSpec()}\n`,
+        ".claude/agents/stamity-reviewer.md": "---\nname: reviewer\n---\n\nBody.\n",
+        "corpus/agents/stamity-reviewer.md": AGENT_FIXTURE,
+      },
+    });
+
+    const duplicates = await duplicatesRow(root);
+
+    expect(duplicates.detail).toContain(
+      "claude: agent (1 file(s), unmanaged) at .claude/agents/stamity-reviewer.md — ",
+    );
+    expect(duplicates.detail).toContain(`claude: agent (1 file(s), apm) at ${apmInstallSpec()} — `);
+  });
+
   it("names an APM dependency and an unowned native file as their own sources", async () => {
     const repo = getRepo();
     const root = await seedRepo(repo, {
