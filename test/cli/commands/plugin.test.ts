@@ -175,16 +175,16 @@ async function pluginRoot(
       // refuses such a root by name. Only the codex fixture moves; the claude
       // and cursor roots build byte-identically to before.
       ...(Object.fromEntries(
-        PLUGIN_OWNED_CLASSES.map((name) => [
-          name,
-          name !== "rule" && CARRIABLE_CLASSES[client].includes(name)
-            ? { status: "carried", count: name === "hooks" ? 4 : 10 }
+        PLUGIN_OWNED_CLASSES.map((cls) => [
+          cls,
+          cls !== "rule" && CARRIABLE_CLASSES[client].includes(cls)
+            ? { status: "carried", count: cls === "hooks" ? 4 : 10 }
             : {
                 status: "repository-owned",
                 reason:
-                  name === "rule"
+                  cls === "rule"
                     ? "the plugin manifest has no rules field"
-                    : `this container has no ${name} surface`,
+                    : `this container has no ${cls} surface`,
               },
         ]),
       ) as Record<string, unknown>),

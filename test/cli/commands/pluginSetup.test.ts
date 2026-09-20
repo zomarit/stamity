@@ -14,10 +14,11 @@ import {
 import { collectManifestErrors, readManifest } from "../../../src/manifest/manifest.ts";
 import {
   CARRIABLE_CLASSES,
+  type PluginCapabilityClassEntry,
   type PluginCapabilityFile,
 } from "../../../src/plugins/capabilityFile.ts";
 import { EngineError } from "../../../src/types/errors.ts";
-import { PLUGIN_OWNED_CLASSES } from "../../../src/types/manifest.ts";
+import { PLUGIN_OWNED_CLASSES, type PluginOwnedClass } from "../../../src/types/manifest.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
 /**
@@ -130,6 +131,30 @@ async function makeRepo(sub = "repo"): Promise<string> {
 }
 
 /**
+ * One class entry for `client`, carried where that CLIENT's own container has
+ * the surface for it.
+ *
+ * FIXTURE CHANGE (2026-09-20): the carried set used to be one table for all
+ * four clients, and a codex root declaring `agent: carried` is a document no
+ * generator can emit — the codex container declares agents and commands
+ * repository-owned — which `planPluginSetup` now refuses by name. Only codex
+ * moves: `rule` was already repository-owned here, so the claude, cursor and
+ * copilot fixtures build exactly as before. The carriable table is read from
+ * the reader because it is fixture INPUT; the table itself is bound to the four
+ * container modules in `test/plugins/capabilityFile.test.ts`.
+ */
+function classEntryFor(
+  client: PluginCapabilityFile["client"],
+  cls: PluginOwnedClass,
+): PluginCapabilityClassEntry {
+  if (cls === "rule") return { status: "repository-owned", reason: "the plugin manifest has no rules field" };
+  if (!CARRIABLE_CLASSES[client].includes(cls)) {
+    return { status: "repository-owned", reason: `this container has no ${cls} surface` };
+  }
+  return { status: "carried", count: cls === "hooks" ? 4 : 10 };
+}
+
+/**
  * A capability file as a generated root carries one. Shaped by hand rather than
  * read off a root because the ROOT is not what is under test here — the reader
  * that produces this shape from real bytes is proven in `./capabilityFile.test.ts`,
@@ -149,30 +174,11 @@ function capabilityFor(
     clientFloor: { version: "2.1.224" },
     prerequisites: { node: ">=22.22.2", git: "optional" },
     classes: {
-      // FIXTURE CHANGE (2026-09-20): the four carried entries below are now
-      // filtered through what the CLIENT's own container can carry, because a
-      // codex root declaring `agent: carried` is a document no generator can
-      // emit — the codex container declares agents and commands
-      // repository-owned — and `planPluginSetup` refuses such a root by name.
-      // Only codex moves: `rule` was already repository-owned here, so claude,
-      // cursor and copilot build byte-identically to before. The table is read
-      // from the reader because this is fixture INPUT; the table itself is
-      // bound to the four container modules in
-      // `test/plugins/capabilityFile.test.ts`.
-      ...(Object.fromEntries(
-        PLUGIN_OWNED_CLASSES.map((name) => [
-          name,
-          name !== "rule" && CARRIABLE_CLASSES[client].includes(name)
-            ? { status: "carried" as const, count: name === "hooks" ? 4 : 10 }
-            : {
-                status: "repository-owned" as const,
-                reason:
-                  name === "rule"
-                    ? "the plugin manifest has no rules field"
-                    : `this container has no ${name} surface`,
-              },
-        ]),
-      ) as PluginCapabilityFile["classes"]),
+      agent: classEntryFor(client, "agent"),
+      skill: classEntryFor(client, "skill"),
+      command: classEntryFor(client, "command"),
+      rule: classEntryFor(client, "rule"),
+      hooks: classEntryFor(client, "hooks"),
       mcp: { status: "repository-owned", reason: "server selection stays the repository's" },
       ...overrides,
     },
