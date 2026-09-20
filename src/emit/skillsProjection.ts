@@ -85,6 +85,7 @@ import {
 } from "../content/ruleDelivery.ts";
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
 import { verificationGatesFor } from "../detect/verificationGates.ts";
+import { readGates } from "../manifest/manifest.ts";
 import { PLATFORM_TOOL_MARKER, buildAskUserPlatformTable } from "../tools/translator.ts";
 import type { ContentClass } from "../types/content.ts";
 import { TOOLS, type Tool } from "../types/core.ts";
@@ -294,7 +295,14 @@ export async function projectSkills(
   );
 
   const detection = detectionContextFromManifest(ctx.manifest);
-  const gates = verificationGatesFor(ctx.manifest.detected);
+  // The charter's own answer, spelled here rather than imported from
+  // `./agentsMd.ts`: that module sits one wave ABOVE this one
+  // (`test/architecture/boundaries.test.ts`), so its
+  // `verificationGatesFromManifest` — which is exactly this pair of calls — is
+  // not importable from here. Both seams read ONE resolver and ONE manifest
+  // field, which is what keeps a skill body and the charter beside it from
+  // naming two different test commands.
+  const gates = verificationGatesFor(ctx.manifest.detected, readGates(ctx.manifest));
 
   const perSkill = await Promise.all(
     admitted.map((item) =>

@@ -52,9 +52,12 @@ import {
   type Tool,
 } from "../../types/core.ts";
 import { summarizeDetection } from "../../detect/repoAnalyzer.ts";
+import { verificationCommandsFor } from "../../detect/verificationGates.ts";
+import { DETECTION_UNKNOWN } from "../../emit/substitution.ts";
 import type { DetectedSummary } from "../../types/detect.ts";
 import {
   RULE_DELIVERIES,
+  type GatesConfig,
   type RuleDelivery,
   type SetupManifest,
 } from "../../types/manifest.ts";
@@ -399,6 +402,77 @@ function applyEffort(draft: SetupManifest, modelClass: ModelClass, raw: string):
   };
 }
 
+// ── The four verification gates ────────────────────────────────────
+
+/** One gate command the operator can pin; the block's own field set, not a second spelling. */
+type GateKey = keyof GatesConfig;
+
+/**
+ * What a gate row accepts, and the word that clears it.
+ *
+ * `none` rather than an empty string: an empty value is what the manifest
+ * schema refuses (a gate command must carry a command), so spelling "unset" as
+ * the one value validation rejects would make the refusal unreadable — the
+ * operator would be told their clear attempt was an invalid command. The word
+ * is in the hint because it is also the only value this row treats as a verb
+ * rather than as a command.
+ */
+const GATE_HINT = "a shell command line, or `none` to clear";
+
+/** The pinned command for one gate, or null when the operator pinned none. */
+function readGate(manifest: SetupManifest, gate: GateKey): string | null {
+  return manifest.gates?.[gate] ?? null;
+}
+
+/**
+ * What the charter will actually print for one gate.
+ *
+ * An unpinned row carries the `detected:` prefix, and that prefix is the whole
+ * point of the row: the value is not the operator's, it is what analysis read
+ * off this repository and could change under them on the next `config detect`.
+ * A gate detection could not resolve prints the charter's own
+ * {@link DETECTION_UNKNOWN} word — the same "unconfigured, do not invent a
+ * value" the generated file carries — rather than the unresolved-gate SENTENCE
+ * the emitted charter quotes into a command position, which would read here as
+ * an instruction to the reader of a settings table.
+ */
+function resolveGate(manifest: SetupManifest, gate: GateKey): string {
+  const pinned = manifest.gates?.[gate];
+  if (pinned !== undefined) return pinned;
+  return `detected: ${verificationCommandsFor(manifest.detected)[gate] ?? DETECTION_UNKNOWN}`;
+}
+
+/**
+ * Pin one gate, or clear it with {@link NONE}.
+ *
+ * The emptied block is DROPPED rather than left standing: a `gates: {}` would
+ * round-trip through every write as a key nothing reads, and `config get`
+ * would keep reporting the cleared key as carried by the manifest. Shape is
+ * the schema's call — non-empty, one line, bounded — so a bad command comes
+ * back from validation with the same message the writer would have produced.
+ */
+function applyGate(draft: SetupManifest, gate: GateKey, raw: string): void {
+  if (raw !== NONE) {
+    draft.gates = { ...draft.gates, [gate]: raw };
+    return;
+  }
+  if (draft.gates === undefined) return;
+  const { [gate]: _cleared, ...rest } = draft.gates;
+  if (Object.keys(rest).length === 0) delete draft.gates;
+  else draft.gates = rest;
+}
+
+/** The registry row for one gate — four keys, one shape. */
+function gateSpec(gate: GateKey): ConfigKeySpec {
+  return {
+    key: `gates.${gate}`,
+    hint: GATE_HINT,
+    read: (manifest) => readGate(manifest, gate),
+    resolve: (manifest) => resolveGate(manifest, gate),
+    apply: (draft, raw) => applyGate(draft, gate, raw),
+  };
+}
+
 /**
  * The closed key registry. Adding a row is the only way to make a key
  * addressable — `set` refuses anything else by name, so a typo can never write
@@ -616,6 +690,16 @@ export const KEY_SPECS: readonly ConfigKeySpec[] = [
       draft.models = { ...draft.models, reviewCap: Number(raw) };
     },
   },
+  // The four gate rows are built from one function rather than spelled out,
+  // unlike the ladder's eight above: those differ row by row (each names its
+  // own class in three closures), while these four are the SAME row over a
+  // four-member field set the manifest type already closes — `GateKey` is
+  // `keyof GatesConfig`, so a fifth gate on the schema is a compile error here
+  // instead of a key that silently never became addressable.
+  gateSpec("test"),
+  gateSpec("lint"),
+  gateSpec("typecheck"),
+  gateSpec("all"),
 ];
 
 /** Every addressable key, in display order. */

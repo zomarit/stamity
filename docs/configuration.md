@@ -60,6 +60,10 @@ clients your own manifest selects.
 | `effort.standard` | one of low \| medium \| high — carried on claude, cursor, codex, omitted on copilot | `claude=medium, cursor=(not expressed), copilot=(not expressed), codex=medium` |
 | `effort.economy` | one of low \| medium \| high — carried on claude, cursor, codex, omitted on copilot | `claude=low, cursor=(not expressed), copilot=(not expressed), codex=low` |
 | `review.maxIterations` | a whole number of review rounds within 1..10 | `4` |
+| `gates.test` | a shell command line, or `none` to clear | `detected: npm run test` |
+| `gates.lint` | a shell command line, or `none` to clear | `detected: npm run lint` |
+| `gates.typecheck` | a shell command line, or `none` to clear | `detected: npm run typecheck` |
+| `gates.all` | a shell command line, or `none` to clear | `detected: npm run lint && npm run typecheck && npm run test` |
 
 One row is recorded but not yet consumed. `communicationStyle` is validated, persisted and
 carried through migrations, and no generated file reads it, so setting it changes what the

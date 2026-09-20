@@ -178,6 +178,32 @@ describe("renderAgentsMd over a fixture charter", () => {
     expect(root.content).not.toContain("${STAMITY:");
   });
 
+  it("renders the operator's pinned gate, leaving the unpinned rows detected", async () => {
+    const { root } = await render(detectedManifest({ gates: { test: "npm run test:unit" } }));
+
+    // The pinned row is the operator's string verbatim...
+    expect(root.content).toContain("- Tests: `npm run test:unit`");
+    // ...and the other two still state what the repository showed.
+    expect(root.content).toContain("- Lint: `ruff check .`");
+    expect(root.content).toContain("- Typecheck: `mypy .`");
+    // `${STAMITY:VERIFY_GATE_ALL}` composes all three: two detected, one
+    // pinned. A charter whose full gate still quoted `pytest` here would tell
+    // a reader to run a suite the Tests row above it had just replaced.
+    expect(root.content).toContain("- Full gate: `ruff check . && mypy . && npm run test:unit`");
+    expect(root.content.match(WELL_FORMED_TOKEN)).toBeNull();
+  });
+
+  it("renders a manifest that pins nothing byte-identically to one with no gates block", async () => {
+    // The no-op property REQ-PLUGIN-026 rests on: the committed dogfood tree
+    // and the cross-client golden pin nothing, so an empty (or absent) gates
+    // block may not move a single byte.
+    const pinned = await render(detectedManifest({ gates: {} }));
+    const unpinned = await render(detectedManifest());
+
+    expect(unpinned.root.content).toBe(EXPECTED_DETECTED_RENDER);
+    expect(pinned.root.content).toBe(EXPECTED_DETECTED_RENDER);
+  });
+
   it("substitutes a repo token at every occurrence, not only the first", async () => {
     const { root } = await render(detectedManifest());
 
@@ -473,6 +499,26 @@ describe("verification gates from the manifest", () => {
       typecheck: unresolvedGate("typecheck"),
       all: unresolvedGate("full-gate"),
     });
+  });
+
+  it("carries the manifest's pinned gates into the resolver", () => {
+    const gates = { test: "npm run test:unit" };
+    const detected: DetectedSummary = {
+      languages: ["python"],
+      linters: ["ruff"],
+      testFrameworks: ["pytest"],
+      ciProviders: [],
+    };
+
+    expect(verificationGatesFromManifest(manifest({ detected, gates }))).toEqual(
+      verificationGatesFor(detected, gates),
+    );
+    // Not the detected answer: the two differ, so the equality above cannot
+    // pass by the pin being dropped on the floor.
+    expect(verificationGatesFromManifest(manifest({ detected, gates })).test).toBe(
+      "npm run test:unit",
+    );
+    expect(verificationGatesFor(detected).test).toBe("pytest");
   });
 
   it("renders gate rows identical to the live resolver, over every detection shape", () => {
