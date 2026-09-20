@@ -22,8 +22,9 @@ platform controls below sit on top of these; they do not replace them.
 
 - **Job split, credential isolation.** A `gates` job runs the build, the suite, the leak gate
   and the packed-artifact smoke on the shipping commit and holds **no** `id-token`; a separate
-  `publish` job holds `id-token: write` and runs only npm, the GitHub CLI and three SHA-pinned
-  actions. A compromised build-time dependency runs in the job that has no credential.
+  `publish` job holds `id-token: write` and runs only npm, git, the GitHub CLI and four
+  SHA-pinned actions. A compromised build-time dependency runs in the job that has no
+  credential.
 - **OIDC trusted publishing, no stored token.** `publish` authenticates through a per-run OIDC
   token (`npm publish --provenance`), so there is no long-lived npm credential in the repository
   to leak or rotate. See the `Publish to npm with provenance` step and the `permissions` block on
@@ -105,6 +106,22 @@ being force-moved onto a different commit after the gates passed.
 - **Settings → Rules → Rulesets** shows `release-tags` as **Active**, targeting `v*`.
 - As a non-bypass actor, attempting to push a `v9.9.9` tag is rejected by the ruleset.
 - Moving an existing `v*` tag to a different commit is rejected.
+
+**The plugin distribution's refs, and why neither is governed by the ruleset above.** The same
+release publishes a plugin distribution: the `publish` job pushes the built tree as one orphan
+commit on the `plugin-dist` branch and creates a `plugins/v<version>` tag on it, both with the
+per-run `GITHUB_TOKEN` under the job's existing `contents: write`. The tag namespace is outside
+the `v*` ruleset **by construction** — `plugins/v1.8.0` does not match the `v*` pattern, which is
+why the ruleset's creation restriction does not refuse the workflow's own tag push and why a
+`plugins/*` ruleset would have to be a separate, deliberate decision rather than an accident of
+pattern overlap. The branch push is a **force** push, and that is the intended behaviour rather
+than a lapse: the tree is published whole, so each release REPLACES the branch head, and every
+earlier release stays fetchable through its own `plugins/v*` tag — which the step refuses to move
+once it exists (it reads the remote first and fails closed when the tag names another commit).
+Any branch rule added on `plugin-dist` must therefore allow the workflow's token to force-push it;
+the kickoff's step 3 confirmed nothing currently blocks that. If a rule is ever added there, the
+symptom of getting it wrong is a release that publishes to npm and then fails at
+`Push plugin distribution`.
 
 ---
 

@@ -8,7 +8,11 @@ title: Enterprise forks
      or the jobs or the permissions in `.github/workflows/upstream-update.yml` change. `test/docsPages.test.ts`
      holds this page to the hand-page contract. `test/upstream/lane.test.ts` owns the lane's behaviour, and
      the content, emission and validate suites own the fork layer's. A move of CONTRIBUTING.md's
-     regeneration table moves the `regenerate` list and the `generatedPaths` list below with it. -->
+     regeneration table moves the `regenerate` list and the `generatedPaths` list below with it.
+     Re-open the plugin-distribution section when the jobs, the build steps or the distribution branch
+     and tag push in `.github/workflows/release.yml` change, or when a key joins or leaves the
+     `stamity.distribution` block in `scripts/distribution-identity.mjs`; `test/ci/workflow.test.ts`
+     pins those steps and `test/ci/pluginDistribution.test.ts` the builder they run. -->
 
 # Enterprise forks
 
@@ -736,6 +740,66 @@ open its consumer update pull request. Verify its actual run, the ref it chose, 
 checks and the resolved lockfile and installed content. Keep that engine's manager and policy
 configuration: a proposed config or a simulated update does not prove the deployed integration. The
 distribution owner closes this step with observed evidence.
+
+## Ship your fork's plugin distribution
+
+APM is one of the routes a consumer takes; the plugin marketplaces are the others. A release of
+this repository also publishes a **distribution root** — four client roots with the runtime
+bundled in each, their archives and checksums, four marketplace catalogs, a complete APM package
+and a `release.json` describing all of it — as one orphan commit on the `plugin-dist` branch,
+tagged `plugins/v<version>`. Your fork publishes its own, from its own tree, to its own branch.
+Nothing about that route reaches out to this repository.
+
+Build it the way the release does:
+
+```sh
+npm pack --pack-destination .
+node scripts/build-plugin-runtime.mjs --tarball stamity-<version>.tgz --out dist/plugin-runtime
+node scripts/build-plugin-distribution.mjs \
+  --out dist/plugins \
+  --runtime dist/plugin-runtime \
+  --source-commit "$(git rev-parse HEAD)" \
+  --source-commit-date "$(git show -s --format=%cI HEAD)"
+```
+
+The runtime is built from the **tarball**, not from the working tree: `npm pack` is the only thing
+that knows what `files` publishes. Both trees go under `dist/` because it is ignored; an untracked
+tree beside the checkout enters `git ls-files --others` and every tree-cleanliness check that
+reads it. The two provenance flags are inputs rather than clock reads, which is what makes two
+builds of one commit produce byte-identical archives — pass them, or the builder falls back to
+this checkout's `HEAD` and you lose that property the moment the build moves to a machine that
+has no git.
+
+Everything the built tree names about your fork comes from the `stamity.distribution` block in
+your `package.json`: `branch` (default `plugin-dist`), `tagPattern` (default `plugins/v<version>`),
+the optional `ownerEmail`, and `sources.<client>`, which decides what each catalog's `source`
+object is — a `git-subdir` entry pointing at your https remote, a `github` entry, an `archive`
+entry naming a release asset and its digest, or an `npm` entry. `scripts/distribution-identity.mjs`
+validates the block and refuses an `ssh://` or `git@` remote and a URL carrying a read token:
+authentication belongs to the fetching client, never to a published catalog. Rebuild after
+editing the block and every catalog in the tree changes with it; nothing else has to.
+
+Then push the tree to your own branch, which is what a marketplace fetches:
+
+```sh
+cd dist/plugins
+git init && git checkout --orphan plugin-dist
+git add -A -f && git commit -m "plugins: v<version> from <source commit>"
+git tag plugins/v<version>
+git push --force <your remote> HEAD:refs/heads/plugin-dist
+git push <your remote> refs/tags/plugins/v<version>
+```
+
+`--force` on the branch is the intended shape rather than a shortcut: the tree is published whole,
+and a merge of two releases' catalogs would describe neither. The **tag** is what keeps history —
+create it once per version and never move it. `dist/plugins/README.md` in the built tree carries
+each client's install, pin, update and rollback commands and the APM install spec for that same
+tag, so a consumer of your mirror reads the routes from the tree rather than from this page.
+
+`release.json` carries `distribution.commit: null` on the branch, because the commit a tree lands
+on cannot be known while it is being built. The canonical release re-stamps that one field into
+the copy it attaches to its GitHub release; a fork that wants the same can pass
+`--distribution-commit <sha>` to a rebuild, or leave it null and let the tag be the pin.
 
 ## Turn on the GitHub workflow
 
