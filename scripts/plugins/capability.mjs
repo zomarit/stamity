@@ -172,13 +172,32 @@ function checkString(value, path, requirement, defects) {
   if (!isNonEmptyString(value)) defects.push(`${path}: ${requirement}`)
 }
 
+/**
+ * Keys under `invocation` that are NOTES about the forms rather than forms themselves.
+ *
+ * `citation` is the one, and it is RESERVED rather than merely tolerated. The Cursor container
+ * reads its `/<id>` form off the subagents and skills pages because the plugins reference states
+ * no invocation form at all, and the file records which page said what. A consumer enumerating
+ * the literals an operator may type must not offer that sentence as one of them, so the key is
+ * named here and excluded by `invocationForms` in `src/plugins/capabilityFile.ts`. A container
+ * that wants a second note adds it to this list; anything else under `invocation` is a form.
+ */
+export const INVOCATION_NOTE_KEYS = ['citation']
+
 function validateInvocation(value, defects) {
-  if (!isPlainObject(value) || Object.keys(value).length === 0) {
+  if (!isPlainObject(value)) {
+    defects.push('invocation: must be an object naming at least one invocation form')
+    return
+  }
+  if (Object.keys(value).every((key) => INVOCATION_NOTE_KEYS.includes(key))) {
     defects.push('invocation: must be an object naming at least one invocation form')
     return
   }
   for (const key of Object.keys(value).toSorted()) {
-    checkString(value[key], `invocation.${key}`, 'must be the literal form an operator types', defects)
+    const requirement = INVOCATION_NOTE_KEYS.includes(key)
+      ? 'must be the note this key reserves: where the forms beside it were read from'
+      : 'must be the literal form an operator types'
+    checkString(value[key], `invocation.${key}`, requirement, defects)
   }
 }
 
