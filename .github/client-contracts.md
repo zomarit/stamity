@@ -193,6 +193,11 @@ Plugins 1.0, and from `.plugin/plugin.json`, `plugin.json`, `.github/plugin/plug
 or a URL; `COPILOT_HOME` moves the whole directory. The install is a CACHED COPY — a local plugin
 edited in place changes nothing until it is installed again — and `copilot plugin install` warned
 on 1.0.85 that direct installs are deprecated in favour of the `plugin@marketplace` form.
+Whichever of those locations a client reads, in this container's shape or another's, the identity it
+finds there is the PUBLISHER's and never the canonical one: a downstream that set
+`stamity.publisher` and repointed `repository.url` gets roots and catalogs carrying its own owner
+and its own https source url wherever ours would have stood, built and compared root by root in
+`test/ci/pluginDownstream.test.ts` (measured 2026-09-20).
 
 Two consequences for any test that claims a plugin was discovered. Skill precedence is
 first-found, with a project's own `.github/skills/`, `.agents/skills/` and `.claude/skills/` AHEAD
