@@ -359,3 +359,117 @@ describe("portable native hook boundary", () => {
     expect(command).not.toContain("touch should-not-exist");
   });
 });
+
+describe("plugin-rooted rows", () => {
+  const ROOT_VAR = "STAMITY_TEST_PLUGIN_ROOT";
+  const REF = `\${${ROOT_VAR}}/hooks`;
+  const CORE_GUARD = "stamity-pre-tool-use-guard.mjs";
+
+  it.each(["claude", "cursor", "copilot", "codex"] as const)(
+    "renders %s's native command against the plugin root with no cwd-walking starter",
+    (tool) => {
+      const row: HookInterchange = { event: "session_start", command: ["node", `${REF}/stamity-session-start.mjs`] };
+
+      const command = portableHookCommand(tool, row);
+
+      // The root variable already locates the script, so Codex's project walk —
+      // the one thing that differs between the clients in repository mode — has
+      // nothing left to find and is not emitted.
+      // Double-quoted on every client, Windows included: the root variable
+      // expands to an absolute install path that may hold a space.
+      expect(command.startsWith(`node "${REF}/${PORTABLE_RUNNER_FILE}" `)).toBe(true);
+      expect(command).not.toContain("node -e");
+      expect(command).toContain(`${REF}/`);
+      expect(command).not.toContain(".stamity/generated");
+    },
+  );
+
+  it("leaves a repository-rooted row on the repository runner for every client", () => {
+    const row: HookInterchange = { event: "session_start", command: ["node", ".stamity/hooks/run.mjs"] };
+    expect(portableHookCommand("cursor", row)).toContain(".stamity/generated/hooks/cursor/");
+    expect(portableHookCommand("codex", row)).toContain("node -e ");
+  });
+
+  /** A vendor container: one `hooks/` directory holding the runner and the scripts. */
+  async function pluginFixture(tool: Tool, body: string, row: Partial<HookInterchange> = {}) {
+    const root = await realpath(await mkdtemp(join(tmpdir(), "stamity-plugin-")));
+    roots.push(root);
+    const session = join(root, "session");
+    await mkdir(join(root, "hooks"), { recursive: true });
+    await mkdir(session, { recursive: true });
+    const script = join(root, "hooks", PORTABLE_RUNNER_FILE);
+    await writeFile(script, buildPortableHookRunner(tool));
+    await writeFile(join(root, "hooks", "check.mjs"), body);
+    const hook: HookInterchange = {
+      event: "pre_tool_use",
+      command: [process.execPath, `${REF}/check.mjs`],
+      ...row,
+    };
+    return { root, session, script, hook };
+  }
+
+  function executeIn(
+    f: Awaited<ReturnType<typeof pluginFixture>>,
+    opts: { cwd: string; env?: Record<string, string> },
+  ) {
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    delete env[ROOT_VAR];
+    Object.assign(env, opts.env);
+    return spawnSync(
+      process.execPath,
+      [f.script, Buffer.from(JSON.stringify(f.hook)).toString("base64url")],
+      { cwd: opts.cwd, env, input: JSON.stringify({ toolName: "bash" }), encoding: "utf8" },
+    );
+  }
+
+  it("expands the root variable itself and runs the child in the session's repository", async () => {
+    // The client expands its root variable only in the config command string —
+    // never inside the base64url payload — so the runner receives the literal
+    // and has to resolve it. And the child's cwd is the SESSION's repository,
+    // not the four-levels-up climb that locates a repository install.
+    const f = await pluginFixture("claude", 'process.stderr.write("cwd=" + process.cwd());');
+
+    const result = executeIn(f, { cwd: f.session, env: { [ROOT_VAR]: f.root } });
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain(`cwd=${f.session}`);
+  });
+
+  it("resolves the script beside the runner when the variable never got expanded", async () => {
+    // Every plugin hook script ships in the one `hooks/` directory the runner
+    // sits in, so an unset variable has an answer that is right by layout
+    // rather than a guess.
+    const f = await pluginFixture("claude", 'process.stderr.write("ran=yes");');
+
+    const result = executeIn(f, { cwd: f.session });
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain("ran=yes");
+  });
+
+  it.each([
+    ["codex", `${REF}/${CORE_GUARD}`, 1],
+    ["codex", `${REF}/authored.mjs`, 2],
+    ["codex", `.stamity/generated/hooks/codex/${CORE_GUARD}`, 1],
+    ["codex", ".stamity/hooks/authored.mjs", 2],
+    ["copilot", `${REF}/${CORE_GUARD}`, 0],
+    ["copilot", `${REF}/authored.mjs`, 1],
+    ["copilot", `.stamity/generated/hooks/copilot/${CORE_GUARD}`, 0],
+    ["copilot", ".stamity/hooks/authored.mjs", 1],
+  ] as const)(
+    "keeps %s's fail-mode posture for %s at exit %i",
+    async (tool, scriptPath, expected) => {
+      // The core guard is identified by WHICH SCRIPT the row runs, not by where
+      // that script sits: under a plugin root the old repository-prefix match
+      // failed and each client's posture silently flipped.
+      const f = await pluginFixture(tool, "", {
+        command: ["stamity-missing-hook-executable", scriptPath],
+      });
+
+      const result = executeIn(f, { cwd: f.session, env: { [ROOT_VAR]: f.root } });
+
+      expect(result.stderr).toContain("Hook process failed");
+      expect(result.status).toBe(expected);
+    },
+  );
+});

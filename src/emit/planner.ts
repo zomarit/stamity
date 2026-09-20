@@ -122,6 +122,11 @@ export interface EmissionContext {
   facts: {
     /** Live monorepo package layout; empty for single-package repos. */
     monorepoPackages: readonly PackageEntry[];
+    /**
+     * Where the generated hook scripts live from the client's point of view;
+     * absent means `HOOKS_GENERATED_DIR/<tool>`.
+     */
+    hookScriptsRoot?: string;
   };
   /**
    * Corpus root override; defaults to the package-bundled corpus. External
@@ -392,6 +397,12 @@ export async function buildCoreEmissionPlan(
         // emitted policy document carries the shipped roster alone and the
         // generated guard answers NO_POLICY for every agent an install added.
         packAgents: resolved.agents,
+        // The client's view of where those scripts will be READ from. A
+        // repository emission leaves it absent and the planner composes the
+        // repo-relative path it always did.
+        ...(ctx.facts.hookScriptsRoot === undefined
+          ? {}
+          : { hookScriptsRoot: ctx.facts.hookScriptsRoot }),
       }),
     ),
     packsPromise,

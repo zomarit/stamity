@@ -166,6 +166,11 @@ export const OVERRIDE_EMITTING_CLASSES: readonly ContentClass[] = Object.freeze(
 export interface EmissionFacts {
   /** Live monorepo package layout; empty for single-package repos. */
   monorepoPackages: readonly PackageEntry[];
+  /**
+   * Where the generated hook scripts live from the client's point of view;
+   * absent means `HOOKS_GENERATED_DIR/<tool>`.
+   */
+  hookScriptsRoot?: string;
 }
 
 /** Everything a planner may read. Callers own all writes. */

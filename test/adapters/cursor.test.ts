@@ -207,6 +207,12 @@ interface CtxOptions {
   efforts?: EffortMap;
   /** The delivery dial, as `stamity config set ruleDelivery` persists it. */
   ruleDelivery?: RuleDelivery;
+  /**
+   * The client's own view of where the generated hook scripts live. Set only by
+   * the plugin-root cases; absent everywhere else, which is the repository
+   * emission every other case in this file asserts.
+   */
+  hookScriptsRoot?: string;
 }
 
 function ctxOf(contentRoot: string, over: CtxOptions = {}): EmissionContext {
@@ -241,7 +247,10 @@ function ctxOf(contentRoot: string, over: CtxOptions = {}): EmissionContext {
       ...(over.ruleDelivery === undefined ? {} : { ruleDelivery: over.ruleDelivery }),
     },
     engineVersion: ENGINE_VERSION,
-    facts: { monorepoPackages: [] },
+    facts: {
+      monorepoPackages: [],
+      ...(over.hookScriptsRoot === undefined ? {} : { hookScriptsRoot: over.hookScriptsRoot }),
+    },
     contentRoot,
   };
 }
@@ -1457,5 +1466,65 @@ describe("cursor under ruleDelivery: on-demand", () => {
     expect(onDemand.map((row) => row.path).some((path) => path.includes("stamity-ai-evals/SKILL.md"))).toBe(
       false,
     );
+  });
+});
+
+describe("hooks.json under a plugin root", () => {
+  const ROOT = "${CURSOR_PLUGIN_ROOT}/hooks";
+
+  it("addresses every command through the root variable and keeps the core rows fail-closed", async () => {
+    const corpus = await seedCorpus();
+    const raw = contentAt(await planFor(corpus, { hookScriptsRoot: ROOT }), P.hooksConfig);
+    const doc = parseHooks(raw);
+
+    const entries = Object.values(doc.hooks).flat();
+    expect(entries.length).toBeGreaterThan(2);
+    for (const entry of entries) {
+      // DOUBLE-quoted: the root variable expands to an absolute install path
+      // that may hold a space, and single quotes would kill the expansion.
+      expect(entry.command.startsWith(`node "${ROOT}/`), entry.command).toBe(true);
+    }
+    // The runner is a sibling of the scripts it launches, so the root variable
+    // locates it too — and no repository path survives anywhere in the document.
+    expect(raw).not.toContain(".stamity/generated");
+    expect(raw).not.toContain(".cursor/hooks/");
+
+    // The two adapter-owned guards are re-rooted with the rest, and both keep
+    // the blocking posture their allow-list semantics depend on.
+    for (const event of [CURSOR_GUARD_EVENTS.subagentSpawn, CURSOR_GUARD_EVENTS.mcpExecution]) {
+      const entry = doc.hooks[event]?.[0];
+      expect(entry?.failClosed, event).toBe(true);
+    }
+    expect(doc.hooks[CURSOR_GUARD_EVENTS.subagentSpawn]?.[0]?.command).toBe(
+      `node "${ROOT}/subagent-guard.mjs"`,
+    );
+    expect(doc.hooks[CURSOR_GUARD_EVENTS.mcpExecution]?.[0]?.command).toBe(
+      `node "${ROOT}/mcp-guard.mjs"`,
+    );
+  });
+
+  it("still recognises the core pre-tool-use guard as core when it sits under a plugin root", async () => {
+    const corpus = await seedCorpus();
+    const plugin = parseHooks(contentAt(await planFor(corpus, { hookScriptsRoot: ROOT }), P.hooksConfig));
+    const repo = parseHooks(contentAt(await planFor(corpus), P.hooksConfig));
+
+    // `failClosed` is decided by whether the row runs a CORE script whose body
+    // can reach a verdict on this client — it cannot here, so the core guard
+    // opts out. Matching that identity on the repository prefix alone made the
+    // same row read as AUTHORED under a plugin root and silently opt back IN.
+    for (const doc of [repo, plugin]) {
+      const row = doc.hooks[EVENT_RENAME.pre_tool_use]?.[0];
+      expect(row?.failClosed).toBeUndefined();
+    }
+  });
+
+  it("leaves the guard SCRIPTS on their repository paths", async () => {
+    const rows = await planFor(await seedCorpus(), { hookScriptsRoot: ROOT });
+    const paths = new Set(rows.map((row) => row.path));
+
+    // The plugin emitter relocates the files; the plan still names where this
+    // repository writes them.
+    expect(paths.has(SUBAGENT_GUARD_PATH)).toBe(true);
+    expect(paths.has(MCP_GUARD_PATH)).toBe(true);
   });
 });

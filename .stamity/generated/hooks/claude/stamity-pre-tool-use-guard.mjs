@@ -13,7 +13,7 @@
 // Reads outside repo state: the pending call's payload on stdin. Output is a
 // function of that payload and the emitted policy document, not of the repo.
 
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,6 +24,31 @@ const GOVERNED_PREFIX = "stamity-";
 const BLOCKING = true;
 const BLOCK_EXIT = 2;
 const MCP_PREFIX = "mcp__";
+
+/**
+ * The policy document THIS run reads.
+ *
+ * A vendor plugin container ships its own copy of the document and addresses it
+ * through the client's root variable, so when one of those variables is set and
+ * the container holds `hooks/agent-tool-policies.json`, that copy IS the
+ * document for the run. It is not a preference: a container document that
+ * exists but is oversized or unparseable is refused by the checks below rather
+ * than traded for the repository's, because answering a call from a policy set
+ * nobody selected is the one outcome worse than a refusal. With no variable
+ * set, or with none of them holding a document, the repository copy the script
+ * was emitted beside stands — which is every repository install.
+ */
+function policyDocumentPath() {
+  const pluginRoot =
+    process.env.CLAUDE_PLUGIN_ROOT ?? process.env.CURSOR_PLUGIN_ROOT ?? process.env.PLUGIN_ROOT;
+  if (typeof pluginRoot === "string" && pluginRoot !== "") {
+    // A native join of two native paths: the root variable is host-native text
+    // the client expanded, never a POSIX literal this generator composed.
+    const candidate = join(pluginRoot, "hooks", "agent-tool-policies.json");
+    if (existsSync(candidate)) return candidate;
+  }
+  return POLICY_FILE;
+}
 
 // Client-native tool name → category, unioned across the client dialects the
 // engine emits. A name listed under two categories resolves to the narrower
@@ -90,6 +115,7 @@ function evaluate() {
   const agentInstance = field(payload, ["agent_id", "subagent_id"]);
   const tool = field(payload, ["tool_name", "toolName", "tool"]);
   const subject = { agentId, agentInstance, tool };
+  const policyFile = policyDocumentPath();
 
   try {
     if (tool === "") {
@@ -102,7 +128,7 @@ function evaluate() {
 
     let size = -1;
     try {
-      const stats = statSync(POLICY_FILE);
+      const stats = statSync(policyFile);
       if (stats.isFile()) size = stats.size;
     } catch {
       size = -1;
@@ -111,7 +137,7 @@ function evaluate() {
       return {
         ...subject,
         reasonCode: "POLICY_UNREADABLE",
-        message: `No readable policy document at ${POLICY_FILE}; nothing authorizes this call.`,
+        message: `No readable policy document at ${policyFile}; nothing authorizes this call.`,
       };
     }
     // Sized before it is read: an unbounded document is refused on its size
@@ -120,11 +146,11 @@ function evaluate() {
       return {
         ...subject,
         reasonCode: "POLICY_TOO_LARGE",
-        message: `Policy document ${POLICY_FILE} is ${size} bytes, past the ${MAX_POLICY_BYTES} byte cap.`,
+        message: `Policy document ${policyFile} is ${size} bytes, past the ${MAX_POLICY_BYTES} byte cap.`,
       };
     }
 
-    const document = JSON.parse(readFileSync(POLICY_FILE, "utf8"));
+    const document = JSON.parse(readFileSync(policyFile, "utf8"));
     if (
       document === null ||
       typeof document !== "object" ||
@@ -134,7 +160,7 @@ function evaluate() {
       return {
         ...subject,
         reasonCode: "POLICY_INVALID",
-        message: `Policy document ${POLICY_FILE} does not declare schema "${POLICY_SCHEMA}".`,
+        message: `Policy document ${policyFile} does not declare schema "${POLICY_SCHEMA}".`,
       };
     }
 

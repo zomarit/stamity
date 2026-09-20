@@ -883,3 +883,68 @@ describe("determinism and purity", () => {
     expect(existsSync(ghost)).toBe(false);
   });
 });
+
+describe("hookScriptsRoot: the client-visible root the plugin emission needs", () => {
+  const PLUGIN_ROOT = "${CLAUDE_PLUGIN_ROOT}/hooks";
+
+  it("re-roots the interchange commands and leaves the script rows on their repository paths", async () => {
+    const repo = await plan(["claude"]);
+    const plugin = await planHooksInfra({
+      ...ctxFor(getRepo().dir, ["claude"]),
+      hookScriptsRoot: PLUGIN_ROOT,
+    });
+
+    // The plugin emitter RELOCATES the files it copies, so the plan still names
+    // where the repository writes them — same paths, same bytes. Only the
+    // command a client executes changes, because only the client's view of the
+    // filesystem moved.
+    expect(plugin.scripts.map((s) => s.path)).toEqual(repo.scripts.map((s) => s.path));
+    expect(plugin.scripts.map((s) => s.content)).toEqual(repo.scripts.map((s) => s.content));
+
+    expect(plugin.interchangeFor("claude").map((row) => row.command)).toEqual([
+      ["node", `${PLUGIN_ROOT}/${SESSION_START}`],
+      ["node", `${PLUGIN_ROOT}/${GUARD}`],
+      ["node", `${PLUGIN_ROOT}/${TAMPER}`],
+    ]);
+    expect(JSON.stringify(plugin.interchangeFor("claude"))).not.toContain(HOOKS_ROOT);
+    // The shared document keeps its repository path: the plugin emitter places
+    // its own copy under the root's `hooks/`, and the generated guard resolves
+    // that at run time from the client's root variable.
+    expect(plugin.policyDocument.path).toBe(AGENT_TOOL_POLICIES_PATH);
+  });
+
+  it("re-roots each selected tool's own copies and nothing a user hook declared", async () => {
+    const repo = getRepo();
+    await repo.seedFiles({
+      [`${USER_HOOKS_DIR}/notify.json`]: hookDoc({
+        event: "session_end",
+        command: ["node", NOTIFY_SCRIPT],
+      }),
+      [NOTIFY_SCRIPT]: "process.exit(0)\n",
+    });
+
+    const p = await planHooksInfra({
+      ...ctxFor(repo.dir, ["claude", "codex"]),
+      hookScriptsRoot: "${PLUGIN_ROOT}/hooks",
+    });
+
+    for (const tool of ["claude", "codex"] as const) {
+      const rows = p.interchangeFor(tool);
+      // Three core rows re-rooted, then the user row verbatim: a repo's own
+      // hook names a script the repo owns, and re-writing its argv would point
+      // it at a file no plugin root holds.
+      expect(rows.slice(0, 3).map((row) => row.command[1]), tool).toEqual([
+        `\${PLUGIN_ROOT}/hooks/${SESSION_START}`,
+        `\${PLUGIN_ROOT}/hooks/${GUARD}`,
+        `\${PLUGIN_ROOT}/hooks/${TAMPER}`,
+      ]);
+      expect(rows.at(-1)?.command, tool).toEqual(["node", NOTIFY_SCRIPT]);
+    }
+    // Both tools' script rows still land under their own per-tool directories.
+    expect(p.scripts.filter((s) => s.tool === "codex").map((s) => s.path)).toEqual([
+      `${HOOKS_ROOT}/codex/${SESSION_START}`,
+      `${HOOKS_ROOT}/codex/${GUARD}`,
+      `${HOOKS_ROOT}/codex/${TAMPER}`,
+    ]);
+  });
+});

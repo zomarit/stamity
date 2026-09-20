@@ -131,7 +131,7 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // Reads outside repo state: the pending call's payload on stdin. Output is a
 // function of that payload and the emitted policy document, not of the repo.
 
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -142,6 +142,31 @@ const GOVERNED_PREFIX = "stamity-";
 const BLOCKING = true;
 const BLOCK_EXIT = 2;
 const MCP_PREFIX = "mcp__";
+
+/**
+ * The policy document THIS run reads.
+ *
+ * A vendor plugin container ships its own copy of the document and addresses it
+ * through the client's root variable, so when one of those variables is set and
+ * the container holds \`hooks/agent-tool-policies.json\`, that copy IS the
+ * document for the run. It is not a preference: a container document that
+ * exists but is oversized or unparseable is refused by the checks below rather
+ * than traded for the repository's, because answering a call from a policy set
+ * nobody selected is the one outcome worse than a refusal. With no variable
+ * set, or with none of them holding a document, the repository copy the script
+ * was emitted beside stands — which is every repository install.
+ */
+function policyDocumentPath() {
+  const pluginRoot =
+    process.env.CLAUDE_PLUGIN_ROOT ?? process.env.CURSOR_PLUGIN_ROOT ?? process.env.PLUGIN_ROOT;
+  if (typeof pluginRoot === "string" && pluginRoot !== "") {
+    // A native join of two native paths: the root variable is host-native text
+    // the client expanded, never a POSIX literal this generator composed.
+    const candidate = join(pluginRoot, "hooks", "agent-tool-policies.json");
+    if (existsSync(candidate)) return candidate;
+  }
+  return POLICY_FILE;
+}
 
 // Client-native tool name → category, unioned across the client dialects the
 // engine emits. A name listed under two categories resolves to the narrower
@@ -208,6 +233,7 @@ function evaluate() {
   const agentInstance = field(payload, ["agent_id", "subagent_id"]);
   const tool = field(payload, ["tool_name", "toolName", "tool"]);
   const subject = { agentId, agentInstance, tool };
+  const policyFile = policyDocumentPath();
 
   try {
     if (tool === "") {
@@ -220,7 +246,7 @@ function evaluate() {
 
     let size = -1;
     try {
-      const stats = statSync(POLICY_FILE);
+      const stats = statSync(policyFile);
       if (stats.isFile()) size = stats.size;
     } catch {
       size = -1;
@@ -229,7 +255,7 @@ function evaluate() {
       return {
         ...subject,
         reasonCode: "POLICY_UNREADABLE",
-        message: \`No readable policy document at \${POLICY_FILE}; nothing authorizes this call.\`,
+        message: \`No readable policy document at \${policyFile}; nothing authorizes this call.\`,
       };
     }
     // Sized before it is read: an unbounded document is refused on its size
@@ -238,11 +264,11 @@ function evaluate() {
       return {
         ...subject,
         reasonCode: "POLICY_TOO_LARGE",
-        message: \`Policy document \${POLICY_FILE} is \${size} bytes, past the \${MAX_POLICY_BYTES} byte cap.\`,
+        message: \`Policy document \${policyFile} is \${size} bytes, past the \${MAX_POLICY_BYTES} byte cap.\`,
       };
     }
 
-    const document = JSON.parse(readFileSync(POLICY_FILE, "utf8"));
+    const document = JSON.parse(readFileSync(policyFile, "utf8"));
     if (
       document === null ||
       typeof document !== "object" ||
@@ -252,7 +278,7 @@ function evaluate() {
       return {
         ...subject,
         reasonCode: "POLICY_INVALID",
-        message: \`Policy document \${POLICY_FILE} does not declare schema "\${POLICY_SCHEMA}".\`,
+        message: \`Policy document \${policyFile} does not declare schema "\${POLICY_SCHEMA}".\`,
       };
     }
 
@@ -838,7 +864,7 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // Reads outside repo state: the pending call's payload on stdin. Output is a
 // function of that payload and the emitted policy document, not of the repo.
 
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -849,6 +875,31 @@ const GOVERNED_PREFIX = "stamity-";
 const BLOCKING = false;
 const BLOCK_EXIT = 2;
 const MCP_PREFIX = "mcp__";
+
+/**
+ * The policy document THIS run reads.
+ *
+ * A vendor plugin container ships its own copy of the document and addresses it
+ * through the client's root variable, so when one of those variables is set and
+ * the container holds \`hooks/agent-tool-policies.json\`, that copy IS the
+ * document for the run. It is not a preference: a container document that
+ * exists but is oversized or unparseable is refused by the checks below rather
+ * than traded for the repository's, because answering a call from a policy set
+ * nobody selected is the one outcome worse than a refusal. With no variable
+ * set, or with none of them holding a document, the repository copy the script
+ * was emitted beside stands — which is every repository install.
+ */
+function policyDocumentPath() {
+  const pluginRoot =
+    process.env.CLAUDE_PLUGIN_ROOT ?? process.env.CURSOR_PLUGIN_ROOT ?? process.env.PLUGIN_ROOT;
+  if (typeof pluginRoot === "string" && pluginRoot !== "") {
+    // A native join of two native paths: the root variable is host-native text
+    // the client expanded, never a POSIX literal this generator composed.
+    const candidate = join(pluginRoot, "hooks", "agent-tool-policies.json");
+    if (existsSync(candidate)) return candidate;
+  }
+  return POLICY_FILE;
+}
 
 // Client-native tool name → category, unioned across the client dialects the
 // engine emits. A name listed under two categories resolves to the narrower
@@ -915,6 +966,7 @@ function evaluate() {
   const agentInstance = field(payload, ["agent_id", "subagent_id"]);
   const tool = field(payload, ["tool_name", "toolName", "tool"]);
   const subject = { agentId, agentInstance, tool };
+  const policyFile = policyDocumentPath();
 
   try {
     if (tool === "") {
@@ -927,7 +979,7 @@ function evaluate() {
 
     let size = -1;
     try {
-      const stats = statSync(POLICY_FILE);
+      const stats = statSync(policyFile);
       if (stats.isFile()) size = stats.size;
     } catch {
       size = -1;
@@ -936,7 +988,7 @@ function evaluate() {
       return {
         ...subject,
         reasonCode: "POLICY_UNREADABLE",
-        message: \`No readable policy document at \${POLICY_FILE}; nothing authorizes this call.\`,
+        message: \`No readable policy document at \${policyFile}; nothing authorizes this call.\`,
       };
     }
     // Sized before it is read: an unbounded document is refused on its size
@@ -945,11 +997,11 @@ function evaluate() {
       return {
         ...subject,
         reasonCode: "POLICY_TOO_LARGE",
-        message: \`Policy document \${POLICY_FILE} is \${size} bytes, past the \${MAX_POLICY_BYTES} byte cap.\`,
+        message: \`Policy document \${policyFile} is \${size} bytes, past the \${MAX_POLICY_BYTES} byte cap.\`,
       };
     }
 
-    const document = JSON.parse(readFileSync(POLICY_FILE, "utf8"));
+    const document = JSON.parse(readFileSync(policyFile, "utf8"));
     if (
       document === null ||
       typeof document !== "object" ||
@@ -959,7 +1011,7 @@ function evaluate() {
       return {
         ...subject,
         reasonCode: "POLICY_INVALID",
-        message: \`Policy document \${POLICY_FILE} does not declare schema "\${POLICY_SCHEMA}".\`,
+        message: \`Policy document \${policyFile} does not declare schema "\${POLICY_SCHEMA}".\`,
       };
     }
 
@@ -1545,7 +1597,7 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // Reads outside repo state: the pending call's payload on stdin. Output is a
 // function of that payload and the emitted policy document, not of the repo.
 
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -1556,6 +1608,31 @@ const GOVERNED_PREFIX = "stamity-";
 const BLOCKING = false;
 const BLOCK_EXIT = 2;
 const MCP_PREFIX = "mcp__";
+
+/**
+ * The policy document THIS run reads.
+ *
+ * A vendor plugin container ships its own copy of the document and addresses it
+ * through the client's root variable, so when one of those variables is set and
+ * the container holds \`hooks/agent-tool-policies.json\`, that copy IS the
+ * document for the run. It is not a preference: a container document that
+ * exists but is oversized or unparseable is refused by the checks below rather
+ * than traded for the repository's, because answering a call from a policy set
+ * nobody selected is the one outcome worse than a refusal. With no variable
+ * set, or with none of them holding a document, the repository copy the script
+ * was emitted beside stands — which is every repository install.
+ */
+function policyDocumentPath() {
+  const pluginRoot =
+    process.env.CLAUDE_PLUGIN_ROOT ?? process.env.CURSOR_PLUGIN_ROOT ?? process.env.PLUGIN_ROOT;
+  if (typeof pluginRoot === "string" && pluginRoot !== "") {
+    // A native join of two native paths: the root variable is host-native text
+    // the client expanded, never a POSIX literal this generator composed.
+    const candidate = join(pluginRoot, "hooks", "agent-tool-policies.json");
+    if (existsSync(candidate)) return candidate;
+  }
+  return POLICY_FILE;
+}
 
 // Client-native tool name → category, unioned across the client dialects the
 // engine emits. A name listed under two categories resolves to the narrower
@@ -1622,6 +1699,7 @@ function evaluate() {
   const agentInstance = field(payload, ["agent_id", "subagent_id"]);
   const tool = field(payload, ["tool_name", "toolName", "tool"]);
   const subject = { agentId, agentInstance, tool };
+  const policyFile = policyDocumentPath();
 
   try {
     if (tool === "") {
@@ -1634,7 +1712,7 @@ function evaluate() {
 
     let size = -1;
     try {
-      const stats = statSync(POLICY_FILE);
+      const stats = statSync(policyFile);
       if (stats.isFile()) size = stats.size;
     } catch {
       size = -1;
@@ -1643,7 +1721,7 @@ function evaluate() {
       return {
         ...subject,
         reasonCode: "POLICY_UNREADABLE",
-        message: \`No readable policy document at \${POLICY_FILE}; nothing authorizes this call.\`,
+        message: \`No readable policy document at \${policyFile}; nothing authorizes this call.\`,
       };
     }
     // Sized before it is read: an unbounded document is refused on its size
@@ -1652,11 +1730,11 @@ function evaluate() {
       return {
         ...subject,
         reasonCode: "POLICY_TOO_LARGE",
-        message: \`Policy document \${POLICY_FILE} is \${size} bytes, past the \${MAX_POLICY_BYTES} byte cap.\`,
+        message: \`Policy document \${policyFile} is \${size} bytes, past the \${MAX_POLICY_BYTES} byte cap.\`,
       };
     }
 
-    const document = JSON.parse(readFileSync(POLICY_FILE, "utf8"));
+    const document = JSON.parse(readFileSync(policyFile, "utf8"));
     if (
       document === null ||
       typeof document !== "object" ||
@@ -1666,7 +1744,7 @@ function evaluate() {
       return {
         ...subject,
         reasonCode: "POLICY_INVALID",
-        message: \`Policy document \${POLICY_FILE} does not declare schema "\${POLICY_SCHEMA}".\`,
+        message: \`Policy document \${policyFile} does not declare schema "\${POLICY_SCHEMA}".\`,
       };
     }
 
@@ -2252,7 +2330,7 @@ exports[`emission goldens — hook scripts > plans three deterministic scripts f
 // Reads outside repo state: the pending call's payload on stdin. Output is a
 // function of that payload and the emitted policy document, not of the repo.
 
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -2263,6 +2341,31 @@ const GOVERNED_PREFIX = "stamity-";
 const BLOCKING = false;
 const BLOCK_EXIT = 2;
 const MCP_PREFIX = "mcp__";
+
+/**
+ * The policy document THIS run reads.
+ *
+ * A vendor plugin container ships its own copy of the document and addresses it
+ * through the client's root variable, so when one of those variables is set and
+ * the container holds \`hooks/agent-tool-policies.json\`, that copy IS the
+ * document for the run. It is not a preference: a container document that
+ * exists but is oversized or unparseable is refused by the checks below rather
+ * than traded for the repository's, because answering a call from a policy set
+ * nobody selected is the one outcome worse than a refusal. With no variable
+ * set, or with none of them holding a document, the repository copy the script
+ * was emitted beside stands — which is every repository install.
+ */
+function policyDocumentPath() {
+  const pluginRoot =
+    process.env.CLAUDE_PLUGIN_ROOT ?? process.env.CURSOR_PLUGIN_ROOT ?? process.env.PLUGIN_ROOT;
+  if (typeof pluginRoot === "string" && pluginRoot !== "") {
+    // A native join of two native paths: the root variable is host-native text
+    // the client expanded, never a POSIX literal this generator composed.
+    const candidate = join(pluginRoot, "hooks", "agent-tool-policies.json");
+    if (existsSync(candidate)) return candidate;
+  }
+  return POLICY_FILE;
+}
 
 // Client-native tool name → category, unioned across the client dialects the
 // engine emits. A name listed under two categories resolves to the narrower
@@ -2329,6 +2432,7 @@ function evaluate() {
   const agentInstance = field(payload, ["agent_id", "subagent_id"]);
   const tool = field(payload, ["tool_name", "toolName", "tool"]);
   const subject = { agentId, agentInstance, tool };
+  const policyFile = policyDocumentPath();
 
   try {
     if (tool === "") {
@@ -2341,7 +2445,7 @@ function evaluate() {
 
     let size = -1;
     try {
-      const stats = statSync(POLICY_FILE);
+      const stats = statSync(policyFile);
       if (stats.isFile()) size = stats.size;
     } catch {
       size = -1;
@@ -2350,7 +2454,7 @@ function evaluate() {
       return {
         ...subject,
         reasonCode: "POLICY_UNREADABLE",
-        message: \`No readable policy document at \${POLICY_FILE}; nothing authorizes this call.\`,
+        message: \`No readable policy document at \${policyFile}; nothing authorizes this call.\`,
       };
     }
     // Sized before it is read: an unbounded document is refused on its size
@@ -2359,11 +2463,11 @@ function evaluate() {
       return {
         ...subject,
         reasonCode: "POLICY_TOO_LARGE",
-        message: \`Policy document \${POLICY_FILE} is \${size} bytes, past the \${MAX_POLICY_BYTES} byte cap.\`,
+        message: \`Policy document \${policyFile} is \${size} bytes, past the \${MAX_POLICY_BYTES} byte cap.\`,
       };
     }
 
-    const document = JSON.parse(readFileSync(POLICY_FILE, "utf8"));
+    const document = JSON.parse(readFileSync(policyFile, "utf8"));
     if (
       document === null ||
       typeof document !== "object" ||
@@ -2373,7 +2477,7 @@ function evaluate() {
       return {
         ...subject,
         reasonCode: "POLICY_INVALID",
-        message: \`Policy document \${POLICY_FILE} does not declare schema "\${POLICY_SCHEMA}".\`,
+        message: \`Policy document \${policyFile} does not declare schema "\${POLICY_SCHEMA}".\`,
       };
     }
 
@@ -2872,12 +2976,20 @@ process.stdout.write(render().join("\\n") + "\\n");
 exports[`emission goldens — hook scripts > preserves the deterministic portable runner bytes for codex 1`] = `
 "#!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const TOOL = "codex";
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(HERE, "../../../..");
+// A script addressed through a client's plugin root variable, e.g.
+// \${CLAUDE_PLUGIN_ROOT}/hooks/stamity-session-start.mjs. The client expands
+// that variable in its config's command string ALONE — never inside the
+// base64url row below — so the literal reaches this runner and this is where
+// it is resolved.
+const PLUGIN_ROOT_REF = /^\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}\\/(.+)$/;
+const CORE_GUARD_FILE = "stamity-pre-tool-use-guard.mjs";
 // PascalCase wire names. Codex reads this set natively and Copilot accepts it
 // as its matcher aliases; Cursor's adapter renames them at its own boundary.
 // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
@@ -2901,7 +3013,11 @@ function main() {
   // every nonzero exit, so the same posture there is exit 0 with the warning.
   // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
   // https://docs.github.com/en/copilot/reference/hooks-reference (accessed 2026-09-17)
-  const coreGuard = row.event === "pre_tool_use" && row.command.includes(".stamity/generated/hooks/" + TOOL + "/stamity-pre-tool-use-guard.mjs");
+  // Identified by WHICH SCRIPT the row runs, not by where that script sits: the
+  // path used to be matched whole against the repository layout, so a row under
+  // a plugin root matched nothing and each client's posture above silently
+  // flipped — Codex to a blocking exit 2, Copilot to a call-rejecting exit 1.
+  const coreGuard = row.event === "pre_tool_use" && row.command.some((arg) => basename(arg) === CORE_GUARD_FILE);
   if (TOOL === "codex" && row.event === "pre_tool_use" && !coreGuard) failureExit = 2;
   if (TOOL === "copilot" && coreGuard) failureExit = 0;
   if (row.timeoutMs !== undefined && (!Number.isSafeInteger(row.timeoutMs) || row.timeoutMs <= 0)) throw safeError("Invalid hook timeout");
@@ -2918,8 +3034,23 @@ function main() {
   if (input.tool_name === undefined && typeof payload.toolName === "string") input.tool_name = payload.toolName;
   if (input.tool_input === undefined && payload.toolArgs !== undefined) input.tool_input = typeof payload.toolArgs === "string" ? parse(payload.toolArgs, "Invalid serialized tool input") : payload.toolArgs;
   if (object(input.tool_input) && input.tool_input.file_path === undefined && typeof input.tool_input.filePath === "string") input.tool_input = { ...input.tool_input, file_path: input.tool_input.filePath };
-  const child = spawnSync(row.command[0], row.command.slice(1), {
-    cwd: ROOT, input: JSON.stringify(input), encoding: "utf8", shell: false,
+  // Resolved here, once: the row's script, and the directory the child runs in.
+  // A plugin-rooted row's repository is the SESSION's working directory — the
+  // four-level climb below locates the repository a runner was synced into, and
+  // under a vendor container it would name the container instead. With the
+  // variable unset there is still one right answer rather than a guess: a
+  // container places every hook script in the single \`hooks/\` directory this
+  // runner ships in, so the script is its sibling.
+  const pluginRef = PLUGIN_ROOT_REF.exec(row.command[1] ?? "");
+  const command = [...row.command];
+  if (pluginRef !== null) {
+    const supplied = process.env[pluginRef[1]];
+    command[1] = typeof supplied === "string" && supplied !== ""
+      ? join(supplied, ...pluginRef[2].split("/"))
+      : join(HERE, basename(command[1]));
+  }
+  const child = spawnSync(command[0], command.slice(1), {
+    cwd: pluginRef === null ? ROOT : process.cwd(), input: JSON.stringify(input), encoding: "utf8", shell: false,
     maxBuffer: 1024 * 1024,
     ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
   });
@@ -3086,12 +3217,20 @@ try { main(); } catch (error) {
 exports[`emission goldens — hook scripts > preserves the deterministic portable runner bytes for copilot 1`] = `
 "#!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const TOOL = "copilot";
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(HERE, "../../../..");
+// A script addressed through a client's plugin root variable, e.g.
+// \${CLAUDE_PLUGIN_ROOT}/hooks/stamity-session-start.mjs. The client expands
+// that variable in its config's command string ALONE — never inside the
+// base64url row below — so the literal reaches this runner and this is where
+// it is resolved.
+const PLUGIN_ROOT_REF = /^\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}\\/(.+)$/;
+const CORE_GUARD_FILE = "stamity-pre-tool-use-guard.mjs";
 // PascalCase wire names. Codex reads this set natively and Copilot accepts it
 // as its matcher aliases; Cursor's adapter renames them at its own boundary.
 // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
@@ -3115,7 +3254,11 @@ function main() {
   // every nonzero exit, so the same posture there is exit 0 with the warning.
   // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
   // https://docs.github.com/en/copilot/reference/hooks-reference (accessed 2026-09-17)
-  const coreGuard = row.event === "pre_tool_use" && row.command.includes(".stamity/generated/hooks/" + TOOL + "/stamity-pre-tool-use-guard.mjs");
+  // Identified by WHICH SCRIPT the row runs, not by where that script sits: the
+  // path used to be matched whole against the repository layout, so a row under
+  // a plugin root matched nothing and each client's posture above silently
+  // flipped — Codex to a blocking exit 2, Copilot to a call-rejecting exit 1.
+  const coreGuard = row.event === "pre_tool_use" && row.command.some((arg) => basename(arg) === CORE_GUARD_FILE);
   if (TOOL === "codex" && row.event === "pre_tool_use" && !coreGuard) failureExit = 2;
   if (TOOL === "copilot" && coreGuard) failureExit = 0;
   if (row.timeoutMs !== undefined && (!Number.isSafeInteger(row.timeoutMs) || row.timeoutMs <= 0)) throw safeError("Invalid hook timeout");
@@ -3132,8 +3275,23 @@ function main() {
   if (input.tool_name === undefined && typeof payload.toolName === "string") input.tool_name = payload.toolName;
   if (input.tool_input === undefined && payload.toolArgs !== undefined) input.tool_input = typeof payload.toolArgs === "string" ? parse(payload.toolArgs, "Invalid serialized tool input") : payload.toolArgs;
   if (object(input.tool_input) && input.tool_input.file_path === undefined && typeof input.tool_input.filePath === "string") input.tool_input = { ...input.tool_input, file_path: input.tool_input.filePath };
-  const child = spawnSync(row.command[0], row.command.slice(1), {
-    cwd: ROOT, input: JSON.stringify(input), encoding: "utf8", shell: false,
+  // Resolved here, once: the row's script, and the directory the child runs in.
+  // A plugin-rooted row's repository is the SESSION's working directory — the
+  // four-level climb below locates the repository a runner was synced into, and
+  // under a vendor container it would name the container instead. With the
+  // variable unset there is still one right answer rather than a guess: a
+  // container places every hook script in the single \`hooks/\` directory this
+  // runner ships in, so the script is its sibling.
+  const pluginRef = PLUGIN_ROOT_REF.exec(row.command[1] ?? "");
+  const command = [...row.command];
+  if (pluginRef !== null) {
+    const supplied = process.env[pluginRef[1]];
+    command[1] = typeof supplied === "string" && supplied !== ""
+      ? join(supplied, ...pluginRef[2].split("/"))
+      : join(HERE, basename(command[1]));
+  }
+  const child = spawnSync(command[0], command.slice(1), {
+    cwd: pluginRef === null ? ROOT : process.cwd(), input: JSON.stringify(input), encoding: "utf8", shell: false,
     maxBuffer: 1024 * 1024,
     ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
   });
@@ -3300,12 +3458,20 @@ try { main(); } catch (error) {
 exports[`emission goldens — hook scripts > preserves the deterministic portable runner bytes for cursor 1`] = `
 "#!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const TOOL = "cursor";
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(HERE, "../../../..");
+// A script addressed through a client's plugin root variable, e.g.
+// \${CLAUDE_PLUGIN_ROOT}/hooks/stamity-session-start.mjs. The client expands
+// that variable in its config's command string ALONE — never inside the
+// base64url row below — so the literal reaches this runner and this is where
+// it is resolved.
+const PLUGIN_ROOT_REF = /^\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}\\/(.+)$/;
+const CORE_GUARD_FILE = "stamity-pre-tool-use-guard.mjs";
 // PascalCase wire names. Codex reads this set natively and Copilot accepts it
 // as its matcher aliases; Cursor's adapter renames them at its own boundary.
 // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
@@ -3329,7 +3495,11 @@ function main() {
   // every nonzero exit, so the same posture there is exit 0 with the warning.
   // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
   // https://docs.github.com/en/copilot/reference/hooks-reference (accessed 2026-09-17)
-  const coreGuard = row.event === "pre_tool_use" && row.command.includes(".stamity/generated/hooks/" + TOOL + "/stamity-pre-tool-use-guard.mjs");
+  // Identified by WHICH SCRIPT the row runs, not by where that script sits: the
+  // path used to be matched whole against the repository layout, so a row under
+  // a plugin root matched nothing and each client's posture above silently
+  // flipped — Codex to a blocking exit 2, Copilot to a call-rejecting exit 1.
+  const coreGuard = row.event === "pre_tool_use" && row.command.some((arg) => basename(arg) === CORE_GUARD_FILE);
   if (TOOL === "codex" && row.event === "pre_tool_use" && !coreGuard) failureExit = 2;
   if (TOOL === "copilot" && coreGuard) failureExit = 0;
   if (row.timeoutMs !== undefined && (!Number.isSafeInteger(row.timeoutMs) || row.timeoutMs <= 0)) throw safeError("Invalid hook timeout");
@@ -3346,8 +3516,23 @@ function main() {
   if (input.tool_name === undefined && typeof payload.toolName === "string") input.tool_name = payload.toolName;
   if (input.tool_input === undefined && payload.toolArgs !== undefined) input.tool_input = typeof payload.toolArgs === "string" ? parse(payload.toolArgs, "Invalid serialized tool input") : payload.toolArgs;
   if (object(input.tool_input) && input.tool_input.file_path === undefined && typeof input.tool_input.filePath === "string") input.tool_input = { ...input.tool_input, file_path: input.tool_input.filePath };
-  const child = spawnSync(row.command[0], row.command.slice(1), {
-    cwd: ROOT, input: JSON.stringify(input), encoding: "utf8", shell: false,
+  // Resolved here, once: the row's script, and the directory the child runs in.
+  // A plugin-rooted row's repository is the SESSION's working directory — the
+  // four-level climb below locates the repository a runner was synced into, and
+  // under a vendor container it would name the container instead. With the
+  // variable unset there is still one right answer rather than a guess: a
+  // container places every hook script in the single \`hooks/\` directory this
+  // runner ships in, so the script is its sibling.
+  const pluginRef = PLUGIN_ROOT_REF.exec(row.command[1] ?? "");
+  const command = [...row.command];
+  if (pluginRef !== null) {
+    const supplied = process.env[pluginRef[1]];
+    command[1] = typeof supplied === "string" && supplied !== ""
+      ? join(supplied, ...pluginRef[2].split("/"))
+      : join(HERE, basename(command[1]));
+  }
+  const child = spawnSync(command[0], command.slice(1), {
+    cwd: pluginRef === null ? ROOT : process.cwd(), input: JSON.stringify(input), encoding: "utf8", shell: false,
     maxBuffer: 1024 * 1024,
     ...(row.timeoutMs === undefined ? {} : { timeout: row.timeoutMs }),
   });

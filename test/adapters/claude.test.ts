@@ -115,6 +115,12 @@ interface PlanOverrides {
    * claude alone and takes the default.
    */
   tools?: Tool[];
+  /**
+   * The client's own view of where the generated hook scripts live. Set only by
+   * the plugin-root cases; absent everywhere else, which is the repository
+   * emission every other case in this file asserts.
+   */
+  hookScriptsRoot?: string;
 }
 
 /** Every rule, agent and command of the real corpus, selected by bare catalog id. */
@@ -150,7 +156,10 @@ async function ctxOf(over: PlanOverrides = {}): Promise<EmissionContext> {
     rootDir: over.rootDir ?? getTemp().path("repo"),
     manifest,
     engineVersion: ENGINE_VERSION,
-    facts: { monorepoPackages: [] },
+    facts: {
+      monorepoPackages: [],
+      ...(over.hookScriptsRoot === undefined ? {} : { hookScriptsRoot: over.hookScriptsRoot }),
+    },
     contentRoot: over.contentRoot ?? CONTENT_ROOT,
   };
 }
@@ -1386,5 +1395,96 @@ describe("claude under ruleDelivery: on-demand", () => {
     expect(defaulted.rows.some((row) => row.path.includes("stamity-ai-evals/SKILL.md"))).toBe(true);
     expect(alwaysOn.rows.some((row) => row.path === ".claude/rules/stamity-ai-evals.md")).toBe(true);
     expect(alwaysOn.rows.some((row) => row.path.includes("stamity-ai-evals/SKILL.md"))).toBe(false);
+  });
+});
+
+describe("settings under a plugin root", () => {
+  const ROOT = "${CLAUDE_PLUGIN_ROOT}/hooks";
+
+  async function pluginSettings(): Promise<SettingsShape> {
+    const { rows } = await planned({ selection: EMPTY_SELECTION, hookScriptsRoot: ROOT });
+    return settingsOf(rows);
+  }
+
+  it("addresses every hook command through the root variable, bare", async () => {
+    const settings = await pluginSettings();
+    const commands = Object.values(settings.hooks).flatMap((entries) =>
+      entries.flatMap((entry) => entry.hooks.map((hook) => hook.command)),
+    );
+
+    expect(commands.length).toBeGreaterThan(0);
+    // DOUBLE-quoted, not single-quoted and not bare: single quotes would kill
+    // the expansion and hand the client the literal variable name, and bare
+    // would word-split on the space an absolute install path may hold
+    // (code.claude.com/docs/en/hooks, accessed 2026-09-20).
+    for (const command of commands) {
+      expect(command.startsWith(`node "${ROOT}/`), command).toBe(true);
+      expect(command.endsWith('"'), command).toBe(true);
+      expect(command).not.toContain("'");
+    }
+    expect(JSON.stringify(settings.hooks)).not.toContain(".stamity/generated");
+  });
+
+  it("re-roots the two extension events as well as the portable rows", async () => {
+    const settings = await pluginSettings();
+
+    // The configuration-change notice and the two review-gate events are wired
+    // by this adapter rather than carried on the interchange, so each is its own
+    // chance to leave a repository path in a plugin's configuration.
+    expect(settings.hooks["ConfigChange"]?.[0]?.hooks[0]?.command).toBe(
+      `node "${ROOT}/stamity-config-tamper-notice.mjs"`,
+    );
+    for (const event of ["TaskCompleted", "SubagentStop"]) {
+      expect(settings.hooks[event]?.[0]?.hooks[0]?.command, event).toBe(
+        `node "${ROOT}/stamity-review-gate.mjs"`,
+      );
+    }
+  });
+
+  /** The SessionStart command the settings render for one hookScriptsRoot value. */
+  async function commandForRoot(root: string): Promise<string> {
+    const { rows } = await planned({ selection: EMPTY_SELECTION, hookScriptsRoot: root });
+    return settingsOf(rows).hooks["SessionStart"]?.[0]?.hooks[0]?.command ?? "";
+  }
+
+  it.each([
+    "${CLAUDE_PLUGIN_ROOT}/hooks",
+    "${PLUGIN_ROOT}/hooks",
+    "${CURSOR_PLUGIN_ROOT}/hooks/nested-1",
+  ])("emits the vendor root-variable path shape %s double-quoted", async (root) => {
+    // NARROWED, not relaxed: the shape that escapes single-quoting is a whole
+    // token of `${NAME}` followed by one or more `/segment`, each segment drawn
+    // from the shell-safe set — and it is rendered DOUBLE-quoted, never bare.
+    // Single quotes would hand the client the literal variable name where a
+    // path belongs; bare would word-split on the space the expanded absolute
+    // install path may hold.
+    expect(await commandForRoot(root)).toBe(`node "${root}/stamity-session-start.mjs"`);
+  });
+
+  it.each([
+    // A space inside the braces, so the token is not one word to the shell.
+    "${CLAUDE PLUGIN}/hooks",
+    // Lower-case is not the vendor variable convention.
+    "${plugin_root}/hooks",
+    // A metacharacter after the brace: `;` would end the command.
+    "${CLAUDE_PLUGIN_ROOT}/hooks;rm -rf /tmp/x",
+    // Command substitution wearing the prefix.
+    "${CLAUDE_PLUGIN_ROOT}/$(touch pwned)",
+    // A bare `$VAR` is not the admitted shape — the gating case in the join
+    // suite above pins the same answer for it through the user-hook lane.
+    "$CLAUDE_PLUGIN_ROOT/hooks",
+  ])("keeps every other $-carrying root %s single-quoted", async (root) => {
+    // Quoting is per WORD: `node` stays bare and the path token is the one
+    // element the join has to protect.
+    expect(await commandForRoot(root)).toBe(`node '${root}/stamity-session-start.mjs'`);
+  });
+
+  it("keeps the review gate's SCRIPT on its repository path", async () => {
+    const { rows } = await planned({ selection: EMPTY_SELECTION, hookScriptsRoot: ROOT });
+
+    // The plugin emitter relocates the file; the plan still says where this
+    // repository writes it, so a repository sync and a plugin build render the
+    // same bytes to the same place.
+    expect(byPath(rows).get(CLAUDE_REVIEW_GATE_PATH)).toBeDefined();
   });
 });

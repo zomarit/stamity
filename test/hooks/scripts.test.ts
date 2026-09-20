@@ -2476,3 +2476,166 @@ function readSourceTree(): Map<string, string> {
   walk(root);
   return files;
 }
+
+describe("the generated scripts under a vendor plugin root", () => {
+  /** A roster the repository document does NOT carry: `Edit` is denied here. */
+  const PLUGIN_ROSTER: readonly AgentToolPolicy[] = [
+    {
+      agentId: "stamity-implementer",
+      allow: ["read", "edit", "network"],
+      denyTools: ["Edit"],
+      rationale: "The plugin's own document, deliberately stricter than the repo's.",
+    },
+    {
+      agentId: "stamity-reviewer",
+      allow: ["read"],
+      rationale: "Reads the diff and reports; it changes nothing.",
+    },
+  ];
+
+  /** A plugin container: `<dir>/hooks/agent-tool-policies.json`, absolute. */
+  async function placePluginRoot(
+    dir: string,
+    document?: string,
+  ): Promise<string> {
+    if (document !== undefined) {
+      await getRepo().seedFiles({ [`${dir}/hooks/${POLICY_FILE}`]: document });
+    } else {
+      await getRepo().seedFiles({ [`${dir}/hooks/.keep`]: "" });
+    }
+    return getRepo().path(dir);
+  }
+
+  it.each(["CLAUDE_PLUGIN_ROOT", "CURSOR_PLUGIN_ROOT", "PLUGIN_ROOT"] as const)(
+    "reads the policy document under %s when the container carries one",
+    async (variable) => {
+      const guard = await placeGuard();
+      const root = await placePluginRoot(
+        `container-${variable}`,
+        buildAgentToolPoliciesJson(PLUGIN_ROSTER),
+      );
+
+      // `Edit` is ALLOWED by the repository document seeded beside the guard and
+      // DENIED by the container's — so the verdict names which document was read.
+      const blocked = run(guard, {
+        cwd: getRepo().dir,
+        input: call("stamity-implementer", "Edit"),
+        env: { [variable]: root },
+      });
+      expect(blocked.code).toBe(2);
+      expect(refusal(blocked)["reasonCode"]).toBe("TOOL_DENIED");
+
+      // And the same call with no variable set reads the repository document.
+      const allowed = run(guard, {
+        cwd: getRepo().dir,
+        input: call("stamity-implementer", "Edit"),
+      });
+      expect(allowed.code).toBe(0);
+      expect(allowed.stderr).toBe("");
+    },
+  );
+
+  it("falls back to the repository document when the container holds none", async () => {
+    const guard = await placeGuard();
+    const root = await placePluginRoot("container-empty");
+
+    const result = run(guard, {
+      cwd: getRepo().dir,
+      input: call("stamity-implementer", "Edit"),
+      env: { CLAUDE_PLUGIN_ROOT: root },
+    });
+
+    expect(result).toEqual({ code: 0, stdout: "", stderr: "" });
+  });
+
+  it("refuses an unreadable container document rather than falling back to a laxer one", async () => {
+    // A container document that EXISTS is the document. Falling back on a parse
+    // failure or an oversized file would answer the call from a policy set
+    // nobody selected — the refusal the guard already has for the repository
+    // document is the honest outcome here too.
+    const guard = await placeGuard();
+    const unparseable = await placePluginRoot("container-broken", "{ not json\n");
+    const broken = run(guard, {
+      cwd: getRepo().dir,
+      input: call("stamity-implementer", "Edit"),
+      env: { CLAUDE_PLUGIN_ROOT: unparseable },
+    });
+    expect(broken.code).toBe(2);
+    // The guard's existing catch-all for a document it could not evaluate: the
+    // point is the refusal, not a new reason code.
+    expect(refusal(broken)["reasonCode"]).toBe("POLICY_EVALUATION_FAILED");
+
+    const oversized = await placePluginRoot(
+      "container-oversized",
+      `${" ".repeat(MAX_POLICY_FILE_BYTES + 1)}\n`,
+    );
+    const large = run(guard, {
+      cwd: getRepo().dir,
+      input: call("stamity-implementer", "Edit"),
+      env: { CLAUDE_PLUGIN_ROOT: oversized },
+    });
+    expect(large.code).toBe(2);
+    expect(refusal(large)["reasonCode"]).toBe("POLICY_TOO_LARGE");
+    // The message names the container's document, not the repository's, so an
+    // operator reads which file to fix.
+    expect(String(refusal(large)["message"])).toContain(oversized);
+  });
+
+  it("leaves a git worktree unchanged apart from the state files each script owns", async () => {
+    const repo = getRepo();
+    await repo.seedFiles({
+      ".stamity/learnings/cache-warmup.md": learning(),
+      ".gitignore": "node_modules\n",
+    });
+    const git = (...args: string[]): string =>
+      spawnSync("git", args, { cwd: repo.dir, encoding: "utf8" }).stdout;
+    spawnSync("git", ["init", "-q"], { cwd: repo.dir, encoding: "utf8" });
+    spawnSync("git", ["add", "-A"], { cwd: repo.dir, encoding: "utf8" });
+    spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "seed"], {
+      cwd: repo.dir,
+      encoding: "utf8",
+    });
+    expect(git("status", "--porcelain").trim()).toBe("");
+
+    const root = await placePluginRoot(
+      "container-clean",
+      buildAgentToolPoliciesJson(PLUGIN_ROSTER),
+    );
+    const env = { CLAUDE_PLUGIN_ROOT: root };
+    const scripts: Array<[string, string, string]> = [
+      ["session.mjs", buildSessionStartScript(), ""],
+      ["notice.mjs", buildConfigTamperNoticeScript(), ""],
+      [
+        "guard-run.mjs",
+        buildPreToolUseGuardScript({ policiesJsonPath: `../${POLICY_FILE}`, failMode: "fail-closed" }),
+        call("stamity-reviewer", "Read"),
+      ],
+      [
+        "gate.mjs",
+        buildReviewGateScript({ statePath: REVIEW_GATE_STATE_FILE, maxIterations: 3, failMode: "fail-closed" }),
+        JSON.stringify({ hook_event_name: "SubagentStop", agent_type: "stamity-reviewer" }),
+      ],
+    ];
+    const placed = await Promise.all(
+      scripts.map(async ([name, body]) => place(`hooks/${name}`, body)),
+    );
+    for (const [index, [, , input]] of scripts.entries()) {
+      run(placed[index]!, { cwd: repo.dir, input, env });
+    }
+
+    // Everything the scripts wrote is either untracked state under `.stamity/`
+    // or nothing at all — no tracked file moved, and the container was read
+    // rather than written.
+    const dirty = git("status", "--porcelain")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(
+        (line) =>
+          line !== "" &&
+          !line.startsWith("?? .stamity/") &&
+          !line.startsWith("?? hooks/") &&
+          !line.startsWith("?? container-"),
+      );
+    expect(dirty).toEqual([]);
+  });
+});

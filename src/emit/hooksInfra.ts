@@ -238,6 +238,19 @@ export interface HooksPlanContext {
    * build.
    */
   packAgents?: readonly PackAgentDeclaration[];
+  /**
+   * Where the generated hook scripts live from the CLIENT's point of view;
+   * absent means `HOOKS_GENERATED_DIR/<tool>`, the repository-relative path
+   * this planner also writes them to.
+   *
+   * The two are only ever different when something relocates the files after
+   * the plan — the plugin emitter copies each client's scripts into one
+   * vendor-container `hooks/` directory, addressed through that client's root
+   * variable. So the `PlannedHookScript.path` rows stay repository-relative
+   * (they say where the bytes are produced) and only `HookInterchange.command`
+   * moves (it says what the client will execute).
+   */
+  hookScriptsRoot?: string;
 }
 
 // ── Pack agent rows ──────────────────────────────────────────────
@@ -381,7 +394,15 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
     for (const script of planCoreHookScripts(POLICIES_PATH_FROM_SCRIPT, tool)) {
       const path = `${HOOKS_GENERATED_DIR}/${tool}/${script.fileName}`;
       scripts.push({ path, content: script.content, tool });
-      rows.push({ event: script.event, command: ["node", path] });
+      rows.push({
+        event: script.event,
+        command: [
+          "node",
+          ctx.hookScriptsRoot === undefined
+            ? path
+            : `${ctx.hookScriptsRoot}/${script.fileName}`,
+        ],
+      });
     }
     rowsByTool.set(tool, rows);
   }
