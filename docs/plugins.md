@@ -95,8 +95,9 @@ profile, which is what makes the decision reviewable:
 }
 ```
 
-To try a root you built yourself, with no marketplace at all, start the client with
-`--plugin-dir ./claude` pointed at the built root.
+`marketplace add` also takes a git URL with a `#ref`, or a **local path** — which is how you try
+a root you built yourself without publishing it anywhere *(from the same vendor page, accessed
+2026-09-20)*.
 
 ### Copilot CLI
 
@@ -167,6 +168,11 @@ an install does not reach the session that performed it.
 
 An administrator who wants the plugin available across a workspace publishes it through the
 vendor's workspace route instead, which is admin-gated.
+
+A built distribution tree carries its own `README.md` with each client's install, pin, update and
+rollback lines already filled in for the tag that tree was built at — including the flag this
+client takes to select a ref. Read it from the tree you mirrored rather than substituting a ref
+into the commands above by hand.
 
 ## Set the repository up
 
