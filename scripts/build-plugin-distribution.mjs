@@ -52,6 +52,7 @@ import { DISTRIBUTION_CLIENTS, resolveDistributionIdentity } from './distributio
 import { isMain } from './native-typescript.mjs'
 import { buildCatalogIdentity, CATALOG_PATHS, releaseTag, renderCatalog } from './plugins/catalogs.mjs'
 import { buildReleaseManifest, validateReleaseManifest } from './plugins/releaseManifest.mjs'
+import { PLUGIN_VERSION } from './plugins/version.mjs'
 import { buildZip } from './plugins/zip.mjs'
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
@@ -61,7 +62,6 @@ const USAGE =
   '[--version <semver>] [--client <csv>]'
 
 const COMMIT_SHA = /^[0-9a-f]{40}$/
-const SEMVER = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/
 
 /** The release manifest's own file name, and the two APM locations it points at. */
 const RELEASE_MANIFEST = 'release.json'
@@ -134,8 +134,11 @@ function parseArguments(argv) {
   if (distributionCommit !== null && !COMMIT_SHA.test(distributionCommit)) {
     return { code: usage('--distribution-commit must be a 40-character lowercase hex commit sha.') }
   }
-  if (version !== null && !SEMVER.test(version)) {
-    return { code: usage('--version must be a semantic version, for example 1.9.0.') }
+  // The generator's own pattern, so a value this script admits is one the generator admits: the
+  // builder used to accept `+build` and forward it, and the refusal came back from the child with
+  // the child's usage text and exit 1 (M-4).
+  if (version !== null && !PLUGIN_VERSION.test(version)) {
+    return { code: usage('--version must be a semantic version with no build metadata, for example 1.9.0.') }
   }
 
   const selected =

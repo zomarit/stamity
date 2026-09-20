@@ -20,6 +20,10 @@
 // and its absence means "no route worth stating", never "the builder forgot".
 
 import { DISTRIBUTION_CLIENTS } from '../distribution-identity.mjs'
+// The plugin's own version, validated rather than merely non-empty because
+// `scripts/plugins/locate.mjs` parses this same field as semver — a root
+// declaring `latest` would resolve nothing there and say nothing here.
+import { PLUGIN_VERSION } from './version.mjs'
 
 /** The schema version every capability file this module builds declares. */
 export const CAPABILITY_SCHEMA_VERSION = 1
@@ -60,13 +64,6 @@ const COMMIT_SHA = /^[0-9a-f]{40}$/
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 /** The floor shape `package.json` `engines.node` carries, the only range this file states. */
 const NODE_FLOOR = /^>=\d+\.\d+\.\d+$/
-/**
- * The plugin's own version: `major.minor.patch` with an optional prerelease.
- * Validated rather than merely non-empty, because `scripts/plugins/locate.mjs`
- * parses this same field as semver — a root declaring `latest` would resolve
- * nothing there and say nothing here.
- */
-const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
 
 /**
  * The companion range: same major, at or above this plugin's version.
@@ -318,7 +315,7 @@ export function validateCapabilityFile(value) {
   if (!DISTRIBUTION_CLIENTS.includes(value.client)) {
     defects.push(`client: must be one of ${DISTRIBUTION_CLIENTS.join(', ')}`)
   }
-  if (!(typeof value.version === 'string' && SEMVER.test(value.version))) {
+  if (!(typeof value.version === 'string' && PLUGIN_VERSION.test(value.version))) {
     defects.push('version: must be the plugin version this root was built at, as major.minor.patch')
   }
   if (!(typeof value.sourceCommit === 'string' && COMMIT_SHA.test(value.sourceCommit))) {
