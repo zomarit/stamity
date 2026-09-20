@@ -5,6 +5,7 @@ import type * as PackageNameApi from "../../../src/cli/kit/packageName.ts";
 import {
   packageCommand,
   packageName,
+  repositorySlug,
   resolveOwnPackageFacts,
 } from "../../../src/cli/kit/packageName.ts";
 import type * as PathsApi from "../../../src/shared/paths.ts";
@@ -162,4 +163,61 @@ describe("packageCommand — the unnamed sentinel", () => {
     expect(kit.resolveOwnPackageFacts()).toEqual({ name: "", version: "", isPrivate: true });
     expect(kit.packageName()).toBe("@zomarit/stamity");
   });
+});
+
+/**
+ * The repository slug — `owner/repo` — is the SECOND identity a remedy has to
+ * be able to name, and it is not derivable from the package name: this package
+ * publishes as `@zomarit/stamity` and its plugin distribution installs as
+ * `zomarit/stamity#plugins/v<version>`, which share no substring at all. The
+ * derivation mirrors `scripts/distribution-identity.mjs` so a dependency line
+ * written by the release job is recognised by the CLI that shipped in it.
+ */
+describe("repositorySlug", () => {
+  it("names this checkout's own owner/repo, derived from its manifest rather than typed", async () => {
+    const raw = await readFile(fileURLToPath(new URL("../../../package.json", import.meta.url)), "utf8");
+    const manifest = JSON.parse(raw) as { repository?: { url?: string } };
+    const expected = (manifest.repository?.url ?? "")
+      .replace(/^git\+/, "")
+      .replace(/\.git$/, "")
+      .replace("https://github.com/", "");
+
+    expect(repositorySlug()).toBe(expected);
+  });
+
+  it("normalizes the `git+https://....git` spelling npm writes into a bare owner/repo", async () => {
+    const fixture = getFixture();
+    await fixture.seedFiles({
+      "package.json": `${JSON.stringify({
+        name: "@acme/stamity",
+        repository: { type: "git", url: "git+https://github.com/acme/stamity-fork.git" },
+      })}\n`,
+    });
+
+    const kit = await loadKitRootedAt(fixture.dir);
+
+    expect(kit.repositorySlug()).toBe("acme/stamity-fork");
+  });
+
+  // Three shapes that carry no derivable slug: another forge, the string
+  // shorthand `scripts/distribution-identity.mjs` does not read, and nothing.
+  // One case each, because the reader is memoized per module load and a loop
+  // would have to re-mock the module seam inside its own body.
+  it.each([
+    ["another forge", { url: "https://gitlab.com/acme/stamity" }],
+    ["the owner/repo shorthand", "acme/stamity"],
+    ["no repository field at all", undefined],
+  ])(
+    "answers null for %s, rather than inventing a slug",
+    async (_label, repository) => {
+      const fixture = getFixture();
+      await fixture.seedFiles({
+        "package.json": `${JSON.stringify({ name: "@acme/stamity", repository })}\n`,
+      });
+
+      const kit = await loadKitRootedAt(fixture.dir);
+
+      expect(kit.repositorySlug()).toBeNull();
+    },
+  );
 });
