@@ -457,7 +457,9 @@ describe("the page an operator reads before installing", () => {
 
 /**
  * Opt-in: nothing in this repository depends on codex, so the suite must stay green on a machine
- * that has never installed it. CI arms this by putting a codex binary on `STAMITY_CODEX_BIN`.
+ * that has never installed it. NOTHING ARMS IT AUTOMATICALLY — no workflow in `.github/` sets
+ * `STAMITY_CODEX_BIN`, so this leg runs when a human exports it and is skipped everywhere else,
+ * CI included. Treat its findings as dated measurements rather than as a standing gate.
  *
  * What the leg proves is the INSTALL, not the behaviour. `codex plugin marketplace add` +
  * `codex plugin add` into a scratch `CODEX_HOME` (the config-directory variable, confirmed on
@@ -473,6 +475,32 @@ describe("the page an operator reads before installing", () => {
  * measurement and never asserted on. A step that needs a login prints its refusal and the leg
  * stays green; a credential is never the difference between a red suite and a green one.
  */
+/**
+ * The environment a spawned client binary gets: an explicit allowlist, never the whole of
+ * `process.env`.
+ *
+ * The scratch home below exists so this leg reads and writes no operator state. Inheriting the
+ * ambient environment reopens exactly what the scratch home closes: a real client CLI reads its
+ * credentials out of variables an author's shell is full of, and a measurement taken with
+ * somebody's own token is not the measurement it claims to be. `PATH` is what makes the binary
+ * and its Node resolvable, `TMPDIR` and `LANG` keep the process well behaved, and `STAMITY_*`
+ * rides because this leg's own arming lives there.
+ *
+ * The same helper sits in the sibling client suite. Duplicated rather than shared, because the
+ * only home it could share is a file this lane does not own.
+ */
+function allowlistedEnv(scratch: Record<string, string>): NodeJS.ProcessEnv {
+  const allowed: NodeJS.ProcessEnv = {};
+  for (const name of ["PATH", "TMPDIR", "LANG"]) {
+    const value = process.env[name];
+    if (value !== undefined) allowed[name] = value;
+  }
+  for (const [name, value] of Object.entries(process.env)) {
+    if (name.startsWith("STAMITY_") && value !== undefined) allowed[name] = value;
+  }
+  return { ...allowed, ...scratch };
+}
+
 describe.skipIf(process.env["STAMITY_CODEX_BIN"] === undefined)("the real client, against the binary on STAMITY_CODEX_BIN", () => {
   const bin = process.env["STAMITY_CODEX_BIN"] ?? "";
   const MARKETPLACE = "stamity-test";
@@ -503,7 +531,9 @@ describe.skipIf(process.env["STAMITY_CODEX_BIN"] === undefined)("the real client
     return spawnSync(bin, args, {
       cwd,
       encoding: "utf8",
-      env: { ...process.env, CODEX_HOME: home },
+      // `HOME` and `XDG_CONFIG_HOME` join `CODEX_HOME` in the scratch set: the client reads a
+      // credential file out of the first two even when the third points elsewhere.
+      env: allowlistedEnv({ HOME: home, CODEX_HOME: home, XDG_CONFIG_HOME: join(home, ".config") }),
       maxBuffer: 32 * 1024 * 1024,
       timeout: 300_000,
     });
@@ -548,8 +578,12 @@ describe.skipIf(process.env["STAMITY_CODEX_BIN"] === undefined)("the real client
     300_000,
   );
 
-  it(
-    "records what a headless session lists, as a measurement and not a claim",
+  // A MEASUREMENT, not a case. This used to be an `it` ending in `expect(true).toBe(true)` —
+  // a case that cannot fail is not a case, and a suite that counts it reports a check it never
+  // made. Whether `codex exec` loads a plugin's skills at all is unproven and a scratch home
+  // carries no credential, so the output is recorded for the next human re-check and gates
+  // nothing. It runs here, before the cases, for the same reason it asserted nothing.
+  beforeAll(
     () => {
       const home = tempDir("codex-home-exec");
       const marketplaceRoot = tempDir("marketplace-exec");
@@ -566,9 +600,6 @@ describe.skipIf(process.env["STAMITY_CODEX_BIN"] === undefined)("the real client
         "list the skills available to you",
       ]);
 
-      // NEVER an assertion. Whether `codex exec` loads a plugin's skills at all is unproven, and
-      // a scratch home carries no credential, so this leg's job is to leave a record a human can
-      // read on the next re-check — not to gate a release on an unmeasured behaviour.
       console.log(
         [
           "── MEASUREMENT: codex exec against an installed stamity plugin ──",
@@ -579,7 +610,6 @@ describe.skipIf(process.env["STAMITY_CODEX_BIN"] === undefined)("the real client
           "────────────────────────────────────────────────────────────────",
         ].join("\n"),
       );
-      expect(true).toBe(true);
     },
     300_000,
   );

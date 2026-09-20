@@ -12,8 +12,8 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  lstatSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -368,10 +368,14 @@ describe("generated plugin roots", () => {
         expect(command, `${client}: ${command}`).toContain(`\${${rootVar}}/hooks/`);
         expect(command, `${client}: ${command}`).not.toContain(".stamity/generated");
       }
-      // The whole document is deliberately NOT asserted clean of `.stamity/generated`: the codex
-      // hook document's own `description` quotes that path in prose, telling an operator where the
-      // repository copies of these scripts live. The COMMANDS are what a client executes, and they
-      // are what must never point outside the installed root.
+      // STALE COMMENT REMOVED, and the assertion strengthened with it. What stood here said the
+      // whole document was deliberately not asserted clean of `.stamity/generated`, because the
+      // codex hook document's own `description` quoted that path in prose. It no longer does —
+      // `test/ci/pluginPackages.codex.test.ts` pins the description against exactly that string
+      // — so the weaker claim was describing a tree that had moved on. Every hooks document on
+      // every client is now asserted clean: a repository path anywhere in a file an installed
+      // client reads points at a checkout the reader may not have.
+      expect(text, client).not.toContain(".stamity/generated");
       expect(() => JSON.parse(readFileSync(join(roots, client, "hooks", "agent-tool-policies.json"), "utf8"))).not.toThrow();
     }
   });
@@ -713,11 +717,29 @@ describe("the container manifest each client reads", () => {
     }
   });
 
-  it("writes every root's files as regular files under the root", () => {
-    for (const client of CLIENTS) {
-      for (const rel of treeFiles(join(roots, client))) {
-        expect(statSync(join(roots, client, rel)).isFile(), `${client}/${rel}`).toBe(true);
+  it("writes every entry under every root as a real file or a directory, never a link", () => {
+    // VACUOUS BEFORE, and deliberately not now. The old case walked with `treeFiles`, which
+    // keeps only `isFile()` entries, and then asserted `statSync(...).isFile()` on each — a
+    // tautology that would have stayed green over a tree of nothing but symlinks, because the
+    // filter removed every offender before the assertion could see it. This walk uses `lstat`,
+    // enumerates EVERY entry, and reports what it found rather than what survived a filter.
+    const offenders: string[] = [];
+    let seen = 0;
+    const walk = (dir: string, prefix: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const rel = `${prefix}/${entry.name}`;
+        const info = lstatSync(join(dir, entry.name));
+        seen += 1;
+        if (info.isDirectory()) {
+          walk(join(dir, entry.name), rel);
+        } else if (!info.isFile()) {
+          offenders.push(`${rel}: ${info.isSymbolicLink() ? "a symbolic link" : "not a regular file"}`);
+        }
       }
-    }
+    };
+    for (const client of CLIENTS) walk(join(roots, client), client);
+    expect(offenders).toEqual([]);
+    // Non-degenerate: four full roots, so the walk reached a tree rather than an empty directory.
+    expect(seen).toBeGreaterThan(200);
   });
 });
