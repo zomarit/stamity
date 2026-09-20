@@ -18,7 +18,7 @@ import * as claude from './plugins/clients/claude.mjs'
 import * as codex from './plugins/clients/codex.mjs'
 import * as copilot from './plugins/clients/copilot.mjs'
 import * as cursor from './plugins/clients/cursor.mjs'
-import { PLUGIN_CLASSES } from './plugins/capability.mjs'
+import { INVOCATION_NOTE_KEYS, PLUGIN_CLASSES } from './plugins/capability.mjs'
 
 /** The client modules in the canonical `TOOLS` order the page renders in. */
 const MODULES = [
@@ -31,12 +31,15 @@ const MODULES = [
 /**
  * The invocation forms as one cell, in the order the capability file lists them.
  *
- * `INVOCATION.citation` is prose about where the forms were read, not a class — it is skipped
- * here and the module header on the client that carries it is where it stays.
+ * A key under `invocation` is either a FORM an operator types or a NOTE about where the forms
+ * beside it were read — `INVOCATION_NOTE_KEYS` is the one list that decides which, and the
+ * capability file's own validator reads it too. Filtered by that constant rather than by the
+ * literal `'citation'`: a container adding a second note would otherwise publish a sentence in
+ * this table as though it were something a reader could type.
  */
 function invocationOf(module) {
   const forms = Object.entries(module.INVOCATION)
-    .filter(([key]) => key !== 'citation')
+    .filter(([key]) => !INVOCATION_NOTE_KEYS.includes(key))
     .map(([klass, form]) => `${klass} \`${form}\``)
   return forms.length === 0 ? 'none declared' : forms.join(', ')
 }
