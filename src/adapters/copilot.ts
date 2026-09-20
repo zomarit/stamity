@@ -19,6 +19,7 @@ import { declaredRuleGlobs } from "../content/ruleDelivery.ts";
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
 import { detectPackageManager, type PackageManagerInfo } from "../detect/packageManager.ts";
 import { verificationGatesFromManifest } from "../emit/agentsMd.ts";
+import { withoutPluginOwnedRows } from "../emit/ownership.ts";
 import type {
   AdapterDialectFacts,
   CoreEmissionPlan,
@@ -249,6 +250,16 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
 // ── The planner ──────────────────────────────────────────────────
 
 /**
+ * The infra rows that are HOOK wiring, and so a plugin's to carry when the
+ * manifest records `hooks` against copilot (`../emit/ownership.ts`). The setup
+ * workflow and the MCP placement are not hook wiring and stay.
+ */
+const HOOK_INFRA_ARTIFACT_IDS: ReadonlySet<string> = new Set([
+  "copilot-hooks",
+  "copilot-portable-hook",
+]);
+
+/**
  * Plan Copilot's per-client rows over the core plan.
  *
  * Order is class order (agents, rules, commands, as the catalog walks them),
@@ -296,7 +307,10 @@ export const copilotResiduePlanner: ResiduePlanner = {
     // and an adapter that re-derived either would be a second writer.
     for (const emission of core.mcpFor(TOOL)) rows.push(mcpRow(emission));
 
-    return { outputs: rows, warnings: ["hook fallback [copilot]: sessionStart output is injected as additionalContext (docs.github.com hooks reference, 2026-09-17), so the learning/handoff index reaches the session. Hook timeouts remain fail-open; use native permission controls for mandatory enforcement."] };
+    // One filter over the finished set: the rule, agent and command rows answer
+    // from their own `artifactType`, the hook rows from this adapter's own id
+    // list. A repository with no `plugin` field gets its rows back unchanged.
+    return { outputs: withoutPluginOwnedRows(ctx.manifest, TOOL, rows, HOOK_INFRA_ARTIFACT_IDS), warnings: ["hook fallback [copilot]: sessionStart output is injected as additionalContext (docs.github.com hooks reference, 2026-09-17), so the learning/handoff index reaches the session. Hook timeouts remain fail-open; use native permission controls for mandatory enforcement."] };
   },
 };
 

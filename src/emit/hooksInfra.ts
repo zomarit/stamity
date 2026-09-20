@@ -251,6 +251,19 @@ export interface HooksPlanContext {
    * moves (it says what the client will execute).
    */
   hookScriptsRoot?: string;
+  /**
+   * The selected clients whose HOOKS an installed plugin carries — no script
+   * copy is planned for them and their interchange list is empty, because the
+   * plugin root already holds both the scripts and the client configuration
+   * that runs them (REQ-PLUGIN-016).
+   *
+   * Passed in rather than read here for the same reason `hookScriptsRoot` is:
+   * this planner is handed a manifest SLICE, and `./ownership.ts` — which
+   * reads the whole manifest — is the one place the boundary is decided. An
+   * absent list is the ordinary repository emission, byte-identical to a
+   * plugin-unaware build.
+   */
+  pluginOwnedHooks?: readonly Tool[];
 }
 
 // ── Pack agent rows ──────────────────────────────────────────────
@@ -389,7 +402,15 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
 
   const scripts: PlannedHookScript[] = [];
   const rowsByTool = new Map<Tool, HookInterchange[]>();
+  const pluginOwnedHooks = new Set(ctx.pluginOwnedHooks ?? []);
   for (const tool of tools) {
+    // A client whose hooks come from its plugin gets neither a script copy nor
+    // an interchange row: the copy would be a second set of bytes under
+    // `.stamity/generated/hooks/<tool>/` that nothing runs, and a row would ask
+    // that client's adapter to wire a command at a path this repository does
+    // not write. Its `rowsByTool` entry stays absent, which `interchangeFor`
+    // already answers as an empty list.
+    if (pluginOwnedHooks.has(tool)) continue;
     const rows: HookInterchange[] = [];
     for (const script of planCoreHookScripts(POLICIES_PATH_FROM_SCRIPT, tool)) {
       const path = `${HOOKS_GENERATED_DIR}/${tool}/${script.fileName}`;
@@ -434,6 +455,23 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
       acceptedHookRows += 1;
       for (const rows of rowsByTool.values()) rows.push(row);
     }
+  }
+
+  // The plugin-backed shape of the same blind spot. A client whose hooks the
+  // plugin carries takes its hook CONFIGURATION from the plugin root, and that
+  // configuration was built from the vendor's tree — it cannot name a hook this
+  // repository authored. So an accepted user or pack hook reaches every other
+  // selected client and not that one, which is a real delivery gap and not a
+  // planning detail: without this line the hook simply never fires there and
+  // nothing on any surface says why.
+  const skipped = tools.filter((tool) => pluginOwnedHooks.has(tool));
+  if (skipped.length > 0 && acceptedHookRows > 0) {
+    warnings.push(
+      `hook wiring: ${acceptedHookRows} accepted hook row(s) from this repo and its installed ` +
+        `packs are not wired into ${skipped.join(", ")} — that client's hooks come from its ` +
+        `installed plugin, whose configuration this repository does not write. They still run on ` +
+        `every other selected client.`,
+    );
   }
 
   // The blind spot the per-tool row below cannot cover. That row is raised once

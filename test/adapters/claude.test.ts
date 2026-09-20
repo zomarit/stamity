@@ -35,7 +35,12 @@ import { AGENT_POLICY_ROSTER } from "../../src/roster/agentPolicies.ts";
 import { DEFAULT_MAX_REVIEW_ITERATIONS } from "../../src/roster/reviewCaps.ts";
 import { toClaudeToolsFrontmatter } from "../../src/tools/translator.ts";
 import type { AdapterOutput, ContentSelection } from "../../src/types/content.ts";
-import type { McpConfig, ModelConfig, RuleDelivery } from "../../src/types/manifest.ts";
+import type {
+  McpConfig,
+  ModelConfig,
+  RuleDelivery,
+  SetupManifest,
+} from "../../src/types/manifest.ts";
 import { getMarkersForPath, stampMarkerVersion } from "../../src/types/markers.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -121,6 +126,12 @@ interface PlanOverrides {
    * emission every other case in this file asserts.
    */
   hookScriptsRoot?: string;
+  /**
+   * The manifest's plugin record. Set only by the ownership cases; absent
+   * everywhere else, which is the generated emission every other case here
+   * asserts — and the reason none of this file's expected paths moved.
+   */
+  plugin?: SetupManifest["plugin"];
 }
 
 /** Every rule, agent and command of the real corpus, selected by bare catalog id. */
@@ -152,6 +163,9 @@ async function ctxOf(over: PlanOverrides = {}): Promise<EmissionContext> {
   // Same shape a repo carries after `stamity config set ruleDelivery …`; absent
   // means the engine default, which is what every other case in this file runs.
   if (over.ruleDelivery !== undefined) manifest.ruleDelivery = over.ruleDelivery;
+  // Same shape `stamity plugin setup` persists; `createManifest` takes no
+  // option for it either.
+  if (over.plugin !== undefined) manifest.plugin = over.plugin;
   return {
     rootDir: over.rootDir ?? getTemp().path("repo"),
     manifest,
@@ -1486,5 +1500,99 @@ describe("settings under a plugin root", () => {
     // repository writes it, so a repository sync and a plugin build render the
     // same bytes to the same place.
     expect(byPath(rows).get(CLAUDE_REVIEW_GATE_PATH)).toBeDefined();
+  });
+});
+
+describe("claude residue under plugin ownership", () => {
+  /** file 1's claude root declares these four `carried`. */
+  const CARRIED: SetupManifest["plugin"] = {
+    mode: "plugin-backed",
+    clients: { claude: { version: "1.9.0", classes: ["agent", "skill", "command", "hooks"] } },
+  };
+
+  it("writes no agent, skill, command or hook-script row, and keeps every rule", async () => {
+    const { rows } = await planned({ plugin: CARRIED });
+    const paths = rows.map((row) => row.path);
+
+    for (const dir of [".claude/agents", CLAUDE_SKILLS_DIR, CLAUDE_COMMANDS_DIR]) {
+      expect(paths.filter((path) => path.startsWith(`${dir}/`)), dir).toEqual([]);
+    }
+    expect(paths.filter((path) => path.startsWith(`${HOOKS_GENERATED_DIR}/claude/`))).toEqual([]);
+    expect(paths).not.toContain(CLAUDE_REVIEW_GATE_PATH);
+
+    // Rules are NOT in the record, so every one of them is still written — the
+    // boundary is per class, and the generated emission for the classes the
+    // plugin does not carry is untouched.
+    const rules = paths.filter((path) => path.startsWith(".claude/rules/"));
+    expect(rules.length).toBeGreaterThan(0);
+    // Against the control rather than a literal count, so the assertion stays
+    // true of a corpus that grows a rule.
+    const control = (await planned()).rows
+      .map((row) => row.path)
+      .filter((path) => path.startsWith(".claude/rules/"));
+    expect(rules).toEqual(control);
+    // And the bridge survives: `CLAUDE.md` is the client's memory import, which
+    // is repository configuration under either install mode.
+    expect(paths).toContain(CLAUDE_MD_PATH);
+  });
+
+  it("emits the settings document with its permissions half and no hooks key", async () => {
+    const { rows } = await planned({ plugin: CARRIED });
+    const row = byPath(rows).get(CLAUDE_SETTINGS_PATH);
+    expect(row).toBeDefined();
+
+    const settings = JSON.parse(row!.content) as Record<string, unknown>;
+    // Exactly one key: an empty `hooks: {}` would be a claim that this client
+    // has no hooks, and what is true is that its hooks live in the plugin.
+    expect(Object.keys(settings)).toEqual(["permissions"]);
+    const permissions = settings["permissions"] as { allow: string[] };
+    expect(permissions.allow.length).toBeGreaterThan(0);
+    // Byte-identical to the permissions the generated emission writes: the
+    // split moves the hooks object and nothing else.
+    expect(permissions).toEqual(settingsOf((await planned()).rows).permissions);
+  });
+
+  it("keeps the whole residue when the record names only hooks", async () => {
+    const { rows } = await planned({
+      plugin: {
+        mode: "plugin-backed",
+        clients: { claude: { version: "1.9.0", classes: ["hooks"] } },
+      },
+    });
+    const paths = rows.map((row) => row.path);
+
+    expect(paths.filter((path) => path.startsWith(".claude/agents/")).length).toBeGreaterThan(0);
+    expect(paths.filter((path) => path.startsWith(`${CLAUDE_SKILLS_DIR}/`)).length).toBeGreaterThan(
+      0,
+    );
+    expect(paths).not.toContain(CLAUDE_REVIEW_GATE_PATH);
+    expect(Object.keys(JSON.parse(byPath(rows).get(CLAUDE_SETTINGS_PATH)!.content))).toEqual([
+      "permissions",
+    ]);
+  });
+
+  it("copies an installed pack's skill into the native tree even when skills are plugin-owned", async () => {
+    // A pack is repository-installed content: no plugin ships it, so skipping
+    // it would leave it reachable by no client at all. The core rows are handed
+    // in directly here — the pack resolution lane is `../pack`'s to exercise,
+    // and what this case is about is the ONE branch that reads `origin`.
+    const ctx = await ctxOf({ selection: EMPTY_SELECTION, plugin: CARRIED });
+    const core = await buildCoreEmissionPlan(ctx);
+    const packSkill = {
+      path: `${SKILLS_PROJECTION_DIR}/acme-drill/SKILL.md`,
+      content: "---\nname: acme-drill\ndescription: pack skill\n---\n\nBody.\n",
+      artifactId: "drill",
+      artifactType: "skill" as const,
+      origin: "pack" as const,
+    };
+    const corpusSkill = { ...packSkill, path: `${SKILLS_PROJECTION_DIR}/stamity-house/SKILL.md`, artifactId: "house", origin: "corpus" as const };
+
+    const rows = (
+      await claudeResiduePlanner.planResidue({ ...core, skills: [packSkill, corpusSkill] }, ctx)
+    ).outputs;
+    const paths = rows.map((row) => row.path);
+
+    expect(paths).toContain(`${CLAUDE_SKILLS_DIR}/acme-drill/SKILL.md`);
+    expect(paths).not.toContain(`${CLAUDE_SKILLS_DIR}/stamity-house/SKILL.md`);
   });
 });

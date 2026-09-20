@@ -61,6 +61,7 @@
 
 import { renderAgentsMd, AGENTS_MD_FILE, type AgentsMdPlan } from "./agentsMd.ts";
 import { planHooksInfra, type CoreHooksPlan } from "./hooksInfra.ts";
+import { isPluginOwned, sharedProjectionOwners } from "./ownership.ts";
 import {
   projectSkills,
   SKILLS_PROJECTION_DIR,
@@ -403,6 +404,10 @@ export async function buildCoreEmissionPlan(
         ...(ctx.facts.hookScriptsRoot === undefined
           ? {}
           : { hookScriptsRoot: ctx.facts.hookScriptsRoot }),
+        // Resolved HERE rather than in the hooks planner, which is handed a
+        // manifest slice rather than the manifest: this function has the whole
+        // of it, and `./ownership.ts` stays the one place the boundary is read.
+        pluginOwnedHooks: TOOLS.filter((tool) => isPluginOwned(ctx.manifest, tool, "hooks")),
       }),
     ),
     packsPromise,
@@ -814,13 +819,25 @@ export function composeEmissionPlanner(
         core.agentsMd.root.content,
         sharedOwners(CHARTER_ARTIFACT_ID, "infra"),
       );
+      // Ownership of the shared tree is narrowed once, off the manifest: a
+      // reader whose plugin CARRIES `skill` receives those skills from its own
+      // plugin root, so it is no longer an owner here and the tree is emitted
+      // while any reader remains (`./ownership.ts`). With no `plugin` field
+      // this is `projectionReaders` itself and nothing about the plan moves.
+      //
+      // A PACK skill is the documented exception, and it is decided per row:
+      // pack content is installed into THIS repository, no plugin ships it,
+      // and dropping its owners would leave an installed pack's skills
+      // reachable by no client at all. So a pack row keeps every reader.
+      const projectionOwners = sharedProjectionOwners(ctx.manifest, projectionReaders);
       for (const file of core.skills) {
-        if (projectionReaders.length === 0) break;
+        const owners = file.origin === "pack" ? projectionReaders : projectionOwners;
+        if (owners.length === 0) continue;
         addRow(
           rows,
           file.path,
           file.content,
-          projectionReaders.map((tool) => ({
+          owners.map((tool) => ({
             adapter: tool,
             artifactId: file.artifactId,
             artifactType: file.artifactType,

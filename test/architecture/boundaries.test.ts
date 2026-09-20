@@ -406,6 +406,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // else — it sits at the depth of the markers it reads (TD-06).
   "src/emit/stateScaffold.ts": { unit: "p4-u02", wave: 2 },
   "src/emit/hooksInfra.ts": { unit: "p4-u03", wave: 5 },
+  // The plugin ownership boundary: one predicate over the manifest, read by the
+  // core composer, the four adapters and the sync report. Wave 5 because it
+  // sits on the manifest resolvers (wave 4) and below every emitter that asks.
+  "src/emit/ownership.ts": { unit: "pl-c3", wave: 5 },
   // The pack manifest reader gained the permission manifest below it in P5, so
   // it left wave 2 for its true depth. Its frontmatter waiver retired with the
   // move: wave-2 frontmatter is now strictly below it.

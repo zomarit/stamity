@@ -1,11 +1,16 @@
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { existsSync, type Dirent } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import semver from "semver";
+import { parse as parseYaml } from "yaml";
 import type { App, EngineRegistry } from "../../index.ts";
+import { buildContentIndex, emittedIdFor } from "../../content/catalog.ts";
 import { readCharterTemplate } from "../../content/charter.ts";
+import { HOOKS_GENERATED_DIR } from "../../emit/hooksInfra.ts";
 import { renderInvariantsVersion } from "../../emit/substitution.ts";
+import { readInstallMode } from "../../manifest/manifest.ts";
 import {
   extractManagedBlock,
   hasManagedBlock,
@@ -16,12 +21,18 @@ import {
   verifyInstalledPacks,
 } from "../../pack/verifyInstalled.ts";
 import { findPackageRoot } from "../../shared/paths.ts";
+import { TOOLS, type Tool } from "../../types/core.ts";
 import { EngineError, type ErrorCode } from "../../types/errors.ts";
-import { MANIFEST_FILE, type SetupManifest } from "../../types/manifest.ts";
+import {
+  MANIFEST_FILE,
+  PLUGIN_OWNED_CLASSES,
+  type PluginOwnedClass,
+  type SetupManifest,
+} from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import { readWorkingTreeStatus } from "../engine/gitStatus.ts";
 import type { FailureDoc } from "../kit/output.ts";
-import { packageCommand } from "../kit/packageName.ts";
+import { packageCommand, packageName } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { Palette } from "../kit/terminal.ts";
 import { planSync, type SyncPlanEntry } from "./sync/engine.ts";
@@ -33,7 +44,7 @@ import { provenanceFromManifest, type ProvenanceRollup } from "./sync/report.ts"
  *
  * Three parts, one exit code:
  *
- * 1. **DOCTOR** — eleven environment and state probes, each a
+ * 1. **DOCTOR** — thirteen environment and state probes, each a
  *    {@link DoctorCheck} row. Every probe is total: it answers, or it warns
  *    about why it could not, but it never takes the command down with it.
  * 2. **DRIFT** — {@link runDriftGate} runs the sync engine's read-only PLAN
@@ -652,6 +663,494 @@ async function checkInvariants(): Promise<DoctorCheck> {
   return { id, status: "pass", detail: `invariants ${renderInvariantsVersion(charter.invariants)}` };
 }
 
+
+// ── Plugin rows ────────────────────────────────────────────────────────────
+
+/**
+ * The environment variables a client sets to the root of an installed plugin,
+ * in the order {@link checkPluginRuntime} probes them.
+ *
+ * The same four, in the same order, that `resolvePluginRoot` reads
+ * (`docs/plans/008-plugin-lifecycle-02.md`, unit C6). A generic `PLUGIN_ROOT`
+ * sits third because two of the four clients set a named variable of their own
+ * and the generic one is the fallback an operator exports by hand.
+ */
+const PLUGIN_ROOT_VARIABLES = [
+  "CLAUDE_PLUGIN_ROOT",
+  "CURSOR_PLUGIN_ROOT",
+  "PLUGIN_ROOT",
+  "COPILOT_PLUGIN_ROOT",
+] as const;
+
+/**
+ * Wall-time ceiling on the locator spawn. A doctor row that can hang is a `check`
+ * that can hang, and `check` is the CI gate — so the probe gives up and warns
+ * rather than holding a pipeline open on a runtime resolution.
+ */
+const PLUGIN_LOCATOR_TIMEOUT_MS = 5_000;
+
+/** The locator every plugin root ships, relative to that root. */
+const PLUGIN_LOCATOR_PATH = "runtime/locate.mjs";
+
+/** The locator's `--print` document (`scripts/plugins/locate.mjs`). */
+interface LocatorReport {
+  runtime: {
+    kind: "companion" | "bundled" | "none";
+    path: string | null;
+    version: string | null;
+    refusal: string | null;
+  };
+  node: { version: string; floor: string; ok: boolean };
+}
+
+/** One locator spawn's outcome, total: a failure to spawn is an answer. */
+interface LocatorRun {
+  /** Exit status, or `null` when the process never produced one. */
+  status: number | null;
+  stdout: string;
+  timedOut: boolean;
+  failure: string | null;
+}
+
+/**
+ * Spawn `<root>/runtime/locate.mjs --print` and collect its verdict.
+ *
+ * `process.execPath` with `shell: false` (execFile's default), never a bare
+ * `node` off PATH: the interpreter that resolves the runtime has to be THIS
+ * one, and a shell would give the root path's own characters a meaning on
+ * Windows that they do not have here.
+ */
+function runPluginLocator(locator: string): Promise<LocatorRun> {
+  return new Promise((settle) => {
+    execFile(
+      process.execPath,
+      [locator, "--print"],
+      { timeout: PLUGIN_LOCATOR_TIMEOUT_MS, windowsHide: true, encoding: "utf8" },
+      (error, stdout) => {
+        if (error === null) {
+          settle({ status: 0, stdout, timedOut: false, failure: null });
+          return;
+        }
+        const failed = error as NodeJS.ErrnoException & { killed?: boolean };
+        settle({
+          // `code` is the exit status on a non-zero exit and an errno string
+          // (`ENOENT`) when the spawn itself failed; only the first is a status.
+          status: typeof failed.code === "number" ? failed.code : null,
+          stdout,
+          // The kill the timeout performs, distinguished from a process that
+          // chose its own exit: `killed` alone is what the option sets.
+          timedOut: failed.killed === true,
+          failure: error.message,
+        });
+      },
+    );
+  });
+}
+
+/** The locator's document, or `null` when stdout was not one. */
+function parseLocatorReport(stdout: string): LocatorReport | null {
+  try {
+    const parsed: unknown = JSON.parse(stdout);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const { runtime, node } = parsed as Record<string, unknown>;
+    if (typeof runtime !== "object" || runtime === null) return null;
+    if (typeof node !== "object" || node === null) return null;
+    return parsed as LocatorReport;
+  } catch {
+    return null;
+  }
+}
+
+/** Major version of a semver-ish string, or `null` when it is not one. */
+function majorOf(version: string | null | undefined): number | null {
+  if (typeof version !== "string") return null;
+  const parsed = semver.valid(version) ?? semver.coerce(version)?.version ?? null;
+  return parsed === null ? null : semver.major(parsed);
+}
+
+/**
+ * Which runtime an installed plugin would run this engine from.
+ *
+ * Absent is not a defect: most repositories are not plugin-backed, and the row
+ * warns with the two ways to make it answerable rather than failing a CI gate
+ * on a setup that never claimed to be one.
+ *
+ * It fails on exactly two things, and both are states in which the plugin is
+ * installed and does not work: the locator REFUSED (exit 2 — no runtime found,
+ * or a Node below the floor), and a plugin-backed repository whose state was
+ * written by a different major than the runtime resolves. The second is
+ * REQ-PLUGIN-013's compatibility half read from the doctor's side: the manifest
+ * and the runtime disagreeing about the major is the state where a sync would
+ * rewrite files under rules the recorded setup was not written to.
+ *
+ * Anything else the spawn can do — a timeout, a root with no locator in it,
+ * stdout that is not the document — warns. The row reports on an environment it
+ * does not own, and turning a broken plugin install into a failed `check` would
+ * gate a repository's CI on a client's own state.
+ */
+async function checkPluginRuntime(
+  env: Readonly<Record<string, string | undefined>>,
+  manifest: SetupManifest | null,
+): Promise<DoctorCheck> {
+  const id = "plugin-runtime";
+  const variable = PLUGIN_ROOT_VARIABLES.find((name) => (env[name] ?? "").trim() !== "");
+  if (variable === undefined) {
+    return {
+      id,
+      status: "warn",
+      detail:
+        `no plugin root in the environment; run this check through the plugin's st-setup or ` +
+        `set ${PLUGIN_ROOT_VARIABLES[0]}`,
+    };
+  }
+  const root = (env[variable] ?? "").trim();
+  const locator = join(root, ...PLUGIN_LOCATOR_PATH.split("/"));
+  const run = await runPluginLocator(locator);
+
+  if (run.timedOut) {
+    return {
+      id,
+      status: "warn",
+      detail:
+        `${locator} did not answer within ${PLUGIN_LOCATOR_TIMEOUT_MS / 1000}s and was stopped, ` +
+        `so no runtime was resolved: ${run.failure ?? "no message"}`,
+    };
+  }
+
+  const report = parseLocatorReport(run.stdout);
+  if (run.status === 2) {
+    return {
+      id,
+      status: "fail",
+      detail:
+        `${variable}=${root}: ${report?.runtime.refusal ?? run.failure ?? "the locator refused without a message"}`,
+    };
+  }
+  if (run.status !== 0 || report === null) {
+    return {
+      id,
+      status: "warn",
+      detail:
+        `${locator} reported no runtime (exit ${run.status ?? "none"}): ` +
+        `${run.failure ?? "stdout was not the locator's --print document"}`,
+    };
+  }
+
+  const { kind, path, version } = report.runtime;
+  const detail = `runtime ${kind} ${version ?? "unknown"} at ${path ?? root}`;
+  if (readInstallMode(manifest) === "plugin-backed") {
+    const runtimeMajor = majorOf(version);
+    const stateMajor = majorOf(manifest?.generatedBy);
+    if (runtimeMajor !== null && stateMajor !== null && runtimeMajor !== stateMajor) {
+      return {
+        id,
+        status: "fail",
+        detail:
+          `${detail}, but this repository's ${STATE_DIR}/ state was written by stamity ` +
+          `${manifest?.generatedBy ?? "an unrecorded version"} — major ${runtimeMajor} against ` +
+          `major ${stateMajor}. Pin the plugin back to a ${stateMajor}.x release, or install the ` +
+          `matching companion runtime, before the next sync rewrites anything.`,
+      };
+    }
+  }
+  return { id, status: "pass", detail };
+}
+
+/** One duplicated class, with the source that put it there. */
+interface DuplicateFinding {
+  tool: Tool;
+  cls: PluginOwnedClass;
+  source: "ledger" | "apm" | "unmanaged";
+  files: number;
+  remedy: string;
+}
+
+/**
+ * Each client's NATIVE content directories, with the class each one holds.
+ *
+ * The vendor-neutral `.agents/skills/` tree appears under all three of its
+ * readers by design: a leftover skill there is a duplicate for each of them
+ * separately, and the row's detail is per client.
+ */
+const NATIVE_CONTENT_DIRS: Readonly<Record<Tool, readonly (readonly [string, PluginOwnedClass])[]>> =
+  {
+    claude: [
+      [".claude/agents", "agent"],
+      [".claude/commands", "command"],
+      [".claude/skills", "skill"],
+    ],
+    cursor: [
+      [".cursor/agents", "agent"],
+      [".cursor/rules", "rule"],
+      [".agents/skills", "skill"],
+    ],
+    copilot: [
+      [".github/agents", "agent"],
+      [".github/prompts", "command"],
+      [".agents/skills", "skill"],
+    ],
+    codex: [
+      [".codex/agents", "agent"],
+      [".agents/skills", "skill"],
+    ],
+  };
+
+/** Extensions the four clients spell a content file with. */
+const NATIVE_CONTENT_EXTENSIONS = [".md", ".mdc", ".toml"] as const;
+
+/**
+ * The emitted id a native directory entry stands for: a file's basename with
+ * its client extension removed, or a directory's own name (a skill and a
+ * cursor command are both directories holding a `SKILL.md`).
+ */
+function nativeEntryId(name: string, isDirectory: boolean): string {
+  if (isDirectory) return name;
+  const extension = NATIVE_CONTENT_EXTENSIONS.find((suffix) => name.endsWith(suffix));
+  return extension === undefined ? name : name.slice(0, -extension.length);
+}
+
+/**
+ * Every emitted id this engine's catalog would produce for `classes` — the ids
+ * a plugin built from the same corpus carries.
+ *
+ * Read through {@link emittedIdFor}, the one answer every surface that names an
+ * artifact to a human shares, so a file called `stamity-reviewer.md` is matched
+ * by the same spelling rule that would have written it.
+ */
+async function pluginCarriedIds(
+  classes: ReadonlySet<PluginOwnedClass>,
+): Promise<ReadonlySet<string>> {
+  const index = await buildContentIndex();
+  const ids = new Set<string>();
+  for (const item of index.items) {
+    if (classes.has(item.type)) ids.add(emittedIdFor(item));
+  }
+  return ids;
+}
+
+/**
+ * Files under one client's native directories that carry a plugin id and that
+ * no ledger row owns.
+ *
+ * "No ledger row owns" is the whole distinction between this source and
+ * `ledger`: a path this engine wrote is reported with the remedy that removes
+ * it through the engine, and a path it did not is reported as the operator's
+ * own file, never as something a verb will delete.
+ */
+async function unmanagedDuplicates(
+  rootDir: string,
+  tool: Tool,
+  classes: ReadonlySet<PluginOwnedClass>,
+  ledgerPaths: ReadonlySet<string>,
+  carriedIds: ReadonlySet<string>,
+): Promise<DuplicateFinding[]> {
+  const scans = NATIVE_CONTENT_DIRS[tool]
+    .filter(([, cls]) => classes.has(cls))
+    .map(async ([dir, cls]): Promise<DuplicateFinding[]> => {
+      const entries = await readDirEntries(join(rootDir, ...dir.split("/")));
+      let files = 0;
+      for (const entry of entries) {
+        const isDirectory = entry.isDirectory();
+        if (!carriedIds.has(nativeEntryId(entry.name, isDirectory))) continue;
+        const path = `${dir}/${entry.name}`;
+        // A directory is owned when ANY row under it is: the ledger records the
+        // files a skill projects, never the directory itself.
+        const owned = isDirectory
+          ? [...ledgerPaths].some((row) => row.startsWith(`${path}/`))
+          : ledgerPaths.has(path);
+        if (!owned) files += 1;
+      }
+      if (files === 0) return [];
+      return [
+        {
+          tool,
+          cls,
+          source: "unmanaged",
+          files,
+          remedy:
+            `not written by this engine; remove the file or keep it as an override under ` +
+            `${STATE_DIR}/overrides/`,
+        },
+      ];
+    });
+  return (await Promise.all(scans)).flat();
+}
+
+/** Directory entries, or none: an absent native directory is an answer. */
+async function readDirEntries(path: string): Promise<Dirent[]> {
+  try {
+    return await readdir(path, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * APM dependencies that deploy the same content this plugin carries.
+ *
+ * An APM install writes agents, skills and commands straight into the client
+ * directories with no ledger row and no manifest entry, so neither of the other
+ * two sources can see it — the only trace it leaves in the repository is the
+ * dependency line that asks for it.
+ *
+ * The match is on THIS installation's own package name (`packageName()`), never
+ * a hardcoded canonical one: a downstream that renamed the package as
+ * `docs/enterprise-forks.md` instructs has to recognise its own dependency. A
+ * private mirror published under an unrelated name is NOT matched — the row
+ * would rather miss that case than fail a repository's CI on a dependency whose
+ * name merely resembles this one.
+ */
+function apmDuplicates(
+  apmYaml: string | null,
+  tool: Tool,
+  classes: ReadonlySet<PluginOwnedClass>,
+): DuplicateFinding[] {
+  if (apmYaml === null) return [];
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(apmYaml);
+  } catch {
+    // An unreadable apm.yml is a fact for a different row to raise; this one
+    // answers about duplicates and cannot claim any from a file it cannot read.
+    return [];
+  }
+  const declared = (parsed as { dependencies?: unknown } | null)?.dependencies;
+  if (!Array.isArray(declared)) return [];
+  const own = packageName();
+  const matched: string[] = [];
+  for (const entry of declared) {
+    const text =
+      typeof entry === "string"
+        ? entry
+        : typeof entry === "object" && entry !== null
+          ? Object.values(entry as Record<string, unknown>)
+              .filter((value) => typeof value === "string")
+              .join(" ")
+          : "";
+    if (text.includes(own)) matched.push(text);
+  }
+  if (matched.length === 0) return [];
+  // APM deploys content, never hook wiring or always-on rules, so the classes
+  // it can duplicate are the three it actually writes.
+  const deployable = (["agent", "skill", "command"] as const).filter((cls) => classes.has(cls));
+  return deployable.map((cls) => ({
+    tool,
+    cls,
+    source: "apm" as const,
+    files: matched.length,
+    remedy:
+      `the APM dependency ${matched.join(", ")} deploys the same classes; remove it from ` +
+      `apm.yml and run apm install, or keep the plugin uninstalled`,
+  }));
+}
+
+/**
+ * Content a plugin carries that this repository ALSO holds, from all three
+ * sources it can come from.
+ *
+ * The severity split is the coexistence rule of REQ-PLUGIN-019, and it is not a
+ * matter of taste: a repository whose manifest still says `mode: "generated"`
+ * has an installed plugin beside a generated setup, which is the expected state
+ * BEFORE the operator cleans — failing there would break the CI of every
+ * repository mid-migration. Once the manifest records `plugin-backed`, the same
+ * finding is a defect: emission has stopped writing those classes, so anything
+ * still on disk is stale content the client is loading twice.
+ *
+ * No verb deletes any of it. Every remedy is the operator's own step, named
+ * per source, because two of the three sources are files this engine has no
+ * ownership claim over at all.
+ */
+async function checkPluginDuplicates(
+  rootDir: string,
+  manifest: SetupManifest | null,
+): Promise<DoctorCheck> {
+  const id = "plugin-duplicates";
+  const recorded = manifest?.plugin?.clients ?? {};
+  const tools = TOOLS.filter((tool) => recorded[tool] !== undefined);
+  if (tools.length === 0) {
+    return { id, status: "pass", detail: "no client records a plugin, so nothing can duplicate" };
+  }
+
+  const ledgerPaths = new Set((manifest?.ledger ?? []).map((row) => row.path));
+  const apmYaml = await readIfPresent(join(rootDir, "apm.yml"));
+  // Per client, in parallel: each answer reads a disjoint set of directories
+  // and the same two in-memory inputs, so the only ordering that matters is the
+  // one the flatten below restores.
+  const perTool = await Promise.all(
+    tools.map(async (tool) => {
+      const classes = new Set(recorded[tool]?.classes ?? []);
+      if (classes.size === 0) return [];
+      return await duplicatesForClient(rootDir, tool, classes, manifest, apmYaml, ledgerPaths);
+    }),
+  );
+  const findings = perTool.flat();
+
+  if (findings.length === 0) {
+    return { id, status: "pass", detail: "no duplicated classes" };
+  }
+  const lines = findings.map(
+    (finding) =>
+      `${finding.tool}: ${finding.cls} (${finding.files} file(s), ${finding.source}) — ${finding.remedy}`,
+  );
+  return {
+    id,
+    status: readInstallMode(manifest) === "plugin-backed" ? "fail" : "warn",
+    detail: lines.join("\n                         "),
+  };
+}
+
+/** One recorded client's duplicates, from all three sources. */
+async function duplicatesForClient(
+  rootDir: string,
+  tool: Tool,
+  classes: ReadonlySet<PluginOwnedClass>,
+  manifest: SetupManifest | null,
+  apmYaml: string | null,
+  ledgerPaths: ReadonlySet<string>,
+): Promise<DuplicateFinding[]> {
+  const findings: DuplicateFinding[] = [];
+  // Source 1 — rows this engine wrote and still owns. A hook row is any row
+  // under the generated hooks tree: that directory is what REQ-PLUGIN-016
+  // names as the one a plugin-backed setup writes nothing into, and a
+  // client's own config document (`.claude/settings.json`) is deliberately
+  // not counted, since it carries repository configuration as well.
+  const ledgerRows = (manifest?.ledger ?? []).filter((row) => row.adapter === tool);
+  const byClass = new Map<PluginOwnedClass, number>();
+  for (const row of ledgerRows) {
+    const cls: PluginOwnedClass | null =
+      row.artifactType === "infra"
+        ? row.path.startsWith(`${HOOKS_GENERATED_DIR}/${tool}/`)
+          ? "hooks"
+          : null
+        : row.artifactType;
+    if (cls === null || !classes.has(cls)) continue;
+    byClass.set(cls, (byClass.get(cls) ?? 0) + 1);
+  }
+  for (const cls of PLUGIN_OWNED_CLASSES) {
+    const files = byClass.get(cls);
+    if (files === undefined) continue;
+    findings.push({
+      tool,
+      cls,
+      source: "ledger",
+      files,
+      remedy: `${packageCommand("clean -y")} then ${packageCommand(`plugin setup --client ${tool}`)}`,
+    });
+  }
+
+  findings.push(...apmDuplicates(apmYaml, tool, classes));
+  findings.push(
+    ...(await unmanagedDuplicates(
+      rootDir,
+      tool,
+      classes,
+      ledgerPaths,
+      await pluginCarriedIds(classes),
+    )),
+  );
+  return findings;
+}
+
 /**
  * Every doctor probe, in report order.
  *
@@ -672,16 +1171,27 @@ export async function runDoctor(
   const state = await readManifestState(rootDir, engine);
   const { manifest } = state;
 
-  const [range, learnings, tmpHygiene, envMcp, preservedDuplicate, packIntegrity, invariants] =
-    await Promise.all([
-      requiredNodeRange(),
-      guarded("learnings", () => checkLearnings(rootDir, engine, manifest)),
-      guarded("tmp-hygiene", () => checkTmpHygiene(rootDir, engine)),
-      guarded("env-mcp", () => checkEnvMcp(rootDir, engine, manifest)),
-      guarded("preserved-duplicate", () => checkPreservedDuplicate(rootDir, manifest)),
-      guarded("pack-integrity", () => checkPackIntegrity(rootDir, manifest)),
-      guarded("invariants", checkInvariants),
-    ]);
+  const [
+    range,
+    learnings,
+    tmpHygiene,
+    envMcp,
+    preservedDuplicate,
+    packIntegrity,
+    pluginRuntime,
+    pluginDuplicates,
+    invariants,
+  ] = await Promise.all([
+    requiredNodeRange(),
+    guarded("learnings", () => checkLearnings(rootDir, engine, manifest)),
+    guarded("tmp-hygiene", () => checkTmpHygiene(rootDir, engine)),
+    guarded("env-mcp", () => checkEnvMcp(rootDir, engine, manifest)),
+    guarded("preserved-duplicate", () => checkPreservedDuplicate(rootDir, manifest)),
+    guarded("pack-integrity", () => checkPackIntegrity(rootDir, manifest)),
+    guarded("plugin-runtime", () => checkPluginRuntime(app.runtime.env, manifest)),
+    guarded("plugin-duplicates", () => checkPluginDuplicates(rootDir, manifest)),
+    guarded("invariants", checkInvariants),
+  ]);
 
   return [
     checkNodeVersion(process.versions.node, range),
@@ -694,6 +1204,12 @@ export async function runDoctor(
     checkToolTraces(manifest),
     preservedDuplicate,
     packIntegrity,
+    // The two plugin rows sit after the repository-state probes and before the
+    // corpus one, because the first of them answers about the ENVIRONMENT (is a
+    // plugin root reachable, and does its runtime match this state) and the
+    // second about the repository beside it.
+    pluginRuntime,
+    pluginDuplicates,
     // Last, and read off the installed corpus rather than the repo: every row
     // above answers about THIS repository's state, and this one answers about
     // the engine's own content — the version of the floors a sync would write.

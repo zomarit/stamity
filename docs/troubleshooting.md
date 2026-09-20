@@ -20,7 +20,8 @@ Start here:
 npx @zomarit/stamity check
 ```
 
-A healthy repository answers like this:
+A healthy repository answers like this — `plugin-runtime` warns because this one is not
+plugin-backed, and a warn leaves the exit code at `0`:
 
 ```text
 doctor
@@ -34,6 +35,8 @@ doctor
   ok    tool-traces          all 1 target tool(s) have emitted files recorded in the ledger
   ok    preserved-duplicate  1 managed file(s) carry their block once
   ok    pack-integrity       no installed pack content is recorded in the ledger
+  warn  plugin-runtime       no plugin root in the environment; run this check through the plugin's st-setup or set CLAUDE_PLUGIN_ROOT
+  ok    plugin-duplicates    no client records a plugin, so nothing can duplicate
   ok    invariants           invariants 1.0.0 · ratified 2026-08-31 · last amended 2026-09-13
 
 drift: clean — every generated file matches what a sync would write
@@ -70,14 +73,15 @@ the two that exist only at the CLI edge. The codes this page names are `VALIDATI
 
 ## What `check` prints
 
-Eleven probes, then the drift gate, then a provenance rollup.
+Thirteen probes, then the drift gate, then a provenance rollup.
 
 Each probe reads `ok`, `warn` or `fail`. A `fail` takes the exit code to `1`. A `warn` is
 advisory and leaves it at `0`. That split is deliberate. A missing state subdirectory or an
 absent git binary is a legal repository, and a run that failed on those would train you to
 ignore `check` altogether.
 
-Only three rows can fail: `node-version`, `manifest` and `pack-integrity`. A probe that cannot
+Only four rows can fail: `node-version`, `manifest`, `pack-integrity` and
+`plugin-duplicates`. A probe that cannot
 run at all warns instead, saying `could not be checked:` and why. Every other row still prints.
 
 | Row | What a bad verdict means, and what to do |
@@ -91,6 +95,8 @@ run at all warns instead, saying `could not be checked:` and why. Every other ro
 | `env-mcp` | Warns when MCP servers are selected but `.env.mcp` is absent, and when a credential in it is still blank. A server whose credential is empty fails at start-up. `config mcp add <id>` recreates the file with the names those servers need. |
 | `tool-traces` | Warns when a client the manifest targets has nothing emitted for it in the ledger. `sync` writes that client's files and records them. |
 | `preserved-duplicate` | Warns when a managed file repeats its own managed block below the `STAMITY:END` marker. Your repository then loads that content twice. Delete the copy at the line the row names. The block itself is regenerated on every sync. |
+| `plugin-runtime` | Warns when no plugin root is in the environment — the ordinary state for a repository that is not plugin-backed. **Can fail** when the plugin's locator refuses (no runtime found, or a Node below the plugin's floor; its own message is quoted), and when this repository records `plugin-backed` and the resolved runtime's major differs from the version its `.stamity/` state was written by. Pin the plugin back to that major, or install the matching companion runtime. |
+| `plugin-duplicates` | **Can fail.** A class an installed plugin carries is also on disk here. Three sources, each with its own remedy: `ledger` (this engine wrote it — `clean -y`, then `plugin setup --client <tool>`), `apm` (an APM dependency deploys the same classes — remove it from `apm.yml` and run `apm install`, or keep the plugin uninstalled), `unmanaged` (not written by this engine — remove the file, or keep it as an override under `.stamity/overrides/`). It **warns** while the manifest still says `mode: "generated"`, because coexistence is the expected state before you clean, and **fails** once the manifest records `plugin-backed`. No verb deletes a duplicate. |
 | `pack-integrity` | **Can fail.** An installed pack's bytes no longer match what was recorded at install. Re-install that pack with `clean --pack <id>`, then `add <id>`. Do **not** reach for `sync` first: it would carry the edited bytes into your emitted setup. |
 | `invariants` | States which version of the charter's floor invariants the installed engine would write — the version, its ratification date, and its last amendment. Warns when the installed charter declares no version at all. That means an old package: upgrade, then sync. |
 

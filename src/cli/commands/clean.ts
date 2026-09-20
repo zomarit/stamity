@@ -24,6 +24,7 @@ import {
   type LedgerEntry,
   type SetupManifest,
 } from "../../types/manifest.ts";
+import { TOOLS, type Tool } from "../../types/core.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import { CliFailure } from "../kit/output.ts";
 import { packageCommand } from "../kit/packageName.ts";
@@ -112,6 +113,46 @@ async function exists(dir: string): Promise<boolean> {
 }
 
 const REINIT_OFFER = `start fresh: ${packageCommand("init")}`;
+
+/**
+ * How each client uninstalls the plugin — the vendor's own command, printed
+ * because this verb cannot run it.
+ *
+ * `clean` removes ledger rows and the files they name. A plugin root is the
+ * CLIENT's installation, outside the repository and outside anything this
+ * engine has an ownership claim over, so the honest close on a plugin-backed
+ * repository is to say what is left and who removes it. Nothing here executes.
+ *
+ * The marketplace is a placeholder rather than a value: the manifest records
+ * the plugin's VERSION and the classes it carries, never the catalog it was
+ * installed from, and inventing a name would send an operator at a marketplace
+ * they may not have added.
+ *
+ * Commands as the vendors document them: `codex plugin remove` is read from
+ * `codex --help` on 0.154.0 (2026-09-20). Cursor documents no CLI form, so its
+ * line names the view that does the job.
+ */
+const PLUGIN_UNINSTALL_COMMANDS: Readonly<Record<Tool, string>> = {
+  claude: "claude plugin uninstall stamity@<your marketplace>",
+  cursor: "uninstall the stamity plugin from Cursor's Customize view",
+  copilot: "copilot plugin uninstall stamity",
+  codex: "codex plugin remove stamity@<your marketplace>",
+};
+
+/**
+ * The uninstall lines this run owes, one per client the manifest records a
+ * plugin for, in {@link TOOLS} order.
+ *
+ * Read off `plugin.clients` rather than off `tools`: a client can be recorded
+ * and deselected, and the plugin is still installed in it — that is exactly the
+ * state where nobody would otherwise be told.
+ */
+function pluginUninstallLines(manifest: SetupManifest): string[] {
+  const recorded = manifest.plugin?.clients ?? {};
+  return TOOLS.filter((tool) => recorded[tool] !== undefined).map(
+    (tool) => `  ${tool}: ${PLUGIN_UNINSTALL_COMMANDS[tool]}`,
+  );
+}
 
 /** The one-per-line next-step block every exit path ends with. */
 function nextSteps(ctx: CliContext, steps: readonly string[]): void {
@@ -631,6 +672,9 @@ export const cleanCommand: CommandModule = {
         `Dry run: nothing was written and ${STATE_DIR}/ is untouched. ` +
           `A real run also deletes ${STATE_DIR}/ and everything in it.\n`,
       );
+      // Printed on the preview too: what a real run would leave behind is part
+      // of what the preview is for, and the lines name no destructive step.
+      renderPluginUninstall(ctx, manifest);
       nextSteps(ctx, ["apply it: stamity clean"]);
     } else {
       ctx.io.out(
@@ -639,6 +683,7 @@ export const cleanCommand: CommandModule = {
           `${stateDirRemoved ? `, ${STATE_DIR}/ removed` : ""}.\n`,
       );
       ctx.io.out("Left your .gitignore untouched — stale ignore lines are harmless.\n");
+      renderPluginUninstall(ctx, manifest);
       nextSteps(ctx, [REINIT_OFFER]);
     }
 
@@ -650,7 +695,21 @@ export const cleanCommand: CommandModule = {
         skipped: report.skippedCount,
         stateDirRemoved,
         entries: report.entries,
+        // The same lines the human report prints, so a machine caller driving
+        // an uninstall reads the steps this verb did not take.
+        pluginUninstall: pluginUninstallLines(manifest).map((line) => line.trim()),
       },
     };
   },
 };
+
+/** The plugin-uninstall disclosure, printed only when a client records one. */
+function renderPluginUninstall(ctx: CliContext, manifest: SetupManifest): void {
+  const lines = pluginUninstallLines(manifest);
+  if (lines.length === 0) return;
+  ctx.io.out(
+    `The plugin itself stays installed — it lives in your client, not in this repository, ` +
+      `so this command neither removed it nor touched a file inside its root. Uninstall it ` +
+      `with your client's own command:\n${lines.join("\n")}\n`,
+  );
+}

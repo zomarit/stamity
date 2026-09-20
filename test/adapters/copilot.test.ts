@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   COPILOT_AGENT_PROMPT_CAP,
   COPILOT_DIALECT_FACTS,
+  COPILOT_HOOKS_PATH,
   COPILOT_SETUP_STEPS_PATH,
   buildAgentFile,
   buildCopilotHooksJson,
@@ -32,7 +33,7 @@ import {
 } from "../../src/roster/modelLadder.ts";
 import { PLATFORM_TOOL_MARKER, toCopilotToolsFrontmatter } from "../../src/tools/translator.ts";
 import type { AdapterOutput, ContentSelection } from "../../src/types/content.ts";
-import type { RuleDelivery } from "../../src/types/manifest.ts";
+import type { RuleDelivery, SetupManifest } from "../../src/types/manifest.ts";
 import type { ModelClass, Tool } from "../../src/types/core.ts";
 import type { PackageEntry } from "../../src/types/detect.ts";
 import { EngineError } from "../../src/types/errors.ts";
@@ -112,6 +113,8 @@ interface CtxOptions {
   mcp?: { servers: string[] };
   languages?: string[];
   pins?: Partial<Record<ModelClass, string>>;
+  /** The manifest's plugin record; absent everywhere but the ownership cases. */
+  plugin?: SetupManifest["plugin"];
 }
 
 function ctxOf(over: CtxOptions = {}): EmissionContext {
@@ -135,6 +138,7 @@ function ctxOf(over: CtxOptions = {}): EmissionContext {
       // on rather than passed in — the same shape `stamity config` writes.
       ...(over.pins === undefined ? {} : { models: { pins: over.pins } }),
       ...(over.ruleDelivery === undefined ? {} : { ruleDelivery: over.ruleDelivery }),
+      ...(over.plugin === undefined ? {} : { plugin: over.plugin }),
     },
     engineVersion: ENGINE_VERSION,
     facts: { monorepoPackages: over.packages ?? [] },
@@ -1305,5 +1309,29 @@ describe("copilot under ruleDelivery: on-demand", () => {
       true,
     );
     expect(pathsOf(alwaysOn).some((path) => path.includes("stamity-ai-evals/SKILL.md"))).toBe(false);
+  });
+});
+
+describe("copilot residue under plugin ownership", () => {
+  it("drops the agent, command and hook rows the record names and keeps the instructions", async () => {
+    const plugin: SetupManifest["plugin"] = {
+      mode: "plugin-backed",
+      clients: { copilot: { version: "1.9.0", classes: ["agent", "command", "hooks"] } },
+    };
+    const paths = pathsOf(await planResidue({ plugin }));
+
+    expect(paths.filter((path) => path.startsWith(".github/agents/"))).toEqual([]);
+    expect(paths.filter((path) => path.startsWith(".github/prompts/"))).toEqual([]);
+    expect(paths).not.toContain(COPILOT_HOOKS_PATH);
+    expect(paths.filter((path) => path.includes("/hooks/copilot/"))).toEqual([]);
+
+    // The setup workflow is infra that is not hook wiring, and rules are not in
+    // the record: both survive, byte-for-byte as the control emits them.
+    expect(paths).toContain(COPILOT_SETUP_STEPS_PATH);
+    const control = pathsOf(await planResidue()).filter((path) =>
+      path.endsWith(".instructions.md"),
+    );
+    expect(control.length).toBeGreaterThan(0);
+    expect(paths.filter((path) => path.endsWith(".instructions.md"))).toEqual(control);
   });
 });

@@ -16,6 +16,7 @@ import {
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
 import { verificationGatesFromManifest } from "../emit/agentsMd.ts";
 import { HOOKS_GENERATED_DIR } from "../emit/hooksInfra.ts";
+import { withoutPluginOwnedRows } from "../emit/ownership.ts";
 import type {
   AdapterDialectFacts,
   CoreEmissionPlan,
@@ -258,6 +259,22 @@ const ARTIFACT_IDS = {
   mcp: "mcp-config",
 } as const;
 
+/**
+ * The infra rows that are HOOK wiring, and so a plugin's to carry when the
+ * manifest records `hooks` against cursor (`../emit/ownership.ts`).
+ *
+ * The two guard scripts are on the list with the config document and the
+ * portable runner: each of them is reachable only through
+ * {@link CURSOR_HOOKS_CONFIG_PATH}, so leaving them behind would write scripts
+ * nothing on this client can run. The MCP row is not hook wiring and stays.
+ */
+const HOOK_INFRA_ARTIFACT_IDS: ReadonlySet<string> = new Set([
+  ARTIFACT_IDS.hooksConfig,
+  ARTIFACT_IDS.subagentGuard,
+  ARTIFACT_IDS.mcpGuard,
+  "cursor-portable-hook",
+]);
+
 /** What this client can and cannot do, as the generated capability matrix reads it. */
 export const cursorDialectFacts: AdapterDialectFacts = {
   tool: "cursor",
@@ -465,7 +482,11 @@ export const cursorResiduePlanner: ResiduePlanner = {
       });
     }
 
-    return { outputs: rows.toSorted((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)) };
+    // One filter over the finished set: the rule, agent and command rows answer
+    // from their own `artifactType`, the hook rows from this adapter's own id
+    // list. A repository with no `plugin` field gets its rows back unchanged.
+    const kept = withoutPluginOwnedRows(ctx.manifest, "cursor", rows, HOOK_INFRA_ARTIFACT_IDS);
+    return { outputs: kept.toSorted((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)) };
   },
 };
 
