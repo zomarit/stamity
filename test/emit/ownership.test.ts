@@ -82,6 +82,28 @@ describe("isPluginOwned", () => {
   });
 });
 
+describe("an absent manifest", () => {
+  it("owns nothing, keeps every reader and summarises nothing", () => {
+    // Reachable, not defensive: `stamity plugin status` answers on a repository
+    // that was never initialised, and `check`'s rows read a manifest that may
+    // have failed to parse. The tolerant answer is "no plugin owns anything",
+    // never a throw — a boundary that cannot be read is a boundary that has not
+    // moved.
+    for (const manifest of [null, undefined]) {
+      expect(isPluginOwned(manifest, "claude", "agent"), String(manifest)).toBe(false);
+      expect(sharedProjectionOwners(manifest, ["cursor", "codex"]), String(manifest)).toEqual([
+        "cursor",
+        "codex",
+      ]);
+      expect(pluginOwnedSummary(manifest), String(manifest)).toEqual([]);
+      expect(
+        withoutPluginOwnedRows(manifest, "claude", [row("alpha", "agent")], new Set()),
+        String(manifest),
+      ).toEqual([row("alpha", "agent")]);
+    }
+  });
+});
+
 describe("sharedProjectionOwners", () => {
   it("returns every reader unchanged when no plugin owns skills", () => {
     const manifest = manifestOf(["claude", "cursor", "copilot", "codex"]);
