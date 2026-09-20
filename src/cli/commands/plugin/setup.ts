@@ -34,7 +34,12 @@
  * this run, and `sync`, `check` and `clean` all have to reach the same answer
  * later without a plugin root in hand.
  */
-import { carriedClasses, type PluginCapabilityFile } from "../../../plugins/capabilityFile.ts";
+import {
+  CARRIABLE_CLASSES,
+  carriedClasses,
+  uncarriableClasses,
+  type PluginCapabilityFile,
+} from "../../../plugins/capabilityFile.ts";
 import { TOOLS, type Tool } from "../../../types/core.ts";
 import { EngineError } from "../../../types/errors.ts";
 import type { PluginClientRecord, PluginConfig } from "../../../types/manifest.ts";
@@ -99,6 +104,23 @@ export async function planPluginSetup(input: PluginSetupInput): Promise<PluginSe
       throw new EngineError(
         `The plugin root at ${entry.root} declares client ${entry.file.client}, but it was ` +
           `requested for ${entry.tool}. Set up each client from its own root.`,
+        { code: "CONFIG_ERROR" },
+      );
+    }
+    // Beside the client check, and for the same reason: a root is a document
+    // from outside this repository, and the classes it claims are recorded as
+    // an ownership transfer. A claude root declaring `rule: carried` would stop
+    // `.claude/rules/` being emitted while no container delivers a rule to
+    // claude, so the repository would lose its always-on layer to a plugin that
+    // does not carry one. Refused by name rather than filtered away, because a
+    // silent filter records a boundary the root does not describe.
+    const uncarriable = uncarriableClasses(entry.file);
+    if (uncarriable.length > 0) {
+      throw new EngineError(
+        `The plugin root at ${entry.root} declares it carries ` +
+          `${uncarriable.join(", ")} for ${entry.tool}, which that client's plugin container ` +
+          `has no surface for — it carries ${CARRIABLE_CLASSES[entry.tool].join(", ")}. This ` +
+          `root was not built by a generator this engine can set up from.`,
         { code: "CONFIG_ERROR" },
       );
     }

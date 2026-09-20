@@ -11,6 +11,7 @@ import {
   runDriftGate,
   type DoctorCheck,
 } from "../../../src/cli/commands/check.ts";
+import { probePluginRuntime } from "../../../src/cli/commands/plugin/probe.ts";
 import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
@@ -1353,6 +1354,50 @@ async function doctorRow(
   if (found === undefined) throw new Error(`no doctor row ${id}`);
   return found;
 }
+
+/**
+ * The ceiling is a CEILING (SEC3-M3).
+ *
+ * `execFile`'s `timeout` sends a signal and then waits for `close`, and `close`
+ * waits for every writer on the child's stdout — including a DETACHED
+ * grandchild that inherited it. A locator that ignores SIGTERM and leaves such
+ * a grandchild behind therefore held the probe open indefinitely, which is a
+ * `check` that hangs, which is a CI job that hangs.
+ *
+ * The stub below is the smallest portable shape of that: a locator that spawns
+ * a detached grandchild inheriting stdout, installs a SIGTERM handler that does
+ * nothing, and then sits. The ceiling is passed in rather than waited out, so
+ * the case costs its own timeout and not five seconds.
+ */
+describe("probePluginRuntime — the timeout ceiling", () => {
+  const STUBBORN_LOCATOR = [
+    "import { spawn } from 'node:child_process';",
+    // The grandchild inherits fd 1, so the parent's death does not close the
+    // pipe this probe is reading. 2s, not a minute: the case is over long
+    // before that, and a short life keeps no handle around after the run.
+    "spawn(process.execPath, ['-e', 'setTimeout(() => {}, 2000)'], {",
+    "  detached: true,",
+    "  stdio: ['ignore', 1, 'ignore'],",
+    "}).unref();",
+    "process.on('SIGTERM', () => {});",
+    "setTimeout(() => {}, 2000);",
+    "",
+  ].join("\n");
+
+  it("settles as a timeout rather than waiting on a locator that will not close", async () => {
+    const handle = getRepo();
+    const pluginDir = await pluginRoot(handle, "plugin-stubborn", STUBBORN_LOCATOR);
+
+    const started = Date.now();
+    const probe = await probePluginRuntime(pluginDir, { timeoutMs: 300 });
+
+    expect(probe.outcome).toBe("timeout");
+    expect(probe.message).toContain(pluginDir);
+    // The claim is the ceiling itself: settling at all is not enough, it has to
+    // settle near the ceiling rather than when the grandchild finally lets go.
+    expect(Date.now() - started).toBeLessThan(1_500);
+  });
+});
 
 describe("check — plugin-runtime", () => {
   /**

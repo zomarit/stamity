@@ -8,14 +8,28 @@ import { describe, expect, it } from "vitest";
 // this reader are two halves of one contract (REQ-PLUGIN-002 / REQ-PLUGIN-015), and a
 // hand-copied fixture would let the two drift silently green.
 import { buildCapabilityFile, INVOCATION_NOTE_KEYS, PLUGIN_CLASSES } from "../../scripts/plugins/capability.mjs";
+// @ts-expect-error — the four container modules are plain .mjs for the same reason: they are
+// read by the generator under bare Node. Imported rather than restated so the carriable set
+// below is BOUND to what each container actually declares, the way
+// `test/ci/releaseManifest.test.ts` imports its own .mjs half.
+import * as claudeContainer from "../../scripts/plugins/clients/claude.mjs";
+// @ts-expect-error — see above.
+import * as codexContainer from "../../scripts/plugins/clients/codex.mjs";
+// @ts-expect-error — see above.
+import * as copilotContainer from "../../scripts/plugins/clients/copilot.mjs";
+// @ts-expect-error — see above.
+import * as cursorContainer from "../../scripts/plugins/clients/cursor.mjs";
 import {
   CAPABILITY_FILE,
+  CARRIABLE_CLASSES,
   PLUGIN_CAPABILITY_CLASSES,
   carriedClasses,
   invocationForms,
   readCapabilityFile,
   resolvePluginRoot,
+  uncarriableClasses,
 } from "../../src/plugins/capabilityFile.ts";
+import { PLUGIN_OWNED_CLASSES, type PluginOwnedClass } from "../../src/types/manifest.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -320,6 +334,37 @@ describe("readCapabilityFile — refusals", () => {
     expect(error.message).toContain("version:");
   });
 
+  // The version a root declares is recorded on the manifest and compared, major
+  // against major, by every later `check`. `semver.major` on `1.9` or `latest`
+  // answers nothing usable, so a mis-declared root has to refuse at ingress —
+  // the same rule the manifest applies to its own version — rather than after
+  // `applyInit` has written a setup that records it.
+  //
+  // `v1.9.0` is deliberately absent from this list: `semver.valid` accepts the
+  // `v` prefix, and the rule mirrors the manifest's own version rule exactly
+  // rather than inventing a stricter one the release job never had to satisfy.
+  it.each(["1.9", "latest", "1.9.0-", "1.9.0.1"])(
+    "refuses the version %s, before a single file is written",
+    async (version) => {
+      const file = build(claudeInput());
+      file.version = version;
+
+      const error = await refusalFor(file, `bad-version-${version.replaceAll(/\W+/g, "-")}`);
+      expect(error.message).toContain("version:");
+    },
+  );
+
+  it("accepts the prerelease and build spellings semver itself accepts", async () => {
+    // Not a degenerate pass: `1.9.0-rc.1+build.5` is a version the release job
+    // can genuinely stamp, and a check written as "looks like three numbers"
+    // would refuse it.
+    const file = build({ ...claudeInput(), version: "1.9.0-rc.1+build.5" });
+
+    const root = await seedRoot(file, "prerelease-version");
+
+    expect((await readCapabilityFile(root)).version).toBe("1.9.0-rc.1+build.5");
+  });
+
   it("refuses a citation that is present but not a url and an access date", async () => {
     const file = build(claudeInput());
     (file.clientFloor as Record<string, unknown>).citation = { url: "", accessDate: 20260917 };
@@ -367,6 +412,71 @@ describe("readCapabilityFile — refusals", () => {
     expect(error.code).toBe("CONFIG_ERROR");
     expect(error.message).toContain(join(root, CAPABILITY_FILE));
     expect(error.message).not.toContain("no such file");
+  });
+});
+
+/**
+ * The carriable set, bound to the containers that build the roots.
+ *
+ * A capability file is a document from OUTSIDE this repository, so `status:
+ * "carried"` on a class the container has no surface for is a claim the reader
+ * has to refuse rather than record: a root declaring `rule: carried` for claude
+ * would switch `.claude/rules/` off in emission while no container delivers a
+ * rule to claude at all, and the repository would silently lose its always-on
+ * layer. The four containers already state which classes they do not carry
+ * (`DECLARED_CLASSES`, every entry `repository-owned` or `unsupported`), and
+ * this binding is what keeps the reader's table from drifting away from them.
+ */
+describe("CARRIABLE_CLASSES", () => {
+  const containers: Record<string, { DECLARED_CLASSES?: Record<string, unknown> }> = {
+    claude: claudeContainer,
+    cursor: cursorContainer,
+    copilot: copilotContainer,
+    codex: codexContainer,
+  };
+
+  it.each(Object.keys(containers))(
+    "names exactly the classes %s's own container does not declare away",
+    (client) => {
+      const declared = containers[client]?.DECLARED_CLASSES ?? {};
+      const expected = PLUGIN_OWNED_CLASSES.filter(
+        (name) => !Object.hasOwn(declared, name),
+      );
+
+      expect(CARRIABLE_CLASSES[client as keyof typeof CARRIABLE_CLASSES]).toEqual(expected);
+    },
+  );
+
+  it("keeps the four sets different, so the binding is not a tautology", () => {
+    // codex carries two classes and cursor five; a table that had collapsed to
+    // one list for every client would pass the per-client check above against a
+    // container set that happened to agree.
+    expect(CARRIABLE_CLASSES.codex).toEqual(["skill", "hooks"]);
+    expect(CARRIABLE_CLASSES.cursor).toEqual(["agent", "skill", "command", "rule", "hooks"]);
+  });
+});
+
+describe("uncarriableClasses", () => {
+  it("names a class a root carries that its client has no surface for", async () => {
+    const file = build({
+      ...claudeInput(),
+      classes: {
+        ...(claudeInput().classes as Record<string, unknown>),
+        rule: { status: "carried", count: 3 },
+      },
+    });
+
+    const root = await seedRoot(file, "claude-carrying-rules");
+
+    expect(uncarriableClasses(await readCapabilityFile(root))).toEqual<PluginOwnedClass[]>([
+      "rule",
+    ]);
+  });
+
+  it("names nothing for a root carrying only what its client can carry", async () => {
+    const root = await seedRoot(build(claudeInput()), "claude-well-formed");
+
+    expect(uncarriableClasses(await readCapabilityFile(root))).toEqual([]);
   });
 });
 

@@ -19,6 +19,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import semver from "semver";
 import { parseJsonStrict } from "../config/parse.ts";
 import { TOOLS, VALID_TOOLS, type Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
@@ -293,7 +294,16 @@ function collectCapabilityErrors(value: Record<string, unknown>): string[] {
       `client: must be one of ${TOOLS.join(", ")}, not ${JSON.stringify(value.client)}`,
     );
   }
-  checkString(value.version, "version", "must be the plugin version this root was built at", defects);
+  // Semver, not merely non-empty (mirrors the manifest's own version rule). The
+  // value is recorded on the manifest and compared major against major by every
+  // later `check`; `semver.major("v1.9")` answers nothing usable, so a
+  // mis-declared root has to refuse HERE — before `applyInit` writes a setup
+  // that records it — rather than at the first comparison that reads it back.
+  if (typeof value.version !== "string" || semver.valid(value.version) === null) {
+    defects.push(
+      "version: must be the semver version this root was built at, such as 1.9.0",
+    );
+  }
   if (!(typeof value.sourceCommit === "string" && COMMIT_SHA.test(value.sourceCommit))) {
     defects.push("sourceCommit: must be a 40-character lowercase hex commit sha");
   }
@@ -358,6 +368,46 @@ export async function readCapabilityFile(pluginRoot: string): Promise<PluginCapa
  */
 export function carriedClasses(file: PluginCapabilityFile): PluginOwnedClass[] {
   return PLUGIN_OWNED_CLASSES.filter((name) => file.classes[name]?.status === "carried");
+}
+
+/**
+ * Which classes each client's container can actually CARRY.
+ *
+ * A capability file is a document from outside this repository, and
+ * {@link carriedClasses} reads it as an ownership transfer: every class it
+ * lists stops being emitted. A root declaring `rule: carried` for claude would
+ * therefore switch `.claude/rules/` off while NO container delivers a rule to
+ * claude — the repository loses its always-on layer and nothing replaces it.
+ * The set below is what makes that claim refusable rather than recordable.
+ *
+ * Each row is the complement of that container's own `DECLARED_CLASSES` in
+ * `scripts/plugins/clients/<client>.mjs` — the classes it declares
+ * `repository-owned` or `unsupported`, which are exactly the ones it has no
+ * surface for. `test/plugins/capabilityFile.test.ts` imports those four modules
+ * and binds this table to them, so the two cannot drift.
+ *
+ * Listed in {@link PLUGIN_OWNED_CLASSES} order, which is what makes the
+ * refusal name classes in one order whatever a root's own key order was.
+ */
+export const CARRIABLE_CLASSES: Readonly<Record<Tool, readonly PluginOwnedClass[]>> = {
+  claude: ["agent", "skill", "command", "hooks"],
+  cursor: ["agent", "skill", "command", "rule", "hooks"],
+  copilot: ["agent", "skill", "command", "hooks"],
+  codex: ["skill", "hooks"],
+};
+
+/**
+ * The classes a root claims to carry that its own client cannot carry — empty
+ * for every root this repository's release job builds.
+ *
+ * Separate from {@link carriedClasses} rather than filtered inside it: silently
+ * dropping the class would record a boundary the root does not describe, and
+ * the operator would be left with a plugin that believes it delivers rules and
+ * a repository that believes it does not. The caller refuses by name instead.
+ */
+export function uncarriableClasses(file: PluginCapabilityFile): PluginOwnedClass[] {
+  const carriable = CARRIABLE_CLASSES[file.client];
+  return carriedClasses(file).filter((name) => !carriable.includes(name));
 }
 
 /**

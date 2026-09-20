@@ -12,7 +12,10 @@ import {
   __setContentRootForTests,
 } from "../../../src/content/contentRoot.ts";
 import { collectManifestErrors, readManifest } from "../../../src/manifest/manifest.ts";
-import type { PluginCapabilityFile } from "../../../src/plugins/capabilityFile.ts";
+import {
+  CARRIABLE_CLASSES,
+  type PluginCapabilityFile,
+} from "../../../src/plugins/capabilityFile.ts";
 import { EngineError } from "../../../src/types/errors.ts";
 import { PLUGIN_OWNED_CLASSES } from "../../../src/types/manifest.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -146,11 +149,30 @@ function capabilityFor(
     clientFloor: { version: "2.1.224" },
     prerequisites: { node: ">=22.22.2", git: "optional" },
     classes: {
-      agent: { status: "carried", count: 10 },
-      skill: { status: "carried", count: 14 },
-      command: { status: "carried", count: 10 },
-      rule: { status: "repository-owned", reason: "the plugin manifest has no rules field" },
-      hooks: { status: "carried", count: 4 },
+      // FIXTURE CHANGE (2026-09-20): the four carried entries below are now
+      // filtered through what the CLIENT's own container can carry, because a
+      // codex root declaring `agent: carried` is a document no generator can
+      // emit — the codex container declares agents and commands
+      // repository-owned — and `planPluginSetup` refuses such a root by name.
+      // Only codex moves: `rule` was already repository-owned here, so claude,
+      // cursor and copilot build byte-identically to before. The table is read
+      // from the reader because this is fixture INPUT; the table itself is
+      // bound to the four container modules in
+      // `test/plugins/capabilityFile.test.ts`.
+      ...(Object.fromEntries(
+        PLUGIN_OWNED_CLASSES.map((name) => [
+          name,
+          name !== "rule" && CARRIABLE_CLASSES[client].includes(name)
+            ? { status: "carried" as const, count: name === "hooks" ? 4 : 10 }
+            : {
+                status: "repository-owned" as const,
+                reason:
+                  name === "rule"
+                    ? "the plugin manifest has no rules field"
+                    : `this container has no ${name} surface`,
+              },
+        ]),
+      ) as PluginCapabilityFile["classes"]),
       mcp: { status: "repository-owned", reason: "server selection stays the repository's" },
       ...overrides,
     },
@@ -268,8 +290,12 @@ describe("planPluginSetup", () => {
     });
 
     expect(plugin.clients?.claude?.classes).toEqual(["agent", "skill", "command", "hooks"]);
-    // The codex spike outcome: hooks stay generated for that client alone.
-    expect(plugin.clients?.codex?.classes).toEqual(["agent", "skill", "command"]);
+    // The codex spike outcome: hooks stay generated for that client alone. The
+    // expected list moved to `["skill"]` on 2026-09-20 with the fixture — the
+    // codex container carries skills and hooks and nothing else, so `agent` and
+    // `command` were never that root's to carry, and the claim this case makes
+    // (a repository-owned class is left out of the record) is unchanged.
+    expect(plugin.clients?.codex?.classes).toEqual(["skill"]);
   });
 
   it("refuses a root whose declared client is not the tool it was requested for", async () => {
@@ -284,6 +310,23 @@ describe("planPluginSetup", () => {
         now: FIXED_NOW,
       }),
     ).rejects.toThrow(/declares client claude/);
+  });
+
+  it("refuses a root carrying a class its own client has no surface for", async () => {
+    // The dangerous direction: `carriedClasses` is read as an ownership
+    // transfer, so recording `rule: carried` for claude would stop
+    // `.claude/rules/` being emitted while no container delivers a rule to
+    // claude at all — the repository would silently lose its always-on layer.
+    const root = await makeRepo();
+    await expect(
+      planPluginSetup({
+        rootDir: root,
+        roots: [rootFor("claude", { rule: { status: "carried", count: 3 } })],
+        engineVersion: ENGINE_VERSION,
+        dryRun: false,
+        now: FIXED_NOW,
+      }),
+    ).rejects.toThrow(/carries rule for claude/);
   });
 
   it("refuses two roots claiming the same client", async () => {
