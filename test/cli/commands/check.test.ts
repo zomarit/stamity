@@ -1627,6 +1627,42 @@ const agentRow = (id: string): LedgerEntry => ({
 const duplicatesRow = (root: string): Promise<DoctorCheck> =>
   doctorRow(root, "plugin-duplicates");
 
+/**
+ * The doctor sample on the troubleshooting page, pinned to the row `check`
+ * actually prints.
+ *
+ * The page's sample carried `warn  plugin-runtime …` for four days after the
+ * row started passing on exactly the repository the sample depicts — one that
+ * records no plugin and sets no root variable — so the page taught readers to
+ * expect an advisory their own run does not produce. A transcript in a document
+ * is a claim about output, and this is the only thing that holds it to one.
+ *
+ * It lives here rather than in `test/docsPages.test.ts` because the comparison
+ * needs a real doctor run, and that page's suite is a text lane.
+ */
+describe("check — the troubleshooting page's doctor sample", () => {
+  it("shows the plugin-runtime line a repository recording nothing really prints", async () => {
+    const page = await readFile(
+      fileURLToPath(new URL("../../../docs/troubleshooting.md", import.meta.url)),
+      "utf8",
+    );
+    const sample = page
+      .split("\n")
+      .find((line) => line.trimStart().startsWith("ok    plugin-runtime"));
+    expect(sample, "the troubleshooting sample has no ok plugin-runtime line").toBeDefined();
+
+    const root = await seedRepo(getRepo());
+    const probe = await doctorRow(root, "plugin-runtime", {});
+
+    // Status and detail both: a sample showing the right sentence under the
+    // wrong verdict is the exact defect this pins against.
+    expect(probe.status).toBe("pass");
+    // Column padding collapsed: the page aligns its table, and the alignment is
+    // not the claim — the verdict word and the sentence are.
+    expect(sample?.trim().replaceAll(/\s+/g, " ")).toBe(`ok plugin-runtime ${probe.detail}`);
+  });
+});
+
 describe("check — plugin-duplicates", () => {
   /**
    * `agent` alone, not the four classes file 1's claude root carries.
