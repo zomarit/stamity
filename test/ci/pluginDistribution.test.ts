@@ -573,6 +573,20 @@ describe("the builder's refusals", () => {
     expect(result.stderr).toContain("already holds files");
   });
 
+  it("refuses a version carrying build metadata at its own argument parsing, not the generator's", () => {
+    // M-4: the builder admitted `+build` and forwarded it to
+    // `generate-plugin-packages.mjs`, which refuses it — so `--version 1.9.0+1`
+    // failed at the child, with the child's usage text and exit 1, rather than
+    // here with this script's own message and exit 2. One pattern now,
+    // `scripts/plugins/version.mjs`, read by both scripts and by the
+    // capability validator that judges the value last.
+    const result = build(["--out", tempDir("empty"), "--runtime", RUNTIME, "--version", "1.9.0+1"]);
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("--version must be a semantic version with no build metadata");
+    expect(result.stderr).toContain("Usage: node scripts/build-plugin-distribution.mjs");
+  });
+
   it("exits 2 when the runtime is not a built runtime tree", () => {
     const bare = tempDir("bare-runtime");
     expect(build(["--out", tempDir("empty"), "--runtime", join(bare, "missing")]).status).toBe(2);

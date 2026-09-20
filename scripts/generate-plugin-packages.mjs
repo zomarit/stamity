@@ -70,6 +70,7 @@ import { buildCapabilityFile, PLUGIN_CLASSES, validateCapabilityFile } from './p
 import { stageSubstitutedCorpus } from './plugins/corpusStage.mjs'
 import { renderSetupCommand } from './plugins/setupCommand.mjs'
 import * as tokens from './plugins/tokens.mjs'
+import { PLUGIN_VERSION } from './plugins/version.mjs'
 
 const SELF = fileURLToPath(import.meta.url)
 const ROOT = resolve(SELF, '..', '..')
@@ -86,15 +87,6 @@ function fail(message) {
 }
 
 const COMMIT_SHA = /^[0-9a-f]{40}$/
-/**
- * The version a root may be built at: `major.minor.patch` with an optional prerelease and NO
- * build metadata. Identical to `scripts/plugins/capability.mjs`'s `SEMVER`, deliberately: that
- * validator judges the value this flag supplies, so a `+build` accepted here was refused three
- * hundred lines later with a defect message about a file nobody had asked for. Nothing in the
- * distribution surface carries build metadata either — neither the `plugins/v<version>` tag
- * pattern nor the `^x.y.z` companion range has a place to put it.
- */
-const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
 /**
  * A full ISO 8601 date-time: date, `T`, a time to the second, and a zone. `Date.parse` alone
  * accepts `2026` and `2026-09` — a year is a parseable date and a useless provenance record,
@@ -292,7 +284,10 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
   if (sourceCommitDate !== null && (!ISO_DATE_TIME.test(sourceCommitDate) || Number.isNaN(Date.parse(sourceCommitDate)))) {
     usage('--source-commit-date must be a full ISO 8601 timestamp, for example 2026-09-20T00:00:00Z.')
   }
-  if (version !== null && !SEMVER.test(version)) {
+  // `scripts/plugins/version.mjs`, the same pattern the capability validator judges the value by
+  // once it is written into a root — a `+build` accepted here used to be refused three hundred
+  // lines later with a defect message about a file nobody had asked for.
+  if (version !== null && !PLUGIN_VERSION.test(version)) {
     usage('--version must be a semantic version with no build metadata, for example 1.9.0.')
   }
 
