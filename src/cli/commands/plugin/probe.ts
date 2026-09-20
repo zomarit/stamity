@@ -357,21 +357,43 @@ function nativeEntryId(name: string, isDirectory: boolean): string {
   return extension === undefined ? name : name.slice(0, -extension.length);
 }
 
+/** The emitted ids this engine's catalog would produce, grouped by class. */
+type CarriedIdIndex = ReadonlyMap<PluginOwnedClass, ReadonlySet<string>>;
+
 /**
- * Every emitted id this engine's catalog would produce for `classes` — the ids
- * a plugin built from the same corpus carries.
+ * Every emitted id this engine's catalog would produce for `classes`, indexed
+ * by class — the ids a plugin built from the same corpus carries.
+ *
+ * ONE corpus walk per `check`, not one per recorded client: the catalog is the
+ * same for every client, and a four-client repository was walking it four
+ * times. Grouped by class so each client can compose the set for exactly the
+ * classes its own record lists, which is what the per-client call used to
+ * return.
  *
  * Read through {@link emittedIdFor}, the one answer every surface that names an
  * artifact to a human shares, so a file called `stamity-reviewer.md` is matched
  * by the same spelling rule that would have written it.
  */
-async function pluginCarriedIds(
-  classes: ReadonlySet<PluginOwnedClass>,
-): Promise<ReadonlySet<string>> {
+async function pluginCarriedIds(classes: ReadonlySet<PluginOwnedClass>): Promise<CarriedIdIndex> {
   const index = await buildContentIndex();
-  const ids = new Set<string>();
+  const byClass = new Map<PluginOwnedClass, Set<string>>();
   for (const item of index.items) {
-    if (classes.has(item.type)) ids.add(emittedIdFor(item));
+    if (!classes.has(item.type)) continue;
+    const ids = byClass.get(item.type) ?? new Set<string>();
+    ids.add(emittedIdFor(item));
+    byClass.set(item.type, ids);
+  }
+  return byClass;
+}
+
+/** One client's slice of that index: the ids of the classes its record lists. */
+function carriedIdsFor(
+  index: CarriedIdIndex,
+  classes: ReadonlySet<PluginOwnedClass>,
+): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const cls of classes) {
+    for (const id of index.get(cls) ?? []) ids.add(id);
   }
   return ids;
 }
@@ -470,11 +492,7 @@ async function unmanagedDuplicates(
  * nothing; closing it needs the installed marketplace recorded on the client's
  * `PluginClientRecord`, which no manifest field carries yet.
  */
-function apmDuplicates(
-  apmYaml: string | null,
-  tool: Tool,
-  classes: ReadonlySet<PluginOwnedClass>,
-): DuplicateFinding[] {
+function matchedApmDependencies(apmYaml: string | null): string[] {
   if (apmYaml === null) return [];
   let parsed: unknown;
   try {
@@ -504,6 +522,22 @@ function apmDuplicates(
           : "";
     if (identities.some((identity) => text.includes(identity))) matched.push(text);
   }
+  return matched;
+}
+
+/**
+ * The `apm` findings for one client, from the dependency lines
+ * {@link matchedApmDependencies} already found.
+ *
+ * The parse happens ONCE per `check` rather than once per recorded client:
+ * `apm.yml` is a repository-level file and the lines it matches say nothing
+ * about which client is being reported.
+ */
+function apmDuplicates(
+  matched: readonly string[],
+  tool: Tool,
+  classes: ReadonlySet<PluginOwnedClass>,
+): DuplicateFinding[] {
   if (matched.length === 0) return [];
   // APM deploys content, never hook wiring or always-on rules, so the classes
   // it can duplicate are the three it actually writes.
@@ -525,8 +559,9 @@ async function duplicatesForClient(
   tool: Tool,
   classes: ReadonlySet<PluginOwnedClass>,
   manifest: SetupManifest | null,
-  apmYaml: string | null,
+  matchedApm: readonly string[],
   ledgerPaths: ReadonlySet<string>,
+  carriedIds: CarriedIdIndex,
 ): Promise<DuplicateFinding[]> {
   const findings: DuplicateFinding[] = [];
   // Source 1 — rows this engine wrote and still owns. A hook row is any row
@@ -558,14 +593,14 @@ async function duplicatesForClient(
     });
   }
 
-  findings.push(...apmDuplicates(apmYaml, tool, classes));
+  findings.push(...apmDuplicates(matchedApm, tool, classes));
   findings.push(
     ...(await unmanagedDuplicates(
       rootDir,
       tool,
       classes,
       ledgerPaths,
-      await pluginCarriedIds(classes),
+      carriedIdsFor(carriedIds, classes),
     )),
   );
   return findings;
@@ -590,15 +625,32 @@ export async function collectPluginDuplicates(
   if (tools.length === 0) return [];
 
   const ledgerPaths = new Set((manifest?.ledger ?? []).map((row) => row.path));
-  const apmYaml = await readIfPresent(join(rootDir, "apm.yml"));
+  // The two repository-level reads happen ONCE, ahead of the fan-out: `apm.yml`
+  // is one file whose matched dependency lines are the same for every client,
+  // and the content catalog is one corpus walk whose answer is the same for
+  // every client. Both used to run per recorded client, so a four-client
+  // repository paid for four corpus walks and four YAML parses to produce four
+  // slices of one answer.
+  const [matchedApm, carriedIds] = await Promise.all([
+    readIfPresent(join(rootDir, "apm.yml")).then(matchedApmDependencies),
+    pluginCarriedIds(new Set(tools.flatMap((tool) => recorded[tool]?.classes ?? []))),
+  ]);
   // Per client, in parallel: each answer reads a disjoint set of directories
-  // and the same two in-memory inputs, so the only ordering that matters is the
-  // one the flatten below restores.
+  // and the same shared inputs, so the only ordering that matters is the one
+  // the flatten below restores.
   const perTool = await Promise.all(
     tools.map(async (tool) => {
       const classes = new Set(recorded[tool]?.classes ?? []);
       if (classes.size === 0) return [];
-      return await duplicatesForClient(rootDir, tool, classes, manifest, apmYaml, ledgerPaths);
+      return await duplicatesForClient(
+        rootDir,
+        tool,
+        classes,
+        manifest,
+        matchedApm,
+        ledgerPaths,
+        carriedIds,
+      );
     }),
   );
   return perTool.flat();
