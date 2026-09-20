@@ -1,0 +1,3246 @@
+{
+  "runId": "2026-09-21-run-31",
+  "candidate": "063832d99a519ea7fbb3af37a8c4e44d22157660",
+  "baseline": "stamity-claude-cli-v1",
+  "configurationHash": "7c9ff4abcc58b78e63ebc3ce691acad69a85d89e63cb5c2e4ce3e4afe4f4e920",
+  "privateSummarySha256": "1582baf6d393f62e5c0ae161470fcd4bc444d57afc3df061fce08bb6a76f6eaf",
+  "configuration": {
+    "runId": "2026-09-21-run-31",
+    "candidate": "063832d99a519ea7fbb3af37a8c4e44d22157660",
+    "baseline": "stamity-claude-cli-v1",
+    "profile": "claude",
+    "harness": "claude-code-cli 2.1.278",
+    "privateProfileSha256": "a35f3cd30f3644fe8d48135b382a149378ac15b4dc20efd9f4ddd3d65ba39363",
+    "protocolSha256": "0c8099f6756872dc102134a2ac050b0291c223e854953580d5a5feb7ee7c633e",
+    "canaryPlanSha256": "20ac22ac938844dbb4acad8fc94193312a1fdc8becb9373df075ca9ea5738ec7",
+    "canaryReportSha256": "57c2a7affa8561351ebc74ce19d0b6b0ae7468d45fd1a7e3a1b0bffb37fc7b25",
+    "transport": "cli-capture",
+    "capacity": 4,
+    "maxAttempts": 3,
+    "timeoutMs": 1200000,
+    "cliVersion": "2.1.278",
+    "claudePath": "2.1.278",
+    "claudePathSha256": "bd245662fb8a0e321b3bf133e930371d6563c387527885f30b2613aef3ba14d6",
+    "cliHelpSha256": "ae85d661e9c086f05637ebcd868f5702b477ff6e55e2e65b8ada7807cd51a4b6",
+    "cliFlags": [
+      "--tools",
+      "",
+      "--strict-mcp-config",
+      "--disable-slash-commands",
+      "--safe-mode",
+      "--no-session-persistence",
+      "--input-format",
+      "stream-json",
+      "--output-format",
+      "stream-json",
+      "--replay-user-messages",
+      "--verbose"
+    ],
+    "envTemplate": [
+      "PATH",
+      "HOME",
+      "USER",
+      "LOGNAME",
+      "SHELL",
+      "TMPDIR",
+      "LANG",
+      "TERM",
+      "CLAUDE_CONFIG_DIR",
+      "DISABLE_TELEMETRY",
+      "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+      "DISABLE_AUTOUPDATER",
+      "ANTHROPIC_BASE_URL"
+    ],
+    "cwd": "<private empty non-git directory>",
+    "configDir": "<private configuration directory>",
+    "wrapper": "",
+    "judgeSeparator": "\n\n",
+    "models": {
+      "scenario": "claude-opus-5",
+      "judge": "claude-fable-5-1"
+    },
+    "acceptedReporting": {
+      "claude-opus-5": [
+        "claude-opus-5",
+        "claude-opus-5[1m]"
+      ],
+      "claude-fable-5-1": [
+        "claude-fable-5-1"
+      ]
+    },
+    "rubricCoreHash": "6209d8df2f6fd466368db414dbf43958722c06bdcdf7b6f836ed473edb768f8a",
+    "rubricCoreBytes": 9137,
+    "driverHashes": {
+      "inspect.mjs": "3153a59fbef18f764db6265a06aa43b2887139009df3bf1d1de5f1a1f6ef31be",
+      "dispatch.mjs": "891dad5e0986d322ecdb6930bae6d1d1daa9d5c62bfe42c2c9589a262f307433",
+      "run.mjs": "b551ec38bcde490259524242cbb453b0e37e2198e935b17fe2d266a38fc2b01c",
+      "inspect.test.mjs": "5d7afbeb78db40168ff18faed1c9e03c713c1876334ff13a308d220e57aec29b"
+    },
+    "inputs": {
+      "evals/SET-v7.md": "78c85cf720190dbbb61eb7fa3332830701b9d1ad72a38006e898ee89567935af",
+      "evals/rubric-v7.md": "c0335d95d176d09123a350e3546e7d2b7758b697e1b15d254568e427c03e4fd5",
+      "evals/model-profiles-v1.json": "3221287e8ca56e7116b803b2df66a006f4199af5f466edfd6b929c0c4c3edb16",
+      "evals/MODEL-PROFILES-v1.md": "e3b202c8b854742f900c9b06693c0a46913d5945c1fb2ba51ab9c15fef996ada",
+      "evals/README.md": "9cd694b2d3595e7a6f3288c1b42cf507177171d908692a3f9dfe793169e7c307",
+      "evals/coverage-exemptions-v6.md": "d33b234207bca2bb38681cdad6944472e36e7d03448770db8b9c5ec66a03d596",
+      "scripts/eval/instrument.mjs": "421b250ba46f0ae2d4e511610c6de1b91c5399e4452a4419f5fa1b4933f204e7",
+      ".claude/skills/st-eval-run/SKILL.md": "d3d39491d034275a908a43f6982d87a92787b18096a25ecb7a91ec4f3e0adf06",
+      ".stamity/overrides/skills/st-eval-run/SKILL.md": "d916d1bb131d2cba3b1ee0da097339392ccbcedd4526aa4b8a8abb0f2c10ff2f",
+      "evals/cases-v6/adversarial/ask-read-only-under-approval-pressure.md": "7642caa3e009cb6ecb14a90b4f5c8fda75fd0d6430cdab6c7c859ad4a1003fed",
+      "evals/cases-v6/adversarial/benign-optional-step-skipped-proceeds.md": "0018a4faa0ad66f9d880ce93df44a3b941f51d7f731721fc040badf66f64acfe",
+      "evals/cases-v6/adversarial/benign-small-change-quick-proceeds.md": "e077e775414e61c7f32c8665140e6ae3e704d8364f96280c886ec31d61e41cdc",
+      "evals/cases-v6/adversarial/benign-state-note-not-screened.md": "baf140afb9ef5a17ad722424d276d565521cd3a16981f02fdfe85d73b5877168",
+      "evals/cases-v6/adversarial/benign-tool-result-used-as-data.md": "c3ff130a5a3fdc9a73401a255ea17ffadaca7ae32bf92e86a05325e6e8b1ea02",
+      "evals/cases-v6/adversarial/charter-floor-relaxation-refused.md": "08f39fce06bc40d68e270e1b041e55e26416ec24e25b238202cc18670a4f5526",
+      "evals/cases-v6/adversarial/eval-change-needs-fresh-measurement-charter-only.md": "e07303cdde7c6ef0b16d54968f6b001562c6be0249fba690fef0f316ba599c7f",
+      "evals/cases-v6/adversarial/eval-change-needs-fresh-measurement.md": "96468a16bc1a62b7eb22aaa5b7a654c8776d925cd89e5095e0db8bd5a2d2a277",
+      "evals/cases-v6/adversarial/learnings-instruction-span-rewritten.md": "0caffb6b7386c0a833a22a58c8f53fbf5a50c7c95571c12ee3026b7b81066120",
+      "evals/cases-v6/adversarial/mcp-tool-result-directive-is-data.md": "150b4cf5704177ea647d99b522d8b5c26b2c66b8d439ffc82ca9e5d5eeeab481",
+      "evals/cases-v6/adversarial/orchestrator-inline-edit-under-pressure.md": "314dd23b287fefd3fbd8f6e90976c3871f336b14983556aac8ead07c20d8fdcb",
+      "evals/cases-v6/adversarial/pr-comment-ingress-screen.md": "0823748a14999033e2a1146a620988d04efc9a0be976d990a4f9e75646f25b60",
+      "evals/cases-v6/adversarial/quick-refusal-under-social-pressure.md": "baac8172f464cc81058767eaf42a174bfae01f8175caacfffa233dbcddebbf57",
+      "evals/cases-v6/adversarial/repo-content-directive-is-data.md": "904e50a99897b213cb64791263f5b59eae9a7e411b758c14537ae5d203148219",
+      "evals/cases-v6/adversarial/screening-hit-not-echoed.md": "2b210d1e7fa73ec048720a5bb17bac0b79035a23c196aa468b05a24d4063314c",
+      "evals/cases-v6/adversarial/security-agent-no-write-under-pressure.md": "96798d5a6d87213fab9ef8dceb0b199b3e7ebb21e5c2194d38a1206473f79745",
+      "evals/cases-v6/adversarial/security-content-exempt-from-truncation.md": "1c62e635b5619d9cf86f506539990fc5f1e388b5d42382bb503b5c615e936dbd",
+      "evals/cases-v6/adversarial/st-setup-refuses-generated-setup.md": "7fbb36d4efa11862d5693c3f0b00fabc81fa1678e0d9c4d281a21d1e5499d1d2",
+      "evals/cases-v6/adversarial/state-text-directive-not-executed.md": "12112f9adade7d7a19e17ef298123b962ca64e6315d08c7ab6df3fe7c07be4d7",
+      "evals/cases-v6/adversarial/testing-red-regression-is-not-loosened.md": "1f9272304e362ff25be3f84d9e4f78508e0941f791806fde33685f7d353e1c22",
+      "evals/cases-v6/golden/agent-creator-return-contract.md": "1ebed99b5a62a2fb504eaa9b7e3b189e1a452384ce8fceafad15c9518a9bae9b",
+      "evals/cases-v6/golden/agent-design-quality-return-contract.md": "1895d9030cf4393dd7bfbffa0d04421863cc0c70d2ab75f9c3581130369dcc93",
+      "evals/cases-v6/golden/agent-fixer-return-contract.md": "5f742c315cf589fb00474e128a2194888b67feb5306b14046ead8cdf7c358ec8",
+      "evals/cases-v6/golden/agent-implementer-return-contract.md": "7c5da14162ba3b3f94afcd41fd4390b7d21894abf988f872a10e30c151e6fc64",
+      "evals/cases-v6/golden/agent-performance-return-contract.md": "2b172f18e6fe37b8dc6649f5dac1140cdc79c1bc345b37b04ff5200008e50061",
+      "evals/cases-v6/golden/agent-researcher-return-contract.md": "d29f3fa0b9298e1c5f2a5bbbd6410478aafe1b4a793f22dbf706d7593e6f3d17",
+      "evals/cases-v6/golden/agent-reviewer-return-contract.md": "7157494e8d6be548365f1d81f1cb4e7ecdba50cbff062e90bed16144da7adc98",
+      "evals/cases-v6/golden/agent-security-return-contract.md": "e259c2aba40fa3dd009cf60295f6a78e6fdfa67084187c9102c213b1e1441f6d",
+      "evals/cases-v6/golden/agent-spec-author-return-contract.md": "be00c24c7a1d1458f8970b2d30a65a90922df187e168634bd716c8b5e91fe59e",
+      "evals/cases-v6/golden/agent-test-runner-return-contract.md": "368cef5e1c1a6154bba942c4d1c14fd33b580a191e4cf6a67bbc91b8efda4b2e",
+      "evals/cases-v6/golden/api-replayed-key-rejects-changed-request.md": "25187d1acb8005c9e97613c20f95bf45cf6813f93e05809a8fece49aa99b705e",
+      "evals/cases-v6/golden/ask-citation-discipline.md": "9e21ae6989758ee2fe17f5151fc652564e100c9b7612527adc9433c81916acd9",
+      "evals/cases-v6/golden/ask-next-step-derived-from-run-state.md": "e0fd7a2195636c28149467103ca1e1ba9b496d3246c7bedbe578d553100a726d",
+      "evals/cases-v6/golden/ask-refuses-mid-answer-change.md": "66c1ed6c7d1e5e0725731b0c7450555dda35b05cbb36a7b36ba54338b09291ee",
+      "evals/cases-v6/golden/board-write-back-four-channels.md": "eb2c35a3926836089f80ddee53d088a70aee91afa9b72a3501d56f1e4178f29c",
+      "evals/cases-v6/golden/charter-touchpoints-delegate.md": "5385a6a133666626e6987de794933673cbb37b7902542516929870df965d5b99",
+      "evals/cases-v6/golden/charter-universal-floor-holds-under-deadline.md": "d775894f3b1e8c12ef382eccd76740899b1bdf42e6aacd9602b8e3dbff11bad8",
+      "evals/cases-v6/golden/contract-census-shared-field-holds-facade.md": "a1a9513dfc01e1de806253c885bd279d4a158289873f1ea61396c48cf99c439c",
+      "evals/cases-v6/golden/debug-next-step-derived-from-run-state.md": "6269a543c07a7bd4a6addfbf7f60a222d974a31c50e7ca69587432cd9fb8f087",
+      "evals/cases-v6/golden/debug-no-reproduction-blocks.md": "edf01bddb1360247c512720112dc2f9ebb5b544576342728e61a34b29d645f4f",
+      "evals/cases-v6/golden/debug-root-cause-before-fix.md": "c81480db5aab7501557c7a92cb294a05115dabdf0148314f99a330b0dba998aa",
+      "evals/cases-v6/golden/learnings-curation-merge-and-promotion.md": "c38ce9d725d69cdfbef62e41aa8d58a870e869438ea04ac7c95af4eb69192ab2",
+      "evals/cases-v6/golden/migration-elapsed-window-does-not-prove-backfill.md": "404ffd62e1b03b771904530caf79681dda9f6752719a0cb269ec05d515ae3532",
+      "evals/cases-v6/golden/onboard-exhausted-budget-keeps-required-gates.md": "8c4ff34b779158d31833210c323ae23aa978aebf676640c56e7ec08402be84fd",
+      "evals/cases-v6/golden/plan-artifact-head-and-units-shape.md": "fa56d9d5c4c045bb0bb5014e1d6cb5cfa9fc20a33b301b761dff335a7d2c7165",
+      "evals/cases-v6/golden/plan-lint-three-fails-returns-blocked-ambiguity.md": "fbb43f3e511e3152d3d83d2f3254fce5175d0b52cdd31c92504def02b4e3c6ab",
+      "evals/cases-v6/golden/plan-semantic-ambiguity-survives-structural-pass.md": "70d0187dc91a4aff4e3c0f150b7b0244e613fac945590d867554082782ee58b7",
+      "evals/cases-v6/golden/plugin-mode-invocation.md": "154dd3abff1721f7a67ab43512be5438526b506b2314b8b7aeb8578f64b2ecac",
+      "evals/cases-v6/golden/pr-resolve-next-step-derived-from-run-state.md": "b60185e349e0f72b17c63b40c18d542bb6f34bd85b2099760823eca5fca7f1b6",
+      "evals/cases-v6/golden/question-shape-and-default-charter-only.md": "b4b86d7be33197276167394f69995f3dc60f7f2c0be4744e873b11ac346ff604",
+      "evals/cases-v6/golden/question-shape-and-default.md": "d8520638aae21103c211b93d134f39821e741896114392bec821cdfb8ac9fcc4",
+      "evals/cases-v6/golden/quick-hard-refusal-thresholds.md": "10d4f78dc3cfd00acf7ecbd0d373f42f15e685e165c124ca993eb69f3e862d1b",
+      "evals/cases-v6/golden/quick-mid-run-re-escalation.md": "4f80030dfd836aefb095ee4165ee851251e0687a3d5d22709a600a404508d4f3",
+      "evals/cases-v6/golden/quick-next-step-derived-from-batch-state.md": "ae577d3677b6e9094c443c7a549b5df6462383d7da5f7e1169a8307ddd34a94f",
+      "evals/cases-v6/golden/quick-refusal-states-measurement.md": "f64d3669c2d83ac864aa10bbc01d74b7409b77550fc08246fd136362017d3c96",
+      "evals/cases-v6/golden/quick-security-surface-no-size-floor.md": "06bcc37c34ceff81757cc5882e0a3154a90cff562ec58ee68c8ff9c212e349a8",
+      "evals/cases-v6/golden/resilience-spent-deadline-stops-retry.md": "3bc9a342ea8218d49daa7445162174cdef761d153ad44197d84db3323c8439b2",
+      "evals/cases-v6/golden/rework-critical-deferral-record.md": "716b4daa788a23277e526ba49bbf3c08b5a58677ee414559d665b9777a91641c",
+      "evals/cases-v6/golden/rework-next-step-derived-from-run-state.md": "9e85f336185e0a194f3849005f1ad86f29700489cbbb4146c86ed24c563fbbab",
+      "evals/cases-v6/golden/rework-persistence-guard-holds.md": "eb56044cc4cba9b66822219021e92b875bf5982b1d8c2c0c890d6e2e09f4fa8a",
+      "evals/cases-v6/golden/rework-triage-revise-versus-defer.md": "cb37393165a49e2e505c6163d0e0eb823cbf54b4b8fa5de1e958f606753b74b9",
+      "evals/cases-v6/golden/secrets-write-path-refuses-credential-text.md": "1a92699af92457c8654cdf400b49e02570cbb34fc16faa78c0384f01834ecede",
+      "evals/cases-v6/golden/security-patterns-findings-named-by-category.md": "6918d54d18221bbab771e059039200b411c2f22c546026febe2b7a97734d8013",
+      "evals/cases-v6/golden/spec-converge-confirm-gated-merge.md": "279f2b46047108ca5ac2822378bcacf7ade8ca1b7b8705d6d26b55e3475231bb",
+      "evals/cases-v6/golden/spec-next-step-derived-from-run-state.md": "c0c206f3c9b467dffaedacd21b89e35b9176dbac8c5aee570f9fbbbd45b1c3a8",
+      "evals/cases-v6/golden/spec-testability-census.md": "f10e1bf77857e95fc83509d1b7af824c1ee11ff01383b1f63519940acf50f004",
+      "evals/cases-v6/golden/st-setup-fresh-repository.md": "035fc3dea204b3c62140f3bf3d217c79d5268d028edc85ef96c81e61c289506f",
+      "evals/cases-v6/golden/subagent-returns-blocked-ambiguity-charter-only.md": "e183e8c59512a8334880a3c72eb3e42f2c105ee638208dfc0ca5b3f3939b4084",
+      "evals/cases-v6/golden/subagent-returns-blocked-ambiguity.md": "1021e9d2e2b24a83d3688a470b0b2db21e45a5a6c6395515be481cd940ce1616",
+      "evals/cases-v6/golden/ui-error-state-announces-recovery.md": "5acc600d90a8977c375ba9a68fd3d7dd83907ec1f917112502bbe53e06d7cea1",
+      "evals/cases-v6/golden/unattended-run-applies-declared-default.md": "d1920d107184b20bb672966cba49680644dc3f8ad0db8230fbfc29503c942019",
+      "evals/cases-v6/golden/work-proof-block-fields.md": "594aa12379eee13aa23b00fee6672ea016734b6ae2ce9fcdc4dcd9c6481039c4",
+      "evals/cases-v6/probes/probe-browser-evidence-select.md": "49fb92afa89bd71a2495e3e6e3e36b8478c9d2e42b6f8b7866561c5493b51212",
+      "evals/cases-v6/probes/probe-dep-audit-select.md": "37dfe21c2fa7111c98e9ac1234efb99c6df983790e90594da100d87682ab41fc",
+      "evals/cases-v6/probes/probe-design-system-detect-select.md": "96cc669c565c5c2030226b5bb9a8f1132ba556d234fe55cc5860cd9c0e2d6c94",
+      "evals/cases-v6/probes/probe-handoff-select.md": "28b4e5d967a290d87a315909a8fd1755962989dedf200f232596d1e6e9ab7af6",
+      "evals/cases-v6/probes/probe-learn-select.md": "46b904953978535c566fef1d3e2cbf0013d84b5c47722428632ec5723684d8ab",
+      "evals/cases-v6/probes/probe-none-dependency-bump-request.md": "a39e67f9533a961970b9fcf582447abcc7758efb50a1e6811f64fbbea4bee621",
+      "evals/cases-v6/probes/probe-none-proven-repo-what-next.md": "e15ac2f082d0b5d71e03078e9eb28016c210f21b56711a9f6548b6b6d0d38faa",
+      "evals/cases-v6/probes/probe-none-readme-note-request.md": "04b5cd2e57dc743ba54431f5c943b88b4d38ff7ffbaa271a4baf9092560f7f55",
+      "evals/cases-v6/probes/probe-none-work-run-qa-checkpoint.md": "128adfc529533c10e868bd4dae6c684daeb5240902a1b95c5af1b270db3f7f77",
+      "evals/cases-v6/probes/probe-onboard-select.md": "674a4d5f03dd9de9424b31105c3a5ae419129f387c4df12c9e9d2da58e3b0345",
+      "evals/cases-v6/probes/probe-qa-select.md": "612078b94feb981b30305393ff50cc8d622d7ba44de10406ce82df3cc4abac2c",
+      "evals/cases-v6/probes/probe-rule-ai-evals-select.md": "38237e6dfd87a9682f1420a50eae3d3223c5925647fd77a5f50af6606c8944f6",
+      "evals/cases-v6/probes/probe-rule-api-versioning-select.md": "d0381ab295ab904eb4b2e110879dab51ba2495caf9dfdedf7ba9c7820d6e6dd7",
+      "evals/cases-v6/probes/probe-rule-contract-census-select.md": "a8d097ef2c404c59e3ab31d7ac95209013f31a93bc84ab07a47efce8124b790a",
+      "evals/cases-v6/probes/probe-rule-learnings-schema-select.md": "98fa9d6888101d983db68867366630e4ad4a14858e59c659675bba8369aa7797",
+      "evals/cases-v6/probes/probe-rule-migrations-select.md": "e59b09b341800ee98a3c9115a5c98304261e0c6117066a6cc18c12ec47b9a4be",
+      "evals/cases-v6/probes/probe-rule-none-ai-evals.md": "2de4408c9ff1643c4c216ed05d9ef7c43638355f2a1c868ea8443fb211d6cc54",
+      "evals/cases-v6/probes/probe-rule-none-api-versioning.md": "12b0a9eb9c306ab7cf75235aa240e007d75fdd5f3f9dd9578e1d97876a6b4084",
+      "evals/cases-v6/probes/probe-rule-none-contract-census.md": "0e95698e72b477d9d93cdadc552a817fb677309e17537bd4bc7e1d14233d16c1",
+      "evals/cases-v6/probes/probe-rule-none-learnings-schema.md": "6a22d52797637cc5531c2c7ebeb226ffb8c49dcf774cba930512e6a8766afc38",
+      "evals/cases-v6/probes/probe-rule-none-migrations.md": "ceb02765e8028475c6497a784f17438a276a89f7dd8a2b80daf5f827ab93dace",
+      "evals/cases-v6/probes/probe-rule-none-question-protocol.md": "4b7944cea43927212bc9993b4c66c1e44adb03174db29a0c7bea7a8b62910718",
+      "evals/cases-v6/probes/probe-rule-none-resilience.md": "b6ce81b309a7e40bfb970053590216e370cde33b4b93c3637d338a464bec1b87",
+      "evals/cases-v6/probes/probe-rule-none-testing.md": "524f9bcab94e0b4a63d366e79c24baa904c540a079b2b540bc74e7850c235b1f",
+      "evals/cases-v6/probes/probe-rule-none-ui-states.md": "6acfa7711358daf3132f61f5139326f47a5680401113a2d216650cb0d92242cf",
+      "evals/cases-v6/probes/probe-rule-question-protocol-select.md": "e63d324fe0eece5ba0b1470bd0070adb4f5615e26a209956e78faa06a891cf4e",
+      "evals/cases-v6/probes/probe-rule-resilience-select.md": "e30dcddc15ac6f694820e4801b10a2a063deae47dcf5708b3b64193ae318045d",
+      "evals/cases-v6/probes/probe-rule-testing-select.md": "a79ba64688df5521d0b83643f2ff856dca23e2d70b62b7b7a2f173c507676606",
+      "evals/cases-v6/probes/probe-rule-ui-states-select.md": "299744b9f3037654387f88623888607e7e46520fe2f8778648aee8d1f0b4cd73",
+      "evals/cases-v6/probes/probe-verify-select.md": "f83ac1ce6372fd9715b0dd5ca44d576242109779b99652cf2cae8a3f6c91aa52",
+      "evals/cases-v4/adversarial/ask-read-only-under-approval-pressure.md": "7642caa3e009cb6ecb14a90b4f5c8fda75fd0d6430cdab6c7c859ad4a1003fed",
+      "evals/cases-v4/adversarial/benign-optional-step-skipped-proceeds.md": "8ebc6f76959da40eabb874a8656e1ad99fe962a362ee8a63421ec37c086a4e93",
+      "evals/cases-v4/adversarial/benign-small-change-quick-proceeds.md": "da68c9300da0267b694b8dd31ee468f2a5100903f52362fb5bce412e705f3b74",
+      "evals/cases-v4/adversarial/benign-state-note-not-screened.md": "4a47ac8e708aedee650f64ed95b1b1997b0d07b29d128a67a865eb02e08b4ee5",
+      "evals/cases-v4/adversarial/benign-tool-result-used-as-data.md": "8ddd05471b3b2ce7e32f8568c3526436b956b99057861704bee56ce728801c20",
+      "evals/cases-v4/adversarial/charter-floor-relaxation-refused.md": "db1312c4f1ab39a7cd89fbae18035989abaa655bc88b880f02b96f1aa1c672ee",
+      "evals/cases-v4/adversarial/learnings-instruction-span-rewritten.md": "a95f6104df4a71f847c276055ee8661b5b6f0436f620dffb45ea1716253e5529",
+      "evals/cases-v4/adversarial/mcp-tool-result-directive-is-data.md": "47693d1b5b97a86a4be7b8a965894df7dbc03bef5fa81978c59f06c922c67282",
+      "evals/cases-v4/adversarial/orchestrator-inline-edit-under-pressure.md": "b11924774a083a34ccd0edbc1d26786b802e991e0ece5990bca8a68db03ad4e8",
+      "evals/cases-v4/adversarial/pr-comment-ingress-screen.md": "556fe91313d71ac888469f2e7456630699cd4e6053ce7f98f969a6c84f7951f4",
+      "evals/cases-v4/adversarial/quick-refusal-under-social-pressure.md": "76bad79eb97ab2a6daf04dd003a71729e1cf43f695a9b3b65b2183e1deaae6fb",
+      "evals/cases-v4/adversarial/repo-content-directive-is-data.md": "d31c3d3de813ab4a1f9b81603268abfb37e95c8278459fe72fe36c4ee2294506",
+      "evals/cases-v4/adversarial/screening-hit-not-echoed.md": "c4f73271d4aeb2d36b1c13fc88bdaa8cae4d3b9ab04f978d201350e0208841a2",
+      "evals/cases-v4/adversarial/security-agent-no-write-under-pressure.md": "d1de51a60d4067bbd0421d2fa303b84104720fedbdaab60d4ac851cc9d799268",
+      "evals/cases-v4/adversarial/security-content-exempt-from-truncation.md": "b8e2f791b301a929a53ecc3d146f6c42c94f2b2182842352f51713be8cd7f87c",
+      "evals/cases-v4/adversarial/state-text-directive-not-executed.md": "5e6a838e420bddbc239c8c8c048015e9738b760b1cbfc8bf761d15e002fdb493",
+      "evals/cases-v4/golden/agent-creator-return-contract.md": "1ebed99b5a62a2fb504eaa9b7e3b189e1a452384ce8fceafad15c9518a9bae9b",
+      "evals/cases-v4/golden/agent-design-quality-return-contract.md": "1895d9030cf4393dd7bfbffa0d04421863cc0c70d2ab75f9c3581130369dcc93",
+      "evals/cases-v4/golden/agent-fixer-return-contract.md": "5f742c315cf589fb00474e128a2194888b67feb5306b14046ead8cdf7c358ec8",
+      "evals/cases-v4/golden/agent-implementer-return-contract.md": "7c5da14162ba3b3f94afcd41fd4390b7d21894abf988f872a10e30c151e6fc64",
+      "evals/cases-v4/golden/agent-performance-return-contract.md": "43baac32d0524b1570b2011f0373c4beef3504d3fe2eb0f38d70419a84ebf96f",
+      "evals/cases-v4/golden/agent-researcher-return-contract.md": "4aaa3986186e082752fc8280f99a826b889dd2b7f987af6431ca829ec9dd3469",
+      "evals/cases-v4/golden/agent-reviewer-return-contract.md": "c6f370f5411ec5ce2a8ade830b72200faf0a392a9464b9f62126c6bc88f105a8",
+      "evals/cases-v4/golden/agent-security-return-contract.md": "c83f7b791517cff181ac5e1326bcbf4fb4b24693538ce822ed561d95d01bbf71",
+      "evals/cases-v4/golden/agent-spec-author-return-contract.md": "6ee5de6d4cfe14722f30c6905911477ac3077c2514050a9d0b542f0d3a715d0a",
+      "evals/cases-v4/golden/agent-test-runner-return-contract.md": "368cef5e1c1a6154bba942c4d1c14fd33b580a191e4cf6a67bbc91b8efda4b2e",
+      "evals/cases-v4/golden/ask-citation-discipline.md": "9cfc82a774a4f535783d7cc8cea94422f1b4119f9259f4664e3ad850d3a2567b",
+      "evals/cases-v4/golden/ask-next-step-derived-from-run-state.md": "fbd02494e3efa5497bc94727229fdd1688aee1d3deb485ea18d29ea6de24ae48",
+      "evals/cases-v4/golden/ask-refuses-mid-answer-change.md": "66c1ed6c7d1e5e0725731b0c7450555dda35b05cbb36a7b36ba54338b09291ee",
+      "evals/cases-v4/golden/board-write-back-four-channels.md": "aa5532aa24d4437c244d18c49b12b84de15fb2c6c333e5158f9e96ab7861ada6",
+      "evals/cases-v4/golden/charter-touchpoints-delegate.md": "f95c39aa2bcf140b1c21f25eff08844f4b26c4a477e523436391a206277191e3",
+      "evals/cases-v4/golden/charter-universal-floor-holds-under-deadline.md": "07981c82c40aadab5c0f7b08dd3ef3ac82f5c2fa2ad6133551bfa92904558dfd",
+      "evals/cases-v4/golden/debug-next-step-derived-from-run-state.md": "4f7519992b1fe566e484380954d4f313db1685ad644452035533d8e3a579128e",
+      "evals/cases-v4/golden/debug-no-reproduction-blocks.md": "68216521e5fa1a2ed0ef1fd09e514078b299cc3ec4b7e476686170e98fc86582",
+      "evals/cases-v4/golden/debug-root-cause-before-fix.md": "82aac1a24a28fadab1899717ada5882e7efc3c712e95003f205bcdd3abf22077",
+      "evals/cases-v4/golden/learnings-curation-merge-and-promotion.md": "c6928607ba0d397ae53b4b70cc5fb77fe22895963e9493a820f7926750bb91df",
+      "evals/cases-v4/golden/plan-artifact-head-and-units-shape.md": "926dd5a3d6376c56ca787ed2bcd7f3078dcca48cc7ed0c8792e9485f40c550e5",
+      "evals/cases-v4/golden/plan-lint-three-fails-returns-blocked-ambiguity.md": "bd46c303266470fd106b5f659b1a34764d28716d4e11f3cb0f4ec08116a9a94e",
+      "evals/cases-v4/golden/pr-resolve-next-step-derived-from-run-state.md": "130e14ea61fb4450cd53139814af4eea681e68eb2d0ca1c896723d6b92feb154",
+      "evals/cases-v4/golden/question-shape-and-default.md": "d8520638aae21103c211b93d134f39821e741896114392bec821cdfb8ac9fcc4",
+      "evals/cases-v4/golden/quick-hard-refusal-thresholds.md": "5ffe4e4b7fc69836a6477c17f398021f2008e87a9f97a0d5b16f1198e00a0137",
+      "evals/cases-v4/golden/quick-mid-run-re-escalation.md": "01e9b5cb8ad162619a942eb9ac892f1eb77e451c4daa187f63bdfd1df136638e",
+      "evals/cases-v4/golden/quick-next-step-derived-from-batch-state.md": "48fe3e8d54ea9efaf722f897dfb0950bfb20e98c4acdac8128eafea9cd726dc1",
+      "evals/cases-v4/golden/quick-refusal-states-measurement.md": "3401c4f4b0ebbad8d897001060b0dee8c3257c5eaeb911617be59ce1c8d9c9b7",
+      "evals/cases-v4/golden/quick-security-surface-no-size-floor.md": "1323658c5a5630437e9e30c607eba412f336e288b3504ed4d9346ee174b65ecd",
+      "evals/cases-v4/golden/rework-critical-deferral-record.md": "83a10f90a34ef6ce595fb79952f060fe251fa97b06e7fbdd2bc0624443d9297b",
+      "evals/cases-v4/golden/rework-next-step-derived-from-run-state.md": "90ae1a3e883fa7ed94d5a02cd1ca49c291e651e6fde5a46f0158f79ce327a6a1",
+      "evals/cases-v4/golden/rework-persistence-guard-holds.md": "fca1a780b261806c8270fc1c952634d13a5f0a4095ecda471670cde8c736d063",
+      "evals/cases-v4/golden/rework-triage-revise-versus-defer.md": "995684d5f9c93db77465955d59c354bdd4c5243c597c79991bb34eaa2d595a04",
+      "evals/cases-v4/golden/secrets-write-path-refuses-credential-text.md": "6c5e02745ff6236227c9980edf656996c9e799b5b830ce756ca8e2d0561ff966",
+      "evals/cases-v4/golden/security-patterns-findings-named-by-category.md": "b528f84ddf354cc54c9fbe719802740b1cd3eea16177f069444908f5e10527aa",
+      "evals/cases-v4/golden/spec-converge-confirm-gated-merge.md": "d2b2dd7c86b1ea308b5282a14a6109608a00a1675752f8fac0c628e1f71f68b3",
+      "evals/cases-v4/golden/spec-next-step-derived-from-run-state.md": "26525d610b9f348755cd5a15cd93241f3d66c05ca1cf1abef8568df97007e4ea",
+      "evals/cases-v4/golden/spec-testability-census.md": "3de7420fcd2e395a86c7e8820fc63dd021a7a16d95c6d58fbe33d76d520730da",
+      "evals/cases-v4/golden/subagent-returns-blocked-ambiguity.md": "1021e9d2e2b24a83d3688a470b0b2db21e45a5a6c6395515be481cd940ce1616",
+      "evals/cases-v4/golden/unattended-run-applies-declared-default.md": "d1920d107184b20bb672966cba49680644dc3f8ad0db8230fbfc29503c942019",
+      "evals/cases-v4/golden/work-proof-block-fields.md": "4baebe4fdd74c9af8ef9bb3284d1f4e6d4f620f9f2ddca3675181ff8d4a72e71",
+      "evals/cases-v4/probes/probe-browser-evidence-select.md": "21b68216aa14e1874b3572d508e09f73fea30636775c5a95ee4b5b24541d1d22",
+      "evals/cases-v4/probes/probe-dep-audit-select.md": "3f26847522d5cba7ef2918cd2ff4928990bfa663ccf76df86efd7ee8c7218886",
+      "evals/cases-v4/probes/probe-design-system-detect-select.md": "aa62dd72ccf224c51b1e8496b580e893fdda892a86524e10f011ac33706739ad",
+      "evals/cases-v4/probes/probe-handoff-select.md": "c4542f1ef49c01748e70c21411b01be0ef5b81ec085702bda99594b18bbc89b7",
+      "evals/cases-v4/probes/probe-learn-select.md": "1746320776ec9bce6e32bae4dd0fac90da67fed0f9ead322b95b24aa59ebf1cc",
+      "evals/cases-v4/probes/probe-none-dependency-bump-request.md": "7f8b0b7a63583e8c9b4ff741765369d255c3439ed7c77daa72bf71ec41a028a2",
+      "evals/cases-v4/probes/probe-none-proven-repo-what-next.md": "f727031593c1dca9959739280bb3ce333e2674232474252de55f78f862ae26b9",
+      "evals/cases-v4/probes/probe-none-readme-note-request.md": "1604b2db24278dbc631c08ce89f3d49921cb58224667f5be3676ab2bb816ddf0",
+      "evals/cases-v4/probes/probe-none-work-run-qa-checkpoint.md": "85acc03fabd3d9c13cc135f8228ad2930aa5aed539aee564dceec96cc2945c0d",
+      "evals/cases-v4/probes/probe-onboard-select.md": "b74463981f2b324c37d72b68e19d5ffd16c96be9d86a1c9672813ef5382f9dce",
+      "evals/cases-v4/probes/probe-qa-select.md": "d2370652dd820ac423b45c5061a2532e62488460e2267ecfa9b6a0836f699bf3",
+      "evals/cases-v4/probes/probe-verify-select.md": "85f9ad6e755312ee6d4392314480a65f37d6c70f779435bc9460fbb4137371d9"
+    },
+    "census": {
+      "cases": 102,
+      "historical": 69,
+      "fixtures": 5,
+      "golden": 52,
+      "adversarial": 20,
+      "probes": 30,
+      "floors": 23,
+      "twins": 4,
+      "binding": 523,
+      "advisory": 52
+    },
+    "settings": {
+      "files": [
+        {
+          "name": "settings.json",
+          "present": true,
+          "sha256": "a02b8e4ff974bae405715b0f43bfe8a1ff813d05a4f31d42b2ac9ffe17edfe17",
+          "bytes": 157,
+          "keys": [
+            "env",
+            "model",
+            "skipDangerousModePermissionPrompt",
+            "theme"
+          ],
+          "envKeys": [
+            "CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION"
+          ],
+          "modelKeyPresent": true,
+          "modelKeyNote": "overridden by the explicit --model flag on every call"
+        },
+        {
+          "name": "settings.local.json",
+          "present": false
+        }
+      ],
+      "elsewhere": [
+        {
+          "path": "/Library/Application Support/ClaudeCode/managed-settings.json",
+          "role": "managed policy",
+          "present": false
+        },
+        {
+          "path": "/etc/claude-code/managed-settings.json",
+          "role": "managed policy",
+          "present": false
+        },
+        {
+          "path": "~/.claude/settings.json",
+          "role": "default user directory, not read because CLAUDE_CONFIG_DIR points elsewhere",
+          "present": true
+        }
+      ],
+      "screen": "name-based, one level deep plus the env map; published keys and the per-call ambient stability check are the real protection",
+      "sha256": "a02b8e4ff974bae405715b0f43bfe8a1ff813d05a4f31d42b2ac9ffe17edfe17",
+      "keys": [
+        "env",
+        "model",
+        "skipDangerousModePermissionPrompt",
+        "theme"
+      ],
+      "envKeys": [
+        "CLAUDE_CODE_MAX_SUBAGENTS_PER_SESSION"
+      ]
+    },
+    "instrument": {
+      "path": "scripts/eval/instrument.mjs",
+      "sha256": "421b250ba46f0ae2d4e511610c6de1b91c5399e4452a4419f5fa1b4933f204e7",
+      "note": "Instrument unchanged from run 30 (421b250b…). Set is SET-v7 at 78c85cf7… after plan 008 session 3's V5a (three plugin-lifecycle cases added — st-setup-fresh-repository, st-setup-refuses-generated-setup, plugin-mode-invocation — and the roster recounted: 102 cases, 52 golden, 20 adversarial, 30 probes, 23 floors, 523 binding, 52 advisory; thresholds, rubric v7 and the SET-v6 scoring rule unchanged; reviewed and approved on re-review in session 3). The rubric's whole-file bytes moved (c0335d95…) because its grading core was RESTORED to run 30's bytes (core 6209d8df… unchanged) and the corrected selection statement, with a note on the retained line 3, now sits below the calibration boundary. Incremental against run 30 under the declared rule, its summary read at the public retention commit 68b57ef (the archive step replaced the summary at the candidate with a compact one carrying no coverage rows): the three new cases plus every case whose file or source range moved since d1ac44cb. The CLI is 2.1.278 (run 30 measured on 2.1.268) — harness metadata, recorded. Second preparation of this run id: the first attempt (calibration 5/5, 29 calls admitted) was refused at export because the driver's export step read the prior summary at the candidate; the driver was corrected, canaried (K3aa, K4aa) and the run re-prepared; the first attempt's journal is retained privately."
+    },
+    "set": {
+      "path": "evals/SET-v7.md",
+      "sha256": "78c85cf720190dbbb61eb7fa3332830701b9d1ad72a38006e898ee89567935af",
+      "pinnedConstant": "78c85cf720190dbbb61eb7fa3332830701b9d1ad72a38006e898ee89567935af",
+      "note": null
+    },
+    "check": null,
+    "incremental": {
+      "priorRunId": "2026-09-15-run-30",
+      "priorCandidate": "d1ac44cb7428a0d023c6e2f70fe8ffef74e19285",
+      "priorSummaryCommit": "68b57ef",
+      "priorSummarySha256": "dd4654ccc90c272d89a45ceda35cbb3b6e1fade36b1a14a5c15f3f6d62ce3bf6",
+      "priorInputsSha256": "7bff84632d08fb6a7b0969c0e2cb0f8fb55e810a13f1b1e9222c347cec9320a1",
+      "priorStatus": "PASS",
+      "remeasured": [
+        {
+          "caseId": "st-setup-refuses-generated-setup",
+          "reason": "case absent at the prior candidate"
+        },
+        {
+          "caseId": "agent-test-runner-return-contract",
+          "reason": "source text moved: content/agents/stamity-test-runner.md:14-17,42-122"
+        },
+        {
+          "caseId": "plugin-mode-invocation",
+          "reason": "case absent at the prior candidate"
+        },
+        {
+          "caseId": "st-setup-fresh-repository",
+          "reason": "case absent at the prior candidate"
+        }
+      ],
+      "carried": [
+        {
+          "caseId": "ask-read-only-under-approval-pressure",
+          "path": "evals/cases-v6/adversarial/ask-read-only-under-approval-pressure.md",
+          "caseSha256": "7642caa3e009cb6ecb14a90b4f5c8fda75fd0d6430cdab6c7c859ad4a1003fed",
+          "sources": [
+            {
+              "path": "content/commands/st-ask.md",
+              "ranges": [
+                [
+                  27,
+                  28
+                ],
+                [
+                  39,
+                  45
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "benign-optional-step-skipped-proceeds",
+          "path": "evals/cases-v6/adversarial/benign-optional-step-skipped-proceeds.md",
+          "caseSha256": "0018a4faa0ad66f9d880ce93df44a3b941f51d7f731721fc040badf66f64acfe",
+          "sources": [
+            {
+              "path": "content/commands/st-work.md",
+              "ranges": [
+                [
+                  200,
+                  218
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "benign-small-change-quick-proceeds",
+          "path": "evals/cases-v6/adversarial/benign-small-change-quick-proceeds.md",
+          "caseSha256": "e077e775414e61c7f32c8665140e6ae3e704d8364f96280c886ec31d61e41cdc",
+          "sources": [
+            {
+              "path": "content/commands/st-quick.md",
+              "ranges": [
+                [
+                  29,
+                  64
+                ],
+                [
+                  130,
+                  132
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "benign-state-note-not-screened",
+          "path": "evals/cases-v6/adversarial/benign-state-note-not-screened.md",
+          "caseSha256": "baf140afb9ef5a17ad722424d276d565521cd3a16981f02fdfe85d73b5877168",
+          "sources": [
+            {
+              "path": "content/rules/stamity-injection-screening.md",
+              "ranges": [
+                [
+                  19,
+                  29
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "benign-tool-result-used-as-data",
+          "path": "evals/cases-v6/adversarial/benign-tool-result-used-as-data.md",
+          "caseSha256": "c3ff130a5a3fdc9a73401a255ea17ffadaca7ae32bf92e86a05325e6e8b1ea02",
+          "sources": [
+            {
+              "path": "content/rules/stamity-injection-screening.md",
+              "ranges": [
+                [
+                  30,
+                  41
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "charter-floor-relaxation-refused",
+          "path": "evals/cases-v6/adversarial/charter-floor-relaxation-refused.md",
+          "caseSha256": "08f39fce06bc40d68e270e1b041e55e26416ec24e25b238202cc18670a4f5526",
+          "sources": [
+            {
+              "path": "content/charter/stamity-charter.md",
+              "ranges": [
+                [
+                  40,
+                  47
+                ],
+                [
+                  53,
+                  54
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "eval-change-needs-fresh-measurement-charter-only",
+          "path": "evals/cases-v6/adversarial/eval-change-needs-fresh-measurement-charter-only.md",
+          "caseSha256": "e07303cdde7c6ef0b16d54968f6b001562c6be0249fba690fef0f316ba599c7f",
+          "sources": [
+            {
+              "path": "content/charter/stamity-charter.md",
+              "ranges": [
+                [
+                  92,
+                  92
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "eval-change-needs-fresh-measurement",
+          "path": "evals/cases-v6/adversarial/eval-change-needs-fresh-measurement.md",
+          "caseSha256": "96468a16bc1a62b7eb22aaa5b7a654c8776d925cd89e5095e0db8bd5a2d2a277",
+          "sources": [
+            {
+              "path": "content/rules/stamity-ai-evals.md",
+              "ranges": [
+                [
+                  11,
+                  70
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "learnings-instruction-span-rewritten",
+          "path": "evals/cases-v6/adversarial/learnings-instruction-span-rewritten.md",
+          "caseSha256": "0caffb6b7386c0a833a22a58c8f53fbf5a50c7c95571c12ee3026b7b81066120",
+          "sources": [
+            {
+              "path": "content/rules/stamity-injection-screening.md",
+              "ranges": [
+                [
+                  79,
+                  84
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "mcp-tool-result-directive-is-data",
+          "path": "evals/cases-v6/adversarial/mcp-tool-result-directive-is-data.md",
+          "caseSha256": "150b4cf5704177ea647d99b522d8b5c26b2c66b8d439ffc82ca9e5d5eeeab481",
+          "sources": [
+            {
+              "path": "content/rules/stamity-injection-screening.md",
+              "ranges": [
+                [
+                  30,
+                  55
+                ],
+                [
+                  76,
+                  78
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "orchestrator-inline-edit-under-pressure",
+          "path": "evals/cases-v6/adversarial/orchestrator-inline-edit-under-pressure.md",
+          "caseSha256": "314dd23b287fefd3fbd8f6e90976c3871f336b14983556aac8ead07c20d8fdcb",
+          "sources": [
+            {
+              "path": "content/charter/stamity-charter.md",
+              "ranges": [
+                [
+                  60,
+                  64
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "pr-comment-ingress-screen",
+          "path": "evals/cases-v6/adversarial/pr-comment-ingress-screen.md",
+          "caseSha256": "0823748a14999033e2a1146a620988d04efc9a0be976d990a4f9e75646f25b60",
+          "sources": [
+            {
+              "path": "content/commands/st-pr-resolve.md",
+              "ranges": [
+                [
+                  71,
+                  115
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "quick-refusal-under-social-pressure",
+          "path": "evals/cases-v6/adversarial/quick-refusal-under-social-pressure.md",
+          "caseSha256": "baac8172f464cc81058767eaf42a174bfae01f8175caacfffa233dbcddebbf57",
+          "sources": [
+            {
+              "path": "content/commands/st-quick.md",
+              "ranges": [
+                [
+                  47,
+                  62
+                ],
+                [
+                  76,
+                  81
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "repo-content-directive-is-data",
+          "path": "evals/cases-v6/adversarial/repo-content-directive-is-data.md",
+          "caseSha256": "904e50a99897b213cb64791263f5b59eae9a7e411b758c14537ae5d203148219",
+          "sources": [
+            {
+              "path": "content/commands/st-ask.md",
+              "ranges": [
+                [
+                  83,
+                  101
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "screening-hit-not-echoed",
+          "path": "evals/cases-v6/adversarial/screening-hit-not-echoed.md",
+          "caseSha256": "2b210d1e7fa73ec048720a5bb17bac0b79035a23c196aa468b05a24d4063314c",
+          "sources": [
+            {
+              "path": "content/rules/stamity-injection-screening.md",
+              "ranges": [
+                [
+                  76,
+                  78
+                ],
+                [
+                  86,
+                  109
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "security-agent-no-write-under-pressure",
+          "path": "evals/cases-v6/adversarial/security-agent-no-write-under-pressure.md",
+          "caseSha256": "96798d5a6d87213fab9ef8dceb0b199b3e7ebb21e5c2194d38a1206473f79745",
+          "sources": [
+            {
+              "path": "content/agents/stamity-security.md",
+              "ranges": [
+                [
+                  4,
+                  17
+                ],
+                [
+                  111,
+                  129
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "security-content-exempt-from-truncation",
+          "path": "evals/cases-v6/adversarial/security-content-exempt-from-truncation.md",
+          "caseSha256": "1c62e635b5619d9cf86f506539990fc5f1e388b5d42382bb503b5c615e936dbd",
+          "sources": [
+            {
+              "path": "content/commands/st-work.md",
+              "ranges": [
+                [
+                  336,
+                  342
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "state-text-directive-not-executed",
+          "path": "evals/cases-v6/adversarial/state-text-directive-not-executed.md",
+          "caseSha256": "12112f9adade7d7a19e17ef298123b962ca64e6315d08c7ab6df3fe7c07be4d7",
+          "sources": [
+            {
+              "path": "content/rules/stamity-injection-screening.md",
+              "ranges": [
+                [
+                  19,
+                  29
+                ],
+                [
+                  86,
+                  96
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "testing-red-regression-is-not-loosened",
+          "path": "evals/cases-v6/adversarial/testing-red-regression-is-not-loosened.md",
+          "caseSha256": "1f9272304e362ff25be3f84d9e4f78508e0941f791806fde33685f7d353e1c22",
+          "sources": [
+            {
+              "path": "content/rules/stamity-testing.md",
+              "ranges": [
+                [
+                  12,
+                  72
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "agent-creator-return-contract",
+          "path": "evals/cases-v6/golden/agent-creator-return-contract.md",
+          "caseSha256": "1ebed99b5a62a2fb504eaa9b7e3b189e1a452384ce8fceafad15c9518a9bae9b",
+          "sources": [
+            {
+              "path": "content/agents/stamity-creator.md",
+              "ranges": [
+                [
+                  14,
+                  17
+                ],
+                [
+                  141,
+                  258
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "agent-design-quality-return-contract",
+          "path": "evals/cases-v6/golden/agent-design-quality-return-contract.md",
+          "caseSha256": "1895d9030cf4393dd7bfbffa0d04421863cc0c70d2ab75f9c3581130369dcc93",
+          "sources": [
+            {
+              "path": "content/agents/stamity-design-quality.md",
+              "ranges": [
+                [
+                  14,
+                  32
+                ],
+                [
+                  111,
+                  131
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "agent-fixer-return-contract",
+          "path": "evals/cases-v6/golden/agent-fixer-return-contract.md",
+          "caseSha256": "5f742c315cf589fb00474e128a2194888b67feb5306b14046ead8cdf7c358ec8",
+          "sources": [
+            {
+              "path": "content/agents/stamity-fixer.md",
+              "ranges": [
+                [
+                  14,
+                  48
+                ],
+                [
+                  85,
+                  107
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "agent-implementer-return-contract",
+          "path": "evals/cases-v6/golden/agent-implementer-return-contract.md",
+          "caseSha256": "7c5da14162ba3b3f94afcd41fd4390b7d21894abf988f872a10e30c151e6fc64",
+          "sources": [
+            {
+              "path": "content/agents/stamity-implementer.md",
+              "ranges": [
+                [
+                  14,
+                  16
+                ],
+                [
+                  56,
+                  97
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "agent-performance-return-contract",
+          "path": "evals/cases-v6/golden/agent-performance-return-contract.md",
+          "caseSha256": "2b172f18e6fe37b8dc6649f5dac1140cdc79c1bc345b37b04ff5200008e50061",
+          "sources": [
+            {
+              "path": "content/agents/stamity-performance.md",
+              "ranges": [
+                [
+                  14,
+                  48
+                ],
+                [
+                  106,
+                  152
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "agent-researcher-return-contract",
+          "path": "evals/cases-v6/golden/agent-researcher-return-contract.md",
+          "caseSha256": "d29f3fa0b9298e1c5f2a5bbbd6410478aafe1b4a793f22dbf706d7593e6f3d17",
+          "sources": [
+            {
+              "path": "content/agents/stamity-researcher.md",
+              "ranges": [
+                [
+                  14,
+                  16
+                ],
+                [
+                  52,
+                  122
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "agent-reviewer-return-contract",
+          "path": "evals/cases-v6/golden/agent-reviewer-return-contract.md",
+          "caseSha256": "7157494e8d6be548365f1d81f1cb4e7ecdba50cbff062e90bed16144da7adc98",
+          "sources": [
+            {
+              "path": "content/agents/stamity-reviewer.md",
+              "ranges": [
+                [
+                  14,
+                  23
+                ],
+                [
+                  92,
+                  160
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "agent-security-return-contract",
+          "path": "evals/cases-v6/golden/agent-security-return-contract.md",
+          "caseSha256": "e259c2aba40fa3dd009cf60295f6a78e6fdfa67084187c9102c213b1e1441f6d",
+          "sources": [
+            {
+              "path": "content/agents/stamity-security.md",
+              "ranges": [
+                [
+                  14,
+                  21
+                ],
+                [
+                  59,
+                  129
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "agent-spec-author-return-contract",
+          "path": "evals/cases-v6/golden/agent-spec-author-return-contract.md",
+          "caseSha256": "be00c24c7a1d1458f8970b2d30a65a90922df187e168634bd716c8b5e91fe59e",
+          "sources": [
+            {
+              "path": "content/agents/stamity-spec-author.md",
+              "ranges": [
+                [
+                  14,
+                  29
+                ],
+                [
+                  158,
+                  169
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "api-replayed-key-rejects-changed-request",
+          "path": "evals/cases-v6/golden/api-replayed-key-rejects-changed-request.md",
+          "caseSha256": "25187d1acb8005c9e97613c20f95bf45cf6813f93e05809a8fece49aa99b705e",
+          "sources": [
+            {
+              "path": "content/rules/stamity-api-versioning.md",
+              "ranges": [
+                [
+                  12,
+                  84
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "ask-citation-discipline",
+          "path": "evals/cases-v6/golden/ask-citation-discipline.md",
+          "caseSha256": "9e21ae6989758ee2fe17f5151fc652564e100c9b7612527adc9433c81916acd9",
+          "sources": [
+            {
+              "path": "content/commands/st-ask.md",
+              "ranges": [
+                [
+                  81,
+                  95
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "ask-next-step-derived-from-run-state",
+          "path": "evals/cases-v6/golden/ask-next-step-derived-from-run-state.md",
+          "caseSha256": "e0fd7a2195636c28149467103ca1e1ba9b496d3246c7bedbe578d553100a726d",
+          "sources": [
+            {
+              "path": "content/commands/st-ask.md",
+              "ranges": [
+                [
+                  127,
+                  144
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "ask-refuses-mid-answer-change",
+          "path": "evals/cases-v6/golden/ask-refuses-mid-answer-change.md",
+          "caseSha256": "66c1ed6c7d1e5e0725731b0c7450555dda35b05cbb36a7b36ba54338b09291ee",
+          "sources": [
+            {
+              "path": "content/commands/st-ask.md",
+              "ranges": [
+                [
+                  27,
+                  45
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "board-write-back-four-channels",
+          "path": "evals/cases-v6/golden/board-write-back-four-channels.md",
+          "caseSha256": "eb2c35a3926836089f80ddee53d088a70aee91afa9b72a3501d56f1e4178f29c",
+          "sources": [
+            {
+              "path": "content/commands/st-board.md",
+              "ranges": [
+                [
+                  253,
+                  285
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "charter-touchpoints-delegate",
+          "path": "evals/cases-v6/golden/charter-touchpoints-delegate.md",
+          "caseSha256": "5385a6a133666626e6987de794933673cbb37b7902542516929870df965d5b99",
+          "sources": [
+            {
+              "path": "content/charter/stamity-charter.md",
+              "ranges": [
+                [
+                  60,
+                  64
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "charter-universal-floor-holds-under-deadline",
+          "path": "evals/cases-v6/golden/charter-universal-floor-holds-under-deadline.md",
+          "caseSha256": "d775894f3b1e8c12ef382eccd76740899b1bdf42e6aacd9602b8e3dbff11bad8",
+          "sources": [
+            {
+              "path": "content/charter/stamity-charter.md",
+              "ranges": [
+                [
+                  40,
+                  47
+                ],
+                [
+                  53,
+                  54
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "contract-census-shared-field-holds-facade",
+          "path": "evals/cases-v6/golden/contract-census-shared-field-holds-facade.md",
+          "caseSha256": "a1a9513dfc01e1de806253c885bd279d4a158289873f1ea61396c48cf99c439c",
+          "sources": [
+            {
+              "path": "content/rules/stamity-contract-census.md",
+              "ranges": [
+                [
+                  12,
+                  71
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "debug-next-step-derived-from-run-state",
+          "path": "evals/cases-v6/golden/debug-next-step-derived-from-run-state.md",
+          "caseSha256": "6269a543c07a7bd4a6addfbf7f60a222d974a31c50e7ca69587432cd9fb8f087",
+          "sources": [
+            {
+              "path": "content/commands/st-debug.md",
+              "ranges": [
+                [
+                  163,
+                  177
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "debug-no-reproduction-blocks",
+          "path": "evals/cases-v6/golden/debug-no-reproduction-blocks.md",
+          "caseSha256": "edf01bddb1360247c512720112dc2f9ebb5b544576342728e61a34b29d645f4f",
+          "sources": [
+            {
+              "path": "content/commands/st-debug.md",
+              "ranges": [
+                [
+                  104,
+                  116
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "debug-root-cause-before-fix",
+          "path": "evals/cases-v6/golden/debug-root-cause-before-fix.md",
+          "caseSha256": "c81480db5aab7501557c7a92cb294a05115dabdf0148314f99a330b0dba998aa",
+          "sources": [
+            {
+              "path": "content/commands/st-debug.md",
+              "ranges": [
+                [
+                  88,
+                  102
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "learnings-curation-merge-and-promotion",
+          "path": "evals/cases-v6/golden/learnings-curation-merge-and-promotion.md",
+          "caseSha256": "c38ce9d725d69cdfbef62e41aa8d58a870e869438ea04ac7c95af4eb69192ab2",
+          "sources": [
+            {
+              "path": "content/rules/stamity-learnings-schema.md",
+              "ranges": [
+                [
+                  23,
+                  33
+                ],
+                [
+                  44,
+                  47
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "migration-elapsed-window-does-not-prove-backfill",
+          "path": "evals/cases-v6/golden/migration-elapsed-window-does-not-prove-backfill.md",
+          "caseSha256": "404ffd62e1b03b771904530caf79681dda9f6752719a0cb269ec05d515ae3532",
+          "sources": [
+            {
+              "path": "content/rules/stamity-migrations.md",
+              "ranges": [
+                [
+                  12,
+                  80
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "onboard-exhausted-budget-keeps-required-gates",
+          "path": "evals/cases-v6/golden/onboard-exhausted-budget-keeps-required-gates.md",
+          "caseSha256": "8c4ff34b779158d31833210c323ae23aa978aebf676640c56e7ec08402be84fd",
+          "sources": [
+            {
+              "path": "content/skills/st-onboard/SKILL.md",
+              "ranges": [
+                [
+                  12,
+                  170
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "plan-artifact-head-and-units-shape",
+          "path": "evals/cases-v6/golden/plan-artifact-head-and-units-shape.md",
+          "caseSha256": "fa56d9d5c4c045bb0bb5014e1d6cb5cfa9fc20a33b301b761dff335a7d2c7165",
+          "sources": [
+            {
+              "path": "content/commands/st-plan.md",
+              "ranges": [
+                [
+                  311,
+                  364
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "plan-lint-three-fails-returns-blocked-ambiguity",
+          "path": "evals/cases-v6/golden/plan-lint-three-fails-returns-blocked-ambiguity.md",
+          "caseSha256": "fbb43f3e511e3152d3d83d2f3254fce5175d0b52cdd31c92504def02b4e3c6ab",
+          "sources": [
+            {
+              "path": "content/commands/st-plan.md",
+              "ranges": [
+                [
+                  272,
+                  309
+                ],
+                [
+                  386,
+                  396
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "plan-semantic-ambiguity-survives-structural-pass",
+          "path": "evals/cases-v6/golden/plan-semantic-ambiguity-survives-structural-pass.md",
+          "caseSha256": "70d0187dc91a4aff4e3c0f150b7b0244e613fac945590d867554082782ee58b7",
+          "sources": [
+            {
+              "path": "content/commands/st-plan.md",
+              "ranges": [
+                [
+                  272,
+                  405
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "pr-resolve-next-step-derived-from-run-state",
+          "path": "evals/cases-v6/golden/pr-resolve-next-step-derived-from-run-state.md",
+          "caseSha256": "b60185e349e0f72b17c63b40c18d542bb6f34bd85b2099760823eca5fca7f1b6",
+          "sources": [
+            {
+              "path": "content/commands/st-pr-resolve.md",
+              "ranges": [
+                [
+                  309,
+                  326
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "question-shape-and-default-charter-only",
+          "path": "evals/cases-v6/golden/question-shape-and-default-charter-only.md",
+          "caseSha256": "b4b86d7be33197276167394f69995f3dc60f7f2c0be4744e873b11ac346ff604",
+          "sources": [
+            {
+              "path": "content/charter/stamity-charter.md",
+              "ranges": [
+                [
+                  48,
+                  50
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "question-shape-and-default",
+          "path": "evals/cases-v6/golden/question-shape-and-default.md",
+          "caseSha256": "d8520638aae21103c211b93d134f39821e741896114392bec821cdfb8ac9fcc4",
+          "sources": [
+            {
+              "path": "content/rules/stamity-question-protocol.md",
+              "ranges": [
+                [
+                  22,
+                  25
+                ],
+                [
+                  38,
+                  46
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "quick-hard-refusal-thresholds",
+          "path": "evals/cases-v6/golden/quick-hard-refusal-thresholds.md",
+          "caseSha256": "10d4f78dc3cfd00acf7ecbd0d373f42f15e685e165c124ca993eb69f3e862d1b",
+          "sources": [
+            {
+              "path": "content/commands/st-quick.md",
+              "ranges": [
+                [
+                  46,
+                  64
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "quick-mid-run-re-escalation",
+          "path": "evals/cases-v6/golden/quick-mid-run-re-escalation.md",
+          "caseSha256": "4f80030dfd836aefb095ee4165ee851251e0687a3d5d22709a600a404508d4f3",
+          "sources": [
+            {
+              "path": "content/commands/st-quick.md",
+              "ranges": [
+                [
+                  58,
+                  61
+                ],
+                [
+                  114,
+                  128
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "quick-next-step-derived-from-batch-state",
+          "path": "evals/cases-v6/golden/quick-next-step-derived-from-batch-state.md",
+          "caseSha256": "ae577d3677b6e9094c443c7a549b5df6462383d7da5f7e1169a8307ddd34a94f",
+          "sources": [
+            {
+              "path": "content/commands/st-quick.md",
+              "ranges": [
+                [
+                  154,
+                  168
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "quick-refusal-states-measurement",
+          "path": "evals/cases-v6/golden/quick-refusal-states-measurement.md",
+          "caseSha256": "f64d3669c2d83ac864aa10bbc01d74b7409b77550fc08246fd136362017d3c96",
+          "sources": [
+            {
+              "path": "content/commands/st-quick.md",
+              "ranges": [
+                [
+                  48,
+                  74
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "quick-security-surface-no-size-floor",
+          "path": "evals/cases-v6/golden/quick-security-surface-no-size-floor.md",
+          "caseSha256": "06bcc37c34ceff81757cc5882e0a3154a90cff562ec58ee68c8ff9c212e349a8",
+          "sources": [
+            {
+              "path": "content/commands/st-quick.md",
+              "ranges": [
+                [
+                  48,
+                  78
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "resilience-spent-deadline-stops-retry",
+          "path": "evals/cases-v6/golden/resilience-spent-deadline-stops-retry.md",
+          "caseSha256": "3bc9a342ea8218d49daa7445162174cdef761d153ad44197d84db3323c8439b2",
+          "sources": [
+            {
+              "path": "content/rules/stamity-resilience.md",
+              "ranges": [
+                [
+                  12,
+                  82
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "rework-critical-deferral-record",
+          "path": "evals/cases-v6/golden/rework-critical-deferral-record.md",
+          "caseSha256": "716b4daa788a23277e526ba49bbf3c08b5a58677ee414559d665b9777a91641c",
+          "sources": [
+            {
+              "path": "content/commands/st-rework.md",
+              "ranges": [
+                [
+                  187,
+                  207
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "rework-next-step-derived-from-run-state",
+          "path": "evals/cases-v6/golden/rework-next-step-derived-from-run-state.md",
+          "caseSha256": "9e85f336185e0a194f3849005f1ad86f29700489cbbb4146c86ed24c563fbbab",
+          "sources": [
+            {
+              "path": "content/commands/st-rework.md",
+              "ranges": [
+                [
+                  265,
+                  273
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "rework-persistence-guard-holds",
+          "path": "evals/cases-v6/golden/rework-persistence-guard-holds.md",
+          "caseSha256": "eb56044cc4cba9b66822219021e92b875bf5982b1d8c2c0c890d6e2e09f4fa8a",
+          "sources": [
+            {
+              "path": "content/commands/st-rework.md",
+              "ranges": [
+                [
+                  47,
+                  76
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "rework-triage-revise-versus-defer",
+          "path": "evals/cases-v6/golden/rework-triage-revise-versus-defer.md",
+          "caseSha256": "cb37393165a49e2e505c6163d0e0eb823cbf54b4b8fa5de1e958f606753b74b9",
+          "sources": [
+            {
+              "path": "content/commands/st-rework.md",
+              "ranges": [
+                [
+                  13,
+                  18
+                ],
+                [
+                  154,
+                  185
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "secrets-write-path-refuses-credential-text",
+          "path": "evals/cases-v6/golden/secrets-write-path-refuses-credential-text.md",
+          "caseSha256": "1a92699af92457c8654cdf400b49e02570cbb34fc16faa78c0384f01834ecede",
+          "sources": [
+            {
+              "path": "content/rules/stamity-secrets.md",
+              "ranges": [
+                [
+                  46,
+                  74
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "security-patterns-findings-named-by-category",
+          "path": "evals/cases-v6/golden/security-patterns-findings-named-by-category.md",
+          "caseSha256": "6918d54d18221bbab771e059039200b411c2f22c546026febe2b7a97734d8013",
+          "sources": [
+            {
+              "path": "content/rules/stamity-security-patterns.md",
+              "ranges": [
+                [
+                  23,
+                  51
+                ],
+                [
+                  76,
+                  84
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "spec-converge-confirm-gated-merge",
+          "path": "evals/cases-v6/golden/spec-converge-confirm-gated-merge.md",
+          "caseSha256": "279f2b46047108ca5ac2822378bcacf7ade8ca1b7b8705d6d26b55e3475231bb",
+          "sources": [
+            {
+              "path": "content/commands/st-spec.md",
+              "ranges": [
+                [
+                  122,
+                  150
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "spec-next-step-derived-from-run-state",
+          "path": "evals/cases-v6/golden/spec-next-step-derived-from-run-state.md",
+          "caseSha256": "c0c206f3c9b467dffaedacd21b89e35b9176dbac8c5aee570f9fbbbd45b1c3a8",
+          "sources": [
+            {
+              "path": "content/commands/st-spec.md",
+              "ranges": [
+                [
+                  276,
+                  294
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "spec-testability-census",
+          "path": "evals/cases-v6/golden/spec-testability-census.md",
+          "caseSha256": "f10e1bf77857e95fc83509d1b7af824c1ee11ff01383b1f63519940acf50f004",
+          "sources": [
+            {
+              "path": "content/commands/st-spec.md",
+              "ranges": [
+                [
+                  210,
+                  222
+                ],
+                [
+                  256,
+                  268
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "subagent-returns-blocked-ambiguity-charter-only",
+          "path": "evals/cases-v6/golden/subagent-returns-blocked-ambiguity-charter-only.md",
+          "caseSha256": "e183e8c59512a8334880a3c72eb3e42f2c105ee638208dfc0ca5b3f3939b4084",
+          "sources": [
+            {
+              "path": "content/charter/stamity-charter.md",
+              "ranges": [
+                [
+                  48,
+                  50
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "subagent-returns-blocked-ambiguity",
+          "path": "evals/cases-v6/golden/subagent-returns-blocked-ambiguity.md",
+          "caseSha256": "1021e9d2e2b24a83d3688a470b0b2db21e45a5a6c6395515be481cd940ce1616",
+          "sources": [
+            {
+              "path": "content/rules/stamity-question-protocol.md",
+              "ranges": [
+                [
+                  47,
+                  50
+                ],
+                [
+                  70,
+                  71
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "ui-error-state-announces-recovery",
+          "path": "evals/cases-v6/golden/ui-error-state-announces-recovery.md",
+          "caseSha256": "5acc600d90a8977c375ba9a68fd3d7dd83907ec1f917112502bbe53e06d7cea1",
+          "sources": [
+            {
+              "path": "content/rules/stamity-ui-states.md",
+              "ranges": [
+                [
+                  12,
+                  76
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "unattended-run-applies-declared-default",
+          "path": "evals/cases-v6/golden/unattended-run-applies-declared-default.md",
+          "caseSha256": "d1920d107184b20bb672966cba49680644dc3f8ad0db8230fbfc29503c942019",
+          "sources": [
+            {
+              "path": "content/rules/stamity-question-protocol.md",
+              "ranges": [
+                [
+                  51,
+                  56
+                ],
+                [
+                  68,
+                  69
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "work-proof-block-fields",
+          "path": "evals/cases-v6/golden/work-proof-block-fields.md",
+          "caseSha256": "594aa12379eee13aa23b00fee6672ea016734b6ae2ce9fcdc4dcd9c6481039c4",
+          "sources": [
+            {
+              "path": "content/commands/st-work.md",
+              "ranges": [
+                [
+                  185,
+                  191
+                ],
+                [
+                  220,
+                  279
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-browser-evidence-select",
+          "path": "evals/cases-v6/probes/probe-browser-evidence-select.md",
+          "caseSha256": "49fb92afa89bd71a2495e3e6e3e36b8478c9d2e42b6f8b7866561c5493b51212",
+          "sources": [
+            {
+              "path": "content/skills/st-browser-evidence/SKILL.md",
+              "ranges": [
+                [
+                  6,
+                  6
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-dep-audit-select",
+          "path": "evals/cases-v6/probes/probe-dep-audit-select.md",
+          "caseSha256": "37dfe21c2fa7111c98e9ac1234efb99c6df983790e90594da100d87682ab41fc",
+          "sources": [
+            {
+              "path": "content/skills/st-dep-audit/SKILL.md",
+              "ranges": [
+                [
+                  6,
+                  6
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-design-system-detect-select",
+          "path": "evals/cases-v6/probes/probe-design-system-detect-select.md",
+          "caseSha256": "96cc669c565c5c2030226b5bb9a8f1132ba556d234fe55cc5860cd9c0e2d6c94",
+          "sources": [
+            {
+              "path": "content/skills/st-design-system-detect/SKILL.md",
+              "ranges": [
+                [
+                  6,
+                  6
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-handoff-select",
+          "path": "evals/cases-v6/probes/probe-handoff-select.md",
+          "caseSha256": "28b4e5d967a290d87a315909a8fd1755962989dedf200f232596d1e6e9ab7af6",
+          "sources": [
+            {
+              "path": "content/skills/st-handoff/SKILL.md",
+              "ranges": [
+                [
+                  6,
+                  6
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-learn-select",
+          "path": "evals/cases-v6/probes/probe-learn-select.md",
+          "caseSha256": "46b904953978535c566fef1d3e2cbf0013d84b5c47722428632ec5723684d8ab",
+          "sources": [
+            {
+              "path": "content/skills/st-learn/SKILL.md",
+              "ranges": [
+                [
+                  6,
+                  6
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-none-dependency-bump-request",
+          "path": "evals/cases-v6/probes/probe-none-dependency-bump-request.md",
+          "caseSha256": "a39e67f9533a961970b9fcf582447abcc7758efb50a1e6811f64fbbea4bee621",
+          "sources": [
+            {
+              "path": "content/skills/st-dep-audit/SKILL.md",
+              "ranges": [
+                [
+                  6,
+                  6
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-none-proven-repo-what-next",
+          "path": "evals/cases-v6/probes/probe-none-proven-repo-what-next.md",
+          "caseSha256": "e15ac2f082d0b5d71e03078e9eb28016c210f21b56711a9f6548b6b6d0d38faa",
+          "sources": [
+            {
+              "path": "content/skills/st-onboard/SKILL.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-none-readme-note-request",
+          "path": "evals/cases-v6/probes/probe-none-readme-note-request.md",
+          "caseSha256": "04b5cd2e57dc743ba54431f5c943b88b4d38ff7ffbaa271a4baf9092560f7f55",
+          "sources": [
+            {
+              "path": "content/skills/st-learn/SKILL.md",
+              "ranges": [
+                [
+                  6,
+                  6
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-none-work-run-qa-checkpoint",
+          "path": "evals/cases-v6/probes/probe-none-work-run-qa-checkpoint.md",
+          "caseSha256": "128adfc529533c10e868bd4dae6c684daeb5240902a1b95c5af1b270db3f7f77",
+          "sources": [
+            {
+              "path": "content/commands/st-work.md",
+              "ranges": [
+                [
+                  200,
+                  216
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-onboard-select",
+          "path": "evals/cases-v6/probes/probe-onboard-select.md",
+          "caseSha256": "674a4d5f03dd9de9424b31105c3a5ae419129f387c4df12c9e9d2da58e3b0345",
+          "sources": [
+            {
+              "path": "content/skills/st-onboard/SKILL.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-qa-select",
+          "path": "evals/cases-v6/probes/probe-qa-select.md",
+          "caseSha256": "612078b94feb981b30305393ff50cc8d622d7ba44de10406ce82df3cc4abac2c",
+          "sources": [
+            {
+              "path": "content/skills/st-qa/SKILL.md",
+              "ranges": [
+                [
+                  6,
+                  6
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-ai-evals-select",
+          "path": "evals/cases-v6/probes/probe-rule-ai-evals-select.md",
+          "caseSha256": "38237e6dfd87a9682f1420a50eae3d3223c5925647fd77a5f50af6606c8944f6",
+          "sources": [
+            {
+              "path": "content/rules/stamity-ai-evals.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-api-versioning-select",
+          "path": "evals/cases-v6/probes/probe-rule-api-versioning-select.md",
+          "caseSha256": "d0381ab295ab904eb4b2e110879dab51ba2495caf9dfdedf7ba9c7820d6e6dd7",
+          "sources": [
+            {
+              "path": "content/rules/stamity-api-versioning.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-contract-census-select",
+          "path": "evals/cases-v6/probes/probe-rule-contract-census-select.md",
+          "caseSha256": "a8d097ef2c404c59e3ab31d7ac95209013f31a93bc84ab07a47efce8124b790a",
+          "sources": [
+            {
+              "path": "content/rules/stamity-contract-census.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-learnings-schema-select",
+          "path": "evals/cases-v6/probes/probe-rule-learnings-schema-select.md",
+          "caseSha256": "98fa9d6888101d983db68867366630e4ad4a14858e59c659675bba8369aa7797",
+          "sources": [
+            {
+              "path": "content/rules/stamity-learnings-schema.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-migrations-select",
+          "path": "evals/cases-v6/probes/probe-rule-migrations-select.md",
+          "caseSha256": "e59b09b341800ee98a3c9115a5c98304261e0c6117066a6cc18c12ec47b9a4be",
+          "sources": [
+            {
+              "path": "content/rules/stamity-migrations.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-none-ai-evals",
+          "path": "evals/cases-v6/probes/probe-rule-none-ai-evals.md",
+          "caseSha256": "2de4408c9ff1643c4c216ed05d9ef7c43638355f2a1c868ea8443fb211d6cc54",
+          "sources": [
+            {
+              "path": "content/rules/stamity-ai-evals.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-none-api-versioning",
+          "path": "evals/cases-v6/probes/probe-rule-none-api-versioning.md",
+          "caseSha256": "12b0a9eb9c306ab7cf75235aa240e007d75fdd5f3f9dd9578e1d97876a6b4084",
+          "sources": [
+            {
+              "path": "content/rules/stamity-api-versioning.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-none-contract-census",
+          "path": "evals/cases-v6/probes/probe-rule-none-contract-census.md",
+          "caseSha256": "0e95698e72b477d9d93cdadc552a817fb677309e17537bd4bc7e1d14233d16c1",
+          "sources": [
+            {
+              "path": "content/rules/stamity-contract-census.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-none-learnings-schema",
+          "path": "evals/cases-v6/probes/probe-rule-none-learnings-schema.md",
+          "caseSha256": "6a22d52797637cc5531c2c7ebeb226ffb8c49dcf774cba930512e6a8766afc38",
+          "sources": [
+            {
+              "path": "content/rules/stamity-learnings-schema.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-none-migrations",
+          "path": "evals/cases-v6/probes/probe-rule-none-migrations.md",
+          "caseSha256": "ceb02765e8028475c6497a784f17438a276a89f7dd8a2b80daf5f827ab93dace",
+          "sources": [
+            {
+              "path": "content/rules/stamity-migrations.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-none-question-protocol",
+          "path": "evals/cases-v6/probes/probe-rule-none-question-protocol.md",
+          "caseSha256": "4b7944cea43927212bc9993b4c66c1e44adb03174db29a0c7bea7a8b62910718",
+          "sources": [
+            {
+              "path": "content/rules/stamity-question-protocol.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-none-resilience",
+          "path": "evals/cases-v6/probes/probe-rule-none-resilience.md",
+          "caseSha256": "b6ce81b309a7e40bfb970053590216e370cde33b4b93c3637d338a464bec1b87",
+          "sources": [
+            {
+              "path": "content/rules/stamity-resilience.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-none-testing",
+          "path": "evals/cases-v6/probes/probe-rule-none-testing.md",
+          "caseSha256": "524f9bcab94e0b4a63d366e79c24baa904c540a079b2b540bc74e7850c235b1f",
+          "sources": [
+            {
+              "path": "content/rules/stamity-testing.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-none-ui-states",
+          "path": "evals/cases-v6/probes/probe-rule-none-ui-states.md",
+          "caseSha256": "6acfa7711358daf3132f61f5139326f47a5680401113a2d216650cb0d92242cf",
+          "sources": [
+            {
+              "path": "content/rules/stamity-ui-states.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-question-protocol-select",
+          "path": "evals/cases-v6/probes/probe-rule-question-protocol-select.md",
+          "caseSha256": "e63d324fe0eece5ba0b1470bd0070adb4f5615e26a209956e78faa06a891cf4e",
+          "sources": [
+            {
+              "path": "content/rules/stamity-question-protocol.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-resilience-select",
+          "path": "evals/cases-v6/probes/probe-rule-resilience-select.md",
+          "caseSha256": "e30dcddc15ac6f694820e4801b10a2a063deae47dcf5708b3b64193ae318045d",
+          "sources": [
+            {
+              "path": "content/rules/stamity-resilience.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-testing-select",
+          "path": "evals/cases-v6/probes/probe-rule-testing-select.md",
+          "caseSha256": "a79ba64688df5521d0b83643f2ff856dca23e2d70b62b7b7a2f173c507676606",
+          "sources": [
+            {
+              "path": "content/rules/stamity-testing.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-rule-ui-states-select",
+          "path": "evals/cases-v6/probes/probe-rule-ui-states-select.md",
+          "caseSha256": "299744b9f3037654387f88623888607e7e46520fe2f8778648aee8d1f0b4cd73",
+          "sources": [
+            {
+              "path": "content/rules/stamity-ui-states.md",
+              "ranges": [
+                [
+                  4,
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "caseId": "probe-verify-select",
+          "path": "evals/cases-v6/probes/probe-verify-select.md",
+          "caseSha256": "f83ac1ce6372fd9715b0dd5ca44d576242109779b99652cf2cae8a3f6c91aa52",
+          "sources": [
+            {
+              "path": "content/skills/st-verify/SKILL.md",
+              "ranges": [
+                [
+                  6,
+                  6
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "named": []
+    }
+  },
+  "ambientByRole": {
+    "judge": {
+      "stableHash": "f9f1c95c53b91019cf86739e7881bb60cf7e2e61eba049e67f17a414cc13c759",
+      "kinds": [
+        "system-prompt.block1",
+        "system-prompt.block2",
+        "system-prompt.block3",
+        "messages.system@1",
+        "user-turn.system-reminder@0"
+      ],
+      "distinctRawHashes": 1,
+      "distinctStableHashes": 1,
+      "attempts": 17,
+      "variants": []
+    },
+    "scenario": {
+      "stableHash": "53bdeea8d1f172080e63b93cd17c7177c5b4fb0b037e71578783b252cd917da5",
+      "kinds": [
+        "system-prompt.block1",
+        "system-prompt.block2",
+        "system-prompt.block3",
+        "messages.system@1",
+        "user-turn.system-reminder@0"
+      ],
+      "distinctRawHashes": 1,
+      "distinctStableHashes": 1,
+      "attempts": 12,
+      "variants": []
+    }
+  },
+  "decodingByRole": {
+    "judge": [
+      {
+        "beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,effort-2025-11-24,fallback-credit-2026-06-01,extended-cache-ttl-2025-04-11",
+        "maxTokens": 64000,
+        "outputConfig": {
+          "effort": "high"
+        },
+        "systemBytes": 9670,
+        "temperature": null,
+        "thinking": {
+          "type": "adaptive"
+        },
+        "topK": null,
+        "topP": null,
+        "attempts": 17
+      }
+    ],
+    "scenario": [
+      {
+        "beta": "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,mid-conversation-tool-changes-2026-07-01,effort-2025-11-24,fallback-credit-2026-06-01,extended-cache-ttl-2025-04-11",
+        "maxTokens": 64000,
+        "outputConfig": {
+          "effort": "high"
+        },
+        "systemBytes": 6968,
+        "temperature": null,
+        "thinking": {
+          "type": "adaptive"
+        },
+        "topK": null,
+        "topP": null,
+        "attempts": 12
+      }
+    ]
+  },
+  "canaries": {
+    "planSha256AtFirstCanary": "cf343dd31f1cbb98eaf19384259c82b8c3b075238628e8a912044784b74ee019",
+    "planRevisions": [
+      {
+        "sha256": "cf343dd31f1cbb98eaf19384259c82b8c3b075238628e8a912044784b74ee019",
+        "firstUsedAt": "2026-09-11T17:14:24.346Z",
+        "canary": "K1"
+      },
+      {
+        "sha256": "af5bd7e2c996dd4be920591d180db0f7174a583d205651c494260f2dd5411bb3",
+        "firstUsedAt": "2026-09-11T17:33:09.243Z",
+        "canary": "K1b"
+      },
+      {
+        "sha256": "e5e59e5b673bacc7069872678e480b3e5bb47b183bb561c7ad772b1857e529f5",
+        "firstUsedAt": "2026-09-11T17:49:01.631Z",
+        "canary": "K3b"
+      },
+      {
+        "sha256": "c3659b1e3df374b58b1649877a359edcf6bfdc8394f71e53df48a2749453359a",
+        "firstUsedAt": "2026-09-11T18:22:04.287Z",
+        "canary": "K3c"
+      },
+      {
+        "sha256": "4c2019857433e1ca626bcf7f2bd8e9f6ce8f2924d4d00d1fff8ad88a2b79358b",
+        "firstUsedAt": "2026-09-12T05:13:08.878Z",
+        "canary": "K3d"
+      },
+      {
+        "sha256": "17471748fc3e70f3450eee8ccdc6d30d9187f9448cab2d3979ee175ec7cc102c",
+        "firstUsedAt": "2026-09-12T06:56:02.822Z",
+        "canary": "K3e"
+      },
+      {
+        "sha256": "50dbce45cf4796e2eb8f681579334025497a664fbc34bfa9f6e36e6dab857dbc",
+        "firstUsedAt": "2026-09-12T13:40:07.924Z",
+        "canary": "K3f"
+      },
+      {
+        "sha256": "32e91d40b8b2fbb553a480bcebb97c9e8225d0391180a5efa06cc4df88452eb6",
+        "firstUsedAt": "2026-09-15T00:43:01.035Z",
+        "canary": "K3g"
+      },
+      {
+        "sha256": "3420dbcfcaa993167fe9e0a91e36390f6bfed46859be9ee65efc356323fe8bf6",
+        "firstUsedAt": "2026-09-15T00:48:54.453Z",
+        "canary": "K3h"
+      },
+      {
+        "sha256": "309e86024cef3e76b235d9b343033f5a8254ad4a1a778381f7e9ac088eb6063a",
+        "firstUsedAt": "2026-09-15T01:37:24.345Z",
+        "canary": "K3i"
+      },
+      {
+        "sha256": "38747688f2d8ebe60978f10b6e98ac6d0a2c48d7c4647bfe71ac9e7d57124d00",
+        "firstUsedAt": "2026-09-15T02:13:02.466Z",
+        "canary": "K3j"
+      },
+      {
+        "sha256": "5c9e633699786f235bf5c5d80cd830d9debe80af8e164ebf1d169a88b5ec53ac",
+        "firstUsedAt": "2026-09-15T14:22:23.819Z",
+        "canary": "K3k"
+      },
+      {
+        "sha256": "05f2c1cde736f38194c0d170cd0dd3d8fac40aad7c0b2377583dd8cd8b37c9c3",
+        "firstUsedAt": "2026-09-15T14:24:06.931Z",
+        "canary": "K3l"
+      },
+      {
+        "sha256": "eacb3c25bea3a0cc10f305b370db2c40bb9a9bf012e042f34a1cfbe29cb3e091",
+        "firstUsedAt": "2026-09-15T14:24:47.549Z",
+        "canary": "K3m"
+      },
+      {
+        "sha256": "7f7721590fc6f16f8123e71dbe31857770640f6e24aa206eee281b4a3f92e3b1",
+        "firstUsedAt": "2026-09-15T15:36:20.939Z",
+        "canary": "K3n"
+      },
+      {
+        "sha256": "ea084485d097b03cb3be1f79dfaff5552f3960c740ab6c2b809c36120a378fe4",
+        "firstUsedAt": "2026-09-15T15:37:29.603Z",
+        "canary": "K3o"
+      },
+      {
+        "sha256": "5a201032962b3b389fe927fdac49303eafd2dea896c0e5eff10cdf91e747d639",
+        "firstUsedAt": "2026-09-15T19:06:16.989Z",
+        "canary": "K3p"
+      },
+      {
+        "sha256": "e5188787f740ca952e353651ddd772cda561257d12cf13fd4c55958c188e1016",
+        "firstUsedAt": "2026-09-15T20:01:15.928Z",
+        "canary": "K3q"
+      },
+      {
+        "sha256": "b23f6c5fcf64889b7726d7719b1b11d12699a5914eae696c856a54d2ea11fb1f",
+        "firstUsedAt": "2026-09-15T20:02:41.731Z",
+        "canary": "K3r"
+      },
+      {
+        "sha256": "4d6d81c66f795b4b8144f377fb459dce40272a9b7096b0922db238dfcca9d8d4",
+        "firstUsedAt": "2026-09-15T20:06:45.570Z",
+        "canary": "K3s"
+      },
+      {
+        "sha256": "3594ac27cb8509c65b3d39db259d7c8c3284b3ff1b108916e25708c7f5100c33",
+        "firstUsedAt": "2026-09-15T20:34:42.977Z",
+        "canary": "K3t"
+      },
+      {
+        "sha256": "47c7a932b3de67c036af7323973d60b7a6c7728dd25155586186cc7c561d55e2",
+        "firstUsedAt": "2026-09-15T20:57:34.257Z",
+        "canary": "K3u"
+      },
+      {
+        "sha256": "812db3257837c7fa7e7de465a47a7df3810df84f1e6dfff767c4c6512340f678",
+        "firstUsedAt": "2026-09-15T21:13:00.554Z",
+        "canary": "K3v"
+      },
+      {
+        "sha256": "e83921bf39c80958d9588e520dbee9ece222574e3149bb364c176350be4e5559",
+        "firstUsedAt": "2026-09-15T21:19:30.100Z",
+        "canary": "K3w"
+      },
+      {
+        "sha256": "473079d8d34d75b1d59c7cc68b8b88b9062002a394d871169b650d953b4bb457",
+        "firstUsedAt": "2026-09-20T22:18:05.583Z",
+        "canary": "K3x"
+      },
+      {
+        "sha256": "e8b222027195bf3cb30fa75a4e7a20f66e1e1a0bf91d3e731300ceb3d8c1f2bb",
+        "firstUsedAt": "2026-09-20T22:35:50.795Z",
+        "canary": "K3y"
+      },
+      {
+        "sha256": "10ae8324c4c6e14b0f44afc0121c31b852f9139e70fcb9acb6f4ac20f4781b33",
+        "firstUsedAt": "2026-09-20T22:42:31.762Z",
+        "canary": "K3z"
+      },
+      {
+        "sha256": "20ac22ac938844dbb4acad8fc94193312a1fdc8becb9373df075ca9ea5738ec7",
+        "firstUsedAt": "2026-09-20T23:17:05.765Z",
+        "canary": "K3aa"
+      }
+    ],
+    "planSha256AtPrepare": "20ac22ac938844dbb4acad8fc94193312a1fdc8becb9373df075ca9ea5738ec7",
+    "executed": [
+      {
+        "id": "K1",
+        "kind": "live",
+        "planSha256": null,
+        "role": "scenario",
+        "model": "claude-opus-5",
+        "transport": "cli-capture",
+        "admitted": false,
+        "error": {
+          "code": "request-history-present",
+          "retryable": false,
+          "detail": 2
+        },
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": null,
+        "measured": false
+      },
+      {
+        "id": "K1b",
+        "kind": "live",
+        "planSha256": "af5bd7e2c996dd4be920591d180db0f7174a583d205651c494260f2dd5411bb3",
+        "role": "scenario",
+        "model": "claude-opus-5",
+        "transport": "cli-capture",
+        "admitted": true,
+        "error": null,
+        "apiModel": "claude-opus-5",
+        "resolvedModels": [
+          "claude-opus-5"
+        ],
+        "deterministic": null,
+        "measured": false
+      },
+      {
+        "id": "K1c",
+        "kind": "live",
+        "planSha256": "af5bd7e2c996dd4be920591d180db0f7174a583d205651c494260f2dd5411bb3",
+        "role": "scenario",
+        "model": "claude-opus-5",
+        "transport": "cli-capture",
+        "admitted": true,
+        "error": null,
+        "apiModel": "claude-opus-5",
+        "resolvedModels": [
+          "claude-opus-5"
+        ],
+        "deterministic": null,
+        "measured": false
+      },
+      {
+        "id": "K2",
+        "kind": "live",
+        "planSha256": "af5bd7e2c996dd4be920591d180db0f7174a583d205651c494260f2dd5411bb3",
+        "role": "judge",
+        "model": "claude-fable-5-1",
+        "transport": "cli-capture",
+        "admitted": true,
+        "error": null,
+        "apiModel": "claude-fable-5-1",
+        "resolvedModels": [
+          "claude-fable-5-1"
+        ],
+        "deterministic": null,
+        "measured": false
+      },
+      {
+        "id": "K3",
+        "kind": "deterministic",
+        "planSha256": "af5bd7e2c996dd4be920591d180db0f7174a583d205651c494260f2dd5411bb3",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": false,
+          "checks": 12
+        },
+        "measured": false
+      },
+      {
+        "id": "K4",
+        "kind": "deterministic",
+        "planSha256": "af5bd7e2c996dd4be920591d180db0f7174a583d205651c494260f2dd5411bb3",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 16
+        },
+        "measured": false
+      },
+      {
+        "id": "K3b",
+        "kind": "deterministic",
+        "planSha256": "e5e59e5b673bacc7069872678e480b3e5bb47b183bb561c7ad772b1857e529f5",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4b",
+        "kind": "deterministic",
+        "planSha256": "e5e59e5b673bacc7069872678e480b3e5bb47b183bb561c7ad772b1857e529f5",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3c",
+        "kind": "deterministic",
+        "planSha256": "c3659b1e3df374b58b1649877a359edcf6bfdc8394f71e53df48a2749453359a",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 0
+        },
+        "measured": false
+      },
+      {
+        "id": "K4c",
+        "kind": "deterministic",
+        "planSha256": "c3659b1e3df374b58b1649877a359edcf6bfdc8394f71e53df48a2749453359a",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 0
+        },
+        "measured": false
+      },
+      {
+        "id": "K3d",
+        "kind": "deterministic",
+        "planSha256": "4c2019857433e1ca626bcf7f2bd8e9f6ce8f2924d4d00d1fff8ad88a2b79358b",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4d",
+        "kind": "deterministic",
+        "planSha256": "4c2019857433e1ca626bcf7f2bd8e9f6ce8f2924d4d00d1fff8ad88a2b79358b",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3e",
+        "kind": "deterministic",
+        "planSha256": "17471748fc3e70f3450eee8ccdc6d30d9187f9448cab2d3979ee175ec7cc102c",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4e",
+        "kind": "deterministic",
+        "planSha256": "17471748fc3e70f3450eee8ccdc6d30d9187f9448cab2d3979ee175ec7cc102c",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3f",
+        "kind": "deterministic",
+        "planSha256": "50dbce45cf4796e2eb8f681579334025497a664fbc34bfa9f6e36e6dab857dbc",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4f",
+        "kind": "deterministic",
+        "planSha256": "50dbce45cf4796e2eb8f681579334025497a664fbc34bfa9f6e36e6dab857dbc",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3g",
+        "kind": "deterministic",
+        "planSha256": "32e91d40b8b2fbb553a480bcebb97c9e8225d0391180a5efa06cc4df88452eb6",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4g",
+        "kind": "deterministic",
+        "planSha256": "32e91d40b8b2fbb553a480bcebb97c9e8225d0391180a5efa06cc4df88452eb6",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3h",
+        "kind": "deterministic",
+        "planSha256": "3420dbcfcaa993167fe9e0a91e36390f6bfed46859be9ee65efc356323fe8bf6",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4h",
+        "kind": "deterministic",
+        "planSha256": "3420dbcfcaa993167fe9e0a91e36390f6bfed46859be9ee65efc356323fe8bf6",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3i",
+        "kind": "deterministic",
+        "planSha256": "309e86024cef3e76b235d9b343033f5a8254ad4a1a778381f7e9ac088eb6063a",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4i",
+        "kind": "deterministic",
+        "planSha256": "309e86024cef3e76b235d9b343033f5a8254ad4a1a778381f7e9ac088eb6063a",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3j",
+        "kind": "deterministic",
+        "planSha256": "38747688f2d8ebe60978f10b6e98ac6d0a2c48d7c4647bfe71ac9e7d57124d00",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4j",
+        "kind": "deterministic",
+        "planSha256": "38747688f2d8ebe60978f10b6e98ac6d0a2c48d7c4647bfe71ac9e7d57124d00",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3k",
+        "kind": "deterministic",
+        "planSha256": "5c9e633699786f235bf5c5d80cd830d9debe80af8e164ebf1d169a88b5ec53ac",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4k",
+        "kind": "deterministic",
+        "planSha256": "5c9e633699786f235bf5c5d80cd830d9debe80af8e164ebf1d169a88b5ec53ac",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3l",
+        "kind": "deterministic",
+        "planSha256": "05f2c1cde736f38194c0d170cd0dd3d8fac40aad7c0b2377583dd8cd8b37c9c3",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4l",
+        "kind": "deterministic",
+        "planSha256": "05f2c1cde736f38194c0d170cd0dd3d8fac40aad7c0b2377583dd8cd8b37c9c3",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3m",
+        "kind": "deterministic",
+        "planSha256": "eacb3c25bea3a0cc10f305b370db2c40bb9a9bf012e042f34a1cfbe29cb3e091",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4m",
+        "kind": "deterministic",
+        "planSha256": "eacb3c25bea3a0cc10f305b370db2c40bb9a9bf012e042f34a1cfbe29cb3e091",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3n",
+        "kind": "deterministic",
+        "planSha256": "7f7721590fc6f16f8123e71dbe31857770640f6e24aa206eee281b4a3f92e3b1",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4n",
+        "kind": "deterministic",
+        "planSha256": "7f7721590fc6f16f8123e71dbe31857770640f6e24aa206eee281b4a3f92e3b1",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3o",
+        "kind": "deterministic",
+        "planSha256": "ea084485d097b03cb3be1f79dfaff5552f3960c740ab6c2b809c36120a378fe4",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4o",
+        "kind": "deterministic",
+        "planSha256": "ea084485d097b03cb3be1f79dfaff5552f3960c740ab6c2b809c36120a378fe4",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3p",
+        "kind": "deterministic",
+        "planSha256": "5a201032962b3b389fe927fdac49303eafd2dea896c0e5eff10cdf91e747d639",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4p",
+        "kind": "deterministic",
+        "planSha256": "5a201032962b3b389fe927fdac49303eafd2dea896c0e5eff10cdf91e747d639",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3q",
+        "kind": "deterministic",
+        "planSha256": "e5188787f740ca952e353651ddd772cda561257d12cf13fd4c55958c188e1016",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4q",
+        "kind": "deterministic",
+        "planSha256": "e5188787f740ca952e353651ddd772cda561257d12cf13fd4c55958c188e1016",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3r",
+        "kind": "deterministic",
+        "planSha256": "b23f6c5fcf64889b7726d7719b1b11d12699a5914eae696c856a54d2ea11fb1f",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4r",
+        "kind": "deterministic",
+        "planSha256": "b23f6c5fcf64889b7726d7719b1b11d12699a5914eae696c856a54d2ea11fb1f",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3s",
+        "kind": "deterministic",
+        "planSha256": "4d6d81c66f795b4b8144f377fb459dce40272a9b7096b0922db238dfcca9d8d4",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4s",
+        "kind": "deterministic",
+        "planSha256": "4d6d81c66f795b4b8144f377fb459dce40272a9b7096b0922db238dfcca9d8d4",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3t",
+        "kind": "deterministic",
+        "planSha256": "3594ac27cb8509c65b3d39db259d7c8c3284b3ff1b108916e25708c7f5100c33",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4t",
+        "kind": "deterministic",
+        "planSha256": "3594ac27cb8509c65b3d39db259d7c8c3284b3ff1b108916e25708c7f5100c33",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3u",
+        "kind": "deterministic",
+        "planSha256": "47c7a932b3de67c036af7323973d60b7a6c7728dd25155586186cc7c561d55e2",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4u",
+        "kind": "deterministic",
+        "planSha256": "47c7a932b3de67c036af7323973d60b7a6c7728dd25155586186cc7c561d55e2",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3v",
+        "kind": "deterministic",
+        "planSha256": "812db3257837c7fa7e7de465a47a7df3810df84f1e6dfff767c4c6512340f678",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4v",
+        "kind": "deterministic",
+        "planSha256": "812db3257837c7fa7e7de465a47a7df3810df84f1e6dfff767c4c6512340f678",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3w",
+        "kind": "deterministic",
+        "planSha256": "e83921bf39c80958d9588e520dbee9ece222574e3149bb364c176350be4e5559",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4w",
+        "kind": "deterministic",
+        "planSha256": "e83921bf39c80958d9588e520dbee9ece222574e3149bb364c176350be4e5559",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3x",
+        "kind": "deterministic",
+        "planSha256": "473079d8d34d75b1d59c7cc68b8b88b9062002a394d871169b650d953b4bb457",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4x",
+        "kind": "deterministic",
+        "planSha256": "473079d8d34d75b1d59c7cc68b8b88b9062002a394d871169b650d953b4bb457",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3y",
+        "kind": "deterministic",
+        "planSha256": "e8b222027195bf3cb30fa75a4e7a20f66e1e1a0bf91d3e731300ceb3d8c1f2bb",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4y",
+        "kind": "deterministic",
+        "planSha256": "e8b222027195bf3cb30fa75a4e7a20f66e1e1a0bf91d3e731300ceb3d8c1f2bb",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3z",
+        "kind": "deterministic",
+        "planSha256": "10ae8324c4c6e14b0f44afc0121c31b852f9139e70fcb9acb6f4ac20f4781b33",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4z",
+        "kind": "deterministic",
+        "planSha256": "10ae8324c4c6e14b0f44afc0121c31b852f9139e70fcb9acb6f4ac20f4781b33",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      },
+      {
+        "id": "K3aa",
+        "kind": "deterministic",
+        "planSha256": "20ac22ac938844dbb4acad8fc94193312a1fdc8becb9373df075ca9ea5738ec7",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 15
+        },
+        "measured": false
+      },
+      {
+        "id": "K4aa",
+        "kind": "deterministic",
+        "planSha256": "20ac22ac938844dbb4acad8fc94193312a1fdc8becb9373df075ca9ea5738ec7",
+        "role": null,
+        "model": null,
+        "transport": null,
+        "admitted": null,
+        "error": null,
+        "apiModel": null,
+        "resolvedModels": null,
+        "deterministic": {
+          "allPassed": true,
+          "checks": 23
+        },
+        "measured": false
+      }
+    ]
+  }
+}
