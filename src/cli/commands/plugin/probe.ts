@@ -518,7 +518,20 @@ function matchedApmDependencies(apmYaml: string | null): string[] {
     return [];
   }
   const declared = (parsed as { dependencies?: unknown } | null)?.dependencies;
-  if (!Array.isArray(declared)) return [];
+  // Two shapes, both real (W-D1). apm's own manifest lists dependencies as a
+  // flat array (`dependencies:\n  - <spec>`), and the consumer manifest
+  // `docs/enterprise-forks.md` documents nests them under an `apm:` section
+  // (`dependencies:\n  apm:\n    - <spec>`), which is the shape
+  // `scripts/apm-install-smoke.mjs` writes. Reading the flat array alone
+  // answered `[]` for the documented shape, so the source never reported.
+  // Anything else is a manifest this row does not understand and claims
+  // nothing from.
+  const nested = (declared as { apm?: unknown } | null)?.apm;
+  const list: unknown[] = Array.isArray(declared)
+    ? declared
+    : Array.isArray(nested)
+      ? nested
+      : [];
   // Both identities, filtered to the ones this installation could derive: a
   // manifest that names no github repository answers `null` for the slug, and
   // an empty needle would match every dependency line there is.
@@ -529,13 +542,17 @@ function matchedApmDependencies(apmYaml: string | null): string[] {
   // `<owner>/<repo>-suffix#plugins/v1.9.0`, and a plain `includes` told every
   // repository depending on a same-owner sibling with a longer name to remove
   // a dependency that deploys nothing. The identity is a whole token: it starts
-  // the text or follows whitespace or a quote, and it ends the text or is
-  // followed by the `#` that opens the ref, whitespace or a quote.
+  // the text or follows whitespace, a quote or a `/` (the URL spelling,
+  // `https://github.com/<slug>#ref`, is the same repository), and it ends the
+  // text or is followed by the `#` that opens the ref, a `/` (a subpath,
+  // `<slug>/<dir>#ref`, is the same repository one directory in), whitespace
+  // or a quote. Case-insensitive, because GitHub owner and repository names
+  // are (M-1).
   const bounded = identities.map(
-    (identity) => new RegExp(`(?:^|[\\s"'])${escapeForRegExp(identity)}(?:$|[#\\s"'])`),
+    (identity) => new RegExp(`(?:^|[\\s"'/])${escapeForRegExp(identity)}(?:$|[#/\\s"'])`, "i"),
   );
   const matched: string[] = [];
-  for (const entry of declared) {
+  for (const entry of list) {
     const text =
       typeof entry === "string"
         ? entry
