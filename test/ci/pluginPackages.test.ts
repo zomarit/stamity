@@ -342,8 +342,17 @@ describe("generated plugin roots", () => {
   it("carries a generated setup command where the client has a command surface, and says so where it has none", () => {
     expect(readFileSync(join(roots, "claude", "commands", "st-setup.md"), "utf8")).toContain("plugin setup --client claude -y");
     expect(readFileSync(join(roots, "cursor", "skills", "st-setup", "SKILL.md"), "utf8")).toContain("plugin setup --client cursor -y");
+    // TEST CHANGE, justified: `st-setup.prompt.md` to `st-setup.md`. The Copilot container's
+    // command extension was a declared UNCERTAINTY when this line was written — the reference
+    // page names `com.github.copilot/commands/` and states no file name — and it is now
+    // MEASURED, against GitHub Copilot CLI 1.0.85 in a scratch COPILOT_HOME on 2026-09-20: the
+    // client strips ONE extension to derive a command's id, so `st-work.prompt.md` registers
+    // `st-work.prompt` while `st-work.md` registers `st-work`. The behaviour that moved is the
+    // container's, not this assertion's: `.prompt.md` remains the spelling of the REPOSITORY's
+    // `.github/prompts/`. `test/ci/pluginPackages.copilot.test.ts` carries the measurement and
+    // the binary leg that produced it.
     expect(
-      readFileSync(join(roots, "copilot", "com.github.copilot", "commands", "st-setup.prompt.md"), "utf8"),
+      readFileSync(join(roots, "copilot", "com.github.copilot", "commands", "st-setup.md"), "utf8"),
     ).toContain("plugin setup --client copilot -y");
     expect(treeFiles(join(roots, "codex")).filter((rel) => rel.includes("st-setup"))).toEqual([]);
     expect(readFileSync(join(roots, "codex", "README.md"), "utf8")).toContain("plugin setup --client codex -y");
