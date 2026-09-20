@@ -1568,6 +1568,33 @@ describe("check — plugin-runtime", () => {
     expect(probe.detail).toContain(pluginDir);
   });
 
+  it("strips a control byte a hostile locator puts in its refusal", async () => {
+    // SEC5-M1 (CWE-150): the refusal is the plugin root's own string, quoted
+    // into a row `check` prints raw — so a root could paint a false row in a
+    // CI log. The refusal is still quoted; the bytes that steer a terminal
+    // are dropped.
+    const handle = getRepo();
+    const root = await seedRepo(handle, {
+      plugin: {
+        mode: "generated",
+        clients: { claude: { version: "1.9.0", classes: ["agent"] } },
+      },
+    });
+    const refusal = "no runtime found\u001b[2K\rok    plugin-runtime  spoofed";
+    const pluginDir = await pluginRoot(
+      handle,
+      "plugin-refused-hostile",
+      printing({ kind: "none", path: null, version: null, refusal }, 2),
+    );
+
+    const probe = await doctorRow(root, "plugin-runtime", { PLUGIN_ROOT: pluginDir });
+
+    expect(probe.status).toBe("fail");
+    expect(probe.detail).toContain("no runtime found");
+    // oxlint-disable-next-line no-control-regex -- the control byte IS the subject
+    expect(probe.detail).not.toMatch(/[\u0000-\u001F\u007F-\u009F]/u);
+  });
+
   it("warns on the same refusal in a repository that records no plugin at all", async () => {
     // The third state, and the reason the second exists: a root variable
     // exported by an unrelated session is not this repository's claim about
@@ -1984,6 +2011,26 @@ describe("check — plugin-duplicates", () => {
 
     expect(duplicates.status).toBe("pass");
     expect(duplicates.detail).toBe("no duplicated classes");
+  });
+
+  it("strips a control byte an apm.yml dependency smuggles into the row", async () => {
+    // SEC5-M1 (CWE-150): the matched dependency line is quoted into the
+    // remedy and carried as the finding's path, and `check` prints the row
+    // raw. A YAML double-quoted scalar can spell `\e`, so a crafted entry
+    // could paint a false doctor row in a CI log. The row still reports the
+    // duplicate — the bytes that steer a terminal are what it drops.
+    const root = await seedRepo(getRepo(), {
+      plugin: pluginOf("generated"),
+      files: {
+        "apm.yml": `name: consumer\ndependencies:\n  - "${apmInstallSpec()}\\e[2K\\rok    spoofed-row"\n`,
+      },
+    });
+
+    const duplicates = await duplicatesRow(root);
+
+    expect(duplicates.detail).toContain("claude: agent (1 file(s), apm)");
+    // oxlint-disable-next-line no-control-regex -- the control byte IS the subject
+    expect(duplicates.detail).not.toMatch(/[\u0000-\u001F\u007F-\u009F]/u);
   });
 
   it("names the dependency under the nested `dependencies: apm:` section the consumer manifest documents", async () => {
