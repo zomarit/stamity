@@ -57,14 +57,34 @@ const FIXED_COMMIT = "0123456789abcdef0123456789abcdef01234567";
 const FIXED_COMMIT_DATE = "2026-09-20T00:00:00Z";
 
 /**
- * Wall-time budgets, derived rather than guessed. One root is a full content index plus a
- * planner pass plus a tree write, measured at ~2s per client on this repository's corpus; the
- * shared build does four of them behind one corpus staging, so ~10s is the honest cost and the
- * budget is 6x that to survive a loaded CI worker. A single-client run is a quarter of the work
- * and gets a quarter of the headroom.
+ * Wall-time budgets, derived rather than guessed — and the derivation states the command that
+ * produced each number, so the next reader can recompute instead of trusting a literal.
+ *
+ * Measured 2026-09-20 on this repository's corpus (darwin, `/usr/bin/time -p` around a real
+ * `node scripts/generate-plugin-packages.mjs` against a real bundled runtime), cold run first:
+ *
+ *   full build, four roots     `--out-dir <dir> --runtime <dir>`            7.5s / 3.9s warm
+ *   one root                   the same plus `--client claude`              2.1s
+ *   one `--check`              the same plus `--check`                      1.8s / 0.6s warm
+ *
+ * A `--check` is not free: it renders the same four roots and then compares bytes instead of
+ * writing 2764 files, so the render is most of its cost and the writes are most of a build's.
+ * The bases below round each cold figure up; MARGIN is the one guessed number, and it is wide
+ * because the required CI legs include a Windows runner that is not measurable from here.
+ *
+ * A case that spawns N times is budgeted N x basis x MARGIN, spelled out at the case.
  */
-const FULL_BUILD_MS = 60_000;
-const ONE_ROOT_MS = 30_000;
+const MARGIN = 8;
+const BUILD_BASIS_MS = 8_000;
+const ONE_ROOT_BASIS_MS = 4_000;
+const CHECK_BASIS_MS = 2_000;
+
+/** One full four-root build. */
+const FULL_BUILD_MS = BUILD_BASIS_MS * MARGIN;
+/** One single-client build. */
+const ONE_ROOT_MS = ONE_ROOT_BASIS_MS * MARGIN;
+/** The four `--check` spawns the drift case makes against the shared tree. */
+const FOUR_CHECKS_MS = 4 * CHECK_BASIS_MS * MARGIN;
 
 /**
  * Where each class lives inside each root, named by the SUITE rather than read from the layout
@@ -260,7 +280,13 @@ describe("generated plugin roots", () => {
       const restored = generate(["--check", "--out-dir", roots, "--runtime", RUNTIME, "--source-commit", FIXED_COMMIT, "--source-commit-date", FIXED_COMMIT_DATE]);
       expect(restored.status, restored.stderr).toBe(0);
     },
-    FULL_BUILD_MS,
+    // W-P1: four spawns, not one. The case reads the tree `beforeAll` already built — it writes
+    // no root of its own — but each `--check` still renders all four roots before it compares a
+    // byte, so the budget is 4 x CHECK_BASIS_MS x MARGIN rather than the one-build constant it
+    // used to borrow. The fourth spawn is load-bearing twice over: it proves `--check` returns
+    // to 0, and it proves the two mutations above were restored faithfully for the cases that
+    // read the same shared tree afterwards.
+    FOUR_CHECKS_MS,
   );
 
   it("leaves no substitution token standing anywhere under any root", () => {
