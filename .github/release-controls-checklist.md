@@ -118,6 +118,11 @@ pattern overlap. The branch push is a **force** push, and that is the intended b
 than a lapse: the tree is published whole, so each release REPLACES the branch head, and every
 earlier release stays fetchable through its own `plugins/v*` tag — which the step refuses to move
 once it exists (it reads the remote first and fails closed when the tag names another commit).
+Since 2026-09-20 the step also refuses, before any push, a tag whose shape is not
+`<namespace>/v<version>` for the release's own version and a branch whose remote head has a parent
+— both names reach the job as outputs of a job that ran third-party build code, and a distribution
+head is always an orphan, so a head with history is a source branch whatever the manifest called
+it.
 Any branch rule added on `plugin-dist` must therefore allow the workflow's token to force-push it;
 the kickoff's step 3 confirmed nothing currently blocks that. If a rule is ever added there, the
 symptom of getting it wrong is a release that publishes to npm and then fails at

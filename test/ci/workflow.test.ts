@@ -2595,8 +2595,12 @@ describe.skipIf(WINDOWS)("release.yml — the distribution push and the stamp, e
     readonly env: Readonly<Record<string, string>>;
   }
 
-  /** A stage directory holding `plugins/`, and a bare remote the step's https URL resolves to. */
-  function scenario(name: string): Scenario {
+  /**
+   * A stage directory holding `plugins/`, and a bare remote the step's https URL resolves to.
+   * `overrides` replace the step's inputs — what a rewritten manifest would have handed the
+   * gates job's outputs — without touching the staged tree.
+   */
+  function scenario(name: string, overrides: Readonly<Record<string, string>> = {}): Scenario {
     const dir = join(root, name);
     const bare = join(dir, "remote.git");
     const configPath = join(dir, "gitconfig");
@@ -2623,6 +2627,7 @@ describe.skipIf(WINDOWS)("release.yml — the distribution push and the stamp, e
         VERSION,
         BRANCH,
         TAG,
+        ...overrides,
       },
     };
   }
@@ -2727,6 +2732,44 @@ describe.skipIf(WINDOWS)("release.yml — the distribution push and the stamp, e
     expect(run.out).toContain("Refusing to move a published distribution tag");
     expect(refOf(setup.bare, `refs/tags/${TAG}`), "the published tag must not move").toBe(poisoned);
     expect(refOf(setup.bare, `refs/heads/${BRANCH}`), "and nothing else may be pushed").toBe("");
+  });
+
+  it("refuses a tag outside the distribution namespace before it pushes anything", () => {
+    // SEC5-W1: the tag name reaches this job as a gates output read from a manifest written
+    // after third-party build code ran in that job's checkout. The shape — `<namespace>/v` and
+    // the version the gates job emitted — is what this job can check without spelling the name.
+    const setup = scenario("foreign-tag", { TAG: `v${VERSION}` });
+
+    const run = push(setup, "attempt-1");
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("Refusing to publish under a tag");
+    expect(refOf(setup.bare, `refs/tags/v${VERSION}`), "nothing may be pushed").toBe("");
+    expect(refOf(setup.bare, `refs/heads/${BRANCH}`), "nothing may be pushed").toBe("");
+  });
+
+  it("refuses to force-push over a branch whose head has a parent, leaving it untouched", () => {
+    // SEC5-W1: the branch name is the same kind of output. A rewritten manifest naming a source
+    // branch would have this job — the one holding the credential — replace that branch's head
+    // with an orphan. A distribution head has no parent; a source head does, and that is the
+    // check. The remote here holds `main`'s shape under the distribution branch's name.
+    const setup = scenario("branch-with-history");
+    const other = join(setup.dir, "other");
+    mkdirSync(other, { recursive: true });
+    git(other, "init", "-q", "-b", "main");
+    git(other, "config", "user.email", "ci@example.invalid");
+    git(other, "config", "user.name", "CI");
+    git(other, "commit", "-q", "--allow-empty", "-m", "first");
+    git(other, "commit", "-q", "--allow-empty", "-m", "second");
+    git(other, "push", "-q", setup.bare, `HEAD:refs/heads/${BRANCH}`);
+    const before = refOf(setup.bare, `refs/heads/${BRANCH}`);
+
+    const run = push(setup, "attempt-1");
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain(`${BRANCH}'s head ${before} has a parent`);
+    expect(refOf(setup.bare, `refs/heads/${BRANCH}`), "the branch must not move").toBe(before);
+    expect(refOf(setup.bare, `refs/tags/${TAG}`), "and nothing else may be pushed").toBe("");
   });
 
   /** One run of the stamp step over a staged manifest, with the commit the push handed on. */
