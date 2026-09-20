@@ -13,8 +13,16 @@
 // a declared `skills` path is searched IN ADDITION TO the default `skills/` directory, and a
 // declared `hooks` file is loaded IN ADDITION TO the default `hooks/hooks.json`. This root puts
 // its files at exactly those defaults, so naming them would ask the client to discover the same
-// artifact twice. `commands` is different — it REPLACES its default — so it is declared, and
-// `agents` is a file list because that is the shape the schema takes.
+// artifact twice. `agents` is a file list because that is the shape the schema takes.
+//
+// `commands` IS declared, and the two vendor documents disagree about what that means: the
+// plugins reference reads as a replacement of the default scan, while the schema's own
+// description for the field says "in addition to those in the commands/ directory". The
+// declaration is the plan's, kept because `claude plugin validate --strict` accepts it and
+// because a client that replaces the default still finds every command; if the additive reading
+// is the true one, the cost is a duplicate registration of the same ten files and the fix is to
+// drop the field exactly as `skills` and `hooks` are dropped. Measuring an installed client is
+// what settles it — an invocation leg, not this table.
 //
 // `rules` does not exist as a manifest field at all. A glob-scoped rule therefore cannot ride in
 // this container; `stamity plugin setup` writes it into the repository's own `.claude/rules/`,
@@ -115,8 +123,29 @@ export const ASSETS = []
 export const MANIFEST_PATH = '.claude-plugin/plugin.json'
 
 /**
- * Build the container manifest. `agents` is the sorted file list the schema takes; `commands`
- * REPLACES its default and is declared; `skills` and `hooks` are omitted — see the header.
+ * How this root is served, refreshed and — the part worth stating — rolled back. Recorded in the
+ * capability file and quoted by the README, so the two cannot drift apart.
+ *
+ * The rollback half is a NEGATIVE fact, and it is here because silence would read as either
+ * answer: one vendor page quoted a `rollback` subcommand in slash form that day and the CLI
+ * reference did not list it. A consumer planning a downgrade needs to know that the supported
+ * route is a reinstall at the previous pin until an installed client says otherwise.
+ */
+export const DISTRIBUTION = {
+  note:
+    'an operator runs `claude plugin marketplace add <owner/repo | git URL#ref | local path>` and ' +
+    '`claude plugin install stamity@stamity --scope project`, which writes `enabledPlugins` and ' +
+    '`extraKnownMarketplaces`; a third-party marketplace has auto-update off by default, so ' +
+    '`claude plugin update stamity` is the refresh and a marketplace added at a tag or a commit is ' +
+    'the pin. A `rollback` subcommand is not established — one vendor page quoted it in slash form ' +
+    'and the CLI reference omitted it (code.claude.com/docs/en/plugin-marketplaces and ' +
+    'code.claude.com/docs/en/cli-reference, accessed 2026-09-20) — so the route back is a reinstall ' +
+    'at the previous pin until an installed client is measured'
+}
+
+/**
+ * Build the container manifest. `agents` is the sorted file list the schema takes; `commands` is
+ * declared at the plan's instruction; `skills` and `hooks` are omitted — see the header for both.
  */
 export function buildManifest({ identity, version, agentPaths }) {
   return {
@@ -167,9 +196,9 @@ pin with the repository rather than in a shell history.
 claude plugin update stamity
 \`\`\`
 
-To roll back, reinstall at the previous pin. A \`rollback\` subcommand was quoted from one reading
-of the CLI reference and absent from another, so this page does not promise it: run
-\`claude plugin --help\` on the installed client and prefer it if your client lists it.
+The route in full, as \`stamity-plugin.json\` records it: ${DISTRIBUTION.note}. Run
+\`claude plugin --help\` on the installed client and prefer a \`rollback\` subcommand if yours
+lists one.
 
 ## What this root does not carry
 
