@@ -2330,8 +2330,9 @@ first push and flipped to ready at this close; no board source is linked (no pro
 - The measurements page: byte-stable at this close — the 2026-09-20 snapshot written at session 1's close
   already reads 6 of 8 (this record's ledger carried no open row then, as it carries none now), and the
   generator refuses to rewrite a same-day snapshot by design; the live rate is 6 of 8.
-- The private layer: AD-130 (the sign-off decision), the HANDOFF paragraph of 2026-09-20 (session 2), the
-  dashboard banner, the DR-030 note, the kickoff regenerated for session 3 — pushed at the close.
+- The private layer: the session's decision row (the sign-off), the HANDOFF paragraph of 2026-09-20
+  (session 2), the dashboard banner, the directive's note, the kickoff regenerated for session 3 — pushed
+  at the close.
 - Not done: nothing within this session's scope. Carried: the nine QA rows accepted unperformed (file 3's
   V1 measures the four client routes, V7 walks the publish path); the 29 inbox rows of 2026-09-20 in the
   session-2 block; file 3 (V1–V7) and the 1.9.0 release for session 3. No `plugin-dist` branch and no
