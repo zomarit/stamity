@@ -861,6 +861,9 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
     expect(residueDocuments(tree, repo.manifest)).toMatchSnapshot(`${label} residue documents`);
   });
 
+  // The `beforeAll`'s whole build again, so it earns the hook's own budget
+  // rather than the default per-case one: measured at 12.7 s alone and 26.5 s
+  // with the suite under load, which is inside 120 s and nowhere near 5 s.
   it("emits a byte-identical tree on a second run into a fresh directory", async () => {
     const second = await makeGoldenRepo({ tools });
     try {
@@ -868,7 +871,7 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
     } finally {
       await second.cleanup();
     }
-  });
+  }, GOLDEN_FIXTURE_TIMEOUT_MS);
 
   it("emits no reserved product name in any byte it writes", () => {
     expect(findReservedNameHits(tree)).toEqual({});
