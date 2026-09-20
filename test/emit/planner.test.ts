@@ -353,6 +353,50 @@ const withPlugin = (
 const residuesFor = (tools: readonly Tool[]): Partial<Record<Tool, ResiduePlanner>> =>
   Object.fromEntries(tools.map((tool) => [tool, fakeResidue(tool, () => [])]));
 
+/** The same context with an operator effort map on it, and nothing else moved. */
+const withEffort = (
+  ctx: EmissionContext,
+  effort: NonNullable<NonNullable<SetupManifest["models"]>["effort"]>,
+): EmissionContext => ({
+  ...ctx,
+  manifest: { ...ctx.manifest, models: { ...ctx.manifest.models, effort } },
+});
+
+describe("the effort disclosures the plan carries", () => {
+  it("names the one selected client whose scale narrowed the operator's level", async () => {
+    // The later-selection case REQ-LADDER-001 describes: the level was legal
+    // when it was set, and a narrower client joined afterwards. The level is
+    // never dropped — it is emitted at that client's top rung — but the
+    // operator has to be told, once, which client moved it and to what.
+    const corpus = await seedCorpus();
+    const tools: Tool[] = ["claude", "codex"];
+    const ctx = withEffort(ctxOf(tools, corpus), { frontier: "max" });
+
+    const result = await composeEmissionPlanner(residuesFor(tools)).planWithWarnings(ctx);
+
+    const disclosures = result.warnings.filter((warning) => warning.startsWith("effort ["));
+    expect(disclosures).toEqual([
+      "effort [codex]: frontier asks for max; this client's scale ends at xhigh, emitted xhigh",
+    ]);
+    // Exactly one line, and not for the client that can express the level.
+    expect(disclosures.some((line) => line.includes("[claude]"))).toBe(false);
+  });
+
+  it("says nothing at all for a repository with no operator effort map", async () => {
+    // The control the byte-identity criterion rests on: the class defaults are
+    // expressible on every carrier, so the default repository discloses
+    // nothing and no warning appears where none appeared before.
+    const corpus = await seedCorpus();
+    const tools: Tool[] = ["claude", "cursor", "copilot", "codex"];
+
+    const result = await composeEmissionPlanner(residuesFor(tools)).planWithWarnings(
+      ctxOf(tools, corpus),
+    );
+
+    expect(result.warnings.filter((warning) => warning.startsWith("effort ["))).toEqual([]);
+  });
+});
+
 describe("plugin ownership of the shared skills projection", () => {
   it("emits the tree co-owned by every reader when no plugin owns skills", async () => {
     // The control. It is the same repository as the two cases below with one

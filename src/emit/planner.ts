@@ -84,6 +84,7 @@ import {
 } from "../content/ruleDelivery.ts";
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
 import { readRuleDelivery } from "../manifest/manifest.ts";
+import { effortDisclosures } from "../roster/modelLadder.ts";
 import type { PackSuppliedServer } from "../mcp/catalog.ts";
 import { planMcpEmissions, type McpDialect, type McpEmission } from "../mcp/emit.ts";
 import {
@@ -931,7 +932,15 @@ export function composeEmissionPlanner(
 
     // Copied, not aliased: the plan is handed to a caller that may keep it for
     // the length of a run, and the core plan object is this pass's own.
-    return { outputs, warnings: [...core.hooks.warnings, ...residueWarnings] };
+    //
+    // The effort disclosures join the hooks plan's findings rather than the
+    // residues': they are a fact about the MANIFEST read against the client
+    // scales, identical for every planner, so deriving them once here keeps
+    // four adapters from each reporting the same narrowing.
+    return {
+      outputs,
+      warnings: [...core.hooks.warnings, ...effortDisclosures(ctx.manifest), ...residueWarnings],
+    };
   };
 
   return {
