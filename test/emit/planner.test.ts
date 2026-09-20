@@ -408,6 +408,43 @@ describe("plugin ownership of the shared skills projection", () => {
     expect(rows.get(P.skillMain)!.coOwners).toBeUndefined();
   });
 
+  it("discloses the repo's own hooks not reaching a plugin-backed client", async () => {
+    // A real delivery gap, not a planning detail. That client takes its hook
+    // CONFIGURATION from the plugin root, which was built from the vendor's
+    // tree and cannot name a hook this repository authored — so the hook runs
+    // on every other selected client and silently never fires on this one.
+    const corpus = await seedCorpus();
+    const temp = getTemp();
+    const rootDir = temp.path("plugin-hooks-repo");
+    await temp.seedFiles({
+      "plugin-hooks-repo/.stamity/hooks/guard.mjs": "process.exit(0)\n",
+      "plugin-hooks-repo/.stamity/hooks/hooks.json": JSON.stringify(
+        { hooks: [{ event: "session_start", command: ["node", ".stamity/hooks/guard.mjs"] }] },
+        null,
+        2,
+      ),
+    });
+    const tools: Tool[] = ["claude", "codex"];
+    const ctx = withPlugin(ctxOf(tools, corpus, { rootDir }), {
+      mode: "plugin-backed",
+      clients: { claude: { version: "1.9.0", classes: ["hooks"] } },
+    });
+
+    const result = await composeEmissionPlanner(residuesFor(tools)).planWithWarnings(ctx);
+
+    const disclosure = result.warnings.find((warning) => warning.startsWith("hook wiring:"));
+    expect(disclosure).toContain("1 accepted hook row(s)");
+    expect(disclosure).toContain("not wired into claude");
+    expect(disclosure).toContain("every other selected client");
+
+    // The control: the same repository with no plugin field says nothing, so
+    // the line is a statement about the boundary and not about the hook.
+    const control = await composeEmissionPlanner(residuesFor(tools)).planWithWarnings(
+      ctxOf(tools, corpus, { rootDir }),
+    );
+    expect(control.warnings.filter((warning) => warning.startsWith("hook wiring:"))).toEqual([]);
+  });
+
   it("plans no hook script copy for a client whose plugin carries hooks", async () => {
     const corpus = await seedCorpus();
     const tools: Tool[] = ["claude", "codex"];
