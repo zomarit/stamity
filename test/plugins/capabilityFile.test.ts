@@ -7,11 +7,12 @@ import { describe, expect, it } from "vitest";
 // TypeScript nearby. Imported HERE rather than restated as a literal because the writer and
 // this reader are two halves of one contract (REQ-PLUGIN-002 / REQ-PLUGIN-015), and a
 // hand-copied fixture would let the two drift silently green.
-import { buildCapabilityFile, PLUGIN_CLASSES } from "../../scripts/plugins/capability.mjs";
+import { buildCapabilityFile, INVOCATION_NOTE_KEYS, PLUGIN_CLASSES } from "../../scripts/plugins/capability.mjs";
 import {
   CAPABILITY_FILE,
   PLUGIN_CAPABILITY_CLASSES,
   carriedClasses,
+  invocationForms,
   readCapabilityFile,
   resolvePluginRoot,
 } from "../../src/plugins/capabilityFile.ts";
@@ -128,6 +129,44 @@ describe("readCapabilityFile — a document the real writer produced", () => {
     };
     const read = await readCapabilityFile(await seedRoot(build(input)));
     expect(carriedClasses(read)).toEqual(["agent", "skill", "command"]);
+  });
+
+  it("round-trips a cursor root's invocation note and keeps it out of the forms", async () => {
+    // The Cursor container declares `invocation.citation` beside its three forms, because the
+    // plugins reference states no invocation form at all and the file has to record which page
+    // the `/<id>` form was read off. `invocation` is an OPEN record — a container names a form
+    // per class without this reader knowing the class names — so nothing but a reserved key can
+    // tell a form from a sentence about the forms, and a consumer offering that sentence as
+    // something to type is the defect the reservation prevents.
+    const input = claudeInput();
+    input.client = "cursor";
+    input.invocation = {
+      agents: "/<id>",
+      commands: "/<id>",
+      skills: "/<id>",
+      citation: "the /<id> form is stated on cursor.com/docs/agent/subagents and cursor.com/docs/skills",
+    };
+    const read = await readCapabilityFile(await seedRoot(build(input)));
+
+    // The note survives the round trip: it is part of the document, not something to strip.
+    expect(read.invocation["citation"]).toContain("cursor.com/docs/agent/subagents");
+    // And it is not a form. Non-degenerate: three forms remain, so this is a filter doing work
+    // rather than an empty record agreeing with an empty expectation.
+    expect(invocationForms(read)).toEqual({ agents: "/<id>", commands: "/<id>", skills: "/<id>" });
+  });
+
+  it("refuses a root whose invocation carries the note and no form at all", async () => {
+    // The two halves run under different runtimes, so the reserved list is read from the writer
+    // rather than restated: a hand-copied literal is what drifts silently green.
+    expect([...(INVOCATION_NOTE_KEYS as string[])].toSorted()).toEqual(["citation"]);
+
+    const input = claudeInput();
+    input.invocation = { citation: "a page, and no form at all" };
+    const root = await seedRoot(build(input), "notes-only");
+    // Reserving the key must not turn it into a form by the back door: a document naming a
+    // citation and nothing else names no way to invoke anything, and is refused exactly as an
+    // empty `invocation` is.
+    await expect(readCapabilityFile(root)).rejects.toThrow(/at least one invocation form/);
   });
 
   it("accepts the optional distribution route the writer emits only on request", async () => {

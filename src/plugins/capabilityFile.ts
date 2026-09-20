@@ -114,6 +114,16 @@ const TOP_KEYS: readonly string[] = [
   "distribution",
 ];
 
+/**
+ * Keys under `invocation` that are NOTES about the forms rather than forms.
+ *
+ * Mirrors `INVOCATION_NOTE_KEYS` in the writer (`scripts/plugins/capability.mjs`), pinned
+ * against it by the suite. `citation` is the one: the Cursor root reads its `/<id>` form off
+ * two pages the plugins reference does not state it on, and the file records which. Offering
+ * that sentence to an operator as something to type is the mistake this reservation prevents.
+ */
+const INVOCATION_NOTE_KEYS: ReadonlySet<string> = new Set(["citation"]);
+
 const CLIENT_FLOOR_KEYS: readonly string[] = ["version", "citation", "reason"];
 const CITATION_KEYS: readonly string[] = ["url", "accessDate"];
 const CLASS_KEYS: readonly string[] = ["status", "count", "reason"];
@@ -153,12 +163,19 @@ function checkString(
 }
 
 function checkInvocation(value: unknown, defects: string[]): void {
-  if (!isPlainObject(value) || Object.keys(value).length === 0) {
+  if (!isPlainObject(value)) {
+    defects.push("invocation: must be an object naming at least one invocation form");
+    return;
+  }
+  if (Object.keys(value).every((key) => INVOCATION_NOTE_KEYS.has(key))) {
     defects.push("invocation: must be an object naming at least one invocation form");
     return;
   }
   for (const key of Object.keys(value).toSorted()) {
-    checkString(value[key], `invocation.${key}`, "must be the literal form an operator types", defects);
+    const requirement = INVOCATION_NOTE_KEYS.has(key)
+      ? "must be the note this key reserves: where the forms beside it were read from"
+      : "must be the literal form an operator types";
+    checkString(value[key], `invocation.${key}`, requirement, defects);
   }
 }
 
@@ -341,6 +358,21 @@ export async function readCapabilityFile(pluginRoot: string): Promise<PluginCapa
  */
 export function carriedClasses(file: PluginCapabilityFile): PluginOwnedClass[] {
   return PLUGIN_OWNED_CLASSES.filter((name) => file.classes[name]?.status === "carried");
+}
+
+/**
+ * The invocation FORMS a root declares — the literals an operator types — with the reserved
+ * note keys left out, in the file's own key order.
+ *
+ * The exclusion is why {@link INVOCATION_NOTE_KEYS} exists: `invocation` is an open record so a
+ * container can declare a form per class without this reader knowing the class names, and an
+ * open record has no way to tell a form from a sentence about the forms. Naming the notes is
+ * what keeps a consumer from printing "the /<id> form is stated on ..." as something to type.
+ */
+export function invocationForms(file: PluginCapabilityFile): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(file.invocation).filter(([key]) => !INVOCATION_NOTE_KEYS.has(key)),
+  );
 }
 
 /**
