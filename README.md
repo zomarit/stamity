@@ -1,5 +1,5 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit e79dcf0. Re-attested 2026-09-16 in the Package 14 rewrite. -->
-<!-- Re-open when: the corpus counts, the nine-verb surface or a client capability changes, or a
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 3f76070. Re-attested 2026-09-20 in the plugin-lifecycle package. -->
+<!-- Re-open when: the corpus counts, the ten-verb surface or a client capability changes, or a
      newer measurement supersedes the proof figures. `test/docsPages.test.ts` catches the first
      three; the figures are re-read against `docs/measurements.md` and the run record they cite. -->
 
@@ -76,10 +76,10 @@ Your setup state lives in `.stamity/`: a manifest, a per-file ledger, learnings 
 ## Commands
 
 `init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
-`clean` — nine verbs. Behind them are two plumbing verbs an agent calls and nobody types,
-`learn` and `handoff`. What each verb does, every flag it takes and every status it exits with is
-[the CLI reference](docs/cli-reference.md)'s to state. That page renders from the program itself,
-so it cannot describe a verb the CLI does not have, or miss one it does.
+`plugin` · `clean` — ten verbs. Behind them are two plumbing verbs an agent calls and nobody
+types, `learn` and `handoff`. What each verb does, every flag it takes and every status it exits
+with is [the CLI reference](docs/cli-reference.md)'s to state. That page renders from the program
+itself, so it cannot describe a verb the CLI does not have, or miss one it does.
 
 ## Working on this repository
 
@@ -111,7 +111,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/configuration.md`](docs/configuration.md) | Generated: the addressable config surface, rendered from the `config` command's key registry, each row's unset value measured against a probe manifest. |
 | [`docs/measurements.md`](docs/measurements.md) | Generated: the verified merge-ready rate over this repository's own run records, the npm reach proxy, the eval run of record, and the first-run proof lanes. |
 | [`docs/reference/`](docs/reference/) | Generated: one page per content class projected from artifact frontmatter, plus the pack inventory and the MCP server reference. |
-| [`llms.txt`](llms.txt) | Generated: the agent-native index of the published pages — the five root pages, the ten guides, the charter and every generated reference page. |
+| [`llms.txt`](llms.txt) | Generated: the agent-native index of the published pages — the five root pages, the eleven guides, the charter and every generated reference page. |
 | [`plugin.json`](plugin.json) | Generated: the plugin surfaces — this Agent Plugins manifest, [`.claude-plugin/`](.claude-plugin/) and [`.cursor-plugin/`](.cursor-plugin/). |
 | [`apm.yml`](apm.yml) | Generated: the APM package manifest, over the [`.apm/`](.apm/) projection of the corpus, served from this repository. |
 | [`website/`](website/) | The Docusaurus site that renders the `docs/` pages from the tree. Its one page of its own is the landing page at `website/src/pages/index.tsx`. |
@@ -121,6 +121,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, and the two channels a report goes through. |
 | [`docs/getting-started.md`](docs/getting-started.md) | Setting stamity up in your own repository for the first time, through to one change proved by a passing verification gate. |
 | [`docs/working-with-stamity.md`](docs/working-with-stamity.md) | Which of the nine touchpoints to open, what that one may do, and what is on disk when it stops. |
+| [`docs/plugins.md`](docs/plugins.md) | Installing stamity as a client plugin — who owns which class, the install route per client, pinning and rollback, and the private-catalog route. |
 | [`docs/doctrine.md`](docs/doctrine.md) | Why stamity ships what it ships — the root question, the four pillars and the surfaces that enforce them, and how an artifact is deleted. |
 | [`docs/customization.md`](docs/customization.md) | Making the agents, rules, commands and skills say what your repository needs — replacing one, patching one, and removing either again. |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | The exit model, every `check` row and its remedy, and where to report a problem. |

@@ -172,6 +172,12 @@ pack that declares no signature do not even load the Sigstore client. The trust 
 under your user cache directory, never inside the repository. A host that cannot reach the mirror
 cannot check a signature, so an offline machine cannot install a signed pack at all.
 
+**Since 1.9.0 the Sigstore client is an optional dependency.** npm installs it by default, so the
+ordinary install is unchanged; an install run with `--omit=optional` has no verifier, and a build
+that cannot load one **refuses** the claim — never a pass, and never the pin-waivable `unarmed`.
+Deleting the client is therefore not a way to switch signature checking off; it is a way to make
+every signed pack fail to install.
+
 The second is `stamity worktree setup`. When no local branch of the requested name exists and the
 repository has an `origin` remote, it runs `git fetch origin <branch>` against your repository's
 own remote (`src/worktree/git.ts::fetchBranch`). A transport failure refuses with `NETWORK_ERROR`,

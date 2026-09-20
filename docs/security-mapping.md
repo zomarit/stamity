@@ -173,6 +173,11 @@ of this repository rather than of the emitted setup.
 
 ### 1. Pack publishing and trust
 
+Since 1.9.0 the Sigstore client is an **optional** dependency of this package, so an install run
+with `--omit=optional` carries no verifier — and the control below still holds: a build that
+cannot load the client **refuses** the claim — never a pass, and never the pin-waivable
+`unarmed` (`src/pack/sigstoreVerifier.ts`).
+
 | Actor | Vector | Control | Residual | Mapped ids | Gap |
 |---|---|---|---|---|---|
 | Pack author | Publishes content that hashes to something other than what was reviewed | A four-tier ladder, pinned or refuse. Content off the catalog pin is refused, never downgraded. Code: `src/pack/trust.ts::resolveTrustTier` | A pin is only as good as the catalog that issued it, and nothing here attests the catalog | ASI04, LLM03, MANAGE 3.1, "Deploying AI Systems Securely" | No catalog attestation |

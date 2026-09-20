@@ -12,7 +12,7 @@
  * constants their renderers export, so a page cannot be generated without
  * being listed here, or listed here without something generating it. Only the
  * hand-written pages — the five root pages (README, CONTRIBUTING, SECURITY,
- * GOVERNANCE, CODE_OF_CONDUCT) and the ten guides under `docs/` — and the
+ * GOVERNANCE, CODE_OF_CONDUCT) and the eleven guides under `docs/` — and the
  * charter are named literally, because nothing generates them to be read from.
  * The guides are held to the same dated hand-page contract as three of those
  * root pages — README, SECURITY, CONTRIBUTING — by `test/docsPages.test.ts`,
@@ -160,6 +160,17 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         title: "Working with stamity",
         description:
           "which of the nine touchpoints to open, what that one may do, what is on disk when it stops, and how to run two changes at once.",
+        regenerateCommand: null,
+      },
+      {
+        // Third, beside the two pages a first-time reader takes first, and in
+        // the same position `test/docsPages.test.ts`'s GUIDES and the sidebar
+        // put it: the plugin route is an alternative to `init` rather than a
+        // topic reached after a setup already works.
+        path: "docs/plugins.md",
+        title: "Plugins",
+        description:
+          "installing stamity as a client plugin — which artifact class each container carries and which stays in the repository, the install route per client, setup, pinning and rollback, the companion runtime, and the private-catalog route.",
         regenerateCommand: null,
       },
       {
