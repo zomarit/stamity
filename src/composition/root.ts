@@ -99,6 +99,7 @@ import * as agentsMd from "../emit/agentsMd.ts";
 import * as skillsProjection from "../emit/skillsProjection.ts";
 import * as stateScaffold from "../emit/stateScaffold.ts";
 import * as hooksInfra from "../emit/hooksInfra.ts";
+import * as emitOwnership from "../emit/ownership.ts";
 import * as emitPlanner from "../emit/planner.ts";
 import * as capabilityMatrix from "../emit/capabilityMatrix.ts";
 import * as adapterClaude from "../adapters/claude.ts";
@@ -241,6 +242,14 @@ export interface EngineRegistry {
     readonly skillsProjection: typeof skillsProjection;
     readonly stateScaffold: typeof stateScaffold;
     readonly hooksInfra: typeof hooksInfra;
+    /**
+     * The plugin ownership boundary — the one predicate deciding which content
+     * classes reach a client from an installed plugin rather than from
+     * emission. Wired like any other engine module because four adapters, the
+     * core composer and the sync report all ask it: a second reader deciding
+     * that question for itself is the competing path this registry rules out.
+     */
+    readonly ownership: typeof emitOwnership;
     readonly planner: typeof emitPlanner;
     /**
      * The generated capability page's renderer. Wired like any other engine
@@ -362,6 +371,7 @@ export function createEngine(): EngineRegistry {
       skillsProjection,
       stateScaffold,
       hooksInfra,
+      ownership: emitOwnership,
       planner: emitPlanner,
       capabilityMatrix,
     },
