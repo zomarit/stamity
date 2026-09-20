@@ -42,6 +42,7 @@ import {
 } from "../../../types/manifest.ts";
 import { STATE_DIR } from "../../../types/markers.ts";
 import { packageCommand, packageName, repositorySlug } from "../../kit/packageName.ts";
+import { sanitizeLabel } from "../../kit/prompts.ts";
 
 // ── The runtime a plugin root resolves ─────────────────────────────────────
 
@@ -280,7 +281,12 @@ export async function probePluginRuntime(
       ...base,
       outcome: "refused",
       node: report?.node ?? null,
-      message: report?.runtime.refusal ?? run.failure ?? "the locator refused without a message",
+      // The root's OWN string, quoted into a row `check` prints raw: a hostile
+      // root could paint a false doctor row in a CI log with an escape byte
+      // (SEC5-M1, CWE-150). Quoted still — the terminal-steering bytes go.
+      message: sanitizeLabel(
+        report?.runtime.refusal ?? run.failure ?? "the locator refused without a message",
+      ),
     };
   }
   if (run.status !== 0 || report === null) {
@@ -584,7 +590,10 @@ function matchedApmDependencies(apmYaml: string | null): string[] {
               .filter((value) => typeof value === "string")
               .join(" ")
           : "";
-    if (bounded.some((pattern) => pattern.test(text))) matched.push(text);
+    // The matched line is quoted into the remedy and carried as the finding's
+    // path, and a YAML double-quoted scalar can spell `\e` — so the text is
+    // sanitized once, here, before either surface sees it (SEC5-M1, CWE-150).
+    if (bounded.some((pattern) => pattern.test(text))) matched.push(sanitizeLabel(text));
   }
   return matched;
 }
