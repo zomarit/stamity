@@ -74,6 +74,26 @@ describe("eval coverage — a source outside content/ is listed, never summed", 
     ]);
   });
 
+  // The narrowness is the whole guard, so it is tested rather than trusted: `parseSource`
+  // admits `.mjs` ONLY under `scripts/plugins/`, because that directory is where the generated
+  // `st-setup` body is rendered. Without these rows the widened pattern would read as "any
+  // `.mjs` anywhere", which is the escape hatch the list above exists to prevent.
+  it("refuses a .mjs source outside scripts/plugins/", () => {
+    expect(parseSource("scripts/plugins/setupCommand.mjs:104-143")).toEqual({
+      path: "scripts/plugins/setupCommand.mjs",
+      ranges: [[104, 143]],
+    });
+    for (const refused of [
+      "scripts/eval/instrument.mjs:1-5",
+      "scripts/plugins/clients/claude.mjs:119-124",
+      "src/plugins/capabilityFile.ts:1-5",
+      "setupCommand.mjs:1-5",
+      "scripts/plugins/.hidden.mjs:1-5",
+    ]) {
+      expect(parseSource(refused), `${refused} must not parse as a source`).toBeNull();
+    }
+  });
+
   it("names files that exist and are no artifact of the coverage surface", () => {
     expect(outside.length, "the non-corpus list is empty, so nothing above is load-bearing").toBeGreaterThan(0);
     for (const entry of outside) {

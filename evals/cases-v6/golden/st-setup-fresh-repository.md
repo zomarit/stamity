@@ -13,8 +13,10 @@ quoted blocks as the only governing text you hold. Respond exactly as you would 
 session.
 
 Governing text — the same file. This is the prose of the `st-setup` command body the plugin root
-generates for the claude client; the four bash blocks it carries are quoted as a fixture below,
-and so are step 3's three remedy bullets.
+generates for the claude client. The three bash blocks it carries are quoted as a fixture below.
+Step 3's three remedy bullets are not quoted at all: `duplicates` is empty in this scenario, so no
+remedy is reached, and step 3's own stop sentence — which is quoted — is the whole of what the run
+needs from it. An elision marks only where the template escapes a backtick around a field name.
 
 ```text
 Set this repository up to run on the installed stamity plugin. Work the four steps in order and
@@ -22,13 +24,13 @@ stop at the one that asks for the operator.
 
 1. Read the current state. Every step below reads from this report.
 
-2. When [...] is true, write the repository-owned files — the charter carrying this
+2. When [...]setup.needed[...] is true, write the repository-owned files — the charter carrying this
    repository's facts and gates, and the client configuration the plugin does not carry:
 
    When it is false, skip this step: a setup already exists, and replacing it is a job for the
    two commands in step 3, run deliberately.
 
-3. When [...] is non-empty, print every entry with the remedy beside it and STOP. A
+3. When [...]duplicates[...] is non-empty, print every entry with the remedy beside it and STOP. A
    duplicate is a file two installs both claim, and which one goes is the operator's call. The
    three remedies below are what THE OPERATOR runs — they are reported, never performed here:
 
