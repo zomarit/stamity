@@ -1,0 +1,26 @@
+{
+  "note": "Every top-level field cursor.com documents for a plugin manifest (.cursor-plugin/plugin.json), transcribed by hand. Cursor publishes NO JSON schema for this file, so nothing can be fetched and validated against: this transcription is the only thing that can catch a key stamity invented, and the only thing that reports a key the vendor added. Re-read the page and move the accessDate when either happens.",
+  "source": {
+    "url": "https://cursor.com/docs/reference/plugins",
+    "accessDate": "2026-09-20"
+  },
+  "required": ["name"],
+  "fields": [
+    "name",
+    "version",
+    "description",
+    "author",
+    "homepage",
+    "repository",
+    "license",
+    "keywords",
+    "logo",
+    "rules",
+    "agents",
+    "commands",
+    "skills",
+    "hooks",
+    "mcpServers",
+    "variables"
+  ]
+}
