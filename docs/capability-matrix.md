@@ -96,6 +96,29 @@ full selection it drops 0 rules. The emitted file names any it dropped in its ow
 notice, so the current set is read there rather than here. Re-measure with `node
 scripts/generate-capability-matrix.mjs` after a corpus change.
 
+## Plugin containers
+
+A release also publishes one plugin root per client. Each root's own emitter module decides
+which artifact classes travel inside it and which stay in the repository, and this table is
+built from those modules rather than beside them. `carried` means the root ships the class
+and the client reads it from there; the repository-owned column is what
+`stamity plugin setup` writes instead. Together the two columns cover every class, so no
+class is left without an owner.
+
+| Client | Container manifest | Carries | Repository-owned | Invocation | Root variable | Client floor |
+|---|---|---|---|---|---|---|
+| `claude` | `.claude-plugin/plugin.json` | agent, skill, command, hooks | rule, mcp | agents `@stamity:<id>`, commands `/stamity:<id>`, skills `/stamity:<id>` | `CLAUDE_PLUGIN_ROOT` | 2.1.224 — the archive-source floor; no floor for the plugin system as a whole is stated |
+| `cursor` | `.cursor-plugin/plugin.json` | agent, skill, command, rule, hooks | mcp | agents `/<id>`, commands `/<id>`, skills `/<id>` | `CURSOR_PLUGIN_ROOT` | unknown — no minimum version stated on cursor.com/docs/reference/plugins, cursor.com/docs/plugins or the CLI reference (accessed 2026-09-20) |
+| `copilot` | `plugin.json` | agent, skill, command, hooks | rule, mcp | agents `/agent <id> (or --agent=<id>)`, commands `/<id>`, skills `/<id>` | `PLUGIN_ROOT` | unknown — no minimum CLI version for plugins stated on the four docs.github.com pages read 2026-09-20; the CLI itself needs Node 22 or later |
+| `codex` | `plugin.json` | skill, hooks | agent, command, rule, mcp | skills `$<id>` | `PLUGIN_ROOT` | unknown — no minimum version is stated on any of the eight vendor pages read 2026-09-20 (the build and submission pages above, learn.chatgpt.com/docs/plugins, /docs/hooks and /docs/config-file/config-reference, the Agent Plugins specification and its 1.0.0 schema); the surface was measured against codex-cli 0.154.0 |
+
+Sources:
+
+- `claude`: <https://code.claude.com/docs/en/plugin-marketplaces> — accessed 2026-09-20
+- `cursor`: <https://cursor.com/docs/reference/plugins> — accessed 2026-09-20
+- `copilot`: <https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference> — accessed 2026-09-20
+- `codex`: <https://developers.openai.com/plugins/build/plugins> — accessed 2026-09-20
+
 ## Dialect facts by client
 
 ### `claude`
@@ -263,5 +286,5 @@ can be, since nothing here re-reads a page on its own.
 | Antigravity adoption/demand | adapter #5 | No adapter, so no row above carries a source for it — the trigger is adoption or demand, not a page this repo re-reads. | unwatched — no supported client carries a source for it |
 | codex#34002 resolution | native glob emission | Open — that client's declared rule shape still down-converts conditional rules into nested `AGENTS.md` files. | `codex`, oldest source read 2026-09-10 |
 | Claude Code AGENTS.md support change | drop the bridge | Unchanged — `claude` is the one client still declaring an entry file, so the bridge block stays emitted. | `claude`, oldest source read 2026-09-10 |
-| Agent Plugins scope expansion | container widens | No container is emitted. Skills reach this client at its native skills location instead, per its declared `skills-access` cap. | `claude`, oldest source read 2026-09-10 |
+| Agent Plugins scope expansion | container widens | Four containers are emitted — one root per client, built by `scripts/generate-plugin-packages.mjs` — and the Plugin containers section above states what each carries. The condition is now about the classes a container may hold: an agent or a command class reaching the Agent Plugins format would move two of codex's repository-owned rows into its root. | `claude`, oldest source read 2026-09-10 |
 | VS Code deny-gate GA | recheck editor-specific hook compatibility | CLI/cloud preToolUse hooks are emitted now, with timeout fail-open. [VS Code hooks](https://code.visualstudio.com/docs/agent-customization/hooks) remain Preview; editor-specific compatibility needs separate verification. | `copilot`, oldest source read 2026-09-10 |

@@ -102,6 +102,70 @@ export interface CapabilityMatrixInputs {
   readonly triggers: readonly RevisitTrigger[];
   /** What a session loads before it has done anything, per client. */
   readonly alwaysOn: AlwaysOnDisclosure;
+  /**
+   * The four plugin containers, or absent.
+   *
+   * OPTIONAL, and the reason is a layering fact rather than a preference. These
+   * facts are decided by the plugin emitter's per-client modules under
+   * `scripts/plugins/clients/`, which are build-time modules: they are not
+   * bundled into `dist/` and this file — engine code — cannot import them. So
+   * the one caller that CAN read them supplies them:
+   * `scripts/generate-capability-matrix.mjs` builds the rows through
+   * `scripts/plugin-container-facts.mjs` and passes them here, and
+   * `test/emit/capabilityMatrix.test.ts` byte-compares the committed page
+   * against a render built the same way. A render without them omits the
+   * section rather than inventing one — which is what {@link
+   * renderCapabilityMatrix} does, and why it is not the function that writes
+   * the page.
+   */
+  readonly plugins?: readonly PluginContainerFact[];
+}
+
+/**
+ * Every artifact class a plugin container declares a status for, in the order
+ * the capability file lists them (`scripts/plugins/capability.mjs`).
+ *
+ * `mcp` is on this list and not on the manifest's `PluginOwnedClass`, and the
+ * difference is real: a container can DECLARE mcp repository-owned, which all
+ * four do, while the manifest only ever records classes a plugin owns.
+ */
+export const PLUGIN_CONTAINER_CLASSES = [
+  "agent",
+  "skill",
+  "command",
+  "rule",
+  "hooks",
+  "mcp",
+] as const;
+
+/** One artifact class as a container declares it. */
+export type PluginContainerClass = (typeof PLUGIN_CONTAINER_CLASSES)[number];
+
+/**
+ * One client's plugin container, as its emitter module declares it.
+ *
+ * `carries` and `repositoryOwned` partition {@link PLUGIN_CONTAINER_CLASSES}:
+ * every class is in exactly one of them, which is what makes the pair a
+ * BOUNDARY rather than two lists. A class in neither would be a class nobody
+ * delivers, and a class in both would be the duplicate `stamity check`'s
+ * `plugin-duplicates` row exists to report.
+ */
+export interface PluginContainerFact {
+  readonly tool: Tool;
+  /** The container manifest's path inside the root — what the client discovers it by. */
+  readonly container: string;
+  /** Classes the root ships and the client reads from there. */
+  readonly carries: readonly PluginContainerClass[];
+  /** Classes `stamity plugin setup` writes into the repository instead. */
+  readonly repositoryOwned: readonly PluginContainerClass[];
+  /** What an operator types to reach each carried class. */
+  readonly invocation: string;
+  /** The client version the container needs, with the reason `unknown` is one. */
+  readonly floor: string;
+  /** The environment variable this client expands inside the root. */
+  readonly rootVariable: string;
+  /** Dated sources behind the row — the same shape a dialect citation takes. */
+  readonly citations: readonly { readonly url: string; readonly accessDate: string }[];
 }
 
 /**
@@ -255,8 +319,11 @@ export const REVISIT_TRIGGERS: readonly RevisitTrigger[] = [
     action: "container widens",
     watch: "claude",
     status:
-      "No container is emitted. Skills reach this client at its native skills location " +
-      "instead, per its declared `skills-access` cap.",
+      "Four containers are emitted — one root per client, built by " +
+      "`scripts/generate-plugin-packages.mjs` — and the Plugin containers section above states " +
+      "what each carries. The condition is now about the classes a container may hold: an agent " +
+      "or a command class reaching the Agent Plugins format would move two of codex's " +
+      "repository-owned rows into its root.",
   },
   {
     when: "VS Code deny-gate GA",
@@ -366,6 +433,70 @@ function requireCitations(facts: AdapterDialectFacts): void {
         `The \`${facts.tool}\` citation ${citation.url} carries access date ` +
           `"${citation.accessDate}", which is not an ISO calendar date (YYYY-MM-DD).`,
       );
+    }
+  }
+}
+
+/**
+ * Every container names a home, a variable, an invocation form and a dated
+ * source, and its two class lists PARTITION {@link PLUGIN_CONTAINER_CLASSES}.
+ *
+ * The partition is the assertion worth having. A class missing from both lists
+ * is one no reader can find an owner for, and a class in both is a container
+ * claiming to deliver what the repository also writes — the duplicate state
+ * `stamity check` reports rather than a fact this page should publish.
+ */
+function requirePluginContainers(rows: readonly PluginContainerFact[]): void {
+  requireExactToolCoverage("The plugin-container set", rows);
+  for (const row of rows) {
+    for (const [label, value] of [
+      ["container manifest path", row.container],
+      ["root variable", row.rootVariable],
+      ["invocation form", row.invocation],
+      ["client floor", row.floor],
+    ] as const) {
+      if (value.trim() === "") {
+        fail(`The \`${row.tool}\` plugin container declares no ${label}.`);
+      }
+    }
+    if (row.carries.length === 0) {
+      fail(
+        `The \`${row.tool}\` plugin container carries no class at all, so the root it describes ` +
+          `would deliver nothing.`,
+      );
+    }
+    const declared = [...row.carries, ...row.repositoryOwned];
+    for (const klass of PLUGIN_CONTAINER_CLASSES) {
+      const count = declared.filter((name) => name === klass).length;
+      if (count === 0) {
+        fail(
+          `The \`${row.tool}\` plugin container declares no owner for \`${klass}\`, so a reader ` +
+            `could not tell whether the root or the repository delivers it.`,
+        );
+      }
+      if (count > 1) {
+        fail(
+          `The \`${row.tool}\` plugin container declares \`${klass}\` twice — a class is carried ` +
+            `or repository-owned, never both.`,
+        );
+      }
+    }
+    if (row.citations.length === 0) {
+      fail(
+        `The \`${row.tool}\` plugin container declares no source, so its client floor would be ` +
+          `an undated claim.`,
+      );
+    }
+    for (const citation of row.citations) {
+      if (citation.url.trim() === "") {
+        fail(`The \`${row.tool}\` plugin container declares a source with no URL.`);
+      }
+      if (!ISO_DATE.test(citation.accessDate)) {
+        fail(
+          `The \`${row.tool}\` plugin container's source ${citation.url} carries access date ` +
+            `"${citation.accessDate}", which is not an ISO calendar date (YYYY-MM-DD).`,
+        );
+      }
     }
   }
 }
@@ -640,6 +771,65 @@ function clientSection(facts: AdapterDialectFacts): string[] {
   return lines;
 }
 
+/**
+ * The four plugin containers: one row each, then the dated sources behind them.
+ *
+ * Rendered in {@link TOOLS} order like every other table here, and the class
+ * lists render in {@link PLUGIN_CONTAINER_CLASSES} order rather than in the
+ * order a module happened to declare them, so two containers agreeing about a
+ * class read the same way.
+ */
+function pluginSection(rows: readonly PluginContainerFact[]): string[] {
+  const ordered = TOOLS.map((tool) => {
+    const row = rows.find((candidate) => candidate.tool === tool);
+    // Unreachable after the coverage check; kept so the narrowing is real.
+    if (row === undefined) fail(`No plugin container declared for \`${tool}\`.`);
+    return row;
+  });
+  const classes = (list: readonly PluginContainerClass[]): string =>
+    list.length === 0
+      ? "none"
+      : PLUGIN_CONTAINER_CLASSES.filter((klass) => list.includes(klass)).join(", ");
+
+  return [
+    "## Plugin containers",
+    "",
+    "A release also publishes one plugin root per client. Each root's own emitter module decides",
+    "which artifact classes travel inside it and which stay in the repository, and this table is",
+    "built from those modules rather than beside them. `carried` means the root ships the class",
+    "and the client reads it from there; the repository-owned column is what",
+    "`stamity plugin setup` writes instead. Together the two columns cover every class, so no",
+    "class is left without an owner.",
+    "",
+    ...table(
+      [
+        "Client",
+        "Container manifest",
+        "Carries",
+        "Repository-owned",
+        "Invocation",
+        "Root variable",
+        "Client floor",
+      ],
+      ordered.map((row) => [
+        code(row.tool),
+        code(row.container),
+        classes(row.carries),
+        classes(row.repositoryOwned),
+        row.invocation,
+        code(row.rootVariable),
+        row.floor,
+      ]),
+    ),
+    "",
+    "Sources:",
+    "",
+    ...ordered.flatMap((row) =>
+      row.citations.map((c) => `- ${code(row.tool)}: <${c.url}> — accessed ${c.accessDate}`),
+    ),
+  ];
+}
+
 function guaranteeSection(guarantees: readonly ClientHookGuarantee[]): string[] {
   return [
     "## Hook guarantee honesty",
@@ -877,6 +1067,7 @@ export function renderCapabilityMatrixFrom(inputs: CapabilityMatrixInputs): stri
   });
   const dated = resolveTriggers(inputs.triggers, ordered);
   requireAlwaysOnFigures(inputs.alwaysOn);
+  if (inputs.plugins !== undefined) requirePluginContainers(inputs.plugins);
 
   const lines = [
     // Frontmatter first, banner second: the site generator parses the block only
@@ -913,6 +1104,7 @@ export function renderCapabilityMatrixFrom(inputs: CapabilityMatrixInputs): stri
     "",
     ...alwaysOnSection(inputs.alwaysOn),
     "",
+    ...(inputs.plugins === undefined ? [] : [...pluginSection(inputs.plugins), ""]),
     "## Dialect facts by client",
     "",
     ...ordered.flatMap((facts) => clientSection(facts).concat("")),
@@ -926,7 +1118,16 @@ export function renderCapabilityMatrixFrom(inputs: CapabilityMatrixInputs): stri
   return `${lines.join("\n")}\n`;
 }
 
-/** The shipped page: {@link renderCapabilityMatrixFrom} over the live data. */
+/**
+ * The live data, WITHOUT the plugin containers — see {@link
+ * CapabilityMatrixInputs.plugins} for why the engine cannot read those.
+ *
+ * Every section but `## Plugin containers` renders here, which is what the
+ * per-section assertions in `test/emit/capabilityMatrix.test.ts` and
+ * `test/adapters/copilot.test.ts` read. The committed page is written by
+ * {@link REGENERATE_COMMAND}, which supplies the containers, and its drift gate
+ * byte-compares against a render built the same way.
+ */
 export function renderCapabilityMatrix(): string {
   return renderCapabilityMatrixFrom(LIVE_CAPABILITY_INPUTS);
 }
