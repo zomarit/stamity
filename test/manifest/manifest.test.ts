@@ -434,14 +434,21 @@ describe("collectManifestErrors", () => {
     ).toEqual([]);
   });
 
-  it("refuses an effort level outside the three the clients share", () => {
+  it("refuses an effort level outside the six the clients document between them", () => {
+    // TEST CHANGE, justified (2026-09-20, REQ-LADDER-001): the name and the
+    // assertion still described the three-level scale. The vocabulary widened
+    // to the six the clients document between them, so a case that accepted
+    // `low | medium | high` as the whole message would stay green against a
+    // manifest validator that had silently dropped `minimal`, `xhigh` or `max`
+    // — the three levels the widening added. The refusal being asserted is
+    // unchanged: `maximum` is not a level, and it is refused as one.
     const errors = collectManifestErrors({
       ...fullManifest(),
       models: { effort: { advanced: "maximum" } },
     });
 
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toContain("low | medium | high");
+    expect(errors[0]).toContain("minimal | low | medium | high | xhigh | max");
   });
 
   it("refuses a listed effort class carrying no level, rather than reading it as unset", () => {
