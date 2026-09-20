@@ -28,6 +28,18 @@
 #     and deployed nothing. Two legs install the package with a fixed client (0.29.1, the minimum
 #     tested one, and 0.30.0, the current one); the third runs the same smoke on 0.29.0 with
 #     `--expect-failure`, so the lane goes red if it ever stops being able to see that failure.
+#   - `plugin-route`, one leg. The CLIENT route into the four plugin roots this repository builds,
+#     read by the clients themselves rather than by a generator's own byte-diff. What it PROVES:
+#     the four roots' structure on every run — each root's `stamity-plugin.json` parses, every
+#     carried class's file count equals its declaration, and the container manifest validates —
+#     plus each client's CREDENTIAL-FREE install, on the legs whose CLI installs on the runner.
+#     What it does NOT prove: the invocation legs. Driving a client through a prompt needs a
+#     vendor credential this job holds none of, so those run in two other places — the nightly
+#     lane (.github/workflows/nightly.yml), behind per-client secrets, and the QA harness on the
+#     maintainer's machine against the logged-in binaries. A CLI that fails to install here leaves
+#     its legs SKIPPED with the installer's stderr in the log and a notice naming it; a structure
+#     failure, or any leg FAIL, is red. So the merge gate is the structure claim, which needs no
+#     credential and holds on every runner.
 #   - The aggregator itself. It is the ONE required status context THIS file exposes: the legs
 #     name themselves per leg, so a rule written against them binds names that rotate with the
 #     matrix.
@@ -62,6 +74,9 @@
 #      distributions, and the headline quality metric has no instrument behind it. All three read
 #      as calibrated today and are not. The nightly headless lane (.github/workflows/nightly.yml)
 #      is where that harness will attach; it is wired and credential-gated, not yet implemented.
+#      Its drive step is no longer empty — it now runs the plugin-route INVOCATION legs behind the
+#      per-client secrets — but driving a client and scoring the run are two different things, and
+#      only the first of them exists. Nothing in this repository measures the three items above.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI
@@ -346,6 +361,167 @@ jobs:
         if: matrix.expect_failure
         run: node scripts/apm-install-smoke.mjs --apm "$RUNNER_TEMP/apm-venv/bin/apm" --targets claude,copilot,cursor,codex --expect-failure
 
+  # The CLIENT route into the plugin distribution, and the second lane in this file that reads a
+  # TREE a third party produced rather than a command's exit code.
+  #
+  # Every other gate on the distribution compares bytes a generator in this repository wrote
+  # against bytes the same generator writes again — `generate-plugin-manifests.mjs --check` in
+  # `check` above is exactly that. A generator agreeing with itself says nothing about whether a
+  # client can read the result, which is the whole claim the distribution makes. So this lane
+  # builds the four roots the release builds, with the same three lines, and then asks the clients.
+  #
+  # The credential boundary is what shapes it. `structure` needs no client at all and runs on every
+  # leg; `install` needs the client's BINARY but no account (`claude plugin validate`, a marketplace
+  # add into a scratch HOME, a deployed-tree comparison); `discovery` and `invocation` need a
+  # credential, and this job holds none, so they do not run here. They run in the nightly lane
+  # behind per-client secrets and in the QA harness on the maintainer's machine. A lane that
+  # pretended otherwise would report a route as proven on the strength of a structure check.
+  #
+  # Every vendor install is best-effort on purpose: an npm outage or a vendor installer change is a
+  # fact about the world on the day the run happened, not about the diff, and a merge gate that
+  # goes red on it teaches the reader to wave the lane through. The smoke's own contract carries
+  # that posture — a client whose binary is neither passed nor exported has its binary-bound legs
+  # SKIPPED — so the structure claim still gates on every run.
+  plugin-route:
+    name: plugin route (structure and credential-free install)
+    runs-on: ubuntu-latest
+    # 15, and derived rather than chosen. The three build lines were measured at ~20 s total on
+    # 2026-09-20 with `time npm pack --pack-destination "$WORK"` (0.5 s), `time node
+    # scripts/build-plugin-runtime.mjs …` (0.6 s) and `time node
+    # scripts/build-plugin-distribution.mjs …` (18.3 s) on darwin 25.6.0 with a warm npm cache;
+    # the checkout, `npm ci` and `npm run build` ahead of them are the `check` job's own first
+    # four steps. What is NOT measured is the install half — three global npm installs and one
+    # vendor shell installer, all network-bound, on a runner nobody has timed this job on yet. So
+    # the ceiling is `apm-install`'s 15 on the same runner shape rather than a number derived from
+    # a measurement that does not exist; re-derive it from the first ten runs of this lane.
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # The release workflow's own three lines, in the same order and with the same provenance
+      # inputs, because a lane that built the distribution a second way would prove a tree the
+      # release never ships. The runtime comes from the TARBALL rather than the checkout for the
+      # reason release.yml states: `npm pack` is the only thing that knows what `files` publishes.
+      #
+      # Both trees land under `dist/`, which is gitignored: an untracked `plugin-runtime/` beside
+      # the checkout would enter `git ls-files --others`, the scan the leak gate itself runs.
+      - name: Build the distribution
+        run: |
+          set -euo pipefail
+          WORK="$(mktemp -d)"
+          npm pack --pack-destination "$WORK"
+          TARBALL="$(ls -1 "$WORK"/*.tgz | head -1)"
+          test -f "$TARBALL"
+          node scripts/build-plugin-runtime.mjs --tarball "$TARBALL" --out dist/plugin-runtime
+          node scripts/build-plugin-distribution.mjs \
+            --out dist/plugins \
+            --runtime dist/plugin-runtime \
+            --source-commit "$GITHUB_SHA" \
+            --source-commit-date "$(git show -s --format=%cI "$GITHUB_SHA")"
+
+      # One step per client, so the log names which vendor failed rather than which line of a
+      # four-vendor script did. Two layers hold each of them off the merge path: the `if` branch
+      # turns the installer's own non-zero into a notice and a missing output, and
+      # `continue-on-error: true` catches what the branch cannot — the step being killed, or the
+      # shell aborting before either arm runs.
+      - name: Install the Claude Code CLI
+        id: cli-claude
+        continue-on-error: true
+        run: |
+          if npm install -g @anthropic-ai/claude-code; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Claude Code CLI not installed::npm install -g @anthropic-ai/claude-code exited non-zero on this runner, so every binary-bound claude leg records SKIPPED. The installer's own stderr is in this step's log."
+          fi
+
+      - name: Install the GitHub Copilot CLI
+        id: cli-copilot
+        continue-on-error: true
+        run: |
+          if npm install -g @github/copilot; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Copilot CLI not installed::npm install -g @github/copilot exited non-zero on this runner, so every binary-bound copilot leg records SKIPPED. The installer's own stderr is in this step's log."
+          fi
+
+      - name: Install the Codex CLI
+        id: cli-codex
+        continue-on-error: true
+        run: |
+          if npm install -g @openai/codex; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Codex CLI not installed::npm install -g @openai/codex exited non-zero on this runner, so every binary-bound codex leg records SKIPPED. The installer's own stderr is in this step's log."
+          fi
+
+      # The one client with no npm route. The vendor ships the agent CLI through a shell installer
+      # and publishes no first-party package: the npm registry was queried on 2026-09-20 for
+      # `cursor-agent`, `cursor-cli`, `@cursor/agent` and `@cursor/cli` — the two that resolve are
+      # unrelated packages that declare no `bin`, and the other two do not exist. So the pipe is
+      # the supported route rather than a shortcut, and it is scoped to the one job in this file
+      # that holds `contents: read`, no credential and no write grant. `-fsS` keeps a 404 or a
+      # redirect to an error page from being fed to bash as a script.
+      #
+      # The install directory is `$HOME/.local/bin`, with the binary named `agent` and symlinked
+      # into `$HOME/.local/share/cursor-agent/versions/<version>/cursor-agent`. That layout is
+      # read off an installed 2026.09.15 agent CLI on the maintainer's machine (`ls -la
+      # ~/.local/bin/agent`, 2026-09-20) rather than off the vendor's installation page, which
+      # refused every TLS connection from the build machine that day — see this unit's entry in
+      # .stamity/runs/2026-09-17_plugin-lifecycle/record.md for the failed reads.
+      - name: Install the Cursor agent CLI
+        id: cli-cursor
+        continue-on-error: true
+        run: |
+          if curl -fsS https://cursor.com/install | bash; then
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Cursor agent CLI not installed::The vendor shell installer at https://cursor.com/install exited non-zero on this runner, so every binary-bound cursor leg records SKIPPED. The installer's own stderr is in this step's log."
+          fi
+
+      # `command -v` rather than the four install steps' outputs, because what the smoke needs is
+      # a path on this runner: an install that reported success and put nothing on PATH is the
+      # same SKIPPED leg as an install that failed, and this step is where the two stop looking
+      # different. The absent case is a notice, never a failure — the smoke's contract is that a
+      # client with no exported binary has its binary-bound legs SKIPPED.
+      - name: Export the client binaries
+        run: |
+          set -euo pipefail
+          for pair in "CLAUDE claude" "CURSOR agent" "COPILOT copilot" "CODEX codex"; do
+            name="${pair% *}"
+            bin="${pair#* }"
+            path="$(command -v "$bin" || true)"
+            if [ -n "$path" ]; then
+              echo "STAMITY_${name}_BIN=$path" >> "$GITHUB_ENV"
+              echo "STAMITY_${name}_BIN=$path"
+            else
+              echo "::notice title=Client binary absent (${bin})::No \`${bin}\` on PATH after the install step, so STAMITY_${name}_BIN is unset and every binary-bound leg of that client records SKIPPED."
+            fi
+          done
+
+      # Without `--invoke`: the structure and install legs are exactly the ones that need no
+      # account. The smoke exits 0 when no leg failed, 1 on a FAIL and 2 when it could not run at
+      # all, so a SKIPPED leg is green here and a broken root is not.
+      - name: Plugin route smoke (no invocation legs)
+        run: node scripts/plugin-route-smoke.mjs --dist dist/plugins --client claude,cursor,copilot,codex
+
   # Currency, not integrity. The exact pins in the MCP catalog guarantee the bytes never
   # change, which is precisely why something has to go and ask whether those bytes are still
   # a good idea — a pinned version stays byte-identical on the day an advisory lands against
@@ -436,18 +612,23 @@ jobs:
   # `dependency-review` is deliberately NOT in `needs`: it is advisory, and it does not run at
   # all outside a pull request, so requiring it would make every push wait on a job that will
   # never report. `apm-install` IS required, and can be: it runs on every trigger this workflow
-  # declares, so requiring it makes no push wait on a job that never reports.
+  # declares, so requiring it makes no push wait on a job that never reports. `plugin-route` is
+  # required on the same terms and for the same reason as `apm-install`: it runs on every trigger,
+  # and what it gates is a ROUTE — the four plugin roots' structure — that no byte-diff in `check`
+  # can see. Its credential-bound legs are the ones it leaves SKIPPED, so requiring it never makes
+  # the merge path depend on a secret this repository does not hold.
   all-ci-checks:
     name: all-ci-checks
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
     if: always()
-    needs: [check, supply-chain, apm-install]
+    needs: [check, supply-chain, apm-install, plugin-route]
     steps:
       - name: Report
         run: |
-          echo "check=${{ needs.check.result }} supply-chain=${{ needs.supply-chain.result }} apm-install=${{ needs.apm-install.result }}"
+          echo "check=${{ needs.check.result }} supply-chain=${{ needs.supply-chain.result }} apm-install=${{ needs.apm-install.result }} plugin-route=${{ needs.plugin-route.result }}"
           # The advisory lane is non-blocking by design: it is reported, never required.
           test "${{ needs.check.result }}" = "success"
           test "${{ needs.apm-install.result }}" = "success"
+          test "${{ needs.plugin-route.result }}" = "success"

@@ -100,14 +100,26 @@ jobs:
   # the same shape for ONE client set on the floor leg; this lane widens it to all four, which is
   # the combination most likely to surface a per-adapter emission gap.
   #
-  # The second half of this lane is ARMED AND NOT ENABLED, and the file says so rather than
-  # implying coverage that does not exist: driving a real headless target tool over the emitted
-  # setup needs an API credential this repository does not hold. The credential check below exits
-  # 0 with a notice when the secret is absent, so the lane is honest about which half ran.
+  # The second half of this lane is the plugin route's INVOCATION legs, and it is ARMED PER CLIENT:
+  # driving a real headless client over the plugin distribution needs that vendor's credential, and
+  # this repository holds none of the four. The credential check below exits 0 with one notice per
+  # absent secret, so the lane is honest about which legs ran — three configured and one missing is
+  # three legs driven and one that says why it was not. The credential-free half of the same route
+  # (structure, and each client's install where its CLI installs) is merge-blocking on every commit
+  # in the `plugin-route` job of .github/workflows/ci.yml; what cannot be there is exactly what is
+  # here. Driving is still not SCORING: the eval harness named in ci.yml's lane map is absent.
   headless-lane:
-    name: headless lane (scratch-repo dogfood; drive step armed, not enabled)
+    name: headless lane (scratch-repo dogfood; invocation legs behind per-client secrets)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # 45, raised from the 25 this job carried while its second half printed a warning. The added
+    # work is a distribution build measured at ~20 s on 2026-09-20 (`time node
+    # scripts/build-plugin-distribution.mjs …` on darwin 25.6.0, 18.3 s, plus ~1 s for the pack and
+    # the runtime build), four network-bound CLI installs, and four HEADLESS MODEL INVOCATIONS
+    # whose per-leg cost nobody here has measured — a model turn is the one step in this file whose
+    # duration is not a property of this repository. Nothing in this file is merge-blocking, so a
+    # generous ceiling costs a nightly minute and a tight one costs a false red; re-derive from the
+    # first ten runs that actually had a credential.
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -179,32 +191,136 @@ jobs:
           fi
           echo "Scratch-repo dogfood: init + check + residue present for claude, cursor, copilot, codex"
 
-      # Armed, not enabled. The secret is read into an env var rather than compared inside an
-      # `if:` expression so the absent case produces a NOTICE a reader can find, instead of a
-      # silently skipped step that looks the same as a step that passed.
+      # Armed per client. Each secret is read into an env var rather than compared inside an `if:`
+      # expression, so an absent one produces a NOTICE a reader can find instead of a silently
+      # skipped step that looks the same as a step that passed — and the absent case is per client
+      # now, not per lane: three configured credentials and one missing is three invocation legs
+      # that ran and one that says why it did not.
+      #
+      # Which variable each client honours headlessly was measured from the binaries themselves on
+      # 2026-09-20, not read off a page, and each mapping below carries its measurement. Only the
+      # SECRET names are this repository's choice; the env-var names are the vendors'.
       - name: Headless drive credentials
         id: creds
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
         run: |
-          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+          set -euo pipefail
+          clients=""
+          # The secret's VALUE is never passed as an argument or echoed: the loop resolves the
+          # variable by NAME through bash indirect expansion and only ever asks whether it is empty.
+          for pair in \
+            "claude ANTHROPIC_API_KEY" \
+            "cursor CURSOR_API_KEY" \
+            "copilot COPILOT_GITHUB_TOKEN" \
+            "codex CODEX_API_KEY"
+          do
+            client="${pair% *}"
+            var="${pair#* }"
+            if [ -n "${!var:-}" ]; then
+              clients="${clients:+$clients,}$client"
+            else
+              echo "::notice title=Invocation leg skipped (${client})::No ${var} secret is configured for this repository, so the ${client} invocation leg of the plugin-route smoke did not run. Its structure and install legs run credential-free in the plugin-route job of .github/workflows/ci.yml on every commit."
+            fi
+          done
+          if [ -z "$clients" ]; then
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Headless drive skipped::No API-key secret is configured for this repository, so the headless target-tool drive did not run. The scratch-repo dogfood above DID run and is the coverage this lane currently provides."
+            echo "::notice title=Headless drive skipped::No client credential secret is configured for this repository, so the headless target-tool drive did not run. The scratch-repo dogfood above DID run and is the coverage this lane currently provides."
             exit 0
           fi
           echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "clients=$clients" >> "$GITHUB_OUTPUT"
+          echo "Invocation legs armed for: $clients"
 
-      # The drive step itself. It is here so the wiring is reviewable and the gap is visible in
-      # the file rather than only in someone's head; what it does NOT yet have is the harness
-      # that drives a target tool over the emitted setup and scores the result. That harness is
-      # the eval-harness gap named in ci.yml's lane map, and until it exists this step reports
-      # loudly rather than pretending to measure something.
+      # The drive step, and it now drives something. It builds the same four plugin roots the
+      # release builds, installs the same client CLIs the `plugin-route` job of ci.yml installs,
+      # and runs the same smoke WITH `--invoke` — for exactly the clients whose credential is
+      # present, never for the others. A FAIL here is a red nightly, which is this lane's purpose:
+      # the invocation legs are the half of the route a merge gate cannot hold, because they need
+      # an account.
+      #
+      # What is still missing, so the file says it rather than implying coverage: driving a client
+      # is not SCORING a run. The eval harness named in ci.yml's lane map — the instrument behind
+      # the `obsolete_when` triggers, the per-unit size defaults and the headline quality metric —
+      # does not exist, and nothing below measures any of the three.
       - name: Headless target-tool drive
         if: steps.creds.outputs.enabled == 'true'
+        env:
+          CLIENTS: ${{ steps.creds.outputs.clients }}
+          # Claude Code: `claude --help` on 2.1.278 (read 2026-09-20) states Anthropic auth is
+          # "strictly ANTHROPIC_API_KEY or apiKeyHelper".
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Cursor: `agent --help` on 2026.09.15-d2fe57e (read 2026-09-20) documents `--api-key
+          # <key>` as "can also use CURSOR_API_KEY env var".
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          # Copilot: `copilot help environment` on 1.0.85 (read 2026-09-20) lists
+          # `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN` in that order of precedence. The
+          # first is set because it is the only one of the three that means Copilot and nothing
+          # else, so it cannot collide with a token another step wants.
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          # Codex: `codex login --help` on codex-cli 0.154.0 (read 2026-09-20) names the variable
+          # in its own example — `printenv OPENAI_API_KEY | codex login --with-api-key`. Note the
+          # LIMIT that example states: the measured mechanism is a login that reads the key from
+          # stdin, and whether `codex exec` honours the bare variable is unmeasured. So the codex
+          # invocation leg may record a credential failure even with the secret set, and the smoke
+          # is where a login step would belong if one is needed.
+          OPENAI_API_KEY: ${{ secrets.CODEX_API_KEY }}
         run: |
-          echo "::warning title=Headless drive not implemented::An API-key secret is configured, but the drive harness that runs a target tool over the emitted setup and scores the run does not exist yet. Nothing was measured. See the eval-harness entry in .github/workflows/ci.yml."
+          set -euo pipefail
+
+          # The same three lines as the release and as ci.yml's plugin-route job. Duplicated rather
+          # than shared: a composite action is the only way two workflows share steps, and one
+          # would add a file to this directory for three lines.
+          WORK="$(mktemp -d)"
+          npm pack --pack-destination "$WORK"
+          TARBALL="$(ls -1 "$WORK"/*.tgz | head -1)"
+          test -f "$TARBALL"
+          node scripts/build-plugin-runtime.mjs --tarball "$TARBALL" --out dist/plugin-runtime
+          node scripts/build-plugin-distribution.mjs \
+            --out dist/plugins \
+            --runtime dist/plugin-runtime \
+            --source-commit "$GITHUB_SHA" \
+            --source-commit-date "$(git show -s --format=%cI "$GITHUB_SHA")"
+
+          # Best-effort, one client at a time, for the reason ci.yml's plugin-route job states: an
+          # npm outage is a fact about the day rather than about the tree. A client whose CLI did
+          # not install has its legs recorded SKIPPED by the smoke, which is honest; a nightly that
+          # went red on the installer would say the route broke.
+          npm install -g @anthropic-ai/claude-code || echo "::notice title=Claude Code CLI not installed::The claude legs will record SKIPPED."
+          npm install -g @github/copilot || echo "::notice title=Copilot CLI not installed::The copilot legs will record SKIPPED."
+          npm install -g @openai/codex || echo "::notice title=Codex CLI not installed::The codex legs will record SKIPPED."
+          # The vendor's shell installer is the only supported route for this CLI — it publishes no
+          # first-party npm package (registry queried 2026-09-20). It lands `agent` in
+          # $HOME/.local/bin.
+          curl -fsS https://cursor.com/install | bash || echo "::notice title=Cursor agent CLI not installed::The cursor legs will record SKIPPED."
+          export PATH="$HOME/.local/bin:$PATH"
+
+          for pair in "CLAUDE claude" "CURSOR agent" "COPILOT copilot" "CODEX codex"; do
+            name="${pair% *}"
+            bin="${pair#* }"
+            path="$(command -v "$bin" || true)"
+            if [ -n "$path" ]; then
+              export "STAMITY_${name}_BIN=$path"
+              echo "STAMITY_${name}_BIN=$path"
+            fi
+          done
+
+          # WITH --invoke, and scoped to the credentialed clients. A FAIL exits 1 and reddens the
+          # nightly; a SKIPPED leg does not.
+          node scripts/plugin-route-smoke.mjs --dist dist/plugins --client "$CLIENTS" --invoke \
+            --json "$WORK/plugin-route.json" | tee "$WORK/plugin-route.log"
+
           {
-            echo "### Headless drive: credential present, harness absent"
+            echo "### Plugin route: invocation legs"
             echo ""
-            echo "The credential gate passed and the drive step reached. No harness ran."
+            echo "Clients driven: \`$CLIENTS\`"
+            echo ""
+            echo '```'
+            grep '^plugin-route: ' "$WORK/plugin-route.log" || echo "(the smoke printed no result line)"
+            echo '```'
+            echo ""
+            echo "Scoring is NOT part of this: the eval harness named in .github/workflows/ci.yml does not exist, and nothing here measures the three items that read as calibrated against it."
           } >> "$GITHUB_STEP_SUMMARY"

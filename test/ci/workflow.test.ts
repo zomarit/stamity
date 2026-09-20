@@ -227,10 +227,15 @@ describe("ci.yml — the merge-blocking gate", () => {
   const jobs = ci.workflow.jobs;
   const check = stepsOf(ci, "check");
 
-  it("keeps the five lanes: two matrix gates, two advisory probes, and one stable aggregator", () => {
+  it("keeps the six lanes: three gates, two advisory probes, and one stable aggregator", () => {
+    // CHANGED by plan 008 file 3, unit V1w: `plugin-route` joins the merge-blocking set, so this
+    // list and the aggregator's `needs` below both move. It sits beside `apm-install` because the
+    // two answer the same KIND of question — what a real consumer's tooling does with a published
+    // surface — and the ordering here mirrors the lane map's.
     expect(Object.keys(jobs)).toEqual([
       "check",
       "apm-install",
+      "plugin-route",
       "supply-chain",
       "dependency-review",
       "all-ci-checks",
@@ -425,7 +430,7 @@ describe("ci.yml — the merge-blocking gate", () => {
     // `dependency-review` is advisory AND pull-request-only: requiring it would make every push
     // wait on a job that never reports. `apm-install` runs on every trigger this workflow
     // declares, so requiring it costs no push a wait on a job that will not report.
-    expect(aggregator.needs).toEqual(["check", "supply-chain", "apm-install"]);
+    expect(aggregator.needs).toEqual(["check", "supply-chain", "apm-install", "plugin-route"]);
     // `if: always()` is what makes it run after a FAILED dependency; without it the aggregator is
     // skipped, and a skipped required check reads as green.
     expect(aggregator.if).toBe("always()");
@@ -436,8 +441,149 @@ describe("ci.yml — the merge-blocking gate", () => {
     // The APM route is merge-blocking on the same terms: a deployment that stopped happening is
     // not something to read in a log afterwards.
     expect(report).toContain('test "${{ needs.apm-install.result }}" = "success"');
+    // ADDED by plan 008 file 3, unit V1w. The plugin route is the third: a distribution no client
+    // can read is the same class of failure as a package that deploys nothing, and neither shows
+    // up in a generator's byte-diff. Naming it in `needs` is not enough — a job listed in `needs`
+    // that FAILED still lets the aggregator run under `always()`, so the result has to be tested.
+    expect(report).toContain('test "${{ needs.plugin-route.result }}" = "success"');
     // The advisory lane is reported, never required — it exists not to block.
     expect(report).toContain("needs.supply-chain.result");
+  });
+
+  // ADDED by plan 008 file 3, unit V1w — the `plugin-route` lane. Its properties split by what
+  // each one costs: the job's shape, its privileges and its timeout are free to assert here; what
+  // a real client does with the distribution is what the lane itself measures on a runner, and no
+  // assertion in this file can stand in for that. So these pin the wiring — that the lane exists,
+  // that it blocks a merge, that it asks for no credential, and that the half which needs one runs
+  // in the nightly file instead.
+  describe("the plugin-route lane", () => {
+    const route = stepsOf(ci, "plugin-route");
+
+    it("is a merge-blocking lane that asks for no credential and no write grant", () => {
+      const job = jobOf(ci, "plugin-route");
+      expect(job["runs-on"]).toBe("ubuntu-latest");
+      // Least privilege, the same as every other job in this file: it reads a checkout and
+      // installs from public registries, and it has nothing to write anywhere.
+      expect(job.permissions).toEqual({ contents: "read" });
+      // A ceiling, not a hang: the job's own comment derives the number and names the measurement
+      // behind the half of it that is measured.
+      expect(job["timeout-minutes"]).toBeTypeOf("number");
+      expect(job["timeout-minutes"]).toBeGreaterThan(0);
+      // No secret reaches this job. That is the property that lets it be REQUIRED: a merge gate
+      // whose pass depended on a vendor credential would be red on every fork and every clone.
+      const body = [
+        JSON.stringify(job.env ?? {}),
+        ...route.map((step) => `${step.run ?? ""}${JSON.stringify(step.env ?? {})}`),
+      ].join("\n");
+      expect(body).not.toContain("secrets.");
+      // And it runs on every trigger the workflow declares — no `if:` — which is the second half
+      // of what makes requiring it safe (see the `dependency-review` reasoning above).
+      expect(job.if).toBeUndefined();
+    });
+
+    it("builds the distribution the release builds, from the packed tarball", () => {
+      // A lane that built the roots a second way would prove a tree the release never ships, and
+      // the runtime has to come from the tarball because `npm pack` is the only thing that knows
+      // what `files` publishes.
+      const build = runOf(route, "Build the distribution");
+      expect(build).toContain("npm pack --pack-destination");
+      expect(build).toContain(
+        'node scripts/build-plugin-runtime.mjs --tarball "$TARBALL" --out dist/plugin-runtime',
+      );
+      expect(build).toContain("node scripts/build-plugin-distribution.mjs");
+      expect(build).toContain("--runtime dist/plugin-runtime");
+      // Provenance is an INPUT, never a clock read — that is what makes two builds of one commit
+      // produce identical bytes.
+      expect(build).toContain('--source-commit "$GITHUB_SHA"');
+      expect(build).toContain('--source-commit-date "$(git show -s --format=%cI "$GITHUB_SHA")"');
+      // The same lines release.yml runs, compared rather than described: a drift between the two
+      // is exactly the failure this assertion exists to catch.
+      const releaseBody = release.source;
+      for (const line of [
+        "node scripts/build-plugin-runtime.mjs --tarball",
+        "node scripts/build-plugin-distribution.mjs",
+        '--source-commit "$GITHUB_SHA"',
+      ]) {
+        expect(releaseBody, `release.yml must still run ${line}`).toContain(line);
+      }
+      // Under dist/, which is gitignored: an untracked plugin-runtime/ beside the checkout would
+      // enter `git ls-files --others`, the scan the leak gate itself runs.
+      expect(build).not.toMatch(/--out\s+plugin-runtime\b/);
+    });
+
+    it("installs each vendor CLI in its own step, and no install can redden the lane", () => {
+      const installs = [
+        ["Install the Claude Code CLI", "npm install -g @anthropic-ai/claude-code"],
+        ["Install the GitHub Copilot CLI", "npm install -g @github/copilot"],
+        ["Install the Codex CLI", "npm install -g @openai/codex"],
+        // No first-party npm package exists for this one: the registry was queried on 2026-09-20
+        // for `cursor-agent`, `cursor-cli`, `@cursor/agent` and `@cursor/cli`, and the two that
+        // resolve are unrelated packages declaring no `bin`. The vendor shell installer is the
+        // supported route.
+        ["Install the Cursor agent CLI", "curl -fsS https://cursor.com/install | bash"],
+      ] as const;
+      for (const [name, command] of installs) {
+        const step = stepOf(route, name);
+        // One step per client, so the log names the vendor rather than a line number.
+        expect(step.run, name).toContain(command);
+        // An npm outage or a vendor installer change is a fact about the day the run happened,
+        // not about the diff. A merge gate that went red on it would teach the reader to wave the
+        // lane through, and the smoke's own contract turns a missing binary into a SKIPPED leg.
+        expect(step["continue-on-error"], name).toBe(true);
+        // The failure has to be VISIBLE, or a skipped leg and a passing one read alike.
+        expect(step.run, name).toContain("::notice title=");
+      }
+      // The Cursor CLI lands outside the default PATH, so the install step has to extend it for
+      // the steps after it — `export` in one step reaches nothing.
+      expect(runOf(route, "Install the Cursor agent CLI")).toContain('>> "$GITHUB_PATH"');
+    });
+
+    it("exports each binary it can actually find, and runs the smoke WITHOUT --invoke", () => {
+      // `command -v` rather than the install steps' outputs: an install that reported success and
+      // put nothing on PATH is the same SKIPPED leg as one that failed, and this is where the two
+      // stop looking different.
+      const exports = runOf(route, "Export the client binaries");
+      expect(exports).toContain("command -v");
+      expect(exports).toContain('echo "STAMITY_${name}_BIN=$path" >> "$GITHUB_ENV"');
+      // The four pairs the loop walks, asserted as the shell spells them: the variable name is
+      // composed at run time, so the load-bearing literal is the pair list, not `STAMITY_X_BIN`.
+      // The second half of each pair is the COMMAND, and it is the half that goes wrong quietly —
+      // the Cursor CLI installs a binary called `agent`, and looking for `cursor` would export
+      // nothing while the step still printed a clean log.
+      for (const pair of ["CLAUDE claude", "CURSOR agent", "COPILOT copilot", "CODEX codex"]) {
+        expect(exports, `the loop must walk "${pair}"`).toContain(`"${pair}"`);
+      }
+
+      const smoke = runOf(route, "Plugin route smoke (no invocation legs)");
+      expect(smoke).toContain("node scripts/plugin-route-smoke.mjs");
+      expect(smoke).toContain("--dist dist/plugins");
+      expect(smoke).toContain("--client claude,cursor,copilot,codex");
+      // THE property of this lane: the credential-bound legs do not run here. `--invoke` is what
+      // asks a client to answer a prompt, and this job holds no account to answer it with.
+      expect(smoke, "the CI lane must not drive an invocation leg").not.toContain("--invoke");
+      // Order: the smoke reads a tree and an environment that two earlier steps produce.
+      expect(indexOf(route, "Plugin route smoke (no invocation legs)")).toBeGreaterThan(
+        indexOf(route, "Export the client binaries"),
+      );
+      expect(indexOf(route, "Export the client binaries")).toBeGreaterThan(
+        indexOf(route, "Build the distribution"),
+      );
+    });
+
+    it("sends the invocation legs to the nightly file, and says so where a reader looks", () => {
+      // The split is the honest part of this lane, so it is pinned rather than trusted: the half
+      // that needs a credential runs in nightly.yml and the lane map says which half is which.
+      const nightlyDrive = runOf(stepsOf(nightly, "headless-lane"), "Headless target-tool drive");
+      expect(nightlyDrive).toContain("node scripts/plugin-route-smoke.mjs");
+      expect(nightlyDrive).toContain("--invoke");
+
+      const laneMap = ci.source.slice(0, ci.source.indexOf("\nname: CI"));
+      expect(laneMap).toContain("plugin-route");
+      // What it does NOT prove has to be in the map too, or the reader takes a structure check for
+      // a proven route.
+      expect(laneMap).toContain("invocation legs");
+      expect(laneMap).toContain("nightly.yml");
+    });
   });
 
   it("keeps the dependency review advisory, and says which of its two failures happened", () => {
@@ -473,6 +619,10 @@ describe("ci.yml — the merge-blocking gate", () => {
       // exit code. A map that did not name it would leave the reader thinking the generated
       // package's byte-diff is the only thing guarding that surface.
       "apm-install",
+      // The client route into the four plugin roots. Named for the same reason as `apm-install`:
+      // without it the reader would take the generate-and-diff over the plugin manifests for proof
+      // that a client can read the distribution, which is a different claim.
+      "plugin-route",
       // The pull-request gates live in a sibling file; a lane map that did not name them would
       // read as if this workflow were the whole merge gate.
       "pr-checks",
@@ -568,10 +718,39 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
     expect(creds.id).toBe("creds");
     // Read into an env var rather than compared inside an `if:`, so the absent case produces a
     // notice a reader can find instead of a silently skipped step.
-    expect(Object.keys(creds.env ?? {})).toContain("ANTHROPIC_API_KEY");
+    //
+    // CHANGED by plan 008 file 3, unit V1w: one secret became four, one per client, because the
+    // absent case is now per client rather than per lane — three configured and one missing has to
+    // read as three legs driven and one that said why it was not.
+    expect(Object.keys(creds.env ?? {}).toSorted()).toEqual([
+      "ANTHROPIC_API_KEY",
+      "CODEX_API_KEY",
+      "COPILOT_GITHUB_TOKEN",
+      "CURSOR_API_KEY",
+    ]);
+    // One notice per absent secret, naming the client whose leg did not run. The client name is
+    // interpolated by the shell, so what is pinned is the template plus the four client-to-variable
+    // pairs the loop walks — a pair the loop dropped is a client whose absent secret would produce
+    // no notice at all, which is the failure this whole shape exists to prevent.
+    expect(creds.run).toContain("::notice title=Invocation leg skipped (${client})::");
+    for (const pair of [
+      "claude ANTHROPIC_API_KEY",
+      "cursor CURSOR_API_KEY",
+      "copilot COPILOT_GITHUB_TOKEN",
+      "codex CODEX_API_KEY",
+    ]) {
+      expect(creds.run, `the loop must walk "${pair}"`).toContain(`"${pair}"`);
+    }
+    // The secret VALUE is resolved by NAME through indirect expansion and only ever tested for
+    // emptiness — never passed as an argument, where it would be visible in the runner's process
+    // table, and never echoed.
+    expect(creds.run).toContain('${!var:-}');
     expect(creds.run).toContain("enabled=false");
     expect(creds.run).toContain("::notice title=Headless drive skipped::");
     expect(creds.run).toContain("exit 0");
+    // The armed set is handed on as data, so the drive step limits `--client` to the clients whose
+    // credential is present rather than driving all four and failing three.
+    expect(creds.run).toContain('echo "clients=$clients" >> "$GITHUB_OUTPUT"');
 
     // The drive step exists, is guarded, and comes after the gate that arms it.
     expect(conditionOf(steps, "Headless target-tool drive")).toBe(
@@ -580,8 +759,7 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
     expect(indexOf(steps, "Headless target-tool drive")).toBeGreaterThan(
       indexOf(steps, "Headless drive credentials"),
     );
-    // Armed, not enabled: with no harness behind it, the step reports rather than pretending to
-    // measure. Evaluated both ways so the guard is proven to be the switch, not decoration.
+    // Evaluated both ways so the guard is proven to be the switch, not decoration.
     const condition = conditionOf(steps, "Headless target-tool drive");
     expect(
       evaluateWorkflowExpression(condition, { steps: { creds: { outputs: { enabled: "false" } } } }),
@@ -590,8 +768,188 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
       evaluateWorkflowExpression(condition, { steps: { creds: { outputs: { enabled: "true" } } } }),
     ).toBe(true);
   });
+
+  // ADDED by plan 008 file 3, unit V1w. CHANGED from the assertion that pinned the drive step's
+  // "Headless drive not implemented" warning: the harness now exists, so the behaviour that
+  // assertion guarded — that a credentialed run reports honestly rather than pretending to measure
+  // — moved to the last case here, which pins the one thing the harness still does NOT do.
+  it("drives the plugin route's invocation legs for exactly the credentialed clients", () => {
+    const steps = stepsOf(nightly, "headless-lane");
+    const drive = stepOf(steps, "Headless target-tool drive");
+    const run = drive.run ?? "";
+
+    // The same four roots the release builds, from the packed tarball, with provenance as an input.
+    expect(run).toContain("npm pack --pack-destination");
+    expect(run).toContain("node scripts/build-plugin-runtime.mjs");
+    expect(run).toContain("node scripts/build-plugin-distribution.mjs");
+    expect(run).toContain('--source-commit "$GITHUB_SHA"');
+
+    // WITH `--invoke`, which is the whole reason this half cannot live in the merge gate, and
+    // scoped to the armed clients rather than to all four.
+    expect(run).toContain("node scripts/plugin-route-smoke.mjs");
+    expect(run).toContain("--invoke");
+    expect(run).toContain('--client "$CLIENTS"');
+    expect(drive.env?.["CLIENTS"]).toBe("${{ steps.creds.outputs.clients }}");
+
+    // Each secret reaches the client through the variable that client actually honours, measured
+    // from the binaries on 2026-09-20 rather than read off a page: `claude --help` on 2.1.278
+    // ("Anthropic auth is strictly ANTHROPIC_API_KEY"), `agent --help` on 2026.09.15-d2fe57e
+    // ("can also use CURSOR_API_KEY env var"), `copilot help environment` on 1.0.85
+    // (COPILOT_GITHUB_TOKEN, GH_TOKEN, GITHUB_TOKEN in that precedence) and `codex login --help`
+    // on codex-cli 0.154.0 (`printenv OPENAI_API_KEY | codex login --with-api-key`). The last is
+    // the one asymmetry and it is deliberate: the SECRET is named for the client, the VARIABLE is
+    // the vendor's, and the two differ for codex alone.
+    expect(drive.env?.["ANTHROPIC_API_KEY"]).toBe("${{ secrets.ANTHROPIC_API_KEY }}");
+    expect(drive.env?.["CURSOR_API_KEY"]).toBe("${{ secrets.CURSOR_API_KEY }}");
+    expect(drive.env?.["COPILOT_GITHUB_TOKEN"]).toBe("${{ secrets.COPILOT_GITHUB_TOKEN }}");
+    expect(drive.env?.["OPENAI_API_KEY"]).toBe("${{ secrets.CODEX_API_KEY }}");
+
+    // A binary the client CLI installed under a different name is the commonest way this lane would
+    // silently drive nothing — the Cursor CLI's command is `agent` — so the pair list is pinned the
+    // same way ci.yml's export step is, and the export itself is the `STAMITY_<CLIENT>_BIN`
+    // contract the smoke reads a binary path from.
+    expect(run).toContain('export "STAMITY_${name}_BIN=$path"');
+    for (const pair of ["CLAUDE claude", "CURSOR agent", "COPILOT copilot", "CODEX codex"]) {
+      expect(run, `the loop must walk "${pair}"`).toContain(`"${pair}"`);
+    }
+
+    // A FAIL here is a red nightly, which is this lane's purpose — so the smoke's exit status must
+    // reach the step. `set -o pipefail` is what makes that true through the `tee`.
+    expect(run).toContain("set -euo pipefail");
+
+    // The one thing the harness still does not do, and the claim the retired warning used to
+    // carry: driving a client is not SCORING a run. The eval harness is still absent, and the step
+    // summary has to say so where the person reading the run will see it.
+    expect(run).toContain("$GITHUB_STEP_SUMMARY");
+    expect(run.toLowerCase()).toContain("eval harness");
+    expect(
+      run,
+      "the retired not-implemented warning must not come back: the harness exists now",
+    ).not.toContain("Headless drive not implemented");
+  });
 });
 
+
+/**
+ * ADDED by plan 008 file 3, unit V1w — the two plugin-route steps whose BEHAVIOUR is a decision.
+ *
+ * Every other assertion about these two workflows reads them as data, which is the right level for
+ * a pin on step order or a privilege. It is the wrong level for these two steps: each one decides
+ * which legs of the route run, and a loop that dropped a client, resolved the wrong variable, or
+ * exited non-zero on the absent case would satisfy every substring check above while silently
+ * driving nothing. So the shipping shell is EXECUTED here, the way `pr-checks.yml`'s DCO job is
+ * executed below, with the same reasoning: only the inputs are substituted — the four secret
+ * variables in one case and PATH in the other — and bash is the real one.
+ *
+ * Not run on Windows, for the reason the DCO suite states: a Git-for-Windows bash is a different
+ * interpreter than the runner's, and these fixtures are POSIX paths and modes.
+ */
+const SHELL_EXECUTABLE =
+  process.platform !== "win32" && spawnSync("bash", ["--version"]).status === 0;
+
+describe.skipIf(!SHELL_EXECUTABLE)("the plugin-route arming steps, executed", () => {
+  const root = mkdtempSync(join(tmpdir(), "stamity-plugin-route-"));
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  const CREDS = runOf(stepsOf(nightly, "headless-lane"), "Headless drive credentials");
+  const EXPORTS = runOf(stepsOf(ci, "plugin-route"), "Export the client binaries");
+
+  /** Run one step body with a clean environment plus `env`, and read back what it wrote. */
+  function run(
+    body: string,
+    env: Readonly<Record<string, string>>,
+    channel: "GITHUB_OUTPUT" | "GITHUB_ENV",
+  ): { status: number | null; stdout: string; written: string } {
+    const dir = mkdtempSync(join(root, "run-"));
+    const file = join(dir, "channel");
+    writeFileSync(file, "");
+    const result = spawnSync("bash", ["-c", body], {
+      cwd: dir,
+      encoding: "utf8",
+      // A clean env, not `...process.env`: this machine exports three of the four
+      // STAMITY_<CLIENT>_BIN variables and a real ANTHROPIC_API_KEY may be present, either of
+      // which would make the absent-case cases pass for the wrong reason.
+      env: { LC_ALL: "C", PATH: "/usr/bin:/bin", [channel]: file, ...env },
+    });
+    return {
+      status: result.status,
+      stdout: result.stdout,
+      written: readFileSync(file, "utf8"),
+    };
+  }
+
+  it("arms exactly the clients whose secret is present, and exits 0 on the rest", () => {
+    // Two of four, so the csv has to be built rather than copied and the notices have to be
+    // selective — a pass here cannot come from "all" or from "none".
+    const result = run(
+      CREDS,
+      { ANTHROPIC_API_KEY: "sk-not-a-key", COPILOT_GITHUB_TOKEN: "ghp_not-a-token" },
+      "GITHUB_OUTPUT",
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.written).toContain("enabled=true");
+    // The armed set, in the loop's order, and ONLY the armed set.
+    expect(result.written).toContain("clients=claude,copilot");
+    // One notice per absent secret, naming the client. The two armed clients get none: a notice
+    // for a leg that did run would be worse than no notice at all.
+    expect(result.stdout).toContain("::notice title=Invocation leg skipped (cursor)::");
+    expect(result.stdout).toContain("::notice title=Invocation leg skipped (codex)::");
+    expect(result.stdout).not.toContain("Invocation leg skipped (claude)");
+    expect(result.stdout).not.toContain("Invocation leg skipped (copilot)");
+    // Not the lane-wide skip: three legs ran.
+    expect(result.stdout).not.toContain("Headless drive skipped");
+    // And no secret value reaches the log. This is the assertion that would catch an `echo "$var"`
+    // added to the loop for debugging and left in.
+    expect(result.stdout).not.toContain("sk-not-a-key");
+    expect(result.stdout).not.toContain("ghp_not-a-token");
+  });
+
+  it("disarms the whole drive, with a notice and exit 0, when no secret is configured", () => {
+    // The repository's real state. It must be a NOTICE and a zero exit: a nightly that went red
+    // for holding no credential would be red every night, which is the same as no signal.
+    const result = run(CREDS, {}, "GITHUB_OUTPUT");
+
+    expect(result.status).toBe(0);
+    expect(result.written).toContain("enabled=false");
+    expect(result.written).not.toContain("enabled=true");
+    // No `clients=` output at all, so a drive step reached by a widened condition would have
+    // nothing to pass to `--client`.
+    expect(result.written).not.toContain("clients=");
+    expect(result.stdout).toContain("::notice title=Headless drive skipped::");
+    for (const client of ["claude", "cursor", "copilot", "codex"]) {
+      expect(result.stdout, `${client} must be named`).toContain(
+        `::notice title=Invocation leg skipped (${client})::`,
+      );
+    }
+  });
+
+  it("exports a binary path for every client it can find, and notices the ones it cannot", () => {
+    // Two of the four on PATH, again so neither "all" nor "none" can pass. `agent` is the Cursor
+    // CLI's command name, and it is present here while `copilot` is not.
+    const bin = mkdtempSync(join(root, "bin-"));
+    for (const name of ["claude", "agent"]) {
+      const file = join(bin, name);
+      writeFileSync(file, "#!/bin/sh\nexit 0\n");
+      chmodSync(file, 0o755);
+    }
+
+    const result = run(EXPORTS, { PATH: `${bin}${delimiter}/usr/bin:/bin` }, "GITHUB_ENV");
+
+    expect(result.status).toBe(0);
+    // The two present clients reach the smoke through the environment channel, at their real paths.
+    expect(result.written).toContain(`STAMITY_CLAUDE_BIN=${join(bin, "claude")}`);
+    expect(result.written).toContain(`STAMITY_CURSOR_BIN=${join(bin, "agent")}`);
+    // The two absent ones are NOT exported — an empty variable would look set to the smoke.
+    expect(result.written).not.toContain("STAMITY_COPILOT_BIN");
+    expect(result.written).not.toContain("STAMITY_CODEX_BIN");
+    // And they are visible, which is the difference between a SKIPPED leg and a silent one.
+    expect(result.stdout).toContain("::notice title=Client binary absent (copilot)::");
+    expect(result.stdout).toContain("::notice title=Client binary absent (codex)::");
+    expect(result.stdout).not.toContain("Client binary absent (claude)");
+    expect(result.stdout).not.toContain("Client binary absent (agent)");
+  });
+});
 
 // ── pr-checks.yml ────────────────────────────────────────────────────────────
 
@@ -645,7 +1003,12 @@ describe("pr-checks.yml — the gates only a pull request can be asked", () => {
   it("stays out of ci.yml's aggregator, because the two do not run on the same events", () => {
     // Requiring a pull-request-only job through `all-ci-checks` would make every push to `main`
     // wait on a job that never reports. Two contexts, each required where it runs.
-    expect(jobOf(ci, "all-ci-checks").needs).toEqual(["check", "supply-chain", "apm-install"]);
+    expect(jobOf(ci, "all-ci-checks").needs).toEqual([
+      "check",
+      "supply-chain",
+      "apm-install",
+      "plugin-route",
+    ]);
     expect(triggersOf(ci.workflow)).toContain("push");
     expect(triggersOf(prChecks.workflow)).not.toContain("push");
   });
@@ -3149,7 +3512,14 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
   it("reads only the secrets this repository knowingly holds", () => {
     // A closed list, so adding a secret is a decision recorded here rather than a line nobody
     // reviews. GITHUB_TOKEN is the per-run token; ANTHROPIC_API_KEY arms the nightly headless
-    // lane and is absent by design, which that lane says out loud. STAMITY_UPSTREAM_TOKEN is
+    // lane and is absent by design, which that lane says out loud. ADDED by plan 008 file 3, unit
+    // V1w: CURSOR_API_KEY, COPILOT_GITHUB_TOKEN and CODEX_API_KEY arm the other three clients'
+    // invocation legs in the same lane, on the same terms — each absent one is a notice naming the
+    // leg that did not run, and none of them can reach a merge-blocking job, because the
+    // credential-free half of that route is what `plugin-route` in ci.yml gates on. The three
+    // names are a SECRET-side choice; the env-var each client actually honours is the vendor's and
+    // is cited at the drive step (`CURSOR_API_KEY` and `COPILOT_GITHUB_TOKEN` are the vendors' own
+    // spellings, while CODEX_API_KEY is mapped to `OPENAI_API_KEY` there). STAMITY_UPSTREAM_TOKEN is
     // read by the upstream lane's `publish` job alone, is absent here by design (this repository
     // is not a fork), and exists so a FORK can push a release that touches workflow files and
     // let the pull request's own CI start without the approval prompt — both limits of the
@@ -3162,6 +3532,9 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
     );
     expect([...referenced].toSorted()).toEqual([
       "ANTHROPIC_API_KEY",
+      "CODEX_API_KEY",
+      "COPILOT_GITHUB_TOKEN",
+      "CURSOR_API_KEY",
       "GITHUB_TOKEN",
       "STAMITY_UPSTREAM_TOKEN",
     ]);
