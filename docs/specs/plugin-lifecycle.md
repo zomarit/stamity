@@ -222,6 +222,22 @@ zero hits over nothing. Run that way it reports 0 hits over the runtime's own fi
 prune list also drops the `@types/` scope and every declaration file, because the production
 dependency `@types/make-fetch-happen` drags `@types/node` in.
 
+Note (2026-09-20) — signed-pack verification, recorded here for want of an owner. No requirement
+family under `docs/specs/` governs pack signing or Sigstore verification, and the two trust pages
+cite code rather than a requirement id; the nearest requirement is this one, whose bundled runtime
+is the reason the dependency moved, so the fact is recorded under it and moves to a packs-and-trust
+requirement family on the day one is written. Since 1.9.0 the Sigstore client is an OPTIONAL
+dependency: P1 moved `sigstore` from `dependencies` to `optionalDependencies` in `package.json`,
+which is what lets this requirement's `npm ci --omit=dev --omit=optional` leave the client and its
+tree out of the bundled plugin runtime. npm installs it by default, so an ordinary CLI install is
+unchanged. An install that cannot load it returns a REFUSAL verdict for a declared signing claim —
+never a pass, and never the pin-waivable `unarmed` (`src/pack/sigstoreVerifier.ts`) — so removing
+the client switches no check off; it makes every signed pack fail to install, and an unsigned pack
+is unaffected because nothing loads the client for it. Both trust pages state that pair
+(`docs/packs-and-trust.md:175-179`, `docs/security-mapping.md:176-179`), and a docs pin reads the
+claim off `package.json` instead of restating it, failing as a stale-page report on the day the
+client moves back to a required dependency (`test/docsPages.test.ts:1779`).
+
 ### REQ-PLUGIN-007 Locator resolution order and refusals
 
 Given `runtime/locate.mjs`, When it runs with `--print` inside a repository whose
@@ -396,6 +412,28 @@ which is the rule this paragraph states for `plugin status`, so the two agree by
 that records no plugin client: the two-value sentence would have forced a verdict where there is
 nothing to compare. The install, refresh and rollback halves are file 3's proof and are not built.
 
+As built (2026-09-20), the documentation half: "through the client's own commands as
+`docs/plugins.md` states them" assumes four vendors document such a command, and on 2026-09-20 two
+of them do not, so the guide states the gap instead of inventing a command. Claude Code's pin IS
+the marketplace ref — a marketplace added at `#plugins/v<tag>` — `claude plugin update stamity` is
+the refresh, and auto-update is off by default for a third-party marketplace, so an update is a
+thing the operator runs; a `plugin rollback` subcommand is published as NOT ESTABLISHED, because
+one vendor page quoted it in slash form on 2026-09-20 and the CLI reference did not list it, and
+the route printed today is re-adding the marketplace at the previous tag and installing again.
+Establishing it is REQ-PLUGIN-021's work in file 3 — V2 measures it against an installed client —
+and until then the page promises nothing. Copilot documents `copilot plugin update stamity`, with
+the same add-at-a-tag pin and an uninstall-then-re-add rollback. Cursor and Codex document NO pin,
+update or rollback command: for Cursor the served version is whichever commit the mirrored
+marketplace branch points at, so both directions are a branch move on the organization's own mirror
+bounded by the vendor's at-most-every-10-minutes re-index; for Codex,
+`codex plugin marketplace upgrade` refreshes the CATALOG rather than an installed plugin (listed by
+`codex plugin marketplace --help` on codex-cli 0.154.0, read 2026-09-20), and the way back is
+`codex plugin remove stamity` followed by adding the marketplace at the earlier tag and
+`codex plugin add` again. The clause is therefore amended to read "through the route
+`docs/plugins.md` records per client — a vendor command where one exists, and a documented re-add at
+the earlier pin where none does" (`docs/plugins.md:227-263`), which is what the lifecycle proof will
+walk and what REQ-PLUGIN-021's per-client row already anticipated.
+
 ### REQ-PLUGIN-014 Manifest records plugin-backed mode additively
 
 Given the manifest schema, When the plugin fields are added, Then `MANIFEST_VERSION` is unchanged,
@@ -535,7 +573,12 @@ published under ANOTHER owner — `acme/stamity-mirror#plugins/v1.9.0` — carri
 is therefore NOT reported; that is the safe direction, since a false duplicate would send an
 operator to remove a dependency that deploys nothing, and closing it needs the installed
 marketplace recorded on the client's `PluginClientRecord`, which no manifest field carries yet —
-the later fix, not this one. An unparseable `apm.yml` reports nothing rather than guessing.
+the later fix, not this one. An unparseable `apm.yml` reports nothing rather than guessing. The
+`unmanaged` source derives an id by stripping ONE client extension, longest first — `.agent.md` and
+`.prompt.md` precede the bare `.md` they end with (`src/cli/commands/plugin/probe.ts:332-347`),
+because a `.md`-first list left `<id>.agent` and matched no carried id, which made every Copilot
+file invisible to the scan; any extension added later belongs above every extension it is a suffix
+of.
 
 One coexistence state is ACCEPTED and stated rather than reported (disposition 2026-09-20). The
 vendor-neutral `.agents/skills/` tree stays written while any generated-mode reader still owns
@@ -634,6 +677,42 @@ getting-started page's verb list and the CLI reference name `plugin`; the capabi
 carries a `Plugin containers` section rendered from data; `llms.txt`, the sidebar and the README
 map carry the new guide; and `test/docsPages.test.ts` exits 0 with its arrays and count words
 moved in the same change.
+
+As built (2026-09-20): the clause "with every command block copied from an executed run" did not
+hold for the whole page and could not — four legs ran on real clients on this machine and the rest
+are vendor-documented routes nothing here installed, so copying them from a run was never
+available. The clause is amended to what shipped: EVERY command block on `docs/plugins.md` carries
+a provenance line stating either the client and version it was executed on or the vendor page and
+the access date it was transcribed from together with the proof that will execute it, and no block
+is presented as executed when it was not — the contract is stated at the head of the install
+section (`docs/plugins.md:74-78`) rather than left to the reader to infer per block. Executed:
+`claude plugin validate --strict` on Claude Code 2.1.278; `agent --plugin-dir ./cursor --trust` on
+the Cursor agent CLI 2026.09.15; GitHub Copilot CLI 1.0.85's `plugin install`, `plugin list --json`
+and `skill list` in a scratch `HOME`/`COPILOT_HOME`; codex-cli 0.154.0's `plugin marketplace add`
+and `plugin add` in a scratch `CODEX_HOME`. Everything else carries *from the vendor's <page>,
+accessed 2026-09-20; executed by the route proof of the next session* — REQ-PLUGIN-020's V1, which
+is the named proof, not a promise the page makes for itself. A hand-written page carries no
+absolute URL under this project's docs contract, so the dated source URL behind each client's
+container facts lives in the GENERATED page instead, as the `Sources:` list under
+`docs/capability-matrix.md:115-120`. The same honesty rule reaches this requirement's "the pin,
+update and rollback commands per client" clause, which two vendors cannot satisfy: what the page
+names per client is the ROUTE, amended under REQ-PLUGIN-013 rather than a second time here. The
+`Plugin containers` section is rendered from the four plugin emitter modules through ONE builder —
+`buildPluginContainerFacts` in `scripts/plugin-container-facts.mjs`, imported by the generator
+(`scripts/generate-capability-matrix.mjs:60`) and by the drift gate that would otherwise assert a
+hand-kept copy (`test/emit/capabilityMatrix.test.ts:27`) — and its `Carries` and `Repository-owned`
+columns PARTITION the six classes, so a class left without an owner is a test failure
+rather than a silent omission. Two statements the requirement does not reach are on the guide because a reader moving
+clients over one at a time needs them: the vendor-neutral `.agents/skills/` tree is co-owned and
+stays written while any generated-mode client still reads it, and `plugin-duplicates` is
+deliberately silent about the double delivery that staging produces, with the way out named as
+moving the last reader rather than deleting the tree (`docs/plugins.md:59-67`, the disposition
+recorded under REQ-PLUGIN-019). The pinned surfaces moved in the same change: README's
+`## Commands` at ten verbs with `plugin` between `worktree` and `clean` and `README_MAX_LINES`
+157 → 158 for the one added row, getting-started's verb list and its install-as-a-plugin section,
+the llms index entry with `regenerateCommand: null` because the page is hand-written
+(`src/cli/docs/llmsIndex.ts:170-174`) and `llms.txt`, the sidebar entry, and `test/docsPages.test.ts`'s
+arrays, count words, guide counts and `REATTESTATION_DATE` 2026-09-20 with three pages re-stamped.
 
 ### REQ-PLUGIN-025 Eval coverage for the generated command and plugin-mode invocation
 
