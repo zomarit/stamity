@@ -1854,6 +1854,27 @@ describe("check — plugin-duplicates", () => {
     expect(duplicates.detail).toBe("no duplicated classes");
   });
 
+  it("reports nothing for a same-owner sibling whose name merely starts with the slug", async () => {
+    // W4-1: the match was an unbounded substring, so `<owner>/<repo>` was found
+    // inside `<owner>/<repo>-suffix#plugins/v1.9.0` and a repository depending
+    // on ANY same-owner sibling with a longer name was told to remove a
+    // dependency that deploys nothing. The identity has to end where the
+    // dependency's name ends: at the `#` that starts the ref, or at whitespace,
+    // a quote or the end of the line. The sibling's name is synthetic — derived
+    // from this checkout's own slug, never a real repository.
+    const root = await seedRepo(getRepo(), {
+      plugin: pluginOf("generated"),
+      files: {
+        "apm.yml": `name: consumer\ndependencies:\n  - ${ownRepositorySlug()}-suffix#plugins/v1.9.0\n`,
+      },
+    });
+
+    const duplicates = await duplicatesRow(root);
+
+    expect(duplicates.status).toBe("pass");
+    expect(duplicates.detail).toBe("no duplicated classes");
+  });
+
   /**
    * The severity-to-exit-code half, on a fixture whose ONLY finding is the
    * duplicate.
