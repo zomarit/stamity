@@ -1431,6 +1431,7 @@ describe("CONTRIBUTING.md", () => {
       "node scripts/generate-capability-matrix.mjs",
       "node scripts/generate-docs.mjs",
       "node scripts/generate-pack-manifests.mjs",
+      "node scripts/generate-plugin-packages.mjs",
       "node dist/cli.js sync",
     ]) {
       expect(text, `CONTRIBUTING.md omits \`${command}\``).toContain(command);

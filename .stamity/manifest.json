@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.8.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-20T10:24:24.630Z",
+  "updatedAt": "2026-09-20T11:05:11.540Z",
   "tools": [
     "claude"
   ],
@@ -127,7 +127,7 @@
       "adapter": "claude",
       "artifactId": "test-runner",
       "artifactType": "agent",
-      "contentHash": "fac27dc6bc55c4778d91b44d0c59a55c429f7f54d138ddf87930878196934044",
+      "contentHash": "836de1451a84410704bd522f292da077bd0180cc0b6c8a18be5900135a6f0980",
       "path": ".claude/agents/stamity-test-runner.md"
     },
     {

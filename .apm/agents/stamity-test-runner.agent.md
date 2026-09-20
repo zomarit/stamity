@@ -70,7 +70,7 @@ and the verdict names the rows that caused it.
 **A gate command that cannot run.** A command whose rendering begins with the
 literal `unknown` — detection found no command of that kind, and the rendered
 value says so and says to ask — a command still carrying an unresolved
-`${STAMITY:` token, or an
+`STAMITY` substitution token, or an
 executable the shell cannot find (exit 127) is reported `not-runnable` with the
 literal command string quoted. A not-runnable gate is a red verdict, not a
 silent pass and not an omitted row: the repo's setup is unresolved, and the
