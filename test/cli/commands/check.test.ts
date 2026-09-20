@@ -1295,8 +1295,34 @@ async function doctorRow(
 }
 
 describe("check — plugin-runtime", () => {
-  it("warns with the two ways to make it answerable when no root variable is set", async () => {
+  /**
+   * TEST CHANGE, justified (2026-09-20, unit C4 / REQ-PLUGIN-016): this case
+   * asserted `warn` for a repository that records no plugin client and sets no
+   * root variable — which is every repository not running on a plugin,
+   * including this one, so `check` carried a standing advisory warning nobody
+   * could act on. The row's SUBJECT decides the severity now: with nothing
+   * recorded and no root in the environment there is no plugin to report on,
+   * so the honest answer is `pass`. The warn did not disappear — it moved to
+   * the state it was written for, a recorded client with no reachable root,
+   * which the case below pins. Nothing about the resolved, refused or
+   * major-skew branches moved.
+   */
+  it("passes quietly when no client records a plugin and no root variable is set", async () => {
     const root = await seedRepo(getRepo());
+
+    const probe = await doctorRow(root, "plugin-runtime", {});
+
+    expect(probe.status).toBe("pass");
+    expect(probe.detail).toBe("no plugin recorded and no plugin root in the environment");
+  });
+
+  it("warns with the two ways to make it answerable when a recorded client has no root", async () => {
+    const root = await seedRepo(getRepo(), {
+      plugin: {
+        mode: "generated",
+        clients: { claude: { version: "1.9.0", classes: ["agent"] } },
+      },
+    });
 
     const probe = await doctorRow(root, "plugin-runtime", {});
 
