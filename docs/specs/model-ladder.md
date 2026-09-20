@@ -36,12 +36,28 @@ as a pass-through, Copilot none), When `stamity config set effort.frontier xhigh
 manifest selecting `claude` and `codex`, Then the key is written and the emitted Claude agents of
 that class carry `effort: xhigh` and `.codex/config.toml` carries `model_reasoning_effort = "xhigh"`;
 When `stamity config set effort.frontier max` runs on a manifest selecting `codex`, Then it exits
-64 naming `codex`, its top level `xhigh` and the two remedies (pick `xhigh` or lower, or deselect
-the client) and writes nothing; When a manifest already carrying `effort.frontier: max` gains
+1 with `VALIDATION_ERROR` naming `codex`, its top level `xhigh` and the two remedies (pick `xhigh`
+or lower, or deselect the client) and writes nothing; When a manifest already carrying `effort.frontier: max` gains
 `codex` through `config set tools`, Then the next `sync` emits `xhigh` for that class on Codex and
 prints one disclosure line naming the class, the requested level and the emitted level; and When
 no `effort.*` key is set, Then every emitted file is byte-identical to the 1.8.0 emission
 (the cross-client golden snapshot is unchanged without `-u`).
+
+As built (2026-09-20): `EFFORT_LEVELS` is six wide with `effortRank`;
+`nearestExpressibleEffort` clamps down to a client's ceiling and up to its floor, and the
+disclosure line names the class, the requested level and the emitted one, reading `ends at` for the
+downward clamp and `starts at` for the upward one, spliced beside the hooks warnings; `config list`
+appends `(clamped from <requested>)`. Two of the paragraph's literals moved. The refusal exits 1
+with `VALIDATION_ERROR`, not 64 — the CLI retired the sysexits translation and every failure exits
+1 with the kind in `error.code` (ledger row build/34) — and the sentence above is amended to say
+so; it names the client and its bound in both directions and the manifest is unchanged. And the
+scale carries a citation FIELD OF ITS OWN, `effortScaleCitation` beside `effortScale` on each
+projection row, rather than re-dating the row's existing citation: the scale pages are not the
+pages the row's model keys were read from, and the claude suite pins every row citation to
+2026-09-10, so moving that date would have claimed a re-reading nobody performed. Copilot declares
+an empty scale and a `null` citation, having no documented effort axis to cite. The three carrier
+adapters publish an `effort-scale` capability row, and the configuration page and the capability
+matrix are regenerated from them.
 
 ## References
 
