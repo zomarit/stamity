@@ -1870,11 +1870,20 @@ describe("release.yml — the only publishing path", () => {
     // The manifest is the anchor the output covers, and every archive is then checked against the
     // digests IT carries — so the whole tree hangs off a channel the artifact never travelled on.
     expect(verify).toContain("packages");
+    // TEST CHANGE, justified: these two step-order assertions moved from "before the push" to
+    // "before the npm publish". The behaviour that moved is the ordering in the job, and the
+    // reason is what each half costs on failure — fetching and verifying can only REFUSE (a
+    // missing artifact, a digest that does not match), and refusing after npm had published
+    // would strand a registry version no re-run of this job can finish, since `npm publish`
+    // rejects the version it already shipped. The half that runs after the publish is the
+    // re-runnable one: the orphan commit is a pure function of the tree, so a second run
+    // rebuilds the same sha and moves no ref (proven in the executed suite below). The
+    // publish-side ordering of attest, push and stamp is unchanged and still pinned.
     expect(indexOf(publishSteps, "Download plugin distribution")).toBeLessThan(
       indexOf(publishSteps, "Verify plugin distribution digest"),
     );
     expect(indexOf(publishSteps, "Verify plugin distribution digest")).toBeLessThan(
-      indexOf(publishSteps, "Push plugin distribution"),
+      indexOf(publishSteps, "Publish to npm with provenance"),
     );
   });
 
