@@ -3,11 +3,19 @@
 #
 # THE SPLIT. `gates` runs every third-party binary in the release path (the build, the suite, the
 # leak gate, the packed-artifact smoke) on the exact shipping commit, and holds NO OIDC token.
-# `publish` holds the npm trusted-publishing token and runs only npm, the GitHub CLI and three SHA-pinned actions
-# against a tarball whose SHA-256 it verifies against a job OUTPUT — a channel separate from the
-# artifact it verifies, because a digest carried inside the artifact it attests is circular.
-# A compromised devDependency therefore cannot mint a publish credential: the job it runs in
-# does not have one.
+# `publish` holds the npm trusted-publishing token and runs only npm, git, the GitHub CLI and four
+# SHA-pinned actions against a tarball whose SHA-256 it verifies against a job OUTPUT — a channel
+# separate from the artifact it verifies, because a digest carried inside the artifact it attests
+# is circular. A compromised devDependency therefore cannot mint a publish credential: the job it
+# runs in does not have one.
+#
+# THE SECOND PUBLISHED SURFACE. The same release ships a PLUGIN DISTRIBUTION: four client roots
+# with this package's runtime bundled in each, their archives, their catalogs and a manifest.
+# `gates` builds it from the packed tarball and states the manifest's digest on the outputs
+# channel; `publish` verifies that digest, attests the archives, pushes the tree as one orphan
+# commit on the distribution branch with a `plugins/v<version>` tag, and attaches the archives,
+# the checksums and the manifest to the GitHub release. The branch is replaced on every release
+# by design and the tag is what keeps every earlier one reachable.
 #
 # THE THIRD JOB, AND WHY THE SPLIT HAS ONE MORE LINE IN IT. `apm-route` proves the published APM
 # route against the canonical remote at the release sha. It runs a third-party INTERPRETER — pip's
@@ -83,6 +91,13 @@ jobs:
       tarball: ${{ steps.pack.outputs.tarball }}
       tarball_sha256: ${{ steps.pack.outputs.tarball_sha256 }}
       sbom_present: ${{ steps.sbom.outputs.sbom_present }}
+      # The plugin distribution's identity, on the same channel and for the same reason: the
+      # publish job re-derives the manifest's digest from THIS value, never from a file riding
+      # inside the artifact it is verifying.
+      plugins_manifest_sha256: ${{ steps.plugins.outputs.plugins_manifest_sha256 }}
+      plugins_branch: ${{ steps.plugins.outputs.plugins_branch }}
+      plugins_tag: ${{ steps.plugins.outputs.plugins_tag }}
+      plugins_archives: ${{ steps.plugins.outputs.plugins_archives }}
 
     steps:
       # First step, before anything downloads or executes. `egress-policy: block` fails the job
@@ -302,6 +317,82 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Packed: $TARBALL ($(wc -c < "$TARBALL") bytes)"
           echo "SHA-256: $SHA"
+
+      # ── the plugin distribution ────────────────────────────────────────────
+      #
+      # The release publishes more than the npm package: four plugin roots, one per client, with
+      # this package's own runtime bundled inside each of them. Both builds happen HERE, in the
+      # job that holds no credential, and the publish job below receives the finished tree plus
+      # its digest on the outputs channel — the same boundary the tarball already crosses.
+      #
+      # The runtime is built from the TARBALL the pack step just produced, never from the working
+      # tree: `npm pack` is the only thing that knows what `files` publishes, and a runtime built
+      # from the checkout would ship sources and fixtures the published package does not have
+      # while passing every test.
+      #
+      # Both trees land under `dist/`, which is gitignored, rather than beside the checkout. An
+      # untracked `plugin-runtime/` in the workspace would enter `git ls-files --others` — the
+      # scan the leak gate itself runs — and every tree-cleanliness check after it, so a release
+      # would start failing on its own build output.
+      - name: Build plugin runtime
+        env:
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: node scripts/build-plugin-runtime.mjs --tarball "$TARBALL" --out dist/plugin-runtime
+
+      # Provenance is an INPUT to this builder, never a clock read: the roots' capability files,
+      # every archive entry's timestamp and `release.json` are all stamped from these two values,
+      # which is what makes two builds of one commit produce identical bytes. The version comes
+      # from package.json, which the tag proof above has already bound to the tag.
+      #
+      # The branch, the tag and the archive names are READ BACK OUT of the manifest the builder
+      # wrote rather than spelled again here: `scripts/distribution-identity.mjs` owns those
+      # values, and a second spelling in this file is a second thing to keep in step.
+      - name: Build plugin distribution
+        id: plugins
+        run: |
+          set -euo pipefail
+          node scripts/build-plugin-distribution.mjs \
+            --out dist/plugins \
+            --runtime dist/plugin-runtime \
+            --source-commit "$GITHUB_SHA" \
+            --source-commit-date "$(git show -s --format=%cI "$GITHUB_SHA")"
+
+          MANIFEST=dist/plugins/release.json
+          test -f "$MANIFEST"
+          SHA="$(sha256sum "$MANIFEST" | awk '{print $1}')"
+          BRANCH="$(node -p 'JSON.parse(require("node:fs").readFileSync("dist/plugins/release.json","utf8")).distribution.branch')"
+          TAG="$(node -p 'JSON.parse(require("node:fs").readFileSync("dist/plugins/release.json","utf8")).distribution.tag')"
+          ARCHIVES="$(node -p 'JSON.parse(require("node:fs").readFileSync("dist/plugins/release.json","utf8")).packages.map((entry) => entry.archive).join(" ")')"
+          if [ -z "$SHA" ] || [ -z "$BRANCH" ] || [ -z "$TAG" ] || [ -z "$ARCHIVES" ]; then
+            echo "::error::The distribution manifest did not state its digest, branch, tag and archives. Refusing to hand an unidentified tree to the publish job."
+            exit 1
+          fi
+          {
+            echo "plugins_manifest_sha256=$SHA"
+            echo "plugins_branch=$BRANCH"
+            echo "plugins_tag=$TAG"
+            echo "plugins_archives=$ARCHIVES"
+          } >> "$GITHUB_OUTPUT"
+          echo "Distribution: $TAG on $BRANCH"
+          echo "Archives: $ARCHIVES"
+          echo "release.json SHA-256: $SHA"
+
+      # Seven days, for the reason the release artifact carries seven: this tree also has to
+      # outlive the `npm-publish` environment's human approval, not just the run that built it.
+      #
+      # `include-hidden-files` is not optional here and is the whole reason this line exists:
+      # EVERY catalog in this distribution lives in a dot directory (`.claude-plugin/`,
+      # `.cursor-plugin/`, `.agents/plugins/`, `.github/plugin/`) and so does the APM primitive
+      # tree (`.apm/`). The default drops hidden files with a warning, which would publish a
+      # branch whose catalogs are all missing while every gate in this file stayed green.
+      - name: Upload plugin distribution
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-plugins
+          path: dist/plugins
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
 
       # A CycloneDX component inventory of what actually ships. `--package-lock-only` reads the
       # lockfile rather than the installed tree, and `--omit dev` scopes the document to the
@@ -569,12 +660,22 @@ jobs:
     # this environment in repository settings — that is the platform-side control the in-file
     # ancestry probe cannot be.
     environment: npm-publish
-    # The OIDC and release-write grants live here and nowhere else. No `attestations` grant: this
-    # workflow signs provenance through npm trusted publishing and does not run a separate
-    # attestation action.
+    # The OIDC and release-write grants live here and nowhere else.
+    #
+    #   contents: write     `gh release create`, and the distribution branch and tag push
+    #   id-token: write     npm's provenance over trusted publishing, and the Sigstore signing
+    #                       certificate the plugin archives' attestation is issued under
+    #   attestations: write persists that attestation on this repository
+    #   artifact-metadata: write  creates its artifact storage record
+    #
+    # The last two arrived with the plugin archives, which are attested by an action rather than
+    # by npm; `actions/attest-build-provenance` names all three writes in its own README. No job
+    # that runs third-party build code holds any of them.
     permissions:
       contents: write
       id-token: write
+      attestations: write
+      artifact-metadata: write
 
     steps:
       # Belt and braces on the job condition above. If a future edit widens the `if:`, this fails
@@ -609,13 +710,20 @@ jobs:
 
       # Same fail-closed egress policy, on the job that holds the highest-value credential in the
       # repository. Allowlist is the publish-capability subset plus the artifact download:
-      #   api.github.com, github.com    — setup-node manifest, `gh release create`
+      #   api.github.com                — setup-node manifest, `gh release create`, and the
+      #                                   attestations API the plugin-archive attestation is
+      #                                   persisted through
+      #   github.com                    — the same, plus the distribution branch and tag push
       #   nodejs.org                    — the Node download setup-node performs
       #   objects.githubusercontent.com — GitHub's object and manifest CDN
       #   registry.npmjs.org            — the global npm upgrade and `npm publish`
       #   token.actions.githubusercontent.com — the GitHub OIDC token (id-token: write)
       #   fulcio.sigstore.dev, rekor.sigstore.dev, tuf-repo-cdn.sigstore.dev
-      #                                 — the provenance attestation npm publishes
+      #                                 — the provenance attestation npm publishes, AND the
+      #                                   signing certificate, transparency entry and TUF root
+      #                                   `actions/attest-build-provenance` uses for the plugin
+      #                                   archives. Two consumers, one set of hosts: dropping npm
+      #                                   provenance would not make these removable.
       #   uploads.github.com            — release asset upload
       #   results-receiver.actions.githubusercontent.com,
       #   productionresultssa0..19.blob.core.windows.net — GitHub artifact storage
@@ -722,6 +830,169 @@ jobs:
       - name: Publish to npm with provenance
         run: npm publish "./$TARBALL" --provenance --access public
 
+      # ── the plugin distribution ────────────────────────────────────────────
+      #
+      # Everything below runs AFTER the npm publish, which is the release's irreversible step:
+      # the distribution is ordered against it rather than racing it, and a branch push that
+      # failed while npm had already shipped is visible as a failed job on a published version.
+      #
+      # This job still checks nothing out. The tree it publishes is the artifact the gates job
+      # built, and the only thing that makes it trustworthy is the digest check below — a value
+      # that travelled on the job-output channel, not inside the tree it describes.
+      - name: Download plugin distribution
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-plugins
+          path: plugins
+
+      - name: Verify plugin distribution digest
+        env:
+          EXPECTED_SHA: ${{ needs.gates.outputs.plugins_manifest_sha256 }}
+        run: |
+          set -euo pipefail
+          MANIFEST=plugins/release.json
+          if [ ! -f "$MANIFEST" ]; then
+            echo "::error::The gates job built a plugin distribution but the downloaded artifact carries no release.json. Refusing to publish."
+            exit 1
+          fi
+          ACTUAL_SHA="$(sha256sum "$MANIFEST" | awk '{print $1}')"
+          if [ -z "$EXPECTED_SHA" ] || [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+            echo "::error::Plugin manifest digest mismatch: gates output '$EXPECTED_SHA' vs downloaded '$ACTUAL_SHA'. Refusing to publish."
+            exit 1
+          fi
+          # The manifest is trusted from here, so every archive is checked against the digest IT
+          # carries. That is what puts the whole tree on the outputs channel rather than letting
+          # the artifact's own checksum files attest the artifact they ride in.
+          node -e '
+            const fs = require("node:fs");
+            const crypto = require("node:crypto");
+            const manifest = JSON.parse(fs.readFileSync("plugins/release.json", "utf8"));
+            const packages = manifest.packages ?? [];
+            if (packages.length === 0) {
+              console.log("::error::release.json lists no packages, so there is nothing to verify. Refusing to publish.");
+              process.exit(1);
+            }
+            let bad = 0;
+            for (const entry of packages) {
+              const path = `plugins/${entry.archive}`;
+              if (!fs.existsSync(path)) {
+                console.log(`::error::${entry.archive} is named by the verified manifest and missing from the artifact. Refusing to publish.`);
+                bad += 1;
+                continue;
+              }
+              const actual = crypto.createHash("sha256").update(fs.readFileSync(path)).digest("hex");
+              if (actual === entry.sha256) {
+                console.log(`${entry.archive}: ${actual}`);
+              } else {
+                console.log(`::error::${entry.archive} hashes to ${actual} and the verified manifest says ${entry.sha256}. Refusing to publish.`);
+                bad += 1;
+              }
+            }
+            if (bad > 0) process.exit(1);
+          '
+          echo "Plugin distribution verified against the gates job output: $ACTUAL_SHA"
+
+      # Build provenance for the archives a consumer downloads from the release page. npm signs
+      # the tarball through trusted publishing; nothing signs these, so the action does — over the
+      # same OIDC token and the same Sigstore public-good instance, which is why this job's egress
+      # list needs no new destination for it. Verified with `gh attestation verify <archive>`.
+      - name: Attest plugin archives
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: plugins/*.zip
+
+      # The distribution branch: one orphan commit per release, and one tag that never moves.
+      #
+      # The branch head is REPLACED every time, by design. The tree is published whole — four
+      # roots, four catalogs, an APM package and a manifest that describe one version — and a
+      # merge of two releases' catalogs would describe neither. What keeps history is the tag:
+      # `plugins/v<version>` is created once, and every earlier release stays fetchable through
+      # its own, which is why the tag check below fails closed rather than forcing.
+      - name: Push plugin distribution
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ needs.gates.outputs.version }}
+          BRANCH: ${{ needs.gates.outputs.plugins_branch }}
+          TAG: ${{ needs.gates.outputs.plugins_tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$BRANCH" ] || [ -z "$TAG" ]; then
+            echo "::error::The gates job did not name the distribution branch and tag. Refusing to push an unidentified tree."
+            exit 1
+          fi
+          # Actions masks this job's token in every log line, and the URL is never written into a
+          # repository config: each git invocation receives it directly.
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git"
+
+          cd plugins
+          SOURCE_DATE="$(node -p 'JSON.parse(require("node:fs").readFileSync("release.json","utf8")).sourceCommitDate')"
+
+          git init -q
+          git checkout -q --orphan "$BRANCH"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # `-f`, because a dependency inside the bundled runtime may ship a .gitignore of its
+          # own, and a published tree that quietly lost files is worse than a failed release.
+          git add -A -f
+          # Both git dates come from the manifest rather than from the clock, so ONE release
+          # produces ONE commit however often this step runs: fixed tree, fixed message, fixed
+          # dates, fixed sha. That is what makes the tag check below idempotent on a re-run
+          # instead of permanently fatal after a partial failure.
+          GIT_AUTHOR_DATE="$SOURCE_DATE" GIT_COMMITTER_DATE="$SOURCE_DATE" \
+            git commit -q -m "plugins: v$VERSION from $GITHUB_SHA"
+          DIST_COMMIT="$(git rev-parse HEAD)"
+          git tag "$TAG"
+
+          # Read the remote BEFORE pushing anything. A tag already naming another commit is a pin
+          # consumers fetch, and repointing it is the one thing this step must never do; checking
+          # first is also what leaves the branch untouched when it refuses.
+          EXISTING="$(git ls-remote "$REMOTE" "refs/tags/$TAG" | awk '{print $1}')"
+          if [ -n "$EXISTING" ] && [ "$EXISTING" != "$DIST_COMMIT" ]; then
+            echo "::error::$TAG already exists at $EXISTING and this release built $DIST_COMMIT. Refusing to move a published distribution tag."
+            exit 1
+          fi
+
+          git push --force "$REMOTE" "HEAD:refs/heads/$BRANCH"
+          if [ -z "$EXISTING" ]; then
+            git push "$REMOTE" "refs/tags/$TAG"
+            echo "Pushed $BRANCH and $TAG at $DIST_COMMIT"
+          else
+            echo "$TAG already points at $DIST_COMMIT; nothing to push (an idempotent re-run)."
+          fi
+          echo "PLUGINS_COMMIT=$DIST_COMMIT" >> "$GITHUB_ENV"
+
+      # The commit a tree lands on is the one fact its builder cannot know while building it, so
+      # `release.json` carries `distribution.commit: null` until the push above. The BRANCH keeps
+      # that copy — a consumer reading the branch is reading the tree at a ref it already knows —
+      # and the release ASSET gets the sha stamped in here.
+      #
+      # One field, stamped rather than re-rendered, and the reason is this job's design: it checks
+      # nothing out, so `scripts/build-plugin-distribution.mjs` is not present, and a re-render
+      # would additionally need the corpus and the runtime, neither of which rides the artifact.
+      # The builder's contract is that `--distribution-commit` changes exactly this scalar in the
+      # manifest, so the stamp refuses to run unless it finds the `null` it expects.
+      - name: Stamp the release manifest with the distribution commit
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs = require("node:fs");
+            const path = "plugins/release.json";
+            const commit = process.env.PLUGINS_COMMIT ?? "";
+            if (!/^[0-9a-f]{40}$/.test(commit)) {
+              console.log("::error::PLUGINS_COMMIT is not a 40-character lowercase commit sha, so the release asset cannot state where this tree landed.");
+              process.exit(1);
+            }
+            const manifest = JSON.parse(fs.readFileSync(path, "utf8"));
+            if (manifest.distribution.commit !== null) {
+              console.log(`::error::${path} already carries a distribution commit (${manifest.distribution.commit}). The branch keeps the null copy and this stamp runs once.`);
+              process.exit(1);
+            }
+            manifest.distribution.commit = commit;
+            fs.writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
+            console.log(`release.json stamped for the release assets: distribution.commit = ${commit}`);
+          '
+
       # The tarball and the SBOM ride the release so a consumer can fetch the exact bytes and the
       # component inventory without re-running anything. `gh` is preinstalled on the runner, so
       # this needs no third-party action and no extra pin.
@@ -749,6 +1020,16 @@ jobs:
           if [ -f sbom.cdx.json ]; then
             ASSETS="$ASSETS sbom.cdx.json"
           fi
+          # The plugin archives, their checksum files and the stamped manifest. Each is named as
+          # MISSING rather than skipped: a release carrying three of the four archives reads
+          # exactly like a complete one on the release page.
+          for asset in plugins/*.zip plugins/*.sha256 plugins/release.json; do
+            if [ ! -f "$asset" ]; then
+              echo "::error::The plugin distribution is missing $asset — refusing to create a release that does not carry it."
+              exit 1
+            fi
+            ASSETS="$ASSETS $asset"
+          done
           # shellcheck disable=SC2086
           gh release create "v$VERSION" $ASSETS \
             --title "v$VERSION" \
@@ -780,6 +1061,9 @@ jobs:
           TARBALL: ${{ needs.gates.outputs.tarball }}
           TARBALL_SHA256: ${{ needs.gates.outputs.tarball_sha256 }}
           SBOM_PRESENT: ${{ needs.gates.outputs.sbom_present }}
+          PLUGINS_BRANCH: ${{ needs.gates.outputs.plugins_branch }}
+          PLUGINS_TAG: ${{ needs.gates.outputs.plugins_tag }}
+          PLUGINS_ARCHIVES: ${{ needs.gates.outputs.plugins_archives }}
         run: |
           set -euo pipefail
           {
@@ -795,10 +1079,19 @@ jobs:
             echo "| SHA-256 | \`$TARBALL_SHA256\` |"
             echo "| SBOM attached | \`$SBOM_PRESENT\` |"
             echo "| npm | \`publish --provenance --access public\` over OIDC trusted publishing |"
-            echo "| GitHub release | \`v$VERSION\`, with the tarball and the SBOM attached |"
+            echo "| GitHub release | \`v$VERSION\`, with the tarball, the SBOM and the plugin distribution attached |"
+            echo "| plugin branch | \`$PLUGINS_BRANCH\`, replaced by one orphan commit |"
+            echo "| plugin tag | \`$PLUGINS_TAG\`, created once and never moved |"
+            echo "| plugin archives | \`$PLUGINS_ARCHIVES\` |"
+            echo ""
+            echo "The distribution was BUILT on this commit — the gates job packed the tarball, built the"
+            echo "runtime from it and built the four roots, their archives and \`release.json\` — and uploaded"
+            echo "as the \`release-plugins\` artifact. Nothing was pushed: the branch, the tag, the attestation"
+            echo "and the release assets all live in the publish job, which a rehearsal never reaches."
             echo ""
             echo "The \`Resolve version\` step in the gates job lists the three release proofs this rehearsal skipped, and why."
             echo ""
             echo "To publish for real: push the tag \`v$VERSION\`, or dispatch this workflow FROM that tag with \`dry_run\` set to false. A real-publish dispatch from a branch fails in the gates job."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "Dry run complete: $PACKAGE_NAME@$VERSION ($TARBALL, sha256 $TARBALL_SHA256, sbom=$SBOM_PRESENT)"
+          echo "Would publish the distribution as $PLUGINS_TAG on $PLUGINS_BRANCH: $PLUGINS_ARCHIVES"

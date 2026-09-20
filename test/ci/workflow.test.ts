@@ -1486,7 +1486,18 @@ describe("release.yml — the only publishing path", () => {
     expect(apmRoute["timeout-minutes"]).toBeTypeOf("number");
     expect(apmRoute["runs-on"]).toBe("ubuntu-latest");
 
-    expect(publish.permissions).toEqual({ contents: "write", "id-token": "write" });
+    // TEST CHANGE, justified: the publish job's grant set moved when it began attesting the
+    // plugin archives. `attestations: write` persists the attestation and `artifact-metadata:
+    // write` creates its storage record — the two the attestation action's own README requires
+    // beside `id-token`. The property this case pins is unchanged and is asserted above: no job
+    // that runs third-party code holds any of them. The exact set, and the reason each member is
+    // there, is pinned in "attests the archives with a pinned action …" below.
+    expect(publish.permissions).toEqual({
+      contents: "write",
+      "id-token": "write",
+      attestations: "write",
+      "artifact-metadata": "write",
+    });
     // The single approval point: environment protection rules are the platform-side control the
     // in-file ancestry probe cannot be.
     expect(publish.environment).toBe("npm-publish");
@@ -1746,6 +1757,241 @@ describe("release.yml — the only publishing path", () => {
     );
   });
 
+
+  // ── the plugin distribution: built in `gates`, published from `publish` ─────
+  //
+  // The fifth and sixth published surfaces ride the same release as the tarball: four plugin
+  // roots on an orphan branch, and their archives on the GitHub release. Everything below is one
+  // property in two halves — the job that runs third-party code BUILDS the tree and states its
+  // digest on the outputs channel, and the job that holds the credential PUBLISHES a tree whose
+  // digest it re-derived from that channel.
+
+  it("builds the plugin runtime and the distribution from the packed tarball, after the smoke", () => {
+    const pack = indexOf(gatesSteps, "Pack tarball");
+    const runtime = indexOf(gatesSteps, "Build plugin runtime");
+    const distribution = indexOf(gatesSteps, "Build plugin distribution");
+
+    // Both build steps read the tarball the pack step produced — the PUBLISHED shape, never the
+    // working tree — so neither can precede it, and both come after the smoke that proves that
+    // tarball installs at all.
+    expect(indexOf(gatesSteps, "Tarball smoke (publish shape)")).toBeLessThan(pack);
+    expect(pack).toBeLessThan(runtime);
+    expect(runtime).toBeLessThan(distribution);
+
+    expect(runOf(gatesSteps, "Build plugin runtime")).toContain(
+      'node scripts/build-plugin-runtime.mjs --tarball "$TARBALL" --out dist/plugin-runtime',
+    );
+    // The tarball name reaches the shell through `env:`, like every other value in this file.
+    expect(stepOf(gatesSteps, "Build plugin runtime").env?.["TARBALL"]).toBe(
+      "${{ steps.pack.outputs.tarball }}",
+    );
+
+    const build = runOf(gatesSteps, "Build plugin distribution");
+    expect(build).toContain("node scripts/build-plugin-distribution.mjs");
+    expect(build).toContain("--out dist/plugins");
+    expect(build).toContain("--runtime dist/plugin-runtime");
+    // Provenance is an INPUT to that builder, never a clock read: the archives' entry timestamps
+    // and every manifest here are stamped from these two values, which is what makes two builds
+    // of one commit produce the same bytes — the property the digest check below rests on.
+    expect(build).toContain('--source-commit "$GITHUB_SHA"');
+    expect(build).toContain('--source-commit-date "$(git show -s --format=%cI "$GITHUB_SHA")"');
+
+    // Both trees land under `dist/`, which is gitignored, rather than beside the checkout. An
+    // untracked `plugin-runtime/` in the workspace would enter `git ls-files --others` — which is
+    // the leak gate's own scan — and every tree-cleanliness check after it.
+    for (const step of ["Build plugin runtime", "Build plugin distribution"] as const) {
+      expect(runOf(gatesSteps, step), step).toMatch(/--out dist\//);
+      expect(runOf(gatesSteps, step), step).not.toMatch(/--out (?!dist\/)/);
+    }
+    expect(release.source).toContain("git ls-files --others");
+  });
+
+  it("uploads the distribution whole — dot directories and all — with its digest on the outputs channel", () => {
+    const upload = stepOf(gatesSteps, "Upload plugin distribution");
+    expect(upload.uses).toBe(stepOf(gatesSteps, "Upload release artifacts").uses);
+    expect(upload.with?.["name"]).toBe("release-plugins");
+    expect(upload.with?.["path"]).toBe("dist/plugins");
+    expect(upload.with?.["if-no-files-found"]).toBe("error");
+    // The same seven days, and for the same reason: this artifact also has to outlive the
+    // `npm-publish` environment's human approval, not just the run that produced it.
+    expect(upload.with?.["retention-days"]).toBe(7);
+    // EVERY catalog in this distribution lives in a DOT directory — `.claude-plugin/`,
+    // `.cursor-plugin/`, `.agents/plugins/`, `.github/plugin/` — and so does the APM primitive
+    // tree (`.apm/`). actions/upload-artifact drops hidden files unless told otherwise, so
+    // without this the branch would be pushed with every catalog missing and every gate green.
+    expect(upload.with?.["include-hidden-files"]).toBe(true);
+    expect(indexOf(gatesSteps, "Build plugin distribution")).toBeLessThan(
+      indexOf(gatesSteps, "Upload plugin distribution"),
+    );
+
+    // The digest travels on the job-output channel, exactly as the tarball's does: a digest read
+    // from inside the artifact it verifies attests itself.
+    expect(stepOf(gatesSteps, "Build plugin distribution").id).toBe("plugins");
+    for (const output of [
+      "plugins_manifest_sha256",
+      "plugins_branch",
+      "plugins_tag",
+      "plugins_archives",
+    ]) {
+      expect(gates.outputs?.[output], `the gates job must publish ${output}`).toBe(
+        `\${{ steps.plugins.outputs.${output} }}`,
+      );
+    }
+
+    // Branch, tag and archive names are READ OUT of the manifest the builder just wrote rather
+    // than spelled a second time here: `scripts/distribution-identity.mjs` owns those values, and
+    // a workflow that names `plugin-dist` itself is a second source of truth for them.
+    expect(runOf(gatesSteps, "Build plugin distribution")).toContain("dist/plugins/release.json");
+    const shell = [...gatesSteps, ...publishSteps]
+      .map((step) => step.run ?? "")
+      .join("\n")
+      // The builder's own file name carries the branch name as a substring; what must not appear
+      // is the VALUE, spelled by this workflow instead of read from the manifest.
+      .replaceAll("build-plugin-distribution.mjs", "<the builder>");
+    expect(shell, "the branch name belongs to the identity, not to this file").not.toContain(
+      "plugin-dist",
+    );
+    expect(shell, "and so does the tag pattern").not.toContain("plugins/v");
+  });
+
+  it("verifies the distribution against the gates output before anything is pushed", () => {
+    const download = stepOf(publishSteps, "Download plugin distribution");
+    expect(download.uses).toBe(stepOf(publishSteps, "Download release artifacts").uses);
+    expect(download.with?.["name"]).toBe("release-plugins");
+    expect(download.with?.["path"]).toBe("plugins");
+
+    const verify = runOf(publishSteps, "Verify plugin distribution digest");
+    expect(stepOf(publishSteps, "Verify plugin distribution digest").env?.["EXPECTED_SHA"]).toBe(
+      "${{ needs.gates.outputs.plugins_manifest_sha256 }}",
+    );
+    // An empty expected value fails closed here too: a missing output cannot read as a match.
+    expect(verify).toContain('[ -z "$EXPECTED_SHA" ]');
+    expect(verify).toContain("Refusing to publish");
+    // The manifest is the anchor the output covers, and every archive is then checked against the
+    // digests IT carries — so the whole tree hangs off a channel the artifact never travelled on.
+    expect(verify).toContain("packages");
+    expect(indexOf(publishSteps, "Download plugin distribution")).toBeLessThan(
+      indexOf(publishSteps, "Verify plugin distribution digest"),
+    );
+    expect(indexOf(publishSteps, "Verify plugin distribution digest")).toBeLessThan(
+      indexOf(publishSteps, "Push plugin distribution"),
+    );
+  });
+
+  it("attests the archives with a pinned action and exactly the grants that action documents", () => {
+    const attest = stepOf(publishSteps, "Attest plugin archives");
+    expect(attest.uses).toMatch(/^actions\/attest-build-provenance@[0-9a-f]{40}$/);
+    // The pin policy in full, for the one action this unit adds: a full sha AND the exact version
+    // it resolves to, so a bump across a major cannot inherit a comment that still reads true.
+    expect(release.source).toContain(`uses: ${String(attest.uses)} # v4.2.2`);
+    expect(attest.with?.["subject-path"]).toBe("plugins/*.zip");
+
+    // `id-token` mints the Sigstore signing certificate, `attestations` persists the attestation,
+    // and `artifact-metadata` creates the artifact storage record — the three the action's own
+    // README requires. `contents: write` was already here for `gh release create` and now also
+    // pushes the distribution branch and its tag.
+    expect(publish.permissions).toEqual({
+      contents: "write",
+      "id-token": "write",
+      attestations: "write",
+      "artifact-metadata": "write",
+    });
+    expect(indexOf(publishSteps, "Verify plugin distribution digest")).toBeLessThan(
+      indexOf(publishSteps, "Attest plugin archives"),
+    );
+    expect(indexOf(publishSteps, "Attest plugin archives")).toBeLessThan(
+      indexOf(publishSteps, "Push plugin distribution"),
+    );
+  });
+
+  it("pushes one orphan commit and a tag no re-run can move", () => {
+    const step = stepOf(publishSteps, "Push plugin distribution");
+    const push = runOf(publishSteps, "Push plugin distribution");
+    expect(step.env?.["GH_TOKEN"]).toBe("${{ secrets.GITHUB_TOKEN }}");
+    expect(step.env?.["BRANCH"]).toBe("${{ needs.gates.outputs.plugins_branch }}");
+    expect(step.env?.["TAG"]).toBe("${{ needs.gates.outputs.plugins_tag }}");
+    expect(step.env?.["VERSION"]).toBe("${{ needs.gates.outputs.version }}");
+
+    expect(push).toContain("git init");
+    expect(push).toContain('git checkout -q --orphan "$BRANCH"');
+    expect(push).toContain("github-actions[bot]");
+    expect(push).toContain('git commit -q -m "plugins: v$VERSION from $GITHUB_SHA"');
+    // The branch head is REPLACED on every release by design — the tree is published whole, and a
+    // merge of two releases' catalogs would describe neither. Every prior release stays reachable
+    // through its own tag, which is why the TAG is the ref that fails closed rather than moving.
+    expect(push).toContain("git push --force");
+    expect(push).toContain("git ls-remote");
+    expect(push).toContain("Refusing to move a published distribution tag");
+    // After the npm publish: that is the release's irreversible step, and everything downstream
+    // of it is ordered against it rather than racing it.
+    expect(indexOf(publishSteps, "Publish to npm with provenance")).toBeLessThan(
+      indexOf(publishSteps, "Push plugin distribution"),
+    );
+  });
+
+  it("stamps the distribution commit into the release asset, never into the branch's own copy", () => {
+    const STAMP_STEP = "Stamp the release manifest with the distribution commit";
+    // The commit a tree lands on is the one fact the builder cannot know while it is building
+    // that tree, so `release.json` carries `distribution.commit: null` until it is pushed. The
+    // branch keeps that copy; the release ASSET is the stamped one, and the stamp runs after the
+    // push for the plain reason that the sha does not exist before it.
+    expect(indexOf(publishSteps, "Push plugin distribution")).toBeLessThan(
+      indexOf(publishSteps, STAMP_STEP),
+    );
+    expect(indexOf(publishSteps, STAMP_STEP)).toBeLessThan(
+      indexOf(publishSteps, "Create GitHub release"),
+    );
+    expect(runOf(publishSteps, "Push plugin distribution")).toContain(
+      'echo "PLUGINS_COMMIT=$DIST_COMMIT" >> "$GITHUB_ENV"',
+    );
+    expect(runOf(publishSteps, STAMP_STEP)).toContain("PLUGINS_COMMIT");
+  });
+
+  it("attaches the archives, their checksums and the manifest to the release", () => {
+    const create = runOf(publishSteps, "Create GitHub release");
+    for (const asset of ["plugins/*.zip", "plugins/*.sha256", "plugins/release.json"]) {
+      expect(create, `the release must carry ${asset}`).toContain(asset);
+    }
+    // Named as missing rather than skipped: a release that silently carried three of the four
+    // archives would be indistinguishable from a complete one on the release page.
+    expect(create).toContain("refusing to create a release that does not carry it");
+  });
+
+  it("documents the endpoints the attestation and the push reach, and what a rehearsal cannot prove", () => {
+    const page = readFileSync(join(REPO_ROOT, ".github", "release-egress.md"), "utf8");
+    const flowed = page.replaceAll(/\s+/g, " ");
+    const publishAllow = allowlistOf(publishSteps);
+
+    // The attestation talks to the GitHub attestations API and to Sigstore's public-good
+    // instance. Every one of those hosts was already allowed for npm's own provenance, so this
+    // unit adds no destination — but the page has to say that the attestation NEEDS them, or a
+    // later edit that drops npm provenance would take the attestation's hosts with it.
+    for (const host of [
+      "api.github.com",
+      "fulcio.sigstore.dev",
+      "rekor.sigstore.dev",
+      "tuf-repo-cdn.sigstore.dev",
+    ]) {
+      expect(publishAllow, `the publish job must reach ${host}`).toContain(`${host}:443`);
+      expect(page, `release-egress.md must name ${host}`).toContain(host);
+    }
+    // `github.com` carries the distribution branch and tag push, on the allowance
+    // `gh release create` already had. harden-runner stays fail-closed on every job.
+    expect(publishAllow).toContain("github.com:443");
+    expect(
+      stepsOf(release, "publish").find((step) =>
+        (step.uses ?? "").startsWith("step-security/harden-runner@"),
+      )?.with?.["egress-policy"],
+    ).toBe("block");
+    expect(page).toContain("plugin-dist");
+    // The honesty boundary this page exists for: a rehearsal cannot reach the publish job, so the
+    // observed-endpoint evidence for the attestation and the push lands only at the first real
+    // release. The page says that rather than implying these rows were observed.
+    expect(flowed, "release-egress.md must scope the rehearsal's evidence").toContain(
+      "rehearsal never reaches the publish job",
+    );
+  });
+
   describe("a dry run cannot publish", () => {
     /** The condition this file must carry, character for character. */
     const PUBLISH_CONDITION =
@@ -1826,9 +2072,32 @@ describe("release.yml — the only publishing path", () => {
       expect(evaluateWorkflowExpression(summaryCondition, TAG_PUSH)).toBe(false);
 
       // A rehearsal is only useful if it names what a real run would have shipped.
+      //
+      // TEST CHANGE, justified: the release now also publishes a plugin distribution — an orphan
+      // branch, a tag and four archives — so the rehearsal has three more facts to name or it
+      // under-reports what a real run does. The field list grew; nothing was removed from it.
       const report = summary.steps.map((step) => step.run ?? "").join("\n");
-      for (const field of ["PACKAGE_NAME", "VERSION", "TARBALL", "TARBALL_SHA256", "SBOM_PRESENT"]) {
+      for (const field of [
+        "PACKAGE_NAME",
+        "VERSION",
+        "TARBALL",
+        "TARBALL_SHA256",
+        "SBOM_PRESENT",
+        "PLUGINS_BRANCH",
+        "PLUGINS_TAG",
+        "PLUGINS_ARCHIVES",
+      ]) {
         expect(report, `the summary must report ${field}`).toContain(field);
+      }
+      // The three new ones travel on the gates job's outputs, like every other value here.
+      for (const [name, output] of [
+        ["PLUGINS_BRANCH", "plugins_branch"],
+        ["PLUGINS_TAG", "plugins_tag"],
+        ["PLUGINS_ARCHIVES", "plugins_archives"],
+      ] as const) {
+        expect(summary.steps[0]?.env?.[name], `${name} must come from the gates job`).toBe(
+          `\${{ needs.gates.outputs.${output} }}`,
+        );
       }
       expect(summary.permissions).toEqual({});
     });
@@ -2251,6 +2520,263 @@ describe.skipIf(WINDOWS)("release.yml — the changelog extraction, executed", (
 // ── docs-site.yml ────────────────────────────────────────────────────────────
 
 /** A `workflow_dispatch` context for this workflow: main, and whatever the form supplied. */
+// ── release.yml: the distribution push and the manifest stamp, executed ──────
+
+/**
+ * The two shell steps that publish the plugin distribution, RUN — the push against a scratch BARE
+ * REMOTE, the stamp against a fixture manifest.
+ *
+ * Why running them rather than reading them. Both carry a property no substring match reaches.
+ * The push must be IDEMPOTENT: a second run of the same release has to leave the branch and the
+ * tag exactly where the first one left them, and a tag already naming another commit has to stop
+ * the step rather than move a published pin. That is control flow plus git's own behaviour, and
+ * the only way to know it holds is to run it twice and then run it against a poisoned remote. The
+ * stamp must change exactly one field of a document a consumer reads as authoritative, and must
+ * refuse a manifest that already carries a commit — which is what keeps the branch's copy (`null`)
+ * and the release asset's copy (the sha) from ever being the same file by accident.
+ *
+ * The remote is reached through git's own `url.<base>.insteadOf` rewrite in a scratch global
+ * config, so the step's script runs VERBATIM — the https remote it builds from `$GH_TOKEN` and
+ * `$REPOSITORY` included — and git resolves it to a bare repository on disk. `GIT_CONFIG_SYSTEM`
+ * and `HOME` are redirected with it, so a maintainer's own git config (signing, templates,
+ * `init.defaultBranch`) cannot reach these runs.
+ *
+ * Not run on Windows, for the reason the two suites above are not: these are bash scripts GitHub
+ * runs on ubuntu.
+ */
+/** git, reading one value back out of a scratch repository. The sibling of `git` above. */
+function gitOut(cwd: string, ...args: string[]): string {
+  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
+}
+
+describe.skipIf(WINDOWS)("release.yml — the distribution push and the stamp, executed", () => {
+  const root = mkdtempSync(join(tmpdir(), "stamity-plugin-dist-"));
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  const publishStepsHere = stepsOf(release, "publish");
+  const PUSH = runOf(publishStepsHere, "Push plugin distribution");
+  const STAMP = runOf(
+    publishStepsHere,
+    "Stamp the release manifest with the distribution commit",
+  );
+
+  const VERSION = "1.9.0";
+  const BRANCH = "plugin-dist";
+  const TAG = `plugins/v${VERSION}`;
+  const SOURCE_SHA = "4e07408562bedb8b60ce05c1decfe3ad16b72230";
+  const TOKEN = "scratch-token";
+  const REPOSITORY = "zomarit/stamity";
+  const REMOTE_URL = `https://x-access-token:${TOKEN}@github.com/${REPOSITORY}.git`;
+
+  /** The one document both steps read, in the shape `scripts/plugins/releaseManifest.mjs` writes. */
+  const MANIFEST = {
+    schemaVersion: 1,
+    version: VERSION,
+    sourceCommit: SOURCE_SHA,
+    // A FIXED timestamp, and the reason the commit sha below is reproducible: the step stamps
+    // both git dates from this field, so one release builds one commit however often it runs.
+    sourceCommitDate: "2026-09-20T09:15:00+02:00",
+    distribution: { branch: BRANCH, tag: TAG, commit: null },
+    packages: [{ client: "claude", path: "claude", archive: `stamity-plugin-claude-${VERSION}.zip` }],
+  };
+
+  interface Scenario {
+    readonly dir: string;
+    readonly bare: string;
+    readonly env: Readonly<Record<string, string>>;
+  }
+
+  /** A stage directory holding `plugins/`, and a bare remote the step's https URL resolves to. */
+  function scenario(name: string): Scenario {
+    const dir = join(root, name);
+    const bare = join(dir, "remote.git");
+    const configPath = join(dir, "gitconfig");
+    // A dot directory in the fixture on purpose: the step force-adds, so a `.gitignore` shipped
+    // by some dependency inside the bundled runtime cannot silently drop files from the commit.
+    mkdirSync(join(dir, "plugins", ".claude-plugin"), { recursive: true });
+    writeFileSync(join(dir, "plugins", "release.json"), `${JSON.stringify(MANIFEST, null, 2)}\n`);
+    writeFileSync(join(dir, "plugins", `stamity-plugin-claude-${VERSION}.zip`), "archive bytes\n");
+    writeFileSync(join(dir, "plugins", ".claude-plugin", "marketplace.json"), '{"name":"stamity"}\n');
+    git(dir, "init", "--bare", "-q", bare);
+    writeFileSync(configPath, `[url "${bare}"]\n\tinsteadOf = ${REMOTE_URL}\n`);
+    return {
+      dir,
+      bare,
+      env: {
+        PATH: `${dirname(process.execPath)}${delimiter}${process.env["PATH"] ?? ""}`,
+        HOME: dir,
+        GIT_CONFIG_GLOBAL: configPath,
+        GIT_CONFIG_SYSTEM: "/dev/null",
+        GIT_TERMINAL_PROMPT: "0",
+        GITHUB_SHA: SOURCE_SHA,
+        GH_TOKEN: TOKEN,
+        REPOSITORY,
+        VERSION,
+        BRANCH,
+        TAG,
+      },
+    };
+  }
+
+  interface StepRun {
+    readonly status: number | null;
+    readonly out: string;
+    readonly stepEnv: string;
+  }
+
+  /** One run of the push step, from its own copy of the staged tree. */
+  function push(setup: Scenario, attempt: string): StepRun {
+    const workdir = join(setup.dir, attempt);
+    mkdirSync(join(workdir, "plugins", ".claude-plugin"), { recursive: true });
+    for (const relative of [
+      "release.json",
+      `stamity-plugin-claude-${VERSION}.zip`,
+      ".claude-plugin/marketplace.json",
+    ]) {
+      writeFileSync(
+        join(workdir, "plugins", relative),
+        readFileSync(join(setup.dir, "plugins", relative)),
+      );
+    }
+    const envPath = join(workdir, "github-env");
+    writeFileSync(envPath, "");
+    const result = spawnSync("bash", ["-c", PUSH], {
+      cwd: workdir,
+      encoding: "utf8",
+      env: { ...process.env, ...setup.env, GITHUB_ENV: envPath },
+    });
+    return {
+      status: result.status,
+      out: `${result.stdout}${result.stderr}`,
+      stepEnv: readFileSync(envPath, "utf8"),
+    };
+  }
+
+  const refOf = (bare: string, ref: string): string =>
+    gitOut(bare, "for-each-ref", "--format=%(objectname)", ref);
+
+  it("creates the branch and the tag from one orphan commit, hidden files included", () => {
+    const setup = scenario("first-push");
+    const run = push(setup, "attempt-1");
+
+    expect(run.status, run.out).toBe(0);
+    const head = refOf(setup.bare, `refs/heads/${BRANCH}`);
+    expect(head, "the branch must exist on the remote").toMatch(/^[0-9a-f]{40}$/);
+    // A lightweight tag on the same commit: `git ls-remote` answers the commit itself, which is
+    // what makes the idempotence comparison in the step a comparison of commits.
+    expect(refOf(setup.bare, `refs/tags/${TAG}`)).toBe(head);
+    // ORPHAN: one commit, no parent. A release's tree is published whole, so the branch carries
+    // no history to merge into and every prior release is reachable through its own tag.
+    expect(gitOut(setup.bare, "rev-list", "--count", head)).toBe("1");
+    expect(gitOut(setup.bare, "log", "-1", "--format=%an <%ae>", head)).toContain(
+      "github-actions[bot]",
+    );
+    expect(gitOut(setup.bare, "log", "-1", "--format=%s", head)).toBe(
+      `plugins: v${VERSION} from ${SOURCE_SHA}`,
+    );
+    const tree = gitOut(setup.bare, "ls-tree", "-r", "--name-only", head).split("\n");
+    expect(tree).toContain("release.json");
+    // The catalogs all live in dot directories; a commit that dropped them would still look
+    // complete from the release page.
+    expect(tree).toContain(".claude-plugin/marketplace.json");
+    // The commit the next step stamps into the release asset, handed on through the step env.
+    expect(run.stepEnv.trim()).toBe(`PLUGINS_COMMIT=${head}`);
+  });
+
+  it("moves neither ref on a second identical run", () => {
+    const setup = scenario("idempotent-push");
+    const first = push(setup, "attempt-1");
+    expect(first.status, first.out).toBe(0);
+    const head = refOf(setup.bare, `refs/heads/${BRANCH}`);
+
+    const second = push(setup, "attempt-2");
+
+    expect(second.status, second.out).toBe(0);
+    // Reproducible because both git dates are stamped from the manifest's source commit date
+    // rather than read from the clock: the same tree and message produce the same sha.
+    expect(refOf(setup.bare, `refs/heads/${BRANCH}`)).toBe(head);
+    expect(refOf(setup.bare, `refs/tags/${TAG}`)).toBe(head);
+    expect(second.out).toContain("already points at");
+  });
+
+  it("fails closed, and pushes nothing at all, when the tag already names another commit", () => {
+    const setup = scenario("poisoned-tag");
+    // A tag from some other build sitting on the release's tag name. Moving it would repoint a
+    // pin consumers already fetch, so the step must stop before it pushes anything.
+    const other = join(setup.dir, "other");
+    mkdirSync(other, { recursive: true });
+    git(other, "init", "-q", "-b", "main");
+    git(other, "config", "user.email", "ci@example.invalid");
+    git(other, "config", "user.name", "CI");
+    git(other, "commit", "-q", "--allow-empty", "-m", "another build");
+    git(other, "push", "-q", setup.bare, `HEAD:refs/tags/${TAG}`);
+    const poisoned = refOf(setup.bare, `refs/tags/${TAG}`);
+
+    const run = push(setup, "attempt-1");
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("Refusing to move a published distribution tag");
+    expect(refOf(setup.bare, `refs/tags/${TAG}`), "the published tag must not move").toBe(poisoned);
+    expect(refOf(setup.bare, `refs/heads/${BRANCH}`), "and nothing else may be pushed").toBe("");
+  });
+
+  /** One run of the stamp step over a staged manifest, with the commit the push handed on. */
+  function stamp(name: string, commit: string, manifest: unknown = MANIFEST): StepRun {
+    const dir = join(root, name);
+    mkdirSync(join(dir, "plugins"), { recursive: true });
+    writeFileSync(join(dir, "plugins", "release.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+    const result = spawnSync("bash", ["-c", STAMP], {
+      cwd: dir,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${dirname(process.execPath)}${delimiter}${process.env["PATH"] ?? ""}`,
+        PLUGINS_COMMIT: commit,
+      },
+    });
+    return {
+      status: result.status,
+      out: `${result.stdout}${result.stderr}`,
+      stepEnv: readFileSync(join(dir, "plugins", "release.json"), "utf8"),
+    };
+  }
+
+  const DISTRIBUTION_COMMIT = "9f2c1b5d4e6a7f80b1c2d3e4f5a6b7c8d9e0f1a2";
+
+  it("writes the commit into the asset's manifest and changes nothing else about the document", () => {
+    const run = stamp("stamp-ok", DISTRIBUTION_COMMIT);
+
+    expect(run.status, run.out).toBe(0);
+    const stamped = JSON.parse(run.stepEnv) as { distribution: { commit: string } };
+    expect(stamped.distribution.commit).toBe(DISTRIBUTION_COMMIT);
+    // The same two-space document with a trailing newline the builder writes, and the same field
+    // order: a consumer diffing the asset against the branch's copy must see one line change.
+    expect(run.stepEnv).toBe(
+      `${JSON.stringify({ ...MANIFEST, distribution: { ...MANIFEST.distribution, commit: DISTRIBUTION_COMMIT } }, null, 2)}\n`,
+    );
+  });
+
+  it("refuses a manifest that already carries a distribution commit", () => {
+    // The branch's own copy is the one with `null`, and it is pushed BEFORE this step runs. A
+    // stamp that ran twice — or ran on a tree that was somehow already stamped — would mean the
+    // branch and the asset disagree about which commit the tree landed on.
+    const run = stamp("stamp-twice", DISTRIBUTION_COMMIT, {
+      ...MANIFEST,
+      distribution: { ...MANIFEST.distribution, commit: DISTRIBUTION_COMMIT },
+    });
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("already carries");
+  });
+
+  it("refuses a distribution commit that is not a commit sha", () => {
+    const run = stamp("stamp-bad-commit", "HEAD");
+
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("40-character");
+  });
+});
+
 const docsDispatch = (inputs: Readonly<Record<string, unknown>>): ExpressionContext => ({
   github: { event_name: "workflow_dispatch", ref: "refs/heads/main" },
   inputs,

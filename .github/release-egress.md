@@ -42,6 +42,40 @@ candidate, protected environment approval, immutable tag/version/ancestry proofs
 digest-verified handoff. Record the actual rehearsal and publish run IDs in the candidate
 evidence; prior runs and a skipped job cannot close those proofs.
 
+## The plugin distribution's destinations
+
+Added 2026-09-20 with the plugin distribution the release now publishes. **No destination is
+added to any job by it**; what changes is how many things depend on the ones already listed, and
+that is the fact this section exists to record — a later edit that removes npm provenance would
+otherwise read these Sigstore hosts as removable with it.
+
+| Step (publish job) | Destination | Already listed for |
+|---|---|---|
+| `Attest plugin archives` | `token.actions.githubusercontent.com` | the OIDC token `npm publish --provenance` already mints |
+| `Attest plugin archives` | `fulcio.sigstore.dev` | the signing certificate npm's provenance is issued under |
+| `Attest plugin archives` | `rekor.sigstore.dev` | the transparency log entry npm's provenance writes |
+| `Attest plugin archives` | `tuf-repo-cdn.sigstore.dev` | the Sigstore TUF root both clients verify against |
+| `Attest plugin archives` | `api.github.com` | `gh release create`; the attestation is persisted through the same API |
+| `Push plugin distribution` | `github.com` | the git remote `gh release create` already resolves |
+| `Download plugin distribution` | artifact storage (`results-receiver`, the twenty result accounts) | `Download release artifacts` |
+
+The attestation uses Sigstore's **public-good instance**, which is what
+[`actions/attest-build-provenance`](https://github.com/actions/attest-build-provenance) documents
+for a public repository; a private or internal repository would use GitHub's own Sigstore
+instance and a different set of hosts, which this repository never reaches.
+
+`egress-policy: block` is unchanged on all three jobs, so any of these going missing stops the
+release at the step rather than leaking past it. The `gates` job, which builds the distribution,
+holds no signing host and no token: it reaches `github.com` and `registry.npmjs.org` for the pack
+and the runtime install it already made, and nothing else.
+
+**What the rehearsal cannot prove, and why these rows carry no observed-run evidence.** A
+`dry_run=true` dispatch exercises `gates` and `apm-route` only — it builds the distribution and
+uploads it — and the rehearsal never reaches the publish job, which is where the attestation, the
+`plugin-dist` branch push and the tag live. So the observed-endpoint evidence for every row above
+lands at the FIRST REAL RELEASE and not before. Record that run's ID here beside the two above
+when it happens; until then these rows are the documented requirement, not an observation.
+
 ## Dependency recheck
 
 On 2026-09-10, [Docusaurus's supported versions](https://docusaurus.io/versions) and
