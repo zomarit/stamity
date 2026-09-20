@@ -120,14 +120,19 @@ stop at the one that asks for the operator.
    When it is false, skip this step: a setup already exists, and replacing it is a job for the
    two commands in step 3, run deliberately.
 
-3. When \`duplicates\` is non-empty, print every entry with its remedy and stop for the operator.
-   Do not remove a file yourself — a duplicate is a file two installs both claim, and which one
-   goes is the operator's call:
+3. When \`duplicates\` is non-empty, print every entry with the remedy beside it and STOP. A
+   duplicate is a file two installs both claim, and which one goes is the operator's call. The
+   three remedies below are what THE OPERATOR runs — they are reported, never performed here:
 
-   - a file this engine wrote: run \`${locate} -- clean -y\`, then
-     \`${locate} -- plugin setup --client ${client} -y\` again;
-   - a file an APM dependency installed: remove that APM dependency;
-   - a file nobody manages: remove it, or keep it as an override under \`.stamity/overrides/\`.
+   - a file this engine wrote: the operator runs \`${locate} -- clean -y\` and then
+     \`${locate} -- plugin setup --client ${client} -y\` again. Do not run either yourself:
+     \`clean -y\` takes no confirmation and removes ledger rows and the files they name;
+   - a file an APM dependency installed: the operator removes that APM dependency;
+   - a file nobody manages: the operator removes it, or the operator keeps it as an override
+     under \`.stamity/overrides/\`.
+
+   Stop at this step. Remove no file yourself and run none of the three remedies; report the
+   duplicates with their remedies and let the operator choose. Step 4 runs once they have.
 
 4. Finish by reporting the resolved state, as the table an operator reads:
 
