@@ -2333,6 +2333,10 @@ first push and flipped to ready at this close; no board source is linked (no pro
 - The private layer: the session's decision row (the sign-off), the HANDOFF paragraph of 2026-09-20
   (session 2), the dashboard banner, the directive's note, the kickoff regenerated for session 3 — pushed
   at the close.
+- CI on `main` after the merge: the run at `3d23f75` was superseded, the closing-entry commit `db160c2`
+  went red on the leak gate (two private ledger ids spelled in this entry — the same class session 1 hit),
+  `dd91178` respelled them and every job passed (run 35531546115: floor, LTS, Windows, the three apm route
+  legs, `all-ci-checks`). Spell decision rows and directives descriptively in a public file.
 - Not done: nothing within this session's scope. Carried: the nine QA rows accepted unperformed (file 3's
   V1 measures the four client routes, V7 walks the publish path); the 29 inbox rows of 2026-09-20 in the
   session-2 block; file 3 (V1–V7) and the 1.9.0 release for session 3. No `plugin-dist` branch and no
