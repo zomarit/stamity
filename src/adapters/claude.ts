@@ -237,6 +237,69 @@ const REVIEW_GATE_EVENTS: readonly string[] = CLIENT_EXTENSION_EVENTS.filter(
 const TAMPER_NOTICE_SCRIPT_FILE = "stamity-config-tamper-notice.mjs";
 
 /**
+ * File name of the generated pre-tool-use guard, restated from
+ * `src/hooks/scripts.ts` for the same reason {@link TAMPER_NOTICE_SCRIPT_FILE}
+ * is: that module does not export it. The suite pins the pair — the `PreToolUse`
+ * command must name this script — so a rename upstream fails a test here rather
+ * than silently leaving the fail-closed tail below attached to no row at all.
+ */
+const PRE_TOOL_USE_GUARD_SCRIPT_FILE = "stamity-pre-tool-use-guard.mjs";
+
+/**
+ * The repository path of the core guard, i.e. exactly the script argument
+ * `planHooksInfra` puts on this client's `pre_tool_use` row in repository mode
+ * (`../emit/hooksInfra.ts`). A plugin-mode row carries
+ * `${CLAUDE_PLUGIN_ROOT}/hooks/<file>` instead and therefore does not equal it,
+ * which is how {@link failsClosedOnLaunchFailure} tells the two apart.
+ */
+const CLAUDE_GUARD_PATH = `${HOOKS_GENERATED_DIR}/${TOOL}/${PRE_TOOL_USE_GUARD_SCRIPT_FILE}`;
+
+/**
+ * The client's own name for the repository root: "the project root where the
+ * session started" (code.claude.com/docs/en/hooks, accessed 2026-09-20),
+ * exported into every hook process in both shell and exec form.
+ *
+ * Every repository-relative script this adapter wires is rendered through it,
+ * because the same page states handlers "run in the current directory with
+ * Claude Code's environment" — the SESSION's working directory, which a `cd` in
+ * the Bash tool moves for the rest of the session. A relative command is
+ * therefore resolved against a directory the model picks: once it leaves the
+ * root, `node` exits 1 with `Cannot find module`, "any other exit code doesn't
+ * block on its own", and the tool call the guard exists to gate proceeds
+ * unguarded. Measured as 189 occurrences in one consumer run before this
+ * anchor (the maintainer's report of 2026-09-20).
+ */
+const PROJECT_DIR_VARIABLE = "${CLAUDE_PROJECT_DIR}";
+
+/**
+ * The shell tail that turns "the guard could not launch" into a block, appended
+ * to the core guard's command line and to nothing else.
+ *
+ * Why it reclassifies no verdict the guard reaches: the emitted body exits 0 or
+ * `BLOCK_EXIT` (2) and nothing else — one `process.exitCode` assignment under a
+ * top-level catch (`../hooks/scripts.ts`) — so the `||` branch is unreachable
+ * whenever the script ran at all. What it does catch is the script never
+ * running: a missing file after a `clean`, an unset `CLAUDE_PROJECT_DIR`
+ * (leaving `/.stamity/…`), a syntax error, no `node` on PATH. Each of those is a
+ * disarmed gate today, reported by the vendor's own rule that "any other exit
+ * code doesn't block on its own"; with the tail it is a block (exit 2 "Blocks
+ * the tool call") carrying a message the client feeds back to the model.
+ *
+ * Only this row. The session-start and tamper-notice scripts and the review gate
+ * keep the client's non-blocking semantics — a notice that cannot run is not a
+ * guard, and blocking every tool call because a context printer is missing would
+ * trade a lost line for a wedged session. A user row keeps them too: its exit
+ * semantics are its author's, not this adapter's to re-interpret.
+ *
+ * POSIX. `||` and `{ … }` hold under `sh` and Git Bash, the two shells the page
+ * names first for a hook command; under the PowerShell fallback (a Windows host
+ * with no Git Bash) the behaviour is UNMEASURED, and the residual is recorded
+ * rather than papered over — `docs/troubleshooting.md` says so too.
+ */
+const GUARD_FAIL_CLOSED_TAIL =
+  "|| { echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }";
+
+/**
  * Access date carried by every platform citation in {@link CLAUDE_DIALECT_FACTS}.
  *
  * Re-read on this date to settle the rule LOAD MODE, which the facts below had
@@ -775,21 +838,103 @@ function buildSettingsJson(
 function hookEntry(row: HookInterchange): ClaudeHookEntry {
   return {
     ...(row.matcher === undefined ? {} : { matcher: row.matcher }),
-    hooks: [commandHook(row.command, row.timeoutMs)],
+    hooks: [commandHook(row.command, row.timeoutMs, failsClosedOnLaunchFailure(row))],
   };
 }
 
-/** One exec-form argv as the client's `type: "command"` handler. */
-function commandHook(argv: readonly string[], timeoutMs?: number): ClaudeHookCommand {
+/**
+ * Whether this row is the one the {@link GUARD_FAIL_CLOSED_TAIL} belongs to: the
+ * CORE pre-tool-use guard, in repository mode, as the core planned it.
+ *
+ * Identified by the whole script path rather than by {@link argvTail}'s
+ * basename. Both answer the same question for every row this engine emits, and
+ * the path also answers it for the two rows a basename cannot separate: a
+ * plugin-mode guard (addressed through the vendor root variable, whose bytes and
+ * exit semantics this repository does not own here) and a user row that happens
+ * to name a script of the same file name.
+ */
+function failsClosedOnLaunchFailure(row: HookInterchange): boolean {
+  return row.event === "pre_tool_use" && row.command[1] === CLAUDE_GUARD_PATH;
+}
+
+/**
+ * One exec-form argv as the client's `type: "command"` handler.
+ *
+ * `failClosed` appends {@link GUARD_FAIL_CLOSED_TAIL} AFTER the join, so the
+ * tail's own `||`, braces and redirection reach the shell as syntax while every
+ * element of the argv stays quoted as data.
+ */
+function commandHook(
+  argv: readonly string[],
+  timeoutMs?: number,
+  failClosed = false,
+): ClaudeHookCommand {
+  const line = anchorScriptArgument(argv).map(shellWord).join(" ");
   return {
     type: "command",
-    command: argv.map(shellWord).join(" "),
+    command: failClosed ? `${line} ${GUARD_FAIL_CLOSED_TAIL}` : line,
     // The client's `timeout` is whole seconds (code.claude.com/docs/en/hooks,
     // accessed 2026-08-17); the interchange request is milliseconds. Ceil, so
     // a sub-second request rounds up to the nearest second the client can
     // express instead of truncating to an instant timeout.
     ...(timeoutMs === undefined ? {} : { timeout: Math.max(1, Math.ceil(timeoutMs / 1000)) }),
   };
+}
+
+/**
+ * The argv with its ONE script argument anchored on {@link PROJECT_DIR_VARIABLE}.
+ *
+ * This is the CLAUDE RENDER BOUNDARY, and the anchor lives here rather than in
+ * the interchange for one reason: the interchange rows are tool-neutral. The
+ * other three clients embed the row base64 in a portable runner command, and
+ * `../hooks/portableRunner.ts` reads any `ROOT_VARIABLE_PATH` script as a PLUGIN
+ * row — so an anchor upstream would silently reclassify every Cursor, Copilot
+ * and Codex row as plugin-hosted.
+ *
+ * The script is the first element after the launcher that reads as a
+ * repository-relative path. That is the program: `../shared/launcherAllowlist.ts`
+ * admits exactly one script-extension argument per argv and requires it to be
+ * the first non-flag one, so every element after the first match is an argument
+ * TO the script and is left alone — a `dir/name` the author passes as data is
+ * never rewritten into a path. A launcher subcommand (`deno run`, `bun run`)
+ * carries no `/` and is stepped over for free.
+ */
+function anchorScriptArgument(argv: readonly string[]): readonly string[] {
+  for (const [index, word] of argv.entries()) {
+    if (index === 0) continue;
+    const anchored = anchoredOnProjectDir(word);
+    if (anchored !== undefined) return [...argv.slice(0, index), anchored, ...argv.slice(index + 1)];
+  }
+  return argv;
+}
+
+/**
+ * One argv element under the project-directory anchor, or `undefined` when the
+ * element is not a repository-relative path — which is every element the client
+ * can already resolve on its own, and every element that is not a path at all.
+ *
+ * Left exactly as it came: a flag; a word with no separator; an ABSOLUTE path
+ * and a `~` path (host-native already); a `$`-carrying word, which covers a
+ * plugin-mode `${CLAUDE_PLUGIN_ROOT}/hooks/<file>` row — the client expands that
+ * variable itself, and re-anchoring it would name a path inside the repository
+ * for a script that ships in the vendor container; a Windows drive letter or a
+ * URI scheme; and a `../` path, which leaves the root the anchor names.
+ */
+function anchoredOnProjectDir(word: string): string | undefined {
+  if (word.startsWith("-") || !word.includes("/")) return undefined;
+  if (word.startsWith("/") || word.startsWith("~") || word.startsWith("$")) return undefined;
+  if (word.startsWith("../") || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(word)) return undefined;
+  const anchored = `${PROJECT_DIR_VARIABLE}/${word}`;
+  // The one RENDERABLE form. {@link shellWord} keeps an expansion only for a
+  // full `ROOT_VARIABLE_PATH` match, rendered double-quoted, which is also the
+  // form the vendor asks for ("In shell form, wrap each placeholder in double
+  // quotes", code.claude.com/docs/en/hooks, accessed 2026-09-20). A path that
+  // shape cannot carry — one holding a space, a quote or a backslash separator —
+  // would come out SINGLE-quoted, handing the client a literal
+  // `${CLAUDE_PROJECT_DIR}` directory name, which is worse than the relative
+  // path it replaced. Such a row keeps today's rendering; the residual is
+  // recorded rather than guessed at.
+  return ROOT_VARIABLE_PATH.test(anchored) ? anchored : undefined;
 }
 
 /** Shell-safe tokens: anything outside this set forces quoting. */

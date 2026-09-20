@@ -1,5 +1,6 @@
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
@@ -85,13 +86,80 @@ const EXPECTED_EFFORT: Record<string, string> = {
   economy: "low",
 };
 
-/** The generated hook script commands, as the settings transform renders them. */
+/**
+ * The client's own name for the repository root, and the anchor every
+ * repository-relative hook command carries.
+ *
+ * Spelled here as the settings document spells it, because that is what a client
+ * reads: a literal `${CLAUDE_PROJECT_DIR}` inside double quotes, which the shell
+ * the client hands the line to expands to "the project root where the session
+ * started" (code.claude.com/docs/en/hooks, accessed 2026-09-20).
+ */
+const PROJECT_DIR = "${CLAUDE_PROJECT_DIR}";
+
+/**
+ * The tail that makes a guard which could not LAUNCH a block rather than a
+ * silent pass. Spelled once here and asserted against
+ * {@link HOOK_COMMANDS}.guard, so the two cannot drift into two answers.
+ */
+const GUARD_TAIL =
+  "|| { echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }";
+
+/**
+ * The generated hook script commands, as the settings transform renders them.
+ *
+ * TEST CHANGE 2026-09-20, justified — the behaviour moved, not the criterion.
+ * These four were the RELATIVE forms (`node .stamity/generated/hooks/claude/…`),
+ * which the client resolves against the session's own working directory: once a
+ * `cd` in the Bash tool moved it out of the root, the guard ran as `Cannot find
+ * module`, exit 1, "any other exit code doesn't block on its own", and the tool
+ * call proceeded unguarded (189 occurrences in one consumer run). Every command
+ * is now anchored on {@link PROJECT_DIR}, double-quoted as the vendor asks, and
+ * the pre-tool-use guard alone also carries {@link GUARD_TAIL}. Still four
+ * literals rather than a derivation: every other assertion in this file reads
+ * through them, so they are the pin.
+ */
 const HOOK_COMMANDS = {
-  sessionStart: "node .stamity/generated/hooks/claude/stamity-session-start.mjs",
-  guard: "node .stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs",
-  tamper: "node .stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs",
-  reviewGate: "node .stamity/generated/hooks/claude/stamity-review-gate.mjs",
+  sessionStart:
+    'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-session-start.mjs"',
+  guard:
+    'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs" ' +
+    "|| { echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }",
+  tamper:
+    'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs"',
+  reviewGate:
+    'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-review-gate.mjs"',
 } as const;
+
+/**
+ * The fixture user hook's command in the same anchored rendering — a user row is
+ * anchored at RENDER time exactly as a core row is, while its declaration on
+ * disk stays repository-relative (the launcher allow-list judges the
+ * declaration).
+ */
+const USER_HOOK_COMMAND = 'node "${CLAUDE_PROJECT_DIR}/.stamity/hooks/run.mjs"';
+
+/** The core guard's repository path — the previous rendering, and the control below. */
+const GUARD_RELATIVE = ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs";
+
+/**
+ * The shell the client hands a hook command to: `sh -c` on macOS and Linux, Git
+ * Bash on Windows, "or PowerShell when Git Bash isn't installed"
+ * (code.claude.com/docs/en/hooks, accessed 2026-09-20).
+ *
+ * `undefined` means this host has neither shell the vendor names first, which is
+ * the one case the round-trip cases below skip — and they say why rather than
+ * passing: the tail they assert is POSIX (`||` and a brace group), PowerShell
+ * parses neither, and the CI Windows leg is the confirmation of record.
+ */
+const HOOK_SHELL: string | undefined = resolveHookShell();
+
+function resolveHookShell(): string | undefined {
+  if (process.platform !== "win32") return "/bin/sh";
+  const probe = spawnSync("where", ["bash"], { encoding: "utf8" });
+  const first = probe.stdout.split(/\r?\n/).find((line) => line.trim() !== "");
+  return probe.status === 0 && first !== undefined ? first.trim() : undefined;
+}
 
 const EMPTY_SELECTION: ContentSelection = {
   items: { agent: [], skill: [], rule: [], command: [] },
@@ -1078,7 +1146,7 @@ describe("user hook lane", () => {
     // returned them.
     expect(settings.hooks["PreToolUse"]?.map((entry) => entry.hooks[0]?.command)).toEqual([
       HOOK_COMMANDS.guard,
-      "node .stamity/hooks/run.mjs",
+      USER_HOOK_COMMAND,
     ]);
     const userEntry = settings.hooks["PreToolUse"]?.[1];
     expect(userEntry?.matcher).toBe("Bash");
@@ -1088,12 +1156,227 @@ describe("user hook lane", () => {
     expect(settings.hooks["SessionStart"]?.map((entry) => entry.hooks[0]?.command)).toEqual([
       HOOK_COMMANDS.sessionStart,
       HOOK_COMMANDS.tamper,
-      "node .stamity/hooks/run.mjs",
+      USER_HOOK_COMMAND,
     ]);
     // The ConfigChange extension still targets the tamper script, not the
     // user's session-start hook.
     expect(settings.hooks["ConfigChange"]?.[0]?.hooks[0]?.command).toBe(HOOK_COMMANDS.tamper);
   });
+});
+
+/**
+ * The anchor, and the one row that fails closed without it.
+ *
+ * The client runs a hook command "in the current directory with Claude Code's
+ * environment" and exports `${CLAUDE_PROJECT_DIR}` as "the project root where
+ * the session started" (code.claude.com/docs/en/hooks, accessed 2026-09-20).
+ * Those two sentences together are the whole defect and the whole fix: a
+ * relative command is resolved against a directory the model moves, and the
+ * variable is the only thing in the environment that still names the root.
+ *
+ * The last four cases run the emitted line through a REAL shell from a
+ * sub-directory, because that is the one criterion that cannot be re-derived
+ * here — what `sh` does with the string the client wrote.
+ */
+describe("the project-directory anchor", () => {
+  /** The core roster's read-only reviewer, and a call outside its grant. */
+  const DENIED = JSON.stringify({
+    agent_type: "stamity-reviewer",
+    agent_id: "stamity-reviewer-01",
+    tool_name: "Write",
+  });
+
+  /** The same agent inside its grant — a non-degenerate allow, not an empty payload. */
+  const ALLOWED = JSON.stringify({
+    agent_type: "stamity-reviewer",
+    agent_id: "stamity-reviewer-01",
+    tool_name: "Read",
+  });
+
+  it("anchors every command in the document and leaves no repository-relative one", async () => {
+    const { rows } = await planned({ selection: EMPTY_SELECTION });
+    const raw = byPath(rows).get(CLAUDE_SETTINGS_PATH)!.content;
+    const commands = Object.values(settingsOf(rows).hooks).flatMap((entries) =>
+      entries.flatMap((entry) => entry.hooks.map((hook) => hook.command)),
+    );
+
+    expect(commands.length).toBeGreaterThan(0);
+    for (const command of commands) {
+      expect(command.startsWith(`node "${PROJECT_DIR}/`), command).toBe(true);
+    }
+    // The defect stated as the shape that must not come back — a command the
+    // client resolves against whatever directory the session happens to sit in.
+    expect(raw).not.toMatch(/"command": "node \.stamity\//);
+  });
+
+  it("gives the fail-closed tail to the core guard row and to no other row", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({
+      "repo/.stamity/hooks/10-user.json": `${JSON.stringify({
+        hooks: [
+          { event: "pre_tool_use", command: ["node", ".stamity/hooks/run.mjs"] },
+          { event: "session_start", command: ["node", ".stamity/hooks/run.mjs"] },
+        ],
+      })}\n`,
+      "repo/.stamity/hooks/run.mjs": "// fixture user hook\n",
+    });
+    const { rows } = await planned({ selection: EMPTY_SELECTION, rootDir: temp.path("repo") });
+    const settings = settingsOf(rows);
+    const commands = Object.values(settings.hooks).flatMap((entries) =>
+      entries.flatMap((entry) => entry.hooks.map((hook) => hook.command)),
+    );
+
+    // Two pre-tool-use rows and several non-guard rows in one document, so
+    // "only the guard" is a statement about a populated list.
+    expect(settings.hooks["PreToolUse"]).toHaveLength(2);
+    expect(commands.filter((command) => command.endsWith(GUARD_TAIL))).toEqual([
+      HOOK_COMMANDS.guard,
+    ]);
+    expect(HOOK_COMMANDS.guard.endsWith(GUARD_TAIL)).toBe(true);
+    // A notice that cannot run is not a guard, and a user hook's exit semantics
+    // are its author's — both keep the client's non-blocking reading.
+    expect(settings.hooks["SessionStart"]?.every((entry) => !entry.hooks[0]!.command.includes("exit 2"))).toBe(true);
+    expect(settings.hooks["PreToolUse"]?.[1]?.hooks[0]?.command).toBe(USER_HOOK_COMMAND);
+  });
+
+  it("anchors a user hook at render time while its declaration stays repository-relative", async () => {
+    const temp = getTemp();
+    const declaration = {
+      hooks: [{ event: "session_start", command: ["node", ".stamity/hooks/run.mjs"] }],
+    };
+    await temp.seedFiles({
+      "repo/.stamity/hooks/10-user.json": `${JSON.stringify(declaration)}\n`,
+      "repo/.stamity/hooks/run.mjs": "// fixture user hook\n",
+    });
+    const { rows } = await planned({ selection: EMPTY_SELECTION, rootDir: temp.path("repo") });
+
+    // The rendered command is anchored...
+    expect(settingsOf(rows).hooks["SessionStart"]?.at(-1)?.hooks[0]?.command).toBe(
+      USER_HOOK_COMMAND,
+    );
+    // ...and the declaration on disk is untouched, which is what the launcher
+    // allow-list judges: it resolves the declared path inside the repository
+    // (`src/shared/launcherAllowlist.ts`), and a declaration carrying a client
+    // variable would name no file it could read.
+    expect(readFileSync(temp.path("repo/.stamity/hooks/10-user.json"), "utf8")).toContain(
+      '"command":["node",".stamity/hooks/run.mjs"]',
+    );
+  });
+
+  /**
+   * The emitted tree a client needs to RUN this hook: the settings document, the
+   * three core scripts and the policy document the guard reads, at the paths
+   * emission names, plus the sub-directory the session will move into.
+   *
+   * No `git init`: nothing in the guard's own resolution reads git — it finds its
+   * policy document relative to its own file and its verdict comes from the
+   * payload on stdin — so a repository would add a child process and prove
+   * nothing this fixture does not.
+   */
+  async function emitted(): Promise<{ root: string; guard: string; command: string }> {
+    const temp = getTemp();
+    const root = temp.path("anchored");
+    const { rows, core } = await planned({ selection: EMPTY_SELECTION, rootDir: root });
+    const files: Record<string, string> = {
+      [join("anchored", core.hooks.policyDocument.path)]: core.hooks.policyDocument.content,
+      [join("anchored", "sub", "dir", ".keep")]: "",
+    };
+    for (const script of core.hooks.scripts) {
+      files[join("anchored", script.path)] = script.content;
+    }
+    await temp.seedFiles(files);
+    return {
+      root,
+      guard: join(root, ...GUARD_RELATIVE.split("/")),
+      command: settingsOf(rows).hooks["PreToolUse"]?.[0]?.hooks[0]?.command ?? "",
+    };
+  }
+
+  /** The emitted line as the client runs it: one shell, one command STRING. */
+  function shell(
+    command: string,
+    cwd: string,
+    input: string,
+    projectDir?: string,
+  ): { code: number; stdout: string; stderr: string } {
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    // Never inherited: the unset case below is a real branch of the fix, and a
+    // host that exports the variable would hide it.
+    delete env["CLAUDE_PROJECT_DIR"];
+    const result = spawnSync(HOOK_SHELL!, ["-c", command], {
+      cwd,
+      input,
+      encoding: "utf8",
+      env: projectDir === undefined ? env : { ...env, CLAUDE_PROJECT_DIR: projectDir },
+    });
+    return { code: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
+  }
+
+  it.skipIf(HOOK_SHELL === undefined)(
+    "refuses a denied call from a sub-directory, where the previous relative form could not start",
+    async () => {
+      const { root, command } = await emitted();
+      const sub = join(root, "sub", "dir");
+
+      const denied = shell(command, sub, DENIED, root);
+
+      expect(denied.code).toBe(2);
+      expect(denied.stderr).toContain('"reasonCode":"CATEGORY_DENIED"');
+      expect(denied.stderr).toContain('"blocked":true');
+
+      // The defect this case closes, from the same directory: the rendering that
+      // shipped before the anchor. `node` cannot even find the script.
+      const before = shell(
+        `node ${GUARD_RELATIVE}`,
+        sub,
+        DENIED,
+        root,
+      );
+      expect(before.code).toBe(1);
+      expect(before.stderr).toContain("Cannot find module");
+    },
+  );
+
+  it.skipIf(HOOK_SHELL === undefined)(
+    "lets a granted call through from the same sub-directory",
+    async () => {
+      const { root, command } = await emitted();
+
+      const allowed = shell(command, join(root, "sub", "dir"), ALLOWED, root);
+
+      expect(allowed.code).toBe(0);
+      expect(allowed.stderr).toBe("");
+    },
+  );
+
+  it.skipIf(HOOK_SHELL === undefined)(
+    "blocks with the repair when the guard script is missing",
+    async () => {
+      const { root, guard, command } = await emitted();
+      rmSync(guard);
+
+      const result = shell(command, join(root, "sub", "dir"), ALLOWED, root);
+
+      // Fail CLOSED: a gate that cannot launch used to exit 1, which this client
+      // does not block on, so every call went through ungated.
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain("the pre-tool-use guard could not run; run stamity sync");
+    },
+  );
+
+  it.skipIf(HOOK_SHELL === undefined)(
+    "blocks when the client exported no project directory",
+    async () => {
+      const { root, command } = await emitted();
+
+      const result = shell(command, join(root, "sub", "dir"), ALLOWED);
+
+      // The variable expands to nothing, so the path is `/.stamity/…` — outside
+      // any repository. Fail closed there too, rather than reporting exit 1.
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain("the pre-tool-use guard could not run; run stamity sync");
+    },
+  );
 });
 
 /**
@@ -1103,6 +1386,19 @@ describe("user hook lane", () => {
  * its format once per argument, so one word in yields one line out — including
  * an empty one, which is the element a naive splitter loses.
  */
+/**
+ * A stand-in project root carrying a SPACE. The anchored script word is
+ * double-quoted, so this value has to survive the shell as ONE field; a bare
+ * rendering would split it into two and a single-quoted one would not expand at
+ * all. Non-degenerate on purpose — an empty or unset root would hide both.
+ */
+const PROJECT_ROOT_WITH_SPACE = "/tmp/a project root";
+
+/** The declared argv as a shell re-splits the emitted line: element 1 anchored. */
+function expandedArgv(argv: readonly string[], root: string): string[] {
+  return argv.map((word, index) => (index === 1 ? `${root}/${word}` : word));
+}
+
 function reSplit(command: string, env: NodeJS.ProcessEnv = process.env): string[] {
   const printed = execFileSync("/bin/sh", ["-c", `printf '%s\\n' ${command}`], {
     encoding: "utf8",
@@ -1173,7 +1469,7 @@ describe("hook argv joining", () => {
     // was dropped, duplicated or re-ordered, and the empty element is invisible
     // to it entirely.
     expect(command).toBe(
-      `node .stamity/hooks/run.mjs ${QUOTING_TABLE.map((row) => row.quoted).join(" ")}`,
+      `${USER_HOOK_COMMAND} ${QUOTING_TABLE.map((row) => row.quoted).join(" ")}`,
     );
   });
 
@@ -1186,7 +1482,10 @@ describe("hook argv joining", () => {
     async () => {
       const argv = ["node", ".stamity/hooks/run.mjs", ...QUOTING_TABLE.map((row) => row.element)];
 
-      const words = reSplit(await joinedCommand(argv));
+      const words = reSplit(await joinedCommand(argv), {
+        ...process.env,
+        CLAUDE_PROJECT_DIR: PROJECT_ROOT_WITH_SPACE,
+      });
 
       // Row by row, so a failure names the character that broke: the element
       // survives the shell, and this is the rendering that carried it.
@@ -1196,7 +1495,13 @@ describe("hook argv joining", () => {
       // And nothing else moved: no word gained, none lost, none re-ordered. The
       // empty element is what a `toContain` check cannot see on its own — it is
       // a line of zero length in the middle of the list.
-      expect(words).toEqual(argv);
+      //
+      // TEST CHANGE 2026-09-20, justified: the script element is now the
+      // ANCHORED word, so the shell returns the expanded root joined to the
+      // declared path. Asserted against a root carrying a SPACE, which is the
+      // whole reason the anchor is rendered double-quoted rather than bare — the
+      // element has to come back as one field, not two.
+      expect(words).toEqual(expandedArgv(argv, PROJECT_ROOT_WITH_SPACE));
     },
   );
 
@@ -1206,7 +1511,7 @@ describe("hook argv joining", () => {
     // `$` is outside the shell-safe set, so the element is quoted rather than
     // written bare — which is what the predecessor did with it, having asked
     // only about whitespace and quotes.
-    expect(await joinedCommand(argv)).toBe("node .stamity/hooks/run.mjs '$STAMITY_FIXTURE_VAR'");
+    expect(await joinedCommand(argv)).toBe(`${USER_HOOK_COMMAND} '$STAMITY_FIXTURE_VAR'`);
   });
 
   // POSIX-ONLY: same /bin/sh field-splitting primitive as above, with the
@@ -1221,8 +1526,12 @@ describe("hook argv joining", () => {
       const command = await joinedCommand(argv);
 
       expect(
-        reSplit(command, { ...process.env, STAMITY_FIXTURE_VAR: "expanded-by-the-shell" }),
-      ).toEqual(argv);
+        reSplit(command, {
+          ...process.env,
+          STAMITY_FIXTURE_VAR: "expanded-by-the-shell",
+          CLAUDE_PROJECT_DIR: PROJECT_ROOT_WITH_SPACE,
+        }),
+      ).toEqual(expandedArgv(argv, PROJECT_ROOT_WITH_SPACE));
     },
   );
 
@@ -1260,7 +1569,7 @@ describe("hook argv joining", () => {
     expect(settings.hooks["SessionStart"]?.map((entry) => entry.hooks[0]?.command)).toEqual([
       HOOK_COMMANDS.sessionStart,
       HOOK_COMMANDS.tamper,
-      "node .stamity/hooks/run.mjs",
+      USER_HOOK_COMMAND,
     ]);
     // Neither refused argv ever reaches the join, so no trace of either can be
     // in the file the client runs.
@@ -1522,6 +1831,20 @@ describe("settings under a plugin root", () => {
     // Quoting is per WORD: `node` stays bare and the path token is the one
     // element the join has to protect.
     expect(await commandForRoot(root)).toBe(`node '${root}/stamity-session-start.mjs'`);
+  });
+
+  it("leaves a plugin-mode guard row exactly as the root variable addresses it", async () => {
+    const settings = await pluginSettings();
+
+    const guard = settings.hooks["PreToolUse"]?.[0]?.hooks[0]?.command ?? "";
+    // No anchor and no fail-closed tail. The client expands its own root
+    // variable, so the row needs no help finding the file; and the bytes are the
+    // vendor container's, whose exit semantics this render boundary does not own
+    // — the repository-mode row is where the guard's own fail-closed reading is
+    // asserted.
+    expect(guard).toBe(`node "${ROOT}/stamity-pre-tool-use-guard.mjs"`);
+    expect(guard).not.toContain("CLAUDE_PROJECT_DIR");
+    expect(guard).not.toContain("exit 2");
   });
 
   it("keeps the review gate's SCRIPT on its repository path", async () => {

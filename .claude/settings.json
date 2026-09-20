@@ -12,7 +12,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .stamity/generated/hooks/claude/stamity-session-start.mjs"
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-session-start.mjs\""
           }
         ]
       },
@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs"
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\""
           }
         ]
       }
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs"
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\" || { echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }"
           }
         ]
       }
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs"
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\""
           }
         ]
       }
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .stamity/generated/hooks/claude/stamity-review-gate.mjs"
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-review-gate.mjs\""
           }
         ]
       }
@@ -60,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .stamity/generated/hooks/claude/stamity-review-gate.mjs"
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-review-gate.mjs\""
           }
         ]
       }
