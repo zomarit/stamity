@@ -464,6 +464,11 @@ async function unmanagedDuplicates(
   return (await Promise.all(scans)).flat();
 }
 
+/** `identity`, safe to embed in a pattern: `.`, `/` and `@` are the usual characters. */
+function escapeForRegExp(identity: string): string {
+  return identity.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
  * APM dependencies that deploy the same content this plugin carries.
  *
@@ -472,7 +477,7 @@ async function unmanagedDuplicates(
  * two sources can see it — the only trace it leaves in the repository is the
  * dependency line that asks for it.
  *
- * A dependency line matches when it CONTAINS either of this installation's two
+ * A dependency line matches when it carries, as a whole token, either of this installation's two
  * identities: the repository slug (`repositorySlug()`, `<owner>/<repo>`) or the
  * registry name (`packageName()`, `@<scope>/<name>`). Both, because the two are
  * different strings that share no substring, and each is the one a different
@@ -510,6 +515,15 @@ function matchedApmDependencies(apmYaml: string | null): string[] {
   const identities = [repositorySlug(), packageName()].filter(
     (identity): identity is string => identity !== null && identity !== "",
   );
+  // Bounded, not a substring (W4-1): `<owner>/<repo>` is contained in
+  // `<owner>/<repo>-suffix#plugins/v1.9.0`, and a plain `includes` told every
+  // repository depending on a same-owner sibling with a longer name to remove
+  // a dependency that deploys nothing. The identity is a whole token: it starts
+  // the text or follows whitespace or a quote, and it ends the text or is
+  // followed by the `#` that opens the ref, whitespace or a quote.
+  const bounded = identities.map(
+    (identity) => new RegExp(`(?:^|[\\s"'])${escapeForRegExp(identity)}(?:$|[#\\s"'])`),
+  );
   const matched: string[] = [];
   for (const entry of declared) {
     const text =
@@ -520,7 +534,7 @@ function matchedApmDependencies(apmYaml: string | null): string[] {
               .filter((value) => typeof value === "string")
               .join(" ")
           : "";
-    if (identities.some((identity) => text.includes(identity))) matched.push(text);
+    if (bounded.some((pattern) => pattern.test(text))) matched.push(text);
   }
   return matched;
 }
