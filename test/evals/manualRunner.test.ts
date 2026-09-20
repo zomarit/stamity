@@ -10,7 +10,7 @@ import { aggregate, calibrationMatches, EvalBlocked, locateCitation, nonNegotiab
 import { admitRequest, admitResponse, boundedMap, callWithRetries, CONTROLS, ENDPOINT, makeRequest, responsesTransport } from "../../scripts/eval/transport.mjs";
 // @ts-expect-error — native ESM contributor tool.
 import { advisoryRepeats, comparatorKey, createArtifacts, loadInputs, previousRun, runEvaluation, undisposedRepeats } from "../../scripts/eval/run.mjs";
-import { CASES_DIR, REPO_ROOT } from "./support.ts";
+import { CASES_DIR, REPO_ROOT, caseFiles } from "./support.ts";
 
 const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
 const passingRows = (scenario: { binding: string[] }) =>
@@ -1507,7 +1507,12 @@ describe("committed inputs and manual entry point", () => {
   });
   it("requires committed bytes for every current and calibration input, then detects midrun edits", () => {
     const root = temp();
+    // `scripts/plugins/setupCommand.mjs` is here because a case may be governed outside the
+    // corpus: the two `st-setup` cases source that module, `loadInputs` reads every case's
+    // governing file as a committed input, and a fixture tree missing it blocks on
+    // `input-not-committed` rather than on anything the run did.
     for (const path of ["evals/cases-v4", "evals/cases-v6", "content", "scripts/eval", "scripts/eval-run.mjs", "scripts/native-typescript.mjs",
+      "scripts/plugins/setupCommand.mjs",
       "evals/SET-v7.md", "evals/model-profiles-v1.json", "evals/rubric-v7.md", ".stamity/overrides/skills/st-eval-run/SKILL.md"]) {
       mkdirSync(dirname(join(root, path)), { recursive: true });
       cpSync(join(REPO_ROOT, path), join(root, path), { recursive: true });
@@ -1516,7 +1521,10 @@ describe("committed inputs and manual entry point", () => {
     git(["init", "-q"]); git(["add", "."]);
     git(["-c", "user.name=Eval Fixture", "-c", "user.email=eval@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture"]);
     const loaded = loadInputs(root, "codex-astra");
-    expect(loaded.cases).toHaveLength(99); expect(loaded.rubric.fixtures).toHaveLength(5);
+    // Derived, not typed: `loadInputs` has to find every case file the tree carries, and a
+    // literal here drifts the moment a case lands — which is what happened when the three
+    // plugin-lifecycle cases of 2026-09-20 took the roster from 99 to 102.
+    expect(loaded.cases).toHaveLength(caseFiles().length); expect(loaded.rubric.fixtures).toHaveLength(5);
     expect(() => loadInputs(root)).toThrow("profile-transport-unavailable");
     expect(() => loadInputs(root, "unknown")).toThrow("unknown-or-identical-profile");
     writeFileSync(join(root, "evals/rubric-v7.md"), `${read("evals/rubric-v7.md")}\n`);

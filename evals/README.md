@@ -523,7 +523,7 @@ and no added neutrality wrapper. Ambient repository/client instructions are reta
 and disclosed, not claimed to be removed. All five retained calibration transcripts
 against their original case inputs, 78 cases with three samples each, scoring thresholds,
 human QA and platform approval remain required. Those case and sample figures are the v5
-roster's, which the current set retired: a run declared under `SET-v7.md` measures the 99-case
+roster's, which the current set retired: a run declared under `SET-v7.md` measures the 102-case
 roster, so selecting v2 means re-pinning its roster and rubric and saying so in the artifact.
 Its staged task comparison and separate driver invocation claim do not
 establish plaintext visibility in an encrypted native trace. Run 13 remains terminal with

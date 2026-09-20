@@ -114,26 +114,45 @@ export interface ParsedSource {
 }
 
 /**
- * `path/to/file.md:12-30` or `path/to/file.md:12-30,44-51`. Returns null on any
- * shape the contract does not admit, so the caller reports the case rather than
- * silently skipping it.
+ * The one governing source shape outside the corpus: a module under `scripts/plugins/`.
+ * `st-setup` is the command a plugin root GENERATES rather than carries, so the text its two
+ * cases quote is rendered by `setupCommand.mjs` and no `content/**` file carries it. Narrow on
+ * purpose — a non-corpus source is left out of the coverage sum below, so a wider pattern would
+ * be a quiet way out of the artifact accounting; `coverage.test.ts` lists every case using it.
+ */
+const NON_CORPUS_SOURCE = /^scripts\/plugins\/[A-Za-z][\w-]*\.mjs$/;
+
+/** True when a source path is one of the `content/**` artifacts the coverage sum accounts for. */
+export const isCorpusSource = (path: string): boolean => path.startsWith("content/");
+
+/**
+ * `path/to/file.md:12-30` or `path/to/file.md:12-30,44-51`, plus the `.mjs` shape
+ * {@link NON_CORPUS_SOURCE} admits. Returns null on any shape the contract does not admit,
+ * so the caller reports the case rather than silently skipping it.
  */
 export const parseSource = (value: string): ParsedSource | null => {
-  const match = /^([^\s:]+\.md):((?:\d+(?:-\d+)?)(?:,\d+(?:-\d+)?)*)$/.exec(value.trim());
+  const match = /^([^\s:]+\.(?:md|mjs)):((?:\d+(?:-\d+)?)(?:,\d+(?:-\d+)?)*)$/.exec(value.trim());
   if (!match) return null;
+  const path = posix(match[1] ?? "");
+  if (path.endsWith(".mjs") && !NON_CORPUS_SOURCE.test(path)) return null;
   const ranges = (match[2] ?? "").split(",").map((part) => {
     const [from, to] = part.split("-");
     return [Number(from), Number(to ?? from)] as const;
   });
-  return { path: posix(match[1] ?? ""), ranges };
+  return { path, ranges };
 };
 
-/** The artifact path each case's `source:` names, deduplicated. */
+/**
+ * The CORPUS artifact path each case's `source:` names, deduplicated. A case governed outside
+ * `content/**` contributes nothing here: the sum compares sourced ∪ exempted against the five
+ * globs' artifact count, and folding a rendered template in would inflate it by a file no glob
+ * produces. `coverage.test.ts` lists those cases as governed outside `content/` instead.
+ */
 export const sourcedArtifacts = (cases: readonly CaseFile[]): Set<string> => {
   const out = new Set<string>();
   for (const file of cases) {
     const parsed = parseSource(file.frontmatter.get("source") ?? "");
-    if (parsed) out.add(parsed.path);
+    if (parsed && isCorpusSource(parsed.path)) out.add(parsed.path);
   }
   return out;
 };

@@ -14,6 +14,7 @@ import {
   caseFiles,
   contentArtifacts,
   exemptedArtifacts,
+  isCorpusSource,
   parseSource,
   sourcedArtifacts,
 } from "./support.ts";
@@ -50,6 +51,36 @@ describe("eval coverage — the derivation is not vacuous", () => {
     // remains load-bearing through exact artifact accounting and the tests below.
     expect(artifacts.length).toBeGreaterThan(0);
     expect(new Set([...sourced, ...exempted]).size).toBe(artifacts.length);
+  });
+});
+
+describe("eval coverage — a source outside content/ is listed, never summed", () => {
+  // `st-setup` is the one command a plugin root GENERATES rather than carries, so the two
+  // cases that measure it quote text `scripts/plugins/setupCommand.mjs` renders and can name
+  // no `content/**` artifact. Those cases are named here rather than folded into the sum
+  // above: a case leaving the artifact accounting is a reviewed decision, and this list is
+  // where the review happens. A third one appears as a red test, not as a silent exemption.
+  const outside = cases
+    .map((file) => ({ id: file.basename, path: parseSource(file.frontmatter.get("source") ?? "")?.path }))
+    .filter((entry) => entry.path !== undefined && !isCorpusSource(entry.path));
+
+  it("governs outside content/ exactly the cases this list names", () => {
+    expect(
+      outside.map((entry) => `${entry.id} → ${entry.path ?? ""}`),
+      "a case sourced outside `content/**` is admitted only by a row here and a line in SET-v7's Coverage section",
+    ).toEqual([
+      "st-setup-refuses-generated-setup → scripts/plugins/setupCommand.mjs",
+      "st-setup-fresh-repository → scripts/plugins/setupCommand.mjs",
+    ]);
+  });
+
+  it("names files that exist and are no artifact of the coverage surface", () => {
+    expect(outside.length, "the non-corpus list is empty, so nothing above is load-bearing").toBeGreaterThan(0);
+    for (const entry of outside) {
+      const path = entry.path ?? "";
+      expect(existsSync(join(REPO_ROOT, ...path.split("/"))), `${path} does not exist`).toBe(true);
+      expect(artifacts.includes(path), `${path} is a corpus artifact and belongs in the sum`).toBe(false);
+    }
   });
 });
 
