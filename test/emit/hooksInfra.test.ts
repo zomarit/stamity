@@ -945,9 +945,21 @@ describe("hookScriptsRoot: the client-visible root the plugin emission needs", (
     // names its sibling where the repository guard climbs. The assertion below
     // pins that one line as the whole of the difference, which is stronger than
     // the blanket equality it replaces.
+    //
+    // TEST CHANGE 2026-09-20 (the relative hook path), justified: the SESSION
+    // START body joins the guard in differing by mode, for the same kind of
+    // reason and decided in the same place. Its repo-root resolver is chosen at
+    // emission — the repository copy derives the root from its own location under
+    // `.stamity/generated/hooks/<tool>/`, so a hook run from a sub-directory
+    // still reads and writes under the repository, while a container copy sits
+    // beside its siblings in a plugin root that names no repository and keeps the
+    // cwd-and-environment resolver it always had. Pinned by SHAPE below rather
+    // than dropped, so neither half can change unnoticed.
     const [pluginSession, pluginGuard, pluginTamper] = plugin.scripts.map((s) => s.content);
     const [repoSession, repoGuard, repoTamper] = repo.scripts.map((s) => s.content);
-    expect([pluginSession, pluginTamper]).toEqual([repoSession, repoTamper]);
+    expect(pluginTamper).toEqual(repoTamper);
+    expect(pluginSession).not.toContain("import.meta.url");
+    expect(repoSession).toContain("function derivedRoot()");
     expect(policyFileSegments(pluginGuard!)).toEqual(["agent-tool-policies.json"]);
     expect(policyFileSegments(repoGuard!)).toEqual(["..", "..", "agent-tool-policies.json"]);
     expect(pluginGuard!.split("\n").filter((line, i) => line !== repoGuard!.split("\n")[i])).toHaveLength(1);

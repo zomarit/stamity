@@ -43,7 +43,8 @@
 
 import { randomBytes } from "node:crypto";
 import { closeSync, constants as FS, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, utimesSync, writeSync } from "node:fs";
-import { dirname, join, resolve, sep } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const STATE_SEGMENTS = [".stamity","review-gate.json"];
 const MAX_STATE_BYTES = 131072;
@@ -250,8 +251,28 @@ function sharing(error) {
 
 const NOW = Date.now();
 
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ANCHOR_SEGMENTS = ["hooks","generated",".stamity"];
+
+/**
+ * The repository root this script was emitted into, or "" when the script is not
+ * sitting where emission puts one. Shape-checked rather than assumed: four levels
+ * up from any directory is some directory, and only the emitted layout's own
+ * parent segments make it a repository root.
+ */
+function derivedRoot() {
+  let dir = dirname(HERE);
+  for (const segment of ANCHOR_SEGMENTS) {
+    if (basename(dir) !== segment) return "";
+    dir = dirname(dir);
+  }
+  return dir;
+}
+
 function repoRoot() {
   const cwd = resolve(process.cwd());
+  const derived = derivedRoot();
+  if (derived !== "") return derived;
   const declared = process.env.STAMITY_REPO_ROOT;
   if (typeof declared !== "string" || declared === "") return cwd;
   const candidate = resolve(cwd, declared);

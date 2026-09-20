@@ -2771,3 +2771,140 @@ describe("the generated scripts under a vendor plugin root", () => {
     expect(dirty).toEqual([]);
   }, WORKTREE_TIMEOUT_MS);
 });
+/**
+ * Where a script decides its repository is — the half of the sub-directory
+ * defect that the anchored COMMAND does not fix.
+ *
+ * With the command anchored on the client's project-directory variable the
+ * script is FOUND from anywhere, and it would still resolve its state against
+ * `process.cwd()`: a session sitting in `<root>/packages/web` loaded learnings
+ * from a directory that has none, and the review gate created a second
+ * `.stamity/` there to keep its counter in. In the layout emission writes —
+ * `<root>/.stamity/generated/hooks/<tool>/<script>` — the script's own location
+ * identifies the root, and that is what these cases measure: run from a
+ * sub-directory, reading and writing under the repository.
+ *
+ * The shape check is the case after them. Four levels above any directory is
+ * some directory; only those three parent segments make it a repository root.
+ */
+/** Every file under `dir`, `dir`-relative and POSIX-spelled, sorted. */
+function filesUnder(dir: string): string[] {
+  return readdirSync(dir, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => relative(dir, join(entry.parentPath, entry.name)).replaceAll(sep, "/"))
+    .toSorted();
+}
+
+describe("the emitted scripts' own repository root", () => {
+  /** The layout emission writes, and the only one the derivation accepts. */
+  const GENERATED_DIR = ".stamity/generated/hooks/claude";
+
+  it("reads the repository's learnings when the session sits in a sub-directory", async () => {
+    await getRepo().seedFiles({
+      ".stamity/learnings/cache-warmup.md": learning(),
+      // A decoy state tree in the directory the session moved to: pre-anchor the
+      // script read THIS one, silently, and reported the repository as empty.
+      "sub/deep/.stamity/learnings/planted.md": learning({ id: "planted" }),
+    });
+    const script = await place(
+      `${GENERATED_DIR}/stamity-session-start.mjs`,
+      buildSessionStartScript(),
+    );
+
+    const printed = run(script, { cwd: getRepo().path("sub", "deep") }).stdout;
+
+    expect(printed).toContain("- [high] cache-warmup —");
+    expect(printed).not.toContain("planted");
+  });
+
+  it("keeps the review-gate counter under the repository, and writes nothing else", async () => {
+    await getRepo().seedFiles({ "sub/deep/.keep": "" });
+    const gate = await place(
+      `${GENERATED_DIR}/stamity-review-gate.mjs`,
+      buildReviewGateScript(GATE_OPTIONS),
+    );
+    const before = filesUnder(getRepo().dir);
+
+    const result = run(gate, {
+      cwd: getRepo().path("sub", "deep"),
+      input: reviewerStop("run-anchored", "request-changes"),
+    });
+
+    expect(result.code).toBe(0);
+    expect(readGateState().runs["run-anchored"]?.rounds).toBe(1);
+    // No second state tree under whatever directory the session was opened in —
+    // the shape the inbox row of 2026-09-20 records.
+    expect(existsSync(getRepo().path("sub", "deep", ".stamity"))).toBe(false);
+    // And the ONE file that appeared anywhere in the fixture is the counter this
+    // script owns: the lock beside it is released, and nothing was scattered.
+    expect(filesUnder(getRepo().dir)).toEqual([...before, REVIEW_GATE_STATE_FILE].toSorted());
+  });
+
+  it("does not claim a root four levels up that is not the emitted layout", async () => {
+    await getRepo().seedFiles({
+      ".stamity/learnings/cache-warmup.md": learning(),
+      "cwd-repo/.stamity/learnings/planted.md": learning({ id: "planted" }),
+    });
+    // A plugin root built inside a checkout — `<repo>/dist/plugins/claude/hooks`
+    // is what `scripts/build-plugin-distribution.mjs` writes — sits exactly four
+    // levels under it. Counting levels would hand it this checkout's state
+    // directory; the parent segments are what rule it out.
+    const script = await place(
+      "dist/plugins/claude/hooks/stamity-session-start.mjs",
+      buildSessionStartScript(),
+    );
+
+    const printed = run(script, { cwd: getRepo().path("cwd-repo") }).stdout;
+
+    expect(printed).toContain("- [high] planted —");
+    expect(printed).not.toContain("cache-warmup");
+  });
+
+  it("renders a container body with no derivation, so a plugin copy keeps the cwd resolver", async () => {
+    const body = buildSessionStartScript({ layout: "container" });
+    const gate = buildReviewGateScript({ ...GATE_OPTIONS, layout: "container" });
+
+    // Nothing script-relative in either: a container script sits beside its
+    // siblings under a marketplace clone or a client cache, and four levels above
+    // that is nobody's repository.
+    for (const [label, text] of [
+      ["session start", body],
+      ["review gate", gate],
+    ] as const) {
+      expect(text, label).not.toContain("import.meta.url");
+      expect(text, label).toContain("const declared = process.env.STAMITY_REPO_ROOT;");
+    }
+
+    await getRepo().seedFiles({
+      ".stamity/learnings/cache-warmup.md": learning(),
+      "cwd-repo/.stamity/learnings/planted.md": learning({ id: "planted" }),
+    });
+    // Placed in the GENERATED layout on purpose: a body carrying the derivation
+    // would answer with the fixture root from here, so reading the cwd's own
+    // state directory is the proof that the derivation is absent.
+    const script = await place(`${GENERATED_DIR}/container-session-start.mjs`, body);
+
+    expect(syntaxCheck(script).code).toBe(0);
+    expect(run(script, { cwd: getRepo().path("cwd-repo") }).stdout).toContain(
+      "- [high] planted —",
+    );
+  });
+
+  it("still lets the bounded environment root name the repository, one rank lower", async () => {
+    await getRepo().seedFiles({
+      ".stamity/learnings/cache-warmup.md": learning(),
+      "elsewhere/.keep": "",
+    });
+    // The script is NOT in the emitted layout here, which is the case every
+    // existing `STAMITY_REPO_ROOT` assertion in this file runs: the derivation
+    // declines, and the bounded environment value decides exactly as before.
+    const script = await place("session-start-env.mjs", buildSessionStartScript());
+
+    const pointed = run(script, {
+      cwd: getRepo().path("elsewhere"),
+      env: { STAMITY_REPO_ROOT: getRepo().dir },
+    });
+
+    expect(pointed.stdout).toContain("- [high] cache-warmup —");
+  });
+});

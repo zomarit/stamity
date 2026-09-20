@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.8.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-20T20:59:15.895Z",
+  "updatedAt": "2026-09-20T21:15:56.703Z",
   "tools": [
     "claude"
   ],
@@ -505,14 +505,14 @@
       "adapter": "claude",
       "artifactId": "claude-review-gate",
       "artifactType": "infra",
-      "contentHash": "3b28dbc5a37805f5cfd086061f2cf900ef94697fbc7a93544a622cfe2fd30d87",
+      "contentHash": "9e7b9ab9e76c7080cf2322d024caf5a9026f14aeebc9d650b4876a1b86550cc2",
       "path": ".stamity/generated/hooks/claude/stamity-review-gate.mjs"
     },
     {
       "adapter": "claude",
       "artifactId": "stamity-session-start",
       "artifactType": "infra",
-      "contentHash": "02e6e473b0f8b35b498a8cc1559d5f423e73d54631e5ea82a03daa82d3607517",
+      "contentHash": "1678d960b9a854a99325f8042c0d870f55b5bbe020a47120e5828d51510b14db",
       "path": ".stamity/generated/hooks/claude/stamity-session-start.mjs"
     },
     {

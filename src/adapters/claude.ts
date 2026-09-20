@@ -740,6 +740,12 @@ function buildReviewGate(ctx: EmissionContext): AdapterOutput {
       statePath: REVIEW_GATE_STATE_FILE,
       maxIterations: readReviewCap(ctx.manifest),
       failMode: HOOK_GUARANTEE?.failMode ?? "fail-closed",
+      // The gate's own repo-root resolver, decided here because this is where
+      // the placement is known: in repository mode the file lands at
+      // `.stamity/generated/hooks/claude/` and its own location identifies the
+      // root, and under a plugin root the vendor's own `hooks/` directory names
+      // no repository, so that body keeps the cwd-and-environment resolver.
+      layout: ctx.facts.hookScriptsRoot === undefined ? "generated" : "container",
     }),
     owner: owner("claude-review-gate", "infra"),
   };

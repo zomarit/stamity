@@ -408,23 +408,101 @@ function header(summary: readonly string[], posture: readonly string[]): string 
 }
 
 /**
- * The repo-root resolver every script that reads the state directory shares.
+ * Where an emitted script SITS, decided when it is rendered and never at run
+ * time.
  *
- * `STAMITY_REPO_ROOT` is how a client that runs a hook from a subdirectory names
- * the repository. It is also an INPUT, so it is bounded like one: the value is
- * honoured only when it resolves to the working directory or an ANCESTOR of it,
- * and only when that directory actually holds this repo's state directory.
- * Anything else is not naming the repo the client opened — it is pointing the
- * script at an unrelated tree, and for the review gate that means every future
- * run reads and REPLACES a file over there. A value failing either condition is
- * ignored and the working directory stands; the script degrades to less
- * context, never to writing somewhere nobody chose.
+ * `generated` is this repository's own layout —
+ * `<root>/.stamity/generated/hooks/<tool>/<script>` — where the script's own
+ * location identifies the repository. `container` is a vendor plugin root, where
+ * every script is a sibling in one `hooks/` directory and the repository the
+ * session opened is not derivable from the script's path at all.
+ *
+ * Emission is the only place that knows which, so it is the only place that
+ * decides — the same ruling {@link policiesPathFor} in `../emit/hooksInfra.ts`
+ * already makes for the guard's policy document, and for the same reason: a body
+ * that probed its surroundings at run time would let whatever tree it happens to
+ * sit in answer the question.
+ */
+export type HookScriptLayout = "generated" | "container";
+
+/**
+ * The three parent segments a `generated` script's directory sits under, innermost
+ * last. Load-bearing as a SHAPE check, not as decoration: a plugin root built at
+ * `<repo>/dist/plugins/claude/hooks` is also four levels under this checkout, and
+ * without the check it would claim the checkout as its repository root.
+ */
+const GENERATED_ANCHOR_SEGMENTS = [".stamity", "generated", "hooks"] as const;
+
+/**
+ * The repo-root resolver every script that reads the state directory shares, in
+ * the two forms the two layouts take.
+ *
+ * In the `generated` layout the FIRST answer is the script's own location. The
+ * body walks four levels up from `import.meta.url` and accepts the result only
+ * when the three segments above its own directory read
+ * `.stamity/generated/hooks` — which is exactly the layout emission wrote, and
+ * nothing else. This is what makes a hook run from a sub-directory read and write
+ * under the repository the setup belongs to: with the command anchored on the
+ * client's project-directory variable the script is FOUND from anywhere, and
+ * without this it would still resolve its state against `process.cwd()`, so a
+ * session sitting in `<root>/packages/web` loaded no learnings from
+ * `<root>/.stamity/` and the review gate created `<root>/packages/web/.stamity/`
+ * to keep its counter in.
+ *
+ * `STAMITY_REPO_ROOT` stays exactly what it was, one rank lower: how a client
+ * that runs a hook from a subdirectory names the repository. It is also an INPUT,
+ * so it is bounded like one: the value is honoured only when it resolves to the
+ * working directory or an ANCESTOR of it, and only when that directory actually
+ * holds this repo's state directory. Anything else is not naming the repo the
+ * client opened — it is pointing the script at an unrelated tree, and for the
+ * review gate that means every future run reads and REPLACES a file over there. A
+ * value failing either condition is ignored and the working directory stands; the
+ * script degrades to less context, never to writing somewhere nobody chose.
+ *
+ * The `container` form is byte-identical to what both bodies carried before this
+ * anchor existed, and deliberately: a script in a vendor plugin root sits beside
+ * its siblings under a marketplace clone or a client cache, four levels above
+ * which is nobody's repository, so there is nothing there to derive and the two
+ * answers that remain are the bounded environment variable and the cwd.
  *
  * Emitted as text rather than as a call because these bodies are standalone
  * modules with no import of their own to reach for.
  */
-const RESOLVE_REPO_ROOT = `function repoRoot() {
-  const cwd = resolve(process.cwd());
+function resolveRepoRoot(layout: HookScriptLayout): string {
+  const derived =
+    layout === "container"
+      ? ""
+      : `
+  const derived = derivedRoot();
+  if (derived !== "") return derived;`;
+  const helper =
+    layout === "container"
+      ? ""
+      : `/**
+ * The repository root this script was emitted into, or "" when the script is not
+ * sitting where emission puts one. Shape-checked rather than assumed: four levels
+ * up from any directory is some directory, and only the emitted layout's own
+ * parent segments make it a repository root.
+ */
+function derivedRoot() {
+  let dir = dirname(HERE);
+  for (const segment of ANCHOR_SEGMENTS) {
+    if (basename(dir) !== segment) return "";
+    dir = dirname(dir);
+  }
+  return dir;
+}
+
+`;
+  return `${
+    layout === "container"
+      ? ""
+      : `const HERE = dirname(fileURLToPath(import.meta.url));
+const ANCHOR_SEGMENTS = ${json(GENERATED_ANCHOR_SEGMENTS.toReversed())};
+
+`
+  }${helper}function repoRoot() {
+  const cwd = resolve(process.cwd());${derived}
   const declared = process.env.STAMITY_REPO_ROOT;
   if (typeof declared !== "string" || declared === "") return cwd;
   const candidate = resolve(cwd, declared);
@@ -437,6 +515,26 @@ const RESOLVE_REPO_ROOT = `function repoRoot() {
   }
   return candidate;
 }`;
+}
+
+/**
+ * The `node:path` names a body needs on top of its own, plus the whole
+ * `node:url` line, for one layout. Returned rather than spelled twice, so a body
+ * rendered for a container keeps byte-for-byte what it carried before the anchor.
+ */
+function repoRootImports(layout: HookScriptLayout): {
+  path: readonly string[];
+  url: string;
+} {
+  return layout === "container"
+    ? { path: [], url: "" }
+    : { path: ["basename", "dirname"], url: 'import { fileURLToPath } from "node:url";\n' };
+}
+
+/** One `import { … } from "<module>";` line, names de-duplicated and sorted. */
+function namedImport(names: readonly string[], module: string): string {
+  return `import { ${[...new Set(names)].toSorted().join(", ")} } from "${module}";`;
+}
 
 /** Reads the whole stdin payload; an unreadable descriptor is an empty one. */
 const READ_STDIN = `function readPayload() {
@@ -474,6 +572,12 @@ export interface SessionStartScriptOptions {
   stateDir?: string;
   /** Item lines per section before the rest collapse into one line. */
   maxIndexLines?: number;
+  /**
+   * Where this copy will sit ({@link HookScriptLayout}). Defaults to
+   * `generated`, the layout this repository emits; `planCoreHookScripts` passes
+   * the one emission chose.
+   */
+  layout?: HookScriptLayout;
 }
 
 /**
@@ -510,6 +614,8 @@ export interface SessionStartScriptOptions {
 export function buildSessionStartScript(opts: SessionStartScriptOptions = {}): string {
   const segments = repoRelativeSegments(opts.stateDir ?? STATE_DIR, "stateDir");
   const maxLines = positiveInteger(opts.maxIndexLines ?? DEFAULT_MAX_INDEX_LINES, "maxIndexLines");
+  const layout = opts.layout ?? "generated";
+  const extra = repoRootImports(layout);
   const screen = SESSION_START_SCREEN.map(
     (entry) =>
       `  { id: ${json(entry.id)}, re: new RegExp(${json(entry.pattern.source)}, ${json(entry.pattern.flags)}) },`,
@@ -535,8 +641,8 @@ export function buildSessionStartScript(opts: SessionStartScriptOptions = {}): s
 
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, resolve, sep } from "node:path";
-
+${namedImport(["join", "resolve", "sep", ...extra.path], "node:path")}
+${extra.url}
 const STATE_SEGMENTS = ${json(segments)};
 const MAX_ITEM_LINES = ${maxLines};
 const MAX_LEARNING_BYTES = ${MAX_LEARNING_FILE_BYTES};
@@ -552,7 +658,7 @@ ${NORMALIZE_FOR_SCREEN}
 
 const NOW = Date.now();
 
-${RESOLVE_REPO_ROOT}
+${resolveRepoRoot(layout)}
 
 const STATE_ROOT = join(repoRoot(), ...STATE_SEGMENTS);
 
@@ -1374,6 +1480,13 @@ export interface ReviewGateScriptOptions {
   maxIterations: number;
   /** The client's honest blocking strength, from {@link CLIENT_HOOK_GUARANTEES}. */
   failMode: HookFailMode;
+  /**
+   * Where this copy will sit ({@link HookScriptLayout}). Defaults to
+   * `generated`; the wiring adapter passes `container` when it is placing the
+   * gate inside a vendor plugin root, which is the one case where the script's
+   * own location names no repository.
+   */
+  layout?: HookScriptLayout;
 }
 
 /**
@@ -1422,6 +1535,8 @@ export function buildReviewGateScript(opts: ReviewGateScriptOptions): string {
   const segments = repoRelativeSegments(opts.statePath, "statePath");
   const maxRounds = bandedIterations(opts.maxIterations);
   const blocking = opts.failMode !== "fail-open";
+  const layout = opts.layout ?? "generated";
+  const extra = repoRootImports(layout);
 
   return `${header(
     [
@@ -1476,8 +1591,8 @@ export function buildReviewGateScript(opts: ReviewGateScriptOptions): string {
 
 import { randomBytes } from "node:crypto";
 import { closeSync, constants as FS, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, utimesSync, writeSync } from "node:fs";
-import { dirname, join, resolve, sep } from "node:path";
-
+${namedImport(["dirname", "join", "resolve", "sep", ...extra.path], "node:path")}
+${extra.url}
 const STATE_SEGMENTS = ${json(segments)};
 const MAX_STATE_BYTES = ${MAX_REVIEW_GATE_STATE_BYTES};
 const MAX_ROUNDS = ${maxRounds};
@@ -1683,7 +1798,7 @@ function sharing(error) {
 
 const NOW = Date.now();
 
-${RESOLVE_REPO_ROOT}
+${resolveRepoRoot(layout)}
 
 const STATE_FILE = join(repoRoot(), ...STATE_SEGMENTS);
 const LOCK_FILE = STATE_FILE + ".lock";
@@ -2301,7 +2416,7 @@ export function planCoreHookScripts(
   return [
     {
       fileName: SESSION_START_FILE,
-      content: buildSessionStartScript(),
+      content: buildSessionStartScript({ layout: layoutFor(policiesJsonPath) }),
       event: "session_start",
     },
     {
@@ -2319,4 +2434,23 @@ export function planCoreHookScripts(
       event: "session_start",
     },
   ];
+}
+
+/**
+ * The layout this plan is being rendered for, read off the ONE input emission
+ * already keys that decision on.
+ *
+ * `policiesPathFor` (`../emit/hooksInfra.ts`) hands a CLIMB (`../../<document>`)
+ * in the repository layout, because the guard sits two levels under the
+ * generated directory that holds the document, and a bare sibling NAME in a
+ * vendor container, where the document ships beside the guard. So the argument
+ * this function already receives carries the mode, and one decision is made in
+ * one place instead of two that can disagree.
+ *
+ * A first-class parameter threaded from `planHooksInfra` would say it more
+ * directly; that module is outside this change's file set, and the derivation is
+ * exact for both of its call shapes.
+ */
+function layoutFor(policiesJsonPath: string): HookScriptLayout {
+  return policiesJsonPath.startsWith("../") ? "generated" : "container";
 }
