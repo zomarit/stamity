@@ -171,8 +171,18 @@ function runPluginLocator(locator: string, timeoutMs: number): Promise<LocatorRu
     // bound at all, which is a `check` that hangs and therefore a CI job that
     // hangs. This timer settles the probe independently of the pipe; the kill
     // beside it is best-effort cleanup, not what makes the ceiling hold.
+    //
+    // Settling is not releasing (SEC4-M1). A settled promise still leaves this
+    // process holding the read ends of the child's stdout and stderr, and a
+    // grandchild holding a write end keeps those handles — and so the event
+    // loop, and so `check` — alive until it exits. Destroying the two streams
+    // is what lets the process go. `execFile`'s timeout happens to do the same
+    // before it signals, but that is an undocumented line in its `kill()`, not
+    // a contract, and the ceiling does not get to depend on it.
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
+      child.stdout?.destroy();
+      child.stderr?.destroy();
       finish({
         status: null,
         stdout: "",

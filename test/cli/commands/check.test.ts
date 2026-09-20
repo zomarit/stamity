@@ -1,8 +1,9 @@
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   checkCommand,
@@ -1369,20 +1370,30 @@ async function doctorRow(
  * nothing, and then sits. The ceiling is passed in rather than waited out, so
  * the case costs its own timeout and not five seconds.
  */
-describe("probePluginRuntime — the timeout ceiling", () => {
-  const STUBBORN_LOCATOR = [
+/**
+ * The locator that will not close, with the grandchild's life as the
+ * parameter: the in-process ceiling case wants it short so no handle outlives
+ * the run, the process-level release case wants it LONGER than everything the
+ * probe is allowed, so an exit before it is proof of release.
+ */
+const stubbornLocator = (grandchildMs: number): string =>
+  [
     "import { spawn } from 'node:child_process';",
     // The grandchild inherits fd 1, so the parent's death does not close the
-    // pipe this probe is reading. 2s, not a minute: the case is over long
-    // before that, and a short life keeps no handle around after the run.
-    "spawn(process.execPath, ['-e', 'setTimeout(() => {}, 2000)'], {",
+    // pipe this probe is reading.
+    `spawn(process.execPath, ['-e', 'setTimeout(() => {}, ${grandchildMs})'], {`,
     "  detached: true,",
     "  stdio: ['ignore', 1, 'ignore'],",
     "}).unref();",
     "process.on('SIGTERM', () => {});",
-    "setTimeout(() => {}, 2000);",
+    `setTimeout(() => {}, ${grandchildMs});`,
     "",
   ].join("\n");
+
+describe("probePluginRuntime — the timeout ceiling", () => {
+  // 2s, not a minute: the case is over long before that, and a short life
+  // keeps no handle around after the run.
+  const STUBBORN_LOCATOR = stubbornLocator(2000);
 
   it("settles as a timeout rather than waiting on a locator that will not close", async () => {
     const handle = getRepo();
@@ -1396,6 +1407,69 @@ describe("probePluginRuntime — the timeout ceiling", () => {
     // The claim is the ceiling itself: settling at all is not enough, it has to
     // settle near the ceiling rather than when the grandchild finally lets go.
     expect(Date.now() - started).toBeLessThan(1_500);
+  });
+
+  /**
+   * SEC4-M1: settling the promise is not releasing the process.
+   *
+   * The timer above settles the row at the ceiling, but settling leaves this
+   * process holding the read ends of the child's stdout and stderr pipes, and
+   * the detached grandchild holding a write end — a live handle, so an event
+   * loop that cannot exit until the grandchild does. The CLI never calls
+   * `process.exit`, so that is a `check` in CI waiting on a stranger's process.
+   *
+   * Measured before the fix (2026-09-20, Node 22.22.3): the shipped probe did
+   * NOT hang here, because `execFile`'s own `timeout` — set to the same
+   * ceiling — destroys both streams inside its `kill()` before it signals. That
+   * is an undocumented line of Node's, not a contract, and with the `timeout`
+   * option removed (the release resting on the probe's timer alone) this case
+   * was red at the driver's budget. The probe now destroys the streams itself,
+   * and this case holds the release whichever mechanism a future Node leaves.
+   *
+   * Asserted at the PROCESS level, because that is where the property lives: a
+   * driver runs the probe in its own `node` and the assertion is that the
+   * driver exits, near the ceiling, while the grandchild is still holding the
+   * pipe. The vitest worker cannot stand in for it — its pool keeps the worker
+   * alive whatever handles a test leaks.
+   */
+  it("releases the process once the probe settles, while the grandchild still holds stdout", async () => {
+    const handle = getRepo();
+    // Six seconds: past the probe's ceiling, past the driver's budget below,
+    // and past the margin — an exit before it can only be release.
+    const pluginDir = await pluginRoot(handle, "plugin-stubborn-long", stubbornLocator(6_000));
+    const probeModule = pathToFileURL(
+      fileURLToPath(new URL("../../../src/cli/commands/plugin/probe.ts", import.meta.url)),
+    ).href;
+    // Node strips the module's types itself (22.18+; the floor is 22.22), so the
+    // driver imports the source the suite imports, not a bundle of it.
+    const driver = handle.path("driver.mjs");
+    await writeFile(
+      driver,
+      [
+        `const { probePluginRuntime } = await import(${JSON.stringify(probeModule)});`,
+        `const probe = await probePluginRuntime(${JSON.stringify(pluginDir)}, { timeoutMs: 300 });`,
+        "process.stdout.write(JSON.stringify({ outcome: probe.outcome }));",
+        "",
+      ].join("\n"),
+    );
+
+    const started = Date.now();
+    const run = await new Promise<{ error: Error | null; stdout: string }>((settle) => {
+      execFile(
+        process.execPath,
+        [driver],
+        // The driver's own budget, well under the grandchild's life: hitting
+        // it IS the defect, reported as a kill rather than as a vitest timeout.
+        { timeout: 4_000, killSignal: "SIGKILL", encoding: "utf8" },
+        (error, stdout) => settle({ error, stdout }),
+      );
+    });
+    const elapsed = Date.now() - started;
+
+    expect(run.error, `the probe process did not exit on its own (${elapsed}ms)`).toBeNull();
+    expect(JSON.parse(run.stdout)).toEqual({ outcome: "timeout" });
+    // Near the ceiling, with room for a cold start; nowhere near the grandchild.
+    expect(elapsed).toBeLessThan(3_000);
   });
 });
 
