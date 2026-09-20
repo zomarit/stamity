@@ -99,14 +99,34 @@ function parsePaxRecords(body) {
   return records
 }
 
-/** Every entry of a decompressed archive, in the order it was written. */
+/**
+ * Every entry of a decompressed archive, in the order it was written.
+ *
+ * Two properties this reader will not trade away. Every body is bounds-checked
+ * BEFORE it is read — extended headers included — because `subarray` clamps
+ * rather than throwing, so a short read looks exactly like a complete one and
+ * the caller writes a silently incomplete file. And the stream has to END the
+ * way tar says it ends, with two zero blocks: a tarball truncated at a block
+ * boundary otherwise runs the loop out of input and returns the entries it
+ * happened to reach, which is a PARTIAL extraction reported as a whole one.
+ */
 export function* readTarEntries(archive) {
   let offset = 0
   let pending = null
+  let terminated = false
   while (offset + 512 <= archive.length) {
     const header = archive.subarray(offset, offset + 512)
     offset += 512
-    if (header.every((byte) => byte === 0)) break
+    if (header.every((byte) => byte === 0)) {
+      // The end-of-archive marker is TWO zero blocks. One alone is a stream
+      // that stopped mid-marker, which is truncation wearing the shape of a
+      // clean end.
+      if (offset + 512 > archive.length || !archive.subarray(offset, offset + 512).every((byte) => byte === 0)) {
+        throw new Error('the tarball ends after a single zero block, not the two the end-of-archive marker needs — the tarball is truncated')
+      }
+      terminated = true
+      break
+    }
     if (readField(header, 257, 262) !== 'ustar') {
       throw new Error('the tarball is not in ustar format (no magic at offset 257)')
     }
@@ -117,6 +137,13 @@ export function* readTarEntries(archive) {
     const advance = Math.ceil(rawSize / 512) * 512
 
     if (type === 'x' || type === 'g') {
+      // Bounds-checked before the body is read, exactly as a file entry is: an
+      // extended header read past a truncated end used to yield a CLAMPED,
+      // short record set, and a pax `path` or `size` half-read from it decides
+      // the name and the length of the entry that follows.
+      if (offset + rawSize > archive.length) {
+        throw new Error(`the tarball's extended header "${prefix === '' ? base : `${prefix}/${base}`}" runs past the end of the archive — the tarball is truncated`)
+      }
       if (type === 'x') pending = parsePaxRecords(archive.subarray(offset, offset + rawSize))
       offset += advance
       continue
@@ -142,6 +169,9 @@ export function* readTarEntries(archive) {
     const body = archive.subarray(offset, offset + size)
     offset += Math.ceil(size / 512) * 512
     yield { name, type, body }
+  }
+  if (!terminated) {
+    throw new Error('the tarball ends without its end-of-archive marker — the tarball is truncated')
   }
 }
 

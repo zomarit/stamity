@@ -288,6 +288,36 @@ describe("build-plugin-runtime, the tar reader's structural refusals", () => {
     expect(() => [...readTarEntries(pax)]).toThrow(/size/);
   });
 
+  it("names the extended header whose body runs off the end of a truncated archive", () => {
+    // M-k: the pax body was read with an unbounded `subarray` BEFORE anything
+    // checked it fit. `subarray` clamps, so the records parsed out of a
+    // truncated extended header were silently short — and a pax `path` or
+    // `size` half-read from them decides the name and the length of the entry
+    // that follows. The reader then advanced past the end and the loop simply
+    // stopped, returning nothing at all rather than refusing.
+    const record = "24 path=package/x.js\n";
+    const truncated = Buffer.concat([
+      tarHeader("PaxHeader/x", 4096, "x"),
+      Buffer.from(record, "utf-8"),
+    ]);
+
+    expect(() => [...readTarEntries(truncated)]).toThrow(/extended header/);
+    expect(() => [...readTarEntries(truncated)]).toThrow(/truncated/);
+  });
+
+  it.each([
+    ["no trailing block at all", 0],
+    ["one zero block where the marker needs two", 512],
+  ])("refuses an archive that ends with %s", (_label, trailing) => {
+    // M-k: a tarball truncated ON a block boundary ran the entry loop out of
+    // input and ended silently, so a PARTIAL extraction was reported as a whole
+    // one — every entry the stream happened to reach was yielded and the caller
+    // had no way to tell the tail was missing.
+    const archive = archiveOf([{ name: "package/a.js", body: "x\n" }], trailing);
+
+    expect(() => [...readTarEntries(archive)]).toThrow(/truncated/);
+  });
+
   it("reads a well-formed archive it has no reason to refuse", () => {
     // Floor 8: the two refusals above both pass on a degenerate empty archive,
     // so one case drives the reader through a body it must accept.
