@@ -2641,6 +2641,23 @@ describe("the generated scripts under a vendor plugin root", () => {
     );
   });
 
+  /**
+   * Per-child-process budget the herd case's own number already implies: its
+   * 60 s covers {@link GATE_LOCK_CEILING_MS} plus thirty concurrent node
+   * starts on the slowest runner this suite has been red on.
+   */
+  const CHILD_START_BUDGET_MS = (HERD_TIMEOUT_MS - GATE_LOCK_CEILING_MS) / 30;
+
+  /**
+   * M-P2: the case below spawns NINE child processes serially — `git init`,
+   * `add`, `commit`, two `status` reads, and the four generated scripts — and
+   * carried the 5 s default, which is under the ramp alone on that runner.
+   * Derived from the budget above rather than picked, so the two numbers cannot
+   * drift apart. The git spawns are cheaper than a node start, so this is a
+   * ceiling, not an estimate.
+   */
+  const WORKTREE_TIMEOUT_MS = Math.ceil(9 * CHILD_START_BUDGET_MS);
+
   it("leaves a git worktree unchanged apart from the state files each script owns", async () => {
     const repo = getRepo();
     await repo.seedFiles({
@@ -2698,5 +2715,5 @@ describe("the generated scripts under a vendor plugin root", () => {
           !line.startsWith("?? container-"),
       );
     expect(dirty).toEqual([]);
-  });
+  }, WORKTREE_TIMEOUT_MS);
 });
