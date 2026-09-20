@@ -3614,6 +3614,12 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
       "scripts/size-budget.mjs",
       "scripts/tarball-smoke.mjs",
       "scripts/apm-install-smoke.mjs",
+      // ADDED by plan 008 file 3, unit V1w. This loop asserts the script is REFERENCED by some
+      // workflow step, which is a different question from whether it exists on disk — the loop
+      // below asks that one. So this entry is the guard that a merge-blocking lane still calls the
+      // plugin route smoke at all: delete the step and this fails, rename the script and the
+      // existence loop fails.
+      "scripts/plugin-route-smoke.mjs",
     ]) {
       expect(referenced).toContain(script);
     }

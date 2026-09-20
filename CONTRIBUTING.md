@@ -77,9 +77,10 @@ covers the mechanics.
 
 Two required status contexts gate a merge.
 
-`all-ci-checks` (`.github/workflows/ci.yml`) runs on every event. It passes when the check matrix
-and the APM route lane both pass. The matrix has three legs: the declared Node floor, the LTS
-canonical, and one Windows leg. Beside the six steps you already ran, it adds five things:
+`all-ci-checks` (`.github/workflows/ci.yml`) runs on every event. It passes when three lanes pass:
+the check matrix, the APM route lane, and the plugin route lane. The matrix has three legs: the
+declared Node floor, the LTS canonical, and one Windows leg. Beside the six steps you already ran,
+it adds six things:
 
 - A generate-and-diff self-consistency step over every generated artifact class.
 - The dogfood check, `node dist/cli.js check`, which re-proves this repository's own generated setup
@@ -95,6 +96,12 @@ canonical, and one Windows leg. Beside the six steps you already ran, it adds fi
   client, and on 0.30.0, the current one. It runs once more on 0.29.0 with `--expect-failure`, so
   the check keeps proving it can still see the routing failure that shipped zero primitives while
   exiting 0.
+- The plugin route gate, `node scripts/plugin-route-smoke.mjs`. It builds the four client plugin
+  roots the release builds, then asks the clients about them: each root's structure, and each
+  client's install where that client's CLI installs on the runner. It runs without `--invoke`, so no
+  leg needs a credential — driving a client through a prompt is the nightly lane's job
+  (`.github/workflows/nightly.yml`), behind per-client secrets. A client CLI that will not install
+  leaves its own legs skipped with a notice, never a red lane; a broken root is red.
 
 Run the APM smoke locally with `node scripts/apm-install-smoke.mjs --apm <path-to-apm>`, or point
 `STAMITY_APM_BIN` at that path instead. apm-cli is a Python package, and no step of `npm run check`

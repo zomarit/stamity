@@ -50,7 +50,7 @@ check has one stable name, so a required check does not rotate when the matrix d
 ### What `all-ci-checks` covers
 
 `all-ci-checks` is the aggregator job in `.github/workflows/ci.yml`, and it runs on every event.
-It passes when two lanes pass: the check matrix, and the APM route lane.
+It passes when three lanes pass: the check matrix, the APM route lane, and the plugin route lane.
 
 The check matrix runs three legs: the pinned Node floor, the current LTS, and one Windows leg.
 Which step runs on which leg is not uniform.
@@ -69,6 +69,14 @@ Which step runs on which leg is not uniform.
 The APM route lane installs this repository's generated APM package into a throwaway consumer and
 checks the deployed tree. [CONTRIBUTING.md](CONTRIBUTING.md) names the client versions it runs
 against.
+
+The plugin route lane builds the four client plugin roots the release builds, then asks the clients
+about them. It proves two things: the four roots' structure, on every run, and each client's
+credential-free install, on the clients whose CLI installs on the runner. It deliberately does not
+prove the invocation legs — driving a client through a prompt needs that vendor's credential, which
+no merge-blocking job here holds — so those run nightly behind per-client secrets and in the manual
+QA walk-through. A client CLI that fails to install leaves its own legs skipped with a notice naming
+it, rather than reddening the lane; a broken root is red.
 
 ### What `all-pr-checks` covers
 
