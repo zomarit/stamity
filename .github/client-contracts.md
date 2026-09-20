@@ -40,6 +40,59 @@ they do not claim authenticated client sessions, native trust approval, or human
   [config reference](https://learn.chatgpt.com/docs/config-file/config-reference) (read
   2026-09-15, re-read 2026-09-17),
   [subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents).
+
+### Codex plugin container (2026-09-20)
+
+The container is an Agent Plugins 1.0.0 package whose root `plugin.json` is the closed
+ten-field schema: `$schema` and `name` the only required keys, `author` closed to
+name/email/url, `additionalProperties: false`, and `$schema` pinned by `const`. Clients never
+fetch the schema, so the vendored copy at `test/fixtures/plugins/agent-plugins-1.0.0.schema.json`
+is the only enforcement there is
+([schema](https://agent-plugins.org/schemas/1.0.0/plugin.schema.json), read 2026-09-20). A plugin
+carries SKILLS only — agents, commands and rules are outside the v1 format and the migration page
+converts them to skills — so the emitted root carries `skills/` and `hooks/` and declares agent,
+command, rule and MCP as repository-owned. `extensions.com.openai` carries `apps`, `hooks` and
+`interface`, but `hooks/hooks.json` is discovered by default with no manifest field, and the two
+vendor pages disagree about where an override lives; discovery satisfies both readings, so the
+root ships the file at the default path and emits no `extensions` key at all. The twelve
+lifecycle event names are vendored at `test/fixtures/plugins/codex-hook-events.json`; `command`
+and `mcp_tool` handlers run while `prompt` and `agent` handlers are skipped.
+[Build plugins](https://developers.openai.com/plugins/build/plugins) (read 2026-09-20),
+[plugins overview](https://learn.chatgpt.com/docs/plugins) (read 2026-09-20),
+[hooks](https://learn.chatgpt.com/docs/hooks) (read 2026-09-20).
+
+Marketplaces resolve from `$REPO_ROOT/.agents/plugins/marketplace.json`, the legacy
+`.claude-plugin/marketplace.json`, and `~/.agents/plugins/marketplace.json`. An entry's
+`source.path` must start with `./` and stay inside the marketplace root; `source` kinds are
+`local`, `url`, `git-subdir` (with `ref` or `sha`) and `npm`; every entry must carry
+`policy.installation`, `policy.authentication` and `category`; no entry `version` is documented;
+and an entry the client cannot resolve is skipped SILENTLY, which is why the suite asserts the
+installed cache tree rather than the marketplace file it wrote. Measured 2026-09-20 on codex-cli
+0.154.0 in a scratch `CODEX_HOME`: `codex plugin marketplace add <root>` followed by
+`codex plugin add stamity@<marketplace>` exited 0 with no login, wrote `[marketplaces.<name>]` and
+`[plugins."<name>@<marketplace>"] enabled = true` into that home's `config.toml`, and cached the
+root under `<CODEX_HOME>/plugins/cache/<marketplace>/<plugin>/<version>/` byte-identical file by
+file. [Build plugins](https://developers.openai.com/plugins/build/plugins) (read 2026-09-20).
+
+The root variable is `PLUGIN_ROOT` — with `PLUGIN_DATA`, and `CLAUDE_PLUGIN_ROOT` and
+`CLAUDE_PLUGIN_DATA` carried for compatibility — and it is exported to the hook process. Hook
+commands run with the SESSION working directory, not the plugin root, so every emitted command
+addresses its script absolutely through the variable and the runner it launches reports on the
+working directory it was given. On top of the three repository-side loading steps the Codex
+bullet above records, a PLUGIN's hooks are skipped until the operator trusts them, so `hooks`
+carried in a plugin root means shipped and discoverable, never enforced.
+[Hooks](https://learn.chatgpt.com/docs/hooks) (read 2026-09-20).
+
+Unstated on every page read 2026-09-20, and therefore not claimed here. Which layer expands
+`${PLUGIN_ROOT}` inside a hook `command` string — the client or the shell — is not stated on the
+hooks or the build page; the vendor's own example writes the variable there, so the root does too
+and the expansion stays unmeasured. No minimum client version for plugins appears on any of the
+eight pages read, so the capability file's `clientFloor` is `unknown` with that citation. And
+whether `codex exec` loads a plugin's skills at all is unproven: a scratch `CODEX_HOME` carries
+no credential and the run refused with `401 Unauthorized` (measured 2026-09-20), so the suite
+prints the exec output as a measurement and asserts nothing on it. Re-read all three at the next
+codex minor.
+
 - **Cursor:** neutral-tree skills support `/st-*` invocation. Native hook timeouts use
   seconds; explicit exit 2 denies supported actions and `failClosed` covers errors and
   timeouts. PreToolUse `ask` is unenforced, so portable `ask` denies pending human review.

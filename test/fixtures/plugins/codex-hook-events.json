@@ -1,0 +1,35 @@
+{
+  "source": "https://learn.chatgpt.com/docs/hooks",
+  "accessDate": "2026-09-20",
+  "client": "codex-cli 0.154.0",
+  "note": "The twelve lifecycle events this client documents, in the page's own grouping order: the eight that can fire during a turn, the interrupt, the two start events, and the session end. Vendored so an emitted event name is checked against the vendor's list rather than against the adapter table that produced it.",
+  "groups": {
+    "duringATurn": [
+      "PreToolUse",
+      "PermissionRequest",
+      "PostToolUse",
+      "PreCompact",
+      "PostCompact",
+      "UserPromptSubmit",
+      "SubagentStop",
+      "Stop"
+    ],
+    "onInterrupt": ["Interrupt"],
+    "onStart": ["SessionStart", "SubagentStart"],
+    "onEnd": ["SessionEnd"]
+  },
+  "events": [
+    "Interrupt",
+    "PermissionRequest",
+    "PostCompact",
+    "PostToolUse",
+    "PreCompact",
+    "PreToolUse",
+    "SessionEnd",
+    "SessionStart",
+    "Stop",
+    "SubagentStart",
+    "SubagentStop",
+    "UserPromptSubmit"
+  ]
+}
