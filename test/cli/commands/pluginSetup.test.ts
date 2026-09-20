@@ -368,15 +368,13 @@ describe("applyPluginSetup", () => {
     expect(onDisk.some((path) => path.startsWith(".claude/rules/"))).toBe(true);
   });
 
-  // eslint-disable-next-line vitest/no-disabled-tests -- see the skip reason below.
-  it.skip("writes 0 files of a class the root declares carried (owner: unit C3)", async () => {
-    // The ownership PASS is C3's (`src/emit/ownership.ts` + the planner edit),
-    // building in parallel with this unit. C6 records the boundary on the
-    // manifest; until C3 reads it, a plugin-backed apply still emits agents,
-    // skills, commands and hook scripts. Asserting their absence today would be
-    // red for a reason this unit cannot fix, and weakening the assertion to
-    // something that passes either way would leave the requirement uncovered
-    // the day C3 lands. It is skipped with its owner named instead.
+  it("writes 0 files of a class the root declares carried", async () => {
+    // TEST CHANGE, justified (2026-09-20, unit C4): un-skipped, unaltered. The
+    // case was written red by C6 and parked with its owner named, because the
+    // ownership PASS it asserts is C3's (`src/emit/ownership.ts` + the planner
+    // edit) and that unit was still building. C3 has landed, so the case runs
+    // as written — not one assertion moved, which is the point of having parked
+    // it rather than weakening it.
     const root = await makeRepo();
     await applyPluginSetup({
       rootDir: root,
