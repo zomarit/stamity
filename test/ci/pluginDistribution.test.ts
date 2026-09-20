@@ -530,6 +530,16 @@ describe("the tree as a whole", () => {
     // The two bounds a mirror has to know, from the inbox rows this unit closes.
     expect(readme).toContain("https-only");
     expect(readme).toContain("The private mirror route");
+    // The recipe's staging flag, pinned because it was WRONG and nothing noticed: the published
+    // instruction said `git add -A`, while `.github/workflows/release.yml` stages the same tree
+    // with `-A -f` because a dependency inside the bundled runtime may ship a `.gitignore` of its
+    // own. A mirror built from the unflagged line silently loses those files, and the loss is
+    // invisible until a consumer installs the root and a file is missing.
+    expect(readme).toContain("git add -A -f");
+    expect(readme).not.toContain("git add -A &&");
+    // The reason travels with the flag, asserted without its line break so a rewrap of the
+    // paragraph is not a failure while a deleted reason is.
+    expect(readme).toContain("`.gitignore` of its own");
   });
 
   it("pins the Codex routes to the --ref spelling the CLI's own help documents", () => {

@@ -369,10 +369,15 @@ re-deriving it:
 
 \`\`\`sh
 git init dist && cd dist && git switch --orphan plugin-dist
-cp -R <this tree>/. . && git add -A && git commit -m 'plugins: v${version}'
+cp -R <this tree>/. . && git add -A -f && git commit -m 'plugins: v${version}'
 git tag ${tag}
 git push <your remote> plugin-dist ${tag}
 \`\`\`
+
+\`-f\` is load-bearing, not tidiness: a dependency inside the bundled runtime may ship a
+\`.gitignore\` of its own, and without \`-f\` those files are staged by nobody — a mirror that
+quietly lost files is worse than a push that failed. The release workflow that publishes this
+tree stages it with the same flag for the same reason.
 
 Then point \`stamity.distribution.sources.<client>\` in your fork's \`package.json\` at that remote
 and rebuild the catalogs: every \`source\` object above is projected from that block, so nothing
