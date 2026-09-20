@@ -441,3 +441,8 @@ This note sits below the calibration boundary on purpose: the text above the
 incremental-runs rule of `SET-v7.md` hashes as part of a run's configuration, so a currency
 statement about which profiles select the rubric belongs here, where moving it changes no
 run's configuration.
+
+Line 3 above is run-30 text retained verbatim so the grading core keeps the hash a run's
+configuration is composed on, and it is stale by design: it was copied forward from
+`rubric-v6.md:3` and states v6's selection — `MODEL-PROFILES-v2.md:15` selects `rubric-v6.md`
+for `codex-astra` — so the sentences above this one, not that line, are the current truth.
