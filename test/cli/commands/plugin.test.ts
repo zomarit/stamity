@@ -58,6 +58,19 @@ const COMPANION_PACKAGE = (
   }
 ).name;
 
+/**
+ * This build's OWN declared Node floor, read from the checkout rather than
+ * spelled. `status` reports it on the `node` row whenever no plugin root's
+ * locator states one, and a literal here would keep passing against an engine
+ * whose `engines.node` had moved — the same rule `test/ci/forkIdentity.test.ts`
+ * holds every CLI suite to for the package name.
+ */
+const ENGINE_NODE_FLOOR = (
+  JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8")) as {
+    engines: { node: string };
+  }
+).engines.node;
+
 const getTemp = useTempDir("plugin-verb");
 
 const T0 = new Date("2026-09-20T09:00:00.000Z");
@@ -354,6 +367,55 @@ describe("plugin status — the read", () => {
     });
     // A repository that already has a setup is not offered another one.
     expect(doc.setup).toMatchObject({ needed: false });
+  });
+
+  it("states the engine's own declared floor on the node row when no root answers", async () => {
+    // Inbox row of 2026-09-20 (build/60): with no root to ask, the row carried
+    // `floor: null` and the table printed `unstated`, while `check`'s
+    // node-version row read the very engines.node range this build declares out
+    // of the same package.json. Non-degenerate: the floor asserted is a real
+    // range read off the manifest, and the table is checked for it BY VALUE.
+    const root = await makeRepo();
+
+    const doc = await pluginJson(root, ["status"]);
+    const table = await plugin(root, ["status"]);
+
+    expect(doc.runtime).toMatchObject({ kind: "none" });
+    expect(doc.node).toEqual({
+      version: process.versions.node,
+      floor: ENGINE_NODE_FLOOR,
+      ok: true,
+    });
+    expect(ENGINE_NODE_FLOOR).toMatch(/\d+\.\d+\.\d+/);
+    expect(table.stdout).toContain(`floor ${ENGINE_NODE_FLOOR}`);
+    expect(table.stdout).not.toContain("floor unstated");
+  });
+
+  it("narrows the client rows to --client, in TOOLS order", async () => {
+    // Inbox row of 2026-09-20 (build/60): the flag registered on `status` and
+    // did nothing. Two named clients, passed in the reverse of TOOLS order, so
+    // the assertion distinguishes a real filter from both the no-op (four rows)
+    // and an argument-order echo.
+    const root = await makeRepo();
+
+    const all = await pluginJson(root, ["status"]);
+    const filtered = await pluginJson(root, ["status", "--client", "cursor,claude"]);
+
+    expect((all.clients as unknown[]).length).toBe(4);
+    expect((filtered.clients as { tool: Tool }[]).map((row) => row.tool)).toEqual([
+      "claude",
+      "cursor",
+    ]);
+  });
+
+  it("refuses a --client name on status that is not a client this engine knows", async () => {
+    const root = await makeRepo();
+
+    const result = await plugin(root, ["status", "--client", "emacs"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("emacs");
+    expect(result.stderr).toContain("claude, cursor, copilot, codex");
   });
 
   it("drops a gate from the unconfigured list once the operator pins it", async () => {
@@ -831,6 +893,41 @@ describe("the documented route off a generated setup (REQ-PLUGIN-015, REQ-PLUGIN
     expect(duplicates[0]?.paths).toHaveLength(duplicates[0]?.files ?? -1);
     expect(duplicates[0]?.paths.every((path) => path.startsWith(".claude/agents/"))).toBe(true);
     expect(duplicates[0]?.paths).toEqual(duplicates[0]?.paths.toSorted());
+  });
+
+  it("carries each duplicate's source and remedy, the two facts only check printed", async () => {
+    // Inbox row of 2026-09-20 (build/60): `{ tool, class, files, paths }` left
+    // the SOURCE that put the content there and the REMEDY that removes it
+    // reachable only by running `check`. Same finding, same strings — the remedy
+    // is asserted by value against `./probe.ts`'s ledger composition, so a
+    // recomposed second vocabulary here would go red rather than drift.
+    const root = await makeRepo();
+    await seedGenerated(root);
+    const installed = await pluginRoot("claude-root");
+    const generated = (await readManifest(root)) as SetupManifest;
+    await writeManifest(
+      root,
+      {
+        ...generated,
+        plugin: {
+          mode: "generated",
+          clients: { claude: { version: "1.9.0", classes: ["agent"] } },
+        },
+      },
+      { now: T0 },
+    );
+
+    const doc = await pluginJson(root, ["status", "--plugin-root", installed]);
+    const table = await plugin(root, ["status", "--plugin-root", installed]);
+
+    const duplicates = doc.duplicates as { source: string; remedy: string; files: number }[];
+    const remedy = `${npxCommand("clean -y")} then ${npxCommand("plugin setup --client claude")}`;
+    expect(duplicates).toHaveLength(1);
+    expect(duplicates[0]).toMatchObject({ source: "ledger", remedy });
+    expect(duplicates[0]?.files).toBeGreaterThan(0);
+    // The plain table prints both beside the count, in `check`'s own spelling.
+    expect(table.stdout).toContain(`(${duplicates[0]?.files} file(s), ledger)`);
+    expect(table.stdout).toContain(remedy);
   });
 });
 

@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { dirname, join, relative, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, sep } from "node:path";
 import semver from "semver";
 import type { App, EngineRegistry } from "../../index.ts";
 import { readCharterTemplate } from "../../content/charter.ts";
@@ -17,7 +16,6 @@ import {
   verifyInstalledPacks,
 } from "../../pack/verifyInstalled.ts";
 import { PLUGIN_ROOT_VARIABLES } from "../../plugins/capabilityFile.ts";
-import { findPackageRoot } from "../../shared/paths.ts";
 import { TOOLS } from "../../types/core.ts";
 import { EngineError, type ErrorCode } from "../../types/errors.ts";
 import { MANIFEST_FILE, type SetupManifest } from "../../types/manifest.ts";
@@ -33,6 +31,7 @@ import {
   majorOf,
   pluginRootVariable,
   probePluginRuntime,
+  requiredNodeRange,
 } from "./plugin/probe.ts";
 import { planSync, type SyncPlanEntry } from "./sync/engine.ts";
 import { provenanceFromManifest, type ProvenanceRollup } from "./sync/report.ts";
@@ -158,25 +157,6 @@ export function checkNodeVersion(nodeVersion: string, range: string | null): Doc
       `Node ${nodeVersion} is below the required ${range} — install a Node in that range ` +
       `(or switch to one with your version manager), then re-run`,
   };
-}
-
-/**
- * `engines.node` from the package that ships this build, or `null` when it
- * cannot be read as a range. Read rather than duplicated as a constant: the
- * floor is declared in package.json, and a second copy here could disagree
- * with the one npm actually enforces at install time.
- */
-async function requiredNodeRange(): Promise<string | null> {
-  try {
-    const root = findPackageRoot(dirname(fileURLToPath(import.meta.url)));
-    const parsed = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
-      engines?: { node?: unknown };
-    };
-    const range = parsed.engines?.node;
-    return typeof range === "string" && semver.validRange(range) !== null ? range : null;
-  } catch {
-    return null;
-  }
 }
 
 /**

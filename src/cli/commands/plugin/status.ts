@@ -39,7 +39,13 @@ import {
 import { TOOLS, type Tool } from "../../../types/core.ts";
 import type { GatesConfig, InstallMode, PluginClientRecord, PluginOwnedClass, SetupManifest } from "../../../types/manifest.ts";
 import { packageCommand } from "../../kit/packageName.ts";
-import { collectPluginDuplicates, majorOf, probePluginRuntime } from "./probe.ts";
+import {
+  collectPluginDuplicates,
+  engineNodeFacts,
+  majorOf,
+  probePluginRuntime,
+  type DuplicateFinding,
+} from "./probe.ts";
 
 /** What the locator resolved, or why nothing was resolved. */
 interface PluginStatusRuntime {
@@ -82,8 +88,21 @@ export interface PluginStatusReport {
     pluginVersion: string | null;
     manifestVersion: string | null;
   };
-  /** `check`'s list: the count, and the paths it names (see `DuplicateFinding.paths`). */
-  duplicates: { tool: Tool; class: PluginOwnedClass; files: number; paths: string[] }[];
+  /**
+   * `check`'s list, field for field: the count, the paths it names, the SOURCE
+   * that put the content there and the REMEDY it prints (see
+   * `DuplicateFinding`). Source and remedy are carried rather than recomposed —
+   * a machine caller reading this document gets the sentence `check` would print
+   * for the same finding, and there is no second remedy vocabulary to drift.
+   */
+  duplicates: {
+    tool: Tool;
+    class: PluginOwnedClass;
+    source: DuplicateFinding["source"];
+    files: number;
+    paths: string[];
+    remedy: string;
+  }[];
   /** True when a duplicate was found: content reaching one client twice. */
   coexistence: boolean;
   setup: { needed: boolean; unconfigured: PluginStatusUnconfigured[] };
@@ -96,6 +115,12 @@ export interface PluginStatusOptions {
   env: Readonly<Record<string, string | undefined>>;
   /** The running interpreter's version, injected so the report is testable. */
   nodeVersion: string;
+  /**
+   * `--client`, when one was passed: the only clients `clients` carries rows
+   * for. An absent or empty list is every client, which is what a bare `status`
+   * passes — the report's default is the whole surface, and the flag narrows it.
+   */
+  clients?: readonly Tool[];
 }
 
 /** The three detected facts the charter renders, with the fact name it prints. */
@@ -189,14 +214,24 @@ async function readRoot(root: string | null): Promise<PluginCapabilityFile | nul
   }
 }
 
-/** One row per client, in `TOOLS` order, whatever the repository records. */
+/**
+ * One row per client, in `TOOLS` order, whatever the repository records —
+ * narrowed to `only` when `--client` named a subset.
+ *
+ * `TOOLS` order and not argument order, for the same reason `parseClients`
+ * sorts: two spellings of one selection read identically. An empty `only` is no
+ * filter rather than no rows, which keeps a bare `status` and `--client ""` the
+ * same report instead of making the flag's blank value mean "nothing".
+ */
 function clientRows(
   manifest: SetupManifest | null,
   file: PluginCapabilityFile | null,
+  only: readonly Tool[],
 ): PluginStatusClient[] {
   const recorded = manifest?.plugin?.clients ?? {};
   const selected = new Set(manifest?.tools ?? []);
-  return TOOLS.map((tool) => {
+  const wanted = only.length === 0 ? TOOLS : TOOLS.filter((tool) => only.includes(tool));
+  return wanted.map((tool) => {
     const rootFound = file?.client === tool;
     return {
       tool,
@@ -276,17 +311,21 @@ export async function buildPluginStatus(
   return {
     installMode: readInstallMode(manifest),
     runtime,
-    // The locator's own node facts when it produced them, else this process's
-    // version with no floor to judge it: a floor nobody stated cannot be
-    // missed, which is the rule the locator itself applies.
-    node: probe?.node ?? { version: opts.nodeVersion, floor: null, ok: true },
-    clients: clientRows(manifest, file),
+    // The locator's own node facts when it produced them, else this ENGINE's
+    // own declared floor against this process's version (`engineNodeFacts`).
+    // The row is therefore never `unstated` on a build that declares a floor —
+    // it used to be, whenever no root answered, while `check`'s node-version row
+    // read the very same value out of the same package.json.
+    node: probe?.node ?? (await engineNodeFacts(opts.nodeVersion)),
+    clients: clientRows(manifest, file, opts.clients ?? []),
     compatibility: compatibilityOf(file, manifest),
     duplicates: findings.map((finding) => ({
       tool: finding.tool,
       class: finding.cls,
+      source: finding.source,
       files: finding.files,
       paths: finding.paths,
+      remedy: finding.remedy,
     })),
     coexistence: findings.length > 0,
     setup: { needed: !present, unconfigured: unconfiguredFacts(manifest) },

@@ -288,10 +288,14 @@ function renderStatus(ctx: CliContext, report: PluginStatusReport): void {
     report.duplicates.length === 0
       ? "none"
       : report.duplicates
+          // The same five facts `check`'s `plugin-duplicates` row prints, in the
+          // same order, from the same finding: the source names WHAT put the
+          // content there, and the remedy is the command that removes it. A
+          // reader who saw the count alone had to run `check` to learn either.
           .map(
             (entry) =>
-              `${entry.tool}: ${entry.class} (${entry.files} file(s)) at ` +
-              describeDuplicatePaths(entry.paths),
+              `${entry.tool}: ${entry.class} (${entry.files} file(s), ${entry.source}) at ` +
+              `${describeDuplicatePaths(entry.paths)} — ${entry.remedy}`,
           )
           .join(`\n${CONTINUATION}`),
   );
@@ -329,10 +333,16 @@ async function runStatus(ctx: CliContext, opts: Record<string, unknown>): Promis
   // per invocation. A repeated flag therefore reports on the first root given,
   // which is the one an operator naming several would read about first.
   const [pluginRoot] = parseRootFlags(opts["pluginRoot"]);
+  // `--client` NARROWS the client rows here; on `setup` the same flag selects
+  // what is written. One validator for both (`parseClients`), so the two
+  // subcommands cannot disagree about which names are clients — an unknown name
+  // is refused with the same message and the same code on either.
+  const clients = parseClients(opts["client"]);
   const report = await buildPluginStatus(ctx.app.runtime.cwd, ctx.engine, {
     ...(pluginRoot === undefined ? {} : { pluginRoot }),
     env: ctx.app.runtime.env,
     nodeVersion: process.versions.node,
+    clients,
   });
 
   renderStatus(ctx, report);
@@ -402,10 +412,11 @@ export const pluginCommand: CommandModule = {
   ],
 
   /**
-   * Commander registers flags per COMMAND, not per subcommand, so both are
-   * visible everywhere: `--plugin-root` is read by both (status probes the root
-   * it names), `--client` by `setup` alone. Editing either string is a docs
-   * change — the generated reference page copies them verbatim.
+   * Commander registers flags per COMMAND, not per subcommand, and both are read
+   * by both: `--plugin-root` names the root `status` probes and the roots
+   * `setup` writes from, and `--client` narrows `status`'s client rows where it
+   * selects `setup`'s clients. Editing either string is a docs change — the
+   * generated reference page copies them verbatim.
    */
   configure(cmd: Command): void {
     cmd.option("--client <csv>", `clients to act on (${TOOLS.join(", ")})`);

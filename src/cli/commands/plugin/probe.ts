@@ -28,12 +28,14 @@
 import { execFile } from "node:child_process";
 import type { Dirent } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import semver from "semver";
 import { parse as parseYaml } from "yaml";
 import { buildContentIndex, emittedIdFor } from "../../../content/catalog.ts";
 import { HOOKS_GENERATED_DIR } from "../../../emit/hooksInfra.ts";
 import { PLUGIN_ROOT_VARIABLES } from "../../../plugins/capabilityFile.ts";
+import { findPackageRoot } from "../../../shared/paths.ts";
 import { TOOLS, type Tool } from "../../../types/core.ts";
 import {
   PLUGIN_OWNED_CLASSES,
@@ -245,6 +247,66 @@ export function majorOf(version: string | null | undefined): number | null {
   if (typeof version !== "string") return null;
   const parsed = semver.valid(version) ?? semver.coerce(version)?.version ?? null;
   return parsed === null ? null : semver.major(parsed);
+}
+
+/**
+ * `engines.node` from the package that ships this build, or `null` when it
+ * cannot be read as a range. Read rather than duplicated as a constant: the
+ * floor is declared in package.json, and a second copy here could disagree with
+ * the one npm actually enforces at install time.
+ *
+ * It lives HERE, in the shared probe, rather than privately in `../check.ts`
+ * where it was written, because both readers of that floor need it: `check`'s
+ * `node-version` row compares the running interpreter against it, and
+ * `./status.ts` has no other way to state a floor when no plugin root's locator
+ * produced one. A second copy in the report would be a second answer to the one
+ * question the two commands must agree about.
+ */
+export async function requiredNodeRange(): Promise<string | null> {
+  try {
+    const root = findPackageRoot(dirname(fileURLToPath(import.meta.url)));
+    const parsed = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
+      engines?: { node?: unknown };
+    };
+    const range = parsed.engines?.node;
+    return typeof range === "string" && semver.validRange(range) !== null ? range : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The node facts to report when NO plugin root's locator produced any — the
+ * running interpreter against this engine's own declared floor.
+ *
+ * Why a floor at all here. The locator states the floor the installed plugin
+ * was built against; with no root to ask, the report used to carry `floor:
+ * null`, which the table renders as `unstated` — and "unstated" was wrong twice
+ * over, because this build declares a floor in its own package.json and
+ * `check`'s `node-version` row already reads exactly that value. A row that says
+ * `unstated` while the answer sits in the shipped manifest sends an operator
+ * looking for a fact they already have.
+ *
+ * `ok` is therefore computed rather than assumed true: stating a floor and then
+ * reporting `ok` against a version below it would be a worse row than the one
+ * this replaces. `includePrerelease` for the same reason `../check.ts`'s own
+ * comparison carries it — a nightly of a satisfying major is
+ * not below the floor. A floor that could not be read stays `null` with `ok:
+ * true`: a floor nobody stated cannot be missed.
+ */
+export async function engineNodeFacts(
+  nodeVersion: string,
+): Promise<{ version: string; floor: string | null; ok: boolean }> {
+  const floor = await requiredNodeRange();
+  if (floor === null) return { version: nodeVersion, floor: null, ok: true };
+  const parsed = semver.valid(nodeVersion) ?? semver.coerce(nodeVersion)?.version ?? null;
+  return {
+    version: nodeVersion,
+    floor,
+    // An unparseable version is not evidence of being below the floor; the
+    // doctor row is where that case is reported, and it warns rather than fails.
+    ok: parsed === null || semver.satisfies(parsed, floor, { includePrerelease: true }),
+  };
 }
 
 /**
