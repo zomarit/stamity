@@ -2598,6 +2598,49 @@ describe("the generated scripts under a vendor plugin root", () => {
     );
   });
 
+  it("judges a repository-mode call by the repository document, not a stray sibling", async () => {
+    // W-3/SEC2-M1: the sibling used to win unconditionally, so any writer with
+    // access to the workspace could drop a document beside an installed guard
+    // and have the next call judged by it, with no ledger or check probe
+    // seeing the swap. The repository document is now what a repository
+    // install reads, and the stray copy decides nothing.
+    await getRepo().seedFiles({
+      [`repo-stray/${POLICY_FILE}`]: buildAgentToolPoliciesJson(ROSTER),
+      [`repo-stray/hooks/${POLICY_FILE}`]: buildAgentToolPoliciesJson(PLUGIN_ROSTER),
+    });
+    const guard = await place(
+      `repo-stray/hooks/guard.mjs`,
+      buildPreToolUseGuardScript({ policiesJsonPath: `../${POLICY_FILE}`, failMode: "fail-closed" }),
+    );
+
+    // `Edit` is allowed by the repository document and denied by the stray one.
+    const result = run(guard, { cwd: getRepo().dir, input: call("stamity-implementer", "Edit") });
+
+    expect(result).toEqual({ code: 0, stdout: "", stderr: "" });
+  });
+
+  it("refuses a symlinked sibling document instead of following it", async () => {
+    // A link is content another path owns: following it lets the governing
+    // document be swapped while the directory entry a reviewer reads never
+    // moves. `lstatSync` sees the link, and the refusal is the same one a
+    // wrong-schema document earns.
+    const target = await place(
+      "linked-source/elsewhere.json",
+      buildAgentToolPoliciesJson(PLUGIN_ROSTER),
+    );
+    const guard = await placeContainerGuard("container-linked");
+    await symlink(target, getRepo().path("container-linked", "hooks", POLICY_FILE));
+
+    const result = run(guard, { cwd: getRepo().dir, input: call("stamity-implementer", "Read") });
+
+    expect(result.code).toBe(2);
+    expect(refusal(result)["reasonCode"]).toBe("POLICY_INVALID");
+    // The message names the link, so an operator reads which entry to remove.
+    expect(String(refusal(result)["message"])).toContain(
+      getRepo().path("container-linked", "hooks", POLICY_FILE),
+    );
+  });
+
   it("leaves a git worktree unchanged apart from the state files each script owns", async () => {
     const repo = getRepo();
     await repo.seedFiles({
