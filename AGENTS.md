@@ -1,4 +1,4 @@
-<!-- STAMITY:BEGIN v1.8.0 -->
+<!-- STAMITY:BEGIN v1.9.0 -->
 # Charter
 
 The always-on context for agents working in this repository. Everything else loads on demand:
