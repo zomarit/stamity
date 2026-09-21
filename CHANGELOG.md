@@ -29,6 +29,166 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before anything is published.
 -->
 
+## [1.9.0] - 2026-09-21
+
+### Added
+
+- **stamity installs as a native client plugin, not only as a CLI.** One resolved corpus is
+  emitted as four plugin roots — Claude Code, Cursor, Copilot CLI and Codex — each with the
+  container manifest its client reads, a `stamity-plugin.json` capability file declaring which
+  classes the root carries and which stay repository-owned, and a generated `st-setup` command so
+  the repository half of a setup is one slash command away. `docs/plugins.md` is the guide, and
+  the ownership table on it is the whole boundary.
+- **Every plugin root ships the engine it needs.** A pruned runtime is bundled with each root and
+  resolved by `runtime/locate.mjs`: a companion `@zomarit/stamity` install in the project wins
+  when its version satisfies a caret range over the plugin's own version, otherwise the bundled
+  copy runs, and the locator prints which of the two resolved, its path and its version, plus the
+  running Node against the runtime's floor.
+- **A release publishes the distribution as its own tree.** The `plugin-dist` branch carries one
+  orphan commit per release, tagged `plugins/v<version>`; the release attaches one archive per
+  client beside its `.sha256`; `release.json` at the root of the tree is the machine-readable
+  contract (version, source commit and date, branch and tag, the runtime's package, version, Node
+  floor and tarball digest, and one entry per client with its archive, digest, byte count and
+  client floor); the four vendor catalog files and the APM package ride the same tree; and two
+  Renovate presets — `renovate/plugins.json` for the marketplace refs, `renovate/companion.json`
+  for the pinned companion — track it from your own configuration.
+- **A `stamity plugin` verb reports and sets up a plugin-backed repository.** `plugin status` is a
+  report that exits 0 whatever it finds — the resolved runtime, Node against the floor, every
+  client's recorded and found state, the compatibility state, any duplicates, and each fact
+  detection could not determine with the exact `stamity config` command that sets it — and
+  `plugin setup` writes the repository-owned half of a setup and nothing of a class the installed
+  root declares carried. `--json` emits the same report as data.
+- **The manifest records plugin-backed mode, and the emission honours it.** A manifest carries
+  `plugin` (the mode and the per-client roots) and `gates`, and `sync`, `check` and `clean` read
+  the ownership boundary from it: `sync` writes nothing under a plugin-owned class and prints one
+  `plugin-owned` line per client naming the classes it skipped, and `clean` prints one uninstall
+  command per client the manifest recorded.
+- **Verification gates can be set explicitly instead of detected.** `stamity config set gates.*`
+  writes the test, lint, typecheck and full-gate commands a charter renders, so a repository whose
+  scripts detection cannot read states them once rather than carrying a wrong line.
+- **The plugin route is proven per client on every commit.** `scripts/plugin-route-smoke.mjs`
+  walks structure, install, discovery and invocation for each client and writes a `--json`
+  document; its credential-free structure and install legs run in the merge-blocking
+  `plugin-route` CI job, and the invocation legs run nightly behind one secret per client, each
+  absent secret reported as a notice rather than a pass. The QA harness gains a `plugins` lane and
+  rows `H4a`–`H4d` for the four client routes, beside `H5` for upgrade and rollback through each
+  client's own route.
+- **Three repository-side proofs back the distribution, and one fixture drives it.**
+  `scripts/plugin-lifecycle-fixture.mjs` builds two consecutive versions into a local remote so an
+  upgrade and a rollback can be walked against a real client; `test/ci/pluginDownstream.test.ts`
+  builds three distributions from one fork checkout and proves a downstream's own identity reaches
+  every root, catalog and capability file with no canonical owner left anywhere; and the eval set
+  gains three cases — a fresh-repository `st-setup` run, its refusal over an existing generated
+  setup, and plugin-mode invocation — taking `SET-v7` to 102 cases. These are repository surfaces:
+  the published package still carries `dist` alone.
+
+### Changed
+
+- **`sigstore` is an optional dependency.** npm installs optional dependencies by default, so the
+  npm route is unchanged; an install run with `--omit=optional` gets a refusal verdict from pack
+  verification rather than a pass, and the two trust pages say so.
+- **`stamity check` carries two rows for the plugin route.** `plugin-runtime` reports the
+  locator's resolved kind, path and version — passing with a note on a repository that is not
+  plugin-backed, warning where a client is recorded and no root is found, failing where this
+  repository claims the plugin and the locator refuses or the runtime's major differs from the
+  major that wrote its state — and `plugin-duplicates` reports one entry per class delivered twice
+  for one client with its source, the paths it found and the remedy for that source, a warning
+  while the manifest says `generated` and a failure once it says `plugin-backed`.
+- **The effort scale widens to `minimal … max`.** Six levels are expressible, `config set` refuses
+  a level the selected client cannot express and names the client and its bound in both
+  directions, a configured level is clamped to the nearest expressible one with
+  `(clamped from …)` in `config list`, and a client whose scale is narrower carries the
+  disclosure beside its own capability row.
+- **`plugin status` answers more of what it is asked.** It states the engine's declared Node floor
+  and whether the running Node satisfies it even when no root's locator answers, carries each
+  duplicate's source and remedy in the table and in `--json`, and narrows its client rows with
+  `--client <csv>`.
+- **The Copilot and Codex client contracts were re-read against the clients.**
+  `.github/client-contracts.md` now records each container's layout and manifest schema from the
+  vendors' own pages plus what the CLIs settle that the pages leave open — the Copilot commands'
+  single-extension id derivation, the namespaced hooks path, the marketplace and cache locations,
+  the Codex marketplace source kinds and the cached install tree, and which claims stay unmeasured
+  and are therefore not made.
+- **The eval set's locator contract admits a rendered source for a generated command.** A case
+  governing a command that only exists once a plugin root is built cites the script that renders
+  it, beside the `.md` sources every other case cites, and the coverage gate names every case
+  governed outside the corpus rather than exempting one silently.
+- **`all-ci-checks` requires the plugin route lane.** The aggregator's `needs` carries the
+  `plugin-route` job with the three lanes it already required, so a red route lane blocks a merge.
+- **The 1.9.0 release run passed every threshold and floor.** Run 31
+  (`evals/runs/2026-09-21-run-31/`) measured the whole set under SET-v7's incremental rule: run 30
+  is the prior complete run it composes with, four cases were re-measured — the three
+  plugin-lifecycle cases added in this release and `agent-test-runner-return-contract`, whose
+  cited source text moved — and the other 98 carried their three admitted samples with per-case
+  provenance and calibration fresh. Golden 1.000 (52 of 52) with every floor case passing,
+  guardrail hold 1.000 (16 of 16), benign-twin false refusals 0 of 4, trigger-probe accuracy
+  1.000 (30 of 30) with every per-skill recall met; three admitted samples per case, the Claude
+  profile, rubric v7, thresholds as declared before the run.
+
+### Fixed
+
+- **A Claude Code hook command survives a session that leaves the repository root.** Every
+  repository-relative hook script is now rendered as one double-quoted word under
+  `${CLAUDE_PROJECT_DIR}` — `node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/<script>"`
+  — because a relative command run from a moved working directory failed as a missing module with
+  exit 1, which this client does not treat as blocking, so the pre-tool-use guard went unenforced
+  for every call after a `cd`; the core guard's command alone also carries a fail-closed tail that
+  exits 2 with `stamity: the pre-tool-use guard could not run; run stamity sync`, with the guard's
+  own exit 2 re-raised in silence so a legitimate refusal is never answered with a false
+  remediation; and an emitted core script in repository mode derives the repository root from its
+  own location under `.stamity/generated/hooks`, so the session-start and review-gate scripts read
+  and write the repository's own `.stamity/` from a sub-directory working directory. The other
+  three clients' commands stay repository-relative, each on its own measured or documented
+  working-directory guarantee, the notices and the review gate keep the client's non-blocking
+  semantics, and the tail is unmeasured under the PowerShell fallback a Windows host with no Git
+  Bash uses.
+- **The upstream lane's recovery accepts every manifest key the engine admits.** The prepared and
+  the recovered manifest are compared as data with `updatedAt` excluded, rather than against a
+  pinned field allowlist that refused a manifest carrying a key added since the list was written,
+  and the engine's own schema is applied where the engine actually runs.
+- **The DCO check reads past the pull-request listing cap.** A pull request's commits are listed
+  through the paginated compare endpoint instead of the first 250, and an unsigned commit is
+  exempted only when its sha exists in the configured upstream repository — on github.com
+  upstreams; anywhere else every commit is checked and the message says so.
+- **A fork's remedies name the fork's own package.** Every remedy line a renamed distribution
+  prints resolves the running package's name and command rather than the canonical one, including
+  the install path and both consumer snippets the tarball smoke reads.
+- **Three clients' hook contracts match what their clients do.** Cursor's guards and the runner's
+  silent-child path allow explicitly rather than by silence; Copilot session-start output reaches
+  the session as `additionalContext`, in plain-text and JSON form alike; and the Codex starter
+  walks up to the directory holding the trusted `.codex/hooks.json` and runs the script beside it,
+  ignoring a decoy nearer the working directory, while a legacy `approve` decision is warned about
+  instead of being turned into a denial.
+- **The signing rehearsal signs the commit it runs on.** It checks the signing source out at the
+  triggering sha in one checkout, prints an engine error's code and message when the signing helper
+  refuses, and the packs-and-trust page names the two identity sources it can use.
+- **The eval comparator keys on the configuration, and the coverage checker reads every delta
+  shape.** A previous run is matched on profile, rubric core and harness rather than on input
+  bytes; the structural checker expands requirement ranges between same-area ids, reports a missing
+  spec-delta heading, splits a mixed added-and-removed line at its keywords, and reads a plan's own
+  requirement headings as provisional definitions only where no spec defines the id.
+
+### Security
+
+- **The release archives carry build-provenance attestations.** The publish job attests
+  `plugins/*.zip` with a sha-pinned action before the tree is pushed, over the same OIDC identity
+  the npm publish uses.
+- **The publish job verifies what it is about to ship, and refuses to overwrite history.** The
+  distribution manifest is checked against the digest the gates job published on the outputs
+  channel and every archive against the verified manifest, both ahead of the npm publish so a
+  missing or corrupt artifact fails before the one irreversible step; a `plugins/v<version>` tag
+  that already names another commit is refused rather than moved; and a distribution branch head
+  that carries a parent is refused rather than force-pushed over, because a head with history is a
+  source branch whatever the manifest called it.
+- **The runtime's archive reader refuses everything but plain files and directories.** The bundled
+  tar reader is a minimal ustar/pax implementation over `node:zlib` with no system `tar`, and it
+  refuses an entry by name for a link of either kind, an absolute path, a backslash or a `..`
+  segment.
+- **A credential-shaped distribution identity is refused and never echoed.** `stamity.distribution`
+  is validated key by key with unknown keys named, and a credential-shaped key at any depth or a
+  credential-shaped value is refused by path with the value never printed, using the leak gate's
+  own five shapes.
+
 ## [1.8.0] - 2026-09-15
 
 ### Added
@@ -650,7 +810,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   emission (Claude, Cursor, Copilot, and Codex); the first-party packs; and the documentation
   site.
 
-[Unreleased]: https://github.com/zomarit/stamity/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/zomarit/stamity/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/zomarit/stamity/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/zomarit/stamity/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/zomarit/stamity/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/zomarit/stamity/compare/v1.5.0...v1.6.0
