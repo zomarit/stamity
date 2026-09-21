@@ -269,11 +269,13 @@ claude plugin install stamity@stamity --scope project
 claude plugin update stamity@stamity --scope project
 ```
 
-*Executed 2026-09-20 on 2.1.278.* The first two are the documented route and they are not
-sufficient on their own: with the plugin already installed, `marketplace add` answers that the
-source is already on disk and `install` answers "already installed … it loads in place", leaving
-the recorded version where it was. The third line is what re-records it, and the client's own
-message is what names it. A `plugin rollback` subcommand is **settled absent**: `claude plugin
+*Walked 2026-09-20 on 2.1.278 by the release's lifecycle proof, which spelled the third command's
+plugin argument bare; both spellings resolve on that build, and `stamity@stamity` is written here
+for the same reason `install` above it takes one — it names the marketplace as well (measured
+2026-09-21).* The first two commands are the documented route and they are not sufficient on their
+own: with the plugin already installed, `marketplace add` answers that the source is already on
+disk and `install` answers "already installed … it loads in place", leaving the recorded version
+where it was. The third line is what re-records it, and the client's own message is what names it. A `plugin rollback` subcommand is **settled absent**: `claude plugin
 rollback stamity` answers `error: unknown command 'rollback'` on 2.1.278, and no vendor page read
 2026-09-21 names one. The reinstall route above is the rollback.
 
