@@ -15,6 +15,8 @@ interface CatalogueRow {
   client?: string;
   title: string;
   proves: string;
+  /** `H5` only: the route each client's own CLI actually offers, which is not one route. */
+  routes?: Record<string, string>;
 }
 
 const PAGE_INPUTS = {
@@ -143,18 +145,20 @@ const evidence = {
 };
 
 describe("renderForm", () => {
-  it("renders all thirteen rows, in catalogue order", () => {
+  it("renders all fourteen rows, in catalogue order", () => {
     const markdown = renderForm(evidence) as string;
 
     const ids = (QA_ROWS as CatalogueRow[]).map((row) => row.id);
-    // The plugin route added `H4a`–`H4d` on 2026-09-20, one per client, after `H3d` — the ids are
-    // the join key the form, the harness and the run record share, so their ORDER is pinned here
-    // rather than left to whatever order the catalogue happens to be written in.
+    // The plugin route added `H4a`–`H4d` on 2026-09-20, one per client, after `H3d`, and the
+    // upgrade-and-rollback walk added `H5` after them — the ids are the join key the form, the
+    // harness and the run record share, so their ORDER is pinned here rather than left to whatever
+    // order the catalogue happens to be written in.
     expect(ids).toEqual([
       "H1a", "H1b", "H1c", "H1d",
       "H2",
       "H3a", "H3b", "H3c", "H3d",
       "H4a", "H4b", "H4c", "H4d",
+      "H5",
     ]);
     for (const id of ids) expect(markdown).toContain(`**${id}**`);
 
@@ -233,7 +237,7 @@ describe("renderForm", () => {
 
 describe("the plugin-route rows", () => {
   it("names one client per row, all four of them, on the lane run.mjs dispatches", () => {
-    const plugins = (QA_ROWS as CatalogueRow[]).filter((row) => row.lane === "plugins");
+    const plugins = (QA_ROWS as CatalogueRow[]).filter((row) => row.lane === "plugins" && row.client !== undefined);
     expect(plugins.map((row) => row.id)).toEqual(["H4a", "H4b", "H4c", "H4d"]);
     expect(plugins.map((row) => row.client)).toEqual(["claude", "cursor", "copilot", "codex"]);
     for (const row of plugins) {
@@ -243,6 +247,26 @@ describe("the plugin-route rows", () => {
       expect(row.proves, row.id).toContain(".stamity/manifest.json");
       expect(row.proves, row.id).toContain("plugin-backed");
     }
+  });
+
+  it("carries the upgrade-and-rollback row once, with no client and a route named per client", () => {
+    const walk = (QA_ROWS as CatalogueRow[]).filter((row) => row.lane === "plugins" && row.client === undefined);
+    // ONE row, not four: the claim is about a version transition walked through every client, and
+    // four per-client rows could each pass while the transition went unmeasured where it mattered.
+    expect(walk.map((row) => row.id)).toEqual(["H5"]);
+    const row = walk[0]!;
+    expect(row.title).toBe("Upgrade and rollback through each client's own route");
+    // What a pass means, in the three parts the walk actually asserts.
+    expect(row.proves).toContain("byte for byte");
+    expect(row.proves).toContain("`plugin status` compatible in all three states");
+    expect(row.proves).toContain("repository-owned files unchanged");
+    // The four routes are not the same shape, and the row names which is which — a reader deciding
+    // whether to ship needs the one their own client uses.
+    expect(Object.keys(row.routes ?? {}).toSorted()).toEqual(["claude", "codex", "copilot", "cursor"]);
+    expect(row.routes?.["claude"]).toContain("--scope project");
+    expect(row.routes?.["copilot"]).toContain("tree replacement");
+    expect(row.routes?.["codex"]).toContain("plugin remove stamity@stamity");
+    expect(row.routes?.["cursor"]).toContain("--plugin-dir");
   });
 
   it("renders a measured plugin failure as a failure and a skipped leg as not-run", () => {

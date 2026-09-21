@@ -133,6 +133,24 @@ export const QA_ROWS = [
     proves:
       'the built root installs through the marketplace route into the client\'s own cache, its carried skills are discovered under the form the root declares, and the setup line its README names writes `.stamity/manifest.json` with `plugin.mode` `plugin-backed`',
   },
+  {
+    id: 'H5',
+    lane: 'plugins',
+    title: "Upgrade and rollback through each client's own route",
+    proves:
+      "installing the first fixture version, updating to the second and rolling back restores the first version's tree byte for byte, with `plugin status` compatible in all three states and the repository-owned files unchanged",
+    // The four routes, named here because they differ and the difference is what an operator has to
+    // plan around. Measured 2026-09-20; the row's own reason carries the route each client actually
+    // walked, out of the run, rather than out of this list.
+    routes: {
+      claude:
+        'reinstall — re-add the marketplace at the previous tag, `plugin install stamity@stamity --scope project`, then `plugin update stamity@stamity --scope project` completes it (there is no `plugin rollback` subcommand)',
+      copilot:
+        'tree replacement — a local marketplace loads live, so `plugin update` is a no-op and the version follows the directory',
+      codex: '`plugin remove stamity@stamity`, then marketplace add at the earlier tag and `plugin add`',
+      cursor: '`--plugin-dir` tree replacement — this client documents no install, update or rollback subcommand',
+    },
+  },
 ]
 
 /** Row id -> catalogue entry, so a renderer never has to scan the list. */

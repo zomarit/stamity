@@ -296,12 +296,13 @@ describe("main — inputHashes keys never carry the checkout location", () => {
 });
 
 /**
- * The plugins lane (`H4a`–`H4d`), which needs a BUILT distribution the harness deliberately does not
- * build. Both cases below drive `main()` with no distribution at all, because that is the state the
- * rows must describe honestly: a release run that forgot `--dist` must not produce four absent rows,
- * and must certainly not produce four green ones. The lane's own measurement — the route smoke
- * against real client binaries — is proven in `test/ci/pluginRoute.test.ts`; what is under test here
- * is the row the harness writes when it cannot measure.
+ * The plugins lane (`H4a`–`H4d` and `H5`), which needs a BUILT distribution the harness deliberately
+ * does not build. Both cases below drive `main()` with no distribution at all, because that is the
+ * state the rows must describe honestly: a release run that forgot `--dist` must not produce five
+ * absent rows, and must certainly not produce five green ones. The lane's own measurements — the
+ * route smoke and the upgrade-and-rollback walk against real client binaries — are proven in
+ * `test/ci/pluginRoute.test.ts` and `test/ci/pluginLifecycle.test.ts`; what is under test here is the
+ * row the harness writes when it cannot measure, and that each row is bound to ITS OWN instrument.
  */
 describe("main — the plugins lane with nothing to measure", () => {
   const temps: string[] = [];
@@ -344,9 +345,10 @@ describe("main — the plugins lane with nothing to measure", () => {
     ])) as { rows: { row: string; status: string; reason: string; inputHashes: Record<string, string> }[] };
   }
 
-  const PLUGIN_ROWS = ["H4a", "H4b", "H4c", "H4d"];
+  const ROUTE_ROWS = ["H4a", "H4b", "H4c", "H4d"];
+  const PLUGIN_ROWS = [...ROUTE_ROWS, "H5"];
 
-  it("writes all four rows as not-run, naming the missing --dist, when none was passed", async () => {
+  it("writes every plugins row as not-run, naming the missing --dist, when none was passed", async () => {
     const evidence = await runHarness([]);
 
     for (const id of PLUGIN_ROWS) {
@@ -354,10 +356,20 @@ describe("main — the plugins lane with nothing to measure", () => {
       expect(row, `${id} is absent from the evidence`).toBeDefined();
       expect(row?.status, id).toBe("not-run");
       expect(row?.reason, id).toBe("no --dist directory: build the distribution and pass it");
-      // Bound to the instrument that lives in this repository, so the row reopens when the smoke
-      // moves rather than carrying a constant hash a signature could sit on forever.
-      expect(Object.keys(row?.inputHashes ?? {}), id).toEqual(["scripts/plugin-route-smoke.mjs"]);
     }
+    // Bound to the instrument that lives in this repository, so a row reopens when its own
+    // instrument moves rather than carrying a constant hash a signature could sit on forever — and
+    // the lifecycle row's instrument is NOT the route smoke, which is the distinction that would
+    // otherwise let a walk row be signed off against a file it never ran.
+    for (const id of ROUTE_ROWS) {
+      expect(Object.keys(evidence.rows.find((entry) => entry.row === id)?.inputHashes ?? {}), id).toEqual([
+        "scripts/plugin-route-smoke.mjs",
+      ]);
+    }
+    expect(Object.keys(evidence.rows.find((entry) => entry.row === "H5")?.inputHashes ?? {}).toSorted()).toEqual([
+      "scripts/plugin-lifecycle-fixture.mjs",
+      "test/ci/pluginLifecycle.test.ts",
+    ]);
   });
 
   it("says the lane was skipped when --skip-plugins was passed, rather than blaming --dist", async () => {

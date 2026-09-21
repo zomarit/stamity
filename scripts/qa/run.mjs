@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The QA harness: measures the thirteen form rows it can measure, binds all thirteen to the bytes
+// The QA harness: measures the fourteen form rows it can measure, binds all fourteen to the bytes
 // they were measured against, and writes one evidence file.
 //
 // WHAT THIS REPLACES. Nine rows of a manual walk-through have been carried to two releases reading
@@ -36,7 +36,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { carryForward, hashFile, inputHashMap, rowHash } from './bind.mjs'
 import { QA_ROWS } from './form.mjs'
 import { exitDescription, runHookClients } from './hook-runs.mjs'
-import { runPluginClients } from './plugin-runs.mjs'
+import { runLifecycleWalk, runPluginClients } from './plugin-runs.mjs'
 
 const SELF = fileURLToPath(import.meta.url)
 const REPO_ROOT = resolve(SELF, '..', '..', '..')
@@ -145,6 +145,16 @@ const HOOK_INPUT_PATTERNS = {
  * repository, so every `H4` row carries it whether or not a distribution was passed.
  */
 const PLUGIN_SMOKE = 'scripts/plugin-route-smoke.mjs'
+
+/**
+ * The instruments row `H5` is bound to when the walk did not run.
+ *
+ * A row that cannot be measured is still bound to something, or a signature on it would sit on a
+ * constant hash forever; the two files here are the fixture builder and the suite that drives it, so
+ * the row reopens when either moves. When the walk DOES run it returns its own input list — the
+ * fixture's `release.json` and per-client capability files, which are the bytes actually walked.
+ */
+const LIFECYCLE_INSTRUMENTS = ['scripts/plugin-lifecycle-fixture.mjs', 'test/ci/pluginLifecycle.test.ts']
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -517,9 +527,24 @@ export async function main(argv) {
           distDir,
           ...(fixturesDir === undefined ? {} : { scratchDir: fixturesDir }),
         })
+  // The lifecycle walk (`H5`) is gated on the SAME two options as the route rows, and for the same
+  // reason: it reuses the distribution's own bundled runtime rather than packing this checkout again,
+  // so a run with no `--dist` has nothing to measure it against and says so instead of building one.
+  const lifecycleResult =
+    options.skipPlugins || distDir === undefined
+      ? undefined
+      : await runLifecycleWalk({
+          clients: options.clients,
+          repoRoot: REPO_ROOT,
+          distDir,
+          ...(fixturesDir === undefined ? {} : { scratchDir: fixturesDir }),
+        })
   const smokeInputs = existsSync(join(REPO_ROOT, ...PLUGIN_SMOKE.split('/')))
     ? [{ path: PLUGIN_SMOKE, sha256: hashFile(join(REPO_ROOT, ...PLUGIN_SMOKE.split('/'))) }]
     : []
+  const lifecycleInstruments = LIFECYCLE_INSTRUMENTS.filter((path) => existsSync(join(REPO_ROOT, ...path.split('/')))).map(
+    (path) => ({ path, sha256: hashFile(join(REPO_ROOT, ...path.split('/'))) }),
+  )
 
   const rows = []
   for (const definition of QA_ROWS) {
@@ -558,8 +583,11 @@ export async function main(argv) {
     }
 
     if (definition.lane === 'plugins') {
+      // Each row in this lane is bound to ITS OWN instrument: the route rows to the smoke, the
+      // lifecycle row to the fixture builder and the suite that drives it.
+      const laneInputs = definition.client === undefined ? lifecycleInstruments : smokeInputs
       if (options.skipPlugins) {
-        rows.push(buildRow({ id: definition.id, status: 'not-run', reason: 'the plugins lane was skipped (--skip-plugins)', inputs: smokeInputs }))
+        rows.push(buildRow({ id: definition.id, status: 'not-run', reason: 'the plugins lane was skipped (--skip-plugins)', inputs: laneInputs }))
         continue
       }
       if (distDir === undefined) {
@@ -568,7 +596,22 @@ export async function main(argv) {
             id: definition.id,
             status: 'not-run',
             reason: 'no --dist directory: build the distribution and pass it',
-            inputs: smokeInputs,
+            inputs: laneInputs,
+          }),
+        )
+        continue
+      }
+      // The one plugins row with no client: the walk across all four at once.
+      if (definition.client === undefined) {
+        rows.push(
+          buildRow({
+            id: definition.id,
+            status: lifecycleResult?.status ?? 'not-run',
+            reason: lifecycleResult?.reason ?? 'the upgrade-and-rollback walk did not run',
+            inputs:
+              lifecycleResult?.inputs === undefined || lifecycleResult.inputs.length === 0
+                ? lifecycleInstruments
+                : lifecycleResult.inputs,
           }),
         )
         continue
@@ -580,12 +623,12 @@ export async function main(argv) {
             id: definition.id,
             status: 'not-run',
             reason: `client "${definition.client}" was not in --clients`,
-            inputs: smokeInputs,
+            inputs: laneInputs,
           }),
         )
         continue
       }
-      rows.push(buildRow({ id: definition.id, status: result.status, reason: result.reason, inputs: result.inputs ?? smokeInputs }))
+      rows.push(buildRow({ id: definition.id, status: result.status, reason: result.reason, inputs: result.inputs ?? laneInputs }))
       continue
     }
 

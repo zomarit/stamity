@@ -196,3 +196,225 @@ function runSmoke({ args, cwd }) {
     child.on('close', (status, signal) => done(status, signal))
   })
 }
+
+// ───────────────────────────────────────────────────────────────────────────────────────────────
+// The upgrade-and-rollback walk (row `H5`).
+//
+// The instrument is `test/ci/pluginLifecycle.test.ts`, spawned. That is the deliberate choice over a
+// shared walk module: the walk's proof is its ASSERTIONS — installed tree equals the shipped root
+// byte for byte, `plugin status` compatible in all three states, the project surface unchanged after
+// every step — and a second implementation that produced a status without them would be a different
+// measurement wearing the same row id. So there is one walk, the suite owns it, and this function
+// reads its verdict and its rows.
+//
+// The channel is the suite's own `STAMITY_LIFECYCLE_LOG`: one `plugin-lifecycle: <client> <step>
+// <verdict> (<reason>)` line per step, plus `plugin-lifecycle-input: <label> <sha256>` lines binding
+// the row to the fixture bytes under LOGICAL labels. Nothing in this lane composes a path into a
+// reason, and every reason still goes through {@link redactPaths} before it is returned — an
+// evidence file is committed, and a vitest line can carry a temp directory or a home.
+//
+// THE ROW FOLDS ON THE PER-CLIENT `walk` LINE, not on the whole log. Four `walk PASS` and a green
+// suite is `passed`; any `walk SKIPPED` — no binary, an account the walk will not reach for, a rate
+// limit — is `not-run` with those clients' reasons; a red suite, or a `walk FAIL`, is `failed`. The
+// one line that is FAIL by design, `claude rollback-documented`, is a measurement of `docs/plugins.md`
+// rather than of a walk step, which is exactly why the fold reads the `walk` line and not the rest.
+
+/** The suite whose armed cases ARE this walk, and the scripts the row is bound to beyond the fixture. */
+const LIFECYCLE_SUITE = ['test', 'ci', 'pluginLifecycle.test.ts']
+
+/**
+ * Four client walks, each building a real runtime's worth of distribution and driving a client CLI
+ * through three states. The suite's own budget for one armed run was 206.68 s measured on
+ * 2026-09-20; this ceiling is ~9x that, because the harness may be the third thing running on the
+ * machine and a Cursor discovery call is a network round trip.
+ */
+const WALK_TIMEOUT_MS = 1_800_000
+
+/** One row line out of the suite's log, or `null` for anything else. */
+function parseRow(line) {
+  const match = /^plugin-lifecycle: (\S+) (\S+) (PASS|FAIL|SKIPPED)(?: \((.*)\))?$/.exec(line)
+  if (match === null) return null
+  return { client: match[1], step: match[2], verdict: match[3], reason: match[4] ?? '' }
+}
+
+/**
+ * Fold the suite's log into the one row `H5` carries. Exported for `test/qa/pluginRuns.test.ts`,
+ * which is the only caller that can drive it against a log it wrote itself.
+ */
+export function lifecycleRow({ clients, log, status, exit, redact = (text) => text }) {
+  const lines = log.split('\n')
+  const rows = lines.map(parseRow).filter((row) => row !== null)
+  const reason = redact(
+    lines
+      .filter((line) => line.startsWith('plugin-lifecycle: ') || line.startsWith('plugin-lifecycle-runtime: '))
+      .join(' || '),
+  )
+  if (rows.length === 0) {
+    return { status: 'not-run', reason: `the lifecycle suite wrote no row (${exit})` }
+  }
+  // The suite's OWN verdict, kept separate from the rows: `status` is its exit code and is what says
+  // whether the assertions held, while the rows say what was walked. A green log under a red exit is
+  // the case this distinction exists for.
+  const green = status === 0
+  const walks = clients.map((client) => ({
+    client,
+    row: rows.findLast((row) => row.client === client && row.step === 'walk') ?? null,
+  }))
+  const missing = walks.filter((entry) => entry.row === null)
+  const failed = walks.filter((entry) => entry.row?.verdict === 'FAIL')
+  const skipped = walks.filter((entry) => entry.row?.verdict === 'SKIPPED')
+  if (failed.length > 0 || !green) {
+    const how = failed.length > 0 ? `walk FAIL for ${failed.map((entry) => entry.client).join(', ')}` : `the suite ended: ${exit}`
+    return { status: 'failed', reason: `${how} || ${reason}` }
+  }
+  if (missing.length > 0) {
+    // A client with no `walk` line at all: the suite never reached its closing row, which is a
+    // failure to MEASURE rather than a measured failure.
+    return { status: 'not-run', reason: `no walk row for ${missing.map((entry) => entry.client).join(', ')} || ${reason}` }
+  }
+  if (skipped.length > 0) {
+    return {
+      status: 'not-run',
+      reason: `${skipped.map((entry) => `${entry.client}: ${entry.row.reason}`).join('; ')} || ${reason}`,
+    }
+  }
+  return { status: 'passed', reason }
+}
+
+/** The `plugin-lifecycle-input:` lines, as the row's input list under their logical labels. */
+export function lifecycleInputs(log) {
+  return log
+    .split('\n')
+    .map((line) => /^plugin-lifecycle-input: (\S+) ([0-9a-f]{64})$/.exec(line))
+    .filter((match) => match !== null)
+    .map((match) => ({ path: match[1], sha256: match[2] }))
+    .toSorted((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+}
+
+/**
+ * Run the upgrade-and-rollback walk once and return the one row `H5` carries.
+ *
+ * `distDir` is used for ONE thing: its first root's bundled `runtime/` is handed to the fixture
+ * builder, so the walk does not pack this checkout and install a production graph a second time
+ * (~60 s of the ~70 s a self-built fixture costs). With no usable runtime in the distribution the
+ * builder makes its own, and the reason says which happened — the `plugin-lifecycle-runtime:` line.
+ *
+ * `scratchDir` is a REDACTION input only, not a location: the suite makes its own temp directories
+ * per client walk, and passing the harness's `--fixtures` path in would put two owners on one tree.
+ * What it buys is a reason with `<scratch>` in it where a vitest line quoted that path.
+ */
+export async function runLifecycleWalk({ clients, repoRoot, distDir, scratchDir }) {
+  const suite = join(repoRoot, ...LIFECYCLE_SUITE)
+  if (!existsSync(suite)) {
+    return { status: 'not-run', reason: `${LIFECYCLE_SUITE.join('/')} is absent` }
+  }
+  const unarmed = clients.filter((client) => process.env[`STAMITY_${client.toUpperCase()}_BIN`] === undefined)
+  if (unarmed.length > 0) {
+    // Asked BEFORE a thirty-minute spawn: the suite would skip those walks and this lane would read
+    // its own log to discover what the environment already says.
+    return {
+      status: 'not-run',
+      reason: `no binary for ${unarmed.map((client) => `${client} (STAMITY_${client.toUpperCase()}_BIN unset)`).join(', ')}`,
+    }
+  }
+  const work = mkdtempSync(join(tmpdir(), 'stamity-qa-lifecycle-'))
+  const logPath = join(work, 'walks.txt')
+  try {
+    const runtime = bundledRuntime(distDir)
+    const result = await runSuite({
+      args: ['vitest', 'run', LIFECYCLE_SUITE.join('/')],
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        STAMITY_LIFECYCLE_LOG: logPath,
+        ...(runtime === null ? {} : { STAMITY_LIFECYCLE_RUNTIME: runtime }),
+      },
+    })
+    const log = existsSync(logPath) ? readFileSync(logPath, 'utf8') : ''
+    const redact = (text) =>
+      redactPaths(text, [
+        [distDir, 'dist'],
+        ...(scratchDir === undefined ? [] : [[scratchDir, '<scratch>']]),
+        [work, '<scratch>'],
+        [repoRoot, '<repo>'],
+        [tmpdir(), '<tmp>'],
+        [homedir(), '<home>'],
+      ])
+    if (log === '') {
+      const detail = redact(`${result.stdout.trim().split('\n').at(-1) ?? ''} ${result.stderr.trim().slice(-400)}`.trim())
+      return { status: 'not-run', reason: `the lifecycle suite wrote no log (${result.exit}): ${detail}` }
+    }
+    return {
+      ...lifecycleRow({ clients, log, status: result.status, exit: result.exit, redact }),
+      inputs: lifecycleInputs(log),
+    }
+  } finally {
+    rmSync(work, { recursive: true, force: true })
+  }
+}
+
+/**
+ * A runtime directory inside a built distribution, or `null`.
+ *
+ * Every plugin root bundles one at `<root>/runtime/`, and the distribution builder requires exactly
+ * three files of a runtime input — `package.json`, `dist/cli.js`, `RUNTIME.json`. All three are
+ * checked here rather than assumed, because handing the builder a directory that only looks like a
+ * runtime turns a reusable input into a refusal thirty seconds into the walk.
+ */
+function bundledRuntime(distDir) {
+  if (distDir === undefined) return null
+  for (const client of ['claude', 'cursor', 'copilot', 'codex']) {
+    const dir = join(distDir, client, 'runtime')
+    const complete = ['package.json', 'RUNTIME.json', join('dist', 'cli.js')].every((file) => existsSync(join(dir, file)))
+    if (complete) return dir
+  }
+  return null
+}
+
+/**
+ * Run the suite to completion, or end it in two steps — the same shape {@link runSmoke} uses and for
+ * the same reason: the walks install into client state directories and remove what they installed,
+ * and a single kill with no grace would leave that behind. `npx` rather than a resolved binary
+ * because vitest is a dev dependency of this repository and its bin location is npm's to know.
+ */
+function runSuite({ args, cwd, env }) {
+  return new Promise((settle) => {
+    const child = spawn('npx', args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    const keep = (buffer, chunk) => `${buffer}${chunk}`.slice(-STREAM_TAIL)
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (chunk) => {
+      stdout = keep(stdout, chunk)
+    })
+    child.stderr.on('data', (chunk) => {
+      stderr = keep(stderr, chunk)
+    })
+
+    let ended = null
+    let killTimer = null
+    const termTimer = setTimeout(() => {
+      ended = 'SIGTERM after the harness ceiling'
+      child.kill('SIGTERM')
+      killTimer = setTimeout(() => {
+        ended = `SIGKILL ${CLEANUP_GRACE_MS} ms after SIGTERM`
+        child.kill('SIGKILL')
+      }, CLEANUP_GRACE_MS)
+    }, WALK_TIMEOUT_MS)
+
+    const done = (status, signal, error) => {
+      clearTimeout(termTimer)
+      if (killTimer !== null) clearTimeout(killTimer)
+      const how =
+        error !== undefined
+          ? `the lifecycle suite could not be spawned: ${error.message}`
+          : signal !== null && signal !== undefined
+            ? `killed by signal ${signal}${ended === null ? '' : ` (${ended})`}`
+            : `exit ${String(status)}`
+      settle({ stdout, stderr, exit: how, status: status ?? null })
+    }
+    child.on('error', (error) => done(null, null, error))
+    child.on('close', (status, signal) => done(status, signal))
+  })
+}

@@ -264,6 +264,16 @@ function transcribe(text: string): void {
   appendFileSync(LOG, `${text}\n`);
 }
 
+/**
+ * One input line: a LOGICAL label and the sha-256 of the file behind it. `scripts/qa/plugin-runs.mjs`
+ * reads these back to bind row `H5` to the bytes it was measured against, which is why the label is
+ * never the path — the fixture lives in a temp directory and an evidence file is committed.
+ */
+function transcribeInput(label: string, path: string): void {
+  if (LOG === undefined || !existsSync(path)) return;
+  transcribe(`plugin-lifecycle-input: ${label} ${digest(readFileSync(path))}`);
+}
+
 /** One client command's full observation, appended to the transcript log under its own heading. */
 function observe(label: string, command: string[], result: SpawnSyncReturns<string>): SpawnSyncReturns<string> {
   transcribe(
@@ -277,6 +287,13 @@ function observe(label: string, command: string[], result: SpawnSyncReturns<stri
   );
   return result;
 }
+
+/**
+ * What a client CLI says when the account behind it is out of quota for now. A rate limit is a fact
+ * about the account, not about the tree under test, so a walk that hits one records `not-run` with
+ * the client's own words and stops — never `failed`, which would send the next reader to the diff.
+ */
+const RATE_LIMITED = /rate limit|rate-limit|too many requests|quota|usage limit|try again (later|after)/i;
 
 /** The steps this client's walk has recorded so far, in order, with their verdicts. */
 function stepsOf(client: Client): string[] {
@@ -487,9 +504,23 @@ function withRealRuntime(): string {
   if (realFixture === null) {
     try {
       const out = join(tempDir("real"), "lifecycle");
-      // No `--runtime`: the builder packs this checkout and builds one, which is the route the
-      // verify line in the plan cell runs and the only runtime the locator can actually spawn.
-      buildFixture(out, [], REAL_BUILD_MS);
+      // `STAMITY_LIFECYCLE_RUNTIME`, when exported, is a runtime directory this build reuses instead
+      // of packing the checkout and installing a production graph again — which is what the QA
+      // harness passes when it already has a built distribution, whose every root bundles one.
+      // Unset, the builder makes its own: the route the plan cell's verify line runs, and the only
+      // runtime the locator can actually spawn.
+      const given = process.env["STAMITY_LIFECYCLE_RUNTIME"];
+      buildFixture(out, given === undefined ? [] : ["--runtime", given], REAL_BUILD_MS);
+      transcribe(`plugin-lifecycle-runtime: ${given === undefined ? "built by the fixture builder" : "reused from the distribution"}`);
+      // The bytes every row below is a claim about, under LOGICAL labels: an evidence file must not
+      // carry the temp directory this fixture happened to land in (`run.mjs`'s S-4 rule).
+      transcribeInput("scripts/plugin-lifecycle-fixture.mjs", join(REPO_ROOT, "scripts", "plugin-lifecycle-fixture.mjs"));
+      for (const version of VERSIONS) {
+        transcribeInput(`fixture/${version}/release.json`, join(out, version, "release.json"));
+        for (const client of CLIENTS) {
+          transcribeInput(`fixture/${version}/${client}/stamity-plugin.json`, join(out, version, client, "stamity-plugin.json"));
+        }
+      }
       realFixture = { out };
     } catch (error) {
       // A FAILURE IS MEMOIZED TOO. Four walk suites call this, and a build that failed once will
@@ -758,11 +789,13 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
       expect(JSON.parse(reinstall.stdout)).toMatchObject({ message: expect.stringContaining("already installed") });
       // Still at the second version: the documented route alone did not roll anything back.
       expect(claude(["plugin", "list"]).stdout).toContain(V2);
+      // FAIL, not SKIPPED: the route RAN and did not do what the page says it does. A skipped
+      // verdict would read as "nobody tried", which is the one thing this row is not.
       row(
         "claude",
         "rollback-documented",
-        "SKIPPED",
-        "docs/plugins.md's re-add plus install answers 'already installed' and leaves the recorded version at .2",
+        "FAIL",
+        "docs/plugins.md's re-add plus install leaves the recorded version at .2; plugin update --scope project completes the route",
       );
 
       // The completing command, which is the one the CLI itself names.
@@ -774,6 +807,7 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
       unchanged();
       row("claude", "rollback", "PASS", `marketplace re-added at ${V1} plus plugin update --scope project`);
       assertCompatible("claude", installedRoot(V1), walk.project, V1, "rolled-back");
+      row("claude", "walk", "PASS", "reinstall route: directory marketplace, --scope project on install and update");
 
       // The rows are the walk's own record, so the walk asserts them: a step that stopped running
       // would otherwise drop out of the output with nothing failing.
@@ -785,9 +819,10 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
         "update PASS",
         "status-updated PASS",
         "rollback-subcommand SKIPPED",
-        "rollback-documented SKIPPED",
+        "rollback-documented FAIL",
         "rollback PASS",
         "status-rolled-back PASS",
+        "walk PASS",
       ]);
     },
     WALK_MS,
@@ -863,6 +898,7 @@ describe.skipIf(!armed("copilot"))("the Copilot install, update and rollback wal
       unchanged();
       row("copilot", "rollback", "PASS", `reinstall route by tree replacement to ${V1}`);
       assertCompatible("copilot", live, walk.project, V1, "rolled-back");
+      row("copilot", "walk", "PASS", "tree replacement: a local marketplace loads live, plugin update is a no-op");
 
       expect(stepsOf("copilot")).toEqual([
         "install PASS",
@@ -873,6 +909,7 @@ describe.skipIf(!armed("copilot"))("the Copilot install, update and rollback wal
         "status-updated PASS",
         "rollback PASS",
         "status-rolled-back PASS",
+        "walk PASS",
       ]);
     },
     WALK_MS,
@@ -907,9 +944,15 @@ describe.skipIf(!armed("codex"))("the Codex install, update and rollback walk", 
 
   it(
     "copies the local marketplace into its cache and re-adds for both states",
-    () => {
+    (ctx) => {
       moveMirror(walk, V1, false);
-      expect(codex(["plugin", "marketplace", "add", walk.mirror]).status).toBe(0);
+      const market = codex(["plugin", "marketplace", "add", walk.mirror]);
+      if (RATE_LIMITED.test(`${market.stdout}${market.stderr}`)) {
+        row("codex", "walk", "SKIPPED", `rate limited: ${`${market.stdout}${market.stderr}`.trim().split("\n")[0] ?? ""}`);
+        ctx.skip();
+        return;
+      }
+      expect(market.status, market.stderr).toBe(0);
       const add = codex(["plugin", "add", "stamity@stamity"]);
       expect(add.status, add.stderr).toBe(0);
       expect([...digestMap(installedRoot(V1))]).toEqual([...digestMap(shippedRoot(walk, "codex", V1))]);
@@ -965,6 +1008,7 @@ describe.skipIf(!armed("codex"))("the Codex install, update and rollback walk", 
       unchanged();
       row("codex", "rollback", "PASS", `documented route: plugin remove, marketplace add, plugin add at ${V1}`);
       assertCompatible("codex", installedRoot(V1), walk.project, V1, "rolled-back");
+      row("codex", "walk", "PASS", "plugin remove stamity@stamity then marketplace add and plugin add");
 
       expect(stepsOf("codex")).toEqual([
         "install PASS",
@@ -976,6 +1020,7 @@ describe.skipIf(!armed("codex"))("the Codex install, update and rollback walk", 
         "rollback-remove PASS",
         "rollback PASS",
         "status-rolled-back PASS",
+        "walk PASS",
       ]);
     },
     WALK_MS,
@@ -1129,6 +1174,9 @@ describe.skipIf(!armed("cursor"))("the Cursor local-path walk", () => {
         const transcript = `${seen.stdout}\n${seen.stderr}`;
         if (CURSOR_REFUSAL.test(transcript)) {
           row("cursor", state, "SKIPPED", `needs an account: ${transcript.trim().split("\n")[0] ?? ""}`);
+          // The per-client completion row every consumer folds on, closed before the skip: a client
+          // whose walk stopped has to say so on that line, not go quiet.
+          row("cursor", "walk", "SKIPPED", "needs an account: agent refused before it reached the model");
           ctx.skip();
           return;
         }
@@ -1145,6 +1193,7 @@ describe.skipIf(!armed("cursor"))("the Cursor local-path walk", () => {
         );
         assertCompatible("cursor", root, walk.project, target, state);
       }
+      row("cursor", "walk", "PASS", "--plugin-dir tree replacement, discovery driven through the client");
 
       expect(stepsOf("cursor")).toEqual([
         "binary PASS",
@@ -1156,6 +1205,7 @@ describe.skipIf(!armed("cursor"))("the Cursor local-path walk", () => {
         "status-update PASS",
         "rollback PASS",
         "status-rollback PASS",
+        "walk PASS",
       ]);
     },
     WALK_MS,
