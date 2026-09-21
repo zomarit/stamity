@@ -11,7 +11,7 @@ closed run record's date, which is what this page is stamped with rather than th
 rendered. Every number below is computed from a committed artifact, so a claim here can be
 checked rather than believed.
 
-The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-09-20.json`](../evals/measurements/merge-ready-2026-09-20.json), the frozen
+The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-09-21.json`](../evals/measurements/merge-ready-2026-09-21.json), the frozen
 measurement committed beside this page. Refreshed per release by `node scripts/merge-ready-rate.mjs --write`
 (the release checklist's record-currency line); the snapshot named above is the input, and a
 run record written after it is not on this page until the next refresh.
