@@ -2,7 +2,7 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 3f76070. Re-attested 2026-09-20 in the plugin-lifecycle package. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.0 release cut (2026-09-21). -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run line changes, a verb joins
      or leaves the CLI, a probe joins or leaves `check`, a path joins or leaves `.stamity/`, or the
      APM route's client floor or per-target output moves. `test/docsPages.test.ts` holds this page
@@ -188,8 +188,10 @@ workflow request reaches the same projection. Claude Code reads its own copy und
 `.claude/skills/`. Codex has no emitted project command directory, so its charter is where its
 touchpoints are listed.
 
-Both install routes are proved on a clean machine before either ships.
-[The measurements page](measurements.md) has the first-run proof, lane by lane.
+Every install route is proved before it ships. The npm and APM routes are proved on a clean
+machine, lane by lane, on [the measurements page](measurements.md); the plugin route has a
+merge-blocking job of its own, which builds the four roots a release builds and asks each client
+about them ([CONTRIBUTING](../CONTRIBUTING.md) names what it does and does not prove).
 
 ## The ten verbs
 
@@ -261,7 +263,7 @@ GitHub CLI, `gh`, authenticated, when they work a real board or pull request.
 npx @zomarit/stamity check
 ```
 
-`check` is the diagnosis. It runs eleven environment probes. Then it asks the one question that
+`check` is the diagnosis. It runs thirteen environment probes. Then it asks the one question that
 matters more than the rest: **would a sync change anything?**
 
 If the answer is yes, disk and the engine's output disagree. Something was hand-edited, a

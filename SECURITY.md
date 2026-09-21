@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit e79dcf0. Re-attested 2026-09-16 in the Package 14 rewrite. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.0 release cut (2026-09-21). -->
 <!-- Re-open when: a `file::symbol` address below stops resolving, a control in the table loses its
      last caller under `src/`, a new install route or execution surface ships, a control named under
      "Publishing this package" changes in `.github/workflows/release.yml`, or the crosswalk in
@@ -50,7 +50,7 @@ own sync runs inside it. A cascade that is not a `--dry-run` preview also append
 
 ## Where content comes from
 
-Three sources install, and no more. Nothing on any of them is fetched over the network.
+Three sources install a PACK, and no more. Nothing on any of them is fetched over the network.
 
 1. **Bundled first-party packs** shipped inside this package. They resolve through the curated
    catalog by bare id (`stamity add ops`).
@@ -62,6 +62,18 @@ Three sources install, and no more. Nothing on any of them is fetched over the n
 
 Every route runs the same gate chain. The org trust policy narrows them
 (`src/pack/orgPolicy.ts::evaluatePackSource`) — by pack id, by scope wildcard, or by source kind.
+
+Since 1.9.0 there is a second way corpus content reaches a repository, and it is not a pack route:
+a **client plugin**. Your client installs a plugin root from a marketplace you point it at, that
+root carries the agents, skills, commands and hooks its container can hold, and it ships a bundled
+copy of this engine that `stamity plugin setup` then runs to write the repository-owned half. What
+checks that route is not the pack gate chain: it is the client's own install, plus the digest and
+the provenance attestation the release attaches to each archive, plus the corpus this repository
+publishes being the corpus the root was built from. So a plugin root is content you trust the way
+you trust the marketplace that served it. The engine's own contribution is that `sync` writes
+nothing under a class the installed root declares it carries, and that the locator refuses a
+runtime whose major differs from the one that wrote your `.stamity/` state
+(`scripts/plugins/locate.mjs`). [The plugins guide](docs/plugins.md) states the whole boundary.
 
 There are three kind tokens, not two: `local-path`, `npm-package` and `catalog-pinned`. The last is
 granted only to a catalog install whose pin verified against the pack's aggregate content hash. So
@@ -86,7 +98,7 @@ below is asserted to exist by `test/docsPages.test.ts`.
 | Any text author | Prompt injection and instruction override reaching agent context | Deny-scan over four pattern sets: content, injection, learnings-and-handoff injection, and MCP poisoning. Each is scanned raw ∪ normalized, so a lookalike letter or a combining mark is not an evasion. The fourth set is the memory vector. A learning or a handoff is written once and read back as agent context in a later session. So a forged instruction header, a frontmatter head impersonating engine config, a forged managed-block marker or a cross-agent override is refused. The learnings and handoff write gates refuse it, and so does the emitted session-start screen | `src/denyscan/denyScan.ts::scanNormalized`, `src/denyscan/denyScan.ts::normalizeForDenyScan`, `src/denyscan/denyScan.ts::LEARNINGS_INJECTION_PATTERNS` | A pattern gate is a gate, not a proof |
 | Any text author | Smuggling keywords past a reader with invisible characters | The invisible-character class is stripped ahead of the write-path screens — user content, pack bodies, learnings, handoffs — and by the emitted session-start screen, which embeds the same class (`src/hooks/scripts.ts`). The MCP metadata screens do not strip: a word-adjacent invisible run is rejoined for them by the normalized copy `scanNormalized` already scans | `src/denyscan/denyScan.ts::INVISIBLE_SMUGGLING_CHARS` | The class excludes the Unicode tag block deliberately, so `unicode-tag-smuggling` can refuse that block on the raw text. The prompt guard's own strip is unwired — see "Bounded phase IO" below |
 | MCP server | Poisoning a tool description a model reads | Tool descriptions and their element surfaces are scanned at emission | `src/mcp/descriptionScan.ts::scanMcpEntry` | A server that redefines its tools after install is NOT detected — see below |
-| A generated agent | Using a tool its role was never granted | Deny-by-default per-agent allowlist over tool categories. The named roster is serialized into the policy document the emitted pre-tool-use guard reads, pre-sanitized to exactly what an access check would authorize. The guard refuses with a machine-readable reason code | `src/tools/allowlist.ts::buildAgentToolPoliciesJson`, `src/roster/agentPolicies.ts::AGENT_POLICY_ROSTER` | ONE enforcement point, and it is the emitted client-side guard — the in-process check is built but unwired, see below. On a client whose hook payload names no agent the guard is telemetry |
+| A generated agent | Using a tool its role was never granted | Deny-by-default per-agent allowlist over tool categories. The named roster is serialized into the policy document the emitted pre-tool-use guard reads, pre-sanitized to exactly what an access check would authorize. The guard refuses with a machine-readable reason code. On Claude Code its command is anchored on `${CLAUDE_PROJECT_DIR}` and fails closed: a guard that cannot launch exits 2 rather than letting the call through, which it did for every call after a `cd` out of the repository root before 1.9.0 | `src/tools/allowlist.ts::buildAgentToolPoliciesJson`, `src/roster/agentPolicies.ts::AGENT_POLICY_ROSTER` | ONE enforcement point, and it is the emitted client-side guard — the in-process check is built but unwired, see below. On a client whose hook payload names no agent the guard is telemetry, and the fail-closed tail is unmeasured under the PowerShell fallback a Windows host with no Git Bash uses |
 | An agent | Piping an unbounded payload through the `learn` or `handoff` write path | Stdin is read under a 250 000-byte ceiling and REJECTED past it, not truncated. On the `learn` and `handoff` read the bound counts bytes rather than characters, so a body of multi-byte UTF-8 is refused well short of that many characters. The same number is applied as a CHARACTER ceiling over a user-content overlay body. `stamity validate` reports a body past it as a finding, and the engine's read of that body refuses it | `src/guard/promptGuard.ts::MAX_USER_CONTENT_LENGTH`, applied over stdin in `src/cli/commands/learn.ts` and `src/cli/commands/handoff.ts`, and as a character ceiling in `src/cli/commands/validate.ts` and `src/content/catalog.ts::readOverlayBody` | The 500 KB and 1 MB phase bounds beside it are unwired — see below |
 | Concurrent writer, or anything at the target path | Torn writes, symlink redirection, clobbering content the engine does not own | Temp file created `O_EXCL \| O_NOFOLLOW`, plus an atomic rename under a cross-process lock. Content outside managed blocks is preserved and reclaimed | `src/merge/atomicWrite.ts::atomicWriteFile`, `src/merge/managedBlocks.ts::extractCustomContent`, `src/merge/reclaim.ts::sweepReclaimCandidates` | — |
 | Anyone reading the repo | Credentials committed into generated config | MCP configs emit the reference form each dialect's own client resolves, never literal values. That is `${VAR}` for Claude Code, `${env:VAR}` for Cursor, `${input:<id>}` plus an `inputs` entry for VS Code, `$COPILOT_MCP_<VAR>` for Copilot, and the variable name alone for Codex. Values are scanned for known secret shapes and masked wherever a finding is printed | `src/mcp/emit.ts::envPlaceholder`, `src/mcp/secretScan.ts::detectSecrets` | Shape detection catches known shapes on sight, and nothing else |
@@ -114,7 +126,10 @@ repository.
 `signing.method: "sigstore"` fetches the Sigstore project's trust root over TUF before the bundle is
 checked (`src/pack/sigstoreVerifier.ts::verifySigstoreBundle`). The mirror is the client's default,
 named in that file. It happens only then: `init`, `sync`, `check`, and every install of a pack that
-declares no signature do not even load the client. No first-party pack declares one. The exchange
+declares no signature do not even load the client. No first-party pack declares one. Since 1.9.0
+that client is an OPTIONAL dependency: npm installs it by default, and an install run with
+`--omit=optional` cannot verify a signed pack at all, which refuses the install rather than passing
+it ([the trust guide](docs/packs-and-trust.md) states both halves). The exchange
 fetches signed metadata and sends nothing about you or the repository. The metadata is cached under
 your user cache directory (`src/pack/sigstoreVerifier.ts::sigstoreCachePath`), never inside the
 repository being installed into. A host that cannot reach the mirror gets a refusal, not a pass.
@@ -142,9 +157,10 @@ properties of that file, rather than properties of a maintainer's laptop.
   gate and the packed-artifact smoke on the shipping commit. An isolated `apm-route` job runs the
   third-party APM interpreter without publishing credentials and without access to the tarball. The
   `publish` job holds the publishing credential, takes no checkout, and runs only npm, the GitHub CLI
-  and three SHA-pinned actions: harden-runner, setup-node and download-artifact. It verifies the
-  tarball's SHA-256 against the first job's OUTPUT, a channel separate from the artifact under
-  verification. So a compromised build-time dependency runs in the job that has no credential.
+  and four SHA-pinned actions: harden-runner, setup-node, download-artifact and
+  attest-build-provenance. It verifies the tarball's SHA-256 against the first job's OUTPUT, a
+  channel separate from the artifact under verification, and the plugin distribution's manifest the
+  same way. So a compromised build-time dependency runs in the job that has no credential.
 - **No stored npm token.** Publishing is `npm publish --provenance` over GitHub OIDC trusted
   publishing. The publishing job mints a short-lived credential per run, so there is no long-lived
   publishing credential in this repository to leak or to rotate.
@@ -156,6 +172,15 @@ properties of that file, rather than properties of a maintainer's laptop.
 - **The GitHub release carries the bytes.** It carries the tarball, its SHA-256 in the release body,
   and a CycloneDX SBOM when generation succeeds. When generation does not succeed, the body states
   the SBOM is absent.
+- **The plugin distribution is verified before it is published, and history is never overwritten.**
+  Since 1.9.0 the same run publishes four client plugin archives, a `plugin-dist` branch and a
+  `plugins/v<version>` tag. Every archive is checked against the manifest the gates job published
+  on the outputs channel before the npm publish runs, so a missing or corrupt artifact refuses
+  ahead of the one irreversible step; each archive then carries a build-provenance attestation
+  minted over the same OIDC identity. The branch is replaced by a single orphan commit whose git
+  dates come from the manifest, so a re-run reproduces one sha — and the push refuses if the
+  remote head carries a parent (a head with history is a source branch whatever the manifest
+  called it) or if the release tag already names a different commit.
 
 What no file here can do is the platform half, and that is maintainer setup rather than code. It is
 three things. A required reviewer on the `npm-publish` deployment environment, a `v*` tag ruleset,

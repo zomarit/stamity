@@ -2,7 +2,7 @@
 title: Doctrine
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit e79dcf0. Re-attested 2026-09-16 in the Package 14 rewrite. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.0 release cut (2026-09-21). -->
 <!-- Re-open when: an invariant's text changes, a pillar gains or loses a public enforcement
      surface, the root question's three answers change, the always-on split across clients moves,
      or the deferred with-versus-without measurement lands. `test/docsPages.test.ts` holds this
@@ -95,11 +95,12 @@ A claim about behaviour is worth what its instrument is worth.
 - The corpus is prose executed by a model, so a test suite cannot decide it. The
   [eval set](../evals/README.md) decides it instead. Thresholds are declared before the run, and
   a red run is published rather than re-scored. The run of record is
-  [run 30](../evals/runs/2026-09-15-run-30/RESULTS.md), the 1.8.0 release run, which passed every
+  [run 31](../evals/runs/2026-09-21-run-31/RESULTS.md), the 1.9.0 release run, which passed every
   declared threshold. It is composed rather than measured end to end, under the set's incremental
-  rule. Run 27 measured every case in full. Runs 29 and 30 then re-measured only the cases whose
-  inputs had moved, and carried the rest with their hashes. Its figures roll up on
-  [the measurements page](measurements.md) beside the verified merge-ready rate.
+  rule. Run 27 measured every case in full. Runs 29, 30 and 31 then re-measured only the cases
+  whose inputs had moved, and carried the rest with their hashes.
+  [The measurements page](measurements.md) rolls an eval run of record up beside the verified
+  merge-ready rate.
 - Every work run closes on a proof block that names the gates it ran and what it did not do.
 - The question protocol declares a default for every question it asks. An unanswered question
   therefore produces a recorded decision instead of a silent pick.

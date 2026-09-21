@@ -2,7 +2,7 @@
 title: Customization
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit e79dcf0. Re-attested 2026-09-16 in the Package 14 rewrite. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.0 release cut (2026-09-21). -->
 <!-- Re-open when: a save gate is added or removed, a content class joins or leaves the
      override tree, a merge verb joins the overlay layer, a class gains or loses overlay
      support, the fork layer's place in the precedence chain moves, or patch-or-replace
@@ -325,7 +325,7 @@ capabilities require the packaged CLI.
 The [Client capability matrix](capability-matrix.md) is the generated, per-client reference. The
 limits below are the ones an override author meets most often. The dated
 [client contract evidence](../.github/client-contracts.md) links the official sources and records
-which guarantees the local fixtures exercise. It was last revalidated on 2026-09-10.
+which guarantees the local fixtures exercise. It was last re-attested on 2026-09-21.
 
 Bundled skills declare `license: MIT` and their runtime prerequisites in `compatibility`. Both
 fields pass through the skill projection untouched, and so does `allowed-tools`, so a skill

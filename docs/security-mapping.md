@@ -2,7 +2,7 @@
 title: Security mapping
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit e79dcf0. Re-attested 2026-09-16 in the Package 14 rewrite. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.0 release cut (2026-09-21). -->
 <!-- Re-open when: a catalogue edition below moves, a control's implementing symbol moves, or a
      surface is added to or removed from the engine. `test/docsPages.test.ts` resolves every
      `file::symbol` address and pins the surface count, so it catches the last two, not the first. -->
@@ -228,6 +228,7 @@ cannot load the client **refuses** the claim — never a pass, and never the pin
 |---|---|---|---|---|---|
 | A build-time dependency | Reaches the publishing credential | The job that builds does not hold it. The gate job, the isolated third-party route job and `publish` are separate jobs. `publish` takes no checkout, and it verifies the tarball hash against the gate job's output. Code: `.github/workflows/release.yml` | A compromised build dependency runs where no credential is | ASI04, LLM03, A08, MANAGE 3.1 | None |
 | Anyone | Publishes a build nobody can trace to this repository | `npm publish --provenance` over OIDC trusted publishing. No long-lived token exists here, and third-party actions are SHA-pinned | The platform half is maintainer setup rather than a file: the required reviewer, the tag ruleset and the trusted-publisher entry. It is re-verified at each cut | ASI04, A06, A08, GOVERN 1.5, MANAGE 2.1 | The platform half is not code |
+| Anyone serving a plugin distribution | Serves a client plugin tree that is not the one this release built | Since 1.9.0 the same run publishes four client plugin archives, a distribution branch and a `plugins/v<version>` tag. The publish job verifies the distribution manifest against the digest the gate job put on its outputs channel, then every archive against that manifest, both before the npm publish; each archive carries a build-provenance attestation over the same OIDC identity; the branch is replaced by one orphan commit whose dates come from the manifest, and the push refuses a remote head that carries a parent or a release tag that already names another commit. Code: `.github/workflows/release.yml`, `scripts/plugins/releaseManifest.mjs::validateReleaseManifest` | Verification at the consumer's end is the consumer's: a mirror that republishes the tree is trusted the way its own repository is trusted, and nothing here attests a mirror | ASI04, LLM03, A08, A06, MANAGE 3.1 | No mirror attestation |
 
 ## Gaps this mapping leaves open
 
@@ -249,6 +250,9 @@ Every gap named in a row above, collected so the list reads without the tables.
    attests the catalog itself.
 7. **A verified signature is not an entitlement.** The pin comes from the pack's own declared
    signer, so a pack naming its own author verifies whoever that is.
+8. **No mirror attestation.** A plugin distribution is verified where it is published. An
+   organization that mirrors the tree is trusted the way its own repository is trusted, and
+   nothing here attests a mirror.
 
 ## What is not applicable, and why
 

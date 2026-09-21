@@ -2,10 +2,10 @@
 title: Plugins
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 3f76070. Re-attested 2026-09-20 in the plugin-lifecycle package. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.0 release cut (2026-09-21). -->
 <!-- Re-open when: the capability-file schema changes shape, the locator's exit codes or its
      candidate order move, or a vendor page behind a command block is re-read on a later access
-     date than the 2026-09-20 one every block here carries. `test/docsPages.test.ts` holds this
+     date than the 2026-09-21 one every documentation block here carries. `test/docsPages.test.ts` holds this
      page to the hand-page contract; `docs/capability-matrix.md` carries the dated source URL
      behind each client's container facts, and `docs/cli-reference.md` is what the `stamity
      plugin` blocks must not contradict. -->
@@ -72,10 +72,12 @@ URL, under **Plugin containers** in [the capability matrix](capability-matrix.md
 ## Install
 
 Each block below carries a provenance line. A block that says **executed** was run on a real
-client on 2026-09-20 and the output is what this page describes. A block that says **from the
-vendor's documentation** is transcribed from a page read on 2026-09-20 and has not been run here;
-the release's own route proof runs it. No block on this page is presented as executed when it was
-not.
+client on 2026-09-20 or 2026-09-21 and the output is what this page describes. A block that says
+**from the vendor's documentation** is transcribed from a page read on 2026-09-21 and has not been
+run here. The release's own route proof has since run, and it executed the LOCAL form of every
+client's route — a marketplace or a plugin directory on disk. What stays unexecuted is the remote
+`<owner>/stamity#plugin-dist` source: it has nothing to point at until the 1.9.0 release publishes
+the distribution branch. No block on this page is presented as executed when it was not.
 
 `<owner>/stamity` below is your own mirror or this repository, whichever your organization serves
 from. The branch a release publishes the distribution to is `plugin-dist`, and each release also
@@ -88,10 +90,11 @@ claude plugin marketplace add <owner>/stamity#plugin-dist
 claude plugin install stamity@stamity --scope project
 ```
 
-*From the vendor's plugin-marketplaces and CLI reference pages, accessed 2026-09-20; executed by
-the route proof of the next session.* What **is** measured about this root: `claude plugin
-validate --strict <root>/claude` prints `✔ Validation passed` and exits 0 *(executed 2026-09-20 on
-Claude Code 2.1.278)*.
+*From the vendor's plugin-marketplaces and CLI reference pages, accessed 2026-09-21. The route
+proof executed this route from a marketplace on disk; the remote source above waits for the
+distribution branch.* What **is** measured about this root: `claude plugin validate --strict
+<root>/claude` prints `✔ Validation passed` and exits 0 *(executed 2026-09-20 on Claude Code
+2.1.278)*.
 
 `--scope project` records the install in your repository's own settings rather than in your user
 profile, which is what makes the decision reviewable:
@@ -107,7 +110,9 @@ profile, which is what makes the decision reviewable:
 
 `marketplace add` also takes a git URL with a `#ref`, or a **local path** — which is how you try
 a root you built yourself without publishing it anywhere *(from the same vendor page, accessed
-2026-09-20)*.
+2026-09-21)*. A local BARE repository is not one of those forms: the route proof measured
+`marketplace add <path>#<tag>` answering `Path does not exist` and a `file://` URL answering
+`Invalid marketplace source format`, so a mirror you serve from disk is a checked-out directory.
 
 ### Copilot CLI
 
@@ -117,16 +122,23 @@ copilot plugin marketplace add <owner>/stamity#plugin-dist
 copilot plugin install stamity@stamity
 ```
 
-*From the vendor's CLI plugin reference, accessed 2026-09-20; executed by the route proof of the
-next session.* Take the marketplace route rather than a direct install: `copilot plugin install
-<path>` still works and prints a deprecation warning in favour of `plugin@marketplace`
-*(executed 2026-09-20 on GitHub Copilot CLI 1.0.85, which installed 10 skills unauthenticated and
-listed `stamity` under `copilot plugin list --json`)*.
+*From the vendor's CLI plugin reference, accessed 2026-09-21. The route proof executed this route
+from a marketplace on disk; the remote source above waits for the distribution branch.* Take the
+marketplace route rather than a direct install: `copilot plugin install <path>` still works and
+prints a deprecation warning in favour of `plugin@marketplace` *(executed 2026-09-20 on GitHub
+Copilot CLI 1.0.85, which installed 10 skills unauthenticated and listed `stamity` under `copilot
+plugin list --json`)*.
 
-Installs land under `~/.copilot/installed-plugins/<marketplace>/<plugin>`, or
-`_direct/<source-id>/` for a direct one. **They are cached.** A plugin root you edit on disk
-changes nothing in the client until you install it again; for a marketplace install, `copilot
-plugin update stamity` is the refresh.
+Where an install lands, and whether it is a copy at all, depends on the marketplace's own source.
+A **remote** marketplace install is a cached copy under
+`~/.copilot/installed-plugins/<marketplace>/<plugin>`, or `_direct/<source-id>/` for a direct one:
+a root you edit on disk changes nothing in the client until you install it again, and `copilot
+plugin update stamity` is the refresh. A marketplace on a **local path** is the other case, and
+nothing is copied — the plugin loads live from the directory it sits in, an edit takes effect on
+`/restart` or in a new session, and no `plugin update` is needed *(vendor-stated for a
+directory-source marketplace, read 2026-09-21; measured 2026-09-20 on 1.0.85, which reported the
+installed entry's source as `live`, copied nothing, never wrote `installed-plugins/`, and answered
+`plugin update` with "there is nothing to update")*.
 
 Project skills win over plugin skills on this client — `.github/skills/`, `.agents/skills/` and
 `.claude/skills/` are searched first — so a plugin skill with the same id as one of yours is
@@ -140,8 +152,9 @@ install mode there (Default Off, Default On, Required), and restrict who sees it
 **Marketplace Settings → Marketplace Access**. Cursor re-indexes a marketplace *"at most once
 every 10 minutes, batching rapid pushes to the latest commit"*.
 
-*From the vendor's plugins page, accessed 2026-09-20; executed by the route proof of the next
-session.*
+*From the vendor's plugins page, accessed 2026-09-21. The dashboard is an organization action in
+a browser, so no proof here executes it; what the route proof executed for this client is the
+`--plugin-dir` form below.*
 
 For one developer, install from the Customize view, or run the agent against a root on disk:
 
@@ -155,6 +168,11 @@ plugin provides, including the ones it may not invoke itself, the client returne
 ids the root ships. `~/.cursor/plugins/local` is the drop directory when you would rather not pass
 a flag.
 
+Each `--plugin-dir` run also leaves an empty directory behind in your own home, at
+`~/.cursor/projects/<slug>`, where the slug is the working directory's path truncated to 42
+characters with a hash appended *(observed 2026-09-20 on the same build)*. It is the client's own
+per-project scratch, it holds nothing of the plugin, and deleting it costs nothing.
+
 ### Codex
 
 ```sh
@@ -164,8 +182,9 @@ codex plugin add stamity@stamity
 
 *Executed 2026-09-20 on codex-cli 0.154.0, against a marketplace on a local path in a scratch
 `CODEX_HOME`: both commands exited 0 with no login, and the installed cache tree was byte-identical
-to the built root over all 48 files. The `<owner>/stamity` spelling of a remote source is from the
-vendor's build page, accessed 2026-09-20, and is executed by the route proof of the next session.*
+to the built root over all 45 files outside its bundled `runtime/`, which the route proof compared
+again at this release. The `<owner>/stamity` spelling of a remote source is from the vendor's build
+page, accessed 2026-09-21, and waits for the distribution branch.*
 
 A marketplace entry on its own installs nothing — both commands are needed. The marketplace file
 this repository publishes lives at `.agents/plugins/marketplace.json`, and an entry's `source` is
@@ -227,40 +246,60 @@ emits the same report as data.
 ## Pin, update, roll back
 
 There is no common answer here, and this page states the gap where there is one rather than
-inventing a command. Every block below is *from the vendor's documentation, accessed 2026-09-20;
-executed by the route proof of the next session*, unless it says otherwise.
+inventing a command. Every block below is *from the vendor's documentation, accessed 2026-09-21*,
+unless it says otherwise; the release's lifecycle proof walked each client's upgrade and rollback
+against two built versions on 2026-09-20, and where it measured something the documentation does
+not say, the measurement is what this page states.
 
 **Claude Code.** A marketplace added at a tag or a commit is the pin, and
 
 ```sh
-claude plugin update stamity
+claude plugin update stamity --scope project
 ```
 
-is the refresh. Auto-update is **off by default for third-party marketplaces**, so an update is
-something you run; `DISABLE_AUTOUPDATER` switches the client's own updater off as well. To roll
-back, re-add the marketplace at the previous tag and install again:
+is the refresh. `--scope project` is not optional on an install recorded in your repository:
+without it the command defaults to user scope and refuses with `Plugin "stamity" is not installed
+at scope user` *(measured 2026-09-20 on 2.1.278)*. Auto-update is **off by default for third-party
+marketplaces**, so an update is something you run; `DISABLE_AUTOUPDATER` switches the client's own
+updater off as well. Rolling back takes three commands, not two:
 
 ```sh
 claude plugin marketplace add <owner>/stamity#plugins/v<previous>
 claude plugin install stamity@stamity --scope project
+claude plugin update stamity@stamity --scope project
 ```
 
-A `plugin rollback` subcommand is **not established**: one vendor page quoted it in slash form on
-2026-09-20 and the CLI reference did not list it. This page will not promise it until the release's
-own lifecycle proof measures it against an installed client.
+*Executed 2026-09-20 on 2.1.278.* The first two are the documented route and they are not
+sufficient on their own: with the plugin already installed, `marketplace add` answers that the
+source is already on disk and `install` answers "already installed … it loads in place", leaving
+the recorded version where it was. The third line is what re-records it, and the client's own
+message is what names it. A `plugin rollback` subcommand is **settled absent**: `claude plugin
+rollback stamity` answers `error: unknown command 'rollback'` on 2.1.278, and no vendor page read
+2026-09-21 names one. The reinstall route above is the rollback.
 
-**Copilot CLI.** `copilot plugin update stamity` refreshes a marketplace install; pinning is the
-same move as installing — add the marketplace at `#plugins/v<version>`. `COPILOT_AUTO_UPDATE=false`
-stops the CLI updating *itself* behind you. Rolling back is uninstall, re-add at the previous tag,
-install. *From the vendor's CLI plugin reference, accessed 2026-09-20.*
+**Copilot CLI.** Pinning is the same move as installing — add the marketplace at
+`#plugins/v<version>` — and for a remote marketplace `copilot plugin update stamity` is the
+refresh, with rolling back being uninstall, re-add at the previous tag, install. For a marketplace
+on a local path there is nothing to update or roll back through the CLI: the plugin loads live, so
+both are a replacement of the tree the marketplace points at *(measured 2026-09-20 on 1.0.85:
+`plugin update` answered "there is nothing to update")*. `COPILOT_AUTO_UPDATE=false`, or
+`autoUpdate: false` in the configuration, turns off the session-start auto-update of FIRST-PARTY
+plugins — the built-in marketplaces — which is skipped in CI by default anyway; a third-party
+marketplace like this one is not auto-updated at all. *From the vendor's CLI plugin reference,
+accessed 2026-09-21.*
 
-**Cursor and Codex: no vendor-documented pin, update or rollback command on 2026-09-20.** For
+**Cursor and Codex: no vendor-documented pin, update or rollback command on 2026-09-21.** For
 Cursor the served version is whichever commit the marketplace branch points at, so pinning and
 rolling back are branch moves on your mirror, and the re-index above is the delay you plan
-around. For Codex, `codex plugin marketplace upgrade` refreshes the catalog — *the subcommand is
-listed by `codex plugin marketplace --help` on codex-cli 0.154.0, read 2026-09-20* — and the route
-back to a previous version is `codex plugin remove stamity` followed by adding the marketplace at
-the earlier tag and `codex plugin add` again.
+around; a root passed with `--plugin-dir` is replaced in place. For Codex,
+`codex plugin marketplace upgrade` refreshes git-sourced catalogs only — *the subcommand is listed
+by `codex plugin marketplace --help` on codex-cli 0.154.0, read 2026-09-20, and answered "No
+configured Git marketplaces to upgrade" for a marketplace on a local path* — so update and
+rollback are both the marketplace directory moved plus `codex plugin add stamity@stamity` again.
+`codex plugin remove` takes the qualified id: `codex plugin remove stamity` refuses with `plugin
+requires --marketplace unless passed as <plugin>@<marketplace>`, and `codex plugin remove
+stamity@stamity` purges that version's local cache, so the route back re-copies the tree
+*(both measured 2026-09-20 on 0.154.0)*.
 
 ## Keep the runtime in step
 
@@ -274,7 +313,7 @@ npm install -D @zomarit/stamity@<version>
 
 When the project holds a companion install whose version satisfies the root's compatible range,
 the companion wins; otherwise the bundled copy runs. The range is a caret over the plugin's own
-version, and the locator applies it in four shapes — `^1.8.0` is the same major at or ahead of
+version, and the locator applies it in four shapes — `^1.9.0` is the same major at or ahead of
 that version, `^0.7.2` the same minor, `^0.0.3` exactly that version, and a prerelease range
 accepts only the identical prerelease. A prerelease companion never satisfies a released range.
 

@@ -1,12 +1,13 @@
 # Client contract evidence
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 0ca2600. Re-attested 2026-09-17 against the vendor pages each bullet cites. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 8354fe1. Re-attested 2026-09-21 against the vendor pages each bullet cites. -->
 <!-- Re-open when: a cited vendor page changes what a client guarantees, an adapter emits a
      different configuration key, or a measurement supersedes a dated one below.
      `test/docsPages.test.ts` holds this page to the evidence-page contract and to the Codex
      hook-loading facts. -->
 
-Revalidated 2026-09-10 against released 1.6.0 source and the current official pages.
+One currency claim, and it is the header above: every bullet's cited page was re-read on the date
+that header names, and a claim resting on a measurement instead carries its own date in place.
 These source-derived fixtures exercise emitted configuration and local hook processes;
 they do not claim authenticated client sessions, native trust approval, or human QA.
 
@@ -19,8 +20,9 @@ they do not claim authenticated client sessions, native trust approval, or human
   started" and is exported to the handler in both shell and exec form; shell form is "passed to a
   shell: `sh -c` on macOS and Linux, Git Bash on Windows, or PowerShell when Git Bash isn't
   installed", and that page asks that "in shell form, wrap each placeholder in double quotes"; exit
-  2 "means a blocking error" and on `PreToolUse` "blocks the tool call", while "any other exit code
-  doesn't block on its own" (hooks page, read 2026-09-20). The consequence is the anchoring this
+  2 "means a blocking error" and on `PreToolUse` "blocks the tool call", while "Any other exit code
+  doesn't block on its own for most hook events" — the qualifier is the vendor's, and `PreToolUse`
+  is one of the events it covers (hooks page, read 2026-09-21). The consequence is the anchoring this
   repository emits: every repository-relative hook command is rendered as one double-quoted word
   under that variable, because a relative command run from a moved working directory fails as
   `Cannot find module` with exit 1 — which does not block, so the pre-tool-use guard went unenforced
@@ -40,7 +42,7 @@ they do not claim authenticated client sessions, native trust approval, or human
   session sat at the root" to "never runs", recorded as unmeasured rather than claimed either way.
   [Skills](https://code.claude.com/docs/en/skills),
   [memory and imports](https://code.claude.com/docs/en/memory),
-  [hooks](https://code.claude.com/docs/en/hooks) (read 2026-09-20).
+  [hooks](https://code.claude.com/docs/en/hooks) (all three read 2026-09-21).
 - **Codex:** `.agents/skills` supports named `$st-*` invocation. Optional `agents/openai.yaml`
   companions add display names and default prompts. Hooks use command strings, and three
   loading steps all have to hold before the client runs one. First, `features.hooks` must be
@@ -48,25 +50,30 @@ they do not claim authenticated client sessions, native trust approval, or human
   measured on 2026-09-15 to flip the feature on codex-cli 0.154.0. Second, the project must
   carry `projects.<path>.trust_level = "trusted"`. Third, each hook needs per-hook `/hooks`
   trust, or an invocation started with `--dangerously-bypass-hook-trust`. They do not consume
-  Stamity digests as approval. The hooks page read 2026-09-17 says the feature is on by
-  default; the 2026-09-15 measurement never ran without the key, so this page states the
-  emitted key rather than a default. Headless `codex exec` on codex-cli 0.154.0 ran zero
+  Stamity digests as approval. Neither page states a default for that key as read 2026-09-21 —
+  the config reference marks other `[features]` keys "on by default" in so many words and this one
+  not, and an earlier hooks-page read of 2026-09-17 did call it on by default — so this page states
+  the emitted key rather than a default, which is also what the 2026-09-15 measurement covers: it
+  never ran without the key. Headless `codex exec` on codex-cli 0.154.0 ran zero
   project hooks with the feature on, the project trusted and hook trust bypassed (measured
   2026-09-15; three runs, no observation file written, no hook-discovery line in the debug
   log). An emitted hook therefore enforces nothing on that lane, and a QA row that asks it to
-  is measuring the client. Hook commands "run with the session `cwd`" (hooks page, read
-  2026-09-20), so the emitted starter walks UP from `process.cwd()` to the directory holding the
-  trusted `.codex/hooks.json` and launches the script beside it — which covers a session in a
-  sub-directory of the project and not a session outside its ancestry. Session-relative hook CWD
+  is measuring the client. "Commands run with the session cwd as their working directory", and the same page asks that a
+  repo-local hook "prefer resolving from the git root instead of using a relative path such as
+  `.codex/hooks/...`" because "Codex may be started from a subdirectory" (hooks page, read
+  2026-09-21) — which is what the emitted starter does: it walks UP from `process.cwd()` to the
+  directory holding the trusted `.codex/hooks.json` and launches the script beside it, covering a
+  session in a sub-directory of the project and not one outside its ancestry. Session-relative hook CWD
   requires locating the nearest initialized project. PreToolUse carries no calling-agent identity, and some tool paths bypass hooks. No
   native per-agent `tools` key is documented; generated developer instructions carry the
   category restriction and `sandbox_mode` the filesystem boundary. Unsupported PreToolUse
   `ask`/stop controls become explicit denials pending manual review; unsupported output flags
   are diagnosed without losing a denial.
   [Skills](https://learn.chatgpt.com/docs/build-skills),
-  [hooks](https://learn.chatgpt.com/docs/hooks) (read 2026-09-15, re-read 2026-09-17),
+  [hooks](https://learn.chatgpt.com/docs/hooks) (read 2026-09-15, re-read 2026-09-17 and
+  2026-09-21),
   [config reference](https://learn.chatgpt.com/docs/config-file/config-reference) (read
-  2026-09-15, re-read 2026-09-17),
+  2026-09-15, re-read 2026-09-17 and 2026-09-21),
   [subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents).
 
 ### Codex plugin container (2026-09-20)
@@ -76,7 +83,9 @@ ten-field schema: `$schema` and `name` the only required keys, `author` closed t
 name/email/url, `additionalProperties: false`, and `$schema` pinned by `const`. Clients never
 fetch the schema, so the vendored copy at `test/fixtures/plugins/agent-plugins-1.0.0.schema.json`
 is the only enforcement there is
-([schema](https://agent-plugins.org/schemas/1.0.0/plugin.schema.json), read 2026-09-20). A plugin
+([schema](https://agent-plugins.org/schemas/1.0.0/plugin.schema.json), read 2026-09-20 and
+re-read 2026-09-21, when the published document and the vendored copy still agreed field for
+field). A plugin
 carries SKILLS only — agents, commands and rules are outside the v1 format and the migration page
 converts them to skills — so the emitted root carries `skills/` and `hooks/` and declares agent,
 command, rule and MCP as repository-owned. `extensions.com.openai` carries `apps`, `hooks` and
@@ -85,9 +94,10 @@ vendor pages disagree about where an override lives; discovery satisfies both re
 root ships the file at the default path and emits no `extensions` key at all. The twelve
 lifecycle event names are vendored at `test/fixtures/plugins/codex-hook-events.json`; `command`
 and `mcp_tool` handlers run while `prompt` and `agent` handlers are skipped.
-[Build plugins](https://developers.openai.com/plugins/build/plugins) (read 2026-09-20),
-[plugins overview](https://learn.chatgpt.com/docs/plugins) (read 2026-09-20),
-[hooks](https://learn.chatgpt.com/docs/hooks) (read 2026-09-20).
+[Build plugins](https://developers.openai.com/plugins/build/plugins) (read 2026-09-20, re-read
+2026-09-21),
+[plugins overview](https://learn.chatgpt.com/docs/plugins) (read 2026-09-20, re-read 2026-09-21),
+[hooks](https://learn.chatgpt.com/docs/hooks) (read 2026-09-20, re-read 2026-09-21).
 
 Marketplaces resolve from `$REPO_ROOT/.agents/plugins/marketplace.json`, the legacy
 `.claude-plugin/marketplace.json`, and `~/.agents/plugins/marketplace.json`. An entry's
@@ -100,7 +110,8 @@ installed cache tree rather than the marketplace file it wrote. Measured 2026-09
 `codex plugin add stamity@<marketplace>` exited 0 with no login, wrote `[marketplaces.<name>]` and
 `[plugins."<name>@<marketplace>"] enabled = true` into that home's `config.toml`, and cached the
 root under `<CODEX_HOME>/plugins/cache/<marketplace>/<plugin>/<version>/` byte-identical file by
-file. [Build plugins](https://developers.openai.com/plugins/build/plugins) (read 2026-09-20).
+file. [Build plugins](https://developers.openai.com/plugins/build/plugins) (read 2026-09-20,
+re-read 2026-09-21).
 
 The root variable is `PLUGIN_ROOT` — with `PLUGIN_DATA`, and `CLAUDE_PLUGIN_ROOT` and
 `CLAUDE_PLUGIN_DATA` carried for compatibility — and it is exported to the hook process. Hook
@@ -109,9 +120,9 @@ addresses its script absolutely through the variable and the runner it launches 
 working directory it was given. On top of the three repository-side loading steps the Codex
 bullet above records, a PLUGIN's hooks are skipped until the operator trusts them, so `hooks`
 carried in a plugin root means shipped and discoverable, never enforced.
-[Hooks](https://learn.chatgpt.com/docs/hooks) (read 2026-09-20).
+[Hooks](https://learn.chatgpt.com/docs/hooks) (read 2026-09-20, re-read 2026-09-21).
 
-Unstated on every page read 2026-09-20, and therefore not claimed here. Which layer expands
+Unstated on every page read 2026-09-20 and re-read 2026-09-21, and therefore not claimed here. Which layer expands
 `${PLUGIN_ROOT}` inside a hook `command` string — the client or the shell — is not stated on the
 hooks or the build page; the vendor's own example writes the variable there, so the root does too
 and the expansion stays unmeasured. No minimum client version for plugins appears on any of the
@@ -130,20 +141,29 @@ codex minor.
   session's shell directory: measured 2026-09-20 on the Cursor agent CLI 2026.09.15 in a disposable
   fixture whose extra user hook logged its own `process.cwd()`, every one of six hook invocations
   recorded the fixture root — including the three after the model had run `cd sub` in the shell —
-  and the denial was still enforced on the calls that followed. The client also exports a
+  and the denial was still enforced on the calls that followed. The vendor page now states the same
+  rule and scopes it by source: a project hook in `.cursor/hooks.json` runs "from the project
+  root", a user hook in `~/.cursor/hooks.json` runs from `~/.cursor/` (hooks page, read
+  2026-09-21) — so a repository-relative command is correct for the project rows this engine emits
+  and would not be for a user row of the same shape. The client also exports a
   project-root variable name (`CURSOR_PROJECT_DIR`, observed in the same log; values never read), so
   an anchor is available if that behaviour ever changes, but the emitted repository-relative command
-  needs none today. The vendor pages were unreachable from the measuring host on that date, so this
-  bullet's Cursor claims about hook working directories rest on the measurement rather than on a
-  re-read page. [Skills](https://cursor.com/docs/skills),
-  [hooks](https://cursor.com/docs/hooks), [MCP](https://cursor.com/docs/mcp).
+  needs none today. The vendor pages refused every connection from the measuring host on 2026-09-20, which is why the
+  measurement above was taken; they answered that same host on 2026-09-21, and the three cited
+  below were re-read then. What the hooks page settles beside the working directory: exit 2 blocks
+  and is "equivalent to returning `permission: "deny"`"; any other non-zero exit is a hook
+  failure that "fail[s] open by default" unless `failClosed: true` is set, and no output counts as
+  one of those failures; and where several sources match, "any deny wins over ask, and ask wins
+  over allow". [Skills](https://cursor.com/docs/skills),
+  [hooks](https://cursor.com/docs/hooks), [MCP](https://cursor.com/docs/mcp) (all three read
+  2026-09-21).
 - **Copilot:** repository command hooks run in CLI/cloud, with PascalCase event aliases
   preserving canonical tool-name matcher semantics. PreToolUse rejects nonzero exits and
   explicit deny; timeouts always fail-open. String and object tool arguments normalize at
   the portable boundary. Session-start command output is injected as additionalContext
-  (docs.github.com hooks reference, 2026-09-17). Each hook entry carries its own working
-  directory, `cwd`, documented as "relative to repository root" and emitted as `"."`, so a
-  repository-relative command needs no anchor here (hooks reference, read 2026-09-20). The cloud
+  (the hooks reference, read 2026-09-17 and again 2026-09-21). Each hook entry carries its own
+  working directory, `cwd`, documented as "relative to repository root" and emitted as `"."`, so a
+  repository-relative command needs no anchor here (hooks reference, read 2026-09-21). The cloud
   configuration must reach the default branch through the normal review/approval path.
   [Hook schema and decisions](https://docs.github.com/en/copilot/reference/hooks-reference),
   [cloud discovery](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/use-hooks).
@@ -154,13 +174,13 @@ A published plugin root is a different address space from the repository surface
 two disagree on more than one path. Measured for the generated `copilot` root against
 [the CLI plugin reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference)
 and [the hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference)
-(both read 2026-09-20), with the client itself — GitHub Copilot CLI 1.0.85, in a scratch
+(both read 2026-09-20 and re-read 2026-09-21), with the client itself — GitHub Copilot CLI 1.0.85, in a scratch
 `COPILOT_HOME` — settling what the pages leave open.
 
 The manifest is `plugin.json` at the root, and its exact `$schema` value opts the plugin into
 Agent Plugins 1.0. That schema, vendored at `test/fixtures/plugins/agent-plugins-1.0.0.schema.json`
 from [the published document](https://agent-plugins.org/schemas/1.0.0/plugin.schema.json)
-(read 2026-09-20), is closed: ten properties, `additionalProperties: false`, `$schema` and `name`
+(read 2026-09-20, re-read 2026-09-21), is closed: ten properties, `additionalProperties: false`, `$schema` and `name`
 required, `author` closed to `name`/`email`/`url`, `name` bounded by a pattern with a lookahead,
 no logo field and no component path fields at all. The CLI reports and ignores an unknown
 top-level key; the vendored schema refuses it, which is the stricter of the two gates and the one
@@ -190,9 +210,14 @@ Plugins 1.0, and from `.plugin/plugin.json`, `plugin.json`, `.github/plugin/plug
 `.claude-plugin/plugin.json` for a legacy plugin. An install lands at
 `~/.copilot/installed-plugins/MARKETPLACE/PLUGIN-NAME`, or at
 `~/.copilot/installed-plugins/_direct/SOURCE-ID/` when it came straight from a path, a repository
-or a URL; `COPILOT_HOME` moves the whole directory. The install is a CACHED COPY — a local plugin
-edited in place changes nothing until it is installed again — and `copilot plugin install` warned
-on 1.0.85 that direct installs are deprecated in favour of the `plugin@marketplace` form.
+or a URL; `COPILOT_HOME` moves the whole directory. A REMOTE marketplace's install is a cached copy — a
+plugin edited in place changes nothing until it is installed again — while a LOCAL directory-source
+marketplace is not copied at all: "Path-sourced plugins in a local (directory-source) marketplace
+load live from their real directory — editing one takes effect on `/restart` or in a new session,
+with no `copilot plugin update` needed" (the CLI plugin reference, read 2026-09-21), which is what
+the route proof measured on 1.0.85 on 2026-09-20: the installed entry reported `"source": "live"`,
+nothing was copied, and `installed-plugins/` was never written. `copilot plugin install` warned on
+1.0.85 that direct installs are deprecated in favour of the `plugin@marketplace` form.
 Whichever of those locations a client reads, in this container's shape or another's, the identity it
 finds there is the PUBLISHER's and never the canonical one: a downstream that set
 `stamity.publisher` and repointed `repository.url` gets roots and catalogs carrying its own owner

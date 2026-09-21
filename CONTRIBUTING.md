@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit e79dcf0. Re-attested 2026-09-16 in the Package 14 rewrite. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.0 release cut (2026-09-21). -->
 <!-- Re-open when: a step joins or leaves `npm run check`, a generated artifact class gains or loses a
      regeneration command, either Node floor moves, a test lane joins or leaves, a coverage floor in
      `vitest.config.ts` moves, a type-only dependency exception joins or leaves `knip.json`, or the
@@ -312,7 +312,7 @@ Something wrong that is not a vulnerability goes to the
 | `packs/` | the first-party packs |
 | `test/` | the three lanes |
 | `evals/` | the eval set, its cases, and its run artifacts |
-| `scripts/` | generators, the leak gate, the two smokes (publish shape, APM route), and the upstream lane (`upstream.mjs`, for forks) |
+| `scripts/` | generators, the leak gate, the three smokes (publish shape, APM route, client plugin route), and the upstream lane (`upstream.mjs`, for forks) |
 | `docs/` | the generated reference pages (`capability-matrix.md`, `cli-reference.md`, `configuration.md`, `measurements.md`, `reference/`) beside the hand-written guides, plus `docs/plans/` and `docs/specs/` |
 | `website/` | the docs site, a separate npm project |
 

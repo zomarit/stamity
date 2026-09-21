@@ -215,8 +215,17 @@ const EVIDENCE_PAGES: readonly string[] = [CLIENT_CONTRACTS];
  *
  * MOVED 2026-09-17: introduced with the bucket. The 2026-09-17 audit re-read every vendor page
  * this record cites and the Codex paragraph was rewritten against the 2026-09-15 measurement.
+ *
+ * MOVED 2026-09-21, by the 1.9.0 release cut's evidence pass. Every cited page answered this host
+ * that day — including cursor.com, which had refused every connection from it on 2026-09-20 — so
+ * the pass re-read all of them and the page's claims moved with what they now say: the Copilot
+ * reference documents the live load of a local directory-source marketplace, the Cursor hooks page
+ * states the per-source hook working directory this repository had only measured, the Codex hooks
+ * page asks a repo-local hook to resolve from the git root, and the published Agent Plugins schema
+ * still agrees field for field with the vendored copy. The page also lost the second, stale
+ * currency claim it carried under this header.
  */
-const EVIDENCE_REATTESTATION_DATE = "2026-09-17";
+const EVIDENCE_REATTESTATION_DATE = "2026-09-21";
 
 /**
  * The Codex hook-loading facts the contract page must carry, each a literal a reader can check
@@ -392,6 +401,15 @@ const CURRENCY_HEADER =
  * so the constant has to move on the next cut or the assertion fails, and no page claims a
  * verification later than the cut it shipped in.
  */
+// MOVED 2026-09-21, from "2026-09-15" (the 1.8.0 cut) to the 1.9.0 cut. The whole hand bucket
+// was re-read claim by claim against the candidate tree and restamped onto the cut form, which is
+// what the release controls checklist's fourth line asks for; nine claims moved with it (the
+// merge-ready figure and the eval run of record on README, the run of record in the doctrine, the
+// probe count and the proved install routes in getting started, the smoke count in CONTRIBUTING,
+// the publish job's action count and two new controls in SECURITY.md, the dogfood provenance
+// sample in troubleshooting, the contracts page's revalidation date in customization, and the
+// Claude, Copilot and Codex lifecycle routes on the plugins page).
+//
 // MOVED 2026-09-15, from "2026-09-10" (the 1.5.0 cut) to the 1.8.0 cut. Four read-only
 // attestors re-read every claim on the hand bucket against this tree at this cut and four
 // claims moved with it.
@@ -403,7 +421,7 @@ const CURRENCY_HEADER =
 // REATTESTATION_DATE below, and each form's newest date is pinned to its own constant. The
 // direction the pin is written for is unchanged — it fails a re-cut that restamps nothing, never
 // one that restamps honestly.
-const RELEASE_CUT_DATE = "2026-09-15";
+const RELEASE_CUT_DATE = "2026-09-21";
 
 /**
  * The date the current re-verification pass re-read the hand bucket on.
@@ -427,8 +445,13 @@ const RELEASE_CUT_DATE = "2026-09-15";
  * (its command surface and its map) and `docs/getting-started.md` (its verb list and its
  * glossary). Every other page keeps the date it was actually verified on, which is the property
  * the pair of assertions below exists to protect.
+ *
+ * MOVED 2026-09-21, to the 1.9.0 cut date, and with it the commit form left the bucket: a release
+ * cut re-attests every hand page against the candidate tree and stamps the cut form on all
+ * fourteen, so there is no between-cuts pass left to date. The pin below covers that state rather
+ * than skipping it — see the assertion's own note.
  */
-const REATTESTATION_DATE = "2026-09-20";
+const REATTESTATION_DATE = "2026-09-21";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");
@@ -720,15 +743,29 @@ describe("hand pages", () => {
         `${page} re-attests to ${date}, later than the ${REATTESTATION_DATE} pass it ships in`,
       ).toBe(true);
     }
-    expect(
-      reattestations.length,
-      "no hand page carries a re-attestation date to check",
-    ).toBeGreaterThan(0);
-    expect(
-      newest(reattestations.map(([, date]) => date)),
-      `no hand page was re-attested at ${REATTESTATION_DATE} — stamp the pages this pass re-read, ` +
-        `or move REATTESTATION_DATE to the pass that actually happened`,
-    ).toBe(REATTESTATION_DATE);
+    // TEST CHANGE, justified: this required at least one page on the COMMIT form, which is true
+    // only between cuts. A release cut re-attests the whole bucket against the candidate tree and
+    // stamps the cut form on every page (the release controls checklist's fourth line), so at a cut
+    // the commit form legitimately has no members and the old pin failed the honest state rather
+    // than a dishonest one. The property is kept in both directions instead of dropped: with
+    // commit-form pages present the newest of them must still equal REATTESTATION_DATE, and with
+    // none present the constant must equal the cut it ships in. So the constant still has to move
+    // at every cut and at every between-cuts pass, which is the direction it was written for, and
+    // a bucket restamped onto the cut form cannot leave a stale re-attestation date behind it.
+    if (reattestations.length > 0) {
+      expect(
+        newest(reattestations.map(([, date]) => date)),
+        `no hand page was re-attested at ${REATTESTATION_DATE} — stamp the pages this pass ` +
+          `re-read, or move REATTESTATION_DATE to the pass that actually happened`,
+      ).toBe(REATTESTATION_DATE);
+    } else {
+      expect(
+        REATTESTATION_DATE,
+        `every hand page carries the ${RELEASE_CUT_DATE} cut form, so REATTESTATION_DATE names a ` +
+          `pass with no pages left to date — move it to the cut, or restamp the page this pass ` +
+          `actually re-read between cuts`,
+      ).toBe(RELEASE_CUT_DATE);
+    }
   });
 
   it("every sidebar-listed hand page declares its H1 as its title", () => {
