@@ -97,8 +97,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The effort scale widens to `minimal … max`.** Six levels are expressible, `config set` refuses
   a level the selected client cannot express and names the client and its bound in both
   directions, a configured level is clamped to the nearest expressible one with
-  `(clamped from …)` in `config list`, and a client whose scale is narrower carries the
-  disclosure beside its own capability row.
+  `(clamped from …)` in `config list`, the emission discloses each clamp beside its other
+  warnings, and the capability matrix publishes every client's own scale.
 - **`plugin status` answers more of what it is asked.** It states the engine's declared Node floor
   and whether the running Node satisfies it even when no root's locator answers, carries each
   duplicate's source and remedy in the table and in `--json`, and narrows its client rows with
