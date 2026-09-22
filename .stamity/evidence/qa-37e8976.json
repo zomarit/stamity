@@ -1,0 +1,231 @@
+{
+  "sha": "37e897678545b7f58372337b178a5a369d835d42",
+  "timestamp": "2026-09-22T13:59:15.835Z",
+  "harness": {
+    "name": "playwright",
+    "version": "1.63.0",
+    "browser": "153.0.8010.12",
+    "scanner": "axe-core",
+    "scannerVersion": "4.13.0"
+  },
+  "rows": [
+    {
+      "row": "H1a",
+      "automated": true,
+      "status": "passed",
+      "reason": "claude 2.1.278 (Claude Code); claude -p Read qa-denied.txt, then read qa-allowed.txt, and reply with what you could read --output-format stream-json --verbose → exit 0; the hook recorded 2 call(s): 1 denied (qa-denied.txt) and 1 allowed (qa-allowed.txt)",
+      "inputHashes": {
+        "fixture/.claude/settings.json": "503d9e5219e7936bd8c646a8c13eebbe1fe75cd322f11b21e2a1618980d3ec88",
+        "fixture/qa-hooks/decision.mjs": "4aaf1b36dd27cfc606744bd0d510d53e2c588114fdcef480ac0f38cfa1dde97b",
+        "fixture/qa-hooks/decision.json": "ecad76e33a7e4d8e0a6a6f6aba87e0e3cfd8cdc631f53f7ed08b60c5a430ebc6",
+        "fixture/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f",
+        "fixture/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs": "c661afcbce4835bd105f25fa33a19b5fd0090e6c7724c3436e7606cefc7de98a",
+        "fixture/.stamity/generated/hooks/claude/stamity-review-gate.mjs": "9e7b9ab9e76c7080cf2322d024caf5a9026f14aeebc9d650b4876a1b86550cc2",
+        "fixture/.stamity/generated/hooks/claude/stamity-session-start.mjs": "1678d960b9a854a99325f8042c0d870f55b5bbe020a47120e5828d51510b14db"
+      },
+      "rowHash": "3b40accac45f2f7981797059e3689b2602b559d598dc377c0c3b010852210962"
+    },
+    {
+      "row": "H1b",
+      "automated": false,
+      "status": "not-run",
+      "reason": "codex exec on codex-cli 0.154.0 loads no project hook layer headlessly (features.hooks on, project trusted, hook trust bypassed; RUST_LOG=debug shows no hook discovery; the vendor pages read 2026-09-15 do not state whether exec runs hooks) — the interactive /hooks trust and the TUI observation stay human",
+      "inputHashes": {
+        "fixture/.codex/hooks.json": "61cbc093d1789f648b8ae414d603592639241e7ca2af5c816433852473b04021",
+        "fixture/qa-hooks/decision.mjs": "4aaf1b36dd27cfc606744bd0d510d53e2c588114fdcef480ac0f38cfa1dde97b",
+        "fixture/qa-hooks/decision.json": "ecad76e33a7e4d8e0a6a6f6aba87e0e3cfd8cdc631f53f7ed08b60c5a430ebc6",
+        "fixture/.stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f",
+        "fixture/.stamity/generated/hooks/codex/stamity-portable-hook.mjs": "5c6e049eead691b7917f0c27606bb0d4c9ec27debfff076e4bbdf0bf4d5510b9",
+        "fixture/.stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "c48c6a3900e17eed4f53b92cdad7e9616b7d0a97c266183b76c49ee9e0009be7",
+        "fixture/.stamity/generated/hooks/codex/stamity-session-start.mjs": "1678d960b9a854a99325f8042c0d870f55b5bbe020a47120e5828d51510b14db"
+      },
+      "rowHash": "cdae4734f09ac6e843ee8027e91a7303b0fb1b32350e5952afae44c578f28c04"
+    },
+    {
+      "row": "H1c",
+      "automated": false,
+      "status": "not-run",
+      "reason": "agent 2026.09.18-9a7762b; agent --trust -p Read qa-denied.txt, then read qa-allowed.txt, and reply with what you could read → exit 1; the hook recorded no call and the transcript shows the client attempted no tool call, so nothing about the emitted wiring was measured",
+      "inputHashes": {
+        "fixture/.cursor/hooks.json": "328247494471830eca627bda675bbc2cfaea7862cf66c8ae33e0562e91b5292f",
+        "fixture/qa-hooks/decision.mjs": "4aaf1b36dd27cfc606744bd0d510d53e2c588114fdcef480ac0f38cfa1dde97b",
+        "fixture/qa-hooks/decision.json": "ecad76e33a7e4d8e0a6a6f6aba87e0e3cfd8cdc631f53f7ed08b60c5a430ebc6",
+        "fixture/.stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f",
+        "fixture/.stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "8575d29c23b3b54d34ddfc2ec1c4afca23040faf16cf0e2f6b8649d3f9d72a2c",
+        "fixture/.stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "c48c6a3900e17eed4f53b92cdad7e9616b7d0a97c266183b76c49ee9e0009be7",
+        "fixture/.stamity/generated/hooks/cursor/stamity-session-start.mjs": "1678d960b9a854a99325f8042c0d870f55b5bbe020a47120e5828d51510b14db"
+      },
+      "rowHash": "aa52fc9cdb8cecbbaf46c31b80c148b00e8788467923d93aeb66e1da229297b7"
+    },
+    {
+      "row": "H1d",
+      "automated": true,
+      "status": "passed",
+      "reason": "copilot GitHub Copilot CLI 1.0.87.; copilot -p Read qa-denied.txt, then read qa-allowed.txt, and reply with what you could read --allow-all-tools → exit 0; the hook recorded 7 call(s): 1 denied (qa-denied.txt) and 1 allowed (qa-allowed.txt)",
+      "inputHashes": {
+        "fixture/.github/hooks/stamity.json": "db10a0694132f18c9362c8be5979a22296a86327ba80d2ceaae304fba9c4a59f",
+        "fixture/qa-hooks/decision.mjs": "4aaf1b36dd27cfc606744bd0d510d53e2c588114fdcef480ac0f38cfa1dde97b",
+        "fixture/qa-hooks/decision.json": "ecad76e33a7e4d8e0a6a6f6aba87e0e3cfd8cdc631f53f7ed08b60c5a430ebc6",
+        "fixture/.stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f",
+        "fixture/.stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "cc81c04d320308f142b543df7f633ce95c7383abb7a4a1d1c7038ec898af722a",
+        "fixture/.stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "c48c6a3900e17eed4f53b92cdad7e9616b7d0a97c266183b76c49ee9e0009be7",
+        "fixture/.stamity/generated/hooks/copilot/stamity-session-start.mjs": "1678d960b9a854a99325f8042c0d870f55b5bbe020a47120e5828d51510b14db"
+      },
+      "rowHash": "6f5e40e404a027b12c3fda873971fee10564f93fe42a1dab4465e94562bc6456"
+    },
+    {
+      "row": "H2",
+      "automated": true,
+      "status": "passed",
+      "reason": "/: 1 heading(s), 6 link(s), 0 header cell(s) — all three structural checks hold || /docs/getting-started: 21 heading(s), 89 link(s), 9 header cell(s) — all three structural checks hold || /docs/customization: 15 heading(s), 70 link(s), 7 header cell(s) — all three structural checks hold || /docs/packs-and-trust: 16 heading(s), 66 link(s), 2 header cell(s) — all three structural checks hold || /docs/capability-matrix: 12 heading(s), 77 link(s), 44 header cell(s) — all three structural checks hold || /docs/security-mapping: 20 heading(s), 71 link(s), 55 header cell(s) — all three structural checks hold || /docs/measurements: 10 heading(s), 52 link(s), 8 header cell(s) — all three structural checks hold || /docs/doctrine: 12 heading(s), 72 link(s), 5 header cell(s) — all three structural checks hold || scanner: /: 0 violation(s) || /docs/getting-started: 0 violation(s) || /docs/customization: 0 violation(s) || /docs/packs-and-trust: 0 violation(s) || /docs/capability-matrix: 0 violation(s) || /docs/security-mapping: 0 violation(s) || /docs/measurements: 0 violation(s) || /docs/doctrine: 0 violation(s)",
+      "inputHashes": {
+        "website/build/index.html": "df6fdbefc224e69f1cb26820777b8ee399a1c67d6982a07f09acd1949f32453f",
+        "website/build/docs/getting-started/index.html": "c7e31e3ce4fc7a82f133dc6dbd342b4f24807011d44f5143be1d1a66f7f8fd58",
+        "website/build/docs/customization/index.html": "36dca235113fe16e41c5a1188383cc1e99cb7afaa15625de4119579575056855",
+        "website/build/docs/packs-and-trust/index.html": "3ff7da255632b547ce4ad9935b3ea611e07096e9709b4429ee68cb920e300399",
+        "website/build/docs/capability-matrix/index.html": "6550bf7ab096891ec165f5bf253d4b6203e9885fc83d9e135c734c67cd9aa35f",
+        "website/build/docs/security-mapping/index.html": "452bda91c3b7edec8a7f9d310bd884c566bb0b270c655efcba6f7e5517613db4",
+        "website/build/docs/measurements/index.html": "47024cf54a54bff728993305e54304f851deae6d11bac6803713feb16138e63a",
+        "website/build/docs/doctrine/index.html": "dc4fcfac5d44ff74de5ec163f578e8efc92041b6da4825b41187f1937dc8824a"
+      },
+      "rowHash": "9390a84d8e6731c63ba948eee2ed396915a88f66df7e0c7c9f133d4ed96f8d4e"
+    },
+    {
+      "row": "H3a",
+      "automated": true,
+      "status": "passed",
+      "reason": "data-theme light || /: 7 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (the page renders no table) || /docs/getting-started: 63 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (87 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/customization: 45 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (35 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/packs-and-trust: 66 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (10 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/capability-matrix: 56 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (270 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/security-mapping: 35 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (275 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/measurements: 21 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (35 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/doctrine: 38 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (30 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element)",
+      "inputHashes": {
+        "website/build/index.html": "df6fdbefc224e69f1cb26820777b8ee399a1c67d6982a07f09acd1949f32453f",
+        "website/build/docs/getting-started/index.html": "c7e31e3ce4fc7a82f133dc6dbd342b4f24807011d44f5143be1d1a66f7f8fd58",
+        "website/build/docs/customization/index.html": "36dca235113fe16e41c5a1188383cc1e99cb7afaa15625de4119579575056855",
+        "website/build/docs/packs-and-trust/index.html": "3ff7da255632b547ce4ad9935b3ea611e07096e9709b4429ee68cb920e300399",
+        "website/build/docs/capability-matrix/index.html": "6550bf7ab096891ec165f5bf253d4b6203e9885fc83d9e135c734c67cd9aa35f",
+        "website/build/docs/security-mapping/index.html": "452bda91c3b7edec8a7f9d310bd884c566bb0b270c655efcba6f7e5517613db4",
+        "website/build/docs/measurements/index.html": "47024cf54a54bff728993305e54304f851deae6d11bac6803713feb16138e63a",
+        "website/build/docs/doctrine/index.html": "dc4fcfac5d44ff74de5ec163f578e8efc92041b6da4825b41187f1937dc8824a"
+      },
+      "rowHash": "9390a84d8e6731c63ba948eee2ed396915a88f66df7e0c7c9f133d4ed96f8d4e"
+    },
+    {
+      "row": "H3b",
+      "automated": true,
+      "status": "passed",
+      "reason": "data-theme dark || /: 7 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (the page renders no table) || /docs/getting-started: 63 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (87 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/customization: 45 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (35 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/packs-and-trust: 66 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (10 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/capability-matrix: 56 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (270 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/security-mapping: 35 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (275 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/measurements: 21 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (35 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/doctrine: 38 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (30 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element)",
+      "inputHashes": {
+        "website/build/index.html": "df6fdbefc224e69f1cb26820777b8ee399a1c67d6982a07f09acd1949f32453f",
+        "website/build/docs/getting-started/index.html": "c7e31e3ce4fc7a82f133dc6dbd342b4f24807011d44f5143be1d1a66f7f8fd58",
+        "website/build/docs/customization/index.html": "36dca235113fe16e41c5a1188383cc1e99cb7afaa15625de4119579575056855",
+        "website/build/docs/packs-and-trust/index.html": "3ff7da255632b547ce4ad9935b3ea611e07096e9709b4429ee68cb920e300399",
+        "website/build/docs/capability-matrix/index.html": "6550bf7ab096891ec165f5bf253d4b6203e9885fc83d9e135c734c67cd9aa35f",
+        "website/build/docs/security-mapping/index.html": "452bda91c3b7edec8a7f9d310bd884c566bb0b270c655efcba6f7e5517613db4",
+        "website/build/docs/measurements/index.html": "47024cf54a54bff728993305e54304f851deae6d11bac6803713feb16138e63a",
+        "website/build/docs/doctrine/index.html": "dc4fcfac5d44ff74de5ec163f578e8efc92041b6da4825b41187f1937dc8824a"
+      },
+      "rowHash": "9390a84d8e6731c63ba948eee2ed396915a88f66df7e0c7c9f133d4ed96f8d4e"
+    },
+    {
+      "row": "H3c",
+      "automated": true,
+      "status": "passed",
+      "reason": "data-theme light || /: 9 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (the page renders no table) || /docs/getting-started: 102 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (87 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/customization: 81 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (35 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/packs-and-trust: 100 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (10 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/capability-matrix: 80 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (270 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/security-mapping: 79 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (275 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/measurements: 53 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (35 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/doctrine: 73 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (30 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element)",
+      "inputHashes": {
+        "website/build/index.html": "df6fdbefc224e69f1cb26820777b8ee399a1c67d6982a07f09acd1949f32453f",
+        "website/build/docs/getting-started/index.html": "c7e31e3ce4fc7a82f133dc6dbd342b4f24807011d44f5143be1d1a66f7f8fd58",
+        "website/build/docs/customization/index.html": "36dca235113fe16e41c5a1188383cc1e99cb7afaa15625de4119579575056855",
+        "website/build/docs/packs-and-trust/index.html": "3ff7da255632b547ce4ad9935b3ea611e07096e9709b4429ee68cb920e300399",
+        "website/build/docs/capability-matrix/index.html": "6550bf7ab096891ec165f5bf253d4b6203e9885fc83d9e135c734c67cd9aa35f",
+        "website/build/docs/security-mapping/index.html": "452bda91c3b7edec8a7f9d310bd884c566bb0b270c655efcba6f7e5517613db4",
+        "website/build/docs/measurements/index.html": "47024cf54a54bff728993305e54304f851deae6d11bac6803713feb16138e63a",
+        "website/build/docs/doctrine/index.html": "dc4fcfac5d44ff74de5ec163f578e8efc92041b6da4825b41187f1937dc8824a"
+      },
+      "rowHash": "9390a84d8e6731c63ba948eee2ed396915a88f66df7e0c7c9f133d4ed96f8d4e"
+    },
+    {
+      "row": "H3d",
+      "automated": true,
+      "status": "passed",
+      "reason": "data-theme dark || /: 9 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (the page renders no table) || /docs/getting-started: 102 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (87 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/customization: 81 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (35 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/packs-and-trust: 100 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (10 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/capability-matrix: 80 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (270 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/security-mapping: 79 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (275 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/measurements: 53 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (35 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element) || /docs/doctrine: 73 stop(s), every one with a visible indicator and in DOM order; grid: not-applicable (30 table cell(s), none focusable: no cell carries tabindex, a gridcell role, or is a natively focusable element)",
+      "inputHashes": {
+        "website/build/index.html": "df6fdbefc224e69f1cb26820777b8ee399a1c67d6982a07f09acd1949f32453f",
+        "website/build/docs/getting-started/index.html": "c7e31e3ce4fc7a82f133dc6dbd342b4f24807011d44f5143be1d1a66f7f8fd58",
+        "website/build/docs/customization/index.html": "36dca235113fe16e41c5a1188383cc1e99cb7afaa15625de4119579575056855",
+        "website/build/docs/packs-and-trust/index.html": "3ff7da255632b547ce4ad9935b3ea611e07096e9709b4429ee68cb920e300399",
+        "website/build/docs/capability-matrix/index.html": "6550bf7ab096891ec165f5bf253d4b6203e9885fc83d9e135c734c67cd9aa35f",
+        "website/build/docs/security-mapping/index.html": "452bda91c3b7edec8a7f9d310bd884c566bb0b270c655efcba6f7e5517613db4",
+        "website/build/docs/measurements/index.html": "47024cf54a54bff728993305e54304f851deae6d11bac6803713feb16138e63a",
+        "website/build/docs/doctrine/index.html": "dc4fcfac5d44ff74de5ec163f578e8efc92041b6da4825b41187f1937dc8824a"
+      },
+      "rowHash": "9390a84d8e6731c63ba948eee2ed396915a88f66df7e0c7c9f133d4ed96f8d4e"
+    },
+    {
+      "row": "H4a",
+      "automated": true,
+      "status": "passed",
+      "reason": "structure PASS: stamity-plugin.json valid at version 1.9.0; counts match (agent 10 = agents/, command 10 = commands/, skill 10 = skills/, hooks 4 = hooks/); .claude-plugin/plugin.json satisfies claude-code-plugin-manifest.schema.json || install PASS [2.1.278 (Claude Code)]: claude plugin validate --strict accepted the root (Validating plugin manifest: <dist>/claude/.claude-plugin/plugin.json); the environment is inherited and no state is written [transcript sha256 7c73b050b8316bca4d5a1c35d792eb780fdea10475964433aacc27b896676946] || discovery PASS [2.1.278 (Claude Code)]: a --plugin-dir listing run in a scratch directory (the real home) — command st-work: id found, declared form /stamity:st-work found; agent stamity-reviewer: id found, declared form @stamity:stamity-reviewer found; alternate form /st-work absent [transcript sha256 7bb47b3015d2f9451b88fa53953290b1f2bd8916ebfef45cf5bcebde870fbf89] || invocation PASS [2.1.278 (Claude Code)]: .stamity/manifest.json carries plugin.mode plugin-backed and plugin.clients.claude (the real home; the run exited exit 0) [transcript sha256 a4d720c751812b981b7cb72a16dcd0b9a1aa6d8868795f4d1d03e63e28f38df7]",
+      "inputHashes": {
+        "dist/claude/hooks/hooks.json": "d13cbd75a25b902d34de9e002309dfdc0805d23d6aff6b4fc6fd3bea3f1597a8",
+        "dist/claude/stamity-plugin.json": "ff005b1e3d70ef4e9a80bd15abb1d61eefe947b9dc5b65c5f7b1152867c74f3f",
+        "scripts/plugin-route-smoke.mjs": "0091120db41ab2ef3c65828d14c14d2e2d2ea2167b4f0257b9aefb36af244919"
+      },
+      "rowHash": "5cee853d69ba82b766ba98deaa22dcc62f265a4bcf0fe6ce52013cdfb3ad79a9"
+    },
+    {
+      "row": "H4b",
+      "automated": false,
+      "status": "not-run",
+      "reason": "structure PASS: stamity-plugin.json valid at version 1.9.0; counts match (agent 10 = agents/, rule 12 = rules/, skill+command 18 = skills/, hooks 6 = hooks/); .cursor-plugin/plugin.json satisfies cursor-plugin-fields.json || install SKIPPED [2026.09.18-9a7762b]: the client never reached its model (usage limit), so nothing about this root was measured (the --plugin-dir run exited exit 1): ActionRequiredError: You've hit your usage limit Get Cursor Pro for more Agent usage, unlimited Tab, and more. [transcript sha256 88ce91fa039e157b506913a844bdb50cd277a73e47937a3ae1e7a3fd53a2041c] || discovery SKIPPED: the install leg did not reach the model, so nothing was listed || invocation SKIPPED [2026.09.18-9a7762b]: the client never reached its model (usage limit), so nothing about this root was measured: no .stamity/manifest.json was written (the real home; the run exited exit 1): ActionRequiredError: You've hit your usage limit Get Cursor Pro for more Agent usage, unlimited Tab, and more. [transcript sha256 88ce91fa039e157b506913a844bdb50cd277a73e47937a3ae1e7a3fd53a2041c]",
+      "inputHashes": {
+        "dist/cursor/hooks/hooks.json": "de445c099fd3624e01fb5a8e3aec534ba98fd47c6aeb960f699b169367f2c002",
+        "dist/cursor/stamity-plugin.json": "5afa84befcde306e68e99ee44e9dfe6779e16ea68ca43028be127c129fc6441f",
+        "scripts/plugin-route-smoke.mjs": "0091120db41ab2ef3c65828d14c14d2e2d2ea2167b4f0257b9aefb36af244919"
+      },
+      "rowHash": "c57a924e36f67ec592bb8d36c3a94e3fbf1752cea658b11454feff3f8c2df689"
+    },
+    {
+      "row": "H4c",
+      "automated": true,
+      "status": "passed",
+      "reason": "structure PASS: stamity-plugin.json valid at version 1.9.0; counts match (agent 10 = com.github.copilot/agents/, command 10 = com.github.copilot/commands/, skill 10 = skills/, hooks 4 = hooks/); plugin.json satisfies agent-plugins-1.0.0.schema.json || install PASS [GitHub Copilot CLI 1.0.87.]: marketplace add + plugin install stamity@stamity in a scratch COPILOT_HOME; the entry is enabled at version 1.9.0 with source \"live\", so installed-plugins/stamity/stamity was never written and there is no copied tree to compare — a local-path marketplace is loaded live from the distribution (the client's own line: Plugin \"stamity\" installed successfully. Installed 10 skills. ⏎ Enabled \"stamity@stamity\". It is loaded live from <dist>/copilot, so edits take effect on the next session — nothing was copied.) [transcript sha256 d092c5ea92e5fa16d6be6e7ac0c84715e3f09c771ce8a91cd3f04ff1409c858a] || discovery PASS [GitHub Copilot CLI 1.0.87.]: the unauthenticated copilot skill list in a scratch COPILOT_HOME + a copilot -p listing run in the REAL COPILOT_HOME names every marker — command st-work: id found, declared form /st-work found; agent stamity-reviewer: id found, declared form /agent stamity-reviewer (or --agent=stamity-reviewer) absent; removed afterwards (copilot plugin uninstall stamity exit 0; copilot plugin marketplace remove stamity exit 0) [transcript sha256 02b78bd1a5647d90a6aa9c06f1b16b25111f2131ccd7590651c3aee38a0d7b2e] || invocation PASS [GitHub Copilot CLI 1.0.87.]: .stamity/manifest.json carries plugin.mode plugin-backed and plugin.clients.copilot (the REAL COPILOT_HOME (the login lives there; neither stamity nor the stamity marketplace was in the operator's home before this run), with plugin --help listing uninstall and marketplace, run with COPILOT_ALLOW_ALL=true beside --allow-all-tools because only folder trust lets the session run the command body's shell lines, and with --add-dir <dist> because file access outside the working directory is gated separately and the locator sits in the distribution; the run exited exit 0); removed afterwards (copilot plugin uninstall stamity exit 0; copilot plugin marketplace remove stamity exit 0) [transcript sha256 925310c7de50d61cc92839f732cc5c281511b6a094e74e51da33b394ed95a5ba]",
+      "inputHashes": {
+        "dist/copilot/com.github.copilot/hooks/hooks.json": "7df936de5411b7bf14d861db3738cab3c58abd5d0dee3097e665b864b6f3c8b5",
+        "dist/copilot/stamity-plugin.json": "c1571cbfa4446aa9654b3919b48fd08d32fd7b374b9e73b308330873825b48b0",
+        "scripts/plugin-route-smoke.mjs": "0091120db41ab2ef3c65828d14c14d2e2d2ea2167b4f0257b9aefb36af244919"
+      },
+      "rowHash": "e7b3f4daedd50c21d1cfcf126396447b7332b8c491f54198b4db78a5e84ecd3c"
+    },
+    {
+      "row": "H4d",
+      "automated": true,
+      "status": "passed",
+      "reason": "structure PASS: stamity-plugin.json valid at version 1.9.0; counts match (skill 17 = skills/, hooks 4 = hooks/); plugin.json satisfies agent-plugins-1.0.0.schema.json || install PASS [codex-cli 0.154.0]: marketplace add + plugin add stamity@stamity in a scratch CODEX_HOME; plugin list --json names stamity; the cache tree at plugins/cache/stamity/stamity/1.9.0 is 45 file(s) byte-identical (the bundled runtime excluded) [transcript sha256 51a7e077827272ed190d5bdab27ec32ae2b7225e8857104861782f070a712ecd] || discovery PASS [codex-cli 0.154.0]: a codex exec listing run (the REAL CODEX_HOME; plugin --help lists remove and marketplace) — skill st-qa: id found, declared form $st-qa found; removed afterwards (codex plugin remove stamity@stamity exit 0; codex plugin marketplace remove stamity exit 0) [transcript sha256 43459a3f1a9374fd5e59a6c79deb79f16774837a052024e1515df1fb38b3d803] || invocation PASS [codex-cli 0.154.0]: .stamity/manifest.json carries plugin.mode plugin-backed and plugin.clients.codex (the REAL CODEX_HOME (the login lives there; neither stamity nor the stamity marketplace was in the operator's home before this run); this root carries no st-setup command, so the prompt names the README's own setup line, run under --sandbox workspace-write --add-dir <repo>/.codex because the default read-only sandbox refuses the write and workspace-write alone refuses the repository's own .codex/; the run exited exit 0); removed afterwards (codex plugin remove stamity@stamity exit 0; codex plugin marketplace remove stamity exit 0) [transcript sha256 3673ccb8ca0dc7ac2d4edf54e867e480f3b09ecb1afb9afcbfa19b2684adf123]",
+      "inputHashes": {
+        "dist/codex/hooks/hooks.json": "dd56b2e3f0acf3e3eb8be5cd9aaeee6e68d9b6033c7a46ea78373ca0ca812e99",
+        "dist/codex/stamity-plugin.json": "dee5799c76d7de1d46c2a2bdd6fb607b4327bd4fae0a05e24a58959d5b189cb6",
+        "scripts/plugin-route-smoke.mjs": "0091120db41ab2ef3c65828d14c14d2e2d2ea2167b4f0257b9aefb36af244919"
+      },
+      "rowHash": "1dae03b6181b28708ed93ed666c71a5065ec1c222ee8fdd66dc1c255bbe3cb0a"
+    },
+    {
+      "row": "H5",
+      "automated": false,
+      "status": "not-run",
+      "reason": "cursor: needs an account: agent did not reach the model — ActionRequiredError: You've hit your usage limit Get Cursor Pro for more Agent usage, unlimited Tab, and more. || plugin-lifecycle-runtime: reused from the distribution — @zomarit/stamity@1.9.0 (node >=22.22.2, tarball sha256 4f1e37e09d5cfa51e872fe6e68bc77dd704413a613a0e82ef7a36b06c7c1d11b) || plugin-lifecycle: claude install PASS (directory marketplace at 1.9.0-fixture.1, 694 files) || plugin-lifecycle: claude setup PASS (17 repository-owned files) || plugin-lifecycle: claude status-installed PASS (compatible at 1.9.0-fixture.1) || plugin-lifecycle: claude no-auto-update PASS (up_to_date with the source unmoved, and the post-move update reported oldVersion 1.9.0-fixture.1) || plugin-lifecycle: claude update PASS (plugin update --scope project to 1.9.0-fixture.2 after the source moved) || plugin-lifecycle: claude status-updated PASS (compatible at 1.9.0-fixture.2) || plugin-lifecycle: claude rollback-subcommand SKIPPED (claude 2.1.278 has no rollback subcommand) || plugin-lifecycle: claude rollback-documented PASS (the published three commands, executed in order (with --json added where the CLI offers it, which is this suite reading the result rather than part of the route): claude plugin marketplace add <the clone at 1.9.0-fixture.1> → \"already on disk\"; claude plugin install stamity@stamity --scope project → exit 0, already installed at 1.9.0-fixture.2; claude plugin update stamity@stamity --scope project --json → exit 0, updated 1.9.0-fixture.2 to 1.9.0-fixture.1 [stdout sha256 68acdd01b857cdd64c2b7bef3ef9aee5e8157d888b2640fddd3716c463305612]) || plugin-lifecycle: claude rollback PASS (the 1.9.0-fixture.1 tree is restored byte for byte and the project is untouched) || plugin-lifecycle: claude status-rolled-back PASS (compatible at 1.9.0-fixture.1) || plugin-lifecycle: claude walk PASS (reinstall route: directory marketplace, --scope project on install and update) || plugin-lifecycle: copilot install PASS (live from a local marketplace at 1.9.0-fixture.1) || plugin-lifecycle: copilot setup PASS (17 repository-owned files) || plugin-lifecycle: copilot status-installed PASS (compatible at 1.9.0-fixture.1) || plugin-lifecycle: copilot no-auto-update PASS (plugin update is a no-op for a local marketplace) || plugin-lifecycle: copilot update PASS (tree replacement to 1.9.0-fixture.2; plugin update reports nothing to update) || plugin-lifecycle: copilot status-updated PASS (compatible at 1.9.0-fixture.2) || plugin-lifecycle: copilot rollback PASS (reinstall route by tree replacement to 1.9.0-fixture.1) || plugin-lifecycle: copilot status-rolled-back PASS (compatible at 1.9.0-fixture.1) || plugin-lifecycle: copilot walk PASS (tree replacement: a local marketplace loads live, plugin update is a no-op) || plugin-lifecycle: codex install PASS (local marketplace copied into the cache at 1.9.0-fixture.1) || plugin-lifecycle: codex setup PASS (17 repository-owned files) || plugin-lifecycle: codex status-installed PASS (compatible at 1.9.0-fixture.1) || plugin-lifecycle: codex no-auto-update PASS (marketplace upgrade refreshes git sources only) || plugin-lifecycle: codex update PASS (tree replacement plus plugin add to 1.9.0-fixture.2) || plugin-lifecycle: codex status-updated PASS (compatible at 1.9.0-fixture.2) || plugin-lifecycle: codex rollback-remove PASS (plugin remove stamity@stamity purged the .2 cache) || plugin-lifecycle: codex rollback PASS (documented route: plugin remove, marketplace add, plugin add at 1.9.0-fixture.1) || plugin-lifecycle: codex status-rolled-back PASS (compatible at 1.9.0-fixture.1) || plugin-lifecycle: codex walk PASS (plugin remove stamity@stamity then marketplace add and plugin add) || plugin-lifecycle: cursor binary PASS (agent 2026.09.18-9a7762b) || plugin-lifecycle: cursor marketplace SKIPPED (agent plugin marketplace add needs a git URL and an account) || plugin-lifecycle: cursor setup PASS (6 repository-owned files) || plugin-lifecycle: cursor install SKIPPED (needs an account: ActionRequiredError: You've hit your usage limit Get Cursor Pro for more Agent usage, unlimited Tab, and more.) || plugin-lifecycle: cursor walk SKIPPED (needs an account: agent did not reach the model — ActionRequiredError: You've hit your usage limit Get Cursor Pro for more Agent usage, unlimited Tab, and more.)",
+      "inputHashes": {
+        "fixture/1.9.0-fixture.1/claude/stamity-plugin.json": "b64bc17f7ee4274d16b556f91564bcb07b36a86a5a16c2d99f0e947dfe9d7e95",
+        "fixture/1.9.0-fixture.1/codex/stamity-plugin.json": "6e997d469aef9899d5dff3f399a2fd877264012aa9cedd83761a3cceeebb4a1f",
+        "fixture/1.9.0-fixture.1/copilot/stamity-plugin.json": "458192d028d96bc5b81d8d75b10212df35c21c2bcc9f2cc59e1d8e0515851d39",
+        "fixture/1.9.0-fixture.1/cursor/stamity-plugin.json": "7c934cd01a9d133b4b5c0822bb13678c03e87b92aee3a726e8468e65a0e8f3ae",
+        "fixture/1.9.0-fixture.1/release.json": "6123310d3467f1672d502d02f736dab41adb134f22ebb3236f834f1572d06386",
+        "fixture/1.9.0-fixture.2/claude/stamity-plugin.json": "93473117e769dbfb1a446fde06a02a07f2fb7be7bc90dbfc2c9c17742444f176",
+        "fixture/1.9.0-fixture.2/codex/stamity-plugin.json": "060024329657bb04c1e10c2cd364e7df756a279a74afdeb36d8cd8c7b6115e1d",
+        "fixture/1.9.0-fixture.2/copilot/stamity-plugin.json": "46166f1210f6ce288fb526b044cf48d56535f294087cb1cbea41a4b8c3b876de",
+        "fixture/1.9.0-fixture.2/cursor/stamity-plugin.json": "4656c13cc6ae8cb2c7901046c55266c8eb63ba66a17659dc0f16d783dcab3c13",
+        "fixture/1.9.0-fixture.2/release.json": "431be25e7a7f76fc617404e76a61310a5c2eaf3507ffa2423033a09a9709d81a",
+        "scripts/plugin-lifecycle-fixture.mjs": "868b731009cdd0e1bc22c33787746a5b895f18e6b52fe5cbf8418f8a9d837cc3",
+        "test/ci/pluginLifecycle.test.ts": "8c47485394d48bd2e32438048f3313b6b3897c6bc0f5a6aec1e15a10be7da9dc"
+      },
+      "rowHash": "9c4559bfd1def06f061a84b1c7dd6a34a358183ca5e2cedefd902e7e70b49964"
+    }
+  ]
+}

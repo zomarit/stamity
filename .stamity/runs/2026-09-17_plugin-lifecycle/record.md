@@ -2443,3 +2443,1553 @@ whole-branch review's findings at `claude-fable-5-1`.
 Skip note: V2 part 1 (`scripts/plugin-lifecycle-fixture.mjs`, `test/ci/pluginLifecycle.test.ts`) and V5's
 cases share no contract with V1 or V3 beyond the rows above; every row closes as `clean`, `reconciled(N)`
 or a facade-hold with its owner named, so the batch dispatches in parallel.
+
+## Phase 1 — one researcher on the hook-path seams (2026-09-20T20:35Z–20:42Z, opus, read-only, web)
+
+- Vendor facts read today: Claude Code hooks run "in the current directory" (the session's cwd), export
+  `CLAUDE_PROJECT_DIR` to every hook process in both forms, run shell form through `sh -c` (Git Bash on
+  Windows, PowerShell only when Git Bash is absent), block on exit 2 and continue on any other non-zero exit
+  — the defect's root cause stated by the vendor, and its anchor. Copilot's entries carry `cwd: "."`,
+  "relative to repository root" — anchored by contract. Codex commands run with the session cwd and the
+  emitted starter walks up to the directory holding `.codex/hooks.json`, so any sub-directory is anchored; a
+  cwd outside the project's ancestry is not (a separate gap, deferred). Cursor's pages refused the fetcher
+  and the machine's own `curl` (the host closes the connection) — not stated; U1 measures the client.
+- Seams: the four repository-mode Claude commands are composed once (`src/emit/hooksInfra.ts:438-445`) and
+  the review gate's once more in the adapter (`src/adapters/claude.ts:744-747`); `shellWord` already
+  double-quotes a `ROOT_VARIABLE_PATH` match as the vendor asks; the guard exits only 0 or 2 by design, so
+  a fail-closed tail reclassifies no verdict; no doctor row reads a hook command; the launcher allowlist
+  judges the user hook's declaration, never the rendered string; the QA harness runs `claude -p` at the
+  fixture root and hashes the settings file, so the anchored bytes reopen `H1a` by design.
+- Findings raised: one Critical — an anchor applied in the interchange would match `ROOT_VARIABLE_PATH` and
+  silently reclassify every Cursor, Copilot and Codex row as a plugin row (`src/hooks/portableRunner.ts:48-56`);
+  folded into the design as "anchor at the Claude render boundary, the interchange stays repository-relative".
+  One Warning — the Cursor command carries the same relative shape, unproven either way (U1's measurement).
+  One Minor — `docs/troubleshooting.md` has no Claude hook-not-running section (U1 writes it).
+
+## Wave 0 and wave 1 — dispatched (2026-09-20T20:50Z–21:05Z)
+
+Seven implementer lanes at opus, each from the branch head `5429d3e` with a pointer-style dispatch (the
+brief under the session scratchpad, the shared lane rules beside it): U1 (`p15s3-u1`) the hook-path bug
+unit; V1 (`p15s3-v1`) the route-proof smoke, the `plugins` harness lane and rows `H4a`–`H4d`; V1w
+(`p15s3-v1w`) the `plugin-route` CI job and the nightly invocation legs, coded against V1's declared CLI;
+V1b (`p15s3-v1b`) the three inbox rows the route proof decides; V2 part 1 (`p15s3-v2`) the lifecycle fixture
+builder and its test; V3 (`p15s3-v3`) the downstream packages proof; V5a (`p15s3-v5`) the three eval cases.
+V1 is split at Plan into V1, V1w and V1b because the plan's cell names ten files across three concerns and
+the unit ceiling is eight; V2 is split into the builder (now) and the harness row (after V1 lands), the
+facade-hold the census names. Two defaults applied by the orchestrator and recorded here rather than asked
+(each has one safe reading under the overnight contract): (1) **the pre-tool-use guard fails closed on
+Claude Code when it cannot launch** — the core guard row alone carries a shell tail exiting 2 with a message
+naming `stamity sync`; the notices, the review gate and every user row keep the client's non-blocking
+semantics; the PowerShell-fallback residual is named as not done — default executed under the overnight
+contract of 2026-09-20, with the universal floor as the reason (a guard that cannot run must not let the
+call through, and the guard's own exit contract makes the tail verdict-neutral); (2) V5's adversarial case is
+written against the as-built refusal (`stamity clean -y` then `plugin setup`), because the `plugin migrate`
+preview its cell names was cut on 2026-09-17. Six lane briefs also declare their readings; each return
+names the ones it applied.
+
+## Wave 1 — returns and integration
+
+### V1w — the `plugin-route` CI job and the nightly invocation legs: BUILT (2026-09-20T21:35Z; `575e4d1` on `p15s3/v1w`; integration after V1)
+
+Unit V1w landed the `plugin-route` CI job and the nightly invocation legs as one commit, 699 insertions and 29
+deletions across `.github/workflows/ci.yml`, `.github/workflows/nightly.yml` and `test/ci/workflow.test.ts`. The
+job is merge-blocking through `all-ci-checks` (`needs` now four entries with the result test): it builds the four
+roots with the release workflow's own three lines from the packed tarball, installs the four vendor CLIs one step
+each under `continue-on-error`, exports `STAMITY_<CLIENT>_BIN` for every binary `command -v` finds, and runs the
+smoke without `--invoke` — the merge gate is the structure claim plus each credential-free install, and no secret
+reaches the job. Nightly's drive step replaced its "not implemented" warning: four secrets instead of one, one
+notice per absent secret, `--invoke` scoped to the armed clients, the job's ceiling raised from 25 to 45 minutes
+with its derivation. Each secret maps to the variable its client honours, measured from the binaries
+(`claude --help` 2.1.278: `ANTHROPIC_API_KEY`; `agent --help` 2026.09.15: `CURSOR_API_KEY`; `copilot help
+environment` 1.0.85: `COPILOT_GITHUB_TOKEN` first in precedence; `codex login --help` 0.154.0: the measured
+mechanism is a stdin login from `OPENAI_API_KEY`, so the codex mapping carries its stated limit). `cursor.com`
+refused every TLS connection from this machine (reproduced four ways against three reachable control hosts), so
+the Cursor install shape is cited from the installed layout and a registry probe showing no first-party package.
+The distribution build measured at about 20 s (18.27 s for the distribution step). The test file moved five pins
+with inline justifications, retired three nightly assertions by name, and added three suites that execute the two
+arming loops with two-of-four inputs and assert no secret value reaches the log; two red-checks restored. Lint,
+typecheck, knip and the leak gate (0 hits, 1538 files) exit 0; 9,154 tests pass with no coverage-threshold line;
+ONE assertion red by construction — `references only scripts/*.mjs files that exist on disk` — because
+`scripts/plugin-route-smoke.mjs` is V1's file; it closes at integration with no edit. Two hand pages drift
+silently green (`GOVERNANCE.md`, `CONTRIBUTING.md` state two lanes) — ledgered build/68, the lane resumed for
+the two lines. Deferrals build/64–67.
+
+### V1b — the three inbox rows the route proof decides: DONE (2026-09-20T21:36Z; `7e9ac6e`, `621fea4` on `p15s3/v1b`)
+
+Row build/60 landed as `7e9ac6e` (228 insertions over 39 deletions, five files): `requiredNodeRange()` moved from
+its private home in `check.ts` into the shared probe, where `engineNodeFacts()` reads this build's declared
+`>=22.22.2` and computes `ok` against it, so `plugin status`'s `node` row is never `unstated` when no root's
+locator answers; the `duplicates` entries gained `source` and `remedy` from the same finding `check`'s
+`plugin-duplicates` row prints, in the JSON and the plain table; `--client <csv>` on `status` now narrows the
+`clients` rows in `TOOLS` order through the same `parseClients` validator `setup` uses (its code is
+`CONFIG_ERROR`, not the `VALIDATION_ERROR` the brief named — one validator for one flag was preferred to a second
+refusal; a reading recorded). Four red-first cases pin the three. Row prove/101 changed nothing:
+learn.chatgpt.com/docs/hooks read 2026-09-20 (HTTP 200) states only that `commandWindows` is an optional
+Windows-only override, names no shell, and its one example carries no variable — not stated; no Windows host; the
+inbox row keeps its trigger. Row build/63 kept its lines: `codex plugin marketplace add --help` on 0.154.0 lists
+`--ref <REF>` with the example `codex plugin marketplace add owner/repo --ref main`; `621fea4` pins the built
+README's Codex section to that spelling, red-checked. Lint, typecheck exit 0; `npm run test -- --coverage`
+229 files, 9,151 passed, 9 skipped, no threshold line; `generate-docs.mjs` moved no byte. No codex emission in the
+dogfood tree, so no sync was owed. Deferrals build/69–71.
+
+### V5a — three eval cases for `st-setup` and plugin-mode invocation: DONE (2026-09-20T21:50Z; `5178cb2`, `bd9f2c0` on `p15s3/v5`)
+
+V5a added the three plugin-lifecycle eval cases and moved every count they touch. `st-setup-fresh-repository`
+(golden · rubric, 6 binding / 1 advisory) measures the clean first run — `plugin status --json` through the
+root's own locator first, then `plugin setup --client claude -y`, never `init`, never a bare `stamity` on `PATH`,
+closing on the resolved status and claiming no file of a carried class. `st-setup-refuses-generated-setup`
+(adversarial · refusal, 6/1) measures the refusal over an existing setup, written against the as-built behaviour
+rather than the plan cell's: the migration engine was cut on 2026-09-17, so there is no `plugin migrate` preview;
+the run stops for the operator and names `clean -y` then `plugin setup`, and B6 refuses an invented `--apply` or
+migrate flag as well as the operator's assertion that one exists (the as-built refusal exits 1 —
+`src/types/errors.ts:9-13` records the retired sysexits translation; the case asserts no exit code).
+`plugin-mode-invocation` (golden · rubric, 5/1) measures the Claude namespaced form — `@stamity:stamity-researcher`,
+the orchestrating run as single writer, and the charter-reference phrase "the Full gate command listed under
+Verification gates in AGENTS.md" where a unit's `verify` line reaches the gate; its Brief states that Cursor,
+Copilot and Codex invocation is proven by the route proof. The locator reading was decided by running the suites
+red first (four distinct reds: `coverage.test.ts:43`, `locators.test.ts:128`, `EvalBlocked: set-roster`,
+`EvalBlocked: input-not-committed`) and reading (a) was taken: `parseSource` admits a `scripts/plugins/<name>.mjs`
+source beside `.md`, `sourcedArtifacts` counts corpus sources only so the coverage sum still compares the five
+`content/` globs against cases and exemptions alone, and `coverage.test.ts` names every case governed outside the
+corpus so a third arrives as a red test rather than a silent exemption; the harness's own `case-source` guard
+admits the same pair and its fixture tree carries `setupCommand.mjs`. No coverage-exemption row was added.
+Recomputed roster: 102 cases — 52 golden, 20 adversarial (16 non-twin guardrails, 4 benign twins), 30 probes;
+23 floor cases; 522 binding and 52 advisory criteria; 83 non-negotiable rows across 28 cases. The `set-roster`
+census literal moved to 102 and the manual-runner case pin became a derivation. Gates at `5178cb2`: lint,
+typecheck, `npm run test -- --coverage` 229 files, 9,172 passed, 9 skipped, `All files 96.59/89.99/98.79/97.41`,
+no threshold miss; `npx vitest run test/evals` 1,288 passed (two earlier full runs failed only on load-induced
+`afterAll` cleanup timeouts in three unrelated suites, all green in isolation — the same class the runner meets).
+The follow-up `bd9f2c0` moved the four roster-derived literals no test gates — the release checklist's "all 99 v6
+cases" to 102, the `st-eval-run` override's roster line to 102 cases, 306 scenarios and 612 calls, and
+`evals/README.md`'s appendix restatement from 75 rows across 25 cases (stale before this package) to 83 across 28
+— and regenerated the override's emitted copy through the dogfood sync (`0 created, 1 updated, 66 unchanged`; the
+manifest moved on `updatedAt` and one `contentHash`), `check` all green. Carried to the orchestrator: the private
+driver's census and set pins (moved before the release run, with a deterministic canary pair). Deferral build/73.
+
+#### V1w — the measurements, with their exit codes and hashes (2026-09-20; closes prove/119)
+
+Each command run on this machine on 2026-09-20 with the binary named; the captured stdout is under the lane's
+private scratch directory, hashed with sha-256: `agent --help` (Cursor agent CLI 2026.09.15-d2fe57e, exit 0,
+`be0388f7e15063e8c147ea5759e789a7f2ac87f95727dd596e1d8253e32b378b`) — `--api-key` "can also use CURSOR_API_KEY env
+var", `--plugin-dir` and `-p/--print` present; `copilot help environment` (GitHub Copilot CLI 1.0.85, exit 0,
+`6c337ec371802712cc1bd1709c60a9b5ffebb835847ba6a583bcd9f7982168a6`) — `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`,
+`GITHUB_TOKEN` in order of precedence; `codex login --help` (codex-cli 0.154.0, exit 0,
+`06ef70370c92189627bf3d969c6b304506f5b161f8f751496a02668d2103771f`) — `--with-api-key` reads the key from stdin
+(`printenv OPENAI_API_KEY | codex login --with-api-key`); `claude --help` (Claude Code 2.1.278, exit 0,
+`ae85d661e9c086f05637ebcd868f5702b477ff6e55e2e65b8ada7807cd51a4b6`) — "Anthropic auth is strictly
+ANTHROPIC_API_KEY or apiKeyHelper"; `ls -la ~/.local/bin/agent` (exit 0, `2853086ca45293ad5cef7c4b78b67b4d122c8acb2b65526dd1daee900fc161e2`)
+— the vendor installer's layout under `~/.local/share/cursor-agent/versions/<v>/`; the npm registry `latest`
+documents for `@anthropic-ai/claude-code` 2.1.278, `@github/copilot` 1.0.86 and `@openai/codex` 0.155.1 (exit 0,
+`35de5eaee531b01a1b872f9b8fd4c422244d350de5b777afa8e2e193d759b1da`); `curl https://cursor.com/docs/cli/installation`
+exit 35 (`SSL_ERROR_SYSCALL`, reproduced on `www.cursor.com`, `cursor.com/install` and `docs.cursor.com` and under
+`openssl s_client`, while `registry.npmjs.org`, `docs.claude.com` and `raw.githubusercontent.com` answered 200
+from the same shell) — not-run; the three distribution-build commands timed at 0.69 s (build), 0.52 s (pack),
+0.57 s (runtime extraction) and 18.27 s (the distribution), the measured half of both timeout derivations.
+
+### V3 — downstream-customized packages proof: DONE (2026-09-20T21:35Z; `e7e1355` on `p15s3/v3`)
+
+V3 landed as one commit: a new `test/ci/pluginDownstream.test.ts` builds three distributions from ONE fork
+checkout — the fork layer present, removed, and back as an empty directory — with
+`scripts/build-plugin-distribution.mjs` spawned from that checkout, a stub runtime carrying the fork's own
+package name, and no `--source-commit` override, so the three trees share one corpus, one identity and one
+HEAD. The fixture module gained, additively and opt-in, the fork identity (`@acme/stamity`, publisher `acme`,
+`https://github.com/acme/stamity-private`), one empty commit for provenance, `fixtureProvenance`, the 60-pair
+`EXPECTED_PLUGIN_FILES` oracle and `FORK_ONLY_IDS`; the identity is opt-in because applying it unconditionally
+turned `test/ci/apmDownstream.test.ts:211` red (measured, recorded at the option). Proved: every fork
+operation's delivered body in each client's own home, 0 occurrences of the upstream body under each of 12
+replaced documents, the fork-only ids under bare directories, no surviving `upstream.txt`, no consumer override
+in any root, `sourceCommit` equal to the fixture's HEAD in four capability files and `release.json`, the fork's
+owner and https source in every catalog that carries one (Codex carries neither, asserted absent), the canonical
+owner and package absent from all 133 non-zip files, and a differing shared-root set against the unforked build
+pinned exactly at 24 replaced or patched documents plus 5 corpus-derived files. An empty `fork/` reproduced the
+no-fork distribution byte for byte over 131 files. Refusals proved: a case-folded fork id, a same-directory case
+twin (exit 1 by two routes per host case sensitivity), a fork-skill symlink. A non-github mirror is addressed as
+`git-subdir` with no `github` source; a `github` kind off github.com is refused. One opt-in case under
+`STAMITY_FORK_SUITE=1` built the distribution inside a renamed `private: true` copy of the whole tree and found
+the renamed identity in its catalogs (17.6 s). `.github/client-contracts.md` gained one dated sentence in the
+Copilot container's discovery paragraph. Three red-checks run and reverted. Gates: lint and typecheck clean;
+`npm run test -- --coverage` 230 files, 9,159 passed, 10 skipped, no threshold line, green in one run and red
+in two later runs under concurrent lane load only on the recorded `afterAll` cleanup timeout of
+`test/upstream/workflowRecovery.test.ts:38` (the known load class; green alone); the leak gate 0 hits over
+1,539 files. Two spec-delta proposals for REQ-PLUGIN-022 (the identity proof includes the package name; an
+empty `fork/` and a non-github mirror). Deferrals build/74–77, the two Warnings graded by the reviewer.
+
+### V2 part 1 — the upgrade-and-rollback fixture and its four measured walks: DONE (2026-09-20T21:40Z; `3eb7058` on `p15s3/v2`)
+
+Two new files, none existing touched. The builder makes one temp copy of the checkout, builds `1.9.0-fixture.1`
+from it, writes the marker skill into that copy's fork layer (authored as `fork/skills/fixture-marker/` — the
+generator refuses an `st-`-prefixed fork directory, a default applied and quoted), builds `1.9.0-fixture.2`, and
+commits each tree as an orphan commit into `<out>/remote.git` under `plugins/v<version>` with the distribution
+branch at the second; both commits take the author `fixture <fixture@example.invalid>` and both dates from
+`release.json`'s `sourceCommitDate`, and two runs produced the same two shas. The two trees differ in 13 added,
+8 removed and 17 changed paths, every one accounted for by the version string, the archive digests, the skills
+count in each capability file, or the marker. Timings: 4.34 s one root, 4.95 s four roots with a stub runtime,
+67.60 s building its own runtime. All four client walks ran for real on this machine (34 rows, every one PASS but
+one SKIPPED): claude 2.1.278 has NO `plugin rollback` (`error: unknown command 'rollback'`; `claude plugin
+--help` sha-256 `b0214cc3567a6eff8fc62215006a94043c8debaacc89c366d4e0ce8b70a0c5ab`), so its rollback is the
+reinstall route; a local bare repository is not a Claude marketplace source (`Path does not exist`, `Invalid
+marketplace source format`), so the walk clones at the tag and rewrites only the CLONE's catalog entry to
+`./claude`; `--scope project` is needed on install AND update (`plugin update` defaults to user scope and
+refuses; `up_to_date` at `.1`, `updated` `.1`→`.2` and `.2`→`.1` as the source moves). Copilot 1.0.85 loads a
+local marketplace live (`Installed 10 skills`, `nothing was copied`; `plugin update` → `nothing to update`), so
+its update and rollback are tree replacement (`copilot plugin --help` sha-256 `5329cfea11820d22ec67a02bbb368983cf…`).
+Codex 0.154.0 copies into `$CODEX_HOME/plugins/cache/stamity/stamity/<version>` and `plugin add` again is both
+update and rollback (`marketplace upgrade` refreshes git sources only; `plugin remove stamity` needs
+`<plugin>@<marketplace>`). The Cursor agent 2026.09.15 `plugin marketplace add` takes a git URL and needs an
+account (`Authentication required`) — SKIPPED with the reason; `--plugin-dir` tree replacement walked instead
+(`agent plugin marketplace --help` sha-256 `8b93a0e4f872144c0f0bba62384bc734493a6ec1e5649fcbc7f5ca1a4e47eb7d`:
+add, list, remove, update; no install, update, rollback or uninstall of a plugin). Every installed tree's sha-256
+map equalled the shipped root (claude 694/695, copilot 694/695, codex 681/682); `plugin setup` then `plugin
+status --json` through each root's locator reported `not-applicable` before setup and `compatible` in all three
+states after, for all four clients; the repository-owned map (17 files; 6 for cursor) was unchanged at every
+step, the project's only install-time change being `.claude/settings.json`'s `enabledPlugins`; every walk ran in
+a scratch config directory or home with no login and no credential read or copied. Gates: lint, typecheck PASS;
+`npm run test -- --coverage` PASS at 230 files, 9,159 passed, 13 skipped, no threshold line (one earlier full run
+reported a suite-level `FAIL test/ci/apmDownstream.test.ts` with zero failing cases that did not reproduce alone
+— a load-sensitive transient, the known class); the unarmed suite 13 passed, 4 skipped; the armed suite 16
+passed, 1 skipped in 208 s. Two spec-delta proposals (REQ-PLUGIN-021 the measured routes; REQ-PLUGIN-013 the
+marker's bare slug). Deferrals build/78–80. Part 2 (`H5`, the harness walk) waits on V1.
+
+## CI on pull request #47 at `5429d3e` (2026-09-20)
+
+Pull request #47 opened as a draft at the branch's first commit (the record's opening section). Run
+35535632378: floor 3m40s and LTS 4m23s green, the three apm route legs, the dependency review and the
+supply-chain check green; run 35535632430: DCO, the title check and the size budget green with `all-pr-checks`
+`pass`. The Windows leg went red once — `test/ci/evidenceArchive.test.ts:150` (`captures and restores git
+evidence when Windows stat APIs report different ctime and modes`) timed out at 20000 ms after 29,719 ms, on a
+commit whose product bytes equal `main` `67f404b` (green on Windows in run 35533988057) — and a re-run of the
+failed leg alone passed (completed 21:33:09Z), so `all-ci-checks` reads `pass`: a runner timing flake of the
+rerun-only class, ledgered prove/131 and deferred with a derived-timeout trigger.
+
+### U1 — the relative hook path: BUILT (2026-09-20T21:55Z; `ab9eae6`, `4c23e98`, `16b895b`, `f678fa3` on `p15s3/u1`; review pending)
+
+U1 closed the relative hook path in four commits. The Claude render boundary now anchors every
+repository-relative hook script on `${CLAUDE_PROJECT_DIR}` as one double-quoted word (`src/adapters/claude.ts`)
+— the interchange rows stay tool-neutral, so no Cursor, Copilot or Codex row was reclassified — and the core
+pre-tool-use guard's command alone gained a POSIX fail-closed tail (`|| { echo 'stamity: the pre-tool-use guard
+could not run; run stamity sync' >&2; exit 2; }`), **the default executed under the overnight contract of
+2026-09-20**; the session-start, tamper-notice and review-gate rows and every user row keep the client's
+non-blocking semantics, and a plugin-mode row renders unchanged. Emitted core scripts in repository mode now
+derive their repository root from their own location (`src/hooks/scripts.ts`), accepted only under the three
+parent segments `.stamity/generated/hooks`, with the container layout decided at emission and byte-identical to
+before — so the session-start and review-gate scripts read and write the repository's own `.stamity/` from a
+sub-directory cwd. Measured with the real clients: `node scripts/qa/run.mjs --skip-browser --clients claude` at
+`ab9eae6` (claude 2.1.278, exit 0, stdout sha-256 `a1340b944f7d6a1c0d496b1d482f04d4b8fb532961e2532c3489c52347e37d8c`)
+wrote `H1a passed` against the ANCHORED fixture — the first evidence that headless `claude -p` exports
+`CLAUDE_PROJECT_DIR`; the PRE-change sub-directory control (the fixture builder against the baseline adapter;
+transcript sha-256 `1b119b1a1758df7b8ad6bb4c5d1f09f30afa3eee43677e4e58a3b49c792668c6`, observations
+`74044299e48d665dcff7345ab98c9eb467ee0dc1074f8b9ff92f2bc8f0271618`) reproduced the defect exactly — ONE hook
+observation (the `cd` itself) and the denied file then read with no hook line; the POST-change leg from the same
+sub-directory (transcript `5e5576ecd52eaeb3b5d66d9390b50646d20986760dcb83ab35c568c19b854875`, observations
+`04b28f57f18fe181809f7aed207c23ddbb34b1405dfd2a3e6e35096f58fa7a73`) recorded six observations, the denied read
+blocked and the allowed one served. Cursor was measured rather than guessed (agent CLI 2026.09.15-d2fe57e, exit
+0, stdout `772760cbc7e45fb30db3794da063d29c50ee3f3b396b3f58483ef8362c5842a4`, observations
+`41ed8997894af0f0fb91fda7b1fd70143ca25c5da1d5d38e35a87e521a8498e0`): all six hook invocations reported the
+workspace root as their cwd, three of them after the model's `cd sub`, the denial still fired, and
+`CURSOR_PROJECT_DIR` is exported (names only, no value read) — outcome (a), no Cursor change, the measurement is
+the citation. Copilot and Codex: no emitted byte moved (Copilot's per-entry `cwd: "."`; Codex's starter walk) —
+nothing to measure. Fixtures under the OS temp directory, removed; no credential read, copied or printed.
+Gates: lint and typecheck pass; `npm run test -- --coverage` 229 files, 9,160 passed, 9 skipped, no threshold
+line; `npm run build && node dist/cli.js sync && node dist/cli.js check` — `0 created, 0 updated, 67 unchanged`
+(the sync had already been run in the lane; the dogfood `.claude/settings.json`, the two claude scripts and the
+manifest moved in the commits), drift clean, all green. Four literals moved and nine cases added in
+`test/adapters/claude.test.ts`, five in `test/hooks/scripts.test.ts`, both goldens regenerated, one assertion in
+`test/emit/hooksInfra.test.ts:942-953` (outside the unit's file set) moved because part 2 makes the two modes'
+session-start bodies differ by design. Docs: a Claude section in `docs/troubleshooting.md`; the contracts page's
+four client bullets with today's citations. Readings recorded by the lane: the tail is recognised by the whole
+repository-mode script path, not the basename; the guard's refusal is on stderr; the round-trip fixture needs no
+`git init`; part 2's layout is decided off the policy path the emitter already keys on. Spec-delta proposal:
+MODIFIED REQ-FINISH-001 (three bullets). CHANGELOG line proposed for the 1.9.0 `Fixed` group. Not done, stated
+rather than claimed: the tail is unmeasured under the Windows PowerShell fallback (a host without Git Bash is
+unguarded rather than fail-closed); the CI Windows leg is the confirmation of record for the path work. Deferrals
+(Minor): a repository-relative script path carrying a space, a quote or a backslash keeps today's relative
+rendering silently (no accepted row has that shape); the Codex starter finds no project from a cwd outside the
+project's ancestry (recorded, not fixed); the three other clients' commands rest on three separately measured
+vendor behaviours rather than one anchor; the layout would read better as a parameter of `planCoreHookScripts`;
+the unit is 1,078 insertions over 13 files (341 of source, the rest tests and regenerated bytes).
+
+## Review round 1 — U1 (`5429d3e..f678fa3` on `p15s3/u1`), 2026-09-20T22:20Z: request-changes, confidence 0.86; the security lens PASS with one Warning
+
+The reviewer (fable) read every moved hunk of `src/adapters/claude.ts` and `src/hooks/scripts.ts` against the
+base, the tests, the dogfood tree and the lane's captured artefacts, and confirmed the inbox row's three
+acceptance points met: the anchor is confined to the Claude render boundary (`CLAUDE_PROJECT_DIR` appears in no
+other `src/` file; the goldens keep sixteen relative Cursor, Copilot and Codex commands), the tail sits on the
+core repository-mode guard row alone, the anchored word passes `ROOT_VARIABLE_PATH` so no quote, dollar,
+backtick, backslash or space can reach the double quotes, the layout derivation is exact for both policy-path
+shapes, the shape check rejects `dist/plugins/claude/hooks`, and the round-trip and root cases are load-bearing
+(the `hooksInfra.test.ts` byte-identity pin was made false by construction and became a shape pin with its
+reason — not a weakened gate). One Warning, raised by both the reviewer and the security lens (prove/147): the
+`||` tail fires on ANY non-zero status, and the guard's own block is exit 2, so every legitimate denial's stderr
+carries the refusal JSON plus the "could not run; run stamity sync" line — the client feeds stderr to the model
+on exit 2, so every denied call would carry a false remediation; the exit code is unchanged (the brief's
+criterion holds), the message is the defect, and the round-trip case never asserted the line absent. Routed to
+the lane as round-1 fixer with the security lens's two Minors (the PowerShell-fallback residual understated —
+`${CLAUDE_PROJECT_DIR}` is PowerShell variable syntax, so all five anchored rows would stop there, a possible
+regression to name; the user-row fallback of build/81) and the reviewer's six (prove/149–151, build/81, build/84).
+The security lens found the injection surface, the fail-closed paths, the anchor's trust boundary (the variable
+and the settings file derive from one session root; no cwd walk), the own-location root's shape check and the
+interchange isolation clean. Class of evidence: the lane's captured artefacts under its private scratch
+(`gate-final.txt`, the observation logs, the harness log) read by the reviewer; no command run by either lens.
+
+## Review round 1 — V3, V5a, V1b, V1w and V2 (fable), 2026-09-20T21:40Z–22:30Z
+
+- **V1b** approve 0.78 — one Warning (the node-floor judgment composed twice; prove/110), six Minors; the lane
+  fixed the Warning with one exported tri-state `judgeNodeFloor` both readers call (`ca16a77`), `check`'s row
+  byte-identical arm by arm; the narrow re-review approve (medium-high) verified all three closures.
+- **V5a** request-changes 0.72 — three Warnings (a governing block opening mid-sentence at line 120 without the
+  step-2 condition; a Brief misdescribing its fixtures; the plugin-mode case lacking the skill form
+  REQ-PLUGIN-025 requires), four Minors; the lane's round 1 (`1fe4663`) widened the range to 113-135 spelling
+  the field names, corrected the Brief, added a third governing block from `content/commands/st-plan.md:285-290`
+  (the plan-lint gate's structural coverage pass through the verify skill) with binding row B4 sealing
+  `/stamity:st-verify` and its `scripts/` companion resolved inside the root (523 binding now), a negative
+  `parseSource` test and the completed fixture JSON; the re-review approve (medium-high) recounted the roster
+  by hand — 102 cases, 523 binding, 52 advisory, 83 rows across 28 cases — and verified every closure.
+- **V1w** request-changes 0.78 (after the security lens's PASS with one Warning) — the credential-scope
+  Warning (prove/108) closed in `81e6666` and verified; three items on the lane's statements and pins closed in
+  `f6c9cab` (the merge gate's "does not prove" now says the boundary falls through the middle of discovery,
+  described by mechanism; the `creds` step pinned spawn-free; the pointer repointed at the plan cell); the
+  re-review approve (medium) verified all four closures; one gate stays red until V1's script lands (prove/117).
+- **V3** request-changes 0.72 — two Warnings on the generators (the plugin writer had no case-fold projection
+  check, so the cell's refusal held only through the APM step; a failed distribution build left its roots in
+  `--out`), one on the lane's contended gate capture, one reading (the non-github edge case is unreachable
+  through `repository.url`; the reachable `stamity.distribution.sources` form was tested — recorded, prove/136),
+  seven Minors; the lane's round 1 (`a874739`) added the lowercased claim map to the plugin writer refusing a
+  second claimant before any write and naming both contestants (the locator's `files.set` bypass carries it),
+  tightened the two assertions on a PROBED volume (`filename-mismatch` where the volume folds, the writer's
+  message where it does not), added the plugin-only-route case, extracted `build(parsed)` in the distribution
+  builder with `--out` removed on a throw and a retry case, and fixed the six Minors; the full suite green
+  uncontended (230 files, 9,161 passed, 10 skipped, 137.78 s — the machine idle), so prove/135 closes there;
+  the re-review is pending.
+- **V2 part 1** request-changes 0.80 — three Warnings (the Cursor walk never drove the client with
+  `--plugin-dir`; two rollbacks differed from the routes `docs/plugins.md` documents; the 34 walk rows were
+  summarised, not captured), seven Minors; routed to the lane as round 1 (drive the client at each state or
+  mark the rows `not-run`, walk the documented commands, capture every row); pending.
+- The attribution trailer: three lanes signed `Co-Authored-By: Claude Opus 5` rather than the shared rules'
+  Fable line, correctly — a trailer names who wrote the commit; the rule is corrected (prove/143 rejected).
+
+### V1 — the per-client route proof: BUILT (2026-09-20T22:05Z; `729dc15`, `31e1ef9` on `p15s3/v1`; review pending)
+
+`scripts/plugin-route-smoke.mjs` landed with `test/ci/pluginRoute.test.ts`, `scripts/qa/plugin-runs.mjs` and the QA
+form's four new rows, in two commits (9 files, +2,263/−49). The smoke walks structure, install, discovery and
+invocation per client, exits 0 only when no leg failed, 1 on a failure and 2 when it could not run, and writes
+the `--json` document the CI job and the harness read; the CLI shape V1w codes against is unchanged. The
+credential-free structure leg passed for all four roots and is the leg CI blocks on: it re-counts every carried
+class out of the tree (claude agent 10 / command 10 / skill 10 / hooks 4; cursor agent 10 / rule 12 / skill and
+command 18 / hooks 6 — Cursor's commands and skills share `skills/`, so only their sum is provable; copilot agent
+10 / command 10 / skill 10 / hooks 4; codex skill 17 / hooks 4) and validates each container manifest against
+its vendored document; a root with `commands/st-work.md` removed fails naming both numbers. With all four
+binaries armed the `--invoke` run reported 13 passed, 0 failed, 3 skipped in 17 m 47 s against a distribution
+built from a packed tarball (runtime 637 files, roots 681–707). Measured: `claude plugin validate --strict`
+(2.1.278, exit 0, `74d28e9e95c3bbad647a3bfc67dc0c4991935f6fa2e7f8562242f3e1fdf6f5bf`); the Claude listing
+(`7bb47b3015d2f9451b88fa53953290b1f2bd8916ebfef45cf5bcebde870fbf89`) printed `/stamity:st-work` and
+`@stamity:stamity-reviewer` and NOT the bare `/st-work` — the measurement the 2026-09-17 inbox row on
+client-neutral cross-references waited for: the client advertises only the namespaced form; whether the bare
+form also resolves is not measurable headlessly; the Claude setup leg with `--allowed-tools Bash`
+(`5de44669446e04220e9f4cec9361a074ed58c485563f4f5113c1e6a813e95ab0`) wrote the manifest with `plugin.mode:
+plugin-backed`; the Cursor listing (`agent --trust --plugin-dir … -p`, 2026.09.15-d2fe57e,
+`0a59cc9f7335fcb824a3428106ba30e11b4df4e06177b68357dcf427dc463ef1`) printed `/st-work` and `/stamity-reviewer`
+and its setup leg (`--force`, `9df5a8ed0c6b1edaf586728646f24350c146923a161107ea80c86cb50d15cb23`) wrote the
+manifest; the Copilot marketplace route in a scratch home (1.0.85, listing
+`631cfb7a80642646f5c0e0dd8462c590b60dc8e0fb6bb968e4d47c634df462c5`) — a NEW vendor fact: a marketplace on a
+LOCAL path is loaded live (`"source": "live"`, "nothing was copied", `installed-plugins/` never written), so the
+leg proves the resolved entry rather than a tree comparison; `copilot skill list` unauthenticated names 20
+plugin ids (10 skills, 10 commands) in a scratch cwd — and inside this checkout the same listing reports 20
+PROJECT skills and one plugin skill, the precedence trap the package suite warns about; the Copilot setup leg
+in the REAL home with `--allow-all-tools` (`74617dc3e95ef0128b85baaf5531dd9a21e2b49ce363c77f115e7e94319229e5`)
+wrote the manifest, then `plugin uninstall` and `marketplace remove` exit 0; the Codex marketplace add, plugin
+add and `plugin list --json` in a scratch home (0.154.0, `cd60d41505a1168bb929bc0055b43a48ac5403ca417059f152be3c1fc2fd1e95`),
+the cache tree byte-identical over 45 files (runtime excluded), cleanup exit 0; `codex exec` — NOT RUN: exit 1,
+"You've hit your usage limit … try again at Sep 21st, 2026 10:16 PM" (`87cd098f…`, `3a1cdb00…`) — both Codex
+model legs SKIPPED with that cause. Three readings applied: Codex's discovery marker is a carried skill (`st-qa`
+under `$<id>`) because that container carries no command class; a marker resolves on its id with the declared
+form recorded beside it; Claude's discovery is a listing run of its own. Each invocation leg carries the
+client's documented tool grant — without one a headless run measures the permission model ("Permission denied
+and could not request permission from user", measured). The QA harness at `5429d3e` (`--skip-browser --dist`)
+wrote `H4a`, `H4b`, `H4c` passed and `H4d` not-run (the usage limit), and the hook lane's two newly driven rows
+came back split: **`H1c` passed** (Cursor: 4 hook calls, 2 denied, 2 allowed — the first client watched
+honouring the emitted repository-mode hook) and **`H1d` failed** (Copilot: no hook call at all — the runner
+grants no tool, so the row may measure permissions; ledgered prove/154 for the review). The evidence file was
+kept out of the checkout: the pre-fix build sliced transcript tails before redacting and one Codex reason
+carried part of the operator's home path; the fix redacts first and sweeps home-directory shapes (prove/158),
+and V6 re-measures at the candidate. Two modified tests with inline justifications. Gates: lint, typecheck pass;
+`npm run test -- --coverage` 230 files, 9,165 passed, 6 skipped, no threshold line; leak gate 0 hits over 1,541
+files; knip clean. Findings carried: `docs/plugins.md`'s "installs are cached" claim is false for a local-path
+marketplace (prove/152), its four "next session" sentences need re-dating (prove/153); Minors prove/155–157.
+`docs/plugins.md` unedited: every command block the route executed matches the page.
+
+## Integration 1 — U1, V1b, V5a and V3 onto the package branch (2026-09-20T22:11Z; head `cded8fc`, pushed 22:15Z)
+
+Thirteen commits cherry-picked in landing order — U1 (5), V1b (3), V5a (3), V3 (2). One conflict, the generated
+dogfood manifest at V5a's sync commit (both lanes had run the sync): resolved by taking V5a's copy and
+regenerating through `npm run build && node dist/cli.js sync` at the integrated tree, which then reported
+`0 created, 0 updated, 67 unchanged` and `check` all green — the manifest carries U1's hook hashes and V5a's
+skill hash together. A dry run of the same picks on a detached scratch worktree preceded the real integration.
+The record and ledger stay uncommitted until every row closes (they carry open rows for the units under review);
+the branch pushed for the CI round-trip with the units' own bytes only. V1w and V1 integrate after V1's review;
+V2 after its fix round.
+
+## The eval run's preparation — a rubric-core finding and the default it took (2026-09-20T22:20Z)
+
+The private driver's pins were moved for the 102-case roster (the set file's sha at `cded8fc`, the census
+`102/52/20/30/23/4/523/52`), the deterministic canary pair K3x/K4x passed under the moved driver (15 and 23
+checks, no model call), and `prepare` for run 31 against run 30 refused on the rubric: `evals/rubric-v7.md`'s bytes
+moved in session 1 (`c989e10`, the audit's currency fix A4 rewrote the selector sentence at line 3 from "selected
+by `codex-astra` in `MODEL-PROFILES-v2.md`" to the statement that every v1 profile selects it), and that line sits
+ABOVE `## Calibration protocol` — inside the grading core the judge receives and the incremental rule hashes. The
+core hash moved from `6209d8df…` (run 30's) to `be52bf01…`; the driver checks `rubricCoreHash` equality with the
+prior run, so a composed run is inadmissible as the tree stands, and a new baseline would cost about 617 calls —
+a window this night does not have. No test pins the core hash, so the edit passed every gate green (ledgered
+prove/170; a learning at the close). **Default executed under the overnight contract of 2026-09-20:** restore the
+judge-visible core to run 30's exact bytes (the three-line head as it was, so the grading instrument is the one the
+baseline calibrated) and carry session 1's corrected currency statement below the calibration boundary, where the
+judge never reads it and the file stays complete and true; the whole-file pin moves in the private driver and the
+profile with a second canary pair, the core hash and the profile's `gradingCoreSha256` stay `6209d8df…`, and the
+increment composes with run 30 as the maintainer's plan intends. The alternative — a full baseline on the new CLI —
+is the maintainer's to choose in the morning if the restore is not wanted: reverting the one rubric commit and
+re-running is cheap. The edit goes through a writer lane and a reviewer like every other change tonight.
+
+## Re-reviews of V2 and V3; integration 2 (2026-09-20T22:25Z)
+
+- **V2 part 1** re-review approve 0.85: prove/139 closed (the Cursor client driven at each of the three states
+  with the package test's own listing prompt; the exact `fixture-marker` line appears only in the `.2` listing —
+  18 ids at `.1`, 19 at `.2`; a scratch home refuses `Authentication required`, so the leg inherits the operator's
+  environment, stated; cleanup deletes only this walk's chat records by their `meta.json` cwd), prove/140 closed
+  (the documented Claude re-add plus install answers "already installed" and leaves the recorded version at `.2` —
+  `plugin update --scope project` is the completing command; the documented Codex `plugin remove stamity` refuses
+  and `plugin remove stamity@stamity` purges the `.2` cache), prove/141 closed (a `STAMITY_LIFECYCLE_LOG` sink;
+  467 lines and all 36 rows captured under the lane's scratch, every row PASS but the Cursor marketplace add and
+  the two Claude rollback rows SKIPPED with their reasons), prove/142 closed. One tracking Warning for the docs
+  (prove/169, `docs/plugins.md:243-246,262` still promise the two routes as sufficient; assigned to V7's writer
+  through its brief, with the note that the `rollback-documented` row should read as the failed route it is —
+  V2 part 2 carries it). Integrated as `886c9cb`, `9b6b337`.
+- **V3** re-review approve (medium-high): build/74 closed (the claim map refuses before any write and names both
+  contestants; the volume probe gives Linux and darwin/Windows one deterministic branch each), build/75 closed
+  (the `--out` cleanup is unreachable on an argument refusal and can only remove what the run wrote), prove/137
+  closed; prove/135 closes at the runner's gate on the integrated branch.
+
+## CI on pull request #47 at `cded8fc` (2026-09-20T22:15Z–22:30Z)
+
+Run 35541099353: floor and WINDOWS green, the three apm route legs and the advisory checks green, the LTS leg red at
+`Unused code and dependencies` — knip reports one unused export, `FORK_REPOSITORY_SLUG` at
+`test/ci/downstreamFixture.ts:16:14` (V3's fixture module exports it and nothing imports it). The shared lane
+rules' gate line carried lint, typecheck and the coverage suite and omitted `npm run knip`, which only the LTS leg
+runs — the third CI-only check beside the coverage floors and the Windows leg the learning names; the rule is
+widened for the lanes still to run and the orchestrator runs knip before every push. Routed to the V3 lane
+(prove/171). PR checks (DCO, the title, the size budget) green.
+
+## The eval run's preparation, continued — the archived prior and the driver's retention commit (2026-09-20T22:35Z)
+
+The rubric restore landed as `21f8a29` (the core hashes `6209d8df…` again at 9137 bytes; the pushed head), its
+reviewer asked for one sentence below the boundary (the restored line 3 describes v6's selection — the v2 profile
+document assigns `codex-astra` to `rubric-v6.md` — so the section must say the line is run-30 text retained for
+the configuration hash; prove/172, the lane resumed). With the rubric's whole-file pin moved in the driver and the
+private profile and the canary pair K3y/K4y passed, `prepare` then refused this session's configuration directory
+(`settings.json sets decoding- or routing-relevant keys: permissions`) and accepted the directory the earlier runs
+used; and its plan carried NOTHING — every case "not in the prior artifact", 617 calls — because the evidence
+archive of 2026-09-15 (`05cb4ef`) replaced run 30's public summary with a compact one (`archiveStorage.kind:
+compact-summary`) that carries no per-sample coverage rows, while the driver reads the prior summary at the
+candidate commit (prove/174). The published rows survive at the retention commit `68b57ef` (99 coverage rows, all
+three samples admitted on every one, the same run id, candidate and configuration hash as the compact summary) and
+in the public evidence release's archive under the sha `ARCHIVE.json` records. **Default executed under the
+overnight contract of 2026-09-20:** the private driver gains `--prior-summary-commit <sha>`, reading the prior
+run's summary at the named public commit where it was retained, refusing unless the compact summary at the
+candidate agrees with it on the run id, the candidate and the configuration hash and unless the retained file
+carries coverage rows, and recording both commits in the run's configuration; without the flag the driver
+behaves as before. The alternative — a full baseline of 617 calls — is not a window this night has, and the
+carried rows are the rows run 30 published. The prepared state of the 617-call plan was removed before any call;
+the run is re-prepared after the rubric sentence lands, under a third canary pair. The archive policy's effect on
+composability is a finding for the maintainer (the compact summary could keep `coverage`, or the retention
+commit could be recorded in `ARCHIVE.json`).
+
+## Run 31 prepared and started (2026-09-20T22:43Z; candidate `063832d`)
+
+The rubric sentence landed (`2521448` → `063832d` on the branch; the core still `6209d8df…` at 9137 bytes), the
+rubric's whole-file pin moved to its final bytes in the driver and the private profile, and the third
+deterministic canary pair K3z/K4z passed under the driver that gained `--prior-summary-commit` (15 and 23 checks,
+no model call). `prepare` at candidate `063832d` with `--prior-run 2026-09-15-run-30 --prior-summary-commit
+68b57ef`, the configuration directory the earlier runs used, capacity 4, the CLI 2.1.278: **29 calls** — five
+calibration fixtures, then four cases × three samples × two roles — **98 cases carried** from run 30 with their
+three admitted samples each, four re-measured: `st-setup-fresh-repository`, `st-setup-refuses-generated-setup`,
+`plugin-mode-invocation` (absent at the prior candidate) and `agent-test-runner-return-contract` (its source text
+moved: `content/agents/stamity-test-runner.md:14-17,42-122`, session 1's audit fix). Census 102/52/20/30/23/4/523/52;
+configuration hash `a4e9f1bd…`. Calibration and scoring started detached at 22:43Z (`run31/chain.log`); scoring
+runs only if every fixture matches. The branch pushed at `063832d` (eighteen unit commits) for the CI round-trip.
+
+## Run 31 — the account's session window (2026-09-20T22:45Z)
+
+The first four calibration calls came back `api_error_status: 429 — "You've hit your session limit · resets 1am
+(Europe/Sarajevo)"`, exit 1 within two seconds each; the driver classified them `process-exit`, retryable, and is
+holding on a `capacity-wait` until 2026-09-20T23:00:00Z (the window's reset) before the second attempt of each — its
+designed behaviour, no call spent past the refusal. The window was consumed by this session's own sub-agent
+fan-out (seven implementer lanes, their reviewers and lenses, three fix rounds) rather than by the eval, which the
+kickoff had scheduled after V1–V3 precisely to give it a free window; the increment's 29 calls now run in the next
+window beside the remaining lanes. Recorded for the maintainer as a scheduling lesson, not a defect: an eval
+increment starts before the review fan-out, or the fan-out is paced around it.
+
+## Review round 1 — V1 (2026-09-20T22:25Z–22:50Z): request-changes 0.70 and the security lens's four Warnings, closed by the lane's round 1 (`5f636b3`, `210238c`)
+
+The reviewer and the security lens raised, between them, the operator's own home (the real-home cleanup ran in a
+`finally` only, the marketplace add sat outside the `try`, and nothing checked whether the operator already had
+stamity installed — the cleanup would have deleted their plugin; prove/160, prove/165), the evidence file's
+redaction (a raw-transcript blocker match, the absolute `--dist` on an exit-2 refusal, `error.stack` on a crash,
+client-controlled strings and the binary's path; prove/161, prove/162, prove/164), the Codex cache assumed under
+`homedir()/.codex` rather than `CODEX_HOME`, the Claude grant `--allowed-tools Bash` wider than `st-setup` needs
+(prove/163), the Copilot hook row `H1d` reading `failed` while the client, granted no tool, may have attempted no
+call (prove/154), no suite for the harness lane (prove/166), two plan criteria unmet as written (prove/167), and
+four Minors (prove/168). The lane's round 1: `operatorAlreadyHas()` probes `plugin list --json` and the marketplace
+listing before any add and SKIPs both model legs when stamity is already in the operator's home; `realHomeGuard()`
+registers the removals on SIGTERM and SIGINT before the add, runs them once from either path and re-raises the
+signal, with the add inside the guarded region, and `plugin-runs.mjs` spawns asynchronously with SIGTERM at 1,800 s
+and SIGKILL only after a 420 s grace; blockers match the redacted transcript and every reason, refusal and crash
+line goes through one exported redactor per client (the entry's version and source, the version banner, the
+binary path, `<dist>`, `<scratch>`, `<repo>`, `<home>`, the Windows home spelling); `CODEX_HOME` is honoured; the
+Claude grant is `Bash(node *)` and the leg re-measured PASS with it; `CLIENT_RUNNERS.copilot.args` gained
+`--allow-all-tools` and `verdictFor` splits the empty-log case three ways (a permission refusal → not-run, no tool
+call attempted → not-run, a tool call with no observation → failed), six cases; `test/qa/pluginRuns.test.ts` (seven
+cases) pins the weakest-leg fold, the logical labels and the no-JSON path's redaction; the counts derive from the
+capability file, `blockerFor` is narrowed so a setup step's own EACCES is a FAIL, and `copilot plugin --help` is
+read once. Re-measured: the copilot invocation leg PASS in the REAL home with the probe, the guard and the two-step
+cleanup exercised (`plugin uninstall stamity` exit 0, `marketplace remove stamity` exit 0), `H1d` now `not-run` —
+"the hook recorded no call and the transcript shows the client attempted no tool call, so nothing about the emitted
+wiring was measured" — an honest row where a false `failed` stood. Gates: lint, typecheck pass; `npm run test --
+--coverage` 231 files, 9,180 passed, 6 skipped, no threshold line; the leak gate 0 hits over 1,542 files; knip
+clean. The REQ-PLUGIN-020 delta extended with the two readings (handed to the spec-author). Re-review pending.
+
+## Re-review — V1 (2026-09-20T22:50Z): request-changes 0.72 — the ten closures verified, four new Warnings in the fixes
+
+Every earlier row verified closed with line evidence (prove/154, 160–166, 168; prove/167 closes with the
+spec-author's merge, not the lane's code). Four new Warnings, all in the round-1 fixes: the SIGTERM/SIGINT
+handler cannot run while `main()`'s synchronous spawn chain holds the event loop, so cleanup on signal is
+effectively `finally`-only and the harness's grace assumes a stop that does not happen (prove/175); the
+pre-install probe fails OPEN when a listing errors — an install and a removal in the operator's real home would
+follow (prove/176); a `JSON.parse` message quoting the raw listing head can reach a reason unredacted
+(prove/177); the hook runner's permission-refusal pattern includes bare `permission denied`, so a real tool call
+whose result carries `EACCES` beside an empty log would read `not-run` rather than `failed` (prove/178). Two
+Minors (prove/179). Routed to the lane as round 2 (the same fixer, within the cap).
+
+## Side effects — the spec-delta merge (spec-author, opus, worktree `p15s3-spec`; integrated as `6f440e2` and `523c66b`, 2026-09-20T22:56Z)
+
+File 3's delta merged AS BUILT into `docs/specs/plugin-lifecycle.md`: REQ-PLUGIN-020 (the merge-blocking half
+stated by mechanism — structure, install and the discovery a credential-free listing command can answer; the
+credential-bound legs nightly behind one secret per step and on the maintainer's machine through the harness; the
+tool grant; the file instrument; the five moved literals — the sha-256 listing holds where the client copies a tree
+and a live-loaded local Copilot marketplace proves the resolved entry, the Copilot marketplace route, the Codex root
+carrying no command or agent class, Claude's listing printing only the namespaced form, the weakest-first fold;
+SKIPPED legs and the already-installed case), REQ-PLUGIN-021 (the four measured routes), REQ-PLUGIN-022 (the
+package name in the identity proof, the empty `fork/`, the `git-subdir`-under-`sources` form, the case-fold and
+symlink refusals), REQ-PLUGIN-023 (merged as PLANNED, its proof of record the V4 rehearsal's record when it lands,
+no clause claimed met), REQ-PLUGIN-025 (the three cases, the coverage-gate bound, the run-artifact clause stated as
+open until run 31 exports); the session's amendments to REQ-PLUGIN-013 (rollback settled as measured-absent; the
+bare marker slug), 016 (one tri-state floor judgment), 017 (`--client` on `status`), 019 (`source` and `remedy`);
+REQ-FINISH-001 in `docs/specs/implementation-finish.md` gained U1's three bullets in both copies (the anchor, the
+guard failing closed with its silent re-raise of exit 2, the script-located root with the container carve-out);
+four cells of plan file 3 amended and dated (V1's split at Plan and the fold, V2's marker slug and measured routes,
+V3's reachable form, V5's as-built refusal). Verify in the lane's worktree: the structural checker over file 3
+reports no findings; `test/records`, `test/docsPages.test.ts` and `test/authoring` 117 passed; lint exit 0. The
+status flips (`plugin-lifecycle`, `model-ladder` → `shipped-with-1.9.0`) ride their own commit so a `git revert` of
+that one commit restores `design` if the release does not happen — **a default executed under the overnight
+contract of 2026-09-20**: the spec-delta merge is confirm-gated in the work flow, and the flip anticipates the
+morning's tag; both are the maintainer's to reverse in one command. Readings the lane recorded: the V1b facts
+placed under the requirement governing each surface; REQ-PLUGIN-020's grant posture stated in terms that hold over
+V1's round 2; the plan files' historical prose left byte-stable. The V7 `files` cell waits for the writer's return.
+
+## CI on pull request #47 at `063832d` (2026-09-20T22:43Z–22:56Z)
+
+Run 35542535765: floor, LTS (knip green after V3's fix) and WINDOWS green, the three apm route legs and both
+advisory checks green, `all-ci-checks` pass; PR checks (DCO, the title, the size budget) pass. The run at `21f8a29`
+(35542230554) was superseded by this push and cancelled by the concurrency group, as designed. This is the first
+fully green CI at an integrated head of the session: U1, V1b, V5a, V3 (with its two fix rounds), V2 part 1 and the
+rubric restore.
+
+## Side effects — learnings (2026-09-20T23:00Z, through `stamity learn capture`)
+
+Two captured, each verified tonight and pinned by no gate: `the-rubric-core-is-hashed-above-the-calibration-boundary`
+(an edit anywhere above `## Calibration protocol` in `evals/rubric-v7.md` moves the grading-core hash the
+incremental rule composes on; session 1's currency sentence did, unnoticed, and the driver's `prepare` refused —
+validated against that refusal and the restore's acceptance; review horizon 2026-12-01, retiring when a test pins
+the core's sha to the newest run's `rubricCoreHash`) and `full-suite-cleanup-hooks-time-out-under-concurrent-load`
+(three suites' `afterAll` temp-tree cleanups exceed the 20 s hook timeout under concurrent full suites — a red with
+zero failing assertions and no coverage report, met by four lanes tonight, each green alone and uncontended;
+review horizon 2026-12-01). The second capture was refused once on a 205-character summary and re-run at 199;
+both heads gained `reviewBy` and `validatedAgainst` after capture, the shape session 2's learnings carry (the
+integrity digest covers the body). `test/learnings` 97 passed. The directory holds eleven learnings.
+
+## Run 31 — calibration matched, scoring restarted from a pinned worktree (2026-09-20T23:01Z–23:03Z)
+
+After the window reset the five calibration fixtures matched (C1–C4 on their second attempt, C5 on its first;
+`allMatched: true`, the judge resolved as `claude-fable-5-1`), and `score` refused in the same second: the driver
+pins the checkout it reads to the candidate for the whole run (`HEAD 523c66b is not the candidate 063832d`) and
+the branch head had moved when the two spec commits were integrated onto it during the wait. No call was spent.
+Scoring restarted at 23:02:43Z against a detached worktree pinned at `063832d` (`p15s3-eval`, sharing the object
+store, so every pinned input is byte-identical), which decouples the run from integration on the branch; the
+milestone lines land in the same chain log. Lesson recorded: the eval's `--repo` is a checkout that does not
+move for the run's duration — a pinned worktree, never the integration checkout.
+
+## Fixer round 2 — V1 (`3a17a6d` on `p15s3/v1`, 2026-09-20T23:05Z; re-review pending)
+
+prove/175: the stop path is real — `call` is `async` and yields to the event loop after every `spawnSync`, so a
+queued SIGTERM/SIGINT handler runs between client calls; the handler sets `stopped.signal` and runs the real-home
+removal, the next `call` throws a `RunStopped` sentinel, the per-client `catch` records every unreached leg
+`SKIPPED (the run was stopped by <signal> before this leg ran, so nothing about it was measured)`, a client reached
+after the stop still gets its structure leg measured, and the signal is re-raised once from the entry point after
+`main` resolves; the removal deliberately bypasses `call` (its own 60 s ceiling; it must run even under a stop);
+the residual is stated (a signal cannot interrupt the call in flight, up to 300 s; SIGKILL cannot be handled) and
+the harness grace is derived, 300 s plus two 60 s removals. A new case in `test/ci/pluginRoute.test.ts` spawns the
+smoke `--invoke` against a fixture binary that sleeps 3 s, sends a real SIGTERM at 1 s and asserts the stop line,
+the signal on close, `structure` still PASS and one leg `SKIPPED … stopped by SIGTERM`; red-checked with the yield
+removed; `skipIf(win32)` as the hook suite already does for signals. prove/176: `operatorAlreadyHas` returns
+`{ answered, present, detail }`, and an unanswered probe (a spawn failure or a non-zero exit on either listing)
+SKIPs both model legs with its own wording — a skip costs a measurement, the other direction costs an operator
+their plugin. prove/177: the parse note goes through `context.redact`. prove/178: `verdictFor` tests
+`TOOL_CALL_SIGNS` first — a visible tool call beside an empty log is `failed` whatever follows — and
+`PERMISSION_REFUSAL` is narrowed to the client's own approval wording, with the EACCES case added. prove/179: the
+header reads seven cases; the `runtime/` exclusion carries its reason (600-odd files with their own owner; the
+invocation leg runs `runtime/locate.mjs` out of the installed tree, so a truncated cached runtime fails there).
+Gates: lint, typecheck, knip pass; `npx vitest run test/qa test/ci/pluginRoute.test.ts` 74 passed, 1 skipped;
+`npm run test -- --coverage` 231 files, 9,182 passed, 6 skipped, no threshold line; the leak gate 0 hits over
+1,542 files. Re-measured credential-free after the async refactor: `plugin-route: PASS - 6 passed, 0 failed, 6
+skipped across 3 client(s)` — claude validate, the copilot marketplace install (`source "live"`), the codex cache
+tree byte-identical over 45 files; the round-1 model legs stand.
+
+## Re-review round 2 — V1: approve, medium (2026-09-20T23:09Z); round 3 routed to a fresh fixer at the stronger class
+
+prove/175 to prove/179 verified closed from the post-commit tree (`3a17a6d`): the yield sits after every spawn and
+before the next `call`'s check, the real-home guard is created before the real-home add and removed idempotently,
+the re-raise is once after `main`, every `operatorAlreadyHas` path carries `answered`, the parse note is
+redacted, `TOOL_CALL_SIGNS` is tested first, the header and the `runtime/` exclusion read right. Two new findings:
+a Warning (prove/180) — the SIGTERM case sends its signal after a fixed 1 s sleep, so under the concurrent load
+this session already recorded the child may die before its handlers exist, with no JSON to read, a load-dependent
+red in a new test rather than a defect in the stop path (the comment beside it also misplaces the signal, which
+lands during the `--version` probe); and a Minor (prove/181) — `copilotInstallLeg`'s parse-failure reason inlines
+the raw parser message, the sibling redacted in round 2. Round 3 is past the loop's cap, so both go to a FRESH
+fixer at `claude-fable-5-1` (worktree `p15s3-v1`, no reset), with the deterministic readiness signal the reviewer
+proposed (the fake binary touches a marker the test polls for before it kills) and the ordering proof required
+(handlers registered before the first client spawn, by line). Integration of V1 and then V1w waits for that commit.
+
+## Run 31 — export refused after scoring; driver corrected, canaried, re-prepared (2026-09-20T23:07Z–23:19Z)
+
+Scoring of the first attempt ended clean at 23:07:08Z (calibration 5/5 after four 429 attempts, 29 calls
+admitted, exit 0) and `export` refused at once: `the prior artifact 2026-09-15-run-30 changed since prepare`.
+Cause: the `--prior-summary-commit` extension added to `prepare` this evening (prove/174) was incomplete —
+`export`'s two reads of the prior summary (`carriedRows`, the carried coverage rows; the advisory-repeat ledger)
+still read it at the candidate, where the archive step of 2026-09-15 left the compact summary, so the hash
+check that guards the carried rows failed exactly as designed. The driver's own integrity rule
+(`driver files changed after prepare`) forbids exporting a run under a driver other than the one that prepared
+it, and that rule stands: no hash was re-recorded, no check bypassed. Default executed under the overnight
+contract of 2026-09-20: correct the driver (both reads now use the recorded `priorSummaryCommit` and keep the
+same sha check; 28 lines, driver tests 23/23), run the deterministic canary pair for a driver change (K3aa 15/15,
+K4aa 23/23, no model call, plan entries 58–59), retain the first attempt's journal and calls privately as
+`run31-export-refused` (its scores are not mixed into the run of record), and re-prepare the same run id from
+the pinned worktree at `063832d` (29 calls, 98 carried, census unchanged, configuration hash `7c9ff4ab…`; the
+instrument note states the second preparation and why). The alternatives were exporting under an edited hash
+(tampering with the run's integrity record) or a flag that waives the check (the same thing with a name); a
+full baseline was not needed. The refused export had already written 62 call files into the public directory
+before the check; that partial directory was removed (exports never overwrite). Calibration of the second
+preparation matched at 23:18:52Z on the first try; scoring started at once. Cost of the correction: 34 model
+calls repeated.
+
+## Run 31 exported — PASS (2026-09-20T23:24Z; artifact `3e76f7b` on the branch)
+
+The second preparation scored in four minutes (calibration 5/5 on the first attempt, 29 calls admitted, exit 0
+at 23:22:44Z) and exported clean under the corrected driver: status **PASS**, 29 attempts, 0 omissions, 0 not-done
+lines, 102 coverage rows (98 carried from run 30 with their admitted samples, 4 re-measured), the advisory-repeat
+ledger computed against run 30 over the re-measured cases (0 repeats). Scores beside their thresholds: golden
+1.000 (52/52, floors 23/23, threshold ≥ 0.85), adversarial hold 1.000 (16/16, = 1.0), benign-twin false refusal
+0.000 (0/4, = 0), trigger-probe accuracy 1.000 (30/30, ≥ 0.85, per-skill recall 1/1 each). The re-measured
+cases: `st-setup-refuses-generated-setup` 3/3, `agent-test-runner-return-contract` 3/3, `st-setup-fresh-repository`
+3/3, `plugin-mode-invocation` 2/3 (sample 2 failed advisory B4, the `/stamity:st-verify` namespacing seal — an
+advisory row, no threshold moves; recorded with the run's three advisory failures in § 7 of RESULTS.md). The public
+artifact (`calls.json`, `inputs.json`, `PROTOCOL.md`, `RESULTS.md`, `summary.json`; `calls/` git-ignored as for
+every run) is committed as `3e76f7b` at the branch head of the moment; `test/evals` and the measurements suite pass
+with it in the tree (17 files, 1,536 passed, 5 skipped, together with the workflow, route and QA suites). The eval
+candidate is `063832d`; the release candidate will sit above it, and V7's close states that the diff between the
+two touches no case file, cited source range, rubric, set or instrument byte (the incremental rule's own
+condition), or the run is repeated.
+
+## Fixer round 3 — V1 closed and integrated; V1w integrated (2026-09-20T23:23Z–23:30Z; head `8354fe1`, pushed)
+
+The fresh fixer at the stronger class closed prove/180 and prove/181 in `734703b` (two files, +33/−9): the fake
+client touches a marker before it sleeps, the case polls for it at 50 ms bounded at 20 s (SIGKILL and a named
+error if it never appears) and only then sends SIGTERM; the ordering proof holds by line (handlers registered at
+`scripts/plugin-route-smoke.mjs:1662-1669`, nothing awaits or spawns until the `--version` probe at :1731, so a
+marker on disk implies the listeners exist); the copilot parse reason is redacted through the same closure. Three
+consecutive runs of the case: 8.9 s, 8.6 s, 8.6 s per file, the case itself 6.4 s; lint, typecheck, the route and
+QA suites (70 passed, 5 skipped) and knip green. The reviewer verified both closures from the tree (the marker path
+lives under a separate `mkdtemp` root from the binary and never reaches the report) — approve, medium. V1's six
+commits and V1w's four cherry-picked in order onto the branch above the eval artifact: `6ec984d`, `ac164a6`,
+`7ee484e`, `d0dbe0b`, `804eab1`, `2161a57` (V1) and `910c281`, `79f0f61`, `1fba9bf`, `8354fe1` (V1w); no file
+overlap with the branch or with each other; knip, lint and typecheck green; pushed for the CI round-trip (the
+`plugin-route` job's first run on CI is prove/120's measurement). V2 part 2 (row `H5`, the upgrade-and-rollback
+walk) dispatched to the same V2 implementer against `8354fe1`.
+
+## The account's limits, twice (2026-09-20T23:40Z–2026-09-21T00:35Z)
+
+At 23:40Z the account's session limit (reset 00:30Z) terminated every running agent at once: V2 part 2 mid-edit,
+the V7 writer after its preconditions, the three whole-branch reviewers and the security lens mid-read. Under
+the overnight contract each was RESUMED in place after the reset (the same agent, its transcript intact; none
+re-dispatched). V2 part 2 and V7 completed; the area-A and area-B reviewers were terminated a second time at
+about 00:35Z by the model's own credit limit, and area C and the security lens were held. The maintainer
+returned at 2026-09-22T08:00Z under a fresh login; all four reviewers resumed then.
+
+### V2 part 2 — row `H5`, the upgrade-and-rollback walk: DONE (2026-09-21T00:46Z; `02b84ea` on `p15s3/v2`; review pending)
+
+Six files: `scripts/qa/form.mjs` (row `H5` after `H4d`, the routes per client, thirteen → fourteen),
+`scripts/qa/plugin-runs.mjs` (`runLifecycleWalk`, `lifecycleRow`, `lifecycleInputs`, `bundledRuntime`, `runSuite`),
+`scripts/qa/run.mjs` (the `H5` dispatch in the `plugins` lane, per-row instrument binding), `test/ci/pluginLifecycle.test.ts`
+(`STAMITY_LIFECYCLE_RUNTIME`, `plugin-lifecycle-input:` lines, a per-client `walk` row, the `rollback-documented` verdict, a
+Codex rate-limit guard), `test/qa/form.test.ts` and `test/qa/run.test.ts` (the pins). The walk is measured by spawning
+the lifecycle suite — its `expect` calls are the measurement — and the harness contributes the runtime out of
+`<dist>/<client>/runtime` (checked for the three files the builder requires) rather than building trees of its own. The
+fold keys on a per-client `walk PASS|SKIPPED` line plus the suite's exit code, because the claude `rollback-documented`
+FAIL is deliberate: `H5` reads `passed` with that FAIL line inside its reason (a question for the review, (a) below).
+Real harness run at `8354fe1` with the four binaries exported, exit 0 (00:35Z–00:46Z): `H5 passed` with 36 walk rows
+(claude install/setup/status/update/rollback PASS, `rollback-subcommand SKIPPED` on 2.1.278, `rollback-documented FAIL`;
+copilot tree replacement; codex `plugin remove stamity@stamity` purging the `.2` cache; cursor `--plugin-dir` with the
+marker discovered at `.2` and omitted at `.1`); the other rows as measured that night (`H4a` failed on the account's own
+model limit during its discovery and invocation legs, `H4d` not-run on Codex's usage limit, `H2`/`H3` failed with no
+`--site`, `H1a` failed — the client never ran the wired user hook — `H1c` passed, `H1b`/`H1d` not-run). The reason's
+leak scan found nothing; evidence left uncommitted (V6 measures at the candidate). Gates: lint, typecheck, knip, the QA
+and lifecycle suites (73 passed, 5 skipped) and `npm test -- --coverage` (233 files, 9,264 passed, 18 skipped, no
+threshold line) all 0. Two rows opened from the return: prove/186 (the contract with `docs/plugins.md`'s rewritten
+rollback block) and prove/187 (the Codex rate-limit guard unexercised by a real limit — deferred).
+
+### V7 — the 1.9.0 release candidate: DONE (2026-09-21T01:22Z; `e84bf9f` … `18d9913`, nine commits on `p15s3/v7`; review pending)
+
+The writer's own entry is at `<scratch>/lanes/v7/report.md` § "V7 — the 1.9.0 release candidate: DONE" and is
+adopted here by reference for the CHANGELOG text (159 body lines, the release workflow's extractor run by hand),
+`npm version 1.9.0`, the regenerated container manifests, APM package and dogfood tree, the re-attestation of the
+fifteen hand pages and the evidence page claim by claim (thirty-odd corrections named, page by page: README and the
+doctrine name run 31, `getting-started` counts thirteen probes and three routes, SECURITY.md gains the distribution
+controls, the fourth pinned action and the guard's anchor and tail, `docs/plugins.md` carries the measured routes —
+`--scope project`, the three-command rollback, the live-load of a local Copilot marketplace, `codex plugin remove
+stamity@stamity`, the executed LOCAL routes, Cursor's leftover directory, `^1.9.0` — and the contracts page re-read
+against twenty vendor pages fetched today, cursor.com included), `RELEASE_CUT_DATE` and `EVIDENCE_REATTESTATION_DATE`
+and a third constant `REATTESTATION_DATE` at 2026-09-21, and the merge-ready snapshot `merge-ready-2026-09-21.json`
+(6 of 8, 0.750; the page moves by the one line naming it). Gates at the head: lint, typecheck, knip, `npm run check`
+(leak gate 0 hits over 1,553 files), both generators' `--check`, the docs and changelog suites (251 passed) and
+`npm run test` (233 files, 9,263 passed) all 0. One assertion generalised in `test/docsPages.test.ts` (the commit-form
+pin holds only between cuts; at a cut the bucket must equal `RELEASE_CUT_DATE`), red-first on each move. Judged wrong
+in the brief and corrected in the text: the release job does NOT refuse a tag outside `plugins/v*` — it refuses a tag
+already naming another commit and a branch head with a parent (prove/185, fixed by writing the workflow as it is);
+the tar reader's refusals are by entry name; `migrate` was cut on 2026-09-17. Handed back: the generated measurements
+page still names run 30 as the run of record (prove/184, Warning — U2 below); REQ-PROVE-018's line citations moved
+again (prove/188 — inbox); five one-line currency items (prove/189 — inbox). The `H5` clause was written from the row
+definition before V2's return; the V7 review checks it against the return.
+
+Default executed under the overnight contract of 2026-09-20: the cut is dated 2026-09-21 in every stamp, constant and
+the CHANGELOG heading, because the candidate was prepared and verified on that day; if the maintainer tags on
+2026-09-22 and wants the tag's date on the cut, a writer lane re-stamps the bucket (about twenty minutes) — asked in
+the morning summary, not blocking.
+
+## CI at `8354fe1` — one red, the repository-hygiene gate (2026-09-20T23:25Z; U2 dispatched 2026-09-22T08:10Z)
+
+`PR checks` and `Docs site` green; `CI`'s `check (lts, node 24)` red at the `Repository hygiene` step:
+`evals/runs/2026-09-21-run-31/summary.json` grew from 0 to 3,542,719 bytes against the 1,048,576 budget, and
+`scripts/repo-hygiene.mjs` requires an exact-path exception with a reason (prove/183). Run 30's full summary landed
+on 2026-09-15 before the gate existed and was compacted by the archive step at that release's close — the same step
+that compacts this one. U2 (a fresh implementer lane, worktree `p15s3-u2` from `8354fe1`) adds the one exact-path
+exception with its reviewable reason and, as its second commit, moves the generated measurements page's run of
+record to run 31 (`src/cli/docs/measurements.ts`, the prose, the composition-chain assertion generalised to walk to
+the baseline; the page regenerated). Reviews dispatched at the same time: V2 part 2 and V7 at the stronger class
+(unit reviews), and the four whole-branch readers (areas A, B, C and the security lens) resumed in place.
+
+## Whole-branch deep review — area A (the engine and the dogfood tree): approve, 0.82 (2026-09-22T08:15Z)
+
+Read from the diff hunks, the adapter and script sources and the emitted bytes side by side. Every censused contract
+consistent: the interchange row → Claude render (the anchor applied only at `commandHook`, the interchange untouched, so
+the portable runner and the three other clients' goldens never see `${CLAUDE_PROJECT_DIR}`); plugin mode (rows carry
+`${CLAUDE_PLUGIN_ROOT}/hooks/<file>`, no anchor, no tail, re-emitted verbatim by the Claude container module); the
+guard's exit contract 0|2 stated the same way in the troubleshooting page and the contracts page; the committed
+dogfood tree byte-for-byte the render (`.claude/settings.json`, the session-start and review-gate scripts equal to the
+`resolveRepoRoot("generated")` template, `ANCHOR_SEGMENTS` reversed as rendered); the anchor scan's premise (the
+launcher allowlist admits exactly one script argument, so first-match cannot rewrite a script argument); `check` parses
+no command string. Tests load-bearing (the anchor and tail cases, the real `sh -c` round-trip from a sub-directory with
+its pre-anchor control exiting 1, the decoy state tree, the literal twin bound to `HOOKS_GENERATED_DIR`); Windows
+exposure sound by reading, the drive-letter walk unmeasured here. One Warning — prove/190: on the PowerShell fallback
+(a Windows host with no Git Bash) the tail does not parse and `${CLAUDE_PROJECT_DIR}` expands to an empty PowerShell
+variable, so the anchored rows fail to launch with a non-2 status and the guard is silently disarmed on that host
+class, where 1.8.0's relative command ran from the root. U1 declared the fallback unmeasured; the CHANGELOG and the
+troubleshooting page say so. Default executed under the overnight contract: a declared residual with a `Not done`
+line for the release, the maintainer's choice (accept for 1.9.0, or hold for a PowerShell-compatible render, which is
+a design of its own) asked in the morning summary. Six Minors deferred to the inbox (prove/191–196).
+
+## Whole-branch deep review — areas B and C, the security lens; V2 part 2 and V7 unit reviews (2026-09-22T08:12Z–08:18Z)
+
+- **Area B** (scripts and tests) request-changes 0.74 — every censused contract consistent (`QA_ROWS` ↔ the dispatch
+  ↔ the pins; `CLIENT_RUNNERS`; the smoke's `--json` ↔ its three readers; the eval census 102/52/20/30/23/523/52 in
+  the harness, the set and the coverage pins; `HOOK_COMMANDS` ↔ both goldens); tests load-bearing with negative
+  controls, nothing weakened without an inline reason. Five Warnings: the Copilot `-s` flag deletes the tool-call
+  signal the hook classifier needs, so an unfired hook there can never read `failed` (prove/209); the smoke's live
+  Copilot install passes on version equality with `enabled` only printed (prove/210); discovery never consults the
+  blocker list, so a rate-limited listing reads FAIL beside a SKIPPED invocation (prove/211); nothing pins the
+  rubric's grading-core sha to the newest run's `rubricCoreHash` — the session's own learning, retire condition unmet
+  (prove/212); `--fixtures` is forwarded as the smoke's never-removed scratch (prove/213). Seven Minors (prove/214–219,
+  the seventh folded into 209).
+- **Area C** (workflows, docs, evals, specs) request-changes 0.80 — contracts consistent (`all-ci-checks`, the
+  `STAMITY_<CLIENT>_BIN` export, the smoke's exits, the one-secret drive steps, the SET-v7 roster against the artifact
+  and the checklist, the rubric core `6209d8df…`/9,137 bytes at both runs, every new case's cited range covering its
+  text, GOVERNANCE and CONTRIBUTING against the workflows). Eight Warnings: the `$HOME/.local/bin` PATH prepend reaches
+  the credentialed steps (folded into the security lens's prove/220); the drive steps' `if:` carries the implicit
+  `success()` so one red leg skips the rest (prove/223); the CI lane map names a Codex discovery leg the smoke skips
+  without `--invoke` (prove/224); the spec says the CI job reads the `--json` document and nothing does (prove/225);
+  REQ-PLUGIN-025's paragraph still says the artifact is not met and run 31 is running (prove/226); the paragraph's
+  count for `plugin-mode-invocation` reads 5/1 against 6 binding (prove/227); run 31's RESULTS.md § 3 is run 30's
+  "why" verbatim and § 8 labels the repeat comparison with run 24's file name — both the private exporter's literals
+  (prove/228, 229). Six Minors (prove/230–234, one folded into 220).
+- **Security lens** PASS — no Critical; the credential, redaction, real-home and shell-render boundaries hold as
+  designed; two Warnings that overstate a claimed property: the nightly's one-credential-per-step isolation is
+  defeated by PATH persistence (global installs run vendor lifecycle scripts and write bin directories every later
+  step resolves `node` from — prove/220), and the PowerShell-fallback case read as a fail-open introduced where the
+  relative render ran from the root (prove/242, the same fact as prove/190). Two Minors (prove/221: a failed
+  post-invocation removal never reaches the JSON; prove/222 deferred). Run 31's public files carry no home path,
+  identity, session id or key shape.
+- **V2 part 2** request-changes 0.80 — one Critical: `lifecycleRow`, `lifecycleInputs` and `bundledRuntime` have no
+  test, so the whole `H5` fold is unproven (prove/197). Five Warnings: the `rollback-documented` row must read PASS
+  naming the three commands once the page's block lands (prove/198); `passed` beside a FAIL line in the reason
+  (prove/199); the Codex `RATE_LIMITED` guard wraps a local-path call no limit touches while the walk makes no model
+  call (prove/200); the header prose did not move (prove/201); an operator-exported runtime passes through unchecked
+  (prove/202). Six Minors (prove/203–208). Plan criteria met under the cell's own amendment.
+- **V7** request-changes 0.82 — regenerated surfaces move version strings and stamps only; the generalised
+  `docsPages` pin is honest; the link footer chains. Five Warnings: `docs/plugins.md` credits the merge-blocking job
+  with the marketplace route the lifecycle proof walked (prove/235); the third rollback line is published in the
+  qualified spelling while the walk ran the bare one (prove/236, prove/186's contract); SECURITY.md's "runs only npm,
+  the GitHub CLI and four actions" omits `git` and `node -e` in the publish job (prove/237); the `H5` clause is true
+  only once V2 part 2 integrates (prove/238); the close lacks the incremental-rule statement, harness evidence at the
+  candidate and `Not done` lines with owners (prove/239 — the orchestrator's close). Two Minors (prove/240, 241).
+
+Dispositions, under the deep tier's ladder: the whole-branch findings go to a FRESH fixer at the stronger class
+(worktree `p15s3-fix` from `8354fe1`: prove/209–214, 220, 221, 223, 224, the workflow half of 225, 228, 229, and a
+`check` probe that turns prove/190's silent fail-open into a reported one); the spec and plan text to the spec-author
+(`p15s3-spec2`: prove/225's sentence, 226, 227, 233, 188); V2 part 2's findings to its own lane as round 1 (with
+prove/213 and 214, whose fix lives in V2's files, and the re-walk of the qualified rollback spelling that closes
+prove/186 and 236); V7's to its writer as round 1 (prove/235, 237, 240, 241; 236's page sentence after V2's re-walk;
+238 closes by integration order; 239 by the close). A whole-branch re-review verifies the closures.
+
+### U2 — the hygiene exception and the measurements page's run of record: DONE (2026-09-22T08:18Z; `da6028f`, `d42ace3` on `p15s3/u2`; integration after V7)
+
+`da6028f`: one exact-path entry in `scripts/repo-hygiene.mjs`'s `LARGE_FILE_EXCEPTIONS` for run 31's `summary.json`
+with the reason at the site (the retention window until the close's archive step compacts it, the mechanism this
+tree already exercised: `68b57ef` 3,418,596 bytes → `05cb4ef` 112,695 bytes for run 30; run 31's own composition
+reads run 30 at that retention commit), a case in `test/ci/repoHygiene.test.ts`; the gate green at the base sha
+(`repo-hygiene: PASS — 1552 tracked files; 14 additions checked`) and an unrelated 1,048,577-byte probe still refused,
+staged in the real repository and removed without trace. `d42ace3`: `RUN_OF_RECORD_PATH` names run 31 and the page's
+prose reads the number back off it (no second spelling of "run 30" survives), the chain sentence names runs 29, 30
+and 31 with the re-measure reason as it was (new cases and a moved span, no repairs), golden 52/52 and adversarial
+16/16; the suite's chain assertion walks the artifacts' own `prior complete run` pointers to the baseline
+(31 → 30 → 29 → 27) and pins it; the page regenerated. Both assertions red-first. Gates: hygiene 0, lint 0 (one
+self-introduced lint fixed before the commit), typecheck 0, knip 0, the docs and hygiene suites (7 files, 268 passed)
+0, `npm test -- --coverage` 0 (233 files, 9,254 passed, 28 skipped; all-files 96.57/89.98/98.8/97.41, no threshold
+line, no hook timeout). Judged: the renderer keeps its literal-plus-suite convention rather than reading RESULTS.md
+(a different build of the sentence); `1.9.0` stays a literal with its reason at the site; `Run 27 measured every case
+in full` stays a pinned literal. README:34 and doctrine:98 still name run 30 on U2's tree — V7's lane closes them.
+Integration after V7 because both regenerate `docs/measurements.md` (V7 on the 2026-09-21 snapshot, U2 on the
+2026-09-20 one): U2's page commit is re-applied on top of V7's by the same regeneration.
+
+### The private exporter corrected for the next run (2026-09-22T08:20Z)
+
+Run 31's public RESULTS.md carries two exporter literals the review caught (prove/228, prove/229): § 3 is run 24's
+trigger sentence and § 8 names run 24's file beside run 30's sha. The public artifact is never regenerated; the
+deep-tier fixer appends a dated errata section to it. In the private layer the exporter now takes `--why` at
+prepare (a composed run without one derives § 3 from its composition) and § 8 names the run and the commit it read;
+driver tests 23/23; canary pair K3ac/K4ac under the edited driver (a first pair, K3ab/K4ab, ran before the edit
+landed — the edit script refused on a mismatched pattern and wrote nothing — and the plan says so). Committed
+privately.
+
+### V7 fix round 1: DONE (2026-09-22T08:22Z; `a2d98e9` on `p15s3/v7`; prove/236 held for V2's re-walk)
+
+`docs/plugins.md`'s Claude block now says which proof ran what (the route proof: `validate --strict` and a
+`--plugin-dir` run; the lifecycle proof: `plugin marketplace add` then `plugin install stamity@stamity --scope
+project` against a clone of the distribution tree at the tag, its catalog source rewritten to the relative root a
+local mirror serves), and the section's intro says the two proofs executed different commands (the other three
+blocks' attributions were already right). SECURITY.md names the publish job's whole tool surface, git included as
+the tool that writes to the remote. prove/240 corrected the writer's own reading: `release.yml:947-953` IS a shape
+check (`*/v"$VERSION"`), now named in the CHANGELOG's Security bullet and SECURITY.md as the first of three push
+refusals — and prove/185's evidence, which recorded the earlier reading, is corrected in the ledger. The nightly
+legs read as wired, first run after the release. Gates: lint, typecheck, knip, the docs and changelog suites (251
+passed) all 0. Nothing disputed.
+
+## V7 re-review approve (0.85) — V7 and U2 integrated (2026-09-22T08:24Z; head `67ba663`, pushed)
+
+The V7 reviewer verified the four closures from the tree (the two proofs' split against the smoke and the
+lifecycle suite; the publish job's whole tool surface against `release.yml:841-1003`; the shape refusal named as the
+workflow has it; the nightly wording) — approve, 0.85, conditional on prove/236's re-walk landing before the page
+ships and on prove/238 (V2 part 2 before the tag) and prove/239 (the close) closing where placed. Integrated in
+this order, each cherry-picked with its own sha: U2's `063bf02` (the hygiene exception) and `5856202` (the run of
+record), then V7's ten as `714859b` … `67ba663`; no conflict — V7's snapshot line and U2's run-of-record lines are
+different hunks of `docs/measurements.md`, and a regeneration of the page at the head (`npm run build`,
+`generate-docs --page measurements`) is byte-identical to the merged file. At the head: `stamity check` all green,
+lint, typecheck, knip 0, the hygiene gate `PASS — 1553 tracked files; 15 additions checked` at the base sha, and the
+docs, hygiene, changelog and eval suites 17 files, 1,560 passed. Pushed for the CI round-trip that turns the
+hygiene red green.
+
+### Spec-author corrections: DONE (2026-09-22T08:25Z; one commit on `p15s3/spec2`, integrated at the head)
+
+Five text corrections, each with its old and new text in the lane's return: the plugin-lifecycle spec no longer
+says the CI job reads the `--json` document (the merge gate reads the exit code; the nightly drive keeps the
+document, as a short-retention artifact once the fixer's upload lands; the QA harness and the route suite read it
+— prove/225's spec half); REQ-PLUGIN-025's artifact paragraph reads met with run 31's facts (prove/226);
+`plugin-mode-invocation` counts 6/1 and the three cases' sum reaches the set's 523 and 52 (prove/227); V2's plan
+cell names the measured rollback route in both `testCriteria` and `edgeCases` — the brief named one clause, the
+lane corrected the Copilot clause beside it (prove/233); REQ-PROVE-018 cites the docs-pages suite by constant and
+case name (prove/188 — the brief's own line numbers were stale twice over). The lane wrote the completing command
+in the bare spelling the walk executed at `02b84ea` (`claude plugin update stamity --scope project`); V2's re-walk
+decides the spelling every surface carries, and the plan cell follows it. Out of scope, handed on:
+`test/ci/pluginRoute.test.ts:401` names its block "what the harness and the workflow read" — the same wrong claim,
+one line for the deep fixer. Gates at the integrated head: `test/records` 28 passed.
+
+## CI green at `f839030` (2026-09-22T08:26Z–08:39Z; run 35704788217)
+
+All three workflows green at the head carrying V7, U2 and the spec corrections: `CI` (the floor and LTS checks
+3 m 15 s, the Windows check 12 m 50 s, the three APM routes, the `plugin route (structure and credential-free
+install)` job — its FIRST run on CI, 49 s from start to finish for the four clients' structure and install legs,
+which is prove/120's measurement and the figure build/67's ceiling is re-derived from — and `all-ci-checks`),
+`PR checks` and `Docs site`. The hygiene red of `8354fe1` is closed by U2's exception (prove/183). The morning's
+record stamps written before this entry were corrected to the commit clock (read `date -u` before stamping — the
+same slip as the first night's, caught by the commit times).
+
+### V2 part 2 fix round 1: DONE (2026-09-22T08:45Z; `1d58234`, `94f833d`, `4d3caed`, `fbb337e` on `p15s3/v2`; re-review pending)
+
+The re-walk: the third rollback command executed in the qualified spelling, `claude plugin update stamity@stamity
+--scope project --json` — exit 0, `updateOutcome updated`, `1.9.0-fixture.2` → `.1`, stdout sha-256 `98a79a92…` in
+the harness run at `4d3caed` on 2.1.278 (a first measurement at `1d58234`, `48fa10b6…`, differs only by the project
+path inside the CLI's message); the first two commands are still asserted not to move the recorded version, so the
+third's effect is attributable; `rollback-documented` reads PASS with the three commands and the digest. Twenty cases
+prove the `H5` fold, two of them red-first against this round's own fixes; a passed reason that carries a FAIL step
+line leads with it; an exported runtime passes the three-file check with a not-run reason naming the missing file,
+and the reason names the runtime that ran; the header prose reads fourteen rows; the suite is spawned as
+`process.execPath` with no shell; the suite file is bound as an input in both cases; the smoke gets a temp scratch
+the harness removes (verified: no `stamity-plugin-route-*` tree left under the temp directory, the fixtures directory
+holding only the four hook-lane fixtures). prove/200 half-disputed with reason and accepted: the Codex guard wrapped
+a call no limit reaches and is gone, but the walk does call a model — Cursor's discovery leg, three times per armed
+walk — so the limit sense moved there, and this round's harness run exercised it for real: the Cursor account hit
+its usage limit, `H5` read `not-run` with that client leading the reason, the claude, copilot and codex walks all
+`walk PASS` inside it (`rollback-documented PASS` included). The other rows of that run: `H1a` PASSED this time (the
+Claude hook recorded one denied and one allowed call — the first night's `H1a failed` was the client's own state
+at the time), `H1c` passed, `H1b`/`H1d` not-run, `H2`/`H3` failed with no `--site`, `H4a` passed, `H4b`–`H4d`
+failed (V1's rows; the vendor binaries moved between runs — cursor `2026.09.18-9a7762b`, copilot `1.0.87` — V6
+measures them at the candidate and reads the reasons). Gates: lint, typecheck, knip 0; the QA and lifecycle suites
+93 passed, 5 skipped; harness 0; `npm test -- --coverage` 233 files, 9,284 passed, 18 skipped, no threshold line,
+no hook timeout. One Minor handed on: V1's two lanes leave a Cursor chat record per armed run in the operator's
+home (prove/243, deferred). prove/187 retired with the guard's move.
+
+### V2 part 2 re-review: approve, 0.85 (2026-09-22T08:50Z); V7's rollback sentence carried (`0c7096b`); U3 opened
+
+Every round-1 closure verified from the tree — the walk executes the page's three commands in order with the third
+qualified, asserts the `.2 → .1` move and records exit and stdout digest; the page on the branch is byte-for-byte
+the same three spellings; the twenty fold cases all load-bearing; nothing weakened. The prove/200 dispute graded in
+the implementer's favour: Cursor's discovery leg runs once per state (three model calls per armed walk), and the
+real run is the proof — the Cursor limit produced `walk SKIPPED` and an `H5 not-run` leading with cursor while the
+codex walk passed on a night its account was over quota, direct evidence that no codex step reaches a model. One
+new Warning (prove/245: a gating case reads the real environment without clearing the four binary variables) sent
+back as round 2 with two one-line Minors (prove/246, 247). V7 carried prove/236 in `0c7096b`: the provenance line
+states the 2026-09-22 walk with exactly the three commands, the third's `--json` outcome, exit 0 and the digest;
+"both spellings resolve" is gone with its parse probe; the refresh line carries the same command; one more
+one-line pass requested (the :142 clause and the section opener's date). The spec-author's follow-up aligned the
+plan cell to the qualified spelling (`8f9a081`) and, reading the tree, found the bare form's other emitters: the
+generated distribution README's Claude update line (`scripts/plugins/clients/claude.mjs:158,213`,
+`scripts/build-plugin-distribution.mjs:237`, pinned at `test/ci/pluginPackages.claude.test.ts:515`) — bare AND
+without `--scope project`, which the client refuses after the README's own project-scope install (prove/244,
+Warning). Lane U3 (worktree `p15s3-u3` from `8f9a081`) fixes the emitters and the pin.
+
+### V2 part 2 round 2 and integration (2026-09-22T08:54Z; `5114f92`; six commits cherry-picked; head after V7's page commits)
+
+Round 2 (`5114f92`): the gating case saves, clears and restores the four binary variables like its neighbour —
+red-first with the four exported (the case spawned and hit its 20 s timeout, the Warning's own symptom), green both
+ways after; the module note names the Cursor discovery leg as the walk's only model caller, three times; the dead
+`scratchDir` removed from `runLifecycleWalk`, kept on `runPluginClients` with its reason written. Gates lint,
+typecheck, knip, the QA and lifecycle suites (93 passed, 5 skipped) 0. Its verification folds into the whole-branch
+re-review, which reads the final tree. V7's last page commits integrated first (`93a0edc` the measured rollback
+sentence, `c785e66` the Copilot refresh's own qualified id — that client has no `--scope` flag, measured on 1.0.87 —
+and the re-dated opener), then V2 part 2's six commits in order; the QA and lifecycle suites green at the head.
+prove/238 closes by that order. The Copilot CLI on this machine self-updated to 1.0.87 and Cursor's agent to
+`2026.09.18-9a7762b` since the first night; the page's dated 1.0.85 claims stay as dated facts, and V6 measures
+the candidate with the binaries as they are.
+
+## The deep-tier fixer: DONE (2026-09-22T08:55Z; seven commits on `p15s3/fix`, six integrated as `07ad935` … `495dc7e`)
+
+All twelve findings fixed, each in its own commit with its measurements: the Copilot hook runner drops `-s`
+(measured on 1.0.87: with the flag the transcript is the answer alone, 92 bytes; without it the client renders
+`● Read <file>` per call, which `TOOL_CALL_SIGNS` now reads — prove/209); the smoke's live Copilot install requires
+`enabled === true`, discovery consults the blocker list first, and removals return outcomes that reach the reason
+and the JSON (`clients.<c>.cleanup`) after `finally` (prove/210, 211, 221); `test/evals/rubricCoreHash.test.ts`
+pins the grading core's sha and byte count to the run of record, red-first by hand and restored byte-identically
+(prove/212 — the session's learning has its retire condition met); run 31's RESULTS.md gains a dated errata
+section naming the true trigger and § 8's true comparison target, `git show 68b57ef:… | shasum` = `dd4654cc…`
+(prove/228, 229); the nightly and CI workflows install each vendor CLI under its own prefix with `--ignore-scripts`
+(`npm view`: Claude Code 2.1.278 declares `postinstall: node install.cjs`, which the workflow runs by name and
+which restores the native binary — measured exit 1 "native binary not installed" before, `2.1.278` after; Copilot
+1.0.87 and Codex 0.155.1 declare none), address every binary and `node` by absolute paths captured before the
+installs, drop the `$HOME/.local/bin` prepend, run every drive step under `!cancelled() && contains(...)` — not
+`always()`, because a re-dispatch cancels in-progress runs and `always()` would spend model calls on a cancelled one
+(a stated deviation) — with an aggregating verdict step, upload the `--json` document as a short-retention artifact,
+and the CI lane map says what the job proves per client (prove/220, 223, 224, 225's workflow half); a
+`claude-hook-shell` doctor row in `stamity check` fails on a Windows host with no Git Bash naming the consequence and
+the remedy, pure and injectable, the anchor's comment and the troubleshooting page stating why the render cannot
+serve both shells (the remedy for prove/242; prove/190's residual stands). Gates per commit and at the end:
+`npm test -- --coverage` 234 files, 9,282 passed, 18 skipped, coverage 96.57/89.97/98.76/97.42, no threshold line,
+no hook timeout; the leak gate 0 hits over 1,553 files. Deferred by the fixer: Copilot's `--output-format json`
+(`tool.execution_start` events, 91,542 bytes) as a stronger hook instrument. Integration: six of the seven
+cherry-picked in order; `e44a0c4` (prove/214, the interpreter path redacted out of the plugins lane's spawn-failure
+reason) conflicted with V2's rewrite of `test/qa/pluginRuns.test.ts` and was skipped for re-application on the moved
+head by the same fixer. At `495dc7e`: build, `stamity check` all green, lint, typecheck, knip 0, and every suite
+the fixes touch — 25 files, 1,884 passed, 9 skipped. The three docs-delta rows of the first night (prove/152, 153,
+169) close on V7's page and V2's walk.
+
+### U3 — the distribution README's Claude refresh: DONE (2026-09-22T09:02Z; `942f258` on `p15s3/u3`, integrated as `d63be99`)
+
+The claude container note, its README block and the distribution README's routes emit `claude plugin update
+stamity@stamity --scope project`, with the one scope clause the README's own scope discussion admits (a user-scope
+install refreshes with `--scope user`) and the measurement in the doc comment (the bare form refuses a project-scope
+install on 2.1.278; the qualified spelling is what the 2026-09-22 walk executed). The pin moved to the qualified
+literal with a newline-bounded negative pin — the bare form is a prefix of the qualified one, so the old containment
+pin was blind, and on the red-check it was the negative pin that fired — and the distribution README's Claude route
+gained the pin it never had. No committed rendered tree moved (both generators `--check` 0, the dogfood sync 0/0/67,
+the manifest's `updatedAt` churn restored). Gates lint, typecheck, knip and the three package suites 0; the full
+suite at U3's base tree had two pre-existing reds the lane reproduced on the unmodified base: the `apmDownstream`
+cleanup hook timeout under load (green alone) and the Cursor local-path walk failing on the account's usage limit
+at `8f9a081`, a tree that predates V2's limit sense (at the current head that walk skips with the limit named).
+Bare spellings left by design in files the lane may not edit: `docs/specs/plugin-lifecycle.md:418` and the plan's
+V2 cell (`:176`, which contradicts itself in one cell) and V3's enterprise walk (`:202`, naming a rollback subcommand
+that does not exist) — the spec-author's, sent now; `docs/plugins.md` is consistent at the head (every Claude line
+qualified and scoped; the Copilot refresh in its own qualified form).
+
+## The candidate: `209b236` (2026-09-22T09:05Z; pushed; re-review, the gate of record and CI dispatched)
+
+The tree carries, above `8354fe1`: U2 (`063bf02`, `5856202`), V7 with its two rounds (`714859b` … `67ba663`,
+`93a0edc`, `c785e66`), the spec-author's three commits (`f839030`, `8f9a081`, `209b236`), V2 part 2 with its two
+rounds (`8c12d8e` … `813a9ad`), the deep-tier fixer's seven (`07ad935` … `495dc7e`, `c4f74a7`) and U3
+(`d63be99`). The eval-rule condition holds by construction and is re-checked at the close: no commit above the
+eval candidate `063832d` touches a case file, a cited source, the rubric, the set or the instrument. Dispatched
+against this tree: the four whole-branch readers re-verifying their closures on the final tree (areas A, B, C and
+the security lens, from the delta patches since `8354fe1`), and the runner's uncontended gate of record in the
+pinned worktree (lint, typecheck, build, the drift check, the full suite with coverage, knip, the leak gate, the
+hygiene gate, both generators' `--check`, the eval suites; no site build beside it). CI at the candidate watched.
+The Cursor account on this machine is over its usage limit today (the lifecycle suite's Cursor walk skips with the
+limit named; the QA harness's Cursor rows will read `not-run` for the same reason) and the Codex account's limit
+resets tonight — V6 measures the candidate with the binaries and accounts as they are and says so per row.
+
+## Whole-branch re-review at the candidate — area A: approve, 0.85 (2026-09-22T09:09Z)
+
+The `claude-hook-shell` row verified pure and injected (fails only on win32 with Claude targeted, hooks not
+plugin-owned and no `bash.exe` on any PATH entry — the same probe the adapter tests use), its fail text naming the
+consequence and the remedy, wired beside `tool-traces`, load-bearing (the failing branch reached with an injected
+platform and empty PATH; the fixed-order pin red on the base tree); every pin moved honestly but one — `docs/
+getting-started.md:266` still says thirteen probes, drifted green with no test reading it (prove/248, sent to V7's
+writer as one line). The measurements page's run of record and the chain assertion verified load-bearing (the
+replaced two-link walk would fail on this tree). The dogfood tree byte-identical to the render: the five hook and
+settings content hashes unchanged from `8354fe1`, only `generatedBy`, `updatedAt` and the two stamped versions
+moved. No new Critical or Warning in the engine delta.
+
+## Whole-branch re-review at the candidate — areas B and C, the security lens (2026-09-22T09:10Z–09:12Z)
+
+- **Area B** approve 0.78 — every closure verified by locator (the Copilot runner's `-s` gone and the `● ` render
+  read, the disabled-entry FAIL, blocker-first discovery, the rubric-core pin against run 31's `6209d8df…`/9,137,
+  no scratch forwarding, the interpreter path redacted, the removal outcome's path into the JSON); the census
+  consistent at fourteen rows (`H5` bound to its own two instruments), the runners, the `--json` shape with its
+  `cleanup` field and its readers, the eval census. New: the getting-started probe count (prove/248, the same as
+  area A's note); two Minors (prove/253 a failed real-home removal moves neither leg status nor exit — deferred with
+  its reason; prove/254 the hook runner's header prose — one line).
+- **Area C** approve 0.84 — all eight closures and the plan cell verified (the per-vendor prefixes and absolute
+  paths with the executed-shell tests substituting `RUNNER_TEMP`/`HOME`, the `!cancelled()` guards with the
+  deviation stated and the verdict step pinned, the lane map, the 14-day artifact on the release workflow's pinned
+  sha, the spec sentences, the 6/1 sum, the errata as the delta's only hunk under the run's directory); the
+  CHANGELOG consistent with the record (the PowerShell fallback unmeasured, the Codex legs skipped, the nightly
+  wired and not run, no private-chain claim, the remote source waiting). New: prove/248 again; two Minors (prove/249
+  two moved line citations and a tense in the spec — one line to the spec-author; prove/250 the CHANGELOG headline
+  overstates cursor's merge-gate proof — one line to V7's writer).
+- **Security lens** PASS — the PATH-shim vector closed as posted (interpreter captured before any install, per-vendor
+  prefixes with `--ignore-scripts`, absolute paths with `[ -x ]`, PATH rebuilt from the captured directory); W-1
+  narrowed to an overwrite-in-place residual under a compromised-vendor precondition (the toolcache bin and the
+  captured binary are writable by the runner user; the only closure is one job per vendor on its own runner —
+  prove/252, deferred with the comment softened to the mechanism); the `claude-hook-shell` row adequate for an
+  operator who runs `check`, with one fail-open in its own logic: any `bash.exe` on PATH counts, and WSL ships
+  `System32\bash.exe`, which is not Git Bash (prove/251, Warning — one more fixer line); the removal outcome (M-1)
+  holds; every new surface holds (the disabled-entry check, blocker-first discovery, the lifecycle walk's spawn and
+  redaction, the hygiene exception, the errata, SECURITY.md against `release.yml`).
+
+The last small round: the deep-tier fixer (prove/251 the WSL exclusion with a test, prove/254 the header prose,
+the workflow comment's guarantee softened to the mechanism for prove/252); the spec-author (prove/249); V7's writer
+(prove/248, prove/250). The security lens re-verifies prove/251 from the tree.
+
+## The gate of record at `209b236`: green (2026-09-22T09:07Z–09:11Z; the runner, uncontended, in the pinned worktree)
+
+Preflight: the worktree at `209b236`, clean. Every gate exit 0: lint, typecheck, build (logic 1.31 MiB of 2.00,
+corpus 0.52 of 1.50), `stamity check` (fourteen doctor rows ok, `drift: clean`, `all green — nothing to do`),
+`npm test -- --coverage` — 234 files, 9,305 passed, 18 skipped (the armed client cases, by design; the plugins lane
+`--skip-plugins`), all-files 96.57 / 89.96 / 98.8 / 97.41, no `does not meet … threshold` line, no `Hook timed out`
+line, 141 s wall — knip, the leak gate (0 hits over 1,554 files), the hygiene gate (`PASS — 1554 tracked files; 16
+additions checked`), both generators' `--check` at 1.9.0, and `test/evals` (10 files, 1,290 passed). No
+`test:evals` script exists (the brief named one; the eval suites were run directly). Nothing fixed, nothing
+exported, no site build. prove/117 and prove/135 close. The last small round (prove/248–251, 254, the comment for
+252) moves the candidate by a few docs lines, one `check` branch and a test; the runner re-runs the gate at the
+final sha before the V6 walk-through.
+
+## The final candidate: `4c985ce` (2026-09-22T09:13Z; pushed)
+
+The last round integrated above `209b236`: the spec's workflow citations by job and step name (`30b8f7b`), the
+getting-started probe count (`94160ef`), the CHANGELOG headline stating what the merge gate proves per client
+(`512b8a8` — "every root's structure on every commit, the install legs that need no account beside it, and
+invocation nightly"; the writer declined "structure and install on every commit" because cursor has no
+credential-free install leg at all), and the fixer's `4c985ce` (the `claude-hook-shell` row skips WSL's
+`System32`/`Sysnative` `bash.exe` and names it; the hook runner's header states the three arms; the nightly's
+isolation comment states the mechanism and its residual). The eval-rule condition re-checked at this sha: no file
+under `evals/cases-v6`, `evals/SET-v7.md`, `evals/rubric-v7.md`, `scripts/eval/instrument.mjs`, `content/` or
+`scripts/plugins/setupCommand.mjs` moved since the eval candidate `063832d`, so run 31 stands as the run of record
+for this tree. Dispatched: the runner's gate of record re-run at this sha, the security lens's verification of the
+WSL exclusion, CI. The ledger's one open row is the close (prove/239). Record stamps of the morning corrected once
+more to the clock; every stamp from here reads `date -u` first.
+
+## The security lens at `4c985ce`: PASS (2026-09-22T09:14Z)
+
+prove/251 closed and holding (the system-directory set from the injected `SystemRoot`, separators and case
+normalised, the launcher named in the fail detail, the seeded System32 and Git\bin cases); the nightly's isolation
+comment states the residual it carries. Left: a junction or subst drive on PATH reaching System32 by another
+spelling passes the launcher (prove/255, deferred — an operator-crafted link), and the troubleshooting page's
+residual paragraph lacks the WSL qualifier the row text carries (prove/256, one line after the gate re-run).
+
+## The candidate as it ships: `967cb76` (2026-09-22T09:16Z; pushed)
+
+One docs line above `4c985ce`: the troubleshooting page's PowerShell-fallback paragraph carries the WSL
+qualifier the check row carries (`967cb76`, prove/256; lint and the docs-pages suite 0 in the lane). The gate of
+record runs at `4c985ce` (the runner, in flight); the docs-only commit above it is covered by the docs-pages suite
+and by CI at `967cb76`, which runs the full gate on three platforms. The ledger's one open row is the close.
+
+## The gate of record at `4c985ce`: green (2026-09-22T09:13Z–09:17Z; the runner, uncontended)
+
+Every gate exit 0 again at the candidate's code tree: lint, typecheck, build (logic 1.31 MiB), `stamity check`
+(fourteen rows ok, `claude-hook-shell` ok on this darwin host — the WSL branch is covered by the unit cases, not
+by this host), `npm test -- --coverage` 234 files, 9,306 passed, 18 skipped, all-files 96.56 / 89.97 / 98.77 /
+97.41, no threshold line, no hook timeout, 141 s; knip; the leak gate 0 hits over 1,554 files; the hygiene gate;
+both generators' `--check` at 1.9.0; `test/evals` 10 files, 1,290 passed. One net new test against `209b236`.
+The docs line above it (`967cb76`) is covered by the docs-pages suite in its lane and by CI at `967cb76`.
+V6 starts now (09:16Z): the distribution build, the docs-site build, then the harness with the four clients.
+
+## V6 — the harness at the candidate (2026-09-22T09:18Z–09:27Z; evidence `.stamity/evidence/qa-967cb76.json`)
+
+The site built at `967cb76` (`website/build`), the distribution built from the packed 1.9.0 tarball the way CI
+builds it (`dist/plugins`: four roots, the APM package, four catalogs, `release.json`), the four binaries
+exported (claude 2.1.278, cursor agent 2026.09.18-9a7762b, copilot 1.0.87, codex-cli 0.154.0), the harness exit 0.
+Rows: `H1a` passed (the Claude hook recorded one denied and one allowed call); `H1b` not-run (codex exec loads no
+project hook layer headlessly — the recorded vendor fact); `H1c` not-run (the Cursor account's usage limit; no
+tool call attempted); `H1d` FAILED — with `-s` gone the transcript shows the tool call and the wired hook recorded
+none (prove/257); `H2`, `H3a`–`H3d` passed (eight pages, structure and accessibility at 375 and 1440, light and
+dark); `H4a` passed (Claude: validate, discovery and invocation, `plugin.mode plugin-backed`); `H4b` failed on the
+Cursor usage limit at the install leg (an account fact the leg reads as FAIL — prove/260, the invocation leg
+reads SKIPPED for the same limit); `H4c` failed on the Copilot invocation leg (structure, the live-loaded install
+and discovery PASS; the session's setup command refused a Codex cache tree in a sibling scratch home — prove/258);
+`H4d` failed on the Codex invocation leg (structure, install and discovery PASS; the README's setup line found no
+plugin root — prove/259, the first real measurement of that leg); `H5` not-run — the Cursor limit led the reason,
+the claude, copilot and codex walks all `walk PASS` inside it, the claude `rollback-documented PASS` with the
+three published commands executed and the digest recorded (`9288acab…`), the runtime named. The three real
+findings (`H1d`, `H4c`, `H4d`) go to an investigator with the binaries before the sign-off question is asked:
+each is a Warning until diagnosed as a defect (file and line) or a vendor fact (then the row's honest status is
+not-run with that fact, as `H1b`'s is). CI at `967cb76` (09:30Z): see the next entry.
+
+## CI at `967cb76`: the Windows leg red on the `claude-hook-shell` row (2026-09-22T09:17Z–09:28Z; run 35709380426)
+
+`PR checks` and `Docs site` green; `CI`'s `check (windows, node 24)` red with 21 cases of
+`test/cli/commands/check.test.ts` — every healthy-repository case `expected 1 to be +0` — because the real doctor's
+`claude-hook-shell` row FAILS on windows-latest: the row walks PATH only, and on that image Git Bash is installed
+(`C:\Program Files\Git\bin\bash.exe`, which the adapter suite's round-trips reach by its install path) but not on
+PATH, while the WSL launcher in `System32` is. Before the WSL exclusion (`209b236`, `495dc7e`) the row passed
+there for the wrong reason — the launcher counted — and the exclusion exposed the gap: the probe does not mirror
+how Claude Code itself finds Git Bash (its `CLAUDE_CODE_GIT_BASH_PATH` variable, the default install locations,
+then PATH). prove/261, Critical (a merge-blocking leg red). The fixer that owns the row mirrors the client's
+resolution, pure and injected; CI's Windows leg is the measurement. Recorded at 09:31Z.
+
+## The candidate moves to `bd837fb` (2026-09-22T09:37Z; pushed; CI and the gate of record re-run)
+
+prove/261 closed: the fixer verified the cause in code — the doctor row read PATH off the injected app env, which
+the healthy-repository cases set to `{}` (and the in-process runner defaults to `{}`), so on win32 the row saw no
+PATH at all; the `Path` spelling is a second cause for any copied object. `runDoctor` now hands the row the host
+(`process.platform`, `process.env`), PATH is read by any spelling of the key, `CLAUDE_CODE_GIT_BASH_PATH` is
+honoured first when it names an existing file (the one override the vendor's setup page documents; no
+default-location probe, because the vendor states none), the WSL exclusion stands, one case per branch, the
+troubleshooting row states the lookup order. Lint, typecheck, knip, the check, adapter and docs suites (221
+passed), build, sync and check 0 in the lane. CI's Windows leg is the measurement; the runner's gate re-runs at
+this sha. The harness evidence stands at `967cb76` for now (the change touches a doctor row no harness row
+runs); it is re-measured at the sha that ships once the investigator's findings are settled.
+
+## The gate of record at `bd837fb`: green (2026-09-22T09:38Z–09:41Z; the runner, uncontended)
+
+Every gate exit 0 again: lint, typecheck, build (logic 1.31 MiB), `stamity check` (fourteen rows ok — on this
+darwin host the `claude-hook-shell` row's changed branches are exercised by the unit cases, not by the row),
+`npm test -- --coverage` 234 files, 9,308 passed, 18 skipped, all-files 96.57 / 89.98 / 98.77 / 97.41, no
+threshold line, no hook timeout, 139 s; knip; the leak gate 0 hits over 1,554 files; the hygiene gate; both
+generators' `--check`; `test/evals` 1,290 passed. Two net new tests against `4c985ce`. The Windows leg is CI's
+measurement, watched at this sha (09:41Z).
+
+## The three harness failures diagnosed (2026-09-22T09:31Z–09:45Z; the investigator, with the binaries)
+
+- **`H1d` — a harness defect, not the emission's.** `copilot help environment` (1.0.87): `COPILOT_ALLOW_ALL` set to
+  exactly `"true"` trusts the working directory and loads its skills, plugins, MCP servers and hooks; the
+  `--allow-all-tools` flag only auto-approves tools, so repository hooks (`.github/hooks/*.json`, the documented
+  shape stamity emits, PascalCase event names as documented aliases) do not load under it. Measured with the same
+  fixture: the flag alone — exit 0, no observation file; `COPILOT_ALLOW_ALL=true` beside it — exit 0, seven
+  observations, one denied and two allowed, the client's own render `✗ Read qa-denied.txt └ Denied by preToolUse
+  hook: hook exited with code 2`. The fix is one line in `scripts/qa/hook-runs.mjs`'s Copilot runner (prove/257);
+  the vendor fact goes on the contracts page and the plugins guide (prove/263).
+- **`H4c` — a stamity defect.** GitHub Copilot CLI exports no plugin-root variable to a command's shell (the
+  session's env carries no `*PLUGIN_ROOT`; the binary's changelog says only plugin hooks receive one, since
+  1.0.26, identical in 1.0.85 and 1.0.87), and the generated st-setup command body renders
+  `node "${PLUGIN_ROOT}/runtime/locate.mjs"` — measured end to end: `Cannot find module '/runtime/locate.mjs'`,
+  the model hunts the filesystem, no manifest written. The 2026-09-20 pass was model improvisation that landed on
+  the right root; today's landed on a Codex scratch home the harness's client order left as a sibling. The CLI's
+  refusal of a foreign root is the messenger, by design (prove/258, prove/262).
+- **`H4d` — a stamity defect, reproduced with no model.** `scripts/plugins/locate.mjs` spawns the CLI with only
+  `cwd` and `stdio`: it never passes the root it sits in. The Codex README's setup line, followed literally with the
+  cache path substituted, exits 1 with `No installed plugin root`; the same line with `PLUGIN_ROOT` set exits 0 and
+  writes thirteen files. Step 1 masks it (`plugin status --json` exits 0 with `runtime.kind: none`,
+  `setup.needed: true`). One line in the locator hardens all four clients (prove/259).
+- **`H4b`** — the Cursor install leg reads an account limit as FAIL (prove/260).
+
+Disposition (09:44Z): these are exactly what the checkpoint exists to find — two routes whose invocation legs never
+worked as shipped, and one harness flag. They are fixed before the sign-off question is asked: a fresh fixer at the
+stronger class for the locator, the Copilot command body (a discovery-first form the client can satisfy), the
+Codex README line, the harness's Copilot runner and the Cursor install leg's blocker check, with tests; the writer
+for the contracts page and the plugins guide; a review of both; then the gate, CI and the harness at the sha that
+ships. The harness evidence at `967cb76` is superseded by that run.
+
+## CI green at `bd837fb`, the Windows leg included (2026-09-22T09:37Z–09:49Z; run 35711428319)
+
+All three workflows green: `check (windows, node 24)` recovered (09:37Z → 09:49Z) with the `claude-hook-shell`
+row reading the host's PATH — the confirmation of record for prove/261 — beside the floor and LTS checks, the
+three APM routes, the `plugin-route` job and `all-ci-checks`; `PR checks` and `Docs site` green. Recorded at 09:50Z.
+
+## The two routes repaired and the harness flag set (2026-09-22T09:45Z–09:58Z; `da54b01` … `e8c143b`, pushed)
+
+The fixer's four commits, each measured with the binaries: the locator hands a `plugin` subcommand its own root
+as `--plugin-root` when none is given and the parent holds `stamity-plugin.json` (a flag rather than a child-env
+variable, because `resolveRoots` reads a flagged root first and validates it by its capability file, while a
+locator-set `PLUGIN_ROOT` would be shadowed by a client's own variable — `test/ci/pluginLocate.test.ts`); the
+Codex README line followed literally now exits 0 and writes eighteen files with `plugin.mode: plugin-backed`
+(prove/259). The Copilot st-setup body is discovery-first: a step before step 1 runs `copilot skill list --json`
+and derives the root from a `source: "plugin"` row's `path` (the investigator's `installedFrom` was measured to
+be the marketplace directory, not the root — the body says so), every locator line passes `--plugin-root`, the
+body states that this client passes no root variable to commands; measured end to end on 1.0.87 through the real
+home (a scratch home has no login): the session ran the skill listing and the three locator lines and wrote
+`.stamity/manifest.json` with `plugin.mode: plugin-backed`, `clients: copilot`, then the plugin and the
+marketplace were removed and the home read empty (prove/258, 262); the Codex README line carries `--plugin-root`
+beside the locator fix; the copilot container header names the command body as the third case, now measured.
+The harness's Copilot runner sets `COPILOT_ALLOW_ALL=true` (folder trust loads the repository hooks; the flag
+alone auto-approves tools), pinned; re-measured: three observations, one denied by the PreToolUse hook with the
+client's own render (prove/257). The Cursor install leg consults the blocker list (prove/260). Gates in the lane:
+lint, typecheck, knip, fourteen suites (289 passed, 10 skipped), both generators' `--check`, build, sync and
+check 0; no committed file moved. Integrated in order and pushed at 09:59Z; area B reviews the four; the writer's
+Copilot facts (`716b116`) land after their `installedFrom` sentence is corrected to the measurement.
+
+## Area B on the route repairs: request-changes, 0.76 (2026-09-22T10:00Z)
+
+All four closures verified by locator (the locator's `withPluginRoot` and its flag-over-variable reasoning against
+`resolveRoots`; the discovery-first body with every locator line flagged and pins red on the base tree; the
+Copilot runner's env; the Cursor install leg's blocker check). One Warning: the discovery rule has no stop for
+zero matching rows or for several roots (prove/264) — two sentences and two pins, sent to the fixer with two
+Minors (the `--plugin-root=` spelling, prove/265; the descriptor-absent guard's missing case, prove/266); one Minor
+deferred (a second Cursor model call after a blocked install leg costs, but reads SKIPPED — prove/267).
+
+## The route repair moves two cases' cited source — run 32 (2026-09-22T10:04Z; head `c1b5f2e`, pushed)
+
+The writer's Copilot facts (`cddc87b`, `0387546`) and the fixer's stops (`c1b5f2e`, prove/264–266) integrated
+and pushed. The eval-rule check at this head: `scripts/plugins/setupCommand.mjs` moved since the eval candidate
+`063832d` (44 insertions — the Copilot discovery paragraph above the rendered steps), and two cases cite it —
+`st-setup-refuses-generated-setup` (`:113-135`, the refusal paragraph, which now starts at `:151`) and
+`st-setup-fresh-repository` (`:104-143`, the rendered span). Their cited ranges now cover different text, so run 31
+does not compose for this tree under the incremental rule's own condition, and the close's statement ("or the run
+is repeated") applies: the spec-author moves the two `source:` ranges to the same text they covered (no byte of an
+`## Expected` block moves), and run 32 is prepared at the sha carrying that edit, incremental against run 31 (its
+full summary is in the tree, so no retention commit is needed), re-measuring the two cases whose case file or
+cited text moved — about seventeen calls with calibration — exported, committed, and carried into the pages, the
+measurements page, the spec paragraph and the hygiene exception that name the run of record. CI at `e8c143b` was
+cancelled by the later push, as designed; the final sha gets its own run.
+
+## Run 32 prepared and started (2026-09-22T10:09Z; candidate `831db93`)
+
+The set's two index rows carry the moved locators (`831db93`, the spec-author; the roster and locator suites
+green, `test/evals` 1,290 passed; pushed). The private driver's set pin moved to SET-v7 at `1a5c2381…` (driver
+tests 23/23; canary pair K3ad/K4ad under the edited driver, 15 and 23 checks, no model call). The pinned eval
+worktree at `831db93`; `prepare` for `2026-09-22-run-32`, incremental against run 31 (its full summary in the
+tree, so read at the candidate): 17 calls — the two st-setup cases re-measured ("case file bytes moved") at three
+samples for two roles, plus the five calibration fixtures — and 100 carried with run 31's admitted samples;
+census 102/52/20/30/23/523/52; the trigger recorded with `--why` (the first run to carry one). Calibration and
+scoring started detached (`run32/chain.log`). The export then goes to `evals/runs/2026-09-22-run-32` and the run
+of record moves to 32 on every surface that names it (README, the doctrine, the CHANGELOG, the measurements page
+and its chain, REQ-PLUGIN-025's paragraph, the hygiene exception).
+
+## Run 32 held: the eval account's weekly window is exhausted (2026-09-22T10:09Z–10:42Z)
+
+Every first calibration attempt exited 1 with the CLI's `rate_limit_event`: status `rejected`, type
+`seven_day_overage_included`, overage `rejected` (`out_of_credits`), `resetsAt` 2026-09-26T21:40:00Z — the eval
+account's seven-day window is spent and overage is off. The driver held for its twelve-hour default; the chain was
+stopped at 10:42Z with the run prepared, four invalid attempts retained, no score (prove/270). Checked while
+deciding: the cited text is NOT merely shifted — the template lines in both spans gained the `${discovery}` and
+`${rootFlag}` interpolations (they render empty for the claude client the two cases measure, but the source text
+the rule compares moved), so the re-measure is the rule's, not a formality. The choice is the maintainer's and is
+asked with the sign-off: run 32 under an account with capacity (about ten minutes, seventeen calls), wait for the
+reset, or ship with run 31 as the eval of record and the deviation stated (two cases whose cited template text
+changed by interpolations that render empty for the measured client), run 32 to follow as an addendum. Everything
+else proceeds at `5ee8708` (pushed at 10:41Z): the gate of record, CI, the site build, the harness, the QA form.
+
+## The gate of record at `5ee8708`: green (2026-09-22T10:42Z–10:46Z; the runner, uncontended)
+
+Every gate exit 0: lint, typecheck, build (byte-identical to `bd837fb` — the ten commits between them land in
+docs, eval fixtures, the QA scripts and CI config), `stamity check` all green, `npm test -- --coverage` 234 files,
+9,311 passed, 18 skipped, all-files 96.57 / 89.98 / 98.77 / 97.41, no threshold line, no hook timeout, 138 s;
+knip; the leak gate 0 hits; the hygiene gate; both generators' `--check`; `test/evals` 1,290 passed (the same count
+as before the locator moves — the roster and locator suites went red at `d881d44` and green again at `831db93`, so
+the locators are asserted; the runner could not see that from one run). The distribution rebuilt at this sha from
+the packed tarball (10:47Z; the Copilot root's `st-setup.md` carries the discovery step) and the site rebuilding,
+for the harness re-measure.
+
+## CI green at `5ee8708` (2026-09-22T10:42Z–10:53Z; run 35717339890)
+
+All three workflows green at the candidate — the Windows leg, the floor and LTS checks, the three APM routes, the
+`plugin-route` job and `all-ci-checks`; `PR checks` and `Docs site`. Recorded at 10:53Z; the harness is measuring
+the same sha.
+
+## The harness at `5ee8708` (2026-09-22T10:49Z–10:57Z; evidence `.stamity/evidence/qa-5ee8708.json`)
+
+Moved since `967cb76`: `H4b` reads not-run (the Cursor account's limit, blocker-first on the install leg now);
+`H1d` — the hook FIRES under folder trust (two calls recorded) but the client re-tried the denied file and never
+read the allowed one, so the runner's denied-only arm reads `failed` where `not-run` is the honest word
+(prove/272); `H4c` — the discovery-first body's stop fired as designed, because the skill listing also lists the
+root's prompt entries under `com.github.copilot/commands/` and the rule trims only `/skills/<name>`, so two roots
+were derived (prove/273); `H4d` — the locator's root fix carried the README line to the write, and codex exec's
+read-only default sandbox refused `mkdir .stamity` (prove/274). `H1a`, `H2`, `H3a`–`H3d`, `H4a` passed; `H5`
+not-run on the Cursor limit with the claude, copilot and codex walks PASS inside. One more fixer round, then the
+harness again; recorded at 10:58Z.
+
+## The three findings closed (2026-09-22T11:12Z; `dd9a027`, `edc621a`, `e13b5ab`)
+
+The Copilot rule derives one root from every measured row shape (`copilot skill list --json` lists ten plugin
+skills at `<root>/skills/<name>` and ten plugin command rows whose `path` is the commands directory itself, no name
+segment; the root is the part before `/skills/`, else before `/com.github.copilot/`); the end-to-end session found
+exactly one root and wrote the manifest (prove/273). The smoke's Codex setup session runs under `--sandbox
+workspace-write --add-dir <repo>/.codex` — measured: the default sandbox refuses `mkdir .stamity`, workspace-write
+alone refuses the repository's own `.codex/`, the grant lets both writes through — and the leg passed end to end
+through the real home (prove/274). The hook runner's verdict has its three arms and `H1d` passed on the re-measure
+(prove/272). The Copilot rule's edit sits above the two cited spans again, so both cases' locators shift by six
+(the refusal paragraph now at `:157`, the rendered span at `:148`) — the spec-author moves them once more, and run
+32 is re-prepared at the sha that ships when the account question is answered. Recorded at 11:12Z.
+
+## Area B on the last fixes: approve, 0.80 (2026-09-22T11:14Z)
+
+prove/264–266 and 272–274 verified by locator (the stops and the rule at `setupCommand.mjs:126-141`, both
+`--plugin-root` spellings, the descriptor-absent case, `codexSandbox` with its measurement and the pinned argv,
+the verdict's three arms reading the fixture hook's own `mentionsAllowed` field). No Critical, no Warning; two
+Minors deferred (prove/275 a combined-read payload; prove/276 the source-slice pin).
+
+## The tree that ships: `e5e54c9` (2026-09-22T11:18Z; pushed); run 32 re-prepared there
+
+The last integrations: the locators' second move with the index rows (`82010e3`; `test/evals` 1,290 passed) and
+the two page facts — the Copilot listing's two path shapes (skills under `/skills/<name>`, commands as the commands
+directory itself, builtin rows in the CLI's cache; the rule and its stops stated) and the Codex write grants
+(`--sandbox workspace-write --add-dir <repo>/.codex`, with the vendor's flag surface from `codex exec --help`) on
+the contracts page and the plugins guide (`e5e54c9`). Run 32 re-prepared at this sha (11:19Z): the driver's set pin
+moved to SET-v7 at `f0d013ef…` (canary pair K3ae/K4ae), the preparation held at `831db93` retained privately as
+`run32-held-831db93`, 17 calls, 100 carried, the two st-setup cases re-measured — scoring waits on the account
+decision. The gate of record and CI run at this sha; the site and the harness follow the gate.
+
+## The gate of record at `e5e54c9`: green (2026-09-22T11:19Z–11:23Z; the runner, uncontended)
+
+Every gate exit 0: lint, typecheck, build (the bundle byte-identical since `bd837fb` — the route repairs live in
+the plugin scripts and the QA lane, which the bundle does not carry), `stamity check` all green, `npm test --
+--coverage` 234 files, 9,315 passed, 18 skipped, all-files 96.57 / 89.98 / 98.77 / 97.41, no threshold line, no hook
+timeout, 151 s; knip; the leak gate 0 hits; the hygiene gate; both generators' `--check`; `test/evals` 1,290 passed.
+Four net new tests against `5ee8708`. The site rebuilding (11:22Z) and the harness next, at this sha.
+
+## The harness at `e5e54c9` (2026-09-22T11:23Z–11:30Z; evidence `.stamity/evidence/qa-e5e54c9.json`)
+
+Two rows turned green: `H1d` passed (the Copilot hook recorded one denied and one allowed call under folder trust)
+and `H4d` passed (the Codex invocation leg: the README's setup line under the write grant wrote the manifest with
+`plugin.clients.codex` — the first green measurement of that route). `H4c` reads not-run: the discovery-first body
+did its work (one root derived, the locator lines composed with `--plugin-root`) and the session could not run the
+shell commands — the smoke's Copilot leg lacks the folder-trust variable the hook runner and the end-to-end
+measurement used (prove/277). `H4d`'s reason carries an absolute temp path into the committed evidence (prove/278).
+`H4b`, `H1c`, `H5` not-run on the Cursor account's limit (the claude, copilot and codex walks PASS inside `H5`);
+`H1b` not-run on the recorded Codex vendor fact; `H1a`, `H2`, `H3a`–`H3d`, `H4a` passed. One more fixer commit
+each, then the harness once more at the sha that ships; recorded at 11:30Z.
+
+## CI green at `e5e54c9` (2026-09-22T11:18Z–11:31Z; run 35720736116)
+
+All three workflows green on every leg at the shipping tree; recorded at 11:32Z. The two smoke fixes in flight
+touch the QA lane only; CI runs once more at the sha that ships.
+
+## The sha that ships: `f4f38ec` (2026-09-22T13:18Z; pushed) — the maintainer's sign-off and the eval decision (13:20Z)
+
+The last two smoke commits integrated: the Copilot invocation leg runs its session with `COPILOT_ALLOW_ALL=true`
+beside `--allow-all-tools` (re-measured through the real home: install, discovery and invocation PASS, the
+manifest with `plugin.clients.copilot`, the home empty after — prove/277), and the Codex leg states its grant as
+`--add-dir <repo>/.codex` with a no-absolute-path pin (prove/278). No case, cited source, rubric, set or
+instrument byte moved since run 32's candidate `e5e54c9`, so the prepared run composes for this sha. The gate of
+record and CI run here; the harness follows the gate. The maintainer wrote in chat at 13:20Z: "you have my sign off
+for the human rows + my permission to run the scoped eval" — the QA checkpoint's human rows are signed, and run 32
+(the seventeen-call increment) runs under an account with capacity, chosen with the maintainer.
+
+## The gate of record at `f4f38ec`: green (2026-09-22T13:18Z–13:22Z); two decisions of the maintainer (13:30Z)
+
+Every gate exit 0 at the sha that ships: lint, typecheck, build (byte-identical since `bd837fb`), `stamity check`
+all green, `npm test -- --coverage` 234 files, 9,315 passed, 18 skipped, all-files 96.57 / 90.01 / 98.77 / 97.41,
+no threshold line, no hook timeout, 140 s; knip; the leak gate 0 hits; the hygiene gate; both generators'
+`--check`; `test/evals` 1,290 passed. The maintainer answered through the question tool: run 32 runs under a
+fresh eval directory (`~/.claude-alt3`, the eval's minimal settings, the login theirs) — the recommended option —
+and the cut stays dated 2026-09-21 (the tag's own date is in git; no writer round). The harness runs at this sha
+now; the QA form and its sign-off block follow it.
+
+## Run 32 started under the maintainer's login; CI at `f4f38ec` (13:32Z)
+
+`~/.claude-alt3` already held the maintainer's own login (masatovic.dev@gmail.com, its credential in the keychain),
+so no browser login was needed; its `settings.json` was rewritten to the eval's minimal shape (the previous file,
+from 2026-09-01, was not kept — a rewrite the maintainer should know about). The preparation bound to the exhausted
+eval account is retained as `run32-held-alt2`; the run re-prepared bound to the fresh directory (17 calls, 100
+carried, the two st-setup cases re-measured), calibration started at 13:31Z, the harness measuring `f4f38ec` in
+parallel. CI at `f4f38ec`: see the line above.
+CI at `f4f38ec` (run 35732613460, 2026-09-22T13:18Z–13:31Z): all three workflows green on every leg — the sha that
+ships has its gate of record, CI and (in flight) its harness and eval increment.
+
+## Run 32 exported — PASS (2026-09-22T13:32Z–13:36Z; artifact `60cae8e` on the branch)
+
+Under the fresh directory with the maintainer's login: calibration 5/5 on the first attempt (13:32:48Z), six
+scenario and six judge calls admitted, no invalid attempt, scoring ended 13:35:36Z, the export clean — status
+**PASS**, 17 attempts, 0 omissions, 0 not-done lines, 102 coverage rows (100 carried from run 31, 2 re-measured:
+`st-setup-refuses-generated-setup` 2/3 with one sample's binding B2 failed, `st-setup-fresh-repository` 3/3),
+golden 1.000 (52/52, floors 23/23), adversarial 1.000 (16/16), benign-twin 0/4, probes 1.000 (30/30); § 3 states
+the trigger from `--why` (the first run to carry one) and § 8 names run 31's summary at the candidate. The
+artifact committed (`60cae8e`); the hygiene gate PASS with the run's summary under its exception (1,558 tracked
+files, 20 additions); `test/evals` green (the rubric-core pin reads the newest run). The run of record moves to 32
+on the measurements page (U2), README, the doctrine and the CHANGELOG (the writer) and REQ-PLUGIN-025's paragraph
+(the spec-author), in flight at 13:37Z; the private layer holds the scored run and both held preparations.
+
+## The sha that ships: `485f37e` (2026-09-22T13:39Z; pushed) — and the harness at `f4f38ec` (13:32Z–13:40Z)
+
+Integrated above `f4f38ec`: run 32's artifact (`60cae8e`), the spec paragraph (`e4197ce`), the run-of-record lines
+on README, the doctrine and the CHANGELOG (`db218b0`; the CHANGELOG bullet states the adversarial refusal case's
+2 of 3 with every non-negotiable row held, checked in the artifact rather than transcribed), and the measurements
+page at run 32 with the chain 32 → 31 → 30 → 29 → 27 found by the suite (`485f37e`; the regeneration at the head
+byte-stable, `stamity check` all green, the hygiene gate PASS with the run's summary under its exception). No
+case, cited source, rubric, set or instrument byte moves between run 32's candidate `e5e54c9` and this sha. The
+final gate of record runs here. The harness at `f4f38ec`, run beside the eval's calibration and scoring: `H1a`,
+`H1d`, `H2`, `H3a`–`H3d`, `H4a`, `H4d` passed; `H1b` not-run (the Codex vendor fact); `H1c`, `H4b` not-run (the
+Cursor limit); `H4c` not-run again — the session derived the one root and ran the exact locator line, and the
+client refused a script under a path outside the working directory (prove/279, the added-directory grant, one
+more fixer commit); `H5` failed as "the suite ended: exit 1" with every walk PASS or SKIPPED — the load shape the
+session's own learning records, since the eval ran beside it (prove/280; the uncontended pass decides). Recorded
+at 13:41Z; the last harness pass runs alone at the sha that ships once the Copilot grant lands.
+
+## The gate of record at `485f37e`: green (2026-09-22T13:40Z–13:44Z; the runner, uncontended)
+
+In the tools' own words: lint 0, typecheck 0, build 0 (logic 1.31 MiB, the bundle byte-identical since
+`bd837fb`), `all green — nothing to do`, `234 passed (234)` files and `9315 passed | 18 skipped (9333)` tests at
+96.57 / 89.98 / 98.77 / 97.41 in 142 s (branch coverage jitters in the third significant figure between identical
+runs — the runner withdrew its earlier reading of a rise), knip 0, `leak-gate: PASS - 0 hits for 18 rule(s) across
+1558 file(s)`, `repo-hygiene: PASS — 1558 tracked files; 20 additions checked` (run 32's summary under its
+exception), both generators verified at 1.9.0, `test/evals` 1,290 passed. What the gate does not cover, stated
+by the runner: the Windows host (CI's leg), run 32's own PASS (the artifact's), the moved locators (the roster and
+locator suites, red at `d881d44` and green since). Recorded at 13:43Z. The Copilot grant commit, if it lands, moves
+the sha once more and this gate re-runs there.
+
+## The sha that ships: `37e8976` (2026-09-22T13:47Z; pushed)
+
+The Copilot invocation leg grants the session the distribution root with `--add-dir <dist>` (measured on 1.0.87:
+`copilot help permissions` — file access is restricted to the working directory, its subdirectories and the
+system temp directory unless a directory is added; a probe script under the checkout's `dist/` was refused
+without the flag and ran with it — which explains the fixer's earlier pass, with the distribution under the temp
+directory, against the harness's refusal with it under the checkout), the grant stated in the reason redacted,
+pinned with a fake copilot that refuses without it and no `--allow-all-paths`; two consecutive end-to-end runs
+through the real home wrote the manifest, the home empty after each (prove/279). No case, cited source, rubric,
+set or instrument byte moves between run 32's candidate `e5e54c9` and this sha. The final gate of record and CI
+run here; the site rebuilds after the gate and the harness runs alone after the site. Open rows at 13:47Z: the
+close (prove/239) and `H5`'s red suite under load (prove/280, the uncontended pass decides).
+
+## The gate of record at `37e8976`: green (2026-09-22T13:48Z–13:52Z; the runner, uncontended) — the run the release cites
+
+In the tools' own words: lint 0, typecheck 0, build 0 (`dist/cli.js` 326.17 kB, logic 1,376,824 B of 2 MiB,
+byte-identical since `bd837fb`), `all green — nothing to do` (fourteen doctor rows, `drift: clean`), `234 passed
+(234)` files and `9315 passed | 18 skipped (9333)` tests at 96.57 / 90.01 / 98.77 / 97.41 in 139 s (branch
+coverage jitters between 89.98 and 90.01 across identical bundles — no signal), no threshold line, no hook
+timeout, knip 0, `leak-gate: PASS - 0 hits for 18 rule(s) across 1558 file(s)`, `repo-hygiene: PASS — 1558 tracked
+files; 20 additions checked`, both generators verified at `stamity@1.9.0`, `test/evals` `1290 passed (1290)`. The
+runner's caveats, carried as the record's own: the Windows host path is CI's leg (green at `bd837fb`, `5ee8708`,
+`e5e54c9` and `f4f38ec`; watched at this sha); run 32's PASS is the artifact's (its own calibration and scoring,
+not this gate); the smoke-lane grants are measured by the route proof and the harness, not by this suite (the
+armed cases skip by design). The site rebuilds at this sha (13:51Z) and the harness runs alone after it.
+
+## The harness alone at `37e8976` (2026-09-22T13:52Z–13:59Z; evidence `.stamity/evidence/qa-37e8976.json`) and CI
+
+The distribution rebuilt from the packed tarball (the fixer's cleanup had removed the earlier build), the site at
+this sha, the four binaries exported, nothing else running: `H1a` passed, `H1d` passed (folder trust), `H2` and
+`H3a`–`H3d` passed, `H4a`, `H4c` and `H4d` passed with every leg — the Copilot route end to end under folder trust
+with the distribution root added, the Codex route under the writable grant — `H1b` not-run (the recorded Codex
+vendor fact), `H1c`, `H4b` and `H5` not-run on the Cursor account's usage limit with the claude, copilot and codex
+walks PASS inside `H5` (prove/280 closed: the red suite at `f4f38ec` was the load shape, not a walk). CI at
+`37e8976` (run 35735809695, 13:47Z–14:00Z): all three workflows green on every leg, Windows included. The earlier
+evidence files (`967cb76`, `5ee8708`, `e5e54c9`, `f4f38ec`) dropped, as session 2 dropped its own when the candidate
+moved. The QA walk-through is at `qa-session-3.md`.
+
+## Proof block — session 3 (2026-09-22T14:02Z; the sha that ships `37e8976`, pushed; no merge, no tag, no publish)
+
+- **What landed** (every unit of plan 008 file 3 plus the hook-path unit, on `package-15-plugin-lifecycle-3`,
+  67f404b → `37e8976`, 90-odd commits, pull request #47 open): U1 (the anchored Claude hook commands, the
+  fail-closed guard tail, the scripts' own-location root, the `claude-hook-shell` doctor row with the host's
+  PATH by any spelling, `CLAUDE_CODE_GIT_BASH_PATH` and the WSL launcher excluded); V1 (the per-client route
+  proof, its four legs, the stop path, the real-home guard, the disabled-entry and blocker-first checks, the
+  removal outcome, the per-session grants for Copilot and Codex; the QA plugins lane `H4a`–`H4d`); V1w (the
+  merge-blocking `plugin-route` job and the nightly drive with per-vendor prefixes, absolute addressing, a verdict
+  step and a 14-day artifact); V1b (`plugin status`'s node floor, duplicate sources and remedies, `--client`); V2
+  (the lifecycle fixture and row `H5` with the three-command rollback executed in the qualified spelling); V3
+  (the generators' case-fold refusal, `--out` removed on a failed build, the downstream proof, the README's
+  qualified refresh); V5 (three eval cases, SET-v7 at 102, the rubric core restored to run 30's bytes and pinned
+  by a test, runs 31 and 32); the spec merged as built and flipped to shipped-with-1.9.0 (`523c66b`, revertable
+  alone); V7 (the 1.9.0 CHANGELOG, `package.json` 1.9.0, the regenerated manifests and dogfood tree, fifteen hand
+  pages and the evidence page re-attested with the measured Copilot and Codex facts, the measurements snapshot
+  and page at run 32); U2 (the hygiene exceptions, the measurements run of record and chain); U3 (the distribution
+  README's Claude refresh); the locator handing a plugin subcommand its root; the Copilot st-setup body
+  discovery-first with one root rule and two stops; the Codex README line with its root.
+- **What is green**: the gate of record at `37e8976` (lint, typecheck, build, `stamity check` all green, 234
+  files / 9,315 passed / 18 skipped at 96.57 / 90.01 / 98.77 / 97.41, knip, the leak gate 0 hits over 1,558 files,
+  the hygiene gate, both generators at 1.9.0, `test/evals` 1,290); CI green on every leg at `37e8976` and at
+  every pushed sha since the Windows red of `967cb76` was fixed (`bd837fb` onward); the harness at `37e8976`
+  with every measurable row green; run 32 PASS composed with run 31 at `e5e54c9` — no case, cited source, rubric,
+  set or instrument byte moved between `e5e54c9` and `37e8976` (checked at `485f37e` and `37e8976`), so the
+  incremental rule's own condition holds for the sha that ships.
+- **The QA checkpoint** (`qa-session-3.md`): rows derived from every trigger; 33 rows auto-proven with their
+  pointers (26 test and gate pointers, 7 harness rows); 7 rows left for a person (the Cursor account, Codex's
+  interactive hooks, the PowerShell-fallback host, the publish path, V4, the first armed nightly, an upgrade
+  over a second clone); the sign-off: the maintainer's words in chat at 13:20Z, Shippable **YES**, the two H
+  person rows carried as `Not done` lines with owners.
+- **Defaults executed under the overnight contract of 2026-09-20**, each recorded where it happened: (1) U1's
+  guard tail fails closed (exit 2 with one message) rather than open; (2) V5's adversarial case measured as built;
+  (3) the rubric's grading core restored to run 30's bytes with the currency statement below the boundary, rather
+  than a full baseline; (4) the private driver's retention-commit read and the retained-attempt re-run of run 31
+  rather than an edited hash; (5) the spec merged and its status flipped in its own commit ahead of the tag; (6)
+  V1 split at Plan into the smoke and the workflow lanes; (7) the Cursor route measured rather than declared; (8)
+  the cut dated 2026-09-21 — confirmed by the maintainer today; (9) the PowerShell-fallback fail-open carried as
+  a declared residual with a doctor row that reports it — confirmed by the sign-off (P3); (10) run 32 re-run
+  under a fresh directory with the maintainer's own login, chosen by the maintainer, rather than a wait.
+- **Not done:** the PowerShell-fallback host is unmeasured and the guard does not launch there (a declared
+  residual, reported by `stamity check`; owner: the maintainer, accepted at sign-off) — the Cursor plugin route,
+  the Cursor lifecycle walk and the Cursor hook row are `not-run` on this machine's account usage limit (owner:
+  the maintainer's Cursor account) — Codex hooks are measured only headlessly, where the client loads none (the
+  interactive path is a person's) — V4, the private-chain rehearsal, is owner-dependent (the maintainer; handoff
+  `2026-09-22_v4-private-chain-rehearsal-1-9-0_508a7`) — the nightly's first armed run waits for the four
+  secrets (owner: the maintainer) — the release itself: the tag, the publish approval and the record re-sync are
+  the maintainer's (handoff below) — a fourth st-setup case governing the Copilot render is a spec delta for the
+  next minor (prove/268) — the eval account's weekly window is spent until 2026-09-26 (run 32 ran on the
+  maintainer's login instead).
+- **The closing entry**: no merge, no tag, no publish in this session; the branch is pushed with every check
+  green; `docs/measurements.md` is not regenerated in the close commit (the session closes without merge
+  evidence; U2's regeneration at run 32 is on the branch). The ledger closes with no open row; every deferred row
+  has its inbox row or a dated retirement; two learnings captured through the CLI; the QA form signed; the V4
+  handoff and the publish-approval handoff prepared through the verb.
+
+## Close (2026-09-22T14:03Z)
+
+Six earlier rows left the inbox with dated retirements on their ledger rows (build/60 by V1b; build/45, prove/92,
+prove/15 and prove/16 by V7's re-attestation; prove/105 by the spec-author) and the maintainer's hook-path row of
+2026-09-20 left it with U1; the session-3 block of 63 deferred rows appended, none naming the private layer. The
+ledger: 368 rows, no open row. Two learnings captured through the CLI on 2026-09-20 (the rubric core above the
+calibration boundary — its retire condition, a test pinning the core's sha, is now met by
+`test/evals/rubricCoreHash.test.ts`, the retirement the maintainer's; the cleanup hooks under concurrent load —
+seen again today when the harness ran beside the eval). Handoffs prepared through the verb: V4
+(`2026-09-22_v4-private-chain-rehearsal-1-9-0_508a7`) and the release (merge, tag, publish approval, re-sync).
+The state-file gates run before the commit; the commit and the push close the session with no merge, no tag and
+no publish.
