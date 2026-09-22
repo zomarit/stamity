@@ -385,6 +385,14 @@ async function runSetup(ctx: CliContext, opts: Record<string, unknown>): Promise
   for (const entry of owned) {
     ctx.io.out(`  ${ctx.palette.dim(`plugin-owned  ${entry.tool}: ${entry.classes.join(", ")}`)}\n`);
   }
+  // The per-file verdicts, the way init's panel and the sync report print
+  // them: a notice plain, a warning yellow. The client settings document is
+  // the file another party writes into, and what the merge kept, removed or
+  // backed up there is the one thing this route has to say about it.
+  for (const result of report.wrote) {
+    if (result.notice !== undefined) ctx.io.out(`  ${result.notice}\n`);
+    if (result.warning !== undefined) ctx.io.out(`  ${ctx.palette.yellow(`warning: ${result.warning}`)}\n`);
+  }
   for (const warning of report.warnings) ctx.io.out(`  ${ctx.palette.yellow(warning)}\n`);
 
   return {

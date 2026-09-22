@@ -991,3 +991,38 @@ describe("the verb's surface", () => {
     expect(page).toContain("status (default), setup");
   });
 });
+
+describe("plugin setup prints what the merge engine said about each file", () => {
+  it("names the client's own keys it adopted, and the repository-mode hooks it removed, on the terminal", async () => {
+    // `init` prints every per-file notice and warning on its panel; this verb
+    // printed only the planner's channel, so the plugin route told the operator
+    // nothing about the one file another party had written.
+    const client = `${JSON.stringify({ enabledPlugins: { "stamity@stamity": true } }, null, 2)}\n`;
+    const adopted = await makeRepo("adopted", { ".claude/settings.json": client });
+    const installed = await pluginRoot("claude-root");
+
+    const adoption = await plugin(adopted, ["setup", "--client", "claude", "--plugin-root", installed, "-y"]);
+
+    expect(adoption.code).toBe(0);
+    expect(adoption.stdout).toContain("Adopted .claude/settings.json");
+    expect(adoption.stdout).toContain("(enabledPlugins)");
+
+    const stale = `${JSON.stringify(
+      {
+        // The engine's own permissions rendering: a left-behind file carries it
+        // unchanged, and only the hooks half is the stale part.
+        permissions: { allow: ["Read", "Grep", "Glob"] },
+        hooks: { SessionStart: [{ hooks: [{ type: "command", command: 'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-session-start.mjs"' }] }] },
+      },
+      null,
+      2,
+    )}\n`;
+    const leftBehind = await makeRepo("left-behind", { ".claude/settings.json": stale });
+
+    const removal = await plugin(leftBehind, ["setup", "--client", "claude", "--plugin-root", installed, "-y"]);
+
+    expect(removal.code).toBe(0);
+    expect(removal.stdout).toContain("Removed the repository-mode hooks wiring (hooks) from .claude/settings.json");
+    expect(JSON.parse(await readFile(join(leftBehind, ".claude", "settings.json"), "utf8"))).not.toHaveProperty("hooks");
+  });
+});
