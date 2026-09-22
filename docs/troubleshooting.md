@@ -75,14 +75,14 @@ the two that exist only at the CLI edge. The codes this page names are `VALIDATI
 
 ## What `check` prints
 
-Thirteen probes, then the drift gate, then a provenance rollup.
+Fourteen probes, then the drift gate, then a provenance rollup.
 
 Each probe reads `ok`, `warn` or `fail`. A `fail` takes the exit code to `1`. A `warn` is
 advisory and leaves it at `0`. That split is deliberate. A missing state subdirectory or an
 absent git binary is a legal repository, and a run that failed on those would train you to
 ignore `check` altogether.
 
-Only five rows can fail: `node-version`, `manifest`, `pack-integrity`,
+Only six rows can fail: `node-version`, `manifest`, `claude-hook-shell`, `pack-integrity`,
 `plugin-duplicates` and `plugin-runtime`. A probe that cannot
 run at all warns instead, saying `could not be checked:` and why. Every other row still prints.
 
@@ -96,6 +96,7 @@ run at all warns instead, saying `could not be checked:` and why. Every other ro
 | `tmp-hygiene` | Warns on a live concurrent write. It also warns on `.tmp.stamity-<8hex>` litter left by a write interrupted between the temp file and the rename. The engine token in that name keeps another tool's `.tmp.<hex>` files out of the row. The row reports; it never deletes. |
 | `env-mcp` | Warns when MCP servers are selected but `.env.mcp` is absent, and when a credential in it is still blank. A server whose credential is empty fails at start-up. `config mcp add <id>` recreates the file with the names those servers need. |
 | `tool-traces` | Warns when a client the manifest targets has nothing emitted for it in the ledger. `sync` writes that client's files and records them. |
+| `claude-hook-shell` | **Can fail**, on Windows only. The Claude hook commands this engine emits are anchored on `${CLAUDE_PROJECT_DIR}` with a POSIX fail-closed tail, and they parse under `sh` and Git Bash. On a Windows host with no Git Bash the client falls back to PowerShell, where `${NAME}` is PowerShell's own variable and the tail does not parse: the pre-tool-use guard never launches and the client does not block. The row fails when this repository targets `claude` with repository-emitted hooks and no `bash.exe` is on PATH. Install Git for Windows (Git Bash), put its `bash.exe` on PATH, re-run `check`. On every other host, and where Claude's hooks are carried by its plugin, it passes with a note saying which condition released it. |
 | `preserved-duplicate` | Warns when a managed file repeats its own managed block below the `STAMITY:END` marker. Your repository then loads that content twice. Delete the copy at the line the row names. The block itself is regenerated on every sync. |
 | `plugin-runtime` | Passes with a note when this repository records no plugin client and no plugin root is in the environment — the ordinary state for a repository that is not plugin-backed, and nothing to act on. Warns when a client IS recorded and no root is in the environment: the repository names a plugin this run could not look at. **Can fail** on two states, and both are plugins this repository claims: the locator refuses (no runtime found, or a Node below the plugin's floor; its own message is quoted) while a client is recorded or the mode is `plugin-backed`, and this repository records `plugin-backed` while the resolved runtime's major differs from the version its `.stamity/` state was written by. Pin the plugin back to that major, or install the matching companion runtime. A refusal with no client recorded and no `plugin-backed` mode warns instead — the root variable came from elsewhere in your environment, and another session's broken plugin is not this repository's defect. |
 | `plugin-duplicates` | **Can fail.** A class an installed plugin carries is also on disk here. The row names the paths it found — three, sorted, then `+N more` — and three sources, each with its own remedy: `ledger` (this engine wrote it — `clean -y`, then `plugin setup --client <tool>`), `apm` (an APM dependency deploys the same classes — remove it from `apm.yml` and run `apm install`, or keep the plugin uninstalled), `unmanaged` (not written by this engine — remove the file, or keep it as an override under `.stamity/overrides/`). It **warns** while the manifest still says `mode: "generated"`, because coexistence is the expected state before you clean, and **fails** once the manifest records `plugin-backed`. No verb deletes a duplicate. |
@@ -231,7 +232,9 @@ environment lookup (which would be `$env:CLAUDE_PROJECT_DIR`), so the path expan
 affects all five anchored rows, not just the guard — the session-start and tamper notices and the
 review gate too — so on such a host the anchoring may be a REGRESSION: a hook that used to run
 while the session sat at the repository root may now never launch at all. This is unmeasured; no
-run on such a host has been made. If you are on one, install Git Bash, and report what you see.
+run on such a host has been made. `stamity check` says so on that host: its `claude-hook-shell`
+row fails when Claude is targeted with repository-emitted hooks and no `bash.exe` is on PATH. If
+you are on one, install Git Bash, and report what you see.
 
 The other three clients need no anchor, each for a measured reason: Cursor runs a hook from the
 workspace root whatever the shell's directory is, Copilot gives each hook entry a `cwd` relative

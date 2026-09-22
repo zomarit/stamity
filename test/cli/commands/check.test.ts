@@ -6,6 +6,7 @@ import { join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
+  checkClaudeHookShell,
   checkCommand,
   checkNodeVersion,
   runDoctor,
@@ -417,7 +418,7 @@ describe("check — a healthy repository", () => {
     expect(result.stderr).toBe("");
   });
 
-  it("returns the thirteen doctor rows in a fixed order", async () => {
+  it("returns the fourteen doctor rows in a fixed order", async () => {
     const root = await seedRepo(getRepo());
 
     const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root, env: {} }));
@@ -443,6 +444,13 @@ describe("check — a healthy repository", () => {
       "tmp-hygiene",
       "env-mcp",
       "tool-traces",
+      // TEST CHANGE, justified (2026-09-22, prove/190 and prove/242): `claude-hook-shell`
+      // joined the doctor beside `tool-traces` — both answer about the targeted tools' emitted
+      // rows, and this one asks whether the Claude rows can LAUNCH on this host: on a Windows
+      // host with no Git Bash the anchored hook commands fall to PowerShell and never run, which
+      // is a guard silently disarmed. The row is present on every host (a pass with the note that
+      // released it elsewhere), so the pin grows by one and no row above or below it moved.
+      "claude-hook-shell",
       "preserved-duplicate",
       "pack-integrity",
       // TEST CHANGE, justified (2026-09-20, REQ-PLUGIN-016): the two plugin rows
@@ -1343,6 +1351,73 @@ function printing(runtime: Record<string, unknown>, exitCode = 0): string {
     "",
   ].join("\n");
 }
+
+/**
+ * `claude-hook-shell` (prove/190, prove/242): the anchored Claude hook commands cannot launch
+ * under Claude Code's PowerShell fallback — a Windows host with no Git Bash — and the guard is
+ * then silently disarmed. The render cannot serve both shells, so `check` says so on that host.
+ * The failing branch cannot be reached in-process on a POSIX host, so the platform and the
+ * environment are injected; `bash.exe` is found the way `test/adapters/claude.test.ts` resolves
+ * the hook shell — a PATH walk with `existsSync` — so a real file under a temp directory is
+ * what makes the found case true, not a mock.
+ */
+describe("check — claude-hook-shell", () => {
+  const claude = { tools: ["claude"], ledger: [], plugin: undefined } as unknown as SetupManifest;
+
+  it("passes with a note on every host that is not Windows, whatever the manifest says", () => {
+    for (const platform of ["darwin", "linux"] as const) {
+      const verdict = checkClaudeHookShell(claude, { platform, env: { PATH: "" } });
+      expect(verdict.id).toBe("claude-hook-shell");
+      expect(verdict.status, platform).toBe("pass");
+      expect(verdict.detail).toContain("not a Windows host");
+    }
+  });
+
+  it("fails on win32 with no bash.exe on PATH, naming the consequence and the remedy", () => {
+    const handle = getRepo();
+    const empty = handle.path("no-bash");
+    const verdict = checkClaudeHookShell(claude, { platform: "win32", env: { PATH: `${empty};C:\\Windows\\System32` } });
+    expect(verdict.status).toBe("fail");
+    expect(verdict.detail).toContain(
+      "the anchored hook commands need Git Bash on Windows; without it the pre-tool-use guard does not launch and the client does not block",
+    );
+    expect(verdict.detail).toContain("PowerShell");
+    expect(verdict.detail).toContain("Install Git for Windows (Git Bash)");
+  });
+
+  it("passes on win32 once a bash.exe is on PATH, naming where it was found", async () => {
+    const handle = getRepo();
+    await handle.seedFiles({ "git-bash/bin/bash.exe": "" });
+    const dir = handle.path("git-bash/bin");
+    // Windows PATH uses `;` — the probe splits on the platform's delimiter, and this suite runs
+    // on the host's, so the fixture is composed with that delimiter rather than a literal.
+    const verdict = checkClaudeHookShell(claude, { platform: "win32", env: { PATH: ["C:\\nothing", dir].join(sep === "\\" ? ";" : ":") } });
+    expect(verdict.status).toBe("pass");
+    expect(verdict.detail).toContain(`Git Bash found at ${join(dir, "bash.exe")}`);
+  });
+
+  it("passes with a note on win32 when claude is not targeted, or its hooks are a plugin's", () => {
+    const none = checkClaudeHookShell({ ...claude, tools: ["cursor"] } as SetupManifest, { platform: "win32", env: { PATH: "" } });
+    expect(none.status).toBe("pass");
+    expect(none.detail).toContain("claude is not a target tool");
+    // Plugin-owned hooks are the plugin's render, not this adapter's: nothing anchored is on disk.
+    const owned = {
+      ...claude,
+      plugin: { mode: "plugin-backed", clients: { claude: { root: "x", classes: ["hooks"] } } },
+    } as unknown as SetupManifest;
+    const verdict = checkClaudeHookShell(owned, { platform: "win32", env: { PATH: "" } });
+    expect(verdict.status).toBe("pass");
+    expect(verdict.detail).toContain("carried by its plugin");
+  });
+
+  it("is a row of the real doctor, passing on this host", async () => {
+    const root = await seedRepo(getRepo());
+    const verdict = await doctorRow(root, "claude-hook-shell");
+    // This suite never runs the failing branch for real: the CI Windows leg carries Git Bash, so
+    // there the row passes on the found case, and on POSIX it passes on the platform.
+    expect(verdict.status).toBe("pass");
+  });
+});
 
 /** One named doctor row off a fresh run, with the environment pinned. */
 async function doctorRow(

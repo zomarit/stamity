@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { delimiter, join, relative, sep } from "node:path";
 import type { App, EngineRegistry } from "../../index.ts";
 import { readCharterTemplate } from "../../content/charter.ts";
+import { isPluginOwned } from "../../emit/ownership.ts";
 import { renderInvariantsVersion } from "../../emit/substitution.ts";
 import { readInstallMode } from "../../manifest/manifest.ts";
 import {
@@ -42,7 +43,7 @@ import { provenanceFromManifest, type ProvenanceRollup } from "./sync/report.ts"
  *
  * Three parts, one exit code:
  *
- * 1. **DOCTOR** — thirteen environment and state probes, each a
+ * 1. **DOCTOR** — fourteen environment and state probes, each a
  *    {@link DoctorCheck} row. Every probe is total: it answers, or it warns
  *    about why it could not, but it never takes the command down with it.
  * 2. **DRIFT** — {@link runDriftGate} runs the sync engine's read-only PLAN
@@ -374,6 +375,80 @@ async function checkEnvMcp(
     detail:
       `${unfilled.length} of ${reported.length} credential(s) in ${file} are still empty ` +
       `(${names}${overflow}) — a server whose credential is blank fails at start-up${held}`,
+  };
+}
+
+/**
+ * The `claude-hook-shell` DOCTOR ROW: can the anchored Claude hook commands
+ * launch on this host at all?
+ *
+ * The Claude adapter renders every hook command on `${CLAUDE_PROJECT_DIR}`
+ * and gives the core guard a POSIX fail-closed tail (`../../adapters/claude.ts`,
+ * `PROJECT_DIR_VARIABLE` and `GUARD_FAIL_CLOSED_TAIL`). Both hold under `sh`
+ * and Git Bash, the two shells the client's hooks page names first. On a
+ * Windows host with no Git Bash the client falls back to PowerShell, and there
+ * the render cannot work: `${NAME}` is PowerShell's own variable syntax, so the
+ * anchored path expands empty, and the tail's `||{…}` does not parse. The hook
+ * then never launches, the client does not block, and nothing on the host says
+ * so — a guard silently disarmed. The render cannot be fixed for both shells
+ * (the adapter's comment beside the anchor says why), so the remedy is to SAY
+ * IT where the operator looks: this row.
+ *
+ * Pure and exported for the reason `checkNodeVersion` is: the failing branch
+ * cannot be reached in-process on a POSIX host, so the platform and the
+ * environment are injected. `bash.exe` is looked for the way the adapter's
+ * own suite resolves it — each PATH entry, `existsSync`, no spawn — so the
+ * doctor and the test that measured the shell answer one question.
+ *
+ * Fails only where every condition holds: `win32`, Claude targeted, its hooks
+ * emitted by this engine rather than carried by a plugin (a plugin-owned hook
+ * set is the plugin's render, not this adapter's), and no `bash.exe` on PATH.
+ * Everywhere else it passes with the note that says which condition released
+ * it, so the row reads the same on every host and is never silently absent.
+ */
+export function checkClaudeHookShell(
+  manifest: SetupManifest | null,
+  host: {
+    readonly platform: NodeJS.Platform;
+    readonly env: Readonly<Record<string, string | undefined>>;
+  },
+): DoctorCheck {
+  const id = "claude-hook-shell";
+  if (host.platform !== "win32") {
+    return {
+      id,
+      status: "pass",
+      detail:
+        "not a Windows host: the client hands hook commands to sh, where the anchored " +
+        "commands parse (Git Bash is a Windows-only requirement)",
+    };
+  }
+  const targeted = (manifest?.tools ?? []).includes("claude");
+  if (!targeted || isPluginOwned(manifest, "claude", "hooks")) {
+    return {
+      id,
+      status: "pass",
+      detail: targeted
+        ? "Claude's hooks are carried by its plugin, so no anchored hook row of this engine's is on disk"
+        : "claude is not a target tool, so no anchored hook row is emitted",
+    };
+  }
+  for (const entry of (host.env["PATH"] ?? "").split(delimiter)) {
+    if (entry === "") continue;
+    const candidate = join(entry, "bash.exe");
+    if (existsSync(candidate)) {
+      return { id, status: "pass", detail: `Git Bash found at ${candidate}: the anchored hook commands parse there` };
+    }
+  }
+  return {
+    id,
+    status: "fail",
+    detail:
+      "the anchored hook commands need Git Bash on Windows; without it the pre-tool-use guard " +
+      "does not launch and the client does not block — the client falls back to PowerShell, " +
+      "which reads ${CLAUDE_PROJECT_DIR} as its own variable and does not parse the guard's " +
+      "fail-closed tail. Install Git for Windows (Git Bash) and put its bash.exe on PATH, then " +
+      "re-run check.",
   };
 }
 
@@ -836,6 +911,9 @@ export async function runDoctor(
     tmpHygiene,
     envMcp,
     checkToolTraces(manifest),
+    // Beside `tool-traces` because both answer about the targeted tools' emitted
+    // rows; this one asks whether the Claude rows can LAUNCH on this host.
+    checkClaudeHookShell(manifest, { platform: process.platform, env: app.runtime.env }),
     preservedDuplicate,
     packIntegrity,
     // The two plugin rows sit after the repository-state probes and before the

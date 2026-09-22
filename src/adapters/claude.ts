@@ -304,8 +304,15 @@ const PROJECT_DIR_VARIABLE = "${CLAUDE_PROJECT_DIR}";
  * the PowerShell fallback (a Windows host with no Git Bash) none of it parses —
  * and `${CLAUDE_PROJECT_DIR}` is PowerShell's own variable syntax rather than an
  * environment lookup (`$env:NAME`), so the anchored path would expand empty
- * there too. That host is UNMEASURED and the residual is recorded rather than
- * papered over — `docs/troubleshooting.md` states it as a possible regression.
+ * there too. The render cannot be fixed for both shells: PowerShell reads
+ * `${NAME}` as its own variable and the tail's `||{…}` does not parse there,
+ * while `$env:NAME` and a PowerShell tail parse in neither `sh` nor Git Bash —
+ * one command string cannot serve both. The remedy is therefore to SAY it on
+ * the host where it bites: the `claude-hook-shell` doctor row of `stamity check`
+ * (`../cli/commands/check.ts`) fails on a Windows host that targets Claude with
+ * repository-emitted hooks and has no `bash.exe` on PATH, naming the
+ * consequence and the fix. That host is otherwise UNMEASURED, and
+ * `docs/troubleshooting.md` states the residual as a possible regression.
  */
 const GUARD_FAIL_CLOSED_TAIL =
   "|| { s=$?; [ \"$s\" -eq 2 ] && exit 2; " +
