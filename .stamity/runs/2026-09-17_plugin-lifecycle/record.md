@@ -4001,3 +4001,11 @@ assumed to work as implemented — rather than waiting for a Windows host withou
 row and here; the `Not done` line stands with that owner's decision beside it, and the `claude-hook-shell` doctor
 row is the release's guard on that host class. The maintainer also asked for the step-by-step of everything else
 (the release, V4, the Cursor rows, Codex's interactive hooks, the nightly's first armed run), given in chat.
+
+## Amendment (2026-09-22T14:23Z): the nightly disabled at the repository, armed for later
+
+The maintainer wrote in chat that the nightly runs are not wanted for now but the workflow stays armed for a
+later activation: `gh workflow disable nightly.yml` at the repository (no file changed — the schedule, the three
+jobs, the per-client secret steps and their pins stay as shipped; the four secrets stay unset). To activate:
+`gh workflow enable nightly.yml`, set the secrets, dispatch once. The CHANGELOG's "wired to run nightly … the first
+run lands after this release" stays true as written; this record is where the disabled state is noted.
