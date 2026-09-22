@@ -844,10 +844,17 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
       expect(setup.status, setup.stderr).toBe(0);
       surface = projectSurface(walk.project);
       expect(surface.files.length).toBeGreaterThan(5);
-      // The client's own install write, and the ONLY project-side change the install made: the
-      // marketplace record went to the scratch configuration directory, not here. Asserted here
-      // and re-asserted after every later step through `unchanged` below.
-      expect(surface.clientSettings).toEqual({ enabledPlugins: { "stamity@stamity": true } });
+      // `.claude/settings.json` under KEY-LEVEL ownership. `enabledPlugins` is the client's own
+      // install write, and the ONLY project-side change the install made: the marketplace record
+      // went to the scratch configuration directory, not here. `permissions.allow` is the SETUP's
+      // write — the engine's own key in plugin mode, landed beside the client's with every foreign
+      // key preserved in place — so the file carries exactly these two owners' keys after the
+      // setup step. Both asserted here and re-asserted after every later step through `unchanged`
+      // below, which is what proves neither the update nor the rollback touches the file.
+      const settings = surface.clientSettings as { enabledPlugins?: unknown; permissions?: { allow?: unknown } } | null;
+      expect(settings).not.toBeNull();
+      expect(settings?.enabledPlugins).toEqual({ "stamity@stamity": true });
+      expect(settings?.permissions?.allow).toEqual(["Read", "Grep", "Glob"]);
       row("claude", "setup", "PASS", `${String(surface.files.length)} repository-owned files`);
       assertCompatible("claude", installedRoot(V1), walk.project, V1, "installed");
 
