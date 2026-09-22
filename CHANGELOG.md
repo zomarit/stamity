@@ -66,7 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Verification gates can be set explicitly instead of detected.** `stamity config set gates.*`
   writes the test, lint, typecheck and full-gate commands a charter renders, so a repository whose
   scripts detection cannot read states them once rather than carrying a wrong line.
-- **The plugin route is proven per client on every commit.** `scripts/plugin-route-smoke.mjs`
+- **The plugin route is proven per client: every root's structure on every commit, the install
+  legs that need no account beside it, and invocation nightly.** `scripts/plugin-route-smoke.mjs`
   walks structure, install, discovery and invocation for each client and writes a `--json`
   document; its credential-free structure and install legs run in the merge-blocking
   `plugin-route` CI job, and its invocation legs are wired to run nightly behind one secret per
