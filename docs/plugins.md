@@ -2,10 +2,10 @@
 title: Plugins
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.0 release cut (2026-09-21). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 66c6152. Re-attested 2026-09-22 against the Copilot CLI measurements of that date. -->
 <!-- Re-open when: the capability-file schema changes shape, the locator's exit codes or its
      candidate order move, or a vendor page behind a command block is re-read on a later access
-     date than the 2026-09-21 one every documentation block here carries. `test/docsPages.test.ts` holds this
+     date than the newest this page carries, 2026-09-22. `test/docsPages.test.ts` holds this
      page to the hand-page contract; `docs/capability-matrix.md` carries the dated source URL
      behind each client's container facts, and `docs/cli-reference.md` is what the `stamity
      plugin` blocks must not contradict. -->
@@ -50,6 +50,16 @@ The reasons, one line each, are the ones each container declares in its own capa
   strips exactly one extension, so `.prompt.md` would register ids the corpus never names.
 - **Codex, agent and command** — the Agent Plugins container carries no agent class, and this
   client documents no project-scoped command directory; `plugin setup` writes `.codex/agents/`.
+- **Copilot CLI, hooks** — carried, and loaded only in a **trusted folder**. Interactively that is
+  the client's own trust prompt; headlessly it is `COPILOT_ALLOW_ALL` set to exactly `true`, which
+  "additionally trusts the working directory without prompting, which loads that directory's
+  skills, plugins, MCP servers, and hooks" — every other truthy spelling, and the
+  `--allow-all-tools` flag on its own, only auto-approve tools and load no hooks at all
+  (`copilot help environment` on 1.0.87, read 2026-09-22; measured the same day, where one hook
+  fixture recorded nothing under the flag alone and seven observations with the variable set, one
+  of them the client's own `Denied by preToolUse hook: hook exited with code 2`). Only machine-wide
+  policy hooks load "regardless of folder trust state"; a repository's `.github/hooks/*.json` and a
+  plugin's own hooks do not (the vendor's hooks reference, read 2026-09-22).
 - **Codex, hooks** — carried means shipped and discoverable, never enforced: a plugin's hooks are
   skipped until the operator trusts them, and a headless run on codex-cli 0.154.0 ran no project
   hook at all.
@@ -219,6 +229,14 @@ the files no container carries. One command does that, and every client's plugin
 - **Cursor** and **Copilot CLI** — `/st-setup`
 - **Codex** — no command class rides in that container, so run the line the root's own `README.md`
   prints: the locator at `<root>/runtime/locate.mjs`, followed by `plugin setup`.
+
+On the Copilot CLI that command has one step before the others, and it is there because this client
+passes a command's shell no plugin-root variable at all — the session environment carries
+`COPILOT_CLI` and `COPILOT_HOME` and nothing ending in `PLUGIN_ROOT` (measured 2026-09-22 on
+1.0.87). So `/st-setup` asks the client where its own root is: `copilot plugin list --json` reports
+each plugin's `installedFrom`, and that path is handed to the locator as `--plugin-root`.
+`copilot skill list --json` reports each skill's `path` under the same root, which is the second way
+to read it.
 
 Each of those runs `stamity plugin setup` through the plugin's own runtime. What it writes:
 

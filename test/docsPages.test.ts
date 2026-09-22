@@ -216,6 +216,13 @@ const EVIDENCE_PAGES: readonly string[] = [CLIENT_CONTRACTS];
  * MOVED 2026-09-17: introduced with the bucket. The 2026-09-17 audit re-read every vendor page
  * this record cites and the Codex paragraph was rewritten against the 2026-09-15 measurement.
  *
+ * MOVED 2026-09-22, by the pass that measured four Copilot CLI facts against the 1.0.87 binary the
+ * candidate's own harness turned up: what `COPILOT_ALLOW_ALL` set to exactly `true` trusts and what
+ * `--allow-all-tools` does not, which hooks load regardless of folder trust, that no plugin-root
+ * variable reaches a command's shell while the CLI's changelog states that a plugin's HOOKS get
+ * three, and the two listings that report a root. The page's Copilot bullet and container section
+ * carry them, so its header moves with them.
+ *
  * MOVED 2026-09-21, by the 1.9.0 release cut's evidence pass. Every cited page answered this host
  * that day — including cursor.com, which had refused every connection from it on 2026-09-20 — so
  * the pass re-read all of them and the page's claims moved with what they now say: the Copilot
@@ -225,7 +232,7 @@ const EVIDENCE_PAGES: readonly string[] = [CLIENT_CONTRACTS];
  * still agrees field for field with the vendored copy. The page also lost the second, stale
  * currency claim it carried under this header.
  */
-const EVIDENCE_REATTESTATION_DATE = "2026-09-21";
+const EVIDENCE_REATTESTATION_DATE = "2026-09-22";
 
 /**
  * The Codex hook-loading facts the contract page must carry, each a literal a reader can check
@@ -446,12 +453,19 @@ const RELEASE_CUT_DATE = "2026-09-21";
  * glossary). Every other page keeps the date it was actually verified on, which is the property
  * the pair of assertions below exists to protect.
  *
+ * MOVED 2026-09-22, and the commit form is back in the bucket with exactly one member. The Copilot
+ * measurements of that date landed on `docs/plugins.md` AFTER the 2026-09-21 cut, so that page can
+ * no longer say its claims were verified at the cut and nothing later: it carries the commit form
+ * naming the cut's own re-attestation commit plus `Re-attested 2026-09-22`, and this constant names
+ * that pass. The other thirteen keep the cut form and the cut's date, which is what the pin above
+ * still reads.
+ *
  * MOVED 2026-09-21, to the 1.9.0 cut date, and with it the commit form left the bucket: a release
  * cut re-attests every hand page against the candidate tree and stamps the cut form on all
  * fourteen, so there is no between-cuts pass left to date. The pin below covers that state rather
  * than skipping it — see the assertion's own note.
  */
-const REATTESTATION_DATE = "2026-09-21";
+const REATTESTATION_DATE = "2026-09-22";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");

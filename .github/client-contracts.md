@@ -1,6 +1,6 @@
 # Client contract evidence
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 8354fe1. Re-attested 2026-09-21 against the vendor pages each bullet cites. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 8354fe1. Re-attested 2026-09-22 against the vendor pages each bullet cites and four Copilot CLI measurements of that date. -->
 <!-- Re-open when: a cited vendor page changes what a client guarantees, an adapter emits a
      different configuration key, or a measurement supersedes a dated one below.
      `test/docsPages.test.ts` holds this page to the evidence-page contract and to the Codex
@@ -163,7 +163,24 @@ codex minor.
   the portable boundary. Session-start command output is injected as additionalContext
   (the hooks reference, read 2026-09-17 and again 2026-09-21). Each hook entry carries its own
   working directory, `cwd`, documented as "relative to repository root" and emitted as `"."`, so a
-  repository-relative command needs no anchor here (hooks reference, read 2026-09-21). The cloud
+  repository-relative command needs no anchor here (hooks reference, read 2026-09-21). An emitted
+  hook file is loaded only where the FOLDER IS TRUSTED, which is the fact a headless run turns on:
+  `COPILOT_ALLOW_ALL` set to exactly `"true"` "additionally trusts the working directory without
+  prompting, which loads that directory's skills, plugins, MCP servers, and hooks, including hooks
+  that run shell commands", while the other truthy spellings — and `--allow-all-tools`, whose own
+  help defers to that variable — "only auto-approve tools" (`copilot help environment` on 1.0.87,
+  read 2026-09-22, stdout sha-256 `dac68e84255d3a00ab9c013f5d9accd8079f9c7fb8c1b5a5df23653e60d6c662`).
+  Measured 2026-09-22 on the same build: one hook fixture recorded NOTHING under the flag alone, and
+  seven hook observations with the variable set, one of them a `PreToolUse` denial the client
+  rendered as `Denied by preToolUse hook: hook exited with code 2` — so a QA row that drives this
+  client without the variable measures folder trust rather than the emitted wiring. Only
+  machine-wide policy hooks "are available regardless of folder trust state"; the repository-level
+  files this engine writes (`.github/hooks/*.json`) are not, and neither are a plugin's own. The
+  PascalCase aliases are the vendor's "VS Code compatible format" (`SessionStart`, `PreToolUse`,
+  fields in snake_case), and a PascalCase `PreToolUse` entry takes Claude's matcher semantics
+  instead of the native regex rule, where "`*`, `**`, or an empty `matcher` value fires for every
+  tool" (the hooks reference, fetched 2026-09-22, sha-256
+  `39d4274e9ca1aea384f57693c76252e6b53e857d28578d9d2e11d4cea1021d40`). The cloud
   configuration must reach the default branch through the normal review/approval path.
   [Hook schema and decisions](https://docs.github.com/en/copilot/reference/hooks-reference),
   [cloud discovery](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/use-hooks).
@@ -198,10 +215,19 @@ the CLI derives an id by stripping ONE extension — `st-work.prompt.md` registe
 what it has always been here, the spelling of the REPOSITORY's `.github/prompts/`. Rules stay
 repository-owned: the directory exists and its file format is not stated. `${PLUGIN_ROOT}` is
 documented for MCP `args`, `env` and `cwd`, for agent frontmatter and for LSP configuration; its
-expansion inside a hook `command` string, and its export to a hook process, are NOT stated, and
-the generated root uses it in hook commands anyway because it is the only documented handle on an
-installed root's own files. That one remains unmeasured and is declared as such on the root's
-`hooks` class.
+expansion inside a hook `command` string is still not stated on any reference page, and the
+generated root uses it in hook commands anyway because it is the only documented handle on an
+installed root's own files. Its EXPORT is no longer unstated, and the two surfaces differ. For a
+plugin's HOOKS the CLI's own changelog says the process receives `PLUGIN_ROOT`,
+`COPILOT_PLUGIN_ROOT` and `CLAUDE_PLUGIN_ROOT` (the 1.0.26 entry, unchanged in 1.0.85 and 1.0.87;
+read by the release's Copilot investigation on 2026-09-22 and recorded rather than re-derived here —
+the shipped binary's strings are compressed, so a grep over it confirms nothing either way). For a
+plugin's COMMANDS no such variable arrives at all: the session environment a command's shell sees
+carries `COPILOT_CLI` and `COPILOT_HOME` and nothing ending in `PLUGIN_ROOT` (measured 2026-09-22 on
+1.0.87). A command that needs its own root therefore asks the client for it — `copilot plugin list
+--json` reports each plugin's `installedFrom` root, and `copilot skill list --json` each skill's
+`path` beneath it (both measured 2026-09-22) — which is the route the generated `st-setup` command
+takes before it calls the locator.
 
 Discovery and cache paths, from the same reference. A marketplace manifest is read from
 `marketplace.json`, `.plugin/marketplace.json`, `.github/plugin/marketplace.json` or
