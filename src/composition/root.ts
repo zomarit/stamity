@@ -53,6 +53,7 @@ import * as handoffStore from "../handoffs/store.ts";
 import * as manifestCore from "../manifest/manifest.ts";
 import * as ledger from "../manifest/ledger.ts";
 import * as mcpFilter from "../manifest/mcpFilter.ts";
+import * as claudeSettings from "../manifest/claudeSettings.ts";
 import * as mcpCatalog from "../mcp/catalog.ts";
 import * as descriptionScan from "../mcp/descriptionScan.ts";
 import * as mcpEnv from "../mcp/env.ts";
@@ -160,6 +161,7 @@ export interface EngineRegistry {
     readonly manifest: typeof manifestCore;
     readonly ledger: typeof ledger;
     readonly mcpFilter: typeof mcpFilter;
+    readonly claudeSettings: typeof claudeSettings;
   };
   readonly mcp: {
     readonly catalog: typeof mcpCatalog;
@@ -334,7 +336,7 @@ export function createEngine(): EngineRegistry {
       validation: handoffValidation,
       store: handoffStore,
     },
-    manifest: { manifest: manifestCore, ledger, mcpFilter },
+    manifest: { manifest: manifestCore, ledger, mcpFilter, claudeSettings },
     mcp: {
       catalog: mcpCatalog,
       descriptionScan,

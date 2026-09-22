@@ -1,12 +1,19 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { CLAUDE_SETTINGS_PATH, claudeSettingsOwnedKeys } from "../../adapters/claude.ts";
+import { claudeSettingsReclaimReducer } from "../../manifest/claudeSettings.ts";
 import type { EmittedArtifact } from "../../manifest/ledger.ts";
 import { planUserMcpJson, predictMcpMergeRefusal } from "../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../mcp/catalog.ts";
-import { engineOwnedServerIds } from "../../mcp/emit.ts";
+import { engineOwnedServerIds, mcpReclaimReducers } from "../../mcp/emit.ts";
 import type { SafeWriteFileOptions } from "../../merge/safeWrite.ts";
 import { discoverInstalledPacks, packMcpServers } from "../../pack/projection.ts";
-import { outputOwners, type AdapterOutput, type MergeResult } from "../../types/content.ts";
+import {
+  outputOwners,
+  type AdapterOutput,
+  type CoOwnedReducer,
+  type MergeResult,
+} from "../../types/content.ts";
 import type { SetupManifest } from "../../types/manifest.ts";
 
 /**
@@ -319,4 +326,26 @@ export async function installedPackServers(
   manifest: SetupManifest,
 ): Promise<PackSuppliedServer[]> {
   return packMcpServers(await discoverInstalledPacks(rootDir, manifest), rootDir);
+}
+
+/**
+ * The reducers the reclaim sweep owes for every CO-OWNED document
+ * (`../../merge/reclaim.ts` → `ReclaimOptions.coOwnedPaths`): the three
+ * merged client MCP documents, keyed per dialect (`../../mcp/emit.ts`), plus
+ * `.claude/settings.json`, whose engine-owned keys are a fact about the
+ * install mode `manifest` records rather than about any rendering
+ * (`../../adapters/claude.ts::claudeSettingsOwnedKeys`). One builder for the
+ * sync sweep and both of clean's, because a caller that omits a path here
+ * silently returns it to the whole-file delete branch, where a hash match over
+ * merged bytes reads as sole authorship — the regression the MCP reducers exist
+ * for, and the one `test/merge/settingsKeyOwnership.test.ts` drives at the
+ * shipped verbs for the settings document.
+ */
+export function coOwnedReclaimReducers(
+  manifest: SetupManifest,
+  packServers: readonly PackSuppliedServer[] = [],
+): Map<string, CoOwnedReducer> {
+  const reducers = mcpReclaimReducers(packServers);
+  reducers.set(CLAUDE_SETTINGS_PATH, claudeSettingsReclaimReducer(claudeSettingsOwnedKeys(manifest)));
+  return reducers;
 }

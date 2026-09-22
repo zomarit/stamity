@@ -1,5 +1,6 @@
 import { mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { CLAUDE_SETTINGS_PATH } from "../../../adapters/claude.ts";
 import { buildContentIndex, type ContentRoots } from "../../../content/catalog.ts";
 import {
   resolveBundledContentRoot,
@@ -18,12 +19,18 @@ import {
   writeManifest,
 } from "../../../manifest/manifest.ts";
 import { ensureStateScaffold } from "../../../emit/stateScaffold.ts";
+import {
+  materializeClaudeSettings,
+  predictClaudeSettingsMerge,
+  type SettingsMergeResult,
+} from "../../../manifest/claudeSettings.ts";
 import { materializeUserMcpJson, type McpMergeResult } from "../../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../../mcp/catalog.ts";
 import { engineOwnedServerIds, MERGED_MCP_JSON_PATHS } from "../../../mcp/emit.ts";
 import { ensureGitignoreEntry } from "../../../mcp/env.ts";
 import { extractManagedBlock } from "../../../merge/managedBlocks.ts";
 import {
+  isManagedPath,
   ledgerHashIndex,
   ledgerPathSet,
   predictMergeAction,
@@ -288,6 +295,22 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
       );
       result = merged;
       if (writtenContent !== null) writtenByPath.set(output.path, writtenContent);
+    } else if (output.path === CLAUDE_SETTINGS_PATH) {
+      // Co-owned by top-level key: the client's install record and the
+      // operator's own keys survive beside the engine's
+      // (`../../../manifest/claudeSettings.ts`), so the written bytes are the
+      // merged document and are handed to the ledger loop like the MCP lane's.
+      // oxlint-disable-next-line no-await-in-loop
+      const { writtenContent, ...merged } = await writeClaudeSettings(
+        target,
+        output.content,
+        dryRun,
+        force || replacePaths.has(output.path),
+        isManagedPath(target, ownedPaths),
+        rootDir,
+      );
+      result = merged;
+      if (writtenContent !== null) writtenByPath.set(output.path, writtenContent);
     } else {
       // oxlint-disable-next-line no-await-in-loop
       result = await writeOutput(
@@ -417,6 +440,30 @@ async function writeMcpDocument(
     content,
     engineOwnedServerIds(relPath, selectedServers, existing, packServers),
   );
+}
+
+/**
+ * The client settings document, merged by top-level key ownership instead of
+ * written whole (`../../../manifest/claudeSettings.ts`). `owned` is the
+ * ledger's answer, which on a fresh init is `false` for this path and on a
+ * `--force` re-init is `false` too (the fresh ledger carries only pack rows) —
+ * `force` then clears an engine-owned key the previous setup left with other
+ * content, behind a verified `.bak`, and adopts one that still matches. The
+ * dry-run leg runs the same planning and writes nothing.
+ */
+async function writeClaudeSettings(
+  target: string,
+  content: string,
+  dryRun: boolean,
+  force: boolean,
+  owned: boolean,
+  boundaryDir: string,
+): Promise<SettingsMergeResult> {
+  if (dryRun) {
+    const { result } = await predictClaudeSettingsMerge(target, content, { owned, force });
+    return { ...result, writtenContent: null };
+  }
+  return materializeClaudeSettings(target, content, { owned, force, boundaryDir });
 }
 
 /**

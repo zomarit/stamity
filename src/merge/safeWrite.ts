@@ -117,9 +117,10 @@ export interface SafeWriteFileOptions {
    *
    * Without it, the only ownership proof left is a managed block in the file's
    * own bytes, which every generated artifact named by its platform rather than
-   * by the engine lacks: `AGENTS.md` carries one, `.claude/settings.json`,
-   * `.cursor/hooks.json`, the plugin container and the other whole-file JSON
-   * outputs do not. Those then classify as unproven on the second write and
+   * by the engine lacks: `AGENTS.md` carries one, `.cursor/hooks.json`, the
+   * plugin container and the other whole-file JSON outputs do not
+   * (`.claude/settings.json` is merged by key ownership instead —
+   * `../manifest/claudeSettings.ts` — and never reaches this lane). Those then classify as unproven on the second write and
    * refuse to update without `force` — i.e. the engine cannot maintain its own
    * output. That is the safe half of the trade (a refusal, not a silent
    * overwrite), but it is a degraded mode, not a supported one.
@@ -961,7 +962,7 @@ function refuseBackupDestination(
  *   `copyFile` did for free: a backup of a `0600` file landing at the default
  *   `0644` would publish it to every other account on the host.
  */
-async function backupBeforeOverwrite(
+export async function backupBeforeOverwrite(
   filePath: string,
   existingContent: string,
   operation: string,

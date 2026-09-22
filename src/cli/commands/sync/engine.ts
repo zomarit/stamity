@@ -1,6 +1,7 @@
 import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import pLimit from "p-limit";
+import { CLAUDE_SETTINGS_PATH } from "../../../adapters/claude.ts";
 import { buildContentIndex, type ContentIndex } from "../../../content/catalog.ts";
 import { analyzeRepo, summarizeDetection } from "../../../detect/repoAnalyzer.ts";
 import {
@@ -13,17 +14,18 @@ import {
   type ReclaimCandidate,
 } from "../../../manifest/ledger.ts";
 import { manifestPath, readManifest, writeManifest } from "../../../manifest/manifest.ts";
+import {
+  materializeClaudeSettings,
+  predictClaudeSettingsMerge,
+} from "../../../manifest/claudeSettings.ts";
 import { materializeUserMcpJson } from "../../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../../mcp/catalog.ts";
-import {
-  engineOwnedServerIds,
-  mcpReclaimReducers,
-  MERGED_MCP_JSON_PATHS,
-} from "../../../mcp/emit.ts";
+import { engineOwnedServerIds, MERGED_MCP_JSON_PATHS } from "../../../mcp/emit.ts";
 import { isSharedRegularFile } from "../../../merge/atomicWrite.ts";
 import { extractManagedBlock } from "../../../merge/managedBlocks.ts";
 import { sweepReclaimCandidates, type ReclaimReport } from "../../../merge/reclaim.ts";
 import {
+  isManagedPath,
   ledgerHashIndex,
   ledgerPathSet,
   predictMergeAction,
@@ -45,6 +47,7 @@ import type { SetupManifest } from "../../../types/manifest.ts";
 import { ensureStateScaffold } from "../../../emit/stateScaffold.ts";
 import { getEmissionPlanner } from "../../engine/emission.ts";
 import {
+  coOwnedReclaimReducers,
   installedPackServers,
   ledgerRowsForOutput,
   outputWriteOptions,
@@ -334,6 +337,29 @@ export async function planOutputEntries(
       }
       return { ...base, action: ACTION_OF[predicted.result.action] };
     }
+    // The client settings document is co-owned too, by top-level KEY: the
+    // client's install record and the operator's own keys sit beside the
+    // engine's (`manifest/claudeSettings.ts`). The prediction runs the real
+    // merge over the current bytes, so a foreign key added since the last
+    // write is neither drift nor a collision; what does collide is an
+    // engine-owned key with other content in a file the ledger does not
+    // claim, or a file that is not a JSON object — the two `--force` clears
+    // behind a `.bak` — and a linked target, which nothing clears.
+    if (output.path === CLAUDE_SETTINGS_PATH) {
+      const predicted = await predictClaudeSettingsMerge(absPath, output.content, {
+        owned: isManagedPath(absPath, ledgerPaths),
+        force: false,
+      });
+      if (predicted.collision !== null) {
+        return {
+          ...base,
+          action: "collision" as const,
+          collisionKind: predicted.collision.kind,
+          detail: predicted.collision.detail,
+        };
+      }
+      return { ...base, action: ACTION_OF[predicted.result.action] };
+    }
     const existing = await readIfExists(absPath);
     // The prediction is pure — `boundaryDir` is inert here — but it is built
     // from the same call so the plan and the apply cannot drift apart.
@@ -607,7 +633,7 @@ export async function applySync(
   // emission ∪ the operator's own entries; handing the sweep a reducer is what
   // stops it reading a match as sole authorship and unlinking a document
   // carrying a hand-added server (`../../../merge/reclaim.ts` gate 4).
-  const coOwnedPaths = mcpReclaimReducers(packMcpSupply);
+  const coOwnedPaths = coOwnedReclaimReducers(plan.manifest, packMcpSupply);
 
   if (dryRun) {
     const reclaimed =
@@ -715,6 +741,20 @@ export async function applySync(
         output.content,
         engineOwnedServerIds(output.path, selectedMcpServers, existing, packMcpSupply),
       );
+      result = merged;
+      if (writtenContent !== null) written = writtenContent;
+    } else if (output.path === CLAUDE_SETTINGS_PATH) {
+      // Key-level ownership (`manifest/claudeSettings.ts`): the engine's keys
+      // are regenerated, every other key survives in place, and the ledger
+      // hashes the MERGED bytes below exactly as it does for the MCP lane.
+      // `force` here is the collision gate's: it replaces an unowned engine
+      // key or an unparseable file behind a verified `.bak`, and on a healthy
+      // file changes nothing.
+      const { writtenContent, ...merged } = await materializeClaudeSettings(absPath, output.content, {
+        owned: isManagedPath(absPath, ownedPaths),
+        force,
+        boundaryDir: rootDir,
+      });
       result = merged;
       if (writtenContent !== null) written = writtenContent;
     } else {

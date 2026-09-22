@@ -85,11 +85,14 @@ import { splitAtManagedBlock } from "./managedBlocks.ts";
  *    whether a match may stand in for an ownership marker, which is a question
  *    about location, while a mismatch is a fact about the bytes. That is what lets content the engine writes verbatim under a name it
  *    did not mint — a pack's own files, and the block-less whole-file infra it
- *    emits at platform-mandated paths (`AGENTS.md`, `.claude/settings.json`) —
+ *    emits at platform-mandated paths (`AGENTS.md`, the plugin container) —
  *    be uninstalled by dropping its ledger rows and sweeping, and only while it
  *    is untouched. That shortcut holds only where the recorded hash covers a
  *    document the engine wrote END TO END, and `coOwnedPaths` names the paths
- *    where it does not. The three client MCP documents are written by MERGING
+ *    where it does not. The three client MCP documents and
+ *    `.claude/settings.json` (co-owned by top-level key: the client's install
+ *    record and the operator's keys beside the engine's,
+ *    `../manifest/claudeSettings.ts`) are written by MERGING
  *    the engine's entries into whatever the operator already has, so both
  *    writers record the hash of the MERGED bytes (`cli/commands/sync/engine.ts`,
  *    `cli/commands/init/apply.ts`) — emission ∪ the operator's own. A match
@@ -356,8 +359,8 @@ function isStateDirPath(path: string): boolean {
  *
  * The allowlist was previously exempt from the NAME gate yet had no way to prove
  * sole ownership at gate 4 unless a managed block spanned the file. That left the
- * engine's block-less whole-file infra — `AGENTS.md`, `.claude/settings.json`,
- * the plugin container — permanently unreclaimable: `clean` reported success
+ * engine's block-less whole-file infra — `AGENTS.md`, the plugin container —
+ * permanently unreclaimable: `clean` reported success
  * while leaving them behind. Admitting the hash closes that gap without widening
  * anything else, because gate 4 still requires an exact match.
  */

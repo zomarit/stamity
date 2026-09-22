@@ -46,10 +46,14 @@
  * 5. **Commands → `.claude/commands/<id>.md`** ({@link CLAUDE_COMMANDS_DIR}),
  *    the touchpoint commands as native slash commands, with the same
  *    description-only frontmatter discipline the sibling adapters use.
- * 6. **`.claude/settings.json`** — whole-file JSON (plain `.json` takes no
- *    managed block per `src/types/markers.ts`): the core hook interchange
- *    transformed to the client shape, the `ConfigChange` tamper wiring, the
- *    review-gate wiring below, and the read-only permissions chain.
+ * 6. **`.claude/settings.json`** — JSON owned per TOP-LEVEL KEY (plain `.json`
+ *    takes no managed block per `src/types/markers.ts`, and the client and the
+ *    operator write this file too): the engine owns exactly the keys it renders
+ *    — the read-only permissions chain, and the `hooks` object (the core hook
+ *    interchange transformed to the client shape, the `ConfigChange` tamper
+ *    wiring, the review-gate wiring below) when the repository owns hooks —
+ *    and every other key (`enabledPlugins`, `model`, …) is kept as it is
+ *    (`../manifest/claudeSettings.ts`).
  * 7. **The work-scoped review gate** ({@link CLAUDE_REVIEW_GATE_PATH}) beside
  *    the three core hook scripts. Adapter-owned rather than core, because it
  *    rides two events only this client fires ({@link REVIEW_GATE_EVENTS}).
@@ -146,6 +150,7 @@ import {
 } from "../tools/translator.ts";
 import type { AdapterOutput, ContentClass, EmissionOwner } from "../types/content.ts";
 import type { Tool } from "../types/core.ts";
+import type { SetupManifest } from "../types/manifest.ts";
 
 // ── Client layout ────────────────────────────────────────────────
 
@@ -186,8 +191,22 @@ export const CLAUDE_SKILLS_DIR: string = NATIVE_SKILL_DIRS[TOOL] ?? "";
  */
 export const CLAUDE_COMMANDS_DIR = ".claude/commands";
 
-/** Project settings: hooks wiring plus the permissions chain. Whole-file JSON. */
+/**
+ * Project settings: hooks wiring plus the permissions chain. JSON merged by
+ * top-level key ownership (`../manifest/claudeSettings.ts`), never written whole.
+ */
 export const CLAUDE_SETTINGS_PATH = ".claude/settings.json";
+
+/**
+ * The top-level keys of `.claude/settings.json` this engine owns under the
+ * install mode `manifest` records — exactly the keys {@link buildSettingsJson}
+ * renders there: `permissions` always, `hooks` only while the repository owns
+ * hooks. The reclaim sweep reads its reducer's key set off this rather than off
+ * a rendering, because it reaches the path only once nothing renders it.
+ */
+export function claudeSettingsOwnedKeys(manifest: SetupManifest | null | undefined): readonly string[] {
+  return isPluginOwned(manifest, TOOL, "hooks") ? ["permissions"] : ["permissions", "hooks"];
+}
 
 /**
  * The work-scoped review gate, placed beside the three core hook scripts under
@@ -310,8 +329,8 @@ const PROJECT_DIR_VARIABLE = "${CLAUDE_PROJECT_DIR}";
  * one command string cannot serve both. The remedy is therefore to SAY it on
  * the host where it bites: the `claude-hook-shell` doctor row of `stamity check`
  * (`../cli/commands/check.ts`) fails on a Windows host that targets Claude with
- * repository-emitted hooks and has no `bash.exe` on PATH, naming the
- * consequence and the fix. That host is otherwise UNMEASURED, and
+ * repository-emitted hooks and has no Git Bash where the client looks, naming
+ * the consequence and the fix. That host is otherwise UNMEASURED, and
  * `docs/troubleshooting.md` states the residual as a possible regression.
  */
 const GUARD_FAIL_CLOSED_TAIL =
@@ -788,8 +807,10 @@ interface ClaudeHookEntry {
 
 /**
  * `.claude/settings.json`: the permissions chain plus the hook wiring, as one
- * whole-file JSON document (plain `.json` takes no managed block — it has no
- * comment syntax to carry markers, per `src/types/markers.ts`).
+ * JSON document (plain `.json` takes no managed block — it has no comment
+ * syntax to carry markers, per `src/types/markers.ts`). The writers merge it by
+ * top-level key: this rendering's keys are the engine's, and a key the client or
+ * the operator put there survives every write (`../manifest/claudeSettings.ts`).
  *
  * The hook transform is mechanical over the portable interchange: PascalCase
  * event names from `CLAUDE_EVENT_NAMES`, one entry per row in declaration

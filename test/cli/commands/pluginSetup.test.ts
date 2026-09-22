@@ -513,3 +513,36 @@ describe("applyPluginSetup", () => {
     expect(onDisk.some((path) => path.startsWith(".cursor/"))).toBe(true);
   });
 });
+
+describe("applyPluginSetup and the client's own install write", () => {
+  /** What `claude plugin install … --scope project` leaves in the repository (Claude Code 2.1.278). */
+  const CLIENT_SETTINGS = `${JSON.stringify({ enabledPlugins: { "stamity@stamity": true } }, null, 2)}\n`;
+
+  it("keeps the client's enabledPlugins beside its own permissions and counts the file as written", async () => {
+    // The documented route runs the client's install BEFORE this setup, so the
+    // settings file already exists with the client's one key and no ledger row.
+    // Whole-file ownership skipped it here — and `check` then recommended a
+    // remedy that destroys the install record.
+    const root = await makeRepo();
+    await getTemp().seedFiles({ "repo/.claude/settings.json": CLIENT_SETTINGS });
+
+    const report = await applyPluginSetup({
+      rootDir: root,
+      roots: [rootFor("claude")],
+      engineVersion: ENGINE_VERSION,
+      dryRun: false,
+      now: FIXED_NOW,
+    });
+
+    const row = report.wrote.find((entry) => entry.path.endsWith("settings.json"));
+    expect(row?.action).toBe("updated");
+    expect(row?.notice).toContain("enabledPlugins");
+    const settings = JSON.parse(await readFile(join(root, ".claude", "settings.json"), "utf8")) as Record<string, unknown>;
+    expect(Object.keys(settings)).toEqual(["enabledPlugins", "permissions"]);
+    expect(settings["enabledPlugins"]).toEqual({ "stamity@stamity": true });
+    expect((await readManifest(root))?.ledger.some((entry) => entry.path === ".claude/settings.json")).toBe(true);
+    // Everything else the route writes is unchanged by the pre-existing file.
+    const onDisk = await walk(root);
+    expect(onDisk.filter((path) => !isRepositoryOwned(path))).toEqual([]);
+  });
+});

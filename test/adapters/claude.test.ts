@@ -11,6 +11,7 @@ import {
   CLAUDE_SETTINGS_PATH,
   CLAUDE_SKILLS_DIR,
   claudeResiduePlanner,
+  claudeSettingsOwnedKeys,
 } from "../../src/adapters/claude.ts";
 import { buildContentIndex, type CatalogItem } from "../../src/content/catalog.ts";
 import { parseFrontmatter } from "../../src/content/frontmatter.ts";
@@ -1987,5 +1988,34 @@ describe("claude residue under plugin ownership", () => {
 
     expect(paths).toContain(`${CLAUDE_SKILLS_DIR}/acme-drill/SKILL.md`);
     expect(paths).not.toContain(`${CLAUDE_SKILLS_DIR}/stamity-house/SKILL.md`);
+  });
+});
+
+describe("claudeSettingsOwnedKeys", () => {
+  /**
+   * The reclaim sweep strips exactly these keys from a settings document once
+   * nothing renders it, so the set is pinned to the rendering itself rather than
+   * to a literal: under either install mode, the keys the manifest says the
+   * engine owns are the keys the settings row actually carries.
+   */
+  it("names exactly the top-level keys the settings document renders, under either install mode", async () => {
+    const generated = await planned();
+    expect(claudeSettingsOwnedKeys(generated.ctx.manifest)).toEqual(
+      Object.keys(JSON.parse(byPath(generated.rows).get(CLAUDE_SETTINGS_PATH)!.content)),
+    );
+    expect(claudeSettingsOwnedKeys(generated.ctx.manifest)).toEqual(["permissions", "hooks"]);
+
+    const pluginBacked = await planned({
+      plugin: {
+        mode: "plugin-backed",
+        clients: { claude: { version: "1.9.0", classes: ["hooks"] } },
+      },
+    });
+    expect(claudeSettingsOwnedKeys(pluginBacked.ctx.manifest)).toEqual(
+      Object.keys(JSON.parse(byPath(pluginBacked.rows).get(CLAUDE_SETTINGS_PATH)!.content)),
+    );
+    expect(claudeSettingsOwnedKeys(pluginBacked.ctx.manifest)).toEqual(["permissions"]);
+    // No manifest at all reads as the generated mode.
+    expect(claudeSettingsOwnedKeys(null)).toEqual(["permissions", "hooks"]);
   });
 });

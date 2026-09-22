@@ -721,6 +721,54 @@ describe("check — the drift gate", () => {
   });
 });
 
+/** The client's project-scope install write, appended to the engine's real settings bytes. */
+async function appendClientKey(root: string): Promise<void> {
+  const path = join(root, ".claude", "settings.json");
+  const doc = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+  doc["enabledPlugins"] = { "stamity@stamity": true };
+  await writeFile(path, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+}
+
+describe("check — key-level ownership of .claude/settings.json", () => {
+  const SETTINGS = ".claude/settings.json";
+
+  it("reads the client's enabledPlugins beside the engine's permissions as clean, and exits 0", async () => {
+    // The documented consumer route: `plugin install --scope project` writes
+    // this key into the engine's file, and a sync would leave it there — so
+    // neither drift nor a collision is true of it.
+    const root = await seedRepo(getRepo());
+    await appendClientKey(root);
+
+    const { code, doc } = await runJson(root);
+
+    expect(doc.drift).toEqual({ clean: true, changes: [], missing: [], reclaimPending: 0 });
+    expect(code).toBe(0);
+    expect((await runHuman(root)).stdout).toContain("drift: clean");
+  });
+
+  it("reports a hand-written engine-owned key the ledger does not claim as a collision naming the key, not as drift", async () => {
+    const root = await seedRepo(getRepo());
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("fixture lost its manifest");
+    await writeManifest(
+      root,
+      { ...manifest, ledger: manifest.ledger.filter((entry) => entry.path !== SETTINGS) },
+      { now: T0 },
+    );
+    await getRepo().seedFiles({
+      [SETTINGS]: `${JSON.stringify({ permissions: { allow: ["Bash"] }, model: "opus" }, null, 2)}\n`,
+    });
+
+    const { code, doc } = await runJson(root);
+
+    expect(code).toBe(1);
+    expect(doc.drift?.changes).toEqual([{ path: SETTINGS, action: "collision" }].map((entry) => expect.objectContaining(entry)));
+    const human = await runHuman(root);
+    expect(human.stdout).toContain(`collision ${SETTINGS}`);
+    expect(human.stdout).toContain("1 file(s) collide");
+  });
+});
+
 describe("check — advisory warnings", () => {
   it("exits 0 when the only findings are a missing state subdir and an absent git repo", async () => {
     const handle = getRepo();
