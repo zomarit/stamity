@@ -6,9 +6,11 @@
 // UNPERFORMED, which is honest and useless: nobody could tell which of them had gone stale and
 // which had simply never been done. Five of the nine are mechanical — a keyboard walk over a built
 // page, an accessibility tree read, a hook that either fires or does not — and a mechanical check a
-// person performs once a release is a check nobody performs. The other four are the same kind of
-// mechanical, on clients this machine cannot drive; they stay human, and they now carry the hash of
-// what a signature would be a signature ON.
+// person performs once a release is a check nobody performs. The other four are the hook rows, one
+// per client: the harness drives the three clients whose non-interactive invocation has been
+// measured (`hook-runs.mjs`, `CLIENT_RUNNERS`) and records the fourth as `not-run` with the reason
+// its headless lane loads no hook — and every row, driven or not, carries the hash of what a
+// signature would be a signature ON.
 //
 // WHAT IT NEVER DOES. Invent a pass. A page missing from the build is `failed` with its path. A
 // client binary that is absent is `not-run` with the reason. A browser that was never installed is

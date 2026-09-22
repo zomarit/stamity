@@ -1,5 +1,5 @@
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
@@ -340,6 +340,42 @@ describe("verdictFor — what an empty observation log means", () => {
     // looked at.
     expect((verdictFor([]) as { status: string }).status).toBe("failed");
   });
+
+  it("fails on denials only when the transcript shows the allowed file was read without the hook", () => {
+    // The denied-only arm decided from the log alone and never consulted the transcript. The
+    // fixture declares no matcher (`scripts/qa/fixtures.mjs`), so a `denied` row, no `allowed` row,
+    // no denied row mentioning the allowed file AND a tool call on that file in the transcript is
+    // one thing only: the client ran the hook on the first call and skipped it on the second — an
+    // unfired hook, which read `not-run` as though the client had never asked. The Copilot text
+    // render, in the bytes the runner note measured.
+    const verdict = verdictFor([{ decision: "denied", mentionsDenied: true, mentionsAllowed: false }], {
+      transcript:
+        "● Read qa-denied.txt\n  └ Denied by preToolUse hook: hook exited with code 2\n\n" +
+        "● Read qa-allowed.txt\n  └ 1 line read\n\nI could read qa-allowed.txt only.\n",
+    }) as { status: string; reason: string };
+    expect(verdict.status).toBe("failed");
+    expect(verdict.reason).toContain("qa-allowed.txt");
+    expect(verdict.reason).toContain("the hook was never invoked for");
+    // The stream-json shape: the tool_use event names the file on its own line.
+    const streamed = verdictFor([{ decision: "denied", mentionsAllowed: false }], {
+      transcript: '{"type":"tool_use","name":"Read","input":{"file_path":"/x/qa-allowed.txt"}}',
+    }) as { status: string };
+    expect(streamed.status).toBe("failed");
+  });
+
+  it("stays not-run on denials only when the transcript shows no attempt at the allowed file", () => {
+    // The prompt names both files and so does the model's answer; prose is not an attempt. Only a
+    // tool-call sign on the same line as the file counts, which is the line the client prints.
+    const verdict = verdictFor([{ decision: "denied", mentionsDenied: true, mentionsAllowed: false }], {
+      transcript:
+        "● Read qa-denied.txt\n  └ Denied by preToolUse hook: hook exited with code 2\n\n" +
+        "I was refused qa-denied.txt and did not go on to qa-allowed.txt.\n",
+    }) as { status: string; reason: string };
+    expect(verdict.status).toBe("not-run");
+    expect(verdict.reason).toContain("the client never attempted the allowed read after the denial");
+    // And with no transcript at all the arm keeps its measured reading: nothing says the client asked.
+    expect((verdictFor([{ decision: "denied", mentionsAllowed: false }]) as { status: string }).status).toBe("not-run");
+  });
 });
 
 describe("exitDescription — the one renderer of a process exit in the evidence", () => {
@@ -352,4 +388,76 @@ describe("exitDescription — the one renderer of a process exit in the evidence
     expect(exitDescription({ status: null, signal: null })).toBe("exit unknown");
     expect(exitDescription({})).toBe("exit unknown");
   });
+});
+
+describe("runClient — a fixture that cannot be built", () => {
+  it(
+    "redacts the interpreter, the repository, the fixtures directory and the home out of the reason",
+    () => {
+      // `createFixture`'s failure is `execFileSync`'s own message — `Command failed:
+      // <process.execPath> <repoRoot>/dist/cli.js init …` plus the CLI's output naming the same
+      // paths — and it reached the H1 row reason (`scripts/qa/run.mjs`) with no redaction: the
+      // class of leak c4f74a7 closed for the plugins lane. A repository with no `dist/cli.js` is
+      // the one build failure that can be produced on demand, and the row must still be `failed`:
+      // an unbuilt fixture is never a pass.
+      const unbuilt = mkdtempSync(join(tmpdir(), "stamity-qa-hookruns-unbuilt-repo-"));
+      temps.push(unbuilt);
+      const fixtures = mkdtempSync(join(tmpdir(), "stamity-qa-hookruns-fixtures-"));
+      temps.push(fixtures);
+
+      const row = runClient({
+        client: "claude",
+        repoRoot: unbuilt,
+        fixturesDir: fixtures,
+        runners: { claude: { binary: "stamity-qa-hookruns-never-probed", args: ["-p", "x"] } },
+      }) as { status: string; reason: string };
+
+      expect(row.status).toBe("failed");
+      expect(row.reason).toContain("the fixture could not be built: ");
+      expect(row.reason).toContain("<node> <repo>");
+      expect(row.reason).toContain("init -y --tools claude");
+      expect(row.reason).not.toContain(process.execPath);
+      expect(row.reason).not.toContain(unbuilt);
+      expect(row.reason).not.toContain(fixtures);
+      expect(row.reason).not.toContain(homedir());
+      expect(row.reason).not.toMatch(/\/var\/folders\/|\/private\/|\/Users\/|\/tmp\//);
+    },
+    30_000,
+  );
+});
+
+describe("runClient — the recorded command line", () => {
+  it.skipIf(WINDOWS)(
+    "carries the runner's environment grant ahead of the binary, so the row reads as it ran",
+    () => {
+      // H1d's evidence line read `copilot -p … --allow-all-tools`, as if the flag alone had
+      // passed, while the run also set `COPILOT_ALLOW_ALL=true` — the variable the runner's own
+      // note measured as the difference between no observation and seven. A synthetic runner of
+      // the same shape (args plus env) drives a throwaway binary; the real repoRoot is needed
+      // because `createFixture` shells out to this checkout's built `dist/cli.js`, as the argless
+      // case above already depends on.
+      pathDirWith("stamity-qa-hookruns-env-binary", { echo: "fixture-4.0.0" });
+      const repoRoot = join(import.meta.dirname, "../..");
+      const fixtures = mkdtempSync(join(tmpdir(), "stamity-qa-hookruns-fixtures-"));
+      temps.push(fixtures);
+
+      const row = runClient({
+        client: "copilot",
+        repoRoot,
+        fixturesDir: fixtures,
+        runners: {
+          copilot: {
+            binary: "stamity-qa-hookruns-env-binary",
+            args: ["-p", "x", "--allow-all-tools"],
+            env: { COPILOT_ALLOW_ALL: "true" },
+          },
+        },
+      }) as { command: string; status: string };
+
+      expect(row.command).toBe("COPILOT_ALLOW_ALL=true stamity-qa-hookruns-env-binary -p x --allow-all-tools");
+      // The fake prints its version line and no tool call, so the verdict is the third arm's.
+      expect(row.status).toBe("not-run");
+    },
+    30_000,
+  );
 });

@@ -68,6 +68,9 @@ import * as cursorContainer from './plugins/clients/cursor.mjs'
 // `.exe`/`.com` and nothing else, so an npm `.cmd` shim reads as an absent binary. Imported rather
 // than restated, because a second copy of a sentence is a pin that drifts.
 import { exitDescription, WINDOWS_PROBE_LIMIT } from './qa/hook-runs.mjs'
+// The one sweep this script's reasons, the plugins lane's row reasons and the hooks lane's fixture
+// failure all go through — see that module's header for why it is not this file's.
+import { redactPaths, spellingsOf } from './qa/redact.mjs'
 
 const SELF = fileURLToPath(import.meta.url)
 const ROOT = resolve(SELF, '..', '..')
@@ -602,40 +605,22 @@ function allowlistedEnv(scratch) {
 }
 
 /**
- * Every user home a line could name, swept in one pass: POSIX, macOS and the Windows spelling.
+ * The redactor one client's legs use: its own dist, scratch, binary and home, then the sweep.
  *
- * Exported because two files need the SAME sweep — this script's own reasons and the QA lane's row
- * reasons (`scripts/qa/plugin-runs.mjs`), which quote this script's output. A second copy of the
- * pattern is a pin that drifts, and the thing it guards is an absolute path reaching a committed
- * evidence file.
+ * Each directory is paired under BOTH its spellings (`spellingsOf`): on macOS `os.tmpdir()` is
+ * `/var/folders/…/T` while a child's `process.cwd()` under it — a scratch repository, as the client
+ * prints it — reports `/private/var/folders/…/T`, and a pair that matched only the given spelling
+ * left the resolved one in a reason.
  */
-const HOME_PATHS = /(?:\/Users|\/home|\/root)\/[^/\s"']+|[A-Za-z]:\\Users\\[^\\/\s"']+/g
-
-/**
- * `text` with the paths that must never reach a printed line or a committed evidence file removed.
- *
- * `replacements` are the run's own known locations, replaced by their LOGICAL label first, so a
- * reader still learns which tree a line is about; the sweep then takes any home this run did not
- * know it would see (a second checkout, another account, a runner's).
- */
-export function redactPaths(text, replacements = []) {
-  let out = String(text ?? '')
-  for (const [from, to] of replacements) {
-    if (typeof from === 'string' && from.length > 0) out = out.replaceAll(from, to)
-  }
-  return out.replaceAll(HOME_PATHS, '<home>')
-}
-
-/** The redactor one client's legs use: its own dist, scratch, binary and home, then the sweep. */
 function redactor(context) {
   const pairs = [
-    [context.dist, '<dist>'],
-    [context.scratch, '<scratch>'],
+    ...spellingsOf(context.dist, '<dist>'),
+    ...spellingsOf(context.scratch, '<scratch>'),
     // The binary's own path: a spawn failure's message carries it verbatim
     // (`spawnSync /Users/…/.local/bin/claude ENOENT`), and what a reader needs is which client
     // could not be run, not where it was installed.
     [context.binary, `<${context.display}>`],
-    [homedir(), '<home>'],
+    ...spellingsOf(homedir(), '<home>'),
   ]
   return (text) => redactPaths(text, pairs)
 }
@@ -702,17 +687,9 @@ function probeVersion(binary) {
   return line === '' ? null : line
 }
 
-/** A leg result. `PASS`, `FAIL` or `SKIPPED`, one reason, and the call it came from where there was one. */
-function leg(name, status, reason, made = null) {
-  return {
-    leg: name,
-    status,
-    reason,
-    command: made?.command ?? null,
-    exitCode: made?.status ?? null,
-    binaryVersion: made?.binaryVersion ?? null,
-    transcriptSha256: made?.transcriptSha256 ?? null,
-  }
+/** A leg result with no client call behind it: `PASS`, `FAIL` or `SKIPPED` and one reason. `legFrom` carries a call. */
+function leg(name, status, reason) {
+  return { leg: name, status, reason, command: null, exitCode: null, binaryVersion: null, transcriptSha256: null }
 }
 
 /** The same, carrying the call's own command, exit and transcript hash. */
@@ -779,7 +756,14 @@ const BLOCKERS = [
     // A login, a quota or a rate limit. FIRST, because a client that never reached its model also
     // prints the words the refusal pattern looks for — the codex leg on 2026-09-20 hit a usage
     // limit and would otherwise have been recorded as a sandbox refusal.
-    pattern: /usage limit|rate limit|quota|no authentication information|authentication required|please run .*login|not authorized|\b401\b/i,
+    // A token counter is not a status: a Claude `stream-json --verbose` transcript carries
+    // `"input_tokens":N` and `codex exec` prints token totals, and `\b401\b` read a count of
+    // exactly 401 as a login failure — which turned an invocation with no manifest into SKIPPED
+    // and, because discovery consults this list first, a good listing into SKIPPED as well. So
+    // `401` is anchored to the spellings a client prints for a status (`HTTP 401`, `status 401`,
+    // `"status":401`, `401 Unauthorized`), and `quota` needs the word that makes it a limit.
+    pattern:
+      /usage limit|rate limit|quota (?:exceeded|reached|limit)|no authentication information|authentication required|please run .*login|not authorized|HTTP(?:\/[\d.]+)? 401\b|\bstatus"?\s*[:=]?\s*401\b|\b401 Unauthorized\b/i,
   },
   {
     label: 'the client refused to run what it was asked to run',
@@ -1000,7 +984,24 @@ async function cursorLegs(context) {
     cwd: repo,
     env: process.env,
   })
-  return [install, discovery, invocationLeg(context, run, repo, 'the real home')]
+  return [
+    install,
+    discovery,
+    invocationLeg(
+      context,
+      run,
+      repo,
+      // The grant, stated as the copilot and codex legs state theirs: this reason is the H4b row's
+      // reason verbatim (`scripts/qa/plugin-runs.mjs`), and a row that names the login and not the
+      // grant under-reports what the run was allowed to do.
+      'the real home (the login lives there), run with --trust --force because the setup command runs ' +
+        "shell commands and a headless run cannot be prompted — --force is this client's documented " +
+        '"Force allow commands unless explicitly denied" and -p "has access to all tools, including ' +
+        'write and shell" (agent --help, read 2026-09-20 on 2026.09.15-d2fe57e and 2026-09-22 on ' +
+        '2026.09.18-9a7762b), so the grant is every command the model composes, confined by nothing ' +
+        'but the scratch repository the run is made in',
+    ),
+  ]
 }
 
 /**
@@ -1822,10 +1823,13 @@ export async function main(argv) {
   const scratch = ownScratch ? mkdtempSync(join(tmpdir(), 'stamity-plugin-route-')) : resolve(options.scratch)
   mkdirSync(scratch, { recursive: true })
 
-  // `dist` is the caller's own argument: this document is a scratch artifact a harness or a CI job
-  // reads, never a committed one. What IS committed downstream is `sha256s`, whose labels are
-  // logical (`dist/<client>/…`) for the reason `scripts/qa/run.mjs` states at `repoRelativeLabel`.
-  const report = { dist, sha256s: { 'scripts/plugin-route-smoke.mjs': sha256(readFileSync(SELF)) }, clients: {} }
+  // `dist` under the same placeholder every reason uses, never the caller's absolute path. This
+  // document is not committed, but it is the nightly's artifact for its retention window, and a
+  // path in it is a runner's or an operator's home; the caller knows its own argument, and the key
+  // stays where a reader of the document expects it. What IS committed downstream is `sha256s`,
+  // whose labels are logical (`dist/<client>/…`) for the reason `scripts/qa/run.mjs` states at
+  // `repoRelativeLabel`.
+  const report = { dist: '<dist>', sha256s: { 'scripts/plugin-route-smoke.mjs': sha256(readFileSync(SELF)) }, clients: {} }
   let failed = 0
 
   try {

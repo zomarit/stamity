@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -480,5 +480,80 @@ describe("runLifecycleWalk — what it refuses before it spawns anything", () =>
     expect(entry).toContain(join("node_modules", "vitest"));
     expect(existsSync(entry as string)).toBe(true);
     expect(vitestEntry(mkdtempSync(join(tmpdir(), "stamity-qa-no-vitest-")))).toBeNull();
+  });
+});
+
+/**
+ * The one sweep the smoke's reasons, this lane's row reasons and the hooks lane's build failure
+ * all go through (`scripts/qa/redact.mjs`), on the spelling it used to miss. `os.tmpdir()` is
+ * `/var/folders/…/T` on macOS while a child's `process.cwd()` under it — and `realpathSync`, which
+ * `test/ci/pluginLifecycle.test.ts` applies to its own root — spell it `/private/var/folders/…/T`;
+ * `/tmp` is `/private/tmp` the same way. No pair matched the resolved spelling and the home sweep
+ * stops at `/Users`, so a failed fixture build's `--out` under the resolved root reached the H5
+ * not-run reason through `runLifecycleWalk` — and `test/ci/pluginRoute.test.ts` already counts
+ * `/private/` as a leak signature.
+ */
+describe("redactPaths and spellingsOf — the resolved spelling of a temp path", () => {
+  it("sweeps the /private spelling of the temp roots even when no pair names them", async () => {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { redactPaths } = await import("../../scripts/qa/redact.mjs");
+    const out = redactPaths(
+      "the fixture build exited 1: --out /private/var/folders/x/y/T/stamity-plugin-lifecycle-abc/out and /private/tmp/other",
+      [],
+    ) as string;
+    expect(out).toBe("the fixture build exited 1: --out <tmp>/stamity-plugin-lifecycle-abc/out and <tmp>/other");
+    expect(out).not.toContain("/private/");
+    // Not a prefix match: a directory that merely starts with the same letters is left alone.
+    expect(redactPaths("/private/tmpfiles/x", [])).toBe("/private/tmpfiles/x");
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "pairs the resolved spelling with the given one, resolved first, so a linked root is replaced whichever way a child spelled it",
+    async () => {
+      // A symlink stands for the macOS layout on every POSIX host: the given spelling and the
+      // resolved one differ, and both have to map to the label. Resolved FIRST, because the
+      // resolved form can contain the given one as a suffix (`/private` + `/var/…`), and a pair
+      // applied in the other order leaves `/private<tmp>` behind.
+      // @ts-expect-error — native ESM contributor tool, outside the product package.
+      const { redactPaths, spellingsOf } = await import("../../scripts/qa/redact.mjs");
+      const real = mkdtempSync(join(tmpdir(), "stamity-qa-redact-real-"));
+      temps.push(real);
+      const holder = mkdtempSync(join(tmpdir(), "stamity-qa-redact-link-"));
+      temps.push(holder);
+      const link = join(holder, "link");
+      symlinkSync(real, link);
+      const resolved = realpathSync(real);
+
+      const pairs = spellingsOf(link, "<scratch>") as [string, string][];
+      expect(pairs).toEqual([
+        [resolved, "<scratch>"],
+        [link, "<scratch>"],
+      ]);
+      expect(redactPaths(`wrote ${resolved}/walks.txt and ${link}/walks.txt`, pairs)).toBe(
+        "wrote <scratch>/walks.txt and <scratch>/walks.txt",
+      );
+      // A path that does not exist has one spelling, and a blank one none — the callers hand an
+      // undefined scratch directory through this rather than branching around it.
+      expect(spellingsOf(join(holder, "absent"), "<x>")).toEqual([[join(holder, "absent"), "<x>"]]);
+      expect(spellingsOf("", "<x>")).toEqual([]);
+      expect(spellingsOf(undefined, "<x>")).toEqual([]);
+    },
+  );
+
+  it("replaces the resolved spelling of the dist in a not-run reason as well as the given one", () => {
+    // The caller-side half: `notRunReason`'s pairs are built from the given spellings, and on
+    // macOS a `--dist` under `os.tmpdir()` is named by the smoke's child in the resolved form.
+    const holder = mkdtempSync(join(tmpdir(), "stamity-qa-plugin-runs-dist-"));
+    temps.push(holder);
+    const dist = join(holder, "dist");
+    mkdirSync(dist);
+    const resolved = realpathSync(dist);
+    const reason = notRunReason(
+      { stdout: "", stderr: `could not read ${resolved}/release.json`, exit: "exit 2" },
+      { distDir: dist, scratchDir: undefined, repoRoot: REPO_ROOT },
+    ) as string;
+    expect(reason).toContain("could not read dist/release.json");
+    expect(reason).not.toContain(resolved);
+    expect(reason).not.toMatch(/\/private\//);
   });
 });

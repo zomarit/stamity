@@ -26,7 +26,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 // The SAME sweep the smoke applies to its own reasons: this module quotes the smoke's stderr and its
 // last stdout line into a row reason, and a row reason lands in a committed evidence file.
-import { redactPaths } from '../plugin-route-smoke.mjs'
+import { redactPaths, spellingsOf } from './redact.mjs'
 
 /** The smoke is a four-client, `--invoke` run: model calls, installs, uninstalls. */
 const SMOKE_TIMEOUT_MS = 1_800_000
@@ -143,12 +143,14 @@ export async function runPluginClients({ clients, repoRoot, distDir, scratchDir 
  * Exported so the suite can hand it a spawn failure — one cannot be produced from a real spawn.
  */
 export function notRunReason(result, { distDir, scratchDir, repoRoot }) {
+  // Each directory under BOTH its spellings (`spellingsOf`): on macOS the smoke's child names a
+  // `--dist` under `os.tmpdir()` in the resolved `/private/var/…` form.
   const pairs = [
-    [distDir, 'dist'],
-    ...(scratchDir === undefined ? [] : [[scratchDir, '<scratch>']]),
-    [repoRoot, '<repo>'],
+    ...spellingsOf(distDir, 'dist'),
+    ...spellingsOf(scratchDir, '<scratch>'),
+    ...spellingsOf(repoRoot, '<repo>'),
     [process.execPath, '<node>'],
-    [homedir(), '<home>'],
+    ...spellingsOf(homedir(), '<home>'),
   ]
   const detail = redactPaths(
     `${result.stdout.trim().split('\n').at(-1) ?? ''} ${result.stderr.trim().slice(-400)}`.trim(),
@@ -384,16 +386,20 @@ export async function runLifecycleWalk({ clients, repoRoot, distDir }) {
       env: childEnv,
     })
     const log = existsSync(logPath) ? readFileSync(logPath, 'utf8') : ''
+    // Each directory under BOTH its spellings: the suite realpath's its own root
+    // (`test/ci/pluginLifecycle.test.ts`), so a failed fixture build's `--out` reaches the thrown
+    // message — and this reason — as `/private/var/…` on macOS, which no pair built from
+    // `os.tmpdir()`'s own spelling matched.
     const redact = (text) =>
       redactPaths(text, [
-        [distDir, 'dist'],
-        [work, '<scratch>'],
-        [repoRoot, '<repo>'],
-        [tmpdir(), '<tmp>'],
+        ...spellingsOf(distDir, 'dist'),
+        ...spellingsOf(work, '<scratch>'),
+        ...spellingsOf(repoRoot, '<repo>'),
+        ...spellingsOf(tmpdir(), '<tmp>'),
         // the interpreter, because a spawn failure quotes Node's own message with it (prove/214),
         [process.execPath, '<node>'],
         // and nothing else: every path a vitest line can quote is under one of these six.
-        [homedir(), '<home>'],
+        ...spellingsOf(homedir(), '<home>'),
       ])
     if (log === '') {
       const detail = redact(`${result.stdout.trim().split('\n').at(-1) ?? ''} ${result.stderr.trim().slice(-400)}`.trim())

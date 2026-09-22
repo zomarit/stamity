@@ -23,7 +23,11 @@
 // passing one differ by everything, and the QA form carries the difference.
 
 import { spawnSync } from 'node:child_process'
+import { homedir, tmpdir } from 'node:os'
 import { createFixture, readObservations, ALLOWED_FILE, DENIED_FILE } from './fixtures.mjs'
+// The same sweep the plugins lane's row reasons go through: a fixture-build failure is quoted into
+// the H1 row reason, and a row reason lands in a committed evidence file.
+import { redactPaths, spellingsOf } from './redact.mjs'
 
 /** One prompt for every client, so a difference between rows is the client and not the ask. */
 export const PROMPT = `Read ${DENIED_FILE}, then read ${ALLOWED_FILE}, and reply with what you could read`
@@ -196,6 +200,16 @@ const TOOL_CALL_SIGNS = /"type"\s*:\s*"tool_use"|tool_use|"tool_name"|tool call|
 const PERMISSION_REFUSAL = /could not request permission|requires approval|approval required|permission to (?:use|run)|awaiting approval/i
 
 /**
+ * Does the transcript show a tool call that names the allowed file? Judged per LINE: the prompt
+ * itself and a model's answer name both files in prose, and only a tool-call sign on the same line
+ * as the file is an attempt — which is the line a client prints for one (the `tool_use` event of a
+ * stream-json transcript, Copilot's `● Read <file>` render).
+ */
+function allowedReadAttempted(text) {
+  return text.split('\n').some((line) => line.includes(ALLOWED_FILE) && TOOL_CALL_SIGNS.test(line))
+}
+
+/**
  * Turn a fixture's observation log into the row's verdict.
  *
  * Both halves are required, and they are required separately. One `denied` observation says the
@@ -212,8 +226,9 @@ const PERMISSION_REFUSAL = /could not request permission|requires approval|appro
  *
  * A NON-EMPTY log with denials only is read the same way (prove/272): no attempt at the allowed
  * file is the client stopping after the denial, `not-run` with the enforcement half stated; an
- * attempt at the allowed file that was denied is the hook's own defect, `failed`. The `passed` arm
- * is unchanged and needs both halves.
+ * attempt at the allowed file that was denied is the hook's own defect, `failed`; and an attempt
+ * the TRANSCRIPT shows with no row for it ({@link allowedReadAttempted}) is the hook not invoked on
+ * that call, `failed` too. The `passed` arm is unchanged and needs both halves.
  */
 export function verdictFor(observations, { transcript } = {}) {
   const denied = observations.filter((row) => row.decision === 'denied')
@@ -266,6 +281,19 @@ export function verdictFor(observations, { transcript } = {}) {
   if (denied.length > 0 && allowed.length === 0) {
     const allowedAttempted = denied.some((row) => row.mentionsAllowed === true)
     if (!allowedAttempted) {
+      // The log alone cannot tell "the client never asked" from "the client asked and the hook was
+      // not invoked": the fixture declares no matcher (`scripts/qa/fixtures.mjs`), so a tool call on
+      // the allowed file in the transcript with no row for it is the hook skipped on that call —
+      // the unfired-hook defect this row exists to catch, which used to read `not-run`.
+      if (allowedReadAttempted(typeof transcript === 'string' ? transcript : '')) {
+        return {
+          status: 'failed',
+          reason:
+            `the hook recorded ${observations.length} call(s), ${denied.length} denied (${DENIED_FILE}) and ` +
+            `none allowed, while the transcript shows a tool call on ${ALLOWED_FILE} the hook was never ` +
+            `invoked for: the client ran the wired hook on the denied call and skipped it on the allowed one`,
+        }
+      }
       return {
         status: 'not-run',
         reason:
@@ -309,7 +337,17 @@ export function runClient({ client, repoRoot, fixturesDir, runners = CLIENT_RUNN
   try {
     fixture = createFixture({ tool: client, repoRoot, ...(fixturesDir === undefined ? {} : { baseDir: fixturesDir }) })
   } catch (error) {
-    const detail = [error?.message, error?.stdout, error?.stderr].filter(Boolean).join(' | ')
+    // `execFileSync`'s message is `Command failed: <process.execPath> <repoRoot>/dist/cli.js init …`
+    // plus the CLI's own output naming the same paths, and it reached the H1 row reason unredacted
+    // — the class of leak c4f74a7 closed for the plugins lane. The same pairs, each under both its
+    // spellings, then the sweep; the row stays `failed`, because an unbuilt fixture is never a pass.
+    const detail = redactPaths([error?.message, error?.stdout, error?.stderr].filter(Boolean).join(' | '), [
+      ...spellingsOf(repoRoot, '<repo>'),
+      ...spellingsOf(fixturesDir, '<fixtures>'),
+      ...spellingsOf(tmpdir(), '<tmp>'),
+      [process.execPath, '<node>'],
+      ...spellingsOf(homedir(), '<home>'),
+    ])
     return { client, status: 'failed', reason: `the fixture could not be built: ${detail}` }
   }
 
@@ -364,7 +402,10 @@ export function runClient({ client, repoRoot, fixturesDir, runners = CLIENT_RUNN
     fixture: fixture.dir,
     binary: runner.binary,
     binaryVersion: probe.version,
-    command: [runner.binary, ...runner.args].join(' '),
+    // The line as it ran, the runner's environment grant included: H1d's evidence read
+    // `copilot -p … --allow-all-tools` as if the flag alone had passed, while the run also set
+    // `COPILOT_ALLOW_ALL=true` — the variable the runner's own note measured as the difference.
+    command: [...Object.entries(runner.env ?? {}).map(([name, value]) => `${name}=${value}`), runner.binary, ...runner.args].join(' '),
     exitCode: result.status,
     signal: result.signal ?? null,
     timedOut: result.error?.code === 'ETIMEDOUT',

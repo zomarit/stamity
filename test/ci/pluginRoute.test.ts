@@ -376,6 +376,26 @@ describe("blockerFor — which transcripts mean 'nothing was measured'", () => {
     expect(blockerFor("EPERM: operation not permitted, mkdir")).toBeNull();
     expect(blockerFor("plugin setup wrote 12 files")).toBeNull();
   });
+
+  it("reads a token counter of exactly 401 as no blocker, and a 401 status as one", async () => {
+    // The first pattern matched `\b401\b` and a bare `quota` against the whole transcript. A Claude
+    // `stream-json --verbose` transcript carries `"input_tokens":N` counters and `codex exec`
+    // prints token totals, so a count of exactly 401 turned an invocation with no manifest into
+    // SKIPPED ("the client never reached its model (401)") — and, because discovery consults the
+    // blockers first, a good listing into SKIPPED as well. The status spellings a client prints
+    // are anchored instead, and `quota` needs the word that makes it a limit.
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { blockerFor } = await import("../../scripts/plugin-route-smoke.mjs");
+
+    expect(blockerFor('{"type":"result","usage":{"input_tokens":401,"output_tokens":12}}')).toBeNull();
+    expect(blockerFor("tokens used: 401")).toBeNull();
+    expect(blockerFor("the quota field is unset")).toBeNull();
+    expect(blockerFor("HTTP 401: bad credentials")?.match).toBe("HTTP 401");
+    expect(blockerFor("request failed with status 401")?.label).toBe("the client never reached its model");
+    expect(blockerFor('{"error":{"status":401,"message":"…"}}')?.label).toBe("the client never reached its model");
+    expect(blockerFor("401 Unauthorized")?.label).toBe("the client never reached its model");
+    expect(blockerFor("Quota exceeded for this account")?.label).toBe("the client never reached its model");
+  });
 });
 
 /**
@@ -483,6 +503,19 @@ describe("discoveryFromTranscript — a listing that never reached its model is 
     ) as Leg;
     expect(leg.status).toBe("FAIL");
     expect(leg.reason).toContain("st-work never appeared");
+  });
+
+  it("does not read a token counter of exactly 401 in a good listing as the model never reached", async () => {
+    // The blocker-first order is right and stays; what it must not be handed is a pattern that
+    // matches a number. A listing that named the marker and reported 401 input tokens is a PASS.
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { discoveryFromTranscript } = await import("../../scripts/plugin-route-smoke.mjs");
+    const leg = discoveryFromTranscript(
+      context,
+      madeCall({ status: 0, transcript: '/st-work\n{"type":"result","usage":{"input_tokens":401}}' }),
+      "a listing run",
+    ) as Leg;
+    expect(leg.status, leg.reason).toBe("PASS");
   });
 });
 
@@ -660,6 +693,53 @@ exit 1
   );
 });
 
+describe.skipIf(process.platform === "win32")("the cursor invocation leg against a fake client that ran the setup", () => {
+  it(
+    "names the grant the run was made under, as the copilot and codex legs do",
+    () => {
+      // The leg runs `--trust --force` under the operator's real login: `--force` is "Force allow
+      // commands unless explicitly denied" and `-p` "has access to all tools, including write and
+      // shell" (`agent --help`, 2026.09.15-d2fe57e and 2026.09.18-9a7762b), confined by nothing
+      // but the scratch working directory. The H4b row reason is this leg's reason verbatim
+      // (`scripts/qa/plugin-runs.mjs`), and it said `the real home` and nothing of the grant while
+      // the copilot and codex legs state theirs. The fake answers the listing with the markers and,
+      // on the `--force` run, writes the manifest the leg reads — so the PASS proves the grant
+      // reached the client, and the reason has to say what it was.
+      const dir = tempDir("fake-agent-setup");
+      const bin = join(dir, "fake-agent");
+      writeFileSync(
+        bin,
+        `#!/bin/sh
+case "$1" in
+  --version) echo "fake agent 0.0.1"; exit 0 ;;
+esac
+case " $* " in
+  *" --force "*) mkdir -p .stamity; printf '{"plugin":{"mode":"plugin-backed","clients":{"cursor":{}}}}\\n' > .stamity/manifest.json; echo "ran st-setup"; exit 0 ;;
+esac
+printf '/st-work\\n/stamity-reviewer\\n/st-qa\\n'
+exit 0
+`,
+      );
+      chmodSync(bin, 0o755);
+      const { run, report } = smokeWithJson(
+        ["--dist", dist, "--client", "cursor", "--invoke", "--bin-cursor", bin, "--scratch", tempDir("scratch")],
+        disarmed(),
+      );
+      expect(run.status, `${run.stdout}\n${run.stderr}`).toBe(0);
+      const invocation = legOf(report, "cursor", "invocation");
+      expect(invocation.status, invocation.reason).toBe("PASS");
+      expect(invocation.reason).toContain("run with --trust --force");
+      expect(invocation.reason).toContain("Force allow commands unless explicitly denied");
+      expect(invocation.command).toContain("--trust --force");
+      // No reason of any leg carries a temp or home path into the evidence (the prove/278 rule).
+      for (const entry of report.clients["cursor"]?.legs ?? []) {
+        expect(entry.reason, `${entry.leg}: ${entry.reason}`).not.toMatch(/\/var\/folders\/|\/private\/|\/Users\/|\/tmp\//);
+      }
+    },
+    ARMED_MS,
+  );
+});
+
 describe("the codex invocation leg's sandbox grant", () => {
   // prove/274: `codex exec`'s default sandbox is read-only and the setup writes, so the leg
   // refused with "EPERM: operation not permitted, mkdir '<repo>/.stamity'". `codex exec --help`
@@ -719,6 +799,10 @@ describe("the --json document — written by the nightly drive and kept as its a
   it("carries the dist, the row-hash inputs under logical labels, and every leg's fields", () => {
     const { report } = smokeWithJson(["--dist", dist, "--client", "claude,codex"]);
 
+    // The dist under the same placeholder every reason uses, never the caller's absolute path:
+    // this document is the nightly's artifact, kept for its retention window, and the caller
+    // already knows what it passed.
+    expect(report.dist).toBe("<dist>");
     expect(Object.keys(report.clients).toSorted()).toEqual(["claude", "codex"]);
     expect(report.clients["claude"]?.legs.map((leg) => leg.leg)).toEqual([
       "structure",

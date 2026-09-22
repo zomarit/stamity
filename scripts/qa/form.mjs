@@ -155,9 +155,6 @@ export const QA_ROWS = [
   },
 ]
 
-/** Row id -> catalogue entry, so a renderer never has to scan the list. */
-const BY_ID = new Map(QA_ROWS.map((row) => [row.id, row]))
-
 /** Markdown table cells are pipe-delimited, so a reason carrying one has to escape it. */
 function cell(text) {
   return String(text ?? '').replaceAll('|', '\\|').replaceAll('\n', ' ')
@@ -256,11 +253,6 @@ export function renderForm(evidence) {
       'above and `scripts/qa/bind.mjs` reopens that row on the next run.',
   )
   return `${lines.join('\n')}\n`
-}
-
-/** Catalogue lookup, exported so `run.mjs` builds its rows from the same nine entries. */
-export function rowDefinition(id) {
-  return BY_ID.get(id)
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
