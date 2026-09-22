@@ -91,8 +91,15 @@ describe("CLIENT_RUNNERS — cursor and copilot drive the invocations that were 
     // a headless run without it answers the read with "Permission denied and could not request
     // permission from user" and never consults the hook, so the row would read `failed` as though the
     // wiring were wrong. The hook still decides what happens to the call it is handed.
+    //
+    // TEST CHANGE, justified (2026-09-22, prove/209): `-s` LEFT the args. It prints the model's
+    // answer alone, so the transcript never showed a tool call and `verdictFor`'s third arm read an
+    // unfired hook as `not-run` — the row could never say `failed` for this client. Measured on
+    // 1.0.86: without `-s` each tool call is a `● Read <file>` line on stdout and the stats go to
+    // stderr, which is the visible tool call the verdict needs.
     expect(CLIENT_RUNNERS.copilot.binary).toBe("copilot");
-    expect(CLIENT_RUNNERS.copilot.args).toEqual(["-p", PROMPT, "-s", "--allow-all-tools"]);
+    expect(CLIENT_RUNNERS.copilot.args).toEqual(["-p", PROMPT, "--allow-all-tools"]);
+    expect(CLIENT_RUNNERS.copilot.args, "-s hides the tool calls the verdict reads").not.toContain("-s");
     expect(CLIENT_RUNNERS.copilot.notRun).toBeUndefined();
     // codex's measured reason is untouched: `exec` on 0.154.0 loads no project hook layer at all.
     expect(CLIENT_RUNNERS.codex.binary).toBeNull();
@@ -259,6 +266,22 @@ describe("verdictFor — what an empty observation log means", () => {
     }) as { status: string; reason: string };
     expect(verdict.status).toBe("failed");
     expect(verdict.reason).toContain("a tool call was attempted");
+  });
+
+  it("fails on no observation when the transcript is Copilot's text render of a tool call", () => {
+    // The Copilot CLI's text mode (no `-s`) prints one `● <Tool> <argument>` line per tool call, with
+    // the result indented under it — the exact bytes measured 2026-09-22 on 1.0.86 with this
+    // module's prompt in a scratch cwd. Two reads and no observation is the unfired hook this row
+    // exists to catch; before the sign was read, the same transcript was `not-run`.
+    const verdict = verdictFor([], {
+      transcript:
+        "● Read qa-denied.txt\n  └ 1 line read\n\n● Read qa-allowed.txt\n  └ 1 line read\n\n" +
+        "I could read:\n\n- `qa-denied.txt`: `denied contents`\n- `qa-allowed.txt`: `allowed contents`\n",
+    }) as { status: string; reason: string };
+    expect(verdict.status).toBe("failed");
+    expect(verdict.reason).toContain("a tool call was attempted");
+    // The bullet counts only at a line start: a model's answer that mentions one mid-line is prose.
+    expect((verdictFor([], { transcript: "the marker ● Read is what the client prints" }) as { status: string }).status).toBe("not-run");
   });
 
   it("is not-run when the client's own permission layer refused before the hook was consulted", () => {

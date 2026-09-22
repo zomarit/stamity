@@ -62,11 +62,17 @@ const RUN_TIMEOUT_MS = 300_000
  *   `test/ci/pluginPackages.cursor.test.ts:600-680` drives the same pair through to a model answer.
  *   The vendor reference is cursor.com/docs/cli/reference.
  *
- *   copilot — `-p <text>` is the documented non-interactive lane and `-s` silences the run's stats
- *   so the transcript is the model's answer alone (`copilot --help` on GitHub Copilot CLI 1.0.85,
- *   read 2026-09-20, lists `-p, --prompt <text>`, `-s, --silent` and `--allow-all-tools`; the same
- *   pair is driven by `test/ci/pluginPackages.copilot.test.ts`). The vendor reference is
- *   docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference.
+ *   copilot — `-p <text>` is the documented non-interactive lane (`copilot --help` on GitHub
+ *   Copilot CLI 1.0.85, read 2026-09-20, lists `-p, --prompt <text>`, `-s, --silent` and
+ *   `--allow-all-tools`). `-s` is deliberately NOT passed, and it was until 2026-09-22: it prints
+ *   "only the agent response", which is the model's answer alone — and `verdictFor`'s third arm
+ *   reads a transcript with no tool call in it as `not-run`, so an unfired hook under this client
+ *   could never read `failed`. Measured 2026-09-22 on 1.0.86 in a scratch cwd with two files and
+ *   this module's prompt: with `-s` stdout was the 92-byte answer and nothing else; without it
+ *   stdout carried one `● Read <file>` line per tool call (`└ 1 line read` under each) ahead of the
+ *   same answer, and the run's stats (credits, tokens, resume id) went to stderr. That bullet
+ *   render is the tool-call sign {@link TOOL_CALL_SIGNS} reads for this client. The vendor
+ *   reference is docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference.
  *
  *   `--allow-all-tools` rides with them, and it is the difference between measuring this engine's
  *   emission and measuring the client's permission prompt. Measured 2026-09-20 on 1.0.85: a headless
@@ -100,7 +106,7 @@ export const CLIENT_RUNNERS = {
   },
   copilot: {
     binary: 'copilot',
-    args: ['-p', PROMPT, '-s', '--allow-all-tools'],
+    args: ['-p', PROMPT, '--allow-all-tools'],
   },
 }
 
@@ -161,8 +167,12 @@ export function exitDescription(probe) {
  * `failed` row about the emission's effect. A client that never called a tool at all — because its
  * own permission layer refused first, or because it answered from the prompt — measured nothing
  * about the hook, and reporting that as `failed` blames this engine for the client's behaviour.
+ *
+ * The last alternative is the Copilot CLI's text render: one `● <Tool> <argument>` line per tool
+ * call at the start of a line (measured 2026-09-22 on 1.0.86 without `-s` — see the runner note).
+ * Anchored at a line start, which is where the client prints it; a model's own lists use `-`.
  */
-const TOOL_CALL_SIGNS = /"type"\s*:\s*"tool_use"|tool_use|"tool_name"|tool call|Read\(|shell\(|str_replace/i
+const TOOL_CALL_SIGNS = /"type"\s*:\s*"tool_use"|tool_use|"tool_name"|tool call|Read\(|shell\(|str_replace|^● \S+/im
 
 /**
  * The CLIENT's own permission prompt, and deliberately not `permission denied` or
