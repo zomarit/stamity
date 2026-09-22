@@ -402,7 +402,12 @@ async function checkEnvMcp(
  *
  * Fails only where every condition holds: `win32`, Claude targeted, its hooks
  * emitted by this engine rather than carried by a plugin (a plugin-owned hook
- * set is the plugin's render, not this adapter's), and no `bash.exe` on PATH.
+ * set is the plugin's render, not this adapter's), and no `bash.exe` on PATH
+ * that is Git Bash. WSL ships `%SystemRoot%\System32\bash.exe` (prove/251), a
+ * launcher into a Linux distribution that the client's fallback never uses, so
+ * a `bash.exe` whose directory is the Windows system directory — `System32` or
+ * `Sysnative` under `SystemRoot`, read from the injected environment with the
+ * `C:\Windows` default, compared case-insensitively — does not count.
  * Everywhere else it passes with the note that says which condition released
  * it, so the row reads the same on every host and is never silently absent.
  */
@@ -433,13 +438,25 @@ export function checkClaudeHookShell(
         : "claude is not a target tool, so no anchored hook row is emitted",
     };
   }
+  const systemRoot = (host.env["SystemRoot"] ?? host.env["SYSTEMROOT"] ?? "C:\\Windows")
+    .replaceAll("/", "\\")
+    .replace(/[\\]+$/, "");
+  const systemDirs = new Set(["System32", "Sysnative"].map((name) => `${systemRoot}\\${name}`.toLowerCase()));
+  const wsl: string[] = [];
   for (const entry of (host.env["PATH"] ?? "").split(delimiter)) {
     if (entry === "") continue;
     const candidate = join(entry, "bash.exe");
-    if (existsSync(candidate)) {
-      return { id, status: "pass", detail: `Git Bash found at ${candidate}: the anchored hook commands parse there` };
+    if (!existsSync(candidate)) continue;
+    // The directory as the entry spelled it, separators unified: a PATH entry may say
+    // `C:/Windows/System32` or carry a trailing slash, and both name the system directory.
+    const dir = entry.replaceAll("/", "\\").replace(/[\\]+$/, "").toLowerCase();
+    if (systemDirs.has(dir)) {
+      wsl.push(candidate);
+      continue;
     }
+    return { id, status: "pass", detail: `Git Bash found at ${candidate}: the anchored hook commands parse there` };
   }
+  const wslNote = wsl.length === 0 ? "" : ` (${wsl.join(", ")} is the WSL launcher, not Git Bash, and does not count)`;
   return {
     id,
     status: "fail",
@@ -448,7 +465,7 @@ export function checkClaudeHookShell(
       "does not launch and the client does not block — the client falls back to PowerShell, " +
       "which reads ${CLAUDE_PROJECT_DIR} as its own variable and does not parse the guard's " +
       "fail-closed tail. Install Git for Windows (Git Bash) and put its bash.exe on PATH, then " +
-      "re-run check.",
+      `re-run check.${wslNote}`,
   };
 }
 

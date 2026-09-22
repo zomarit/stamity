@@ -13,8 +13,11 @@
 // no evidence at all: the record that settles the row is the JSONL the hook wrote as the client
 // called it, one line per call, each naming the decision. A run that produces one `denied` line and
 // one `allowed` line proves the client ran the hook, handed it a payload identifying the file, and
-// acted on the exit status. A run that produces no lines proves the client never ran the hook,
-// whatever its answer said — and that is a `failed` row, not an absent one.
+// acted on the exit status. A run that produces no lines is read against the transcript, in three
+// arms (`verdictFor`): a visible tool call with an empty log is `failed` — the client called a tool
+// and never ran the wired hook, whatever its answer said; a refusal from the client's own permission
+// layer is `not-run` with that refusal as the reason; and a transcript with no tool call attempted
+// at all is `not-run`, because nothing about the emitted wiring was measured.
 //
 // A client that is not installed is `not-run` with the reason. Never a pass: an unrun check and a
 // passing one differ by everything, and the QA form carries the difference.
@@ -84,8 +87,10 @@ const RUN_TIMEOUT_MS = 300_000
  *
  * What this does NOT change is the instrument or the posture: both rows are still decided by the
  * hook's own observation log, a client whose binary is absent is still `not-run` with the probe's
- * reason, and a run that produces no observation is a `failed` row rather than an absent one — the
- * clients' own headless behaviour is exactly what these two rows exist to report.
+ * reason, and a run that produces no observation is read by `verdictFor`'s three arms — a visible
+ * tool call beside an empty log is `failed`, a client-side refusal is `not-run` with its reason,
+ * and no tool call attempted is `not-run` — so the clients' own headless behaviour is reported as
+ * what it is, which is exactly what these two rows exist to do.
  */
 export const CLIENT_RUNNERS = {
   claude: {

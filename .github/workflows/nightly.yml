@@ -216,9 +216,11 @@ jobs:
       # directories — never `$HOME/.local/bin`, which the ubuntu image carries on its default
       # PATH and which the Cursor installer writes into.
       #
-      # What that still does not close, stated rather than implied: the Cursor installer is a
-      # vendor script piped to bash, running as the runner user, so it can write wherever that
-      # user can. What the credential steps guarantee is that nothing it wrote is RESOLVED there.
+      # What that still does not close, stated rather than implied: ordering and absolute
+      # addressing guarantee that no vendor-written DIRECTORY is resolved through PATH by a
+      # credential step. The toolcache bin and the captured `node` binary are writable by the
+      # runner user, so a compromised vendor release could still overwrite in place the very file
+      # a credential step later executes; one job per vendor on its own runner is the closure.
       #
       # Lifecycle scripts, checked with `npm view <package> scripts` on 2026-09-22:
       # `@anthropic-ai/claude-code` declares `postinstall: node install.cjs`, which copies the

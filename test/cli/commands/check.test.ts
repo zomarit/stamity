@@ -1396,6 +1396,36 @@ describe("check — claude-hook-shell", () => {
     expect(verdict.detail).toContain(`Git Bash found at ${join(dir, "bash.exe")}`);
   });
 
+  it("does not count WSL's System32 bash.exe as Git Bash, and does count one under Git\\bin", async () => {
+    // prove/251: WSL ships %SystemRoot%\System32\bash.exe, a launcher into a Linux distribution
+    // the client's fallback never uses. A host with WSL and no Git for Windows must FAIL the row,
+    // naming the launcher; the same host with Git\bin on PATH passes on that one.
+    const handle = getRepo();
+    await handle.seedFiles({ "windows/System32/bash.exe": "", "git/Git/bin/bash.exe": "" });
+    const systemRoot = handle.path("windows");
+    const system32 = handle.path("windows/System32");
+    const gitBin = handle.path("git/Git/bin");
+    const pathSep = sep === "\\" ? ";" : ":";
+    const wslOnly = checkClaudeHookShell(claude, {
+      platform: "win32",
+      env: { SystemRoot: systemRoot, PATH: [system32, "C:\\nothing"].join(pathSep) },
+    });
+    expect(wslOnly.status).toBe("fail");
+    expect(wslOnly.detail).toContain(`${join(system32, "bash.exe")} is the WSL launcher, not Git Bash, and does not count`);
+    // Case-insensitive, and the entry's own spelling: `system32` with a trailing separator.
+    const spelled = checkClaudeHookShell(claude, {
+      platform: "win32",
+      env: { SystemRoot: systemRoot.toUpperCase(), PATH: `${system32.toLowerCase()}${sep}` },
+    });
+    expect(spelled.status).toBe("fail");
+    const withGit = checkClaudeHookShell(claude, {
+      platform: "win32",
+      env: { SystemRoot: systemRoot, PATH: [system32, gitBin].join(pathSep) },
+    });
+    expect(withGit.status).toBe("pass");
+    expect(withGit.detail).toContain(`Git Bash found at ${join(gitBin, "bash.exe")}`);
+  });
+
   it("passes with a note on win32 when claude is not targeted, or its hooks are a plugin's", () => {
     const none = checkClaudeHookShell({ ...claude, tools: ["cursor"] } as SetupManifest, { platform: "win32", env: { PATH: "" } });
     expect(none.status).toBe("pass");
