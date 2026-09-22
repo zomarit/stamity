@@ -136,7 +136,7 @@ interface Leg {
 interface Report {
   dist: string;
   sha256s: Record<string, string>;
-  clients: Record<string, { legs: Leg[] }>;
+  clients: Record<string, { legs: Leg[]; cleanup?: string[] }>;
 }
 
 function smoke(args: string[], env: NodeJS.ProcessEnv = disarmed()): SpawnSyncReturns<string> {
@@ -376,6 +376,238 @@ describe("blockerFor — which transcripts mean 'nothing was measured'", () => {
     expect(blockerFor("EPERM: operation not permitted, mkdir")).toBeNull();
     expect(blockerFor("plugin setup wrote 12 files")).toBeNull();
   });
+});
+
+/**
+ * A hand-built call, the shape `call()` returns, for the helpers exported to be driven without a
+ * client: only the fields the helper under test reads are meaningful.
+ */
+function madeCall(overrides: Partial<Record<"status" | "transcript" | "redacted" | "tail" | "exit", unknown>> = {}) {
+  const transcript = String(overrides.transcript ?? "");
+  return {
+    name: "x",
+    command: "copilot x",
+    status: 0,
+    signal: null,
+    exit: "exit 0",
+    transcript,
+    redacted: transcript,
+    firstLine: transcript.split("\n")[0] ?? "",
+    tail: transcript.slice(-400),
+    transcriptSha256: "0".repeat(64),
+    durationMs: 1,
+    spawnFailure: null,
+    ...overrides,
+  };
+}
+
+describe("copilotInstallLeg — the live entry passes on enabled, not on version alone", () => {
+  // prove/210. `plugin list --json` on 1.0.87 (measured 2026-09-22 in a scratch COPILOT_HOME) prints
+  // `{name, marketplace, version, enabled, source, installedFrom}` per plugin. The leg used to pass a
+  // live entry on version equality; an entry the client lists and will not load proves nothing, and a
+  // disabled one cannot be produced from a real install on demand — so the listing is composed here.
+  const context = { redact: (text: string) => text, pluginVersion: "1.9.0", version: "fake 0.0.1", rootDigest: {} };
+  const names = { marketplace: "stamity", plugin: "stamity", spec: "stamity@stamity" };
+  const listing = (entry: Record<string, unknown>) =>
+    madeCall({ transcript: JSON.stringify([{ name: "stamity", marketplace: "stamity", version: "1.9.0", source: "live", ...entry }]) });
+
+  it("fails a disabled entry at the right version, and names the entry as disabled", async () => {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { copilotInstallLeg } = await import("../../scripts/plugin-route-smoke.mjs");
+    const leg = copilotInstallLeg(context, {
+      names,
+      copilotHome: tempDir("copilot-home"),
+      installed: madeCall({ transcript: "loaded live" }),
+      listed: listing({ enabled: false }),
+    }) as Leg;
+    expect(leg.status).toBe("FAIL");
+    expect(leg.reason).toContain("DISABLED (enabled: false)");
+    expect(leg.reason).toContain("will not load it");
+    // An entry with no `enabled` field at all is not an enabled one either.
+    const absent = copilotInstallLeg(context, {
+      names,
+      copilotHome: tempDir("copilot-home"),
+      installed: madeCall({ transcript: "loaded live" }),
+      listed: listing({}),
+    }) as Leg;
+    expect(absent.status).toBe("FAIL");
+    expect(absent.reason).toContain("DISABLED (enabled: null)");
+  });
+
+  it("passes an enabled live entry, and the reason says enabled", async () => {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { copilotInstallLeg } = await import("../../scripts/plugin-route-smoke.mjs");
+    const leg = copilotInstallLeg(context, {
+      names,
+      copilotHome: tempDir("copilot-home"),
+      installed: madeCall({ transcript: "loaded live" }),
+      listed: listing({ enabled: true }),
+    }) as Leg;
+    expect(leg.status, leg.reason).toBe("PASS");
+    expect(leg.reason).toContain('the entry is enabled at version 1.9.0 with source "live"');
+  });
+});
+
+describe("discoveryFromTranscript — a listing that never reached its model is SKIPPED, not FAIL", () => {
+  // prove/211. The invocation leg consulted the blocker list and read a usage limit as SKIPPED; the
+  // discovery leg read the same transcript, found no marker in it, and called the root's discovery a
+  // FAIL — on a zero exit, because a client can print its usage limit and exit 0.
+  const context = {
+    client: "copilot",
+    version: "fake 0.0.1",
+    markers: [{ class: "command", id: "st-work", form: "/st-work" }],
+  };
+
+  it("reads a zero-exit usage limit as the invocation leg does: SKIPPED with the blocker's reason", async () => {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { discoveryFromTranscript } = await import("../../scripts/plugin-route-smoke.mjs");
+    const leg = discoveryFromTranscript(
+      context,
+      madeCall({ status: 0, transcript: "ERROR: You've hit your usage limit. Visit …" }),
+      "a listing run",
+    ) as Leg;
+    expect(leg.status).toBe("SKIPPED");
+    expect(leg.reason).toContain("the client never reached its model (usage limit)");
+    expect(leg.reason).toContain("nothing about this root was listed");
+  });
+
+  it("still fails a zero-exit listing that reached the model and named no marker", async () => {
+    // The control: without a blocker in it, an answer with no id in it is the root's discovery
+    // failing, which is the leg's whole subject.
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { discoveryFromTranscript } = await import("../../scripts/plugin-route-smoke.mjs");
+    const leg = discoveryFromTranscript(
+      context,
+      madeCall({ status: 0, transcript: "This plugin provides nothing I can see." }),
+      "a listing run",
+    ) as Leg;
+    expect(leg.status).toBe("FAIL");
+    expect(leg.reason).toContain("st-work never appeared");
+  });
+});
+
+describe("removalOutcome — the evidence says removed only when the removal exited 0", () => {
+  // prove/221, the pure half: the sentence a leg reason carries after the `finally` ran.
+  it("names a failed removal's command and exit, and says the home may still carry the plugin", async () => {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { removalOutcome } = await import("../../scripts/plugin-route-smoke.mjs");
+    const failed = removalOutcome([
+      { line: "copilot plugin uninstall stamity exit 1", ok: false },
+      { line: "copilot plugin marketplace remove stamity exit 0", ok: true },
+    ]) as { ok: boolean; summary: string; lines: string[] };
+    expect(failed.ok).toBe(false);
+    expect(failed.summary).toContain("NOT removed afterwards — copilot plugin uninstall stamity exit 1");
+    expect(failed.summary).toContain("may still carry it");
+    expect(failed.lines).toHaveLength(2);
+
+    const clean = removalOutcome([{ line: "copilot plugin uninstall stamity exit 0", ok: true }]) as { ok: boolean; summary: string };
+    expect(clean.ok).toBe(true);
+    expect(clean.summary).toBe("removed afterwards (copilot plugin uninstall stamity exit 0)");
+    expect((removalOutcome([]) as { summary: string }).summary).toBe("nothing to remove");
+  });
+});
+
+/**
+ * prove/221, the wiring half: the copilot `--invoke` legs driven end to end against a FAKE client,
+ * so the reason composed inside the `try` is proven to carry the outcome the `finally` produced.
+ *
+ * The fake is a POSIX shell script that answers every subcommand the leg issues — version probe,
+ * marketplace add, install, `plugin list --json`, `skill list`, `plugin --help`, the two `-p` runs
+ * (a listing that names the markers, a setup run that writes the manifest) and the two removals —
+ * keyed on `COPILOT_HOME` so the scratch install and the "real home" legs keep separate state. The
+ * uninstall's exit code is the one input, through a `STAMITY_`-prefixed variable because that prefix
+ * is what the smoke's allowlisted environment passes through. No vendor binary, credential or
+ * network is involved; Windows is skipped for the reason the stop case above states.
+ */
+describe.skipIf(process.platform === "win32")("the copilot invoke legs against a fake client, with the removal's outcome", () => {
+  function fakeCopilot(): string {
+    const dir = tempDir("fake-copilot");
+    const bin = join(dir, "fake-copilot");
+    writeFileSync(
+      bin,
+      `#!/bin/sh
+STATE="\${COPILOT_HOME:-$STAMITY_FAKE_COPILOT_STATE/real}"
+mkdir -p "$STATE"
+case "$1" in
+  --version) echo "fake copilot 0.0.1"; exit 0 ;;
+  plugin)
+    case "$2" in
+      marketplace)
+        case "$3" in
+          add) touch "$STATE/added"; echo "loaded live from $4"; exit 0 ;;
+          list) [ -e "$STATE/added" ] && echo "stamity"; exit 0 ;;
+          remove) rm -f "$STATE/added"; exit 0 ;;
+        esac ;;
+      install) touch "$STATE/installed"; echo "It is loaded live"; exit 0 ;;
+      uninstall) exit "\${STAMITY_FAKE_COPILOT_UNINSTALL_EXIT:-0}" ;;
+      list)
+        if [ -e "$STATE/installed" ]; then
+          echo '[{"name":"stamity","marketplace":"stamity","version":"1.9.0","enabled":true,"source":"live","installedFrom":"x"}]'
+        else
+          echo '[]'
+        fi
+        exit 0 ;;
+      --help) echo "uninstall marketplace"; exit 0 ;;
+    esac ;;
+  skill) echo "st-work"; exit 0 ;;
+  -p)
+    case "$2" in
+      List*) printf '/st-work\\n/agent stamity-reviewer\\n'; exit 0 ;;
+      *) mkdir -p .stamity; printf '{"plugin":{"mode":"plugin-backed","clients":{"copilot":{}}}}\\n' > .stamity/manifest.json; echo "ran st-setup"; exit 0 ;;
+    esac ;;
+esac
+echo "fake copilot: unexpected $*" >&2
+exit 1
+`,
+    );
+    chmodSync(bin, 0o755);
+    return bin;
+  }
+
+  function invokeCopilot(uninstallExit: string): { run: SpawnSyncReturns<string>; report: Report } {
+    const env: NodeJS.ProcessEnv = { ...disarmed(), STAMITY_FAKE_COPILOT_STATE: tempDir("fake-state"), STAMITY_FAKE_COPILOT_UNINSTALL_EXIT: uninstallExit };
+    // The "real home" legs inherit the smoke's whole environment; a developer's own COPILOT_HOME
+    // would send the fake's state there.
+    delete env["COPILOT_HOME"];
+    return smokeWithJson(["--dist", dist, "--client", "copilot", "--invoke", "--bin-copilot", fakeCopilot(), "--scratch", tempDir("scratch")], env);
+  }
+
+  it(
+    "carries a failed removal into the invocation reason and the JSON, and never says removed",
+    () => {
+      const { run, report } = invokeCopilot("1");
+      expect(run.status, `${run.stdout}\n${run.stderr}`).toBe(0);
+      const invocation = legOf(report, "copilot", "invocation");
+      // The setup landed, so the leg is a PASS about the root — and it says the home is not clean.
+      expect(invocation.status, invocation.reason).toBe("PASS");
+      expect(invocation.reason).toContain("NOT removed afterwards — copilot plugin uninstall stamity exit 1");
+      expect(invocation.reason).not.toContain("the plugin removed afterwards");
+      expect(legOf(report, "copilot", "discovery").reason).toContain("NOT removed afterwards");
+      expect(report.clients["copilot"]?.cleanup).toEqual([
+        "copilot plugin uninstall stamity exit 1",
+        "copilot plugin marketplace remove stamity exit 0",
+      ]);
+      expect(run.stderr).toContain("plugin-route: copilot cleanup - NOT removed afterwards");
+    },
+    ARMED_MS,
+  );
+
+  it(
+    "says removed afterwards, with both removal lines, only once both exited 0",
+    () => {
+      const { report } = invokeCopilot("0");
+      const invocation = legOf(report, "copilot", "invocation");
+      expect(invocation.status, invocation.reason).toBe("PASS");
+      expect(invocation.reason).toContain(
+        "removed afterwards (copilot plugin uninstall stamity exit 0; copilot plugin marketplace remove stamity exit 0)",
+      );
+      expect(report.clients["copilot"]?.cleanup).toHaveLength(2);
+      // A client that ran no real-home guard carries no cleanup field at all.
+      const { report: disarmedReport } = smokeWithJson(["--dist", dist, "--client", "claude"]);
+      expect(disarmedReport.clients["claude"]?.cleanup).toBeUndefined();
+    },
+    ARMED_MS,
+  );
 });
 
 describe("the smoke's own arguments", () => {

@@ -1063,6 +1063,8 @@ async function copilotLegs(context) {
   })
   let discovery
   let invocation
+  // Set once the real home holds the plugin: only then does a removal outcome belong on a leg.
+  let installedInRealHome = false
   try {
     const realAdd = await call(context, { args: ['plugin', 'marketplace', 'add', context.dist], cwd: repo, env: realEnv })
     const realInstall = realAdd.status === 0 ? await call(context, { args: ['plugin', 'install', names.spec], cwd: repo, env: realEnv }) : realAdd
@@ -1071,6 +1073,7 @@ async function copilotLegs(context) {
       discovery = discoveryFrom(context, sources, listing, reason)
       invocation = legFrom('invocation', 'SKIPPED', reason, realInstall, context.version)
     } else {
+      installedInRealHome = true
       const asked = await copilotListing(context, repo, realEnv)
       if (asked.status === 0) sources.push({ label: 'a copilot -p listing run in the REAL COPILOT_HOME', transcript: asked.redacted })
       discovery = discoveryFrom(context, sources, asked, `the listing run exited ${asked.exit}: ${asked.tail}`)
@@ -1087,13 +1090,20 @@ async function copilotLegs(context) {
           run,
           repo,
           `the REAL COPILOT_HOME (the login lives there; ${existing.detail}), with plugin --help ` +
-            `listing ${removals} and the plugin removed afterwards`,
+            `listing ${removals}`,
         )
       }
     }
   } finally {
-    const lines = guard.finish()
-    console.error(`plugin-route: copilot cleanup - ${lines.join('; ') || 'nothing to remove'}`)
+    // The removal's OUTCOME, read after it ran, is what the legs and the JSON carry — never the
+    // plan. `discovery` and `invocation` are undefined here when a stop unwound the `try`.
+    const removal = guard.finish()
+    console.error(`plugin-route: copilot cleanup - ${removal.summary}`)
+    context.cleanup = removal.lines
+    if (installedInRealHome) {
+      if (discovery !== undefined) discovery = withRemoval(discovery, removal)
+      if (invocation !== undefined) invocation = withRemoval(invocation, removal)
+    }
   }
   return [install, discovery, invocation]
 }
@@ -1109,8 +1119,12 @@ async function copilotListing(context, cwd, env) {
   return await call(context, { args: ['-p', DISCOVERY_PROMPT, '-s', '--allow-all-tools'], cwd, env })
 }
 
-/** What the Copilot install proves: a copied tree where there is one, the live entry where there is not. */
-function copilotInstallLeg(context, { names, copilotHome, installed, listed }) {
+/**
+ * What the Copilot install proves: a copied tree where there is one, the live entry where there is
+ * not. Exported so the suite can hand it a listing it composed — the disabled-entry case cannot be
+ * produced on demand from a real install.
+ */
+export function copilotInstallLeg(context, { names, copilotHome, installed, listed }) {
   const where = `installed-plugins/${names.marketplace}/${names.plugin}`
   if (listed.status !== 0) {
     return legFrom('install', 'FAIL', `copilot plugin list --json exited ${listed.exit} after the install: ${listed.tail}`, listed, context.version)
@@ -1138,6 +1152,21 @@ function copilotInstallLeg(context, { names, copilotHome, installed, listed }) {
       context.version,
     )
   }
+  // `enabled` is the client's own word for whether the entry LOADS: `plugin list --json` on 1.0.87
+  // (measured 2026-09-22 in a scratch COPILOT_HOME) prints one row per plugin with `name`,
+  // `marketplace`, `version`, `enabled`, `source` and `installedFrom`, and `settings.json` mirrors
+  // it under `enabledPlugins`. Version equality alone used to pass this leg (prove/210): an entry
+  // the client lists at the right version and will not load is an install that proves nothing.
+  if (entry.enabled !== true) {
+    return legFrom(
+      'install',
+      'FAIL',
+      `the installed entry is DISABLED (enabled: ${JSON.stringify(entry.enabled ?? null)}) at version ` +
+        `${entryVersion}: the client lists ${names.plugin} but will not load it`,
+      listed,
+      context.version,
+    )
+  }
   const deployed = join(copilotHome, 'installed-plugins', names.marketplace, names.plugin)
   if (isDirectory(deployed)) {
     const verdict = treeVerdict(compareTrees(context.rootDigest, deployed))
@@ -1154,7 +1183,7 @@ function copilotInstallLeg(context, { names, copilotHome, installed, listed }) {
       'install',
       'PASS',
       `marketplace add + plugin install ${names.spec} in a scratch COPILOT_HOME; the entry is ` +
-        `${entry.enabled === true ? 'enabled' : 'DISABLED'} at version ${entryVersion} with source "live", so ` +
+        `enabled at version ${entryVersion} with source "live", so ` +
         `${where} was never written and there is no copied tree to compare — a local-path marketplace is loaded ` +
         `live from the distribution (the client's own line: ${installed.tail})`,
       listed,
@@ -1259,6 +1288,7 @@ async function codexLegs(context) {
   })
   let discovery
   let invocation
+  let installedInRealHome = false
   try {
     const realAdd = await call(context, { args: ['plugin', 'marketplace', 'add', context.dist], cwd: context.dist, env: realEnv })
     const realInstall = realAdd.status === 0 ? await call(context, { args: ['plugin', 'add', names.spec], cwd: context.dist, env: realEnv }) : realAdd
@@ -1267,6 +1297,7 @@ async function codexLegs(context) {
       discovery = legFrom('discovery', 'SKIPPED', reason, realInstall, context.version)
       invocation = legFrom('invocation', 'SKIPPED', reason, realInstall, context.version)
     } else {
+      installedInRealHome = true
       const listing = await call(context, {
         args: ['exec', '--skip-git-repo-check', DISCOVERY_PROMPT],
         cwd: mkdtempSync(join(context.scratch, 'codex-cwd-')),
@@ -1277,8 +1308,7 @@ async function codexLegs(context) {
           ? discoveryFromTranscript(
               context,
               listing,
-              `a codex exec listing run (the REAL CODEX_HOME; plugin --help lists ${removals}, and the ` +
-                'plugin was removed afterwards)',
+              `a codex exec listing run (the REAL CODEX_HOME; plugin --help lists ${removals})`,
             )
           : legFrom('discovery', 'SKIPPED', `codex exec exited ${listing.exit}: ${listing.tail}`, listing, context.version)
       // The codex container carries NO command class, so there is no `st-setup` to ask for: its
@@ -1307,8 +1337,13 @@ async function codexLegs(context) {
       )
     }
   } finally {
-    const lines = guard.finish()
-    console.error(`plugin-route: codex cleanup - ${lines.join('; ') || 'nothing to remove'}`)
+    const removal = guard.finish()
+    console.error(`plugin-route: codex cleanup - ${removal.summary}`)
+    context.cleanup = removal.lines
+    if (installedInRealHome) {
+      if (discovery !== undefined) discovery = withRemoval(discovery, removal)
+      if (invocation !== undefined) invocation = withRemoval(invocation, removal)
+    }
   }
   return [install, discovery, invocation]
 }
@@ -1430,11 +1465,13 @@ function realHomeGuard(context, { cwd, env, removals, label }) {
         timeout: CLEANUP_CALL_MS,
         maxBuffer: 8 * 1024 * 1024,
       })
-      const how =
-        result.error === undefined || result.error === null
-          ? exitDescription({ status: result.status, signal: result.signal })
-          : `could not run (${context.redact(result.error.message)})`
-      return `${context.display} ${args.join(' ')} ${how}`
+      const spawned = result.error === undefined || result.error === null
+      const how = spawned
+        ? exitDescription({ status: result.status, signal: result.signal })
+        : `could not run (${context.redact(result.error.message)})`
+      // Each removal is an OUTCOME, not a line: a caller composing a leg's reason after the
+      // `finally` needs to know whether the operator's home is clean, and a string does not say.
+      return { line: `${context.display} ${args.join(' ')} ${how}`, ok: spawned && result.status === 0 }
     })
   }
   const registered = []
@@ -1443,18 +1480,44 @@ function realHomeGuard(context, { cwd, env, removals, label }) {
       // Set the flag FIRST: the loop this handler interrupted is between two client calls, and the
       // next one must refuse to spawn rather than carry on measuring a run somebody stopped.
       stopped.signal = signal
-      console.error(`plugin-route: ${label} cleanup on ${signal} - ${removeNow().join('; ') || 'nothing to remove'}`)
+      console.error(`plugin-route: ${label} cleanup on ${signal} - ${removalOutcome(removeNow()).summary}`)
     }
     registered.push([signal, handler])
     process.once(signal, handler)
   }
   return {
     finish: () => {
-      const lines = removeNow()
+      const outcome = removalOutcome(removeNow())
       for (const [name, fn] of registered) process.off(name, fn)
-      return lines
+      return outcome
     },
   }
+}
+
+/**
+ * What the removals did, as one sentence a leg reason can carry and one list the JSON keeps.
+ *
+ * Composed AFTER the removals ran, which is the fix (prove/221): the copilot and codex reasons used
+ * to say "the plugin removed afterwards" from inside the `try`, before the `finally` had run a
+ * single removal, so the evidence claimed a clean home on the strength of a plan. A removal that
+ * failed now names its command and exit (already redacted by `removeNow`), and the words "removed
+ * afterwards" appear only when every removal exited 0.
+ */
+export function removalOutcome(results) {
+  const lines = results.map((result) => result.line)
+  if (results.length === 0) return { lines, ok: true, summary: 'nothing to remove' }
+  const failed = results.filter((result) => !result.ok).map((result) => result.line)
+  if (failed.length === 0) return { lines, ok: true, summary: `removed afterwards (${lines.join('; ')})` }
+  return {
+    lines,
+    ok: false,
+    summary: `NOT removed afterwards — ${failed.join('; ')} — the operator's home may still carry it`,
+  }
+}
+
+/** A leg that ran in the operator's real home, with the removal's own outcome appended to its reason. */
+function withRemoval(entry, outcome) {
+  return { ...entry, reason: `${entry.reason}; ${outcome.summary}` }
 }
 
 /**
@@ -1514,14 +1577,34 @@ function discoveryFrom(context, sources, made, unresolved) {
   )
 }
 
-/** Discovery read out of a transcript, with the forms that resolved named. */
-function discoveryFromTranscript(context, made, source) {
+/**
+ * Discovery read out of a transcript, with the forms that resolved named.
+ *
+ * The SAME blocker list {@link invocationLeg} consults, consulted FIRST (prove/211): a listing run
+ * that never reached its model prints no id whatever the root carries, and a client can print a
+ * usage limit or a login prompt and still exit 0 — the codex leg of 2026-09-20 did. Before this
+ * order, that transcript read as a FAIL of the root's discovery while the invocation leg beside it,
+ * reading the same words, said SKIPPED. Exported so the suite can drive the order with a
+ * hand-built call rather than a credential.
+ */
+export function discoveryFromTranscript(context, made, source) {
   if (context.markers.length === 0) {
     return legFrom(
       'discovery',
       'SKIPPED',
       `this root declares no invocation form for a class it carries, so there is no marker to search ` +
         `for (${source})`,
+      made,
+      context.version,
+    )
+  }
+  const blocker = blockerFor(made.redacted)
+  if (blocker !== null) {
+    return legFrom(
+      'discovery',
+      'SKIPPED',
+      `${blocker.label} (${blocker.match}), so nothing about this root was listed (${source}; the run ` +
+        `exited ${made.exit}): ${made.tail}`,
       made,
       context.version,
     )
@@ -1695,6 +1778,9 @@ export async function main(argv) {
       }
 
       const binary = resolveBinary(client, options)
+      // The real-home removals' outcome lines, for the clients whose `--invoke` legs install into
+      // the operator's own home; `null` for a client that ran no guard.
+      let cleanup = null
       // A refused root is the stronger statement and comes first: it is why no client saw the tree,
       // whether or not this machine has that client's binary.
       if (stopped.signal !== null) {
@@ -1743,9 +1829,10 @@ export async function main(argv) {
           if (!(error instanceof RunStopped)) throw error
           for (const name of LEGS.slice(legs.length)) legs.push(leg(name, 'SKIPPED', error.message))
         }
+        cleanup = context.cleanup ?? null
       }
 
-      report.clients[client] = { legs }
+      report.clients[client] = cleanup === null ? { legs } : { legs, cleanup }
       for (const entry of legs) {
         if (entry.status === 'FAIL') failed += 1
         console.log(`plugin-route: ${client} ${entry.leg} ${entry.status} (${entry.reason})`)
