@@ -17,6 +17,7 @@ import {
   type DirectoryIdentity,
 } from "./atomicWrite.ts";
 import { splitAtManagedBlock } from "./managedBlocks.ts";
+import { backupBeforeOverwrite } from "./safeWrite.ts";
 
 /**
  * Reclaim sweep — the write half of the ownership model. `computeReclaimCandidates`
@@ -102,7 +103,11 @@ import { splitAtManagedBlock } from "./managedBlocks.ts";
  *    with no backup and no entry saying so. So a co-owned path never reaches the
  *    whole-file branch: its reducer takes out the entries the engine can prove
  *    it wrote, everything else is preserved verbatim, and the unlink is reached
- *    only when the reduction finds nothing of the operator's left.
+ *    only when the reduction finds nothing of the operator's left. A reducer
+ *    proves per top-level entry, so a row of the operator's INSIDE an entry
+ *    the engine owns is invisible to it; the bytes no longer hashing to the
+ *    recorded value is the one sign of such a row, and on this lane it earns a
+ *    verified `.bak` before the rewrite or the unlink rather than a veto.
  * 5. **Consent.** Without `consent: true` the sweep still runs gates 1-4 and
  *    reports the action each candidate WOULD receive, but performs no write.
  *
@@ -498,7 +503,7 @@ interface TargetPin {
 
 /** The action gates 1-4 selected, with everything the mutation step needs. */
 type ReclaimPlan =
-  | { kind: "delete"; target: string; pin: TargetPin; detail: string }
+  | { kind: "delete"; target: string; pin: TargetPin; detail: string; backup?: string }
   | {
       /** Rewrite in place, preserving `keep`. Both rewrite dispositions land
        *  here; `action` is which of the two the report names. */
@@ -508,6 +513,15 @@ type ReclaimPlan =
       pin: TargetPin;
       keep: string;
       detail: string;
+      /**
+       * The file's current bytes, when the mutation owes a verified `.bak` of
+       * them first: a co-owned document whose bytes no longer hash to what the
+       * ledger recorded. Its reducer proves ownership per top-level entry and
+       * cannot see a row of the operator's inside an entry the engine owns, so
+       * the drift is the only evidence such a row exists — and the write lanes'
+       * rule applies: touched behind a backup, never silently.
+       */
+      backup?: string;
     }
   | {
       kind: "skip";
@@ -663,8 +677,24 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
   if (reduce !== undefined) {
     const reduction = reduce(content);
     if (reduction.kind === "untouched") return skip("skipped-user-content", reduction.detail);
+    // Drifted: the bytes no longer hash to what the ledger recorded. On this
+    // lane that is not a veto — the reducer already separated what the engine
+    // can prove it wrote — but it is the one sign that an entry the engine
+    // owns may carry a row of the operator's, so the mutation takes a verified
+    // backup first, as every write lane does.
+    const drifted =
+      group.recordedHashes.size > 0 && !matchesRecordedHash(group.recordedHashes, bytes, content);
+    const driftDetail = drifted
+      ? " The bytes no longer hash to what the ledger recorded writing here, so the engine's keys may carry rows of yours; the previous file is backed up first."
+      : "";
     if (reduction.kind === "engine-only") {
-      return { kind: "delete", target, pin, detail: reduction.detail };
+      return {
+        kind: "delete",
+        target,
+        pin,
+        detail: reduction.detail + driftDetail,
+        ...(drifted ? { backup: content } : {}),
+      };
     }
     // Same rewrite primitive as the strip lane below, so the same hard-link
     // refusal applies for the same reason — and off the same `lstat`.
@@ -675,7 +705,8 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
       target,
       pin,
       keep: reduction.content,
-      detail: reduction.detail,
+      detail: reduction.detail + driftDetail,
+      ...(drifted ? { backup: content } : {}),
     };
   }
 
@@ -951,6 +982,24 @@ export async function sweepReclaimCandidates(
       });
       continue;
     }
+    // The backup a drifted co-owned document owes, taken in the same tick as
+    // the mutation it precedes and after the pin was re-proved. A backup that
+    // cannot be taken — a hard-linked target, a `.bak` name already held —
+    // refuses the mutation: the rule is a backup or nothing.
+    let backedUp = "";
+    if (plan.backup !== undefined) {
+      try {
+        const bakPath = await backupBeforeOverwrite(plan.target, plan.backup, "reclaim", ctx.root);
+        backedUp = ` Your previous file is at ${bakPath}.`;
+      } catch (err) {
+        entries.push({
+          ...base,
+          action: "skipped-unsafe-path",
+          detail: `The previous file could not be backed up, so nothing was removed: ${describeError(err)}.${provenance}`,
+        });
+        continue;
+      }
+    }
     if (plan.kind === "delete") {
       try {
         await unlink(plan.target);
@@ -974,7 +1023,7 @@ export async function sweepReclaimCandidates(
       entries.push({
         ...base,
         action: "deleted",
-        detail: `${plan.detail} Deleted at ${stamp}.${provenance}`,
+        detail: `${plan.detail}${backedUp} Deleted at ${stamp}.${provenance}`,
       });
       continue;
     }
@@ -998,7 +1047,7 @@ export async function sweepReclaimCandidates(
     entries.push({
       ...base,
       action: plan.action,
-      detail: `${plan.detail} ${plan.action === "co-owned-reduced" ? "Reduced" : "Stripped"} at ${stamp}.${provenance}`,
+      detail: `${plan.detail}${backedUp} ${plan.action === "co-owned-reduced" ? "Reduced" : "Stripped"} at ${stamp}.${provenance}`,
     });
   }
 

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { chmod, link, lstat, mkdir, readFile, readdir, symlink } from "node:fs/promises";
+import { chmod, link, lstat, mkdir, readFile, readdir, rm, symlink } from "node:fs/promises";
 // Namespace import of the REAL module, so the one case that has to change the
 // tree mid-sweep can delegate to the unpatched calls from inside its replacement.
 import * as realFsPromises from "node:fs/promises";
@@ -1089,6 +1089,106 @@ describe("sweepReclaimCandidates — co-owned documents", () => {
 
     expect(onlyEntry(report).action).toBe("skipped-user-content");
     expect(await readFile(join(root, CO_OWNED), "utf-8")).toBe(theirs);
+  });
+
+  // S-W3: the co-owned lane settles ahead of the hash veto, so a document whose
+  // bytes no longer match what the ledger recorded — an operator's row inside
+  // the engine's own key, which the reducer cannot see — was rewritten or
+  // unlinked with no backup, the one lane in the engine that did. The write
+  // lanes' rule applies here too: touched behind a verified .bak when drifted.
+  it("backs a drifted co-owned document up before reducing it, and names the .bak", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const merged = `${ENGINE_LINE}operator server\n`;
+    await temp.seedFiles({ [`repo/${CO_OWNED}`]: merged });
+
+    // The row records other bytes: the file changed since the engine wrote it.
+    const report = await sweepReclaimCandidates([coOwnedCandidate(ENGINE_LINE)], {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: new Set([CO_OWNED]),
+      coOwnedPaths: reducerFor(),
+    });
+
+    const entry = onlyEntry(report);
+    expect(entry.action).toBe("co-owned-reduced");
+    expect(entry.detail).toContain(`${CO_OWNED}.bak`);
+    expect(await readFile(join(root, `${CO_OWNED}.bak`), "utf-8")).toBe(merged);
+    expect(await readFile(join(root, CO_OWNED), "utf-8")).toBe("operator server\n");
+  });
+
+  it("backs a drifted co-owned document up before deleting it, and says the engine's keys may carry rows of the operator's", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${CO_OWNED}`]: ENGINE_LINE });
+
+    const report = await sweepReclaimCandidates([coOwnedCandidate("what the engine wrote\n")], {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: new Set([CO_OWNED]),
+      coOwnedPaths: reducerFor(),
+    });
+
+    const entry = onlyEntry(report);
+    expect(entry.action).toBe("deleted");
+    expect(entry.detail).toContain("rows of yours");
+    expect(entry.detail).toContain(`${CO_OWNED}.bak`);
+    expect(await snapshot(root)).toEqual({ [`${CO_OWNED}.bak`]: ENGINE_LINE });
+  });
+
+  it("takes no backup of a co-owned document whose bytes still match the recorded hash", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${CO_OWNED}`]: ENGINE_LINE });
+
+    const report = await sweepReclaimCandidates([coOwnedCandidate(ENGINE_LINE)], {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: new Set([CO_OWNED]),
+      coOwnedPaths: reducerFor(),
+    });
+
+    expect(onlyEntry(report).action).toBe("deleted");
+    expect(onlyEntry(report).detail).not.toContain(".bak");
+    expect(await snapshot(root)).toEqual({});
+  });
+
+  it("previews the backup under a dry run and writes nothing", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const merged = `${ENGINE_LINE}operator server\n`;
+    await temp.seedFiles({ [`repo/${CO_OWNED}`]: merged });
+
+    const report = await sweepReclaimCandidates([coOwnedCandidate(ENGINE_LINE)], {
+      rootDir: root,
+      consent: false,
+      trustedExactPaths: new Set([CO_OWNED]),
+      coOwnedPaths: reducerFor(),
+    });
+
+    expect(onlyEntry(report).action).toBe("dry-run");
+    expect(onlyEntry(report).detail).toContain("backed up first");
+    expect(await snapshot(root)).toEqual({ [CO_OWNED]: merged });
+  });
+
+  it.skipIf(process.platform === "win32")("refuses to delete a drifted document it cannot back up — a hard link — and leaves it in place", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ [`repo/${CO_OWNED}`]: ENGINE_LINE, "twin.json": "" });
+    await rm(temp.path("twin.json"));
+    await link(join(root, CO_OWNED), temp.path("twin.json"));
+
+    const report = await sweepReclaimCandidates([coOwnedCandidate("what the engine wrote\n")], {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: new Set([CO_OWNED]),
+      coOwnedPaths: reducerFor(),
+    });
+
+    const entry = onlyEntry(report);
+    expect(entry.action).toBe("skipped-unsafe-path");
+    expect(entry.detail).toContain("could not be backed up");
+    expect(await readFile(join(root, CO_OWNED), "utf-8")).toBe(ENGINE_LINE);
   });
 
   it("previews the reduction under a dry run and writes nothing", async () => {

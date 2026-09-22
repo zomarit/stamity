@@ -497,7 +497,7 @@ describe("clean and the sync reclaim sweep remove only the engine's keys", () =>
     expect(await settingsDoc(root)).toEqual({ model: "opus" });
   });
 
-  it("clean removes a file holding only the engine's keys, as before", async () => {
+  it("clean removes a file holding only the engine's keys, as before, with no backup while the bytes are the engine's", async () => {
     const root = await freshRepo();
     await repositoryInit(root);
 
@@ -506,6 +506,41 @@ describe("clean and the sync reclaim sweep remove only the engine's keys", () =>
     expect(result.code).toBe(0);
     expect(result.stdout).toContain(`deleted  ${CLAUDE_SETTINGS_PATH}`);
     expect(existsSync(SETTINGS_ABS(root))).toBe(false);
+    expect(existsSync(BAK_ABS(root))).toBe(false);
+  });
+
+  it("clean over a repository-mode file with an operator row inside the engine's hooks backs the file up first and names the .bak", async () => {
+    // The reducer strips by key name and cannot see a row inside the key; the
+    // bytes no longer hashing to what the ledger recorded is what says the
+    // file may carry rows of the operator's, and that earns the backup.
+    const root = await freshRepo();
+    await repositoryInit(root);
+    const hooks = (await settingsDoc(root))["hooks"] as Record<string, unknown>;
+    await addKeys(root, { hooks: { ...hooks, ...OPERATOR_HOOKS } });
+    const before = await readSettings(root);
+
+    const result = await clean(root);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(`${CLAUDE_SETTINGS_PATH}.bak`);
+    expect(existsSync(SETTINGS_ABS(root))).toBe(false);
+    expect(await readFile(BAK_ABS(root), "utf8")).toBe(before);
+  });
+
+  it("clean over a plugin-backed file with the client's key and a hand-extended permissions reduces it behind a .bak", async () => {
+    const root = await freshRepo();
+    await seedSettings(root, CLIENT_SETTINGS);
+    await pluginSetup(root);
+    await addKeys(root, { permissions: { allow: [...PERMISSIONS.allow, "Bash"] } });
+    const before = await readSettings(root);
+
+    const result = await clean(root);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(`co-owned-reduced  ${CLAUDE_SETTINGS_PATH}`);
+    expect(result.stdout).toContain(`${CLAUDE_SETTINGS_PATH}.bak`);
+    expect(await readSettings(root)).toBe(CLIENT_SETTINGS);
+    expect(await readFile(BAK_ABS(root), "utf8")).toBe(before);
   });
 
   it("the sync sweep (claude deselected) reduces the file the same way", async () => {

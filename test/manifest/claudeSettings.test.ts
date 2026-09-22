@@ -90,6 +90,11 @@ function ledgered(root: string, bytes: string): ReadonlyMap<string, ReadonlySet<
   return ledgerHashIndex(root, [{ path: ".claude/settings.json", contentHash: sha256(bytes) }]);
 }
 
+/** A line break or an escape byte in a message would forge a panel line. */
+function hasControlBytes(text: string): boolean {
+  return text.includes("\n") || text.includes("\u001b");
+}
+
 const ROOT = "/repo";
 const PATH = join(ROOT, ".claude", "settings.json");
 
@@ -152,6 +157,25 @@ describe("planClaudeSettings — foreign keys", () => {
     expect(plan.content).toContain('"__proto__": {\n    "polluted": true\n  }');
     const reduction = reduceClaudeSettingsToForeignContent(plan.content ?? "", PLUGIN_KEYS);
     expect(reduction.kind === "reduced" && reduction.content).toBe(existing);
+  });
+
+  it("never lets a file-authored key name forge a panel line: control bytes are stripped from every name it prints", () => {
+    const forged = "bad\nkey\u001b[31m";
+    const existing = doc({ [forged]: 1, permissions: { allow: ["Bash"] } });
+
+    const adopted = planClaudeSettings("x", EMITTED_PLUGIN, doc({ [forged]: 1 }), own(PLUGIN_KEYS));
+    expect(adopted.result.notice).toContain("(bad key[31m)");
+    expect(hasControlBytes(adopted.result.notice ?? "")).toBe(false);
+
+    const forced = planClaudeSettings("x", EMITTED_PLUGIN, existing, own(PLUGIN_KEYS, { force: true }));
+    expect(forced.result.warning).toContain("(bad key[31m) was kept");
+    expect(hasControlBytes(forced.result.warning ?? "")).toBe(false);
+
+    const reduction = reduceClaudeSettingsToForeignContent(existing, PLUGIN_KEYS);
+    expect(reduction.detail).toContain("(bad key[31m) are kept");
+    expect(hasControlBytes(reduction.detail)).toBe(false);
+    // The key itself is carried through untouched; only the message is sanitised.
+    expect(reduction.kind === "reduced" && reduction.content).toBe(doc({ [forged]: 1 }));
   });
 
   it("keeps the file's own CRLF line ending: compares in it, writes in it, so a Windows checkout stays clean", () => {
@@ -247,6 +271,20 @@ describe("planClaudeSettings — the hooks key across install modes", () => {
     expect(plan.collision).toBeNull();
     expect(plan.backup).toBe(existing);
     expect(plan.result.warning).toContain("hooks");
+    expect(plan.content).toBe(EMITTED_FULL);
+  });
+
+  it("in repository mode regenerates an unedited older hooks rendering silently — the rendering moved with an upgrade, nobody edited", () => {
+    // The round-2 pin, restored: a ledgered, hash-matching file whose hooks
+    // rendering is an older engine's gets no warning and no backup on the sync
+    // that brings it up to date — every sync after an upgrade would otherwise
+    // print a false "rows of yours may have been inside it".
+    const existing = doc({ permissions: PERMISSIONS, hooks: OLDER_ENGINE_HOOKS });
+
+    const plan = planClaudeSettings(PATH, EMITTED_FULL, existing, own(REPO_KEYS, { owned: true, ledgerHashes: ledgered(ROOT, existing) }));
+
+    expect(plan.result).toEqual({ path: PATH, action: "updated" });
+    expect(plan.backup).toBeNull();
     expect(plan.content).toBe(EMITTED_FULL);
   });
 

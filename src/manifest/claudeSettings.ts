@@ -113,7 +113,7 @@ const HOOKS_KEY = "hooks";
 /** The client's per-user project settings, which this engine never writes. */
 const PER_USER_SETTINGS = ".claude/settings.local.json";
 const CRLF = "\r\n";
-const BOM = "﻿";
+const BOM = "\uFEFF";
 /** Where V8's parse message says it stopped — the one part of it that carries no file bytes. */
 const PARSE_LOCATION = /at position \d+(?: \(line \d+ column \d+\))?/;
 
@@ -156,6 +156,26 @@ function lineEndingOf(raw: string): string {
 function serialise(value: unknown, eol: string): string {
   const text = jsonDocument(value);
   return eol === "\n" ? text : text.replaceAll("\n", eol);
+}
+
+/**
+ * A file-authored key name as a message may print it: line breaks and tabs
+ * become spaces, and control bytes, the bidi controls and the zero-width
+ * marks are dropped — the rule `../cli/kit/prompts.ts::sanitizeLabel` applies
+ * to every label an operator reads, mirrored here because this module sits
+ * below the CLI. A key carrying an escape sequence or a newline would
+ * otherwise forge a panel line in every verb that prints these messages.
+ */
+function safeName(name: string): string {
+  return name
+    .replace(/[\r\n\t]/gu, " ")
+    // oxlint-disable-next-line no-control-regex -- stripping control bytes IS the point
+    .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/gu, "");
+}
+
+/** The names a message lists, sanitised and comma-joined. */
+function listNames(names: readonly string[]): string {
+  return names.map(safeName).join(", ");
 }
 
 /** Deep equality by the one spelling both sides share: the JSON text. */
@@ -425,8 +445,13 @@ export function planClaudeSettings(
     `which this engine never writes.`;
   // A recognised hooks object that is not proven unedited: touched behind the
   // backup, with the warning — removed under plugin ownership, replaced under
-  // repository ownership. Proven unedited, its removal is still reported.
-  const hooks = engineKeys.find((entry) => entry.key === HOOKS_KEY && entry.recognised && entry.changed);
+  // repository ownership. Proven unedited, a removal is still reported (the
+  // client stops running those hooks), while a replacement is the rendering
+  // having moved and says nothing — a warning there would print on every sync
+  // after an engine upgrade.
+  const hooks = engineKeys.find(
+    (entry) => entry.key === HOOKS_KEY && entry.recognised && entry.changed && (!entry.rendered || !entry.proven),
+  );
   if (hooks !== undefined) {
     if (!hooks.proven) backup = existingRaw;
     warnings.push(
@@ -454,13 +479,13 @@ export function planClaudeSettings(
           `backed up first. ${personal}`
         : `Force-replaced the ${contested.join(", ")} key(s) of ${shown}: no ownership ledger ` +
           `row proved the engine wrote them, so the previous file was backed up first. Every ` +
-          `other top-level key (${foreign.length === 0 ? "none" : foreign.join(", ")}) was kept.`,
+          `other top-level key (${foreign.length === 0 ? "none" : listNames(foreign)}) was kept.`,
     );
   }
   const notice =
     !ownership.owned && foreign.length > 0
       ? `Adopted ${shown}: kept its ${foreign.length} other top-level key(s) ` +
-        `(${foreign.join(", ")}) beside the generated ${emittedKeys.join(", ")}; the engine owns ` +
+        `(${listNames(foreign)}) beside the generated ${emittedKeys.join(", ")}; the engine owns ` +
         `only those.` +
         (foreign.includes(HOOKS_KEY)
           ? ` Its own hooks key stays too, and this client loads it beside the plugin's hooks — ` +
@@ -633,7 +658,7 @@ export function reduceClaudeSettingsToForeignContent(
       kind: "engine-only",
       detail:
         `Co-owned settings document that proved to be engine-only: removing ${removed} left no ` +
-        `key the client or the operator authored, so nothing in it is theirs to keep.`,
+        `other top-level key, so nothing else in it is the client's or the operator's to keep.`,
     };
   }
   return {
@@ -641,7 +666,7 @@ export function reduceClaudeSettingsToForeignContent(
     content: serialise(Object.fromEntries(kept), lineEndingOf(raw)),
     detail:
       `Co-owned settings document: the engine's ${present.length} key(s) (${removed}) were ` +
-      `removed and the ${kept.length} other key(s) (${kept.map(([key]) => key).join(", ")}) are ` +
+      `removed and the ${kept.length} other key(s) (${listNames(kept.map(([key]) => key))}) are ` +
       `kept verbatim, so the file stays.`,
   };
 }
