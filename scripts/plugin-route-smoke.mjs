@@ -1114,13 +1114,25 @@ async function copilotLegs(context) {
         // permission from user" and the leg measures the permission model rather than the root. The
         // narrower `--allow-tool <tools>` is documented but its tool NAMES are not, so the measured
         // flag is the one used and the run happens in a throwaway repository outside every checkout.
-        const run = await call(context, { args: ['-p', setupPrompt(context.setupForm), '-s', '--allow-all-tools'], cwd: repo, env: realEnv })
+        // `COPILOT_ALLOW_ALL=true` beside the flag (prove/277): `copilot help environment` on 1.0.87
+        // says the variable, set to exactly "true", "trusts the working directory and loads its
+        // skills, plugins, MCP servers and hooks", and folder trust is what lets a headless session
+        // run the shell commands the command body asks for; `--allow-all-tools` alone auto-approves
+        // tools, and under it every `node …` line the session composed answered "Permission denied
+        // and could not request permission from user". This client only. The instrument is still
+        // the manifest on disk.
+        const run = await call(context, {
+          args: ['-p', setupPrompt(context.setupForm), '-s', '--allow-all-tools'],
+          cwd: repo,
+          env: { ...realEnv, COPILOT_ALLOW_ALL: 'true' },
+        })
         invocation = invocationLeg(
           context,
           run,
           repo,
           `the REAL COPILOT_HOME (the login lives there; ${existing.detail}), with plugin --help ` +
-            `listing ${removals}`,
+            `listing ${removals}, run with COPILOT_ALLOW_ALL=true beside --allow-all-tools because ` +
+            `only folder trust lets the session run the command body's shell lines`,
         )
       }
     }
