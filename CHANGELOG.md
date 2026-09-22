@@ -144,6 +144,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`.claude/settings.json` is owned per top-level key, so a project-scope plugin install and
+  `plugin setup` no longer collide.** The engine owns exactly the keys the install mode makes its
+  own — `permissions`, and `hooks` while the repository owns hooks — and carries every other key
+  through as parsed: the client's `enabledPlugins`, an operator's `model` or `env` and, under a
+  plugin-backed setup, the operator's `hooks` survive setup, sync, check and clean, and `clean`
+  deletes the file only when nothing else remains — reclaiming it, and the three MCP documents,
+  behind a verified `.bak` when the bytes no longer match what the ledger recorded, with no backup
+  when they still do, and not at all when the backup cannot be taken. An engine-owned key whose
+  content differs is regenerated silently while the file still hashes to what the engine wrote, and
+  otherwise behind a verified `.bak` with a warning naming the key; a repository-mode hooks wiring a
+  lost setup left behind is removed by a plugin-backed setup and reported — replaced by a
+  repository-owned one, with a warning unless the file is proven unedited — behind a `.bak` whenever
+  the engine cannot prove the file unedited, because recognising its own rendering widens what it
+  may touch and never skips the backup; the collision that remains is one key the engine cannot
+  prove it wrote, which `sync --force` replaces alone; and `check`'s `plugin-duplicates` row reports
+  a `hooks` key beside a plugin's hooks, because the client loads both. Found by the private-chain
+  rehearsal, whose documented route — install, then setup — ended in a red `check`.
 - **A Claude Code hook command survives a session that leaves the repository root.** Every
   repository-relative hook script is now rendered as one double-quoted word under
   `${CLAUDE_PROJECT_DIR}` — `node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/<script>"`

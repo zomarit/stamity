@@ -100,7 +100,7 @@ run at all warns instead, saying `could not be checked:` and why. Every other ro
 | `claude-hook-shell` | **Can fail**, on Windows only. The Claude hook commands this engine emits are anchored on `${CLAUDE_PROJECT_DIR}` with a POSIX fail-closed tail, and they parse under `sh` and Git Bash. On a Windows host with no Git Bash the client falls back to PowerShell, where `${NAME}` is PowerShell's own variable and the tail does not parse: the pre-tool-use guard never launches and the client does not block. The row looks where the client looks and nowhere else, in the client's order (vendor's troubleshoot-install page, read 2026-09-22): `CLAUDE_CODE_GIT_BASH_PATH` when it names an existing file called `bash.exe`, `sh.exe`, `bash` or `sh` — any other value, a directory or `git-bash.exe` included, the client ignores and so does the row; then `bin\bash.exe` under the default install locations `C:\Program Files\Git` and `C:\Program Files (x86)\Git`; then the `git.exe` on `PATH`, reading `bin\bash.exe` from that installation. A bare `bash.exe` on `PATH` (MSYS2, Cygwin, WSL's `C:\Windows\System32\bash.exe`) is not a place the client looks and does not count; a `git.exe` on `PATH` with no `bin\bash.exe` beside it (a shim, a relocated Git) fails the row with the variable as the remedy, since how the client resolves such a git is unstated. It fails when this repository targets `claude` with repository-emitted hooks and none of the three holds Git Bash. Install Git for Windows (Git Bash), or set `CLAUDE_CODE_GIT_BASH_PATH` to its `bin\bash.exe` in the environment — a value in `settings.json`'s `env` block reaches the client, not a shell that runs `check` outside a Claude session; re-run `check`. On every other host, and where Claude's hooks are carried by its plugin, it passes with a note saying which condition released it. |
 | `preserved-duplicate` | Warns when a managed file repeats its own managed block below the `STAMITY:END` marker. Your repository then loads that content twice. Delete the copy at the line the row names. The block itself is regenerated on every sync. |
 | `plugin-runtime` | Passes with a note when this repository records no plugin client and no plugin root is in the environment — the ordinary state for a repository that is not plugin-backed, and nothing to act on. Warns when a client IS recorded and no root is in the environment: the repository names a plugin this run could not look at. **Can fail** on two states, and both are plugins this repository claims: the locator refuses (no runtime found, or a Node below the plugin's floor; its own message is quoted) while a client is recorded or the mode is `plugin-backed`, and this repository records `plugin-backed` while the resolved runtime's major differs from the version its `.stamity/` state was written by. Pin the plugin back to that major, or install the matching companion runtime. A refusal with no client recorded and no `plugin-backed` mode warns instead — the root variable came from elsewhere in your environment, and another session's broken plugin is not this repository's defect. |
-| `plugin-duplicates` | **Can fail.** A class an installed plugin carries is also on disk here. The row names the paths it found — three, sorted, then `+N more` — and three sources, each with its own remedy: `ledger` (this engine wrote it — `clean -y`, then `plugin setup --client <tool>`), `apm` (an APM dependency deploys the same classes — remove it from `apm.yml` and run `apm install`, or keep the plugin uninstalled), `unmanaged` (not written by this engine — remove the file, or keep it as an override under `.stamity/overrides/`). It **warns** while the manifest still says `mode: "generated"`, because coexistence is the expected state before you clean, and **fails** once the manifest records `plugin-backed`. No verb deletes a duplicate. |
+| `plugin-duplicates` | **Can fail.** A class an installed plugin carries is also on disk here. The row names the paths it found — three, sorted, then `+N more` — and three sources, each with its own remedy: `ledger` (this engine wrote it — `clean -y`, then `plugin setup --client <tool>`), `apm` (an APM dependency deploys the same classes — remove it from `apm.yml` and run `apm install`, or keep the plugin uninstalled), `unmanaged` (not written by this engine — remove the file, or keep it as an override under `.stamity/overrides/`; on Claude Code a `hooks` key in `.claude/settings.json` under a plugin install is this source too, because the client loads it beside the plugin's hooks — remove the key, or keep personal rows in `.claude/settings.local.json`, and `sync` removes a stale repository-mode rendering by itself, where `clean` leaves it in place). It **warns** while the manifest still says `mode: "generated"`, because coexistence is the expected state before you clean, and **fails** once the manifest records `plugin-backed`. No verb deletes a duplicate. |
 | `pack-integrity` | **Can fail.** An installed pack's bytes no longer match what was recorded at install. Re-install that pack with `clean --pack <id>`, then `add <id>`. Do **not** reach for `sync` first: it would carry the edited bytes into your emitted setup. |
 | `invariants` | States which version of the charter's floor invariants the installed engine would write — the version, its ratification date, and its last amendment. Warns when the installed charter declares no version at all. That means an old package: upgrade, then sync. |
 
@@ -156,6 +156,16 @@ npx @zomarit/stamity sync --force
 
 `--force` copies your bytes to a verified `.bak` before it overwrites. Which remedy is right
 depends on whose content matters, and `sync` cannot know that.
+
+For `.claude/settings.json` the collision is one key, not the file. That document is owned per
+top-level key — `permissions`, and `hooks` while the repository owns hooks — and every other key
+(the client's `enabledPlugins`, your `model` or `env`) is kept whatever you do: remove the key the
+message names and re-run `sync`, or `sync --force` replaces only the engine's keys behind a
+verified `.bak` and keeps every other key. A hand edit inside `permissions` or `hooks` of a file
+the engine wrote is regenerated on the next `sync` — with a `.bak` and a warning naming the key
+when the file no longer hashes to what the engine wrote, and silently when it still does — the
+case of a rendering that merely moved with an engine upgrade; personal permission rows belong in
+`.claude/settings.local.json`, which this engine never writes.
 
 ### A client has no files
 
@@ -276,8 +286,13 @@ in-repo writes do not take that path, and none of them can damage a file that is
 - The state directories' `.gitkeep`. It is created exclusively, so a file already at that name
   is kept.
 - The `.bak` the writer leaves before it overwrites a file it cannot regenerate. That happens to
-  a colliding unmanaged file under `--force`, and to a managed file whose markers a plain `sync`
-  has to repair. The backup takes a name no existing file holds.
+  a colliding unmanaged file under `--force`, to a managed file whose markers a plain `sync`
+  has to repair, to `.claude/settings.json` when an engine-owned key — or a hooks wiring the
+  engine recognises as its own — is replaced or removed in a file the engine cannot prove
+  unedited, and to that file and the three MCP documents when `clean` or a client's removal
+  reclaims the engine's keys from bytes that no longer match what the ledger recorded (an
+  untouched file is reclaimed with no backup; a backup that cannot be taken refuses the removal
+  and leaves the file untouched). The backup takes a name no existing file holds.
 - The workspace root's `.stamity/workspace-sync-journal.jsonl`, which is an append-only log.
 
 ### `init` refuses on a repository that already has a setup

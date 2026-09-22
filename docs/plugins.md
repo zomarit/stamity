@@ -123,6 +123,11 @@ settings of your Claude configuration directory (`extraKnownMarketplaces` there)
 }
 ```
 
+`stamity plugin setup` keeps that key beside its own `permissions`, in either order, and says so:
+the file is owned per top-level key, so the client's enablement — and the marketplace declaration
+below, if you add it — survive setup, `sync`, `check` and `clean` (the rule is under
+[Set the repository up](#set-the-repository-up)).
+
 What makes the decision reviewable is a declaration you write into the project settings yourself —
 the same `extraKnownMarketplaces` block beside the enablement, so the committed file names the
 source as well as the plugin:
@@ -168,8 +173,10 @@ Where an install lands, and whether it is a copy at all, depends on the marketpl
 **remote** marketplace install is a cached copy under
 `~/.copilot/installed-plugins/<marketplace>/<plugin>`, or `_direct/<source-id>/` for a direct one:
 a root you edit on disk changes nothing in the client until you install it again, and `copilot
-plugin update stamity@stamity` is the refresh — this client's update takes
-`plugin-name@marketplace-name` for a marketplace install. A marketplace on a **local path** is the
+plugin update stamity` is the refresh — the bare plugin name, the spelling the lifecycle walk
+executed and a built tree's `README.md` prints; the vendor's reference spells a marketplace
+install's refresh `plugin-name@marketplace-name`, and that `stamity@stamity` form is vendor-stated
+for a remote marketplace and unmeasured here for `update`. A marketplace on a **local path** is the
 other case, and nothing is copied — the plugin loads live from the directory it sits in, an edit
 takes effect on `/restart` or in a new session, and no `plugin update` is needed *(vendor-stated
 for a directory-source marketplace, read 2026-09-21; measured 2026-09-20 on 1.0.85, which reported
@@ -272,7 +279,20 @@ Each of those runs `stamity plugin setup` through the plugin's own runtime. What
 
 - `AGENTS.md`, and the managed block in `CLAUDE.md`
 - `.claude/rules/` and the other repository-owned classes from the table above
-- `.claude/settings.json` **without** a `hooks` object, when the plugin owns hooks
+- `.claude/settings.json` **without** a `hooks` object, when the plugin owns hooks. The file is
+  merged by top-level key: setup adds `permissions` (and `hooks` only when the repository owns
+  hooks) and keeps every other key in place — including the `enabledPlugins` that
+  `plugin install --scope project` wrote. A `permissions` or `hooks` key the engine did not record
+  and that differs from what it renders is a collision: remove that key and re-run, or
+  `sync --force` replaces only the engine's keys behind a verified `.bak`. A repository-mode
+  `hooks` wiring an earlier setup left behind — its commands run scripts under
+  `.stamity/generated/hooks/` — is removed and reported, behind a `.bak` whenever the engine cannot
+  prove the file unedited (a lost setup left no ledger row, so it cannot); `clean` leaves such a
+  wiring in place and `sync` removes it. `clean` reclaims this file the way it writes it: behind a
+  verified `.bak`, named, when the bytes no longer match what the ledger recorded, with no backup
+  when they still do, and not at all when the backup cannot be taken. Under a plugin install, a
+  `hooks` key in this file is loaded by the client beside the plugin's hooks and `check` reports it
+  as an unmanaged duplicate.
 - MCP documents, when you select servers
 - `.stamity/` — the manifest, the ledger, and the state directories
 
@@ -342,11 +362,19 @@ client's own message is what names it. A `plugin rollback` subcommand is **settl
 vendor page read 2026-09-21 names one. The reinstall route above is the rollback.
 
 **Copilot CLI.** Pinning is the same move as installing — add the marketplace at
-`#plugins/v<version>` — and for a remote marketplace `copilot plugin update stamity@stamity` is the
-refresh, with rolling back being uninstall, re-add at the previous tag, install. For a marketplace
-on a local path there is nothing to update or roll back through the CLI: the plugin loads live, so
-both are a replacement of the tree the marketplace points at *(measured 2026-09-20 on 1.0.85:
-`plugin update` answered "there is nothing to update")*. `COPILOT_AUTO_UPDATE=false`, or
+`#plugins/v<version>` — and `copilot plugin update stamity` is the refresh: the bare plugin name,
+which is the spelling the lifecycle walk executed and the one a built tree's `README.md` prints
+*(executed 2026-09-20 on 1.0.85, where it answered "there is nothing to update" against a
+marketplace on a local path)*. The vendor's reference spells a remote marketplace's refresh as
+`plugin-name@marketplace-name` — `copilot plugin update stamity@stamity` — and that form is
+vendor-stated, not measured here. Rolling back is uninstall, re-add at the previous tag, install
+(`copilot plugin uninstall stamity`, then
+`copilot plugin marketplace add <owner>/stamity#plugins/v<previous>`, then
+`copilot plugin install stamity@stamity` — the lines a built tree's `README.md` prints, from the
+vendor's reference; the walk did not execute them). For a
+marketplace on a local path there is nothing to update or roll back through the CLI: the plugin
+loads live, so both are a replacement of the tree the marketplace points at *(measured 2026-09-20
+on 1.0.85)*. `COPILOT_AUTO_UPDATE=false`, or
 `autoUpdate: false` in the configuration, turns off the session-start auto-update of FIRST-PARTY
 plugins — the built-in marketplaces — which is skipped in CI by default anyway; a third-party
 marketplace like this one is not auto-updated at all. *From the vendor's CLI plugin reference,
@@ -358,12 +386,27 @@ rolling back are branch moves on your mirror, and the re-index above is the dela
 around; a root passed with `--plugin-dir` is replaced in place. For Codex,
 `codex plugin marketplace upgrade` refreshes git-sourced catalogs only — *the subcommand is listed
 by `codex plugin marketplace --help` on codex-cli 0.154.0, read 2026-09-20, and answered "No
-configured Git marketplaces to upgrade" for a marketplace on a local path* — so update and
-rollback are both the marketplace directory moved plus `codex plugin add stamity@stamity` again.
+configured Git marketplaces to upgrade" for a marketplace on a local path* — so an update is the
+marketplace moved plus `codex plugin add stamity@stamity` again, and the route back a built tree's
+`README.md` prints is four commands:
+
+```sh
+codex plugin remove stamity@stamity
+codex plugin marketplace remove stamity
+codex plugin marketplace add <owner>/stamity --ref plugins/v<previous>
+codex plugin add stamity@stamity
+```
+
+*What was walked, 2026-09-20 on codex-cli 0.154.0: the marketplace directory moved in place and
+`codex plugin add stamity@stamity` again — both the update and the rollback for a marketplace on a
+local path; re-adding that directory answered "already added". What is recommended and was not
+walked: the `marketplace remove` step, whose verb is listed by `codex plugin marketplace --help` on
+0.155.1 (read 2026-09-22). It comes first because re-pointing a git marketplace already on record
+is unmeasured, and the "already added" answer may leave such a marketplace's ref where it was.*
 `codex plugin remove` takes the qualified id: `codex plugin remove stamity` refuses with `plugin
 requires --marketplace unless passed as <plugin>@<marketplace>`, and `codex plugin remove
-stamity@stamity` purges that version's local cache, so the route back re-copies the tree
-*(both measured 2026-09-20 on 0.154.0)*.
+stamity@stamity` purges that version's local cache, which is why the route ends in `plugin add`
+again *(both measured 2026-09-20 on 0.154.0)*.
 
 ## Keep the runtime in step
 
@@ -475,6 +518,10 @@ at all, whatever its client settings say.
   source reads `apm.yml` in both shapes an APM manifest takes — a flat `dependencies:` list and
   the `dependencies:` → `apm:` section the [enterprise guide](enterprise-forks.md) shows — and
   matches a dependency that names this repository's slug or package name as a whole token,
-  case-insensitively, in its bare, GitHub-URL and subpath spellings alike.
+  case-insensitively, in its bare, GitHub-URL and subpath spellings alike. On Claude Code, a
+  `hooks` key in `.claude/settings.json` under a plugin install is an `unmanaged` finding of this
+  row too, because the client loads it beside the plugin's hooks: remove the key, or keep personal
+  rows in `.claude/settings.local.json`; `sync` removes a stale repository-mode rendering by itself
+  (`clean` does not — it strips only the keys the mode owns).
 
 Neither row removes anything. Every remedy is a step you run.

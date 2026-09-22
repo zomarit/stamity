@@ -359,12 +359,14 @@ no ownership ledger and no corpus, so nothing can regenerate it.
 Commit the repository before you run the sweep, so that prose is recoverable from git. Or move
 it out of the tree. Or skip the sweep and remove the leftovers by hand with `git rm`.
 
-### One file is worth losing on purpose
+### One key is worth losing on purpose
 
-If hatch3r's `.claude/settings.json` was already there at init, stamity refused to claim it. The
-file is in no ownership ledger and carries no markers. So init left it untouched, said so in a
-warning, and named it on the panel's own list of what was left in place. That means hatch3r's
-hooks are still the ones wired up. Remove that file and run `sync` to install this setup's.
+If hatch3r's `.claude/settings.json` was already there at init, stamity refused to claim its
+`hooks` key: that key is one this engine renders, its content differs, and no ownership ledger row
+proves the engine wrote it. Init left the file untouched, said so, and named it on the panel — so
+hatch3r's hooks are still the ones wired up. Remove the `hooks` key (and any `permissions` key)
+and run `sync`, or run `sync --force` to replace them after a verified `.bak`; every other key in
+the file is kept either way.
 
 ### In a monorepo, handle each package
 

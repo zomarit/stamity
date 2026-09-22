@@ -436,9 +436,16 @@ bounded by the vendor's at-most-every-10-minutes re-index; for Codex,
 `codex plugin remove stamity@stamity` (amended 2026-09-22 from the bare `codex plugin remove
 stamity`: on codex-cli 0.154.0 `plugin remove` takes `<plugin>@<marketplace>`, the spelling
 `clean -y` prints and the 2026-09-21 paragraph under REQ-PLUGIN-021 records) followed by adding
-the marketplace at the earlier tag and `codex plugin add` again. The clause is therefore amended
+the marketplace at the earlier tag and `codex plugin add` again — four commands as the built tree's
+`README.md` prints them (amended 2026-09-22): `codex plugin remove stamity@stamity`,
+`codex plugin marketplace remove stamity`, `codex plugin marketplace add <owner>/stamity --ref
+plugins/v<previous>`, `codex plugin add stamity@stamity`, where the `marketplace remove` verb is
+read from `codex plugin marketplace --help` on 0.155.1 and was not walked, and stands ahead of the
+re-add because the walk re-added only a local directory (answered "already added") and re-pointing
+a git marketplace already on record is unmeasured; `docs/plugins.md` prints the same four and says
+which were walked. The clause is therefore amended
 to read "through the route `docs/plugins.md` records per client — a vendor command where one
-exists, and a documented re-add at the earlier pin where none does" (`docs/plugins.md:301-366`,
+exists, and a documented re-add at the earlier pin where none does" (`docs/plugins.md:321-409`,
 the **Pin, update, roll back** section), which is what the lifecycle proof will
 walk and what REQ-PLUGIN-021's per-client row already anticipated.
 
@@ -509,6 +516,41 @@ level removed (its duplicates remedy composes through the CLI's package-name kit
 capability-file reader stays in the engine, registered as the group `plugins: { capabilityFile }`.
 `plugin setup` is prompt-free — the init planner it calls asks nothing — so `-y` is inert.
 
+As built (2026-09-22): `.claude/settings.json` is owned per top-level key, not as a file. The engine
+owns exactly the keys the install mode makes its own (`src/adapters/claude.ts::claudeSettingsOwnedKeys`
+— `permissions`, and `hooks` while the repository owns hooks) and carries every other key — the
+client's `enabledPlugins`, an operator's `model`, `env` or, under a plugin-backed setup, `hooks` —
+through as its parsed value, re-serialised in the engine's style and in the file's own line ending
+(a document mixing the two endings is normalised to CRLF on its first write), in its position (`src/manifest/claudeSettings.ts`, `planClaudeSettings`;
+`test/manifest/claudeSettings.test.ts`, `test/merge/settingsKeyOwnership.test.ts`). So a setup run
+after `claude plugin install stamity@stamity --scope project` adopts the file the client wrote,
+keeps `enabledPlugins` beside the generated `permissions` and prints a notice naming the kept keys;
+in the other order the client's key lands beside a ledgered file and survives the same way. A
+repository-mode `hooks` rendering left behind by a lost setup — recognised by a command that runs a
+script under `.stamity/generated/hooks/` (`HOOKS_GENERATED_DIR`, defined in `src/types/markers.ts`
+and re-exported by `src/emit/hooksInfra.ts`), which only this engine writes — is the engine's to
+touch even with no ledger row: a plugin-backed setup removes it and reports the removal (the
+client stops running those hooks); a repository-owned one replaces it, with a warning naming `hooks`
+unless the file is proven unedited — then the difference is the rendering having moved with an
+engine upgrade and the replacement says nothing, as every proven-unedited key does; and recognition
+only widens what the engine may touch — it never skips the backup, so a recognised object the engine cannot prove
+unedited is touched only behind a verified `.bak`, because no predicate can tell the engine's rows
+from an operator's inside one object. The file collides only when it is not a JSON object (a leading
+byte-order mark is tolerated; the refusal quotes where the parser stopped, never the file's bytes),
+cannot be serialised back, or carries an engine-owned key with other content that no ledger row
+claims; the refusal names that key, because
+the key alone is the collision, and `--force` clears it behind a verified `.bak` of the file,
+replacing only the engine's keys — the whole file only where nothing in it could be parsed and kept.
+A symbolic or hard link at the path is refused before any read, as the MCP merge lane refuses it.
+The `hooks` half of REQ-PLUGIN-016's boundary is unchanged: under plugin-backed ownership the
+emission renders no `hooks` key, so user hooks (the manifest's `hooks.userHooksDir`) reach no file
+for this client — pre-existing, the planning warning recorded under that requirement — and a
+`hooks` key an operator hand-writes is what the `plugin-duplicates` row flags. This contract answers a defect the private-chain rehearsal found
+on 2026-09-22: the documented route — install, then setup — skipped the file the client had written
+and ended in `check`'s `collision .claude/settings.json`, with a remedy that would have destroyed
+the install record. Aligned to the header of `src/manifest/claudeSettings.ts` at the settings
+lane's round-3 commit, the wording of record.
+
 ### REQ-PLUGIN-016 sync, check and clean honor the ownership boundary
 
 Given a manifest recording `plugin.mode: "plugin-backed"` with `clients.claude.classes` of
@@ -549,6 +591,44 @@ in `check.ts` into the shared probe, where `engineNodeFacts()` reads this build'
 `>=22.22.2` and computes `ok` against it, and ONE exported tri-state `judgeNodeFloor` is called by
 both readers, so `check`'s row stays byte-identical arm by arm instead of two surfaces composing the
 same judgment twice.
+
+As built (2026-09-22), the settings document under the boundary. `sync` and `check` plan
+`.claude/settings.json` by the key-level ownership REQ-PLUGIN-015's paragraph of the same date
+records: `check`'s drift gate previews exactly the write `sync` would make, and its collision step
+says, for this file, that the collision is one key and not the file (`src/cli/commands/check.ts`,
+`collisionStep`). The rule is the same for every engine-owned key, `hooks` included: content equal
+to the rendering needs no proof, and content that differs is regenerated silently only while the
+file is unedited — a ledger row records the path and the file's bytes still hash to a hash that row
+recorded (`hasLedgerDrift`, CRLF fold included; a row recording no hash reads as contested);
+otherwise the key is contested — a collision with no ledger row, and with one a replacement behind
+a verified `.bak` whose warning names the key and `.claude/settings.local.json`, the client's
+per-user project settings, for personal rows. `clean`, and a client's removal through the reclaim sweep, strip only
+the keys the install mode makes the engine's and delete the file only when nothing else remains —
+the co-owned reducer settles the document by its keys ahead of the hash proof, so a client's
+`enabledPlugins` written after the setup does not block the reclaim
+(`reduceClaudeSettingsToForeignContent`; `src/merge/reclaim.ts`, gate 4); the reducer strips only
+the mode's own keys, so `clean` leaves a stale repository-mode rendering in place under plugin
+ownership — it is `sync`'s to remove, behind its backup, and the `plugin-duplicates` row's to name.
+The reclaim takes the care every write lane takes (the lane's round-4 commit): `clean` and a
+client's removal reclaim `.claude/settings.json` — and the three MCP documents — behind a verified
+`.bak` when the file's bytes no longer hash to what the ledger recorded, and name it; an untouched
+file is reclaimed with no backup; and a backup that cannot be taken (a hard-linked target, a `.bak`
+name already held) refuses the removal and leaves the file untouched — a backup or nothing.
+Under a plugin-backed
+setup a `hooks` key in the file is reported by `check`'s `plugin-duplicates` row and by
+`plugin status`, through the one probe both read, as an `unmanaged` hooks duplicate at
+`.claude/settings.json` (`src/cli/commands/plugin/probe.ts`, `settingsHooksDuplicate`), because the
+client loads it beside the plugin's hooks; the remedy names the key, `.claude/settings.local.json`
+for personal rows, and `sync`, which removes a stale repository-mode rendering by itself. The
+user-hook sentence above holds as it stands: under plugin-backed ownership the emission drops the
+whole `hooks` object for this client, so an accepted user hook row reaches no file (pre-existing),
+and the hooks key the duplicates row flags is one an operator hand-wrote. One residual is
+documented rather than closed (`test/manifest/claudeSettings.test.ts`, the repository-mode
+silent-regeneration case): an operator's `hooks` the engine carried under a plugin-backed setup,
+with the manifest's mode then hand-edited back to repository ownership and the file's bytes still
+matching a ledgered hash, reads as unedited and is regenerated silently — the route that reaches it,
+a hand-edited manifest mode, is outside the supported ones. Aligned to the header of
+`src/manifest/claudeSettings.ts` at the settings lane's round-3 commit, the wording of record.
 
 ### REQ-PLUGIN-017 Explicit facts and gates replace placeholders
 
@@ -613,7 +693,7 @@ marketplace recorded on the client's `PluginClientRecord`, which no manifest fie
 the later fix, not this one. An unparseable `apm.yml` reports nothing rather than guessing. The
 `unmanaged` source derives an id by stripping ONE client extension, longest first — `.agent.md` and
 `.prompt.md` precede the bare `.md` they end with (`NATIVE_CONTENT_EXTENSIONS`,
-`src/cli/commands/plugin/probe.ts:463-479`),
+`src/cli/commands/plugin/probe.ts:464-480`),
 because a `.md`-first list left `<id>.agent` and matched no carried id, which made every Copilot
 file invisible to the scan; any extension added later belongs above every extension it is a suffix
 of.
@@ -964,7 +1044,10 @@ recomputed roster is 102 cases — 52 golden, 20 adversarial (16 non-twin guardr
 The clause about the committed run artifact is MET, and the eval of record is now run 32
 (2026-09-22): `evals/runs/2026-09-22-run-32/`, status PASS over 102 cases at eval candidate
 `e5e54c9`, with no case, cited source, rubric, set or instrument byte moving between that candidate
-and `37e8976`, the sha that ships. It is an increment under SET-v7's incremental rule (§ 0) composed
+and the sha that ships, named in the run record's session-4 proof block — the invariant that holds
+for it whatever the session's last commit: `scripts/plugins/setupCommand.mjs`, the one cited source
+outside the corpus, is byte-identical through this session, and no case, rubric, set or instrument
+byte moved between `e5e54c9` and it. It is an increment under SET-v7's incremental rule (§ 0) composed
 with run 31 — 17 calls, five calibration fixtures matched 5 of 5 on the first attempt (§ 9), then two
 cases at three samples for two roles — re-measuring `st-setup-refuses-generated-setup` and
 `st-setup-fresh-repository`, whose cited source lines the route repairs of 2026-09-22 moved (§ 3: the
