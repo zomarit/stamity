@@ -1370,8 +1370,10 @@ async function codexLegs(context) {
         run,
         realCwd,
         `the REAL CODEX_HOME (the login lives there; ${existing.detail}); this root carries no ` +
+          // The grant as a PLACEHOLDER, never the argv's real path (prove/278): the scratch
+          // repository is a temp path, and this reason lands in a committed evidence file.
           `st-setup command, so the prompt names the README's own setup line, run under ` +
-          `${codexSandbox(realCwd).join(' ')} because the default read-only sandbox refuses the write ` +
+          `${codexSandbox('<repo>').join(' ')} because the default read-only sandbox refuses the write ` +
           `and workspace-write alone refuses the repository's own .codex/`,
       )
     }

@@ -588,6 +588,10 @@ exit 1
         "copilot plugin marketplace remove stamity exit 0",
       ]);
       expect(run.stderr).toContain("plugin-route: copilot cleanup - NOT removed afterwards");
+      // prove/278: no reason of any leg carries a temp or home path into the evidence.
+      for (const entry of report.clients["copilot"]?.legs ?? []) {
+        expect(entry.reason, `${entry.leg}: ${entry.reason}`).not.toMatch(/\/var\/folders\/|\/private\/|\/Users\/|\/tmp\//);
+      }
     },
     ARMED_MS,
   );
@@ -663,6 +667,11 @@ describe("the codex invocation leg's sandbox grant", () => {
     const source = readFileSync(SMOKE, "utf8");
     const codexLeg = source.slice(source.indexOf("async function codexLegs("), source.indexOf("async function operatorAlreadyHas("));
     expect(codexLeg).toContain("...codexSandbox(realCwd),");
+    // prove/278: the reason is composed from the placeholder, never from the argv's temp path —
+    // the evidence file is committed. The argv keeps the real directory.
+    expect(codexLeg).toContain("codexSandbox('<repo>').join(' ')");
+    expect(codexLeg).not.toContain("codexSandbox(realCwd).join");
+    expect(codexSandbox("<repo>").join(" ")).toBe(`--sandbox workspace-write --add-dir ${join("<repo>", ".codex")}`);
     expect(codexLeg).toContain("because the default read-only sandbox refuses the write");
     expect(codexLeg).toContain("workspace-write alone refuses the repository's own .codex/");
     // Never the widest grant, and never the flag that drops the sandbox altogether — read off the
