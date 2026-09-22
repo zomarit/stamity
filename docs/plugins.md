@@ -229,16 +229,25 @@ the files no container carries. One command does that, and every client's plugin
 - **Cursor** and **Copilot CLI** — `/st-setup`
 - **Codex** — no command class rides in that container, so run the line the root's own `README.md`
   prints: the locator at `<root>/runtime/locate.mjs`, followed by `plugin setup`.
+  On Codex that run needs permission to write. An interactive session asks you for it. A headless
+  `codex exec` does not ask: its default sandbox is read-only, so the setup cannot even create
+  `.stamity/`, and `--sandbox workspace-write` still refuses the repository's own `.codex/` — which
+  is exactly where this client's repository-owned agents land. Grant both: `codex exec --sandbox
+  workspace-write --add-dir <repo>/.codex` (measured 2026-09-22 on codex-cli 0.154.0).
 
 On the Copilot CLI that command has one step before the others, and it is there because this client
 passes a command's shell no plugin-root variable at all — the session environment carries
 `COPILOT_CLI` and `COPILOT_HOME` and nothing ending in `PLUGIN_ROOT` (measured 2026-09-22 on
-1.0.87). So `/st-setup` asks the client where its own root is, and the listing that answers is the
-skill one: `copilot skill list --json` gives every skill a `path`, and for a row whose `source` is
-`plugin` that path is `<root>/skills/<name>`, so trimming the tail leaves the root the command
-hands the locator as `--plugin-root`. `copilot plugin list --json` does not answer it — its
-`installedFrom` is the MARKETPLACE directory the plugin was added from, and the catalog inside that
-directory is what points at a root beneath it (both measured 2026-09-22 on 1.0.87).
+1.0.87). So `/st-setup` asks the client where its own root is, and the listing that answers is
+`copilot skill list --json`. A plugin's rows there take two shapes: a carried skill's `path` ends
+`/skills/<name>`, and a carried command's `path` is the commands directory itself,
+`<root>/com.github.copilot/commands`, with no name on the end — while a builtin row's path sits in
+the CLI's own cache. So the command reads the root as the part of the path before `/skills/` where
+a row has one and before `/com.github.copilot/` otherwise, and it stops rather than guessing when
+nothing matches or when two rows disagree; the root it derives is what it hands the locator as
+`--plugin-root`. `copilot plugin list --json` does not answer it — its `installedFrom` is the
+MARKETPLACE directory the plugin was added from, and the catalog inside that directory is what
+points at a root beneath it (all measured 2026-09-22 on 1.0.87).
 
 Each of those runs `stamity plugin setup` through the plugin's own runtime. What it writes:
 

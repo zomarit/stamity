@@ -132,6 +132,18 @@ no credential and the run refused with `401 Unauthorized` (measured 2026-09-20),
 prints the exec output as a measurement and asserts nothing on it. Re-read all three at the next
 codex minor.
 
+What `codex exec` may WRITE was measured on 2026-09-22 on codex-cli 0.154.0, and it decides how a
+setup session has to be launched. The default sandbox is READ-ONLY: the setup line's `mkdir
+.stamity` was refused under it. `--sandbox workspace-write` lets the repository be written — the
+same `mkdir .stamity` succeeded — but still refuses the repository's OWN `.codex/` directory, which
+is where `plugin setup` writes this client's repository-owned agent class. With `--add-dir
+<repo>/.codex` beside that mode, `.codex` was created and written. So the route proof's Codex setup
+session runs `--sandbox workspace-write --add-dir <repo>/.codex`, and an interactive session asks
+the operator for the same write instead. The flag surface is the client's own: `-s, --sandbox`
+takes `read-only`, `workspace-write` or `danger-full-access`, and `--add-dir <DIR>` names
+"additional directories that should be writable alongside the primary workspace" (`codex exec
+--help` on 0.154.0, read 2026-09-22).
+
 - **Cursor:** neutral-tree skills support `/st-*` invocation. Native hook timeouts use
   seconds; explicit exit 2 denies supported actions and `failClosed` covers errors and
   timeouts. PreToolUse `ask` is unenforced, so portable `ask` denies pending human review.
@@ -227,13 +239,21 @@ carries `COPILOT_CLI` and `COPILOT_HOME` and nothing ending in `PLUGIN_ROOT` (me
 on 1.0.87). A command that needs its own root therefore asks the client for it, and only one of the
 two listings answers. `copilot plugin list --json` does NOT: its `installedFrom` is the MARKETPLACE
 directory the plugin was added from, and the catalog inside that directory is what maps the
-plugin's name to a root beneath it. `copilot skill list --json` does: a row with `source: "plugin"`
-carries a `path` of `<root>/skills/<name>`, so trimming that tail yields the root. Measured
-2026-09-22 on 1.0.87 in a scratch `COPILOT_HOME`, against a throwaway one-skill root added as a
-local marketplace: `installedFrom` was the marketplace directory and the skill row's `path` its
-`copilot/` subtree (the install also reported `"source": "live"` and said in the client's own words
-that it loads live from that directory and copied nothing). The generated `st-setup` command reads
-the root out of the skill listing and passes it to the locator as `--plugin-root`.
+plugin's name to a root beneath it. `copilot skill list --json` does, and a plugin's rows there
+come in TWO shapes. A carried SKILL's `path` is `<root>/skills/<name>`. A carried COMMAND's `path`
+is the commands directory itself, `<root>/com.github.copilot/commands`, with no name segment — and
+a builtin row's path is under the CLI's own package cache, so no derivation may simply trust a path
+it finds. Against the installed stamity root on 1.0.87 the listing is 22 rows: ten plugin skills,
+ten plugin commands, two builtin, and no agent rows at all. So the generated `st-setup` command
+takes the part of `path` before `/skills/` where a row has one and the part before
+`/com.github.copilot/` otherwise, and it STOPS rather than guessing when no entry matches or when
+two entries yield different roots; the root it derives goes to the locator as `--plugin-root`.
+Measured 2026-09-22 on 1.0.87 in a scratch `COPILOT_HOME`: against the installed root for the
+census above, and against a throwaway root of one skill and one command for the two path shapes,
+where `installedFrom` was the marketplace directory, the skill row's path its `copilot/skills/`
+subtree and the command row's path its `copilot/com.github.copilot/commands` directory (that
+install also reported `"source": "live"` and said in the client's own words that it loads live from
+that directory and copied nothing).
 
 Discovery and cache paths, from the same reference. A marketplace manifest is read from
 `marketplace.json`, `.plugin/marketplace.json`, `.github/plugin/marketplace.json` or
