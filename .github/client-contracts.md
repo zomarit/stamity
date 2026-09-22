@@ -58,7 +58,18 @@ they do not claim authenticated client sessions, native trust approval, or human
   project hooks with the feature on, the project trusted and hook trust bypassed (measured
   2026-09-15; three runs, no observation file written, no hook-discovery line in the debug
   log). An emitted hook therefore enforces nothing on that lane, and a QA row that asks it to
-  is measuring the client. "Commands run with the session cwd as their working directory", and the same page asks that a
+  is measuring the client.
+  INTERACTIVELY it does enforce, measured 2026-09-22 at 14:41Z on codex-cli 0.155.1 — a newer build
+  than the headless fact above — by walking the emitted hooks in the QA hook fixture:
+  `features.hooks = true` came from the emitted `.codex/config.toml`, the client asked for the two
+  trust decisions and recorded both in the operator's home config (the project's `trust_level =
+  "trusted"`, the hook's `trusted_hash`), and it then rendered `Blocked by hook` for
+  `qa-denied.txt` carrying the emitted hook's own `permissionDecision: deny` while reading
+  `qa-allowed.txt`; the hook's own log holds one `denied` and one `allowed` line (sha-256
+  `756246be52bd0bd85faab288f1e8ae5b43e98d42d3750734478c0d108081097b`). So the three loading steps
+  above are the whole of it on that lane: with them satisfied the emitted document is enforcement
+  in an interactive session, and the headless lane's zero remains the headless lane's.
+  "Commands run with the session cwd as their working directory", and the same page asks that a
   repo-local hook "prefer resolving from the git root instead of using a relative path such as
   `.codex/hooks/...`" because "Codex may be started from a subdirectory" (hooks page, read
   2026-09-21) — which is what the emitted starter does: it walks UP from `process.cwd()` to the
