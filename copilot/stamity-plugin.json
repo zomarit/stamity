@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "client": "copilot",
+  "version": "1.9.0",
+  "sourceCommit": "719ea79983a2a2024af3eba8b9bce7928ba24308",
+  "invocation": {
+    "agents": "/agent <id> (or --agent=<id>)",
+    "commands": "/<id>",
+    "skills": "/<id>"
+  },
+  "clientFloor": {
+    "version": "unknown",
+    "citation": {
+      "url": "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference",
+      "accessDate": "2026-09-20"
+    },
+    "reason": "no minimum CLI version for plugins stated on the four docs.github.com pages read 2026-09-20; the CLI itself needs Node 22 or later"
+  },
+  "prerequisites": {
+    "node": ">=22.22.2",
+    "git": "optional",
+    "copilot": "npm install -g @github/copilot"
+  },
+  "classes": {
+    "agent": {
+      "status": "carried",
+      "count": 10
+    },
+    "skill": {
+      "status": "carried",
+      "count": 10
+    },
+    "command": {
+      "status": "carried",
+      "count": 10,
+      "reason": "the file extension under com.github.copilot/commands/ is not stated on the reference page (docs.github.com cli-plugin-reference, 2026-09-20); measured against GitHub Copilot CLI 1.0.85 in a scratch COPILOT_HOME: <id>.md registers the id <id>, while <id>.prompt.md registers <id>.prompt, so the container takes <id>.md and the repository keeps .prompt.md"
+    },
+    "rule": {
+      "status": "repository-owned",
+      "reason": "the Copilot CLI container defines com.github.copilot/rules/ but its file format is not stated (docs.github.com cli-plugin-reference, 2026-09-20) and this engine has no Copilot rule surface; stamity plugin setup writes .github/instructions/ for VS Code and the CLI alike"
+    },
+    "hooks": {
+      "status": "carried",
+      "count": 4,
+      "reason": "${PLUGIN_ROOT} expansion inside a hook command, and its export to a hook process, are not stated on the hooks reference (docs.github.com hooks-reference, 2026-09-20); the variable is the only documented handle on the installed root, so every command uses it unmeasured"
+    },
+    "mcp": {
+      "status": "repository-owned",
+      "reason": "MCP server selection and credential references are repository-owned"
+    }
+  },
+  "runtime": {
+    "path": "runtime",
+    "locator": "runtime/locate.mjs",
+    "companion": {
+      "package": "@zomarit/stamity",
+      "compatible": "^1.9.0"
+    }
+  }
+}

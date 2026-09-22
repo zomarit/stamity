@@ -1,0 +1,18 @@
+import { type HookInterchange } from "../hooks/model.ts";
+import { type CatalogItem } from "../content/catalog.ts";
+import { type PackageManagerInfo } from "../detect/packageManager.ts";
+import type { AdapterDialectFacts, ResiduePlanner } from "../emit/planner.ts";
+import { type ResolvedAgentGrant } from "../roster/agentGrants.ts";
+import { type ModelPinMap } from "../roster/modelLadder.ts";
+import type { AdapterOutput } from "../types/content.ts";
+export declare const COPILOT_HOOKS_PATH = ".github/hooks/stamity.json";
+export declare const COPILOT_PROMPTS_DIR = ".github/prompts";
+export declare const COPILOT_SETUP_STEPS_PATH = ".github/workflows/copilot-setup-steps.yml";
+export declare const COPILOT_AGENT_PROMPT_CAP = 30000;
+export declare const COPILOT_DIALECT_FACTS: AdapterDialectFacts;
+export declare const copilotResiduePlanner: ResiduePlanner;
+export declare function buildInstructionsFile(item: CatalogItem, render: (raw: string) => string): AdapterOutput;
+export declare function buildAgentFile(item: CatalogItem, grant: ResolvedAgentGrant, render: (raw: string) => string, pins?: ModelPinMap): AdapterOutput;
+export declare function buildPromptFile(item: CatalogItem, render: (raw: string) => string, pins?: ModelPinMap): AdapterOutput;
+export declare function buildSetupSteps(packageManager: PackageManagerInfo, languages: readonly string[]): string;
+export declare function buildCopilotHooksJson(rows: readonly HookInterchange[]): string;

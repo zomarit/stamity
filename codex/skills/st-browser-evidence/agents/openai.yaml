@@ -1,0 +1,4 @@
+interface:
+  display_name: "Browser evidence"
+  short_description: "Use the Stamity browser evidence workflow"
+  default_prompt: "Use $st-browser-evidence for this repository."

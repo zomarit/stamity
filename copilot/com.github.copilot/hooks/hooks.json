@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "node \"${PLUGIN_ROOT}/hooks/stamity-portable-hook.mjs\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIke1BMVUdJTl9ST09UfS9ob29rcy9zdGFtaXR5LXNlc3Npb24tc3RhcnQubWpzIl19",
+        "cwd": "."
+      },
+      {
+        "type": "command",
+        "command": "node \"${PLUGIN_ROOT}/hooks/stamity-portable-hook.mjs\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIke1BMVUdJTl9ST09UfS9ob29rcy9zdGFtaXR5LWNvbmZpZy10YW1wZXItbm90aWNlLm1qcyJdfQ",
+        "cwd": "."
+      }
+    ],
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "node \"${PLUGIN_ROOT}/hooks/stamity-portable-hook.mjs\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIiR7UExVR0lOX1JPT1R9L2hvb2tzL3N0YW1pdHktcHJlLXRvb2wtdXNlLWd1YXJkLm1qcyJdfQ",
+        "cwd": "."
+      }
+    ]
+  }
+}

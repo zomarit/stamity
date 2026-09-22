@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design system detect"
+  short_description: "Use the Stamity design system detect workflow"
+  default_prompt: "Use $st-design-system-detect for this repository."

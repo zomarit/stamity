@@ -1,0 +1,32 @@
+{
+  "description": "Stamity hooks. Three steps stand between this file and a hook the client runs. 1. Feature flag: `features.hooks = true`. The client defaults it OFF (deprecated alias `features.codex_hooks`), so this file is not read until it is on. .codex/config.toml carries it; the per-invocation equivalent is `codex exec --enable hooks`, which is shorthand for `-c features.hooks=true`. 2. Project trust: a project `.codex/` layer loads only when it is trusted. Record `projects.<path>.trust_level = \"trusted\"` in the Codex home config (`~/.codex/config.toml`), which is the operator's file and not one this engine writes. 3. Per-hook review: each hook is trusted by hash through the interactive `/hooks` command. Automation that cannot take that step runs `--dangerously-bypass-hook-trust`, which runs enabled hooks with no persisted trust. Key set and default: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15). Trust is recorded against this file's hash only: the hook script bytes under ${PLUGIN_ROOT}/hooks/ are outside it and can change without re-review, so stamity check is the control for them and for emitted-file drift generally. The role guard is telemetry because PreToolUse carries no agent identity.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/stamity-portable-hook.mjs\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIke1BMVUdJTl9ST09UfS9ob29rcy9zdGFtaXR5LXNlc3Npb24tc3RhcnQubWpzIl19",
+            "commandWindows": "node \"${PLUGIN_ROOT}/hooks/stamity-portable-hook.mjs\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIke1BMVUdJTl9ST09UfS9ob29rcy9zdGFtaXR5LXNlc3Npb24tc3RhcnQubWpzIl19"
+          },
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/stamity-portable-hook.mjs\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIke1BMVUdJTl9ST09UfS9ob29rcy9zdGFtaXR5LWNvbmZpZy10YW1wZXItbm90aWNlLm1qcyJdfQ",
+            "commandWindows": "node \"${PLUGIN_ROOT}/hooks/stamity-portable-hook.mjs\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIke1BMVUdJTl9ST09UfS9ob29rcy9zdGFtaXR5LWNvbmZpZy10YW1wZXItbm90aWNlLm1qcyJdfQ"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/stamity-portable-hook.mjs\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIiR7UExVR0lOX1JPT1R9L2hvb2tzL3N0YW1pdHktcHJlLXRvb2wtdXNlLWd1YXJkLm1qcyJdfQ",
+            "commandWindows": "node \"${PLUGIN_ROOT}/hooks/stamity-portable-hook.mjs\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIiR7UExVR0lOX1JPT1R9L2hvb2tzL3N0YW1pdHktcHJlLXRvb2wtdXNlLWd1YXJkLm1qcyJdfQ"
+          }
+        ]
+      }
+    ]
+  }
+}

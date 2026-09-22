@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "client": "cursor",
+  "version": "1.9.0",
+  "sourceCommit": "719ea79983a2a2024af3eba8b9bce7928ba24308",
+  "invocation": {
+    "agents": "/<id>",
+    "citation": "the /<id> form is stated on cursor.com/docs/agent/subagents and cursor.com/docs/skills, not on cursor.com/docs/reference/plugins (accessed 2026-09-20)",
+    "commands": "/<id>",
+    "skills": "/<id>"
+  },
+  "clientFloor": {
+    "version": "unknown",
+    "citation": {
+      "url": "https://cursor.com/docs/reference/plugins",
+      "accessDate": "2026-09-20"
+    },
+    "reason": "no minimum version stated on cursor.com/docs/reference/plugins, cursor.com/docs/plugins or the CLI reference (accessed 2026-09-20)"
+  },
+  "prerequisites": {
+    "node": ">=22.22.2",
+    "git": "optional"
+  },
+  "classes": {
+    "agent": {
+      "status": "carried",
+      "count": 10
+    },
+    "skill": {
+      "status": "carried",
+      "count": 8
+    },
+    "command": {
+      "status": "carried",
+      "count": 10,
+      "reason": "this client converts a command into a skill carrying disable-model-invocation: true, and its commands/ discovery reads files rather than directories (cursor.com/docs/skills and /docs/reference/plugins, 2026-09-20), so the nine touchpoints ride under skills/ as the client renders them"
+    },
+    "rule": {
+      "status": "carried",
+      "count": 12
+    },
+    "hooks": {
+      "status": "carried",
+      "count": 6
+    },
+    "mcp": {
+      "status": "repository-owned",
+      "reason": "MCP server selection and credential references are repository-owned"
+    }
+  },
+  "runtime": {
+    "path": "runtime",
+    "locator": "runtime/locate.mjs",
+    "companion": {
+      "package": "@zomarit/stamity",
+      "compatible": "^1.9.0"
+    }
+  },
+  "distribution": {
+    "note": "an organization adds a team marketplace in the Cursor dashboard (Dashboard → Plugins & MCPs → Team Marketplaces → Add Marketplace), sets the install mode (Default Off, Default On, Required), may restrict it under Marketplace Settings → Marketplace Access, and Cursor re-indexes a marketplace at most once every 10 minutes, batching rapid pushes to the latest commit (cursor.com/docs/plugins, accessed 2026-09-20)"
+  }
+}

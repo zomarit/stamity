@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "node \"${CURSOR_PLUGIN_ROOT}/hooks/stamity-portable-hook.mjs\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIke0NVUlNPUl9QTFVHSU5fUk9PVH0vaG9va3Mvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdfQ"
+      },
+      {
+        "command": "node \"${CURSOR_PLUGIN_ROOT}/hooks/stamity-portable-hook.mjs\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIke0NVUlNPUl9QTFVHSU5fUk9PVH0vaG9va3Mvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXX0"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "node \"${CURSOR_PLUGIN_ROOT}/hooks/stamity-portable-hook.mjs\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIiR7Q1VSU09SX1BMVUdJTl9ST09UfS9ob29rcy9zdGFtaXR5LXByZS10b29sLXVzZS1ndWFyZC5tanMiXX0"
+      }
+    ],
+    "subagentStart": [
+      {
+        "command": "node \"${CURSOR_PLUGIN_ROOT}/hooks/subagent-guard.mjs\"",
+        "failClosed": true
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": "node \"${CURSOR_PLUGIN_ROOT}/hooks/mcp-guard.mjs\"",
+        "failClosed": true
+      }
+    ]
+  }
+}

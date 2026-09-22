@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "client": "codex",
+  "version": "1.9.0",
+  "sourceCommit": "719ea79983a2a2024af3eba8b9bce7928ba24308",
+  "invocation": {
+    "skills": "$<id>"
+  },
+  "clientFloor": {
+    "version": "unknown",
+    "citation": {
+      "url": "https://developers.openai.com/plugins/build/plugins",
+      "accessDate": "2026-09-20"
+    },
+    "reason": "no minimum version is stated on any of the eight vendor pages read 2026-09-20 (the build and submission pages above, learn.chatgpt.com/docs/plugins, /docs/hooks and /docs/config-file/config-reference, the Agent Plugins specification and its 1.0.0 schema); the surface was measured against codex-cli 0.154.0"
+  },
+  "prerequisites": {
+    "node": ">=22.22.2",
+    "git": "optional"
+  },
+  "classes": {
+    "agent": {
+      "status": "repository-owned",
+      "reason": "the Agent Plugins container carries no agent class (agent-plugins.org specification, 2026-09-20); stamity plugin setup writes .codex/agents/"
+    },
+    "skill": {
+      "status": "carried",
+      "count": 17
+    },
+    "command": {
+      "status": "repository-owned",
+      "reason": "this client documents no project-scoped command directory"
+    },
+    "rule": {
+      "status": "repository-owned",
+      "reason": "glob-less rules ride as skills; the container carries no rules class"
+    },
+    "hooks": {
+      "status": "carried",
+      "count": 4,
+      "reason": "the document travels and this client discovers it at the default hooks/hooks.json, but a plugin's hooks are skipped until the operator trusts them (developers.openai.com/plugins/build/plugins and learn.chatgpt.com/docs/hooks, 2026-09-20), and headless codex exec on codex-cli 0.154.0 ran no project hook at all (measured 2026-09-15) — carried means shipped and discoverable here, never enforced"
+    },
+    "mcp": {
+      "status": "repository-owned",
+      "reason": "MCP server selection and credential references are repository-owned"
+    }
+  },
+  "runtime": {
+    "path": "runtime",
+    "locator": "runtime/locate.mjs",
+    "companion": {
+      "package": "@zomarit/stamity",
+      "compatible": "^1.9.0"
+    }
+  }
+}
