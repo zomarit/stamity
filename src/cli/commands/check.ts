@@ -402,13 +402,15 @@ async function checkEnvMcp(
  * in its order and no wider:
  *
  * 1. `CLAUDE_CODE_GIT_BASH_PATH`, honoured only when it names an existing FILE
- *    called `bash.exe`, `sh.exe`, `bash` or `sh`, the name compared without
- *    case: "Claude Code accepts only a file named `bash.exe`, `sh.exe`, `bash`,
- *    or `sh`; with any other name, such as Git for Windows' `git-bash.exe`
- *    launcher, it ignores the variable and auto-detects Git Bash as if it were
- *    unset … A path that doesn't exist gets the same fallback". An ignored
- *    variable is therefore a note on whichever verdict follows, never a verdict
- *    of its own.
+ *    called `bash.exe`, `sh.exe`, `bash` or `sh`: "Claude Code accepts only a
+ *    file named `bash.exe`, `sh.exe`, `bash`, or `sh`; with any other name,
+ *    such as Git for Windows' `git-bash.exe` launcher, it ignores the variable
+ *    and auto-detects Git Bash as if it were unset … A path that doesn't exist
+ *    gets the same fallback". Two assumptions here are the row's own, not the
+ *    page's: the value is trimmed of surrounding whitespace, and the name is
+ *    compared without case, as Windows compares file names. An ignored
+ *    variable is a note on whichever verdict follows, never a verdict of its
+ *    own.
  * 2. "The default install locations `C:\Program Files\Git` and
  *    `C:\Program Files (x86)\Git`": `bin\bash.exe` under each, the roots read
  *    from `ProgramFiles` and `ProgramFiles(x86)` with the page's literals when
@@ -425,19 +427,28 @@ async function checkEnvMcp(
  * Every probe is a filesystem read, no spawn. A bare `bash.exe` on PATH is NOT
  * in the client's list and does not count — the row once took one, which gave
  * two false verdicts: a default Git for Windows install has `git.exe` on PATH
- * and no `bash.exe` there (a false FAIL), and MSYS2 or Cygwin put a `bash.exe`
- * on PATH that the client never finds (a false PASS, on the exact host this
- * row exists to report). WSL's `%SystemRoot%\System32\bash.exe` (prove/251) is
- * the same case and needs no exclusion of its own. A `bash.exe` seen on PATH,
- * and a `git.exe` with no `bin\bash.exe` in its installation, are each named
- * in the fail text as not counting, so the operator reads why.
+ * and no `bash.exe` there (a false FAIL), and MSYS2 or Cygwin put a bare
+ * `bash.exe` with no `git.exe` beside it on PATH, which the client never finds
+ * (a false PASS, on the exact host this row exists to report). WSL's
+ * `%SystemRoot%\System32\bash.exe` (prove/251) is the same case and needs no
+ * exclusion of its own. A `bin` entry holding BOTH `git.exe` and `bash.exe` —
+ * Cygwin's `bin`, MSYS2's `usr\bin` with its git package — passes here as the
+ * shell beside the git on PATH, because `..\bin\bash.exe` from a `bin` entry
+ * is that entry's own `bash.exe`; whether the client resolves it the same way
+ * is unmeasured. A bare `bash.exe` seen on PATH, and a `git.exe` with no
+ * `bin\bash.exe` beside it, are each named in the fail text — the first as
+ * not counting, the second as unresolved here — so the operator reads why.
  *
- * One clause of the page is not modelled: in step 3 the client "skips a `git`
- * that sits in the folder you launched Claude Code from, or below it in a path
- * that contains `node_modules` or a virtual-environment folder such as `.venv`
- * or `env`". The launch folder is a session fact this row cannot know, so a
- * `git.exe` in such a place counts here and may not there; the page's own
- * remedy for that case is the variable, which this row honours first.
+ * Two clauses of the page are not modelled. In step 3 the client "skips a
+ * `git` that sits in the folder you launched Claude Code from, or below it in
+ * a path that contains `node_modules` or a virtual-environment folder such as
+ * `.venv` or `env`": the launch folder is a session fact this row cannot know,
+ * so a `git.exe` in such a place counts here and may not there. And how the
+ * client derives "that Git installation" from a `git` on PATH is unstated:
+ * this row reads `..\bin\bash.exe` from the entry, so a shimmed git (Scoop's
+ * `shims\git.exe`) or a relocated layout finds no shell here and may still be
+ * resolved there. For both, the page's own remedy is the variable, which this
+ * row honours first, and the fail text says so.
  *
  * `runDoctor` hands this row the HOST's `process.env`, not the app's runtime
  * env: the row asks whether a shell exists on the machine the doctor runs on,
@@ -522,15 +533,19 @@ export function checkClaudeHookShell(
   // 3. The git on PATH, and the shell of its installation.
   const bare: string[] = [];
   const notes: string[] = [];
-  for (const entry of (read(/^path$/i) ?? "").split(delimiter)) {
+  for (const raw of (read(/^path$/i) ?? "").split(delimiter)) {
+    // A quoted entry (`"C:\Program Files\Git\cmd"`) is legal on Windows, and libuv strips the
+    // quote pair when it walks PATH to spawn, so the probe strips it too.
+    const entry = raw.replace(/^"(.*)"$/, "$1");
     if (entry === "") continue;
     const git = join(entry, "git.exe");
     if (existsSync(git)) {
       const candidate = join(entry, "..", "bin", "bash.exe");
       if (existsSync(candidate)) return pass(`${candidate}, beside the git.exe on PATH at ${git}`, ignored);
       notes.push(
-        `the git.exe on PATH at ${git} has no bin\\bash.exe in its installation (looked at ` +
-          `${candidate}), so the client reads no shell from it`,
+        `the git.exe on PATH at ${git}: this row found no bin\\bash.exe beside it (looked at ` +
+          `${candidate}); a shimmed or relocated git may still be resolved by the client — set ` +
+          "CLAUDE_CODE_GIT_BASH_PATH to be sure",
       );
     }
     const bash = join(entry, "bash.exe");

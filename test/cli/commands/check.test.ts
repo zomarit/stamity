@@ -1452,18 +1452,35 @@ describe("check — claude-hook-shell", () => {
     );
   });
 
-  it("fails on a bare bash.exe on PATH that no Git installation put there — MSYS2, Cygwin, WSL", async () => {
-    // The false PASS the old probe gave, on the exact host the row exists to report: a `bash.exe`
-    // on PATH is not in the client's list, so the client falls back to PowerShell while the row
-    // said found. WSL's `%SystemRoot%\System32\bash.exe` (prove/251) is the same case now and
-    // needs no exclusion of its own; both are named as not counting.
+  it("strips a surrounding quote pair from a PATH entry before probing, as the spawner does", async () => {
+    // A quoted entry is legal on Windows and libuv strips the pair when it walks PATH to spawn;
+    // probing the quoted spelling would have been a false FAIL on such a host.
+    const handle = getRepo();
+    await handle.seedFiles({ "quoted/Git/cmd/git.exe": "", "quoted/Git/bin/bash.exe": "" });
+    const verdict = checkClaudeHookShell(claude, {
+      platform: "win32",
+      env: windowsEnv(handle, [`"${handle.path("quoted/Git/cmd")}"`]),
+    });
+    expect(verdict.status).toBe("pass");
+    expect(verdict.detail).toContain(`Git Bash at ${handle.path("quoted/Git/bin/bash.exe")}`);
+  });
+
+  it("fails on a bare bash.exe on PATH with no git.exe beside it — MSYS2 or Cygwin without git, WSL", async () => {
+    // The false PASS the old probe gave, on the exact host the row exists to report: a bare
+    // `bash.exe` on PATH is not in the client's list, so the client falls back to PowerShell while
+    // the row said found. WSL's `%SystemRoot%\System32\bash.exe` (prove/251) is the same case now
+    // and needs no exclusion of its own — the row no longer reads `SystemRoot`, so none is set
+    // here; both are named as not counting. A `bin` entry holding both `git.exe` and `bash.exe`
+    // (Cygwin's `bin`, MSYS2's `usr\bin` with git) is NOT this case: it passes as the shell beside
+    // the git on PATH, the `bin` layout of the case above, and whether the client resolves it the
+    // same way is unmeasured.
     const handle = getRepo();
     await handle.seedFiles({ "msys64/usr/bin/bash.exe": "", "windows/System32/bash.exe": "" });
     const msys = handle.path("msys64/usr/bin");
     const system32 = handle.path("windows/System32");
     const verdict = checkClaudeHookShell(claude, {
       platform: "win32",
-      env: windowsEnv(handle, [msys, system32], { SystemRoot: handle.path("windows") }),
+      env: windowsEnv(handle, [msys, system32]),
     });
     expect(verdict.status).toBe("fail");
     expect(verdict.detail).toContain(
@@ -1471,15 +1488,16 @@ describe("check — claude-hook-shell", () => {
     );
   });
 
-  it("fails on a git.exe on PATH with no bin\\bash.exe in its installation, naming it", async () => {
-    // A shim, or a git that is not Git for Windows: step 2 finds the git and no shell from it.
+  it("fails on a git.exe on PATH with no bin\\bash.exe beside it, naming it and the variable", async () => {
+    // A shim (Scoop's `shims\git.exe`) or a relocated layout: the row finds the git and no shell
+    // from it, and says only what it measured — the client's own derivation is unstated.
     const handle = getRepo();
     await handle.seedFiles({ "shims/git.exe": "" });
     const shims = handle.path("shims");
     const verdict = checkClaudeHookShell(claude, { platform: "win32", env: windowsEnv(handle, [shims]) });
     expect(verdict.status).toBe("fail");
     expect(verdict.detail).toContain(
-      `the git.exe on PATH at ${join(shims, "git.exe")} has no bin\\bash.exe in its installation (looked at ${join(shims, "..", "bin", "bash.exe")}), so the client reads no shell from it`,
+      `the git.exe on PATH at ${join(shims, "git.exe")}: this row found no bin\\bash.exe beside it (looked at ${join(shims, "..", "bin", "bash.exe")}); a shimmed or relocated git may still be resolved by the client — set CLAUDE_CODE_GIT_BASH_PATH to be sure`,
     );
   });
 
