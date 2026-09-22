@@ -672,15 +672,19 @@ As built (2026-09-21) — the proof exists, and its legs are split by what a cre
 than by client. `scripts/plugin-route-smoke.mjs` walks structure, install, discovery and invocation
 per client, exits 0 only when no leg failed, 1 on a failure and 2 when it could not run, and writes
 its `--json` document only where one is asked for — which is not the merge gate (corrected
-2026-09-22): the merge-blocking `plugin-route` CI job passes no `--json` and reads the exit code alone
-(`.github/workflows/ci.yml:536`); the nightly drive writes the document to the runner's temp directory
-(`.github/workflows/nightly.yml:335`) and keeps it — for the job, and as a short-retention workflow
-artifact once the upload step lands — rather than reading it back; and the document's two readers are
-the QA harness's `plugins` lane (`scripts/qa/plugin-runs.mjs:111`) and `test/ci/pluginRoute.test.ts`
-(`:155`, `:401`). That test runs the structure leg always and each install and discovery leg under
-`describe.skipIf` on `STAMITY_<CLIENT>_BIN`; `scripts/qa/plugin-runs.mjs` writes rows `H4a`–`H4d`.
-What blocks a merge is the credential-free half, and it is stated by mechanism because the boundary
-falls through the middle of discovery: each root's STRUCTURE (every carried class re-counted out of the tree and each
+2026-09-22): the merge-blocking `plugin-route` job of `.github/workflows/ci.yml`, in its
+`Plugin route smoke (no invocation legs)` step, passes no `--json` and reads the exit code alone; the
+nightly drive writes the document to the runner's temp directory in its per-client
+`Headless target-tool drive (<client>)` steps, carried by the `headless-lane` job, and the job's
+artifact upload step (14-day retention) keeps it, so the nightly writes and keeps the document
+rather than reading it back; and the document's two readers are the QA harness's `plugins` lane
+(`scripts/qa/plugin-runs.mjs`) and `test/ci/pluginRoute.test.ts`. Both workflows are cited here by
+job and step name rather than by line, because the workflow rewrite of 2026-09-22 moved every line
+number this sentence first carried. That test runs the structure leg always and each install and
+discovery leg under `describe.skipIf` on `STAMITY_<CLIENT>_BIN`; `scripts/qa/plugin-runs.mjs` writes
+rows `H4a`–`H4d`. What blocks a merge is the credential-free half, and it is stated by mechanism
+because the boundary falls through the middle of discovery: each root's STRUCTURE (every carried
+class re-counted out of the tree and each
 container manifest validated against its vendored document — a root with `commands/st-work.md`
 removed fails naming both numbers), each client's INSTALL, and the discovery a credential-free
 listing command can answer. Discovery read from an invocation TRANSCRIPT, and every invocation leg,
