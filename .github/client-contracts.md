@@ -220,14 +220,20 @@ generated root uses it in hook commands anyway because it is the only documented
 installed root's own files. Its EXPORT is no longer unstated, and the two surfaces differ. For a
 plugin's HOOKS the CLI's own changelog says the process receives `PLUGIN_ROOT`,
 `COPILOT_PLUGIN_ROOT` and `CLAUDE_PLUGIN_ROOT` (the 1.0.26 entry, unchanged in 1.0.85 and 1.0.87;
-read by the release's Copilot investigation on 2026-09-22 and recorded rather than re-derived here —
-the shipped binary's strings are compressed, so a grep over it confirms nothing either way). For a
-plugin's COMMANDS no such variable arrives at all: the session environment a command's shell sees
-carries `COPILOT_CLI` and `COPILOT_HOME` and nothing ending in `PLUGIN_ROOT` (measured 2026-09-22 on
-1.0.87). A command that needs its own root therefore asks the client for it — `copilot plugin list
---json` reports each plugin's `installedFrom` root, and `copilot skill list --json` each skill's
-`path` beneath it (both measured 2026-09-22) — which is the route the generated `st-setup` command
-takes before it calls the locator.
+read by the release's Copilot investigation on 2026-09-22 and recorded rather than re-derived here
+— the shipped binary's strings are compressed, so a grep over it confirms nothing either way). For
+a plugin's COMMANDS no such variable arrives at all: the session environment a command's shell sees
+carries `COPILOT_CLI` and `COPILOT_HOME` and nothing ending in `PLUGIN_ROOT` (measured 2026-09-22
+on 1.0.87). A command that needs its own root therefore asks the client for it, and only one of the
+two listings answers. `copilot plugin list --json` does NOT: its `installedFrom` is the MARKETPLACE
+directory the plugin was added from, and the catalog inside that directory is what maps the
+plugin's name to a root beneath it. `copilot skill list --json` does: a row with `source: "plugin"`
+carries a `path` of `<root>/skills/<name>`, so trimming that tail yields the root. Measured
+2026-09-22 on 1.0.87 in a scratch `COPILOT_HOME`, against a throwaway one-skill root added as a
+local marketplace: `installedFrom` was the marketplace directory and the skill row's `path` its
+`copilot/` subtree (the install also reported `"source": "live"` and said in the client's own words
+that it loads live from that directory and copied nothing). The generated `st-setup` command reads
+the root out of the skill listing and passes it to the locator as `--plugin-root`.
 
 Discovery and cache paths, from the same reference. A marketplace manifest is read from
 `marketplace.json`, `.plugin/marketplace.json`, `.github/plugin/marketplace.json` or
@@ -236,19 +242,19 @@ Plugins 1.0, and from `.plugin/plugin.json`, `plugin.json`, `.github/plugin/plug
 `.claude-plugin/plugin.json` for a legacy plugin. An install lands at
 `~/.copilot/installed-plugins/MARKETPLACE/PLUGIN-NAME`, or at
 `~/.copilot/installed-plugins/_direct/SOURCE-ID/` when it came straight from a path, a repository
-or a URL; `COPILOT_HOME` moves the whole directory. A REMOTE marketplace's install is a cached copy — a
-plugin edited in place changes nothing until it is installed again — while a LOCAL directory-source
-marketplace is not copied at all: "Path-sourced plugins in a local (directory-source) marketplace
-load live from their real directory — editing one takes effect on `/restart` or in a new session,
-with no `copilot plugin update` needed" (the CLI plugin reference, read 2026-09-21), which is what
-the route proof measured on 1.0.85 on 2026-09-20: the installed entry reported `"source": "live"`,
-nothing was copied, and `installed-plugins/` was never written. `copilot plugin install` warned on
-1.0.85 that direct installs are deprecated in favour of the `plugin@marketplace` form.
-Whichever of those locations a client reads, in this container's shape or another's, the identity it
-finds there is the PUBLISHER's and never the canonical one: a downstream that set
-`stamity.publisher` and repointed `repository.url` gets roots and catalogs carrying its own owner
-and its own https source url wherever ours would have stood, built and compared root by root in
-`test/ci/pluginDownstream.test.ts` (measured 2026-09-20).
+or a URL; `COPILOT_HOME` moves the whole directory. A REMOTE marketplace's install is a cached copy
+— a plugin edited in place changes nothing until it is installed again — while a LOCAL
+directory-source marketplace is not copied at all: "Path-sourced plugins in a local
+(directory-source) marketplace load live from their real directory — editing one takes effect on
+`/restart` or in a new session, with no `copilot plugin update` needed" (the CLI plugin reference,
+read 2026-09-21), which is what the route proof measured on 1.0.85 on 2026-09-20: the installed
+entry reported `"source": "live"`, nothing was copied, and `installed-plugins/` was never written.
+`copilot plugin install` warned on 1.0.85 that direct installs are deprecated in favour of the
+`plugin@marketplace` form. Whichever of those locations a client reads, in this container's shape
+or another's, the identity it finds there is the PUBLISHER's and never the canonical one: a
+downstream that set `stamity.publisher` and repointed `repository.url` gets roots and catalogs
+carrying its own owner and its own https source url wherever ours would have stood, built and
+compared root by root in `test/ci/pluginDownstream.test.ts` (measured 2026-09-20).
 
 Two consequences for any test that claims a plugin was discovered. Skill precedence is
 first-found, with a project's own `.github/skills/`, `.agents/skills/` and `.claude/skills/` AHEAD

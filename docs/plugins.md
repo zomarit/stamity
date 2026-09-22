@@ -233,10 +233,12 @@ the files no container carries. One command does that, and every client's plugin
 On the Copilot CLI that command has one step before the others, and it is there because this client
 passes a command's shell no plugin-root variable at all — the session environment carries
 `COPILOT_CLI` and `COPILOT_HOME` and nothing ending in `PLUGIN_ROOT` (measured 2026-09-22 on
-1.0.87). So `/st-setup` asks the client where its own root is: `copilot plugin list --json` reports
-each plugin's `installedFrom`, and that path is handed to the locator as `--plugin-root`.
-`copilot skill list --json` reports each skill's `path` under the same root, which is the second way
-to read it.
+1.0.87). So `/st-setup` asks the client where its own root is, and the listing that answers is the
+skill one: `copilot skill list --json` gives every skill a `path`, and for a row whose `source` is
+`plugin` that path is `<root>/skills/<name>`, so trimming the tail leaves the root the command
+hands the locator as `--plugin-root`. `copilot plugin list --json` does not answer it — its
+`installedFrom` is the MARKETPLACE directory the plugin was added from, and the catalog inside that
+directory is what points at a root beneath it (both measured 2026-09-22 on 1.0.87).
 
 Each of those runs `stamity plugin setup` through the plugin's own runtime. What it writes:
 
