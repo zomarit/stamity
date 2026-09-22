@@ -73,7 +73,7 @@ import {
 } from "../tools/allowlist.ts";
 import { TOOLS, type Tool } from "../types/core.ts";
 import type { SetupManifest } from "../types/manifest.ts";
-import { STATE_DIR } from "../types/markers.ts";
+import { GENERATED_DIR, HOOKS_GENERATED_DIR, STATE_DIR } from "../types/markers.ts";
 
 // ── Layout ───────────────────────────────────────────────────────
 
@@ -82,10 +82,10 @@ import { STATE_DIR } from "../types/markers.ts";
  * distinct from the user-owned subtrees beside it (`hooks/`, `learnings/`,
  * `handoffs/`, `overrides/`), which regeneration never rewrites.
  */
-export const GENERATED_DIR = `${STATE_DIR}/generated`;
-
-/** Per-tool hook script root: scripts land under `<here>/<tool>/<file>`. */
-export const HOOKS_GENERATED_DIR = `${GENERATED_DIR}/hooks`;
+// Defined in `../types/markers.ts` so the merge lane can name the engine's own
+// hook rendering from below this module; re-exported here, where every reader
+// of the hooks infrastructure has always found them.
+export { GENERATED_DIR, HOOKS_GENERATED_DIR };
 
 /** Repo-relative path of the single emitted policy document. */
 export const AGENT_TOOL_POLICIES_PATH = `${GENERATED_DIR}/${AGENT_TOOL_POLICIES_FILE}`;

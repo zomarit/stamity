@@ -399,10 +399,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/manifest/ledger.ts": { unit: "p1-37", wave: 5 },
   // Key-level ownership of `.claude/settings.json`: pure planning plus the
   // merge writer and the reclaim reducer, over the MCP merge lane (wave 4,
-  // whose read and serialise helpers it shares), the safe-write lane (wave 4,
-  // whose verified backup and drift compare it reuses) and the hooks infra
-  // (wave 5, whose generated directory names the engine's own hook rendering).
-  "src/manifest/claudeSettings.ts": { unit: "p15-s4", wave: 6 },
+  // whose read and serialise helpers it shares) and the safe-write lane (wave
+  // 4, whose verified backup and drift compare it reuses); the generated-hooks
+  // prefix it recognises the engine's own rendering by is a wave-0 marker.
+  "src/manifest/claudeSettings.ts": { unit: "p15-s4", wave: 5 },
   "src/workspace/sync.ts": { unit: "p1-38", wave: 5 },
   // Authored as p1-39; re-cut into s2d-10 with the catalog above — see there.
   "src/content/userContent.ts": { unit: "s2d-10", wave: 5 },

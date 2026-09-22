@@ -60,6 +60,11 @@ const OLDER_ENGINE_HOOKS = {
     { matcher: "Bash", hooks: [{ type: "command", command: 'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs"' }] },
   ],
 };
+/** The engine's rendering with an operator's own row added inside it — a MIXED object. */
+const MIXED_HOOKS = {
+  ...ENGINE_HOOKS,
+  Stop: [{ hooks: [{ type: "command", command: "node scripts/notify.mjs" }] }],
+};
 /** An operator's own hooks: no command under the engine's generated directory. */
 const OPERATOR_HOOKS = { Stop: [{ hooks: [{ type: "command", command: "node scripts/notify.mjs" }] }] };
 
@@ -117,11 +122,13 @@ describe("planClaudeSettings — foreign keys", () => {
   });
 
   it("replaces an engine-owned key in place and keeps every other key's position and value", () => {
+    // Unedited by the ledger's compare — the bytes match the recorded hash —
+    // so the engine's keys are regenerated silently.
     const existing = doc({ model: "opus", permissions: { allow: ["Bash"] }, env: { A: "1" }, hooks: ENGINE_HOOKS });
 
-    const plan = planClaudeSettings("x", EMITTED_FULL, existing, own(REPO_KEYS, { owned: true }));
+    const plan = planClaudeSettings(PATH, EMITTED_FULL, existing, own(REPO_KEYS, { owned: true, ledgerHashes: ledgered(ROOT, existing) }));
 
-    expect(plan.result).toEqual({ path: "x", action: "updated" });
+    expect(plan.result).toEqual({ path: PATH, action: "updated" });
     expect(plan.content).toBe(doc({ model: "opus", permissions: PERMISSIONS, env: { A: "1" }, hooks: ENGINE_HOOKS }));
   });
 
@@ -181,17 +188,43 @@ describe("planClaudeSettings — foreign keys", () => {
 });
 
 describe("planClaudeSettings — the hooks key across install modes", () => {
-  it("removes a stale repository-mode hooks rendering from a plugin-mode file and reports it, ledgered or not", () => {
+  it("removes a stale repository-mode hooks rendering from a plugin-mode file behind a backup and reports it, ledgered or not", () => {
+    // Recognition WIDENS what the engine may touch — never past a backup: no
+    // predicate can tell the engine's rows from an operator's inside one object.
     const existing = doc({ permissions: PERMISSIONS, hooks: OLDER_ENGINE_HOOKS, enabledPlugins: { "x@y": true } });
 
     for (const owned of [false, true]) {
       const plan = planClaudeSettings("x", EMITTED_PLUGIN, existing, own(PLUGIN_KEYS, { owned }));
       expect(plan.result.action, `owned=${owned}`).toBe("updated");
       expect(plan.result.warning, `owned=${owned}`).toContain("Removed the repository-mode hooks");
+      expect(plan.result.warning, `owned=${owned}`).toContain(".claude/settings.local.json");
       expect(plan.content, `owned=${owned}`).toBe(doc({ permissions: PERMISSIONS, enabledPlugins: { "x@y": true } }));
-      expect(plan.backup, `owned=${owned}`).toBeNull();
+      expect(plan.backup, `owned=${owned}`).toBe(existing);
       expect(plan.collision, `owned=${owned}`).toBeNull();
     }
+  });
+
+  it("removes a MIXED hooks object from a plugin-mode file behind a backup with the warning — never dropped silently, never a collision", () => {
+    const existing = doc({ permissions: PERMISSIONS, hooks: MIXED_HOOKS });
+
+    for (const owned of [false, true]) {
+      const plan = planClaudeSettings("x", EMITTED_PLUGIN, existing, own(PLUGIN_KEYS, { owned }));
+      expect(plan.result.action, `owned=${owned}`).toBe("updated");
+      expect(plan.collision, `owned=${owned}`).toBeNull();
+      expect(plan.backup, `owned=${owned}`).toBe(existing);
+      expect(plan.result.warning, `owned=${owned}`).toContain("hooks");
+      expect(plan.result.warning, `owned=${owned}`).toContain("rows of yours");
+      expect(plan.content, `owned=${owned}`).toBe(EMITTED_PLUGIN);
+    }
+  });
+
+  it("leaves a stale rendering that the ledger proves unedited to the silent path — bytes match, so the mode moved, not a hand", () => {
+    const existing = doc({ permissions: PERMISSIONS, hooks: OLDER_ENGINE_HOOKS });
+    const plan = planClaudeSettings(PATH, EMITTED_PLUGIN, existing, own(PLUGIN_KEYS, { owned: true, ledgerHashes: ledgered(ROOT, existing) }));
+    expect(plan.result.action).toBe("updated");
+    expect(plan.backup).toBeNull();
+    expect(plan.result.warning).toContain("Removed the repository-mode hooks");
+    expect(plan.content).toBe(EMITTED_PLUGIN);
   });
 
   it("keeps an operator's own hooks in a plugin-mode file as a foreign key, and names it in the adoption notice", () => {
@@ -205,26 +238,42 @@ describe("planClaudeSettings — the hooks key across install modes", () => {
     expect(plan.result.notice).toMatch(/loads? .*beside the plugin/);
   });
 
-  it("in repository mode replaces an older engine hooks rendering silently — it is recognisably the engine's", () => {
+  it("in repository mode replaces an unowned older engine hooks rendering behind a backup, with a warning, rather than refusing it", () => {
     const existing = doc({ permissions: PERMISSIONS, hooks: OLDER_ENGINE_HOOKS });
 
     const plan = planClaudeSettings("x", EMITTED_FULL, existing, own(REPO_KEYS));
 
-    expect(plan.result).toEqual({ path: "x", action: "updated" });
+    expect(plan.result.action).toBe("updated");
+    expect(plan.collision).toBeNull();
+    expect(plan.backup).toBe(existing);
+    expect(plan.result.warning).toContain("hooks");
     expect(plan.content).toBe(EMITTED_FULL);
   });
 
-  it("in repository mode, an operator's hooks the engine had carried is replaced behind a backup even when the bytes match a ledgered hash", () => {
-    // The mode moved under the file (a hand-edited manifest): the engine wrote
-    // these bytes, but it CARRIED this hooks object, it did not render it — a
-    // hash match proves "unedited since", never "mine".
+  it("in repository mode replaces a MIXED hooks object in a drifted ledgered file behind a backup, warning that rows of yours may be inside", () => {
+    const written = doc({ permissions: PERMISSIONS, hooks: ENGINE_HOOKS });
+    const edited = doc({ permissions: PERMISSIONS, hooks: MIXED_HOOKS });
+
+    const plan = planClaudeSettings(PATH, EMITTED_FULL, edited, own(REPO_KEYS, { owned: true, ledgerHashes: ledgered(ROOT, written) }));
+
+    expect(plan.result.action).toBe("updated");
+    expect(plan.backup).toBe(edited);
+    expect(plan.result.warning).toContain("hooks");
+    expect(plan.result.warning).toContain("rows of yours");
+    expect(plan.result.warning).toContain(".claude/settings.local.json");
+    expect(plan.content).toBe(written);
+  });
+
+  it("in repository mode, an unedited ledgered file's hooks is regenerated silently whatever it holds — the ledger's compare is the one rule", () => {
+    // The reviewer's rule of record: "unedited" means "may touch silently",
+    // hooks included; the route that reaches this (a hand-edited manifest mode)
+    // is outside the supported ones and stays a documented residual.
     const existing = doc({ permissions: PERMISSIONS, hooks: OPERATOR_HOOKS });
 
     const plan = planClaudeSettings(PATH, EMITTED_FULL, existing, own(REPO_KEYS, { owned: true, ledgerHashes: ledgered(ROOT, existing) }));
 
-    expect(plan.result.action).toBe("updated");
-    expect(plan.backup).toBe(existing);
-    expect(plan.result.warning).toContain("hooks");
+    expect(plan.result).toEqual({ path: PATH, action: "updated" });
+    expect(plan.backup).toBeNull();
     expect(plan.content).toBe(EMITTED_FULL);
   });
 });
@@ -287,6 +336,17 @@ describe("planClaudeSettings — an engine-owned key that differs", () => {
     const edited = doc({ permissions: PERMISSIONS, model: "opus" });
     const plan = planClaudeSettings(PATH, EMITTED_PLUGIN, edited, own(PLUGIN_KEYS, { owned: true, ledgerHashes: ledgered(ROOT, written) }));
     expect(plan).toMatchObject({ result: { action: "unchanged" }, backup: null });
+  });
+
+  it("never quotes a byte of an unparseable file in its message — only where the parser stopped", () => {
+    const raw = '{\n  "env": {\n    "SECRET": "hunter2-token"\n  },\n}\n';
+    const plan = planClaudeSettings("x", EMITTED_PLUGIN, raw, own(PLUGIN_KEYS, { owned: true }));
+    expect(plan.result.action).toBe("skipped");
+    expect(plan.result.warning).not.toContain("hunter2");
+    expect(plan.result.warning).not.toContain("SECRET");
+    expect(plan.result.warning).toMatch(/not valid JSON \(syntax error at position \d+/);
+    const reduction = reduceClaudeSettingsToForeignContent(raw, PLUGIN_KEYS);
+    expect(reduction.detail).not.toContain("hunter2");
   });
 
   it("refuses a file that is not a JSON object, and replaces it whole only under force", () => {
@@ -374,6 +434,15 @@ describe("materializeClaudeSettings", () => {
     expect(result.warning).toContain(`Your previous file is at ${path}.bak`);
     expect(await readFile(`${path}.bak`, "utf8")).toBe(existing);
     expect(await readFile(path, "utf8")).toBe(doc({ permissions: PERMISSIONS, model: "opus" }));
+  });
+
+  it("refuses a target outside the boundary before building its parent directory", async () => {
+    const repo = getRepo();
+    const outside = repo.path("outside/.claude/settings.json");
+
+    await expect(materializeClaudeSettings(outside, EMITTED_PLUGIN, own(PLUGIN_KEYS, { boundaryDir: repo.path("inside") }))).rejects.toThrow(EngineError);
+    await expect(readFile(outside, "utf8")).rejects.toThrow(/ENOENT/);
+    expect(writes.paths).toEqual([]);
   });
 
   it("writes a CRLF file back in CRLF", async () => {
@@ -467,9 +536,9 @@ describe("reduceClaudeSettingsToForeignContent", () => {
     expect(reduction.detail).toContain("(enabledPlugins, model) are kept");
   });
 
-  it("in plugin mode strips a stale repository-mode hooks rendering too, and keeps an operator's own hooks", () => {
+  it("in plugin mode strips only the mode's keys: a stale repository-mode hooks rendering is left to sync and the duplicates row", () => {
     const stale = doc({ permissions: PERMISSIONS, hooks: OLDER_ENGINE_HOOKS, model: "opus" });
-    expect(claudeSettingsReclaimReducer(PLUGIN_KEYS)(stale)).toMatchObject({ kind: "reduced", content: doc({ model: "opus" }) });
+    expect(claudeSettingsReclaimReducer(PLUGIN_KEYS)(stale)).toMatchObject({ kind: "reduced", content: doc({ hooks: OLDER_ENGINE_HOOKS, model: "opus" }) });
 
     const operator = doc({ permissions: PERMISSIONS, hooks: OPERATOR_HOOKS });
     expect(claudeSettingsReclaimReducer(PLUGIN_KEYS)(operator)).toMatchObject({ kind: "reduced", content: doc({ hooks: OPERATOR_HOOKS }) });

@@ -659,7 +659,7 @@ export function predictMergeAction(
 // ── Managed-path predicate ─────────────────────────────────────────────────
 
 /** Ledger keys are repo-relative POSIX paths; normalize before membership tests. */
-function toLedgerKey(filePath: string): string {
+export function toLedgerKey(filePath: string): string {
   return filePath.replaceAll("\\", "/").replace(/^\.\//, "");
 }
 

@@ -85,8 +85,8 @@ afterEach(() => {
 
 // ── Fixture ────────────────────────────────────────────────────
 
-async function freshRepo(): Promise<string> {
-  const root = getTemp().path("repo");
+async function freshRepo(sub = "repo"): Promise<string> {
+  const root = getTemp().path(sub);
   await mkdir(root, { recursive: true });
   return root;
 }
@@ -400,8 +400,39 @@ describe("the hooks key when the install mode moves under the file", () => {
     const row = settingsRow(report.wrote);
     expect(row.action).toBe("updated");
     expect(row.warning).toContain("Removed the repository-mode hooks");
+    expect(row.warning).toContain(".bak");
     expect(await settingsDoc(root)).toEqual({ permissions: PERMISSIONS });
+    // Behind a backup: no predicate can tell the engine's rows from rows of
+    // the operator's inside one object, so recognition never skips the .bak.
+    expect(JSON.parse(await readFile(BAK_ABS(root), "utf8"))).toHaveProperty("hooks");
     expect(await runDriftGate(root, ENGINE_VERSION)).toMatchObject({ clean: true });
+  });
+
+  it("a stale repository-mode hooks rendering under a plugin-backed manifest: sync removes it behind a .bak with the warning, clean leaves it in place", async () => {
+    const stale = {
+      SessionStart: [{ hooks: [{ type: "command", command: 'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-session-start.mjs"' }] }],
+    };
+    const synced = await freshRepo();
+    await pluginSetup(synced);
+    await addKeys(synced, { hooks: stale });
+    const before = await readSettings(synced);
+
+    const drift = await runDriftGate(synced, ENGINE_VERSION);
+    expect(drift.changes.map((entry) => [entry.path, entry.action])).toEqual([[CLAUDE_SETTINGS_PATH, "update"]]);
+    const live = await sync(synced);
+    const row = settingsRow(live.report.wrote);
+    expect(row.action).toBe("updated");
+    expect(row.warning).toContain("Removed the repository-mode hooks");
+    expect(await readFile(BAK_ABS(synced), "utf8")).toBe(before);
+    expect(await settingsDoc(synced)).toEqual({ permissions: PERMISSIONS });
+
+    // The clean lane strips only the mode's keys — the stale rendering is
+    // sync's to remove (behind the backup above) and the duplicates row's to name.
+    const cleaned = await freshRepo("cleaned");
+    await pluginSetup(cleaned);
+    await addKeys(cleaned, { hooks: stale });
+    expect((await clean(cleaned)).code).toBe(0);
+    expect(await settingsDoc(cleaned)).toEqual({ hooks: stale });
   });
 
   it("an operator's own hooks in a plugin-mode file is kept by setup, sync and clean, and the plugin-duplicates row reports the second loader", async () => {

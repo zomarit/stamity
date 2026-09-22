@@ -146,6 +146,18 @@ export function parseMarkerVersion(line: string): string | null {
 export const STATE_DIR = ".stamity";
 
 /**
+ * Generated documents the engine writes for its own hooks and agents to read,
+ * under the state directory. Defined here, at the bottom of the tree, because
+ * the merge lane recognises the engine's own hook rendering by this prefix
+ * (`../manifest/claudeSettings.ts`) and sits below the hooks infrastructure
+ * that composes the documents; `../emit/hooksInfra.ts` re-exports both names.
+ */
+export const GENERATED_DIR = `${STATE_DIR}/generated`;
+
+/** Per-tool hook script root: scripts land under `<here>/<tool>/<file>`. */
+export const HOOKS_GENERATED_DIR = `${GENERATED_DIR}/hooks`;
+
+/**
  * Filename prefix on generated content artifacts the operator does not type:
  * agents, rules, hook scripts, carried learnings (`stamity-implementer.md`).
  *
