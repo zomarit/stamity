@@ -99,6 +99,12 @@ export function inputsFor(client, sha256s) {
  * would be reporting on a tree it had just made rather than on the tree under test. The binaries
  * come from the `STAMITY_<CLIENT>_BIN` variables the smoke reads itself, so a machine with none of
  * them produces four honest `not-run` rows rather than an error.
+ *
+ * `scratchDir` has NO caller in this repository since `run.mjs` stopped forwarding `--fixtures` into
+ * it (prove/213), and it stays anyway: it is the one way to reach the smoke's own `--scratch`, whose
+ * documented purpose is that the smoke then does NOT remove the tree, so an operator debugging one
+ * client's install keeps it. Kept as a parameter rather than restored as a harness flag, because
+ * nothing about a QA run should default to leaving install trees on the disk.
  */
 export async function runPluginClients({ clients, repoRoot, distDir, scratchDir }) {
   const smoke = join(repoRoot, ...SMOKE)
@@ -214,12 +220,16 @@ function runSmoke({ args, cwd }) {
 // evidence file is committed, and a vitest line can carry a temp directory or a home.
 //
 // THE ROW FOLDS ON THE PER-CLIENT `walk` LINE, not on the whole log. Four `walk PASS` and a green
-// suite is `passed`; any `walk SKIPPED` — no binary, or an account the walk's one model call could
-// not reach — is `not-run` with those clients' reasons; a red suite, or a `walk FAIL`, is `failed`.
+// suite is `passed`; any `walk SKIPPED` — no binary, or an account the walk's model calls could not
+// reach — is `not-run` with those clients' reasons; a red suite, or a `walk FAIL`, is `failed`.
 // Reading the `walk` line rather than the whole log is also what keeps a step line from being folded
 // twice, and the fold refuses to hide one: a `FAIL` on any step line inside an otherwise passing row
 // LEADS that row's reason, so a verdict nobody meant to publish cannot sit quietly in the middle of
 // forty lines of evidence.
+//
+// "An account the walk could not reach" is the Cursor discovery leg, which is the only part of the
+// whole walk that calls a model — three times, once per state — while every other client command it
+// makes is a local file operation no account limit can touch.
 
 /** The suite whose armed cases ARE this walk, and the scripts the row is bound to beyond the fixture. */
 const LIFECYCLE_SUITE = ['test', 'ci', 'pluginLifecycle.test.ts']
@@ -310,11 +320,11 @@ export function lifecycleInputs(log) {
  * (~60 s of the ~70 s a self-built fixture costs). With no usable runtime in the distribution the
  * builder makes its own, and the reason says which happened — the `plugin-lifecycle-runtime:` line.
  *
- * `scratchDir` is a REDACTION input only, not a location: the suite makes its own temp directories
- * per client walk, and passing the harness's `--fixtures` path in would put two owners on one tree.
- * What it buys is a reason with `<scratch>` in it where a vitest line quoted that path.
+ * There is no `scratchDir` parameter, deliberately: the suite makes its own temp directory per client
+ * walk, no caller has one to offer, and the redaction pairs below already cover `tmpdir()` — a
+ * parameter whose only use was redacting a path it never received was a branch nothing could enter.
  */
-export async function runLifecycleWalk({ clients, repoRoot, distDir, scratchDir }) {
+export async function runLifecycleWalk({ clients, repoRoot, distDir }) {
   const suite = join(repoRoot, ...LIFECYCLE_SUITE)
   if (!existsSync(suite)) {
     return { status: 'not-run', reason: `${LIFECYCLE_SUITE.join('/')} is absent` }
@@ -364,10 +374,10 @@ export async function runLifecycleWalk({ clients, repoRoot, distDir, scratchDir 
     const redact = (text) =>
       redactPaths(text, [
         [distDir, 'dist'],
-        ...(scratchDir === undefined ? [] : [[scratchDir, '<scratch>']]),
         [work, '<scratch>'],
         [repoRoot, '<repo>'],
         [tmpdir(), '<tmp>'],
+        // and nothing else: every path a vitest line can quote is under one of these five.
         [homedir(), '<home>'],
       ])
     if (log === '') {

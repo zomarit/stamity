@@ -391,13 +391,25 @@ describe("runLifecycleWalk — what it refuses before it spawns anything", () =>
   it("is not-run when a client's binary is not on the environment, naming the variable", async () => {
     // Asked BEFORE a thirty-minute spawn: the suite would skip that walk, and this lane would then
     // read its own log to discover what the environment already said.
-    const row = (await runLifecycleWalk({ clients: ["claude", "cursor"], repoRoot: REPO_ROOT })) as {
-      status: string;
-      reason: string;
-    };
-    expect(row.status).toBe("not-run");
-    expect(row.reason).toContain("STAMITY_CLAUDE_BIN unset");
-    expect(row.reason).toContain("STAMITY_CURSOR_BIN unset");
+    //
+    // The four variables are CLEARED inside a saved-and-restored block, not read out of the ambient
+    // environment. This machine's own lane rules tell an operator to export all four before a
+    // harness run, and a gating case that only holds in a shell where they are unset is a case that
+    // goes red on the very machine the walk is armed on — which is the opposite of what it is for.
+    const saved = { ...process.env };
+    try {
+      for (const client of ["CLAUDE", "CURSOR", "COPILOT", "CODEX"]) delete process.env[`STAMITY_${client}_BIN`];
+      const row = (await runLifecycleWalk({ clients: ["claude", "cursor"], repoRoot: REPO_ROOT })) as {
+        status: string;
+        reason: string;
+      };
+      expect(row.status).toBe("not-run");
+      expect(row.reason).toContain("STAMITY_CLAUDE_BIN unset");
+      expect(row.reason).toContain("STAMITY_CURSOR_BIN unset");
+    } finally {
+      for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+      Object.assign(process.env, saved);
+    }
   });
 
   it("is not-run when an exported runtime is incomplete, naming the file and the variable", async () => {
