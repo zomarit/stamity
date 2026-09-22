@@ -1,0 +1,86 @@
+# QA walk-through — Package 15, session 4 (the audit's fixes at the 1.9.0 candidate)
+
+Candidate: `c3d98d6` (the head of `package-15-plugin-lifecycle-3` after the session-4 audit's four fix lanes and two docs
+rounds; the engine bytes those of `3eef4a6`, the one commit between them test-only). Harness evidence:
+`.stamity/evidence/qa-c3d98d6.json` (the hooks lane, the site lanes and the plugins lane, written by `node
+scripts/qa/run.mjs --site website/build --dist dist/plugins --sha c3d98d6` with the four client binaries exported —
+claude 2.1.280, cursor `agent 2026.09.18-9a7762b`, copilot 1.0.87, codex-cli 0.155.1 — the site built at the candidate
+and the distribution built from the packed 1.9.0 tarball the way CI builds it, alone on the machine, 23:02Z–23:12Z:
+every row the harness can measure reads `passed`, `H1b` `not-run` on the recorded Codex vendor fact). Gate of record:
+the test-runner's uncontended full gate in the main checkout at the candidate (the run record's "gate of record at
+`c3d98d6`" entry, every gate exit 0). CI: run 35794713427 at `c3d98d6`, every leg green, the Windows leg included.
+The change set since the signed session-3 form at `37e8976`: the `claude-hook-shell` doctor row rewritten to the
+client's order; key-level ownership of `.claude/settings.json` (setup, init, sync, check, clean, the reclaim backup,
+the duplicates row); the scripts lane (the distribution README's rollback blocks, the smoke's blocker and redaction,
+the hook runner's classifier, the fixture builder, the Claude root README); the docs rounds. Written 2026-09-22T23:14Z
+by the session-4 orchestrator; the sign-off is the maintainer's and is open.
+
+## Rows derived (the triggers)
+
+- A user-visible surface changed: the doctor row's verdicts (A1–A5), the setup's printed notices (A13), the
+  collision remedy (A9), the distribution and root READMEs (A14), the docs pages (A20).
+- An error, fallback or refusal path changed: the settings collision and `--force` (A9), the reclaim backup and
+  its refusal (A8), the blocker classification (A15), the denied-only arm (A17), the push-display scrub (A18).
+- Config ownership changed (a migration of who owns a file): a clean first run (A6, A7) and an upgrade over
+  existing state — a repository set up by the previous engine (A6's re-measurement; P3, P4).
+- A security-adjacent path changed (permissions, hooks, secret handling in evidence): the negative rows — a
+  differing hand-written engine key is refused (A9), a foreign `__proto__` key is carried, never executed (A10),
+  a drifted document is never reclaimed without a backup (A8, A11), credential shapes never reach evidence (A16).
+- UI: the site's pages in both themes (A20).
+- Windows-specific behaviour the suite cannot reach from this host: P1, P2.
+
+## Appendix — rows auto-proven by artifacts that exist for this change
+
+| # | Scenario | Proof |
+|---|---|---|
+| A1 | `stamity check`'s `claude-hook-shell` row passes on a Windows host whose Git for Windows sits at a default install location with nothing on PATH, and names that location | `test/cli/commands/check.test.ts` (the `check — claude-hook-shell` block: the default-location cases); the run record's "gate of record at `c3d98d6`" entry (`npm test -- --coverage` 236 files / 9,421 passed / 18 skipped, exit 0); CI run 35794713427, the Windows leg green |
+| A2 | The row passes for a `git.exe` on PATH in either layout (`cmd\` or `bin\`) by reading `bin\bash.exe` from that installation, and strips a quoted PATH entry | `test/cli/commands/check.test.ts` (the git-on-PATH and quoted-entry cases); the run record's "gate of record at `c3d98d6`" entry (`npm test -- --coverage` 236 files / 9,421 passed / 18 skipped, exit 0) |
+| A3 | The row FAILS on a bare `bash.exe` on PATH with no `git.exe` beside it (MSYS2, Cygwin, WSL), naming the three places it looked and the remedy | `test/cli/commands/check.test.ts` (the bare-bash.exe and nothing-anywhere cases); the run record's "gate of record at `c3d98d6`" entry (`npm test -- --coverage` 236 files / 9,421 passed / 18 skipped, exit 0) |
+| A4 | `CLAUDE_CODE_GIT_BASH_PATH` is honoured only for an existing file named `bash.exe`/`sh.exe`/`bash`/`sh`; a directory, `git-bash.exe` or a missing path is ignored with a note and the next place decides | `test/cli/commands/check.test.ts` (the variable cases); the run record's "gate of record at `c3d98d6`" entry (`npm test -- --coverage` 236 files / 9,421 passed / 18 skipped, exit 0) |
+| A5 | Off Windows the row passes with its note; a plugin-owned or untargeted Claude passes | `test/cli/commands/check.test.ts` (the non-win32 and plugin-owned cases); the doctor row in the gate's `node dist/cli.js check` at `c3d98d6` (`ok claude-hook-shell not a Windows host …`) |
+| A6 | On the documented plugin route — the client's `enabledPlugins` written first, then `plugin setup` — the settings file carries both keys, the setup counts it as written, and `check` is clean, exit 0 | `test/merge/settingsKeyOwnership.test.ts` (client key first); `test/cli/commands/pluginSetup.test.ts`; the rehearsal consumer re-measured with the fixed engine (`private-chain.md`, fact 2: `check` one plain update, `sync` adopted, `check` clean); the run record's "gate of record at `c3d98d6`" entry (`npm test -- --coverage` 236 files / 9,421 passed / 18 skipped, exit 0) |
+| A7 | Setup first, then a foreign key appended (a client's or an operator's) — `check` clean and `sync` leaves the key byte for byte, in either mode | `test/merge/settingsKeyOwnership.test.ts` (setup first; repository mode with `hooks`); `test/manifest/claudeSettings.test.ts`; the run record's "gate of record at `c3d98d6`" entry (`npm test -- --coverage` 236 files / 9,421 passed / 18 skipped, exit 0) |
+| A8 | `clean` and a tool removal strip only the engine's keys and keep the file when a foreign key remains; delete it when nothing else remains; back up a drifted document first and name the `.bak`; refuse when the backup cannot be taken | `test/merge/settingsKeyOwnership.test.ts` (the clean and sync-sweep block); `test/merge/reclaim.test.ts` (backup before reduce, before delete, none when the hash matches, dry run); CI run 35794713427 (the Windows leg green on the native `.bak` path) |
+| A9 | A hand-written `permissions` or `hooks` key that differs from the rendering with no ledger row is a collision, never adopted; `--force` replaces only the engine's keys behind a verified `.bak`; an unparseable file or a non-object is a collision, and the warning quotes the parser's position, never the file's bytes | `test/manifest/claudeSettings.test.ts` (the collision, force, BOM, deep-nesting and position-only cases); `test/cli/commands/check.test.ts` (the collision step names the key); the run record's "gate of record at `c3d98d6`" entry (`npm test -- --coverage` 236 files / 9,421 passed / 18 skipped, exit 0) |
+| A10 | A foreign `__proto__` key round-trips; CRLF files are compared and written in their own ending; a leading BOM is tolerated; file-derived key names are sanitised in every printed notice | `test/manifest/claudeSettings.test.ts` (proto, CRLF, BOM, sanitiser cases); the run record's "gate of record at `c3d98d6`" entry (`npm test -- --coverage` 236 files / 9,421 passed / 18 skipped, exit 0) |
+| A11 | An engine-owned key that differs is regenerated silently only while the file still hashes to a ledgered hash; otherwise the previous file goes to `.bak` and the warning names the key and `.claude/settings.local.json`; a recognised repository-mode hooks rendering is removed by a plugin-backed setup behind a `.bak` and reported, a mixed object never loses operator rows without one; a rendering that merely moved with an upgrade is silent | `test/manifest/claudeSettings.test.ts` (proven-unedited, drifted `.bak`, stale rendering, mixed object, mirror residual); `test/merge/settingsKeyOwnership.test.ts` (the manifest-lost route and the `.bak` cases); the run record's "gate of record at `c3d98d6`" entry (`npm test -- --coverage` 236 files / 9,421 passed / 18 skipped, exit 0) |
+| A12 | Under a plugin install a `hooks` key in the settings file is reported by `check`'s `plugin-duplicates` row and `plugin status` as an `unmanaged` hooks duplicate | `test/merge/settingsKeyOwnership.test.ts` (the duplicates row); `test/cli/commands/check.test.ts` (the plugin-duplicates case); the run record's "gate of record at `c3d98d6`" entry (`npm test -- --coverage` 236 files / 9,421 passed / 18 skipped, exit 0) |
+| A13 | `plugin setup` prints the merge engine's per-file notices and warnings (the adoption notice, the removal warning) and carries them in `--json` | `test/cli/commands/plugin.test.ts` (the renderer case); the run record's "gate of record at `c3d98d6`" entry (`npm test -- --coverage` 236 files / 9,421 passed / 18 skipped, exit 0) |
+| A14 | The shipped distribution README's Claude rollback is the measured three-command block and its Codex block the four commands with `marketplace remove`, both pinned whole; the Claude root's README and capability note carry the measured route | `test/ci/pluginDistribution.test.ts` (the rollback blocks); `test/ci/pluginPackages.claude.test.ts` and `pluginPackages.codex.test.ts` (the pins); the run record's "gate of record at `c3d98d6`" entry (`npm test -- --coverage` 236 files / 9,421 passed / 18 skipped, exit 0); harness `H4a`–`H4d` passed at `c3d98d6` (the roots' structure at 1.9.0 re-hashed) |
+| A15 | The route smoke's blocker matches real 401/quota spellings and not a token count; the Cursor leg's grant is stated in its reason; `report.dist` is a placeholder | `test/ci/pluginRoute.test.ts` (the blocker and grant cases); the run record's "gate of record at `c3d98d6`" entry (`npm test -- --coverage` 236 files / 9,421 passed / 18 skipped, exit 0) |
+| A16 | Every string that reaches an evidence file passes the redaction pairs (both path spellings), the `/private` sweep and the credential-shape sweep; the fixture-build failure, the version banner and an unreadable log are redacted | `test/qa/pluginRuns.test.ts` (the redaction and secret-shape cases); `test/qa/hookRuns.test.ts` (the banner, build-failure and unreadable-log cases); `.stamity/evidence/qa-c3d98d6.json` carries no home, temp or credential string (the leak gate's PASS at `c3d98d6` and the by-hand sweep) |
+| A17 | The denied-only hook arm reads `failed` only on an event-shaped tool call naming the allowed file, and `not-run` on a result line, prose or an empty log | `test/qa/hookRuns.test.ts` (the denied-only and empty-log arms); harness `H1a`, `H1c`, `H1d` passed at `c3d98d6`, `H1b` not-run on the vendor fact |
+| A18 | The fixture builder prints and throws its push URL without userinfo (both spellings, the unknown-argument line too), copies and counts a fork layer | `test/ci/pluginLifecycle.test.ts` (the push-display, unknown-argument and fork cases); the run record's "gate of record at `c3d98d6`" entry (`npm test -- --coverage` 236 files / 9,421 passed / 18 skipped, exit 0) |
+| A19 | The four lifecycle walks pass at the candidate: the Claude three-command rollback executed in order, the Codex remove-add route, the Copilot and Cursor tree replacements, the marker discovered at `.2` and absent at `.1`; after `plugin setup` the Claude project's settings carry `enabledPlugins` and `permissions.allow` | harness `H5` passed at `c3d98d6` (`.stamity/evidence/qa-c3d98d6.json`); `test/ci/pluginLifecycle.test.ts` (the settings assertion under key-level ownership) |
+| A20 | The docs pages render, their links resolve, the keyboard stops and themes hold; the site carries the rewritten pages | harness `H2`, `H3a`–`H3d` passed at `c3d98d6`; `test/docsPages.test.ts` in the gate; the `Docs site` workflow success at `c3d98d6` |
+| A21 | The private-chain rehearsal: one pull request per consumer, the upgrade with the marker discovered, the rollback byte-identical to the first install, a second run opening none, the leak gate clean | `.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md` (steps 5–10 with their captures' digests); `node scripts/leak-gate.mjs` PASS at `c3d98d6` |
+| A22 | No case, cited source, rubric, set, instrument or corpus byte moved since the run-32 candidate, so run 32 stays the run of record | `git diff --stat e5e54c9 c3d98d6 -- evals/cases-v6 evals/SET-v7.md evals/rubric-v7.md evals/README.md test/evals scripts/eval scripts/plugins/setupCommand.mjs content` empty; `test/evals/rubricCoreHash.test.ts` in the gate |
+
+## Walk-through — rows left for a person
+
+Four rows, 17 minutes; sorted by risk then minutes. P1 and P2 need Windows hosts this machine cannot stand in for;
+P3 and P4 need the published package and a real repository.
+
+| # | Scenario | Steps | Expected | Risk | Minutes | Proof |
+|---|---|---|---|---|---|---|
+| P1 | A Windows host with a default Git for Windows install and only `Git\cmd` on PATH: the doctor row passes and names the default location | 1. On Windows with Git for Windows installed the default way (PATH carries `C:\Program Files\Git\cmd` only): `npx @zomarit/stamity@1.9.0 check` in a repository that targets Claude with repository-emitted hooks. 2. Read the `claude-hook-shell` row. | `ok claude-hook-shell Git Bash at C:\Program Files\Git\bin\bash.exe, a default install location …`; exit 0 | H | 3 | ☐ |
+| P2 | A Windows host with only an MSYS2 or Cygwin `bash.exe` on PATH and no Git for Windows: the row fails with the remedy | 1. On such a host (`where bash` finds `C:\msys64\usr\bin\bash.exe`, `where git` finds nothing): `npx @zomarit/stamity@1.9.0 check` in the same kind of repository. 2. Read the row. | `fail claude-hook-shell …` naming the three places looked, the bare `bash.exe` as not counting, and the remedy (install Git for Windows or set `CLAUDE_CODE_GIT_BASH_PATH` to its `bin\bash.exe`); exit 1 | H | 3 | ☐ |
+| P3 | A real repository's hand-written settings keys survive init, sync and clean | 1. In a repository with `.claude/settings.json` = `{"model": "opus"}` and no `.stamity/`: `npx @zomarit/stamity@1.9.0 init` selecting Claude. 2. `cat .claude/settings.json`. 3. Add `"env": {"X": "1"}` by hand; `npx @zomarit/stamity check`; `npx @zomarit/stamity sync`. 4. `npx @zomarit/stamity clean -y`; `cat .claude/settings.json`. | Step 2: `model` kept beside `permissions` and `hooks`, the init panel says the file was adopted. Step 3: `check` clean, `sync` 0 updated, `env` intact. Step 4: `clean` reports `co-owned-reduced .claude/settings.json`; the file holds `model` and `env` only, no `.bak` | M | 5 | ☐ |
+| P4 | The plugin route on a fresh clone after the release: install, setup, check clean | 1. In a fresh clone of any repository, with Claude Code: `claude plugin marketplace add zomarit/stamity#plugins/v1.9.0` and `claude plugin install stamity@stamity --scope project`. 2. Start a session and run `/stamity:st-setup`. 3. `cat .claude/settings.json`; then, through the root's runtime (the locator line the plugin's README prints), `check`. | Step 3: the file holds `enabledPlugins` and `permissions`; `check` prints fourteen `ok` rows, `drift: clean`, `all green`, exit 0 | M | 6 | ☐ |
+
+**Sign-off** — Package 15 session 4, candidate `c3d98d6`, 2026-09-22 — OPEN (the maintainer's)
+
+The 22 auto-proven rows carry their pointers; the four person rows are unperformed. The release proceeds on the
+maintainer's standing instruction for this session (the audit's fixes before the tag, then ship) with this checkpoint
+reported as open in the proof block and the four rows as `Not done` lines owned by the maintainer; the session-3
+sign-off of 2026-09-22T13:20Z covers the release's other human rows.
+
+- [ ] Every H row walked and passing — P1 and P2 are Windows hosts (the CI leg proves the default-location probe on
+  the runner's image; the MSYS2-only host is unmeasured).
+- [ ] Every failing M row has a filed follow-up, linked — none walked yet.
+- L failures are recorded, not blocking.
+- Rollback: the settings ownership and the doctor row are engine code — revert `eb52d52..d729870` and
+  `4ea159f`,`6f8f103` (or `npm install -D @zomarit/stamity@1.8.0` in a consumer); the scripts lane is
+  `5f3d62e..d9b56f1`; the docs rounds `f3f92c5..cb36119`, `3eef4a6`; the test fix `c3d98d6`.
+- Shippable: YES on the auto-proven rows and the session-3 sign-off; the person rows above are the release's
+  `Not done` lines until the maintainer walks or waives them.

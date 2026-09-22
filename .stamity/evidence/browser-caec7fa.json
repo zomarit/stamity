@@ -39,7 +39,7 @@
     {
       "id": "browser",
       "status": "pass",
-      "evidence": "/Users/denismasatovic/.cache/puppeteer/chrome/mac_arm-146.0.7680.153/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+      "evidence": "<home>/.cache/puppeteer/chrome/mac_arm-146.0.7680.153/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
     },
     {
       "id": "surface",

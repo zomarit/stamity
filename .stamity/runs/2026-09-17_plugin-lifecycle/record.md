@@ -3699,8 +3699,11 @@ is repeated") applies: the spec-author moves the two `source:` ranges to the sam
 `## Expected` block moves), and run 32 is prepared at the sha carrying that edit, incremental against run 31 (its
 full summary is in the tree, so no retention commit is needed), re-measuring the two cases whose case file or
 cited text moved — about seventeen calls with calibration — exported, committed, and carried into the pages, the
-measurements page, the spec paragraph and the hygiene exception that name the run of record. CI at `e8c143b` was
-cancelled by the later push, as designed; the final sha gets its own run.
+measurements page, the spec paragraph and the hygiene exception that name the run of record. CI at `e8c143b` (run
+35713389171): the LTS leg completed red on the two moved st-setup locators (2 failed / 9,308 passed — the drift
+`d881d44` and `831db93` fixed) sixteen seconds before the next push; the floor and Windows legs were cancelled by
+that push (corrected 2026-09-22 by the session-4 audit; the entry had read "cancelled by the later push, as
+designed"). The final sha gets its own run.
 
 ## Run 32 prepared and started (2026-09-22T10:09Z; candidate `831db93`)
 
@@ -3831,13 +3834,13 @@ Every gate exit 0 at the sha that ships: lint, typecheck, build (byte-identical 
 all green, `npm test -- --coverage` 234 files, 9,315 passed, 18 skipped, all-files 96.57 / 90.01 / 98.77 / 97.41,
 no threshold line, no hook timeout, 140 s; knip; the leak gate 0 hits; the hygiene gate; both generators'
 `--check`; `test/evals` 1,290 passed. The maintainer answered through the question tool: run 32 runs under a
-fresh eval directory (`~/.claude-alt3`, the eval's minimal settings, the login theirs) — the recommended option —
+fresh eval directory (a second client directory with the eval's minimal settings, the login theirs) — the recommended option —
 and the cut stays dated 2026-09-21 (the tag's own date is in git; no writer round). The harness runs at this sha
 now; the QA form and its sign-off block follow it.
 
 ## Run 32 started under the maintainer's login; CI at `f4f38ec` (13:32Z)
 
-`~/.claude-alt3` already held the maintainer's own login (masatovic.dev@gmail.com, its credential in the keychain),
+That directory already held the maintainer's own login (its credential in the keychain),
 so no browser login was needed; its `settings.json` was rewritten to the eval's minimal shape (the previous file,
 from 2026-09-01, was not kept — a rewrite the maintainer should know about). The preparation bound to the exhausted
 eval account is retained as `run32-held-alt2`; the run re-prepared bound to the fresh directory (17 calls, 100
@@ -3946,8 +3949,11 @@ moved. The QA walk-through is at `qa-session-3.md`.
   discovery-first with one root rule and two stops; the Codex README line with its root.
 - **What is green**: the gate of record at `37e8976` (lint, typecheck, build, `stamity check` all green, 234
   files / 9,315 passed / 18 skipped at 96.57 / 90.01 / 98.77 / 97.41, knip, the leak gate 0 hits over 1,558 files,
-  the hygiene gate, both generators at 1.9.0, `test/evals` 1,290); CI green on every leg at `37e8976` and at
-  every pushed sha since the Windows red of `967cb76` was fixed (`bd837fb` onward); the harness at `37e8976`
+  the hygiene gate, both generators at 1.9.0, `test/evals` 1,290); CI green on every leg at `37e8976` and, after
+  the Windows red of `967cb76` was fixed, at every pushed sha whose run completed — `bd837fb`, `831db93`, `5ee8708`,
+  `e5e54c9`, `f4f38ec`, `37e8976`; the runs at `e8c143b` (its LTS leg red on the moved locators), `c1b5f2e`,
+  `d881d44` and `485f37e` were superseded by the next push before completing (corrected 2026-09-22 by the
+  session-4 audit; the block had read "at every pushed sha since … `bd837fb` onward"); the harness at `37e8976`
   with every measurable row green; run 32 PASS composed with run 31 at `e5e54c9` — no case, cited source, rubric,
   set or instrument byte moved between `e5e54c9` and `37e8976` (checked at `485f37e` and `37e8976`), so the
   incremental rule's own condition holds for the sha that ships.
@@ -4015,7 +4021,7 @@ run lands after this release" stays true as written; this record is where the di
 In the hook fixture (`scripts/qa/fixtures.mjs`, written to a temp directory), the maintainer opened `codex`
 interactively on codex-cli 0.155.1 (the client updated from 0.154.0 since the morning's harness), trusted the
 project and accepted the hook at the client's prompts (the home config gained the project's `trust_level` and
-the hook's `trusted_hash`), and asked for the two reads (session `01a0c990-16a6-7b20-8098-068dc47ea5c0`, 14:41Z):
+the hook's `trusted_hash`), and asked for the two reads (the client's local session, 14:41Z):
 the client rendered `Blocked by hook` with the emitted hook's own deny decision for `qa-denied.txt`, then read
 `qa-allowed.txt`; the observation log carries one `denied` and one `allowed` line (sha-256 `756246be…`). So the
 emitted Codex hooks — `features.hooks = true` in the emitted config, the project trusted, the hook accepted — run
@@ -4034,3 +4040,278 @@ measure reads `passed`; `H1b` stays `not-run` on the recorded Codex vendor fact,
 maintainer walked (P2). The `Not done` lines for the Cursor rows are closed; the release's remaining lines are the
 PowerShell-fallback host (the maintainer's exception), V4 (owner-dependent), the nightly (disabled by choice) and
 the release itself.
+
+# Session 4 — the audit of session 3 for context-rot damage, the private-chain rehearsal, the 1.9.0 release
+
+Session status: opened 2026-09-22T15:05Z on the kickoff regenerated at the session-3 close, on the maintainer's
+instruction to continue and their standing preference that the session does everything it technically can (merge,
+tag, approve, run the token-bearing commands with the `gh` login's token inline) and reports in plain words.
+Branch `package-15-plugin-lifecycle-3`, tip `730593b` at intake (code `37e8976`). The order the kickoff set: the
+audit first as a read-only pass, then V4 from its on-disk state, then the release. Model rule: the six audit
+readers, every reviewer and lens, the fixers of the audit's findings and the docs writers at `claude-fable-5-1`
+(the stronger class, the rule for a whole-branch review's findings); the runner and the ledger-mapping helper at
+`claude-opus-5`. Decisions the kickoff would have put to the maintainer one per turn were executed as defaults
+and are listed in the proof block for the maintainer's confirmation. One outage: the account's usage credits for
+the stronger class ran out at about 21:55Z on 2026-09-22 and cut off three sub-agents mid-round; they were resumed
+from their on-disk state at 22:07Z after the maintainer's "continue", with no work lost. Every stamp below was
+read from `date -u` at the time.
+
+## Baseline, re-verified at intake (2026-09-22T15:05Z)
+
+- `package-15-plugin-lifecycle-3` at `730593b` = `origin`, code `37e8976`, `main` = `origin/main` = `67f404b`,
+  99 commits ahead, working tree clean; pull request #47 draft, mergeable; CI at `730593b` every leg green once
+  the Windows leg finished (run 35744316462) ✓
+- No `plugin-dist` branch, no `plugins/*` tag, no `v1.9*` tag on `origin` ✓
+- Ledger 368 rows, no open row, last id `prove/280`; three active handoffs; 17 worktrees (the 16 session-3 lanes
+  and `p15s3-v4` with its uncommitted identity edit) ✓
+- V4's on-disk state as the kickoff described it: the three private fixture repositories, the mirror's
+  `plugin-dist` = `plugins/v1.9.1` = `b567f3a9…` and `plugins/v1.9.0` = `bbd0c962…`, the two built versions and the
+  record skeleton under the scratch directory, the apm virtual environment half-made (recreated at 0.30.0) ✓
+- The two hazards of the kickoff: the maintainer's second client directory carries the eval's minimal settings
+  (`model`, one subagent env, the dangerous-mode prompt skipped, the theme) and its `.claude.json` backups from
+  the same day, so nothing else of it was lost; the release workflow packs before it builds the plugin trees from
+  a fresh checkout (reader C2 confirmed the order at `release.yml:308-320` against `:340`/`:354`, pinned by
+  `test/ci/workflow.test.ts`) — the local-pack hazard is the operator's and is now documented ✓
+
+## The audit (2026-09-22T15:06Z–15:40Z): six readers at the stronger class over the final tree `730593b`
+
+Dispatched in parallel, read-only: A the engine (`src/`, the emitted hook bytes, their tests), B the scripts and
+tests, C1 the hand pages read whole for contradictions, C2 the workflows and the evals (with the private layer's
+driver and run directories), D the security lens, E the records (every claim against git, CI and the artifacts;
+the stamps checked mechanically). Findings, all ledgered as `prove/281` onward:
+
+- **One Critical in code** (A): the new `claude-hook-shell` doctor row searched a different set of places than
+  the client — any existing `CLAUDE_CODE_GIT_BASH_PATH` (a directory included) or any `bash.exe` on PATH — a
+  false FAIL on a default Git for Windows install and a false PASS on a non-Git bash; the vendor's
+  troubleshoot-install page (read 2026-09-22) resolves the variable only for `bash.exe`/`sh.exe`/`bash`/`sh`,
+  then the default install locations, then `bin\bash.exe` beside the git on PATH (`prove/281`).
+- **No Critical** from B, C1, C2, D or E. Warnings, 28 in all: the shipped distribution README's rollback blocks
+  (B), a blocker regex that read a token count as a 401 (B), the macOS realpath spelling unredacted (B), a hook
+  classifier that could hide an unfired hook (B), the fixture builder's push echo (B, D), three pages asserting a
+  Codex default the evidence page had retracted (C1), the troubleshooting sample missing the fourteenth row (C1),
+  the spec naming `f4f38ec` as the sha that ships (C1, C2), the enterprise guide denying the fork layer in built
+  roots (C1), SECURITY.md attributing the major-mismatch refusal to the locator (C1), stale citations (C1), the
+  private driver's advisory-repeat comparison compared nothing for run 32's two v7-new cases (C2), an unrecorded
+  red CI run at the record-only commit `d6f8348` (C2, E), the local-pack recipe with no note (C2), the
+  maintainer's login e-mail in the record (D, E), unpinned vendor CLIs in the nightly (D), the Cursor leg's
+  broadest grant unstated (D), the disclosed payload fail-open (D), the QA form's and proof block's CI claims at
+  `485f37e` and "every pushed sha since `bd837fb`" (E), the release handoff's Cursor lines retracted by the
+  14:50Z amendment (E), the V4 handoff pinned 29 commits below the candidate (E), the Codex version in the form
+  (B, E), and 62 ledger rows citing lane commits that a worktree prune would orphan (E).
+- **Minors** in the thirties: stale count numerals, a docblock, a digest citation that differs every run, plan
+  cells the as-built superseded, "runs nightly" on three pages while the workflow is disabled by choice, the
+  session id of the maintainer's Codex walk quoted, the held run-32 directories unmarked, and the like.
+- **Verified sound, per reader**: A — the anchored commands, the fail-closed tail's every non-zero status, the
+  own-location root, the snapshots' every hunk explained, `plugin status`'s semver floor; B — all eighteen late
+  commits still do what their messages say, the row ids and client mapping agree across the form, the evidence
+  and the harness, the evidence file carries no path; C1 — every version-specific fact carries its version, the
+  Claude refresh spelling is one everywhere, 145 links resolve, the two eval-run skills are byte-identical in
+  body; C2 — the aggregator requires the plugin-route lane, the nightly holds one secret per drive step and
+  spawns nothing with all four, the release packs before it builds, run 32's composition and every cross-document
+  count hold, the rubric core hash `6209d8df…` unchanged since run 30; D — the hook anchor quotes its expansion,
+  the guard exits only 0 or 2, the Codex emission writes only project files, the smoke's install legs run in
+  allowlisted scratch homes, the release's privilege boundary and digest-before-publish hold, the lock file is
+  the version bump alone; E — 106 shas resolve with matching subjects, 127 stamps and 91 headings with 0 stamp
+  ahead of its commit, the ledger's 106 unretired deferred rows each have an inbox row, all three handoffs'
+  integrity hashes match, both learnings' digests match.
+
+## The records corrected in place (2026-09-22T15:31Z–15:37Z; this session's close commit)
+
+The maintainer's e-mail and the second client directory's name respelled; the Codex session id dropped; the QA
+form's CI list (drop `485f37e`, name `37e8976`) and its Codex version (0.155.1 at the 14:49Z rewrite); the proof
+block's CI sentence and the `e8c143b` entry corrected and marked as session-4 corrections; the stale learning
+amended with a dated paragraph and its digest recomputed; 48 ledger rationales gained the package-branch commit
+each lane commit landed as — the helper at `claude-opus-5` mapped 39 lane shas 1:1 by patch-id, subject and file
+set with 0 unmapped, and `build/60`'s retirement names `959db14`; the two browser-evidence files on `main` that
+carried the maintainer's home path redacted to `<home>`; the two held run-32 preparations in the private layer
+marked. The three prove ids the session-3 sequence skipped (`prove/144`–`146`) stay unused. The state-file gates
+(`test/records`, `test/learnings`, `test/qa/form`) green after every edit.
+
+## V4 — the private-chain rehearsal (2026-09-22T15:18Z–15:46Z; `private-chain.md` beside this record)
+
+Run for real against the three private fixture repositories with the maintainer's `gh` login: the mirror made a
+full private fork (source at `37e8976` plus the identity commit, the presets moved, `main` the default branch)
+beside its `plugin-dist` and two tags; the plugin consumer carrying the private catalog and the Claude
+project-scope install in a scratch configuration directory; the APM consumer on `apm.yml`; the Copilot half
+walked as add and install; one real Renovate run (44.107.0 on Node 24, the day's version) opening exactly one
+pull request per consumer — the plugin one changing one file and one line, the APM one `apm.yml`, its lock and
+the deployed marker; the merges; the refresh to the second version with the marker discovered and `plugin
+status` compatible; the rollback to the first version by the documented route with the per-file sha-256 map
+equal to the first version's and the APM tree byte-identical to the first install; the restore; a second run
+opening none; the leak gate clean over both consumers and over this checkout with the record present. Eleven
+steps done, the twelfth (the upstream-lane integrate in the fork) after the tag. Seven measured facts differ
+from what the pages said; two became fixes (the settings collision, `prove/321`) and docs (the `--scope project`
+write, the apm rule per tag scheme, the executed Renovate example, REQ-PLUGIN-023 as built). The `Not done`
+lines are the owner-dependent ones (required checks on the private plan, the enterprise's catalog approval,
+network mirroring, the Cursor and Codex halves against the private mirror, the Copilot update path, the
+project-declared marketplace at session start).
+
+## The fixes (2026-09-22T15:25Z–22:28Z): four lanes, every one reviewed at the stronger class
+
+- **`p15s4/hookshell`** — the doctor row rewritten to the client's order with twelve red-first cases (8 of 12 red
+  on the old row), a second round on the reviewer's three Warnings (the shim note says what the row measured, the
+  MSYS2 claim narrowed to a bare `bash.exe` with no `git.exe` beside it, a quoted PATH entry stripped); reviewer
+  request-changes → approve. Integrated as `4ea159f`, `6f8f103`; CI green at `6f8f103` on every leg, Windows
+  included (run 35765931985).
+- **`p15s4/settings`** — key-level ownership of `.claude/settings.json` (`prove/321`): four rounds, a reviewer
+  (request-changes twice, then approve) and the security lens (one Warning, then PASS) each read every round; the
+  rule of record: the engine owns the keys the install mode makes its own and carries every other key through;
+  an engine-owned key that differs is regenerated silently only while the bytes still hash to a ledgered hash,
+  otherwise behind a verified `.bak` with a warning; recognising its own repository-mode hooks rendering never
+  skips the backup; `clean` and a tool removal back up a drifted document; `check`'s `plugin-duplicates` row
+  reports a hooks key beside a plugin's hooks. 23 files; the module at wave 5; the dogfood tree's bytes unmoved.
+  Integrated as `eb52d52`, `aa4270c`, `2b994cd`, `321074c`, `d729870`.
+- **`p15s4/scripts`** — the nine findings of readers B and D and the reviewer's and security lens's rounds
+  (`prove/325`): the README blocks measured and pinned whole, the blocker's real spellings, the redaction module
+  with realpath twins and a credential-shape sweep, the denied-only arm on event-shaped tool calls, the push
+  display without userinfo, the fork layer copied and counted, the Cursor grant named, the Claude root README and
+  its note aligned to the measured route; `scripts/plugins/setupCommand.mjs` byte-identical. Integrated as
+  `5f3d62e`, `22028d5`, `1c759af`, `7dfb2cb`, `d9b56f1`.
+- **`p15s4/docs`** — round A (every reader's docs finding, the hook-shell sentences, the rehearsal's facts,
+  REQ-PLUGIN-023 as built, run 32's errata) integrated as `f3f92c5`, `664385d`, `558bca5`, `cb36119`, CI green
+  there; round B (the settings contract in the spec, the guide, migration, troubleshooting and the changelog; the
+  bare Copilot refresh and the four-command Codex rollback with their provenance; the shipping sha named by this
+  section's proof block; the citations re-pointed twice) integrated as `3eef4a6`.
+- The sixteen session-3 lane worktrees and `p15s3-v4` removed after the mapping (their branches kept); the
+  session-4 lanes stay until the close.
+- **The candidate is `3eef4a6`** (116 commits above `main`), pushed 2026-09-22T22:28Z; the eval composition
+  re-checked there: no case, cited source, rubric, set, instrument or corpus byte moved since `e5e54c9` (the run
+  artifacts alone moved — run 32's own files, its errata block, the two protocol lines), so run 32 stays the run
+  of record.
+
+## The gate of record at `3eef4a6`: green (2026-09-22T22:29Z–22:32Z; the runner, uncontended) — the run the release cites
+
+In the tools' own words: lint 0, typecheck 0, build 0 (`dist/cli.js` 331.66 kB, logic 1,400,508 B of 2 MiB, corpus
+550,381 B of 1.5 MiB), `all green — nothing to do` (fourteen doctor rows, `drift: clean`), `236 passed (236)` files
+and `9421 passed | 18 skipped (9439)` tests at 96.6 / 89.94 / 98.9 / 97.47 in 162 s, no threshold line, no hook
+timeout, knip 0, `leak-gate: PASS - 0 hits for 18 rule(s) across 1571 file(s)`, `repo-hygiene: PASS — 1569 tracked
+files; 31 additions checked` (against local `main`), both generators verified at `stamity@1.9.0`, `test/evals`
+`1290 passed (1290)` (a slice of the 9,421, not a second count). The runner's caveats, carried as the record's own:
+the Windows host is CI's leg (the four heavy fixtures run through the serialised project only there); run 32's PASS
+is the artifact's; the smoke-lane grants are measured by the route proof and the harness; the doctor ran with the
+orchestrator's nine uncommitted state files present and `drift: clean` still held. Two more files and 106 more
+tests than at `37e8976`: the settings module's two suites and the reclaim and scripts cases.
+
+## The rehearsal consumer re-measured with the fixed engine (2026-09-22T22:33Z; the gate's own `dist/cli.js`)
+
+On the plugin consumer set up by the candidate's predecessor (its `.claude/settings.json` holding only the client's
+`enabledPlugins`): `check` reported one plain `update` for that file and no collision; `sync -y` adopted it — "kept
+its 1 other top-level key(s) (enabledPlugins) beside the generated permissions; the engine owns only those" — with no
+`.bak`; `check` then `drift: clean`, exit 0. The consumer's synced state committed to the fixture repository
+(`b85c9eb`); the captures are listed in `private-chain.md`.
+
+## The harness at `3eef4a6` (2026-09-22T22:34Z–22:45Z; alone, after the site and the distribution were built the way CI builds them; evidence `.stamity/evidence/qa-3eef4a6.json`)
+
+The site built at the candidate (22:33Z–22:34Z), the distribution built from the packed 1.9.0 tarball
+(`zomarit-stamity-1.9.0.tgz`, 582,182 bytes; the runtime 638 files; four roots, the APM package and four catalogs
+at `plugins/v1.9.0` with `sourceCommit` `3eef4a6`), then `node scripts/qa/run.mjs --site website/build --dist
+dist/plugins --sha 3eef4a6` with the four binaries exported. Every measurable row passed: `H1a` (Claude Code
+2.1.280 — the client updated from 2.1.278 since the rehearsal; the emitted hook denied one read and allowed one),
+`H1c` (the Cursor agent 2026.09.18), `H1d` (GitHub Copilot CLI 1.0.87 under `COPILOT_ALLOW_ALL=true`), `H2`,
+`H3a`–`H3d`, `H4a`–`H4d` (the four route legs at 1.9.0, their inputs re-hashed since the smoke's own sha and the
+Claude and Codex capability notes moved this session), `H5` (all four lifecycle walks PASS — the Claude
+three-command rollback executed in order, the Codex remove-add route, the Copilot and Cursor tree replacements,
+the marker discovered at `.2` and omitted at `.1`); `H1b` `not-run` on the recorded Codex vendor fact (the
+interactive half measured by the maintainer on 2026-09-22). The superseded candidate's evidence file
+`qa-37e8976.json` stays in the tree because the session-3 form's signed pointers name its rows.
+
+## CI at `3eef4a6`: the Windows leg red on two assertions (2026-09-22T22:28Z–22:47Z; run 35792569525)
+
+Every other leg green. The Windows leg failed two cases of `test/merge/settingsKeyOwnership.test.ts` — the two
+`clean` scenarios added in the settings lane's fourth round — with `expected 'Removing 8 recorded path(s)...' to
+contain '.claude/settings.json.bak'`. The saved job log shows the engine did what the cases demand: the drift
+sentence printed and the backup taken, named as the native absolute path (`…\repo\.claude\settings.json.bak`);
+the assertions looked for the POSIX substring inside it — the shape the learning
+`the-local-test-gate-is-weaker-than-ci` records. Fixed test-only as `c3d98d6` (lane `83e5acc`): both assertions
+expect the native `join(root, ".claude", "settings.json.bak")`, identical to the POSIX form on this host. Not
+expressible red-first off-platform (the two spellings coincide wherever the separator is `/`); the Windows leg at
+`c3d98d6` is the confirmation of record. **The candidate moves to `c3d98d6`** (117 commits above `main`), pushed
+2026-09-22T22:56Z; the engine bytes are unchanged from `3eef4a6`.
+
+## The gate of record at `c3d98d6`: green (2026-09-22T22:53Z–23:01Z; the runner, uncontended) — the run the release cites
+
+In the tools' own words: lint 0, typecheck 0, build 0 (`dist/cli.js` 331.66 kB, logic 1,400,508 B of 2 MiB, corpus
+550,381 B of 1.5 MiB — byte-identical to `3eef4a6`'s), `all green — nothing to do` (fourteen doctor rows, `drift:
+clean`), `236 passed (236)` files and `9421 passed | 18 skipped (9439)` tests at 96.6 / 89.94 / 98.93 / 97.47 in
+379 s, no threshold line, no hook timeout, knip 0, `leak-gate: PASS - 0 hits for 18 rule(s) across 1572 file(s)`,
+`repo-hygiene: PASS — 1569 tracked files; 31 additions checked`, both generators verified at `stamity@1.9.0`,
+`test/evals` `1290 passed (1290)` (a slice of the 9,421). A fresh measurement, not a carry-forward; the same
+caveats as the `3eef4a6` entry. The gate at `3eef4a6` stays recorded as the first green of this tree.
+
+## The harness at `c3d98d6` (2026-09-22T23:01Z–23:12Z; alone, after the site and the distribution were rebuilt at the sha; evidence `.stamity/evidence/qa-c3d98d6.json`)
+
+The same chain as at `3eef4a6`: the site (23:01Z), the tarball, the runtime, the distribution with `sourceCommit`
+`c3d98d6` (23:02Z), then the harness with the four binaries. Every measurable row passed — `H1a`, `H1c`, `H1d`, `H2`,
+`H3a`–`H3d`, `H4a`–`H4d`, `H5` — and `H1b` `not-run` on the recorded Codex vendor fact. The evidence file of the
+superseded candidate `3eef4a6` dropped (never committed); `qa-37e8976.json` stays for the session-3 form's signed
+pointers.
+
+## CI green at `c3d98d6`, the Windows leg included (2026-09-22T22:56Z–23:1xZ; run 35794713427)
+
+Every leg of `CI` success — floor, LTS, Windows, the three APM routes, `plugin-route`, `all-ci-checks` — plus `PR
+checks` and `Docs site`. The Windows leg is the confirmation of record for the settings lane's `win32`-skipped
+link cases, the two `clean` backup scenarios and the doctor row's default-location probe on the runner's Git for
+Windows.
+
+## QA checkpoint (2026-09-22T23:14Z; `qa-session-4.md`)
+
+Rows derived from every trigger the audit's fixes fire; 22 rows auto-proven with their pointers (the settings
+suites, the doctor-row cases, the distribution and harness suites, the gate of record, CI's Windows leg, the
+harness evidence at `c3d98d6`, the rehearsal record); four rows left for a person — two Windows hosts (a default
+Git for Windows install, an MSYS2-only host), a real repository's hand-written keys through init, sync and clean,
+the plugin route on a fresh clone after the release. The sign-off is the maintainer's and is **open**; the
+release proceeds on their standing instruction for this session with the four rows carried as `Not done` lines.
+
+## Proof block — session 4 (2026-09-22T23:16Z; the sha that ships `c3d98d6`, pushed; no merge, no tag, no publish at this commit)
+
+- **What landed** on `package-15-plugin-lifecycle-3`, `730593b` → `c3d98d6` (117 commits above `main`, pull request
+  #47 open): the audit of session 3 by six readers at the stronger class (47 ledger rows, `prove/281`–`327`; one
+  Critical in code, one Critical-class defect found by the rehearsal, 28 Warnings, the rest Minors; every claim the
+  readers verified sound listed in the audit entry); the records corrected in place and the ledger's 62 lane-only
+  citations mapped to their branch commits; the four fix lanes, every round reviewed at the stronger class — the
+  `claude-hook-shell` row rewritten to the client's order (`4ea159f`, `6f8f103`), key-level ownership of
+  `.claude/settings.json` with the backup rule, the stale-rendering removal, the reclaim backup and the
+  duplicates row (`eb52d52`, `aa4270c`, `2b994cd`, `321074c`, `d729870`), the scripts lane's redaction module,
+  classifiers, README blocks and fixture builder (`5f3d62e`, `22028d5`, `1c759af`, `7dfb2cb`, `d9b56f1`), the two
+  docs rounds (`f3f92c5`, `664385d`, `558bca5`, `cb36119`, `3eef4a6`), the Windows assertion (`c3d98d6`); V4, the
+  private-chain rehearsal, eleven of twelve steps done and recorded credential-free (`private-chain.md`,
+  `renovate-consumer.json`), the twelfth after the tag; the session-4 QA walk-through; the session-4 rows of the
+  inbox; the sixteen session-3 lane worktrees removed.
+- **What is green**: the gate of record at `c3d98d6` (lint, typecheck, build, `stamity check` all green, 236 files /
+  9,421 passed / 18 skipped at 96.6 / 89.94 / 98.93 / 97.47, knip, the leak gate 0 hits over 1,572 files, the hygiene
+  gate, both generators at 1.9.0, `test/evals` 1,290); CI green on every leg at `c3d98d6` (run 35794713427, the
+  Windows leg included) and at `cb36119` and `6f8f103` before it; the harness at `c3d98d6` with every measurable
+  row green and `H1b` not-run on the vendor fact; run 32 PASS stays the run of record — no case, cited source,
+  rubric, set, instrument or corpus byte moved between `e5e54c9` and `c3d98d6` (checked at `d9b56f1` and
+  `c3d98d6`), so the incremental rule's own condition holds for the sha that ships.
+- **The QA checkpoint** (`qa-session-4.md`): 22 rows auto-proven, 4 person rows, the sign-off open — reported as
+  open, not closed around; the session-3 sign-off of 13:20Z covers the release's other human rows.
+- **Defaults executed** without the question tool, each recorded where it happened, for the maintainer's
+  confirmation: (1) the audit's findings fixed before the tag rather than deferred (the kickoff's own rule); (2)
+  the settings collision fixed by key-level ownership — a contract change on `.claude/settings.json` (an engine-owned
+  key's hand edit is regenerated only behind a `.bak` once the file no longer hashes to what the engine wrote;
+  recognising the engine's own hooks rendering never skips the backup); (3) the readers, reviewers, lenses, fixers
+  and docs writers at the stronger class throughout, the runner and the mapping helper at `claude-opus-5`; (4) V4's
+  private catalog hosted in the plugin consumer and the mirror made a full private fork with the presets moved,
+  because the shipped preset watches the catalog files of the repository Renovate runs over; (5) the APM
+  consumer's package rule moved to the regex versioning when `semver` read the `plugins/v` tag as invalid, and the
+  guide now says which rule fits which scheme; (6) the nightly's vendor-CLI pins and egress allowlist deferred to
+  the inbox — the workflow is disabled by the maintainer's choice; (7) the Copilot refresh documented in the
+  measured bare spelling; (8) the Codex rollback documented as four commands with `marketplace remove` (from the
+  client's `--help`), the git re-point stated unmeasured; (9) the superseded candidates' evidence files dropped
+  and `qa-37e8976.json` kept for the signed session-3 pointers; (10) the session-3 lane worktrees removed with their
+  branches kept; (11) the release proceeding with the session-4 checkpoint open, its person rows as `Not done`
+  lines; (12) the two browser-evidence files on `main` redacted in place; (13) the settings lane's W3 remainder
+  (the link guard, the parse and the merge rule still copies beside the MCP lane's) deferred to the inbox.
+- **Not done:** the four person rows of `qa-session-4.md` — two Windows hosts, a real repository's hand-written keys,
+  the plugin route on a fresh clone after the release (owner: the maintainer) — V4's twelfth step, the upstream-lane
+  integrate in the private fork against the `v1.9.0` tag (this session, after the tag) — the nightly's vendor-CLI
+  pins and egress allowlist before it is enabled (owner: the maintainer; inbox `prove/296`) — the disclosed
+  payload fail-open of the guard (inbox `prove/297`) — the PowerShell-fallback host (the standing residual, the
+  maintainer's exception) — the private driver's advisory-repeat comparison before the next increment (inbox
+  `prove/295`) — the release itself follows in this session's next entries.
+- **The closing entry** of this commit: no merge, no tag, no publish; the branch pushed with every check green; the
+  ledger 415 rows with no open row (the three skipped ids `prove/144`–`146` stay unused); every deferred row has its
+  inbox row; the three handoffs still active (V4's and the release's are completed in the release entries, the
+  session-4 one at the close).
+
