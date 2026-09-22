@@ -942,9 +942,22 @@ async function cursorLegs(context) {
     // login lives in the operator's own home.
     env: process.env,
   })
+  // The install leg IS a model call for this client, so it consults the same blocker list discovery
+  // and invocation do (prove/260): an account limit read as `install FAIL … usage limit` while the
+  // invocation leg beside it read the same words as SKIPPED.
+  const blocker = listing.spawnFailure === null ? blockerFor(listing.redacted) : null
   const install =
     listing.spawnFailure !== null
       ? legFrom('install', 'FAIL', `agent --plugin-dir could not run: ${listing.spawnFailure}`, listing, context.version)
+      : blocker !== null
+        ? legFrom(
+            'install',
+            'SKIPPED',
+            `${blocker.label} (${blocker.match}), so nothing about this root was measured (the --plugin-dir run ` +
+              `exited ${listing.exit}): ${listing.tail}`,
+            listing,
+            context.version,
+          )
       : listing.status === 0
         ? legFrom(
             'install',

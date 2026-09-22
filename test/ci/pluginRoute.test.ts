@@ -610,6 +610,40 @@ exit 1
   );
 });
 
+/**
+ * prove/260: the Cursor install leg is a model call (`agent --trust --plugin-dir`), and an account
+ * limit read as `install FAIL` while the invocation leg beside it read SKIPPED for the same words.
+ * A fake `agent` that prints the client's own limit text and exits 1 drives the leg with no
+ * credential; Windows is skipped for the reason the stop case states.
+ */
+describe.skipIf(process.platform === "win32")("the cursor install leg against a fake client that hit its usage limit", () => {
+  it(
+    "reads the limit as SKIPPED with the blocker's reason, on install and invocation alike",
+    () => {
+      const dir = tempDir("fake-agent");
+      const bin = join(dir, "fake-agent");
+      writeFileSync(bin, `#!/bin/sh
+case "$1" in
+  --version) echo "fake agent 0.0.1"; exit 0 ;;
+esac
+echo "ActionRequiredError: You've hit your usage limit. Visit …" >&2
+exit 1
+`);
+      chmodSync(bin, 0o755);
+      const { run, report } = smokeWithJson(
+        ["--dist", dist, "--client", "cursor", "--invoke", "--bin-cursor", bin, "--scratch", tempDir("scratch")],
+        disarmed(),
+      );
+      expect(run.status, `${run.stdout}\n${run.stderr}`).toBe(0);
+      const install = legOf(report, "cursor", "install");
+      expect(install.status, install.reason).toBe("SKIPPED");
+      expect(install.reason).toContain("the client never reached its model (usage limit)");
+      expect(legOf(report, "cursor", "invocation").status).toBe("SKIPPED");
+    },
+    ARMED_MS,
+  );
+});
+
 describe("the smoke's own arguments", () => {
   it("exits 2 with the usage banner when --dist is absent", () => {
     const run = smoke(["--client", "claude"]);
