@@ -234,7 +234,12 @@ function clientRoutes(slug, tag, branch) {
       title: 'Claude Code',
       install: [`claude plugin marketplace add ${slug}#${branch}`, 'claude plugin install stamity@stamity --scope project'],
       pin: [`claude plugin marketplace add ${slug}#${tag}`],
-      update: ['claude plugin update stamity'],
+      // `@stamity --scope project` is not decoration: `plugin update` defaults to user scope, and
+      // MEASURED on Claude Code 2.1.278 the bare form refuses a project-scope install with
+      // `Plugin "stamity" is not installed at scope user`. This is the spelling the 2026-09-22
+      // lifecycle walk executed (exit 0, `updateOutcome: "updated"`), and its scope matches the
+      // install line above; a user-scope install refreshes with `--scope user` instead.
+      update: ['claude plugin update stamity@stamity --scope project'],
       rollback: [`claude plugin marketplace add ${slug}#plugins/v<previous>`, 'claude plugin install stamity@stamity --scope project'],
       note:
         'A `rollback` subcommand appears in slash form on one vendor page and is absent from the CLI ' +

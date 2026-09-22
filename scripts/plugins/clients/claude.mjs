@@ -149,14 +149,22 @@ export const MANIFEST_PATH = '.claude-plugin/plugin.json'
  * answer: one vendor page quoted a `rollback` subcommand in slash form that day and the CLI
  * reference did not list it. A consumer planning a downgrade needs to know that the supported
  * route is a reinstall at the previous pin until an installed client says otherwise.
+ *
+ * The refresh carries `@stamity` and `--scope project` because `plugin update` defaults to user
+ * scope: MEASURED on Claude Code 2.1.278 (2026-09-20), the bare `claude plugin update stamity`
+ * refuses a project-scope install with `Plugin "stamity" is not installed at scope user`, and the
+ * qualified spelling is what the release's lifecycle walk executed on 2026-09-22 (exit 0,
+ * `updateOutcome: "updated"`). The scope has to match the install's, which is why the clause
+ * names the user-scope counterpart instead of implying one flag fits both installs.
  */
 export const DISTRIBUTION = {
   note:
     'an operator runs `claude plugin marketplace add <owner/repo | git URL#ref | local path>` and ' +
     '`claude plugin install stamity@stamity --scope project`, which writes `enabledPlugins` and ' +
     '`extraKnownMarketplaces`; a third-party marketplace has auto-update off by default, so ' +
-    '`claude plugin update stamity` is the refresh and a marketplace added at a tag or a commit is ' +
-    'the pin. A `rollback` subcommand is not established — one vendor page quoted it in slash form ' +
+    '`claude plugin update stamity@stamity --scope project` is the refresh — the scope has to match ' +
+    'the install\'s, so a user-scope install refreshes with `--scope user` — and a marketplace added ' +
+    'at a tag or a commit is the pin. A `rollback` subcommand is not established — one vendor page quoted it in slash form ' +
     'and the CLI reference omitted it (code.claude.com/docs/en/plugin-marketplaces and ' +
     'code.claude.com/docs/en/cli-reference, accessed 2026-09-20) — so the route back is a reinstall ' +
     'at the previous pin until an installed client is measured'
@@ -210,7 +218,7 @@ at. Pin by adding the marketplace at a tag or a commit instead of \`#plugin-dist
 pin with the repository rather than in a shell history.
 
 \`\`\`sh
-claude plugin update stamity
+claude plugin update stamity@stamity --scope project
 \`\`\`
 
 The route in full, as \`stamity-plugin.json\` records it: ${DISTRIBUTION.note}. Run

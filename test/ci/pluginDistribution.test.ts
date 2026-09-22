@@ -527,6 +527,15 @@ describe("the tree as a whole", () => {
       }
       expect(section, client).toContain(`stamity-plugin-${client}-${VERSION}.zip`);
     }
+    // The Claude refresh in the qualified spelling, and the bare form excluded. `plugin update`
+    // defaults to user scope, so on Claude Code 2.1.278 `claude plugin update stamity` refuses the
+    // project-scope install this page prescribes (`Plugin "stamity" is not installed at scope
+    // user`). The negative pin is bounded by the line break: the bare form is a prefix of the
+    // qualified one, so an unbounded containment check cannot tell them apart.
+    const claudeSection = readme.split(/^## /m).find((part) => part.includes("Root: `claude/`"));
+    expect(claudeSection).toBeDefined();
+    expect(claudeSection).toContain("claude plugin update stamity@stamity --scope project");
+    expect(claudeSection).not.toContain("claude plugin update stamity\n");
     // The two bounds a mirror has to know, from the inbox rows this unit closes.
     expect(readme).toContain("https-only");
     expect(readme).toContain("The private mirror route");

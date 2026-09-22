@@ -512,7 +512,14 @@ describe("what the root carries", () => {
     expect(readme).toContain("claude plugin marketplace add zomarit/stamity");
     expect(readme).toContain("claude plugin install stamity@stamity --scope project");
     for (const form of ["@stamity:<id>", "/stamity:<id>"]) expect(readme, form).toContain(form);
-    expect(readme).toContain("claude plugin update stamity");
+    // The refresh is pinned in the QUALIFIED spelling: `plugin update` defaults to user scope, so
+    // on Claude Code 2.1.278 the bare form refuses a project-scope install with
+    // `Plugin "stamity" is not installed at scope user`. The negative pin is bounded by the line
+    // break because the bare form is a prefix of the qualified one — an unbounded `toContain`
+    // passes either way, which is how the bare command survived here.
+    expect(readme).toContain("claude plugin update stamity@stamity --scope project");
+    expect(readme).not.toContain("claude plugin update stamity\n");
+    expect(readme).toContain("`--scope user`");
     // The route back is a reinstall at the previous pin, because `rollback` is not established.
     expect(readme.toLowerCase()).toContain("pin");
     expect(readme).toContain("not established");
