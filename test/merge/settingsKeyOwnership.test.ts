@@ -1,6 +1,5 @@
-import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CLAUDE_SETTINGS_PATH } from "../../src/adapters/claude.ts";
@@ -14,6 +13,7 @@ import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
 } from "../../src/content/contentRoot.ts";
+import { sha256 } from "../../src/cli/engine/emissionWrite.ts";
 import { createApp } from "../../src/index.ts";
 import { readManifest, writeManifest } from "../../src/manifest/manifest.ts";
 import type { MergeResult } from "../../src/types/content.ts";
@@ -190,10 +190,6 @@ async function seedSettings(root: string, raw: string): Promise<void> {
   await writeFile(SETTINGS_ABS(root), raw, "utf8");
 }
 
-function sha256(content: string): string {
-  return createHash("sha256").update(content).digest("hex");
-}
-
 /** The settings row of an apply report, whichever path spelling the verb reports. */
 function settingsRow(wrote: readonly MergeResult[]): MergeResult {
   const row = wrote.find((entry) => entry.path.replaceAll("\\", "/").endsWith(CLAUDE_SETTINGS_PATH));
@@ -212,6 +208,23 @@ async function selectTools(root: string, tools: readonly Tool[]): Promise<void> 
   await writeManifest(root, { ...manifest, tools: [...tools] }, { now: T1 });
 }
 
+/**
+ * Records the settings file's current bytes as what the engine last wrote
+ * there: the ledger row's hash is re-pointed at them. This is the state in
+ * which a difference from the rendering is the rendering having moved, not an
+ * edit — the silent path of the backup rule.
+ */
+async function recordSettingsAsWritten(root: string): Promise<void> {
+  const manifest = await readManifest(root);
+  if (manifest === null) throw new Error("fixture lost its manifest");
+  const contentHash = sha256(await readSettings(root));
+  const ledger = [];
+  for (const entry of manifest.ledger) {
+    ledger.push(entry.path === CLAUDE_SETTINGS_PATH ? Object.assign({}, entry, { contentHash }) : entry);
+  }
+  await writeManifest(root, { ...manifest, ledger }, { now: T1 });
+}
+
 async function dropSettingsLedgerRow(root: string): Promise<void> {
   const manifest = await readManifest(root);
   if (manifest === null) throw new Error("fixture lost its manifest");
@@ -223,6 +236,8 @@ async function dropSettingsLedgerRow(root: string): Promise<void> {
 }
 
 const PERMISSIONS = { allow: ["Read", "Grep", "Glob"] };
+/** An operator's own hooks: no command under the engine's generated directory. */
+const OPERATOR_HOOKS = { Stop: [{ hooks: [{ type: "command", command: "node scripts/notify.mjs" }] }] };
 
 // ── Plugin-backed setup: the client's install write ────────────
 
@@ -279,9 +294,11 @@ describe("plugin-backed setup and the client's project-scope install write", () 
     const root = await freshRepo();
     await pluginSetup(root);
     await addKeys(root, { enabledPlugins: { "stamity@stamity": true } });
-    // Simulate an engine-side change: the on-disk permissions key falls behind
-    // the rendering (an older engine wrote it). Only that key may move.
+    // An engine-side change: the on-disk permissions key is an older rendering
+    // — recorded as what the engine last wrote, so the difference is the
+    // rendering having moved, not an edit. Only that key may move, silently.
     await addKeys(root, { permissions: { allow: ["Read"] } });
+    await recordSettingsAsWritten(root);
 
     const live = await sync(root);
 
@@ -326,21 +343,99 @@ describe("repository mode and an operator's own keys", () => {
     expect(existsSync(BAK_ABS(root))).toBe(false);
   });
 
-  it("a hand-edit inside an engine-owned key of a ledgered file is replaced on sync — the key is the engine's, and no backup is taken", async () => {
+  it("a hand-edit inside an engine-owned key of a ledgered file is replaced on sync behind a verified .bak, with a warning naming the key and the per-user file", async () => {
     const root = await freshRepo();
     await repositoryInit(root);
     await addKeys(root, { permissions: { allow: ["Bash"] }, model: "opus" });
+    const edited = await readSettings(root);
 
     const drift = await runDriftGate(root, ENGINE_VERSION);
     expect(drift.changes.map((entry) => [entry.path, entry.action])).toEqual([[CLAUDE_SETTINGS_PATH, "update"]]);
 
     const live = await sync(root);
 
-    expect(settingsRow(live.report.wrote).action).toBe("updated");
+    const row = settingsRow(live.report.wrote);
+    expect(row.action).toBe("updated");
+    expect(row.warning).toContain("permissions");
+    expect(row.warning).toContain(".claude/settings.local.json");
+    expect(row.warning).toContain(".bak");
     const doc = await settingsDoc(root);
     expect(doc["permissions"]).toEqual(PERMISSIONS);
     expect(doc["model"]).toBe("opus");
+    expect(await readFile(BAK_ABS(root), "utf8")).toBe(edited);
+  });
+
+  it("an engine key that moved while the bytes still match a ledgered hash is regenerated silently — the rendering moved, nobody edited", async () => {
+    const root = await freshRepo();
+    await repositoryInit(root);
+    // An older rendering of the engine's own key, recorded as what the engine
+    // last wrote: the ledger row's hash is re-pointed at these bytes.
+    await addKeys(root, { permissions: { allow: ["Read"] } });
+    await recordSettingsAsWritten(root);
+
+    const live = await sync(root);
+
+    const row = settingsRow(live.report.wrote);
+    expect(row.action).toBe("updated");
+    expect(row.warning).toBeUndefined();
+    expect((await settingsDoc(root))["permissions"]).toEqual(PERMISSIONS);
     expect(existsSync(BAK_ABS(root))).toBe(false);
+  });
+});
+
+// ── The hooks key across a mode move ───────────────────────────
+
+describe("the hooks key when the install mode moves under the file", () => {
+  it("a repository-mode hooks rendering left behind (manifest lost) is removed by plugin setup and reported, and check is clean", async () => {
+    const root = await freshRepo();
+    await repositoryInit(root);
+    expect(await settingsDoc(root)).toHaveProperty("hooks");
+    // The route that leaves the file behind: the state directory is gone, the
+    // client file is not. The next setup is plugin-backed, and a hooks object
+    // whose scripts nothing writes any more would fail closed on every tool call.
+    await rm(join(root, ".stamity"), { recursive: true, force: true });
+
+    const report = await pluginSetup(root);
+
+    const row = settingsRow(report.wrote);
+    expect(row.action).toBe("updated");
+    expect(row.warning).toContain("Removed the repository-mode hooks");
+    expect(await settingsDoc(root)).toEqual({ permissions: PERMISSIONS });
+    expect(await runDriftGate(root, ENGINE_VERSION)).toMatchObject({ clean: true });
+  });
+
+  it("an operator's own hooks in a plugin-mode file is kept by setup, sync and clean, and the plugin-duplicates row reports the second loader", async () => {
+    const root = await freshRepo();
+    await pluginSetup(root);
+    await addKeys(root, { hooks: OPERATOR_HOOKS });
+    const before = await readSettings(root);
+
+    expect(await runDriftGate(root, ENGINE_VERSION)).toMatchObject({ clean: true, changes: [] });
+    const live = await sync(root);
+    expect(settingsRow(live.report.wrote).action).toBe("unchanged");
+    expect(await readSettings(root)).toBe(before);
+
+    const check = await runInProcess([checkCommand], ["check", "--json"], { cwd: root });
+    const envelope = JSON.parse(check.stdout.trim()) as { doctor: { id: string; status: string; detail: string }[] };
+    const duplicates = envelope.doctor.find((entry) => entry.id === "plugin-duplicates");
+    expect(duplicates?.status).toBe("fail");
+    expect(duplicates?.detail).toContain(`claude: hooks (1 file(s), unmanaged) at ${CLAUDE_SETTINGS_PATH}`);
+
+    const cleaned = await clean(root);
+    expect(cleaned.code).toBe(0);
+    expect(await settingsDoc(root)).toEqual({ hooks: OPERATOR_HOOKS });
+  });
+
+  it("a CRLF file with the client's key reads as clean and keeps its line ending through a sync", async () => {
+    const root = await freshRepo();
+    await pluginSetup(root);
+    await addKeys(root, { enabledPlugins: { "stamity@stamity": true } });
+    const crlf = (await readSettings(root)).replaceAll("\n", "\r\n");
+    await writeFile(SETTINGS_ABS(root), crlf, "utf8");
+
+    expect(await runDriftGate(root, ENGINE_VERSION)).toMatchObject({ clean: true, changes: [] });
+    await sync(root);
+    expect(await readSettings(root)).toBe(crlf);
   });
 });
 

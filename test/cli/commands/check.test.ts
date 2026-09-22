@@ -766,6 +766,10 @@ describe("check — key-level ownership of .claude/settings.json", () => {
     const human = await runHuman(root);
     expect(human.stdout).toContain(`collision ${SETTINGS}`);
     expect(human.stdout).toContain("1 file(s) collide");
+    // The key-level remedy, not the whole-file one: this lane never needs the
+    // file moved aside, and force replaces only the engine's keys.
+    expect(human.stdout).toContain("remove the named key");
+    expect(human.stdout).toContain("replaces only the engine's keys behind a verified .bak");
   });
 });
 
@@ -2165,6 +2169,29 @@ describe("check — plugin-duplicates", () => {
    * anything about the source it is actually about. The selection is empty, so
    * `agent` starts with no rows and each case adds exactly the ones it means.
    */
+  it("reports a hooks key in .claude/settings.json as an unmanaged hooks duplicate while the plugin carries hooks", async () => {
+    // W2: the plugin's hooks and the file's own hooks both load, and neither
+    // the ledger source (only the generated hooks tree) nor the unmanaged scan
+    // (only the native content directories) looked at the settings document.
+    const root = await seedRepo(getRepo(), {
+      plugin: { mode: "plugin-backed", clients: { claude: { version: "1.9.0", classes: ["hooks"] } } },
+      files: {
+        ".claude/settings.json": `${JSON.stringify(
+          { permissions: { allow: ["Read"] }, hooks: { Stop: [{ hooks: [{ type: "command", command: "node scripts/notify.mjs" }] }] } },
+          null,
+          2,
+        )}\n`,
+      },
+    });
+
+    const duplicates = await duplicatesRow(root);
+
+    expect(duplicates.status).toBe("fail");
+    expect(duplicates.detail).toContain("claude: hooks (1 file(s), unmanaged) at .claude/settings.json — ");
+    expect(duplicates.detail).toContain("loads");
+    expect(duplicates.detail).toContain(".claude/settings.local.json");
+  });
+
   it("passes when a client records a plugin and nothing duplicates it", async () => {
     const root = await seedRepo(getRepo(), { plugin: pluginOf("plugin-backed") });
 

@@ -2,6 +2,7 @@ import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { delimiter, join, relative, sep } from "node:path";
 import type { App, EngineRegistry } from "../../index.ts";
+import { CLAUDE_SETTINGS_PATH } from "../../adapters/claude.ts";
 import { readCharterTemplate } from "../../content/charter.ts";
 import { isPluginOwned } from "../../emit/ownership.ts";
 import { renderInvariantsVersion } from "../../emit/substitution.ts";
@@ -1308,7 +1309,16 @@ function collisionStep(paths: readonly string[]): string {
     `sync refuses them. Either move each aside and run ${packageCommand("sync")}, or run ` +
     `${packageCommand("sync --force")} to overwrite them after a verified .bak. Running sync ` +
     `without one of those two ` +
-    `changes nothing.`
+    `changes nothing.` +
+    // The client settings document is owned per top-level key
+    // (`../../manifest/claudeSettings.ts`), so its collision is one key, never
+    // the file: moving it aside would take the client's own install record and
+    // the operator's keys with it, and force replaces only the engine's keys.
+    (paths.includes(CLAUDE_SETTINGS_PATH)
+      ? ` For ${CLAUDE_SETTINGS_PATH} the collision is one key, not the file: remove the named key ` +
+        `and re-run ${packageCommand("sync")}, or run ${packageCommand("sync --force")}, which ` +
+        `replaces only the engine's keys behind a verified .bak and keeps every other key.`
+      : "")
   );
 }
 

@@ -1,7 +1,7 @@
 import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import pLimit from "p-limit";
-import { CLAUDE_SETTINGS_PATH } from "../../../adapters/claude.ts";
+import { CLAUDE_SETTINGS_PATH, claudeSettingsOwnedKeys } from "../../../adapters/claude.ts";
 import { buildContentIndex, type ContentIndex } from "../../../content/catalog.ts";
 import { analyzeRepo, summarizeDetection } from "../../../detect/repoAnalyzer.ts";
 import {
@@ -283,6 +283,8 @@ export async function planOutputEntries(
   ledgerPaths?: ReadonlySet<string>,
   mcpServers?: readonly string[],
   packServers?: readonly PackSuppliedServer[],
+  /** The settings keys the install mode makes the engine's (`../../../adapters/claude.ts::claudeSettingsOwnedKeys`); the rendering's own keys when absent. */
+  settingsOwnedKeys?: readonly string[],
 ): Promise<SyncPlanEntry[]> {
   return pLimit(PREDICT_CONCURRENCY).map([...outputs], async (output) => {
     const absPath = join(rootDir, output.path);
@@ -349,6 +351,8 @@ export async function planOutputEntries(
       const predicted = await predictClaudeSettingsMerge(absPath, output.content, {
         owned: isManagedPath(absPath, ledgerPaths),
         force: false,
+        boundaryDir: rootDir,
+        ...(settingsOwnedKeys === undefined ? {} : { ownedKeys: settingsOwnedKeys }),
       });
       if (predicted.collision !== null) {
         return {
@@ -465,6 +469,7 @@ export async function planSync(
     ledgerPathSet(rootDir, manifest.ledger.map((row) => row.path)),
     manifest.mcp?.servers ?? [],
     packServers,
+    claudeSettingsOwnedKeys(manifest),
   );
   const collisions = entries.filter((entry) => entry.action === "collision").map((entry) => entry.path);
 
@@ -754,6 +759,8 @@ export async function applySync(
         owned: isManagedPath(absPath, ownedPaths),
         force,
         boundaryDir: rootDir,
+        ownedKeys: claudeSettingsOwnedKeys(plan.manifest),
+        ledgerHashes: ownedHashes,
       });
       result = merged;
       if (writtenContent !== null) written = writtenContent;

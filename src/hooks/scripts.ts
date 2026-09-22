@@ -446,7 +446,7 @@ const GENERATED_ANCHOR_SEGMENTS = [".stamity", "generated", "hooks"] as const;
  * the two forms the two layouts take.
  *
  * In the `generated` layout the FIRST answer is the script's own location. The
- * body walks four levels up from `import.meta.url` and accepts the result only
+ * body walks four levels up from the script's own directory and accepts the result only
  * when the three segments above its own directory read
  * `.stamity/generated/hooks` — which is exactly the layout emission wrote, and
  * nothing else. This is what makes a hook run from a sub-directory read and write

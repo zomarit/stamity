@@ -1,6 +1,6 @@
 import { mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { CLAUDE_SETTINGS_PATH } from "../../../adapters/claude.ts";
+import { CLAUDE_SETTINGS_PATH, claudeSettingsOwnedKeys } from "../../../adapters/claude.ts";
 import { buildContentIndex, type ContentRoots } from "../../../content/catalog.ts";
 import {
   resolveBundledContentRoot,
@@ -23,6 +23,7 @@ import {
   materializeClaudeSettings,
   predictClaudeSettingsMerge,
   type SettingsMergeResult,
+  type SettingsOwnership,
 } from "../../../manifest/claudeSettings.ts";
 import { materializeUserMcpJson, type McpMergeResult } from "../../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../../mcp/catalog.ts";
@@ -306,8 +307,12 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
         output.content,
         dryRun,
         force || replacePaths.has(output.path),
-        isManagedPath(target, ownedPaths),
-        rootDir,
+        {
+          owned: isManagedPath(target, ownedPaths),
+          ownedKeys: claudeSettingsOwnedKeys(manifest),
+          ledgerHashes: ownedHashes,
+          boundaryDir: rootDir,
+        },
       );
       result = merged;
       if (writtenContent !== null) writtenByPath.set(output.path, writtenContent);
@@ -456,14 +461,13 @@ async function writeClaudeSettings(
   content: string,
   dryRun: boolean,
   force: boolean,
-  owned: boolean,
-  boundaryDir: string,
+  ownership: Omit<SettingsOwnership, "force">,
 ): Promise<SettingsMergeResult> {
   if (dryRun) {
-    const { result } = await predictClaudeSettingsMerge(target, content, { owned, force });
+    const { result } = await predictClaudeSettingsMerge(target, content, { ...ownership, force });
     return { ...result, writtenContent: null };
   }
-  return materializeClaudeSettings(target, content, { owned, force, boundaryDir });
+  return materializeClaudeSettings(target, content, { ...ownership, force });
 }
 
 /**

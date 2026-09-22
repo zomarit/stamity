@@ -9,63 +9,107 @@
  * operator sets `model`, `env` and whatever else the client documents. The
  * engine renders `permissions`, and `hooks` when the repository owns hooks.
  * Three writers, one file, no comment syntax to carry a marker — so ownership
- * is decided per TOP-LEVEL KEY: **the engine owns exactly the keys its
- * rendering carries; every other key is foreign and is kept verbatim, in its
- * position.** Whole-file ownership, which this lane replaces, skipped the file
- * when the client had written it first (no ledger row, no marker) and then had
- * `check` recommend a remedy that destroys the install record; in the other
- * order it read the client's key as hand-edit drift and regenerated the file
- * whole behind a `.bak`.
+ * is decided per TOP-LEVEL KEY: **the engine owns exactly the keys the
+ * install mode makes its own (`../adapters/claude.ts::claudeSettingsOwnedKeys`
+ * — `permissions`, and `hooks` while the repository owns hooks), and every
+ * other key is carried through as its parsed value, re-serialised in the
+ * engine's style, in its position.** Whole-file ownership, which this lane
+ * replaces, skipped the file when the client had written it first (no ledger
+ * row, no marker) and then had `check` recommend a remedy that destroys the
+ * install record; in the other order it read the client's key as hand-edit
+ * drift and regenerated the file whole behind a `.bak`.
  *
- * Every function here holds the same invariant the MCP merge lane holds for
- * the three client MCP documents (`./mcpFilter.ts`): **a key the engine does
- * not render is never removed and never overwritten.** The differences from
- * that lane are the ones the document forces. Ownership is by key name, not by
- * a ledger of ids, because the rendering's keys ARE the claim: `permissions` is
- * the engine's whether or not a row records it, and an `enabledPlugins` is the
- * client's whether or not the engine wrote the file. And the collision rule
- * keeps one refusal the MCP lane has no equivalent of: an engine-owned key
- * already present with DIFFERENT content, in a file no ledger row proves the
- * engine wrote, is hand-written or a predecessor's — a live hook or permission
- * wiring — and replacing it silently is exactly the write the whole-file lane
- * refused. It still refuses, and `force` still clears it behind a verified
- * `.bak` of the file, so the two remedies every collision message names stay
- * true. An engine-owned key whose content already EQUALS the rendering proves
- * nothing against the engine and is adopted. A file that does not parse as a
- * JSON object is the other collision: nothing in it can be kept beside the
- * generated keys, so without `force` it is left alone, and with `force` it is
- * replaced whole behind the same `.bak`.
+ * Every function here holds the invariant the MCP merge lane holds for the
+ * three client MCP documents (`./mcpFilter.ts`, whose read and serialise
+ * helpers it shares): **a key the engine does not own is never removed and
+ * never overwritten.** Two facts about the `hooks` key make the rule a fact
+ * about the MODE rather than about any one rendering. Under a plugin-backed
+ * setup the engine renders no `hooks` — the plugin carries them — so a `hooks`
+ * key in the file is the operator's and stays (the `plugin-duplicates` doctor
+ * row names it, because the client loads it beside the plugin's). But a
+ * repository-mode rendering LEFT BEHIND by a setup whose state directory is
+ * gone is the engine's whatever the mode says, and it is dangerous there: its
+ * commands run scripts under the engine's generated hooks directory, which a
+ * plugin-backed setup never writes, and the guard's fail-closed tail would then
+ * block every tool call. The engine recognises its own rendering by exactly
+ * that: a hooks object in which some command runs a script under
+ * `HOOKS_GENERATED_DIR` is a repository-mode rendering of this engine, across
+ * versions, and nobody else's ({@link isRepositoryHooksRendering}); such an
+ * object is removed under plugin ownership and replaced under repository
+ * ownership, silently, because it is provably the engine's.
  *
- * What a `.bak` no longer protects is a hand-edit INSIDE an engine-owned key
- * of a file the ledger claims. The key is the engine's by contract and is
- * regenerated on every write, like a managed MCP entry is refreshed from the
- * emission; the operator's own keys never needed the backup, because they
- * survive in place. That is the one contract change this lane makes on
- * purpose, and the report line that used to say "edited by hand since" has no
- * true replacement here — a difference in an engine-owned key is as often the
- * engine's own rendering moving as it is an edit.
+ * The rule for an engine-owned key whose content DIFFERS from the rendering
+ * and is not recognisably the engine's — a hand-written `permissions`, a
+ * predecessor's `hooks`, an operator's `hooks` the engine had carried under a
+ * plugin-backed setup before the mode was hand-edited back:
  *
- * Every writer here preserves the document's own bytes and republishes them,
- * so every writer first refuses a target whose bytes are not that file's alone
+ * - **No ledger row** (the engine cannot prove it wrote the file): a
+ *   collision. The file is left alone and the message names the key, because
+ *   that key alone is the collision — every other key survives a `force`, which
+ *   replaces the engine's keys behind a verified `.bak` of the file, as every
+ *   collision message promises.
+ * - **A ledger row, and the file's bytes still hash to a ledgered hash**:
+ *   nobody edited the file since the engine wrote it, so the difference is the
+ *   engine's own rendering having moved (an upgrade, a new hook row) — the key
+ *   is regenerated silently. `hasLedgerDrift` (`../merge/safeWrite.ts`) is the
+ *   one compare, CRLF fold included. A row that records no hash reads as
+ *   unedited, the way the whole-file lane reads it.
+ * - **A ledger row, and the bytes match no ledgered hash**: the file changed
+ *   since the engine last wrote it and the key differs, so it may be a hand
+ *   edit — the previous file is backed up first and the warning names the key
+ *   and the client's per-user project settings file, where personal rows
+ *   belong. The one exception runs the other way: a `hooks` object the engine
+ *   cannot recognise as its own is backed up even when the bytes match, because
+ *   a hash match on this document proves "unedited since", never "rendered by
+ *   the engine" — the engine carries a foreign `hooks` under a plugin-backed
+ *   setup.
+ *
+ * A file that is not a JSON object, or that this engine cannot serialise back
+ * (nesting past the stack), is the other collision: nothing in it can be kept
+ * beside the generated keys, so without `force` it is left alone, and with
+ * `force` it is replaced whole behind the same `.bak`. A leading byte-order
+ * mark is stripped before parsing and not written back.
+ *
+ * Every writer here preserves what it parsed and republishes it, so every
+ * writer first refuses a target whose bytes are not that file's alone
  * ({@link refuseLinkedSettingsTarget}) — a symbolic link would have its target's
  * keys copied into the tree as a fresh regular file, and a hard link would
- * become an independent copy of bytes another name still holds.
+ * become an independent copy of bytes another name still holds. The line
+ * ending is the file's own: a CRLF document is compared and written in CRLF, so
+ * a `core.autocrlf` checkout reads as clean.
  *
- * Pure planning, then a write: {@link planClaudeSettings} decides from bytes
- * alone, so the sync plan and `check`'s drift gate preview the write exactly,
- * and {@link materializeClaudeSettings} performs it. The reclaim sweep's view
- * of the same document is {@link reduceClaudeSettingsToForeignContent}, which
- * takes the engine's keys out and reports whether anything else is left.
+ * Pure planning, then a write under the path's lock: {@link planClaudeSettings}
+ * decides from bytes alone, so the sync plan and `check`'s drift gate preview
+ * the write exactly, and {@link materializeClaudeSettings} performs it. The
+ * reclaim sweep's view of the same document is
+ * {@link reduceClaudeSettingsToForeignContent}, which takes the engine's keys
+ * out and reports whether anything else is left.
  */
 
-import { lstat, readFile } from "node:fs/promises";
+import { lstat, mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
 import { isPlainObject } from "../config/parse.ts";
-import { atomicWriteFile, isSharedRegularFile } from "../merge/atomicWrite.ts";
-import { backupBeforeOverwrite } from "../merge/safeWrite.ts";
+import { HOOKS_GENERATED_DIR } from "../emit/hooksInfra.ts";
+import {
+  acquireWriteLock,
+  atomicWriteFileUnlocked,
+  isSharedRegularFile,
+} from "../merge/atomicWrite.ts";
+import { mapFsErrno } from "../merge/fsErrors.ts";
+import { backupBeforeOverwrite, displayPath, hasLedgerDrift } from "../merge/safeWrite.ts";
 import type { CoOwnedReducer, CoOwnedReduction, MergeResult } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
+import { describeValue, jsonDocument, readTextOrNull } from "./mcpFilter.ts";
 
-// ── Parsing ──────────────────────────────────────────────────────
+/** The noun the shared read-failure sentences name for this lane. */
+const DOCUMENT = "settings document";
+/** The one engine-owned key whose ownership is decided by content as well as by mode. */
+const HOOKS_KEY = "hooks";
+/** The client's per-user project settings, which this engine never writes. */
+const PER_USER_SETTINGS = ".claude/settings.local.json";
+const CRLF = "\r\n";
+
+// ── Parsing and serialising ──────────────────────────────────────
 
 type ObjectParse =
   | { ok: true; doc: Record<string, unknown> }
@@ -75,7 +119,7 @@ type ObjectParse =
 function parseObject(raw: string): ObjectParse {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON.parse(raw.startsWith("﻿") ? raw.slice(1) : raw);
     // reason: not silent — the failure is returned and every caller surfaces it.
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
@@ -86,24 +130,49 @@ function parseObject(raw: string): ObjectParse {
   return { ok: true, doc: parsed };
 }
 
-function describeValue(value: unknown): string {
-  if (value === null) return "null";
-  if (Array.isArray(value)) return "an array";
-  return `a ${typeof value}`;
+/** The document's own line ending, so a CRLF checkout is compared and written in CRLF. */
+function lineEndingOf(raw: string): string {
+  return raw.includes(CRLF) ? CRLF : "\n";
 }
 
-/** 2-space JSON with a trailing newline — the engine's own style, and the client's. */
-function jsonDocument(value: unknown): string {
-  return `${JSON.stringify(value, null, 2)}\n`;
+/**
+ * `value` in the engine's style, in `eol`. JSON escapes every newline inside a
+ * string, so the substitution touches structure only. Throws `RangeError` on a
+ * document nested past the stack; the planner classifies that.
+ */
+function serialise(value: unknown, eol: string): string {
+  const text = jsonDocument(value);
+  return eol === "\n" ? text : text.replaceAll("\n", eol);
 }
 
-async function readTextOrNull(path: string): Promise<string | null> {
-  try {
-    return await readFile(path, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw error;
-  }
+/** Deep equality by the one spelling both sides share: the JSON text. */
+function sameJson(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+/**
+ * True when `value` is a repository-mode `hooks` rendering of this engine: a
+ * hooks object in which some command runs a script under the engine's
+ * generated hooks directory. Only this engine writes there, and every
+ * repository-mode rendering wires at least the core scripts from it, so the
+ * test recognises the engine's own renderings across versions while an
+ * operator's hooks — which command their own scripts — never match.
+ */
+function isRepositoryHooksRendering(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  return Object.values(value).some(
+    (entries) =>
+      Array.isArray(entries) &&
+      entries.some((entry) => {
+        if (!isPlainObject(entry) || !Array.isArray(entry["hooks"])) return false;
+        return entry["hooks"].some(
+          (hook) =>
+            isPlainObject(hook) &&
+            typeof hook["command"] === "string" &&
+            hook["command"].includes(`${HOOKS_GENERATED_DIR}/`),
+        );
+      }),
+  );
 }
 
 // ── Link guard ───────────────────────────────────────────────────
@@ -151,8 +220,23 @@ async function refuseLinkedSettingsTarget(filePath: string): Promise<void> {
 export interface SettingsOwnership {
   /** A ledger row records the engine wrote this path. */
   owned: boolean;
-  /** The operator asked for the collision to be cleared behind a `.bak`. */
+  /** The operator asked for a collision to be cleared behind a `.bak`. */
   force: boolean;
+  /**
+   * The top-level keys the install mode makes the engine's
+   * (`../adapters/claude.ts::claudeSettingsOwnedKeys`). The rendering's own
+   * keys when absent — which is the same set whenever the rendering follows the
+   * mode, and the mode's answer when the two ever disagree.
+   */
+  ownedKeys?: readonly string[];
+  /**
+   * The ledger's recorded hashes (`../merge/safeWrite.ts::ledgerHashIndex`),
+   * for the backup rule in the module header. Absent on a plan lane, which
+   * needs no backup decision: drift moves the backup, never the disposition.
+   */
+  ledgerHashes?: ReadonlyMap<string, ReadonlySet<string>>;
+  /** The repository root: repo-relative paths in messages, the write's containment, the `.bak`. */
+  boundaryDir?: string;
 }
 
 /** What {@link materializeClaudeSettings} WOULD do, computed from bytes alone. */
@@ -160,19 +244,10 @@ export interface SettingsPlan {
   result: MergeResult;
   /** The bytes to write; `null` when nothing needs writing. */
   content: string | null;
-  /** The previous file, when the write owes a verified `.bak` of it first (`force` over a collision). */
+  /** The previous file, when the write owes a verified `.bak` of it first. */
   backup: string | null;
   /** Why the write is refused, when `result.action` is `skipped`. The same text as `result.warning`. */
   collision: string | null;
-}
-
-/**
- * The top-level keys `emitted` carries — the engine's claim on the document.
- * Throws `ADAPTER_ERROR` when the emission is not a JSON object: the adapter
- * produced it, so that is an engine bug and fails loudly rather than skipping.
- */
-export function engineOwnedSettingsKeys(filePath: string, emitted: string): readonly string[] {
-  return Object.keys(parseEmitted(filePath, emitted));
 }
 
 function parseEmitted(filePath: string, emitted: string): Record<string, unknown> {
@@ -186,30 +261,6 @@ function parseEmitted(filePath: string, emitted: string): Record<string, unknown
   return parsed.doc;
 }
 
-/** Deep equality by the one spelling both sides share: the JSON text. */
-function sameJson(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-/**
- * `existing` with every engine-owned key replaced by the rendering — in place
- * when the key is already there, appended in rendering order when it is not —
- * and every other key carried through untouched, in its position.
- */
-function mergeOwnedKeys(
-  existing: Record<string, unknown>,
-  emitted: Record<string, unknown>,
-): Record<string, unknown> {
-  const merged: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(existing)) {
-    merged[key] = Object.hasOwn(emitted, key) ? emitted[key] : value;
-  }
-  for (const [key, value] of Object.entries(emitted)) {
-    if (!Object.hasOwn(merged, key)) merged[key] = value;
-  }
-  return merged;
-}
-
 function skipped(filePath: string, reason: string): SettingsPlan {
   return {
     result: { path: filePath, action: "skipped", warning: reason },
@@ -219,9 +270,30 @@ function skipped(filePath: string, reason: string): SettingsPlan {
   };
 }
 
+/** The whole-file replacement `force` performs over a document nothing can be kept from. */
+function replacedWhole(filePath: string, emitted: string, existingRaw: string, warning: string): SettingsPlan {
+  return {
+    result: { path: filePath, action: "updated", warning },
+    content: emitted,
+    backup: existingRaw,
+    collision: null,
+  };
+}
+
+/** One engine-owned key on disk, and what the plan found about it. */
+interface EngineKey {
+  key: string;
+  /** The rendering carries the key (replace) or not (remove). */
+  rendered: boolean;
+  /** The content on disk differs from the rendering, or the key is being removed. */
+  changed: boolean;
+  /** The engine can prove the content is its own — see the module header. */
+  proven: boolean;
+}
+
 /**
  * Decide the write for `filePath` from the bytes alone. See the module header
- * for the ownership rule and the two collisions it keeps.
+ * for the ownership rule and the collisions it keeps.
  */
 export function planClaudeSettings(
   filePath: string,
@@ -230,6 +302,7 @@ export function planClaudeSettings(
   ownership: SettingsOwnership,
 ): SettingsPlan {
   const emittedDoc = parseEmitted(filePath, emitted);
+  const shown = displayPath(filePath, ownership.boundaryDir);
   if (existingRaw === null) {
     return { result: { path: filePath, action: "created" }, content: emitted, backup: null, collision: null };
   }
@@ -239,75 +312,136 @@ export function planClaudeSettings(
     if (!ownership.force) {
       return skipped(
         filePath,
-        `Skipped ${filePath}: it is not valid JSON (${existing.error}), so nothing in it can be ` +
+        `Skipped ${shown}: it is not valid JSON (${existing.error}), so nothing in it can be ` +
           `kept beside the generated keys and the engine will not guess. It was left untouched. ` +
           `Fix or delete it and re-run, or re-run with force to replace it after a verified .bak.`,
       );
     }
-    return {
-      result: {
-        path: filePath,
-        action: "updated",
-        warning:
-          `Force-overwrote ${filePath}: it was not valid JSON (${existing.error}), so nothing in ` +
-          `it could be kept beside the generated keys and the whole file was replaced.`,
-      },
-      content: emitted,
-      backup: existingRaw,
-      collision: null,
-    };
-  }
-
-  const ownedKeys = Object.keys(emittedDoc);
-  const foreignKeys = Object.keys(existing.doc).filter((key) => !Object.hasOwn(emittedDoc, key));
-  // The engine's own keys, already present with other content. Owned by the
-  // ledger they are the engine's to regenerate; unowned they are somebody's
-  // live wiring, and only `force` may replace them.
-  const disputed = ownedKeys.filter(
-    (key) => Object.hasOwn(existing.doc, key) && !sameJson(existing.doc[key], emittedDoc[key]),
-  );
-  const contested = !ownership.owned && disputed.length > 0;
-  if (contested && !ownership.force) {
-    return skipped(
+    return replacedWhole(
       filePath,
-      `Skipped ${filePath}: it carries a ${disputed.join(", ")} key this engine renders, with ` +
-        `different content, and no ownership ledger row proves the engine wrote it — the key is ` +
-        `hand-written or a previous setup's, and replacing it would silently change live wiring. ` +
-        `The engine owns only its own top-level keys (${ownedKeys.join(", ")}); every other key ` +
-        `is kept as it is, so the collision is that key alone. Remove or rename it and re-run, or ` +
-        `re-run with force to replace it after a verified .bak of the file.`,
+      emitted,
+      existingRaw,
+      `Force-overwrote ${shown}: it was not valid JSON (${existing.error}), so nothing in it ` +
+        `could be kept beside the generated keys and the whole file was replaced.`,
     );
   }
 
-  const content = jsonDocument(mergeOwnedKeys(existing.doc, emittedDoc));
+  const eol = lineEndingOf(existingRaw);
+  const emittedKeys = Object.keys(emittedDoc);
+  const ownedNames = new Set([...(ownership.ownedKeys ?? emittedKeys), ...emittedKeys]);
+  // Unedited since the engine last wrote it, by the ledger's own compare. A
+  // path with no recorded hash reads as unedited, as it does on the whole-file
+  // lane; the plan lane passes no index and needs no answer.
+  const unedited =
+    ownership.owned && !hasLedgerDrift(filePath, existingRaw, ownership.ledgerHashes);
+
+  const entries: [string, unknown][] = [];
+  const foreign: string[] = [];
+  const engineKeys: EngineKey[] = [];
+  let content: string;
+  try {
+    for (const [key, value] of Object.entries(existing.doc)) {
+      const isEngine = ownedNames.has(key) || (key === HOOKS_KEY && isRepositoryHooksRendering(value));
+      if (!isEngine) {
+        foreign.push(key);
+        entries.push([key, value]);
+        continue;
+      }
+      const rendered = Object.hasOwn(emittedDoc, key);
+      const changed = !rendered || !sameJson(value, emittedDoc[key]);
+      const proven =
+        !changed || (key === HOOKS_KEY ? isRepositoryHooksRendering(value) : unedited);
+      engineKeys.push({ key, rendered, changed, proven });
+      if (rendered) entries.push([key, emittedDoc[key]]);
+    }
+    for (const [key, value] of Object.entries(emittedDoc)) {
+      if (!Object.hasOwn(existing.doc, key)) entries.push([key, value]);
+    }
+    // `Object.fromEntries` defines own properties, so a foreign `__proto__` key
+    // round-trips instead of hitting the setter of an object literal.
+    content = serialise(Object.fromEntries(entries), eol);
+    // reason: not silent — a document this engine cannot serialise back is
+    // classified below, as a collision, rather than escaping as a RangeError.
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    const why = `not a settings document this engine can merge (${error.message})`;
+    if (!ownership.force) {
+      return skipped(
+        filePath,
+        `Skipped ${shown}: ${why}, so nothing in it can be kept beside the generated keys. It ` +
+          `was left untouched. Fix or delete it and re-run, or re-run with force to replace it ` +
+          `after a verified .bak.`,
+      );
+    }
+    return replacedWhole(filePath, emitted, existingRaw, `Force-overwrote ${shown}: ${why}, so the whole file was replaced.`);
+  }
+
+  // In the rendering's own key order, so the message reads the same whatever
+  // order the file spells its keys in.
+  const contested = [...ownedNames].filter((key) =>
+    engineKeys.some((entry) => entry.key === key && entry.changed && !entry.proven),
+  );
+  if (contested.length > 0 && !ownership.owned && !ownership.force) {
+    return skipped(
+      filePath,
+      `Skipped ${shown}: it carries a ${contested.join(", ")} key this engine renders, with ` +
+        `different content, and no ownership ledger row proves the engine wrote it — the key is ` +
+        `hand-written or a previous setup's, and replacing it would silently change live wiring. ` +
+        `The engine owns only its own top-level keys (${[...ownedNames].join(", ")}); every other ` +
+        `key is kept, so the collision is that key alone. Remove or rename it and re-run, or ` +
+        `re-run with force to replace it after a verified .bak of the file.`,
+    );
+  }
   if (content === existingRaw) {
     return { result: { path: filePath, action: "unchanged" }, content: null, backup: null, collision: null };
   }
-  if (contested) {
-    return {
-      result: {
-        path: filePath,
-        action: "updated",
-        warning:
-          `Force-replaced the ${disputed.join(", ")} key(s) of ${filePath}: no ownership ledger ` +
-          `row proved the engine wrote them, so the previous file was backed up first. Every other ` +
-          `top-level key (${foreignKeys.length === 0 ? "none" : foreignKeys.join(", ")}) was kept as it is.`,
-      },
-      content,
-      backup: existingRaw,
-      collision: null,
-    };
+
+  const warnings: string[] = [];
+  const removed = engineKeys.filter((entry) => !entry.rendered).map((entry) => entry.key);
+  if (removed.length > 0) {
+    warnings.push(
+      `Removed the repository-mode hooks wiring (${removed.join(", ")}) from ${shown}: its ` +
+        `commands run scripts under ${HOOKS_GENERATED_DIR}, which a plugin-backed setup does not ` +
+        `write — the plugin carries the hooks, and a wiring pointing at scripts that are not ` +
+        `there fails closed on every tool call.`,
+    );
+  }
+  let backup: string | null = null;
+  if (contested.length > 0) {
+    backup = existingRaw;
+    warnings.push(
+      ownership.owned
+        ? `Replaced the ${contested.join(", ")} key(s) of ${shown}: ` +
+          (unedited
+            ? `the engine cannot recognise that content as its own rendering, so it may be yours. `
+            : `the file has changed since the engine last wrote it and that key no longer ` +
+              `matches the engine's rendering, so it may have been edited by hand. `) +
+          `The previous file was backed up first. Personal rows belong in ${PER_USER_SETTINGS}, ` +
+          `the client's per-user project settings, which this engine never writes.`
+        : `Force-replaced the ${contested.join(", ")} key(s) of ${shown}: no ownership ledger ` +
+          `row proved the engine wrote them, so the previous file was backed up first. Every ` +
+          `other top-level key (${foreign.length === 0 ? "none" : foreign.join(", ")}) was kept.`,
+    );
   }
   const notice =
-    !ownership.owned && foreignKeys.length > 0
-      ? `Adopted ${filePath}: kept its ${foreignKeys.length} other top-level key(s) ` +
-        `(${foreignKeys.join(", ")}) beside the generated ${ownedKeys.join(", ")}; the engine owns ` +
-        `only those.`
+    !ownership.owned && foreign.length > 0
+      ? `Adopted ${shown}: kept its ${foreign.length} other top-level key(s) ` +
+        `(${foreign.join(", ")}) beside the generated ${emittedKeys.join(", ")}; the engine owns ` +
+        `only those.` +
+        (foreign.includes(HOOKS_KEY)
+          ? ` Its own hooks key stays too, and this client loads it beside the plugin's hooks — ` +
+            `remove it, or keep personal rows in ${PER_USER_SETTINGS}, if that is not what you want.`
+          : "")
       : undefined;
   return {
-    result: { path: filePath, action: "updated", ...(notice === undefined ? {} : { notice }) },
+    result: {
+      path: filePath,
+      action: "updated",
+      ...(warnings.length === 0 ? {} : { warning: warnings.join(" ") }),
+      ...(notice === undefined ? {} : { notice }),
+    },
     content,
-    backup: null,
+    backup,
     collision: null,
   };
 }
@@ -319,7 +453,7 @@ export interface SettingsMergePrediction {
   result: MergeResult;
   /**
    * Present when the write would be refused: `shared-name` for a linked target
-   * (never force-clearable), `unmanaged-name` for the two collisions `force`
+   * (never force-clearable), `unmanaged-name` for the collisions `force`
    * clears behind a `.bak`. The vocabulary is the sync plan's.
    */
   collision: { kind: "shared-name" | "unmanaged-name"; detail: string } | null;
@@ -343,7 +477,7 @@ export async function predictClaudeSettingsMerge(
       collision: { kind: "shared-name", detail: error.message },
     };
   }
-  const plan = planClaudeSettings(filePath, emitted, await readTextOrNull(filePath), ownership);
+  const plan = planClaudeSettings(filePath, emitted, await readTextOrNull(filePath, DOCUMENT), ownership);
   return {
     result: plan.result,
     collision: plan.collision === null ? null : { kind: "unmanaged-name", detail: plan.collision },
@@ -362,33 +496,47 @@ export interface SettingsMergeResult extends MergeResult {
 }
 
 /**
- * Write `emitted` into `filePath` by key ownership. `boundaryDir` is the repo
- * root the write and the `.bak` must land inside.
+ * Write `emitted` into `filePath` by key ownership, under the path's write
+ * lock for the whole read-plan-backup-write cycle (`../merge/safeWrite.ts`
+ * holds its lane the same way), so a concurrent run cannot slip a change in
+ * between the read the plan was computed from and the write.
  */
 export async function materializeClaudeSettings(
   filePath: string,
   emitted: string,
-  ownership: SettingsOwnership & { boundaryDir?: string },
+  ownership: SettingsOwnership,
 ): Promise<SettingsMergeResult> {
-  await refuseLinkedSettingsTarget(filePath);
-  const existingRaw = await readTextOrNull(filePath);
-  const plan = planClaudeSettings(filePath, emitted, existingRaw, ownership);
-  let result = plan.result;
-  if (plan.backup !== null) {
-    const bakPath = await backupBeforeOverwrite(filePath, plan.backup, "force overwrite", ownership.boundaryDir);
-    result = { ...result, warning: `${result.warning ?? ""} Your previous file is at ${bakPath}.`.trim() };
+  // The parent before the lock, as the safe-write lane does: the lock and the
+  // write both need it, and a missing parent is a plain create.
+  try {
+    await mkdir(dirname(filePath), { recursive: true });
+  } catch (error) {
+    throw mapFsErrno(error, filePath) ?? error;
   }
-  if (plan.content !== null) {
-    await atomicWriteFile(
-      filePath,
-      plan.content,
-      ownership.boundaryDir === undefined ? undefined : { boundaryDir: ownership.boundaryDir },
-    );
+  const release = await acquireWriteLock(filePath, ownership.boundaryDir);
+  try {
+    await refuseLinkedSettingsTarget(filePath);
+    const existingRaw = await readTextOrNull(filePath, DOCUMENT);
+    const plan = planClaudeSettings(filePath, emitted, existingRaw, ownership);
+    let result = plan.result;
+    if (plan.backup !== null) {
+      const bakPath = await backupBeforeOverwrite(filePath, plan.backup, "verified backup", ownership.boundaryDir);
+      result = { ...result, warning: `${result.warning ?? ""} Your previous file is at ${bakPath}.`.trim() };
+    }
+    if (plan.content !== null) {
+      await atomicWriteFileUnlocked(
+        filePath,
+        plan.content,
+        ownership.boundaryDir === undefined ? undefined : { boundaryDir: ownership.boundaryDir },
+      );
+    }
+    return {
+      ...result,
+      writtenContent: plan.content ?? (result.action === "skipped" ? null : existingRaw),
+    };
+  } finally {
+    await release();
   }
-  return {
-    ...result,
-    writtenContent: plan.content ?? (result.action === "skipped" ? null : existingRaw),
-  };
 }
 
 // ── Reclaim ──────────────────────────────────────────────────────
@@ -397,11 +545,12 @@ export async function materializeClaudeSettings(
  * What should be left of `raw` once the engine's keys are taken out — the
  * reclaim sweep's view of this document (`../merge/reclaim.ts` gate 4).
  *
- * `ownedKeys` is the caller's: the sweep reaches a path only once nothing emits
- * it, so there is no rendering to read the keys off, and which keys the engine
- * owned is a fact about the install mode the manifest records
- * (`../adapters/claude.ts::claudeSettingsOwnedKeys`). Pure, and it writes
- * nothing: the sweep owns every read and every write on that lane.
+ * `ownedKeys` is the mode's answer (`../adapters/claude.ts::claudeSettingsOwnedKeys`):
+ * the sweep reaches a path only once nothing renders it, so there is no
+ * rendering to read the keys off. A repository-mode `hooks` rendering the
+ * engine recognises as its own leaves under either mode, for the reason the
+ * module header gives; an operator's hooks stays. Pure, and it writes nothing:
+ * the sweep owns every read and every write on that lane.
  */
 export function reduceClaudeSettingsToForeignContent(
   raw: string,
@@ -417,7 +566,13 @@ export function reduceClaudeSettingsToForeignContent(
         `the file by hand.`,
     };
   }
-  const present = ownedKeys.filter((key) => Object.hasOwn(parsed.doc, key));
+  const owned = new Set(ownedKeys);
+  const present: string[] = [];
+  const kept: [string, unknown][] = [];
+  for (const [key, value] of Object.entries(parsed.doc)) {
+    if (owned.has(key) || (key === HOOKS_KEY && isRepositoryHooksRendering(value))) present.push(key);
+    else kept.push([key, value]);
+  }
   if (present.length === 0) {
     return {
       kind: "untouched",
@@ -427,10 +582,6 @@ export function reduceClaudeSettingsToForeignContent(
         `file is left exactly as it is.`,
     };
   }
-  const rest = Object.fromEntries(
-    Object.entries(parsed.doc).filter(([key]) => !present.includes(key)),
-  );
-  const kept = Object.keys(rest);
   const removed = present.join(", ");
   if (kept.length === 0) {
     return {
@@ -442,11 +593,11 @@ export function reduceClaudeSettingsToForeignContent(
   }
   return {
     kind: "reduced",
-    content: jsonDocument(rest),
+    content: serialise(Object.fromEntries(kept), lineEndingOf(raw)),
     detail:
       `Co-owned settings document: the engine's ${present.length} key(s) (${removed}) were ` +
-      `removed and the ${kept.length} other key(s) (${kept.join(", ")}) are kept verbatim, so ` +
-      `the file stays.`,
+      `removed and the ${kept.length} other key(s) (${kept.map(([key]) => key).join(", ")}) are ` +
+      `kept verbatim, so the file stays.`,
   };
 }
 

@@ -673,7 +673,7 @@ function toLedgerKey(filePath: string): string {
  * around it did not. `boundaryDir` is that root wherever a caller emits into a
  * tree, so no new parameter is needed to answer the question.
  */
-function displayPath(filePath: string, boundaryDir: string | undefined): string {
+export function displayPath(filePath: string, boundaryDir: string | undefined): string {
   if (boundaryDir === undefined) return filePath;
   const rel = relative(boundaryDir, filePath);
   if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return filePath;
@@ -836,7 +836,7 @@ export function ledgerHashIndex(
  * — a drifted overwrite is `updated` like any other — so
  * {@link predictMergeAction} needs no drift input to stay byte-accurate.
  */
-function hasLedgerDrift(
+export function hasLedgerDrift(
   filePath: string,
   existingContent: string,
   ledgerHashes: ReadonlyMap<string, ReadonlySet<string>> | undefined,

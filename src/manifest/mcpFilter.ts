@@ -150,7 +150,7 @@ export function parseMcpJsonDocument(raw: string): McpJsonParseResult {
   return { ok: true, doc: parsed, servers, maps };
 }
 
-function describeValue(value: unknown): string {
+export function describeValue(value: unknown): string {
   if (value === null) return "null";
   if (Array.isArray(value)) return "an array";
   return `a ${typeof value}`;
@@ -252,14 +252,17 @@ async function refuseLinkedMcpTarget(filePath: string): Promise<void> {
  * through to that table — the same split `./manifest.ts` uses, not a second
  * mechanism beside it.
  */
-const READ_ERRNO_MESSAGE: Record<string, (path: string) => string> = {
-  EACCES: (p) =>
-    `Permission denied reading ${p}. The MCP document is merged rather than overwritten, so it has to be read before anything can be written. Check the file's permissions and confirm the current user can read it, then re-run.`,
-  EISDIR: (p) =>
-    `Cannot read the MCP document at ${p}: that path is a directory, not a file. Remove or rename it, then re-run to regenerate the document.`,
-  ENOTDIR: (p) =>
-    `Cannot reach the MCP document at ${p}: a parent path component is a file, not a directory. Remove or rename that file, then re-run.`,
+const READ_ERRNO_MESSAGE: Record<string, (path: string, document: string) => string> = {
+  EACCES: (p, d) =>
+    `Permission denied reading ${p}. The ${d} is merged rather than overwritten, so it has to be read before anything can be written. Check the file's permissions and confirm the current user can read it, then re-run.`,
+  EISDIR: (p, d) =>
+    `Cannot read the ${d} at ${p}: that path is a directory, not a file. Remove or rename it, then re-run to regenerate the document.`,
+  ENOTDIR: (p, d) =>
+    `Cannot reach the ${d} at ${p}: a parent path component is a file, not a directory. Remove or rename that file, then re-run.`,
 };
+
+/** The noun the read-side sentences name; a sibling merge lane passes its own. */
+const MCP_DOCUMENT = "MCP document";
 
 /**
  * Classify a read-side filesystem failure. Never swallows: an errno with no
@@ -267,11 +270,11 @@ const READ_ERRNO_MESSAGE: Record<string, (path: string) => string> = {
  * when the shared table knows it, and as the original error when neither does —
  * an unrecognised failure surfaces unchanged rather than being relabelled.
  */
-function readFailure(cause: unknown, path: string): unknown {
+export function readFailure(cause: unknown, path: string, document = MCP_DOCUMENT): unknown {
   const code = (cause as NodeJS.ErrnoException | null)?.code;
   const messageFor = typeof code === "string" ? READ_ERRNO_MESSAGE[code] : undefined;
   if (messageFor !== undefined) {
-    return new EngineError(messageFor(path), { code: "FS_ERROR", cause });
+    return new EngineError(messageFor(path, document), { code: "FS_ERROR", cause });
   }
   return mapFsErrno(cause, path) ?? cause;
 }
@@ -876,15 +879,21 @@ function withFilteredServers(
 }
 
 /** 2-space JSON with a trailing newline — the shape every MCP client writes. */
-function jsonDocument(value: unknown): string {
+export function jsonDocument(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-async function readTextOrNull(path: string): Promise<string | null> {
+/**
+ * File content, or `null` when the file does not exist; every other read
+ * failure is the mapped sentence of {@link readFailure}, named after `document`.
+ * Shared with the settings lane (`./claudeSettings.ts`) so both merge lanes
+ * fail a read the same way.
+ */
+export async function readTextOrNull(path: string, document = MCP_DOCUMENT): Promise<string | null> {
   try {
     return await readFile(path, "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw readFailure(error, path);
+    throw readFailure(error, path, document);
   }
 }

@@ -32,6 +32,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import semver from "semver";
 import { parse as parseYaml } from "yaml";
+import { CLAUDE_SETTINGS_PATH } from "../../../adapters/claude.ts";
 import { buildContentIndex, emittedIdFor } from "../../../content/catalog.ts";
 import { HOOKS_GENERATED_DIR } from "../../../emit/hooksInfra.ts";
 import { PLUGIN_ROOT_VARIABLES } from "../../../plugins/capabilityFile.ts";
@@ -763,6 +764,13 @@ async function duplicatesForClient(
     });
   }
 
+  // Source 1b — the client's own settings document, for the hooks class. The
+  // file is owned per top-level key (`../../../manifest/claudeSettings.ts`),
+  // so a `hooks` key in it is kept as the operator's under a plugin that
+  // carries hooks — and this client loads it beside the plugin's hooks. Neither
+  // the ledger source (the generated hooks tree) nor the native scan below (the
+  // content directories) reads this file, so nothing else can say so.
+  if (tool === "claude" && classes.has("hooks")) findings.push(...(await settingsHooksDuplicate(rootDir)));
   findings.push(...apmDuplicates(matchedApm, tool, classes));
   findings.push(
     ...(await unmanagedDuplicates(
@@ -774,6 +782,40 @@ async function duplicatesForClient(
     )),
   );
   return findings;
+}
+
+/**
+ * The `unmanaged` hooks finding for a `hooks` key in `.claude/settings.json`.
+ *
+ * A file that does not parse, or parses to something other than an object, is
+ * not this row's to report: the drift gate names it as a collision already.
+ */
+async function settingsHooksDuplicate(rootDir: string): Promise<DuplicateFinding[]> {
+  const raw = await readIfPresent(join(rootDir, ...CLAUDE_SETTINGS_PATH.split("/")));
+  if (raw === null) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw.startsWith("\uFEFF") ? raw.slice(1) : raw);
+    // reason: not silent — the drift gate reports the unparseable file as a
+    // collision on the same `check`; this row answers only about a hooks key.
+  } catch {
+    return [];
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return [];
+  if (!Object.hasOwn(parsed, "hooks")) return [];
+  return [
+    {
+      tool: "claude",
+      cls: "hooks",
+      source: "unmanaged",
+      files: 1,
+      paths: [CLAUDE_SETTINGS_PATH],
+      remedy:
+        `this client loads the file's own hooks key beside the plugin's hooks; remove the key — ` +
+        `${packageCommand("sync")} removes a stale repository-mode rendering by itself — or keep ` +
+        `personal rows in .claude/settings.local.json, the client's per-user project settings`,
+    },
+  ];
 }
 
 /**
