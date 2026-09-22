@@ -139,7 +139,10 @@ function parseArguments(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     const sink = Object.hasOwn(sinks, arg) ? sinks[arg] : null
-    if (sink === null) return { code: usage(`Unknown argument: ${arg}`) }
+    // Shown without userinfo: every flag consumes the next token, so a flag with no value swallows
+    // `--push` and the URL is what arrives here — the one place a token could print before the push
+    // arm's own display form.
+    if (sink === null) return { code: usage(`Unknown argument: ${pushDisplay(arg).shown}`) }
     i += 1
     if (i >= argv.length) return { code: usage(`${arg} needs a value.`) }
     sink(argv[i])
@@ -236,10 +239,15 @@ function run(command, args, options = {}) {
  * A push URL's display form, and a scrub for any line that quoted the URL as given. Userinfo is
  * dropped — `https://x-access-token:<token>@host/o/r.git` is how a token travels in a push URL —
  * and every spelling of it a line could carry is replaced: the URL itself by the display form, the
- * `user:password@` run by nothing, the password by a placeholder. A value the URL parser refuses
- * (an scp-style `git@host:o/r.git`, a path) carries no userinfo and is shown as given.
+ * `user:password@` and `user@` runs by nothing (git's credential prompt prints the username
+ * DECODED, so both the encoded and the decoded spelling go), and the bare token by a placeholder.
+ * The token is the password when there is one, else the username — which is how GitHub takes one
+ * over http(s); a transport user on another scheme (`ssh://git@…`) is not a secret, and scrubbing
+ * `git` out of a git command line would be worse than the line. A value the URL parser refuses (an
+ * scp-style `git@host:o/r.git`, a path) carries no userinfo and is shown as given. Exported for the
+ * suite, which drives every spelling without a push.
  */
-function pushDisplay(url) {
+export function pushDisplay(url) {
   let parsed
   try {
     parsed = new URL(url)
@@ -247,19 +255,22 @@ function pushDisplay(url) {
     // Not a URL: nothing to drop, and git will say what it makes of the value.
     return { shown: url, scrub: (text) => text }
   }
-  const { username, password } = parsed
+  const { username, password, protocol } = parsed
   if (username === '' && password === '') return { shown: url, scrub: (text) => text }
   parsed.username = ''
   parsed.password = ''
   const shown = parsed.href
+  const spellings = (value) => [...new Set([value, decodedOrSelf(value)])].filter((entry) => entry !== '')
   const userinfo = password === '' ? username : `${username}:${password}`
-  const secrets = [password, decodedOrSelf(password)].filter((secret) => secret !== '')
+  const runs = [...spellings(userinfo), ...spellings(username)].map((value) => `${value}@`)
+  const bare = password !== '' ? password : /^https?:$/.test(protocol) ? username : ''
+  const secrets = spellings(bare)
   return {
     shown,
     scrub: (text) =>
       secrets.reduce(
         (out, secret) => out.replaceAll(secret, '<redacted>'),
-        text.replaceAll(url, shown).replaceAll(`${userinfo}@`, ''),
+        runs.reduce((out, userinfoRun) => out.replaceAll(userinfoRun, ''), text.replaceAll(url, shown)),
       ),
   }
 }
@@ -335,9 +346,15 @@ function checkoutCopy(parent) {
   // `fork/` when the checkout has one: a fork's own layer is part of what its build carries
   // (REQ-PLUGIN-022), and a copy without it built two trees that dropped it — while the marker,
   // written under the copy's own `fork/skills/` between the builds, still landed and hid the loss.
-  for (const path of ['src', 'scripts', 'assets', 'content', 'fork']) {
-    if (path === 'fork' && !existsSync(join(ROOT, path))) continue
+  for (const path of ['src', 'scripts', 'assets', 'content']) {
     cpSync(join(ROOT, path), join(root, path), { recursive: true })
+  }
+  const fork = join(ROOT, 'fork')
+  if (existsSync(fork)) {
+    cpSync(fork, join(root, 'fork'), { recursive: true })
+    // Said out loud: a fork layer travels into what `--push` publishes, and the diff summary at
+    // the end names only what differs between the two versions, which a shared layer never does.
+    console.log(`plugin-lifecycle-fixture: fork layer: ${String(treeFiles(fork).length)} file(s) copied`)
   }
   writeFileSync(join(root, 'package.json'), readFileSync(join(ROOT, 'package.json')))
   symlinkSync(join(ROOT, 'node_modules'), join(root, 'node_modules'), 'junction')

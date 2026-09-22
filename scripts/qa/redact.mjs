@@ -25,19 +25,27 @@ const HOME_PATHS = /(?:\/Users|\/home|\/root)\/[^/\s"']+|[A-Za-z]:\\Users\\[^\\/
 const PRIVATE_TMP_PATHS = /\/private\/(?:var\/folders\/[^/\s"']+\/[^/\s"']+\/T|tmp)(?![^/\s"'])/g
 
 /**
+ * Credential shapes a quoted transcript could carry: a GitHub token in either format, an
+ * OpenAI-style key, a bearer header's value, and the token of an `x-access-token:<token>` run. Up
+ * to 400 characters of a client transcript are quoted into a leg reason, and the Cursor leg runs
+ * under `--force`, so whatever a command the model composed printed lands there.
+ */
+const SECRET_SHAPES = /ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{16,}|Bearer\s+\S+|x-access-token:[^@\s]+/g
+
+/**
  * `text` with the paths that must never reach a printed line or a committed evidence file removed.
  *
  * `replacements` are the run's own known locations, replaced by their LOGICAL label first, so a
  * reader still learns which tree a line is about; the sweeps then take any home this run did not
- * know it would see (a second checkout, another account, a runner's) and the resolved spelling of
- * the temp roots.
+ * know it would see (a second checkout, another account, a runner's), the resolved spelling of
+ * the temp roots, and the credential shapes a transcript could carry.
  */
 export function redactPaths(text, replacements = []) {
   let out = String(text ?? '')
   for (const [from, to] of replacements) {
     if (typeof from === 'string' && from.length > 0) out = out.replaceAll(from, to)
   }
-  return out.replaceAll(HOME_PATHS, '<home>').replaceAll(PRIVATE_TMP_PATHS, '<tmp>')
+  return out.replaceAll(HOME_PATHS, '<home>').replaceAll(PRIVATE_TMP_PATHS, '<tmp>').replaceAll(SECRET_SHAPES, '<secret>')
 }
 
 /**

@@ -557,3 +557,26 @@ describe("redactPaths and spellingsOf — the resolved spelling of a temp path",
     expect(reason).not.toMatch(/\/private\//);
   });
 });
+
+describe("redactPaths — credential shapes a quoted transcript could carry", () => {
+  it("sweeps a token, a bearer header and a token-in-URL run into one placeholder", async () => {
+    // Up to 400 characters of a client transcript are quoted into a leg reason, and the Cursor leg
+    // runs under `--force`, so whatever a command the model composed printed lands there. The
+    // sweep is the path sweep's sibling; the shapes are composed at run time so no literal token
+    // sits in this file for the leak gate to find.
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { redactPaths } = await import("../../scripts/qa/redact.mjs");
+    const shapes = [
+      `ghp_${"a".repeat(36)}`,
+      `github_pat_${"b".repeat(22)}_${"c".repeat(59)}`,
+      `sk-${"d".repeat(24)}`,
+      `Bearer ${"e".repeat(20)}.${"f".repeat(10)}`,
+      `x-access-token:${"g".repeat(12)}`,
+    ];
+    for (const shape of shapes) {
+      expect(redactPaths(`token ${shape} end`, []), shape).toBe("token <secret> end");
+    }
+    // Too short, or not a header: left alone, so a reason is not scrubbed into noise.
+    expect(redactPaths("ghp_short and sk-ab and the bearer of news", [])).toBe("ghp_short and sk-ab and the bearer of news");
+  });
+});

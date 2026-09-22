@@ -205,12 +205,16 @@ per-hook trust review through \`/hooks\`. A headless run proves discovery, never
 
 \`\`\`sh
 codex plugin marketplace upgrade
+codex plugin marketplace remove stamity
 codex plugin remove stamity@stamity
 \`\`\`
 
 The marketplace entry resolves to a branch, so an install takes whatever that branch points at.
-Pin by adding the marketplace at a tag; roll back by re-adding the previous tag and installing
-again. \`codex plugin remove\` uninstalls and clears the local cache.
+Pin by adding the marketplace at a tag; roll back by removing the marketplace, re-adding it at the
+previous tag and installing again — \`marketplace remove\` is listed by \`codex plugin marketplace
+--help\` on 0.155.1 (read 2026-09-22), and the re-point of a git marketplace already on record is
+unmeasured, which is why the removal comes first. \`codex plugin remove\` uninstalls and clears the
+local cache.
 
 ## Where this root is read
 

@@ -36,6 +36,23 @@ export const PROMPT = `Read ${DENIED_FILE}, then read ${ALLOWED_FILE}, and reply
 const RUN_TIMEOUT_MS = 300_000
 
 /**
+ * The lane's own path sweep: the checkout and the fixtures directory, the temp root, the
+ * interpreter and the home, each under both its spellings, then the shared sweeps. Every line this
+ * module quotes into a row reason goes through it — a fixture-build failure, a client's `--version`
+ * banner (which has been seen to carry an install path), an observation log that could not be
+ * read — because a row reason lands in a committed evidence file.
+ */
+function redactLane(text, { repoRoot, fixturesDir } = {}) {
+  return redactPaths(text, [
+    ...spellingsOf(repoRoot, '<repo>'),
+    ...spellingsOf(fixturesDir, '<fixtures>'),
+    ...spellingsOf(tmpdir(), '<tmp>'),
+    [process.execPath, '<node>'],
+    ...spellingsOf(homedir(), '<home>'),
+  ])
+}
+
+/**
  * How each client is driven, and why.
  *
  * `claude` — `-p` is the documented non-interactive lane and `--output-format stream-json` makes
@@ -151,7 +168,9 @@ export function binaryVersion(binary, { platform = process.platform } = {}) {
     const limit = platform === 'win32' ? ` — ${WINDOWS_PROBE_LIMIT}` : ''
     return { present: false, reason: `${binary}: not on PATH (${probe.error.message})${limit}` }
   }
-  const version = (probe.stdout ?? '').trim().split('\n')[0] ?? ''
+  // The banner leads every H1 row reason (`scripts/qa/run.mjs`), and a client's banner has been
+  // seen to carry an install path — the smoke redacts the same line for the same reason.
+  const version = redactLane((probe.stdout ?? '').trim().split('\n')[0] ?? '')
   if (probe.status === 0 || version !== '') {
     return { present: true, version }
   }
@@ -184,11 +203,16 @@ export function exitDescription(probe) {
  * own permission layer refused first, or because it answered from the prompt — measured nothing
  * about the hook, and reporting that as `failed` blames this engine for the client's behaviour.
  *
- * The last alternative is the Copilot CLI's text render: one `● <Tool> <argument>` line per tool
- * call at the start of a line (measured 2026-09-22 on 1.0.86 without `-s` — see the runner note).
- * Anchored at a line start, which is where the client prints it; a model's own lists use `-`.
+ * Two shapes, both measured, and nothing looser: the `tool_use` EVENT of a stream-json transcript
+ * (`"type":"tool_use"`, as Claude prints a tool call) and the Copilot CLI's text render, one
+ * `● <Tool> <argument>` line per tool call at the start of a line (measured 2026-09-22 on 1.0.86
+ * without `-s` — see the runner note; anchored at a line start, which is where the client prints
+ * it, because a model's own lists use `-`). The bare `tool_use`, `"tool_name"` and `tool call`
+ * signs are gone: a `result` event carries `permission_denials[].tool_use_id` and
+ * `usage.server_tool_use` on the one line that also carries the model's answer, and prose says
+ * "after the tool call was denied" — none of which is a call the hook should have seen.
  */
-const TOOL_CALL_SIGNS = /"type"\s*:\s*"tool_use"|tool_use|"tool_name"|tool call|Read\(|shell\(|str_replace|^● \S+/im
+const TOOL_CALL_SIGNS = /"type"\s*:\s*"tool_use"|^● \S+/im
 
 /**
  * The CLIENT's own permission prompt, and deliberately not `permission denied` or
@@ -200,13 +224,37 @@ const TOOL_CALL_SIGNS = /"type"\s*:\s*"tool_use"|tool_use|"tool_name"|tool call|
 const PERMISSION_REFUSAL = /could not request permission|requires approval|approval required|permission to (?:use|run)|awaiting approval/i
 
 /**
- * Does the transcript show a tool call that names the allowed file? Judged per LINE: the prompt
- * itself and a model's answer name both files in prose, and only a tool-call sign on the same line
- * as the file is an attempt — which is the line a client prints for one (the `tool_use` event of a
- * stream-json transcript, Copilot's `● Read <file>` render).
+ * Does the transcript show a tool call that names the allowed file? Only an EVENT-SHAPED line
+ * counts: a JSON line that is a `tool_use` event, or an `assistant` event whose content carries a
+ * `tool_use` block, with the file named INSIDE that block — never the text blocks beside it, a
+ * `result` event's answer or its `permission_denials`, or prose, all of which name the file because
+ * the prompt did — or the Copilot `● <Tool> <file>` line.
  */
 function allowedReadAttempted(text) {
-  return text.split('\n').some((line) => line.includes(ALLOWED_FILE) && TOOL_CALL_SIGNS.test(line))
+  return text.split('\n').some((line) => {
+    const trimmed = line.trim()
+    if (trimmed.startsWith('{')) return toolUseBlocksOf(trimmed).some((block) => JSON.stringify(block).includes(ALLOWED_FILE))
+    return /^● \S+/.test(trimmed) && trimmed.includes(ALLOWED_FILE)
+  })
+}
+
+/**
+ * The `tool_use` blocks one transcript line carries: the event itself when it is one, else the
+ * blocks of its content array (`message.content` on an assistant event). A line that is not JSON
+ * carries none.
+ */
+function toolUseBlocksOf(line) {
+  let event
+  try {
+    event = JSON.parse(line)
+  } catch {
+    // Not a JSON event: a text render or prose, which the caller judges by its own shape.
+    return []
+  }
+  if (event === null || typeof event !== 'object') return []
+  if (event.type === 'tool_use') return [event]
+  const content = Array.isArray(event.content) ? event.content : Array.isArray(event.message?.content) ? event.message.content : []
+  return content.filter((block) => block !== null && typeof block === 'object' && block.type === 'tool_use')
 }
 
 /**
@@ -341,13 +389,7 @@ export function runClient({ client, repoRoot, fixturesDir, runners = CLIENT_RUNN
     // plus the CLI's own output naming the same paths, and it reached the H1 row reason unredacted
     // — the class of leak c4f74a7 closed for the plugins lane. The same pairs, each under both its
     // spellings, then the sweep; the row stays `failed`, because an unbuilt fixture is never a pass.
-    const detail = redactPaths([error?.message, error?.stdout, error?.stderr].filter(Boolean).join(' | '), [
-      ...spellingsOf(repoRoot, '<repo>'),
-      ...spellingsOf(fixturesDir, '<fixtures>'),
-      ...spellingsOf(tmpdir(), '<tmp>'),
-      [process.execPath, '<node>'],
-      ...spellingsOf(homedir(), '<home>'),
-    ])
+    const detail = redactLane([error?.message, error?.stdout, error?.stderr].filter(Boolean).join(' | '), { repoRoot, fixturesDir })
     return { client, status: 'failed', reason: `the fixture could not be built: ${detail}` }
   }
 
@@ -393,7 +435,8 @@ export function runClient({ client, repoRoot, fixturesDir, runners = CLIENT_RUNN
   const verdict =
     error === undefined
       ? verdictFor(observations, { transcript: `${result.stdout ?? ''}\n${result.stderr ?? ''}` })
-      : { status: 'failed', reason: `the hook's observation log could not be read: ${error}` }
+      : // `readFileSync`'s own message names the log's temp path, in the unresolved spelling.
+        { status: 'failed', reason: `the hook's observation log could not be read: ${redactLane(String(error), { repoRoot, fixturesDir })}` }
 
   const transcriptTail = (result.stdout ?? '').slice(-2000)
   const stderrTail = (result.stderr ?? '').slice(-2000)

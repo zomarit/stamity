@@ -598,15 +598,22 @@ describe("the tree as a whole", () => {
     // `docs/plugins.md` both say so.
     expect(section).toContain("codex plugin remove stamity@stamity");
     expect(section).not.toContain("codex plugin remove stamity\n");
+    // The marketplace itself is removed before it is re-added: the walk's middle step re-added a
+    // LOCAL directory and the client answered "already added", and for a git marketplace already
+    // on record that answer may leave the ref where it was. `codex plugin marketplace --help` on
+    // 0.155.1 (read 2026-09-22) lists `remove` ("Remove a configured marketplace source by name"),
+    // so the block prints it, and the note says the re-point itself is unmeasured.
     expect(section).toContain(
       [
         "```sh",
         "codex plugin remove stamity@stamity",
+        "codex plugin marketplace remove stamity",
         "codex plugin marketplace add zomarit/stamity --ref plugins/v<previous>",
         "codex plugin add stamity@stamity",
         "```",
       ].join("\n"),
     );
+    expect(section).toContain("unmeasured");
   });
 });
 

@@ -223,7 +223,9 @@ function writeDocument(path, contents) {
 
 /**
  * The per-client install, pin, update and rollback routes, quoted from the vendor pages the
- * B2 spikes read on 2026-09-20 and kept in the same words as each root's own README. A command
+ * B2 spikes read on 2026-09-20 and, where a route has been walked since, from the walk
+ * (`test/ci/pluginLifecycle.test.ts`); each root's own README (`scripts/plugins/clients/<client>.mjs`)
+ * carries the same commands, and `test/ci/pluginDistribution.test.ts` pins the blocks here. A command
  * a vendor does not document is named as absent rather than invented: Cursor has no documented
  * plugin install, update or rollback subcommand at all, so its section is the dashboard route
  * and the mirror branch, which is what an operator actually does there.
@@ -296,16 +298,24 @@ function clientRoutes(slug, tag, branch) {
       // `remove` takes the QUALIFIED id — the bare `codex plugin remove stamity` refuses on 0.154.0
       // with "plugin requires --marketplace unless passed as <plugin>@<marketplace>" (the lifecycle
       // walk, 2026-09-20) — and purges that version's local cache, so the marketplace re-added at
-      // the previous tag installs nothing until `plugin add` runs again: three commands.
+      // the previous tag installs nothing until `plugin add` runs again. The marketplace itself is
+      // removed before the re-add: the walk re-added a LOCAL directory and the client answered
+      // "already added", and for a git marketplace already on record that answer may leave the ref
+      // where it was; `codex plugin marketplace --help` on 0.155.1 (read 2026-09-22) lists `remove`.
       rollback: [
         'codex plugin remove stamity@stamity',
+        'codex plugin marketplace remove stamity',
         `codex plugin marketplace add ${slug} --ref plugins/v<previous>`,
         'codex plugin add stamity@stamity',
       ],
       note:
         'An entry in a marketplace file installs nothing on its own — the two install commands above ' +
         'are both needed, and the same `plugin add` closes the rollback because `plugin remove` purges ' +
-        'the local cache. Plugin hooks additionally need `features.hooks = true`, project trust, and a ' +
+        'the local cache. The marketplace is removed before it is re-added at the previous tag: ' +
+        '`codex plugin marketplace --help` on 0.155.1 (read 2026-09-22) lists `remove`, and the walk ' +
+        'measured only a local marketplace re-added in place ("already added"), so the re-point of a ' +
+        'git marketplace already on record is unmeasured and removing it first is the route this page ' +
+        'can stand behind. Plugin hooks additionally need `features.hooks = true`, project trust, and a ' +
         'per-hook trust review before any of them runs.',
     },
   }

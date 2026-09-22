@@ -396,6 +396,39 @@ describe("blockerFor — which transcripts mean 'nothing was measured'", () => {
     expect(blockerFor("401 Unauthorized")?.label).toBe("the client never reached its model");
     expect(blockerFor("Quota exceeded for this account")?.label).toBe("the client never reached its model");
   });
+
+  it("reads the status and quota spellings a client prints, and still no counter", async () => {
+    // The anchors were narrower than the clients: `statusCode: 401` and `status_code: 401` put a
+    // word between `status` and the number, a quoted `"status":"401"` puts a quote before it,
+    // `API Error: 401 {…}` and `error 401` name no status at all, and quota wordings run either
+    // way round (`exceeded your quota`, `quota has been exhausted`). One case per shape, beside the
+    // counters that must stay out.
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { blockerFor } = await import("../../scripts/plugin-route-smoke.mjs");
+
+    for (const line of [
+      "statusCode: 401",
+      "status_code: 401",
+      '{"statusCode":401}',
+      '{"status":"401","message":"…"}',
+      'API Error: 401 {"type":"error","error":{"type":"authentication_error"}}',
+      "API Error 401",
+      "error 401",
+      "You have exceeded your quota for this month",
+      "quota has been exhausted",
+      "quota limit reached",
+    ]) {
+      expect(blockerFor(line)?.label, line).toBe("the client never reached its model");
+    }
+    for (const line of [
+      '{"type":"result","usage":{"input_tokens":401,"output_tokens":12}}',
+      "errors: 0, tokens: 401",
+      "the quota field is unset",
+      "error_code 4010",
+    ]) {
+      expect(blockerFor(line), line).toBeNull();
+    }
+  });
 });
 
 /**

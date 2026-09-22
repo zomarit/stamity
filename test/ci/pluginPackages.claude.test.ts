@@ -520,9 +520,23 @@ describe("what the root carries", () => {
     expect(readme).toContain("claude plugin update stamity@stamity --scope project");
     expect(readme).not.toContain("claude plugin update stamity\n");
     expect(readme).toContain("`--scope user`");
-    // The route back is a reinstall at the previous pin, because `rollback` is not established.
+    // The route back is THREE commands, measured 2026-09-22 on 2.1.278 (`test/ci/pluginLifecycle
+    // .test.ts`): the re-add and the reinstall leave the recorded version where it was and
+    // `plugin update` at the same scope re-records it, while `claude plugin rollback stamity`
+    // answers `error: unknown command 'rollback'`. The README carries the block the distribution
+    // README prints, and no longer defers to a subcommand the client does not have.
     expect(readme.toLowerCase()).toContain("pin");
-    expect(readme).toContain("not established");
+    expect(readme).toContain(
+      [
+        "```sh",
+        "claude plugin marketplace add zomarit/stamity#plugins/v<previous>",
+        "claude plugin install stamity@stamity --scope project",
+        "claude plugin update stamity@stamity --scope project",
+        "```",
+      ].join("\n"),
+    );
+    expect(readme).not.toContain("prefer a `rollback` subcommand");
+    expect(readme).not.toContain("not established");
   });
 });
 
@@ -550,14 +564,20 @@ describe("the capability file", () => {
     expect(mcp?.reason ?? "").toContain("credential");
   });
 
-  it("records the install route and says plainly that rollback is not established", () => {
-    // The CLI reference quoted a `rollback` subcommand on one page that day and omitted it on
-    // another. A capability file that stayed silent would let a consumer infer either one.
+  it("records the install route and says the rollback route was measured", () => {
+    // The CLI reference quoted a `rollback` subcommand on one page (2026-09-20) and omitted it on
+    // another; the installed client settled it on 2026-09-22 (`unknown command 'rollback'`), and
+    // the route back — three commands, the third re-recording the version — was walked the same
+    // day. A capability file that still said "until an installed client is measured" would send a
+    // consumer to measure what this repository already has.
     const note = capability.distribution?.note ?? "";
     expect(note).toBe(DISTRIBUTION.note as string);
     expect(note).toContain("plugin marketplace add");
-    expect(note).toContain("not established");
+    expect(note).toContain("settled absent");
+    expect(note).toContain("claude plugin update stamity@stamity --scope project");
+    expect(note).not.toContain("until an installed client is measured");
     expect(note).toContain("2026-09-20");
+    expect(note).toContain("2026-09-22");
   });
 });
 

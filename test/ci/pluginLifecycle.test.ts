@@ -494,6 +494,72 @@ describe("plugin-lifecycle-fixture, the refusals", () => {
     expect(result.stderr).toContain("already holds files");
     expect(readFileSync(join(occupied, "keep.txt"), "utf8")).toBe("mine\n");
   });
+
+  it("prints an unknown argument without the credential a misplaced --push left in it", () => {
+    // Every flag consumes the next token, so a `--runtime` with no value swallows `--push` and the
+    // URL becomes the unknown argument — which was printed whole, userinfo included, before the
+    // push arm's own display form was ever reached.
+    const token = "fixture-token-77aa";
+    const result = refuse([
+      "--out",
+      "x",
+      "--versions",
+      VERSIONS.join(","),
+      "--runtime",
+      "--push",
+      `https://x-access-token:${token}@127.0.0.1:9/o/r.git`,
+    ]);
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("Unknown argument: https://127.0.0.1:9/o/r.git");
+    expect(result.stderr).not.toContain(token);
+    expect(result.stdout).toBe("");
+  });
+});
+
+describe("plugin-lifecycle-fixture, pushDisplay — every spelling of a push URL's userinfo", () => {
+  it("drops the userinfo from the shown form and scrubs each spelling a line could carry", async () => {
+    // Git's credential prompt prints the username DECODED (`Password for 'https://user@host':`), so
+    // a percent-encoded token survives the encoded spelling's removal; and a token in the USERNAME
+    // slot with an empty password is how GitHub takes one. Both spellings of the userinfo run go,
+    // and the bare token in both spellings becomes a placeholder.
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { pushDisplay } = await import("../../scripts/plugin-lifecycle-fixture.mjs");
+    const encoded = ["s3cr3t", "40x"].join("%");
+    const decoded = ["s3cr3t", "x"].join("@");
+
+    const withPassword = pushDisplay(`https://x-access-token:${encoded}@github.com/o/r.git`) as {
+      shown: string;
+      scrub: (text: string) => string;
+    };
+    expect(withPassword.shown).toBe("https://github.com/o/r.git");
+    expect(
+      withPassword.scrub(
+        `push https://x-access-token:${encoded}@github.com/o/r.git refs; Password for 'https://x-access-token@github.com': ${decoded}`,
+      ),
+    ).toBe("push https://github.com/o/r.git refs; Password for 'https://github.com': <redacted>");
+
+    const usernameOnly = pushDisplay("https://ghp%5Ffixture@127.0.0.1:9/o/r.git") as {
+      shown: string;
+      scrub: (text: string) => string;
+    };
+    expect(usernameOnly.shown).toBe("https://127.0.0.1:9/o/r.git");
+    expect(usernameOnly.scrub("fatal: 'https://ghp_fixture@127.0.0.1:9/o/r.git/' then ghp_fixture and ghp%5Ffixture")).toBe(
+      "fatal: 'https://127.0.0.1:9/o/r.git/' then <redacted> and <redacted>",
+    );
+
+    // A transport user on a non-http scheme is not a secret: `git` must survive in the command
+    // line the failure quotes, while the `git@` run still leaves the URL.
+    const transport = pushDisplay("ssh://git@github.com/o/r.git") as { shown: string; scrub: (text: string) => string };
+    expect(transport.shown).toBe("ssh://github.com/o/r.git");
+    expect(transport.scrub("git -c x push ssh://git@github.com/o/r.git refs/tags/v1")).toBe("git -c x push ssh://github.com/o/r.git refs/tags/v1");
+
+    // Values the parser refuses carry no userinfo and pass through as given.
+    for (const value of ["git@github.com:o/r.git", "/tmp/remote.git"]) {
+      const shape = pushDisplay(value) as { shown: string; scrub: (text: string) => string };
+      expect(shape.shown, value).toBe(value);
+      expect(shape.scrub(`push ${value}`), value).toBe(`push ${value}`);
+    }
+  });
 });
 
 describe("plugin-lifecycle-fixture, the checkout copy and the push", () => {
@@ -551,6 +617,9 @@ describe("plugin-lifecycle-fixture, the checkout copy and the push", () => {
         { cwd: checkout, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: STUB_BUILD_MS },
       );
       expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+      // The copy says what it carried: a fork layer travels into what `--push` publishes, and the
+      // console reported only the two-version diff, which never names it.
+      expect(result.stdout).toContain("plugin-lifecycle-fixture: fork layer: 1 file(s) copied");
       for (const version of VERSIONS) {
         expect(existsSync(join(out, version, "claude", "skills", "fork-probe", "SKILL.md")), version).toBe(true);
       }
@@ -591,6 +660,8 @@ describe("plugin-lifecycle-fixture, the checkout copy and the push", () => {
       );
       expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(1);
       const printed = `${result.stdout}\n${result.stderr}`;
+      // This checkout carries no fork layer, so the copy reports none.
+      expect(result.stdout).not.toContain("fork layer");
       expect(printed).not.toContain(secret);
       expect(printed).not.toContain("x-access-token");
       expect(result.stderr).toContain("plugin-lifecycle-fixture: FAIL - git");
@@ -854,6 +925,12 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
       const settings = surface.clientSettings as { enabledPlugins?: unknown; permissions?: { allow?: unknown } } | null;
       expect(settings).not.toBeNull();
       expect(settings?.enabledPlugins).toEqual({ "stamity@stamity": true });
+      // The three names are `CLAUDE_PERMISSION_ROWS` (`src/adapters/claude.ts:374`): the
+      // `AGENT_POLICY_ROSTER` rows' allow categories kept to `SESSION_PREAPPROVED_CATEGORIES`
+      // (read), rendered through the Claude tool-name table minus the guard-only names — "for the
+      // shipped roster that is three rows". The constant is module-private, so the derivation is
+      // cited beside the literal rather than imported; when the roster moves, this walk goes red
+      // here and the citation says where the new value comes from.
       expect(settings?.permissions?.allow).toEqual(["Read", "Grep", "Glob"]);
       row("claude", "setup", "PASS", `${String(surface.files.length)} repository-owned files`);
       assertCompatible("claude", installedRoot(V1), walk.project, V1, "installed");

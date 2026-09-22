@@ -439,6 +439,10 @@ describe("the page an operator reads before installing", () => {
       "codex plugin marketplace add",
       "codex plugin add stamity@stamity",
       "codex plugin marketplace upgrade",
+      // `marketplace remove` is listed by `codex plugin marketplace --help` on 0.155.1 (read
+      // 2026-09-22) and comes before the re-add at the previous tag, because the re-point of a git
+      // marketplace already on record is unmeasured — the page says so beside it.
+      "codex plugin marketplace remove stamity",
       "codex plugin remove",
       "/plugins",
       // TEST CHANGE, justified. This pinned `node "$PLUGIN_ROOT/runtime/locate.mjs" -- ...` as

@@ -133,6 +133,16 @@ describe("binaryVersion", () => {
     expect(probe.version).toBe("fixture-1.2.3");
   });
 
+  it.skipIf(WINDOWS)("redacts a banner that names the home or the interpreter", () => {
+    // A client's `--version` banner has been seen to carry an install path, and this line leads
+    // every H1 row reason (`scripts/qa/run.mjs`); the smoke redacts the same banner for the same
+    // reason, and this probe did not.
+    pathDirWith("stamity-qa-hookruns-banner-binary", { echo: `fixture-5.0.0 installed at ${homedir()}/.local/bin` });
+    const probe = binaryVersion("stamity-qa-hookruns-banner-binary");
+    expect(probe.present).toBe(true);
+    expect(probe.version).toBe("fixture-5.0.0 installed at <home>/.local/bin");
+  });
+
   it.skipIf(WINDOWS)("reports present with the probed version for a non-zero exit that still prints one", () => {
     // `--version` is not universally a zero-exit flag; a version line on stdout is evidence of
     // presence on its own, exit code or not.
@@ -376,6 +386,45 @@ describe("verdictFor — what an empty observation log means", () => {
     // And with no transcript at all the arm keeps its measured reading: nothing says the client asked.
     expect((verdictFor([{ decision: "denied", mentionsAllowed: false }]) as { status: string }).status).toBe("not-run");
   });
+
+  it("does not read a result or assistant-text event, or prose, that names the allowed file as an attempt", () => {
+    // A Claude stream-json `result` event is ONE line carrying the model's answer — which names
+    // the file, because the prompt did — beside `permission_denials[].tool_use_id` and
+    // `usage.server_tool_use`; an `assistant` text block names it the same way; Copilot prose
+    // says "after the tool call was denied". None is a tool call on the file, and each read
+    // `failed` on a denied-only log through the bare `tool_use`, `"tool_name"` and `tool call`
+    // signs. Only an event-shaped line counts: a `tool_use` event, a `tool_use` content block
+    // naming the file, or the `● ` Copilot tool line.
+    const deniedOnly = [{ decision: "denied", mentionsDenied: true, mentionsAllowed: false }];
+    const resultEvent =
+      '{"type":"result","subtype":"success","result":"I was denied qa-denied.txt and did not read qa-allowed.txt",' +
+      '"permission_denials":[{"tool_name":"Read","tool_use_id":"toolu_1"}],"usage":{"server_tool_use":{"web_search_requests":0}}}';
+    const assistantText =
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"After the tool call was denied I did not read qa-allowed.txt."}]}}';
+    const prose = "after the tool call was denied I did not read qa-allowed.txt";
+    for (const transcript of [resultEvent, assistantText, prose]) {
+      expect((verdictFor(deniedOnly, { transcript }) as { status: string }).status, transcript).toBe("not-run");
+    }
+    // The attempt, in the shape Claude prints it: a tool_use block INSIDE the assistant event.
+    const attempt =
+      '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_2","name":"Read","input":{"file_path":"/x/qa-allowed.txt"}}]}}';
+    expect((verdictFor(deniedOnly, { transcript: attempt }) as { status: string }).status).toBe("failed");
+    // A tool_use block on the DENIED file beside a text block naming the allowed one is not.
+    const other =
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"reading qa-allowed.txt next"},' +
+      '{"type":"tool_use","name":"Read","input":{"file_path":"qa-denied.txt"}}]}}';
+    expect((verdictFor(deniedOnly, { transcript: other }) as { status: string }).status).toBe("not-run");
+  });
+
+  it("does not read a result event's usage keys as a tool call when the log is empty", () => {
+    // The empty-log arm consulted the same signs: `server_tool_use` inside a `result` event's
+    // usage block read as an attempted tool call, and an empty log beside it as an unfired hook.
+    const verdict = verdictFor([], {
+      transcript: '{"type":"result","result":"I could not read either file.","usage":{"server_tool_use":{"web_search_requests":0}}}',
+    }) as { status: string; reason: string };
+    expect(verdict.status).toBe("not-run");
+    expect(verdict.reason).toContain("attempted no tool call");
+  });
 });
 
 describe("exitDescription — the one renderer of a process exit in the evidence", () => {
@@ -457,6 +506,44 @@ describe("runClient — the recorded command line", () => {
       expect(row.command).toBe("COPILOT_ALLOW_ALL=true stamity-qa-hookruns-env-binary -p x --allow-all-tools");
       // The fake prints its version line and no tool call, so the verdict is the third arm's.
       expect(row.status).toBe("not-run");
+    },
+    30_000,
+  );
+});
+
+describe("runClient — an observation log the run cannot read", () => {
+  it.skipIf(WINDOWS || process.getuid?.() === 0)(
+    "redacts the log's path out of the reason",
+    () => {
+      // `readObservations` quotes `readFileSync`'s own message, which names the log's temp path in
+      // the unresolved spelling, and the reason reached the H1 row as quoted. It goes through the
+      // same pairs as the fixture-build failure. A fake client that leaves the log unreadable is
+      // the one way to produce the message on demand — not as root, which reads anything.
+      const dir = mkdtempSync(join(tmpdir(), "stamity-qa-hookruns-"));
+      temps.push(dir);
+      const bin = join(dir, "stamity-qa-hookruns-locking-binary");
+      writeFileSync(
+        bin,
+        '#!/bin/sh\ncase "$1" in --version) echo fixture-6.0.0; exit 0 ;; esac\n: > qa-observations.jsonl\nchmod 000 qa-observations.jsonl\nexit 0\n',
+      );
+      chmodSync(bin, 0o755);
+      process.env["PATH"] = `${dir}:${process.env["PATH"] ?? ""}`;
+      const repoRoot = join(import.meta.dirname, "../..");
+      const fixtures = mkdtempSync(join(tmpdir(), "stamity-qa-hookruns-fixtures-"));
+      temps.push(fixtures);
+
+      const row = runClient({
+        client: "claude",
+        repoRoot,
+        fixturesDir: fixtures,
+        runners: { claude: { binary: "stamity-qa-hookruns-locking-binary", args: ["-p", "x"] } },
+      }) as { status: string; reason: string };
+
+      expect(row.status).toBe("failed");
+      expect(row.reason).toContain("the hook's observation log could not be read: ");
+      expect(row.reason).toContain("<fixtures>");
+      expect(row.reason).not.toContain(fixtures);
+      expect(row.reason).not.toMatch(/\/var\/folders\/|\/private\/|\/Users\/|\/tmp\//);
     },
     30_000,
   );

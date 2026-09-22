@@ -616,6 +616,9 @@ function redactor(context) {
   const pairs = [
     ...spellingsOf(context.dist, '<dist>'),
     ...spellingsOf(context.scratch, '<scratch>'),
+    // The temp root itself, as the two QA lanes pair it: a client names a temp path of its own
+    // making (a scratch cwd it created, a log it wrote) that is under neither the dist nor the scratch.
+    ...spellingsOf(tmpdir(), '<tmp>'),
     // The binary's own path: a spawn failure's message carries it verbatim
     // (`spawnSync /Users/…/.local/bin/claude ENOENT`), and what a reader needs is which client
     // could not be run, not where it was installed.
@@ -760,10 +763,12 @@ const BLOCKERS = [
     // `"input_tokens":N` and `codex exec` prints token totals, and `\b401\b` read a count of
     // exactly 401 as a login failure — which turned an invocation with no manifest into SKIPPED
     // and, because discovery consults this list first, a good listing into SKIPPED as well. So
-    // `401` is anchored to the spellings a client prints for a status (`HTTP 401`, `status 401`,
-    // `"status":401`, `401 Unauthorized`), and `quota` needs the word that makes it a limit.
+    // `401` is anchored to the spellings a client prints for a status — `HTTP 401`, `status 401`,
+    // `statusCode: 401`, `status_code: 401`, `"status":401` and its quoted value `"status":"401"`,
+    // `API Error: 401`, `error 401`, `401 Unauthorized` — and `quota` needs a limit word within a
+    // few words of it, either way round (`exceeded your quota`, `quota has been exhausted`).
     pattern:
-      /usage limit|rate limit|quota (?:exceeded|reached|limit)|no authentication information|authentication required|please run .*login|not authorized|HTTP(?:\/[\d.]+)? 401\b|\bstatus"?\s*[:=]?\s*401\b|\b401 Unauthorized\b/i,
+      /usage limit|rate limit|quota\W+(?:\w+\W+){0,3}(?:exceed|exhaust|reach|limit)|(?:exceed|exhaust|reach|limit)\w*\W+(?:\w+\W+){0,3}quota|no authentication information|authentication required|please run .*login|not authorized|HTTP(?:\/[\d.]+)? 401\b|\bstatus(?:_?code)?"?\s*[:=]?\s*"?401\b|\b(?:API )?error:? 401\b|\b401 Unauthorized\b/i,
   },
   {
     label: 'the client refused to run what it was asked to run',

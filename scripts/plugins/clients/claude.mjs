@@ -147,8 +147,10 @@ export const MANIFEST_PATH = '.claude-plugin/plugin.json'
  *
  * The rollback half is a NEGATIVE fact, and it is here because silence would read as either
  * answer: one vendor page quoted a `rollback` subcommand in slash form that day and the CLI
- * reference did not list it. A consumer planning a downgrade needs to know that the supported
- * route is a reinstall at the previous pin until an installed client says otherwise.
+ * reference did not list it, and the installed client settled it on 2026-09-22 (`unknown command
+ * 'rollback'` on 2.1.278). A consumer planning a downgrade needs to know that the supported route
+ * is the three-command reinstall the lifecycle walk measured that day, whose third command —
+ * `plugin update` at the install's scope — is what re-records the version.
  *
  * The refresh carries `@stamity` and `--scope project` because `plugin update` defaults to user
  * scope: MEASURED on Claude Code 2.1.278 (2026-09-20), the bare `claude plugin update stamity`
@@ -164,10 +166,14 @@ export const DISTRIBUTION = {
     '`extraKnownMarketplaces`; a third-party marketplace has auto-update off by default, so ' +
     '`claude plugin update stamity@stamity --scope project` is the refresh — the scope has to match ' +
     'the install\'s, so a user-scope install refreshes with `--scope user` — and a marketplace added ' +
-    'at a tag or a commit is the pin. A `rollback` subcommand is not established — one vendor page quoted it in slash form ' +
+    'at a tag or a commit is the pin. A `rollback` subcommand is settled absent: one vendor page quoted it in slash form ' +
     'and the CLI reference omitted it (code.claude.com/docs/en/plugin-marketplaces and ' +
-    'code.claude.com/docs/en/cli-reference, accessed 2026-09-20) — so the route back is a reinstall ' +
-    'at the previous pin until an installed client is measured'
+    'code.claude.com/docs/en/cli-reference, accessed 2026-09-20), and `claude plugin rollback stamity` ' +
+    "answers `error: unknown command 'rollback'` on 2.1.278 (measured 2026-09-22). The route back is " +
+    'three commands, walked the same day: the marketplace re-added at the previous tag, ' +
+    '`claude plugin install stamity@stamity --scope project`, then `claude plugin update stamity@stamity --scope project` ' +
+    '— the first two answer already on disk and already installed and leave the recorded version where ' +
+    'it was, and the third is what re-records it',
 }
 
 /**
@@ -211,19 +217,28 @@ Run \`/stamity:st-setup\` once after installing. It writes the repository-owned 
 does not carry — the charter with this repository's facts and gates, and the client configuration —
 through the runtime bundled at \`runtime/\`.
 
-## Pin and roll back
+## Pin, update, roll back
 
 The marketplace entry above resolves to a branch, so an install takes whatever that branch points
 at. Pin by adding the marketplace at a tag or a commit instead of \`#plugin-dist\`, and record the
-pin with the repository rather than in a shell history.
+pin with the repository rather than in a shell history. The refresh, at the install's own scope:
 
 \`\`\`sh
 claude plugin update stamity@stamity --scope project
 \`\`\`
 
-The route in full, as \`stamity-plugin.json\` records it: ${DISTRIBUTION.note}. Run
-\`claude plugin --help\` on the installed client and prefer a \`rollback\` subcommand if yours
-lists one.
+Rolling back takes three commands, not two — measured 2026-09-22 on Claude Code 2.1.278: the
+marketplace re-added at the previous tag answers that the source is already on disk, the reinstall
+answers already installed, and the third command is what re-records the version. A \`rollback\`
+subcommand answers \`error: unknown command 'rollback'\` on that build.
+
+\`\`\`sh
+claude plugin marketplace add ${slug}#plugins/v<previous>
+claude plugin install stamity@stamity --scope project
+claude plugin update stamity@stamity --scope project
+\`\`\`
+
+The route in full, as \`stamity-plugin.json\` records it: ${DISTRIBUTION.note}.
 
 ## What this root does not carry
 
