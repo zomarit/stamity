@@ -5,8 +5,10 @@ first measurement at `967cb76` and the repairs it forced). Harness evidence: `.s
 (the hooks lane, the site lanes and the plugins lane, written by `node scripts/qa/run.mjs --site website/build
 --dist dist/plugins --sha <candidate>` with the four client binaries exported — claude 2.1.278, cursor `agent
 2026.09.18-9a7762b`, copilot 1.0.87, codex-cli 0.154.0 — the site built at the candidate and the distribution
-built from the packed 1.9.0 tarball the way CI builds it, alone on the machine; the earlier files at `967cb76`,
-`5ee8708`, `e5e54c9` and `f4f38ec` dropped because the candidate moved). Gate of record: the test-runner's
+built from the packed 1.9.0 tarball the way CI builds it, alone on the machine — written first at 13:52Z with the
+Cursor account over its usage limit and rewritten at 14:49Z by the same pass with an account that has Agent usage,
+so every row the harness can measure reads `passed` except `H1b`, the recorded Codex vendor fact; the earlier
+files at `967cb76`, `5ee8708`, `e5e54c9` and `f4f38ec` dropped because the candidate moved). Gate of record: the test-runner's
 uncontended full gate in the pinned worktree `p15s3-review` at the candidate (the run record's "gate of record"
 entry for `37e8976`) and CI green on every leg, Windows included, at `bd837fb`, `5ee8708`, `e5e54c9`, `f4f38ec`
 and `485f37e` (the record's CI sections; the run at the candidate is cited there once it lands). Eval run of
@@ -81,7 +83,7 @@ evidence file.
 | A30 | The Claude plugin route: `plugin validate --strict` accepts the root, a `--plugin-dir` run lists the namespaced command and agent, the setup command writes a plugin-backed manifest | harness `H4a` passed (2.1.278; structure, install, discovery, invocation) |
 | A31 | The Copilot plugin route: the marketplace install loads live, the listing names every marker, the discovery-first setup command writes a plugin-backed manifest under folder trust with the distribution root added | harness `H4c` passed (1.0.87; structure, install, discovery, invocation) |
 | A32 | The Codex plugin route: marketplace add and plugin add cache the root byte-identically, the listing names the skill, the README's setup line writes a plugin-backed manifest under the writable-workspace grant | harness `H4d` passed (0.154.0; structure, install, discovery, invocation) |
-| A33 | Upgrade and rollback through each client's own route: Claude's three published commands (the third qualified) restore the first version's tree, Copilot's tree replacement, Codex's remove-then-add | harness `H5`: the claude, copilot and codex walks PASS inside a row read `not-run` for Cursor's account |
+| A33 | Upgrade and rollback through each client's own route: Claude's three published commands (the third qualified) restore the first version's tree, Copilot's tree replacement, Codex's remove-then-add, Cursor's `--plugin-dir` tree replacement | harness `H5` passed: all four walks PASS (the Cursor walk on the second pass, with an account that has Agent usage) |
 
 ## Walk-through — rows left for a person
 
@@ -97,7 +99,7 @@ npm pack --pack-destination /tmp/pkg \
 
 | # | Scenario | Steps | Expected | Risk | Minutes | Proof |
 |---|---|---|---|---|---|---|
-| P1 | The Cursor plugin route and its lifecycle walk with an account that is not over its usage limit | 1. On a machine whose Cursor account has Agent usage left: `export STAMITY_CURSOR_BIN=$(command -v agent)`. 2. `node scripts/plugin-route-smoke.mjs --dist /tmp/plugins --client cursor --invoke --json /tmp/cursor.json`. 3. `npx vitest run test/ci/pluginLifecycle.test.ts -t cursor`. | Step 2 exits 0 with install, discovery and invocation PASS (a `--plugin-dir` run lists `fixture`-free ids and the setup writes `.stamity/manifest.json` with `plugin.clients.cursor`); step 3's cursor walk PASS with the marker discovered at `.2` and omitted at `.1`. | M | 8 | ☐ — the harness read `H1c`, `H4b` and the cursor half of `H5` `not-run` on this account's limit (the client's own `ActionRequiredError`), every step SKIPPED with the reason, never FAIL |
+| P1 | The Cursor plugin route and its lifecycle walk with an account that is not over its usage limit | 1. On a machine whose Cursor account has Agent usage left: `export STAMITY_CURSOR_BIN=$(command -v agent)`. 2. `node scripts/plugin-route-smoke.mjs --dist /tmp/plugins --client cursor --invoke --json /tmp/cursor.json`. 3. `npx vitest run test/ci/pluginLifecycle.test.ts -t cursor`. | Step 2 exits 0 with install, discovery and invocation PASS (a `--plugin-dir` run lists `fixture`-free ids and the setup writes `.stamity/manifest.json` with `plugin.clients.cursor`); step 3's cursor walk PASS with the marker discovered at `.2` and omitted at `.1`. | M | 8 | ☑ **measured 2026-09-22T14:38Z–14:49Z on agent 2026.09.18-9a7762b after the maintainer signed the CLI in to an account with Agent usage** (the evidence file at this candidate rewritten by that pass): `H1c` passed (one denied, one allowed), `H4b` passed (install, discovery and invocation through the real home, the manifest with `plugin.clients.cursor`), the cursor walk in `H5` PASS (`--plugin-dir` tree replacement, the marker discovered at `.2` and omitted at `.1`); the earlier pass at the same sha, on the account over its limit, read every Cursor step SKIPPED with the reason and never FAIL |
 | P2 | Codex hooks in an interactive session (the headless client loads no project hook layer) | 1. In the hook fixture repository (`scripts/qa/fixtures.mjs`), open `codex` interactively, trust the project and accept the hooks prompt. 2. Ask it to read `qa-denied.txt`, then `qa-allowed.txt`. | The first read is denied by the PreToolUse hook (exit 2 rendered by the client), the second allowed; `qa-observations.jsonl` records one denied and one allowed. | M | 5 | ☑ **walked by the maintainer 2026-09-22T14:41Z on codex-cli 0.155.1** (session `01a0c990-16a6-7b20-8098-068dc47ea5c0`): the client rendered `Blocked by hook` with the hook's own `permissionDecision: deny … qa-denied.txt is refused by this repository's hook`, then read `qa-allowed.txt`; the log carries one `denied` and one `allowed` line (sha-256 `756246be…`). The project was trusted and the hook accepted at the client's prompts, with `features.hooks = true` from the emitted config — the interactive path runs the emitted hooks; `H1b` stays `not-run` for the headless client, which loads none. |
 | P3 | A Windows host with no Git Bash: the guard's declared residual and the doctor row that reports it | 1. On Windows without Git for Windows (WSL may be present), in a repository-mode checkout: `stamity check`. 2. Open Claude Code there and ask it to read a file. | Step 1's `claude-hook-shell` row FAILS naming the consequence (the anchored hook commands do not launch; the client does not block) and the remedy (Git Bash on PATH or `CLAUDE_CODE_GIT_BASH_PATH`); step 2 proceeds unguarded, which is the declared residual, not a pass. | H | 6 | ☐ — unmeasured on any host: the CI Windows leg has Git Bash; the row's branches are unit-tested with an injected platform (`A5`); the residual is a `Not done` line of the release. **Maintainer's decision (2026-09-22, in chat): shipped with an exception — assumed to work as implemented; the doctor row that reports the host is the release's guard, and the first Windows host without Git Bash that runs `stamity check` measures it.** |
 | P4 | The real publish path of the release workflow | 1. Tag 1.9.0 and approve the release run's publish job. 2. After it: `git ls-remote origin refs/heads/plugin-dist refs/tags/plugins/v1.9.0`. 3. Open the run's attestation step and the digest check ahead of the npm publish. | The run succeeds; the branch and the tag exist at one orphan commit; the four archives are attested; the npm publish follows the digest check; a second run refuses the existing tag. | H | 10 | ☐ — the workflow's guards are pinned (`test/ci/workflow.test.ts`, `test/ci/changelogLinks.test.ts`) and the first real run is the measurement; the publish approval is the maintainer's |
@@ -118,13 +120,14 @@ eval (run 32) ran under the maintainer's login and passed.
   (the doctor row that reports it is auto-proven, `A5`), P4 is the tag itself; both are `Not done` lines with
   owners, signed as such.
 - [x] Every failing M row has a filed follow-up, linked — no M row failed; P2 was walked by the maintainer on
-  2026-09-22 and passed; P1 (the Cursor account), P5 (V4, owner-dependent) and P6 (the first armed nightly,
-  disabled at the repository for now) are recorded as signed off and not performed, each with its ledger row or
-  handoff.
+  2026-09-22 and passed, and P1 was measured the same afternoon once the Cursor CLI was signed in to an account
+  with Agent usage (every Cursor row passed); P5 (V4, owner-dependent) and P6 (the first armed nightly, disabled
+  at the repository for now) are recorded as signed off and not performed, each with its ledger row or handoff.
 - L failures are recorded, not blocking — P7 unperformed, no failure recorded.
 - Rollback: the pull request merges by rebase; `git revert` of the merged range (or reverting the merge on
   `main`) restores the previous tree; nothing is published until the maintainer approves the release run, and
   the spec status flip (`523c66b`) is its own commit to revert if the release does not happen.
-- Shippable: **YES** — every measurable row is green at the candidate (thirty-three auto-proven rows, three
-  client routes end to end, both hook emissions firing headlessly, the eval increment passed); the seven person
-  rows are signed with their owners named.
+- Shippable: **YES** — every measurable row is green at the candidate (thirty-three auto-proven rows, all four
+  client routes end to end, the hook emissions firing headlessly on three clients and interactively on the fourth,
+  the eval increment passed); of the seven person rows, two were walked the same day and the rest are signed with
+  their owners named.

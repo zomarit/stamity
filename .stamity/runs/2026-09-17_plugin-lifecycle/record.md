@@ -4021,3 +4021,16 @@ the client rendered `Blocked by hook` with the emitted hook's own deny decision 
 emitted Codex hooks — `features.hooks = true` in the emitted config, the project trusted, the hook accepted — run
 in an interactive session; the headless `codex exec` loads none (the recorded vendor fact, `H1b`). The `Not done`
 line for Codex's interactive hooks is closed; the contracts page gains the measurement.
+
+## Amendment (2026-09-22T14:50Z): the Cursor rows measured — every measurable harness row green
+
+The maintainer signed the Cursor CLI in to an account with Agent usage; the harness ran again at the code sha
+`37e8976` (14:38Z–14:49Z, alone) and rewrote the evidence file at that candidate: `H1c` passed (the emitted Cursor
+hook recorded one denied and one allowed call), `H4b` passed (the `--plugin-dir` route loaded the root, the listing
+named the command and the agent, the setup wrote the manifest with `plugin.clients.cursor`), and `H5` passed with
+all four walks PASS (the Cursor walk by `--plugin-dir` tree replacement, the marker discovered at `.2` and omitted
+at `.1`). With `H1a`, `H1d`, `H2`, `H3a`–`H3d`, `H4a`, `H4c` and `H4d` already green, every row the harness can
+measure reads `passed`; `H1b` stays `not-run` on the recorded Codex vendor fact, whose interactive half the
+maintainer walked (P2). The `Not done` lines for the Cursor rows are closed; the release's remaining lines are the
+PowerShell-fallback host (the maintainer's exception), V4 (owner-dependent), the nightly (disabled by choice) and
+the release itself.
