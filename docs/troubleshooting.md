@@ -233,8 +233,9 @@ affects all five anchored rows, not just the guard — the session-start and tam
 review gate too — so on such a host the anchoring may be a REGRESSION: a hook that used to run
 while the session sat at the repository root may now never launch at all. This is unmeasured; no
 run on such a host has been made. `stamity check` says so on that host: its `claude-hook-shell`
-row fails when Claude is targeted with repository-emitted hooks and no `bash.exe` is on PATH. If
-you are on one, install Git Bash, and report what you see.
+row fails when Claude is targeted with repository-emitted hooks and no Git Bash is on PATH (a WSL
+launcher in the system directory does not count). If you are on one, install Git Bash, and report
+what you see.
 
 The other three clients need no anchor, each for a measured reason: Cursor runs a hook from the
 workspace root whatever the shell's directory is, Copilot gives each hook entry a `cwd` relative
