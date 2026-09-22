@@ -24,6 +24,20 @@ function fixture(): string {
     "-c", "commit.gpgsign=false", "commit", "-qm", "baseline");
   return root;
 }
+/**
+ * The exact paths `scripts/repo-hygiene.mjs` exempts from the size budget, read out of its source.
+ *
+ * The script is a CLI entrypoint with no exports — importing it runs `main` — so the map cannot be
+ * read as a value; its literals are matched instead. The block is anchored on the declaration and
+ * the parse throws when it moves, because a silent zero-length list would exempt nothing and pass.
+ */
+function exemptedPaths(): readonly string[] {
+  const source = readFileSync(SCRIPT, "utf8");
+  const block = /const LARGE_FILE_EXCEPTIONS = new Map\(\[(.*?)^\]\)$/ms.exec(source)?.[1];
+  if (block === undefined) throw new Error(`${SCRIPT} declares no LARGE_FILE_EXCEPTIONS map`);
+  return [...block.matchAll(/^ *\['([^']+)',/gm)].map((match) => match[1] ?? "");
+}
+
 const run = (root: string, ...args: string[]) =>
   spawnSync(process.execPath, [SCRIPT, "--repo", root, ...args], { encoding: "utf8" });
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -150,16 +164,26 @@ describe("repository hygiene over the Git index", () => {
     expect(run(root).status).toBe(0);
   });
 
-  it("exempts only the exact retained run summary and still refuses its neighbour", () => {
+  // TEST CHANGE, justified: the case covered the one exception the map carried; the map carries two
+  // while run 32 composes with run 31, and a case naming one path would have left the other's
+  // exemption — and any third entry a later release adds — unproven. It now reads the exempted
+  // paths out of the script's own map, so the list here cannot fall behind the list there, and
+  // exercises every one of them beside a same-directory neighbour.
+  it("exempts exactly the paths its map names and still refuses their neighbours", () => {
+    const exempt = exemptedPaths();
+    expect(exempt, "the size-exception map's paths are not the two retained run summaries").toEqual([
+      "evals/runs/2026-09-21-run-31/summary.json",
+      "evals/runs/2026-09-22-run-32/summary.json",
+    ]);
+
     const root = fixture();
-    const exempt = "evals/runs/2026-09-21-run-31/summary.json";
-    const neighbour = "evals/runs/2026-09-21-run-31/inputs.json";
-    for (const path of [exempt, neighbour]) write(root, path, "x".repeat(1024 * 1024 + 1));
+    const neighbours = exempt.map((path) => path.replace(/[^/]+$/, "inputs.json"));
+    for (const path of [...exempt, ...neighbours]) write(root, path, "x".repeat(1024 * 1024 + 1));
     git(root, "add", ".");
     const result = run(root, "--base", "HEAD");
     expect(result.status, result.stderr).toBe(1);
-    expect(result.stderr).toContain(neighbour);
-    expect(result.stderr).not.toContain(exempt);
+    for (const path of neighbours) expect(result.stderr, `${path} was not refused`).toContain(path);
+    for (const path of exempt) expect(result.stderr, `${path} was refused`).not.toContain(path);
   });
 
   it.each([
