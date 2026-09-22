@@ -102,7 +102,8 @@ it adds six things:
   CLI installs on the runner — the install leg and the discovery legs a listing command can answer
   without an account. The other half needs a credential and runs elsewhere: discovery wherever the
   only listing of a plugin's ids is what a driven session prints, and every invocation leg. Those run
-  nightly (`.github/workflows/nightly.yml`) behind per-client secrets, and on a maintainer's machine
+  nightly (`.github/workflows/nightly.yml`) behind per-client secrets — a workflow armed but disabled
+  at the repository until the maintainer enables it and sets them — and on a maintainer's machine
   through the QA harness. A client CLI that will not install leaves its own legs skipped with a
   notice, never a red lane; a broken root is red.
 
@@ -198,7 +199,7 @@ next regeneration. For the generator-owned rows that gate is a test. For the las
 | `dist/plugins/` | `node scripts/generate-plugin-packages.mjs --out-dir dist/plugins --runtime <dir>` |
 | `AGENTS.md`, `CLAUDE.md` (its managed block), `.claude/`, `.stamity/generated/` | `npm run build && node dist/cli.js sync` |
 
-Four notes on that table:
+Five notes on that table:
 
 - `--write` on `merge-ready-rate.mjs` freezes the snapshot under `evals/measurements/`, which the
   measurements page renders from.
@@ -209,6 +210,10 @@ Four notes on that table:
   CI runs them.
 - The last row is this repository's own setup running its own output. `node dist/cli.js check` at
   the root reports whether that setup is still drift-clean.
+- `dist/plugins/` and the runtime built beside it sit inside the directory `package.json`
+  publishes (`files: ["dist"]`), so a local `npm pack` or `npm publish` run after that row ships
+  both trees in the tarball unless `npm run build` — which cleans `dist/` — runs first. The release
+  workflow is safe: it packs before it builds either tree, from a fresh checkout.
 
 The manifest here selects Claude alone. Claude does not read the `.agents/skills/` projection, so no
 `.agents/` tree is emitted or committed in this repository.

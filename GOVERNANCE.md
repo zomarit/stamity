@@ -76,7 +76,8 @@ run, and then — on the clients whose CLI installs on the runner — each clien
 discovery legs a listing command can answer without an account. What it deliberately does not prove
 is the other half: discovery wherever the only listing of a plugin's ids is what a driven session
 prints, and every invocation leg. Both of those need that vendor's credential, which no
-merge-blocking job here holds, so they run nightly behind per-client secrets and in the manual QA
+merge-blocking job here holds, so they run nightly behind per-client secrets — a workflow armed but
+disabled at the repository until the maintainer enables it and sets them — and in the manual QA
 walk-through. A client CLI that fails to install leaves its own legs skipped with a notice naming it,
 rather than reddening the lane; a broken root is red.
 

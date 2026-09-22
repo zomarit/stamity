@@ -1,6 +1,6 @@
 # Client contract evidence
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 8354fe1. Re-attested 2026-09-22 against the vendor pages each bullet cites and four Copilot CLI measurements of that date. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6f8f103. Re-attested 2026-09-22 against the vendor pages each bullet cites and four Copilot CLI measurements of that date. -->
 <!-- Re-open when: a cited vendor page changes what a client guarantees, an adapter emits a
      different configuration key, or a measurement supersedes a dated one below.
      `test/docsPages.test.ts` holds this page to the evidence-page contract and to the Codex
@@ -37,9 +37,10 @@ they do not claim authenticated client sessions, native trust approval, or human
   would answer each legitimate refusal with a false remediation. The whole anchoring is unmeasured
   under the PowerShell fallback the page names for a Windows host with no Git Bash, and the
   expectation there is worse than "no tail": `${CLAUDE_PROJECT_DIR}` is PowerShell variable syntax
-  rather than an environment lookup (`$env:NAME`), so every one of the five anchored rows would
-  expand to an empty root and never launch — a possible regression on that host from "ran while the
-  session sat at the root" to "never runs", recorded as unmeasured rather than claimed either way.
+  rather than an environment lookup (`$env:NAME`), so every anchored command (six entries over
+  four scripts) would expand to an empty root and never launch — a possible regression on that
+  host from "ran while the session sat at the root" to "never runs", recorded as unmeasured rather
+  than claimed either way.
   [Skills](https://code.claude.com/docs/en/skills),
   [memory and imports](https://code.claude.com/docs/en/memory),
   [hooks](https://code.claude.com/docs/en/hooks) (all three read 2026-09-21).
@@ -130,7 +131,8 @@ commands run with the SESSION working directory, not the plugin root, so every e
 addresses its script absolutely through the variable and the runner it launches reports on the
 working directory it was given. On top of the three repository-side loading steps the Codex
 bullet above records, a PLUGIN's hooks are skipped until the operator trusts them, so `hooks`
-carried in a plugin root means shipped and discoverable, never enforced.
+carried in a plugin root means shipped and discoverable, not enforced by shipping alone: the
+trust steps decide it, as they do for the repository-emitted document above.
 [Hooks](https://learn.chatgpt.com/docs/hooks) (read 2026-09-20, re-read 2026-09-21).
 
 Unstated on every page read 2026-09-20 and re-read 2026-09-21, and therefore not claimed here. Which layer expands

@@ -71,9 +71,13 @@ checks that route is not the pack gate chain: it is the client's own install, pl
 the provenance attestation the release attaches to each archive, plus the corpus this repository
 publishes being the corpus the root was built from. So a plugin root is content you trust the way
 you trust the marketplace that served it. The engine's own contribution is that `sync` writes
-nothing under a class the installed root declares it carries, and that the locator refuses a
-runtime whose major differs from the one that wrote your `.stamity/` state
-(`scripts/plugins/locate.mjs`). [The plugins guide](docs/plugins.md) states the whole boundary.
+nothing under a class the installed root declares it carries, and that `stamity check` fails its
+`plugin-runtime` row — and `plugin status` reports the compatibility state — when the resolved
+runtime's major differs from the one that wrote your `.stamity/` state
+(`src/cli/commands/check.ts::checkPluginRuntime`,
+`src/cli/commands/plugin/status.ts::compatibilityOf`); the locator itself refuses only a missing
+runtime or a Node below the floor (`scripts/plugins/locate.mjs`). [The plugins
+guide](docs/plugins.md) states the whole boundary.
 
 There are three kind tokens, not two: `local-path`, `npm-package` and `catalog-pinned`. The last is
 granted only to a catalog install whose pin verified against the pack's aggregate content hash. So
@@ -158,8 +162,10 @@ properties of that file, rather than properties of a maintainer's laptop.
   third-party APM interpreter without publishing credentials and without access to the tarball. The
   `publish` job holds the publishing credential and takes no checkout of this repository. Its whole
   tool surface is four SHA-pinned actions — harden-runner, setup-node, download-artifact and
-  attest-build-provenance — plus npm, the GitHub CLI, `node` running programs written inline in the
-  workflow, POSIX shell with `sha256sum`, and **git**, which is the tool that writes to the remote:
+  attest-build-provenance — plus npm (which the job first upgrades by one registry download
+  pinned to the exact version 12.0.2 and asserts against the trusted-publishing floor before
+  use), the GitHub CLI, `node` running programs written inline in the workflow, POSIX shell with
+  `sha256sum`, and **git**, which is the tool that writes to the remote:
   the distribution branch and its tag are pushed out of a repository this job creates inside the
   artifact it has just verified (`git init`, one orphan commit whose dates come from the manifest,
   then `git push --force` over a token-bearing https remote). It verifies the tarball's SHA-256
@@ -210,8 +216,8 @@ where it depends on it.
   of those: `.claude/settings.json`, `.cursor/hooks.json`, `.github/hooks/stamity.json` and
   `.codex/hooks.json`. A hook a PACK supplies lands in one of them, never under
   `.stamity/generated/`. On Codex, three things decide it rather than one. The first is
-  `features.hooks = true` in `.codex/config.toml`, which this engine now emits and the client
-  defaults OFF. The second is the project's trust level. The third is the per-hook review through
+  `features.hooks = true` in `.codex/config.toml`, which this engine emits; the vendor states no
+  default. The second is the project's trust level. The third is the per-hook review through
   the interactive `/hooks` command, or `--dangerously-bypass-hook-trust` for automation that cannot
   take that step. With all three in place, headless `codex exec` on codex-cli 0.154.0 loaded no
   project hook layer at all in the 2026-09-15 measurement. So a hook on that client is enforcement

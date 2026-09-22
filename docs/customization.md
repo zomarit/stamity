@@ -325,7 +325,7 @@ capabilities require the packaged CLI.
 The [Client capability matrix](capability-matrix.md) is the generated, per-client reference. The
 limits below are the ones an override author meets most often. The dated
 [client contract evidence](../.github/client-contracts.md) links the official sources and records
-which guarantees the local fixtures exercise. It was last re-attested on 2026-09-21.
+which guarantees the local fixtures exercise. It was last re-attested on 2026-09-22.
 
 Bundled skills declare `license: MIT` and their runtime prerequisites in `compatibility`. Both
 fields pass through the skill projection untouched, and so does `allowed-tools`, so a skill
@@ -348,8 +348,8 @@ additionalContext (the GitHub Copilot hooks reference, read 2026-09-17), so the 
 reaches the session. Copilot cloud reads hook configuration from the default branch.
 
 Codex hooks use command strings and native `/hooks` trust review, and that review is the last of
-three gates. First `features.hooks = true` in `.codex/config.toml`, which stamity emits and the
-client defaults off. Then the project's trust level. Then the per-hook review. Even with all
+three gates. First `features.hooks = true` in `.codex/config.toml`, which stamity emits; the
+vendor states no default. Then the project's trust level. Then the per-hook review. Even with all
 three in place, headless `codex exec` on codex-cli 0.154.0 loaded no project hook layer at all in
 the 2026-09-15 measurement. A hook there is enforcement in the interactive client only. An
 emitted digest is not native approval, and `stamity check` detects generated-file drift.

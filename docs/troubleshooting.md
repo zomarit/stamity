@@ -35,6 +35,7 @@ doctor
   ok    tmp-hygiene          no writer temp files left behind
   ok    env-mcp              no MCP servers selected, so no credentials are required
   ok    tool-traces          all 1 target tool(s) have emitted files recorded in the ledger
+  ok    claude-hook-shell    not a Windows host: the client hands hook commands to sh, where the anchored commands parse (Git Bash is a Windows-only requirement)
   ok    preserved-duplicate  2 managed file(s) carry their block once
   ok    pack-integrity       no installed pack content is recorded in the ledger
   ok    plugin-runtime       no plugin recorded and no plugin root in the environment
@@ -96,7 +97,7 @@ run at all warns instead, saying `could not be checked:` and why. Every other ro
 | `tmp-hygiene` | Warns on a live concurrent write. It also warns on `.tmp.stamity-<8hex>` litter left by a write interrupted between the temp file and the rename. The engine token in that name keeps another tool's `.tmp.<hex>` files out of the row. The row reports; it never deletes. |
 | `env-mcp` | Warns when MCP servers are selected but `.env.mcp` is absent, and when a credential in it is still blank. A server whose credential is empty fails at start-up. `config mcp add <id>` recreates the file with the names those servers need. |
 | `tool-traces` | Warns when a client the manifest targets has nothing emitted for it in the ledger. `sync` writes that client's files and records them. |
-| `claude-hook-shell` | **Can fail**, on Windows only. The Claude hook commands this engine emits are anchored on `${CLAUDE_PROJECT_DIR}` with a POSIX fail-closed tail, and they parse under `sh` and Git Bash. On a Windows host with no Git Bash the client falls back to PowerShell, where `${NAME}` is PowerShell's own variable and the tail does not parse: the pre-tool-use guard never launches and the client does not block. The row looks where the client looks and nowhere else: `CLAUDE_CODE_GIT_BASH_PATH` first, when it names an existing file (the vendor's stated override, set in `settings.json`'s `env` block or the environment), then a `bash.exe` on `PATH` — WSL's `C:\Windows\System32\bash.exe` is a launcher into a Linux distribution, not Git Bash, and does not count. It fails when this repository targets `claude` with repository-emitted hooks and neither finds Git Bash. Install Git for Windows (Git Bash); put its `bash.exe` on `PATH` or name it in `CLAUDE_CODE_GIT_BASH_PATH`; re-run `check`. On every other host, and where Claude's hooks are carried by its plugin, it passes with a note saying which condition released it. |
+| `claude-hook-shell` | **Can fail**, on Windows only. The Claude hook commands this engine emits are anchored on `${CLAUDE_PROJECT_DIR}` with a POSIX fail-closed tail, and they parse under `sh` and Git Bash. On a Windows host with no Git Bash the client falls back to PowerShell, where `${NAME}` is PowerShell's own variable and the tail does not parse: the pre-tool-use guard never launches and the client does not block. The row looks where the client looks and nowhere else, in the client's order (vendor's troubleshoot-install page, read 2026-09-22): `CLAUDE_CODE_GIT_BASH_PATH` when it names an existing file called `bash.exe`, `sh.exe`, `bash` or `sh` — any other value, a directory or `git-bash.exe` included, the client ignores and so does the row; then `bin\bash.exe` under the default install locations `C:\Program Files\Git` and `C:\Program Files (x86)\Git`; then the `git.exe` on `PATH`, reading `bin\bash.exe` from that installation. A bare `bash.exe` on `PATH` (MSYS2, Cygwin, WSL's `C:\Windows\System32\bash.exe`) is not a place the client looks and does not count; a `git.exe` on `PATH` with no `bin\bash.exe` beside it (a shim, a relocated Git) fails the row with the variable as the remedy, since how the client resolves such a git is unstated. It fails when this repository targets `claude` with repository-emitted hooks and none of the three holds Git Bash. Install Git for Windows (Git Bash), or set `CLAUDE_CODE_GIT_BASH_PATH` to its `bin\bash.exe` in the environment — a value in `settings.json`'s `env` block reaches the client, not a shell that runs `check` outside a Claude session; re-run `check`. On every other host, and where Claude's hooks are carried by its plugin, it passes with a note saying which condition released it. |
 | `preserved-duplicate` | Warns when a managed file repeats its own managed block below the `STAMITY:END` marker. Your repository then loads that content twice. Delete the copy at the line the row names. The block itself is regenerated on every sync. |
 | `plugin-runtime` | Passes with a note when this repository records no plugin client and no plugin root is in the environment — the ordinary state for a repository that is not plugin-backed, and nothing to act on. Warns when a client IS recorded and no root is in the environment: the repository names a plugin this run could not look at. **Can fail** on two states, and both are plugins this repository claims: the locator refuses (no runtime found, or a Node below the plugin's floor; its own message is quoted) while a client is recorded or the mode is `plugin-backed`, and this repository records `plugin-backed` while the resolved runtime's major differs from the version its `.stamity/` state was written by. Pin the plugin back to that major, or install the matching companion runtime. A refusal with no client recorded and no `plugin-backed` mode warns instead — the root variable came from elsewhere in your environment, and another session's broken plugin is not this repository's defect. |
 | `plugin-duplicates` | **Can fail.** A class an installed plugin carries is also on disk here. The row names the paths it found — three, sorted, then `+N more` — and three sources, each with its own remedy: `ledger` (this engine wrote it — `clean -y`, then `plugin setup --client <tool>`), `apm` (an APM dependency deploys the same classes — remove it from `apm.yml` and run `apm install`, or keep the plugin uninstalled), `unmanaged` (not written by this engine — remove the file, or keep it as an override under `.stamity/overrides/`). It **warns** while the manifest still says `mode: "generated"`, because coexistence is the expected state before you clean, and **fails** once the manifest records `plugin-backed`. No verb deletes a duplicate. |
@@ -179,8 +180,9 @@ enforcement limits.
 
 Three steps stand between the emitted `.codex/hooks.json` and a hook the client runs.
 
-1. `features.hooks = true`. Codex defaults that key off, and every byte in `hooks.json` is inert
-   without it. stamity writes it into `.codex/config.toml` for you, and `sync` restores it.
+1. `features.hooks = true`. The vendor states no default for that key, and every byte in
+   `hooks.json` is inert without it. stamity writes it into `.codex/config.toml` for you, and
+   `sync` restores it.
 2. `projects.<path>.trust_level = "trusted"`, in your own Codex home config.
 3. A per-hook review through the interactive `/hooks` command. Automation that cannot take that
    step uses `--dangerously-bypass-hook-trust` instead.
@@ -229,13 +231,14 @@ in the two shells the client's own hooks documentation names first. On a Windows
 Bash the client falls back to PowerShell, and there nothing about the line works: PowerShell
 parses none of that syntax, and `${CLAUDE_PROJECT_DIR}` is its own VARIABLE syntax rather than an
 environment lookup (which would be `$env:CLAUDE_PROJECT_DIR`), so the path expands empty. That
-affects all five anchored rows, not just the guard — the session-start and tamper notices and the
-review gate too — so on such a host the anchoring may be a REGRESSION: a hook that used to run
-while the session sat at the repository root may now never launch at all. This is unmeasured; no
-run on such a host has been made. `stamity check` says so on that host: its `claude-hook-shell`
-row fails when Claude is targeted with repository-emitted hooks and no Git Bash is found — through
-`CLAUDE_CODE_GIT_BASH_PATH` or on PATH; a WSL launcher in the system directory does not count. If you
-are on one, install Git Bash, and report what you see.
+affects every anchored command (six entries over four scripts), not just the guard — the
+session-start and tamper notices and the review gate too — so on such a host the anchoring may be
+a REGRESSION: a hook that used to run while the session sat at the repository root may now never
+launch at all. This is unmeasured; no run on such a host has been made. `stamity check` says so on
+that host: its `claude-hook-shell` row fails when Claude is targeted with repository-emitted hooks
+and no Git Bash is found where the client looks — `CLAUDE_CODE_GIT_BASH_PATH`, the default install
+locations, or beside the `git` on PATH; a bare `bash.exe` on PATH does not count. If you are on
+one, install Git Bash, and report what you see.
 
 The other three clients need no anchor, each for a measured reason: Cursor runs a hook from the
 workspace root whatever the shell's directory is, Copilot gives each hook entry a `cwd` relative

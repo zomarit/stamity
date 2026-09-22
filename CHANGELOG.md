@@ -66,14 +66,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Verification gates can be set explicitly instead of detected.** `stamity config set gates.*`
   writes the test, lint, typecheck and full-gate commands a charter renders, so a repository whose
   scripts detection cannot read states them once rather than carrying a wrong line.
+- **`stamity check` says when the Claude hooks cannot launch on Windows.** A new
+  `claude-hook-shell` row fails on a Windows host that targets `claude` with repository-emitted
+  hooks and has no Git Bash where Claude Code looks — `CLAUDE_CODE_GIT_BASH_PATH` naming a file
+  called `bash.exe`, `sh.exe`, `bash` or `sh`, `bin\bash.exe` under `C:\Program Files\Git` or
+  `C:\Program Files (x86)\Git`, or `bin\bash.exe` beside the `git.exe` on `PATH` — because there
+  the client falls back to PowerShell, the anchored commands never launch and the pre-tool-use
+  guard does not block. The remedy is in the row: install Git for Windows, or set
+  `CLAUDE_CODE_GIT_BASH_PATH` to its `bin\bash.exe`. It passes with a note on every other host and
+  where Claude's hooks are a plugin's.
 - **The plugin route is proven per client: every root's structure on every commit, the install
   legs that need no account beside it, and invocation nightly.** `scripts/plugin-route-smoke.mjs`
   walks structure, install, discovery and invocation for each client and writes a `--json`
   document; its credential-free structure and install legs run in the merge-blocking
   `plugin-route` CI job, and its invocation legs are wired to run nightly behind one secret per
-  client, each absent secret reported as a notice rather than a pass — the first nightly run lands
-  after this release, and when the smoke was driven by hand here the Codex invocation legs were
-  skipped on an account usage limit. The QA harness gains a `plugins` lane and
+  client, each absent secret reported as a notice rather than a pass — the workflow is armed but
+  disabled at the repository until the maintainer enables it and sets the four secrets, so the
+  first nightly run lands after this release; when the smoke was driven by hand here the Codex
+  invocation legs were skipped on an account usage limit. The QA harness gains a `plugins` lane and
   rows `H4a`–`H4d` for the four client routes, beside `H5` for upgrade and rollback through each
   client's own route.
 - **Three repository-side proofs back the distribution, and one fixture drives it.**
@@ -117,7 +127,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it, beside the `.md` sources every other case cites, and the coverage gate names every case
   governed outside the corpus rather than exempting one silently.
 - **`all-ci-checks` requires the plugin route lane.** The aggregator's `needs` carries the
-  `plugin-route` job with the three lanes it already required, so a red route lane blocks a merge.
+  `plugin-route` job beside the two lanes it already required (`check` and `apm-install`) and the
+  advisory `supply-chain` lane it reports without requiring, so a red route lane blocks a merge.
 - **The 1.9.0 release run passed every threshold and floor.** Run 32
   (`evals/runs/2026-09-22-run-32/`) measured the whole set under SET-v7's incremental rule, at the
   candidate this release ships: run 31 is the prior complete run it composes with — that one
