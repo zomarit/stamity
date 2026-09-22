@@ -325,3 +325,11 @@ An errored or invalid call is reported here, never as a grade or a calibration m
 Nothing: every calibration fixture matched, all 12 scenario samples and 12 independent judges were admitted, and every metric is reported beside its threshold above.
 
 No threshold moved. No case text moved after any score was known. Canaries (`inputs.json`) were non-measured control checks with non-case prompts and are not counted above.
+
+## Errata (2026-09-22)
+
+Two lines above are the private exporter's, not this run's. The public artifact is never regenerated (the exporter refuses to overwrite a scored run, and a driver change cannot re-export one), so both are corrected here and nowhere else; no other line of this file, and none of `summary.json`, `inputs.json` or `calls.json`, changed.
+
+1. § 3 "Why the run happened" is run 30's sentence verbatim — the exporter's literal. This run's trigger was hard trigger 2 (the 1.9.0 release) and hard trigger 1 (the three plugin-lifecycle cases added and one cited source moved); the run measured the release increment under the incremental rule, composing with run 30 as § 0 states.
+
+2. § 8 "Advisory repeats" names `evals/runs/2026-09-11-run-24/summary.json` beside sha256 `dd4654ccc90c272d89a45ceda35cbb3b6e1fade36b1a14a5c15f3f6d62ce3bf6` — the exporter's stale label. That sha is run 30's `summary.json` at its retention commit `68b57ef` (`git show 68b57ef:evals/runs/2026-09-15-run-30/summary.json | shasum -a 256`), the same sha § 0 assigns to run 30. The comparison target of § 8 is run 30, the prior complete run, not run 24.
