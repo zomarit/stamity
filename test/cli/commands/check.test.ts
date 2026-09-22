@@ -1426,6 +1426,43 @@ describe("check — claude-hook-shell", () => {
     expect(withGit.detail).toContain(`Git Bash found at ${join(gitBin, "bash.exe")}`);
   });
 
+  it("reads PATH by any spelling of the key, as Windows spells it Path", async () => {
+    // prove/261: on windows-latest the row saw no PATH at all — the real variable is `Path`, and a
+    // plain object copied from process.env does not answer case-insensitively — so the real doctor
+    // failed on every healthy repository. Branch covered: the `/^path$/i` key lookup.
+    const handle = getRepo();
+    await handle.seedFiles({ "spelled/Git/usr/bin/bash.exe": "" });
+    const dir = handle.path("spelled/Git/usr/bin");
+    const verdict = checkClaudeHookShell(claude, { platform: "win32", env: { Path: dir } });
+    expect(verdict.status).toBe("pass");
+    expect(verdict.detail).toContain(`Git Bash found at ${join(dir, "bash.exe")}`);
+  });
+
+  it("honours CLAUDE_CODE_GIT_BASH_PATH when it names an existing file, and not otherwise", async () => {
+    // The vendor's stated override (setup page, read 2026-09-22): "If Claude Code can't find Git
+    // Bash, set the path in your settings.json file: env CLAUDE_CODE_GIT_BASH_PATH". Branches
+    // covered: the variable naming a seeded file passes before PATH is read at all (PATH empty
+    // here); the variable naming a missing file does not count, the fail text says so, and the
+    // lookup falls through to PATH.
+    const handle = getRepo();
+    await handle.seedFiles({ "configured/Git/bin/bash.exe": "" });
+    const named = handle.path("configured/Git/bin/bash.exe");
+    const found = checkClaudeHookShell(claude, { platform: "win32", env: { CLAUDE_CODE_GIT_BASH_PATH: named, PATH: "" } });
+    expect(found.status).toBe("pass");
+    expect(found.detail).toContain(`Git Bash at ${named}, named by CLAUDE_CODE_GIT_BASH_PATH`);
+    const missing = handle.path("configured/nowhere/bash.exe");
+    const absent = checkClaudeHookShell(claude, { platform: "win32", env: { CLAUDE_CODE_GIT_BASH_PATH: missing, PATH: "" } });
+    expect(absent.status).toBe("fail");
+    expect(absent.detail).toContain(`CLAUDE_CODE_GIT_BASH_PATH names ${missing}, which does not exist, so it does not count`);
+    expect(absent.detail).toContain("through CLAUDE_CODE_GIT_BASH_PATH");
+    const fallsThrough = checkClaudeHookShell(claude, {
+      platform: "win32",
+      env: { CLAUDE_CODE_GIT_BASH_PATH: missing, PATH: handle.path("configured/Git/bin") },
+    });
+    expect(fallsThrough.status).toBe("pass");
+    expect(fallsThrough.detail).toContain("Git Bash found at");
+  });
+
   it("passes with a note on win32 when claude is not targeted, or its hooks are a plugin's", () => {
     const none = checkClaudeHookShell({ ...claude, tools: ["cursor"] } as SetupManifest, { platform: "win32", env: { PATH: "" } });
     expect(none.status).toBe("pass");
@@ -1443,8 +1480,10 @@ describe("check — claude-hook-shell", () => {
   it("is a row of the real doctor, passing on this host", async () => {
     const root = await seedRepo(getRepo());
     const verdict = await doctorRow(root, "claude-hook-shell");
-    // This suite never runs the failing branch for real: the CI Windows leg carries Git Bash, so
-    // there the row passes on the found case, and on POSIX it passes on the platform.
+    // This suite never runs the failing branch for real. On POSIX the row passes on the platform;
+    // on the CI Windows leg it passes on the found case, reading the HOST's process.env (the app
+    // env handed in here is `{}`, which is why the row reads the host and not the seam — prove/261)
+    // where Git for Windows is on PATH, as test/adapters/claude.test.ts's round-trips measure.
     expect(verdict.status).toBe("pass");
   });
 });

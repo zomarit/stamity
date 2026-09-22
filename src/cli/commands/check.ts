@@ -396,9 +396,20 @@ async function checkEnvMcp(
  *
  * Pure and exported for the reason `checkNodeVersion` is: the failing branch
  * cannot be reached in-process on a POSIX host, so the platform and the
- * environment are injected. `bash.exe` is looked for the way the adapter's
- * own suite resolves it — each PATH entry, `existsSync`, no spawn — so the
- * doctor and the test that measured the shell answer one question.
+ * environment are injected. The lookup mirrors what the vendor states and no
+ * more (setup page, read 2026-09-22: "If Claude Code can't find Git Bash, set
+ * the path in your settings.json file: env CLAUDE_CODE_GIT_BASH_PATH"; no
+ * default install location is stated, so none is probed): the variable first,
+ * when it names an existing file, then `bash.exe` on PATH the way the
+ * adapter's own suite resolves it — each entry, `existsSync`, no spawn. PATH is
+ * read by the first key matching `/^path$/i` (prove/261): Windows spells it
+ * `Path`, and while `process.env` answers case-insensitively there, a plain
+ * object copied from it does not.
+ *
+ * `runDoctor` hands this row the HOST's `process.env`, not the app's runtime
+ * env: the row asks whether a shell exists on the machine the doctor runs on,
+ * the same kind of host fact `checkNodeVersion` reads off `process.versions`,
+ * and a fixture that scopes the app's env to `{}` is not a host with no shell.
  *
  * Fails only where every condition holds: `win32`, Claude targeted, its hooks
  * emitted by this engine rather than carried by a plugin (a plugin-owned hook
@@ -438,12 +449,18 @@ export function checkClaudeHookShell(
         : "claude is not a target tool, so no anchored hook row is emitted",
     };
   }
+  const configured = (host.env["CLAUDE_CODE_GIT_BASH_PATH"] ?? "").trim();
+  if (configured !== "" && existsSync(configured)) {
+    return { id, status: "pass", detail: `Git Bash at ${configured}, named by CLAUDE_CODE_GIT_BASH_PATH: the anchored hook commands parse there` };
+  }
+  const configuredNote = configured === "" ? "" : ` (CLAUDE_CODE_GIT_BASH_PATH names ${configured}, which does not exist, so it does not count)`;
   const systemRoot = (host.env["SystemRoot"] ?? host.env["SYSTEMROOT"] ?? "C:\\Windows")
     .replaceAll("/", "\\")
     .replace(/[\\]+$/, "");
   const systemDirs = new Set(["System32", "Sysnative"].map((name) => `${systemRoot}\\${name}`.toLowerCase()));
   const wsl: string[] = [];
-  for (const entry of (host.env["PATH"] ?? "").split(delimiter)) {
+  const pathKey = Object.keys(host.env).find((key) => /^path$/i.test(key));
+  for (const entry of (pathKey === undefined ? "" : (host.env[pathKey] ?? "")).split(delimiter)) {
     if (entry === "") continue;
     const candidate = join(entry, "bash.exe");
     if (!existsSync(candidate)) continue;
@@ -464,8 +481,9 @@ export function checkClaudeHookShell(
       "the anchored hook commands need Git Bash on Windows; without it the pre-tool-use guard " +
       "does not launch and the client does not block — the client falls back to PowerShell, " +
       "which reads ${CLAUDE_PROJECT_DIR} as its own variable and does not parse the guard's " +
-      "fail-closed tail. Install Git for Windows (Git Bash) and put its bash.exe on PATH, then " +
-      `re-run check.${wslNote}`,
+      "fail-closed tail. Install Git for Windows (Git Bash); the client finds it on PATH, or " +
+      "through CLAUDE_CODE_GIT_BASH_PATH in settings.json's env block or the environment, and so " +
+      `does this row. Then re-run check.${configuredNote}${wslNote}`,
   };
 }
 
@@ -930,7 +948,8 @@ export async function runDoctor(
     checkToolTraces(manifest),
     // Beside `tool-traces` because both answer about the targeted tools' emitted
     // rows; this one asks whether the Claude rows can LAUNCH on this host.
-    checkClaudeHookShell(manifest, { platform: process.platform, env: app.runtime.env }),
+    // The HOST's env, deliberately: see the row's own comment.
+    checkClaudeHookShell(manifest, { platform: process.platform, env: process.env }),
     preservedDuplicate,
     packIntegrity,
     // The two plugin rows sit after the repository-state probes and before the
