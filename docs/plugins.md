@@ -260,7 +260,7 @@ not say, the measurement is what this page states.
 **Claude Code.** A marketplace added at a tag or a commit is the pin, and
 
 ```sh
-claude plugin update stamity --scope project
+claude plugin update stamity@stamity --scope project
 ```
 
 is the refresh. `--scope project` is not optional on an install recorded in your repository:
@@ -275,15 +275,20 @@ claude plugin install stamity@stamity --scope project
 claude plugin update stamity@stamity --scope project
 ```
 
-*Walked 2026-09-20 on 2.1.278 by the release's lifecycle proof, which spelled the third command's
-plugin argument bare; both spellings resolve on that build, and `stamity@stamity` is written here
-for the same reason `install` above it takes one — it names the marketplace as well (measured
-2026-09-21).* The first two commands are the documented route and they are not sufficient on their
-own: with the plugin already installed, `marketplace add` answers that the source is already on
-disk and `install` answers "already installed … it loads in place", leaving the recorded version
-where it was. The third line is what re-records it, and the client's own message is what names it. A `plugin rollback` subcommand is **settled absent**: `claude plugin
-rollback stamity` answers `error: unknown command 'rollback'` on 2.1.278, and no vendor page read
-2026-09-21 names one. The reinstall route above is the rollback.
+*Walked 2026-09-22 on Claude Code 2.1.278 by the release's lifecycle proof, with exactly these
+three commands: the marketplace re-added at the previous tag, then `plugin install stamity@stamity
+--scope project`, then `plugin update stamity@stamity --scope project`. The third command's
+`--json` output reported `updateOutcome: "updated"`, `oldVersion` `1.9.0-fixture.2` and
+`newVersion` `1.9.0-fixture.1`, exit 0; its stdout digest — sha-256
+`98a79a9256c8a27a70fffd2769cf24d3cb46e1e1f72b5f5513e01e8d9947213f` — is recorded beside the three
+commands in that suite's `rollback-documented` row.* The first two commands are the documented
+route and they are not sufficient on their own: with the plugin already installed, `marketplace
+add` answers that the source is already on disk and `install` answers "already installed … it loads
+in place", leaving the recorded version where it was — the walk asserts that, which is what makes
+the move attributable to the third command. The third line is what re-records the version, and the
+client's own message is what names it. A `plugin rollback` subcommand is **settled absent**:
+`claude plugin rollback stamity` answers `error: unknown command 'rollback'` on 2.1.278, and no
+vendor page read 2026-09-21 names one. The reinstall route above is the rollback.
 
 **Copilot CLI.** Pinning is the same move as installing — add the marketplace at
 `#plugins/v<version>` — and for a remote marketplace `copilot plugin update stamity` is the
