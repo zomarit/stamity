@@ -3,8 +3,9 @@
 //
 // Nine rows were carried through two releases as "UNPERFORMED", which is an honest record of a
 // walk-through nobody did and a useless one for deciding whether the next release needs it. This
-// module renders thirteen rows out of `.stamity/evidence/qa-<sha>.json` — the original nine plus one
-// per client for the plugin route (`H4a`–`H4d`) — so each one arrives with the thing a typed form
+// module renders fourteen rows out of `.stamity/evidence/qa-<sha>.json` — the original nine, one per
+// client for the plugin route (`H4a`–`H4d`), and one for the upgrade-and-rollback walk across all
+// four clients (`H5`) — so each one arrives with the thing a typed form
 // never carries: what it was measured against. The rows the harness can measure end to end it
 // measures; the rest stay human, and a human row reads UNPERFORMED until somebody signs it — with
 // the row's input hash beside the signature, so the next run can tell whether that signature still
@@ -20,13 +21,14 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 /**
- * The thirteen rows, in form order.
+ * The fourteen rows, in form order.
  *
- * The ids are the form's (`H1a`–`H1d`, `H2`, `H3a`–`H3d`, `H4a`–`H4d`) and the split follows what
- * each row is measured BY: H1 is one row per client whose hook lane is exercised, H2 is the
+ * The ids are the form's (`H1a`–`H1d`, `H2`, `H3a`–`H3d`, `H4a`–`H4d`, `H5`) and the split follows
+ * what each row is measured BY: H1 is one row per client whose hook lane is exercised, H2 is the
  * accessibility tree and scanner pass over the built pages, H3 is one row per viewport/theme pair
- * of the keyboard journey, and H4 is one row per client for the plugin route — install, discovery
- * and invocation of a built plugin root through that client's own commands. `lane` names which half
+ * of the keyboard journey, H4 is one row per client for the plugin route — install, discovery and
+ * invocation of a built plugin root through that client's own commands — and H5 is the one row for
+ * the upgrade-and-rollback walk, whose note sits beside its entry below. `lane` names which half
  * of the harness owns the row, and is what `run.mjs` dispatches on — a row nobody owns would be a
  * row nobody measures.
  */

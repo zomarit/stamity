@@ -20,7 +20,8 @@
 // (`npm run build`) and the plugin distribution (`scripts/build-plugin-distribution.mjs`, passed as
 // `--dist`); this script reads all three. That split keeps the harness honest about staleness — it
 // hashes what is on disk and reports it, rather than regenerating inputs until they agree. A run
-// with no `--dist` is a run that measured no plugin route, and the four `H4` rows say exactly that.
+// with no `--dist` is a run that measured no plugin route, and the five plugin rows — `H4a`–`H4d`
+// and `H5` — say exactly that.
 //
 // Usage:
 //   node scripts/qa/run.mjs [--site website/build] [--sha <sha>] [--out <path>]
@@ -151,8 +152,9 @@ const PLUGIN_SMOKE = 'scripts/plugin-route-smoke.mjs'
  *
  * A row that cannot be measured is still bound to something, or a signature on it would sit on a
  * constant hash forever; the two files here are the fixture builder and the suite that drives it, so
- * the row reopens when either moves. When the walk DOES run it returns its own input list — the
- * fixture's `release.json` and per-client capability files, which are the bytes actually walked.
+ * the row reopens when either moves. When the walk DOES run it returns its own input list, which
+ * carries these two AND the fixture bytes it built — the suite hashes both, so a signature on a
+ * measured row reopens when the instrument moves as well as when the corpus does.
  */
 const LIFECYCLE_INSTRUMENTS = ['scripts/plugin-lifecycle-fixture.mjs', 'test/ci/pluginLifecycle.test.ts']
 
@@ -518,6 +520,16 @@ export async function main(argv) {
   // where `scripts/build-plugin-distribution.mjs` is normally pointed — because the row's labels are
   // logical (`dist/<client>/…`), composed by the smoke and never from this argument.
   const distDir = options.dist === undefined ? undefined : resolve(REPO_ROOT, options.dist)
+  // THE SMOKE OWNS ITS OWN SCRATCH, and this harness no longer hands it one.
+  //
+  // `--fixtures` used to be forwarded as the smoke's `--scratch`, which was wrong twice over: the
+  // smoke deliberately does NOT remove a scratch it was handed (so an operator debugging one
+  // client's install keeps the tree), and `--fixtures` is the hook lane's directory, whose contents
+  // this harness HASHES into `H1`'s inputs. Every plugins run therefore left a set of per-client
+  // install trees inside the directory another lane measures, one set per invocation. Given no
+  // `--scratch`, the smoke makes one under the OS temp directory and removes it itself
+  // (`scripts/plugin-route-smoke.mjs`, `ownScratch`) — one owner, one lifetime. The parameter below
+  // stays for an operator who passes a directory on purpose and wants to keep what lands in it.
   const pluginResults =
     options.skipPlugins || distDir === undefined
       ? []
@@ -525,7 +537,6 @@ export async function main(argv) {
           clients: options.clients,
           repoRoot: REPO_ROOT,
           distDir,
-          ...(fixturesDir === undefined ? {} : { scratchDir: fixturesDir }),
         })
   // The lifecycle walk (`H5`) is gated on the SAME two options as the route rows, and for the same
   // reason: it reuses the distribution's own bundled runtime rather than packing this checkout again,
@@ -537,7 +548,6 @@ export async function main(argv) {
           clients: options.clients,
           repoRoot: REPO_ROOT,
           distDir,
-          ...(fixturesDir === undefined ? {} : { scratchDir: fixturesDir }),
         })
   const smokeInputs = existsSync(join(REPO_ROOT, ...PLUGIN_SMOKE.split('/')))
     ? [{ path: PLUGIN_SMOKE, sha256: hashFile(join(REPO_ROOT, ...PLUGIN_SMOKE.split('/'))) }]

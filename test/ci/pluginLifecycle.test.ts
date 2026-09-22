@@ -508,10 +508,26 @@ function withRealRuntime(): string {
       // runtime the locator can actually spawn.
       const given = process.env["STAMITY_LIFECYCLE_RUNTIME"];
       buildFixture(out, given === undefined ? [] : ["--runtime", given], REAL_BUILD_MS);
-      transcribe(`plugin-lifecycle-runtime: ${given === undefined ? "built by the fixture builder" : "reused from the distribution"}`);
+      // WHICH RUNTIME RAN, in the row's own words. A handed-in runtime can come from another commit
+      // than the one under test — that is the whole point of reusing a built distribution's copy —
+      // and a reader of the evidence has to be able to see that without recomputing a row hash. The
+      // manifest the build just wrote is the authority: it carries the runtime block the roots
+      // actually bundle, rather than this suite re-reading the directory it was handed.
+      const runtime = (
+        JSON.parse(readFileSync(join(out, V1, "release.json"), "utf8")) as {
+          runtime: { package: string; version: string; nodeFloor: string; tarballSha256: string };
+        }
+      ).runtime;
+      transcribe(
+        `plugin-lifecycle-runtime: ${given === undefined ? "built by the fixture builder" : "reused from the distribution"} — ` +
+          `${runtime.package}@${runtime.version} (node ${runtime.nodeFloor}, tarball sha256 ${runtime.tarballSha256})`,
+      );
       // The bytes every row below is a claim about, under LOGICAL labels: an evidence file must not
-      // carry the temp directory this fixture happened to land in (`run.mjs`'s S-4 rule).
+      // carry the temp directory this fixture happened to land in (`run.mjs`'s S-4 rule). The two
+      // INSTRUMENTS are bound beside the fixture — the builder and this suite — so a signature on a
+      // measured row reopens when the thing that measured it moves, not only when the corpus does.
       transcribeInput("scripts/plugin-lifecycle-fixture.mjs", join(REPO_ROOT, "scripts", "plugin-lifecycle-fixture.mjs"));
+      transcribeInput("test/ci/pluginLifecycle.test.ts", fileURLToPath(import.meta.url));
       for (const version of VERSIONS) {
         transcribeInput(`fixture/${version}/release.json`, join(out, version, "release.json"));
         for (const client of CLIENTS) {

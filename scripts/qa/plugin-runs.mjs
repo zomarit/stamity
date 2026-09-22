@@ -328,18 +328,37 @@ export async function runLifecycleWalk({ clients, repoRoot, distDir, scratchDir 
       reason: `no binary for ${unarmed.map((client) => `${client} (STAMITY_${client.toUpperCase()}_BIN unset)`).join(', ')}`,
     }
   }
+  const entry = vitestEntry(repoRoot)
+  if (entry === null) {
+    return { status: 'not-run', reason: 'vitest is not installed in node_modules, so the lifecycle suite could not be spawned' }
+  }
+  // The runtime the walk will build its fixture against: the distribution's own bundled copy, or a
+  // directory the operator exported. EITHER WAY it goes through the same three-file check — an
+  // exported value used to pass straight through this lane into the child's environment, so a
+  // half-built directory became a refusal inside the suite with no row to explain it.
+  const exported = process.env['STAMITY_LIFECYCLE_RUNTIME']
+  const runtime = bundledRuntime(distDir) ?? exported ?? null
+  if (runtime !== null) {
+    const missing = runtimeMissing(runtime)
+    if (missing.length > 0) {
+      return {
+        status: 'not-run',
+        reason: `the runtime offered to the walk is incomplete: ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} absent (${
+          bundledRuntime(distDir) === null ? 'STAMITY_LIFECYCLE_RUNTIME' : '--dist'
+        })`,
+      }
+    }
+  }
   const work = mkdtempSync(join(tmpdir(), 'stamity-qa-lifecycle-'))
   const logPath = join(work, 'walks.txt')
   try {
-    const runtime = bundledRuntime(distDir)
+    const childEnv = { ...process.env, STAMITY_LIFECYCLE_LOG: logPath }
+    if (runtime === null) delete childEnv.STAMITY_LIFECYCLE_RUNTIME
+    else childEnv.STAMITY_LIFECYCLE_RUNTIME = runtime
     const result = await runSuite({
-      args: ['vitest', 'run', LIFECYCLE_SUITE.join('/')],
+      args: [entry, 'run', LIFECYCLE_SUITE.join('/')],
       cwd: repoRoot,
-      env: {
-        ...process.env,
-        STAMITY_LIFECYCLE_LOG: logPath,
-        ...(runtime === null ? {} : { STAMITY_LIFECYCLE_RUNTIME: runtime }),
-      },
+      env: childEnv,
     })
     const log = existsSync(logPath) ? readFileSync(logPath, 'utf8') : ''
     const redact = (text) =>
@@ -365,32 +384,61 @@ export async function runLifecycleWalk({ clients, repoRoot, distDir, scratchDir 
 }
 
 /**
- * A runtime directory inside a built distribution, or `null`.
+ * The three files the distribution builder requires of a `--runtime` input, and what is missing from
+ * a directory offered as one.
  *
- * Every plugin root bundles one at `<root>/runtime/`, and the distribution builder requires exactly
- * three files of a runtime input — `package.json`, `dist/cli.js`, `RUNTIME.json`. All three are
- * checked here rather than assumed, because handing the builder a directory that only looks like a
- * runtime turns a reusable input into a refusal thirty seconds into the walk.
+ * Checked rather than assumed, and checked in ONE place: handing the builder a directory that only
+ * looks like a runtime turns a reusable input into a refusal a minute into the walk, and the two
+ * callers below — a distribution's own bundled copy, and a directory an operator exported — have no
+ * reason to disagree about what a runtime is.
  */
-function bundledRuntime(distDir) {
-  if (distDir === undefined) return null
+const RUNTIME_FILES = ['package.json', 'RUNTIME.json', join('dist', 'cli.js')]
+export function runtimeMissing(dir) {
+  return RUNTIME_FILES.filter((file) => !existsSync(join(dir, file)))
+}
+
+/**
+ * A complete runtime directory inside a built distribution, or `null`. Every plugin root bundles one
+ * at `<root>/runtime/`; the first one that is complete is the one handed over.
+ */
+export function bundledRuntime(distDir) {
+  if (distDir === undefined || distDir === null) return null
   for (const client of ['claude', 'cursor', 'copilot', 'codex']) {
     const dir = join(distDir, client, 'runtime')
-    const complete = ['package.json', 'RUNTIME.json', join('dist', 'cli.js')].every((file) => existsSync(join(dir, file)))
-    if (complete) return dir
+    if (runtimeMissing(dir).length === 0) return dir
   }
   return null
 }
 
 /**
+ * The vitest entry this repository would run, spawned through the interpreter rather than through
+ * `npx`.
+ *
+ * `spawn('npx', …)` without a shell is ENOENT on Windows, where npm's binary is `npx.cmd` and Node
+ * will not spawn a `.cmd` without one — and a shell would re-parse arguments this module composed.
+ * The entry comes out of `node_modules` (`vitest`'s own `bin` field), so the version that runs is the
+ * one the lockfile pinned. `null` when it is not installed, which is a `not-run` row rather than a
+ * spawn that fails a minute later with a message about a missing file.
+ */
+export function vitestEntry(repoRoot) {
+  const pkgPath = join(repoRoot, 'node_modules', 'vitest', 'package.json')
+  if (!existsSync(pkgPath)) return null
+  const bin = JSON.parse(readFileSync(pkgPath, 'utf8')).bin
+  const rel = typeof bin === 'string' ? bin : bin?.vitest
+  if (typeof rel !== 'string') return null
+  const entry = join(repoRoot, 'node_modules', 'vitest', ...rel.split('/'))
+  return existsSync(entry) ? entry : null
+}
+
+/**
  * Run the suite to completion, or end it in two steps — the same shape {@link runSmoke} uses and for
  * the same reason: the walks install into client state directories and remove what they installed,
- * and a single kill with no grace would leave that behind. `npx` rather than a resolved binary
- * because vitest is a dev dependency of this repository and its bin location is npm's to know.
+ * and a single kill with no grace would leave that behind. The interpreter and a resolved entry, not
+ * `npx`: see {@link vitestEntry}.
  */
 function runSuite({ args, cwd, env }) {
   return new Promise((settle) => {
-    const child = spawn('npx', args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(process.execPath, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] })
     let stdout = ''
     let stderr = ''
     const keep = (buffer, chunk) => `${buffer}${chunk}`.slice(-STREAM_TAIL)
