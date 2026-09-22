@@ -96,25 +96,54 @@ export function renderSetupCommand(client, rootVar, decoration = {}) {
     key === 'description' ? `description: "${DESCRIPTION}"` : frontmatterLine(key, decoration[key]),
   )
 
-  const locate = `node "\${${rootVar}}/runtime/locate.mjs"`
+  // The Copilot CLI exports NO plugin-root variable to a command's shell — measured on 1.0.87
+  // (prove/258, prove/262): the session's environment carries no `*PLUGIN_ROOT`, and the binary's
+  // changelog says only plugin HOOKS receive one (since 1.0.26, the same in 1.0.85). A body that
+  // read `${PLUGIN_ROOT}` therefore ran `node "/runtime/locate.mjs"` and the model hunted the
+  // filesystem. So that client's body is DISCOVERY-FIRST, in the form the client can satisfy: its
+  // own `skill list --json` reports each plugin skill's `path` as `<root>/skills/<id>` (measured
+  // on 1.0.87), so the root is the directory holding that `skills/`. NOT `plugin list --json`'s
+  // `installedFrom`: measured the same day, it names the MARKETPLACE directory the plugin was
+  // added from (whose catalog maps the plugin to `./copilot` beneath it), not the root. Every
+  // command below names the root literally and hands it to the CLI as `--plugin-root`. Claude
+  // and Cursor export their variables to commands and keep the variable form.
+  const discovered = client === 'copilot'
+  const locate = discovered ? 'node "<root>/runtime/locate.mjs"' : `node "\${${rootVar}}/runtime/locate.mjs"`
+  const rootFlag = discovered ? ' --plugin-root "<root>"' : ''
+  const discovery = discovered
+    ? `
+Before step 1, find the installed root. This client passes no plugin-root variable to a command's
+shell — \`\${${rootVar}}\` expands to nothing here, so do not use it. Ask the client where this
+plugin's skills live:
+
+   \`\`\`bash
+   copilot skill list --json
+   \`\`\`
+
+Take any entry whose \`source\` is \`plugin\` and whose \`name\` starts with \`st-\`; its \`path\` is
+\`<root>/skills/<name>\`, so \`<root>\` is the directory that holds that \`skills/\` directory. (Not
+\`plugin list --json\`'s \`installedFrom\`: that names the marketplace the plugin was added from,
+not the root.) Substitute \`<root>\` literally, quotes kept, wherever it appears below.
+`
+    : ''
   return `---
 ${front.join('\n')}
 ---
 
 Set this repository up to run on the installed stamity plugin. Work the four steps in order and
 stop at the one that asks for the operator.
-
+${discovery}
 1. Read the current state. Every step below reads from this report.
 
    \`\`\`bash
-   ${locate} -- plugin status --json
+   ${locate} -- plugin status --json${rootFlag}
    \`\`\`
 
 2. When \`setup.needed\` is true, write the repository-owned files — the charter carrying this
    repository's facts and gates, and the client configuration the plugin does not carry:
 
    \`\`\`bash
-   ${locate} -- plugin setup --client ${client} -y
+   ${locate} -- plugin setup --client ${client} -y${rootFlag}
    \`\`\`
 
    When it is false, skip this step: a setup already exists, and replacing it is a job for the
@@ -125,7 +154,7 @@ stop at the one that asks for the operator.
    three remedies below are what THE OPERATOR runs — they are reported, never performed here:
 
    - a file this engine wrote: the operator runs \`${locate} -- clean -y\` and then
-     \`${locate} -- plugin setup --client ${client} -y\` again. Do not run either yourself:
+     \`${locate} -- plugin setup --client ${client} -y${rootFlag}\` again. Do not run either yourself:
      \`clean -y\` takes no confirmation and removes ledger rows and the files they name;
    - a file an APM dependency installed: the operator removes that APM dependency;
    - a file nobody manages: the operator removes it, or the operator keeps it as an override
@@ -137,7 +166,7 @@ stop at the one that asks for the operator.
 4. Finish by reporting the resolved state, as the table an operator reads:
 
    \`\`\`bash
-   ${locate} -- plugin status
+   ${locate} -- plugin status${rootFlag}
    \`\`\`
 
 Report what changed, what stayed, and any duplicate you stopped on.

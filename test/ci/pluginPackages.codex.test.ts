@@ -447,7 +447,9 @@ describe("the page an operator reads before installing", () => {
       // as `node "/runtime/locate.mjs"`. The README now gives a placeholder the operator
       // substitutes and names the installed cache path to substitute from; what moved is the
       // page's advice, not this case's standard.
-      'node "<plugin root>/runtime/locate.mjs" -- plugin setup --client codex -y',
+      // MOVED 2026-09-22 (prove/259, belt and braces beside the locator's own --plugin-root):
+      // the line hands the CLI the root explicitly as well.
+      'node "<plugin root>/runtime/locate.mjs" -- plugin setup --client codex -y --plugin-root "<plugin root>"',
       "<CODEX_HOME>/plugins/cache/stamity/stamity/",
     ]) {
       expect(readme, `README.md does not name \`${line}\``).toContain(line);

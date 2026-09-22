@@ -175,7 +175,7 @@ This root carries no \`st-setup\` command — ${COMMAND_REASON}. Run the setup y
 once per repository, from that repository's directory:
 
 \`\`\`sh
-node "<plugin root>/runtime/locate.mjs" -- plugin setup --client codex -y
+node "<plugin root>/runtime/locate.mjs" -- plugin setup --client codex -y --plugin-root "<plugin root>"
 \`\`\`
 
 \`<plugin root>\` is a path YOU substitute, and \`$PLUGIN_ROOT\` is not it: that variable is

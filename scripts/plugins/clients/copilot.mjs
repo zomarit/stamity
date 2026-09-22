@@ -10,9 +10,10 @@
 //   - https://docs.github.com/en/copilot/how-tos/use-copilot-agents/use-copilot-cli — the CLI's
 //     own Node requirement.
 //
-// Two spellings the vendor pages do NOT state. One of them is now MEASURED, against GitHub
-// Copilot CLI 1.0.85 in a scratch `COPILOT_HOME`, by the binary leg of
-// `test/ci/pluginPackages.copilot.test.ts`; the other is still open and says so on its class.
+// Three things the vendor pages do NOT state. Two of them are now MEASURED — the first against
+// GitHub Copilot CLI 1.0.85 in a scratch `COPILOT_HOME`, by the binary leg of
+// `test/ci/pluginPackages.copilot.test.ts`, the third against 1.0.87 end to end (prove/258,
+// prove/262); the second is still open and says so on its class.
 //
 //   1. The FILE EXTENSION under `com.github.copilot/commands/` — MEASURED, and the answer is
 //      NOT the repository surface's spelling. The CLI derives a command's id by stripping ONE
@@ -27,6 +28,17 @@
 //      hook process. The commands are written root-relative regardless, because the alternative
 //      — a repository-relative path — is certainly wrong for an installed plugin. The class
 //      carries the gap as its reason rather than letting a consumer inherit it silently.
+//   3. `${PLUGIN_ROOT}` in a COMMAND body — MEASURED on 1.0.87 (2026-09-22), and the answer is
+//      no: the client exports no plugin-root variable to a command's shell (the session's
+//      environment carries no `*PLUGIN_ROOT`; the binary's changelog says only plugin hooks
+//      receive `PLUGIN_ROOT`/`COPILOT_PLUGIN_ROOT`/`CLAUDE_PLUGIN_ROOT`, since 1.0.26, the same in
+//      1.0.85). A body reading the variable ran `node "/runtime/locate.mjs"`. The generated
+//      `st-setup` body for this client is therefore discovery-first: it reads the root out of
+//      `copilot skill list --json` (a plugin skill's `path` is `<root>/skills/<id>`; `plugin list
+//      --json`'s `installedFrom` names the marketplace directory, not the root — both measured
+//      2026-09-22) and names it in every command
+//      (`scripts/plugins/setupCommand.mjs`). `ROOT_VARIABLE` below stays what the client expands
+//      inside its OWN files — MCP args, agent frontmatter — not what a command's shell sees.
 
 /** The environment variable this client expands inside a plugin's own files. */
 export const ROOT_VARIABLE = 'PLUGIN_ROOT'

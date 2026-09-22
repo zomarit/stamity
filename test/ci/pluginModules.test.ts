@@ -582,24 +582,31 @@ describe("the generated setup command (REQ-PLUGIN-003)", () => {
   it.each(CLIENTS)("renders the four steps and the three remedies for %s", (client) => {
     const rootVar = rootVars[client];
     const body = renderSetupCommand(client, rootVar) as string;
+    // TEST CHANGE, justified (2026-09-22, prove/258, prove/262): the Copilot CLI exports no
+    // plugin-root variable to a command's shell (measured on 1.0.87), so that client's body is
+    // discovery-first — every command names `<root>`, read out of `copilot skill list --json`
+    // (a plugin skill's `path` is `<root>/skills/<id>`), and hands it to the CLI as
+    // `--plugin-root`. The other three keep the variable form.
+    const locate = client === "copilot" ? 'node "<root>/runtime/locate.mjs"' : `node "\${${rootVar}}/runtime/locate.mjs"`;
+    const rootFlag = client === "copilot" ? ' --plugin-root "<root>"' : "";
 
     expect(body.startsWith("---\ndescription: \"Set this repository up for the stamity plugin: ")).toBe(true);
     expect(body).toContain(
       'description: "Set this repository up for the stamity plugin: resolve facts and gates, write the repository-owned files, report duplicates."',
     );
 
-    expect(body).toContain(`node "\${${rootVar}}/runtime/locate.mjs" -- plugin status --json`);
+    expect(body).toContain(`${locate} -- plugin status --json${rootFlag}`);
     expect(body).toContain("`setup.needed`");
-    expect(body).toContain(`node "\${${rootVar}}/runtime/locate.mjs" -- plugin setup --client ${client} -y`);
+    expect(body).toContain(`${locate} -- plugin setup --client ${client} -y${rootFlag}`);
     expect(body).toContain("`duplicates`");
-    expect(body).toContain(`node "\${${rootVar}}/runtime/locate.mjs" -- plugin status`);
+    expect(body).toContain(`${locate} -- plugin status${rootFlag}\n`);
 
     // TEST CHANGE (W3): the assertion was `toContain("stamity clean -y")`, a
     // bare command. A plugin-only install has no `stamity` on PATH, so every
     // remedy the body prints has to run through the locator — the contract the
     // module header already states for every other command in this file. The
     // old assertion passed on a remedy an operator cannot run.
-    expect(body).toContain(`node "\${${rootVar}}/runtime/locate.mjs" -- clean -y`);
+    expect(body).toContain(`${locate} -- clean -y`);
     expect(body).not.toMatch(/(?<!-- )\bstamity clean -y/);
     expect(body).not.toMatch(/`plugin setup`/);
     expect(body).toContain("APM dependency");

@@ -327,7 +327,18 @@ describe("the copilot root's carried classes", () => {
     // root's own 126 `/st-*` references would name commands that do not exist. The repository
     // surface keeps `.prompt.md`; the container does not.
     expect(commands.filter((rel) => rel.endsWith(".prompt.md"))).toEqual([]);
-    expect(read(`${NAMESPACE}/commands/st-setup.md`)).toContain("plugin setup --client copilot -y");
+    const setup = read(`${NAMESPACE}/commands/st-setup.md`);
+    expect(setup).toContain("plugin setup --client copilot -y");
+    // MOVED 2026-09-22 (prove/258, prove/262): this client exports no plugin-root variable to a
+    // command's shell (measured on 1.0.87), so the body reads the root out of the client's own
+    // listing and never expands the variable in a command.
+    expect(setup).toContain("copilot skill list --json");
+    expect(setup).toContain("`<root>/skills/<name>`");
+    // `installedFrom` names the marketplace directory, not the root (measured on 1.0.87), and the
+    // body says so rather than sending the reader there.
+    expect(setup).toContain("not the root");
+    expect(setup).toContain('node "<root>/runtime/locate.mjs" -- plugin setup --client copilot -y --plugin-root "<root>"');
+    expect(setup).not.toContain(`\${${ROOT_VARIABLE}}/runtime`);
   });
 
   it("drops the four repository-owned surfaces the container has no home for", () => {
