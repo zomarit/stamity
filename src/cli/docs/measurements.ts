@@ -86,10 +86,10 @@ export const REACH_SNAPSHOT_PATH = "evals/reach/npm-downloads-2026-09-14.json";
 /**
  * The eval run of record, linked from the page relative to `docs/`.
  *
- * The release run of record, which since 2026-09-21 is the composed 1.9.0 run:
- * run 27 measured every case in full, and runs 29, 30 and 31 re-measured only
- * the cases whose inputs had moved, carrying the rest with provenance under
- * SET-v7's incremental rule. The page restates this run's own figures because a
+ * The release run of record, which since 2026-09-22 is the composed 1.9.0 run:
+ * run 27 measured every case in full, and runs 29, 30, 31 and 32 re-measured
+ * only the cases whose inputs had moved, carrying the rest with provenance
+ * under SET-v7's incremental rule. The page restates this run's own figures because a
  * composed run scores the whole set under the unchanged rule and thresholds —
  * it is the artifact that states the set's score, not a partial one.
  *
@@ -99,7 +99,7 @@ export const REACH_SNAPSHOT_PATH = "evals/reach/npm-downloads-2026-09-14.json";
  * the two spellings that used to sit there were left saying "run 30" by the
  * release that moved this path.
  */
-export const RUN_OF_RECORD_PATH = "evals/runs/2026-09-21-run-31/RESULTS.md";
+export const RUN_OF_RECORD_PATH = "evals/runs/2026-09-22-run-32/RESULTS.md";
 
 /**
  * The release the run of record measured, as the page names it.
@@ -849,9 +849,11 @@ export function renderMeasurements(root: string = repoRoot()): string {
     "That run is composed rather than measured end to end, under SET-v7's incremental rule: one",
     "full baseline run per release, and a later run on another candidate re-measures only the cases",
     "whose inputs moved and carries the rest with provenance. Run 27 measured every case in full;",
-    "runs 29, 30 and 31 re-measured only the cases whose case file was new or whose cited source had",
-    "moved, and carried the rest — each carried case named in the composed artifact with its",
-    "case-file hash and the source ranges found identical at both candidates. The set is SET-v7.",
+    "runs 29, 30, 31 and 32 re-measured only the cases whose case file was new or whose cited source",
+    "had moved, and carried the rest — in run 32 that is two cases a route repair moved the cited",
+    "lines of, their case files re-pointed at the new locators rather than their expectations",
+    "changed. Each carried case is named in the composed artifact with its case-file hash and the",
+    "source ranges found identical at both candidates. The set is SET-v7.",
     `The scoring rule is SET-v6, which is what run ${runOfRecord}'s own score table is headed with.`,
     "The figures below score that whole set:",
     "",
