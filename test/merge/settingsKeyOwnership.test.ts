@@ -522,7 +522,9 @@ describe("clean and the sync reclaim sweep remove only the engine's keys", () =>
     const result = await clean(root);
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain(`${CLAUDE_SETTINGS_PATH}.bak`);
+    // The entry names the backup the way the engine spells a file it wrote: the
+    // resolved NATIVE path (backslashes on Windows), never a POSIX substring.
+    expect(result.stdout).toContain(BAK_ABS(root));
     expect(existsSync(SETTINGS_ABS(root))).toBe(false);
     expect(await readFile(BAK_ABS(root), "utf8")).toBe(before);
   });
@@ -538,7 +540,9 @@ describe("clean and the sync reclaim sweep remove only the engine's keys", () =>
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain(`co-owned-reduced  ${CLAUDE_SETTINGS_PATH}`);
-    expect(result.stdout).toContain(`${CLAUDE_SETTINGS_PATH}.bak`);
+    // The entry names the backup the way the engine spells a file it wrote: the
+    // resolved NATIVE path (backslashes on Windows), never a POSIX substring.
+    expect(result.stdout).toContain(BAK_ABS(root));
     expect(await readSettings(root)).toBe(CLIENT_SETTINGS);
     expect(await readFile(BAK_ABS(root), "utf8")).toBe(before);
   });
