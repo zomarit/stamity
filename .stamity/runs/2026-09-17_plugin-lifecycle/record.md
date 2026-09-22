@@ -4009,3 +4009,15 @@ later activation: `gh workflow disable nightly.yml` at the repository (no file c
 jobs, the per-client secret steps and their pins stay as shipped; the four secrets stay unset). To activate:
 `gh workflow enable nightly.yml`, set the secrets, dispatch once. The CHANGELOG's "wired to run nightly … the first
 run lands after this release" stays true as written; this record is where the disabled state is noted.
+
+## Amendment (2026-09-22T14:42Z): the Codex interactive hooks walked by the maintainer — P2 PASS
+
+In the hook fixture (`scripts/qa/fixtures.mjs`, written to a temp directory), the maintainer opened `codex`
+interactively on codex-cli 0.155.1 (the client updated from 0.154.0 since the morning's harness), trusted the
+project and accepted the hook at the client's prompts (the home config gained the project's `trust_level` and
+the hook's `trusted_hash`), and asked for the two reads (session `01a0c990-16a6-7b20-8098-068dc47ea5c0`, 14:41Z):
+the client rendered `Blocked by hook` with the emitted hook's own deny decision for `qa-denied.txt`, then read
+`qa-allowed.txt`; the observation log carries one `denied` and one `allowed` line (sha-256 `756246be…`). So the
+emitted Codex hooks — `features.hooks = true` in the emitted config, the project trusted, the hook accepted — run
+in an interactive session; the headless `codex exec` loads none (the recorded vendor fact, `H1b`). The `Not done`
+line for Codex's interactive hooks is closed; the contracts page gains the measurement.
