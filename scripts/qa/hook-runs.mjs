@@ -209,6 +209,11 @@ const PERMISSION_REFUSAL = /could not request permission|requires approval|appro
  * three arms are ordered so the stricter reading wins on ambiguity: a visible tool call is `failed`
  * first, then a client-side permission refusal is `not-run`, then a transcript with no tool call in
  * it at all is `not-run`.
+ *
+ * A NON-EMPTY log with denials only is read the same way (prove/272): no attempt at the allowed
+ * file is the client stopping after the denial, `not-run` with the enforcement half stated; an
+ * attempt at the allowed file that was denied is the hook's own defect, `failed`. The `passed` arm
+ * is unchanged and needs both halves.
  */
 export function verdictFor(observations, { transcript } = {}) {
   const denied = observations.filter((row) => row.decision === 'denied')
@@ -249,6 +254,31 @@ export function verdictFor(observations, { transcript } = {}) {
       reason:
         'the hook recorded no call and the transcript shows the client attempted no tool call, ' +
         'so nothing about the emitted wiring was measured',
+    }
+  }
+  // A denial with NO attempt at the allowed file is the CLIENT's behaviour, not the hook's
+  // (prove/272): measured 2026-09-22 on GitHub Copilot CLI 1.0.87 under folder trust, the client
+  // re-tried the denied file and never asked for the allowed one, and reading that as `failed`
+  // said the hook misbehaved when it had enforced every call it was handed. The enforcement half
+  // is stated as observed; the allowance half was never measured. An attempt at the allowed file
+  // that the hook DENIED is the hook's own defect and stays `failed` — `mentionsAllowed` on a
+  // denied row is that attempt, and only that.
+  if (denied.length > 0 && allowed.length === 0) {
+    const allowedAttempted = denied.some((row) => row.mentionsAllowed === true)
+    if (!allowedAttempted) {
+      return {
+        status: 'not-run',
+        reason:
+          `the hook recorded ${observations.length} call(s), ${denied.length} denied (${DENIED_FILE}) and ` +
+          `none allowed: the client never attempted the allowed read after the denial, so the hook's ` +
+          `enforcement half is observed and its allowance half was not measured`,
+      }
+    }
+    return {
+      status: 'failed',
+      reason:
+        `the hook recorded ${observations.length} call(s) and denied an attempt at ${ALLOWED_FILE}: ` +
+        'the hook refused the file it must allow',
     }
   }
   return {

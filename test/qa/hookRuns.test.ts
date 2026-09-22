@@ -248,9 +248,36 @@ describe("verdictFor — what an empty observation log means", () => {
     expect(verdict.reason).toContain("1 allowed");
   });
 
-  it("fails on one half only, whichever half it is", () => {
-    expect((verdictFor([denied]) as { status: string }).status).toBe("failed");
+  it("fails on the allowed half alone", () => {
     expect((verdictFor([allowed, allowed]) as { status: string }).status).toBe("failed");
+  });
+
+  // prove/272: measured 2026-09-22 on GitHub Copilot CLI 1.0.87 under folder trust — the hook
+  // fired (two calls recorded), the client re-tried the denied file and never asked for the allowed
+  // one, and the denied-only log read as `failed`, which said the hook misbehaved when the client
+  // simply never made the second read. The three arms, with the passed arm NOT loosened.
+  it("is not-run on denials with no attempt at the allowed file, stating the enforcement half", () => {
+    const verdict = verdictFor([
+      { decision: "denied", mentionsDenied: true, mentionsAllowed: false },
+      { decision: "denied", mentionsDenied: true, mentionsAllowed: false },
+    ]) as { status: string; reason: string };
+    expect(verdict.status).toBe("not-run");
+    expect(verdict.reason).toContain("the client never attempted the allowed read after the denial");
+    expect(verdict.reason).toContain("2 denied");
+  });
+
+  it("fails when the allowed file was attempted and the hook denied it", () => {
+    const verdict = verdictFor([
+      { decision: "denied", mentionsDenied: true, mentionsAllowed: false },
+      { decision: "denied", mentionsDenied: true, mentionsAllowed: true },
+    ]) as { status: string; reason: string };
+    expect(verdict.status).toBe("failed");
+    expect(verdict.reason).toContain("denied an attempt at qa-allowed.txt");
+  });
+
+  it("still needs both halves to pass — a denial beside an allowance, nothing less", () => {
+    expect((verdictFor([denied, allowed]) as { status: string }).status).toBe("passed");
+    expect((verdictFor([denied]) as { status: string }).status).toBe("not-run");
   });
 
   it("fails on no observation when the transcript shows a tool call was attempted", () => {
