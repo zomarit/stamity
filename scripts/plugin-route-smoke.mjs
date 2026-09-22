@@ -810,6 +810,23 @@ export function blockerFor(text) {
   return null
 }
 
+/**
+ * The sandbox grant the Codex invocation leg runs under, exported so the suite can pin the exact
+ * argv. `codex exec` defaults to a read-only sandbox and the setup writes (prove/274). Measured
+ * 2026-09-22 on codex-cli 0.154.0 (`codex exec --help` sha-256 0e82cfde…) in a scratch
+ * repository: under `--sandbox workspace-write` the model creates `.stamity/` and an ordinary
+ * directory, and is refused `mkdir .codex` and a write inside an existing `.codex/` — the client
+ * protects the repository's own `.codex/` from model writes, and that is exactly where this
+ * client's setup lands (`.codex/config.toml`, `.codex/hooks.json`). `--add-dir <repo>/.codex`
+ * ("additional directories that should be writable alongside the primary workspace") lifts
+ * that one directory, and accepts one that does not exist yet. So the grant is the narrowest
+ * pair that lets the setup land: the workspace, plus its own `.codex/`. Never
+ * `danger-full-access`, never the flag that drops the sandbox.
+ */
+export function codexSandbox(repo) {
+  return ['--sandbox', 'workspace-write', '--add-dir', join(repo, '.codex')]
+}
+
 /** The one ask of an invocation leg, in the client's own idiom. */
 function setupPrompt(form) {
   return (
@@ -1331,12 +1348,19 @@ async function codexLegs(context) {
       const codexHome = process.env['CODEX_HOME'] ?? join(homedir(), '.codex')
       const cached = join(codexHome, 'plugins', 'cache', names.marketplace, names.plugin)
       const cachedVersions = directoriesIn(cached)
-      const locator = join(cached, cachedVersions[0] ?? '', 'runtime', 'locate.mjs')
+      const cachedRoot = join(cached, cachedVersions[0] ?? '')
+      const locator = join(cachedRoot, 'runtime', 'locate.mjs')
       const run = await call(context, {
         args: [
           'exec',
           '--skip-git-repo-check',
-          `Run exactly this command in this repository and report what it printed: node "${locator}" -- plugin setup --client codex -y`,
+          // `codex exec`'s default sandbox is read-only, and the setup WRITES: with the README's line
+          // now reaching the write (prove/259), the run refused with "EPERM: operation not
+          // permitted, mkdir '<repo>/.stamity'" (prove/274), and `workspace-write` alone still
+          // refused `mkdir '<repo>/.codex'`. The grant is {@link codexSandbox}, measured there; the
+          // reason below says what was granted. The instrument is still the manifest on disk.
+          ...codexSandbox(realCwd),
+          `Run exactly this command in this repository and report what it printed: node "${locator}" -- plugin setup --client codex -y --plugin-root "${cachedRoot}"`,
         ],
         cwd: realCwd,
         env: realEnv,
@@ -1346,7 +1370,9 @@ async function codexLegs(context) {
         run,
         realCwd,
         `the REAL CODEX_HOME (the login lives there; ${existing.detail}); this root carries no ` +
-          "st-setup command, so the prompt names the README's own setup line",
+          `st-setup command, so the prompt names the README's own setup line, run under ` +
+          `${codexSandbox(realCwd).join(' ')} because the default read-only sandbox refuses the write ` +
+          `and workspace-write alone refuses the repository's own .codex/`,
       )
     }
   } finally {

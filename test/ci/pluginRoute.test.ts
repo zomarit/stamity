@@ -644,6 +644,36 @@ exit 1
   );
 });
 
+describe("the codex invocation leg's sandbox grant", () => {
+  // prove/274: `codex exec`'s default sandbox is read-only and the setup writes, so the leg
+  // refused with "EPERM: operation not permitted, mkdir '<repo>/.stamity'". `codex exec --help`
+  // on 0.154.0 documents `--sandbox <read-only|workspace-write|danger-full-access>`;
+  // `workspace-write` is the narrowest grant that lets the working directory be written. The
+  // leg is a real-home model call this suite never makes, so the argv is pinned as the module
+  // states it and the source is read for the two places it must appear: the exec argv and the
+  // reason the evidence carries.
+  it("grants workspace-write plus the repository's own .codex/ to the setup session, and says so", async () => {
+    // Measured 2026-09-22 on 0.154.0: `workspace-write` lets the model create `.stamity/` and
+    // refuses `mkdir .codex` — the client protects the repository's own `.codex/`, where this
+    // client's setup lands — and `--add-dir <repo>/.codex` lifts that one directory, existing or
+    // not. So the grant is a function of the repository.
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { codexSandbox } = await import("../../scripts/plugin-route-smoke.mjs");
+    expect(codexSandbox("/scratch/repo")).toEqual(["--sandbox", "workspace-write", "--add-dir", join("/scratch/repo", ".codex")]);
+    const source = readFileSync(SMOKE, "utf8");
+    const codexLeg = source.slice(source.indexOf("async function codexLegs("), source.indexOf("async function operatorAlreadyHas("));
+    expect(codexLeg).toContain("...codexSandbox(realCwd),");
+    expect(codexLeg).toContain("because the default read-only sandbox refuses the write");
+    expect(codexLeg).toContain("workspace-write alone refuses the repository's own .codex/");
+    // Never the widest grant, and never the flag that drops the sandbox altogether — read off the
+    // EXECUTED lines (the leg's own comment quotes the help's three modes by name).
+    const executed = codexLeg.split("\n").filter((line) => !line.trimStart().startsWith("//")).join("\n");
+    expect(executed).not.toContain("danger-full-access");
+    expect(executed).not.toContain("--dangerously-bypass-approvals-and-sandbox");
+    expect(codexSandbox("/scratch/repo")).not.toContain("danger-full-access");
+  });
+});
+
 describe("the smoke's own arguments", () => {
   it("exits 2 with the usage banner when --dist is absent", () => {
     const run = smoke(["--client", "claude"]);
