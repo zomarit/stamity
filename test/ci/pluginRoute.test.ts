@@ -553,7 +553,7 @@ case "$1" in
   -p)
     case "$2" in
       List*) printf '/st-work\\n/agent stamity-reviewer\\n'; exit 0 ;;
-      *) [ "$COPILOT_ALLOW_ALL" = "true" ] || { echo "Permission denied and could not request permission from user"; exit 0; }; mkdir -p .stamity; printf '{"plugin":{"mode":"plugin-backed","clients":{"copilot":{}}}}\\n' > .stamity/manifest.json; echo "ran st-setup"; exit 0 ;;
+      *) [ "$COPILOT_ALLOW_ALL" = "true" ] || { echo "Permission denied and could not request permission from user"; exit 0; }; case " $* " in *" --add-dir $STAMITY_FAKE_COPILOT_DIST "*) ;; *) echo "Permission denied and could not request permission from user (no --add-dir for the distribution)"; exit 0 ;; esac; mkdir -p .stamity; printf '{"plugin":{"mode":"plugin-backed","clients":{"copilot":{}}}}\\n' > .stamity/manifest.json; echo "ran st-setup"; exit 0 ;;
     esac ;;
 esac
 echo "fake copilot: unexpected $*" >&2
@@ -565,7 +565,9 @@ exit 1
   }
 
   function invokeCopilot(uninstallExit: string): { run: SpawnSyncReturns<string>; report: Report } {
-    const env: NodeJS.ProcessEnv = { ...disarmed(), STAMITY_FAKE_COPILOT_STATE: tempDir("fake-state"), STAMITY_FAKE_COPILOT_UNINSTALL_EXIT: uninstallExit };
+    // The fake refuses the setup unless the argv carries `--add-dir <dist>` (prove/279), so the
+    // dist it must see is handed in the same way the state directory is.
+    const env: NodeJS.ProcessEnv = { ...disarmed(), STAMITY_FAKE_COPILOT_STATE: tempDir("fake-state"), STAMITY_FAKE_COPILOT_UNINSTALL_EXIT: uninstallExit, STAMITY_FAKE_COPILOT_DIST: dist };
     // The "real home" legs inherit the smoke's whole environment; a developer's own COPILOT_HOME
     // would send the fake's state there.
     delete env["COPILOT_HOME"];
@@ -592,6 +594,12 @@ exit 1
       // COPILOT_ALLOW_ALL=true, so the PASS above proves the variable reached it — and the reason
       // says so as the bare variable: no path, no value beyond the vendor's "true".
       expect(invocation.reason).toContain("run with COPILOT_ALLOW_ALL=true beside --allow-all-tools");
+      // prove/279: the session is granted the distribution root, and only that — the fake refuses
+      // the setup without `--add-dir <dist>` on its argv, so the PASS proves the flag reached it;
+      // the reason states the grant redacted, and the command carries it.
+      expect(invocation.reason).toContain("with --add-dir <dist> because file access outside the working directory is gated separately");
+      expect(invocation.command).toContain("--add-dir <dist>");
+      expect(invocation.command).not.toContain("--allow-all-paths");
       // prove/278: no reason of any leg carries a temp or home path into the evidence.
       for (const entry of report.clients["copilot"]?.legs ?? []) {
         expect(entry.reason, `${entry.leg}: ${entry.reason}`).not.toMatch(/\/var\/folders\/|\/private\/|\/Users\/|\/tmp\//);

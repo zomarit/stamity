@@ -1121,8 +1121,20 @@ async function copilotLegs(context) {
         // tools, and under it every `node …` line the session composed answered "Permission denied
         // and could not request permission from user". This client only. The instrument is still
         // the manifest on disk.
+        //
+        // `--add-dir <dist>` beside them (prove/279): the locator the command body runs sits in
+        // the DISTRIBUTION, outside the scratch repository, and `copilot help permissions` on
+        // 1.0.87 (read 2026-09-22, sha-256 b11bef78…) says "file access is restricted to paths
+        // within the current working directory and its subdirectories, plus the system temporary
+        // directory". Measured the same day in a scratch repository: a script under a non-temp
+        // directory outside the cwd answered "Permission denied and could not request permission
+        // from user" under COPILOT_ALLOW_ALL=true and --allow-all-tools alone, and ran under
+        // `--add-dir <that directory>` ("Allow file access to a directory", `copilot --help`,
+        // sha-256 cef26adc…). The earlier PASS of this leg had the distribution under the OS temp
+        // directory, which the client allows by default; the harness's sits under the checkout.
+        // Never `--allow-all-paths`: the distribution root is the one directory the session needs.
         const run = await call(context, {
-          args: ['-p', setupPrompt(context.setupForm), '-s', '--allow-all-tools'],
+          args: ['-p', setupPrompt(context.setupForm), '-s', '--allow-all-tools', '--add-dir', context.dist],
           cwd: repo,
           env: { ...realEnv, COPILOT_ALLOW_ALL: 'true' },
         })
@@ -1132,7 +1144,9 @@ async function copilotLegs(context) {
           repo,
           `the REAL COPILOT_HOME (the login lives there; ${existing.detail}), with plugin --help ` +
             `listing ${removals}, run with COPILOT_ALLOW_ALL=true beside --allow-all-tools because ` +
-            `only folder trust lets the session run the command body's shell lines`,
+            `only folder trust lets the session run the command body's shell lines, and with ` +
+            `--add-dir <dist> because file access outside the working directory is gated separately ` +
+            `and the locator sits in the distribution`,
         )
       }
     }
