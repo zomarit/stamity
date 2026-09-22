@@ -2,7 +2,7 @@
 title: Plugins
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 66c6152. Re-attested 2026-09-22 against the Copilot CLI measurements of that date. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6f8f103. Re-attested 2026-09-22 against the Copilot CLI measurements of that date. -->
 <!-- Re-open when: the capability-file schema changes shape, the locator's exit codes or its
      candidate order move, or a vendor page behind a command block is re-read on a later access
      date than the newest this page carries, 2026-09-22. `test/docsPages.test.ts` holds this
@@ -60,9 +60,9 @@ The reasons, one line each, are the ones each container declares in its own capa
   of them the client's own `Denied by preToolUse hook: hook exited with code 2`). Only machine-wide
   policy hooks load "regardless of folder trust state"; a repository's `.github/hooks/*.json` and a
   plugin's own hooks do not (the vendor's hooks reference, read 2026-09-22).
-- **Codex, hooks** — carried means shipped and discoverable, never enforced: a plugin's hooks are
-  skipped until the operator trusts them, and a headless run on codex-cli 0.154.0 ran no project
-  hook at all.
+- **Codex, hooks** — carried means shipped and discoverable, not enforced by shipping alone: a
+  plugin's hooks are skipped until the operator trusts them, and a headless run on codex-cli
+  0.154.0 ran no project hook at all.
 - **Every client, mcp** — MCP server selection and its credential references are one repository's
   decision, never a plugin's.
 
@@ -112,8 +112,20 @@ two commands above were walked by the lifecycle proof instead — `plugin market
 out at the tag, with that clone's catalog `source` rewritten to the relative root path a local
 mirror serves, because a local bare repository is not a marketplace source this client takes.*
 
-`--scope project` records the install in your repository's own settings rather than in your user
-profile, which is what makes the decision reviewable:
+The two commands write to two places. `marketplace add` declares the marketplace in the **user**
+settings of your Claude configuration directory (`extraKnownMarketplaces` there), and
+`plugin install … --scope project` writes only the enablement into your repository's own
+`.claude/settings.json`:
+
+```json
+{
+  "enabledPlugins": { "stamity@stamity": true }
+}
+```
+
+What makes the decision reviewable is a declaration you write into the project settings yourself —
+the same `extraKnownMarketplaces` block beside the enablement, so the committed file names the
+source as well as the plugin:
 
 ```json
 {
@@ -123,6 +135,13 @@ profile, which is what makes the decision reviewable:
   "enabledPlugins": { "stamity@stamity": true }
 }
 ```
+
+One caveat travels with that declaration: the `plugin` subcommands read it by name and not by
+source. In a configuration directory that has never run `marketplace add`, `plugin install
+stamity@stamity` answers "not found in marketplace" and `marketplace update stamity` answers
+"Marketplace not found" until `marketplace add` has run; the vendor documents the project
+declaration's effect at session start, which was not measured here *(measured 2026-09-22 on Claude
+Code 2.1.278 by the private-chain rehearsal)*.
 
 `marketplace add` also takes a git URL with a `#ref`, or a **local path** — which is how you try
 a root you built yourself without publishing it anywhere *(from the same vendor page, accessed
@@ -310,9 +329,10 @@ claude plugin update stamity@stamity --scope project
 three commands: the marketplace re-added at the previous tag, then `plugin install stamity@stamity
 --scope project`, then `plugin update stamity@stamity --scope project`. The third command's
 `--json` output reported `updateOutcome: "updated"`, `oldVersion` `1.9.0-fixture.2` and
-`newVersion` `1.9.0-fixture.1`, exit 0; its stdout digest — sha-256
-`98a79a9256c8a27a70fffd2769cf24d3cb46e1e1f72b5f5513e01e8d9947213f` — is recorded beside the three
-commands in that suite's `rollback-documented` row.* The first two commands are the documented
+`newVersion` `1.9.0-fixture.1`, exit 0 — asserted by `test/ci/pluginLifecycle.test.ts`, whose
+`rollback-documented` row names the three commands as executed with the third's exit code and its
+stdout digest, and the QA harness's `H5` row carries that suite's rows at the candidate.* The
+first two commands are the documented
 route and they are not sufficient on their own: with the plugin already installed, `marketplace
 add` answers that the source is already on disk and `install` answers "already installed … it loads
 in place", leaving the recorded version where it was — the walk asserts that, which is what makes
@@ -402,19 +422,25 @@ Two Renovate presets ship in this repository, and they do different jobs:
 - **`renovate/companion.json`** pins the repository's own `@zomarit/stamity` dependency to one
   exact version rather than a range, so the companion cannot drift away from the pinned plugin.
 
-Extend them from your own configuration:
+Extend them from your own configuration. The block below is the plugin consumer's `renovate.json`
+as the private-chain rehearsal executed it, less the `$schema` line naming Renovate's schema (a
+hand page here links inside the tree only), where `<owner>/stamity-plugins-mirror` is the private
+mirror that carries the moved presets; a consumer of this repository's own distribution writes
+`zomarit/stamity` in both lines:
 
 ```json
 {
   "extends": [
-    "github>zomarit/stamity//renovate/plugins.json",
-    "github>zomarit/stamity//renovate/companion.json"
+    "github><owner>/stamity-plugins-mirror//renovate/plugins.json",
+    "github><owner>/stamity-plugins-mirror//renovate/companion.json"
   ]
 }
 ```
 
-*This is the shape, not an executed run: the presets are committed and readable in this tree, and
-the release's own proof step is what executes them against a real Renovate.*
+*Executed 2026-09-22 by the private-chain rehearsal (renovate 44.107.0): one pull request per
+consumer, the plugin consumer's changing one file and one line — the catalog's `ref` — and the APM
+consumer's changing `apm.yml`, its lock and the deployed files; a second run after the merges
+opened none; the record is `.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md`.*
 
 **Where the review step actually sits.** No client delivers a plugin update as a pull request.
 Claude Code's marketplace auto-update, Cursor's team-marketplace re-index and the Copilot CLI's

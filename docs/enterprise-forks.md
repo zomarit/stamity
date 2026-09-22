@@ -649,9 +649,13 @@ APM delivery depends on the target profile. The tested Claude, Copilot and Curso
 all four classes. Codex deploys agents and skills, with instructions compiled by APM separately.
 This package does not deliver stamity's charter, hooks, MCP wiring, engine and runtime, or CLI
 behaviour through APM. Editing those sources changes a downstream repository or its packaged CLI,
-not the APM projection. Plugin manifests keep their direct `content/` surface; the fork layer is not
-projected into plugin installation. Consumer `.stamity/overrides/` precedence belongs to the CLI and
-is not read during APM generation.
+not the APM projection. The plugin manifests committed in the source checkout (`.claude-plugin/`,
+`.cursor-plugin/plugin.json`, `plugin.json`) keep their direct `content/` surface, while the built
+distribution roots carry the fork layer: `scripts/build-plugin-distribution.mjs` runs
+`scripts/generate-plugin-packages.mjs`, which stages `fork/` beside `content/` through
+`scripts/plugins/corpusStage.mjs` — what REQ-PLUGIN-022 of `docs/specs/plugin-lifecycle.md` proves
+per root. Consumer `.stamity/overrides/` precedence belongs to the CLI and is not read during APM
+generation.
 
 ### Cut a private release
 
@@ -676,6 +680,30 @@ configuration, then prove it offers the second tag:
   }]
 }
 ```
+
+That rule fits this guide's own `v<semver>-<suffix>` private tags. It does not fit the
+`plugins/v<version>` tag scheme of a mirrored plugin distribution (the route the **Ship your fork's
+plugin distribution** section below describes): Renovate's `apm` manager reads such a tag through
+the `github-tags` datasource, `semver` marks `plugins/v1.9.0` an invalid value, and the dependency
+gets no update at all — measured 2026-09-22 by the private-chain rehearsal with renovate 44.107.0,
+whose engine floor is Node `^24.11.0`. The rule for that scheme is the regex versioning the shipped
+`renovate/plugins.json` preset uses:
+
+```json
+{
+  "packageRules": [{
+    "matchManagers": ["apm"],
+    "matchPackageNames": ["<owner>/stamity-plugins-mirror"],
+    "versioning": "regex:^plugins/v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
+  }]
+}
+```
+
+With either rule the native manager runs `apm install` inside its own run to refresh the lock, so
+`apm` must be on Renovate's `PATH` with `GITHUB_APM_PAT` in its environment — without them the
+update is found and the run ends in a lockfile error — and the pull request carries the deployed
+files beside `apm.yml` and the lock (the rehearsal's changed `apm.yml`, `apm.lock.yaml` and one
+deployed skill file).
 
 If your deployed engine uses another manager, apply that manager's equivalent supported policy, or
 choose its supported stable tag convention. Keep the existing engine, and do not infer ordering
@@ -769,6 +797,11 @@ reads it. The two provenance flags are inputs rather than clock reads, which is 
 builds of one commit produce byte-identical archives — pass them, or the builder falls back to
 this checkout's `HEAD` and you lose that property the moment the build moves to a machine that
 has no git.
+
+One thing the recipe leaves under `dist/`: `package.json` publishes `files: ["dist"]`, so a local
+`npm pack` or `npm publish` run after it ships `dist/plugins` and `dist/plugin-runtime` inside the
+tarball unless `npm run build` — which cleans `dist/` — runs first; the release workflow packs
+before it builds either tree, from a fresh checkout.
 
 Everything the built tree names about your fork comes from the `stamity.distribution` block in
 your `package.json`: `branch` (default `plugin-dist`), `tagPattern` (default `plugins/v<version>`),
