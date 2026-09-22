@@ -360,7 +360,10 @@ if (refusal !== null) {
  * would turn "no root" into "malformed root".
  */
 function withPluginRoot(stamityArgs) {
-  if (stamityArgs[0] !== 'plugin' || stamityArgs.includes('--plugin-root')) return stamityArgs
+  // Both spellings commander accepts — `--plugin-root <path>` and `--plugin-root=<path>` —
+  // or the argv would gain a second root beside the caller's own (prove/265).
+  if (stamityArgs[0] !== 'plugin' || stamityArgs.some((arg) => arg === '--plugin-root' || arg.startsWith('--plugin-root=')))
+    return stamityArgs
   const root = dirname(RUNTIME_DIR)
   if (!existsSync(join(root, 'stamity-plugin.json'))) return stamityArgs
   return [...stamityArgs, '--plugin-root', root]

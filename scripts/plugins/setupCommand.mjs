@@ -120,10 +120,19 @@ plugin's skills live:
    copilot skill list --json
    \`\`\`
 
-Take any entry whose \`source\` is \`plugin\` and whose \`name\` starts with \`st-\`; its \`path\` is
+Take every entry whose \`source\` is \`plugin\` and whose \`name\` starts with \`st-\`; each \`path\` is
 \`<root>/skills/<name>\`, so \`<root>\` is the directory that holds that \`skills/\` directory. (Not
 \`plugin list --json\`'s \`installedFrom\`: that names the marketplace the plugin was added from,
-not the root.) Substitute \`<root>\` literally, quotes kept, wherever it appears below.
+not the root.) Two stops before anything else runs:
+
+- No such entry: the plugin is not loaded in this session — the folder is not trusted, or the
+  plugin is not installed. Report that in those words and STOP. Write nothing, and do not search
+  the filesystem for a root.
+- More than one distinct \`<root>\` among the entries: two stamity-derived plugins are installed
+  (a canonical root beside a fork, or two marketplaces). List every root and STOP, asking the
+  operator which one this repository should run on.
+
+With exactly one root, substitute \`<root>\` literally, quotes kept, wherever it appears below.
 `
     : ''
   return `---

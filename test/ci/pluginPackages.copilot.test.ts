@@ -337,6 +337,13 @@ describe("the copilot root's carried classes", () => {
     // `installedFrom` names the marketplace directory, not the root (measured on 1.0.87), and the
     // body says so rather than sending the reader there.
     expect(setup).toContain("not the root");
+    // prove/264: the two stops. No matching row is a plugin not loaded in this session, reported
+    // and stopped on without a filesystem hunt; more than one root is the operator's choice.
+    expect(setup).toContain("No such entry: the plugin is not loaded in this session");
+    expect(setup).toContain("do not search\n  the filesystem for a root");
+    expect(setup).toContain("More than one distinct `<root>` among the entries");
+    expect(setup).toContain("List every root and STOP, asking the\n  operator which one");
+    expect(setup).toContain("With exactly one root, substitute `<root>` literally");
     expect(setup).toContain('node "<root>/runtime/locate.mjs" -- plugin setup --client copilot -y --plugin-root "<root>"');
     expect(setup).not.toContain(`\${${ROOT_VARIABLE}}/runtime`);
   });

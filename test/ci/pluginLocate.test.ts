@@ -440,6 +440,20 @@ describe("the locator runs the resolved runtime", () => {
     expect((JSON.parse(own.stdout) as { args: string[] }).args).toEqual(["plugin", "setup", "--plugin-root", "/elsewhere"]);
     const other = runLocate(root, { cwd: project, args: ["--", "check"] });
     expect((JSON.parse(other.stdout) as { args: string[] }).args).toEqual(["check"]);
+    // prove/265: the `--plugin-root=<path>` spelling commander accepts is a caller's own root too.
+    const joined = runLocate(root, { cwd: project, args: ["--", "plugin", "status", "--plugin-root=/elsewhere"] });
+    expect((JSON.parse(joined.stdout) as { args: string[] }).args).toEqual(["plugin", "status", "--plugin-root=/elsewhere"]);
+  });
+
+  it("forwards a plugin argv untouched from a runtime with no descriptor beside it", () => {
+    // prove/266: a bare runtime directory locates itself (the case above), and its parent is not a
+    // plugin root — handing the CLI that directory would turn "no root" into "malformed root".
+    const root = makeRoot("plugin-root-bare", { descriptor: false });
+    const project = makeProject("plugin-root-bare", null);
+
+    const status = runLocate(root, { cwd: project, args: ["--", "plugin", "status", "--json"] });
+    expect(status.status, status.stderr).toBe(0);
+    expect((JSON.parse(status.stdout) as { args: string[] }).args).toEqual(["plugin", "status", "--json"]);
   });
 
   it("exits with the child's status", () => {
