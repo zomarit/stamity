@@ -52,10 +52,14 @@ import { CATALOG_PATHS } from "../../scripts/plugins/catalogs.mjs";
  * through `git ls-files` and an ignored directory inside a repository lists ZERO files, which
  * would turn its "0 hits" into a pass over nothing.
  *
- * THE ROUTES, AS MEASURED ON 2026-09-20 rather than as documented. Every step below was walked by
- * hand on this machine before it was written down, against claude 2.1.278, GitHub Copilot CLI
- * 1.0.85, codex-cli 0.154.0 and Cursor agent CLI 2026.09.15, and the walks assert exactly what was
- * observed:
+ * THE ROUTES, AS MEASURED rather than as documented. Every step below was walked by hand on this
+ * machine before it was written down: the four routes on 2026-09-20 against claude 2.1.278, GitHub
+ * Copilot CLI 1.0.85, codex-cli 0.154.0 and Cursor agent CLI 2026.09.15-d2fe57e, and the Claude
+ * three-command rollback re-walked on 2026-09-22 against 2.1.278. Those versions are the ones the
+ * PROSE below describes; no case asserts a version, and each walk records the build that actually
+ * ran in its own row — by 2026-09-22 this machine had moved to Copilot CLI 1.0.87 and Cursor
+ * 2026.09.18-9a7762b, which is exactly the drift the row is there to make visible. A route that
+ * stops behaving as described is a red case, not a stale comment.
  *
  *   claude   A local bare repository cannot be a marketplace source at all: `marketplace add
  *            <path>#<tag>` reports "Path does not exist" for the literal string, and a `file://`
