@@ -156,11 +156,16 @@ properties of that file, rather than properties of a maintainer's laptop.
 - **The job that builds does not hold the credential.** One job runs the build, the suite, the leak
   gate and the packed-artifact smoke on the shipping commit. An isolated `apm-route` job runs the
   third-party APM interpreter without publishing credentials and without access to the tarball. The
-  `publish` job holds the publishing credential, takes no checkout, and runs only npm, the GitHub CLI
-  and four SHA-pinned actions: harden-runner, setup-node, download-artifact and
-  attest-build-provenance. It verifies the tarball's SHA-256 against the first job's OUTPUT, a
-  channel separate from the artifact under verification, and the plugin distribution's manifest the
-  same way. So a compromised build-time dependency runs in the job that has no credential.
+  `publish` job holds the publishing credential and takes no checkout of this repository. Its whole
+  tool surface is four SHA-pinned actions — harden-runner, setup-node, download-artifact and
+  attest-build-provenance — plus npm, the GitHub CLI, `node` running programs written inline in the
+  workflow, POSIX shell with `sha256sum`, and **git**, which is the tool that writes to the remote:
+  the distribution branch and its tag are pushed out of a repository this job creates inside the
+  artifact it has just verified (`git init`, one orphan commit whose dates come from the manifest,
+  then `git push --force` over a token-bearing https remote). It verifies the tarball's SHA-256
+  against the first job's OUTPUT, a channel separate from the artifact under verification, and the
+  plugin distribution's manifest the same way. So a compromised build-time dependency runs in the
+  job that has no credential.
 - **No stored npm token.** Publishing is `npm publish --provenance` over GitHub OIDC trusted
   publishing. The publishing job mints a short-lived credential per run, so there is no long-lived
   publishing credential in this repository to leak or to rotate.
@@ -178,9 +183,11 @@ properties of that file, rather than properties of a maintainer's laptop.
   on the outputs channel before the npm publish runs, so a missing or corrupt artifact refuses
   ahead of the one irreversible step; each archive then carries a build-provenance attestation
   minted over the same OIDC identity. The branch is replaced by a single orphan commit whose git
-  dates come from the manifest, so a re-run reproduces one sha — and the push refuses if the
-  remote head carries a parent (a head with history is a source branch whatever the manifest
-  called it) or if the release tag already names a different commit.
+  dates come from the manifest, so a re-run reproduces one sha — and the push refuses three
+  states: a tag whose name is not `<namespace>/v<version>` for the version the gates job emitted,
+  so the manifest's word for where to push is checked for shape rather than trusted; a remote head
+  that carries a parent, because a head with history is a source branch whatever the manifest
+  called it; and a release tag that already names a different commit.
 
 What no file here can do is the platform half, and that is maintainer setup rather than code. It is
 three things. A required reviewer on the `npm-publish` deployment environment, a `v*` tag ruleset,

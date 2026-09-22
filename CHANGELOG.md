@@ -69,8 +69,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The plugin route is proven per client on every commit.** `scripts/plugin-route-smoke.mjs`
   walks structure, install, discovery and invocation for each client and writes a `--json`
   document; its credential-free structure and install legs run in the merge-blocking
-  `plugin-route` CI job, and the invocation legs run nightly behind one secret per client, each
-  absent secret reported as a notice rather than a pass. The QA harness gains a `plugins` lane and
+  `plugin-route` CI job, and its invocation legs are wired to run nightly behind one secret per
+  client, each absent secret reported as a notice rather than a pass — the first nightly run lands
+  after this release, and when the smoke was driven by hand here the Codex invocation legs were
+  skipped on an account usage limit. The QA harness gains a `plugins` lane and
   rows `H4a`–`H4d` for the four client routes, beside `H5` for upgrade and rollback through each
   client's own route.
 - **Three repository-side proofs back the distribution, and one fixture drives it.**
@@ -176,7 +178,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The publish job verifies what it is about to ship, and refuses to overwrite history.** The
   distribution manifest is checked against the digest the gates job published on the outputs
   channel and every archive against the verified manifest, both ahead of the npm publish so a
-  missing or corrupt artifact fails before the one irreversible step; a `plugins/v<version>` tag
+  missing or corrupt artifact fails before the one irreversible step; the tag's own shape is
+  checked before anything is pushed, so a name that is not `<namespace>/v<version>` for the version
+  the gates job emitted is refused rather than trusted from the manifest; a `plugins/v<version>` tag
   that already names another commit is refused rather than moved; and a distribution branch head
   that carries a parent is refused rather than force-pushed over, because a head with history is a
   source branch whatever the manifest called it.

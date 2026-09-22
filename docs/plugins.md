@@ -71,13 +71,15 @@ URL, under **Plugin containers** in [the capability matrix](capability-matrix.md
 
 ## Install
 
-Each block below carries a provenance line. A block that says **executed** was run on a real
-client on 2026-09-20 or 2026-09-21 and the output is what this page describes. A block that says
-**from the vendor's documentation** is transcribed from a page read on 2026-09-21 and has not been
-run here. The release's own route proof has since run, and it executed the LOCAL form of every
-client's route — a marketplace or a plugin directory on disk. What stays unexecuted is the remote
-`<owner>/stamity#plugin-dist` source: it has nothing to point at until the 1.9.0 release publishes
-the distribution branch. No block on this page is presented as executed when it was not.
+Each block below carries a provenance line. A block that says **executed** was run on a real client
+on 2026-09-20 or 2026-09-21 and the output is what this page describes. A block that says **from
+the vendor's documentation** is transcribed from a page read on 2026-09-21 and has not been run
+here. Two proofs have since run — the release's route proof, and the upgrade-and-rollback lifecycle
+walk — and between them they executed the LOCAL form of every client's route, a marketplace or a
+plugin directory on disk. They did not execute the same commands as each other, so each block below
+names which one ran what. What neither executed is the remote `<owner>/stamity#plugin-dist` source:
+it has nothing to point at until the 1.9.0 release publishes the distribution branch. No block on
+this page is presented as executed when it was not.
 
 `<owner>/stamity` below is your own mirror or this repository, whichever your organization serves
 from. The branch a release publishes the distribution to is `plugin-dist`, and each release also
@@ -90,11 +92,15 @@ claude plugin marketplace add <owner>/stamity#plugin-dist
 claude plugin install stamity@stamity --scope project
 ```
 
-*From the vendor's plugin-marketplaces and CLI reference pages, accessed 2026-09-21. The route
-proof executed this route from a marketplace on disk; the remote source above waits for the
-distribution branch.* What **is** measured about this root: `claude plugin validate --strict
-<root>/claude` prints `✔ Validation passed` and exits 0 *(executed 2026-09-20 on Claude Code
-2.1.278)*.
+*From the vendor's plugin-marketplaces and CLI reference pages, accessed 2026-09-21; the remote
+source above waits for the distribution branch. Two proofs executed different halves of this route,
+both on Claude Code 2.1.278 on 2026-09-20. The route proof took the root's own side and never ran
+these two commands: `claude plugin validate --strict <root>/claude` printed `✔ Validation passed`
+and exited 0, and a `--plugin-dir` run listed the plugin's ids and then ran the setup command. The
+two commands above were walked by the lifecycle proof instead — `plugin marketplace add`, then
+`plugin install stamity@stamity --scope project` — against a CLONE of the distribution tree checked
+out at the tag, with that clone's catalog `source` rewritten to the relative root path a local
+mirror serves, because a local bare repository is not a marketplace source this client takes.*
 
 `--scope project` records the install in your repository's own settings rather than in your user
 profile, which is what makes the decision reviewable:
