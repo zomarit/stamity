@@ -118,15 +118,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   governed outside the corpus rather than exempting one silently.
 - **`all-ci-checks` requires the plugin route lane.** The aggregator's `needs` carries the
   `plugin-route` job with the three lanes it already required, so a red route lane blocks a merge.
-- **The 1.9.0 release run passed every threshold and floor.** Run 31
-  (`evals/runs/2026-09-21-run-31/`) measured the whole set under SET-v7's incremental rule: run 30
-  is the prior complete run it composes with, four cases were re-measured — the three
-  plugin-lifecycle cases added in this release and `agent-test-runner-return-contract`, whose
-  cited source text moved — and the other 98 carried their three admitted samples with per-case
-  provenance and calibration fresh. Golden 1.000 (52 of 52) with every floor case passing,
-  guardrail hold 1.000 (16 of 16), benign-twin false refusals 0 of 4, trigger-probe accuracy
-  1.000 (30 of 30) with every per-skill recall met; three admitted samples per case, the Claude
-  profile, rubric v7, thresholds as declared before the run.
+- **The 1.9.0 release run passed every threshold and floor.** Run 32
+  (`evals/runs/2026-09-22-run-32/`) measured the whole set under SET-v7's incremental rule, at the
+  candidate this release ships: run 31 is the prior complete run it composes with — that one
+  re-measured the three plugin-lifecycle cases new in this release and
+  `agent-test-runner-return-contract`, whose cited source had moved — and run 32 re-measured the
+  two whose case files moved with the route repairs of 2026-09-22,
+  `st-setup-refuses-generated-setup` (2 of 3 samples, every non-negotiable row held on all three)
+  and `st-setup-fresh-repository` (3 of 3), carrying the other 100 with their three admitted
+  samples, per-case provenance and calibration fresh. Golden 1.000 (52 of 52) with every floor case
+  passing, guardrail hold 1.000 (16 of 16), benign-twin false refusals 0 of 4, trigger-probe
+  accuracy 1.000 (30 of 30) with every per-skill recall met; three admitted samples per case, the
+  Claude profile, rubric v7, thresholds as declared before the run.
 
 ### Fixed
 

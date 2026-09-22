@@ -95,9 +95,9 @@ A claim about behaviour is worth what its instrument is worth.
 - The corpus is prose executed by a model, so a test suite cannot decide it. The
   [eval set](../evals/README.md) decides it instead. Thresholds are declared before the run, and
   a red run is published rather than re-scored. The run of record is
-  [run 31](../evals/runs/2026-09-21-run-31/RESULTS.md), the 1.9.0 release run, which passed every
+  [run 32](../evals/runs/2026-09-22-run-32/RESULTS.md), the 1.9.0 release run, which passed every
   declared threshold. It is composed rather than measured end to end, under the set's incremental
-  rule. Run 27 measured every case in full. Runs 29, 30 and 31 then re-measured only the cases
+  rule. Run 27 measured every case in full. Runs 29, 30, 31 and 32 then re-measured only the cases
   whose inputs had moved, and carried the rest with their hashes.
   [The measurements page](measurements.md) rolls an eval run of record up beside the verified
   merge-ready rate.
