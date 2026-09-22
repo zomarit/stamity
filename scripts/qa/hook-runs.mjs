@@ -112,6 +112,13 @@ export const CLIENT_RUNNERS = {
   copilot: {
     binary: 'copilot',
     args: ['-p', PROMPT, '--allow-all-tools'],
+    // `--allow-all-tools` auto-approves tools and does NOT trust the folder, and only folder trust
+    // loads the repository's `.github/hooks/*.json` — `copilot help environment` on 1.0.87:
+    // COPILOT_ALLOW_ALL set to exactly "true" "trusts the working directory and loads its skills,
+    // plugins, MCP servers and hooks". Measured 2026-09-22 with this fixture (prove/257): the flag
+    // alone exited 0 with no observation file; with the variable beside it, seven observations, one
+    // denied and two allowed. Set for this client only — the others honour nothing of the kind.
+    env: { COPILOT_ALLOW_ALL: 'true' },
   },
 }
 
@@ -308,7 +315,9 @@ export function runClient({ client, repoRoot, fixturesDir, runners = CLIENT_RUNN
     timeout: RUN_TIMEOUT_MS,
     // Inherited wholesale: the client's credentials, its config directory and its PATH all live
     // in this environment, and a curated subset would measure a login failure instead of a hook.
-    env: process.env,
+    // A runner's own `env` rides on top — the one variable a client needs to load the fixture's
+    // hooks at all, stated on the runner with its measurement.
+    env: { ...process.env, ...runner.env },
     maxBuffer: 64 * 1024 * 1024,
   })
 

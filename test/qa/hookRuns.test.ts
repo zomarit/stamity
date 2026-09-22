@@ -100,6 +100,13 @@ describe("CLIENT_RUNNERS — cursor and copilot drive the invocations that were 
     expect(CLIENT_RUNNERS.copilot.binary).toBe("copilot");
     expect(CLIENT_RUNNERS.copilot.args).toEqual(["-p", PROMPT, "--allow-all-tools"]);
     expect(CLIENT_RUNNERS.copilot.args, "-s hides the tool calls the verdict reads").not.toContain("-s");
+    // prove/257: the flag auto-approves tools and does not trust the folder, and only folder trust
+    // loads `.github/hooks/*.json` — `copilot help environment` (1.0.87): COPILOT_ALLOW_ALL set to
+    // exactly "true" trusts the working directory and loads its hooks. Exactly "true", for this
+    // client only; the runner's env rides on top of the inherited process env.
+    expect(CLIENT_RUNNERS.copilot.env).toEqual({ COPILOT_ALLOW_ALL: "true" });
+    expect(CLIENT_RUNNERS.claude.env).toBeUndefined();
+    expect(CLIENT_RUNNERS.cursor.env).toBeUndefined();
     expect(CLIENT_RUNNERS.copilot.notRun).toBeUndefined();
     // codex's measured reason is untouched: `exec` on 0.154.0 loads no project hook layer at all.
     expect(CLIENT_RUNNERS.codex.binary).toBeNull();
