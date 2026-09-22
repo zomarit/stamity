@@ -3993,3 +3993,11 @@ seen again today when the harness ran beside the eval). Handoffs prepared throug
 (`2026-09-22_v4-private-chain-rehearsal-1-9-0_508a7`) and the release (merge, tag, publish approval, re-sync).
 The state-file gates run before the commit; the commit and the push close the session with no merge, no tag and
 no publish.
+
+## Amendment after the close (2026-09-22T14:14Z): the Windows exception
+
+The maintainer wrote in chat that the PowerShell-fallback row (`qa-session-3.md` P3) ships with an exception —
+assumed to work as implemented — rather than waiting for a Windows host without Git Bash. Recorded on the form's
+row and here; the `Not done` line stands with that owner's decision beside it, and the `claude-hook-shell` doctor
+row is the release's guard on that host class. The maintainer also asked for the step-by-step of everything else
+(the release, V4, the Cursor rows, Codex's interactive hooks, the nightly's first armed run), given in chat.
