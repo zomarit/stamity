@@ -422,6 +422,26 @@ describe("the locator runs the resolved runtime", () => {
     expect((JSON.parse(result.stdout) as { ran: string }).ran).toBe("companion");
   });
 
+  it("hands a plugin subcommand the root it sits in as --plugin-root", () => {
+    // prove/259: the Codex README's setup line, followed literally, exited 1 with "No installed
+    // plugin root" because the locator never passed the root it sits in. A `plugin` subcommand
+    // now carries `--plugin-root <root>` — the flag, not a child-env variable, because the CLI
+    // reads a flagged root first and the environment in a fixed order a client's own variable
+    // would shadow. `makeRoot` writes the root's `stamity-plugin.json`, which is the condition.
+    const root = makeRoot("plugin-root");
+    const project = makeProject("plugin-root", null);
+
+    const status = runLocate(root, { cwd: project, args: ["--", "plugin", "status", "--json"] });
+    expect(status.status, status.stderr).toBe(0);
+    expect((JSON.parse(status.stdout) as { args: string[] }).args).toEqual(["plugin", "status", "--json", "--plugin-root", root]);
+
+    // A caller's own --plugin-root wins, and a non-plugin command is untouched.
+    const own = runLocate(root, { cwd: project, args: ["--", "plugin", "setup", "--plugin-root", "/elsewhere"] });
+    expect((JSON.parse(own.stdout) as { args: string[] }).args).toEqual(["plugin", "setup", "--plugin-root", "/elsewhere"]);
+    const other = runLocate(root, { cwd: project, args: ["--", "check"] });
+    expect((JSON.parse(other.stdout) as { args: string[] }).args).toEqual(["check"]);
+  });
+
   it("exits with the child's status", () => {
     const root = makeRoot("child-status");
     const project = makeProject("child-status", null);

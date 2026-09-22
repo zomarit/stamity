@@ -339,7 +339,34 @@ if (refusal !== null) {
   process.exit(2)
 }
 
-const child = spawnSync(process.execPath, [resolved.path, ...forwarded], {
+/**
+ * The plugin root this locator sits in, handed to a `plugin` subcommand as `--plugin-root`
+ * (prove/259). The locator KNOWS its root — `dirname(RUNTIME_DIR)` — and until 2026-09-22 never
+ * said so: it spawned the CLI with only `cwd` and `stdio`, so the Codex README's setup line,
+ * followed literally with the cache path substituted, exited 1 with "No installed plugin root"
+ * (measured on codex-cli 0.154.0), while the same line with `PLUGIN_ROOT` set exited 0.
+ *
+ * The FLAG rather than a variable in the child's environment, because of how the CLI resolves
+ * a root (`src/cli/commands/plugin.ts`, `resolveRoots`): a flagged root is read first and
+ * validated by its own capability file; the environment is a fallback read in a fixed order —
+ * CLAUDE_PLUGIN_ROOT, CURSOR_PLUGIN_ROOT, PLUGIN_ROOT, COPILOT_PLUGIN_ROOT — so a `PLUGIN_ROOT`
+ * set here would be shadowed by a client's own variable when that is ALSO set (a stale
+ * CLAUDE_PLUGIN_ROOT from another session, a hook's export), and the CLI would set up whatever
+ * root that named. The flag is deterministic and is what the CLI validates.
+ *
+ * Only for a `plugin` subcommand, only when the caller passed no `--plugin-root` of its own,
+ * and only when the parent directory IS a plugin root (it carries `stamity-plugin.json`): a
+ * bare runtime directory locates itself too, and handing the CLI a directory that is not a root
+ * would turn "no root" into "malformed root".
+ */
+function withPluginRoot(stamityArgs) {
+  if (stamityArgs[0] !== 'plugin' || stamityArgs.includes('--plugin-root')) return stamityArgs
+  const root = dirname(RUNTIME_DIR)
+  if (!existsSync(join(root, 'stamity-plugin.json'))) return stamityArgs
+  return [...stamityArgs, '--plugin-root', root]
+}
+
+const child = spawnSync(process.execPath, [resolved.path, ...withPluginRoot(forwarded)], {
   cwd: project,
   stdio: 'inherit',
   shell: false,
