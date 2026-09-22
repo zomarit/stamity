@@ -9,7 +9,16 @@ import { resolve } from 'node:path'
 const MAX_FILE_BYTES = 1024 * 1024
 // Exact repository-relative paths only. An exception needs its reviewable reason here,
 // never a broad extension exemption or an automatically raised size ceiling.
-const LARGE_FILE_EXCEPTIONS = new Map()
+const LARGE_FILE_EXCEPTIONS = new Map([
+  // The 1.9.0 release run's public summary: 102 coverage cases at three samples each, carrying the
+  // cited span of every binding verdict, which the next release's incremental run reads from this
+  // retention commit to carry a case forward (run 31 read run 30's the same way — its
+  // composition.priorSummaryCommit is 68b57ef). Run 30's summary landed at 3418596 bytes in that
+  // commit (2026-09-15) before this gate existed, and the archive step at the 1.8.0 close compacted
+  // it to 112695 bytes (05cb4ef); the same close step compacts this one, so the exception covers the
+  // retention window, not growth. Verify: git cat-file -s 68b57ef:evals/runs/2026-09-15-run-30/summary.json
+  ['evals/runs/2026-09-21-run-31/summary.json', '1.9.0 release run summary, retained until the release-close archive step compacts it'],
+])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/
 const RUNNER_PAYLOAD = /^(?:[^/]*-attempt-[^/]*|sample-[^/]*|isolation-[^/]*)\.json$/

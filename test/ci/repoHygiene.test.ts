@@ -150,6 +150,18 @@ describe("repository hygiene over the Git index", () => {
     expect(run(root).status).toBe(0);
   });
 
+  it("exempts only the exact retained run summary and still refuses its neighbour", () => {
+    const root = fixture();
+    const exempt = "evals/runs/2026-09-21-run-31/summary.json";
+    const neighbour = "evals/runs/2026-09-21-run-31/inputs.json";
+    for (const path of [exempt, neighbour]) write(root, path, "x".repeat(1024 * 1024 + 1));
+    git(root, "add", ".");
+    const result = run(root, "--base", "HEAD");
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stderr).toContain(neighbour);
+    expect(result.stderr).not.toContain(exempt);
+  });
+
   it.each([
     ["small file crossing the budget", 8, 1048577, "y", 1],
     ["unchanged historical large file", 1048577, 1048577, "x", 0],
