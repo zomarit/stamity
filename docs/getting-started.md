@@ -263,7 +263,7 @@ GitHub CLI, `gh`, authenticated, when they work a real board or pull request.
 npx @zomarit/stamity check
 ```
 
-`check` is the diagnosis. It runs thirteen environment probes. Then it asks the one question that
+`check` is the diagnosis. It runs fourteen environment probes. Then it asks the one question that
 matters more than the rest: **would a sync change anything?**
 
 If the answer is yes, disk and the engine's output disagree. Something was hand-edited, a
