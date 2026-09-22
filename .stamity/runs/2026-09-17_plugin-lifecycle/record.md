@@ -4364,8 +4364,9 @@ closes with merge evidence: pull request #47 merged as `719ea79` (fast-forward, 
 the release run 35797922250 success, npm 1.9.0, `plugin-dist` = `plugins/v1.9.0` = `3c51eba`. The close commit
 carries this section, the two compact run summaries with their `ARCHIVE.json` pointers, the retired hygiene
 exceptions (the lane commit `c7e1c27`), the measurements snapshot `merge-ready-2026-09-23.json` (the script's own
-clock; the page moved by its one pointer line) and `docs/measurements.md`. The private layer's re-sync (AD-132,
-DR-030 done, the session paragraph, the banner, the kickoff regenerated for Package 16) lands in its own commit.
+clock; the page moved by its one pointer line) and `docs/measurements.md`. The private layer's re-sync (its decision row for this session,
+its directive for plan 008 flipped to done, the session paragraph, the banner, the kickoff regenerated for Package 16)
+lands in its own commit.
 Handoffs: the release handoff completed here; V4's completes once the fork's upstream-lane step (the plan's
 twelfth) is recorded in `private-chain.md`; the session-4 handoff last. Session status: **closed** with merge
 evidence. Then Package 16, Track B, Package 12.
