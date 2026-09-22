@@ -101,8 +101,11 @@ export function renderSetupCommand(client, rootVar, decoration = {}) {
   // changelog says only plugin HOOKS receive one (since 1.0.26, the same in 1.0.85). A body that
   // read `${PLUGIN_ROOT}` therefore ran `node "/runtime/locate.mjs"` and the model hunted the
   // filesystem. So that client's body is DISCOVERY-FIRST, in the form the client can satisfy: its
-  // own `skill list --json` reports each plugin skill's `path` as `<root>/skills/<id>` (measured
-  // on 1.0.87), so the root is the directory holding that `skills/`. NOT `plugin list --json`'s
+  // own `skill list --json` lists this root's skills AND its prompt entries (measured on 1.0.87,
+  // 2026-09-22: ten rows at `<root>/skills/<id>` and ten command rows whose `path` is the
+  // directory `<root>/com.github.copilot/commands`), so the rule trims at `/skills/` or at
+  // `/com.github.copilot/`, whichever the path carries — trimming only the first shape derived
+  // two roots from one install and tripped the stop (prove/273). NOT `plugin list --json`'s
   // `installedFrom`: measured the same day, it names the MARKETPLACE directory the plugin was
   // added from (whose catalog maps the plugin to `./copilot` beneath it), not the root. Every
   // command below names the root literally and hands it to the CLI as `--plugin-root`. Claude
@@ -120,15 +123,18 @@ plugin's skills live:
    copilot skill list --json
    \`\`\`
 
-Take every entry whose \`source\` is \`plugin\` and whose \`name\` starts with \`st-\`; each \`path\` is
-\`<root>/skills/<name>\`, so \`<root>\` is the directory that holds that \`skills/\` directory. (Not
-\`plugin list --json\`'s \`installedFrom\`: that names the marketplace the plugin was added from,
-not the root.) Two stops before anything else runs:
+Take every entry whose \`source\` is \`plugin\` and whose \`name\` starts with \`st-\` or \`stamity-\`.
+The listing carries this root's SKILLS and its PROMPT entries alike, and their \`path\` values
+take two shapes: \`<root>/skills/<name>\` for a skill, and \`<root>/com.github.copilot/...\` for a
+command or agent. The rule for both: \`<root>\` is the part of \`path\` before \`/skills/\` when the
+path contains it, otherwise the part before \`/com.github.copilot/\`. Apply it to every entry and
+collect the distinct results. (Not \`plugin list --json\`'s \`installedFrom\`: that names the
+marketplace the plugin was added from, not the root.) Two stops before anything else runs:
 
 - No such entry: the plugin is not loaded in this session — the folder is not trusted, or the
   plugin is not installed. Report that in those words and STOP. Write nothing, and do not search
   the filesystem for a root.
-- More than one distinct \`<root>\` among the entries: two stamity-derived plugins are installed
+- More than one distinct \`<root>\` after that rule: two stamity-derived plugins are installed
   (a canonical root beside a fork, or two marketplaces). List every root and STOP, asking the
   operator which one this repository should run on.
 

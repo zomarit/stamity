@@ -333,7 +333,12 @@ describe("the copilot root's carried classes", () => {
     // command's shell (measured on 1.0.87), so the body reads the root out of the client's own
     // listing and never expands the variable in a command.
     expect(setup).toContain("copilot skill list --json");
-    expect(setup).toContain("`<root>/skills/<name>`");
+    // prove/273: the listing carries the prompt entries too (measured on 1.0.87: command rows whose
+    // path is the directory `<root>/com.github.copilot/commands`), so the rule trims at either
+    // marker; a rule that trimmed only `/skills/<name>` derived two roots and tripped the stop.
+    expect(setup).toContain("`<root>/skills/<name>` for a skill, and `<root>/com.github.copilot/...` for a\ncommand or agent");
+    expect(setup).toContain("before `/skills/` when the\npath contains it, otherwise the part before `/com.github.copilot/`");
+    expect(setup).toContain("starts with `st-` or `stamity-`");
     // `installedFrom` names the marketplace directory, not the root (measured on 1.0.87), and the
     // body says so rather than sending the reader there.
     expect(setup).toContain("not the root");
@@ -341,7 +346,7 @@ describe("the copilot root's carried classes", () => {
     // and stopped on without a filesystem hunt; more than one root is the operator's choice.
     expect(setup).toContain("No such entry: the plugin is not loaded in this session");
     expect(setup).toContain("do not search\n  the filesystem for a root");
-    expect(setup).toContain("More than one distinct `<root>` among the entries");
+    expect(setup).toContain("More than one distinct `<root>` after that rule");
     expect(setup).toContain("List every root and STOP, asking the\n  operator which one");
     expect(setup).toContain("With exactly one root, substitute `<root>` literally");
     expect(setup).toContain('node "<root>/runtime/locate.mjs" -- plugin setup --client copilot -y --plugin-root "<root>"');
