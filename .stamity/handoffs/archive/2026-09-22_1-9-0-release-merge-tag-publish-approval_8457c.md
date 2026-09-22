@@ -1,6 +1,6 @@
 ---
 id: 2026-09-22_1-9-0-release-merge-tag-publish-approval_8457c
-status: active
+status: archived
 created: 2026-09-22T14:03:58.884Z
 expires: 2026-10-22T14:03:58.884Z
 summary: "The 1.9.0 candidate 37e8976 is green on its gate, CI, harness and eval; the merge of PR #47, the tag, the publish approval and the record re-sync are the maintainer's"

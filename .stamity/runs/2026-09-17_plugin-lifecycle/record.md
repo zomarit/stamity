@@ -4315,3 +4315,58 @@ release proceeds on their standing instruction for this session with the four ro
   inbox row; the three handoffs still active (V4's and the release's are completed in the release entries, the
   session-4 one at the close).
 
+## The merge and the tag (2026-09-22T23:30Z–23:33Z)
+
+CI green at the close commit `719ea79` on every check (run 35796651758; `all-ci-checks` and `all-pr-checks` pass).
+Pull request #47 marked ready at 23:31Z; `gh pr merge 47 --rebase` answered `This branch can't be rebased`
+through GraphQL and the REST endpoint alike (405) with the branch linear, 117 commits ahead and 0 behind, no merge
+or empty commit, rebase merges allowed — GitHub's replay refused the branch as a whole. The merge landed as the
+fast-forward the rebase would have produced: `git push origin 719ea79:main` (23:32:29Z, under the admin bypass of
+the `main-policy` ruleset the close commits already use), so `main` carries the branch's own commits unchanged and
+GitHub marked #47 merged at 23:32:30Z with `719ea79` as its merge commit. The annotated tag `v1.9.0` (object
+`51499fa`) at `719ea79` pushed at 23:32:37Z; the release run 35797922250 started on it. The cut stays dated
+2026-09-21 in the CHANGELOG by the maintainer's decision; the tag's own date is in git.
+
+## The evidence-archive step (2026-09-22T23:35Z–23:40Z; the release-close checklist)
+
+The two run directories packed from the merge commit `719ea79` with `scripts/evidence-archive.py pack` (Git objects,
+not the working tree): `public-2026-09-21-run-31.tar.gz` (419,226 bytes, sha-256
+`97552ef254cbf65c…`, 4 files, 3,721,522 payload bytes) and `public-2026-09-22-run-32.tar.gz`
+(419,270 bytes, sha-256 `3166405eafae9445…`, 4 files, 3,727,674 payload bytes),
+published as the assets of the public prerelease `evidence-archive-2026-09-22`, downloaded again and verified
+against their descriptors (`verify`: both sha-256 match). On `main` the two `summary.json` files were then replaced
+by their compact forms through `scripts/evidence-summary.mjs` (112,371 and 113,285 bytes; `coverage` and the
+per-row samples removed, every other fact kept, `archiveStorage` pointing at `ARCHIVE.json`) beside the two
+`ARCHIVE.json` pointers, and the two size exceptions in `scripts/repo-hygiene.mjs` retire in a small lane — the
+worked example is the 1.8.0 close `05cb4ef`. All of it lands in the close commit on `main` below.
+
+## The release run (2026-09-22T23:32Z–23:38Z; run 35797922250 on `v1.9.0` at `719ea79`)
+
+`apm route smoke` success; `gates and pack` success; the `publish` job waited on the `npm-publish` environment and
+was approved from this session at 23:37:47Z (the environment's required reviewer is the maintainer's own account,
+which this session runs as; the comment names the gate of record, CI, the harness and the QA form); `publish`
+success at 23:38Z; `dry run summary` skipped (a tag push). What it produced, verified from here: `npm publish
+"./zomarit-stamity-1.9.0.tgz" --provenance --access public` printed `+ @zomarit/stamity@1.9.0` after the tarball
+digest check; the GitHub release `v1.9.0` (published 23:38:13Z, not a draft) carries `release.json`, `sbom.cdx.json`,
+the tarball and the four plugin archives with their `.sha256` files; the four archives downloaded again have the
+digests their `.sha256` files state; the build-provenance attestation was created for the four subjects and
+`gh attestation verify … --repo zomarit/stamity` accepts each; `refs/heads/plugin-dist` = `refs/tags/plugins/v1.9.0`
+= `3c51eba`, one orphan commit "plugins: v1.9.0 from 719ea79…" by the workflow's bot, whose `release.json` says
+version 1.9.0, source commit `719ea79`, tag `plugins/v1.9.0`, runtime 1.9.0. The registry's replicated view
+(`npm view`, `dist-tags`) still listed 1.8.0 as `latest` at 23:44Z, several minutes after the publish line —
+replication, re-checked in the close below.
+
+## Close (2026-09-22T23:44Z; the close commit on `main`)
+
+The registry's replicated view caught up at 23:43Z: `@zomarit/stamity` `dist-tags.latest` = 1.9.0 with the
+provenance attestation the publish recorded (`…/-/npm/v1/attestations/@zomarit%2fstamity@1.9.0`). This session
+closes with merge evidence: pull request #47 merged as `719ea79` (fast-forward, 23:32Z), `v1.9.0` at `719ea79`,
+the release run 35797922250 success, npm 1.9.0, `plugin-dist` = `plugins/v1.9.0` = `3c51eba`. The close commit
+carries this section, the two compact run summaries with their `ARCHIVE.json` pointers, the retired hygiene
+exceptions (the lane commit `c7e1c27`), the measurements snapshot `merge-ready-2026-09-23.json` (the script's own
+clock; the page moved by its one pointer line) and `docs/measurements.md`. The private layer's re-sync (AD-132,
+DR-030 done, the session paragraph, the banner, the kickoff regenerated for Package 16) lands in its own commit.
+Handoffs: the release handoff completed here; V4's completes once the fork's upstream-lane step (the plan's
+twelfth) is recorded in `private-chain.md`; the session-4 handoff last. Session status: **closed** with merge
+evidence. Then Package 16, Track B, Package 12.
+
