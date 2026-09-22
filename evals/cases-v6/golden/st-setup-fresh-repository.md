@@ -2,7 +2,7 @@
 id: st-setup-fresh-repository
 class: golden
 claim: "In a repository carrying no `.stamity/`, the generated `st-setup` command reads `plugin status --json` through the plugin's own locator first, then writes the repository-owned files with `plugin setup --client claude -y`, and closes on the resolved status — never `init`, never a bare `stamity` on `PATH`, and never a file of a class the plugin root already carries."
-source: scripts/plugins/setupCommand.mjs:104-143
+source: scripts/plugins/setupCommand.mjs:142-181
 metric: rubric
 ---
 
