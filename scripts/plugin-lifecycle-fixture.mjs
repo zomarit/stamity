@@ -34,7 +34,10 @@
 //
 // `--push <git url>` mirrors both tags and the branch to a real remote. It is the only step here
 // that leaves the machine, it is never needed to walk a client locally, and it is separate from
-// the build for that reason.
+// the build for that reason. The push is not forced, so the remote must not already hold the
+// distribution branch: a `plugin-dist` that is already there is refused as a non-fast-forward, and
+// that refusal is the right answer for a fixture remote — delete the branch there first. The URL
+// is printed and, on failure, quoted with its userinfo dropped, because a token travels there.
 //
 // Exit codes: 0 the fixture was built, 1 a step failed, 2 bad arguments.
 // Usage: node scripts/plugin-lifecycle-fixture.mjs --out <dir> --versions <semver>,<semver>
@@ -230,6 +233,48 @@ function run(command, args, options = {}) {
 }
 
 /**
+ * A push URL's display form, and a scrub for any line that quoted the URL as given. Userinfo is
+ * dropped — `https://x-access-token:<token>@host/o/r.git` is how a token travels in a push URL —
+ * and every spelling of it a line could carry is replaced: the URL itself by the display form, the
+ * `user:password@` run by nothing, the password by a placeholder. A value the URL parser refuses
+ * (an scp-style `git@host:o/r.git`, a path) carries no userinfo and is shown as given.
+ */
+function pushDisplay(url) {
+  let parsed
+  try {
+    parsed = new URL(url)
+  } catch {
+    // Not a URL: nothing to drop, and git will say what it makes of the value.
+    return { shown: url, scrub: (text) => text }
+  }
+  const { username, password } = parsed
+  if (username === '' && password === '') return { shown: url, scrub: (text) => text }
+  parsed.username = ''
+  parsed.password = ''
+  const shown = parsed.href
+  const userinfo = password === '' ? username : `${username}:${password}`
+  const secrets = [password, decodedOrSelf(password)].filter((secret) => secret !== '')
+  return {
+    shown,
+    scrub: (text) =>
+      secrets.reduce(
+        (out, secret) => out.replaceAll(secret, '<redacted>'),
+        text.replaceAll(url, shown).replaceAll(`${userinfo}@`, ''),
+      ),
+  }
+}
+
+/** `value` percent-decoded, or as given when it is not valid percent-encoding. */
+function decodedOrSelf(value) {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    // Malformed escapes: the encoded form is the only spelling a line could have carried.
+    return value
+  }
+}
+
+/**
  * Every git invocation here is run with the repository's configuration pinned on the command line
  * rather than inherited: an operator's global `core.autocrlf` or commit signing would otherwise
  * change the bytes committed or the commit object, and the whole point of these two commits is that
@@ -279,15 +324,19 @@ function treeDigests(dir) {
 
 /**
  * A copy of this checkout that a distribution build can run out of, isolated from the working
- * tree: the four directories a build reads, the manifest that carries the distribution identity,
- * and `node_modules` as a symlink rather than a copy. The shape is
- * `test/ci/downstreamFixture.ts`'s `downstreamCheckout`, plus the real `content/` tree, which is
- * the corpus every root is planned from.
+ * tree: the four directories a build reads, the fork layer when the checkout carries one, the
+ * manifest that carries the distribution identity, and `node_modules` as a symlink rather than a
+ * copy. The shape is `test/ci/downstreamFixture.ts`'s `downstreamCheckout`, plus the real
+ * `content/` tree, which is the corpus every root is planned from.
  */
 function checkoutCopy(parent) {
   const root = join(parent, 'checkout')
   mkdirSync(root, { recursive: true })
-  for (const path of ['src', 'scripts', 'assets', 'content']) {
+  // `fork/` when the checkout has one: a fork's own layer is part of what its build carries
+  // (REQ-PLUGIN-022), and a copy without it built two trees that dropped it — while the marker,
+  // written under the copy's own `fork/skills/` between the builds, still landed and hid the loss.
+  for (const path of ['src', 'scripts', 'assets', 'content', 'fork']) {
+    if (path === 'fork' && !existsSync(join(ROOT, path))) continue
     cpSync(join(ROOT, path), join(root, path), { recursive: true })
   }
   writeFileSync(join(root, 'package.json'), readFileSync(join(ROOT, 'package.json')))
@@ -487,8 +536,20 @@ function main(argv) {
       // bare repository rather than re-deriving anything: what a mirror receives is byte for
       // byte what a local walk just exercised.
       const refs = [...versions.map((version) => `refs/tags/${releaseTag(identity, version)}`), `refs/heads/${branch}`]
-      git(['push', push, ...refs], { cwd: outDir, env: { ...process.env, GIT_DIR: bare } })
-      console.log(`plugin-lifecycle-fixture: pushed ${refs.join(' ')} to ${push}`)
+      const { shown, scrub } = pushDisplay(push)
+      try {
+        git(['push', push, ...refs], { cwd: outDir, env: { ...process.env, GIT_DIR: bare } })
+      } catch (error) {
+        // `run()`'s line quotes its argv, which is the URL as given — the one place a token in its
+        // userinfo could reach stderr and a pasted record: git's own "unable to access" line prints
+        // the URL without credentials already (measured 2026-09-22). The cause travels with the
+        // rethrow, so its message and its stack (which repeats the message) are scrubbed in place.
+        const thrown = error instanceof Error ? error : new Error(String(error))
+        thrown.message = scrub(thrown.message)
+        thrown.stack = scrub(thrown.stack ?? '')
+        throw new Error(thrown.message, { cause: error })
+      }
+      console.log(`plugin-lifecycle-fixture: pushed ${refs.join(' ')} to ${shown}`)
     }
 
     console.log(

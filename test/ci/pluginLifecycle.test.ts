@@ -6,6 +6,7 @@ import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   appendFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -13,6 +14,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,6 +24,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // @ts-expect-error — the distribution modules ship as plain .mjs with no type declarations: they
 // run under bare Node in a release job, with no TypeScript nearby.
 import { CATALOG_PATHS } from "../../scripts/plugins/catalogs.mjs";
+import { document } from "./downstreamFixture.js";
 
 /**
  * `scripts/plugin-lifecycle-fixture.mjs` and the consumer walks it exists for: install at one
@@ -491,6 +494,110 @@ describe("plugin-lifecycle-fixture, the refusals", () => {
     expect(result.stderr).toContain("already holds files");
     expect(readFileSync(join(occupied, "keep.txt"), "utf8")).toBe("mine\n");
   });
+});
+
+describe("plugin-lifecycle-fixture, the checkout copy and the push", () => {
+  it(
+    "carries the checkout's own fork layer into both trees, beside the marker the second adds",
+    () => {
+      // `checkoutCopy` copied `src`, `scripts`, `assets`, `content` and `package.json` and not
+      // `fork/`, so a fork checkout's own layer was dropped from both fixture trees while the
+      // marker — written under the COPY's `fork/skills/` between the builds — still landed, which
+      // is what hid the loss. The subject is the copy, so the builder runs out of a checkout this
+      // case composes under the temp root: the same five inputs, `node_modules` linked, one fork
+      // skill, and one empty commit so the provenance resolves (the shape of
+      // `test/ci/downstreamFixture.ts`'s `downstreamCheckout`).
+      const checkout = tempDir("fork-checkout");
+      for (const path of ["src", "scripts", "assets", "content"]) {
+        cpSync(join(REPO_ROOT, path), join(checkout, path), { recursive: true });
+      }
+      writeFileSync(join(checkout, "package.json"), readFileSync(join(REPO_ROOT, "package.json")));
+      symlinkSync(join(REPO_ROOT, "node_modules"), join(checkout, "node_modules"), "junction");
+      const probe = join(checkout, "fork", "skills", "fork-probe", "SKILL.md");
+      mkdirSync(join(probe, ".."), { recursive: true });
+      writeFileSync(probe, document("fork-probe", "skill", "A fork-layer skill the fixture has to carry."));
+      gitOut(["init", "--quiet", "--initial-branch", "fixture"], checkout);
+      gitOut(
+        [
+          "-c",
+          "user.name=fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          "-c",
+          "commit.gpgsign=false",
+          "commit",
+          "--quiet",
+          "--allow-empty",
+          "--message",
+          "fixture: a checkout with a fork layer",
+        ],
+        checkout,
+      );
+
+      const out = join(tempDir("fork-fixture"), "lifecycle");
+      const result = spawnSync(
+        process.execPath,
+        [
+          join(checkout, "scripts", "plugin-lifecycle-fixture.mjs"),
+          "--out",
+          out,
+          "--versions",
+          VERSIONS.join(","),
+          "--runtime",
+          stubRuntime(),
+          "--client",
+          "claude",
+        ],
+        { cwd: checkout, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: STUB_BUILD_MS },
+      );
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+      for (const version of VERSIONS) {
+        expect(existsSync(join(out, version, "claude", "skills", "fork-probe", "SKILL.md")), version).toBe(true);
+      }
+      // The marker stays the second version's alone: the checkout's fork layer is what both trees
+      // share, and the one authored difference is still the one authored difference.
+      expect(existsSync(join(out, V1, "claude", "skills", "fixture-marker", "SKILL.md"))).toBe(false);
+      expect(existsSync(join(out, V2, "claude", "skills", "fixture-marker", "SKILL.md"))).toBe(true);
+    },
+    STUB_BUILD_MS,
+  );
+
+  it(
+    "prints and throws the push URL without its userinfo",
+    () => {
+      // `pushed … to ${push}` echoed the URL as given, and `run()`'s failure line quotes its argv,
+      // so a token in the URL's userinfo — `https://x-access-token:<token>@host/o/r.git` is how one
+      // travels — reached stdout or stderr and from there a pasted record. The push goes to a
+      // loopback port nothing listens on, so it fails without leaving the machine and without a
+      // credential prompt (the fixture ignores stdin); git's own "unable to access" line prints the
+      // URL without credentials already, so the argv and the echo are the two places the secret
+      // could survive.
+      const secret = "fixture-token-3f9a1c";
+      const out = join(tempDir("push"), "lifecycle");
+      const result = fixture(
+        [
+          "--out",
+          out,
+          "--versions",
+          VERSIONS.join(","),
+          "--runtime",
+          stubRuntime(),
+          "--client",
+          "claude",
+          "--push",
+          `https://x-access-token:${secret}@127.0.0.1:9/o/r.git`,
+        ],
+        STUB_BUILD_MS,
+      );
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(1);
+      const printed = `${result.stdout}\n${result.stderr}`;
+      expect(printed).not.toContain(secret);
+      expect(printed).not.toContain("x-access-token");
+      expect(result.stderr).toContain("plugin-lifecycle-fixture: FAIL - git");
+      expect(result.stderr).toContain("push https://127.0.0.1:9/o/r.git refs/tags/");
+    },
+    STUB_BUILD_MS,
+  );
 });
 
 // ── group two: the client walks ──────────────────────────────────────────────────────────
