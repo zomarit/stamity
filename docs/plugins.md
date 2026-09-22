@@ -135,16 +135,17 @@ prints a deprecation warning in favour of `plugin@marketplace` *(executed 2026-0
 Copilot CLI 1.0.85, which installed 10 skills unauthenticated and listed `stamity` under `copilot
 plugin list --json`)*.
 
-Where an install lands, and whether it is a copy at all, depends on the marketplace's own source.
-A **remote** marketplace install is a cached copy under
+Where an install lands, and whether it is a copy at all, depends on the marketplace's own source. A
+**remote** marketplace install is a cached copy under
 `~/.copilot/installed-plugins/<marketplace>/<plugin>`, or `_direct/<source-id>/` for a direct one:
 a root you edit on disk changes nothing in the client until you install it again, and `copilot
-plugin update stamity` is the refresh. A marketplace on a **local path** is the other case, and
-nothing is copied — the plugin loads live from the directory it sits in, an edit takes effect on
-`/restart` or in a new session, and no `plugin update` is needed *(vendor-stated for a
-directory-source marketplace, read 2026-09-21; measured 2026-09-20 on 1.0.85, which reported the
-installed entry's source as `live`, copied nothing, never wrote `installed-plugins/`, and answered
-`plugin update` with "there is nothing to update")*.
+plugin update stamity@stamity` is the refresh — this client's update takes
+`plugin-name@marketplace-name` for a marketplace install. A marketplace on a **local path** is the
+other case, and nothing is copied — the plugin loads live from the directory it sits in, an edit
+takes effect on `/restart` or in a new session, and no `plugin update` is needed *(vendor-stated
+for a directory-source marketplace, read 2026-09-21; measured 2026-09-20 on 1.0.85, which reported
+the installed entry's source as `live`, copied nothing, never wrote `installed-plugins/`, and
+answered `plugin update` with "there is nothing to update")*.
 
 Project skills win over plugin skills on this client — `.github/skills/`, `.agents/skills/` and
 `.claude/skills/` are searched first — so a plugin skill with the same id as one of yours is
@@ -254,8 +255,9 @@ emits the same report as data.
 There is no common answer here, and this page states the gap where there is one rather than
 inventing a command. Every block below is *from the vendor's documentation, accessed 2026-09-21*,
 unless it says otherwise; the release's lifecycle proof walked each client's upgrade and rollback
-against two built versions on 2026-09-20, and where it measured something the documentation does
-not say, the measurement is what this page states.
+against two built versions on 2026-09-20, with the Claude rollback re-walked on 2026-09-22, and
+where it measured something the documentation does not say, the measurement is what this page
+states.
 
 **Claude Code.** A marketplace added at a tag or a commit is the pin, and
 
@@ -291,7 +293,7 @@ client's own message is what names it. A `plugin rollback` subcommand is **settl
 vendor page read 2026-09-21 names one. The reinstall route above is the rollback.
 
 **Copilot CLI.** Pinning is the same move as installing — add the marketplace at
-`#plugins/v<version>` — and for a remote marketplace `copilot plugin update stamity` is the
+`#plugins/v<version>` — and for a remote marketplace `copilot plugin update stamity@stamity` is the
 refresh, with rolling back being uninstall, re-add at the previous tag, install. For a marketplace
 on a local path there is nothing to update or roll back through the CLI: the plugin loads live, so
 both are a replacement of the tree the marketplace points at *(measured 2026-09-20 on 1.0.85:
