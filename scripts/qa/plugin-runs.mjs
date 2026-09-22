@@ -214,10 +214,12 @@ function runSmoke({ args, cwd }) {
 // evidence file is committed, and a vitest line can carry a temp directory or a home.
 //
 // THE ROW FOLDS ON THE PER-CLIENT `walk` LINE, not on the whole log. Four `walk PASS` and a green
-// suite is `passed`; any `walk SKIPPED` — no binary, an account the walk will not reach for, a rate
-// limit — is `not-run` with those clients' reasons; a red suite, or a `walk FAIL`, is `failed`. The
-// one line that is FAIL by design, `claude rollback-documented`, is a measurement of `docs/plugins.md`
-// rather than of a walk step, which is exactly why the fold reads the `walk` line and not the rest.
+// suite is `passed`; any `walk SKIPPED` — no binary, or an account the walk's one model call could
+// not reach — is `not-run` with those clients' reasons; a red suite, or a `walk FAIL`, is `failed`.
+// Reading the `walk` line rather than the whole log is also what keeps a step line from being folded
+// twice, and the fold refuses to hide one: a `FAIL` on any step line inside an otherwise passing row
+// LEADS that row's reason, so a verdict nobody meant to publish cannot sit quietly in the middle of
+// forty lines of evidence.
 
 /** The suite whose armed cases ARE this walk, and the scripts the row is bound to beyond the fixture. */
 const LIFECYCLE_SUITE = ['test', 'ci', 'pluginLifecycle.test.ts']
@@ -277,6 +279,15 @@ export function lifecycleRow({ clients, log, status, exit, redact = (text) => te
       status: 'not-run',
       reason: `${skipped.map((entry) => `${entry.client}: ${entry.row.reason}`).join('; ')} || ${reason}`,
     }
+  }
+  // Every `walk` line passed, so the row passes — but a STEP line may still carry a FAIL that the
+  // walk deliberately recorded without failing over (a measurement of something outside the tree,
+  // which is a thing this suite has published before). It is not hidden: it leads the reason, where
+  // a reader of the row sees it before the forty lines behind it.
+  const failedSteps = rows.filter((row) => row.verdict === 'FAIL')
+  if (failedSteps.length > 0) {
+    const lead = failedSteps.map((row) => `${row.client} ${row.step}: ${row.reason}`).join('; ')
+    return { status: 'passed', reason: `FAIL lines recorded by a passing walk — ${lead} || ${reason}` }
   }
   return { status: 'passed', reason }
 }

@@ -71,13 +71,17 @@ import { CATALOG_PATHS } from "../../scripts/plugins/catalogs.mjs";
  *            at scope user". There is NO `rollback` subcommand on 2.1.278 (`claude plugin
  *            rollback stamity` answers `error: unknown command 'rollback'`, and the sha-256 of
  *            `claude plugin --help` is recorded in the run record), so the rollback route is the
- *            marketplace moved back to the `.1` tag plus `plugin update --scope project`, which
- *            re-records the version downwards — the route the CLI's own reinstall message names.
- *            `docs/plugins.md`'s documented rollback (re-add the marketplace at the previous tag,
- *            then install again) is EXECUTED here and measured insufficient: `marketplace add`
- *            answers "already on disk", `install` answers "already installed … it loads in place
- *            from <path>", and the recorded version stays at `.2`. The return carries the docs
- *            delta; the walk keeps both measurements rather than only the one that works.
+ *            marketplace moved back to the `.1` tag plus `plugin update stamity@stamity --scope
+ *            project`, which re-records the version downwards. That is `docs/plugins.md`'s
+ *            published rollback, and the walk EXECUTES all THREE of its commands in order rather
+ *            than paraphrasing them: `marketplace add` at the previous tag (answers "already on
+ *            disk" when the clone is the marketplace), `plugin install stamity@stamity --scope
+ *            project` (answers "already installed … it loads in place from <path>" and leaves the
+ *            recorded version where it was — which is why the page needs its third line), then the
+ *            QUALIFIED `plugin update stamity@stamity --scope project`, which is the command the
+ *            CLI's own reinstall message names and the one that re-records `.2` down to `.1`. The
+ *            row records that third command's exit code and the sha-256 of its output, because a
+ *            page's route is only documented once something has run it.
  *   copilot  A local directory marketplace loads the plugin LIVE: `plugin install` answers "it is
  *            loaded live from <path> … nothing was copied", and `plugin update` answers "there is
  *            nothing to update". The version therefore follows the marketplace directory, so
@@ -287,13 +291,6 @@ function observe(label: string, command: string[], result: SpawnSyncReturns<stri
   );
   return result;
 }
-
-/**
- * What a client CLI says when the account behind it is out of quota for now. A rate limit is a fact
- * about the account, not about the tree under test, so a walk that hits one records `not-run` with
- * the client's own words and stops — never `failed`, which would send the next reader to the diff.
- */
-const RATE_LIMITED = /rate limit|rate-limit|too many requests|quota|usage limit|try again (later|after)/i;
 
 /** The steps this client's walk has recorded so far, in order, with their verdicts. */
 function stepsOf(client: Client): string[] {
@@ -767,12 +764,10 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
       expect(`${absent.stdout}${absent.stderr}`).toContain("unknown command 'rollback'");
       row("claude", "rollback-subcommand", "SKIPPED", "claude 2.1.278 has no rollback subcommand");
 
-      // THE DOCUMENTED ROUTE, executed as `docs/plugins.md` writes it: re-add the marketplace at
-      // the previous tag, then install again. Measured 2026-09-20 on 2.1.278 against a directory
-      // marketplace: neither command moves the recorded version. `marketplace add` answers
-      // "already on disk", `install` answers "already installed … it loads in place from <path>"
-      // and names `plugin update … --scope project` as what re-records it. So the page's two
-      // commands are necessary and NOT sufficient, and the return carries a docs delta.
+      // THE DOCUMENTED ROUTE, all three commands, executed in the order `docs/plugins.md` prints
+      // them and with the spelling it prints — including the QUALIFIED `stamity@stamity` on the
+      // third, which is the form the CLI's own message names and is not interchangeable with the
+      // bare id for a reader following the page.
       moveMirror(walk, V1, true);
       const readded = claude(["plugin", "marketplace", "add", walk.mirror], "plugin marketplace add (documented rollback)");
       expect(`${readded.stdout}${readded.stderr}`).toContain("already on disk");
@@ -787,25 +782,32 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
         availableVersion: V1,
       });
       expect(JSON.parse(reinstall.stdout)).toMatchObject({ message: expect.stringContaining("already installed") });
-      // Still at the second version: the documented route alone did not roll anything back.
+      // The first two commands do not re-record the version by themselves, which is exactly why the
+      // page carries a third. Asserted here so the third command's effect is attributable to it.
       expect(claude(["plugin", "list"]).stdout).toContain(V2);
-      // FAIL, not SKIPPED: the route RAN and did not do what the page says it does. A skipped
-      // verdict would read as "nobody tried", which is the one thing this row is not.
+
+      const third = ["plugin", "update", "stamity@stamity", "--scope", "project", "--json"];
+      const back = claude(third, "plugin update stamity@stamity --scope project (documented rollback)");
+      expect(back.status, back.stderr).toBe(0);
+      expect(JSON.parse(back.stdout)).toMatchObject({ updateOutcome: "updated", oldVersion: V2, newVersion: V1 });
+      // PASS, and the reason names the three commands as EXECUTED plus the third one's exit code and
+      // output digest: a route this repository publishes is documented once something has run it,
+      // and the digest is what a run record cites when it says which run that was.
       row(
         "claude",
         "rollback-documented",
-        "FAIL",
-        "docs/plugins.md's re-add plus install leaves the recorded version at .2; plugin update --scope project completes the route",
+        "PASS",
+        `the published three commands, executed in order (with --json added where the CLI offers it, which is this ` +
+          `suite reading the result rather than part of the route): claude plugin marketplace add <the clone at ${V1}> ` +
+          `→ "already on disk"; claude plugin install stamity@stamity --scope project → exit ${String(reinstall.status)}, ` +
+          `already installed at ${V2}; claude ${third.join(" ")} → exit ${String(back.status)}, updated ${V2} to ${V1} ` +
+          `[stdout sha256 ${digest(back.stdout)}]`,
       );
 
-      // The completing command, which is the one the CLI itself names.
-      const back = claude(["plugin", "update", "stamity", "--scope", "project", "--json"]);
-      expect(back.status, back.stderr).toBe(0);
-      expect(JSON.parse(back.stdout)).toMatchObject({ updateOutcome: "updated", oldVersion: V2, newVersion: V1 });
       expect([...digestMap(installedRoot(V1))]).toEqual([...digestMap(shippedRoot(walk, "claude", V1))]);
       expect(existsSync(join(installedRoot(V1), "skills", "fixture-marker", "SKILL.md"))).toBe(false);
       unchanged();
-      row("claude", "rollback", "PASS", `marketplace re-added at ${V1} plus plugin update --scope project`);
+      row("claude", "rollback", "PASS", `the ${V1} tree is restored byte for byte and the project is untouched`);
       assertCompatible("claude", installedRoot(V1), walk.project, V1, "rolled-back");
       row("claude", "walk", "PASS", "reinstall route: directory marketplace, --scope project on install and update");
 
@@ -819,7 +821,7 @@ describe.skipIf(!armed("claude"))("the Claude install, update and rollback walk"
         "update PASS",
         "status-updated PASS",
         "rollback-subcommand SKIPPED",
-        "rollback-documented FAIL",
+        "rollback-documented PASS",
         "rollback PASS",
         "status-rolled-back PASS",
         "walk PASS",
@@ -944,14 +946,15 @@ describe.skipIf(!armed("codex"))("the Codex install, update and rollback walk", 
 
   it(
     "copies the local marketplace into its cache and re-adds for both states",
-    (ctx) => {
+    () => {
+      // No rate-limit guard here, and none anywhere in this walk except the one leg that calls a
+      // model: `plugin marketplace add`, `plugin add`, `plugin remove` and `plugin list` are local
+      // file operations against a directory on this disk, and an account limit cannot reach them.
+      // A guard over them would be a branch no limit can enter, reading as coverage of a risk that
+      // is not there. The Cursor discovery leg is the one model call, and its refusal check carries
+      // the limit sense.
       moveMirror(walk, V1, false);
       const market = codex(["plugin", "marketplace", "add", walk.mirror]);
-      if (RATE_LIMITED.test(`${market.stdout}${market.stderr}`)) {
-        row("codex", "walk", "SKIPPED", `rate limited: ${`${market.stdout}${market.stderr}`.trim().split("\n")[0] ?? ""}`);
-        ctx.skip();
-        return;
-      }
       expect(market.status, market.stderr).toBe(0);
       const add = codex(["plugin", "add", "stamity@stamity"]);
       expect(add.status, add.stderr).toBe(0);
@@ -1036,8 +1039,18 @@ describe.skipIf(!armed("codex"))("the Codex install, update and rollback walk", 
 const CURSOR_DISCOVERY_PROMPT =
   "List every skill this plugin provides, including ones marked disable-model-invocation. " +
   "Print only the skill ids, one per line.";
-/** What that suite's own leg recognises as "the CLI never reached the model". */
-const CURSOR_REFUSAL = /authentication required|CURSOR_API_KEY|agent login|workspace trust required/i;
+/**
+ * What that suite's own leg recognises as "the CLI never reached the model", plus the account limits
+ * that stop it the same way.
+ *
+ * The limit half belongs HERE and nowhere else in this file: the Cursor discovery run is the only
+ * leg of the whole walk that calls a model, and every other client command it makes is a local file
+ * operation an account limit cannot reach. A limit is a fact about the account, not about the tree
+ * under test, so it records `not-run` with the client's own words — never `failed`, which would send
+ * the next reader to the diff.
+ */
+const CURSOR_REFUSAL =
+  /authentication required|CURSOR_API_KEY|agent login|workspace trust required|rate limit|rate-limit|too many requests|usage limit|out of credits/i;
 /** One measured discovery run took 56.59s (`/usr/bin/time -p`, 2026-09-20); 4x for a loaded worker. */
 const CURSOR_PROMPT_MS = 240_000;
 
@@ -1173,10 +1186,11 @@ describe.skipIf(!armed("cursor"))("the Cursor local-path walk", () => {
         const seen = discover(root);
         const transcript = `${seen.stdout}\n${seen.stderr}`;
         if (CURSOR_REFUSAL.test(transcript)) {
-          row("cursor", state, "SKIPPED", `needs an account: ${transcript.trim().split("\n")[0] ?? ""}`);
+          const first = transcript.trim().split("\n")[0] ?? "";
+          row("cursor", state, "SKIPPED", `needs an account: ${first}`);
           // The per-client completion row every consumer folds on, closed before the skip: a client
           // whose walk stopped has to say so on that line, not go quiet.
-          row("cursor", "walk", "SKIPPED", "needs an account: agent refused before it reached the model");
+          row("cursor", "walk", "SKIPPED", `needs an account: agent did not reach the model — ${first}`);
           ctx.skip();
           return;
         }
