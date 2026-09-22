@@ -320,3 +320,9 @@ An errored or invalid call is reported here, never as a grade or a calibration m
 Nothing: every calibration fixture matched, all 6 scenario samples and 6 independent judges were admitted, and every metric is reported beside its threshold above.
 
 No threshold moved. No case text moved after any score was known. Canaries (`inputs.json`) were non-measured control checks with non-case prompts and are not counted above.
+
+## Errata (2026-09-22)
+
+One section above is the private exporter's, not this run's. The public artifact is never regenerated (the exporter refuses to overwrite a scored run, and a driver change cannot re-export one), so it is corrected here and nowhere else; no other line of this file, and none of `summary.json` or `inputs.json`, changed.
+
+1. § 8 "Advisory repeats" reports `none` over a comparison that compared nothing. The repeat driver runs over the cases this run measured, and both re-measured cases — `st-setup-refuses-generated-setup` and `st-setup-fresh-repository` — are new in SET-v7 (`evals/cases-v6/**`) with no counterpart under `evals/cases-v5/**`, so they sit outside the 70-case compared set the rationale sentence describes; that sentence is the v5-era exporter's literal, and no repeat was possible this run. The three advisory failures in § 7 are run 31's three rows carried unchanged under the incremental rule (§ 0) — the same cases, samples, criterion and cited spans — not a second measurement, so a two-run repeat is neither established nor excluded for them here; their disposition waits on the next run that re-measures them.

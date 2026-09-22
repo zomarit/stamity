@@ -266,7 +266,7 @@ measurement.
 
 ## Evidence and preservation
 
-Private (the governance repository beside this one): protocol, canary plan and results, driver source and
+Private (the private layer beside this one): protocol, canary plan and results, driver source and
 tests, per-attempt stdin, stdout, stderr, process metadata, captured request and
 response bodies, system prompt text, inspection and grade records, state and journal.
 Public (`evals/runs/<run-id>/`): `inputs.json` (candidate, input hashes, driver and
