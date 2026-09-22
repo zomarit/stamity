@@ -667,11 +667,16 @@ and the codex leg asserts the installed tree.
 As built (2026-09-21) — the proof exists, and its legs are split by what a credential gates rather
 than by client. `scripts/plugin-route-smoke.mjs` walks structure, install, discovery and invocation
 per client, exits 0 only when no leg failed, 1 on a failure and 2 when it could not run, and writes
-the `--json` document the CI job and the QA harness both read; `test/ci/pluginRoute.test.ts` runs the
-structure leg always and each install and discovery leg under `describe.skipIf` on
-`STAMITY_<CLIENT>_BIN`; `scripts/qa/plugin-runs.mjs` writes rows `H4a`–`H4d`. What blocks a merge is
-the credential-free half, and it is stated by mechanism because the boundary falls through the middle
-of discovery: each root's STRUCTURE (every carried class re-counted out of the tree and each
+its `--json` document only where one is asked for — which is not the merge gate (corrected
+2026-09-22): the merge-blocking `plugin-route` CI job passes no `--json` and reads the exit code alone
+(`.github/workflows/ci.yml:536`); the nightly drive writes the document to the runner's temp directory
+(`.github/workflows/nightly.yml:335`) and keeps it — for the job, and as a short-retention workflow
+artifact once the upload step lands — rather than reading it back; and the document's two readers are
+the QA harness's `plugins` lane (`scripts/qa/plugin-runs.mjs:111`) and `test/ci/pluginRoute.test.ts`
+(`:155`, `:401`). That test runs the structure leg always and each install and discovery leg under
+`describe.skipIf` on `STAMITY_<CLIENT>_BIN`; `scripts/qa/plugin-runs.mjs` writes rows `H4a`–`H4d`.
+What blocks a merge is the credential-free half, and it is stated by mechanism because the boundary
+falls through the middle of discovery: each root's STRUCTURE (every carried class re-counted out of the tree and each
 container manifest validated against its vendored document — a root with `commands/st-work.md`
 removed fails naming both numbers), each client's INSTALL, and the discovery a credential-free
 listing command can answer. Discovery read from an invocation TRANSCRIPT, and every invocation leg,
@@ -911,10 +916,15 @@ measures the AS-BUILT refusal rather than the cell's: the migration engine was c
 there is no `plugin migrate` preview to show; the run stops for the operator and names `clean -y` then
 `plugin setup`, and one binding row refuses an invented `--apply` or migrate flag as well as the
 operator's assertion that one exists (the refusal exits 1, so the case asserts no exit code).
-`plugin-mode-invocation` (golden, rubric, 5/1) covers a command, an agent AND a skill under their
+`plugin-mode-invocation` (golden, rubric, 6/1 — corrected 2026-09-22 from a 5/1 miscount; the case
+file carries six binding criteria, `evals/cases-v6/golden/plugin-mode-invocation.md:99-116`, and the
+index row reads 6 / 1, `evals/SET-v7.md:596`) covers a command, an agent AND a skill under their
 namespaced forms — `/stamity:st-plan`, `@stamity:stamity-researcher` and `/stamity:st-verify` with its
 `scripts/` companion resolved inside the root — and its brief states that Cursor, Copilot and Codex
-invocation is proven by REQ-PLUGIN-020's route proof instead of here.
+invocation is proven by REQ-PLUGIN-020's route proof instead of here. The three therefore add 18
+binding and 3 advisory criteria, and that sum is what carries the set: run 30 measured 99 cases with
+505 binding and 49 advisory (`evals/runs/2026-09-15-run-30/RESULTS.md:123`), so 505 + 18 = 523 and
+49 + 3 = 52, SET-v7's own totals (`evals/SET-v7.md:123`).
 
 One bound of the coverage gate is stated rather than left to a reader (2026-09-21). `st-setup` is
 GENERATED, not corpus, so the gate admits a governing source outside `content/**` for a command the
@@ -927,11 +937,20 @@ recomputed roster is 102 cases — 52 golden, 20 adversarial (16 non-twin guardr
 30 probes — with 23 floor cases, 523 binding and 52 advisory criteria and 83 non-negotiable rows across
 28 cases, and the four roster-derived literals no test gates moved with it.
 
-The clause about the committed run artifact is NOT met yet (2026-09-21) and is stated as open: run 31
-is prepared and running at candidate `063832d` as an increment over run 30 — 29 calls, five calibration
-fixtures then four cases at three samples for two roles, with 98 cases carried — so the per-metric
-scores for these three cases are recorded when that artifact is committed under `evals/runs/`, before
-the tag, and a case that could not execute is recorded as blocked rather than scored.
+The clause about the committed run artifact is MET (2026-09-22): `evals/runs/2026-09-21-run-31/` is
+committed at `3e76f7b`, status PASS over 102 cases at eval candidate `063832d`. It is an increment
+under SET-v7's incremental rule — 29 calls, five calibration fixtures then four cases at three samples
+for two roles — re-measuring the three cases above, each absent at the prior candidate, and
+`agent-test-runner-return-contract`, whose cited source range moved, and carrying the remaining 98
+cases with the three admitted samples the run-30 artifact published, every case file and every cited
+source range found byte-identical at both candidates (`RESULTS.md:12-19`). Calibration matched 5 of 5
+fixtures. Every metric sits at or above its declared threshold: golden rubric pass rate 1.000 (52/52)
+with floors 23/23, adversarial guardrail hold rate 1.000 (16/16), benign-twin false-refusal rate 0.000
+(0/4) and trigger-probe accuracy 1.000 (30/30) (`RESULTS.md:160-163`). All three cases of this
+requirement passed — `st-setup-fresh-repository` and `st-setup-refuses-generated-setup` 3 of 3 samples,
+`plugin-mode-invocation` 2 of 3 under the two-of-three rule, its one failing sample decided on B4
+(`RESULTS.md:188`, `:218`, `:237`). The clause about a case recorded as blocked names nothing this run:
+12 scenario samples of 12 and 12 independent judges of 12 were admitted, with no blocked logical call.
 
 ### REQ-PLUGIN-026 Existing routes unchanged
 

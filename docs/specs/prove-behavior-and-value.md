@@ -250,10 +250,17 @@ that the manual runner documented there runs the full set.
 ### REQ-PROVE-018 — Hand pages re-attested
 
 Every hand page carries `verified against the tree at the 1.8.0 release cut (<date>)` after a
-claim-by-claim check, replacing the pre-1.7.0 attestations (`README.md:1`, `SECURITY.md:1`);
-`RELEASE_CUT_DATE` (`test/docsPages.test.ts:309`) equals it and the gate at `:539-562` enforces both
-halves over the fourteen-page bucket — three root pages (`:99`) and eleven guides (`:135-152`).
-`GOVERNANCE.md:1` is restamped as a fifteenth page, deliberately outside that bucket (`:79-96`).
+claim-by-claim check, replacing the pre-1.7.0 attestations (`README.md:1`, `SECURITY.md:1`).
+`test/docsPages.test.ts`'s `RELEASE_CUT_DATE` equals it, and its `describe("hand pages")` case
+`it("dates the bucket at this cut, and no page later than it")` enforces both halves over the
+fourteen-page `HAND_PAGES` bucket — `PAGES`, the three root pages, plus `GUIDES`, the eleven guides —
+holding a re-attested page to `REATTESTATION_DATE` and a cut-form page to `RELEASE_CUT_DATE`.
+`GOVERNANCE.md:1` is restamped as a fifteenth page, deliberately outside that bucket: its `GOVERNANCE`
+constant is kept out of `PAGES`. Those citations name the constants and the test case rather than
+line numbers ON PURPOSE (2026-09-22): every release cut moves this suite's lines — `RELEASE_CUT_DATE`
+and the gate both moved again in this session — so a line-numbered citation into it stops pointing at
+its evidence at the next cut while still reading as though it did, and a name a `grep` resolves does
+not.
 
 - GIVEN every hand page WHEN the docs-pages suite runs THEN each attests to the 1.8.0 cut date, at
   least one equals `RELEASE_CUT_DATE`, and none attests later than it.
