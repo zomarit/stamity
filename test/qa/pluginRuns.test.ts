@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- see the directive above
-import { bundledRuntime, inputsFor, lifecycleInputs, lifecycleRow, rowFor, runLifecycleWalk, runPluginClients, runtimeMissing, vitestEntry } from "../../scripts/qa/plugin-runs.mjs";
+import { bundledRuntime, inputsFor, lifecycleInputs, lifecycleRow, notRunReason, rowFor, runLifecycleWalk, runPluginClients, runtimeMissing, vitestEntry } from "../../scripts/qa/plugin-runs.mjs";
 
 /**
  * The QA lane that turns the route smoke's four legs into one row per client
@@ -20,6 +20,8 @@ import { bundledRuntime, inputsFor, lifecycleInputs, lifecycleRow, rowFor, runLi
 
 const REPO_ROOT = resolve(import.meta.dirname, "../..");
 const HOME = homedir();
+/** Stands for the callers' `process.execPath -> <node>` pair in the lifecycle cases (prove/214). */
+const redactNode = (text: string): string => text.replaceAll(process.execPath, "<node>");
 
 interface Leg {
   leg: string;
@@ -201,7 +203,40 @@ function greenLog(): string {
 
 const CLIENTS = ["claude", "copilot", "codex", "cursor"];
 
+describe("notRunReason — the exit description is redacted like the detail beside it", () => {
+  // prove/214: `runSmoke` composes its spawn failure from Node's own message, which names
+  // `process.execPath` in full, and that string used to reach the row reason unredacted while the
+  // detail beside it had been scrubbed. A real spawn failure cannot be produced on demand — the
+  // harness spawns the interpreter it runs under — so the composed result is handed in.
+  it("replaces the interpreter's path in a spawn failure, and the home, dist and repo everywhere", () => {
+    const dist = join(HOME, "some-build", "dist");
+    const reason = notRunReason(
+      { stdout: "", stderr: `could not read ${dist}/release.json`, exit: `the smoke could not be spawned: spawn ${process.execPath} ENOENT` },
+      { distDir: dist, scratchDir: undefined, repoRoot: REPO_ROOT },
+    ) as string;
+    expect(reason).toContain("wrote no --json document (the smoke could not be spawned: spawn <node> ENOENT)");
+    expect(reason).toContain("could not read dist/release.json");
+    expect(reason).not.toContain(process.execPath);
+    expect(reason).not.toContain(HOME);
+    expect(reason).not.toContain(REPO_ROOT);
+    expect(reason).not.toMatch(/\/Users\/|\/home\/[a-z]/);
+  });
+});
+
 describe("lifecycleRow — the fold over the walk's own log", () => {
+  it("puts the exit description through the redactor, in both reasons that quote it", () => {
+    // prove/214, the lifecycle half: the same spawn-failure string reaches `wrote no row` and
+    // `the suite ended`, and the caller's pairs carry `process.execPath`; the fold is handed a
+    // redactor that stands for them.
+    const exit = `the lifecycle suite could not be spawned: spawn ${process.execPath} ENOENT`;
+    const empty = lifecycleRow({ clients: ["claude"], log: "", status: null, exit, redact: redactNode }) as Row;
+    expect(empty.reason).toBe("the lifecycle suite wrote no row (the lifecycle suite could not be spawned: spawn <node> ENOENT)");
+    const red = lifecycleRow({ clients: ["claude"], log: "plugin-lifecycle: claude walk PASS (ok)\n", status: null, exit, redact: redactNode }) as Row;
+    expect(red.status).toBe("failed");
+    expect(red.reason).toContain("the suite ended: the lifecycle suite could not be spawned: spawn <node> ENOENT");
+    expect(red.reason).not.toContain(process.execPath);
+  });
+
   it("passes when every client's walk line passed and the suite exited 0", () => {
     const row = lifecycleRow({ clients: CLIENTS, log: greenLog(), status: 0, exit: "exit 0" }) as {
       status: string;

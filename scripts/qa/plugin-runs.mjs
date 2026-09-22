@@ -118,24 +118,8 @@ export async function runPluginClients({ clients, repoRoot, distDir, scratchDir 
     if (scratchDir !== undefined) args.push('--scratch', scratchDir)
     const result = await runSmoke({ args, cwd: repoRoot })
     if (!existsSync(jsonPath)) {
-      // Exit 2 is the smoke's "could not run" — bad arguments, or a `--dist` that is not a
-      // distribution root. The row says so with the smoke's own last words rather than a verdict,
-      // and those words go through the redactor first: they are a child process's stderr, and this
-      // reason is written into `.stamity/evidence/`.
-      const detail = redactPaths(
-        `${result.stdout.trim().split('\n').at(-1) ?? ''} ${result.stderr.trim().slice(-400)}`.trim(),
-        [
-          [distDir, 'dist'],
-          ...(scratchDir === undefined ? [] : [[scratchDir, '<scratch>']]),
-          [repoRoot, '<repo>'],
-          [homedir(), '<home>'],
-        ],
-      )
-      return clients.map((client) => ({
-        client,
-        status: 'not-run',
-        reason: `the route smoke wrote no --json document (${result.exit}): ${detail}`,
-      }))
+      const reason = notRunReason(result, { distDir, scratchDir, repoRoot })
+      return clients.map((client) => ({ client, status: 'not-run', reason }))
     }
     const report = JSON.parse(readFileSync(jsonPath, 'utf8'))
     return clients.map((client) => ({
@@ -145,6 +129,32 @@ export async function runPluginClients({ clients, repoRoot, distDir, scratchDir 
   } finally {
     rmSync(work, { recursive: true, force: true })
   }
+}
+
+/**
+ * The reason every row carries when the smoke wrote no `--json` document.
+ *
+ * Exit 2 is the smoke's "could not run" — bad arguments, or a `--dist` that is not a distribution
+ * root. The row says so with the smoke's own last words rather than a verdict, and those words go
+ * through the redactor first: they are a child process's stderr, and this reason is written into
+ * `.stamity/evidence/`. The EXIT description goes through the same sweep (prove/214): the spawn
+ * failure `runSmoke` composes quotes Node's own message, which names `process.execPath` in full,
+ * and that path used to reach the reason unredacted beside a detail that had been scrubbed.
+ * Exported so the suite can hand it a spawn failure — one cannot be produced from a real spawn.
+ */
+export function notRunReason(result, { distDir, scratchDir, repoRoot }) {
+  const pairs = [
+    [distDir, 'dist'],
+    ...(scratchDir === undefined ? [] : [[scratchDir, '<scratch>']]),
+    [repoRoot, '<repo>'],
+    [process.execPath, '<node>'],
+    [homedir(), '<home>'],
+  ]
+  const detail = redactPaths(
+    `${result.stdout.trim().split('\n').at(-1) ?? ''} ${result.stderr.trim().slice(-400)}`.trim(),
+    pairs,
+  )
+  return `the route smoke wrote no --json document (${redactPaths(result.exit, pairs)}): ${detail}`
 }
 
 /**
@@ -261,8 +271,11 @@ export function lifecycleRow({ clients, log, status, exit, redact = (text) => te
       .filter((line) => line.startsWith('plugin-lifecycle: ') || line.startsWith('plugin-lifecycle-runtime: '))
       .join(' || '),
   )
+  // The exit description is redacted too (prove/214): a spawn failure quotes Node's own message,
+  // which names `process.execPath` in full, and it reaches both reasons below.
+  const ended = redact(exit)
   if (rows.length === 0) {
-    return { status: 'not-run', reason: `the lifecycle suite wrote no row (${exit})` }
+    return { status: 'not-run', reason: `the lifecycle suite wrote no row (${ended})` }
   }
   // The suite's OWN verdict, kept separate from the rows: `status` is its exit code and is what says
   // whether the assertions held, while the rows say what was walked. A green log under a red exit is
@@ -276,7 +289,7 @@ export function lifecycleRow({ clients, log, status, exit, redact = (text) => te
   const failed = walks.filter((entry) => entry.row?.verdict === 'FAIL')
   const skipped = walks.filter((entry) => entry.row?.verdict === 'SKIPPED')
   if (failed.length > 0 || !green) {
-    const how = failed.length > 0 ? `walk FAIL for ${failed.map((entry) => entry.client).join(', ')}` : `the suite ended: ${exit}`
+    const how = failed.length > 0 ? `walk FAIL for ${failed.map((entry) => entry.client).join(', ')}` : `the suite ended: ${ended}`
     return { status: 'failed', reason: `${how} || ${reason}` }
   }
   if (missing.length > 0) {
@@ -377,12 +390,14 @@ export async function runLifecycleWalk({ clients, repoRoot, distDir }) {
         [work, '<scratch>'],
         [repoRoot, '<repo>'],
         [tmpdir(), '<tmp>'],
-        // and nothing else: every path a vitest line can quote is under one of these five.
+        // the interpreter, because a spawn failure quotes Node's own message with it (prove/214),
+        [process.execPath, '<node>'],
+        // and nothing else: every path a vitest line can quote is under one of these six.
         [homedir(), '<home>'],
       ])
     if (log === '') {
       const detail = redact(`${result.stdout.trim().split('\n').at(-1) ?? ''} ${result.stderr.trim().slice(-400)}`.trim())
-      return { status: 'not-run', reason: `the lifecycle suite wrote no log (${result.exit}): ${detail}` }
+      return { status: 'not-run', reason: `the lifecycle suite wrote no log (${redact(result.exit)}): ${detail}` }
     }
     return {
       ...lifecycleRow({ clients, log, status: result.status, exit: result.exit, redact }),
