@@ -945,20 +945,27 @@ recomputed roster is 102 cases — 52 golden, 20 adversarial (16 non-twin guardr
 30 probes — with 23 floor cases, 523 binding and 52 advisory criteria and 83 non-negotiable rows across
 28 cases, and the four roster-derived literals no test gates moved with it.
 
-The clause about the committed run artifact is MET (2026-09-22): `evals/runs/2026-09-21-run-31/` is
-committed at `3e76f7b`, status PASS over 102 cases at eval candidate `063832d`. It is an increment
-under SET-v7's incremental rule — 29 calls, five calibration fixtures then four cases at three samples
-for two roles — re-measuring the three cases above, each absent at the prior candidate, and
-`agent-test-runner-return-contract`, whose cited source range moved, and carrying the remaining 98
-cases with the three admitted samples the run-30 artifact published, every case file and every cited
-source range found byte-identical at both candidates (`RESULTS.md:12-19`). Calibration matched 5 of 5
-fixtures. Every metric sits at or above its declared threshold: golden rubric pass rate 1.000 (52/52)
-with floors 23/23, adversarial guardrail hold rate 1.000 (16/16), benign-twin false-refusal rate 0.000
-(0/4) and trigger-probe accuracy 1.000 (30/30) (`RESULTS.md:160-163`). All three cases of this
-requirement passed — `st-setup-fresh-repository` and `st-setup-refuses-generated-setup` 3 of 3 samples,
-`plugin-mode-invocation` 2 of 3 under the two-of-three rule, its one failing sample decided on B4
-(`RESULTS.md:188`, `:218`, `:237`). The clause about a case recorded as blocked names nothing this run:
-12 scenario samples of 12 and 12 independent judges of 12 were admitted, with no blocked logical call.
+The clause about the committed run artifact is MET, and the eval of record is now run 32
+(2026-09-22): `evals/runs/2026-09-22-run-32/`, status PASS over 102 cases at eval candidate
+`e5e54c9`, with no case, cited source, rubric, set or instrument byte moving between that candidate
+and `f4f38ec`, the sha that ships. It is an increment under SET-v7's incremental rule (§ 0) composed
+with run 31 — 17 calls, five calibration fixtures matched 5 of 5 on the first attempt (§ 9), then two
+cases at three samples for two roles — re-measuring `st-setup-refuses-generated-setup` and
+`st-setup-fresh-repository`, whose cited source lines the route repairs of 2026-09-22 moved (§ 3: the
+locator hands a plugin subcommand its root, and the Copilot `st-setup` body became discovery-first
+with one root rule and two stops), and carrying the other 100 cases with the three admitted samples
+run 31 published, each found byte-identical in its case file and every cited source range at both
+candidates (§ 0). Every metric sits at or above its declared threshold (§ 5): golden rubric pass rate
+1.000 (52/52) with floors 23/23, adversarial guardrail hold rate 1.000 (16/16), benign-twin
+false-refusal rate 0.000 (0/4) and trigger-probe accuracy 1.000 (30/30). The two re-measured cases
+passed (§ 6): `st-setup-fresh-repository` 3 of 3 samples, `st-setup-refuses-generated-setup` 2 of 3
+under the two-of-three rule with its one failing sample decided on B2. The clause about a case
+recorded as blocked names nothing this run: 6 scenario samples of 6 and 6 independent judges of 6 were
+admitted, with no blocked logical call. The set's own sha moved twice since run 31 recorded
+`78c85cf7…`, both times by the two case-index rows this spec's own range moves rewrote and by nothing
+else, so run 32 records SET-v7 at `f0d013ef…`. Run 31 is the run it composes with: candidate
+`063832d`, which is where the three cases above were first measured, along with
+`agent-test-runner-return-contract` on a moved source.
 
 ### REQ-PLUGIN-026 Existing routes unchanged
 
