@@ -536,6 +536,22 @@ describe("the tree as a whole", () => {
     expect(claudeSection).toBeDefined();
     expect(claudeSection).toContain("claude plugin update stamity@stamity --scope project");
     expect(claudeSection).not.toContain("claude plugin update stamity\n");
+    // The Claude rollback is THREE commands, in this order — the order `docs/plugins.md` prints
+    // and the lifecycle walk executed on 2.1.278 (2026-09-22, `test/ci/pluginLifecycle.test.ts`):
+    // the re-add answers "already on disk" and the reinstall answers "already installed", so the
+    // two documented commands leave the recorded version where it was, and `plugin update
+    // stamity@stamity --scope project` is what re-records it (`updateOutcome: "updated"`). This
+    // README printed the first two with a note that reinstalling was the route. Pinned as one
+    // block, so a README that dropped or reordered a line cannot pass three containment checks.
+    expect(claudeSection).toContain(
+      [
+        "```sh",
+        "claude plugin marketplace add zomarit/stamity#plugins/v<previous>",
+        "claude plugin install stamity@stamity --scope project",
+        "claude plugin update stamity@stamity --scope project",
+        "```",
+      ].join("\n"),
+    );
     // The two bounds a mirror has to know, from the inbox rows this unit closes.
     expect(readme).toContain("https-only");
     expect(readme).toContain("The private mirror route");
@@ -572,7 +588,25 @@ describe("the tree as a whole", () => {
     // held the flag could not go green against a renamed verb.
     expect(section).toContain("codex plugin add stamity@stamity");
     expect(section).toContain("codex plugin marketplace upgrade");
-    expect(section).toContain("codex plugin remove stamity");
+    // `remove` takes the QUALIFIED id: `codex plugin remove stamity` refuses on 0.154.0 with
+    // "plugin requires --marketplace unless passed as <plugin>@<marketplace>" (measured by the
+    // lifecycle walk, 2026-09-20), and the bare spelling is what this README printed and what
+    // this pin held — as a prefix of the qualified form, so the negative pin below is bounded by
+    // the line break. The rollback is three commands, not two: `remove` purges the local cache,
+    // so the marketplace re-added at the previous tag installs nothing until `plugin add` runs
+    // again — the client's own README block (`scripts/plugins/clients/codex.mjs`) and
+    // `docs/plugins.md` both say so.
+    expect(section).toContain("codex plugin remove stamity@stamity");
+    expect(section).not.toContain("codex plugin remove stamity\n");
+    expect(section).toContain(
+      [
+        "```sh",
+        "codex plugin remove stamity@stamity",
+        "codex plugin marketplace add zomarit/stamity --ref plugins/v<previous>",
+        "codex plugin add stamity@stamity",
+        "```",
+      ].join("\n"),
+    );
   });
 });
 

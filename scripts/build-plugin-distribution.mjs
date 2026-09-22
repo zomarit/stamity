@@ -240,11 +240,22 @@ function clientRoutes(slug, tag, branch) {
       // lifecycle walk executed (exit 0, `updateOutcome: "updated"`), and its scope matches the
       // install line above; a user-scope install refreshes with `--scope user` instead.
       update: ['claude plugin update stamity@stamity --scope project'],
-      rollback: [`claude plugin marketplace add ${slug}#plugins/v<previous>`, 'claude plugin install stamity@stamity --scope project'],
+      // THREE commands, as `docs/plugins.md` prints them and as the lifecycle walk executed them on
+      // 2.1.278 (2026-09-22, `test/ci/pluginLifecycle.test.ts`): the re-add answers "already on
+      // disk" and the reinstall answers "already installed … it loads in place", so the two
+      // documented commands leave the recorded version where it was, and the third — the command
+      // the CLI's own message names — is what re-records it (`updateOutcome: "updated"`).
+      rollback: [
+        `claude plugin marketplace add ${slug}#plugins/v<previous>`,
+        'claude plugin install stamity@stamity --scope project',
+        'claude plugin update stamity@stamity --scope project',
+      ],
       note:
-        'A `rollback` subcommand appears in slash form on one vendor page and is absent from the CLI ' +
-        'reference, so this page does not promise it: re-adding the marketplace at the previous tag ' +
-        'and reinstalling is the route that is documented on both.',
+        'A `rollback` subcommand is settled absent — `claude plugin rollback stamity` answers ' +
+        "`error: unknown command 'rollback'` on 2.1.278, and the vendor pages read 2026-09-21 name " +
+        'none — so the route back is the marketplace re-added at the previous tag, the reinstall, and ' +
+        'then `plugin update` at the same scope: the first two are the documented route and leave the ' +
+        'recorded version where it was, and the third is what moves it (measured 2026-09-22).',
     },
     cursor: {
       title: 'Cursor',
@@ -282,11 +293,20 @@ function clientRoutes(slug, tag, branch) {
       install: [`codex plugin marketplace add ${slug} --ref ${branch}`, 'codex plugin add stamity@stamity'],
       pin: [`codex plugin marketplace add ${slug} --ref ${tag}`],
       update: ['codex plugin marketplace upgrade'],
-      rollback: ['codex plugin remove stamity', `codex plugin marketplace add ${slug} --ref plugins/v<previous>`],
+      // `remove` takes the QUALIFIED id — the bare `codex plugin remove stamity` refuses on 0.154.0
+      // with "plugin requires --marketplace unless passed as <plugin>@<marketplace>" (the lifecycle
+      // walk, 2026-09-20) — and purges that version's local cache, so the marketplace re-added at
+      // the previous tag installs nothing until `plugin add` runs again: three commands.
+      rollback: [
+        'codex plugin remove stamity@stamity',
+        `codex plugin marketplace add ${slug} --ref plugins/v<previous>`,
+        'codex plugin add stamity@stamity',
+      ],
       note:
-        'An entry in a marketplace file installs nothing on its own — the two commands above are both ' +
-        'needed. Plugin hooks additionally need `features.hooks = true`, project trust, and a per-hook ' +
-        'trust review before any of them runs.',
+        'An entry in a marketplace file installs nothing on its own — the two install commands above ' +
+        'are both needed, and the same `plugin add` closes the rollback because `plugin remove` purges ' +
+        'the local cache. Plugin hooks additionally need `features.hooks = true`, project trust, and a ' +
+        'per-hook trust review before any of them runs.',
     },
   }
 }
