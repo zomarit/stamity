@@ -193,22 +193,58 @@ jobs:
 
       # ── the invocation legs ────────────────────────────────────────────────
       #
-      # Ordered for CREDENTIAL ISOLATION, and the order is the whole mechanism. Everything that runs
-      # third-party code runs FIRST, in steps that hold no secret at all, and the credentials only
-      # enter the job after that code has finished. A step placed before `creds` cannot read a
-      # credential whatever its `env:` says, which is a stronger property than auditing an `env:`
-      # block: it survives someone adding a line to one of these steps later.
+      # Ordered AND addressed for credential isolation; both halves are the mechanism.
+      #
+      # Ordering: everything that runs third-party code runs FIRST, in steps that hold no secret at
+      # all, and the credentials only enter the job after that code has finished. A step placed
+      # before `creds` cannot read a credential whatever its `env:` says, which is a stronger
+      # property than auditing an `env:` block: it survives someone adding a line to one of these
+      # steps later.
+      #
+      # Addressing closes what ordering alone left open (prove/220). An installer that ran
+      # secret-free could still leave a BINARY behind for a credential step to pick up: three
+      # `npm install -g` lines wrote into the toolcache's bin directory — the one `node` itself
+      # lives in, on PATH for every later step — and ran vendor lifecycle scripts on the way,
+      # because npm reads `ignore-scripts=true` from the project `.npmrc` in local mode only; and
+      # the Cursor installer writes `$HOME/.local/bin`, which this file then prepended to PATH.
+      # A credential step resolving `node` or its client from PATH ran whatever had landed there.
+      # So now: the interpreter's path is captured BEFORE any install; each npm-published CLI is
+      # installed under its own `$RUNNER_TEMP/<vendor>` prefix with `--ignore-scripts`; nothing
+      # is appended to `GITHUB_PATH`; the export step reads each binary at the absolute path its
+      # installer owns; and every credential step invokes `node` and the client by those absolute
+      # paths, under a PATH rebuilt from the captured interpreter directory and the image's system
+      # directories — never `$HOME/.local/bin`, which the ubuntu image carries on its default
+      # PATH and which the Cursor installer writes into.
+      #
+      # What that still does not close, stated rather than implied: the Cursor installer is a
+      # vendor script piped to bash, running as the runner user, so it can write wherever that
+      # user can. What the credential steps guarantee is that nothing it wrote is RESOLVED there.
+      #
+      # Lifecycle scripts, checked with `npm view <package> scripts` on 2026-09-22:
+      # `@anthropic-ai/claude-code` declares `postinstall: node install.cjs`, which copies the
+      # platform binary out of its optional dependency over the `bin/claude.exe` placeholder.
+      # With scripts ignored, `claude --version` exits 1 "claude native binary not installed"
+      # (measured); running that one file explicitly afterwards makes it answer `2.1.278`. So
+      # the one lifecycle script the CLI needs is run by name, in this secret-free step, and no
+      # other. `@github/copilot` and `@openai/codex` declare none, and both answer `--version`
+      # with scripts ignored (1.0.87 and 0.155.1, measured the same day).
       #
       # The shape this replaced put all four secrets in one step whose body then ran three
-      # `npm install -g` lines and piped a vendor installer to bash. A single compromised vendor
-      # release could have read the other three vendors' credentials out of its own environment.
-      # Nothing was measured to be compromised; the exposure was the point.
+      # `npm install -g` lines and piped a vendor installer to bash. Nothing was measured to be
+      # compromised; the exposure was the point.
       #
-      # Two costs, both accepted rather than hidden. The build and the installs now run on every
+      # Two costs, both accepted rather than hidden. The build and the installs run on every
       # nightly, including the ones with no credential configured — that is this repository's own
       # state today, so most nights pay for a distribution and four CLIs nobody drives. It buys
       # something real in exchange: a vendor installer that breaks is reported nightly rather than
       # on the first night someone adds a secret.
+      - name: Capture the interpreter before any vendor install
+        run: |
+          set -euo pipefail
+          NODE_BIN="$(command -v node)"
+          echo "STAMITY_NODE_BIN=$NODE_BIN" >> "$GITHUB_ENV"
+          echo "STAMITY_NODE_BIN=$NODE_BIN"
+
       - name: Build the plugin distribution
         run: |
           set -euo pipefail
@@ -229,35 +265,40 @@ jobs:
       # The step that executes other people's code, and it holds nothing. Best-effort per client,
       # for the reason ci.yml's plugin-route job states: an npm outage is a fact about the day
       # rather than about the tree, and a client whose CLI did not install has its legs recorded
-      # SKIPPED by the smoke, which is honest.
+      # SKIPPED by the smoke, which is honest. Each install lands under its own prefix and nothing
+      # here touches PATH — see the block comment above.
       - name: Install the client CLIs
         run: |
           set -euo pipefail
-          npm install -g @anthropic-ai/claude-code || echo "::notice title=Claude Code CLI not installed::The claude legs will record SKIPPED."
-          npm install -g @github/copilot || echo "::notice title=Copilot CLI not installed::The copilot legs will record SKIPPED."
-          npm install -g @openai/codex || echo "::notice title=Codex CLI not installed::The codex legs will record SKIPPED."
+          npm install -g --prefix "$RUNNER_TEMP/claude" --ignore-scripts @anthropic-ai/claude-code \
+            && "$STAMITY_NODE_BIN" "$RUNNER_TEMP/claude/lib/node_modules/@anthropic-ai/claude-code/install.cjs" \
+            || echo "::notice title=Claude Code CLI not installed::The claude legs will record SKIPPED."
+          npm install -g --prefix "$RUNNER_TEMP/copilot" --ignore-scripts @github/copilot || echo "::notice title=Copilot CLI not installed::The copilot legs will record SKIPPED."
+          npm install -g --prefix "$RUNNER_TEMP/codex" --ignore-scripts @openai/codex || echo "::notice title=Codex CLI not installed::The codex legs will record SKIPPED."
           # The vendor's shell installer is the only supported route for this CLI — it publishes no
           # first-party npm package (registry queried 2026-09-20). It lands `agent` in
-          # $HOME/.local/bin, which later steps need on PATH.
+          # $HOME/.local/bin; the export step reads it there by absolute path.
           curl -fsS https://cursor.com/install | bash || echo "::notice title=Cursor agent CLI not installed::The cursor legs will record SKIPPED."
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      # `command -v` rather than the installers' exit codes: an install that reported success and
-      # put nothing on PATH is the same SKIPPED leg as one that failed. Also secret-free, and also
-      # before `creds`.
+      # Each binary at the absolute path its installer owns, never `command -v`: a lookup on PATH
+      # is exactly the resolution the block comment above closes. An install that reported success
+      # and left no executable at its path is the same SKIPPED leg as one that failed. Also
+      # secret-free, and also before `creds`.
       - name: Export the client binaries
         run: |
           set -euo pipefail
-          export PATH="$HOME/.local/bin:$PATH"
-          for pair in "CLAUDE claude" "CURSOR agent" "COPILOT copilot" "CODEX codex"; do
-            name="${pair% *}"
-            bin="${pair#* }"
-            path="$(command -v "$bin" || true)"
-            if [ -n "$path" ]; then
+          for pair in \
+            "CLAUDE claude $RUNNER_TEMP/claude/bin/claude" \
+            "CURSOR agent $HOME/.local/bin/agent" \
+            "COPILOT copilot $RUNNER_TEMP/copilot/bin/copilot" \
+            "CODEX codex $RUNNER_TEMP/codex/bin/codex"
+          do
+            IFS=' ' read -r name bin path <<< "$pair"
+            if [ -x "$path" ]; then
               echo "STAMITY_${name}_BIN=$path" >> "$GITHUB_ENV"
               echo "STAMITY_${name}_BIN=$path"
             else
-              echo "::notice title=Client binary absent (${bin})::No \`${bin}\` on PATH after the install step, so STAMITY_${name}_BIN is unset and every binary-bound leg of that client records SKIPPED."
+              echo "::notice title=Client binary absent (${bin})::No executable at ${path} after the install step, so STAMITY_${name}_BIN is unset and every binary-bound leg of that client records SKIPPED."
             fi
           done
 
@@ -319,19 +360,30 @@ jobs:
       # substring relationship — so a containment test cannot arm the wrong client. The workflow
       # test evaluates all four guards against every armed combination rather than trusting that.
       #
+      # `!cancelled() &&` ahead of it (prove/223): a bare `contains()` carries the implicit
+      # `success()`, so one client's FAIL skipped every client after it and a red nightly reported
+      # one leg instead of four. `!cancelled()` rather than `always()` because a cancelled run —
+      # this workflow cancels in-progress runs on re-dispatch — must not go on spending model calls.
+      # The job's verdict is then the step at the end, which reads every drive step's outcome.
+      #
       # A FAIL here is a red nightly, which is this lane's purpose: the invocation legs are the half
       # of the route a merge gate cannot hold, because they need an account. `set -o pipefail` is
-      # what carries the smoke's exit status through the `tee`.
+      # what carries the smoke's exit status through the `tee`. `node` and the client are invoked
+      # by the absolute paths captured before the installs — the block comment above the build step.
       - name: Headless target-tool drive (claude)
-        if: contains(steps.creds.outputs.clients, 'claude')
+        id: drive-claude
+        if: "!cancelled() && contains(steps.creds.outputs.clients, 'claude')"
         env:
           # `claude --help` on 2.1.278 (read 2026-09-20): Anthropic auth is "strictly
           # ANTHROPIC_API_KEY or apiKeyHelper".
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
+          # PATH rebuilt from the interpreter directory captured before any install plus the
+          # image's system directories: nothing a vendor installer wrote is resolvable here.
+          export PATH="$(dirname "$STAMITY_NODE_BIN"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
           LOG="$RUNNER_TEMP/plugin-route-claude.log"
-          node scripts/plugin-route-smoke.mjs --dist dist/plugins --client claude --invoke \
+          "$STAMITY_NODE_BIN" scripts/plugin-route-smoke.mjs --dist dist/plugins --client claude --invoke \
             --json "$RUNNER_TEMP/plugin-route-claude.json" | tee "$LOG"
           {
             echo "### Plugin route: invocation legs (claude)"
@@ -342,15 +394,19 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Headless target-tool drive (cursor)
-        if: contains(steps.creds.outputs.clients, 'cursor')
+        id: drive-cursor
+        if: "!cancelled() && contains(steps.creds.outputs.clients, 'cursor')"
         env:
           # `agent --help` on 2026.09.15-d2fe57e (read 2026-09-20): `--api-key <key>` "can also use
           # CURSOR_API_KEY env var".
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
         run: |
           set -euo pipefail
+          # PATH rebuilt from the interpreter directory captured before any install plus the
+          # image's system directories: nothing a vendor installer wrote is resolvable here.
+          export PATH="$(dirname "$STAMITY_NODE_BIN"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
           LOG="$RUNNER_TEMP/plugin-route-cursor.log"
-          node scripts/plugin-route-smoke.mjs --dist dist/plugins --client cursor --invoke \
+          "$STAMITY_NODE_BIN" scripts/plugin-route-smoke.mjs --dist dist/plugins --client cursor --invoke \
             --json "$RUNNER_TEMP/plugin-route-cursor.json" | tee "$LOG"
           {
             echo "### Plugin route: invocation legs (cursor)"
@@ -361,7 +417,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Headless target-tool drive (copilot)
-        if: contains(steps.creds.outputs.clients, 'copilot')
+        id: drive-copilot
+        if: "!cancelled() && contains(steps.creds.outputs.clients, 'copilot')"
         env:
           # `copilot help environment` on 1.0.85 (read 2026-09-20) lists COPILOT_GITHUB_TOKEN,
           # GH_TOKEN, GITHUB_TOKEN in that order of precedence. The first is set because it is the
@@ -370,8 +427,11 @@ jobs:
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          # PATH rebuilt from the interpreter directory captured before any install plus the
+          # image's system directories: nothing a vendor installer wrote is resolvable here.
+          export PATH="$(dirname "$STAMITY_NODE_BIN"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
           LOG="$RUNNER_TEMP/plugin-route-copilot.log"
-          node scripts/plugin-route-smoke.mjs --dist dist/plugins --client copilot --invoke \
+          "$STAMITY_NODE_BIN" scripts/plugin-route-smoke.mjs --dist dist/plugins --client copilot --invoke \
             --json "$RUNNER_TEMP/plugin-route-copilot.json" | tee "$LOG"
           {
             echo "### Plugin route: invocation legs (copilot)"
@@ -382,7 +442,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Headless target-tool drive (codex)
-        if: contains(steps.creds.outputs.clients, 'codex')
+        id: drive-codex
+        if: "!cancelled() && contains(steps.creds.outputs.clients, 'codex')"
         env:
           # `codex login --help` on codex-cli 0.154.0 (read 2026-09-20) names the variable in its
           # own example — `printenv OPENAI_API_KEY | codex login --with-api-key`. Note the LIMIT
@@ -393,8 +454,11 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.CODEX_API_KEY }}
         run: |
           set -euo pipefail
+          # PATH rebuilt from the interpreter directory captured before any install plus the
+          # image's system directories: nothing a vendor installer wrote is resolvable here.
+          export PATH="$(dirname "$STAMITY_NODE_BIN"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
           LOG="$RUNNER_TEMP/plugin-route-codex.log"
-          node scripts/plugin-route-smoke.mjs --dist dist/plugins --client codex --invoke \
+          "$STAMITY_NODE_BIN" scripts/plugin-route-smoke.mjs --dist dist/plugins --client codex --invoke \
             --json "$RUNNER_TEMP/plugin-route-codex.json" | tee "$LOG"
           {
             echo "### Plugin route: invocation legs (codex)"
@@ -403,6 +467,46 @@ jobs:
             grep '^plugin-route: ' "$LOG" || echo "(the smoke printed no result line)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # The four `--json` documents, kept (prove/225): per leg they carry the command, the exit
+      # code, the client version and the transcript hash — what a run record cites — and
+      # RUNNER_TEMP is gone with the job. `always()` on the arming switch, because the run whose
+      # leg FAILED is exactly the one whose document is needed. The pin is the sha every other
+      # workflow here uses for this action; short retention, since the nightly repeats.
+      - name: Keep the invocation-leg documents
+        if: always() && steps.creds.outputs.enabled == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plugin-route-invocation-legs
+          path: ${{ runner.temp }}/plugin-route-*.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      # One verdict over the four drive steps. Each of them runs whether or not its siblings
+      # failed, so the job's status is decided here: any drive step whose outcome is a failure
+      # fails the job, and the notice names which. Holds no credential — it reads outcomes.
+      - name: Headless drive verdict
+        if: always() && steps.creds.outputs.enabled == 'true'
+        env:
+          OUTCOMES: >-
+            claude=${{ steps.drive-claude.outcome }}
+            cursor=${{ steps.drive-cursor.outcome }}
+            copilot=${{ steps.drive-copilot.outcome }}
+            codex=${{ steps.drive-codex.outcome }}
+        run: |
+          set -euo pipefail
+          echo "Drive outcomes: $OUTCOMES"
+          failed=""
+          for pair in $OUTCOMES; do
+            case "${pair#*=}" in
+              failure|cancelled) failed="${failed:+$failed,}${pair%%=*}" ;;
+            esac
+          done
+          if [ -n "$failed" ]; then
+            echo "::error title=Headless drive failed::The invocation legs failed for: $failed. Each client's own step above carries its result lines, and the --json documents are in the plugin-route-invocation-legs artifact."
+            exit 1
+          fi
+          echo "No armed drive step failed"
 
       # Said once, after the legs, and said even when a leg failed — `always()` on the arming
       # condition, because a run that measured nothing is exactly the run whose summary must not

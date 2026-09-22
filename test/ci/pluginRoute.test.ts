@@ -630,7 +630,7 @@ describe("the smoke's own arguments", () => {
   });
 });
 
-describe("the --json document, which is what the harness and the workflow read", () => {
+describe("the --json document — written by the nightly drive and kept as its artifact; read by the QA harness's plugins lane and this suite, never by the CI job, which reads the exit code", () => {
   it("carries the dist, the row-hash inputs under logical labels, and every leg's fields", () => {
     const { report } = smokeWithJson(["--dist", dist, "--client", "claude,codex"]);
 

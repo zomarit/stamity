@@ -33,10 +33,13 @@
 #     the four roots' structure on every run — each root's `stamity-plugin.json` parses, every
 #     carried class's file count equals its declaration, and the container manifest validates —
 #     plus, on the clients whose CLI installs on the runner, each client's CREDENTIAL-FREE install
-#     and the discovery legs a credential-free LISTING command can answer (Copilot and Codex).
-#     What it does NOT prove: discovery wherever it has to be read out of an invocation TRANSCRIPT
-#     — Claude and Cursor, whose only listing of a plugin's ids is what a driven session prints —
-#     and every invocation leg. Both need a vendor credential this job holds none of, so they run
+#     and the discovery leg a credential-free LISTING command can answer — Copilot alone, whose
+#     `skill list` names skills and commands without an account (its agent marker still waits for
+#     a transcript). What it does NOT prove: discovery wherever it has to be read out of an
+#     invocation TRANSCRIPT — Claude and Cursor, whose only listing of a plugin's ids is what a
+#     driven session prints, and Codex, whose `plugin list --json` names the plugin and not its
+#     skills, so the smoke SKIPs its discovery without `--invoke` — and every invocation leg. All
+#     of those need a vendor credential this job holds none of, so they run
 #     in two other places: the nightly lane (.github/workflows/nightly.yml), behind per-client
 #     secrets, and the QA harness on the maintainer's machine against the logged-in binaries. A CLI
 #     that fails to install here leaves its legs SKIPPED with the installer's stderr in the log and
@@ -383,10 +386,16 @@ jobs:
   # per-client secrets and in the QA harness on the maintainer's machine.
   #
   # Which clients fall on which side of that split is the SMOKE's answer, not this file's: a listing
-  # command that turns out to need an account is a SKIPPED leg with its reason, which is why the
-  # boundary is described by mechanism here rather than by a client list nothing would keep current.
-  # A lane that flattened the split would report a route as proven on the strength of a structure
-  # check.
+  # command that turns out to need an account is a SKIPPED leg with its reason. What the smoke
+  # answers today (read off its legs on 2026-09-22; the smoke is the source when the two disagree):
+  # Copilot's discovery runs here, from `skill list`, and resolves the command and skill markers
+  # while its agent marker waits for a transcript; Codex's does NOT — `plugin list --json` names
+  # the plugin and not its skills, so the leg is SKIPPED here and measured only under `--invoke`;
+  # Claude and Cursor have no listing at all without a model call. So per client this job proves:
+  # claude — structure and `plugin validate --strict`; copilot — structure, the marketplace install
+  # and the listing half of discovery; codex — structure and the marketplace install; cursor —
+  # structure only. A lane that flattened the split would report a route as proven on the strength
+  # of a structure check.
   #
   # Every vendor install is best-effort on purpose: an npm outage or a vendor installer change is a
   # fact about the world on the day the run happened, not about the diff, and a merge gate that
@@ -447,16 +456,39 @@ jobs:
             --source-commit "$GITHUB_SHA" \
             --source-commit-date "$(git show -s --format=%cI "$GITHUB_SHA")"
 
+      # Captured BEFORE any vendor install, and used by the smoke step below: the same addressing
+      # nightly.yml's headless lane applies (its block comment above the build step states the
+      # mechanism and the measurements), because a global npm install writes into the toolcache's
+      # bin directory — where `node` itself lives — and runs vendor lifecycle scripts, and the
+      # Cursor installer writes `$HOME/.local/bin`, which the ubuntu image already has on PATH.
+      # This job holds no credential, so the exposure here is the tree and the log rather than a
+      # secret; the shape is kept identical to the nightly's so the two cannot drift apart.
+      - name: Capture the interpreter before any vendor install
+        run: |
+          set -euo pipefail
+          NODE_BIN="$(command -v node)"
+          echo "STAMITY_NODE_BIN=$NODE_BIN" >> "$GITHUB_ENV"
+          echo "STAMITY_NODE_BIN=$NODE_BIN"
+
       # One step per client, so the log names which vendor failed rather than which line of a
       # four-vendor script did. Two layers hold each of them off the merge path: the `if` branch
       # turns the installer's own non-zero into a notice and a missing output, and
       # `continue-on-error: true` catches what the branch cannot — the step being killed, or the
       # shell aborting before either arm runs.
+      #
+      # Each npm-published CLI lands under its own `$RUNNER_TEMP/<vendor>` prefix with
+      # `--ignore-scripts` — npm reads the project `.npmrc`'s `ignore-scripts=true` in local mode
+      # only. `npm view <package> scripts` on 2026-09-22: `@anthropic-ai/claude-code` declares
+      # `postinstall: node install.cjs`, which copies the platform binary over the `bin/claude.exe`
+      # placeholder and without which `claude --version` exits 1 "claude native binary not
+      # installed" (measured), so that one file is run by name after the install; `@github/copilot`
+      # and `@openai/codex` declare none and answer `--version` with scripts ignored (measured).
       - name: Install the Claude Code CLI
         id: cli-claude
         continue-on-error: true
         run: |
-          if npm install -g @anthropic-ai/claude-code; then
+          if npm install -g --prefix "$RUNNER_TEMP/claude" --ignore-scripts @anthropic-ai/claude-code \
+            && "$STAMITY_NODE_BIN" "$RUNNER_TEMP/claude/lib/node_modules/@anthropic-ai/claude-code/install.cjs"; then
             echo "installed=true" >> "$GITHUB_OUTPUT"
           else
             echo "::notice title=Claude Code CLI not installed::npm install -g @anthropic-ai/claude-code exited non-zero on this runner, so every binary-bound claude leg records SKIPPED. The installer's own stderr is in this step's log."
@@ -466,7 +498,7 @@ jobs:
         id: cli-copilot
         continue-on-error: true
         run: |
-          if npm install -g @github/copilot; then
+          if npm install -g --prefix "$RUNNER_TEMP/copilot" --ignore-scripts @github/copilot; then
             echo "installed=true" >> "$GITHUB_OUTPUT"
           else
             echo "::notice title=Copilot CLI not installed::npm install -g @github/copilot exited non-zero on this runner, so every binary-bound copilot leg records SKIPPED. The installer's own stderr is in this step's log."
@@ -476,7 +508,7 @@ jobs:
         id: cli-codex
         continue-on-error: true
         run: |
-          if npm install -g @openai/codex; then
+          if npm install -g --prefix "$RUNNER_TEMP/codex" --ignore-scripts @openai/codex; then
             echo "installed=true" >> "$GITHUB_OUTPUT"
           else
             echo "::notice title=Codex CLI not installed::npm install -g @openai/codex exited non-zero on this runner, so every binary-bound codex leg records SKIPPED. The installer's own stderr is in this step's log."
@@ -494,46 +526,56 @@ jobs:
       # into `$HOME/.local/share/cursor-agent/versions/<version>/cursor-agent`. That layout is
       # read off an installed 2026.09.15 agent CLI on the maintainer's machine (`ls -la
       # ~/.local/bin/agent`, 2026-09-20) rather than off the vendor's installation page, which
-      # refused every TLS connection from the build machine that day. The lane this step belongs to,
-      # and what it is meant to prove, are specified in docs/plans/008-plugin-lifecycle-03.md, cell
-      # V1 — read that rather than a run log, which records what one session did rather than what
-      # this step is for.
+      # refused every TLS connection from the build machine that day. Nothing is appended to
+      # `GITHUB_PATH`: the export step reads the binary at that absolute path. The lane this step
+      # belongs to, and what it is meant to prove, are specified in
+      # docs/plans/008-plugin-lifecycle-03.md, cell V1 — read that rather than a run log, which
+      # records what one session did rather than what this step is for.
       - name: Install the Cursor agent CLI
         id: cli-cursor
         continue-on-error: true
         run: |
           if curl -fsS https://cursor.com/install | bash; then
-            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
             echo "installed=true" >> "$GITHUB_OUTPUT"
           else
             echo "::notice title=Cursor agent CLI not installed::The vendor shell installer at https://cursor.com/install exited non-zero on this runner, so every binary-bound cursor leg records SKIPPED. The installer's own stderr is in this step's log."
           fi
 
-      # `command -v` rather than the four install steps' outputs, because what the smoke needs is
-      # a path on this runner: an install that reported success and put nothing on PATH is the
-      # same SKIPPED leg as an install that failed, and this step is where the two stop looking
-      # different. The absent case is a notice, never a failure — the smoke's contract is that a
-      # client with no exported binary has its binary-bound legs SKIPPED.
+      # Each binary at the absolute path its installer owns — never `command -v`, which is the PATH
+      # resolution the capture step above exists to avoid, and never the four install steps'
+      # outputs, because what the smoke needs is a path on this runner: an install that reported
+      # success and left no executable at its path is the same SKIPPED leg as an install that
+      # failed, and this step is where the two stop looking different. The absent case is a
+      # notice, never a failure — the smoke's contract is that a client with no exported binary
+      # has its binary-bound legs SKIPPED. Byte-identical to nightly.yml's export step, and pinned
+      # so by the workflow test, which executes this copy.
       - name: Export the client binaries
         run: |
           set -euo pipefail
-          for pair in "CLAUDE claude" "CURSOR agent" "COPILOT copilot" "CODEX codex"; do
-            name="${pair% *}"
-            bin="${pair#* }"
-            path="$(command -v "$bin" || true)"
-            if [ -n "$path" ]; then
+          for pair in \
+            "CLAUDE claude $RUNNER_TEMP/claude/bin/claude" \
+            "CURSOR agent $HOME/.local/bin/agent" \
+            "COPILOT copilot $RUNNER_TEMP/copilot/bin/copilot" \
+            "CODEX codex $RUNNER_TEMP/codex/bin/codex"
+          do
+            IFS=' ' read -r name bin path <<< "$pair"
+            if [ -x "$path" ]; then
               echo "STAMITY_${name}_BIN=$path" >> "$GITHUB_ENV"
               echo "STAMITY_${name}_BIN=$path"
             else
-              echo "::notice title=Client binary absent (${bin})::No \`${bin}\` on PATH after the install step, so STAMITY_${name}_BIN is unset and every binary-bound leg of that client records SKIPPED."
+              echo "::notice title=Client binary absent (${bin})::No executable at ${path} after the install step, so STAMITY_${name}_BIN is unset and every binary-bound leg of that client records SKIPPED."
             fi
           done
 
       # Without `--invoke`: the structure and install legs are exactly the ones that need no
       # account. The smoke exits 0 when no leg failed, 1 on a FAIL and 2 when it could not run at
-      # all, so a SKIPPED leg is green here and a broken root is not.
+      # all, so a SKIPPED leg is green here and a broken root is not. `node` by the path captured
+      # before the installs, under a PATH with nothing a vendor installer wrote on it.
       - name: Plugin route smoke (no invocation legs)
-        run: node scripts/plugin-route-smoke.mjs --dist dist/plugins --client claude,cursor,copilot,codex
+        run: |
+          set -euo pipefail
+          export PATH="$(dirname "$STAMITY_NODE_BIN"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+          "$STAMITY_NODE_BIN" scripts/plugin-route-smoke.mjs --dist dist/plugins --client claude,cursor,copilot,codex
 
   # Currency, not integrity. The exact pins in the MCP catalog guarantee the bytes never
   # change, which is precisely why something has to go and ask whether those bytes are still

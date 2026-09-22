@@ -149,6 +149,18 @@ function workflowNamed(file: string): LoadedWorkflow {
 const ci = workflowNamed("ci.yml");
 const docsSite = workflowNamed("docs-site.yml");
 const nightly = workflowNamed("nightly.yml");
+
+/**
+ * The export loop's rows, as the shell spells them: the variable's name, the client's command name
+ * (the word the absent-case notice carries) and the absolute path its installer owns. Shared by
+ * ci.yml's plugin-route job and nightly.yml's headless lane, which pin the same body.
+ */
+const EXPORT_TRIPLES = [
+  "CLAUDE claude $RUNNER_TEMP/claude/bin/claude",
+  "CURSOR agent $HOME/.local/bin/agent",
+  "COPILOT copilot $RUNNER_TEMP/copilot/bin/copilot",
+  "CODEX codex $RUNNER_TEMP/codex/bin/codex",
+] as const;
 const prChecks = workflowNamed("pr-checks.yml");
 const release = workflowNamed("release.yml");
 
@@ -512,10 +524,15 @@ describe("ci.yml — the merge-blocking gate", () => {
     });
 
     it("installs each vendor CLI in its own step, and no install can redden the lane", () => {
+      // TEST CHANGE, justified (2026-09-22, prove/220): each npm install now lands under its own
+      // `$RUNNER_TEMP/<vendor>` prefix with `--ignore-scripts` — a global install wrote into the
+      // toolcache's bin directory, where `node` lives, and ran vendor lifecycle scripts because the
+      // project .npmrc's `ignore-scripts` is read in local mode only. The pin is the full line, so
+      // a prefix or the flag dropped from one vendor fails here.
       const installs = [
-        ["Install the Claude Code CLI", "npm install -g @anthropic-ai/claude-code"],
-        ["Install the GitHub Copilot CLI", "npm install -g @github/copilot"],
-        ["Install the Codex CLI", "npm install -g @openai/codex"],
+        ["Install the Claude Code CLI", 'npm install -g --prefix "$RUNNER_TEMP/claude" --ignore-scripts @anthropic-ai/claude-code'],
+        ["Install the GitHub Copilot CLI", 'npm install -g --prefix "$RUNNER_TEMP/copilot" --ignore-scripts @github/copilot'],
+        ["Install the Codex CLI", 'npm install -g --prefix "$RUNNER_TEMP/codex" --ignore-scripts @openai/codex'],
         // No first-party npm package exists for this one: the registry was queried on 2026-09-20
         // for `cursor-agent`, `cursor-cli`, `@cursor/agent` and `@cursor/cli`, and the two that
         // resolve are unrelated packages declaring no `bin`. The vendor shell installer is the
@@ -533,9 +550,19 @@ describe("ci.yml — the merge-blocking gate", () => {
         // The failure has to be VISIBLE, or a skipped leg and a passing one read alike.
         expect(step.run, name).toContain("::notice title=");
       }
-      // The Cursor CLI lands outside the default PATH, so the install step has to extend it for
-      // the steps after it — `export` in one step reaches nothing.
-      expect(runOf(route, "Install the Cursor agent CLI")).toContain('>> "$GITHUB_PATH"');
+      // `@anthropic-ai/claude-code` is the one package whose CLI needs its lifecycle script:
+      // `postinstall: node install.cjs` copies the platform binary over the placeholder, and with
+      // scripts ignored `claude --version` exits 1 (measured 2026-09-22). So that one file is run
+      // by name, by the captured interpreter, and nothing else runs.
+      expect(runOf(route, "Install the Claude Code CLI")).toContain(
+        '"$STAMITY_NODE_BIN" "$RUNNER_TEMP/claude/lib/node_modules/@anthropic-ai/claude-code/install.cjs"',
+      );
+      // TEST CHANGE, justified (2026-09-22, prove/220): the Cursor install step used to append
+      // `$HOME/.local/bin` to GITHUB_PATH for the steps after it. Nothing in this job touches PATH
+      // now — the export step reads each binary at its absolute path — and no step may start again.
+      for (const step of route) {
+        expect(step.run ?? "", `${step.name ?? "?"} must not extend PATH`).not.toContain("GITHUB_PATH");
+      }
     });
 
     it("exports each binary it can actually find, and runs the smoke WITHOUT --invoke", () => {
@@ -543,19 +570,27 @@ describe("ci.yml — the merge-blocking gate", () => {
       // put nothing on PATH is the same SKIPPED leg as one that failed, and this is where the two
       // stop looking different.
       const exports = runOf(route, "Export the client binaries");
-      expect(exports).toContain("command -v");
+      // TEST CHANGE, justified (2026-09-22, prove/220): `command -v` was the PATH resolution the
+      // finding closed, so the step reads each binary at the absolute path its installer owns.
+      expect(exports).not.toContain("command -v");
+      expect(exports).toContain('if [ -x "$path" ]; then');
       expect(exports).toContain('echo "STAMITY_${name}_BIN=$path" >> "$GITHUB_ENV"');
-      // The four pairs the loop walks, asserted as the shell spells them: the variable name is
-      // composed at run time, so the load-bearing literal is the pair list, not `STAMITY_X_BIN`.
-      // The second half of each pair is the COMMAND, and it is the half that goes wrong quietly —
-      // the Cursor CLI installs a binary called `agent`, and looking for `cursor` would export
-      // nothing while the step still printed a clean log.
-      for (const pair of ["CLAUDE claude", "CURSOR agent", "COPILOT copilot", "CODEX codex"]) {
-        expect(exports, `the loop must walk "${pair}"`).toContain(`"${pair}"`);
+      // The four triples the loop walks, asserted as the shell spells them: the variable name is
+      // composed at run time, so the load-bearing literal is the list, not `STAMITY_X_BIN`. The
+      // middle field is the client's COMMAND name (the notice's word), the last its absolute path —
+      // the Cursor CLI installs a binary called `agent` into $HOME/.local/bin, and each npm CLI
+      // sits under the prefix its install step chose.
+      for (const triple of EXPORT_TRIPLES) {
+        expect(exports, `the loop must walk "${triple}"`).toContain(`"${triple}"`);
       }
 
       const smoke = runOf(route, "Plugin route smoke (no invocation legs)");
-      expect(smoke).toContain("node scripts/plugin-route-smoke.mjs");
+      // The interpreter by the path captured before any install, under a PATH rebuilt without
+      // `$HOME/.local/bin` — the ubuntu image has it on the default PATH and the Cursor installer
+      // writes there.
+      expect(smoke).toContain('"$STAMITY_NODE_BIN" scripts/plugin-route-smoke.mjs');
+      expect(smoke).toContain('export PATH="$(dirname "$STAMITY_NODE_BIN"):');
+      expect(smoke).not.toContain(".local/bin");
       expect(smoke).toContain("--dist dist/plugins");
       expect(smoke).toContain("--client claude,cursor,copilot,codex");
       // THE property of this lane: the credential-bound legs do not run here. `--invoke` is what
@@ -568,6 +603,16 @@ describe("ci.yml — the merge-blocking gate", () => {
       expect(indexOf(route, "Export the client binaries")).toBeGreaterThan(
         indexOf(route, "Build the distribution"),
       );
+      // And the interpreter is captured before the first vendor install: a capture after one would
+      // record whatever that install left on PATH.
+      const capture = runOf(route, "Capture the interpreter before any vendor install");
+      expect(capture).toContain('NODE_BIN="$(command -v node)"');
+      expect(capture).toContain('echo "STAMITY_NODE_BIN=$NODE_BIN" >> "$GITHUB_ENV"');
+      for (const name of ["Install the Claude Code CLI", "Install the GitHub Copilot CLI", "Install the Codex CLI", "Install the Cursor agent CLI"]) {
+        expect(indexOf(route, name), `${name} must follow the capture`).toBeGreaterThan(
+          indexOf(route, "Capture the interpreter before any vendor install"),
+        );
+      }
     });
 
     it("sends the invocation legs to the nightly file, and says so where a reader looks", () => {
@@ -577,7 +622,7 @@ describe("ci.yml — the merge-blocking gate", () => {
         stepsOf(nightly, "headless-lane"),
         "Headless target-tool drive (claude)",
       );
-      expect(nightlyDrive).toContain("node scripts/plugin-route-smoke.mjs");
+      expect(nightlyDrive).toContain('"$STAMITY_NODE_BIN" scripts/plugin-route-smoke.mjs');
       expect(nightlyDrive).toContain("--invoke");
 
       const laneMap = ci.source.slice(0, ci.source.indexOf("\nname: CI"));
@@ -800,17 +845,23 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
     // smoke reads a binary path from.
     const exports = runOf(steps, "Export the client binaries");
     expect(exports).toContain('echo "STAMITY_${name}_BIN=$path" >> "$GITHUB_ENV"');
-    for (const pair of ["CLAUDE claude", "CURSOR agent", "COPILOT copilot", "CODEX codex"]) {
-      expect(exports, `the loop must walk "${pair}"`).toContain(`"${pair}"`);
+    for (const triple of EXPORT_TRIPLES) {
+      expect(exports, `the loop must walk "${triple}"`).toContain(`"${triple}"`);
     }
+    // One body, two files: the executed case below runs ci.yml's copy, and this is what makes
+    // that execution stand for the nightly's too.
+    expect(exports).toBe(runOf(stepsOf(ci, "plugin-route"), "Export the client binaries"));
 
     for (const [client, variable, secret] of INVOCATION_LEGS) {
       const step = stepOf(steps, `Headless target-tool drive (${client})`);
       const run = step.run ?? "";
 
       // WITH `--invoke`, which is the whole reason this half cannot live in the merge gate, and
-      // scoped to the ONE client this step holds a credential for.
-      expect(run, client).toContain("node scripts/plugin-route-smoke.mjs");
+      // scoped to the ONE client this step holds a credential for. The interpreter by the absolute
+      // path captured before the installs (prove/220), never `node` off PATH.
+      expect(step.id, client).toBe(`drive-${client}`);
+      expect(run, client).toContain('"$STAMITY_NODE_BIN" scripts/plugin-route-smoke.mjs');
+      expect(run, client).not.toMatch(/(?<![\w"$/])node scripts\//);
       expect(run, client).toContain(`--client ${client} --invoke`);
       // A FAIL is a red nightly, which is this lane's purpose — so the smoke's exit status has to
       // reach the step. `set -o pipefail` is what carries it through the `tee`.
@@ -843,6 +894,7 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
     const credsAt = named("Headless drive credentials");
     expect(credsAt).toBeGreaterThan(0);
     for (const name of [
+      "Capture the interpreter before any vendor install",
       "Build the plugin distribution",
       "Install the client CLIs",
       "Export the client binaries",
@@ -853,12 +905,15 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
       expect(named(name), `${name} must run before the credentials exist`).toBeLessThan(credsAt);
     }
     // The install lines specifically — the ones that execute a vendor's release — are in that
-    // secret-free step and nowhere else.
+    // secret-free step and nowhere else. TEST CHANGE, justified (2026-09-22, prove/220): the
+    // lines moved with the mechanism — each npm CLI under its own prefix with scripts ignored, and
+    // the one lifecycle script the claude CLI needs run by name; see the lane's block comment.
     const installs = runOf(steps, "Install the client CLIs");
     for (const line of [
-      "npm install -g @anthropic-ai/claude-code",
-      "npm install -g @github/copilot",
-      "npm install -g @openai/codex",
+      'npm install -g --prefix "$RUNNER_TEMP/claude" --ignore-scripts @anthropic-ai/claude-code',
+      '"$STAMITY_NODE_BIN" "$RUNNER_TEMP/claude/lib/node_modules/@anthropic-ai/claude-code/install.cjs"',
+      'npm install -g --prefix "$RUNNER_TEMP/copilot" --ignore-scripts @github/copilot',
+      'npm install -g --prefix "$RUNNER_TEMP/codex" --ignore-scripts @openai/codex',
       "curl -fsS https://cursor.com/install | bash",
     ]) {
       expect(installs, `${line} must live in the secret-free step`).toContain(line);
@@ -940,7 +995,12 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
       const context = { steps: { creds: { outputs: { clients: armed } } } };
       for (const [client] of INVOCATION_LEGS) {
         const guard = conditionOf(steps, `Headless target-tool drive (${client})`);
-        expect(guard, client).toBe(`contains(steps.creds.outputs.clients, '${client}')`);
+        // TEST CHANGE, justified (2026-09-22, prove/223): a bare `contains()` carries the implicit
+        // `success()`, so one client's FAIL skipped every client after it. `!cancelled()` ahead of
+        // it runs each drive step whether or not a sibling failed, and still not after the run was
+        // cancelled — this workflow cancels in-progress runs on re-dispatch, and a model call on a
+        // cancelled run is spend for nothing, which is why it is not `always()`.
+        expect(guard, client).toBe(`!cancelled() && contains(steps.creds.outputs.clients, '${client}')`);
         expect(
           evaluateWorkflowExpression(guard, context),
           `armed "${armed}" must ${armed.split(",").includes(client) ? "" : "not "}run ${client}`,
@@ -969,11 +1029,83 @@ describe("nightly.yml — demoted lanes, none of them merge-blocking", () => {
       ).not.toContain("Headless drive not implemented");
     }
   });
+
+  // ADDED 2026-09-22 (prove/223): one client's FAIL used to skip the clients after it, so a red
+  // nightly reported one leg instead of four. Each drive step now runs under `!cancelled()`, and
+  // the job's verdict is one step at the end that reads every drive step's outcome.
+  it("runs every armed drive step whatever its siblings did, and one verdict step fails the job", () => {
+    const steps = stepsOf(nightly, "headless-lane");
+    const verdict = stepOf(steps, "Headless drive verdict");
+    expect(verdict.if).toBe("always() && steps.creds.outputs.enabled == 'true'");
+    // It reads all four outcomes by the drive steps' ids, and nothing else decides.
+    const outcomes = verdict.env?.["OUTCOMES"] ?? "";
+    for (const [client] of INVOCATION_LEGS) {
+      expect(outcomes, client).toContain(`${client}=\${{ steps.drive-${client}.outcome }}`);
+    }
+    expect(JSON.stringify(verdict.env ?? {})).not.toContain("secrets.");
+    expect(verdict.run).toContain("exit 1");
+    expect(verdict.run).toContain("::error title=Headless drive failed::");
+    // After every drive step and before the summary, so a failure it reports is one that happened.
+    const verdictAt = indexOf(steps, "Headless drive verdict");
+    for (const [client] of INVOCATION_LEGS) {
+      expect(indexOf(steps, `Headless target-tool drive (${client})`), client).toBeLessThan(verdictAt);
+    }
+    expect(indexOf(steps, "Headless drive summary")).toBeGreaterThan(verdictAt);
+  });
+
+  // ADDED 2026-09-22 (prove/225): the four --json documents were written to RUNNER_TEMP and
+  // nothing read or kept them, so a nightly's per-leg command, exit, version and transcript hash
+  // were gone with the job. Kept as an artifact, on the sha every other workflow pins this action
+  // to — never a floating tag.
+  it("keeps the invocation-leg documents as a short-lived artifact on the repository's pinned sha", () => {
+    const steps = stepsOf(nightly, "headless-lane");
+    const keep = stepOf(steps, "Keep the invocation-leg documents");
+    const pinned = /actions\/upload-artifact@([0-9a-f]{40}) # v[\d.]+/.exec(release.source)?.[1];
+    expect(pinned, "release.yml pins no upload-artifact sha to copy").toBeDefined();
+    expect(keep.uses).toBe(`actions/upload-artifact@${pinned ?? ""}`);
+    expect(keep.if).toBe("always() && steps.creds.outputs.enabled == 'true'");
+    expect(keep.with?.["path"]).toBe("${{ runner.temp }}/plugin-route-*.json");
+    expect(keep.with?.["name"]).toBe("plugin-route-invocation-legs");
+    expect(keep.with?.["retention-days"]).toBe(14);
+    // The documents come from the drive steps, so the upload sits after all of them.
+    for (const [client] of INVOCATION_LEGS) {
+      const run = runOf(steps, `Headless target-tool drive (${client})`);
+      expect(run, client).toContain(`--json "$RUNNER_TEMP/plugin-route-${client}.json"`);
+      expect(indexOf(steps, `Headless target-tool drive (${client})`), client).toBeLessThan(
+        indexOf(steps, "Keep the invocation-leg documents"),
+      );
+    }
+  });
+
+  // ADDED 2026-09-22 (prove/220): ordering alone left a hole — an installer that ran secret-free
+  // could still leave a binary on PATH for a credential step to resolve. Closed by addressing:
+  // the interpreter captured before any install, nothing appended to GITHUB_PATH, and every
+  // credential step invoking `node` and its client by absolute path under a rebuilt PATH.
+  it("has every credential step resolve nothing from a directory a vendor installer wrote", () => {
+    const steps = stepsOf(nightly, "headless-lane");
+    const capture = stepOf(steps, "Capture the interpreter before any vendor install");
+    expect(capture.run).toContain('NODE_BIN="$(command -v node)"');
+    expect(capture.run).toContain('echo "STAMITY_NODE_BIN=$NODE_BIN" >> "$GITHUB_ENV"');
+    expect(indexOf(steps, "Capture the interpreter before any vendor install")).toBeLessThan(
+      indexOf(steps, "Install the client CLIs"),
+    );
+    for (const step of steps) {
+      expect(step.run ?? "", `${step.name ?? "?"} must not extend PATH`).not.toContain("GITHUB_PATH");
+    }
+    for (const [client] of INVOCATION_LEGS) {
+      const run = runOf(steps, `Headless target-tool drive (${client})`);
+      expect(run, client).toContain('export PATH="$(dirname "$STAMITY_NODE_BIN"):');
+      expect(run, client).not.toContain(".local/bin");
+    }
+    // The block comment says what the ordering now closes and what it does not.
+    expect(nightly.source).toContain("What that still does not close");
+    expect(nightly.source).toContain("npm view <package> scripts");
+  });
 });
 
 
 /**
- * ADDED by plan 008 file 3, unit V1w — the two plugin-route steps whose BEHAVIOUR is a decision.
+ * ADDED by plan 008 file 3, unit V1w — the plugin-route steps whose BEHAVIOUR is a decision.
  *
  * Every other assertion about these two workflows reads them as data, which is the right level for
  * a pin on step order or a privilege. It is the wrong level for these two steps: each one decides
@@ -995,6 +1127,7 @@ describe.skipIf(!SHELL_EXECUTABLE)("the plugin-route arming steps, executed", ()
 
   const CREDS = runOf(stepsOf(nightly, "headless-lane"), "Headless drive credentials");
   const EXPORTS = runOf(stepsOf(ci, "plugin-route"), "Export the client binaries");
+  const VERDICT = runOf(stepsOf(nightly, "headless-lane"), "Headless drive verdict");
 
   /** Run one step body with a clean environment plus `env`, and read back what it wrote. */
   function run(
@@ -1067,21 +1200,29 @@ describe.skipIf(!SHELL_EXECUTABLE)("the plugin-route arming steps, executed", ()
   });
 
   it("exports a binary path for every client it can find, and notices the ones it cannot", () => {
-    // Two of the four on PATH, again so neither "all" nor "none" can pass. `agent` is the Cursor
-    // CLI's command name, and it is present here while `copilot` is not.
-    const bin = mkdtempSync(join(root, "bin-"));
-    for (const name of ["claude", "agent"]) {
-      const file = join(bin, name);
+    // Two of the four present, again so neither "all" nor "none" can pass. `agent` is the Cursor
+    // CLI's command name, and it is present here while `copilot` is not. TEST CHANGE, justified
+    // (2026-09-22, prove/220): the inputs are RUNNER_TEMP and HOME rather than PATH — the step
+    // reads each binary at the absolute path its installer owns, and a binary on PATH must NOT
+    // be found, which the empty PATH-free lookup below proves.
+    const temp = mkdtempSync(join(root, "runner-temp-"));
+    const home = mkdtempSync(join(root, "home-"));
+    for (const file of [join(temp, "claude", "bin", "claude"), join(home, ".local", "bin", "agent")]) {
+      mkdirSync(join(file, ".."), { recursive: true });
       writeFileSync(file, "#!/bin/sh\nexit 0\n");
       chmodSync(file, 0o755);
     }
+    // A `copilot` on PATH that no install step placed: the old `command -v` would have exported it.
+    const stray = mkdtempSync(join(root, "stray-"));
+    writeFileSync(join(stray, "copilot"), "#!/bin/sh\nexit 0\n");
+    chmodSync(join(stray, "copilot"), 0o755);
 
-    const result = run(EXPORTS, { PATH: `${bin}${delimiter}/usr/bin:/bin` }, "GITHUB_ENV");
+    const result = run(EXPORTS, { PATH: `${stray}${delimiter}/usr/bin:/bin`, RUNNER_TEMP: temp, HOME: home }, "GITHUB_ENV");
 
     expect(result.status).toBe(0);
     // The two present clients reach the smoke through the environment channel, at their real paths.
-    expect(result.written).toContain(`STAMITY_CLAUDE_BIN=${join(bin, "claude")}`);
-    expect(result.written).toContain(`STAMITY_CURSOR_BIN=${join(bin, "agent")}`);
+    expect(result.written).toContain(`STAMITY_CLAUDE_BIN=${join(temp, "claude", "bin", "claude")}`);
+    expect(result.written).toContain(`STAMITY_CURSOR_BIN=${join(home, ".local", "bin", "agent")}`);
     // The two absent ones are NOT exported — an empty variable would look set to the smoke.
     expect(result.written).not.toContain("STAMITY_COPILOT_BIN");
     expect(result.written).not.toContain("STAMITY_CODEX_BIN");
@@ -1090,6 +1231,21 @@ describe.skipIf(!SHELL_EXECUTABLE)("the plugin-route arming steps, executed", ()
     expect(result.stdout).toContain("::notice title=Client binary absent (codex)::");
     expect(result.stdout).not.toContain("Client binary absent (claude)");
     expect(result.stdout).not.toContain("Client binary absent (agent)");
+  });
+
+  it("fails the verdict on any drive step that failed, naming it, and passes on success and skips", () => {
+    // The outcomes are GitHub's own words for a step: success, failure, cancelled, skipped.
+    const red = run(VERDICT, { OUTCOMES: "claude=success cursor=failure copilot=skipped codex=success" }, "GITHUB_OUTPUT");
+    expect(red.status).toBe(1);
+    expect(red.stdout).toContain("::error title=Headless drive failed::The invocation legs failed for: cursor.");
+    // Two failures are both named, in the order the steps ran.
+    const two = run(VERDICT, { OUTCOMES: "claude=failure cursor=skipped copilot=cancelled codex=success" }, "GITHUB_OUTPUT");
+    expect(two.status).toBe(1);
+    expect(two.stdout).toContain("failed for: claude,copilot.");
+    // A skipped client is a client with no credential, never a failure.
+    const green = run(VERDICT, { OUTCOMES: "claude=success cursor=skipped copilot=skipped codex=success" }, "GITHUB_OUTPUT");
+    expect(green.status).toBe(0);
+    expect(green.stdout).toContain("No armed drive step failed");
   });
 });
 
@@ -3742,9 +3898,14 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
   });
 
   it("references only scripts/*.mjs files that exist on disk", () => {
+    // TEST CHANGE, justified (2026-09-22, prove/220): the plugin-route steps invoke the interpreter
+    // by the absolute path captured before any vendor install — `"$STAMITY_NODE_BIN" scripts/…` —
+    // so the match admits that spelling beside the bare `node`. Nothing else is admitted: a script
+    // reached any other way is a reference this guard would not see, which is the rot it exists
+    // to catch.
     const referenced = ALL_STEPS.flatMap(([, , step]) =>
       Array.from(
-        (step.run ?? "").matchAll(/node (scripts\/[\w-]+\.mjs)/g),
+        (step.run ?? "").matchAll(/(?:node|"\$STAMITY_NODE_BIN") (scripts\/[\w-]+\.mjs)/g),
         (match) => match[1] ?? "",
       ),
     );
