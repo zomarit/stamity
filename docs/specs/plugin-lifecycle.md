@@ -415,8 +415,12 @@ nothing to compare. The install, refresh and rollback halves are file 3's proof 
 As built (2026-09-20), the documentation half: "through the client's own commands as
 `docs/plugins.md` states them" assumes four vendors document such a command, and on 2026-09-20 two
 of them do not, so the guide states the gap instead of inventing a command. Claude Code's pin IS
-the marketplace ref — a marketplace added at `#plugins/v<tag>` — `claude plugin update stamity` is
-the refresh, and auto-update is off by default for a third-party marketplace, so an update is a
+the marketplace ref — a marketplace added at `#plugins/v<tag>` — and the refresh is
+`claude plugin update stamity@stamity --scope project` (amended 2026-09-22 from the bare
+`claude plugin update stamity`: the qualified, scoped spelling is the one the page publishes and the
+one the walk executed, because `plugin update` defaults to user scope and refuses a project-scope
+install — measured on 2.1.278 and restated by this requirement's 2026-09-21 paragraph below and under
+REQ-PLUGIN-021). Auto-update is off by default for a third-party marketplace, so an update is a
 thing the operator runs; a `plugin rollback` subcommand is published as NOT ESTABLISHED, because
 one vendor page quoted it in slash form on 2026-09-20 and the CLI reference did not list it, and
 the route printed today is re-adding the marketplace at the previous tag and installing again.
