@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { delimiter, join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -1357,9 +1357,18 @@ function printing(runtime: Record<string, unknown>, exitCode = 0): string {
  * under Claude Code's PowerShell fallback — a Windows host with no Git Bash — and the guard is
  * then silently disarmed. The render cannot serve both shells, so `check` says so on that host.
  * The failing branch cannot be reached in-process on a POSIX host, so the platform and the
- * environment are injected; `bash.exe` is found the way `test/adapters/claude.test.ts` resolves
- * the hook shell — a PATH walk with `existsSync` — so a real file under a temp directory is
- * what makes the found case true, not a mock.
+ * environment are injected, and every place the row probes is a real file under the fixture,
+ * not a mock.
+ *
+ * TEST CHANGE, justified (2026-09-22, audit Critical): the row used to pass on any `bash.exe` on
+ * PATH and on any existing path in `CLAUDE_CODE_GIT_BASH_PATH`, neither of which is where the
+ * client looks. The vendor's troubleshoot-install page (read 2026-09-22) states the client's
+ * order — the variable, honoured only for a file named `bash.exe`, `sh.exe`, `bash` or `sh`; the
+ * default install locations `C:\Program Files\Git` and `C:\Program Files (x86)\Git`; the `git` on
+ * PATH, "using the `bin\bash.exe` from that Git installation" — so the cases below are those
+ * three places and the two false verdicts the old probe gave: a default Git for Windows install
+ * has `git.exe` on PATH and no `bash.exe` there (a false FAIL), and an MSYS2 or Cygwin `bash.exe`
+ * on PATH is one the client never finds (a false PASS).
  */
 describe("check — claude-hook-shell", () => {
   const claude = { tools: ["claude"], ledger: [], plugin: undefined } as unknown as SetupManifest;
@@ -1373,94 +1382,202 @@ describe("check — claude-hook-shell", () => {
     }
   });
 
-  it("fails on win32 with no bash.exe on PATH, naming the consequence and the remedy", () => {
+  it("fails on win32 with Git Bash in none of the three places the client looks, naming them and the remedy", () => {
     const handle = getRepo();
-    const empty = handle.path("no-bash");
-    const verdict = checkClaudeHookShell(claude, { platform: "win32", env: { PATH: `${empty};C:\\Windows\\System32` } });
+    const verdict = checkClaudeHookShell(claude, {
+      platform: "win32",
+      env: windowsEnv(handle, ["C:\\nothing", handle.path("no-bash")]),
+    });
     expect(verdict.status).toBe("fail");
     expect(verdict.detail).toContain(
       "the anchored hook commands need Git Bash on Windows; without it the pre-tool-use guard does not launch and the client does not block",
     );
     expect(verdict.detail).toContain("PowerShell");
-    expect(verdict.detail).toContain("Install Git for Windows (Git Bash)");
+    // The three places, in the client's order, then the remedy.
+    expect(verdict.detail).toContain("CLAUDE_CODE_GIT_BASH_PATH naming a file called bash.exe, sh.exe, bash or sh");
+    expect(verdict.detail).toContain(
+      `bin\\bash.exe under the default install locations ${join(handle.path("program-files"), "Git")} and ${join(handle.path("program-files-x86"), "Git")}`,
+    );
+    expect(verdict.detail).toContain("bin\\bash.exe beside a git.exe on PATH");
+    expect(verdict.detail).toContain("Install Git for Windows (Git Bash), or set CLAUDE_CODE_GIT_BASH_PATH to its bin\\bash.exe");
+    // The row reads the environment only: a settings.json value reaches the client, not this shell.
+    expect(verdict.detail).toContain("not a shell that runs stamity check outside a Claude session");
+    expect(verdict.detail).not.toContain("and so does this row");
   });
 
-  it("passes on win32 once a bash.exe is on PATH, naming where it was found", async () => {
+  it("passes on a default install location with nothing on PATH, naming it", async () => {
+    // Step 1 of the client's search when the variable is unset: `C:\Program Files\Git` and
+    // `C:\Program Files (x86)\Git`. Git for Windows' installer puts only `<Git>\cmd` on PATH by
+    // default, so this — not a `bash.exe` on PATH — is how a default install is found.
     const handle = getRepo();
-    await handle.seedFiles({ "git-bash/bin/bash.exe": "" });
-    const dir = handle.path("git-bash/bin");
-    // Windows PATH uses `;` — the probe splits on the platform's delimiter, and this suite runs
-    // on the host's, so the fixture is composed with that delimiter rather than a literal.
-    const verdict = checkClaudeHookShell(claude, { platform: "win32", env: { PATH: ["C:\\nothing", dir].join(sep === "\\" ? ";" : ":") } });
-    expect(verdict.status).toBe("pass");
-    expect(verdict.detail).toContain(`Git Bash found at ${join(dir, "bash.exe")}`);
+    await handle.seedFiles({ "program-files/Git/bin/bash.exe": "" });
+    const found = checkClaudeHookShell(claude, { platform: "win32", env: windowsEnv(handle, []) });
+    expect(found.status).toBe("pass");
+    expect(found.detail).toContain(
+      `Git Bash at ${handle.path("program-files/Git/bin/bash.exe")}, a default install location`,
+    );
+    // The x86 root, probed second, on its own.
+    await handle.seedFiles({ "program-files-x86/Git/bin/bash.exe": "" });
+    const x86 = checkClaudeHookShell(claude, {
+      platform: "win32",
+      env: windowsEnv(handle, [], { ProgramFiles: handle.path("program-files-empty") }),
+    });
+    expect(x86.status).toBe("pass");
+    expect(x86.detail).toContain(
+      `Git Bash at ${handle.path("program-files-x86/Git/bin/bash.exe")}, a default install location`,
+    );
   });
 
-  it("does not count WSL's System32 bash.exe as Git Bash, and does count one under Git\\bin", async () => {
-    // prove/251: WSL ships %SystemRoot%\System32\bash.exe, a launcher into a Linux distribution
-    // the client's fallback never uses. A host with WSL and no Git for Windows must FAIL the row,
-    // naming the launcher; the same host with Git\bin on PATH passes on that one.
+  it("passes on the git on PATH, reading bin\\bash.exe from that installation, for the cmd and the bin layouts", async () => {
+    // Step 2: "The `git` on your `PATH`, using the `bin\bash.exe` from that Git installation".
+    // The default layout puts `<Git>\cmd\git.exe` on PATH with `bin\bash.exe` beside `cmd`; an
+    // operator who put `<Git>\bin` on PATH instead has both in the one directory.
     const handle = getRepo();
-    await handle.seedFiles({ "windows/System32/bash.exe": "", "git/Git/bin/bash.exe": "" });
-    const systemRoot = handle.path("windows");
+    await handle.seedFiles({ "elsewhere/Git/cmd/git.exe": "", "elsewhere/Git/bin/bash.exe": "" });
+    const cmd = handle.path("elsewhere/Git/cmd");
+    const viaCmd = checkClaudeHookShell(claude, {
+      platform: "win32",
+      env: windowsEnv(handle, ["C:\\nothing", cmd]),
+    });
+    expect(viaCmd.status).toBe("pass");
+    expect(viaCmd.detail).toContain(
+      `Git Bash at ${handle.path("elsewhere/Git/bin/bash.exe")}, beside the git.exe on PATH at ${join(cmd, "git.exe")}`,
+    );
+    await handle.seedFiles({ "portable/Git/bin/git.exe": "", "portable/Git/bin/bash.exe": "" });
+    const bin = handle.path("portable/Git/bin");
+    const viaBin = checkClaudeHookShell(claude, { platform: "win32", env: windowsEnv(handle, [bin]) });
+    expect(viaBin.status).toBe("pass");
+    expect(viaBin.detail).toContain(
+      `Git Bash at ${join(bin, "bash.exe")}, beside the git.exe on PATH at ${join(bin, "git.exe")}`,
+    );
+  });
+
+  it("fails on a bare bash.exe on PATH that no Git installation put there — MSYS2, Cygwin, WSL", async () => {
+    // The false PASS the old probe gave, on the exact host the row exists to report: a `bash.exe`
+    // on PATH is not in the client's list, so the client falls back to PowerShell while the row
+    // said found. WSL's `%SystemRoot%\System32\bash.exe` (prove/251) is the same case now and
+    // needs no exclusion of its own; both are named as not counting.
+    const handle = getRepo();
+    await handle.seedFiles({ "msys64/usr/bin/bash.exe": "", "windows/System32/bash.exe": "" });
+    const msys = handle.path("msys64/usr/bin");
     const system32 = handle.path("windows/System32");
-    const gitBin = handle.path("git/Git/bin");
-    const pathSep = sep === "\\" ? ";" : ":";
-    const wslOnly = checkClaudeHookShell(claude, {
+    const verdict = checkClaudeHookShell(claude, {
       platform: "win32",
-      env: { SystemRoot: systemRoot, PATH: [system32, "C:\\nothing"].join(pathSep) },
+      env: windowsEnv(handle, [msys, system32], { SystemRoot: handle.path("windows") }),
     });
-    expect(wslOnly.status).toBe("fail");
-    expect(wslOnly.detail).toContain(`${join(system32, "bash.exe")} is the WSL launcher, not Git Bash, and does not count`);
-    // Case-insensitive, and the entry's own spelling: `system32` with a trailing separator.
-    const spelled = checkClaudeHookShell(claude, {
+    expect(verdict.status).toBe("fail");
+    expect(verdict.detail).toContain(
+      `the client does not look for a bare bash.exe on PATH, so ${join(msys, "bash.exe")} and ${join(system32, "bash.exe")} do not count`,
+    );
+  });
+
+  it("fails on a git.exe on PATH with no bin\\bash.exe in its installation, naming it", async () => {
+    // A shim, or a git that is not Git for Windows: step 2 finds the git and no shell from it.
+    const handle = getRepo();
+    await handle.seedFiles({ "shims/git.exe": "" });
+    const shims = handle.path("shims");
+    const verdict = checkClaudeHookShell(claude, { platform: "win32", env: windowsEnv(handle, [shims]) });
+    expect(verdict.status).toBe("fail");
+    expect(verdict.detail).toContain(
+      `the git.exe on PATH at ${join(shims, "git.exe")} has no bin\\bash.exe in its installation (looked at ${join(shims, "..", "bin", "bash.exe")}), so the client reads no shell from it`,
+    );
+  });
+
+  it("ignores CLAUDE_CODE_GIT_BASH_PATH naming a directory, as the client does, and lets the other places decide", async () => {
+    // The page: "Claude Code accepts only a file named `bash.exe`, `sh.exe`, `bash`, or `sh`; with
+    // any other name … it ignores the variable and auto-detects Git Bash as if it were unset". A
+    // directory is no such file, and the old probe's `existsSync` took one.
+    const handle = getRepo();
+    await handle.seedFiles({ "program-files/Git/bin/bash.exe": "" });
+    const directory = handle.path("program-files/Git");
+    const ignoredNote = `CLAUDE_CODE_GIT_BASH_PATH names ${directory}, which is not a file, so the client ignores it and looks on as if it were unset`;
+    // Ignored, then the default location passes — and the pass still says the variable was ignored.
+    const decided = checkClaudeHookShell(claude, {
       platform: "win32",
-      env: { SystemRoot: systemRoot.toUpperCase(), PATH: `${system32.toLowerCase()}${sep}` },
+      env: windowsEnv(handle, [], { CLAUDE_CODE_GIT_BASH_PATH: directory }),
     });
-    expect(spelled.status).toBe("fail");
-    const withGit = checkClaudeHookShell(claude, {
+    expect(decided.status).toBe("pass");
+    expect(decided.detail).toContain(
+      `Git Bash at ${handle.path("program-files/Git/bin/bash.exe")}, a default install location`,
+    );
+    expect(decided.detail).toContain(ignoredNote);
+    // Ignored, and nothing else found: the fail carries the same note, not a verdict on the
+    // variable alone.
+    const alone = checkClaudeHookShell(claude, {
       platform: "win32",
-      env: { SystemRoot: systemRoot, PATH: [system32, gitBin].join(pathSep) },
+      env: windowsEnv(handle, [], {
+        CLAUDE_CODE_GIT_BASH_PATH: directory,
+        ProgramFiles: handle.path("program-files-empty"),
+      }),
     });
-    expect(withGit.status).toBe("pass");
-    expect(withGit.detail).toContain(`Git Bash found at ${join(gitBin, "bash.exe")}`);
+    expect(alone.status).toBe("fail");
+    expect(alone.detail).toContain(ignoredNote);
+  });
+
+  it("ignores CLAUDE_CODE_GIT_BASH_PATH naming git-bash.exe or a missing path, as the client does", async () => {
+    // "any other name, such as Git for Windows' `git-bash.exe` launcher" is ignored, and "A path
+    // that doesn't exist gets the same fallback".
+    const handle = getRepo();
+    await handle.seedFiles({ "launcher/Git/git-bash.exe": "" });
+    const launcher = handle.path("launcher/Git/git-bash.exe");
+    const byName = checkClaudeHookShell(claude, {
+      platform: "win32",
+      env: windowsEnv(handle, [], { CLAUDE_CODE_GIT_BASH_PATH: launcher }),
+    });
+    expect(byName.status).toBe("fail");
+    expect(byName.detail).toContain(
+      `CLAUDE_CODE_GIT_BASH_PATH names ${launcher}, which is not named bash.exe, sh.exe, bash or sh, so the client ignores it and looks on as if it were unset`,
+    );
+    const missing = handle.path("launcher/nowhere/bash.exe");
+    const absent = checkClaudeHookShell(claude, {
+      platform: "win32",
+      env: windowsEnv(handle, [], { CLAUDE_CODE_GIT_BASH_PATH: missing }),
+    });
+    expect(absent.status).toBe("fail");
+    expect(absent.detail).toContain(
+      `CLAUDE_CODE_GIT_BASH_PATH names ${missing}, which does not exist, so the client ignores it and looks on as if it were unset`,
+    );
+  });
+
+  it("honours CLAUDE_CODE_GIT_BASH_PATH naming an existing file the client accepts, before any other place", async () => {
+    // `bash.exe`, `sh.exe`, `sh`, and a name in any case — a real file each; PATH empty and the
+    // default locations pinned empty, so only the variable can pass.
+    const handle = getRepo();
+    const names = [
+      "configured/Git/bin/bash.exe",
+      "configured/Git/bin/sh.exe",
+      "configured/Git/usr/bin/BASH.EXE",
+      "configured/Git/usr/bin/sh",
+    ];
+    await handle.seedFiles(Object.fromEntries(names.map((name) => [name, ""])));
+    for (const name of names) {
+      const named = handle.path(name);
+      const verdict = checkClaudeHookShell(claude, {
+        platform: "win32",
+        env: windowsEnv(handle, [], { CLAUDE_CODE_GIT_BASH_PATH: named }),
+      });
+      expect(verdict.status, name).toBe("pass");
+      expect(verdict.detail, name).toContain(`Git Bash at ${named}, named by CLAUDE_CODE_GIT_BASH_PATH`);
+    }
   });
 
   it("reads PATH by any spelling of the key, as Windows spells it Path", async () => {
     // prove/261: on windows-latest the row saw no PATH at all — the real variable is `Path`, and a
     // plain object copied from process.env does not answer case-insensitively — so the real doctor
-    // failed on every healthy repository. Branch covered: the `/^path$/i` key lookup.
+    // failed on every healthy repository. Branch covered: the `/^path$/i` key lookup, on the git
+    // layout the client reads. No `PATH` key at all here, so only `Path` can carry the entry.
     const handle = getRepo();
-    await handle.seedFiles({ "spelled/Git/usr/bin/bash.exe": "" });
-    const dir = handle.path("spelled/Git/usr/bin");
-    const verdict = checkClaudeHookShell(claude, { platform: "win32", env: { Path: dir } });
-    expect(verdict.status).toBe("pass");
-    expect(verdict.detail).toContain(`Git Bash found at ${join(dir, "bash.exe")}`);
-  });
-
-  it("honours CLAUDE_CODE_GIT_BASH_PATH when it names an existing file, and not otherwise", async () => {
-    // The vendor's stated override (setup page, read 2026-09-22): "If Claude Code can't find Git
-    // Bash, set the path in your settings.json file: env CLAUDE_CODE_GIT_BASH_PATH". Branches
-    // covered: the variable naming a seeded file passes before PATH is read at all (PATH empty
-    // here); the variable naming a missing file does not count, the fail text says so, and the
-    // lookup falls through to PATH.
-    const handle = getRepo();
-    await handle.seedFiles({ "configured/Git/bin/bash.exe": "" });
-    const named = handle.path("configured/Git/bin/bash.exe");
-    const found = checkClaudeHookShell(claude, { platform: "win32", env: { CLAUDE_CODE_GIT_BASH_PATH: named, PATH: "" } });
-    expect(found.status).toBe("pass");
-    expect(found.detail).toContain(`Git Bash at ${named}, named by CLAUDE_CODE_GIT_BASH_PATH`);
-    const missing = handle.path("configured/nowhere/bash.exe");
-    const absent = checkClaudeHookShell(claude, { platform: "win32", env: { CLAUDE_CODE_GIT_BASH_PATH: missing, PATH: "" } });
-    expect(absent.status).toBe("fail");
-    expect(absent.detail).toContain(`CLAUDE_CODE_GIT_BASH_PATH names ${missing}, which does not exist, so it does not count`);
-    expect(absent.detail).toContain("through CLAUDE_CODE_GIT_BASH_PATH");
-    const fallsThrough = checkClaudeHookShell(claude, {
+    await handle.seedFiles({ "spelled/Git/cmd/git.exe": "", "spelled/Git/bin/bash.exe": "" });
+    const verdict = checkClaudeHookShell(claude, {
       platform: "win32",
-      env: { CLAUDE_CODE_GIT_BASH_PATH: missing, PATH: handle.path("configured/Git/bin") },
+      env: {
+        ProgramFiles: handle.path("program-files"),
+        "ProgramFiles(x86)": handle.path("program-files-x86"),
+        Path: handle.path("spelled/Git/cmd"),
+      },
     });
-    expect(fallsThrough.status).toBe("pass");
-    expect(fallsThrough.detail).toContain("Git Bash found at");
+    expect(verdict.status).toBe("pass");
+    expect(verdict.detail).toContain(`Git Bash at ${handle.path("spelled/Git/bin/bash.exe")}`);
   });
 
   it("passes with a note on win32 when claude is not targeted, or its hooks are a plugin's", () => {
@@ -1483,10 +1600,30 @@ describe("check — claude-hook-shell", () => {
     // This suite never runs the failing branch for real. On POSIX the row passes on the platform;
     // on the CI Windows leg it passes on the found case, reading the HOST's process.env (the app
     // env handed in here is `{}`, which is why the row reads the host and not the seam — prove/261)
-    // where Git for Windows is on PATH, as test/adapters/claude.test.ts's round-trips measure.
+    // where windows-latest carries Git for Windows at the default install location.
     expect(verdict.status).toBe("pass");
   });
 });
+
+/**
+ * A Windows host's environment as the row reads it: PATH from the entries given, joined on
+ * the HOST's delimiter (the probe splits on it, and this suite runs on the host's), and the
+ * two Program Files roots pinned under the fixture. The pin matters on the CI Windows leg: the
+ * row falls back to the literal `C:\Program Files` when a root is unset, that literal holds a
+ * real Git there, and a fail case that left the roots unset would pass for the wrong reason.
+ */
+function windowsEnv(
+  handle: TempDirHandle,
+  entries: readonly string[],
+  extra: Record<string, string> = {},
+): Record<string, string> {
+  return {
+    ProgramFiles: handle.path("program-files"),
+    "ProgramFiles(x86)": handle.path("program-files-x86"),
+    PATH: entries.join(delimiter),
+    ...extra,
+  };
+}
 
 /** One named doctor row off a fresh run, with the environment pinned. */
 async function doctorRow(

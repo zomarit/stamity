@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { delimiter, join, relative, sep } from "node:path";
 import type { App, EngineRegistry } from "../../index.ts";
@@ -396,31 +396,63 @@ async function checkEnvMcp(
  *
  * Pure and exported for the reason `checkNodeVersion` is: the failing branch
  * cannot be reached in-process on a POSIX host, so the platform and the
- * environment are injected. The lookup mirrors what the vendor states and no
- * more (setup page, read 2026-09-22: "If Claude Code can't find Git Bash, set
- * the path in your settings.json file: env CLAUDE_CODE_GIT_BASH_PATH"; no
- * default install location is stated, so none is probed): the variable first,
- * when it names an existing file, then `bash.exe` on PATH the way the
- * adapter's own suite resolves it — each entry, `existsSync`, no spawn. PATH is
- * read by the first key matching `/^path$/i` (prove/261): Windows spells it
- * `Path`, and while `process.env` answers case-insensitively there, a plain
- * object copied from it does not.
+ * environment are injected. The lookup mirrors the client's own resolution as
+ * the vendor states it (troubleshoot-install page, "Claude Code on Windows
+ * requires either Git for Windows (for bash) or PowerShell", read 2026-09-22),
+ * in its order and no wider:
+ *
+ * 1. `CLAUDE_CODE_GIT_BASH_PATH`, honoured only when it names an existing FILE
+ *    called `bash.exe`, `sh.exe`, `bash` or `sh`, the name compared without
+ *    case: "Claude Code accepts only a file named `bash.exe`, `sh.exe`, `bash`,
+ *    or `sh`; with any other name, such as Git for Windows' `git-bash.exe`
+ *    launcher, it ignores the variable and auto-detects Git Bash as if it were
+ *    unset … A path that doesn't exist gets the same fallback". An ignored
+ *    variable is therefore a note on whichever verdict follows, never a verdict
+ *    of its own.
+ * 2. "The default install locations `C:\Program Files\Git` and
+ *    `C:\Program Files (x86)\Git`": `bin\bash.exe` under each, the roots read
+ *    from `ProgramFiles` and `ProgramFiles(x86)` with the page's literals when
+ *    a variable is unset.
+ * 3. "The `git` on your `PATH`, using the `bin\bash.exe` from that Git
+ *    installation": each PATH entry holding a `git.exe`, and `..\bin\bash.exe`
+ *    from there. Git for Windows' installer puts `<Git>\cmd` on PATH by
+ *    default, with `bin\bash.exe` a sibling of `cmd`, and the same probe reads
+ *    `bin\bash.exe` itself when `<Git>\bin` is the entry. PATH is read by the
+ *    first key matching `/^path$/i` (prove/261): Windows spells it `Path`, and
+ *    while `process.env` answers case-insensitively there, a plain object
+ *    copied from it does not; the two Program Files roots are read the same way.
+ *
+ * Every probe is a filesystem read, no spawn. A bare `bash.exe` on PATH is NOT
+ * in the client's list and does not count — the row once took one, which gave
+ * two false verdicts: a default Git for Windows install has `git.exe` on PATH
+ * and no `bash.exe` there (a false FAIL), and MSYS2 or Cygwin put a `bash.exe`
+ * on PATH that the client never finds (a false PASS, on the exact host this
+ * row exists to report). WSL's `%SystemRoot%\System32\bash.exe` (prove/251) is
+ * the same case and needs no exclusion of its own. A `bash.exe` seen on PATH,
+ * and a `git.exe` with no `bin\bash.exe` in its installation, are each named
+ * in the fail text as not counting, so the operator reads why.
+ *
+ * One clause of the page is not modelled: in step 3 the client "skips a `git`
+ * that sits in the folder you launched Claude Code from, or below it in a path
+ * that contains `node_modules` or a virtual-environment folder such as `.venv`
+ * or `env`". The launch folder is a session fact this row cannot know, so a
+ * `git.exe` in such a place counts here and may not there; the page's own
+ * remedy for that case is the variable, which this row honours first.
  *
  * `runDoctor` hands this row the HOST's `process.env`, not the app's runtime
  * env: the row asks whether a shell exists on the machine the doctor runs on,
  * the same kind of host fact `checkNodeVersion` reads off `process.versions`,
  * and a fixture that scopes the app's env to `{}` is not a host with no shell.
+ * The environment is ALL it reads: a value set in `settings.json`'s `env`
+ * block reaches the client, and not a shell that runs `stamity check` outside
+ * a Claude session, and the fail text says exactly that.
  *
  * Fails only where every condition holds: `win32`, Claude targeted, its hooks
  * emitted by this engine rather than carried by a plugin (a plugin-owned hook
- * set is the plugin's render, not this adapter's), and no `bash.exe` on PATH
- * that is Git Bash. WSL ships `%SystemRoot%\System32\bash.exe` (prove/251), a
- * launcher into a Linux distribution that the client's fallback never uses, so
- * a `bash.exe` whose directory is the Windows system directory — `System32` or
- * `Sysnative` under `SystemRoot`, read from the injected environment with the
- * `C:\Windows` default, compared case-insensitively — does not count.
- * Everywhere else it passes with the note that says which condition released
- * it, so the row reads the same on every host and is never silently absent.
+ * set is the plugin's render, not this adapter's), and none of the three
+ * places holds Git Bash. Everywhere else it passes with the note that says
+ * which condition, or which place, released it, so the row reads the same on
+ * every host and is never silently absent.
  */
 export function checkClaudeHookShell(
   manifest: SetupManifest | null,
@@ -449,31 +481,67 @@ export function checkClaudeHookShell(
         : "claude is not a target tool, so no anchored hook row is emitted",
     };
   }
+  // Keys matched by pattern, not by spelling: see the docblock on `Path`.
+  const read = (pattern: RegExp): string | undefined => {
+    const key = Object.keys(host.env).find((name) => pattern.test(name));
+    return key === undefined ? undefined : host.env[key];
+  };
+  const pass = (where: string, note: string): DoctorCheck => ({
+    id,
+    status: "pass",
+    detail: `Git Bash at ${where}: the anchored hook commands parse there${note}`,
+  });
+
+  // 1. The variable: a file by one of the four names, or ignored as the client ignores it.
   const configured = (host.env["CLAUDE_CODE_GIT_BASH_PATH"] ?? "").trim();
-  if (configured !== "" && existsSync(configured)) {
-    return { id, status: "pass", detail: `Git Bash at ${configured}, named by CLAUDE_CODE_GIT_BASH_PATH: the anchored hook commands parse there` };
-  }
-  const configuredNote = configured === "" ? "" : ` (CLAUDE_CODE_GIT_BASH_PATH names ${configured}, which does not exist, so it does not count)`;
-  const systemRoot = (host.env["SystemRoot"] ?? host.env["SYSTEMROOT"] ?? "C:\\Windows")
-    .replaceAll("/", "\\")
-    .replace(/[\\]+$/, "");
-  const systemDirs = new Set(["System32", "Sysnative"].map((name) => `${systemRoot}\\${name}`.toLowerCase()));
-  const wsl: string[] = [];
-  const pathKey = Object.keys(host.env).find((key) => /^path$/i.test(key));
-  for (const entry of (pathKey === undefined ? "" : (host.env[pathKey] ?? "")).split(delimiter)) {
-    if (entry === "") continue;
-    const candidate = join(entry, "bash.exe");
-    if (!existsSync(candidate)) continue;
-    // The directory as the entry spelled it, separators unified: a PATH entry may say
-    // `C:/Windows/System32` or carry a trailing slash, and both name the system directory.
-    const dir = entry.replaceAll("/", "\\").replace(/[\\]+$/, "").toLowerCase();
-    if (systemDirs.has(dir)) {
-      wsl.push(candidate);
-      continue;
+  let ignored = "";
+  if (configured !== "") {
+    const kind = entryKind(configured);
+    const name = (configured.split(/[\\/]/).at(-1) ?? "").toLowerCase();
+    if (kind === "file" && HOOK_SHELL_NAMES.has(name)) {
+      return pass(`${configured}, named by CLAUDE_CODE_GIT_BASH_PATH`, "");
     }
-    return { id, status: "pass", detail: `Git Bash found at ${candidate}: the anchored hook commands parse there` };
+    const why =
+      kind === "absent" ? "does not exist"
+      : kind === "unreadable" ? "cannot be read"
+      : kind === "other" ? "is not a file"
+      : "is not named bash.exe, sh.exe, bash or sh";
+    ignored =
+      ` (CLAUDE_CODE_GIT_BASH_PATH names ${configured}, which ${why}, so the client ignores it ` +
+      "and looks on as if it were unset — as does this row)";
   }
-  const wslNote = wsl.length === 0 ? "" : ` (${wsl.join(", ")} is the WSL launcher, not Git Bash, and does not count)`;
+
+  // 2. The default install locations.
+  const programFiles = join(read(/^programfiles$/i) ?? "C:\\Program Files", "Git");
+  const programFilesX86 = join(read(/^programfiles\(x86\)$/i) ?? "C:\\Program Files (x86)", "Git");
+  for (const root of [programFiles, programFilesX86]) {
+    const candidate = join(root, "bin", "bash.exe");
+    if (existsSync(candidate)) return pass(`${candidate}, a default install location`, ignored);
+  }
+
+  // 3. The git on PATH, and the shell of its installation.
+  const bare: string[] = [];
+  const notes: string[] = [];
+  for (const entry of (read(/^path$/i) ?? "").split(delimiter)) {
+    if (entry === "") continue;
+    const git = join(entry, "git.exe");
+    if (existsSync(git)) {
+      const candidate = join(entry, "..", "bin", "bash.exe");
+      if (existsSync(candidate)) return pass(`${candidate}, beside the git.exe on PATH at ${git}`, ignored);
+      notes.push(
+        `the git.exe on PATH at ${git} has no bin\\bash.exe in its installation (looked at ` +
+          `${candidate}), so the client reads no shell from it`,
+      );
+    }
+    const bash = join(entry, "bash.exe");
+    if (existsSync(bash)) bare.push(bash);
+  }
+  if (bare.length > 0) {
+    notes.unshift(
+      `the client does not look for a bare bash.exe on PATH, so ${listed(bare)} ` +
+        `${bare.length === 1 ? "does" : "do"} not count`,
+    );
+  }
   return {
     id,
     status: "fail",
@@ -481,10 +549,38 @@ export function checkClaudeHookShell(
       "the anchored hook commands need Git Bash on Windows; without it the pre-tool-use guard " +
       "does not launch and the client does not block — the client falls back to PowerShell, " +
       "which reads ${CLAUDE_PROJECT_DIR} as its own variable and does not parse the guard's " +
-      "fail-closed tail. Install Git for Windows (Git Bash); the client finds it on PATH, or " +
-      "through CLAUDE_CODE_GIT_BASH_PATH in settings.json's env block or the environment, and so " +
-      `does this row. Then re-run check.${configuredNote}${wslNote}`,
+      "fail-closed tail. Git Bash is in none of the three places the client looks, in its order: " +
+      "CLAUDE_CODE_GIT_BASH_PATH naming a file called bash.exe, sh.exe, bash or sh; bin\\bash.exe " +
+      `under the default install locations ${programFiles} and ${programFilesX86}; and ` +
+      "bin\\bash.exe beside a git.exe on PATH. Install Git for Windows (Git Bash), or set " +
+      "CLAUDE_CODE_GIT_BASH_PATH to its bin\\bash.exe in the environment — this row reads the " +
+      "environment only, and a value in settings.json's env block reaches the client but not a " +
+      "shell that runs stamity check outside a Claude session. Then re-run check." +
+      `${ignored}${notes.map((note) => ` (${note})`).join("")}`,
   };
+}
+
+/** The file names the client accepts in `CLAUDE_CODE_GIT_BASH_PATH`, compared without case. */
+const HOOK_SHELL_NAMES: ReadonlySet<string> = new Set(["bash.exe", "sh.exe", "bash", "sh"]);
+
+/**
+ * What a configured path names, without throwing: the row is not run through
+ * `guarded`, and a path the process may not stat is a note, not a crash.
+ */
+function entryKind(path: string): "file" | "other" | "absent" | "unreadable" {
+  try {
+    const stat = statSync(path, { throwIfNoEntry: false });
+    if (stat === undefined) return "absent";
+    return stat.isFile() ? "file" : "other";
+  } catch {
+    return "unreadable";
+  }
+}
+
+/** `a`, `a and b`, `a, b and c`. */
+function listed(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1] ?? ""}`;
 }
 
 /**
@@ -898,7 +994,7 @@ async function checkPluginDuplicates(
 /**
  * Every doctor probe, in report order.
  *
- * The manifest is read once, up front, because five probes are conditioned on
+ * The manifest is read once, up front, because nine probes are conditioned on
  * it; the rest are independent reads issued together, and the destructuring
  * order below — not whichever probe finished first — is what makes the report
  * deterministic.
@@ -1033,7 +1129,7 @@ type DriftOutcome =
  * them was being reported as "the manifest has to be readable first".
  *
  * Everything else is CAPTURED, not swallowed and not re-thrown. Capturing keeps
- * the ten other probes on screen, which a diagnostic command exists to
+ * the doctor's fourteen probes on screen, which a diagnostic command exists to
  * produce, while the message — the engine's own, naming the pack and the cause,
  * the same sentence `sync` prints in this state — becomes the drift verdict and
  * gates the exit. Re-throwing would have replaced the whole report with one
@@ -1283,7 +1379,7 @@ interface ManifestState {
 /**
  * Read the manifest once for the probes that need it. A defective manifest is
  * carried as a message rather than thrown: it is one row's verdict, and the
- * other nine probes still have work to do.
+ * other thirteen probes still have work to do.
  */
 async function readManifestState(
   rootDir: string,
@@ -1316,7 +1412,7 @@ async function readProvenance(
 /**
  * Run one probe, converting anything it throws into a warn row for that probe.
  * A sealed directory or an unreadable file is worth saying out loud; it is not
- * worth losing the other nine verdicts over.
+ * worth losing the other thirteen verdicts over.
  */
 async function guarded(id: string, run: () => Promise<DoctorCheck>): Promise<DoctorCheck> {
   try {
