@@ -10,22 +10,20 @@ const MAX_FILE_BYTES = 1024 * 1024
 // Exact repository-relative paths only. An exception needs its reviewable reason here,
 // never a broad extension exemption or an automatically raised size ceiling.
 const LARGE_FILE_EXCEPTIONS = new Map([
-  // Two entries, one retention window. Each is an eval run's public summary: 102 coverage cases at
-  // three samples each, carrying the cited span of every binding verdict, which the NEXT run's
-  // incremental composition reads from the retention commit of the run it composes with — run 31
-  // read run 30's that way (composition.priorSummaryCommit 68b57ef), and run 32 reads run 31's.
-  // That is why run 31's entry stays when the run of record moves to run 32: run 32 composes with
-  // run 31, so both summaries are load-bearing until the 1.9.0 close, whose archive step compacts
-  // both. Run 30's summary is the worked precedent — it landed at 3418596 bytes in 68b57ef
-  // (2026-09-15) before this gate existed and the archive step at the 1.8.0 close compacted it to
-  // 112695 bytes (05cb4ef). Verify: git cat-file -s 68b57ef:evals/runs/2026-09-15-run-30/summary.json
+  // Empty, and an empty list is the expected steady state: an entry buys one retention window and
+  // retires at the release close that ends it. The two that lived here — run 31's and run 32's
+  // public summaries, each load-bearing while the next run's incremental composition read it from
+  // its retention commit (composition.priorSummaryCommit) — retired at the 1.9.0 close, whose
+  // archive step replaced both with compact summaries beside an ARCHIVE.json pointer into the
+  // evidence-archive-2026-09-22 release. Run 30's summary is the worked precedent for that shape:
+  // 3418596 bytes in 68b57ef (2026-09-15), compacted to 112695 bytes at the 1.8.0 close (05cb4ef).
+  // Verify: git cat-file -s 68b57ef:evals/runs/2026-09-15-run-30/summary.json
   //
+  // A new entry is one exact repository-relative path with its reviewable reason, a named window,
+  // and the close step that ends it — never a broad extension exemption, never a raised ceiling.
   // An entry may precede its artifact: the map is consulted only for paths Git reports as changed
-  // (the `has` below), never iterated and never stat'd, so an entry for a path not yet in the tree
-  // is inert rather than a false pass. Run 32's summary is expected under the path named here; if
-  // the run lands under another id, this entry buys nothing and the gate refuses the real file.
-  ['evals/runs/2026-09-21-run-31/summary.json', 'prior complete run summary that run 32 composes with, retained until the 1.9.0 close archives both'],
-  ['evals/runs/2026-09-22-run-32/summary.json', '1.9.0 release run summary, retained until the release-close archive step compacts it'],
+  // (the `has` below), is never iterated and never stat'd, so an entry for a path not yet in the
+  // tree is inert rather than a false pass.
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/
