@@ -236,7 +236,7 @@ the client switches no check off; it makes every signed pack fail to install, an
 is unaffected because nothing loads the client for it. Both trust pages state that pair
 (`docs/packs-and-trust.md:175-179`, `docs/security-mapping.md:176-179`), and a docs pin reads the
 claim off `package.json` instead of restating it, failing as a stale-page report on the day the
-client moves back to a required dependency (`test/docsPages.test.ts:1779`).
+client moves back to a required dependency (`test/docsPages.test.ts:1887-1894`).
 
 ### REQ-PLUGIN-007 Locator resolution order and refusals
 
@@ -287,13 +287,14 @@ without echoing the value; and an unknown key is refused by name.
 As built on 2026-09-19, three points the paragraph above leaves open are settled in
 `scripts/distribution-identity.mjs`. `stamity.publisher` and `stamity.distribution` are
 independently optional: a manifest carrying a distribution block and no publisher still defaults
-the publisher to the owner in `repository.url` (`:258-293`). A credential-shaped key is refused by
-its path rather than only at the block's top level, so the refusal names `sources.<client>.<key>`
-(`:70-98`). The host boundary is per kind: the identity's own `repository.url` stays on
-github.com (`:289`), a `github` source on any other host is refused with a message naming
-`git-subdir` as the host-neutral kind (`:178-185`), and `git-subdir` and `archive` admit any
-https host whose URL carries no credentials in its userinfo, which also refuses an ssh remote
-(`:114-128`).
+the publisher to the owner in `repository.url` (`resolveDistributionIdentity`, `:278-299`). A
+credential-shaped key is refused by its path rather than only at the block's top level, so the
+refusal names `sources.<client>.<key>` (`refuseCredentials`, `:82-110`). The host boundary is per
+kind: the identity's own `repository.url` stays on github.com (`:301-311`), a `github` source on
+any other host is refused with a message naming `git-subdir` as the host-neutral kind
+(`:186-195`), and `git-subdir` and `archive` admit any https host whose URL carries no credentials
+in its userinfo, which also refuses an ssh remote (`requireCleanUrl`, `:123-139`). Line ranges
+re-pointed 2026-09-22 at the shipping tree.
 
 As built (2026-09-20), the block gained one optional key: `stamity.distribution.ownerEmail`, which
 the Copilot catalog's `owner.email` renders when it is set and omits when it is not, and which is
@@ -432,10 +433,13 @@ marketplace branch points at, so both directions are a branch move on the organi
 bounded by the vendor's at-most-every-10-minutes re-index; for Codex,
 `codex plugin marketplace upgrade` refreshes the CATALOG rather than an installed plugin (listed by
 `codex plugin marketplace --help` on codex-cli 0.154.0, read 2026-09-20), and the way back is
-`codex plugin remove stamity` followed by adding the marketplace at the earlier tag and
-`codex plugin add` again. The clause is therefore amended to read "through the route
-`docs/plugins.md` records per client — a vendor command where one exists, and a documented re-add at
-the earlier pin where none does" (`docs/plugins.md:227-263`), which is what the lifecycle proof will
+`codex plugin remove stamity@stamity` (amended 2026-09-22 from the bare `codex plugin remove
+stamity`: on codex-cli 0.154.0 `plugin remove` takes `<plugin>@<marketplace>`, the spelling
+`clean -y` prints and the 2026-09-21 paragraph under REQ-PLUGIN-021 records) followed by adding
+the marketplace at the earlier tag and `codex plugin add` again. The clause is therefore amended
+to read "through the route `docs/plugins.md` records per client — a vendor command where one
+exists, and a documented re-add at the earlier pin where none does" (`docs/plugins.md:301-366`,
+the **Pin, update, roll back** section), which is what the lifecycle proof will
 walk and what REQ-PLUGIN-021's per-client row already anticipated.
 
 As built (2026-09-21), two facts the lifecycle fixture settled. The `rollback` subcommand this
@@ -608,7 +612,8 @@ operator to remove a dependency that deploys nothing, and closing it needs the i
 marketplace recorded on the client's `PluginClientRecord`, which no manifest field carries yet —
 the later fix, not this one. An unparseable `apm.yml` reports nothing rather than guessing. The
 `unmanaged` source derives an id by stripping ONE client extension, longest first — `.agent.md` and
-`.prompt.md` precede the bare `.md` they end with (`src/cli/commands/plugin/probe.ts:332-347`),
+`.prompt.md` precede the bare `.md` they end with (`NATIVE_CONTENT_EXTENSIONS`,
+`src/cli/commands/plugin/probe.ts:463-479`),
 because a `.md`-first list left `<id>.agent` and matched no carried id, which made every Copilot
 file invisible to the scan; any extension added later belongs above every extension it is a suffix
 of.
@@ -849,13 +854,24 @@ contain 0 matches for the leak gate's credential shapes; items the maintainer's 
 enforce (required-check enforcement on a private plan, the enterprise's own catalog approval) are
 recorded as owner-dependent `Not done` lines, never as passes.
 
-PLANNED (2026-09-21): this requirement stands as the contract and has no proof yet. Its unit is file
-3's V4, the maintainer-run private-chain rehearsal, which needs the maintainer's own fixture
-repositories and a transient personal access token and therefore waits on the maintainer's go; the
-proof of record is that rehearsal's record at
-`.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md` on the day it lands, and until then no
-clause above is claimed as met. The two fixture versions V4 reuses are REQ-PLUGIN-021's, which are
-built and measured.
+As built (2026-09-22): the maintainer-run private-chain rehearsal, file 3's V4, ran on this day
+against the maintainer's own private fixture repositories, and its record is the proof of record —
+`.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md`, every step with its command, its exit
+code and the sha-256 of its captured output. Every Then-clause above is met as measured, with two
+amendments. The APM pull request changes `apm.yml`, its lock AND the files the install deploys,
+because Renovate's native `apm` manager runs `apm install` inside its own run — the rehearsal's
+pull request carried the marker skill's file beside the manifest and the lock — so "changing only
+`apm.yml` and its lock" reads as the manifest, the lock and what that install deploys. And the
+per-file sha-256 equality of the pinned-back trees excludes the client's own `.orphaned_at`
+bookkeeping file, which Claude Code writes into the superseded version's cache directory at an
+update; the 288 content files compare equal. The owner-dependent items are recorded in that record
+as `Not done` lines, never as passes: required-check enforcement on the private plan, the
+enterprise's own catalog approval, and network mirroring of the distribution to a host that is not
+github.com (the record's remaining `Not done` lines are scope statements, not owner items). One
+finding of the rehearsal went back to the code: the documented consumer route — the client's
+install first, then `plugin setup` — ended in a red `check` (`collision .claude/settings.json`, the
+file the client had written and the setup then skipped), fixed on the branch by key-level
+ownership of that file. The two fixture versions the rehearsal reused are REQ-PLUGIN-021's.
 
 ### REQ-PLUGIN-024 Documentation and pinned surfaces
 
@@ -875,7 +891,7 @@ available. The clause is amended to what shipped: EVERY command block on `docs/p
 a provenance line stating either the client and version it was executed on or the vendor page and
 the access date it was transcribed from together with the proof that will execute it, and no block
 is presented as executed when it was not — the contract is stated at the head of the install
-section (`docs/plugins.md:74-78`) rather than left to the reader to infer per block. Executed:
+section (`docs/plugins.md:84-92`) rather than left to the reader to infer per block. Executed:
 `claude plugin validate --strict` on Claude Code 2.1.278; `agent --plugin-dir ./cursor --trust` on
 the Cursor agent CLI 2026.09.15; GitHub Copilot CLI 1.0.85's `plugin install`, `plugin list --json`
 and `skill list` in a scratch `HOME`/`COPILOT_HOME`; codex-cli 0.154.0's `plugin marketplace add`
@@ -896,7 +912,7 @@ rather than a silent omission. Two statements the requirement does not reach are
 clients over one at a time needs them: the vendor-neutral `.agents/skills/` tree is co-owned and
 stays written while any generated-mode client still reads it, and `plugin-duplicates` is
 deliberately silent about the double delivery that staging produces, with the way out named as
-moving the last reader rather than deleting the tree (`docs/plugins.md:59-67`, the disposition
+moving the last reader rather than deleting the tree (`docs/plugins.md:69-77`, the disposition
 recorded under REQ-PLUGIN-019). The pinned surfaces moved in the same change: README's
 `## Commands` at ten verbs with `plugin` between `worktree` and `clean` and `README_MAX_LINES`
 157 → 158 for the one added row, getting-started's verb list and its install-as-a-plugin section,
@@ -948,7 +964,7 @@ recomputed roster is 102 cases — 52 golden, 20 adversarial (16 non-twin guardr
 The clause about the committed run artifact is MET, and the eval of record is now run 32
 (2026-09-22): `evals/runs/2026-09-22-run-32/`, status PASS over 102 cases at eval candidate
 `e5e54c9`, with no case, cited source, rubric, set or instrument byte moving between that candidate
-and `f4f38ec`, the sha that ships. It is an increment under SET-v7's incremental rule (§ 0) composed
+and `37e8976`, the sha that ships. It is an increment under SET-v7's incremental rule (§ 0) composed
 with run 31 — 17 calls, five calibration fixtures matched 5 of 5 on the first attempt (§ 9), then two
 cases at three samples for two roles — re-measuring `st-setup-refuses-generated-setup` and
 `st-setup-fresh-repository`, whose cited source lines the route repairs of 2026-09-22 moved (§ 3: the
