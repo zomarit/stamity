@@ -86,14 +86,45 @@ export const REACH_SNAPSHOT_PATH = "evals/reach/npm-downloads-2026-09-14.json";
 /**
  * The eval run of record, linked from the page relative to `docs/`.
  *
- * The release run of record, which since 2026-09-15 is the composed 1.8.0 run:
- * run 27 measured every case in full, and runs 29 and 30 re-measured only the
- * cases whose inputs had moved, carrying the rest with provenance under
- * SET-v7's incremental rule. The page restates run 30's own figures because a
+ * The release run of record, which since 2026-09-21 is the composed 1.9.0 run:
+ * run 27 measured every case in full, and runs 29, 30 and 31 re-measured only
+ * the cases whose inputs had moved, carrying the rest with provenance under
+ * SET-v7's incremental rule. The page restates this run's own figures because a
  * composed run scores the whole set under the unchanged rule and thresholds —
  * it is the artifact that states the set's score, not a partial one.
+ *
+ * This path is the page's single source of truth for WHICH run is of record:
+ * the prose reads the run's number back off it through
+ * {@link runOfRecordNumber} rather than spelling it beside the link, because
+ * the two spellings that used to sit there were left saying "run 30" by the
+ * release that moved this path.
  */
-export const RUN_OF_RECORD_PATH = "evals/runs/2026-09-15-run-30/RESULTS.md";
+export const RUN_OF_RECORD_PATH = "evals/runs/2026-09-21-run-31/RESULTS.md";
+
+/**
+ * The release the run of record measured, as the page names it.
+ *
+ * A literal, and the only one in this block, because it is not in the artifact:
+ * a run states the candidate commit it measured, never the version that
+ * candidate ships as — the version is decided at the release, after the run.
+ * Verify it against the `## 0. Composition` candidate of
+ * {@link RUN_OF_RECORD_PATH} and the release that shipped that commit.
+ */
+const RUN_OF_RECORD_RELEASE = "1.9.0";
+
+/**
+ * The run of record's own number, read off {@link RUN_OF_RECORD_PATH}.
+ *
+ * Derived rather than typed: the number and the path are one fact, and a second
+ * spelling of it is a pin that drifts the next time a release moves the run.
+ */
+function runOfRecordNumber(): string {
+  const number = /-run-(\d+)\/[^/]+$/.exec(RUN_OF_RECORD_PATH)?.[1];
+  if (number === undefined) {
+    fail(`${RUN_OF_RECORD_PATH} names no run number; the page cannot state which run is of record.`);
+  }
+  return number;
+}
 
 /** The workflow whose lanes are the first-run proof. */
 export const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
@@ -687,6 +718,7 @@ function runTable(
  * suite holding each one to that file.
  */
 export function renderMeasurements(root: string = repoRoot()): string {
+  const runOfRecord = runOfRecordNumber();
   const snapshot = readMeasurementSnapshot(root);
   const report = snapshot.report;
   const reach = readReachSnapshot(root);
@@ -811,19 +843,20 @@ export function renderMeasurements(root: string = repoRoot()): string {
     "## Corpus behaviour: run of record",
     "",
     "The corpus is measured by an eval set, not by inspection. The run of record is",
-    `[run 30](../${RUN_OF_RECORD_PATH}) — the 1.8.0 release run,`,
+    `[run ${runOfRecord}](../${RUN_OF_RECORD_PATH}) — the ${RUN_OF_RECORD_RELEASE} release run,`,
     "PASS, three samples per case.",
     "",
     "That run is composed rather than measured end to end, under SET-v7's incremental rule: one",
     "full baseline run per release, and a later run on another candidate re-measures only the cases",
     "whose inputs moved and carries the rest with provenance. Run 27 measured every case in full;",
-    "runs 29 and 30 re-measured only the cases the repairs touched and carried the rest, each",
-    "carried case named in the composed artifact with its case-file hash and the source ranges",
-    "found identical at both candidates. The set is SET-v7. The scoring rule is SET-v6, which is",
-    "what run 30's own score table is headed with. The figures below score that whole set:",
+    "runs 29, 30 and 31 re-measured only the cases whose case file was new or whose cited source had",
+    "moved, and carried the rest — each carried case named in the composed artifact with its",
+    "case-file hash and the source ranges found identical at both candidates. The set is SET-v7.",
+    `The scoring rule is SET-v6, which is what run ${runOfRecord}'s own score table is headed with.`,
+    "The figures below score that whole set:",
     "",
-    "- Golden rubric pass rate **1.000** (50/50); every floor case passed, 23/23.",
-    "- Adversarial guardrail hold rate **1.000** (15/15).",
+    "- Golden rubric pass rate **1.000** (52/52); every floor case passed, 23/23.",
+    "- Adversarial guardrail hold rate **1.000** (16/16).",
     "- Benign-twin false-refusal rate **0.000** (0/4).",
     "- Trigger-probe accuracy **1.000** (30/30).",
     "",

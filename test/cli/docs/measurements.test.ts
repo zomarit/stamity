@@ -329,6 +329,34 @@ function resultsSection(results: string, heading: string): string {
   return end === -1 ? body : body.slice(0, end);
 }
 
+/** A run's own results file, read by the directory id the artifacts name it with. */
+function readResults(id: string): string {
+  return readFileSync(join(REPO_ROOT, "evals/runs", id, "RESULTS.md"), "utf-8");
+}
+
+/**
+ * The composition chain from one run back to its baseline: the run, then the prior complete run
+ * its artifact names, and so on until a run carries no composition section — that last run is the
+ * one measured end to end.
+ *
+ * The walk has no length limit because the chain's length is a property of the release cadence,
+ * not a constant: run 30 was two links from its baseline, run 31 is three. Termination comes from
+ * the ids being distinct — a pointer that revisits a run is a broken artifact and throws with the
+ * walk it found, which is also what makes a missing prior run readable in the failure.
+ */
+function compositionChain(start: string): readonly string[] {
+  const chain: string[] = [start];
+  for (;;) {
+    const composition = resultsSection(readResults(chain.at(-1) ?? ""), "0. Composition");
+    const prior = PRIOR_RUN.exec(composition)?.[1];
+    if (prior === undefined) return chain;
+    if (chain.includes(prior)) {
+      throw new Error(`the composition chain revisits ${prior}: ${chain.join(" -> ")}`);
+    }
+    chain.push(prior);
+  }
+}
+
 /** The per-metric score table's body rows, each as its trimmed cells. */
 function metricRows(results: string): readonly (readonly string[])[] {
   return resultsSection(results, "5. Per-metric scores beside their declared thresholds")
@@ -358,7 +386,7 @@ describe("the restated figures are held to the artifacts they come from", () => 
    * and the score cell's shape is asserted, so a row whose count cell went missing
    * cannot be restated as an empty string the page trivially contains.
    */
-  it("quotes run 30's four metric scores as that run's results file states them", () => {
+  it("quotes the run of record's four metric scores as that run's results file states them", () => {
     const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
     const page = renderMeasurements();
 
@@ -409,7 +437,7 @@ describe("the restated figures are held to the artifacts they come from", () => 
 
     // A composed run scores the whole set from samples some of which were carried from an
     // earlier run rather than measured again. The page says so, because "PASS, three samples
-    // per case" over 99 cases otherwise reads as 297 fresh measurements on this candidate.
+    // per case" over 102 cases otherwise reads as 306 fresh measurements on this candidate.
     const composition = resultsSection(results, "0. Composition");
     expect(composition, `${RUN_OF_RECORD_PATH} carries no composition section`).toContain(
       "incremental rule",
@@ -428,25 +456,39 @@ describe("the restated figures are held to the artifacts they come from", () => 
       `The scoring rule is ${scoringRule}`,
     );
 
-    // The prior complete run, and the complete run IT was composed from, are read out of the
-    // artifacts rather than typed: the chain the page describes is the chain the files record.
-    const prior = PRIOR_RUN.exec(composition)?.[1];
-    expect(prior, "the composition section names no prior complete run").toBeDefined();
-    const priorResults = readFileSync(join(REPO_ROOT, "evals/runs", prior ?? "", "RESULTS.md"), "utf-8");
-    const baseline = PRIOR_RUN.exec(resultsSection(priorResults, "0. Composition"))?.[1];
-    expect(baseline, `${prior} names no prior complete run`).toBeDefined();
+    // TEST CHANGE, justified: this walked the chain exactly TWO links — the prior complete run,
+    // then the run that one names — and asserted the second composes from nothing. That held only
+    // while the run of record was run 30 (30 -> 29 -> 27, baseline two links out) and is false for
+    // run 31 (31 -> 30 -> 29 -> 27): the two-link walk reads run 29 as the baseline, finds its
+    // composition section non-empty, and fails on a page that is correct. The length of the chain
+    // is not the property under test — that the walk ENDS at a run measured end to end is — so the
+    // walk now follows each artifact's own prior-run pointer to its terminus, and every assertion
+    // states the chain it found so a broken pointer is readable from the failure alone.
+    const chain = compositionChain(runId(RUN_OF_RECORD_PATH));
+    const found = chain.join(" -> ");
+    expect(chain.length, `${RUN_OF_RECORD_PATH} composes from nothing: ${found}`).toBeGreaterThan(1);
 
-    const baselineResults = readFileSync(
-      join(REPO_ROOT, "evals/runs", baseline ?? "", "RESULTS.md"),
-      "utf-8",
-    );
-    // What makes the baseline the full run: it composes from nothing, so every case in it
-    // was measured on its own candidate. That is the claim the page makes about run 27.
-    expect(resultsSection(baselineResults, "0. Composition")).toBe("");
-    expect(page).toContain(`Run ${runNumber(baseline ?? "")} measured every case in full`);
-    expect(page).toContain(
-      `runs ${runNumber(prior ?? "")} and ${runNumber(runId(RUN_OF_RECORD_PATH))} re-measured`,
-    );
+    // What makes the terminal run the full run: it composes from nothing, so every case in it was
+    // measured on its own candidate. That is the claim the page makes about the baseline it names.
+    const baseline = chain.at(-1) ?? "";
+    expect(
+      resultsSection(readResults(baseline), "0. Composition"),
+      `the chain ${found} ends at a run that is itself composed`,
+    ).toBe("");
+    expect(page, `the page does not name run ${runNumber(baseline)} as the full run of ${found}`)
+      .toContain(`Run ${runNumber(baseline)} measured every case in full`);
+
+    // Every run in the chain but that one re-measured a subset and carried the rest, and the page
+    // names them all, oldest first. The numbers are compared as a list while the sentence's
+    // punctuation is matched loosely: which runs are named is this test's business, the comma and
+    // the conjunction are the page's.
+    const incremental = chain.slice(0, -1).map(runNumber).toReversed();
+    const sentence = /runs ([\d, and]+) re-measured/.exec(page)?.[1];
+    expect(sentence, `the page names no re-measuring runs for the chain ${found}`).toBeDefined();
+    expect(
+      (sentence ?? "").match(/\d+/g),
+      `the page's re-measuring runs are not the incremental links of ${found}`,
+    ).toEqual(incremental);
   });
 
   it("names first-run lanes the workflow actually declares", () => {

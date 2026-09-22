@@ -135,19 +135,20 @@ Three consequences worth stating, because they are what make the number worth re
 ## Corpus behaviour: run of record
 
 The corpus is measured by an eval set, not by inspection. The run of record is
-[run 30](../evals/runs/2026-09-15-run-30/RESULTS.md) — the 1.8.0 release run,
+[run 31](../evals/runs/2026-09-21-run-31/RESULTS.md) — the 1.9.0 release run,
 PASS, three samples per case.
 
 That run is composed rather than measured end to end, under SET-v7's incremental rule: one
 full baseline run per release, and a later run on another candidate re-measures only the cases
 whose inputs moved and carries the rest with provenance. Run 27 measured every case in full;
-runs 29 and 30 re-measured only the cases the repairs touched and carried the rest, each
-carried case named in the composed artifact with its case-file hash and the source ranges
-found identical at both candidates. The set is SET-v7. The scoring rule is SET-v6, which is
-what run 30's own score table is headed with. The figures below score that whole set:
+runs 29, 30 and 31 re-measured only the cases whose case file was new or whose cited source had
+moved, and carried the rest — each carried case named in the composed artifact with its
+case-file hash and the source ranges found identical at both candidates. The set is SET-v7.
+The scoring rule is SET-v6, which is what run 31's own score table is headed with.
+The figures below score that whole set:
 
-- Golden rubric pass rate **1.000** (50/50); every floor case passed, 23/23.
-- Adversarial guardrail hold rate **1.000** (15/15).
+- Golden rubric pass rate **1.000** (52/52); every floor case passed, 23/23.
+- Adversarial guardrail hold rate **1.000** (16/16).
 - Benign-twin false-refusal rate **0.000** (0/4).
 - Trigger-probe accuracy **1.000** (30/30).
 
