@@ -2,7 +2,7 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.1 release cut (2026-09-23). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 0af76dbb. Re-attested 2026-09-23 against the reports folder under each run and the ledger verb. -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run line changes, a verb joins
      or leaves the CLI, a probe joins or leaves `check`, a path joins or leaves `.stamity/`, or the
      APM route's client floor or per-target output moves. `test/docsPages.test.ts` holds this page
@@ -39,8 +39,8 @@ npx @zomarit/stamity init
 
 `init` reads your repository and writes a setup and a manifest. `sync`, `check`, `config`,
 `workspace`, `clean` and `add` read that manifest. `validate` runs with or without one, and
-`learn` and `handoff` ask only that `.stamity/` exists. **Which verbs need the manifest** below
-states all of this in full.
+`learn`, `handoff` and `ledger` ask only that `.stamity/` exists. **Which verbs need the
+manifest** below states all of this in full.
 
 ### The two questions init asks
 
@@ -211,8 +211,8 @@ Four things, because each is about how two parts fit together rather than about 
 - **Which verbs need the manifest.** `sync`, `check`, `config`, `workspace`, `clean` and `add`
   all read the manifest `init` wrote. `validate` runs with or without one. `plugin status` reads
   it where there is one and reports its absence where there is not; `plugin setup` refuses on a
-  manifest, because writing one is what it does. `learn` and `handoff` ask only that `.stamity/`
-  exists.
+  manifest, because writing one is what it does. `learn`, `handoff` and `ledger` ask only that
+  `.stamity/` exists.
 - **Which verbs need git.** `init`, `sync` and `check` read git where it is, and carry on where
   it is not. The `worktree` verbs need a `git` binary on PATH and refuse without one. The rest
   never call git.
@@ -227,11 +227,14 @@ Four things, because each is about how two parts fit together rather than about 
 Every flag and every exit status is in [the CLI reference](cli-reference.md). Every settable key
 is in [the configuration reference](configuration.md).
 
-### The two hidden verbs
+### The three hidden verbs
 
-There are two more verbs, kept off `stamity --help`. `learn` records a learning through the
+There are three more verbs, kept off `stamity --help`. `learn` records a learning through the
 engine's write gates. `handoff` prepares, resumes, lists, completes and prunes handoffs through
-those same gates. Both are plumbing an agent calls, not something you type.
+those same gates. `ledger` appends a run's findings to its ledger, closes its rows and prints the
+resume card of a run in progress, as the one serialized writer. All three are plumbing an agent
+calls; `stamity ledger status` is the one you may run yourself — after a compaction on Cursor or
+Copilot, whose session-start hook does not re-run after one.
 
 Those gates exist because a learning is text that re-enters an agent's context on a later
 session. Anything with write access to the repository can author a file that is read back into a
@@ -294,7 +297,7 @@ Everything the setup knows about itself lives under `.stamity/`:
 | `.stamity/mcp/` | `copilot-repo-settings.env`, the Copilot coding agent's MCP entries — you paste each one into repository Settings → Copilot → MCP servers; where a server needs a credential, the file's own header warns never to put the secret value in it, because it is not gitignored |
 | `.stamity/packs/` | content installed by `add`, one directory per pack |
 | `.stamity/overrides/` | agents, rules, commands and skills of your own, merged above the bundled content |
-| `.stamity/runs/` | one record per work run — its proof block, with that run's findings ledger beside it |
+| `.stamity/runs/` | one record per work run — its proof block, with that run's findings ledger beside it and a `reports/` folder of full sub-agent reports that is not committed |
 | `.stamity/verify/` | one artifact per quality axis per commit, written by the verify skill |
 | `.stamity/evidence/` | browser and QA evidence bundles, one per commit that captured them |
 | `.stamity/inbox.md` | deferred rows, one dated block per run that filed them |
@@ -305,7 +308,8 @@ Everything the setup knows about itself lives under `.stamity/`:
 ### What to commit
 
 Commit `.stamity/`. The manifest is the provenance record. A teammate who clones the repository
-gets the same setup without re-running `init`.
+gets the same setup without re-running `init`. Each run's `reports/` folder stays out of git: it
+carries its own `.gitignore`.
 
 Commit everything `init` writes outside that directory too: `AGENTS.md`, `.agents/`,
 the managed block in `CLAUDE.md`, and the client trees `.claude/`, `.cursor/`, `.github/`
@@ -319,8 +323,9 @@ and `check` is what catches it drifting from what the engine would emit today.
 
 ### What not to commit
 
-One file stays out of the repository: `.env.mcp`, which holds MCP credentials. It is the single
-entry `init` adds to your `.gitignore` for you.
+Apart from each run's `reports/` folder, which ignores itself, one file stays out of the
+repository: `.env.mcp`, which holds MCP credentials. It is the single entry `init` adds to your
+`.gitignore` for you.
 
 Because everything else is committed, a second checkout of this repository arrives with the
 whole setup in place and that one file missing. Placing it is exactly what

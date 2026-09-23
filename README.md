@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.1 release cut (2026-09-23). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 0af76dbb. Re-attested 2026-09-23 against the ledger verb, the third plumbing verb. -->
 <!-- Re-open when: the corpus counts, the ten-verb surface or a client capability changes, or a
      newer measurement supersedes the proof figures. `test/docsPages.test.ts` catches the first
      three; the figures are re-read against `docs/measurements.md` and the run record they cite. -->
@@ -49,8 +49,8 @@ npx @zomarit/stamity init
 ```
 
 `init` reads your repository and writes the setup plus the manifest `sync`, `check`, `config`,
-`workspace`, `clean` and `add` work from. `validate` runs with or without one; `learn` and `handoff`
-want only `.stamity/`. Node `>= 22.22.2` is the only prerequisite; nothing installs globally.
+`workspace`, `clean` and `add` work from. `validate` runs with or without one; `learn`, `handoff`
+and `ledger` want only `.stamity/`. Node `>= 22.22.2` is the only prerequisite; nothing installs globally.
 
 Git is optional for every verb but `worktree`, which needs a `git` binary on PATH and refuses
 without one. Three things reach the network, all documented in [`SECURITY.md`](SECURITY.md). `add`
@@ -76,10 +76,10 @@ Your setup state lives in `.stamity/`: a manifest, a per-file ledger, learnings 
 ## Commands
 
 `init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
-`plugin` · `clean` — ten verbs. Behind them are two plumbing verbs an agent calls and nobody
-types, `learn` and `handoff`. What each verb does, every flag it takes and every status it exits
-with is [the CLI reference](docs/cli-reference.md)'s to state. That page renders from the program
-itself, so it cannot describe a verb the CLI does not have, or miss one it does.
+`plugin` · `clean` — ten verbs. Behind them are three plumbing verbs an agent calls and nobody
+types, `learn`, `handoff` and `ledger`. What each verb does, every flag it takes and every status
+it exits with is [the CLI reference](docs/cli-reference.md)'s to state. That page renders from the
+program itself, so it cannot describe a verb the CLI does not have, or miss one it does.
 
 ## Working on this repository
 

@@ -493,6 +493,12 @@ const RELEASE_CUT_DATE = "2026-09-23";
  * that page carries the commit form naming the cut's re-attestation commit plus `Re-attested
  * 2026-09-23` — the same day as the cut, so this constant already names the pass and the
  * assertion's first branch now reads it.
+ *
+ * NOT MOVED, 2026-09-23 (UTC), a second time: the ledger pass re-read `README.md` (its plumbing
+ * verbs, now three with `ledger`) and `docs/getting-started.md` (the hidden verbs, the `.stamity/`
+ * table's runs row with its uncommitted `reports/` folder, and what to commit), and moved both onto
+ * the commit form naming that pass's base commit plus `Re-attested 2026-09-23`. The pass ran on
+ * the constant's own date, so the constant already names it.
  */
 const REATTESTATION_DATE = "2026-09-23";
 
@@ -1086,6 +1092,11 @@ describe("README", () => {
     // "the plumbing verb" is no longer one verb. The `learn` pin still holds and stays; this
     // mirrors it so a README that drops either hidden verb fails the way dropping `learn` did.
     expect(text).toContain("`handoff`");
+    // TEST CHANGE, justified: `ledger` joined `learn` and `handoff` behind the advertised surface
+    // as the third plumbing verb (the one serialized writer of a run's findings ledger), so the
+    // README names three hidden verbs. This mirrors the two pins above, so a README that drops it
+    // fails the way dropping `learn` or `handoff` does.
+    expect(text).toContain("`ledger`");
   });
 
   it("is indexed with the same verb count it states itself", () => {
