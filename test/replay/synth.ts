@@ -171,6 +171,14 @@ export const mainLine = {
     return toolUse("Read", spec.id, { file_path: spec.filePath }, opts);
   },
 
+  writeToolUse(spec: { id: string; filePath: string; content: string }, opts?: AssistantOptions): string {
+    return toolUse("Write", spec.id, { file_path: spec.filePath, content: spec.content }, opts);
+  },
+
+  editToolUse(spec: { id: string; filePath: string; oldString: string; newString: string }, opts?: AssistantOptions): string {
+    return toolUse("Edit", spec.id, { file_path: spec.filePath, old_string: spec.oldString, new_string: spec.newString }, opts);
+  },
+
   compactBoundary(
     spec: { trigger: "manual" | "auto"; preTokens: number; postTokens?: number; durationMs?: number },
     opts?: LineOptions,

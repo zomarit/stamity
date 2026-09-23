@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { bashClass, heredocs, ledgerWrite, roleFunction, scanSubagent, walkTranscriptFile, walkTranscriptLines } from "../../scripts/replay/transcript.mjs";
+import { LEDGER_GATED_KINDS, bashClass, heredocs, ledgerWrite, roleFunction, scanSubagent, walkTranscriptFile, walkTranscriptLines } from "../../scripts/replay/transcript.mjs";
 import { mainLine, subagentFile, writeCapture } from "./synth.ts";
 
 /**
@@ -217,6 +217,57 @@ describe("walkTranscriptLines — dispatches and shell", () => {
   });
 });
 
+// build/26 and build/34: the fields the per-run measurement reads, so it needs no second read of
+// the transcript. Every one is additive to the research walk's row shapes.
+describe("walkTranscriptLines — the measurement's additive fields", () => {
+  it("carries a delivery's result text, and null when the block has none", () => {
+    const w = walk([...reviewerPass().lines, mainLine.userText("<task-notification>\n<task-id>a4</task-id>\n<status>completed</status>\n<summary>Agent \"a4\" finished</summary>\n</task-notification>")]);
+    expect(w.deliveries.map((delivery) => delivery["result"])).toEqual([REVIEW_RESULT, null]);
+  });
+
+  it("carries filePath on Read, Write and Edit events, and a ledger classification on Write and Edit events", () => {
+    const rowText = '{"id":"r/build/2"}\n';
+    const w = walk([
+      mainLine.readToolUse({ id: "tu-read", filePath: ".stamity/runs/r/reports/u1-p1-reviewer-r1.md" }),
+      mainLine.writeToolUse({ id: "tu-w", filePath: ".stamity/runs/r/ledger.jsonl", content: rowText }),
+      mainLine.editToolUse({ id: "tu-e", filePath: "lanes/brief-u1.md", oldString: "a", newString: "b" }),
+    ]);
+    const out = w.events.filter((event) => event["dir"] === "out");
+    expect(out).toEqual([
+      expect.objectContaining({ tool: "Read", toolUseId: "tu-read", filePath: ".stamity/runs/r/reports/u1-p1-reviewer-r1.md" }),
+      expect.objectContaining({ tool: "Write", toolUseId: "tu-w", filePath: ".stamity/runs/r/ledger.jsonl", ledger: { kind: "writeEdit", chars: rowText.length } }),
+      expect.objectContaining({ tool: "Edit", toolUseId: "tu-e", filePath: "lanes/brief-u1.md", ledger: null }),
+    ]);
+    // A Read is not a write: it carries no ledger field at all.
+    expect(out[0]).not.toHaveProperty("ledger");
+  });
+
+  it("carries the command text and its ledger classification on Bash command rows", () => {
+    const verb = "npx @zomarit/stamity ledger append --run r --phase build --source reviewer --report .stamity/runs/r/reports/u1-p1-reviewer-r1.md";
+    const w = walk([mainLine.bashToolUse({ id: "tu-v", command: verb }), mainLine.bashToolUse({ id: "tu-n", command: "npm run lint" })]);
+    expect(w.bash.filter((row) => row["kind"] === "command")).toEqual([
+      expect.objectContaining({ toolUseId: "tu-v", command: verb, ledger: { kind: "verb", chars: verb.length } }),
+      expect.objectContaining({ toolUseId: "tu-n", command: "npm run lint", ledger: null }),
+    ]);
+  });
+
+  it("records every tool input that names a forbidden path, once per path, and none without the option", () => {
+    const lines = [
+      mainLine.readToolUse({ id: "tu-1", filePath: "/fixture/evals/replay/v1/seeds.json" }),
+      mainLine.bashToolUse({ id: "tu-2", command: "ls /fixture/__oracle__ && cat /fixture/evals/replay/v1/seeds.json" }),
+      mainLine.agentToolUse({ id: "tu-3", subagentType: "stamity-reviewer", description: "u1-p1 review", prompt: "Review src/a.ts" }),
+      mainLine.readToolUse({ id: "tu-4", filePath: "/fixture/__oracle__/u1.test.ts" }, { sidechain: true }),
+    ];
+    const w = walkTranscriptLines(lines, { forbid: ["seeds.json", "__oracle__"] }) as Walk & { forbidHits: Row[] };
+    expect(w.forbidHits).toEqual([
+      { line: 1, seg: 0, turn: 1, toolUseId: "tu-1", tool: "Read", forbid: "seeds.json" },
+      { line: 2, seg: 0, turn: 2, toolUseId: "tu-2", tool: "Bash", forbid: "seeds.json" },
+      { line: 2, seg: 0, turn: 2, toolUseId: "tu-2", tool: "Bash", forbid: "__oracle__" },
+    ]);
+    expect((walkTranscriptLines(lines) as Walk & { forbidHits: Row[] }).forbidHits).toEqual([]);
+  });
+});
+
 describe("bashClass and heredocs — the verbatim port", () => {
   it.each([
     ["cat a.ts | grep x", "read"],
@@ -259,13 +310,43 @@ describe("ledgerWrite — both shapes", () => {
   it("detects an echo redirect, a python body and a Write/Edit on the ledger", () => {
     const echo = `echo '{"id":"r/prove/2"}' >> .stamity/runs/r/ledger.jsonl`;
     expect(ledgerWrite(bash(echo))).toEqual({ kind: "echo", chars: echo.length });
-    const python = "import json\nrows=[json.loads(l) for l in open('.stamity/runs/r/ledger.jsonl')]\nopen('.stamity/runs/r/ledger.jsonl','w').write('')";
+    const python = "import json\nrows=[{'phase':'build','id':'r/build/4'}]\nopen('.stamity/runs/r/ledger.jsonl','a').write(json.dumps(rows[0]))";
     expect(ledgerWrite(bash(`python3 - <<'PY'\n${python}\nPY`))).toEqual({ kind: "heredoc", chars: python.length });
     const content = '{"id":"r/build/3"}\n';
     expect(ledgerWrite({ type: "tool_use", name: "Write", id: "w", input: { file_path: "/x/.stamity/runs/r/ledger.jsonl", content } })).toEqual({ kind: "writeEdit", chars: content.length });
     expect(
       ledgerWrite({ type: "tool_use", name: "MultiEdit", id: "m", input: { file_path: "ledger.jsonl", edits: [{ old_string: "a", new_string: "open" }, { old_string: "b", new_string: "fixed" }] } }),
     ).toEqual({ kind: "writeEdit", chars: 9 });
+  });
+
+  // build/33: the loop-characters gate counts exactly the ledger kinds REPLAY-v1 §8 names; any
+  // other ledger-touching write comes back under its own kind, reported beside the gated figure.
+  it("gates exactly the kinds REPLAY-v1 §8 names", () => {
+    expect([...LEDGER_GATED_KINDS].toSorted()).toEqual(["echo", "heredoc", "verb", "writeEdit"]);
+  });
+
+  it("returns an unredirected heredoc that opens ledger.jsonl from code, with no phase rows, as its own kind", () => {
+    const python = "import json\nrows=[json.loads(l) for l in open('.stamity/runs/r/ledger.jsonl')]\nopen('.stamity/runs/r/ledger.jsonl','w').write('')";
+    const result = ledgerWrite(bash(`python3 - <<'PY'\n${python}\nPY`));
+    expect(result).toEqual({ kind: "codeHeredoc", chars: python.length });
+    expect(LEDGER_GATED_KINDS.has(result.kind)).toBe(false);
+    const node = "const fs=require('fs');fs.appendFileSync('.stamity/runs/r/ledger.jsonl','x')";
+    expect(ledgerWrite(bash(`node <<'JS'\n${node}\nJS`))).toEqual({ kind: "codeHeredoc", chars: node.length });
+  });
+
+  // build/35: a Write/Edit and a heredoc use one basename rule, so a helper script such as
+  // ledger-round4.cjs is detected by both routes; it is not `ledger.jsonl`, so it is not gated.
+  it("detects a ledger helper script by the same basename rule for a heredoc and a Write/Edit", () => {
+    const body = "fs.appendFileSync('ledger.jsonl', rows)";
+    const heredoc = ledgerWrite(bash(`cat > scratchpad/ledger-round4.cjs <<'EOF'\n${body}\nEOF`));
+    const write = ledgerWrite({ type: "tool_use", name: "Write", id: "w", input: { file_path: "/s/scratchpad/ledger-round4.cjs", content: body } });
+    const edit = ledgerWrite({ type: "tool_use", name: "Edit", id: "e", input: { file_path: "scratchpad/ledger-round4.cjs", old_string: "a", new_string: body } });
+    expect(heredoc).toEqual({ kind: "helperHeredoc", chars: body.length });
+    expect(write).toEqual({ kind: "helperWriteEdit", chars: body.length });
+    expect(edit).toEqual({ kind: "helperWriteEdit", chars: body.length });
+    for (const result of [heredoc, write, edit]) expect(LEDGER_GATED_KINDS.has(result.kind)).toBe(false);
+    // The same file named ledger.jsonl stays gated by both routes.
+    expect(ledgerWrite(bash(`tee -a runs/r/ledger.jsonl <<'EOF'\n${body}\nEOF`))).toEqual({ kind: "heredoc", chars: body.length });
   });
 
   it("returns null for everything else", () => {
@@ -301,6 +382,8 @@ describe("scanSubagent", () => {
       agentId: "a1",
       agentType: "stamity-reviewer",
       requestedModel: "fable",
+      description: "u1-p1 review",
+      toolUseId: "tu-rev",
       prompt: "Review u1-p1",
       requests: [
         { id: "r1", usage: { input: 100, cacheCreation: 2000, cacheRead: 0, output: 50, thinking: 20 }, lines: 2 },
@@ -320,14 +403,35 @@ describe("scanSubagent", () => {
       outTok: 120,
       think: 20,
       firstPrompt: "Review u1-p1",
+      toolUseId: "tu-rev",
+      description: "u1-p1 review",
+      forbidHits: [],
     });
   });
 
-  it("reads a missing meta file as unknown role and model", async () => {
+  it("reads a missing meta file as unknown role, model, dispatch id and description", async () => {
     const dir = scratch();
     const path = join(dir, "agent-b.jsonl");
     writeFileSync(path, `${subagentFile({ agentId: "b", agentType: "x", prompt: "p", requests: [] }).lines.join("\n")}\nnot json\n`);
-    expect(await scanSubagent(path, join(dir, "agent-b.meta.json"))).toMatchObject({ agentType: null, requestedModel: null, nReq: 0, processed: 0, firstPrompt: "p" });
+    expect(await scanSubagent(path, join(dir, "agent-b.meta.json"))).toMatchObject({
+      agentType: null,
+      requestedModel: null,
+      toolUseId: null,
+      description: null,
+      nReq: 0,
+      processed: 0,
+      firstPrompt: "p",
+    });
+  });
+
+  it("records a sub-agent's tool inputs that name a forbidden path", async () => {
+    const agent = subagentFile({ agentId: "c", agentType: "stamity-reviewer", prompt: "Review u1-p1", requests: [] });
+    agent.lines.push(mainLine.readToolUse({ id: "tu-c1", filePath: "/fixture/evals/replay/v1/seeds.json" }, { sidechain: true }));
+    agent.lines.push(mainLine.bashToolUse({ id: "tu-c2", command: "grep -rn sort src" }, { sidechain: true }));
+    const layout = writeCapture(scratch(), { transcript: [], subagents: [agent] });
+    const [jsonl, meta] = [join(layout.subagentsDir, "agent-c.jsonl"), join(layout.subagentsDir, "agent-c.meta.json")];
+    expect((await scanSubagent(jsonl, meta, { forbid: ["seeds.json"] })).forbidHits).toEqual([{ line: 2, toolUseId: "tu-c1", tool: "Read", forbid: "seeds.json" }]);
+    expect((await scanSubagent(jsonl, meta)).forbidHits).toEqual([]);
   });
 });
 
@@ -350,6 +454,10 @@ describe("walkTranscriptFile and writeCapture", () => {
     });
     const fromFile = (await walkTranscriptFile(layout.transcript)) as Walk;
     expect(fromFile).toEqual(walk(lines));
+    const forbid = { forbid: ["ledger.jsonl"] };
+    const forbidden = (await walkTranscriptFile(layout.transcript, forbid)) as Walk & { forbidHits: Row[] };
+    expect(forbidden.forbidHits.map((hit) => hit["toolUseId"])).toEqual(["tu-rev", "tu-l"]);
+    expect(forbidden).toEqual(walkTranscriptLines(lines, forbid));
     expect(fromFile.skipped).toMatchObject({ lines: lines.length, segments: 2, entryTypes: { PARSE_ERROR: 1 } });
     expect(fromFile.compactions).toHaveLength(1);
     expect(fromFile.deliveries.map((delivery) => delivery["seg"])).toEqual([0, 1]);

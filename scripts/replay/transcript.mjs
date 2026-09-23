@@ -52,6 +52,20 @@ const blockText = (c) => {
   return { text, images }
 }
 
+/** Every leaf string of a tool input, keys excluded. */
+const leafStrings = (v, out = []) => {
+  if (typeof v === 'string') out.push(v)
+  else if (v && typeof v === 'object') for (const x of Array.isArray(v) ? v : Object.values(v)) leafStrings(x, out)
+  return out
+}
+
+/** One hit per forbidden string that some leaf of `input` contains, in the order `forbid` lists them. */
+const forbiddenIn = (input, forbid) => {
+  if (!forbid.length) return []
+  const leaves = leafStrings(input)
+  return forbid.filter((f) => leaves.some((s) => s.includes(f)))
+}
+
 const renderedText = (r) => (Array.isArray(r) ? r.map((x) => (typeof x?.content === 'string' ? x.content : blockText(x?.content).text)).join('\n') : '')
 
 /** JSON.parse, or `undefined` for a line that is not JSON. Anything but a syntax error is rethrown. */
@@ -176,40 +190,62 @@ const heredocTarget = (p) => {
 const LEDGER_VERB = /(?:^|[\s;&(])(?:npx\s+(?:--yes\s+)?)?(?:@zomarit\/stamity|stamity|st)\s+ledger\s+(?:append|close|status)\b/
 
 /**
+ * The ledger kinds REPLAY-v1 §8 names, and so the only ones the loop-characters term (c) sums: a
+ * heredoc, redirect or script body targeting `ledger.jsonl` (the research walk's rules), a Write,
+ * Edit or MultiEdit on `*ledger.jsonl`, and the ledger verb. Every other kind `ledgerWrite`
+ * returns is reported beside the gated figure, never inside it.
+ */
+export const LEDGER_GATED_KINDS = new Set(['heredoc', 'echo', 'writeEdit', 'verb'])
+
+/**
  * Whether a tool_use writes the findings ledger, and how many typed characters the write carries.
+ * Gated kinds (`LEDGER_GATED_KINDS`):
  *
  *   verb       the ledger verb (`stamity ledger append|close|status`, any of its spellings): the
  *              whole command, a `--stdin` heredoc included
- *   heredoc    a heredoc whose cat/tee target is a ledger file, or whose unredirected body appends
- *              ledger rows (a `phase` key and a phase-local id) or opens `ledger.jsonl` from code
- *              (a python or node body): the ledger bodies' characters
+ *   heredoc    a heredoc whose cat/tee target is `*ledger.jsonl`, or whose unredirected body
+ *              appends ledger rows (a `phase` key and a phase-local id, the research walk's rule):
+ *              the gated bodies' characters
  *   echo       a heredoc-free command redirecting into `ledger.jsonl`, or typing a `"phase"` row
  *              beside it: the command's characters
  *   writeEdit  a Write, Edit or MultiEdit whose path ends `ledger.jsonl`: the written text
  *
- * `null` for every other call.
+ * Kinds §8 is silent on, returned so the measurement can report them beside the gated figure:
+ *
+ *   helperHeredoc    a heredoc whose cat/tee target's basename names `ledger` but is not
+ *                    `*ledger.jsonl` (a helper such as `ledger-round4.cjs`): the bodies' characters
+ *   helperWriteEdit  a Write, Edit or MultiEdit on such a basename: the written text
+ *   codeHeredoc      an unredirected heredoc body that opens `ledger.jsonl` from code without typing
+ *                    ledger rows: the bodies' characters
+ *
+ * A Write/Edit and a heredoc share one basename rule (`heredocTarget`). When one command holds
+ * heredocs of several kinds, the gated kind wins, then helperHeredoc, then codeHeredoc, and `chars`
+ * counts the winning kind's bodies only. `null` for every other call.
  */
 export function ledgerWrite(toolUse) {
   const name = toolUse?.name
   const input = toolUse?.input || {}
   if (name === 'Write' || name === 'Edit' || name === 'MultiEdit') {
-    if (!(input.file_path || '').endsWith('ledger.jsonl')) return null
+    const path = input.file_path || ''
+    if (heredocTarget(path) !== 'ledger') return null
     const edits = Array.isArray(input.edits) ? input.edits.reduce((a, e) => a + (e?.new_string || '').length, 0) : 0
-    return { kind: 'writeEdit', chars: (input.content || '').length + (input.new_string || '').length + edits }
+    const chars = (input.content || '').length + (input.new_string || '').length + edits
+    return { kind: path.endsWith('ledger.jsonl') ? 'writeEdit' : 'helperWriteEdit', chars }
   }
   if (name !== 'Bash') return null
   const cmd = input.command || ''
   if (LEDGER_VERB.test(cmd)) return { kind: 'verb', chars: cmd.length }
   const docs = heredocMatches(cmd)
-  let chars = 0
-  let found = false
+  const chars = new Map()
   for (const { target, body } of docs) {
-    let tg = heredocTarget(target)
-    if (!tg && /ledger/.test(cmd) && /["']?phase["']?\s*[:=]/.test(body) && /(?:prove|build|review|plan|qa)\/\d+/.test(body)) tg = 'ledger'
-    if (!tg && /ledger\.jsonl/.test(body) && /\bopen\(|(?:write|append)FileSync\(/.test(body)) tg = 'ledger'
-    if (tg === 'ledger') { found = true; chars += body.length }
+    const tg = heredocTarget(target)
+    let kind = null
+    if (tg === 'ledger') kind = target.endsWith('ledger.jsonl') ? 'heredoc' : 'helperHeredoc'
+    else if (!tg && /ledger/.test(cmd) && /["']?phase["']?\s*[:=]/.test(body) && /(?:prove|build|review|plan|qa)\/\d+/.test(body)) kind = 'heredoc'
+    else if (!tg && /ledger\.jsonl/.test(body) && /\bopen\(|(?:write|append)FileSync\(/.test(body)) kind = 'codeHeredoc'
+    if (kind) chars.set(kind, (chars.get(kind) || 0) + body.length)
   }
-  if (found) return { kind: 'heredoc', chars }
+  for (const kind of ['heredoc', 'helperHeredoc', 'codeHeredoc']) if (chars.has(kind)) return { kind, chars: chars.get(kind) }
   if (docs.length === 0 && /ledger\.jsonl/.test(cmd) && (/>>\s*\S*ledger\.jsonl/.test(cmd) || /"phase"/.test(cmd))) return { kind: 'echo', chars: cmd.length }
   return null
 }
@@ -294,8 +330,8 @@ function toolResultClass(name, meta, text) {
 const bump = (o, k, n = 1) => { o[k] = (o[k] || 0) + n }
 
 /** A stateful walker: feed it every line in order, then read `finish()`. */
-function createWalker() {
-  const rows = { events: [], requests: [], deliveries: [], dispatches: [], bash: [], compactions: [] }
+function createWalker(forbid = []) {
+  const rows = { events: [], requests: [], deliveries: [], dispatches: [], bash: [], compactions: [], forbidHits: [] }
   const w = (k, o) => rows[k].push(o)
   let lineNo = 0
   let seg = 0
@@ -317,7 +353,7 @@ function createWalker() {
       if (p.kind === 'agent') {
         const trig = toolMeta.get(p.toolUseId)
         w('deliveries', { line: lineNo, ts, seg, turn, channel, taskId: p.taskId, toolUseId: p.toolUseId, trigger: trig ? trig.name : null,
-          triggerDesc: trig ? trig.desc : null, status: p.status, summary: p.summary, chars: p.chars, resultChars: p.resultChars,
+          triggerDesc: trig ? trig.desc : null, status: p.status, summary: p.summary, chars: p.chars, resultChars: p.resultChars, result: p.result,
           subagentTokens: p.subagentTokens, toolUses: p.toolUses, durationMs: p.durationMs,
           findingWords: p.result ? (p.result.match(/\b(Critical|Warning)\b/g) || []).length : 0,
           minorWords: p.result ? (p.result.match(/\bMinor\b/g) || []).length : 0,
@@ -423,6 +459,10 @@ function createWalker() {
         const meta = { name: b.name, line: lineNo, desc: i.description || i.summary || '', skill: b.name === 'Skill' ? (i.skill || i.command || i.name || null) : null }
         let cls = 'out.otherTool'
         let sub = b.name
+        const extra = {}
+        for (const f of forbiddenIn(i, forbid)) w('forbidHits', { line: lineNo, seg, turn, toolUseId: b.id, tool: b.name, forbid: f })
+        if (['Read', 'Write', 'Edit', 'MultiEdit'].includes(b.name)) extra.filePath = i.file_path ?? null
+        if (['Write', 'Edit', 'MultiEdit'].includes(b.name)) extra.ledger = ledgerWrite(b)
         if (b.name === 'Agent' || b.name === 'Task') {
           cls = 'out.agentPrompt'
           w('dispatches', { kind: 'agent', line: lineNo, ts, seg, turn, toolUseId: b.id, role: i.subagent_type || null, model: i.model || null,
@@ -444,10 +484,10 @@ function createWalker() {
           sub = 'bash-' + bc.cls
           w('bash', { kind: 'command', line: lineNo, ts, seg, turn, toolUseId: b.id, chars, cmdChars: cmd.length, heredocChars: hdChars,
             heredocs: hd.map((x) => ({ target: x.target, chars: x.chars, tool: x.tool })), cls: bc.cls, heads: bc.heads, tags: targetTags(cmd),
-            bg: !!i.run_in_background, desc: (i.description || '').slice(0, 160) })
+            bg: !!i.run_in_background, desc: (i.description || '').slice(0, 160), command: cmd, ledger: ledgerWrite(b) })
         }
         toolMeta.set(b.id, meta)
-        ev({ ts, dir: 'out', cls, sub, chars, tool: b.name, toolUseId: b.id })
+        ev({ ts, dir: 'out', cls, sub, chars, tool: b.name, toolUseId: b.id, ...extra })
       } else ev({ ts, dir: 'out', cls: 'out.otherTool', sub: 'block:' + b.type, chars: JSON.stringify(b).length })
     }
   }
@@ -483,18 +523,23 @@ function createWalker() {
 }
 
 /**
- * Walk a transcript given as lines: `{ events, requests, deliveries, dispatches, bash, compactions, skipped }`,
- * each row shaped as the research walk wrote it to its per-kind JSONL file.
+ * Walk a transcript given as lines: `{ events, requests, deliveries, dispatches, bash, compactions, forbidHits, skipped }`,
+ * each row shaped as the research walk wrote it to its per-kind JSONL file, plus the fields the
+ * measurement reads so it needs no second pass: a delivery's `result` text; `filePath` on Read,
+ * Write, Edit and MultiEdit events; `ledger` (`ledgerWrite`) on Write, Edit and MultiEdit events and
+ * on Bash command rows, which also carry the `command` text. `forbidHits` holds one row
+ * `{ line, seg, turn, toolUseId, tool, forbid }` per main-context tool_use and per `opts.forbid`
+ * string that one of its input's leaf strings contains; it is empty without the option.
  */
-export function walkTranscriptLines(lines) {
-  const walker = createWalker()
+export function walkTranscriptLines(lines, { forbid = [] } = {}) {
+  const walker = createWalker(forbid)
   for (const text of lines) walker.line(text)
   return walker.finish()
 }
 
-/** Walk a transcript file, streamed line by line (a single line can be megabytes). */
-export async function walkTranscriptFile(path) {
-  const walker = createWalker()
+/** Walk a transcript file, streamed line by line (a single line can be megabytes); `opts` as for the lines. */
+export async function walkTranscriptFile(path, { forbid = [] } = {}) {
+  const walker = createWalker(forbid)
   const rl = createInterface({ input: createReadStream(path), crlfDelay: Infinity })
   for await (const text of rl) walker.line(text)
   return walker.finish()
@@ -519,24 +564,32 @@ async function readMeta(metaPath) {
 }
 
 /**
- * One sub-agent transcript and its `.meta.json`: the role and requested model the client recorded,
+ * One sub-agent transcript and its `.meta.json`: the role, requested model, dispatching tool_use id
+ * (`toolUseId`, the join to the main walk's dispatch and delivery rows) and description the client recorded,
  * the models that answered (per distinct request), and the tokens it processed — Σ over requests,
  * deduplicated by `message.id`, of input + cache creation + cache read + output. API-error stubs
  * are not requests; unparseable lines are skipped. A missing meta file reads as unknown role and
  * model.
  */
-export async function scanSubagent(jsonlPath, metaPath) {
+export async function scanSubagent(jsonlPath, metaPath, { forbid = [] } = {}) {
   const meta = await readMeta(metaPath)
   const reqs = new Map()
   const models = {}
+  const forbidHits = []
   let firstPrompt = null
+  let lineNo = 0
   const rl = createInterface({ input: createReadStream(jsonlPath), crlfDelay: Infinity })
   for await (const text of rl) {
+    lineNo++
     const o = parseLine(text)
     if (o === null || typeof o !== 'object') continue
     if (o.type === 'user' && firstPrompt === null) firstPrompt = promptText(o.message?.content)
     if (o.type !== 'assistant' || o.isApiErrorMessage) continue
     const m = o.message || {}
+    for (const b of Array.isArray(m.content) ? m.content : []) {
+      if (b?.type !== 'tool_use') continue
+      for (const f of forbiddenIn(b.input, forbid)) forbidHits.push({ line: lineNo, toolUseId: b.id, tool: b.name, forbid: f })
+    }
     if (m.model) models[m.model] = (models[m.model] || 0) + (reqs.has(m.id) ? 0 : 1)
     if (m.id) {
       const u = m.usage || {}
@@ -560,5 +613,8 @@ export async function scanSubagent(jsonlPath, metaPath) {
     outTok += r.out
     think += r.think
   }
-  return { agentType: meta.agentType ?? null, requestedModel: meta.model ?? null, models, nReq: reqs.size, processed, inputSide, outTok, think, firstPrompt }
+  return {
+    agentType: meta.agentType ?? null, requestedModel: meta.model ?? null, models, nReq: reqs.size, processed, inputSide, outTok, think, firstPrompt,
+    toolUseId: meta.toolUseId ?? null, description: meta.description ?? null, forbidHits,
+  }
 }
