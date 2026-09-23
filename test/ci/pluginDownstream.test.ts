@@ -720,7 +720,7 @@ describe("a fork on another host", () => {
  * The renamed private copy, opt-in on the same variable `./forkIdentity.test.ts` declares.
  *
  * That suite's opt-in group already proves the renamed fork (`@acme/stamity`, `private: true`)
- * PASSES the inherited gate over the fifteen identity-sensitive suites, and its always-on group
+ * PASSES the inherited gate over the eighteen identity-sensitive suites, and its always-on group
  * proves the regenerated marketplace names a git source rather than an npm package it cannot
  * publish. What neither covers is the DISTRIBUTION built inside such a copy, which is this one
  * case; the tarball smoke and the whole-suite run stay where they are.
