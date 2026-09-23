@@ -3,6 +3,12 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import {
+  RUN_OF_RECORD_CARRIED_TO,
+  RUN_OF_RECORD_PATH,
+  RUN_OF_RECORD_RELEASE,
+  carriedToRelease,
+} from "../src/cli/docs/measurements.ts";
 import { COMMAND_ID_PREFIX } from "../src/content/catalog.ts";
 import {
   CLASS_LAYOUT,
@@ -1123,6 +1129,58 @@ describe("README", () => {
     }
     expect(checked.length, "README stopped linking anything").toBeGreaterThanOrEqual(
       README_LINK_TARGETS.length,
+    );
+  });
+});
+
+/**
+ * The eval run of record as README and the doctrine type it: `[run N](…), the X release run`,
+ * and while the run is carried, `carried to Y under the set's incremental rule`. The measurements
+ * page renders the same claim from `src/cli/docs/measurements.ts`, whose suite refuses a run
+ * carried to its own release; these two pages type it by hand, so they are held here to the
+ * generator's constants and passed through the same guard. Read off whitespace-collapsed text,
+ * because the pages break the clause at different words and README puts a comma before
+ * "carried" where the doctrine does not.
+ */
+const RUN_OF_RECORD_PAGES: readonly string[] = [README, DOCTRINE];
+
+const RUN_OF_RECORD_CLAIM =
+  /\[run (\d+)\]\((?:\.\.\/)?(evals\/runs\/[^)\s]+)\),? the (\d+\.\d+\.\d+) release run/;
+const CARRIED_CLAUSE =
+  /the (\d+\.\d+\.\d+) release run,? carried to (\d+\.\d+\.\d+) under the set's incremental rule/;
+
+const collapsed = (text: string): string => text.replace(/\s+/g, " ");
+
+describe("the eval run of record on the hand pages", () => {
+  // Survives the release that runs the set: that release moves the generator's run and release,
+  // and a hand page left naming the old pair fails here rather than going stale.
+  it.each(RUN_OF_RECORD_PAGES)("%s names the generator's run and release", (page) => {
+    const claim = RUN_OF_RECORD_CLAIM.exec(collapsed(read(page)));
+    expect(claim, `${page} states no "[run N](…), the X release run" claim`).not.toBeNull();
+    const [, run, path, release] = claim ?? [];
+    expect(path, `${page} links a run that is not the run of record`).toBe(RUN_OF_RECORD_PATH);
+    expect(run, `${page} numbers the run apart from its path`).toBe(
+      /-run-(\d+)\//.exec(RUN_OF_RECORD_PATH)?.[1],
+    );
+    expect(release, `${page} names another release run than the generator`).toBe(
+      RUN_OF_RECORD_RELEASE,
+    );
+  });
+
+  // Deleted with RUN_OF_RECORD_CARRIED_TO, together with the pages' clause, by the release that
+  // runs the set — the guard's own message says so. While the constant stands, a page without the
+  // clause disagrees with the generator and fails; an equal pair fails through carriedToRelease
+  // first, so it reads the same instruction the measurements page does.
+  it.each(RUN_OF_RECORD_PAGES)("%s carries the run to the generator's release", (page) => {
+    const clause = CARRIED_CLAUSE.exec(collapsed(read(page)));
+    expect(
+      clause,
+      `${page} does not say the run is carried to ${RUN_OF_RECORD_CARRIED_TO}; the generator does`,
+    ).not.toBeNull();
+    const [, runRelease = "", carriedTo = ""] = clause ?? [];
+    expect(carriedToRelease(runRelease, carriedTo)).toBe(RUN_OF_RECORD_CARRIED_TO);
+    expect(runRelease, `${page} carries another release run than the generator`).toBe(
+      RUN_OF_RECORD_RELEASE,
     );
   });
 });
