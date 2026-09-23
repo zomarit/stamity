@@ -29,6 +29,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before anything is published.
 -->
 
+## [1.9.1] - 2026-09-23
+
+### Changed
+
+- **The eval run of record stays run 32, the 1.9.0 release run, carried to 1.9.1 under the set's
+  incremental rule.** No case input moved since its candidate `e5e54c9`: nothing under `evals/`
+  outside `runs/` and `measurements/`, nothing under `content/`, and none of the sources the case
+  set cites changed, so the release adds no run, and the measurements page, README and the
+  doctrine say which release the run is carried to and from which candidate.
+- **The enterprise guide's recommended `generatedPaths` names `docs/measurements.md`.** Plain
+  `node scripts/generate-docs.mjs`, which the recommended `regenerate` list runs, renders every
+  page family, the measurements page included, so a fork whose tree renders that page differently
+  met a rewrite no recommended glob covered; the guide's sentence on what the two lists are now
+  says exactly which regeneration-table rows the list leaves out and why.
+- **The plugins guide says what has run against a remote source.** The distribution branch exists
+  since 1.9.0 (`plugin-dist`, tagged `plugins/v1.9.0`), so the provenance notes that waited for it
+  now say what was executed and against what: the Claude Code and Copilot CLI remote forms ran
+  once, in the private-chain rehearsal of 2026-09-22, against a private mirror at that tag, and
+  Codex's has not run. The Renovate preset's scope is stated as it is — it watches all four
+  catalogs, and only a catalog carrying a `ref` moves.
+- `p-limit` moves to 7.3.3 in the lockfile; the manifest's `^7.3.1` range is unchanged.
+
+### Fixed
+
+- **A renamed private fork's inherited gate is green again.** Two suites that shipped in 1.9.0,
+  `test/ci/pluginDistribution.test.ts` and `test/ci/pluginPackages.claude.test.ts`, asserted the
+  canonical owner and the marketplace routes as literals, so a fork that followed
+  `docs/enterprise-forks.md` met nine red cases it could not turn green. Both now derive every
+  identity value from `test/support/identity.ts`, and the fork-identity guard reads the CI suites
+  on every run.
+
 ## [1.9.0] - 2026-09-21
 
 ### Added
@@ -846,7 +877,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   emission (Claude, Cursor, Copilot, and Codex); the first-party packs; and the documentation
   site.
 
-[Unreleased]: https://github.com/zomarit/stamity/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/zomarit/stamity/compare/v1.9.1...HEAD
+[1.9.1]: https://github.com/zomarit/stamity/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/zomarit/stamity/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/zomarit/stamity/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/zomarit/stamity/compare/v1.6.0...v1.7.0
