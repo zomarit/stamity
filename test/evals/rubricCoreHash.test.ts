@@ -13,10 +13,11 @@ import { REPO_ROOT, RUBRIC_FILE } from "./support.ts";
  * anywhere above that heading — a selector sentence, a citation, a currency note — moves the hash,
  * and the private driver then refuses to compose the next increment: the choice becomes a restore
  * of the bytes or a full baseline of the whole set. Until this file, nothing in the tree pinned it,
- * so such an edit passed every gate green (the learning
- * `the-rubric-core-is-hashed-above-the-calibration-boundary`, 2026-09-20, observed when session 1's
- * currency fix rewrote lines 3-5 and the 1.9.0 increment could not compose until they were
- * restored). prove/212 is the finding that asked for the pin.
+ * so such an edit passed every gate green: observed 2026-09-20, when session 1's currency fix
+ * (`c989e10`) rewrote lines 3-5 and the 1.9.0 increment could not compose until they were restored.
+ * That observation was carried as a learning until this pin met its retire condition; the learning
+ * was retired on 2026-09-23 and this file is now where the rule lives. prove/212 is the finding
+ * that asked for the pin.
  *
  * The boundary and the byte count are the private driver's exactly, and they are read off the
  * newest committed run's public `inputs.json` rather than typed: the text BEFORE the heading line,
@@ -65,8 +66,8 @@ describe("the rubric's grading core is pinned to the run of record", () => {
       `${recorded ?? "?"} (${String(recordedBytes)} bytes). The incremental rule of evals/SET-v7.md composes a ` +
       "release's run with the prior complete run only when the core hash is unchanged, so this edit means the " +
       "next increment cannot compose: either restore the bytes above the boundary (carry the change below it, " +
-      "or into evals/README.md) or run a full baseline and retain it, which is the maintainer's call. See " +
-      ".stamity/learnings/the-rubric-core-is-hashed-above-the-calibration-boundary.md.";
+      "or into evals/README.md) or run a full baseline and retain it, which is the maintainer's call. The " +
+      "header of test/evals/rubricCoreHash.test.ts records the 2026-09-20 increment the driver refused for this.";
     expect(actual, rule).toBe(recorded);
     expect(Buffer.byteLength(core), rule).toBe(recordedBytes);
   });
