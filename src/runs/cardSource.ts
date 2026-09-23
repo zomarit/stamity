@@ -21,6 +21,7 @@ import {
   REPORTS_DIR,
   RUN_ID_PATTERN,
   RUNS_SEGMENTS,
+  UNPRINTABLE_CHARS,
 } from "./layout.ts";
 
 /**
@@ -94,6 +95,7 @@ const CARD_GIT_MAX_BYTES = ${json(GIT_METADATA_MAX_BYTES)};
 const CARD_MAX_CHARS = ${json(CARD_MAX_CHARS)};
 const CARD_LIST_MAX = ${json(CARD_LIST_MAX)};
 const CARD_FIELD_MAX = ${json(CARD_FIELD_MAX)};
+const CARD_UNPRINTABLE = ${regex(UNPRINTABLE_CHARS)};
 const CARD_RECOVERY_NOTE = ${json(CARD_RECOVERY_NOTE)};
 const CARD_NEXT_LINE = ${json(CARD_NEXT_LINE)};
 const CARD_NOT_RECORDED = ${json(CARD_NOT_RECORDED)};
@@ -350,9 +352,17 @@ function cardLanes(rootDir) {
   return out.sort();
 }
 
-/** One field as one bounded line. */
+/**
+ * One field as one bounded line: control characters to spaces, then the C1
+ * controls, bidi controls and zero-width marks dropped (never the tag block,
+ * which the screen must still see), whitespace collapsed, capped.
+ */
 function cardFlat(value) {
-  const flat = String(value).replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+  const flat = String(value)
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(CARD_UNPRINTABLE, "")
+    .replace(/\s+/g, " ")
+    .trim();
   return flat.length > CARD_FIELD_MAX ? flat.slice(0, CARD_FIELD_MAX - 1) + "…" : flat;
 }
 

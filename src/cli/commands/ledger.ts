@@ -465,8 +465,23 @@ async function runClose(ctx: CliContext, opts: Record<string, unknown>): Promise
 /** What `status` prints when there is no card: no run in progress, or none named. */
 const NO_CARD = "stamity: no run in progress under .stamity/runs/ — no resume card.";
 
-/** The status JSON document of a card. A withheld card's lists are what
- *  tripped the screen, so none of them is echoed; the counts still are. */
+/** The status JSON document with no card: the same keys, every count at zero. */
+const NO_CARD_JSON = {
+  run: null,
+  inProgress: false,
+  card: null,
+  counts: { openRows: 0, unledgeredReports: 0, lanes: 0 },
+  withheld: null,
+  listsWithheld: null,
+  unreadableLedgerLines: 0,
+} as const;
+
+/**
+ * The status JSON document of a card. The lists are echoed only when neither
+ * the card nor the full lists tripped the screen — the card names ten items of
+ * each, the document would name all of them — and then flattened as the card
+ * prints them; the counts are always there.
+ */
 function statusJson(card: ResumeCard): Record<string, unknown> {
   return {
     run: card.runId,
@@ -477,7 +492,7 @@ function statusJson(card: ResumeCard): Record<string, unknown> {
       unledgeredReports: card.unledgeredReports.length,
       lanes: card.lanes.length,
     },
-    ...(card.withheld === null
+    ...(card.withheld === null && card.listsWithheld === null
       ? {
           openRowIds: [...card.openRowIds],
           unledgeredReports: [...card.unledgeredReports],
@@ -485,6 +500,7 @@ function statusJson(card: ResumeCard): Record<string, unknown> {
         }
       : {}),
     withheld: card.withheld,
+    listsWithheld: card.listsWithheld,
     unreadableLedgerLines: card.unreadableLedgerLines,
   };
 }
@@ -514,7 +530,7 @@ async function runStatus(ctx: CliContext, opts: Record<string, unknown>): Promis
   });
   if (card === null) {
     ctx.io.out(`${NO_CARD}\n`);
-    return { exitCode: 0, json: { run: null, inProgress: false, card: null } };
+    return { exitCode: 0, json: { ...NO_CARD_JSON, counts: { ...NO_CARD_JSON.counts } } };
   }
 
   if (card.unreadableLedgerLines > 0) {

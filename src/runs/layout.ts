@@ -104,6 +104,19 @@ export const CARD_LIST_MAX = 10;
 /** One printed field's ceiling, the ellipsis included. */
 export const CARD_FIELD_MAX = 200;
 
+/**
+ * The characters a printed or recorded field drops: the C0 and C1 controls,
+ * DEL, the zero-width marks, the bidi controls and the byte-order mark. Text
+ * read from a committed file (a ledger id, a record line, a branch) would
+ * otherwise reach a terminal as an escape sequence, or a context or a diff
+ * reordered. The Unicode tag block is deliberately NOT here: the screens'
+ * `unicode-tag-smuggling` row refuses a payload by those characters, and
+ * stripping them first would launder it. Global and Unicode-aware, for
+ * `String.prototype.replace`; the hook's card embeds it by source and flags.
+ */
+// oxlint-disable-next-line no-control-regex -- matching control characters IS the point
+export const UNPRINTABLE_CHARS = /[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/gu;
+
 /** The card's fixed words. */
 export const CARD_RECOVERY_NOTE = "the ledger is the recovery point";
 export const CARD_NEXT_LINE = "next: read the open rows and the listed reports before dispatching anything";

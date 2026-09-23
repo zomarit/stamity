@@ -25,6 +25,7 @@ import {
   REPORTS_DIR,
   RUN_ID_PATTERN,
   RUNS_SEGMENTS,
+  UNPRINTABLE_CHARS,
 } from "./layout.ts";
 
 /**
@@ -61,11 +62,18 @@ export interface ResumeCard {
   readonly inProgress: boolean;
   /** The printed lines: the six card lines, or the one withheld line. */
   readonly lines: readonly string[];
+  /** The three lists in full, each item flattened as the card prints it. */
   readonly openRowIds: readonly string[];
   readonly unledgeredReports: readonly string[];
   readonly lanes: readonly string[];
   /** The screen pattern id the card's text matched, or null when it printed. */
   readonly withheld: string | null;
+  /**
+   * The screen pattern id the three full lists matched, or null. The card
+   * names at most CARD_LIST_MAX items of each, so an item past them is screened
+   * here, never in `lines`; a caller that echoes the lists checks this first.
+   */
+  readonly listsWithheld: string | null;
   /** Non-blank ledger lines that are not JSON objects. */
   readonly unreadableLedgerLines: number;
 }
@@ -387,11 +395,16 @@ function lanesOf(rootDir: string): string[] {
   return out.toSorted();
 }
 
-/** One field as one bounded line: control characters to spaces, whitespace collapsed, capped. */
+/**
+ * One field as one bounded line: control characters to spaces, then the C1
+ * controls, bidi controls and zero-width marks dropped (never the tag block,
+ * which the screen must still see), whitespace collapsed, capped.
+ */
 function flat(value: string): string {
   const line = value
     // oxlint-disable-next-line no-control-regex -- turning control bytes into spaces IS the point
     .replace(/[\x00-\x1f\x7f]+/g, " ")
+    .replace(UNPRINTABLE_CHARS, "")
     .replace(/\s+/g, " ")
     .trim();
   return line.length > CARD_FIELD_MAX ? `${line.slice(0, CARD_FIELD_MAX - 1)}…` : line;
@@ -498,6 +511,10 @@ export function collectResumeCard(opts: {
     opts.now,
   );
   const withheld = screenCard(card.join("\n"));
+  const openRowIds = ledger.open.map(flat);
+  const reports = unledgered.map(flat);
+  const laneItems = lanes.map(flat);
+  const listsWithheld = screenCard([...openRowIds, ...reports, ...laneItems].join("\n"));
   const lines =
     withheld === ""
       ? card
@@ -508,10 +525,11 @@ export function collectResumeCard(opts: {
     runId,
     inProgress: head?.inProgress ?? false,
     lines,
-    openRowIds: ledger.open,
-    unledgeredReports: unledgered,
-    lanes,
+    openRowIds,
+    unledgeredReports: reports,
+    lanes: laneItems,
     withheld: withheld === "" ? null : withheld,
+    listsWithheld: listsWithheld === "" ? null : listsWithheld,
     unreadableLedgerLines: ledger.unreadable,
   };
 }

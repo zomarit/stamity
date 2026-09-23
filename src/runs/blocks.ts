@@ -4,6 +4,7 @@ import {
   FINDINGS_FENCE,
   fenceOpenPattern,
   RATIONALE_MAX,
+  UNPRINTABLE_CHARS,
 } from "./layout.ts";
 
 /**
@@ -104,8 +105,7 @@ export function quoteReportText(value: unknown): string {
 export function printableText(text: string): string {
   return text
     .replace(/[\r\n\t]/gu, " ")
-    // oxlint-disable-next-line no-control-regex -- stripping control bytes IS the point
-    .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/gu, "");
+    .replace(UNPRINTABLE_CHARS, "");
 }
 
 /**
