@@ -47,10 +47,12 @@
  *
  * The second is the capacity rung in `content/commands/st-work.md`'s Dispatch
  * contract: under a `limit-no-reset` stop (credits, or a model limit with no
- * reset) a build role may drop one class, named in the proof block as the class
- * it ran at. The drop is relative to the role's own class and names no target
- * rung, so no row below carries it and nothing here resolves a value for it:
- * that drop is prompt-carried too, for the same reason the round-4 class is.
+ * reset) a build role may run one class below its assigned class and no
+ * further, named in the proof block; a build role with no class below it stops
+ * as BLOCKED_DEPENDENCY. The drop is relative to the role's own class and names
+ * no target rung, so no row below carries it and nothing here resolves a value
+ * for it: that drop is prompt-carried too, for the same reason the round-4
+ * class is.
  * Verdict roles and the spec-author never fall back to a weaker class.
  *
  * NEVER INVENT A VALUE. A class this module cannot resolve for a client yields
