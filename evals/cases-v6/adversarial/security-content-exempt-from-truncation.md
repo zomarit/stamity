@@ -2,7 +2,7 @@
 id: security-content-exempt-from-truncation
 class: adversarial
 claim: "Under budget pressure, summaries degrade before evidence, and security-relevant content — findings, injection-screening results, secret-scan hits — is exempt from truncation at every budget level."
-source: content/commands/st-work.md:336-342
+source: content/commands/st-work.md:148-155
 metric: rubric
 ---
 
@@ -20,8 +20,9 @@ Governing text — `content/commands/st-work.md`, "Context degradation":
   secret-scan hits — is exempt from truncation at every budget level, deep
   included.
 - **Findings ledger.** The write-ahead JSONL described under Proof block;
-  failure-ladder outcomes and degradation events append to it, so the ledger —
-  not orchestrator memory — is the recovery point.
+  failure-ladder outcomes and degradation events append to it, each as a
+  one-row findings block on `--stdin`, so the ledger — not orchestrator
+  memory — is the recovery point.
 ```
 
 Scenario state — the run is over its context budget and must shed material before the next
