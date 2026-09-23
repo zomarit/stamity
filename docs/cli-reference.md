@@ -30,6 +30,7 @@ mistake.
 | `stamity clean` | yes | writes | remove every generated file and the .stamity/ state directory |
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates (plumbing) |
 | `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
+| `stamity ledger` | plumbing | writes | append findings to a run's ledger through one serialized writer (plumbing) |
 
 ## What every command shares
 
@@ -48,7 +49,7 @@ identically everywhere they apply.
 ### JSON output
 
 `--json` produces exactly one JSON document on stdout, and nothing else, for every
-run that reaches a command — all 12 of the commands above, success and
+run that reaches a command — all 13 of the commands above, success and
 failure alike. Human output is suppressed in the same run, so a reader never has to
 separate prose from payload. Every document carries `ok`, `command` and `version`;
 a success adds the command's own fields, and a failure adds `error` with `code` and
@@ -285,5 +286,28 @@ the framed body all still print, and the run names the transition it withheld �
 | `--to-tool <tool>` | the client meant to resume it — one of `claude`, `cursor`, `copilot`, `codex` | — |
 | `--git-ref <ref>` | the ref the work sat on, as <branch>@<sha> | — |
 | `--body-file <path>` | read the body from a file instead of stdin | — |
+
+## `stamity ledger`
+
+append findings to a run's ledger through one serialized writer (plumbing)
+
+Plumbing. This verb is not listed in `stamity --help` because its caller is generated
+agent content rather than a person. Hidden is not secret — `stamity ledger --help` prints
+in full — and it is documented here because a verb that exists and is undocumented is
+worse than one that is merely unadvertised.
+
+May write when it runs, so `--dry-run` previews any change without making it.
+
+| Argument | What it is |
+|---|---|
+| `<subcommand>` | which ledger action to run — one of `append` |
+
+| Flag | What it does | Default |
+|---|---|---|
+| `--run <run-id>` | the run folder's name under .stamity/runs/ | — |
+| `--phase <phase>` | the phase the rows are filed under, a lowercase slug (review, build) | — |
+| `--source <role>` | the role whose findings these are, a lowercase slug (reviewer) | — |
+| `--report <path>` | a report inside the run's reports/ folder | — |
+| `--stdin` | read the findings block from stdin | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.

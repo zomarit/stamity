@@ -31,8 +31,8 @@ import { npxCommand } from "../support/identity.ts";
 const packageJson = createRequire(import.meta.url)("../../package.json") as { version: string };
 
 /**
- * The advertised surface, in the SoT help order. `learn` and `handoff` are
- * hidden plumbing.
+ * The advertised surface, in the SoT help order. `learn`, `handoff` and
+ * `ledger` are hidden plumbing.
  *
  * `workspace` joined between `config` and `clean` with the multi-repo verb, and
  * `worktree` joined directly after it with the managed parallel-checkout lane —
@@ -58,7 +58,7 @@ const ADVERTISED = [
 ] as const;
 
 /** The plumbing verbs, in registration order: off `--help`, on the surface. */
-const HIDDEN = ["learn", "handoff"] as const;
+const HIDDEN = ["learn", "handoff", "ledger"] as const;
 
 /** A minimal CommandModule under the given name, for the uniqueness guard. */
 const twin = (name: string): CommandModule => ({
@@ -69,9 +69,9 @@ const twin = (name: string): CommandModule => ({
 });
 
 describe("COMMANDS enumeration (in-process)", () => {
-  it("registers exactly 12 uniquely-named commands in help order, the hidden two last", () => {
+  it("registers exactly 13 uniquely-named commands in help order, the hidden three last", () => {
     expect(COMMANDS.map((command) => command.name)).toEqual([...ADVERTISED, ...HIDDEN]);
-    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(12);
+    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(13);
     expect(COMMANDS.filter((command) => command.hidden === true).map((c) => c.name)).toEqual([
       ...HIDDEN,
     ]);
@@ -99,7 +99,7 @@ describe("COMMANDS enumeration (in-process)", () => {
 describe("advertised surface (child process)", () => {
   const getFixture = useCliFixture();
 
-  it("--help lists exactly the 10 advertised commands and neither plumbing verb", async () => {
+  it("--help lists exactly the 10 advertised commands and none of the three plumbing verbs", async () => {
     const result = await getFixture().run(["--help"]);
 
     expect(result.code).toBe(0);
@@ -110,6 +110,7 @@ describe("advertised surface (child process)", () => {
     // Line-anchored: validate's summary legitimately contains "learnings".
     expect(result.stdout).not.toMatch(/^ {2}learn\b/m);
     expect(result.stdout).not.toMatch(/^ {2}handoff\b/m);
+    expect(result.stdout).not.toMatch(/^ {2}ledger\b/m);
   });
 
   it("--version prints the package version and exits 0", async () => {
@@ -191,6 +192,13 @@ describe("exit-code matrix on an empty fixture", () => {
     [
       "handoff prepare refuses uninitialised",
       ["handoff", "prepare", "--title", "t", "--summary", "s", "--from-tool", "claude"],
+      1,
+      npxCommand("init"),
+    ],
+    ["ledger without its subcommand is a usage error", ["ledger"], 2, "run stamity ledger --help"],
+    [
+      "ledger append refuses uninitialised",
+      ["ledger", "append", "--run", "2026-09-23_x", "--phase", "build", "--source", "reviewer", "--stdin"],
       1,
       npxCommand("init"),
     ],

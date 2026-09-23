@@ -318,6 +318,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // The resume card's embeddable body: a string builder over the run layout
   // (wave 1), read by the wave-4 session-start builder that embeds it.
   "src/runs/cardSource.ts": { unit: "ctx-hook-card", wave: 2 },
+  // The findings-block reader: a pure parser over the run layout's fence
+  // patterns (wave 1), read by the wave-4 ledger store that files its rows.
+  "src/runs/blocks.ts": { unit: "ctx-ledger-append", wave: 2 },
   "src/handoffs/schema.ts": { unit: "p1-21", wave: 2 },
   "src/handoffs/validation.ts": { unit: "p1-21", wave: 2 },
   // wave 3
@@ -377,6 +380,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/worktree/policy.ts": { unit: "wt-u1a", wave: 4 },
   "src/worktree/receipt.ts": { unit: "wt-u1a", wave: 4 },
   "src/worktree/materialize.ts": { unit: "wt-u1a", wave: 4 },
+  // The ledger's one serialized writer: the wave-3 atomic writer and its lock,
+  // the wave-2 block reader and the wave-1 run layout, reached by the wave-14
+  // `stamity ledger` verb.
+  "src/runs/ledgerStore.ts": { unit: "ctx-ledger-append", wave: 4 },
   // wave 5
   // RE-PLANNED 2026-09-15, 3 -> 5, with `src/emit/agentsMd.ts` 4 -> 6 below it.
   // The charter loader is still a corpus reader over the wave-2 content
@@ -515,6 +522,11 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // no wave-14 command engine. Its only direct import below the kit is the
   // wave-2 handoff schema, as a type.
   "src/cli/commands/handoff.ts": { unit: "b5-u1", wave: 14 },
+  // The ledger verb, the third hidden plumbing command and the same shape as the
+  // two above: it calls the run modules through the kit and imports no wave-14
+  // command engine. Below the kit it imports the state-directory marker and, as
+  // a type, the wave-4 ledger store.
+  "src/cli/commands/ledger.ts": { unit: "ctx-ledger-append", wave: 14 },
   "src/cli/notice/updateNotice.ts": { unit: "p2-12", wave: 14 },
   // The worktree verb (WT-U2), at the leaf-command wave rather than beside
   // `workspace.ts` one above it. Wave 14 is its true depth: everything it calls

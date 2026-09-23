@@ -85,6 +85,8 @@ import * as worktreeSetup from "../worktree/setup.ts";
 import * as worktreeCleanup from "../worktree/cleanup.ts";
 import * as runsLayout from "../runs/layout.ts";
 import * as runsCardSource from "../runs/cardSource.ts";
+import * as runsBlocks from "../runs/blocks.ts";
+import * as runsLedgerStore from "../runs/ledgerStore.ts";
 import * as hooksModel from "../hooks/model.ts";
 import * as portableRunner from "../hooks/portableRunner.ts";
 import * as userHooks from "../hooks/userHooks.ts";
@@ -225,11 +227,14 @@ export interface EngineRegistry {
   };
   /**
    * A work run's on-disk shape (the run folder, its record head, its ledger and
-   * reports, the resume card's bounds) and the resume card's embeddable body.
+   * reports, the resume card's bounds), the resume card's embeddable body, the
+   * findings-block reader and the ledger's one serialized writer.
    */
   readonly runs: {
     readonly layout: typeof runsLayout;
     readonly cardSource: typeof runsCardSource;
+    readonly blocks: typeof runsBlocks;
+    readonly ledgerStore: typeof runsLedgerStore;
   };
   readonly hooks: {
     readonly model: typeof hooksModel;
@@ -384,7 +389,12 @@ export function createEngine(): EngineRegistry {
       setup: worktreeSetup,
       cleanup: worktreeCleanup,
     },
-    runs: { layout: runsLayout, cardSource: runsCardSource },
+    runs: {
+      layout: runsLayout,
+      cardSource: runsCardSource,
+      blocks: runsBlocks,
+      ledgerStore: runsLedgerStore,
+    },
     hooks: { model: hooksModel, portableRunner, userHooks, scripts: hookScripts },
     tools: { categories: toolCategories, allowlist, translator },
     detect: {

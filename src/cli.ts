@@ -9,6 +9,7 @@ import { configCommand } from "./cli/commands/config.ts";
 import { handoffCommand } from "./cli/commands/handoff.ts";
 import { initCommand } from "./cli/commands/init.ts";
 import { learnCommand } from "./cli/commands/learn.ts";
+import { ledgerCommand } from "./cli/commands/ledger.ts";
 import { pluginCommand } from "./cli/commands/plugin.ts";
 import { syncCommand } from "./cli/commands/sync.ts";
 import { validateCommand } from "./cli/commands/validate.ts";
@@ -26,7 +27,7 @@ import {
  *
  * Everything else is owned elsewhere: the exit-code contract, flag matrix and
  * JSON funnel live in `./cli/kit/program.ts`; each verb's behavior lives in its
- * own module under `./cli/commands/`. This file only (1) enumerates the twelve
+ * own module under `./cli/commands/`. This file only (1) enumerates the thirteen
  * CommandModules in help order, (2) fires the update-notice probe early and
  * settles it non-blockingly after the run, and (3) records the exit code.
  *
@@ -42,8 +43,8 @@ import {
 
 /**
  * The advertised surface in help order — init, sync, check, validate, add,
- * config, workspace, worktree, plugin, clean — plus `learn` and `handoff`, the
- * two hidden plumbing verbs. Ten advertised, twelve registered.
+ * config, workspace, worktree, plugin, clean — plus `learn`, `handoff` and
+ * `ledger`, the three hidden plumbing verbs. Ten advertised, thirteen registered.
  *
  * `workspace` sits after `config` and before `clean`: it is a configuration
  * verb, and `clean` stays last on the advertised surface because it is the one
@@ -74,6 +75,7 @@ export const COMMANDS: readonly CommandModule[] = [
   cleanCommand,
   learnCommand,
   handoffCommand,
+  ledgerCommand,
 ];
 
 /**
