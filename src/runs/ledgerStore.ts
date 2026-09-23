@@ -3,7 +3,15 @@ import { lstat, mkdir, open, readFile, realpath, writeFile } from "node:fs/promi
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { acquireWriteLock, atomicWriteFileUnlocked } from "../merge/atomicWrite.ts";
 import { EngineError } from "../types/errors.ts";
-import type { Finding, FindingSeverity } from "./blocks.ts";
+import {
+  cutReportText,
+  quoteReportText,
+  type BlockProblem,
+  type Closure,
+  type ClosureStatus,
+  type Finding,
+  type FindingSeverity,
+} from "./blocks.ts";
 import {
   isRunId,
   LEDGER_FILE,
@@ -17,17 +25,20 @@ import {
 
 /**
  * The run ledger's one serialized writer (C3, C7): where a run folder is, which
- * report paths belong to it, how the next row id is numbered, and the append
- * that turns a parsed findings block into `open` rows.
+ * report paths belong to it, how the next row id is numbered, the append that
+ * turns a parsed findings block into `open` rows, and the close that moves rows
+ * on a re-review's closures (C9) or one manual transition.
  *
- * **The existing bytes are never rewritten.** An append reads the ledger under
+ * **An append never rewrites the existing bytes.** It reads the ledger under
  * the engine's write lock (`acquireWriteLock`, a lock directory beside the file
  * that goes stale after 15 s), keeps every byte already there — legacy rows
  * spelled with `", "` spacing, a hand-edited line that is not a row — and adds
  * its rows after them, then lands the whole text through the temp-and-rename
  * writer. A reader sees the old ledger or the new one, never half of each, and
  * two appends on one run queue rather than interleave, so their id ranges are
- * disjoint.
+ * disjoint. **A close rewrites only the rows it moves**, each re-stringified
+ * with its key order and every other key kept and its own line end; every other
+ * line stays byte for byte, through the same lock and the same writer.
  *
  * **Every stored path is a POSIX literal** built by `runRelPath` from validated
  * segments, so a row written on Windows reads the same as one written anywhere
@@ -443,4 +454,247 @@ export async function appendFindings(req: {
   } finally {
     await release?.();
   }
+}
+
+/** Where each closure status leaves its row (C9). */
+export const CLOSURE_TARGET: Readonly<Record<ClosureStatus, "fixed" | "rejected" | "open">> = {
+  fixed: "fixed",
+  "not-fixed": "open",
+  regressed: "open",
+  "rejection-upheld": "rejected",
+  "rejection-overturned": "open",
+};
+
+/** Ceiling on a manual close's rationale, in characters (code points), trimmed. */
+export const RATIONALE_MAX = 2_000;
+
+/** The states a manual close (`ledger close --id`) may set. */
+export type ManualState = "fixed" | "rejected" | "deferred";
+
+export interface CloseChange {
+  readonly ledgerId: string;
+  readonly from: string;
+  readonly to: string;
+  /** The closure's status; `null` for a manual transition. */
+  readonly status: ClosureStatus | null;
+  /** The row already records this closure or transition; nothing moved. */
+  readonly unchanged: boolean;
+}
+
+export interface CloseResult {
+  /** The ledger's repo-relative POSIX path. */
+  readonly ledger: string;
+  /** One entry per applied closure, in block order, or the one manual transition. */
+  readonly changes: readonly CloseChange[];
+  /** 1-based ledger lines that are not rows; kept as they are. */
+  readonly unreadableLines: readonly number[];
+}
+
+/**
+ * A closures block at least one of whose closures cannot apply. Carries every
+ * problem, each at the report line of its closure, so the caller lists them
+ * the way it lists a block that does not parse; nothing was written.
+ *
+ * The messages quote report text cut at 60 code points but are not stripped
+ * of control characters: that is the render site's job, as for a parse refusal.
+ */
+export class ClosuresRefused extends EngineError {
+  readonly problems: readonly BlockProblem[];
+
+  constructor(report: string, problems: readonly BlockProblem[]) {
+    super(
+      `ledger close refused ${report}: ${problems.length} closure(s) cannot apply, so no row changed`,
+      {
+        code: "VALIDATION_ERROR",
+        next: "fix the closures named, or the --ids handed, then re-run the close",
+      },
+    );
+    this.problems = problems;
+  }
+}
+
+/** A row field as text: a string as it is, anything else as its JSON spelling. */
+function fieldText(row: LedgerRow, key: "state" | "rationale"): string {
+  const value: unknown = row[key];
+  if (typeof value === "string") return value;
+  return value === undefined ? "" : String(JSON.stringify(value));
+}
+
+/** `text` appended to a rationale: alone when the prior one is blank, else after ` | `. */
+function extendRationale(prior: string, text: string): string {
+  return prior.trim() === "" ? text : `${prior} | ${text}`;
+}
+
+/** Each row id's 0-based line; the first line wins when a hand-edit repeats an id. */
+function rowIndex(parsed: ParsedLedger): ReadonlyMap<string, number> {
+  const index = new Map<string, number>();
+  for (const [line, row] of parsed.rows) if (!index.has(row.id)) index.set(row.id, line);
+  return index;
+}
+
+interface RowRewrite {
+  readonly changes: readonly CloseChange[];
+  /** New row objects keyed by 0-based line. */
+  readonly rewrites: ReadonlyMap<number, LedgerRow>;
+}
+
+/**
+ * The close's one write path, shared by both forms: the same ignore file, lock,
+ * link refusal and temp-and-rename writer as an append. `decide` reads the
+ * parsed ledger and names the rows to rewrite, or throws to refuse the whole
+ * close; only the named lines change, each keeping its own line end (`\r\n` in
+ * a CRLF file), and no write happens when nothing moved.
+ */
+async function rewriteRows(
+  req: { readonly rootDir: string; readonly runId: string; readonly dryRun: boolean },
+  decide: (parsed: ParsedLedger, ledgerRel: string) => RowRewrite,
+): Promise<CloseResult> {
+  const dir = runDir(req.rootDir, req.runId);
+  const ledgerRel = runRelPath(req.runId, LEDGER_FILE);
+  if (!req.dryRun) await ensureReportsIgnore(req.rootDir, req.runId);
+
+  const ledgerPath = join(dir, LEDGER_FILE);
+  const release = req.dryRun ? null : await acquireWriteLock(ledgerPath, dir);
+  try {
+    const existing = await readLedger(ledgerPath, ledgerRel);
+    const parsed = parseLedgerText(existing);
+    const { changes, rewrites } = decide(parsed, ledgerRel);
+    if (!req.dryRun && rewrites.size > 0) {
+      // The same split as parseLedgerText's, so indices agree; each raw line
+      // keeps its trailing `\r`, and a final EOL (or its absence) is untouched.
+      const raw = existing.split("\n");
+      for (const [index, row] of rewrites) {
+        const ending = (raw[index] ?? "").endsWith("\r") ? "\r" : "";
+        raw[index] = JSON.stringify(row) + ending;
+      }
+      await atomicWriteFileUnlocked(ledgerPath, raw.join("\n"), { boundaryDir: dir });
+    }
+    return { ledger: ledgerRel, changes, unreadableLines: parsed.unreadable };
+  } finally {
+    await release?.();
+  }
+}
+
+/**
+ * Apply a re-review's closures block (C9) to the run's ledger, under its lock.
+ *
+ * `handedIds` are the ledger ids the re-review was handed (`--ids`, plan
+ * resolution R38). A closure is refused when its id was not handed — checked
+ * first, so no row, a `decision_needed` one included, is moved by a closure its
+ * re-review was not asked about — when its id is not a row, or when its row is
+ * neither `open` nor a `fixed` row taking `regressed`. Any refusal refuses the
+ * whole close with every problem listed ({@link ClosuresRefused}) and nothing
+ * written. A row whose rationale already carries the closure's note
+ * (`re-review <status>: <report>`) is `unchanged`, so a re-run is a no-op. A
+ * handed id with no closure is left as it is.
+ */
+export async function applyClosures(req: {
+  readonly rootDir: string;
+  readonly runId: string;
+  readonly closures: readonly Closure[];
+  readonly handedIds: readonly string[];
+  readonly report: string;
+  readonly dryRun: boolean;
+}): Promise<CloseResult> {
+  if (req.closures.length === 0) {
+    runDir(req.rootDir, req.runId);
+    if (!req.dryRun) await ensureReportsIgnore(req.rootDir, req.runId);
+    return { ledger: runRelPath(req.runId, LEDGER_FILE), changes: [], unreadableLines: [] };
+  }
+  const handed = new Set(req.handedIds);
+  return await rewriteRows(req, (parsed, ledgerRel) => {
+    const indexOf = rowIndex(parsed);
+    const problems: BlockProblem[] = [];
+    const changes: CloseChange[] = [];
+    const rewrites = new Map<number, LedgerRow>();
+    for (const closure of req.closures) {
+      const { ledgerId, status, line } = closure;
+      if (!handed.has(ledgerId)) {
+        problems.push({
+          line,
+          message: `ledger_id ${quoteReportText(ledgerId)} was not handed to this re-review (not in --ids)`,
+        });
+        continue;
+      }
+      const index = indexOf.get(ledgerId);
+      const row = index === undefined ? undefined : parsed.rows.get(index);
+      if (index === undefined || row === undefined) {
+        problems.push({
+          line,
+          message: `ledger_id ${quoteReportText(ledgerId)} is not a row of ${ledgerRel}`,
+        });
+        continue;
+      }
+      const note = `re-review ${status}: ${req.report}`;
+      const from = fieldText(row, "state");
+      const prior = fieldText(row, "rationale");
+      if (prior.includes(note)) {
+        changes.push({ ledgerId, from, to: from, status, unchanged: true });
+        continue;
+      }
+      if (from !== "open" && !(from === "fixed" && status === "regressed")) {
+        problems.push({
+          line,
+          message: `${cutReportText(ledgerId)} is ${cutReportText(from)}, not open; only an open row takes a closure (a regressed closure also reopens a fixed row)`,
+        });
+        continue;
+      }
+      const to = CLOSURE_TARGET[status];
+      rewrites.set(index, { ...row, state: to, rationale: extendRationale(prior, note) });
+      changes.push({ ledgerId, from, to, status, unchanged: false });
+    }
+    if (problems.length > 0) throw new ClosuresRefused(req.report, problems);
+    return { changes, rewrites };
+  });
+}
+
+/**
+ * Apply one manual transition (`ledger close --id`): set `state` and append
+ * the trimmed rationale by the same rule as a closure's note. Any prior state
+ * may move; an id that is not a row is refused, and a row already in `state`
+ * whose rationale carries the text is `unchanged`.
+ */
+export async function closeRow(req: {
+  readonly rootDir: string;
+  readonly runId: string;
+  readonly ledgerId: string;
+  readonly state: ManualState;
+  readonly rationale: string;
+  readonly dryRun: boolean;
+}): Promise<CloseResult> {
+  const text = req.rationale.trim();
+  if (text === "" || Array.from(text).length > RATIONALE_MAX) {
+    throw new EngineError(
+      `ledger close --id needs a non-empty --rationale of at most ${RATIONALE_MAX} characters`,
+      {
+        code: "VALIDATION_ERROR",
+        why: "a manual transition is the one ledger move no report explains, so its reason is recorded on the row",
+      },
+    );
+  }
+  return await rewriteRows(req, (parsed, ledgerRel) => {
+    const index = rowIndex(parsed).get(req.ledgerId);
+    const row = index === undefined ? undefined : parsed.rows.get(index);
+    if (index === undefined || row === undefined) {
+      throw new EngineError(
+        `ledger close refused: ${printableId(cutReportText(req.ledgerId))} is not a row of ${ledgerRel}`,
+        {
+          code: "VALIDATION_ERROR",
+          next: "name a ledger id exactly as `ledger append` printed it",
+        },
+      );
+    }
+    const from = fieldText(row, "state");
+    const prior = fieldText(row, "rationale");
+    if (from === req.state && prior.includes(text)) {
+      return {
+        changes: [{ ledgerId: req.ledgerId, from, to: from, status: null, unchanged: true }],
+        rewrites: new Map(),
+      };
+    }
+    return {
+      changes: [{ ledgerId: req.ledgerId, from, to: req.state, status: null, unchanged: false }],
+      rewrites: new Map([[index, { ...row, state: req.state, rationale: extendRationale(prior, text) }]]),
+    };
+  });
 }

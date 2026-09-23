@@ -1,7 +1,8 @@
-import { FENCE_CLOSE_PATTERN, FINDINGS_FENCE, fenceOpenPattern } from "./layout.ts";
+import { CLOSURES_FENCE, FENCE_CLOSE_PATTERN, FINDINGS_FENCE, fenceOpenPattern } from "./layout.ts";
 
 /**
- * The strict reader of a role report's machine-readable findings block (C2).
+ * The strict readers of a role report's machine-readable blocks: the findings
+ * block (C2) and a re-review's closures block (C9).
  *
  * A full report, or a verdict return delivered inline, carries exactly one
  * fenced block whose info string is `stamity-findings`, one JSON object per
@@ -15,6 +16,10 @@ import { FENCE_CLOSE_PATTERN, FINDINGS_FENCE, fenceOpenPattern } from "./layout.
  * report nobody has ledgered): here the id letter must match the severity and
  * `locator` and `summary` are single lines, because they become one ledger
  * row's `evidence`.
+ *
+ * The closures block follows the same rules — one block, one JSON object per
+ * line, every bad line named, an empty block a valid answer — and is what
+ * `stamity ledger close --report` reads to move the rows a re-review verified.
  *
  * Pure: text in, verdict out. Nothing here touches the filesystem.
  */
@@ -60,43 +65,51 @@ const FINDING_ID_PATTERN = /^([CWM])-[1-9][0-9]*$/;
 const QUOTED_MAX = 60;
 
 /**
- * A value read from the report as a problem message quotes it: a string is cut
- * at {@link QUOTED_MAX} code points plus `…` and then JSON-quoted; anything
- * else is JSON-spelled and that spelling cut the same way. A key, an id or a
- * severity is report-authored text of any length, and a refusal names every
- * problem, so an uncut quote would let one report size the refusal's output.
+ * Report-authored text as a problem message carries it: cut at
+ * {@link QUOTED_MAX} code points plus `…`. A key, an id or a status is text of
+ * any length, and a refusal names every problem, so an uncut fragment would let
+ * one report size the refusal's output.
  */
-function quoted(value: unknown): string {
-  const cut = (text: string): string => {
-    const points = Array.from(text);
-    return points.length <= QUOTED_MAX ? text : `${points.slice(0, QUOTED_MAX).join("")}…`;
-  };
-  return typeof value === "string" ? JSON.stringify(cut(value)) : cut(String(JSON.stringify(value)));
+export function cutReportText(text: string): string {
+  const points = Array.from(text);
+  return points.length <= QUOTED_MAX ? text : `${points.slice(0, QUOTED_MAX).join("")}…`;
 }
 
 /**
- * Where the one block sits: its opening line and closing line (0-based), or the
- * structural problem that stops the parse before any line is read.
+ * A value read from the report as a problem message quotes it: a string is cut
+ * by {@link cutReportText} and then JSON-quoted; anything else is JSON-spelled
+ * and that spelling cut the same way.
+ */
+export function quoteReportText(value: unknown): string {
+  return typeof value === "string"
+    ? JSON.stringify(cutReportText(value))
+    : cutReportText(String(JSON.stringify(value)));
+}
+
+/**
+ * Where the one `fence` block sits: its opening line and closing line (0-based),
+ * or the structural problem that stops the parse before any line is read.
  */
 function locateBlock(
   lines: readonly string[],
+  fence: string,
 ): { readonly open: number; readonly close: number } | BlockProblem {
-  const openPattern = fenceOpenPattern(FINDINGS_FENCE);
+  const openPattern = fenceOpenPattern(fence);
   const opens: number[] = [];
   for (const [index, line] of lines.entries()) if (openPattern.test(line)) opens.push(index);
   const first = opens[0];
-  if (first === undefined) return { line: 0, message: `no ${FINDINGS_FENCE} block` };
+  if (first === undefined) return { line: 0, message: `no ${fence} block` };
   const second = opens[1];
   if (second !== undefined) {
     return {
       line: second + 1,
-      message: `a second ${FINDINGS_FENCE} block (the first opens at line ${first + 1}); a report carries exactly one`,
+      message: `a second ${fence} block (the first opens at line ${first + 1}); a report carries exactly one`,
     };
   }
   for (let index = first + 1; index < lines.length; index += 1) {
     if (FENCE_CLOSE_PATTERN.test(lines[index] ?? "")) return { open: first, close: index };
   }
-  return { line: first + 1, message: `the ${FINDINGS_FENCE} block opened here is never closed` };
+  return { line: first + 1, message: `the ${fence} block opened here is never closed` };
 }
 
 /** The problems of one text field (`locator` or `summary`) that is already a string. */
@@ -114,29 +127,13 @@ function textProblems(key: string, value: string): string[] {
  * One inner line's object, checked field by field. Returns the finding when the
  * line is clean, and every problem it carries otherwise.
  */
-function readFindingLine(
-  raw: string,
-  line: number,
-): {
-  readonly finding: Finding | null;
-  readonly id: string | null;
-  readonly problems: readonly string[];
-} {
-  let value: unknown;
-  try {
-    value = JSON.parse(raw);
-  } catch (cause) {
-    const reason = cause instanceof Error ? cause.message : String(cause);
-    return { finding: null, id: null, problems: [`not JSON (${reason})`] };
-  }
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return { finding: null, id: null, problems: ["not a JSON object"] };
-  }
-  const object = value as Record<string, unknown>;
+function readFindingLine(raw: string, line: number): LineRead<Finding> {
+  const object = readObject(raw);
+  if (typeof object === "string") return { item: null, key: null, problems: [object] };
   const problems: string[] = [];
 
   for (const key of Object.keys(object)) {
-    if (!ALLOWED_KEYS.has(key)) problems.push(`unknown key ${quoted(key)}`);
+    if (!ALLOWED_KEYS.has(key)) problems.push(`unknown key ${quoteReportText(key)}`);
   }
   for (const key of REQUIRED_KEYS) {
     if (!Object.hasOwn(object, key)) problems.push(`missing ${JSON.stringify(key)}`);
@@ -146,16 +143,16 @@ function readFindingLine(
   const severityOk =
     typeof severity === "string" && (SEVERITIES as readonly string[]).includes(severity);
   if (Object.hasOwn(object, "severity") && !severityOk) {
-    problems.push(`severity ${quoted(severity)} is not Critical, Warning or Minor`);
+    problems.push(`severity ${quoteReportText(severity)} is not Critical, Warning or Minor`);
   }
 
   const id = object["id"];
   if (Object.hasOwn(object, "id")) {
     const match = typeof id === "string" ? FINDING_ID_PATTERN.exec(id) : null;
     if (match === null) {
-      problems.push(`id ${quoted(id)} is not C-<n>, W-<n> or M-<n>`);
+      problems.push(`id ${quoteReportText(id)} is not C-<n>, W-<n> or M-<n>`);
     } else if (severityOk && match[1] !== severity.charAt(0)) {
-      problems.push(`id ${quoted(id)} does not match severity ${severity}`);
+      problems.push(`id ${quoteReportText(id)} does not match severity ${severity}`);
     }
   }
 
@@ -175,9 +172,9 @@ function readFindingLine(
   }
 
   const idText = typeof id === "string" ? id : null;
-  if (problems.length > 0) return { finding: null, id: idText, problems };
+  if (problems.length > 0) return { item: null, key: idText, problems };
   return {
-    finding: {
+    item: {
       id: id as string,
       severity: severity as FindingSeverity,
       locator: object["locator"] as string,
@@ -186,9 +183,71 @@ function readFindingLine(
       security: object["security"] === true,
       line,
     },
-    id: idText,
+    key: idText,
     problems: [],
   };
+}
+
+/** What one inner line's reader returns: its item when clean, its key for the
+ *  uniqueness check whenever the key is a string, and every problem it carries. */
+interface LineRead<T> {
+  readonly item: T | null;
+  readonly key: string | null;
+  readonly problems: readonly string[];
+}
+
+/**
+ * The walk both blocks share: locate the one `fence` block, read every
+ * non-blank inner line, and refuse the whole block when any line has a
+ * problem. `keyName` names the field whose repeat is a problem.
+ */
+function parseBlock<T>(
+  text: string,
+  fence: string,
+  keyName: string,
+  readLine: (raw: string, line: number) => LineRead<T>,
+): BlockParse<T> {
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
+  const located = locateBlock(lines, fence);
+  if ("message" in located) return { ok: false, problems: [located] };
+
+  const items: T[] = [];
+  const problems: BlockProblem[] = [];
+  const firstLineOfKey = new Map<string, number>();
+  for (let index = located.open + 1; index < located.close; index += 1) {
+    const raw = lines[index] ?? "";
+    if (raw.trim() === "") continue;
+    const line = index + 1;
+    const read = readLine(raw, line);
+    for (const message of read.problems) problems.push({ line, message });
+    // Uniqueness is checked on every string key, not only on clean lines, so a
+    // repeat is named in the same pass as the other problems of its line.
+    if (read.key !== null) {
+      const earlier = firstLineOfKey.get(read.key);
+      if (earlier !== undefined) {
+        problems.push({ line, message: `${keyName} ${quoteReportText(read.key)} repeats line ${earlier}` });
+        continue;
+      }
+      firstLineOfKey.set(read.key, line);
+    }
+    if (read.item !== null) items.push(read.item);
+  }
+  return problems.length > 0 ? { ok: false, problems } : { ok: true, items };
+}
+
+/** One inner line as a JSON object, or the one problem that stops its reading. */
+function readObject(raw: string): Record<string, unknown> | string {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch (cause) {
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    return `not JSON (${reason})`;
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return "not a JSON object";
+  }
+  return value as Record<string, unknown>;
 }
 
 /**
@@ -199,30 +258,80 @@ function readFindingLine(
  * second block and an unclosed block are refusals of the whole text.
  */
 export function parseFindingsBlock(text: string): BlockParse<Finding> {
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
-  const located = locateBlock(lines);
-  if ("message" in located) return { ok: false, problems: [located] };
+  return parseBlock(text, FINDINGS_FENCE, "id", readFindingLine);
+}
 
-  const items: Finding[] = [];
-  const problems: BlockProblem[] = [];
-  const firstLineOfId = new Map<string, number>();
-  for (let index = located.open + 1; index < located.close; index += 1) {
-    const raw = lines[index] ?? "";
-    if (raw.trim() === "") continue;
-    const line = index + 1;
-    const read = readFindingLine(raw, line);
-    for (const message of read.problems) problems.push({ line, message });
-    // Uniqueness is checked on every string id, not only on clean lines, so a
-    // repeat is named in the same pass as the other problems of its line.
-    if (read.id !== null) {
-      const earlier = firstLineOfId.get(read.id);
-      if (earlier !== undefined) {
-        problems.push({ line, message: `id ${quoted(read.id)} repeats line ${earlier}` });
-        continue;
-      }
-      firstLineOfId.set(read.id, line);
-    }
-    if (read.finding !== null) items.push(read.finding);
+/** What a re-review says about one prior finding (C9). */
+export type ClosureStatus =
+  | "fixed"
+  | "not-fixed"
+  | "regressed"
+  | "rejection-upheld"
+  | "rejection-overturned";
+
+export interface Closure {
+  /** The ledger id the re-review was handed, `<run>/<phase>/<n>`. */
+  readonly ledgerId: string;
+  readonly status: ClosureStatus;
+  /** The 1-based physical line of the text the object sits on. */
+  readonly line: number;
+}
+
+const CLOSURE_STATUSES: readonly ClosureStatus[] = [
+  "fixed",
+  "not-fixed",
+  "regressed",
+  "rejection-upheld",
+  "rejection-overturned",
+];
+const CLOSURE_KEYS = ["ledger_id", "status"] as const;
+const CLOSURE_KEY_SET: ReadonlySet<string> = new Set<string>(CLOSURE_KEYS);
+
+function readClosureLine(raw: string, line: number): LineRead<Closure> {
+  const object = readObject(raw);
+  if (typeof object === "string") return { item: null, key: null, problems: [object] };
+  const problems: string[] = [];
+
+  for (const key of Object.keys(object)) {
+    if (!CLOSURE_KEY_SET.has(key)) problems.push(`unknown key ${quoteReportText(key)}`);
   }
-  return problems.length > 0 ? { ok: false, problems } : { ok: true, items };
+  for (const key of CLOSURE_KEYS) {
+    if (!Object.hasOwn(object, key)) problems.push(`missing ${JSON.stringify(key)}`);
+  }
+
+  const status = object["status"];
+  if (
+    Object.hasOwn(object, "status") &&
+    !(typeof status === "string" && (CLOSURE_STATUSES as readonly string[]).includes(status))
+  ) {
+    problems.push(
+      `status ${quoteReportText(status)} is not fixed, not-fixed, regressed, rejection-upheld or rejection-overturned`,
+    );
+  }
+
+  const ledgerId = object["ledger_id"];
+  if (Object.hasOwn(object, "ledger_id")) {
+    if (typeof ledgerId !== "string") problems.push("ledger_id is not a string");
+    else if (ledgerId.trim() === "") problems.push("ledger_id is empty");
+    else if (/[\r\n]/.test(ledgerId)) problems.push("ledger_id spans more than one line");
+  }
+
+  const key = typeof ledgerId === "string" ? ledgerId : null;
+  if (problems.length > 0) return { item: null, key, problems };
+  return {
+    item: { ledgerId: ledgerId as string, status: status as ClosureStatus, line },
+    key,
+    problems: [],
+  };
+}
+
+/**
+ * Parse the one `stamity-closures` block of a re-review.
+ *
+ * Each object carries exactly `ledger_id` and `status`; a ledger id closed twice
+ * is a problem, because two answers about one row cannot both be applied. An
+ * empty block is `ok` with zero items.
+ */
+export function parseClosuresBlock(text: string): BlockParse<Closure> {
+  return parseBlock(text, CLOSURES_FENCE, "ledger_id", readClosureLine);
 }

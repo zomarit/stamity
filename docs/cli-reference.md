@@ -30,7 +30,7 @@ mistake.
 | `stamity clean` | yes | writes | remove every generated file and the .stamity/ state directory |
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates (plumbing) |
 | `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
-| `stamity ledger` | plumbing | writes | append findings to a run's ledger through one serialized writer (plumbing) |
+| `stamity ledger` | plumbing | writes | append findings to a run's ledger and close its rows, through one serialized writer (plumbing) |
 
 ## What every command shares
 
@@ -289,7 +289,7 @@ the framed body all still print, and the run names the transition it withheld �
 
 ## `stamity ledger`
 
-append findings to a run's ledger through one serialized writer (plumbing)
+append findings to a run's ledger and close its rows, through one serialized writer (plumbing)
 
 Plumbing. This verb is not listed in `stamity --help` because its caller is generated
 agent content rather than a person. Hidden is not secret — `stamity ledger --help` prints
@@ -300,7 +300,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
-| `<subcommand>` | which ledger action to run — one of `append` |
+| `<subcommand>` | which ledger action to run — one of `append`, `close` |
 
 | Flag | What it does | Default |
 |---|---|---|
@@ -309,5 +309,9 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--source <role>` | the role whose findings these are, a lowercase slug (reviewer) | — |
 | `--report <path>` | a report inside the run's reports/ folder | — |
 | `--stdin` | read the findings block from stdin | — |
+| `--ids <ledger-ids>` | the comma-separated ledger ids handed to this re-review | — |
+| `--id <ledger-id>` | the one row a manual close moves | — |
+| `--state <state>` | the state a manual close sets — one of `fixed`, `rejected`, `deferred` | — |
+| `--rationale <text>` | why a manual close moves the row, recorded on it | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.
