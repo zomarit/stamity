@@ -186,6 +186,9 @@ const heredocTarget = (p) => {
     : /\/briefs?\/|brief[-\w]*\.md|\/lanes\//.test(p) ? 'brief' : /memory\//.test(p) ? 'memory' : null
 }
 
+/** `bashClass` classes with a read or search head verb: a `"phase"` beside the ledger there is a read, not a write. */
+const READS_OR_SEARCHES = new Set(['read', 'search', 'rs', 'mixed'])
+
 /** The changed shape's one ledger writer, in the three spellings an orchestrator types. */
 const LEDGER_VERB = /(?:^|[\s;&(])(?:npx\s+(?:--yes\s+)?)?(?:@zomarit\/stamity|stamity|st)\s+ledger\s+(?:append|close|status)\b/
 
@@ -206,8 +209,8 @@ export const LEDGER_GATED_KINDS = new Set(['heredoc', 'echo', 'writeEdit', 'verb
  *   heredoc    a heredoc whose cat/tee target is `*ledger.jsonl`, or whose unredirected body
  *              appends ledger rows (a `phase` key and a phase-local id, the research walk's rule):
  *              the gated bodies' characters
- *   echo       a heredoc-free command redirecting into `ledger.jsonl`, or typing a `"phase"` row
- *              beside it: the command's characters
+ *   echo       a heredoc-free command redirecting (`>>`) into `ledger.jsonl`, or typing a `"phase"`
+ *              row beside it with no read or search head verb: the command's characters
  *   writeEdit  a Write, Edit or MultiEdit whose path ends `ledger.jsonl`: the written text
  *
  * Kinds §8 is silent on, returned so the measurement can report them beside the gated figure:
@@ -246,7 +249,12 @@ export function ledgerWrite(toolUse) {
     if (kind) chars.set(kind, (chars.get(kind) || 0) + body.length)
   }
   for (const kind of ['heredoc', 'helperHeredoc', 'codeHeredoc']) if (chars.has(kind)) return { kind, chars: chars.get(kind) }
-  if (docs.length === 0 && /ledger\.jsonl/.test(cmd) && (/>>\s*\S*ledger\.jsonl/.test(cmd) || /"phase"/.test(cmd))) return { kind: 'echo', chars: cmd.length }
+  if (docs.length === 0 && /ledger\.jsonl/.test(cmd)) {
+    // A redirect into the ledger is a write whatever the head verb; a `"phase"` row typed beside
+    // the file name is one only when no head verb reads or searches (a grep of the ledger is not).
+    if (/>>\s*\S*ledger\.jsonl/.test(cmd)) return { kind: 'echo', chars: cmd.length }
+    if (/"phase"/.test(cmd) && !READS_OR_SEARCHES.has(bashClass(cmd).cls)) return { kind: 'echo', chars: cmd.length }
+  }
   return null
 }
 

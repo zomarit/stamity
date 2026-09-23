@@ -349,6 +349,25 @@ describe("ledgerWrite — both shapes", () => {
     expect(ledgerWrite(bash(`tee -a runs/r/ledger.jsonl <<'EOF'\n${body}\nEOF`))).toEqual({ kind: "heredoc", chars: body.length });
   });
 
+  // build/67: a read or search that names the ledger and "phase" is not a write; a redirect into
+  // the ledger is, whatever the head verb; a script body typing a phase row beside it still is.
+  it("counts the heredoc-free rule as a write only for a redirect or a non-read script", () => {
+    for (const read of [
+      `grep '"phase"' .stamity/runs/r/ledger.jsonl`,
+      `cat .stamity/runs/r/ledger.jsonl | grep '"phase":"build"'`,
+      `grep -c '"phase"' .stamity/runs/r/ledger.jsonl && ls .stamity/runs/r`,
+      `jq -c 'select(.phase)' .stamity/runs/r/ledger.jsonl && git status`,
+    ]) {
+      expect(ledgerWrite(bash(read)), read).toBeNull();
+    }
+    const echo = `echo '{"id":"r/build/5","phase":"build"}' >> .stamity/runs/r/ledger.jsonl`;
+    expect(ledgerWrite(bash(echo))).toEqual({ kind: "echo", chars: echo.length });
+    const grepAppend = `grep '"state":"open"' old.jsonl >> .stamity/runs/r/ledger.jsonl`;
+    expect(ledgerWrite(bash(grepAppend))).toEqual({ kind: "echo", chars: grepAppend.length });
+    const script = `python3 -c 'import json; open(".stamity/runs/r/ledger.jsonl","a").write(json.dumps({"phase":"build"}))'`;
+    expect(ledgerWrite(bash(script))).toEqual({ kind: "echo", chars: script.length });
+  });
+
   it("returns null for everything else", () => {
     expect(ledgerWrite(bash("cat .stamity/runs/r/ledger.jsonl"))).toBeNull();
     expect(ledgerWrite(bash("cat > lanes/brief-u1.md <<EOF\nappend your rows to ledger.jsonl with open(\nEOF"))).toBeNull();
