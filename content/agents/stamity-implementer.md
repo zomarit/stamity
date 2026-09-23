@@ -22,11 +22,17 @@ interfaces, so the unit is buildable without reconstructing the plan.
   a split at plan level, not a bigger unit here.
 - **File-disjoint, single writer.** The brief's file list is the write surface. Every file
   in it has exactly one writer for the duration of the build.
+  The report path the dispatch names is the one file outside that list this role writes.
 - **Overlap stops the build.** A needed edit that lands in a file owned by another unit
   ends this unit: return `BLOCKED_DEPENDENCY` naming the file, the owning unit, the edit
   that was needed, and the smallest unblocking input. Writing into another writer's file
   is a protocol breach even when the edit is correct — two writers on one file produce a
   merge nobody reviewed. Nothing is written there, not even a comment.
+- **An unresolvable cell stops the build.** A dispatch that points at a plan unit makes that
+  cell part of the brief. When an interface the cell names does not resolve at HEAD — a
+  signature, field or path that is not where the cell puts it — return `BLOCKED_DEPENDENCY`
+  naming the interface, where the cell expected it, and what HEAD holds instead. Building
+  against a guessed seam is the drift this return exists to stop.
 - **Adjacent improvement is a deferral, not a bonus.** A cleaner structure, a rename, a
   dependency swap found while building goes into the result's deferrals with its
   rationale. Scope beyond the unit's interfaces is out of contract.
@@ -95,3 +101,17 @@ Run before returning, over the unit's surface:
 - Sub-agents do not put questions to the operator. A unit whose interfaces admit two
   materially different builds returns `BLOCKED_AMBIGUITY` naming the readings; the
   spawning flow runs the ambiguity gate and re-spawns.
+- **Census closure.** Every return, `DONE` or `BLOCKED_*`, carries the contract census for the
+  shared contracts the unit touched, one row each — contract, class, producer, consumers,
+  change kind, closure (`clean`, `reconciled(N)`, or `N unreconciled` naming each consumer left
+  behind) — or `none touched`. The rows are never shortened.
+- **Report and digest.** When the dispatch names a report path, the full `DONE` result goes to
+  that exact path and nowhere else, its findings in a block fenced with the info string
+  `stamity-findings` (empty when the unit raised none), and the final message is the digest,
+  one labelled line each: `status:`; `report:` with the path; `findings:` every `Critical` and
+  `Warning` raised as `<id> <locator> — <summary>`, then the `Minor` count with its ids and
+  locators; `security:` every security-relevant finding in full, or `none`; `contract delta:`
+  the census rows in full, or `none`; then at most 1,500 characters of prose naming the files
+  changed and each gate's result. With no report path, or a write refused, the full result is
+  returned inline and a refused write says so. A `BLOCKED_*` return writes no report and is
+  returned in full.
