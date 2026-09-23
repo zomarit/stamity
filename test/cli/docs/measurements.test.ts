@@ -32,6 +32,7 @@ import {
   RUN_OF_RECORD_PATH,
   SNAPSHOT_DIR,
   SNAPSHOT_REFRESH_COMMAND,
+  carriedToRelease,
   computeMergeReadyRate,
   readMeasurementSnapshot,
   readReachSnapshot,
@@ -522,6 +523,35 @@ describe("the run of record is carried to the release the tree ships as", () => 
     const named = /no case input moved since its\ncandidate `([0-9a-f]{7,40})`\)/.exec(page)?.[1];
     expect(named, "the page names no candidate the run is carried from").toBeDefined();
     expect(candidate?.startsWith(named ?? "\u0000"), `${named} is not ${candidate}`).toBe(true);
+  });
+
+  // The hazard the case above cannot see: the next release that RUNS the set moves the run's
+  // release to the shipped version, and the case above then demands the carried-to release be
+  // that same version — "the X release run, carried to X", every other case green. The run's own
+  // release is read off the rendered page rather than compared as two module constants, because
+  // TypeScript narrows each literal `const` to its own type and an equality between two different
+  // literals is a compile error, not a check.
+  it("never carries the run to the release it measured", () => {
+    const page = renderMeasurements();
+    const clause = /the (\d+\.\d+\.\d+) release run,\ncarried to (\d+\.\d+\.\d+) under/.exec(page);
+    expect(clause, "the page states no release run beside the carried-to release").not.toBeNull();
+    const [, runRelease, carried] = clause ?? [];
+    expect(
+      carried,
+      `the run is carried to ${carried}, the release it measured: delete the carried clause and this describe`,
+    ).not.toBe(runRelease);
+  });
+
+  it("refuses to render a carried-to release equal to the run's own, naming what to delete", () => {
+    // Non-degenerate on both sides: two distinct releases pass through untouched, and the equal
+    // pair is refused with the instruction rather than rendered.
+    expect(carriedToRelease("1.9.0", "1.9.1")).toBe("1.9.1");
+    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(EngineError);
+    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/is the 1\.9\.2 release run/);
+    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/delete the carried clause/);
+    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/carriedToRelease from src\/cli\/docs\/measurements\.ts/);
+    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/RUN_OF_RECORD_CARRIED_TO and\s+RUN_OF_RECORD_CANDIDATE/);
+    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/test\/cli\/docs\/measurements\.test\.ts/);
   });
 });
 
