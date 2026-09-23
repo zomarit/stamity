@@ -57,11 +57,40 @@ const BASE_FILES = [
 let root: string;
 let cleanGlobal: string;
 
+/**
+ * The inherited variables that point git at another repository, index or object store, or inject
+ * config ahead of the `-c` flags — the set `scripts/replay/fixture.mjs` strips. A run from a git
+ * hook carries several, and any one of them would aim these calls at the caller's checkout.
+ */
+const REDIRECTING_GIT_ENV = new Set([
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_COMMON_DIR",
+  "GIT_NAMESPACE",
+  "GIT_PREFIX",
+  "GIT_CONFIG",
+  "GIT_CONFIG_PARAMETERS",
+  "GIT_CONFIG_COUNT",
+  "GIT_TEMPLATE_DIR",
+  "GIT_ATTR_SOURCE",
+]);
+
+function gitEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (REDIRECTING_GIT_ENV.has(key) || /^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(key)) delete env[key];
+  }
+  return { ...env, GIT_CONFIG_GLOBAL: cleanGlobal, GIT_CONFIG_NOSYSTEM: "1" };
+}
+
 function git(cwd: string, args: string[]): string {
   return execFileSync("git", ["-c", "init.defaultBranch=main", "-c", "core.autocrlf=false", ...args], {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, GIT_CONFIG_GLOBAL: cleanGlobal, GIT_CONFIG_NOSYSTEM: "1" },
+    env: gitEnv(),
     stdio: ["ignore", "pipe", "pipe"],
   });
 }

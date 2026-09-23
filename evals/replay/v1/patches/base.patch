@@ -367,10 +367,10 @@ index 0000000..10c8084
 +}
 diff --git a/src/http/router.ts b/src/http/router.ts
 new file mode 100644
-index 0000000..8d40ec2
+index 0000000..cf69dd7
 --- /dev/null
 +++ b/src/http/router.ts
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,96 @@
 +import type { IncomingHttpHeaders } from "node:http";
 +import type { AppDeps } from "./app.ts";
 +
@@ -411,6 +411,16 @@ index 0000000..8d40ec2
 +  return path.split("/").filter((segment) => segment !== "");
 +}
 +
++/** `part` percent-decoded, or null when its encoding is malformed (such a path matches no route). */
++function decode(part: string): string | null {
++  try {
++    return decodeURIComponent(part);
++  } catch (error) {
++    if (error instanceof URIError) return null;
++    throw error;
++  }
++}
++
 +/** A method-and-path route table with `:name` parameters. */
 +export class Router {
 +  private readonly routes: Route[] = [];
@@ -442,7 +452,9 @@ index 0000000..8d40ec2
 +      const matched = route.segments.every((segment, index) => {
 +        const part = parts[index] as string;
 +        if (segment.startsWith(":")) {
-+          params[segment.slice(1)] = decodeURIComponent(part);
++          const value = decode(part);
++          if (value === null) return false;
++          params[segment.slice(1)] = value;
 +          paramCount += 1;
 +          return true;
 +        }
@@ -776,10 +788,10 @@ index 0000000..bd8d3fd
 +});
 diff --git a/test/handlers.test.ts b/test/handlers.test.ts
 new file mode 100644
-index 0000000..1268a7c
+index 0000000..fa2d0ff
 --- /dev/null
 +++ b/test/handlers.test.ts
-@@ -0,0 +1,90 @@
+@@ -0,0 +1,96 @@
 +import { afterEach, beforeEach, describe, expect, it } from "vitest";
 +import { insertOrder } from "../src/store/db.ts";
 +import { get, startApp, type Started } from "./helpers.ts";
@@ -862,6 +874,12 @@ index 0000000..1268a7c
 +    expect(await res.json()).toEqual({ error: "not found" });
 +  });
 +
++  it("answers 404 for a path with a malformed percent-encoding", async () => {
++    const res = await get(app, "/orders/%E0");
++    expect(res.status).toBe(404);
++    expect(await res.json()).toEqual({ error: "not found" });
++  });
++
 +  it("answers 500 with a fixed body when a handler throws", async () => {
 +    // A closed database throws on every query, so the handler fails the way a lost store would.
 +    app.db.close();
@@ -872,10 +890,10 @@ index 0000000..1268a7c
 +});
 diff --git a/test/helpers.ts b/test/helpers.ts
 new file mode 100644
-index 0000000..a69b113
+index 0000000..e34ca6d
 --- /dev/null
 +++ b/test/helpers.ts
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,62 @@
 +import { mkdtempSync, rmSync } from "node:fs";
 +import { createServer } from "node:http";
 +import type { AddressInfo } from "node:net";
@@ -883,7 +901,6 @@ index 0000000..a69b113
 +import { join } from "node:path";
 +import type { DatabaseSync } from "node:sqlite";
 +import { loadConfig } from "../src/config/load.ts";
-+import { createAuditBus } from "../src/events/audit.ts";
 +import { createApp, type AppDeps } from "../src/http/app.ts";
 +import { openDb } from "../src/store/db.ts";
 +
@@ -895,7 +912,7 @@ index 0000000..a69b113
 +  close(): Promise<void>;
 +  db: DatabaseSync;
 +  bus: AppDeps["bus"];
-+  /** The audit lines the bus has recorded. */
++  /** The serialized events the default bus has received, as published. */
 +  lines: string[];
 +}
 +
@@ -907,7 +924,11 @@ index 0000000..a69b113
 +    db: openDb(),
 +    tokens: new Set([TOKEN]),
 +    config: loadConfig(),
-+    bus: createAuditBus(lines),
++    bus: {
++      publish(raw) {
++        lines.push(raw);
++      },
++    },
 +    invoiceDir,
 +    ...deps,
 +  };
