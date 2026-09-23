@@ -269,6 +269,13 @@ describe("the path-scoped report write in the Claude dialect", () => {
     );
   });
 
+  it("keeps an empty grant empty — never a lone Write", () => {
+    expect(toClaudeToolsFrontmatter([], { pathScopedWrite: true })).toBe("");
+    expect(toClaudeToolsFrontmatter([], { pathScopedWrite: true })).toBe(
+      toClaudeToolsFrontmatter([]),
+    );
+  });
+
   it("adds no duplicate when edit is already granted", () => {
     expect(toClaudeToolsFrontmatter(["read", "edit"], { pathScopedWrite: true })).toBe(
       toClaudeToolsFrontmatter(["read", "edit"]),
@@ -305,7 +312,15 @@ describe("the verdict-role report write in the coverage rows", () => {
     expect(claude?.mechanism).toContain("the four verdict roles also carry `Write`");
     expect(claude?.mechanism).toContain("`writePaths`");
     expect(claude?.mechanism).toContain("never `Edit` or `NotebookEdit`");
-    expect(claude?.mechanism).not.toContain("return their full report inline");
+    // The Write holds in the repository layout only; a plugin install renders
+    // none, and the row says so rather than disclosing a grant that is absent.
+    expect(claude?.mechanism).toContain("`Write` in the repository layout");
+    expect(claude?.mechanism).toContain(
+      "a plugin install (a plugin hook root or plugin-owned hooks) renders no `Write`, and those roles return their full report inline there",
+    );
+    expect(claude?.mechanism).not.toContain("stay read-only here");
+    // The mechanism cell lands in a Markdown table.
+    expect(claude?.mechanism).not.toContain("|");
 
     for (const row of ADAPTER_ALLOWLIST_COVERAGE.filter((r) => r.tool !== "claude")) {
       expect(row.mechanism, row.tool).toContain(

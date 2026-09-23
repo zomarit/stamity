@@ -196,16 +196,22 @@ function renderToolNames(
  * every edit-category call by that agent except a `Write` of a regular file
  * matching the row's patterns. The name lands in the canonical `edit` slot,
  * right after the last `read` name, so the list keeps the table's order; a
- * grant that already renders it gains nothing. Without the option the output
- * is exactly the one-argument form, which the guard's name-to-category map
- * (`../hooks/scripts.ts`) keeps calling.
+ * grant that already renders it gains nothing. An empty grant stays empty
+ * with the option on — the fail-closed value above, never a lone `Write` —
+ * because the write rides a role's grant and does not stand in for one.
+ * Without the option the output is exactly the one-argument form, which the
+ * guard's name-to-category map (`../hooks/scripts.ts`) keeps calling.
  */
 export function toClaudeToolsFrontmatter(
   categories: readonly ToolCategory[],
   options?: { readonly pathScopedWrite?: boolean },
 ): string {
   const names = renderToolNames(categories, CLAUDE_TOOL_NAMES);
-  if (options?.pathScopedWrite === true && !names.includes(CLAUDE_REPORT_WRITE_TOOL)) {
+  if (
+    options?.pathScopedWrite === true &&
+    names.length > 0 &&
+    !names.includes(CLAUDE_REPORT_WRITE_TOOL)
+  ) {
     const readNames = new Set(CLAUDE_TOOL_NAMES.read ?? []);
     const slot = names.findLastIndex((name) => readNames.has(name)) + 1;
     names.splice(slot, 0, CLAUDE_REPORT_WRITE_TOOL);
@@ -298,7 +304,7 @@ export const ADAPTER_ALLOWLIST_COVERAGE: readonly AdapterAllowlistCoverage[] = [
     // code.claude.com/docs/en/sub-agents (accessed 2026-08-13)
     tool: "claude",
     mechanism:
-      "`tools:` sub-agent frontmatter allowlist (comma-separated names); an omitted field inherits every tool, and a list resolving to nothing refuses the spawn; the four verdict roles also carry `Write`, which the generated pre-tool-use guard admits only for a regular file matching the row's `writePaths` under the repository root — never `Edit` or `NotebookEdit`",
+      "`tools:` sub-agent frontmatter allowlist (comma-separated names); an omitted field inherits every tool, and a list resolving to nothing refuses the spawn; the four verdict roles also carry `Write` in the repository layout, which the generated pre-tool-use guard admits only for a regular file matching the row's `writePaths` under the repository root — never `Edit` or `NotebookEdit`; a plugin install (a plugin hook root or plugin-owned hooks) renders no `Write`, and those roles return their full report inline there",
     strength: "hard",
   },
   {

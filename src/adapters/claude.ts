@@ -551,8 +551,10 @@ export const claudeResiduePlanner: ResiduePlanner = {
     // generated guard can scope it: the repository layout, where the guard's
     // own location names the root. A plugin hook root (the container layout)
     // anchors no project root, so that guard refuses every report write, and an
-    // agent carrying the tool there would only waste attempts. The same
-    // predicate picks the settings `hooks` object and the review gate's layout.
+    // agent carrying the tool there would only waste attempts. Each half is
+    // shared with one sibling: the settings `hooks` object keys on the
+    // plugin-owned half alone, and the review gate's layout on the
+    // `hookScriptsRoot` half alone.
     const scopedWrite =
       ctx.facts.hookScriptsRoot === undefined && !isPluginOwned(ctx.manifest, TOOL, "hooks");
     for (const item of items) {
