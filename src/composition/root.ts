@@ -87,6 +87,7 @@ import * as runsLayout from "../runs/layout.ts";
 import * as runsCardSource from "../runs/cardSource.ts";
 import * as runsBlocks from "../runs/blocks.ts";
 import * as runsLedgerStore from "../runs/ledgerStore.ts";
+import * as runsResumeCard from "../runs/resumeCard.ts";
 import * as hooksModel from "../hooks/model.ts";
 import * as portableRunner from "../hooks/portableRunner.ts";
 import * as userHooks from "../hooks/userHooks.ts";
@@ -228,13 +229,15 @@ export interface EngineRegistry {
   /**
    * A work run's on-disk shape (the run folder, its record head, its ledger and
    * reports, the resume card's bounds), the resume card's embeddable body, the
-   * findings-block reader and the ledger's one serialized writer.
+   * findings-block reader, the ledger's one serialized writer, and the engine's
+   * own reader of the resume card, the hook body's twin.
    */
   readonly runs: {
     readonly layout: typeof runsLayout;
     readonly cardSource: typeof runsCardSource;
     readonly blocks: typeof runsBlocks;
     readonly ledgerStore: typeof runsLedgerStore;
+    readonly resumeCard: typeof runsResumeCard;
   };
   readonly hooks: {
     readonly model: typeof hooksModel;
@@ -394,6 +397,7 @@ export function createEngine(): EngineRegistry {
       cardSource: runsCardSource,
       blocks: runsBlocks,
       ledgerStore: runsLedgerStore,
+      resumeCard: runsResumeCard,
     },
     hooks: { model: hooksModel, portableRunner, userHooks, scripts: hookScripts },
     tools: { categories: toolCategories, allowlist, translator },

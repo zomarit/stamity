@@ -4,17 +4,20 @@ import { Argument, Option, type Command } from "commander";
 import { STATE_DIR } from "../../types/markers.ts";
 import type { BlockProblem } from "../../runs/blocks.ts";
 import type { AppendResult, CloseChange, CloseResult } from "../../runs/ledgerStore.ts";
+import type { ResumeCard } from "../../runs/resumeCard.ts";
 import { CliFailure, renderFailureHuman, type FailureDoc } from "../kit/output.ts";
 import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
 
 /**
- * `stamity ledger append` and `stamity ledger close` — the one serialized
- * writer of a work run's findings ledger, and the CLI's third hidden plumbing
- * verb. `append` files a report's findings as `open` rows; `close` moves rows on
- * a re-review's closures block (`--report` with the `--ids` it was handed) or
- * by one manual transition (`--id`, `--state`, `--rationale`). Hidden for the reason
+ * `stamity ledger append`, `stamity ledger close` and `stamity ledger status` —
+ * the one serialized writer of a work run's findings ledger, its reader, and the
+ * CLI's third hidden plumbing verb. `append` files a report's findings as `open`
+ * rows; `close` moves rows on a re-review's closures block (`--report` with the
+ * `--ids` it was handed) or by one manual transition (`--id`, `--state`,
+ * `--rationale`); `status` prints the run's resume card, the same lines the
+ * session-start hook prints after a compaction, and writes nothing. Hidden for the reason
  * `learn` and `handoff` are: its caller is the orchestrating session running
  * `/st-work`, not a person.
  *
@@ -22,20 +25,22 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * blocks' grammar lives in `../../runs/blocks.ts`; the run folder, the report path rules, the
  * row numbering, the closure rules, the lock and the write live in
  * `../../runs/ledgerStore.ts`; the
- * run id's grammar lives in `../../runs/layout.ts`. Every verdict printed here is
- * one of theirs. What this file owns is which flags spell an append or a close,
- * where the block's text comes from, and how a refusal reads on a terminal. A
- * flag only the other subcommand reads is a usage error, never ignored.
+ * run id's grammar lives in `../../runs/layout.ts`; the resume card lives in
+ * `../../runs/resumeCard.ts`. Every verdict printed here is
+ * one of theirs. What this file owns is which flags spell an append, a close or
+ * a status, where the block's text comes from, and how a refusal reads on a
+ * terminal. A flag only another subcommand reads is a usage error, never ignored.
  *
  * **Stdout carries rows only**: for an append, one `<ledger-id> <severity>
  * <report-local id>` line each, with a trailing ` decision-needed` on a row the
  * orchestrator must sign off before a fixer acts on it, so the caller reads the
  * ids it dispatches by straight off the pipe; for a close, one
  * `<id> <from> -> <to>` line per row (with its closure status in parentheses),
- * or `<id> unchanged (already recorded)`. Everything else — the nothing-to-do
+ * or `<id> unchanged (already recorded)`; for a status, the card's lines, or the
+ * one no-run sentence. Everything else — the nothing-to-do
  * note, the warnings about a line that is not a row or about locking being off
  * — goes to stderr. The dry-run line is the one exception, and it ends the
- * output.
+ * output; a status writes nothing, so its dry run prints no such line.
  *
  * **Why the subcommand is positional.** The funnel (`../kit/program.ts`) owns the
  * exit-code contract, the single JSON document and the failure rendering through
@@ -46,6 +51,7 @@ import { sanitizeLabel } from "../kit/prompts.ts";
 
 const APPEND = "append";
 const CLOSE = "close";
+const STATUS = "status";
 const MANUAL_STATES = ["fixed", "rejected", "deferred"] as const;
 
 /** Where the block came from when it was piped rather than named. */
@@ -103,47 +109,59 @@ function missingFlag(subcommand: string, flag: string): CliFailure {
 }
 
 /**
- * The flags only the other subcommand reads, keyed by subcommand: each as its
- * commander option key and its spelling. `--run` and `--report` are shared.
+ * The flags a subcommand does not read, keyed by subcommand: each as its
+ * commander option key, its spelling, and the subcommands that do read it.
+ * `--run` is read by all three; `--report` by append and close.
  */
-const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string])[]>> = {
+const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string, readonly string[]])[]>> = {
   [APPEND]: [
-    ["ids", "--ids"],
-    ["id", "--id"],
-    ["state", "--state"],
-    ["rationale", "--rationale"],
+    ["ids", "--ids", [CLOSE]],
+    ["id", "--id", [CLOSE]],
+    ["state", "--state", [CLOSE]],
+    ["rationale", "--rationale", [CLOSE]],
   ],
   [CLOSE]: [
-    ["phase", "--phase"],
-    ["source", "--source"],
-    ["stdin", "--stdin"],
+    ["phase", "--phase", [APPEND]],
+    ["source", "--source", [APPEND]],
+    ["stdin", "--stdin", [APPEND]],
+  ],
+  [STATUS]: [
+    ["phase", "--phase", [APPEND]],
+    ["source", "--source", [APPEND]],
+    ["stdin", "--stdin", [APPEND]],
+    ["report", "--report", [APPEND, CLOSE]],
+    ["ids", "--ids", [CLOSE]],
+    ["id", "--id", [CLOSE]],
+    ["state", "--state", [CLOSE]],
+    ["rationale", "--rationale", [CLOSE]],
   ],
 };
 
-/** Refuse a flag of the other subcommand rather than silently ignore it. A
+/** Refuse a flag of another subcommand rather than silently ignore it. A
  *  usage error, checked before anything else is read. */
 function refuseForeignFlags(subcommand: string, opts: Record<string, unknown>): void {
-  const other = subcommand === CLOSE ? APPEND : CLOSE;
-  for (const [key, flag] of FOREIGN_FLAGS[subcommand] ?? []) {
+  for (const [key, flag, owners] of FOREIGN_FLAGS[subcommand] ?? []) {
     if (opts[key] === undefined) continue;
+    const named = owners.map((owner) => `ledger ${owner}`);
     throw new CliFailure({
       code: "USAGE",
-      message: `ledger ${subcommand} takes no ${flag}; it is a flag of ledger ${other}`,
-      why: "each ledger subcommand reads only its own flags, so a flag of the other is refused rather than silently ignored",
-      next: `drop ${flag}, or run ledger ${other}`,
+      message: `ledger ${subcommand} takes no ${flag}; it is a flag of ${named.join(" and ")}`,
+      why: "each ledger subcommand reads only its own flags, so a flag of another is refused rather than silently ignored",
+      next: `drop ${flag}, or run ${named.join(" or ")}`,
     });
   }
 }
 
 /** The one precondition: `.stamity/` exists, so a ledger row is never written
- *  into a state directory minted in whatever folder the caller happened to be. */
-async function requireStateDir(rootDir: string): Promise<void> {
+ *  into a state directory minted in whatever folder the caller happened to be,
+ *  and a status never reports on a folder that is not a repository's state. */
+async function requireStateDir(rootDir: string, purpose = "to write a ledger row into"): Promise<void> {
   try {
     await stat(join(rootDir, STATE_DIR));
   } catch (cause) {
     throw new CliFailure({
       code: "VALIDATION_ERROR",
-      message: `this repo is not initialised — there is no ${STATE_DIR}/ directory to write a ledger row into`,
+      message: `this repo is not initialised — there is no ${STATE_DIR}/ directory ${purpose}`,
       why: cause instanceof Error ? cause.message : String(cause),
       next: `run: ${packageCommand("init")}`,
     });
@@ -444,15 +462,80 @@ async function runClose(ctx: CliContext, opts: Record<string, unknown>): Promise
   };
 }
 
+/** What `status` prints when there is no card: no run in progress, or none named. */
+const NO_CARD = "stamity: no run in progress under .stamity/runs/ — no resume card.";
+
+/** The status JSON document of a card. A withheld card's lists are what
+ *  tripped the screen, so none of them is echoed; the counts still are. */
+function statusJson(card: ResumeCard): Record<string, unknown> {
+  return {
+    run: card.runId,
+    inProgress: card.inProgress,
+    card: [...card.lines],
+    counts: {
+      openRows: card.openRowIds.length,
+      unledgeredReports: card.unledgeredReports.length,
+      lanes: card.lanes.length,
+    },
+    ...(card.withheld === null
+      ? {
+          openRowIds: [...card.openRowIds],
+          unledgeredReports: [...card.unledgeredReports],
+          lanes: [...card.lanes],
+        }
+      : {}),
+    withheld: card.withheld,
+    unreadableLedgerLines: card.unreadableLedgerLines,
+  };
+}
+
+/**
+ * `ledger status`: the resume card of the run in progress, or of the run
+ * `--run` names whether or not it is in progress. The card's lines go to stdout
+ * exactly as the session-start hook prints them, so a client whose hook never
+ * prints the card (or that does not re-run it after a compaction) gets the same
+ * bytes by hand. Reads only; `--dry-run` is accepted and changes nothing.
+ */
+async function runStatus(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
+  const rootDir = ctx.app.runtime.cwd;
+  await requireStateDir(rootDir, "to read a resume card from");
+  const { layout, ledgerStore, resumeCard } = ctx.engine.runs;
+
+  let runId: string | undefined;
+  if (opts["run"] !== undefined) {
+    runId = requireRun(ctx, STATUS, opts);
+    await ledgerStore.requireRunDir(rootDir, runId);
+  }
+
+  const card = resumeCard.collectResumeCard({
+    rootDir,
+    now: ctx.app.runtime.clock.now(),
+    ...(runId === undefined ? {} : { runId }),
+  });
+  if (card === null) {
+    ctx.io.out(`${NO_CARD}\n`);
+    return { exitCode: 0, json: { run: null, inProgress: false, card: null } };
+  }
+
+  if (card.unreadableLedgerLines > 0) {
+    ctx.io.err(
+      `warning: ${layout.runRelPath(card.runId, layout.LEDGER_FILE)} has ${card.unreadableLedgerLines} line(s) that are not ledger rows\n`,
+    );
+  }
+  ctx.io.out(`${card.lines.join("\n")}\n`);
+
+  return { exitCode: 0, json: statusJson(card) };
+}
+
 export const ledgerCommand: CommandModule = {
   name: "ledger",
-  summary: "append findings to a run's ledger and close its rows, through one serialized writer (plumbing)",
+  summary: "append findings to a run's ledger, close its rows, and print its resume card (plumbing)",
   hidden: true,
   mutating: true,
 
   configure(cmd: Command): void {
     cmd
-      .addArgument(new Argument("<subcommand>", "which ledger action to run").choices([APPEND, CLOSE]))
+      .addArgument(new Argument("<subcommand>", "which ledger action to run").choices([APPEND, CLOSE, STATUS]))
       .option("--run <run-id>", "the run folder's name under .stamity/runs/")
       .option("--phase <phase>", "the phase the rows are filed under, a lowercase slug (review, build)")
       .option("--source <role>", "the role whose findings these are, a lowercase slug (reviewer)")
@@ -468,8 +551,9 @@ export const ledgerCommand: CommandModule = {
 
   async run(ctx, opts, args): Promise<CommandResult> {
     // Commander's `choices()` already refused every other subcommand at parse time.
-    const subcommand = args[0] === CLOSE ? CLOSE : APPEND;
+    const subcommand = args[0] === CLOSE || args[0] === STATUS ? args[0] : APPEND;
     refuseForeignFlags(subcommand, opts);
+    if (subcommand === STATUS) return await runStatus(ctx, opts);
     return subcommand === CLOSE ? await runClose(ctx, opts) : await runAppend(ctx, opts);
   },
 };

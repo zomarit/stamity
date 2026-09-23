@@ -318,13 +318,15 @@ function cardCommonDir(rootDir) {
 
 /**
  * Linked worktrees as "<path> [<branch>]", sorted. The main checkout is not a
- * lane, and neither is one whose gitdir names nothing on disk any more: git
- * calls that lane prunable, and it holds no work to resume.
+ * lane, and neither is one whose gitdir is empty or names nothing on disk any
+ * more: git calls that lane prunable, and it holds no work to resume. A linked
+ * worktrees folder is not listed at all.
  */
 function cardLanes(rootDir) {
   const common = cardCommonDir(rootDir);
   if (common === null) return [];
   const worktrees = join(common, "worktrees");
+  if (!cardRealDir(worktrees)) return [];
   let admins;
   try {
     admins = readdirSync(worktrees, { withFileTypes: true })
@@ -338,7 +340,7 @@ function cardLanes(rootDir) {
   for (const name of admins) {
     const admin = join(worktrees, name);
     const gitdir = cardGitText(join(admin, "gitdir"));
-    if (gitdir === null) continue;
+    if (gitdir === null || gitdir === "") continue;
     const target = isAbsolute(gitdir) ? gitdir : resolve(admin, gitdir);
     if (!cardExists(target)) continue;
     const located = target.replace(/[\\/]\.git$/, "").replaceAll("\\", "/");

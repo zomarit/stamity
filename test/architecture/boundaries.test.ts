@@ -411,6 +411,11 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/worktree/setup.ts": { unit: "wt-u1b", wave: 5 },
   "src/worktree/cleanup.ts": { unit: "wt-u1b", wave: 5 },
   "src/manifest/ledger.ts": { unit: "p1-37", wave: 5 },
+  // The engine's twin of the resume card the session-start hook prints: it
+  // reads the wave-1 run layout, the wave-1 deny scan and the wave-4 hook
+  // module's session-start screen (so a card the hook withholds is withheld
+  // here too), and is reached by the wave-14 `stamity ledger status` verb.
+  "src/runs/resumeCard.ts": { unit: "ctx-ledger-status", wave: 5 },
   // Key-level ownership of `.claude/settings.json`: pure planning plus the
   // merge writer and the reclaim reducer, over the MCP merge lane (wave 4,
   // whose read and serialise helpers it shares) and the safe-write lane (wave

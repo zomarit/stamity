@@ -30,7 +30,7 @@ mistake.
 | `stamity clean` | yes | writes | remove every generated file and the .stamity/ state directory |
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates (plumbing) |
 | `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
-| `stamity ledger` | plumbing | writes | append findings to a run's ledger and close its rows, through one serialized writer (plumbing) |
+| `stamity ledger` | plumbing | writes | append findings to a run's ledger, close its rows, and print its resume card (plumbing) |
 
 ## What every command shares
 
@@ -289,7 +289,7 @@ the framed body all still print, and the run names the transition it withheld �
 
 ## `stamity ledger`
 
-append findings to a run's ledger and close its rows, through one serialized writer (plumbing)
+append findings to a run's ledger, close its rows, and print its resume card (plumbing)
 
 Plumbing. This verb is not listed in `stamity --help` because its caller is generated
 agent content rather than a person. Hidden is not secret — `stamity ledger --help` prints
@@ -300,7 +300,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
-| `<subcommand>` | which ledger action to run — one of `append`, `close` |
+| `<subcommand>` | which ledger action to run — one of `append`, `close`, `status` |
 
 | Flag | What it does | Default |
 |---|---|---|
