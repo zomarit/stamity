@@ -249,6 +249,47 @@ describe("extractFreeText — the baseline's free-text returns", () => {
     }
   });
 
+  it("gives each locator of a folded block the nearest severity word before it: Minor after Warning", () => {
+    const text = [
+      "Severity: Warning",
+      "",
+      "Locator: src/store/paging.ts:4",
+      "",
+      "Page 1 skips the first 10 rows.",
+      "",
+      "Severity: Minor",
+      "",
+      "Locator: src/orders/export.ts:6",
+    ].join("\n");
+    const findings = extractFreeText(text, REVIEWER) as Finding[];
+    expect(findings.map((f) => [f.file, f.severity])).toEqual([
+      ["src/store/paging.ts", "Warning"],
+      ["src/orders/export.ts", "Minor"],
+    ]);
+    // The Minor stays Minor, so the decoy is not flagged at Critical or Warning.
+    expect(match(findings, {}, { severities: ["Critical", "Warning"] }).matched["dec-allowlist-order"]).toEqual([]);
+  });
+
+  it("keeps a split Warning that follows a Minor or prose `minor`", () => {
+    const pair = ["## Review", "", "Severity: Minor", "", "Locator: src/a.ts:3", "", "Severity: Warning", "", "Locator: src/store/paging.ts:4", "", "Page 1 skips the first 10 rows."];
+    const prose = ["Two minor naming notes, then one real problem.", "", "Severity: Warning", "", "Locator: src/store/paging.ts:4", "", "Page 1 skips the first 10 rows."];
+    const a = extractFreeText(pair.join("\n"), REVIEWER) as Finding[];
+    expect(a.map((f) => [f.file, f.severity])).toEqual([
+      ["src/a.ts", "Minor"],
+      ["src/store/paging.ts", "Warning"],
+    ]);
+    const b = extractFreeText(prose.join("\n"), REVIEWER) as Finding[];
+    expect(b.map((f) => [f.file, f.severity])).toEqual([["src/store/paging.ts", "Warning"]]);
+    expect(match(b, {}, { severities: ["Critical", "Warning"] }).matched["cor-page-offset"]).toEqual([0]);
+  });
+
+  it("reads a one-finding folded block as before: a later word does not move it, a leading locator takes the first word", () => {
+    const later = ["Severity: Warning", "", "Locator: src/store/paging.ts:4", "", "Not a minor issue: page 1 skips rows."].join("\n");
+    expect((extractFreeText(later, REVIEWER) as Finding[]).map((f) => f.severity)).toEqual(["Warning"]);
+    const leading = ["Locator: src/store/paging.ts:4", "", "Severity: Warning", "", "A minor slip that skips page 1."].join("\n");
+    expect((extractFreeText(leading, REVIEWER) as Finding[]).map((f) => f.severity)).toEqual(["Warning"]);
+  });
+
   it("reads a severity word in any case and in the plural, normalized to title case", () => {
     const lower = extractFreeText("- warning: src/store/paging.ts:4 — page 1 skips the first 10 rows", REVIEWER) as Finding[];
     expect(lower.map((f) => f.severity)).toEqual(["Warning"]);

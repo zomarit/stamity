@@ -74,14 +74,14 @@ function parseLocator(locator, roots) {
   return { file: normalizeFile(m[1]), line: Math.min(line, end), lineEnd: Math.max(line, end) }
 }
 
-/** Every distinct free-text locator in a text, in order of first appearance. */
+/** Every distinct free-text locator in a text, in order of first appearance, with `at`, its first index. */
 function locatorsIn(text) {
   const seen = new Set()
   const out = []
   for (const m of text.matchAll(LOCATOR)) {
     const line = Number(m[2])
     const end = m[3] === undefined ? line : Number(m[3])
-    const loc = { file: normalizeFile(m[1]), line: Math.min(line, end), lineEnd: Math.max(line, end) }
+    const loc = { file: normalizeFile(m[1]), line: Math.min(line, end), lineEnd: Math.max(line, end), at: m.index }
     const key = `${loc.file}:${loc.line}:${loc.lineEnd}`
     if (!seen.has(key)) {
       seen.add(key)
@@ -203,11 +203,20 @@ function sectionsOf(text) {
   return sections
 }
 
-/** One Finding per distinct locator of a block that holds `Critical` or `Warning`; its severity is the block's first severity word. */
-function blockFindings(block, meta) {
+/**
+ * One Finding per distinct locator of a block that holds `Critical` or `Warning`. Its severity is
+ * the block's first severity word, or, with `nearest` (the folded section read), the nearest
+ * severity word before the locator, falling back to the block's first when none precedes it.
+ */
+function blockFindings(block, meta, { nearest = false } = {}) {
   if (!FINDING_WORD.test(block)) return []
-  const severity = normalizeSeverity(block.match(SEVERITY_WORD)[1])
-  return locatorsIn(block).map((loc) => finding(meta, loc, { severity, text: block, reportPath: meta.reportPath }))
+  const words = [...block.matchAll(new RegExp(SEVERITY_WORD.source, 'gi'))]
+  const first = normalizeSeverity(words[0][1])
+  return locatorsIn(block).map((loc) => {
+    const before = nearest ? words.findLast((w) => w.index < loc.at) : undefined
+    const severity = before ? normalizeSeverity(before[1]) : first
+    return finding(meta, loc, { severity, text: block, reportPath: meta.reportPath })
+  })
 }
 
 const hasLocator = (block) => locatorsIn(block).length > 0
@@ -217,7 +226,13 @@ const hasLocator = (block) => locatorsIn(block).length > 0
  * severity word and a locator classifies itself. Every other leaf folds into its section block —
  * the heading line (if any) plus the folded leaves — so a finding split over sibling leaves
  * (`Severity: Warning` and `Locator: src/x.ts:9` as two paragraphs or two list items) is read as
- * one. A section block that is no finding is unread when it holds a Critical or Warning word but
+ * one. In that folded block each locator takes the nearest severity word before it (the block's
+ * first when none precedes it), so a split Minor after a Warning stays Minor and a Minor, or prose
+ * `minor`, before a split Warning does not demote it; on a block with one finding this is the
+ * block's first word, as before. Accepted residual: a severity word in a summary sentence
+ * followed by a bare locator leaf (`one Warning below`, then `- src/other.ts:8 — fine`) reads as a
+ * Warning at that locator — a visible finding, never a silent one.
+ * A section block that is no finding is unread when it holds a Critical or Warning word but
  * no locator, or a locator but no severity word; a heading left alone because its every leaf
  * classified itself is a summary line, not an unread block.
  */
@@ -236,7 +251,7 @@ function readFreeText(text, meta) {
     }
     if (folded.length === 0 && (section.head === null || classified > 0)) continue
     const block = (section.head === null ? folded : [section.head, ...folded]).join('\n')
-    const read = blockFindings(block, m)
+    const read = blockFindings(block, m, { nearest: true })
     if (read.length > 0) findings.push(...read)
     else if (FINDING_WORD.test(block) && !hasLocator(block)) unread.push({ block, reason: 'severity-without-locator' })
     else if (hasLocator(block) && !SEVERITY_WORD.test(block)) unread.push({ block, reason: 'locator-without-severity' })
