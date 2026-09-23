@@ -1,4 +1,10 @@
-import { CLOSURES_FENCE, FENCE_CLOSE_PATTERN, FINDINGS_FENCE, fenceOpenPattern } from "./layout.ts";
+import {
+  CLOSURES_FENCE,
+  FENCE_CLOSE_PATTERN,
+  FINDINGS_FENCE,
+  fenceOpenPattern,
+  RATIONALE_MAX,
+} from "./layout.ts";
 
 /**
  * The strict readers of a role report's machine-readable blocks: the findings
@@ -84,6 +90,22 @@ export function quoteReportText(value: unknown): string {
   return typeof value === "string"
     ? JSON.stringify(cutReportText(value))
     : cutReportText(String(JSON.stringify(value)));
+}
+
+/**
+ * Text read from a report or the ledger as it may be printed or recorded: line
+ * breaks and tabs become spaces, and control bytes, the bidi controls and the
+ * zero-width marks are dropped. The ledger is a committed file anyone can edit
+ * and diff, so an id or a rationale carrying an escape sequence or a bidi
+ * override would otherwise reach a terminal raw, or land reordered in a diffed
+ * line. The rule `../cli/kit/prompts.ts::sanitizeLabel` applies, restated here
+ * because the engine never imports the CLI layer.
+ */
+export function printableText(text: string): string {
+  return text
+    .replace(/[\r\n\t]/gu, " ")
+    // oxlint-disable-next-line no-control-regex -- stripping control bytes IS the point
+    .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/gu, "");
 }
 
 /**
@@ -273,6 +295,11 @@ export interface Closure {
   /** The ledger id the re-review was handed, `<run>/<phase>/<n>`. */
   readonly ledgerId: string;
   readonly status: ClosureStatus;
+  /**
+   * The re-review's optional one-line reason, stripped by {@link printableText}
+   * and trimmed; `null` when the closure carries none.
+   */
+  readonly rationale: string | null;
   /** The 1-based physical line of the text the object sits on. */
   readonly line: number;
 }
@@ -285,7 +312,25 @@ const CLOSURE_STATUSES: readonly ClosureStatus[] = [
   "rejection-overturned",
 ];
 const CLOSURE_KEYS = ["ledger_id", "status"] as const;
-const CLOSURE_KEY_SET: ReadonlySet<string> = new Set<string>(CLOSURE_KEYS);
+const CLOSURE_KEY_SET: ReadonlySet<string> = new Set<string>([...CLOSURE_KEYS, "rationale"]);
+
+/**
+ * A closure's `rationale`, read: the raw value must be a string on one line; it
+ * is stripped by {@link printableText} and trimmed before the blank check and
+ * the {@link RATIONALE_MAX} cap, so an invisible character neither fills the
+ * cap nor passes for text.
+ */
+function readRationale(value: unknown): { readonly text: string; readonly problems: string[] } {
+  if (typeof value !== "string") return { text: "", problems: ["rationale is not a string"] };
+  const text = printableText(value).trim();
+  if (text === "") return { text, problems: ["rationale is empty"] };
+  const problems: string[] = [];
+  if (/[\r\n]/.test(value)) problems.push("rationale spans more than one line");
+  if (Array.from(text).length > RATIONALE_MAX) {
+    problems.push(`rationale is over ${RATIONALE_MAX} characters`);
+  }
+  return { text, problems };
+}
 
 function readClosureLine(raw: string, line: number): LineRead<Closure> {
   const object = readObject(raw);
@@ -316,10 +361,17 @@ function readClosureLine(raw: string, line: number): LineRead<Closure> {
     else if (/[\r\n]/.test(ledgerId)) problems.push("ledger_id spans more than one line");
   }
 
+  let rationale: string | null = null;
+  if (Object.hasOwn(object, "rationale")) {
+    const read = readRationale(object["rationale"]);
+    problems.push(...read.problems);
+    rationale = read.text;
+  }
+
   const key = typeof ledgerId === "string" ? ledgerId : null;
   if (problems.length > 0) return { item: null, key, problems };
   return {
-    item: { ledgerId: ledgerId as string, status: status as ClosureStatus, line },
+    item: { ledgerId: ledgerId as string, status: status as ClosureStatus, rationale, line },
     key,
     problems: [],
   };
@@ -328,7 +380,9 @@ function readClosureLine(raw: string, line: number): LineRead<Closure> {
 /**
  * Parse the one `stamity-closures` block of a re-review.
  *
- * Each object carries exactly `ledger_id` and `status`; a ledger id closed twice
+ * Each object carries `ledger_id` and `status`, and may carry a one-line
+ * `rationale` of at most {@link RATIONALE_MAX} characters; any other key is a
+ * problem. A ledger id closed twice
  * is a problem, because two answers about one row cannot both be applied. An
  * empty block is `ok` with zero items.
  */

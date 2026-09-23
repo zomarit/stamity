@@ -91,6 +91,12 @@ export const REPORT_READ_MAX_BYTES = 1_048_576;
  * one path or one ref, and a path longer than this is not one any platform opens.
  */
 export const GIT_METADATA_MAX_BYTES = 4_096;
+/**
+ * Ceiling on a rationale the ledger records — a manual close's `--rationale` or
+ * a closure's optional `rationale` — in characters (code points), counted after
+ * the text is stripped and trimmed.
+ */
+export const RATIONALE_MAX = 2_000;
 /** The card's ceiling, all lines joined by newlines. */
 export const CARD_MAX_CHARS = 2_000;
 /** Items a card list names before it shrinks. */

@@ -24,7 +24,8 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * `../../runs/ledgerStore.ts`; the
  * run id's grammar lives in `../../runs/layout.ts`. Every verdict printed here is
  * one of theirs. What this file owns is which flags spell an append or a close,
- * where the block's text comes from, and how a refusal reads on a terminal.
+ * where the block's text comes from, and how a refusal reads on a terminal. A
+ * flag only the other subcommand reads is a usage error, never ignored.
  *
  * **Stdout carries rows only**: for an append, one `<ledger-id> <severity>
  * <report-local id>` line each, with a trailing ` decision-needed` on a row the
@@ -99,6 +100,39 @@ function missingFlag(subcommand: string, flag: string): CliFailure {
     why: `${flag} is required by ${subcommand} and unused by the other subcommands, so it is checked here rather than by the argument parser`,
     next: `re-run with ${flag} <value>`,
   });
+}
+
+/**
+ * The flags only the other subcommand reads, keyed by subcommand: each as its
+ * commander option key and its spelling. `--run` and `--report` are shared.
+ */
+const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string])[]>> = {
+  [APPEND]: [
+    ["ids", "--ids"],
+    ["id", "--id"],
+    ["state", "--state"],
+    ["rationale", "--rationale"],
+  ],
+  [CLOSE]: [
+    ["phase", "--phase"],
+    ["source", "--source"],
+    ["stdin", "--stdin"],
+  ],
+};
+
+/** Refuse a flag of the other subcommand rather than silently ignore it. A
+ *  usage error, checked before anything else is read. */
+function refuseForeignFlags(subcommand: string, opts: Record<string, unknown>): void {
+  const other = subcommand === CLOSE ? APPEND : CLOSE;
+  for (const [key, flag] of FOREIGN_FLAGS[subcommand] ?? []) {
+    if (opts[key] === undefined) continue;
+    throw new CliFailure({
+      code: "USAGE",
+      message: `ledger ${subcommand} takes no ${flag}; it is a flag of ledger ${other}`,
+      why: "each ledger subcommand reads only its own flags, so a flag of the other is refused rather than silently ignored",
+      next: `drop ${flag}, or run ledger ${other}`,
+    });
+  }
 }
 
 /** The one precondition: `.stamity/` exists, so a ledger row is never written
@@ -434,6 +468,8 @@ export const ledgerCommand: CommandModule = {
 
   async run(ctx, opts, args): Promise<CommandResult> {
     // Commander's `choices()` already refused every other subcommand at parse time.
-    return args[0] === CLOSE ? await runClose(ctx, opts) : await runAppend(ctx, opts);
+    const subcommand = args[0] === CLOSE ? CLOSE : APPEND;
+    refuseForeignFlags(subcommand, opts);
+    return subcommand === CLOSE ? await runClose(ctx, opts) : await runAppend(ctx, opts);
   },
 };

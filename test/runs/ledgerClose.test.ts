@@ -129,8 +129,8 @@ describe("parseClosuresBlock", () => {
     expect(parsed).toEqual({
       ok: true,
       items: [
-        { ledgerId: rid(1), status: "fixed", line: 6 },
-        { ledgerId: rid(2), status: "regressed", line: 8 },
+        { ledgerId: rid(1), status: "fixed", rationale: null, line: 6 },
+        { ledgerId: rid(2), status: "regressed", rationale: null, line: 8 },
       ],
     });
   });
@@ -172,7 +172,7 @@ describe("parseClosuresBlock", () => {
         { ledger_id: rid(3) },
         "not json",
         "[1]",
-        { ...closure(4, "fixed"), rationale: "because" },
+        { ...closure(4, "fixed"), note: "because" },
         { ledger_id: 7, status: "fixed" },
         { ledger_id: "  ", status: "fixed" },
         { ledger_id: "a\nb", status: 3 },
@@ -188,12 +188,53 @@ describe("parseClosuresBlock", () => {
       '8: missing "status"',
       expect.stringMatching(/^9: not JSON \(.+\)$/) as unknown as string,
       "10: not a JSON object",
-      '11: unknown key "rationale"',
+      '11: unknown key "note"',
       "12: ledger_id is not a string",
       "13: ledger_id is empty",
       "14: status 3 is not fixed, not-fixed, regressed, rejection-upheld or rejection-overturned",
       "14: ledger_id spans more than one line",
       `15: ledger_id "${rid(1)}" repeats line 6`,
+    ]);
+  });
+
+  it("admits an optional rationale, trimmed and stripped of control, bidi and zero-width characters", () => {
+    const parsed = parseClosuresBlock(
+      rereview([
+        { ...closure(1, "fixed"), rationale: "  covered by \u202Ethe\u200B new\u0085 test\u001b  " },
+        // Stripped before the cap: 2,000 characters plus two invisible ones fit.
+        { ...closure(2, "not-fixed"), rationale: `${"x".repeat(2_000)}\u200B\u2066` },
+      ]),
+    );
+
+    expect(parsed).toEqual({
+      ok: true,
+      items: [
+        { ledgerId: rid(1), status: "fixed", rationale: "covered by the new test", line: 6 },
+        { ledgerId: rid(2), status: "not-fixed", rationale: "x".repeat(2_000), line: 7 },
+      ],
+    });
+  });
+
+  it("refuses a rationale that is not a string, spans lines, is blank once stripped, or is over 2,000 characters", () => {
+    const parsed = parseClosuresBlock(
+      rereview([
+        { ...closure(1, "fixed"), rationale: 5 },
+        { ...closure(2, "fixed"), rationale: "first\nsecond" },
+        { ...closure(3, "fixed"), rationale: "   " },
+        { ...closure(4, "fixed"), rationale: "\u200B\u202E\u2060" },
+        { ...closure(5, "fixed"), rationale: "x".repeat(2_001) },
+        { ...closure(6, "fixed"), rationale: null },
+      ]),
+    );
+
+    const problems = parsed.ok ? [] : parsed.problems;
+    expect(problems.map((problem) => `${problem.line}: ${problem.message}`)).toEqual([
+      "6: rationale is not a string",
+      "7: rationale spans more than one line",
+      "8: rationale is empty",
+      "9: rationale is empty",
+      "10: rationale is over 2000 characters",
+      "11: rationale is not a string",
     ]);
   });
 
@@ -352,6 +393,74 @@ describe("applyClosures", () => {
     expect(again.changes.every((change) => change.unchanged)).toBe(true);
     expect(again.changes).toHaveLength(5);
     expect(await readText(dir, LEDGER)).toBe(once);
+  });
+
+  it("appends a closure's rationale after its note, and reports a re-run of it unchanged", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [LEDGER]: `${row(1, { rationale: "first look" })}\n${row(2)}\n` });
+    const withWhy = [
+      { ...closure(1, "fixed"), rationale: "covered by the new test" },
+      { ...closure(2, "not-fixed"), rationale: "the guard is still missing" },
+    ];
+
+    await apply(dir, withWhy, [rid(1), rid(2)]);
+    const once = await readText(dir, LEDGER);
+    expect(rowsOf(once).map((r) => [r["state"], r["rationale"]])).toEqual([
+      ["fixed", `first look | re-review fixed: ${REPORT_REL} — covered by the new test`],
+      ["open", `re-review not-fixed: ${REPORT_REL} — the guard is still missing`],
+    ]);
+
+    const again = await apply(dir, withWhy, [rid(1), rid(2)]);
+    expect(again.changes).toEqual([
+      { ledgerId: rid(1), from: "fixed", to: "fixed", status: "fixed", unchanged: true },
+      { ledgerId: rid(2), from: "open", to: "open", status: "not-fixed", unchanged: true },
+    ]);
+    expect(await readText(dir, LEDGER)).toBe(once);
+  });
+
+  it("refuses a stale fixed re-run after a later re-review reopened the row, and writes nothing", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [LEDGER]: `${row(1)}\n` });
+    const later = `${RUN_DIR}/reports/u1-reviewer-r3.md`;
+    await apply(dir, [closure(1, "fixed")], [rid(1)]);
+    const regressed = parseClosuresBlock(rereview([closure(1, "regressed")]));
+    if (!regressed.ok) throw new Error("fixture does not parse");
+    await applyClosures({
+      rootDir: dir.dir,
+      runId: RUN,
+      closures: regressed.items,
+      handedIds: [rid(1)],
+      report: later,
+      dryRun: false,
+    });
+    const reopened = await readText(dir, LEDGER);
+    expect(rowsOf(reopened)[0]).toMatchObject({ state: "open" });
+
+    await expect(apply(dir, [closure(1, "fixed")], [rid(1)])).rejects.toMatchObject({
+      problems: [
+        {
+          line: 6,
+          message: `${rid(1)} is open, not fixed, but its rationale already records re-review fixed: ${REPORT_REL}; a closure is applied once`,
+        },
+      ],
+    });
+    expect(await readText(dir, LEDGER)).toBe(reopened);
+  });
+
+  it("refuses a fixed closure on an open row whose rationale was hand-planted with its note", async () => {
+    const dir = tempDir();
+    const before = `${row(1, { rationale: `re-review fixed: ${REPORT_REL}` })}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    await expect(apply(dir, [closure(1, "fixed")], [rid(1)])).rejects.toMatchObject({
+      problems: [
+        {
+          line: 6,
+          message: `${rid(1)} is open, not fixed, but its rationale already records re-review fixed: ${REPORT_REL}; a closure is applied once`,
+        },
+      ],
+    });
+    expect(await readText(dir, LEDGER)).toBe(before);
   });
 
   it("keeps report, decision_needed and retired in their original order, within the records gate's keys", async () => {
@@ -579,6 +688,43 @@ describe("closeRow", () => {
     await manual(dir, rid(1), "deferred", "y".repeat(2_000));
 
     expect(rowsOf(await readText(dir, LEDGER))[0]?.["rationale"]).toBe("y".repeat(2_000));
+  });
+
+  it("strips control, bidi and zero-width characters from the rationale before the cap and the write", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [LEDGER]: `${row(1)}\n${row(2)}\n` });
+
+    await manual(dir, rid(1), "deferred", " after \u202Ethe\u200B cut\u0085\u001b[2J ");
+    await manual(dir, rid(2), "deferred", `${"z".repeat(2_000)}\u2066\u200B`);
+
+    const rows = rowsOf(await readText(dir, LEDGER));
+    expect(rows[0]?.["rationale"]).toBe("after the cut[2J");
+    expect(rows[1]?.["rationale"]).toBe("z".repeat(2_000));
+  });
+
+  it("refuses a rationale that is blank once stripped", async () => {
+    const dir = tempDir();
+    const before = `${row(1)}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    await expect(manual(dir, rid(1), "deferred", "\u200B\u202E")).rejects.toThrow(
+      "ledger close --id needs a non-empty --rationale of at most 2000 characters",
+    );
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("previews under a dry run and writes nothing, not even the reports ignore file", async () => {
+    const dir = tempDir();
+    const before = `${row(1)}\n${row(2)}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    const result = await manual(dir, rid(2), "rejected", "not a defect", true);
+
+    expect(result.changes).toEqual([
+      { ledgerId: rid(2), from: "open", to: "rejected", status: null, unchanged: false },
+    ]);
+    expect(await readText(dir, LEDGER)).toBe(before);
+    expect(existsSync(dir.path(RUN_DIR, "reports", ".gitignore"))).toBe(false);
   });
 });
 
@@ -816,6 +962,101 @@ describe("stamity ledger close", () => {
     );
     expect(await readText(dir, LEDGER)).toBe(before);
   });
+
+  it("previews a manual close under --dry-run and leaves the ledger byte-identical", async () => {
+    const dir = tempDir();
+    const before = `${row(1)}\n${row(2)}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    const result = await cli(dir, [
+      ...CLOSE,
+      "--id",
+      rid(2),
+      "--state",
+      "deferred",
+      "--rationale",
+      "after the release",
+      "--dry-run",
+    ]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe(
+      `${rid(2)} open -> deferred\nDry run: 1 row(s) would change in ${LEDGER}. Nothing was written.\n`,
+    );
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("applies a closure's rationale and prints only `unchanged` on its re-run", async () => {
+    const dir = tempDir();
+    await seedRun(dir, {
+      [LEDGER]: `${row(1)}\n`,
+      [REPORT_REL]: rereview([{ ...closure(1, "fixed"), rationale: "covered by the new test" }]),
+    });
+
+    const first = await cli(dir, [...CLOSE, "--report", REPORT_REL, "--ids", ids(1)]);
+    const once = await readText(dir, LEDGER);
+    const again = await cli(dir, [...CLOSE, "--report", REPORT_REL, "--ids", ids(1)]);
+
+    expect(first.code).toBe(0);
+    expect(rowsOf(once)[0]).toMatchObject({
+      state: "fixed",
+      rationale: `re-review fixed: ${REPORT_REL} — covered by the new test`,
+    });
+    expect(again.code).toBe(0);
+    expect(again.stdout).toBe(`${rid(1)} unchanged (already recorded)\n`);
+    expect(await readText(dir, LEDGER)).toBe(once);
+  });
+
+  it("refuses a multi-line, blank or over-cap closure rationale, naming each line, and writes nothing", async () => {
+    const dir = tempDir();
+    const before = `${row(1)}\n${row(2)}\n${row(3)}\n`;
+    await seedRun(dir, {
+      [LEDGER]: before,
+      [REPORT_REL]: rereview([
+        { ...closure(1, "fixed"), rationale: "one\r\ntwo" },
+        { ...closure(2, "fixed"), rationale: " " },
+        { ...closure(3, "fixed"), rationale: "w".repeat(2_001) },
+      ]),
+    });
+
+    const result = await cli(dir, [...CLOSE, "--report", REPORT_REL, "--ids", ids(1, 2, 3)]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain(`${REPORT_REL}:6: rationale spans more than one line`);
+    expect(result.stderr).toContain(`${REPORT_REL}:7: rationale is empty`);
+    expect(result.stderr).toContain(`${REPORT_REL}:8: rationale is over 2000 characters`);
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it.each([
+    ["close", "--phase", ["--phase", "build"], "append"],
+    ["close", "--source", ["--source", "reviewer"], "append"],
+    ["close", "--stdin", ["--stdin"], "append"],
+    ["append", "--ids", ["--ids", rid(1)], "close"],
+    ["append", "--id", ["--id", rid(1)], "close"],
+    ["append", "--state", ["--state", "fixed"], "close"],
+    ["append", "--rationale", ["--rationale", "r"], "close"],
+  ] as const)(
+    "refuses `ledger %s` given %s, a flag of the other subcommand, as a usage error",
+    async (subcommand, flag, extra, other) => {
+      const dir = tempDir();
+      const before = `${row(1)}\n`;
+      await seedRun(dir, { [LEDGER]: before, [REPORT_REL]: rereview([closure(1, "fixed")]) });
+      const valid =
+        subcommand === "close"
+          ? [...CLOSE, "--id", rid(1), "--state", "fixed", "--rationale", "r"]
+          : ["ledger", "append", "--run", RUN, "--phase", "review", "--source", "reviewer", "--report", REPORT_REL];
+
+      const human = await cli(dir, [...valid, ...extra]);
+      const json = await cli(dir, [...valid, ...extra, "--json"]);
+
+      expect(human.code).toBe(1);
+      expect(human.stdout).toBe("");
+      expect(human.stderr).toContain(`ledger ${subcommand} takes no ${flag}; it is a flag of ledger ${other}`);
+      expect(JSON.parse(json.stdout)).toMatchObject({ ok: false, error: { code: "USAGE" } });
+      expect(await readText(dir, LEDGER)).toBe(before);
+    },
+  );
 
   it("prints exactly one JSON document under --json: { run, ledger, report, changes, dryRun }", async () => {
     const dir = tempDir();

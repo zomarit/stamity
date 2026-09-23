@@ -5,6 +5,7 @@ import { acquireWriteLock, atomicWriteFileUnlocked } from "../merge/atomicWrite.
 import { EngineError } from "../types/errors.ts";
 import {
   cutReportText,
+  printableText,
   quoteReportText,
   type BlockProblem,
   type Closure,
@@ -15,6 +16,7 @@ import {
 import {
   isRunId,
   LEDGER_FILE,
+  RATIONALE_MAX,
   REPORT_NAME_PATTERN,
   REPORT_READ_MAX_BYTES,
   REPORTS_DIR,
@@ -362,21 +364,6 @@ async function readLedger(path: string, relPath: string): Promise<string> {
 }
 
 /**
- * An id read back from the ledger file as a refusal may print it: line breaks
- * and tabs become spaces, and control bytes, the bidi controls and the
- * zero-width marks are dropped. The ledger is a committed file anyone can edit,
- * so an id carrying an escape sequence would otherwise reach the operator's
- * terminal raw. The rule `../cli/kit/prompts.ts::sanitizeLabel` applies,
- * restated here because the engine never imports the CLI layer.
- */
-function printableId(id: string): string {
-  return id
-    .replace(/[\r\n\t]/gu, " ")
-    // oxlint-disable-next-line no-control-regex -- stripping control bytes IS the point
-    .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/gu, "");
-}
-
-/**
  * Append one `open` row per finding to the run's ledger, under its write lock.
  *
  * Refuses a report the ledger already carries rows from, naming them, so a
@@ -410,7 +397,7 @@ export async function appendFindings(req: {
       const already = held.filter((row) => row.report === req.report).map((row) => row.id);
       if (already.length > 0) {
         throw new EngineError(
-          `ledger append refused ${req.report}: the ledger already carries rows from this report (${already.map(printableId).join(", ")})`,
+          `ledger append refused ${req.report}: the ledger already carries rows from this report (${already.map(printableText).join(", ")})`,
           {
             code: "VALIDATION_ERROR",
             next: "close or amend those rows instead; a report is appended once",
@@ -464,9 +451,6 @@ export const CLOSURE_TARGET: Readonly<Record<ClosureStatus, "fixed" | "rejected"
   "rejection-upheld": "rejected",
   "rejection-overturned": "open",
 };
-
-/** Ceiling on a manual close's rationale, in characters (code points), trimmed. */
-export const RATIONALE_MAX = 2_000;
 
 /** The states a manual close (`ledger close --id`) may set. */
 export type ManualState = "fixed" | "rejected" | "deferred";
@@ -585,8 +569,12 @@ async function rewriteRows(
  * neither `open` nor a `fixed` row taking `regressed`. Any refusal refuses the
  * whole close with every problem listed ({@link ClosuresRefused}) and nothing
  * written. A row whose rationale already carries the closure's note
- * (`re-review <status>: <report>`) is `unchanged`, so a re-run is a no-op. A
- * handed id with no closure is left as it is.
+ * (`re-review <status>: <report>`) and whose state is already the closure's
+ * target is `unchanged`, so a re-run is a no-op; a note already there on a row
+ * in any other state — a stale re-run after a later re-review reopened it, or a
+ * hand-planted note — is refused, because the closure cannot hold. An applied
+ * closure appends its note, then ` — <rationale>` when it carries one; the note
+ * alone is the idempotency key. A handed id with no closure is left as it is.
  */
 export async function applyClosures(req: {
   readonly rootDir: string;
@@ -628,8 +616,16 @@ export async function applyClosures(req: {
       const note = `re-review ${status}: ${req.report}`;
       const from = fieldText(row, "state");
       const prior = fieldText(row, "rationale");
+      const to = CLOSURE_TARGET[status];
       if (prior.includes(note)) {
-        changes.push({ ledgerId, from, to: from, status, unchanged: true });
+        if (from === to) {
+          changes.push({ ledgerId, from, to: from, status, unchanged: true });
+        } else {
+          problems.push({
+            line,
+            message: `${cutReportText(ledgerId)} is ${cutReportText(from)}, not ${to}, but its rationale already records ${note}; a closure is applied once`,
+          });
+        }
         continue;
       }
       if (from !== "open" && !(from === "fixed" && status === "regressed")) {
@@ -639,8 +635,8 @@ export async function applyClosures(req: {
         });
         continue;
       }
-      const to = CLOSURE_TARGET[status];
-      rewrites.set(index, { ...row, state: to, rationale: extendRationale(prior, note) });
+      const recorded = closure.rationale === null ? note : `${note} — ${closure.rationale}`;
+      rewrites.set(index, { ...row, state: to, rationale: extendRationale(prior, recorded) });
       changes.push({ ledgerId, from, to, status, unchanged: false });
     }
     if (problems.length > 0) throw new ClosuresRefused(req.report, problems);
@@ -650,7 +646,8 @@ export async function applyClosures(req: {
 
 /**
  * Apply one manual transition (`ledger close --id`): set `state` and append
- * the trimmed rationale by the same rule as a closure's note. Any prior state
+ * the rationale — stripped by `printableText`, then trimmed, before the cap and
+ * the write — by the same rule as a closure's note. Any prior state
  * may move; an id that is not a row is refused, and a row already in `state`
  * whose rationale carries the text is `unchanged`.
  */
@@ -662,7 +659,7 @@ export async function closeRow(req: {
   readonly rationale: string;
   readonly dryRun: boolean;
 }): Promise<CloseResult> {
-  const text = req.rationale.trim();
+  const text = printableText(req.rationale).trim();
   if (text === "" || Array.from(text).length > RATIONALE_MAX) {
     throw new EngineError(
       `ledger close --id needs a non-empty --rationale of at most ${RATIONALE_MAX} characters`,
@@ -677,7 +674,7 @@ export async function closeRow(req: {
     const row = index === undefined ? undefined : parsed.rows.get(index);
     if (index === undefined || row === undefined) {
       throw new EngineError(
-        `ledger close refused: ${printableId(cutReportText(req.ledgerId))} is not a row of ${ledgerRel}`,
+        `ledger close refused: ${printableText(cutReportText(req.ledgerId))} is not a row of ${ledgerRel}`,
         {
           code: "VALIDATION_ERROR",
           next: "name a ledger id exactly as `ledger append` printed it",
