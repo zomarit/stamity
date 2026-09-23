@@ -33,11 +33,13 @@ import { downstreamCheckout } from "./downstreamFixture.ts";
  *                            source forms are proven against each other rather than one
  *                            of them being asserted alone.
  *   the inherited gate       opt-in. A whole second checkout running a second vitest over
- *                            the fifteen identity-sensitive suites; the reason it is not
+ *                            the eighteen identity-sensitive suites; the reason it is not
  *                            on by default is on the group itself.
  *
- * A third group comes first, because it is the cheapest: the CLI suites are read as text
- * and held to deriving the name rather than spelling it.
+ * A third group comes first, because it is the cheapest: the CLI and CI suites are read as
+ * text and held to deriving the name, the owner and the owner/repository route rather than
+ * spelling them. It is the one of the three CI runs, so it is the one that has to catch a
+ * new canonical literal; the opt-in witness only confirms what it lets through.
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -112,37 +114,119 @@ const marketplaceEntry = (root: string): Record<string, unknown> => {
   return catalog.plugins[0] as Record<string, unknown>;
 };
 
-describe("the identity the CLI suites assert against", () => {
-  it("is read from the manifest, not spelled as the canonical package", () => {
-    // `docs/enterprise-forks.md` now tells a downstream that its rename needs no test edit.
-    // That claim is true only while the remedy assertions derive the name, so the tree is
-    // held to it here rather than the page being trusted. Comments and test titles are
-    // stripped first: both may name the canonical command as prose, and neither is an
-    // assertion a fork can fail.
-    const files = walk(join(REPO_ROOT, "test/cli"));
-    expect(files.length, "no CLI suite was walked").toBeGreaterThan(10);
-    const offenders = files.filter((relPath) => {
-      const code = readFileSync(join(REPO_ROOT, relPath), "utf8")
-        .replaceAll(/\/\*[\s\S]*?\*\//g, "")
-        .replaceAll(/\/\/[^\n]*/g, "")
-        .replaceAll(/\b(?:it|test|describe)(?:\.\w+)*\(\s*(["'])(?:\\.|(?!\1).)*\1/g, "");
-      return code.includes("@zomarit/stamity");
-    });
-    // The exceptions, each stating the canonical name on purpose. A file that joins this
-    // list fails here until somebody writes the reason down, which is the whole point of
-    // pinning the set rather than counting it.
-    const deliberate = {
+/**
+ * The canonical identity's three spellings, each a value a renamed fork derives differently:
+ * the package NAME (`name`), the `<owner>/<repository>` ROUTE a marketplace add, an install
+ * spec or a github.com URL carries (`repository.url`), and the OWNER or publisher as a whole
+ * quoted string (`stamity.publisher`). The route excludes a leading `@` so the name is not
+ * counted twice. Written as patterns with an escaped separator, so this file does not match
+ * its own table.
+ */
+const CANONICAL_SPELLINGS = {
+  name: /@zomarit\/stamity/g,
+  route: /(?<!@)zomarit\/stamity/g,
+  owner: /(["'`])zomarit\1/g,
+} as const;
+
+type Spelling = keyof typeof CANONICAL_SPELLINGS;
+type SpellingCounts = Partial<Record<Spelling, number>>;
+
+/**
+ * A suite's code with the prose taken out: block comments, line comments (not the `//` of a
+ * URL, which is a value) and test titles. All three may name the canonical identity as prose,
+ * and none of them is an assertion a fork can fail.
+ */
+function codeOf(relPath: string): string {
+  return readFileSync(join(REPO_ROOT, relPath), "utf8")
+    .replaceAll(/\/\*[\s\S]*?\*\//g, "")
+    .replaceAll(/(?<!:)\/\/[^\n]*/g, "")
+    .replaceAll(/\b(?:it|test|describe)(?:\.\w+)*\(\s*(["'])(?:\\.|(?!\1).)*\1/g, "");
+}
+
+/** How many times each canonical spelling occurs in one suite's code; absent when none. */
+function spellingsIn(relPath: string): SpellingCounts {
+  const code = codeOf(relPath);
+  const counts: SpellingCounts = {};
+  for (const [spelling, pattern] of Object.entries(CANONICAL_SPELLINGS) as [Spelling, RegExp][]) {
+    const found = code.match(pattern)?.length ?? 0;
+    if (found > 0) counts[spelling] = found;
+  }
+  return counts;
+}
+
+describe("the identity the CLI and CI suites assert against", () => {
+  it("is read from the manifest, not spelled as the canonical package, owner or route", () => {
+    // `docs/enterprise-forks.md` tells a downstream that its rename needs no test edit. That
+    // claim is true only while every assertion about THIS checkout's identity derives it, so
+    // the tree is held to it here rather than the page being trusted. The CI suites are walked
+    // as well as the CLI ones: the plugin distribution suites shipped in 1.9.0 spelled the
+    // owner and the route as literals, a renamed fork's gate went red on them, and
+    // this check — then CLI-only and name-only — had nothing to say.
+    const files = [...walk(join(REPO_ROOT, "test/cli")), ...walk(join(REPO_ROOT, "test/ci"))];
+    expect(files.filter((relPath) => relPath.startsWith("test/cli/")).length, "no CLI suite was walked").toBeGreaterThan(10);
+    expect(files.filter((relPath) => relPath.startsWith("test/ci/")).length, "no CI suite was walked").toBeGreaterThan(10);
+    const found = Object.fromEntries(
+      files.map((relPath) => [relPath, spellingsIn(relPath)] as const).filter(([, counts]) => Object.keys(counts).length > 0),
+    );
+    // The exceptions, each stating the canonical identity on purpose, pinned by COUNT per
+    // spelling rather than by file: a file already on this list that grows one more literal
+    // fails here too, until somebody writes down why. What every entry has in common is that
+    // the literal is not this checkout's identity — it is a synthetic fixture the suite builds
+    // its own input from, a committed file's text the rename does not touch, or a case gated
+    // on `canonical()` — so a renamed fork passes each of them unedited.
+    const deliberate: Record<string, SpellingCounts & { readonly why: string }> = {
+      // ── test/cli ──
       // The FALLBACK the production helper uses when the self-read finds no manifest at
       // all: there is no other name it could give, so the literal IS the subject.
-      "test/cli/kit/packageName.test.ts": "proves the unnamed-manifest fallback",
+      "test/cli/kit/packageName.test.ts": { name: 3, why: "proves the unnamed-manifest fallback" },
       // A renamed pseudo package root, asserting the canonical name does NOT leak into
       // its remedies. The literal is the thing that must be absent.
-      "test/cli/commands/check.test.ts": "asserts the canonical fallback stays out of a renamed run",
+      "test/cli/commands/check.test.ts": { name: 1, why: "asserts the canonical fallback stays out of a renamed run" },
       // The registry-probe fixtures: a synthetic manifest and the percent-encoded name the
       // registry is asked for, neither read from this checkout.
-      "test/cli/notice/updateNotice.test.ts": "pins the registry probe's encoded package name",
+      "test/cli/notice/updateNotice.test.ts": { name: 2, why: "pins the registry probe's encoded package name" },
+      // ── test/ci: stub runtimes and synthetic plugin documents ──
+      // Each is a `--runtime` stub or a capability/release document the suite writes itself;
+      // the product copies the stub's name through, so the assertion compares the fixture to
+      // the fixture and a fork's own name never enters it.
+      "test/ci/pluginDistribution.test.ts": { name: 3, why: "the stub runtime's package.json and RUNTIME.json, and the runtime block read back from it" },
+      "test/ci/pluginLifecycle.test.ts": { name: 2, why: "the stub runtime's package.json and RUNTIME.json" },
+      "test/ci/pluginPackages.test.ts": { name: 1, why: "the stub runtime's package.json" },
+      "test/ci/pluginPackages.claude.test.ts": { name: 1, why: "the stub runtime's package.json" },
+      "test/ci/pluginPackages.codex.test.ts": { name: 1, why: "the stub runtime's package.json" },
+      "test/ci/pluginPackages.copilot.test.ts": { name: 1, owner: 2, why: "the stub runtime's package.json, and a schema-refusal author fixture" },
+      "test/ci/pluginPackages.cursor.test.ts": { name: 1, why: "the stub runtime's package.json" },
+      "test/ci/pluginRoute.test.ts": { name: 2, why: "the stub runtime's package.json and RUNTIME.json" },
+      "test/ci/pluginModules.test.ts": { name: 3, why: "synthetic capability documents naming a companion package" },
+      "test/ci/pluginLocate.test.ts": { name: 1, why: "the companion name the locate fixtures install under" },
+      "test/ci/releaseManifest.test.ts": { name: 1, why: "a synthetic release manifest's runtime block" },
+      // ── test/ci: the resolver fed a synthetic manifest ──
+      // `pkg()` builds a manifest from a constant, never from this checkout, and the absent
+      // `stamity.publisher` default IS the canonical owner in production.
+      "test/ci/distributionIdentity.test.ts": { route: 2, owner: 3, why: "a synthetic manifest's repository and the absent-publisher default" },
+      // ── test/ci: GitHub context and committed workflow text ──
+      // The canonical repository guard the workflows carry, and the Actions context fed to
+      // it. A committed file's text a rename does not touch; the fork guide leaves workflow
+      // customization, and the tests that pin it, to the fork.
+      "test/ci/workflow.test.ts": { route: 13, why: "the workflows' canonical repository guard and the contexts evaluated against it" },
+      "test/ci/packSigningRehearsal.test.ts": { route: 4, why: "the rehearsal workflow's repository guard and its Actions environment fixture" },
+      // ── test/ci: synthetic records ──
+      "test/ci/apmInstall.test.ts": { route: 1, why: "a synthetic apm.lock.yaml written into the suite's own consumer" },
+      "test/ci/evidenceSummary.test.ts": { route: 2, why: "a synthetic evidence pointer's source and archive URL" },
+      "test/ci/repoHygiene.test.ts": { route: 2, why: "a synthetic evidence manifest's source and archive URL" },
+      // ── this file ──
+      // The Renovate presets carry the canonical route and name as DATA the guide tells a fork
+      // to rewrite, so the rewrite names what it replaces; the rest is the canonical-gated case
+      // below, which asserts the canonical identity itself.
+      "test/ci/forkIdentity.test.ts": { name: 2, route: 1, owner: 1, why: "the preset rewrite's source values and the canonical-gated self-check" },
     };
-    expect(offenders).toEqual(Object.keys(deliberate).toSorted());
+    for (const [relPath, entry] of Object.entries(deliberate)) {
+      expect(entry.why.trim(), `${relPath} carries no written reason`).not.toBe("");
+    }
+    const pinned = Object.fromEntries(
+      Object.entries(deliberate).map(([relPath, { why: _why, ...counts }]) => [relPath, counts]),
+    );
+    expect(found).toEqual(pinned);
   });
 
   // Canonical-only by construction: it asserts the canonical identity itself. Skipped
@@ -212,7 +296,7 @@ describe("a private fork's regenerated marketplace", () => {
  *
  * OPT-IN (`STAMITY_FORK_SUITE=1`). Not for its wall time — measured at about 25 seconds on
  * a warm POSIX machine, 2026-09-19 — but for what it does to get there: it copies the whole
- * working tree and starts a second vitest inside the first, over fifteen suites. A nested
+ * working tree and starts a second vitest inside the first, over eighteen suites. A nested
  * runner is charged differently by the coverage leg and by the Windows leg, and neither is
  * a cost the default gate should carry for a property the group above already proves in
  * under a second. This group is the end-to-end witness a reviewer or a release run asks
@@ -227,7 +311,9 @@ const IDENTITY_SUITES = [
   "test/ci/apmPackage.test.ts",
   "test/ci/changelogLinks.test.ts",
   "test/ci/distributionIdentity.test.ts",
+  "test/ci/pluginDistribution.test.ts",
   "test/ci/pluginManifests.test.ts",
+  "test/ci/pluginPackages.claude.test.ts",
   "test/ci/releaseManifest.test.ts",
   "test/cli/binMap.test.ts",
   "test/cli/commands/add.test.ts",

@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inflateRawSync } from "node:zlib";
 import { beforeAll, describe, expect, it } from "vitest";
+import { canonical, repositoryRoute } from "../support/identity.ts";
 // @ts-expect-error — the distribution modules ship as plain .mjs with no type declarations:
 // they run under bare Node in a release job, with no TypeScript nearby.
 import { buildCatalogIdentity, CATALOG_PATHS, renderCatalog } from "../../scripts/plugins/catalogs.mjs";
@@ -42,6 +43,14 @@ import { buildZip } from "../../scripts/plugins/zip.mjs";
  * to every run to re-prove a contract that already has an owner. What this suite asserts about
  * the runtime is the part the DISTRIBUTION owns: `release.json`'s `runtime` block is the stub's
  * `RUNTIME.json`, read rather than re-derived.
+ *
+ * WHO PUBLISHES IT is this checkout's own identity, derived rather than spelled: the owner on
+ * every catalog is `stamity.publisher` (`canonical().publisher`), the npm source is the package
+ * name, and every route — the install spec, the git-subdir URL, each `marketplace add` — is
+ * built from `repository.url` (`repositoryRoute()`). A renamed fork that follows
+ * `docs/enterprise-forks.md` runs this suite unedited; `test/ci/forkIdentity.test.ts` holds the
+ * file to that. The stub runtime's package name below is the one canonical spelling left, and
+ * it is a fixture: the builder copies it through, so the assertion compares it to itself.
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -197,6 +206,10 @@ function readZip(bytes: Buffer): { path: string; bytes: Buffer }[] {
 /** This repository's own package.json, as the identity reads it. */
 const basePackage = readJson<Record<string, unknown>>(join(REPO_ROOT, "package.json"));
 
+/** The owner every catalog names and the `<owner>/<repository>` route every install command takes. */
+const OWNER = canonical().publisher;
+const SLUG = repositoryRoute().slug;
+
 /**
  * A catalog identity built from a COPY of this repository's package.json with one configuration
  * change applied — the same object shape `resolveDistributionIdentity` reads off disk in a real
@@ -269,7 +282,7 @@ describe("the release manifest", () => {
     expect(manifest.apm).toEqual({
       manifest: "apm.yml",
       primitives: ".apm",
-      installSpec: `zomarit/stamity#plugins/v${VERSION}`,
+      installSpec: `${SLUG}#plugins/v${VERSION}`,
     });
     // The runtime block is the stub's RUNTIME.json, read rather than re-derived.
     expect(manifest.runtime).toEqual({
@@ -376,11 +389,11 @@ describe("the archives", () => {
 describe("the catalogs", () => {
   it("gives Claude a git-subdir source pinned to the release tag by default", () => {
     const catalog = catalogOf(dist, "claude");
-    expect(catalog.owner?.name).toBe("zomarit");
+    expect(catalog.owner?.name).toBe(OWNER);
     expect(catalog.version).toBe(VERSION);
     expect(catalog.plugins[0]?.source).toEqual({
       source: "git-subdir",
-      url: "https://github.com/zomarit/stamity.git",
+      url: `${repositoryRoute().url}.git`,
       path: "claude",
       ref: `plugins/v${VERSION}`,
     });
@@ -412,12 +425,12 @@ describe("the catalogs", () => {
   it("gives Claude an npm source when the client is configured for npm", () => {
     const identity = identityWith({ sources: { claude: { kind: "npm" } } });
     const rendered = renderCatalog("claude", identity, VERSION, FIXED_COMMIT) as Catalog;
-    expect(rendered.plugins[0]?.source).toEqual({ source: "npm", package: "@zomarit/stamity", version: VERSION });
+    expect(rendered.plugins[0]?.source).toEqual({ source: "npm", package: canonical().name, version: VERSION });
   });
 
   it("carries the owner Cursor's reference page requires", () => {
     const catalog = catalogOf(dist, "cursor");
-    expect(catalog.owner).toEqual({ name: "zomarit" });
+    expect(catalog.owner).toEqual({ name: OWNER });
     expect(catalog.metadata?.version).toBe(VERSION);
     expect(catalog.plugins[0]?.source).toBe("./cursor");
     expect(catalog.plugins[0]?.version).toBe(VERSION);
@@ -425,7 +438,7 @@ describe("the catalogs", () => {
 
   it("gives Copilot an owner, a metadata version and a relative source", () => {
     const catalog = catalogOf(dist, "copilot");
-    expect(catalog.owner).toEqual({ name: "zomarit" });
+    expect(catalog.owner).toEqual({ name: OWNER });
     expect(catalog.metadata).toEqual({ description: basePackage["description"], version: VERSION });
     expect(catalog.plugins[0]?.source).toBe("./copilot");
     expect(catalog.plugins[0]?.version).toBe(VERSION);
@@ -437,7 +450,7 @@ describe("the catalogs", () => {
     const identity = identityWith({ ownerEmail: "plugins@example.test" });
     for (const client of ["cursor", "copilot"] as const) {
       const rendered = renderCatalog(client, identity, VERSION, FIXED_COMMIT) as Catalog;
-      expect(rendered.owner, client).toEqual({ name: "zomarit", email: "plugins@example.test" });
+      expect(rendered.owner, client).toEqual({ name: OWNER, email: "plugins@example.test" });
       // Absent by default: an empty contact field is worse than none.
       expect(Object.hasOwn(catalogOf(dist, client).owner ?? {}, "email"), client).toBe(false);
     }
@@ -518,7 +531,7 @@ describe("the tree as a whole", () => {
 
   it("names every client's install, pin, update and rollback route, and the APM install spec", () => {
     const readme = readFileSync(join(dist, "README.md"), "utf8");
-    expect(readme).toContain(`apm install zomarit/stamity#plugins/v${VERSION}`);
+    expect(readme).toContain(`apm install ${SLUG}#plugins/v${VERSION}`);
     for (const client of CLIENTS) {
       const section = readme.split(/^## /m).find((part) => part.includes(`Root: \`${client}/\``));
       expect(section, client).toBeDefined();
@@ -546,7 +559,7 @@ describe("the tree as a whole", () => {
     expect(claudeSection).toContain(
       [
         "```sh",
-        "claude plugin marketplace add zomarit/stamity#plugins/v<previous>",
+        `claude plugin marketplace add ${SLUG}#plugins/v<previous>`,
         "claude plugin install stamity@stamity --scope project",
         "claude plugin update stamity@stamity --scope project",
         "```",
@@ -579,11 +592,11 @@ describe("the tree as a whole", () => {
     const readme = readFileSync(join(dist, "README.md"), "utf8");
     const section = readme.split(/^## /m).find((part) => part.includes("Root: `codex/`"));
     expect(section).toBeDefined();
-    expect(section).toContain("codex plugin marketplace add zomarit/stamity --ref plugin-dist");
+    expect(section).toContain(`codex plugin marketplace add ${SLUG} --ref plugin-dist`);
     expect(section).toContain(
-      `codex plugin marketplace add zomarit/stamity --ref plugins/v${VERSION}`,
+      `codex plugin marketplace add ${SLUG} --ref plugins/v${VERSION}`,
     );
-    expect(section).toContain("codex plugin marketplace add zomarit/stamity --ref plugins/v<previous>");
+    expect(section).toContain(`codex plugin marketplace add ${SLUG} --ref plugins/v<previous>`);
     // The three subcommands the same help output documents, so a pin that only
     // held the flag could not go green against a renamed verb.
     expect(section).toContain("codex plugin add stamity@stamity");
@@ -608,7 +621,7 @@ describe("the tree as a whole", () => {
         "```sh",
         "codex plugin remove stamity@stamity",
         "codex plugin marketplace remove stamity",
-        "codex plugin marketplace add zomarit/stamity --ref plugins/v<previous>",
+        `codex plugin marketplace add ${SLUG} --ref plugins/v<previous>`,
         "codex plugin add stamity@stamity",
         "```",
       ].join("\n"),

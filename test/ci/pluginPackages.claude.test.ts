@@ -12,6 +12,7 @@ import { createManifest } from "../../src/manifest/manifest.ts";
 // @ts-expect-error — the container modules ship as plain .mjs with no type declarations: the
 // generator that builds the plugin roots runs them under bare Node, with no TypeScript nearby.
 import { DISTRIBUTION, place } from "../../scripts/plugins/clients/claude.mjs";
+import { canonical, repositoryRoute } from "../support/identity.ts";
 import { downstreamCheckout, write } from "./downstreamFixture.ts";
 
 /**
@@ -34,6 +35,13 @@ import { downstreamCheckout, write } from "./downstreamFixture.ts";
  * `--runtime` is the same justified stub the emitter suite uses: the two files the generator
  * refuses a directory for lacking. The real bundled runtime has its own proof (P7) and rebuilding
  * it here would add an `npm pack` to every run to re-prove a contract with an owner.
+ *
+ * The root is built from THIS checkout, so the identity it publishes is this checkout's, and
+ * the suite derives it rather than spelling the canonical one: the author is
+ * `stamity.publisher` (`canonical().publisher`) and every `marketplace add` route is built from
+ * `repository.url` (`repositoryRoute()`). A renamed fork runs the suite unedited;
+ * `test/ci/forkIdentity.test.ts` holds the file to that. The stub runtime's package name is a
+ * fixture the generator is handed, not an identity it is asked about.
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -370,7 +378,7 @@ describe("the container manifest, against the vendor's own schema", () => {
 
   it("carries an author name, a homepage URI and string keywords", () => {
     expect(schemaProperty("author").required).toContain("name");
-    expect(manifest.author?.name).toBe("zomarit");
+    expect(manifest.author?.name).toBe(canonical().publisher);
     expect(schemaProperty("homepage").format).toBe("uri");
     expect(URL.canParse(manifest.homepage ?? "")).toBe(true);
     expect(schemaProperty("keywords").items?.type).toBe("string");
@@ -509,7 +517,7 @@ describe("what the root carries", () => {
 
   it("tells its operator how to install it, invoke it, pin it and go back", () => {
     const readme = readFileSync(join(root, "README.md"), "utf8");
-    expect(readme).toContain("claude plugin marketplace add zomarit/stamity");
+    expect(readme).toContain(`claude plugin marketplace add ${repositoryRoute().slug}`);
     expect(readme).toContain("claude plugin install stamity@stamity --scope project");
     for (const form of ["@stamity:<id>", "/stamity:<id>"]) expect(readme, form).toContain(form);
     // The refresh is pinned in the QUALIFIED spelling: `plugin update` defaults to user scope, so
@@ -529,7 +537,7 @@ describe("what the root carries", () => {
     expect(readme).toContain(
       [
         "```sh",
-        "claude plugin marketplace add zomarit/stamity#plugins/v<previous>",
+        `claude plugin marketplace add ${repositoryRoute().slug}#plugins/v<previous>`,
         "claude plugin install stamity@stamity --scope project",
         "claude plugin update stamity@stamity --scope project",
         "```",
