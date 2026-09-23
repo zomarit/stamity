@@ -40,7 +40,8 @@
  *    Copilot, which consumes the same directory shape.
  * 4. **Agents → `.claude/agents/<id>.md`** with rich frontmatter: `name`,
  *    `description`, a `tools:` comma-list allowlist resolved through
- *    {@link resolveAgentGrant}, and `model:`/`effort:` projected from the
+ *    {@link resolveAgentGrant} (plus the verdict roles' path-scoped `Write`
+ *    in the repository layout), and `model:`/`effort:` projected from the
  *    canonical `model_class` through the shared ladder — never invented where
  *    the ladder answers nothing.
  * 5. **Commands → `.claude/commands/<id>.md`** ({@link CLAUDE_COMMANDS_DIR}),
@@ -546,13 +547,23 @@ export const claudeResiduePlanner: ResiduePlanner = {
     // `.claude/rules/` would be the always-on load the demotion exists to
     // reclaim (`../content/ruleDelivery.ts`).
     const demoted = core.demotedRules[TOOL];
+    // The verdict roles' path-scoped report `Write` renders only where the
+    // generated guard can scope it: the repository layout, where the guard's
+    // own location names the root. A plugin hook root (the container layout)
+    // anchors no project root, so that guard refuses every report write, and an
+    // agent carrying the tool there would only waste attempts. The same
+    // predicate picks the settings `hooks` object and the review gate's layout.
+    const scopedWrite =
+      ctx.facts.hookScriptsRoot === undefined && !isPluginOwned(ctx.manifest, TOOL, "hooks");
     for (const item of items) {
       if (item.type === "rule") {
         if (!demoted.has(item.id)) rows.push(buildRuleFile(item, render.rule));
       }
       else if (item.type === "command") rows.push(buildCommandFile(item, render.command));
       else {
-        rows.push(buildAgentFile(item, grantFor(item), modelFrontmatter(item, ctx), render.agent));
+        rows.push(
+          buildAgentFile(item, grantFor(item), modelFrontmatter(item, ctx), render.agent, scopedWrite),
+        );
       }
     }
     rows.push({
@@ -715,14 +726,24 @@ function buildRuleFile(item: CatalogItem, render: (raw: string) => string): Adap
  * is the WIDEST grant; an empty grant emits the explicit empty string, the
  * fail-closed end of the dialect — the client refuses to spawn an agent whose
  * list resolves to no tool.
+ *
+ * `scopedWrite` says the generated guard can scope a report write in this
+ * layout. With it, a grant carrying `writePaths` renders the one path-scoped
+ * `Write` (never `Edit` or `NotebookEdit`). The key's presence is the whole
+ * test: the resolver keeps only patterns that pass the guard's grammar and
+ * omits the key when none remain, and it never reads the key from frontmatter,
+ * so a pack agent claiming write paths renders none.
  */
 function buildAgentFile(
   item: CatalogItem,
   grant: ResolvedAgentGrant,
   model: readonly string[],
   render: (raw: string) => string,
+  scopedWrite: boolean,
 ): AdapterOutput {
-  const tools = toClaudeToolsFrontmatter(grant.allow);
+  const tools = toClaudeToolsFrontmatter(grant.allow, {
+    pathScopedWrite: scopedWrite && grant.writePaths !== undefined,
+  });
   const head = [
     `name: ${emittedId(item)}`,
     `description: ${yamlScalar(item.description)}`,

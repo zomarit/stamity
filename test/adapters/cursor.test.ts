@@ -30,6 +30,7 @@ import { resolveAgentGrant, type ResolvedAgentGrant } from "../../src/roster/age
 import type { GrantableToolCategory } from "../../src/roster/agentPolicies.ts";
 import { RUNTIME_AGENT_IDS } from "../../src/roster/agentPolicies.ts";
 import type { EffortMap, ModelPinMap } from "../../src/roster/modelLadder.ts";
+import { ADAPTER_ALLOWLIST_COVERAGE } from "../../src/tools/translator.ts";
 import type { AdapterOutput } from "../../src/types/content.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { CORPUS_ROOT } from "../corpus/harness.ts";
@@ -1414,6 +1415,28 @@ describe("emitted plan", () => {
       const specialist = contentAt(plan, `${CURSOR_AGENTS_DIR}/stamity-${id}.md`);
       expect(specialist, id).toContain("readonly: true");
     }
+  });
+
+  it("keeps the four verdict roles readonly although their roster rows name report write paths", async () => {
+    // Non-degenerate: every verdict row really carries `writePaths` (C8), the
+    // key the Claude adapter turns into a path-scoped `Write`. Nothing on this
+    // client can scope a write to the reports folder, so the key moves nothing
+    // here and the roles return their full report inline.
+    const verdictIds = ["reviewer", "security", "performance", "design-quality"];
+    for (const id of verdictIds) {
+      const grant = resolveAgentGrant({ runtimeId: `stamity-${id}`, frontmatter: {} });
+      expect(grant.writePaths?.length ?? 0, id).toBeGreaterThan(0);
+    }
+
+    const plan = await planFor(CORPUS_ROOT, { agents: verdictIds, rules: [], commands: [] });
+    for (const id of verdictIds) {
+      const agent = contentAt(plan, `${CURSOR_AGENTS_DIR}/stamity-${id}.md`);
+      expect(agent, id).toContain("readonly: true");
+      expect(agent, id).not.toMatch(/^(tools|writePaths):/m);
+    }
+    expect(ADAPTER_ALLOWLIST_COVERAGE.find((row) => row.tool === "cursor")?.mechanism).toContain(
+      "return their full report inline",
+    );
   });
 
   it("plans identical bytes twice, with every row owned by this adapter", async () => {

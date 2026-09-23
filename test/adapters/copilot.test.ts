@@ -31,7 +31,11 @@ import {
   resolveEffortValue,
   MODEL_LADDER,
 } from "../../src/roster/modelLadder.ts";
-import { PLATFORM_TOOL_MARKER, toCopilotToolsFrontmatter } from "../../src/tools/translator.ts";
+import {
+  ADAPTER_ALLOWLIST_COVERAGE,
+  PLATFORM_TOOL_MARKER,
+  toCopilotToolsFrontmatter,
+} from "../../src/tools/translator.ts";
 import type { AdapterOutput, ContentSelection } from "../../src/types/content.ts";
 import type { RuleDelivery, SetupManifest } from "../../src/types/manifest.ts";
 import type { ModelClass, Tool } from "../../src/types/core.ts";
@@ -471,6 +475,27 @@ describe("agents → .github/agents", () => {
       expect(frontmatterValue(row.content, "tools")).toBe(toCopilotToolsFrontmatter(["read"]));
       expect(frontmatterValue(row.content, "tools")).not.toContain("edit");
     }
+  });
+
+  it("keeps the four verdict roles read-only although their roster rows name report write paths", async () => {
+    // Non-degenerate: every verdict row really carries `writePaths` (C8), the
+    // key the Claude adapter turns into a path-scoped `Write`. Copilot's alias
+    // list cannot scope a write to the reports folder, so the key moves nothing
+    // here and the roles return their full report inline.
+    const verdictIds = ["reviewer", "security", "performance", "design-quality"] as const;
+    for (const id of verdictIds) {
+      const grant = resolveAgentGrant({ runtimeId: `stamity-${id}`, frontmatter: {} });
+      expect(grant.writePaths?.length ?? 0, id).toBeGreaterThan(0);
+    }
+
+    const plan = await planResidue();
+    for (const id of verdictIds) {
+      const row = rowAt(plan, `.github/agents/stamity-${id}.agent.md`);
+      expect(frontmatterValue(row.content, "tools"), id).toBe('["read", "search"]');
+    }
+    expect(ADAPTER_ALLOWLIST_COVERAGE.find((row) => row.tool === "copilot")?.mechanism).toContain(
+      "return their full report inline",
+    );
   });
 
   it("carries a core agent's roster grant unchanged when its own frontmatter would differ", () => {

@@ -833,6 +833,36 @@ describe("grants reach this client through the shared resolver", () => {
       expect(row!.content, id).toContain('sandbox_mode = "read-only"');
     }
   });
+
+  it("keeps the four verdict roles read-only although their roster rows name report write paths", async () => {
+    // Non-degenerate: every verdict row really carries `writePaths` (C8), the
+    // key the Claude adapter turns into a path-scoped `Write`. `sandbox_mode`
+    // cannot scope a write to the reports folder, so the key moves nothing
+    // here and the roles return their full report inline.
+    const verdictIds = ["reviewer", "security", "performance", "design-quality"];
+    for (const id of verdictIds) {
+      const grant = resolveAgentGrant({ runtimeId: `stamity-${id}`, frontmatter: {} });
+      expect(grant.writePaths?.length ?? 0, id).toBeGreaterThan(0);
+    }
+
+    const ctx = ctxOf({ contentRoot: resolveBundledContentRoot(), agents: verdictIds, rules: [] });
+    const rows = byPath(
+      (await codexResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx)).outputs,
+    );
+    for (const id of verdictIds) {
+      const toml = rows.get(`${CODEX_AGENTS_DIR}/stamity-${id}.toml`)?.content ?? "";
+      expect(toml, id).toContain('sandbox_mode = "read-only"');
+      const grantLines = toml.split("\n").filter((line) => line.includes("Stamity role grant:"));
+      expect(grantLines.length, id).toBeGreaterThan(0);
+      for (const line of grantLines) {
+        expect(line, id).toContain(`Stamity role grant: ${toCodexToolsFrontmatter(["read"])}.`);
+        expect(line, id).not.toContain("Write");
+      }
+    }
+    expect(LIVE_CAPABILITY_INPUTS.coverage.find((row) => row.tool === "codex")?.mechanism).toContain(
+      "return their full report inline",
+    );
+  });
 });
 
 // ── 2d. Command surface ──────────────────────────────────────────

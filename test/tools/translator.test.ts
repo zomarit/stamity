@@ -250,6 +250,79 @@ describe("the report write tool", () => {
   });
 });
 
+describe("the path-scoped report write in the Claude dialect", () => {
+  it("appends Write to a read-only grant, right after the read names", () => {
+    expect(toClaudeToolsFrontmatter(["read"], { pathScopedWrite: true })).toBe(
+      "Read, Grep, Glob, Skill, Write",
+    );
+    // The canonical `edit` slot: after the last read name, before every later
+    // category's names, so the rendered order stays the table's order.
+    expect(toClaudeToolsFrontmatter(["read", "planning"], { pathScopedWrite: true })).toBe(
+      "Read, Grep, Glob, Skill, Write, TodoWrite",
+    );
+    expect(toClaudeToolsFrontmatter(["read", "spawn"], { pathScopedWrite: true })).toBe(
+      "Read, Grep, Glob, Skill, Write, Agent, Task",
+    );
+    // No read name at all: the slot is the head of the list.
+    expect(toClaudeToolsFrontmatter(["planning"], { pathScopedWrite: true })).toBe(
+      "Write, TodoWrite",
+    );
+  });
+
+  it("adds no duplicate when edit is already granted", () => {
+    expect(toClaudeToolsFrontmatter(["read", "edit"], { pathScopedWrite: true })).toBe(
+      toClaudeToolsFrontmatter(["read", "edit"]),
+    );
+    expect(
+      toClaudeToolsFrontmatter(FULL_GRANT, { pathScopedWrite: true })
+        .split(", ")
+        .filter((name) => name === CLAUDE_REPORT_WRITE_TOOL),
+    ).toHaveLength(1);
+  });
+
+  it("never grants Edit or NotebookEdit through the path-scoped write", () => {
+    for (const category of FUNCTIONAL_TOOL_CATEGORIES.filter((c) => c !== "edit")) {
+      const names = toClaudeToolsFrontmatter([category], { pathScopedWrite: true }).split(", ");
+      expect(names, category).toContain(CLAUDE_REPORT_WRITE_TOOL);
+      expect(names, category).not.toContain("Edit");
+      expect(names, category).not.toContain("NotebookEdit");
+    }
+  });
+
+  it("returns exactly the one-argument output when the option is off or absent", () => {
+    for (const grant of [["read"], FULL_GRANT, READ_ONLY_GRANT, []] as const) {
+      const plain = toClaudeToolsFrontmatter(grant);
+      expect(toClaudeToolsFrontmatter(grant, {})).toBe(plain);
+      expect(toClaudeToolsFrontmatter(grant, { pathScopedWrite: false })).toBe(plain);
+    }
+    expect(toClaudeToolsFrontmatter(["read"], { pathScopedWrite: false })).not.toContain("Write");
+  });
+});
+
+describe("the verdict-role report write in the coverage rows", () => {
+  it("states the Write scope on Claude and the inline return on every other client", () => {
+    const claude = ADAPTER_ALLOWLIST_COVERAGE.find((row) => row.tool === "claude");
+    expect(claude?.mechanism).toContain("the four verdict roles also carry `Write`");
+    expect(claude?.mechanism).toContain("`writePaths`");
+    expect(claude?.mechanism).toContain("never `Edit` or `NotebookEdit`");
+    expect(claude?.mechanism).not.toContain("return their full report inline");
+
+    for (const row of ADAPTER_ALLOWLIST_COVERAGE.filter((r) => r.tool !== "claude")) {
+      expect(row.mechanism, row.tool).toContain(
+        "verdict roles (reviewer, security, performance, design-quality) stay read-only here and return their full report inline",
+      );
+      expect(row.mechanism, row.tool).not.toContain("`Write`");
+    }
+    // The strength column does not move with the disclosure.
+    expect(ADAPTER_ALLOWLIST_COVERAGE.map((row) => row.strength)).toEqual([
+      "hard",
+      "soft",
+      "hard",
+      "soft",
+    ]);
+  });
+});
+
 describe("task/skill category resolution", () => {
   it("maps Task under spawn as the accepted alias of Agent", () => {
     expect(toClaudeToolsFrontmatter(["spawn"])).toBe("Agent, Task");

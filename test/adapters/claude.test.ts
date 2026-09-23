@@ -33,9 +33,10 @@ import {
 } from "../../src/hooks/scripts.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
 import { extractCustomContent } from "../../src/merge/managedBlocks.ts";
+import { resolveAgentGrant } from "../../src/roster/agentGrants.ts";
 import { AGENT_POLICY_ROSTER } from "../../src/roster/agentPolicies.ts";
 import { DEFAULT_MAX_REVIEW_ITERATIONS } from "../../src/roster/reviewCaps.ts";
-import { toClaudeToolsFrontmatter } from "../../src/tools/translator.ts";
+import { CLAUDE_REPORT_WRITE_TOOL, toClaudeToolsFrontmatter } from "../../src/tools/translator.ts";
 import type { AdapterOutput, ContentSelection } from "../../src/types/content.ts";
 import type {
   McpConfig,
@@ -478,7 +479,17 @@ describe("claude residue over the real corpus", () => {
       // The shared resolver answers a rostered id with the row verbatim, so
       // these bytes are the ones the roster lookup produced before pack agents
       // gained a grant path of their own.
-      expect(parsed.frontmatter["tools"]).toBe(toClaudeToolsFrontmatter(roster!.allow));
+      //
+      // TEST CHANGE 2026-09-24, justified — verdict rows carry a roster-only
+      // `writePaths` (C8); `allow` is unchanged. The four verdict roles now
+      // render the path-scoped `Write` in the repository layout, so the
+      // expectation reads the same key-presence test the adapter applies to the
+      // resolved grant: a row whose patterns all fail the grammar resolves with
+      // no `writePaths` key and expects no `Write`.
+      const grant = resolveAgentGrant({ runtimeId, frontmatter: {} });
+      expect(parsed.frontmatter["tools"]).toBe(
+        toClaudeToolsFrontmatter(roster!.allow, { pathScopedWrite: grant.writePaths !== undefined }),
+      );
 
       const modelClass = item.frontmatter["model_class"] as string;
       expect(Object.hasOwn(EXPECTED_MODEL, modelClass), modelClass).toBe(true);
@@ -490,7 +501,12 @@ describe("claude residue over the real corpus", () => {
 
     // The read-only reviewer pins the dialect: read-class names only — which,
     // after the category resolution, includes Skill (procedure ingestion).
-    expect(agentHead(rows, "stamity-reviewer")["tools"]).toBe("Read, Grep, Glob, Skill");
+    //
+    // TEST CHANGE 2026-09-24, justified — the reviewer's roster row carries
+    // `writePaths` (C8), so the repository layout renders the one path-scoped
+    // `Write` after the read names; its category grant is still read-only, and
+    // `Edit`/`NotebookEdit` stay absent.
+    expect(agentHead(rows, "stamity-reviewer")["tools"]).toBe("Read, Grep, Glob, Skill, Write");
 
     // No row this adapter RENDERS leaks a well-formed unresolved substitution
     // token. CHANGED: the assertion used to cover every row, which was
@@ -557,7 +573,11 @@ describe("claude residue over the real corpus", () => {
       expect(head["name"]).toBe(`stamity-${id}`);
       // Their read-only roster grant, through the translator — the same string
       // every other read-only agent gets, not a specialist-specific list.
-      expect(head["tools"], id).toBe(toClaudeToolsFrontmatter(["read"]));
+      //
+      // TEST CHANGE 2026-09-24, justified — the three lenses are verdict roles
+      // whose roster rows carry `writePaths` (C8), so the repository layout adds
+      // the path-scoped `Write`; the category grant is still `["read"]`.
+      expect(head["tools"], id).toBe(toClaudeToolsFrontmatter(["read"], { pathScopedWrite: true }));
       expect(head["model"], id).toBe(model);
     }
   });
@@ -2048,5 +2068,175 @@ describe("claudeSettingsOwnedKeys", () => {
     expect(claudeSettingsOwnedKeys(pluginBacked.ctx.manifest)).toEqual(["permissions"]);
     // No manifest at all reads as the generated mode.
     expect(claudeSettingsOwnedKeys(null)).toEqual(["permissions", "hooks"]);
+  });
+});
+
+/** A read-only pack agent file, with any extra frontmatter lines a case needs. */
+const packAgent = (id: string, extra: readonly string[]): string =>
+  [
+    "---",
+    `id: ${id}`,
+    "type: agent",
+    `description: Pack fixture agent ${id}.`,
+    "tags: [review]",
+    "capabilities: [read]",
+    ...extra,
+    "---",
+    "",
+    `# ${id}`,
+    "",
+  ].join("\n");
+
+describe("the verdict roles' path-scoped report write", () => {
+  /** The four roles whose roster rows name `writePaths` (C8). */
+  const VERDICT_IDS = [
+    "stamity-reviewer",
+    "stamity-security",
+    "stamity-performance",
+    "stamity-design-quality",
+  ] as const;
+
+  /** Non-degenerate by construction: every verdict row really carries the key the render tests. */
+  function expectVerdictRowsCarryWritePaths(): void {
+    for (const id of VERDICT_IDS) {
+      const grant = resolveAgentGrant({ runtimeId: id, frontmatter: {} });
+      expect(grant.source, id).toBe("roster");
+      expect(grant.allow, id).toEqual(["read"]);
+      expect(grant.writePaths?.length ?? 0, id).toBeGreaterThan(0);
+    }
+  }
+
+  function toolNames(rows: readonly AdapterOutput[], runtimeId: string): string[] {
+    return String(agentHead(rows, runtimeId)["tools"]).split(", ");
+  }
+
+  it("renders Write, and neither Edit nor NotebookEdit, for the four verdict roles in the repository layout", async () => {
+    expectVerdictRowsCarryWritePaths();
+    const { rows } = await planned();
+
+    for (const id of VERDICT_IDS) {
+      const names = toolNames(rows, id);
+      expect(names, id).toEqual(["Read", "Grep", "Glob", "Skill", CLAUDE_REPORT_WRITE_TOOL]);
+      expect(names, id).not.toContain("Edit");
+      expect(names, id).not.toContain("NotebookEdit");
+    }
+  });
+
+  it("never renders Write for a role whose row names no writePaths", async () => {
+    const { rows } = await planned();
+
+    for (const id of ["stamity-researcher", "stamity-test-runner"]) {
+      const grant = resolveAgentGrant({ runtimeId: id, frontmatter: {} });
+      // The control: the key the render reads is absent, and the grant holds
+      // no `edit` category that would name `Write` on its own.
+      expect(grant.source, id).toBe("roster");
+      expect(Object.hasOwn(grant, "writePaths"), id).toBe(false);
+      expect(grant.allow, id).not.toContain("edit");
+      expect(toolNames(rows, id), id).not.toContain(CLAUDE_REPORT_WRITE_TOOL);
+    }
+  });
+
+  it("does not pre-approve Write for the session", async () => {
+    const { rows } = await planned();
+
+    // The permissions chain is read-class only; a verdict role's `Write` stays
+    // prompt-on-use and reaches the file system only through the guard's scope.
+    expect(settingsOf(rows).permissions.allow).not.toContain(CLAUDE_REPORT_WRITE_TOOL);
+    expect(cap("permission-rows")).toBe("3");
+  });
+
+  it("renders no Write for the verdict roles under a plugin hook root (the container layout)", async () => {
+    expectVerdictRowsCarryWritePaths();
+    const control = (await planned()).rows;
+    const { rows } = await planned({ hookScriptsRoot: "${CLAUDE_PLUGIN_ROOT}/hooks" });
+
+    for (const id of VERDICT_IDS) {
+      // The control renders it, so the absence below is the layout's doing.
+      expect(toolNames(control, id), id).toContain(CLAUDE_REPORT_WRITE_TOOL);
+      expect(agentHead(rows, id)["tools"], id).toBe(toClaudeToolsFrontmatter(["read"]));
+      expect(toolNames(rows, id), id).not.toContain(CLAUDE_REPORT_WRITE_TOOL);
+    }
+  });
+
+  it("renders no Write for the verdict roles when an installed plugin carries the hooks", async () => {
+    expectVerdictRowsCarryWritePaths();
+    const { rows } = await planned({
+      plugin: {
+        mode: "plugin-backed",
+        clients: { claude: { version: "1.9.0", classes: ["hooks"] } },
+      },
+    });
+
+    // The agents are still repository-written here (only hooks moved), which
+    // is what makes the render decision visible at all.
+    for (const id of VERDICT_IDS) {
+      expect(agentHead(rows, id)["tools"], id).toBe(toClaudeToolsFrontmatter(["read"]));
+    }
+  });
+
+  it("renders no Write for a verdict row whose every pattern fails the grammar", () => {
+    // The adapter cannot be pointed at another roster, so the row is resolved
+    // here through the same resolver and rendered through the same key-presence
+    // test the adapter applies (`grant.writePaths !== undefined`).
+    const row = AGENT_POLICY_ROSTER.find((entry) => entry.agentId === "stamity-reviewer");
+    expect(row?.writePaths?.length ?? 0).toBeGreaterThan(0);
+    const invalid = { ...row!, writePaths: ["../escape/*.md", ".stamity/**/x.md"] };
+    const grant = resolveAgentGrant({ runtimeId: invalid.agentId, frontmatter: {}, roster: [invalid] });
+
+    expect(grant.allow).toEqual(["read"]);
+    expect(Object.hasOwn(grant, "writePaths")).toBe(false);
+    expect(
+      toClaudeToolsFrontmatter(grant.allow, { pathScopedWrite: grant.writePaths !== undefined }),
+    ).toBe("Read, Grep, Glob, Skill");
+  });
+
+  describe("pack agents", () => {
+    const CHARTER = [
+      "---",
+      "id: charter",
+      "type: charter",
+      "description: fixture charter",
+      "tags: [orchestration]",
+      "load: always",
+      "obsolete_when: fixture trigger",
+      "---",
+      "",
+      "# Test Charter",
+      "",
+    ].join("\n");
+
+    async function packPlan(): Promise<AdapterOutput[]> {
+      const temp = getTemp();
+      await temp.seedFiles({
+        "corpus/charter/stamity-charter.md": CHARTER,
+        // A pack agent shipped under a verdict id: the roster row answers.
+        "pack/agents/stamity-reviewer.md": packAgent("reviewer", []),
+        // A pack agent claiming write paths in its own frontmatter.
+        "pack/agents/stamity-scribe.md": packAgent("scribe", [
+          'writePaths: [".stamity/runs/*/reports/*-scribe-r*.md"]',
+        ]),
+      });
+      const ctx = await ctxOf({
+        selection: { items: { agent: ["reviewer", "scribe"], skill: [], rule: [], command: [] } },
+      });
+      ctx.contentRoot = {
+        root: temp.path("corpus"),
+        packRoots: [{ pack: "ops", root: temp.path("pack"), declaredTools: ["read"] }],
+      };
+      const core = await buildCoreEmissionPlan(ctx);
+      return (await claudeResiduePlanner.planResidue(core, ctx)).outputs;
+    }
+
+    it("renders Write for a pack agent under a verdict id, because the roster row wins", async () => {
+      const rows = await packPlan();
+      expect(agentHead(rows, "stamity-reviewer")["tools"]).toBe("Read, Grep, Glob, Skill, Write");
+    });
+
+    it("never renders Write for a pack agent that claims writePaths itself", async () => {
+      const rows = await packPlan();
+      // Non-degenerate: the pack grant resolves to real read names, so the
+      // absence of `Write` is the claim being ignored, not an empty list.
+      expect(agentHead(rows, "stamity-scribe")["tools"]).toBe("Read, Grep, Glob, Skill");
+    });
   });
 });

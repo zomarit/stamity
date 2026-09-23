@@ -189,9 +189,28 @@ function renderToolNames(
  * would invert the policy. An empty list is the fail-closed end of the
  * dialect — Claude Code refuses to spawn a sub-agent whose list resolves to
  * no tool (code.claude.com/docs/en/sub-agents, accessed 2026-08-13).
+ *
+ * `pathScopedWrite` adds {@link CLAUDE_REPORT_WRITE_TOOL} alone — never `Edit`
+ * or `NotebookEdit` — for a verdict role whose policy row names `writePaths`.
+ * It is not a category grant: the generated pre-tool-use guard still denies
+ * every edit-category call by that agent except a `Write` of a regular file
+ * matching the row's patterns. The name lands in the canonical `edit` slot,
+ * right after the last `read` name, so the list keeps the table's order; a
+ * grant that already renders it gains nothing. Without the option the output
+ * is exactly the one-argument form, which the guard's name-to-category map
+ * (`../hooks/scripts.ts`) keeps calling.
  */
-export function toClaudeToolsFrontmatter(categories: readonly ToolCategory[]): string {
-  return renderToolNames(categories, CLAUDE_TOOL_NAMES).join(", ");
+export function toClaudeToolsFrontmatter(
+  categories: readonly ToolCategory[],
+  options?: { readonly pathScopedWrite?: boolean },
+): string {
+  const names = renderToolNames(categories, CLAUDE_TOOL_NAMES);
+  if (options?.pathScopedWrite === true && !names.includes(CLAUDE_REPORT_WRITE_TOOL)) {
+    const readNames = new Set(CLAUDE_TOOL_NAMES.read ?? []);
+    const slot = names.findLastIndex((name) => readNames.has(name)) + 1;
+    names.splice(slot, 0, CLAUDE_REPORT_WRITE_TOOL);
+  }
+  return names.join(", ");
 }
 
 /**
@@ -279,28 +298,28 @@ export const ADAPTER_ALLOWLIST_COVERAGE: readonly AdapterAllowlistCoverage[] = [
     // code.claude.com/docs/en/sub-agents (accessed 2026-08-13)
     tool: "claude",
     mechanism:
-      "`tools:` sub-agent frontmatter allowlist (comma-separated names); an omitted field inherits every tool, and a list resolving to nothing refuses the spawn",
+      "`tools:` sub-agent frontmatter allowlist (comma-separated names); an omitted field inherits every tool, and a list resolving to nothing refuses the spawn; the four verdict roles also carry `Write`, which the generated pre-tool-use guard admits only for a regular file matching the row's `writePaths` under the repository root — never `Edit` or `NotebookEdit`",
     strength: "hard",
   },
   {
     // cursor.com/docs/agent/subagents (accessed 2026-08-13)
     tool: "cursor",
     mechanism:
-      "`readonly:` boolean — blocks file edits and state-changing shell commands, but cannot name individual tools, so network and delegation grants are unexpressed",
+      "`readonly:` boolean — blocks file edits and state-changing shell commands, but cannot name individual tools, so network and delegation grants are unexpressed; verdict roles (reviewer, security, performance, design-quality) stay read-only here and return their full report inline, because nothing on this client can scope a write to the reports folder",
     strength: "soft",
   },
   {
     // docs.github.com/en/copilot/reference/custom-agents-configuration (accessed 2026-08-13)
     tool: "copilot",
     mechanism:
-      "`tools:` alias list where `[]` grants nothing; tool-level only, with no sub-tool (per-shell-command) granularity",
+      "`tools:` alias list where `[]` grants nothing; tool-level only, with no sub-tool (per-shell-command) granularity; verdict roles (reviewer, security, performance, design-quality) stay read-only here and return their full report inline, because nothing on this client can scope a write to the reports folder",
     strength: "hard",
   },
   {
     // .github/client-contracts.md records the current official-source census.
     tool: "codex",
     mechanism:
-      "no documented native per-agent `tools` key in `.codex/agents/*.toml`; the role grant is developer-instruction prose, while `sandbox_mode` supplies the supported filesystem boundary",
+      "no documented native per-agent `tools` key in `.codex/agents/*.toml`; the role grant is developer-instruction prose, while `sandbox_mode` supplies the supported filesystem boundary; verdict roles (reviewer, security, performance, design-quality) stay read-only here and return their full report inline, because nothing on this client can scope a write to the reports folder",
     strength: "soft",
     provisional: true,
   },
