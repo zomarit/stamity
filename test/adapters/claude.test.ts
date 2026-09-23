@@ -1181,6 +1181,16 @@ describe("user hook lane", () => {
   });
 });
 
+/** The core roster's reviewer writing one file, the call its report scope rules on. */
+function reviewerWrite(filePath: string): string {
+  return JSON.stringify({
+    agent_type: "stamity-reviewer",
+    agent_id: "stamity-reviewer-01",
+    tool_name: "Write",
+    tool_input: { file_path: filePath },
+  });
+}
+
 /**
  * The anchor, and the one row that fails closed without it.
  *
@@ -1197,10 +1207,13 @@ describe("user hook lane", () => {
  */
 describe("the project-directory anchor", () => {
   /** The core roster's read-only reviewer, and a call outside its grant. */
+  // TEST CHANGE (2026-09-24): `Write` became path-scoped for verdict roles (C8),
+  // so a path-less `Write` is `WRITE_PATH_DENIED`; `Edit` keeps the category
+  // refusal this anchor case exists to prove.
   const DENIED = JSON.stringify({
     agent_type: "stamity-reviewer",
     agent_id: "stamity-reviewer-01",
-    tool_name: "Write",
+    tool_name: "Edit",
   });
 
   /** The same agent inside its grant — a non-degenerate allow, not an empty payload. */
@@ -1386,6 +1399,24 @@ describe("the project-directory anchor", () => {
 
       expect(allowed.code).toBe(0);
       expect(allowed.stderr).toBe("");
+    },
+  );
+
+  it.skipIf(HOOK_SHELL === undefined)(
+    "scopes the reviewer's report Write to its pattern under the anchored root, from a sub-directory",
+    async () => {
+      const { root, command } = await emitted();
+      const sub = join(root, "sub", "dir");
+
+      // The emitted guard names its root from its own location, so the session
+      // sitting in `sub/dir` changes nothing about where the report may land.
+      const report = shell(command, sub, reviewerWrite(join(root, ".stamity", "runs", "r", "reports", "p-reviewer-r1.md")), root);
+      expect(report).toMatchObject({ code: 0, stderr: "" });
+
+      const source = shell(command, sub, reviewerWrite(join(root, "src", "x.ts")), root);
+      expect(source.code).toBe(2);
+      expect(source.stderr).toContain('"reasonCode":"WRITE_PATH_DENIED"');
+      expect(source.stderr).toContain('"writeCheck":"no-pattern-match"');
     },
   );
 

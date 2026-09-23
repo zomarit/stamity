@@ -18,6 +18,7 @@ import {
 } from "../../src/tools/categories.ts";
 import {
   ADAPTER_ALLOWLIST_COVERAGE,
+  CLAUDE_REPORT_WRITE_TOOL,
   PLATFORM_TOOL_MARKER,
   buildAllowlistCoverageTable,
   buildAskUserPlatformTable,
@@ -232,6 +233,20 @@ describe("ask-user platform table", () => {
     }
     expect(buildAskUserPlatformTable()).toContain("`AskUserQuestion`");
     expect(buildAskUserPlatformTable()).toContain("_none documented_");
+  });
+});
+
+describe("the report write tool", () => {
+  it("names Claude's single-file Write, which the edit category already lists", () => {
+    // The guard renders it as `WRITE_TOOL` and the Claude adapter renders it
+    // into a verdict role's `tools:` line, so both must be this one token — and
+    // it must be one the edit category names, or the guard's category lookup
+    // would call it unknown before the path scope is ever read.
+    expect(CLAUDE_REPORT_WRITE_TOOL).toBe("Write");
+    const edit = toClaudeToolsFrontmatter(["edit"]).split(", ");
+    expect(edit).toContain(CLAUDE_REPORT_WRITE_TOOL);
+    // The two siblings that share its category are never the report tool.
+    expect(edit.filter((name) => name !== CLAUDE_REPORT_WRITE_TOOL)).toEqual(["Edit", "NotebookEdit"]);
   });
 });
 

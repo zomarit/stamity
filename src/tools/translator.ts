@@ -76,6 +76,19 @@ const CLAUDE_TOOL_NAMES: CategoryToolNames = {
 };
 
 /**
+ * The one Claude Code tool a verdict role's `writePaths` may authorize: the
+ * single-file `Write`, which creates or replaces a whole file and nothing else.
+ * `Edit` and `NotebookEdit` share its `edit` category above and stay withheld,
+ * because a report is written once per round and never patched in place.
+ *
+ * Named here, beside the table it is drawn from, so the generated pre-tool-use
+ * guard that scopes the write to a path (`../hooks/scripts.ts`) and the Claude
+ * adapter that renders it into a verdict role's `tools:` line spell the same
+ * token from one place.
+ */
+export const CLAUDE_REPORT_WRITE_TOOL = "Write";
+
+/**
  * Codex custom agents are TOML files under `.codex/agents/`. The current
  * contract documents no native per-agent `tools` key; `sandbox_mode` is the
  * supported filesystem boundary (the dated source census is in

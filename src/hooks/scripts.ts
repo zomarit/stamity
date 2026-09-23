@@ -15,6 +15,7 @@ import {
 import { AGENT_TOOL_POLICIES_FILE, AGENT_TOOL_POLICIES_SCHEMA } from "../tools/allowlist.ts";
 import { FUNCTIONAL_TOOL_CATEGORIES, type ToolCategory } from "../tools/categories.ts";
 import {
+  CLAUDE_REPORT_WRITE_TOOL,
   toClaudeToolsFrontmatter,
   toCodexToolsFrontmatter,
   toCopilotToolsFrontmatter,
@@ -1055,7 +1056,263 @@ export interface GuardScriptOptions {
    * identify the calling role; their guard therefore remains telemetry.
    */
   identityBearing?: boolean;
+  /**
+   * Where this copy will sit ({@link HookScriptLayout}). Defaults to the layout
+   * `policiesJsonPath` implies, the same derivation `planCoreHookScripts`
+   * passes. Only an identity-bearing guard in the `generated` layout renders the
+   * path-scoped report `Write`, because only there does the script's own
+   * location name the repository root a `writePaths` pattern is relative to; a
+   * container guard, and a guard that cannot name its caller, keep refusing that
+   * `Write` through the category.
+   */
+  layout?: HookScriptLayout;
 }
+
+/** Longest `file_path` the path-scoped `Write` reads, in UTF-16 code units. */
+const MAX_WRITE_FILE_PATH_CHARS = 1024;
+
+/**
+ * The rendered half of the path-scoped report `Write`: the constants and helpers
+ * the identity-bearing guard of the `generated` layout carries, and no other
+ * body. Text, because the guard is a standalone module with nothing to import.
+ *
+ * The decision is fail-closed at every step, each refusal naming its step:
+ *
+ * 1. **The root is the script's own.** {@link GENERATED_ANCHOR_SEGMENTS} is
+ *    walked up from the script exactly as `derivedRoot` does for the other
+ *    bodies — a copy, not a call, because `resolveRepoRoot` also consults an
+ *    environment variable and the cwd, and neither may name the tree a write
+ *    lands in. No shape, no root, no write (`no-root`).
+ * 2. **The spelling is checked before it is resolved.** An absolute path of at
+ *    most {@link MAX_WRITE_FILE_PATH_CHARS} characters, no NUL, and no `.` or
+ *    `..` segment: a checked path and a written path that differ lexically are
+ *    two paths, so `runs/x/../x/reports/…` is refused even though it resolves
+ *    inside the pattern. On win32 a UNC or device prefix and an alternate data
+ *    stream (`:` past the drive) are refused as well.
+ * 3. **The anchor is found top down.** Among the requested path's ancestors,
+ *    the FIRST whose real path is the root's real path anchors the rest, which
+ *    absorbs a `/var` -> `/private/var` link above the root; bottom up, a link
+ *    inside the root that points at the root would anchor and hide itself.
+ * 4. **Nothing below the anchor is a link.** Each existing entry is `lstat`ed:
+ *    a symbolic link (or a win32 junction) anywhere refuses, an intermediate
+ *    that is not a directory refuses, and an existing leaf must be a regular
+ *    file with one link. The walk stops at the first missing entry, because a
+ *    run's first report arrives before its `reports/` folder does.
+ * 5. **The pattern matches per segment.** Equal segment counts, case-sensitive.
+ *    Earlier segments match `*` by prefix, ordered `indexOf` and suffix; the
+ *    final segment's LAST `*` — the round number before `.md` — matches one or
+ *    more ASCII digits only. That is what keeps `*-reviewer-r*.md` from
+ *    admitting `x-reviewer-report-security-r1.md`, whatever role tokens a pass
+ *    slug holds. No `RegExp` is ever built from document data.
+ *
+ * The patterns are filtered first by a literal twin of `isWritePathPattern`
+ * (`../roster/agentPolicies.ts`), which this module may not import from the
+ * rendered text; `test/hooks/scripts.test.ts` binds the two case by case.
+ *
+ * A write swapped under the check (a directory replaced by a link between this
+ * run and the client's write) needs an agent that can already write anywhere,
+ * so the race is not an escalation.
+ */
+function pathScopedWriteHelpers(): string {
+  return `const WRITE_TOOL = ${json(CLAUDE_REPORT_WRITE_TOOL)};
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ANCHOR_SEGMENTS = ${json(GENERATED_ANCHOR_SEGMENTS.toReversed())};
+const MAX_PATH_CHARS = ${MAX_WRITE_FILE_PATH_CHARS};
+const MAX_PATTERN_CHARS = 200;
+const MAX_PATTERN_SEGMENTS = 16;
+const PATTERN_SEGMENT = /^[A-Za-z0-9._*-]+$/;
+
+/** One own property of an object, or undefined: an inherited name never answers. */
+function own(value, key) {
+  return value !== null && typeof value === "object" && Object.hasOwn(value, key) ? value[key] : undefined;
+}
+
+/**
+ * The repository root this guard was emitted into, or "" when it is not sitting
+ * where emission puts one. From the script's own location only: no environment
+ * variable and no working directory decides where a report may land.
+ */
+function guardRoot() {
+  let dir = dirname(HERE);
+  for (const segment of ANCHOR_SEGMENTS) {
+    if (basename(dir) !== segment) return "";
+    dir = dirname(dir);
+  }
+  return dir;
+}
+
+/** A literal twin of the roster's write-path grammar: a pattern it rejects scopes nothing. */
+function isWritePathPattern(value) {
+  if (typeof value !== "string") return false;
+  if (value.length === 0 || value.length > MAX_PATTERN_CHARS) return false;
+  if (value.includes("**")) return false;
+  const segments = value.split("/");
+  if (segments.length > MAX_PATTERN_SEGMENTS) return false;
+  return segments.every((segment) => segment !== "." && segment !== ".." && PATTERN_SEGMENT.test(segment));
+}
+
+/** One segment against its \`*\`-split pieces: prefix, ordered indexOf, suffix. */
+function piecesMatch(text, pieces) {
+  if (pieces.length === 1) return text === pieces[0];
+  const head = pieces[0];
+  const tail = pieces[pieces.length - 1];
+  if (text.length < head.length + tail.length) return false;
+  if (!text.startsWith(head) || !text.endsWith(tail)) return false;
+  const end = text.length - tail.length;
+  let cursor = head.length;
+  for (let index = 1; index < pieces.length - 1; index += 1) {
+    const at = text.indexOf(pieces[index], cursor);
+    if (at < 0 || at + pieces[index].length > end) return false;
+    cursor = at + pieces[index].length;
+  }
+  return true;
+}
+
+/**
+ * The final segment: its last \`*\` — the round number just before the suffix —
+ * takes one or more ASCII digits and nothing else; its other \`*\`s keep the
+ * plain rule. A segment with no \`*\` matches exactly.
+ */
+function finalSegmentMatches(text, segment) {
+  const star = segment.lastIndexOf("*");
+  if (star < 0) return text === segment;
+  const suffix = segment.slice(star + 1);
+  if (text.length < suffix.length || !text.endsWith(suffix)) return false;
+  const rest = text.slice(0, text.length - suffix.length);
+  let cut = rest.length;
+  while (cut > 0 && rest.charCodeAt(cut - 1) >= 48 && rest.charCodeAt(cut - 1) <= 57) cut -= 1;
+  if (cut === rest.length) return false;
+  return piecesMatch(rest.slice(0, cut), segment.slice(0, star).split("*"));
+}
+
+/** A repository-relative POSIX path against one pattern, segment for segment. */
+function patternMatches(path, pattern) {
+  const pathSegments = path.split("/");
+  const patternSegments = pattern.split("/");
+  if (pathSegments.length !== patternSegments.length) return false;
+  const last = patternSegments.length - 1;
+  for (let index = 0; index < last; index += 1) {
+    if (!piecesMatch(pathSegments[index], patternSegments[index].split("*"))) return false;
+  }
+  return finalSegmentMatches(pathSegments[last], patternSegments[last]);
+}
+
+/**
+ * "" when this Write may land, or the one reason it may not. Reads file-system
+ * metadata of the requested path's ancestors (realpath, lstat), never content.
+ */
+function writePathCheck(payload, patterns) {
+  const root = guardRoot();
+  if (root === "") return "no-root";
+  const input = own(payload, "tool_input");
+  if (input === null || typeof input !== "object") return "no-file-path";
+  const raw = own(input, "file_path");
+  if (typeof raw !== "string" || raw.length === 0 || raw.length > MAX_PATH_CHARS || raw.includes("\\0")) {
+    return "no-file-path";
+  }
+  if (!isAbsolute(raw)) return "not-absolute";
+  const segments = raw.split(/[\\\\/]+/);
+  if (segments.some((segment) => segment === "." || segment === "..")) return "dot-segment";
+  if (process.platform === "win32") {
+    if (/^[\\\\/]{2}/.test(raw)) return "device-path";
+    if (segments.slice(1).some((segment) => segment.includes(":"))) return "device-path";
+  }
+
+  const target = resolve(raw);
+  const rootReal = realpathSync.native(root);
+  const chain = [];
+  for (let current = target; ; ) {
+    chain.unshift(current);
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  let anchor = -1;
+  for (let index = 0; index < chain.length && anchor < 0; index += 1) {
+    let real;
+    try {
+      real = realpathSync.native(chain[index]);
+    } catch (error) {
+      // An ancestor that does not resolve anchors nothing, and no deeper one
+      // can; anything that is not a file-system answer is a real fault.
+      if (error && typeof error.code === "string") continue;
+      throw error;
+    }
+    if (relative(rootReal, real) === "") anchor = index;
+  }
+  if (anchor < 0) return "outside-root";
+
+  const tail = chain.slice(anchor + 1).map((entry) => basename(entry));
+  let current = rootReal;
+  for (let index = 0; index < tail.length; index += 1) {
+    current = join(current, tail[index]);
+    let entry;
+    try {
+      entry = lstatSync(current);
+    } catch (error) {
+      // Missing: nothing from here down exists yet, so nothing below is a link.
+      if (error && error.code === "ENOENT") break;
+      throw error;
+    }
+    if (entry.isSymbolicLink()) return "symlink";
+    const leaf = index === tail.length - 1;
+    if (!leaf && !entry.isDirectory()) return "not-a-directory";
+    if (leaf && !entry.isFile()) return "not-a-regular-file";
+    if (leaf && entry.nlink > 1) return "hard-linked";
+  }
+
+  const path = tail.join("/");
+  return patterns.some((pattern) => patternMatches(path, pattern)) ? "" : "no-pattern-match";
+}
+
+/** Drops C0, DEL, C1 and bidirectional controls, so a refusal prints as one inert line. */
+function printable(text) {
+  let out = "";
+  for (const char of text) {
+    const code = char.codePointAt(0);
+    if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) continue;
+    if ((code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069)) continue;
+    out += char;
+  }
+  return out;
+}`;
+}
+
+/**
+ * The branch {@link pathScopedWriteHelpers} serves, rendered inside `evaluate()`
+ * just before the category refusal: after the deny list and the category
+ * lookup, so a tool named on `denyTools` and an unknown tool refuse as before.
+ * It keys on the TOOL name, never on the category — `Edit` and `NotebookEdit`
+ * share `edit` with `Write` and are never path-scoped — and only on a row that
+ * withholds `edit`, since a row holding it is admitted by the category anyway.
+ * A row whose patterns are all invalid falls through to the category refusal.
+ */
+const PATH_SCOPED_WRITE_BRANCH = `    // A verdict role's one write: its own report, through the single-file Write
+    // only, on a regular file under this repository matching its write paths.
+    if (
+      tool === WRITE_TOOL &&
+      category === "edit" &&
+      Array.isArray(policy.allow) &&
+      !policy.allow.includes("edit") &&
+      Array.isArray(policy.writePaths)
+    ) {
+      const patterns = policy.writePaths.filter(isWritePathPattern);
+      if (patterns.length > 0) {
+        const check = writePathCheck(payload, patterns);
+        if (check === "") return null;
+        const root = guardRoot();
+        return {
+          ...subject,
+          category,
+          reasonCode: "WRITE_PATH_DENIED",
+          writeCheck: check,
+          message: printable(
+            \`Agent "\${agentId}" may write only its report — a regular file matching \${patterns.join(" or ")} under \${root === "" ? "the repository root" : root} — and this Write was refused (\${check}). Return the full report inline instead.\`,
+          ),
+        };
+      }
+    }
+`;
 
 /**
  * The tool-call authorization gate: deny-by-default over the policy document
@@ -1087,6 +1344,13 @@ export interface GuardScriptOptions {
  * wrong-schema or unparseable policy document, and any unexpected throw while
  * evaluating one, all reach the same refusal — the document is what the guard
  * knows, and a guard that cannot read it knows nothing.
+ *
+ * One exception narrows a refusal rather than widening a grant: a row that
+ * withholds `edit` but carries `writePaths` may use the single-file `Write` on a
+ * regular file under the repository root that matches one of them — and nothing
+ * else. It is rendered only into the identity-bearing guard of the `generated`
+ * layout, see {@link pathScopedWriteHelpers}; every other body stays
+ * byte-identical to the guard before the field existed.
  */
 export function buildPreToolUseGuardScript(opts: GuardScriptOptions): string {
   const identityBearing = opts.identityBearing ?? true;
@@ -1094,6 +1358,10 @@ export function buildPreToolUseGuardScript(opts: GuardScriptOptions): string {
   // client that ignores the exit status never stops the call, and a client whose
   // payload names no agent never reaches a refusal to report.
   const blocking = opts.failMode !== "fail-open" && identityBearing;
+  // Both conditions again: a guard that cannot name its caller has no row to
+  // read `writePaths` from, and a container guard names no repository root the
+  // patterns could be relative to.
+  const pathScoped = identityBearing && (opts.layout ?? layoutFor(opts.policiesJsonPath)) === "generated";
   const categories = Object.entries(unionToolCategoryMap())
     .map(([name, category]) => `  ${json(name)}: ${json(category)},`)
     .join("\n");
@@ -1128,11 +1396,18 @@ export function buildPreToolUseGuardScript(opts: GuardScriptOptions): string {
       "this script in a container, or the repository's own at the climb, chosen",
       "when this script was rendered — and of nothing else. No environment",
       "variable and no second candidate.",
+      ...(pathScoped
+        ? [
+            "For a path-scoped Write it also reads file-system metadata (realpath, lstat)",
+            "of the requested path's ancestors under the repository root this script's own",
+            "location names — never file content, never an environment variable.",
+          ]
+        : []),
     ],
   )}
 
-import { lstatSync, readFileSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
+${namedImport(["lstatSync", "readFileSync", "statSync", ...(pathScoped ? ["realpathSync"] : [])], "node:fs")}
+${namedImport(["dirname", "join", ...(pathScoped ? ["basename", "isAbsolute", "relative", "resolve"] : [])], "node:path")}
 import { fileURLToPath } from "node:url";
 
 const POLICY_FILE = ${policyPathExpression(opts.policiesJsonPath)};
@@ -1141,7 +1416,7 @@ const MAX_POLICY_BYTES = ${MAX_POLICY_FILE_BYTES};
 const GOVERNED_PREFIX = ${json(CONTENT_PREFIX)};
 const BLOCKING = ${blocking};
 const BLOCK_EXIT = ${BLOCKING_EXIT_CODE};
-const MCP_PREFIX = ${json(MCP_TOOL_PREFIX)};
+const MCP_PREFIX = ${json(MCP_TOOL_PREFIX)};${pathScoped ? `\n${pathScopedWriteHelpers()}` : ""}
 
 /**
  * The policy document THIS run reads — fixed when this script was RENDERED.
@@ -1304,7 +1579,7 @@ function evaluate() {
         message: \`Tool "\${tool}" maps to no category on this client, so it cannot be authorized.\`,
       };
     }
-    if (!Array.isArray(policy.allow) || !policy.allow.includes(category)) {
+${pathScoped ? PATH_SCOPED_WRITE_BRANCH : ""}    if (!Array.isArray(policy.allow) || !policy.allow.includes(category)) {
       return {
         ...subject,
         category,
@@ -2474,6 +2749,7 @@ export function planCoreHookScripts(
         policiesJsonPath,
         failMode,
         identityBearing: !IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS.has(tool),
+        layout: layoutFor(policiesJsonPath),
       }),
       event: "pre_tool_use",
     },

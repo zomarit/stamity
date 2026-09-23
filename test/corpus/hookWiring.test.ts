@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { GENERATED_DIR } from "../../src/emit/hooksInfra.ts";
+import { GENERATED_DIR, HOOKS_GENERATED_DIR } from "../../src/emit/hooksInfra.ts";
 import { CLIENT_EXTENSION_EVENTS, CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
 import {
   buildReviewGateScript,
@@ -89,6 +89,10 @@ interface GuardCase {
  * One authorized and one refused call across the grant shapes the roster
  * actually holds, plus the two scope edges: an agent the corpus added without
  * a roster row, and a caller outside the generated-content namespace.
+ *
+ * Unchanged by the verdict roles' report write, and on purpose: the in-process
+ * `checkToolAccess` is path-blind and unwired, so a path-scoped `Write` is decided
+ * by the emitted guard alone — see "the guard's report write on the shipped roster".
  */
 const GUARD_CASES: readonly GuardCase[] = [
   { agentId: "stamity-implementer", tool: "Edit", allowed: true },
@@ -147,6 +151,35 @@ async function placeGuardFor(tool: Tool): Promise<string> {
 
 function call(agentId: string, tool: string): string {
   return JSON.stringify({ agent_type: agentId, agent_id: `${agentId}-01`, tool_name: tool });
+}
+
+/**
+ * The claude guard and the shipped roster's document at the paths emission
+ * writes them — `<root>/.stamity/generated/hooks/claude/<guard>` and
+ * `<root>/.stamity/generated/<document>` — the one layout in which the guard
+ * names its own repository root and so can scope a report `Write`.
+ */
+async function placeEmittedClaudeGuard(): Promise<string> {
+  const guard = guardOf(planCoreHookScripts(`../../${AGENT_TOOL_POLICIES_FILE}`, "claude"));
+  await getRepo().seedFiles({
+    [`${GENERATED_DIR}/${AGENT_TOOL_POLICIES_FILE}`]: buildAgentToolPoliciesJson(AGENT_POLICY_ROSTER),
+    [`${HOOKS_GENERATED_DIR}/claude/${guard.fileName}`]: guard.content,
+  });
+  return getRepo().path(...HOOKS_GENERATED_DIR.split("/"), "claude", guard.fileName);
+}
+
+/** A report file of one run under the fixture root, in the native spelling a client sends. */
+function reportPath(name: string): string {
+  return getRepo().path(".stamity", "runs", "2026-09-23_demo", "reports", name);
+}
+
+function writeCall(agentId: string, tool: string, filePath: string): string {
+  return JSON.stringify({
+    agent_type: agentId,
+    agent_id: `${agentId}-01`,
+    tool_name: tool,
+    tool_input: { file_path: filePath },
+  });
 }
 
 /** The refusal event a guard reports on stderr, parsed. */
@@ -306,28 +339,23 @@ describe("emitted policy document", () => {
     });
   });
 
+  // TEST CHANGE (2026-09-24): this case pinned the field as INERT — every
+  // verdict role's report Write refused through the category — until the guard
+  // read `writePaths`. The guard now does (C8), so the case runs the claude guard
+  // in the layout emission writes and pins the enforcement instead: the role's
+  // own report is admitted to `Write` and still refused to `Edit`. A guard placed
+  // outside the emitted layout names no root and still refuses the Write — the
+  // last case of the describe below.
   it.each(["stamity-reviewer", "stamity-security", "stamity-performance", "stamity-design-quality"])(
-    "still refuses %s's report Write through the category: the field ships inert",
+    "admits %s's Write of its own report and still refuses its Edit",
     async (agentId) => {
-      // The guard does not read `writePaths` yet, so a verdict role's report
-      // write is denied exactly as before — the fail-closed posture an older
-      // guard keeps when it meets the new document.
-      const guard = await placeGuardFor("claude");
-      const role = agentId.slice("stamity-".length);
-      const result = run(
-        guard,
-        JSON.stringify({
-          agent_type: agentId,
-          agent_id: `${agentId}-01`,
-          tool_name: "Write",
-          tool_input: {
-            file_path: getRepo().path(".stamity", "runs", "2026-09-23_demo", "reports", `u1-${role}-r1.md`),
-          },
-        }),
-      );
+      const guard = await placeEmittedClaudeGuard();
+      const report = reportPath(`u1-${agentId.slice("stamity-".length)}-r1.md`);
 
-      expect(result.code).toBe(2);
-      expect(refusal(result)).toMatchObject({ blocked: true, agentId, reasonCode: "CATEGORY_DENIED" });
+      expect(run(guard, writeCall(agentId, "Write", report)), agentId).toEqual({ code: 0, stdout: "", stderr: "" });
+      const edit = run(guard, writeCall(agentId, "Edit", report));
+      expect(edit.code, agentId).toBe(2);
+      expect(refusal(edit), agentId).toMatchObject({ blocked: true, agentId, reasonCode: "CATEGORY_DENIED" });
     },
   );
 
@@ -507,5 +535,72 @@ describe("the work-scoped review gate beside the core set", () => {
       expect(gate, guarantee.tool).toContain(`const BLOCKING = ${String(blocking)};`);
       expect(gate, guarantee.tool).toContain(`const BLOCK_EXIT = ${guarantee.blockingExitCode ?? 2};`);
     }
+  });
+});
+
+/**
+ * The verdict roles' report write on the shipped roster, through the claude
+ * guard in the layout emission writes. The per-role patterns (one role, one
+ * pattern) and the round-number rule together are what keep one verdict role
+ * from creating or overwriting another's report.
+ */
+describe("the guard's report write on the shipped roster", () => {
+  it("refuses a verdict role writing another role's report name", async () => {
+    const guard = await placeEmittedClaudeGuard();
+
+    const result = run(guard, writeCall("stamity-reviewer", "Write", reportPath("u1-security-r1.md")));
+
+    expect(result.code).toBe(2);
+    expect(refusal(result)).toMatchObject({
+      reasonCode: "WRITE_PATH_DENIED",
+      writeCheck: "no-pattern-match",
+    });
+  });
+
+  it("decides by the role token before the round, whatever role tokens the pass slug holds", async () => {
+    const guard = await placeEmittedClaudeGuard();
+    const cases: [string, string, boolean][] = [
+      // Another role's report of a pass whose slug holds this role's token.
+      ["stamity-reviewer", "ctx-reviewer-report-security-r1.md", false],
+      ["stamity-security", "x-security-reviewer-r1.md", false],
+      // Each role's OWN report of that same pass.
+      ["stamity-security", "ctx-reviewer-report-security-r1.md", true],
+      ["stamity-reviewer", "x-security-reviewer-r1.md", true],
+    ];
+
+    for (const [agentId, name, allowed] of cases) {
+      const result = run(guard, writeCall(agentId, "Write", reportPath(name)));
+      const label = `${agentId} -> ${name}`;
+      if (allowed) {
+        expect(result, label).toEqual({ code: 0, stdout: "", stderr: "" });
+        continue;
+      }
+      expect(result.code, label).toBe(2);
+      expect(refusal(result), label).toMatchObject({ reasonCode: "WRITE_PATH_DENIED", writeCheck: "no-pattern-match" });
+    }
+  });
+
+  it("scopes per row: a read-only role without write paths keeps the category, an editing role writes anywhere", async () => {
+    const guard = await placeEmittedClaudeGuard();
+
+    const researcher = run(guard, writeCall("stamity-researcher", "Write", reportPath("u1-reviewer-r1.md")));
+    expect(researcher.code).toBe(2);
+    expect(refusal(researcher)).toMatchObject({ reasonCode: "CATEGORY_DENIED" });
+    expect(run(guard, writeCall("stamity-implementer", "Write", getRepo().path("src", "index.ts")))).toEqual({
+      code: 0,
+      stdout: "",
+      stderr: "",
+    });
+  });
+
+  it("refuses the report Write from a guard placed outside the emitted layout", async () => {
+    // Four levels above `hooks/` is no repository root, so there is nothing to
+    // anchor the pattern on: the fail-closed posture of a misplaced guard.
+    const guard = await placeGuardFor("claude");
+
+    const result = run(guard, writeCall("stamity-reviewer", "Write", reportPath("u1-reviewer-r1.md")));
+
+    expect(result.code).toBe(2);
+    expect(refusal(result)).toMatchObject({ reasonCode: "WRITE_PATH_DENIED", writeCheck: "no-root" });
   });
 });

@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
-import { rm, symlink, writeFile } from "node:fs/promises";
+import { link, rm, symlink, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -31,17 +31,21 @@ import {
 import { formatLearningsIndex, loadValidatedLearnings } from "../../src/learnings/store.ts";
 import { computeLearningIntegrity } from "../../src/learnings/validation.ts";
 import { RENAME_RETRY_COUNT } from "../../src/merge/atomicWrite.ts";
-import { AGENT_POLICY_ROSTER } from "../../src/roster/agentPolicies.ts";
+import { AGENT_POLICY_ROSTER, isWritePathPattern } from "../../src/roster/agentPolicies.ts";
 import {
   clampReviewIterations,
   DEFAULT_MAX_REVIEW_ITERATIONS,
   HARD_MAX_REVIEW_ITERATIONS,
   MIN_MAX_REVIEW_ITERATIONS,
 } from "../../src/roster/reviewCaps.ts";
-import { buildAgentToolPoliciesJson, type AgentToolPolicy } from "../../src/tools/allowlist.ts";
+import {
+  AGENT_TOOL_POLICIES_SCHEMA,
+  buildAgentToolPoliciesJson,
+  type AgentToolPolicy,
+} from "../../src/tools/allowlist.ts";
 import { TOOLS } from "../../src/types/core.ts";
 import { EngineError } from "../../src/types/errors.ts";
-import { useTempDir } from "../support/tempDir.ts";
+import { makeTempDir, useTempDir } from "../support/tempDir.ts";
 
 /**
  * Real temp directories and real child processes: the deliverable here is a
@@ -166,6 +170,16 @@ function refusal(result: RunResult): Record<string, unknown> {
 
 function call(agentId: string, tool: string): string {
   return JSON.stringify({ agent_type: agentId, agent_id: `${agentId}-01`, tool_name: tool });
+}
+
+/** A governed call carrying `tool_input` as given — absent when `toolInput` is undefined. */
+function writeCall(agentId: string, tool: string, toolInput?: unknown): string {
+  return JSON.stringify({
+    agent_type: agentId,
+    agent_id: `${agentId}-01`,
+    tool_name: tool,
+    ...(toolInput === undefined ? {} : { tool_input: toolInput }),
+  });
 }
 
 describe("planCoreHookScripts", () => {
@@ -927,6 +941,510 @@ describe("buildPreToolUseGuardScript", () => {
     ]) {
       expect(guard, name).toContain(`  ${JSON.stringify(name)}: ${JSON.stringify(category)},`);
     }
+  });
+});
+
+/**
+ * The one write a verdict role holds: its own report file, through the
+ * single-file `Write`, under the repository the guard's own location names.
+ *
+ * Every case runs the rendered guard as a child process against a real tree,
+ * because the property under test is what a client sees — the exit status and
+ * the refusal line — and the refusals are about the filesystem (links, hard
+ * links, a directory where a file should be), which no virtual volume models.
+ */
+describe("the guard's path-scoped report write", () => {
+  const GUARD_DIR = ".stamity/generated/hooks/claude";
+  const DOCUMENT = `.stamity/generated/${POLICY_FILE}`;
+  const REVIEWER_PATTERN = ".stamity/runs/*/reports/*-reviewer-r*.md";
+  const RUN = "2026-09-23_ctx";
+  const REPORT = ["repo", ".stamity", "runs", RUN, "reports", "u1-reviewer-r1.md"] as const;
+  const WINDOWS = process.platform === "win32";
+  /** Directory links: a junction on win32, where a directory symlink needs a privilege a CI runner may lack. */
+  const DIR_LINK = WINDOWS ? "junction" : "dir";
+
+  const WRITE_ROSTER: readonly AgentToolPolicy[] = [
+    {
+      agentId: "stamity-reviewer",
+      allow: ["read"],
+      writePaths: [REVIEWER_PATTERN],
+      rationale: "Reads the diff; its one write is its report.",
+    },
+    {
+      // Holds `edit`, so the category admits every write before a path is
+      // read. The per-role pattern, not a bare `*.md`: under the round-number
+      // rule a bare `*.md` would admit only a digits-only basename.
+      agentId: "stamity-implementer",
+      allow: ["read", "edit"],
+      writePaths: [".stamity/runs/*/reports/*-implementer-r*.md"],
+      rationale: "Writes the unit's files.",
+    },
+    {
+      agentId: "stamity-researcher",
+      allow: ["read"],
+      rationale: "Reads and reports inline; no write path at all.",
+    },
+    {
+      // A final segment with no `*` matches exactly — the per-segment rule.
+      agentId: "stamity-security",
+      allow: ["read"],
+      writePaths: [".stamity/runs/*/reports/fixed.md"],
+      rationale: "Fixture row for the exact final segment.",
+    },
+  ];
+
+  /** The repository root of the fixture: `<tmp>/repo`, so `<tmp>/other` is a sibling checkout. */
+  function root(): string {
+    return getRepo().path("repo");
+  }
+
+  /** Guard and document in the layout emission writes, under `<tmp>/repo`. */
+  async function placeWriteGuard(
+    opts: { identityBearing?: boolean; layout?: "generated" | "container"; document?: string } = {},
+  ): Promise<string> {
+    await getRepo().seedFiles({
+      [`repo/${DOCUMENT}`]: opts.document ?? buildAgentToolPoliciesJson(WRITE_ROSTER),
+      "repo/src/app.ts": "export {};\n",
+    });
+    return place(
+      `repo/${GUARD_DIR}/guard.mjs`,
+      buildPreToolUseGuardScript({
+        policiesJsonPath: `../../${POLICY_FILE}`,
+        failMode: "fail-closed",
+        ...(opts.identityBearing === undefined ? {} : { identityBearing: opts.identityBearing }),
+        ...(opts.layout === undefined ? {} : { layout: opts.layout }),
+      }),
+    );
+  }
+
+  function writeTo(agentId: string, filePath: string, tool = "Write"): string {
+    return writeCall(agentId, tool, { file_path: filePath });
+  }
+
+  /** A path spelled segment by segment with the native separator, never normalized. */
+  function spelled(...segments: string[]): string {
+    return [getRepo().dir, ...segments].join(sep);
+  }
+
+  /** The refusal a denied Write earns, with its `writeCheck`. */
+  function expectWriteDenied(result: RunResult, writeCheck: string, label?: string): void {
+    expect(result.code, label).toBe(2);
+    expect(refusal(result), label).toMatchObject({
+      blocked: true,
+      category: "edit",
+      reasonCode: "WRITE_PATH_DENIED",
+      writeCheck,
+    });
+  }
+
+  it("refuses the reviewer's Write outside its pattern, naming why", async () => {
+    const guard = await placeWriteGuard();
+
+    const result = run(guard, { input: writeTo("stamity-reviewer", getRepo().path("repo", "src", "app.ts")) });
+
+    expect(result.code).toBe(2);
+    expect(refusal(result)).toMatchObject({
+      blocked: true,
+      agentId: "stamity-reviewer",
+      tool: "Write",
+      category: "edit",
+      reasonCode: "WRITE_PATH_DENIED",
+      writeCheck: "no-pattern-match",
+    });
+    expect(result.stdout).toBe("");
+  });
+
+  it("keeps Edit and NotebookEdit denied through the category, even on the report path itself", async () => {
+    // Kills the mutant that branches on the category instead of the tool name:
+    // both share `edit` with Write, and neither is ever path-scoped.
+    const guard = await placeWriteGuard();
+
+    for (const tool of ["Edit", "NotebookEdit"]) {
+      const result = run(guard, { input: writeTo("stamity-reviewer", getRepo().path(...REPORT), tool) });
+      expect(result.code, tool).toBe(2);
+      expect(refusal(result), tool).toMatchObject({ reasonCode: "CATEGORY_DENIED", category: "edit" });
+      expect(refusal(result), tool).not.toHaveProperty("writeCheck");
+    }
+  });
+
+  it("allows the reviewer's own report, before and after the reports folder exists", async () => {
+    const guard = await placeWriteGuard();
+
+    // The first report of a run arrives before `reports/` does: the walk stops
+    // at the first missing entry, since nothing below it can be a link yet.
+    expect(existsSync(getRepo().path(...REPORT.slice(0, -1)))).toBe(false);
+    expect(run(guard, { input: writeTo("stamity-reviewer", getRepo().path(...REPORT)) })).toEqual({
+      code: 0,
+      stdout: "",
+      stderr: "",
+    });
+
+    await getRepo().seedFiles({ [REPORT.join("/")]: "# round 1\n" });
+    expect(run(guard, { input: writeTo("stamity-reviewer", getRepo().path(...REPORT)) })).toEqual({
+      code: 0,
+      stdout: "",
+      stderr: "",
+    });
+  });
+
+  it("refuses a relative path and every dot segment, even one that resolves inside the pattern", async () => {
+    const guard = await placeWriteGuard();
+
+    expectWriteDenied(
+      run(guard, { input: writeTo("stamity-reviewer", "reports/u1-reviewer-r1.md") }),
+      "not-absolute",
+    );
+    expectWriteDenied(
+      run(guard, {
+        input: writeTo(
+          "stamity-reviewer",
+          spelled("repo", ".stamity", "runs", RUN, "reports", "..", "..", "..", "src", "a-reviewer-r1.md"),
+        ),
+      }),
+      "dot-segment",
+    );
+    // `runs/x/../x/reports/…` names a path the pattern admits once resolved; the
+    // spelling is refused anyway, because a checked path and a written path
+    // that differ lexically are two paths.
+    expectWriteDenied(
+      run(guard, {
+        input: writeTo(
+          "stamity-reviewer",
+          spelled("repo", ".stamity", "runs", "x", "..", "x", "reports", "a-reviewer-r1.md"),
+        ),
+      }),
+      "dot-segment",
+    );
+    expectWriteDenied(
+      run(guard, {
+        input: writeTo("stamity-reviewer", spelled("repo", ".stamity", "runs", RUN, ".", "reports", "a-reviewer-r1.md")),
+      }),
+      "dot-segment",
+    );
+  });
+
+  it("refuses a sibling checkout's report path as outside its root", async () => {
+    // The lane-worktree case: a second checkout carries the same relative
+    // layout, and the guard answers only for the root its own location names.
+    const guard = await placeWriteGuard();
+    await getRepo().seedFiles({ "other/.stamity/runs/x/reports/.keep": "" });
+
+    expectWriteDenied(
+      run(guard, {
+        input: writeTo("stamity-reviewer", getRepo().path("other", ".stamity", "runs", "x", "reports", "u1-reviewer-r1.md")),
+      }),
+      "outside-root",
+    );
+  });
+
+  it("refuses a linked runs folder, and a link inside the root that points at the root", async () => {
+    const guard = await placeWriteGuard();
+    await getRepo().seedFiles({ "elsewhere/runs/x/reports/.keep": "" });
+    await symlink(getRepo().path("elsewhere", "runs"), getRepo().path("repo", ".stamity", "runs"), DIR_LINK);
+    // The anchor is found top down, so the root itself anchors and `alias` is a
+    // link in the tail; found bottom up, `alias` would anchor and hide itself.
+    await symlink(root(), getRepo().path("repo", "alias"), DIR_LINK);
+
+    const cases: [string, string][] = [
+      ["runs", getRepo().path("repo", ".stamity", "runs", "x", "reports", "u1-reviewer-r1.md")],
+      ["alias", getRepo().path("repo", "alias", ".stamity", "runs", "x", "reports", "u1-reviewer-r1.md")],
+    ];
+    for (const [label, filePath] of cases) {
+      expectWriteDenied(run(guard, { input: writeTo("stamity-reviewer", filePath) }), "symlink", label);
+    }
+  });
+
+  it("refuses a linked reports folder and a linked leaf", async () => {
+    const guard = await placeWriteGuard();
+    await getRepo().seedFiles({
+      "elsewhere/reports/.keep": "",
+      "elsewhere/target.md": "outside\n",
+      [`repo/.stamity/runs/${RUN}/.keep`]: "",
+      "repo/.stamity/runs/leaf/reports/.keep": "",
+    });
+    await symlink(getRepo().path("elsewhere", "reports"), getRepo().path("repo", ".stamity", "runs", RUN, "reports"), DIR_LINK);
+    await symlink(getRepo().path("elsewhere", "target.md"), getRepo().path("repo", ".stamity", "runs", "leaf", "reports", "u1-reviewer-r1.md"));
+
+    expectWriteDenied(run(guard, { input: writeTo("stamity-reviewer", getRepo().path(...REPORT)) }), "symlink", "reports");
+    expectWriteDenied(
+      run(guard, {
+        input: writeTo("stamity-reviewer", getRepo().path("repo", ".stamity", "runs", "leaf", "reports", "u1-reviewer-r1.md")),
+      }),
+      "symlink",
+      "leaf",
+    );
+    // Nothing was written through either link.
+    expect(readFileSync(getRepo().path("elsewhere", "target.md"), "utf8")).toBe("outside\n");
+  });
+
+  it("refuses a hard-linked leaf and a directory where the report file should be", async () => {
+    const guard = await placeWriteGuard();
+    await getRepo().seedFiles({
+      "elsewhere/target.md": "outside\n",
+      [`repo/.stamity/runs/${RUN}/reports/u2-reviewer-r1.md/.keep`]: "",
+    });
+    await link(getRepo().path("elsewhere", "target.md"), getRepo().path(...REPORT));
+
+    expectWriteDenied(run(guard, { input: writeTo("stamity-reviewer", getRepo().path(...REPORT)) }), "hard-linked");
+    expectWriteDenied(
+      run(guard, {
+        input: writeTo("stamity-reviewer", getRepo().path("repo", ".stamity", "runs", RUN, "reports", "u2-reviewer-r1.md")),
+      }),
+      "not-a-regular-file",
+    );
+  });
+
+  it("refuses a file standing where a folder on the path should be", async () => {
+    const guard = await placeWriteGuard();
+    await getRepo().seedFiles({ [`repo/.stamity/runs/${RUN}/reports`]: "a file, not a folder\n" });
+
+    expectWriteDenied(run(guard, { input: writeTo("stamity-reviewer", getRepo().path(...REPORT)) }), "not-a-directory");
+  });
+
+  it("matches the pattern per segment, the round as digits only, and case-sensitively", async () => {
+    const guard = await placeWriteGuard();
+    const reports = ["repo", ".stamity", "runs", RUN, "reports"];
+
+    for (const leaf of [
+      ["sub", "u1-reviewer-r1.md"],
+      ["u1-reviewer-r1.txt"],
+      ["u1-reviewer-r.md"],
+      ["u1-reviewer-r1a.md"],
+      ["u1-security-r1.md"],
+    ]) {
+      expectWriteDenied(
+        run(guard, { input: writeTo("stamity-reviewer", getRepo().path(...reports, ...leaf)) }),
+        "no-pattern-match",
+        leaf.join("/"),
+      );
+    }
+    expectWriteDenied(
+      run(guard, {
+        input: writeTo("stamity-reviewer", getRepo().path("repo", ".Stamity", "runs", RUN, "reports", "u1-reviewer-r1.md")),
+      }),
+      "no-pattern-match",
+      ".Stamity",
+    );
+    // A multi-digit round and a pass slug holding digits of its own both pass.
+    for (const leaf of ["u1-reviewer-r12.md", "p2-reviewer-r3.md"]) {
+      expect(run(guard, { input: writeTo("stamity-reviewer", getRepo().path(...reports, leaf)) }).code, leaf).toBe(0);
+    }
+  });
+
+  it("matches a final segment with no star exactly", async () => {
+    const guard = await placeWriteGuard();
+    const reports = ["repo", ".stamity", "runs", RUN, "reports"];
+
+    expect(run(guard, { input: writeTo("stamity-security", getRepo().path(...reports, "fixed.md")) })).toEqual({
+      code: 0,
+      stdout: "",
+      stderr: "",
+    });
+    expectWriteDenied(
+      run(guard, { input: writeTo("stamity-security", getRepo().path(...reports, "fixed1.md")) }),
+      "no-pattern-match",
+    );
+  });
+
+  it("refuses a Write that names no usable file path", async () => {
+    const guard = await placeWriteGuard();
+    const inputs: [string, unknown][] = [
+      ["missing tool_input", undefined],
+      ["string tool_input", "not an object"],
+      ["null tool_input", null],
+      ["empty file_path", { file_path: "" }],
+      ["numeric file_path", { file_path: 42 }],
+      ["no file_path", { content: "x" }],
+      ["oversized file_path", { file_path: `${getRepo().path(...REPORT.slice(0, -1))}${sep}${"a".repeat(1100)}-reviewer-r1.md` }],
+      ["NUL in file_path", { file_path: `${getRepo().path(...REPORT)}\0.md` }],
+    ];
+
+    for (const [label, input] of inputs) {
+      expectWriteDenied(run(guard, { input: writeCall("stamity-reviewer", "Write", input) }), "no-file-path", label);
+    }
+  });
+
+  it("refuses when the guard does not sit in the emitted layout", async () => {
+    // Four levels above `hooks/guard.mjs` is not a repository root; the guard
+    // names none, so nothing anchors the pattern.
+    await getRepo().seedFiles({ [POLICY_FILE]: buildAgentToolPoliciesJson(WRITE_ROSTER) });
+    const guard = await place(
+      GUARD_PATH,
+      buildPreToolUseGuardScript({ policiesJsonPath: `../${POLICY_FILE}`, failMode: "fail-closed" }),
+    );
+
+    expectWriteDenied(
+      run(guard, {
+        input: writeTo("stamity-reviewer", getRepo().path(".stamity", "runs", RUN, "reports", "u1-reviewer-r1.md")),
+      }),
+      "no-root",
+    );
+  });
+
+  it("anchors on the directory the emitter writes, and says what it reads to do so", () => {
+    // Same binding as the session start's: the guard's `ANCHOR_SEGMENTS` is a
+    // literal twin of `HOOKS_GENERATED_DIR`, which cannot be imported here.
+    const guard = buildPreToolUseGuardScript({ policiesJsonPath: `../../${POLICY_FILE}`, failMode: "fail-closed" });
+    const segments = HOOKS_GENERATED_DIR.split("/");
+
+    expect(guard).toContain(`const ANCHOR_SEGMENTS = ${JSON.stringify(segments.toReversed())};`);
+    expect(guard).toContain('const WRITE_TOOL = "Write";');
+    // The posture header names the new reads, and still the old ones.
+    expect(guard).toContain("// Reads outside repo state: the pending call's payload on stdin.");
+    expect(guard).toMatch(/file-system metadata \(realpath, lstat\)/);
+    expect(guard).toContain("location names — never file content, never an environment variable.");
+  });
+
+  it("falls back to the category refusal where no write path applies", async () => {
+    const guard = await placeWriteGuard();
+    const inPattern = getRepo().path(...REPORT);
+
+    // Scope is per row: a read-only agent with no write path gets the category.
+    const researcher = run(guard, { input: writeTo("stamity-researcher", inPattern) });
+    expect(researcher.code).toBe(2);
+    expect(refusal(researcher)).toMatchObject({ reasonCode: "CATEGORY_DENIED" });
+    // An agent holding `edit` writes anywhere; its write path narrows nothing.
+    expect(run(guard, { input: writeTo("stamity-implementer", getRepo().path("repo", "src", "app.ts")) })).toEqual({
+      code: 0,
+      stdout: "",
+      stderr: "",
+    });
+  });
+
+  it("falls back to the category refusal when the row's only pattern is invalid", async () => {
+    // Written by hand, because the emitter drops an invalid pattern and omits
+    // the key: this document is what a hand edit or an older emitter leaves.
+    const document = JSON.stringify({
+      schema: AGENT_TOOL_POLICIES_SCHEMA,
+      policies: [{ agentId: "stamity-reviewer", allow: ["read"], writePaths: ["../*.md"], rationale: "x" }],
+    });
+    const guard = await placeWriteGuard({ document });
+
+    const result = run(guard, { input: writeTo("stamity-reviewer", getRepo().path(...REPORT)) });
+
+    expect(result.code).toBe(2);
+    expect(refusal(result)).toMatchObject({ reasonCode: "CATEGORY_DENIED" });
+  });
+
+  it("reads the write-path grammar exactly as the roster's own validator does", async () => {
+    // The rendered twin of `isWritePathPattern` is a literal mirror; this table
+    // binds the two. A valid pattern turns the Write below into a path check
+    // (`WRITE_PATH_DENIED`, since `src/app.ts` matches none); an invalid one
+    // leaves the category refusal.
+    const candidates: unknown[] = [
+      ".stamity/*.md",
+      "a".repeat(200),
+      "a".repeat(201),
+      Array.from({ length: 16 }, () => "a").join("/"),
+      Array.from({ length: 17 }, () => "a").join("/"),
+      "a/**/b.md",
+      "a/../b.md",
+      "./a.md",
+      "/abs.md",
+      "a//b.md",
+      "a b.md",
+      "C:/x.md",
+      "a\\b.md",
+      "",
+      42,
+    ];
+    const document = JSON.stringify({
+      schema: AGENT_TOOL_POLICIES_SCHEMA,
+      policies: candidates.map((pattern, index) => ({
+        agentId: `stamity-probe-${index}`,
+        allow: ["read"],
+        writePaths: [pattern],
+        rationale: "grammar probe",
+      })),
+    });
+    const guard = await placeWriteGuard({ document });
+
+    for (const [index, pattern] of candidates.entries()) {
+      const result = run(guard, { input: writeTo(`stamity-probe-${index}`, getRepo().path("repo", "src", "app.ts")) });
+      expect(refusal(result)["reasonCode"], JSON.stringify(pattern)).toBe(
+        isWritePathPattern(pattern) ? "WRITE_PATH_DENIED" : "CATEGORY_DENIED",
+      );
+    }
+  });
+
+  it.each([
+    ["an identity-free client", { identityBearing: false }],
+    ["a container", { layout: "container" as const }],
+  ])("renders no path scope for %s, which keeps the category refusal", async (_label, opts) => {
+    const guard = await placeWriteGuard(opts);
+    const text = readFileSync(guard, "utf8");
+    expect(text).not.toContain("WRITE_TOOL");
+    expect(text).not.toContain("realpathSync");
+
+    const result = run(guard, { input: writeTo("stamity-reviewer", getRepo().path(...REPORT)) });
+    expect(refusal(result)).toMatchObject({ reasonCode: "CATEGORY_DENIED" });
+  });
+
+  it("allows the report path spelled through the unresolved temp root", async () => {
+    // macOS `os.tmpdir()` sits behind `/var` -> `/private/var`: the guard's own
+    // root is resolved, the payload's spelling is not, and the anchor walk has to
+    // reconcile the two above the root rather than call the path outside it.
+    const raw = await makeTempDir("hook-scripts-raw", { realpath: false });
+    try {
+      await raw.seedFiles({ [`repo/${DOCUMENT}`]: buildAgentToolPoliciesJson(WRITE_ROSTER) });
+      await raw.seedFiles({
+        [`repo/${GUARD_DIR}/guard.mjs`]: buildPreToolUseGuardScript({
+          policiesJsonPath: `../../${POLICY_FILE}`,
+          failMode: "fail-closed",
+        }),
+      });
+      const guard = raw.path("repo", GUARD_DIR, "guard.mjs");
+
+      const result = run(guard, { input: writeTo("stamity-reviewer", raw.path(...REPORT)) });
+
+      expect(result).toEqual({ code: 0, stdout: "", stderr: "" });
+    } finally {
+      await raw.cleanup();
+    }
+  });
+
+  it("names the agent and its pattern, points at the inline return, and strips control characters", async () => {
+    const agentId = "stamity-rev\u0007iewer\u001b[2J";
+    const document = JSON.stringify({
+      schema: AGENT_TOOL_POLICIES_SCHEMA,
+      policies: [{ agentId, allow: ["read"], writePaths: [REVIEWER_PATTERN], rationale: "x" }],
+    });
+    const guard = await placeWriteGuard({ document });
+
+    const result = run(guard, { input: writeTo(agentId, getRepo().path("repo", "src", "app.ts")) });
+
+    expect(result.code).toBe(2);
+    const message = String(refusal(result)["message"]);
+    expect(message).toContain('Agent "stamity-reviewer[2J"');
+    expect(message).toContain(REVIEWER_PATTERN);
+    expect(message).toContain("inline");
+    expect(message).toContain("(no-pattern-match)");
+    for (const char of message) {
+      const code = char.codePointAt(0) ?? 0;
+      expect(code < 0x20 || (code >= 0x7f && code <= 0x9f), `control U+${code.toString(16)}`).toBe(false);
+    }
+  });
+
+  describe.skipIf(!WINDOWS)("on win32", () => {
+    it("allows the report under either drive-letter case and either separator", async () => {
+      const guard = await placeWriteGuard();
+      const report = getRepo().path(...REPORT);
+      const flipped = report.slice(0, 1) === report.slice(0, 1).toUpperCase()
+        ? report.slice(0, 1).toLowerCase() + report.slice(1)
+        : report.slice(0, 1).toUpperCase() + report.slice(1);
+
+      for (const spelling of [flipped, report.replaceAll("\\", "/")]) {
+        expect(run(guard, { input: writeTo("stamity-reviewer", spelling) }).code, spelling).toBe(0);
+      }
+    });
+
+    it("refuses a device path and an alternate data stream", async () => {
+      const guard = await placeWriteGuard();
+      const report = getRepo().path(...REPORT);
+
+      expectWriteDenied(run(guard, { input: writeTo("stamity-reviewer", `\\\\?\\${report}`) }), "device-path");
+      expectWriteDenied(run(guard, { input: writeTo("stamity-reviewer", `${report}:evil`) }), "device-path");
+    });
   });
 });
 
