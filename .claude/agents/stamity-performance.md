@@ -1,7 +1,7 @@
 ---
 name: stamity-performance
 description: "Reviews the cost of a change on data-access, background-work, and cache surfaces against the budgets the repository declared, blocking only on a breached budget and staying advisory otherwise, with path:line evidence and no edits."
-tools: Read, Grep, Glob, Skill
+tools: Read, Grep, Glob, Skill, Write
 model: "sonnet"
 effort: "medium"
 ---

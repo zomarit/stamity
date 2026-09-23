@@ -500,6 +500,7 @@ const CARD_GIT_MAX_BYTES = 4096;
 const CARD_MAX_CHARS = 2000;
 const CARD_LIST_MAX = 10;
 const CARD_FIELD_MAX = 200;
+const CARD_UNPRINTABLE = new RegExp("[\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]", "gu");
 const CARD_RECOVERY_NOTE = "the ledger is the recovery point";
 const CARD_NEXT_LINE = "next: read the open rows and the listed reports before dispatching anything";
 const CARD_NOT_RECORDED = "(not recorded)";
@@ -724,13 +725,15 @@ function cardCommonDir(rootDir) {
 
 /**
  * Linked worktrees as "<path> [<branch>]", sorted. The main checkout is not a
- * lane, and neither is one whose gitdir names nothing on disk any more: git
- * calls that lane prunable, and it holds no work to resume.
+ * lane, and neither is one whose gitdir is empty or names nothing on disk any
+ * more: git calls that lane prunable, and it holds no work to resume. A linked
+ * worktrees folder is not listed at all.
  */
 function cardLanes(rootDir) {
   const common = cardCommonDir(rootDir);
   if (common === null) return [];
   const worktrees = join(common, "worktrees");
+  if (!cardRealDir(worktrees)) return [];
   let admins;
   try {
     admins = readdirSync(worktrees, { withFileTypes: true })
@@ -744,7 +747,7 @@ function cardLanes(rootDir) {
   for (const name of admins) {
     const admin = join(worktrees, name);
     const gitdir = cardGitText(join(admin, "gitdir"));
-    if (gitdir === null) continue;
+    if (gitdir === null || gitdir === "") continue;
     const target = isAbsolute(gitdir) ? gitdir : resolve(admin, gitdir);
     if (!cardExists(target)) continue;
     const located = target.replace(/[\\/]\.git$/, "").replaceAll("\\", "/");
@@ -754,9 +757,17 @@ function cardLanes(rootDir) {
   return out.sort();
 }
 
-/** One field as one bounded line. */
+/**
+ * One field as one bounded line: control characters to spaces, then the C1
+ * controls, bidi controls and zero-width marks dropped (never the tag block,
+ * which the screen must still see), whitespace collapsed, capped.
+ */
 function cardFlat(value) {
-  const flat = String(value).replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+  const flat = String(value)
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(CARD_UNPRINTABLE, "")
+    .replace(/\s+/g, " ")
+    .trim();
   return flat.length > CARD_FIELD_MAX ? flat.slice(0, CARD_FIELD_MAX - 1) + "…" : flat;
 }
 

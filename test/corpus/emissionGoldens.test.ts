@@ -85,6 +85,35 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-24, Package 16 session 1's third batch sync (run
+ *     2026-09-23_orchestrator-context). FIVE goldens moved:
+ *
+ *     CLAUDE GUARD moved on `stamity-pre-tool-use-guard.mjs` for claude only:
+ *     266 -> 475 lines, 10398 -> 18995 bytes, from the c8b unit (the Claude
+ *     guard's path-scoped Write): a header note on the metadata reads, the
+ *     `realpathSync` and path-helper imports, the write-path grammar twin,
+ *     the segment matcher with the digits-only round number, the win32
+ *     reserved-device refusal, `writePathCheck` (root anchored on the
+ *     script's own location, realpath walk, lstat for links, non-regular and
+ *     hard-linked leaves), `printable`, and the `WRITE_PATH_DENIED` branch in
+ *     `evaluate()` ahead of the category check. The codex, copilot and cursor
+ *     guards are byte-identical: the path-scoped Write is Claude-only.
+ *
+ *     SESSION START moved on `stamity-session-start.mjs` for all four clients
+ *     (one shared body): 848 -> 859 lines, 37779 -> 38280 bytes, from the
+ *     ctx-ledger-status unit, whose engine twin now renders the card source —
+ *     the `CARD_UNPRINTABLE` pattern and its strip in `cardFlat` (C1, bidi and
+ *     zero-width characters dropped), `cardLanes` skipping a worktrees folder
+ *     that is not a real directory and an empty `gitdir`, and the two
+ *     reworded doc comments.
+ *
+ *     NOTHING else moved here: the charter, the catalog, the MDC companion
+ *     heads, every agent body (the four verdict agents' `Write` lives in the
+ *     Claude frontmatter, which this suite does not pin), the tamper notice,
+ *     the review gate and the three portable runners are byte-identical.
+ *     ctx-ledger-append, ctx-ledger-close, r2, r3, r6, the replay protocol
+ *     and the plan amendments emit nothing.
+ *
  *   - 2026-09-24, Package 16 session 1's second batch sync (run
  *     2026-09-23_orchestrator-context). TWO goldens moved:
  *

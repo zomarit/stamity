@@ -178,6 +178,36 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-24, Package 16 session 1's third batch sync (run
+  //     2026-09-23_orchestrator-context). FOUR agent frontmatters and TWO hook
+  //     scripts moved, plus the manifest rows that record them. No emitted
+  //     path was added or removed, and no residue document moved.
+  //
+  //     CHANGED `.claude/agents/stamity-{design-quality,performance,reviewer,
+  //       security}.md` by +7 bytes each (9324 -> 9331, 10962 -> 10969,
+  //       12651 -> 12658, 9219 -> 9226) in the claude and all-four
+  //       selections: `tools:` gains `, Write`, from the c8c unit (the four
+  //       verdict agents' Claude `tools:` render the path-scoped report
+  //       Write). Every other dialect of those agents is byte-identical.
+  //     CHANGED `.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs`
+  //       10398 -> 18995 bytes (266 -> 475 lines) in the claude and all-four
+  //       selections, from the c8b unit (the guard scopes a verdict role's
+  //       report Write to its writePaths and refuses a win32 device name).
+  //       The codex, copilot and cursor guards are unchanged.
+  //     CHANGED `stamity-session-start.mjs` 37779 -> 38280 bytes under every
+  //       client's hooks folder in every selection, one digest as before,
+  //       from the ctx-ledger-status unit (the card's unprintable strip and
+  //       the lane listing's empty-gitdir and non-directory guards).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the files above.
+  //
+  //     What did NOT move: the policy document, every rule dialect, skill,
+  //       command, generated page, client entry file, portable runner, tamper
+  //       notice, review gate and residue document. ctx-ledger-append,
+  //       ctx-ledger-close, r2, r3, r6, the replay protocol and the plan
+  //       amendments emit nothing. `stamity check` reported `drift: clean`
+  //       after the dogfood sync.
+  //
   //   - 2026-09-24, Package 16 session 1's second batch sync (run
   //     2026-09-23_orchestrator-context). ONE command body and the policy
   //     document moved, plus the manifest rows that record them. No emitted

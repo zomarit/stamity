@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.9.1",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-23T22:24:37.584Z",
+  "updatedAt": "2026-09-23T23:36:20.093Z",
   "tools": [
     "claude"
   ],
@@ -71,7 +71,7 @@
       "adapter": "claude",
       "artifactId": "design-quality",
       "artifactType": "agent",
-      "contentHash": "bb1f66d372e437e0bf366153b6bd0c7975b995b4cbf080b913e4c1d8fbd2ba32",
+      "contentHash": "ae55eb5edfe86554f4b6b860d66725ea5741201139ceef50ef0f40bb425d1e6f",
       "path": ".claude/agents/stamity-design-quality.md"
     },
     {
@@ -92,7 +92,7 @@
       "adapter": "claude",
       "artifactId": "performance",
       "artifactType": "agent",
-      "contentHash": "dc4d553b1e8fee1084f1689282379b8643ef02d7d1bf3ec2c916834b8840cace",
+      "contentHash": "b31923420f5708b712892cfeacd35977d8021891bfd1a314f756a16c152b0d64",
       "path": ".claude/agents/stamity-performance.md"
     },
     {
@@ -106,14 +106,14 @@
       "adapter": "claude",
       "artifactId": "reviewer",
       "artifactType": "agent",
-      "contentHash": "54a68c119ba592ef9ac35a05565ff4d949493fdc9568763eb3b637681bcdb0b1",
+      "contentHash": "55320cc647d1ae8679911eb1e311a375ab52bc14342ba33afe9aebcfd1cdbdc8",
       "path": ".claude/agents/stamity-reviewer.md"
     },
     {
       "adapter": "claude",
       "artifactId": "security",
       "artifactType": "agent",
-      "contentHash": "03044e39261e18a5d64bb37b88587d1263e4741fd56735ab8c86b20b65d62452",
+      "contentHash": "86c19e1e864a167259a661c0925218e8bfc38aa68647a92e8a5afbf7dbf70a33",
       "path": ".claude/agents/stamity-security.md"
     },
     {
@@ -498,7 +498,7 @@
       "adapter": "claude",
       "artifactId": "stamity-pre-tool-use-guard",
       "artifactType": "infra",
-      "contentHash": "c661afcbce4835bd105f25fa33a19b5fd0090e6c7724c3436e7606cefc7de98a",
+      "contentHash": "ead335316ffd2a260a18c114316d8240a73f9cfb65aff158da5e68e41d893edd",
       "path": ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs"
     },
     {
@@ -512,7 +512,7 @@
       "adapter": "claude",
       "artifactId": "stamity-session-start",
       "artifactType": "infra",
-      "contentHash": "5e81f3ad2828aa676a119165cc1f0d4bff87541db366a89671622234b5dbc458",
+      "contentHash": "2178ca7e5f64f5d60ce556652dfdcaf5437ddd7303fcf8f3d34e7babd834620b",
       "path": ".stamity/generated/hooks/claude/stamity-session-start.mjs"
     },
     {
