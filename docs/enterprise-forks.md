@@ -174,13 +174,14 @@ the workflow tests to match your deliberate customization. This repository's
 assertion for your own filters and your full gate still checks the policy you intended.
 
 Your rename needs no test edit at all. Every suite that has to know who this package is reads
-`test/support/identity.ts`, which answers from your own `package.json`: the name, the publisher and
-whether the package is private. So a test asserts the remedy string, the marketplace source or the
-Renovate pin that YOUR identity implies, and the inherited gate is green on your tree for the same
-reason it is green upstream. Two things are still yours to keep true, and both are data rather than
-tests: the identity step above (the manifest and the two Renovate presets), and the branch filters
-in the paragraph before this one. Run the regenerate list in the same commit as the rename, because
-the generated trees are compared byte for byte and a skipped regeneration reads as drift.
+`test/support/identity.ts`, which answers from your own `package.json`: the name, the publisher,
+whether the package is private and the `<owner>/<repository>` route your `repository.url` names.
+So a test asserts the remedy string, the marketplace source or the Renovate pin that YOUR identity
+implies, and the inherited gate is green on your tree for the same reason it is green upstream. Two
+things are still yours to keep true, and both are data rather than tests: the identity step above
+(the manifest and the two Renovate presets), and the branch filters in the paragraph before this
+one. Run the regenerate list in the same commit as the rename, because the generated trees are
+compared byte for byte and a skipped regeneration reads as drift.
 
 Only then enable the approved CI, upstream and private-release workflows and repository Actions,
 after the organisation owner has verified the bot permissions and the real required pull-request
