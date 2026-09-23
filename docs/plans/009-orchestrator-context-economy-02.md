@@ -82,10 +82,12 @@ through the engine's existing write lock). `append --run <run-id> --phase <phase
 --stdin)`: validates the C2 block (any bad line refuses the whole append, naming the line), appends one `open` row per
 finding (ids `<run-id>/<phase>/<n>`, n continuing that run and phase's highest, numerically), prints
 `<ledger-id> <severity> <report-local id>` per row with a trailing ` decision-needed` on such rows, and refuses a
-report already appended. `close --run <run-id> (--report <path> | --id <ledger-id> --state <fixed|rejected|deferred>
---rationale <text>)`: applies a C9 closures block, or one manual transition, rewriting rows in place; an unknown id
-refuses the whole close. `status [--run <run-id>]`: prints C6. Every refusal exits 1; a report path must resolve
-directly inside that run's `reports/`, with no `..` segment and no symlink.
+report already appended. `close --run <run-id> (--report <path> --ids <comma list> | --id <ledger-id> --state
+<fixed|rejected|deferred> --rationale <text>)`: applies a C9 closures block, or one manual transition, rewriting rows in
+place; `--ids` lists the ledger ids handed to that re-review, and an unknown id, or a closure naming an id outside
+`--ids`, refuses the whole close. `status [--run <run-id>]`: prints C6. Every refusal exits 1; a report path must
+resolve directly inside that run's `reports/`, with no `..` segment and no symlink. (Amended 2026-09-23: `close
+--report` takes `--ids`, and a closure outside it refuses the whole close — resolution R38, ledger row `build/58`.)
 
 **C8 — Verdict-role report write on Claude Code only.** An optional `writePaths` on the four verdict policy rows,
 each naming only its own role's reports: `.stamity/runs/*/reports/*-reviewer-r*.md`, `*-security-r*.md`,
@@ -94,9 +96,13 @@ each naming only its own role's reports: `.stamity/runs/*/reports/*-reviewer-r*.
 or `NotebookEdit` — for those agents in the repository layout only; a plugin install (the container hook layout,
 which anchors no project root) renders none. The generated pre-tool-use guard allows such a `Write` only for a regular
 file resolving inside the root its own location names and matching the row's pattern, with no `..`, no symlink, no hard
-link; every other edit-category call by those agents stays denied. Cursor, Copilot and Codex keep read-only grants and
-their capability disclosure says verdict reports are returned inline there. The guard change gets a security lens pass
-and a security review of its diff.
+link; every other edit-category call by those agents stays denied. The guard's matcher reads a pattern's last `*` (the
+round number just before the `.md` suffix) as one or more ASCII digits only, so `*-reviewer-r*.md` matches
+`<pass>-reviewer-r<N>.md` and never a basename in which another role's token comes after it — the per-role isolation
+rests on that rule, not on the pass slug. Cursor, Copilot and Codex keep read-only grants and their capability
+disclosure says verdict reports are returned inline there. The guard change gets a security lens pass and a security
+review of its diff. (Amended 2026-09-23: the round-number rule of the guard's matcher — ledger row `build/70`, signed
+off as the declared default, option 2.)
 
 **C9 — Re-review closures.** A re-review carries a `stamity-closures` block, one object per prior ledger id:
 `{"ledger_id":"<id>","status":"fixed|not-fixed|regressed|rejection-upheld|rejection-overturned"}` with an optional
@@ -107,11 +113,15 @@ open with a note appended; `regressed` also reopens a `fixed` row.
 
 **C10 — Pointer dispatch** (at most 15 lines): role, class and run id; the plan path and unit id, never a line number;
 worktree, branch and base; the absolute report path (C1); the unit's `verify`; its `files` cell as the boundary; the
-learnings that apply; the digest (C4) as the return. An in-flow plan is persisted once as
+learnings that apply; the digest (C4) as the return. A fixer's dispatch also carries the orchestrator's sign-off
+beside each `decision_needed` id it names (the C3 run-record sign-off line stays too), and the fixer fixes such a row
+only then. An in-flow plan is persisted once as
 `.stamity/runs/<run-id>/plan.md` in `/st-plan`'s unit shape. When an implementer's contract delta moves a seam a later
 unit relies on, the spec-author amends that later cell in place (`amended <UTC date>: <what moved> (<commit>)`) before
 it is dispatched; when that unit touches a security trigger path or a shared contract, the reviewer reads the amended
 cell first. An implementer whose cell names an interface that does not resolve at HEAD returns `BLOCKED_DEPENDENCY`.
+(Amended 2026-09-23: the fixer's dispatch carries the sign-off beside each `decision_needed` id — resolution R39,
+ledger row `build/59`.)
 
 **C11 — Capacity rung**, a Dispatch-contract bullet after the findings-ledger bullet. A stop is classed by its notice:
 `stall` (no progress) or `connection` (dropped transport) → resume the same agent; a second stop waits five minutes,
@@ -630,18 +640,19 @@ which no row records.
 
 ### p16-evals-work — the four `/st-work` cases and the dated SET-v7 amendment
 
-**Confidence:** high, basis `direct` (the quoted text is byte-identical at its new lines under Order G).
+**Confidence:** high, basis `direct` (the quoted text is byte-identical at its new lines under Order G for three of the four cases; the fourth's quoted bullet was reworded by the work-text fix round and is re-quoted).
 
 | Field | Content |
 |---|---|
 | `id` | p16-evals-work |
 | `requirements` | REQ-FINISH-009; REQ-CTX-014 |
 | `files` | `evals/cases-v6/golden/work-proof-block-fields.md`, `…/adversarial/security-content-exempt-from-truncation.md`, `…/adversarial/benign-optional-step-skipped-proceeds.md`, `…/probes/probe-none-work-run-qa-checkpoint.md`, `evals/SET-v7.md` (rows :550, :566, :620, :629; line 43; the "Recomputed against the files" paragraph at :452-457; one new paragraph under "What v7 adds", placed after :445) |
-| `interfaces` | `source:` moves only; the Briefs are unchanged. `work-proof-block-fields` `st-work.md:185-191,220-279` → `:303-309,338-397`. `security-content-exempt-from-truncation` `:336-342` → `:146-152`. `benign-optional-step-skipped-proceeds` `:200-218` → `:318-336`. `probe-none-work-run-qa-checkpoint` `:200-216` → `:318-334`. SET-v7 :43 appends ", and thirteen more by the <date> orchestrator-context edits". :452-457 appends "; thirteen moved one or both with the <date> orchestrator-context edits". The new paragraph, written with the landed date: **"Thirteen carried cases moved with the corpus, <date> (the orchestrator's context economy)."** It names the nine Brief-moved cases and the four range-only `/st-work` cases. It states: no `## Expected` block moved, because no scenario names a report path, so each case exercises the full-return branch its Expected already describes; `EXPECTED_MOVES` gains no row; no case was added; the digest branch, the closures, the capacity rung and pointer dispatch are not yet measured; under the incremental rule all thirteen re-measure, because their case-file bytes moved. The historical line citations (`:138-139`, `:200-216`, `:14-29,158-169` in the 2026-09-15 paragraphs and dispositions) are dated records and stay as they are. |
+| `interfaces` | `source:` moves in all four cases. Three Briefs are unchanged; `security-content-exempt-from-truncation`'s Brief is re-quoted verbatim from the landed file, because the work-text fix round reworded the Findings-ledger bullet it quotes (ledger row `build/57`), with its Scenario and `## Expected` byte-unchanged. `work-proof-block-fields` `st-work.md:185-191,220-279` → `:303-309,338-397`. `security-content-exempt-from-truncation` `:336-342` → `:146-152`. `benign-optional-step-skipped-proceeds` `:200-218` → `:318-336`. `probe-none-work-run-qa-checkpoint` `:200-216` → `:318-334`. Those are the projected ranges; the landed ones, derived from the landed 494-line body, are `:310-316,345-404`, `:148-155`, `:325-343` and `:325-341`. SET-v7 :43 appends ", and thirteen more by the <date> orchestrator-context edits". :452-457 appends "; thirteen moved one or both with the <date> orchestrator-context edits". The new paragraph, written with the landed date: **"Thirteen carried cases moved with the corpus, <date> (the orchestrator's context economy)."** It names the ten Brief-moved cases and the three range-only `/st-work` cases (the nine Brief-moved cases planned, plus `security-content-exempt-from-truncation`, whose Brief moved with the reworded Findings-ledger bullet). It states: no `## Expected` block moved, because no scenario names a report path, so each case exercises the full-return branch its Expected already describes; `EXPECTED_MOVES` gains no row; no case was added; the digest branch, the closures, the capacity rung and pointer dispatch are not yet measured; under the incremental rule all thirteen re-measure, because their case-file bytes moved. The historical line citations (`:138-139`, `:200-216`, `:14-29,158-169` in the 2026-09-15 paragraphs and dispositions) are dated records and stay as they are. |
 | `testCriteria` | `npx vitest run test/evals` is green. The roster counts on SET-v7 do not move: 102 cases, 523/52, 83 rows. `readmeCurrency` is unchanged (0 moves). |
-| `edgeCases` | A landed `st-work.md` whose line count differs from 486, for example because an implementer rewrapped: re-derive each range by searching for its first quoted line in the landed file. The range text must be byte-identical to the old range. |
+| `edgeCases` | A landed `st-work.md` whose line count differs from 486, for example because an implementer rewrapped: re-derive each range by searching for its first quoted line in the landed file. The range text must be byte-identical to the old range, except where the landed body reworded the quoted text; then the Brief is re-quoted from the landed file, as for `security-content-exempt-from-truncation`. |
 | `depends_on` | p16-work-text, p16-evals-execution |
 | `verify` | `npx vitest run test/evals && npm run lint` |
+| `amended` | amended 2026-09-23: the landed SET-v7 amendment names ten Brief-moved cases and three range-only ones, not nine and four, because the work-text fix round reworded the Findings-ledger bullet that `security-content-exempt-from-truncation` quotes, so its Brief was re-quoted; the landed ranges sit below the projected ones (ledger row `build/71`; lane commit d9b21357) |
 
 ### p16-docs — the hand pages: three plumbing verbs, the reports folder, the manual resume card
 
