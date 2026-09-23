@@ -292,6 +292,15 @@ README's mission or tagline sentences.
 
 - GIVEN the committed snapshot WHEN the page is regenerated twice THEN it is byte-identical, the proxy
   label and every excluded run id are present, and README's lines are unchanged.
+- GIVEN a run of record carried to a later release (added at the 1.9.1 cut's review, prove/333) WHEN
+  its release `RUN_OF_RECORD_RELEASE` (`src/cli/docs/measurements.ts:115`) equals the carried-to
+  `RUN_OF_RECORD_CARRIED_TO` (`:134`) THEN the page refuses to render — the template's carried-to
+  release goes through `carriedToRelease` (`:164`, `:897`), which fails naming what the release that
+  runs the set deletes — and the same clause typed by hand on README and the doctrine is read off
+  both pages, passed through that guard and held to the same constants. Test evidence by describe
+  name, since every cut moves these suites' lines: `test/cli/docs/measurements.test.ts`'s "the run
+  of record is carried to the release the tree ships as", and `test/docsPages.test.ts`'s "the eval
+  run of record on the hand pages".
 
 ### REQ-PROVE-021 — QA automation and binding
 
