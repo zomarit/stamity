@@ -1,0 +1,1029 @@
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..25fbf5a
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,2 @@
++node_modules/
++coverage/
+diff --git a/.oxlintrc.json b/.oxlintrc.json
+new file mode 100644
+index 0000000..eb72718
+--- /dev/null
++++ b/.oxlintrc.json
+@@ -0,0 +1,6 @@
++{
++  "categories": {
++    "correctness": "error"
++  },
++  "ignorePatterns": ["node_modules", "coverage"]
++}
+diff --git a/README.md b/README.md
+new file mode 100644
+index 0000000..b3de4d4
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,38 @@
++# replay-orders
++
++A small orders service. It lists and reads orders over HTTP, keeps them in an in-memory SQLite
++database, and writes an audit line for every order event it publishes.
++
++- The HTTP contract is [docs/api.md](docs/api.md); change it in the same change as the code.
++- Configuration lives in `config/service.json` and is validated by `src/config/load.ts`.
++- There are no runtime dependencies: `node:http` serves, `node:sqlite` stores.
++
++## Develop
++
++Node 22.13 or later (`node:sqlite` without a flag).
++
++```sh
++npm install
++npm run lint
++npm run typecheck
++npm test
++```
++
++## Run
++
++`node src/server.ts` on Node 22.18 or later, which runs TypeScript directly. It listens on
++`PORT` (default 8080), accepts the comma-separated bearer tokens in `ORDERS_TOKENS`, and serves
++invoices from `ORDERS_INVOICE_DIR` (default `invoices`).
++
++## Layout
++
++| Path | What it holds |
++|---|---|
++| `src/http/` | the router, the request pipeline and the route table |
++| `src/auth/` | the bearer-token guard |
++| `src/orders/` | the order handlers, the wire shape and the text formatting |
++| `src/store/` | the database and its queries |
++| `src/reports/` | reporting helpers such as time windows |
++| `src/events/` | order events and the audit trail that consumes them |
++| `src/config/` | configuration defaults and validation |
++| `test/` | vitest suites; `test/helpers.ts` starts the app on a free port |
+diff --git a/config/service.json b/config/service.json
+new file mode 100644
+index 0000000..d9f36b8
+--- /dev/null
++++ b/config/service.json
+@@ -0,0 +1,5 @@
++{
++  "pageSizeDefault": 20,
++  "maxPageSize": 100,
++  "retentionDays": 30
++}
+diff --git a/docs/api.md b/docs/api.md
+new file mode 100644
+index 0000000..13a21fb
+--- /dev/null
++++ b/docs/api.md
+@@ -0,0 +1,83 @@
++# replay-orders HTTP API
++
++This document is the contract of record. A change to any behaviour below changes this document
++in the same change.
++
++## Authentication
++
++Every endpoint requires a bearer token:
++
++```
++Authorization: Bearer <token>
++```
++
++A request without a header, or with a token the service does not know, gets `401` and
++`{"error":"unauthorized"}`.
++
++## Orders
++
++An order on the wire has exactly these keys:
++
++| Key | Type | Meaning |
++|---|---|---|
++| `id` | integer | the order id |
++| `customer` | string | the customer's name |
++| `total_cents` | integer | the order total in cents |
++| `status` | string | `open`, `paid` or `cancelled` |
++| `created_at` | string | ISO 8601 UTC timestamp |
++
++### `GET /orders`
++
++Lists orders, newest first (by `created_at`), as `{"orders":[<order>, …]}`.
++
++| Query | Default | Rule |
++|---|---|---|
++| `size` | `pageSizeDefault` (20) | integer from 1 to `maxPageSize` (100) |
++
++### `GET /orders/:id`
++
++Returns one order, or `404` when no order has that id. An id that is not a positive integer is
++a `400`.
++
++## Paging
++
++Paged collections number their pages from 1: `page=1` is the first page, `page=2` the next
++`size` items after it. A page size defaults to `pageSizeDefault` (20) and never exceeds
++`maxPageSize` (100).
++
++## Time windows
++
++A report window `from`–`until` is inclusive at both ends: an order created at exactly `from` or
++exactly `until` is inside it.
++
++## Errors
++
++Every error body is `{"error":"<message>"}`.
++
++| Status | When |
++|---|---|
++| `400` | a parameter breaks its rule |
++| `401` | the bearer token is missing or unknown |
++| `404` | no route, or no such order |
++| `500` | anything unexpected; the body is always `{"error":"internal"}` |
++
++## Events
++
++Order events are published as JSON with the payload `{"type","orderId","at"}`: the event type
++(such as `order.created`), the order's id, and the ISO 8601 UTC time. The
++audit trail reads `orderId`; renaming a payload key breaks it.
++
++## Invoices
++
++Invoices are PDF files named `<id>.pdf` inside the configured invoice directory. The service
++serves nothing else from that directory and nothing outside it.
++
++## Configuration
++
++`config/service.json`:
++
++| Key | Default | Rule |
++|---|---|---|
++| `pageSizeDefault` | 20 | positive integer, at most `maxPageSize` |
++| `maxPageSize` | 100 | positive integer |
++| `retentionDays` | 30 | positive integer |
+diff --git a/package.json b/package.json
+new file mode 100644
+index 0000000..954599c
+--- /dev/null
++++ b/package.json
+@@ -0,0 +1,21 @@
++{
++  "name": "replay-orders",
++  "version": "0.1.0",
++  "private": true,
++  "description": "A small orders service: list and read orders over HTTP, with an audit trail of order events.",
++  "type": "module",
++  "engines": {
++    "node": ">=22.13"
++  },
++  "scripts": {
++    "test": "vitest run",
++    "typecheck": "tsc --noEmit",
++    "lint": "oxlint"
++  },
++  "devDependencies": {
++    "@types/node": "26.6.2",
++    "oxlint": "1.83.0",
++    "typescript": "7.0.2",
++    "vitest": "5.0.1"
++  }
++}
+diff --git a/src/auth/guard.ts b/src/auth/guard.ts
+new file mode 100644
+index 0000000..f77057f
+--- /dev/null
++++ b/src/auth/guard.ts
+@@ -0,0 +1,14 @@
++import type { Handler } from "../http/router.ts";
++
++const UNAUTHORIZED = { status: 401, body: { error: "unauthorized" } };
++
++/** `h` behind the bearer check: a request whose token is not in `deps.tokens` gets 401. */
++export function requireAuth(h: Handler): Handler {
++  return (ctx, deps) => {
++    const authorization = ctx.headers.authorization;
++    for (const t of deps.tokens) {
++      if (authorization === "Bearer " + t) return h(ctx, deps);
++    }
++    return UNAUTHORIZED;
++  };
++}
+diff --git a/src/config/load.ts b/src/config/load.ts
+new file mode 100644
+index 0000000..8f741ee
+--- /dev/null
++++ b/src/config/load.ts
+@@ -0,0 +1,48 @@
++import { readFileSync } from "node:fs";
++
++/** The service's tunables. `config/service.json` holds the deployed values. */
++export interface ServiceConfig {
++  /** Orders per page when a request names no size. */
++  pageSizeDefault: number;
++  /** The largest page a request may ask for. */
++  maxPageSize: number;
++  /** How long closed orders are kept, in days. */
++  retentionDays: number;
++}
++
++/** The documented defaults (docs/api.md, Configuration). */
++export const DEFAULTS: ServiceConfig = {
++  pageSizeDefault: 20,
++  maxPageSize: 100,
++  retentionDays: 30,
++};
++
++function positiveInteger(name: keyof ServiceConfig, value: unknown): number {
++  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
++    throw new Error(`config: ${name} must be a positive integer, got ${JSON.stringify(value)}`);
++  }
++  return value;
++}
++
++/** The defaults overlaid with `raw`, every key validated. Throws naming the first bad key. */
++export function loadConfig(raw: Partial<ServiceConfig> = {}): ServiceConfig {
++  const merged = { ...DEFAULTS, ...raw };
++  const config: ServiceConfig = {
++    pageSizeDefault: positiveInteger("pageSizeDefault", merged.pageSizeDefault),
++    maxPageSize: positiveInteger("maxPageSize", merged.maxPageSize),
++    retentionDays: positiveInteger("retentionDays", merged.retentionDays),
++  };
++  if (config.pageSizeDefault > config.maxPageSize) {
++    throw new Error(`config: pageSizeDefault (${config.pageSizeDefault}) exceeds maxPageSize (${config.maxPageSize})`);
++  }
++  return config;
++}
++
++/** Read and validate a JSON config file. */
++export function readConfigFile(path: string): ServiceConfig {
++  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
++  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
++    throw new Error(`config: ${path} must hold a JSON object`);
++  }
++  return loadConfig(parsed as Partial<ServiceConfig>);
++}
+diff --git a/src/events/audit.ts b/src/events/audit.ts
+new file mode 100644
+index 0000000..ba48598
+--- /dev/null
++++ b/src/events/audit.ts
+@@ -0,0 +1,24 @@
++/**
++ * The audit trail: one line per order event, read from the serialized event as published. It
++ * parses the JSON itself rather than sharing a type with the emitter, because in production the
++ * two sides meet only through the bus.
++ */
++export function auditLine(raw: string): string {
++  const payload = JSON.parse(raw) as Record<string, unknown>;
++  const type = payload["type"];
++  const orderId = payload["orderId"];
++  const at = payload["at"];
++  if (typeof type !== "string" || typeof orderId !== "number" || typeof at !== "string") {
++    throw new Error(`audit: malformed order event ${raw}`);
++  }
++  return `${at} ${type} order=${orderId}`;
++}
++
++/** A bus that records one audit line per published event into `lines`. */
++export function createAuditBus(lines: string[]): { publish(raw: string): void } {
++  return {
++    publish(raw) {
++      lines.push(auditLine(raw));
++    },
++  };
++}
+diff --git a/src/events/emitter.ts b/src/events/emitter.ts
+new file mode 100644
+index 0000000..19f8b48
+--- /dev/null
++++ b/src/events/emitter.ts
+@@ -0,0 +1,9 @@
++import type { OrderRow } from "../store/db.ts";
++
++/** The order event types the service publishes. */
++export type OrderEventType = "order.created" | "order.paid" | "order.cancelled";
++
++/** The serialized event for `order` (docs/api.md, Events). */
++export function orderEvent(type: OrderEventType, order: Pick<OrderRow, "id">, at: string): string {
++  return JSON.stringify({ type, orderId: order.id, at });
++}
+diff --git a/src/http/app.ts b/src/http/app.ts
+new file mode 100644
+index 0000000..10c8084
+--- /dev/null
++++ b/src/http/app.ts
+@@ -0,0 +1,51 @@
++import type { IncomingMessage, ServerResponse } from "node:http";
++import type { DatabaseSync } from "node:sqlite";
++import type { ServiceConfig } from "../config/load.ts";
++import type { Reply } from "./router.ts";
++import { routes } from "./routes.ts";
++
++/** Everything a handler may use. Tests build their own; `src/server.ts` builds the real one. */
++export interface AppDeps {
++  db: DatabaseSync;
++  /** The bearer tokens the service accepts. */
++  tokens: ReadonlySet<string>;
++  config: ServiceConfig;
++  /** Where order events go, as serialized JSON (docs/api.md, Events). */
++  bus: { publish(raw: string): void };
++  /** The directory invoices are served from. */
++  invoiceDir: string;
++}
++
++function send(res: ServerResponse, reply: Reply): void {
++  const { status, body } = reply;
++  if (typeof body === "string" || body instanceof Uint8Array) {
++    const type = reply.type ?? (typeof body === "string" ? "text/plain; charset=utf-8" : "application/octet-stream");
++    res.writeHead(status, { "content-type": type });
++    res.end(body);
++    return;
++  }
++  res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
++  res.end(JSON.stringify(body));
++}
++
++/** The request listener: route, run the handler, send its reply; 404 unrouted, 500 on a throw. */
++export function createApp(deps: AppDeps): (req: IncomingMessage, res: ServerResponse) => void {
++  const router = routes();
++  const handle = async (req: IncomingMessage): Promise<Reply> => {
++    const url = new URL(req.url ?? "/", "http://localhost");
++    const method = req.method ?? "GET";
++    const match = router.match(method, url.pathname);
++    if (match === null) return { status: 404, body: { error: "not found" } };
++    const ctx = { method, pathname: url.pathname, params: match.params, query: url.searchParams, headers: req.headers };
++    return await match.handler(ctx, deps);
++  };
++  return (req, res) => {
++    handle(req).then(
++      (reply) => send(res, reply),
++      (error: unknown) => {
++        console.error("request failed:", error);
++        send(res, { status: 500, body: { error: "internal" } });
++      },
++    );
++  };
++}
+diff --git a/src/http/router.ts b/src/http/router.ts
+new file mode 100644
+index 0000000..8d40ec2
+--- /dev/null
++++ b/src/http/router.ts
+@@ -0,0 +1,84 @@
++import type { IncomingHttpHeaders } from "node:http";
++import type { AppDeps } from "./app.ts";
++
++/** What a handler sees of one request. */
++export interface Ctx {
++  method: string;
++  pathname: string;
++  /** The `:name` segments of the matched route. */
++  params: Record<string, string>;
++  query: URLSearchParams;
++  headers: IncomingHttpHeaders;
++}
++
++/**
++ * What a handler answers. A plain value is sent as JSON; a string or bytes body is sent as is,
++ * under `type` (text/plain or application/octet-stream when absent).
++ */
++export interface Reply {
++  status: number;
++  body: unknown;
++  type?: string;
++}
++
++export type Handler = (ctx: Ctx, deps: AppDeps) => Reply | Promise<Reply>;
++
++interface Route {
++  method: string;
++  segments: string[];
++  handler: Handler;
++}
++
++export interface Match {
++  handler: Handler;
++  params: Record<string, string>;
++}
++
++function split(path: string): string[] {
++  return path.split("/").filter((segment) => segment !== "");
++}
++
++/** A method-and-path route table with `:name` parameters. */
++export class Router {
++  private readonly routes: Route[] = [];
++
++  get(path: string, handler: Handler): this {
++    return this.add("GET", path, handler);
++  }
++
++  post(path: string, handler: Handler): this {
++    return this.add("POST", path, handler);
++  }
++
++  private add(method: string, path: string, handler: Handler): this {
++    this.routes.push({ method, segments: split(path), handler });
++    return this;
++  }
++
++  /**
++   * The route for `method` and `pathname`, or null. When several routes match, the one with the
++   * fewest parameters wins, so `/orders/count` beats `/orders/:id` in any registration order.
++   */
++  match(method: string, pathname: string): Match | null {
++    const parts = split(pathname);
++    let best: (Match & { paramCount: number }) | null = null;
++    for (const route of this.routes) {
++      if (route.method !== method || route.segments.length !== parts.length) continue;
++      const params: Record<string, string> = {};
++      let paramCount = 0;
++      const matched = route.segments.every((segment, index) => {
++        const part = parts[index] as string;
++        if (segment.startsWith(":")) {
++          params[segment.slice(1)] = decodeURIComponent(part);
++          paramCount += 1;
++          return true;
++        }
++        return segment === part;
++      });
++      if (matched && (best === null || paramCount < best.paramCount)) {
++        best = { handler: route.handler, params, paramCount };
++      }
++    }
++    return best === null ? null : { handler: best.handler, params: best.params };
++  }
++}
+diff --git a/src/http/routes.ts b/src/http/routes.ts
+new file mode 100644
+index 0000000..592ae65
+--- /dev/null
++++ b/src/http/routes.ts
+@@ -0,0 +1,11 @@
++import { requireAuth } from "../auth/guard.ts";
++import { getHandler, listHandler } from "../orders/handlers.ts";
++import { Router } from "./router.ts";
++
++/** The route table. Every order route sits behind the bearer guard (docs/api.md, Authentication). */
++export function routes(): Router {
++  const router = new Router();
++  router.get("/orders", requireAuth(listHandler));
++  router.get("/orders/:id", requireAuth(getHandler));
++  return router;
++}
+diff --git a/src/orders/format.ts b/src/orders/format.ts
+new file mode 100644
+index 0000000..b6a4de7
+--- /dev/null
++++ b/src/orders/format.ts
+@@ -0,0 +1,19 @@
++import type { OrderRow } from "../store/db.ts";
++
++/** Cents as a dollar amount with two decimals: 1250 → "$12.50". */
++function fmt(cents: number): string {
++  const sign = cents < 0 ? "-" : "";
++  const abs = Math.abs(cents);
++  return `${sign}$${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
++}
++
++/** One line describing an order, for logs and the audit trail. */
++export function describeOrder(order: OrderRow): string {
++  return `order ${order.id} for ${order.customer}: ${fmt(order.total_cents)} (${order.status})`;
++}
++
++/** The sum of several orders' totals, formatted, for summary lines. */
++export function describeTotal(orders: readonly OrderRow[]): string {
++  const cents = orders.reduce((sum, order) => sum + order.total_cents, 0);
++  return `${orders.length} orders, ${fmt(cents)}`;
++}
+diff --git a/src/orders/handlers.ts b/src/orders/handlers.ts
+new file mode 100644
+index 0000000..cd9c0e4
+--- /dev/null
++++ b/src/orders/handlers.ts
+@@ -0,0 +1,50 @@
++import type { Handler, Reply } from "../http/router.ts";
++import type { OrderRow } from "../store/db.ts";
++import { getOrder, listOrders } from "../store/query.ts";
++
++/** An order on the wire: exactly the five documented keys (docs/api.md, Orders). */
++export function toWire(row: OrderRow) {
++  return {
++    id: row.id,
++    customer: row.customer,
++    total_cents: row.total_cents,
++    status: row.status,
++    created_at: row.created_at,
++  };
++}
++
++function badRequest(message: string): Reply {
++  return { status: 400, body: { error: message } };
++}
++
++/** A positive integer from a decimal string, or null. */
++function parsePositive(raw: string): number | null {
++  if (!/^[1-9][0-9]*$/.test(raw)) return null;
++  const value = Number(raw);
++  return Number.isSafeInteger(value) ? value : null;
++}
++
++/** `GET /orders`: the newest orders first, `size` of them. */
++export const listHandler: Handler = (ctx, deps) => {
++  const { pageSizeDefault, maxPageSize } = deps.config;
++  const rawSize = ctx.query.get("size");
++  let size = pageSizeDefault;
++  if (rawSize !== null) {
++    const parsed = parsePositive(rawSize);
++    if (parsed === null || parsed > maxPageSize) {
++      return badRequest(`size must be an integer from 1 to ${maxPageSize}`);
++    }
++    size = parsed;
++  }
++  const rows = listOrders(deps.db, { size });
++  return { status: 200, body: { orders: rows.map(toWire) } };
++};
++
++/** `GET /orders/:id`: one order, 404 when there is none. */
++export const getHandler: Handler = (ctx, deps) => {
++  const id = parsePositive(ctx.params["id"] ?? "");
++  if (id === null) return badRequest("id must be a positive integer");
++  const row = getOrder(deps.db, id);
++  if (row === undefined) return { status: 404, body: { error: "not found" } };
++  return { status: 200, body: toWire(row) };
++};
+diff --git a/src/reports/window.ts b/src/reports/window.ts
+new file mode 100644
+index 0000000..e649951
+--- /dev/null
++++ b/src/reports/window.ts
+@@ -0,0 +1,10 @@
++/**
++ * Whether the ISO 8601 UTC instant `at` lies in the window from `from` to `until`, both ends
++ * inclusive (docs/api.md, Time windows).
++ *
++ * All three are compared as strings, which orders correctly because every timestamp the service
++ * stores has the same fixed-width `YYYY-MM-DDTHH:MM:SSZ` shape.
++ */
++export function isWithin(at: string, from: string, until: string): boolean {
++  return at >= from && at <= until;
++}
+diff --git a/src/server.ts b/src/server.ts
+new file mode 100644
+index 0000000..dbf2ed1
+--- /dev/null
++++ b/src/server.ts
+@@ -0,0 +1,30 @@
++import { createServer } from "node:http";
++import { join } from "node:path";
++import { readConfigFile } from "./config/load.ts";
++import { auditLine } from "./events/audit.ts";
++import { createApp } from "./http/app.ts";
++import { openDb } from "./store/db.ts";
++
++const port = Number(process.env["PORT"] ?? 8080);
++const tokens = new Set(
++  (process.env["ORDERS_TOKENS"] ?? "")
++    .split(",")
++    .map((token) => token.trim())
++    .filter((token) => token !== ""),
++);
++if (tokens.size === 0) {
++  console.error("ORDERS_TOKENS is empty: set at least one bearer token");
++  process.exit(1);
++}
++
++const app = createApp({
++  db: openDb(),
++  tokens,
++  config: readConfigFile(join(import.meta.dirname, "..", "config", "service.json")),
++  bus: { publish: (raw) => console.log(auditLine(raw)) },
++  invoiceDir: process.env["ORDERS_INVOICE_DIR"] ?? "invoices",
++});
++
++createServer(app).listen(port, () => {
++  console.log(`replay-orders listening on ${port}`);
++});
+diff --git a/src/store/db.ts b/src/store/db.ts
+new file mode 100644
+index 0000000..1674e61
+--- /dev/null
++++ b/src/store/db.ts
+@@ -0,0 +1,44 @@
++import { createRequire } from "node:module";
++import type { DatabaseSync } from "node:sqlite";
++
++/** The minimum Node release that ships `node:sqlite` without a flag. */
++const SQLITE_FLOOR = "22.13";
++
++const require = createRequire(import.meta.url);
++
++/** One row of the `orders` table, in its column names. */
++export type OrderRow = {
++  id: number;
++  customer: string;
++  total_cents: number;
++  status: string;
++  created_at: string;
++};
++
++function sqlite(): typeof import("node:sqlite") {
++  try {
++    return require("node:sqlite") as typeof import("node:sqlite");
++  } catch (error) {
++    throw new Error(
++      `replay-orders needs node:sqlite, which Node ${SQLITE_FLOOR} and later provide without a flag; this is Node ${process.versions.node}`,
++      { cause: error },
++    );
++  }
++}
++
++/** A fresh in-memory database with the `orders` table. */
++export function openDb(): DatabaseSync {
++  const db = new (sqlite().DatabaseSync)(":memory:");
++  db.exec(
++    "CREATE TABLE orders (id INTEGER PRIMARY KEY, customer TEXT NOT NULL, total_cents INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL)",
++  );
++  return db;
++}
++
++/** Insert one order and return it as stored. A row without an id gets the next one. */
++export function insertOrder(db: DatabaseSync, order: Omit<OrderRow, "id"> & { id?: number }): OrderRow {
++  const result = db
++    .prepare("INSERT INTO orders (id, customer, total_cents, status, created_at) VALUES (?, ?, ?, ?, ?)")
++    .run(order.id ?? null, order.customer, order.total_cents, order.status, order.created_at);
++  return { ...order, id: Number(result.lastInsertRowid) };
++}
+diff --git a/src/store/query.ts b/src/store/query.ts
+new file mode 100644
+index 0000000..0fe5712
+--- /dev/null
++++ b/src/store/query.ts
+@@ -0,0 +1,25 @@
++import type { DatabaseSync } from "node:sqlite";
++import type { OrderRow } from "./db.ts";
++
++export interface ListOptions {
++  /** How many orders to return, already validated against the configured maximum. */
++  size: number;
++}
++
++/** The newest orders first, at most `size` of them. */
++export function listOrders(db: DatabaseSync, { size }: ListOptions): OrderRow[] {
++  const sql = "SELECT id, customer, total_cents, status, created_at FROM orders ORDER BY created_at DESC LIMIT ?";
++  return db.prepare(sql).all(size) as OrderRow[];
++}
++
++/** One order by id, or `undefined` when there is none. */
++export function getOrder(db: DatabaseSync, id: number): OrderRow | undefined {
++  const sql = "SELECT id, customer, total_cents, status, created_at FROM orders WHERE id = ?";
++  return db.prepare(sql).get(id) as OrderRow | undefined;
++}
++
++/** Set an order's status. Returns false when no order has that id. */
++export function setStatus(db: DatabaseSync, id: number, status: string): boolean {
++  const result = db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(status, id);
++  return Number(result.changes) > 0;
++}
+diff --git a/test/audit.test.ts b/test/audit.test.ts
+new file mode 100644
+index 0000000..fe67ad6
+--- /dev/null
++++ b/test/audit.test.ts
+@@ -0,0 +1,26 @@
++import { describe, expect, it } from "vitest";
++import { auditLine, createAuditBus } from "../src/events/audit.ts";
++
++// The event as it crosses the bus: serialized JSON, typed by nothing. The audit trail is tested
++// against the documented payload (docs/api.md, Events), not against the emitter's output.
++const CREATED = '{"type":"order.created","orderId":7,"at":"2026-09-01T00:00:00Z"}';
++
++describe("auditLine", () => {
++  it("renders one line per event from the documented payload", () => {
++    expect(auditLine(CREATED)).toBe("2026-09-01T00:00:00Z order.created order=7");
++  });
++
++  it("refuses an event without an order id", () => {
++    expect(() => auditLine('{"type":"order.created","at":"2026-09-01T00:00:00Z"}')).toThrow(/malformed order event/);
++  });
++});
++
++describe("createAuditBus", () => {
++  it("records every published event in order", () => {
++    const lines: string[] = [];
++    const bus = createAuditBus(lines);
++    bus.publish(CREATED);
++    bus.publish('{"type":"order.paid","orderId":8,"at":"2026-09-02T00:00:00Z"}');
++    expect(lines).toEqual(["2026-09-01T00:00:00Z order.created order=7", "2026-09-02T00:00:00Z order.paid order=8"]);
++  });
++});
+diff --git a/test/config.test.ts b/test/config.test.ts
+new file mode 100644
+index 0000000..bd8d3fd
+--- /dev/null
++++ b/test/config.test.ts
+@@ -0,0 +1,50 @@
++import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { describe, expect, it } from "vitest";
++import { DEFAULTS, loadConfig, readConfigFile } from "../src/config/load.ts";
++
++describe("loadConfig", () => {
++  it("defaults the page size to 20", () => {
++    expect(loadConfig().pageSizeDefault).toBe(20);
++  });
++
++  it("keeps the documented maximum and retention", () => {
++    expect(loadConfig().maxPageSize).toBe(100);
++    expect(loadConfig().retentionDays).toBe(30);
++  });
++
++  it("overlays the given keys on the defaults", () => {
++    const config = loadConfig({ maxPageSize: 60, retentionDays: 7 });
++    expect(config).toEqual({ pageSizeDefault: DEFAULTS.pageSizeDefault, maxPageSize: 60, retentionDays: 7 });
++  });
++
++  it("rejects a non-positive or fractional value, naming the key", () => {
++    expect(() => loadConfig({ retentionDays: 0 })).toThrow(/retentionDays must be a positive integer/);
++    expect(() => loadConfig({ maxPageSize: 2.5 })).toThrow(/maxPageSize must be a positive integer/);
++  });
++
++  it("rejects a default page larger than the maximum", () => {
++    expect(() => loadConfig({ pageSizeDefault: 200 })).toThrow(/exceeds maxPageSize/);
++  });
++});
++
++describe("readConfigFile", () => {
++  it("reads and validates a JSON file", () => {
++    const dir = mkdtempSync(join(tmpdir(), "replay-orders-config-"));
++    try {
++      const path = join(dir, "service.json");
++      writeFileSync(path, JSON.stringify({ pageSizeDefault: 10 }), "utf8");
++      expect(readConfigFile(path).pageSizeDefault).toBe(10);
++      writeFileSync(path, "[1, 2]", "utf8");
++      expect(() => readConfigFile(path)).toThrow(/must hold a JSON object/);
++    } finally {
++      rmSync(dir, { recursive: true, force: true });
++    }
++  });
++
++  it("reads the shipped config file", () => {
++    const shipped = readConfigFile(join(import.meta.dirname, "..", "config", "service.json"));
++    expect(shipped).toEqual({ pageSizeDefault: 20, maxPageSize: 100, retentionDays: 30 });
++  });
++});
+diff --git a/test/handlers.test.ts b/test/handlers.test.ts
+new file mode 100644
+index 0000000..1268a7c
+--- /dev/null
++++ b/test/handlers.test.ts
+@@ -0,0 +1,90 @@
++import { afterEach, beforeEach, describe, expect, it } from "vitest";
++import { insertOrder } from "../src/store/db.ts";
++import { get, startApp, type Started } from "./helpers.ts";
++
++let app: Started;
++
++beforeEach(async () => {
++  app = await startApp();
++});
++
++afterEach(async () => {
++  await app.close();
++});
++
++describe("GET /orders", () => {
++  it("lists orders with their totals", async () => {
++    insertOrder(app.db, { customer: "Ada", total_cents: 1250, status: "open", created_at: "2026-09-01T10:00:00Z" });
++    const res = await get(app, "/orders");
++    expect(res.status).toBe(200);
++    const body = (await res.json()) as { orders: Record<string, unknown>[] };
++    expect(body.orders).toHaveLength(1);
++    expect(body.orders[0].total_cents).toBe(1250);
++  });
++
++  it("lists the newest order first", async () => {
++    insertOrder(app.db, { customer: "Old", total_cents: 100, status: "paid", created_at: "2026-09-01T10:00:00Z" });
++    insertOrder(app.db, { customer: "New", total_cents: 200, status: "open", created_at: "2026-09-02T10:00:00Z" });
++    const body = (await (await get(app, "/orders")).json()) as { orders: { customer: string }[] };
++    expect(body.orders.map((order) => order.customer)).toEqual(["New", "Old"]);
++  });
++
++  it("honours size and refuses one above the maximum", async () => {
++    for (let day = 1; day <= 3; day += 1) {
++      insertOrder(app.db, { customer: `C${day}`, total_cents: day, status: "open", created_at: `2026-09-0${day}T00:00:00Z` });
++    }
++    const body = (await (await get(app, "/orders?size=2")).json()) as { orders: unknown[] };
++    expect(body.orders).toHaveLength(2);
++    const tooBig = await get(app, "/orders?size=101");
++    expect(tooBig.status).toBe(400);
++    expect(await tooBig.json()).toEqual({ error: "size must be an integer from 1 to 100" });
++  });
++
++  it("answers 401 without a token, and with an unknown one", async () => {
++    const res = await get(app, "/orders", null);
++    expect(res.status).toBe(401);
++    expect(await res.json()).toEqual({ error: "unauthorized" });
++    expect((await get(app, "/orders", "other-token")).status).toBe(401);
++  });
++});
++
++describe("GET /orders/:id", () => {
++  it("returns one order with the documented keys", async () => {
++    const { id } = insertOrder(app.db, { customer: "Ada", total_cents: 500, status: "paid", created_at: "2026-09-03T08:30:00Z" });
++    const res = await get(app, `/orders/${id}`);
++    expect(res.status).toBe(200);
++    const body = (await res.json()) as Record<string, unknown>;
++    expect(body["id"]).toBe(id);
++    expect(body["customer"]).toBe("Ada");
++    expect(body["status"]).toBe("paid");
++    expect(body["created_at"]).toBe("2026-09-03T08:30:00Z");
++  });
++
++  it("answers 404 for a missing order", async () => {
++    const res = await get(app, "/orders/99");
++    expect(res.status).toBe(404);
++    expect(await res.json()).toEqual({ error: "not found" });
++  });
++
++  it("answers 400 for an id that is not a positive integer", async () => {
++    const res = await get(app, "/orders/abc");
++    expect(res.status).toBe(400);
++    expect(await res.json()).toEqual({ error: "id must be a positive integer" });
++  });
++});
++
++describe("the app", () => {
++  it("answers 404 for an unknown route", async () => {
++    const res = await get(app, "/nowhere");
++    expect(res.status).toBe(404);
++    expect(await res.json()).toEqual({ error: "not found" });
++  });
++
++  it("answers 500 with a fixed body when a handler throws", async () => {
++    // A closed database throws on every query, so the handler fails the way a lost store would.
++    app.db.close();
++    const res = await get(app, "/orders/1");
++    expect(res.status).toBe(500);
++    expect(await res.json()).toEqual({ error: "internal" });
++  });
++});
+diff --git a/test/helpers.ts b/test/helpers.ts
+new file mode 100644
+index 0000000..a69b113
+--- /dev/null
++++ b/test/helpers.ts
+@@ -0,0 +1,59 @@
++import { mkdtempSync, rmSync } from "node:fs";
++import { createServer } from "node:http";
++import type { AddressInfo } from "node:net";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import type { DatabaseSync } from "node:sqlite";
++import { loadConfig } from "../src/config/load.ts";
++import { createAuditBus } from "../src/events/audit.ts";
++import { createApp, type AppDeps } from "../src/http/app.ts";
++import { openDb } from "../src/store/db.ts";
++
++/** The one token `startApp` accepts unless a test passes its own. */
++export const TOKEN = "test-token";
++
++export interface Started {
++  url: string;
++  close(): Promise<void>;
++  db: DatabaseSync;
++  bus: AppDeps["bus"];
++  /** The audit lines the bus has recorded. */
++  lines: string[];
++}
++
++/** The app on a free port over a fresh database, with any of its dependencies replaced. */
++export async function startApp(deps: Partial<AppDeps> = {}): Promise<Started> {
++  const lines: string[] = [];
++  const invoiceDir = mkdtempSync(join(tmpdir(), "replay-orders-invoices-"));
++  const full: AppDeps = {
++    db: openDb(),
++    tokens: new Set([TOKEN]),
++    config: loadConfig(),
++    bus: createAuditBus(lines),
++    invoiceDir,
++    ...deps,
++  };
++  const server = createServer(createApp(full));
++  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
++  const { port } = server.address() as AddressInfo;
++  return {
++    url: `http://127.0.0.1:${port}`,
++    db: full.db,
++    bus: full.bus,
++    lines,
++    close: () =>
++      new Promise<void>((resolve, reject) => {
++        server.close((error) => {
++          rmSync(invoiceDir, { recursive: true, force: true });
++          if (error) reject(error);
++          else resolve();
++        });
++      }),
++  };
++}
++
++/** GET `path` with the test token (or `token`, or none when null). */
++export async function get(app: Started, path: string, token: string | null = TOKEN): Promise<Response> {
++  const headers: Record<string, string> = token === null ? {} : { authorization: `Bearer ${token}` };
++  return await fetch(`${app.url}${path}`, { headers });
++}
+diff --git a/test/query.test.ts b/test/query.test.ts
+new file mode 100644
+index 0000000..6f54e95
+--- /dev/null
++++ b/test/query.test.ts
+@@ -0,0 +1,35 @@
++import { beforeEach, describe, expect, it } from "vitest";
++import type { DatabaseSync } from "node:sqlite";
++import { insertOrder, openDb } from "../src/store/db.ts";
++import { getOrder, listOrders, setStatus } from "../src/store/query.ts";
++
++let db: DatabaseSync;
++
++beforeEach(() => {
++  db = openDb();
++  insertOrder(db, { customer: "Ada", total_cents: 1250, status: "open", created_at: "2026-09-01T10:00:00Z" });
++  insertOrder(db, { customer: "Bo", total_cents: 300, status: "paid", created_at: "2026-09-03T10:00:00Z" });
++  insertOrder(db, { customer: "Cy", total_cents: 90, status: "open", created_at: "2026-09-02T10:00:00Z" });
++});
++
++describe("listOrders", () => {
++  it("returns the newest orders first, at most size of them", () => {
++    expect(listOrders(db, { size: 2 }).map((row) => row.customer)).toEqual(["Bo", "Cy"]);
++    expect(listOrders(db, { size: 10 })).toHaveLength(3);
++  });
++});
++
++describe("getOrder", () => {
++  it("finds an order by id and misses an unknown one", () => {
++    expect(getOrder(db, 1)).toEqual({ id: 1, customer: "Ada", total_cents: 1250, status: "open", created_at: "2026-09-01T10:00:00Z" });
++    expect(getOrder(db, 42)).toBeUndefined();
++  });
++});
++
++describe("setStatus", () => {
++  it("updates an existing order and reports a missing one", () => {
++    expect(setStatus(db, 2, "cancelled")).toBe(true);
++    expect(getOrder(db, 2)?.status).toBe("cancelled");
++    expect(setStatus(db, 42, "cancelled")).toBe(false);
++  });
++});
+diff --git a/test/window.test.ts b/test/window.test.ts
+new file mode 100644
+index 0000000..573c0bd
+--- /dev/null
++++ b/test/window.test.ts
+@@ -0,0 +1,24 @@
++import { describe, expect, it } from "vitest";
++import { isWithin } from "../src/reports/window.ts";
++
++const FROM = "2026-09-01T00:00:00Z";
++const UNTIL = "2026-09-30T23:59:59Z";
++
++describe("isWithin", () => {
++  it("includes an instant inside the window", () => {
++    expect(isWithin("2026-09-15T12:00:00Z", FROM, UNTIL)).toBe(true);
++  });
++
++  it("includes the first instant of the window", () => {
++    expect(isWithin(FROM, FROM, UNTIL)).toBe(true);
++  });
++
++  it("includes the last instant of the window", () => {
++    expect(isWithin(UNTIL, FROM, UNTIL)).toBe(true);
++  });
++
++  it("excludes instants before and after the window", () => {
++    expect(isWithin("2026-08-31T23:59:59Z", FROM, UNTIL)).toBe(false);
++    expect(isWithin("2026-10-01T00:00:00Z", FROM, UNTIL)).toBe(false);
++  });
++});
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..e8ed663
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,15 @@
++{
++  "compilerOptions": {
++    "module": "nodenext",
++    "moduleResolution": "nodenext",
++    "target": "es2023",
++    "lib": ["es2023"],
++    "types": ["node"],
++    "strict": true,
++    "noEmit": true,
++    "allowImportingTsExtensions": true,
++    "verbatimModuleSyntax": true,
++    "skipLibCheck": true
++  },
++  "include": ["src", "test"]
++}
