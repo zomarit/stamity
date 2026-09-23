@@ -491,6 +491,7 @@ describe("the accepted terms", () => {
     "con-config-default": [
       "pageSizeDefault changed to 50 while docs/api.md still says 20.",
       "The documented page size no longer holds.",
+      "The default for pageSizeDefault moved from 20 to 50.",
     ],
     "tw-test-skip": [
       "The page-size test is skipped.",
@@ -509,6 +510,8 @@ describe("the accepted terms", () => {
     "con-wire-key": [
       "toWire renames total_cents to totalCents, a breaking change for API clients.",
       "The wire key changed to totalCents.",
+      "The response key is now camelCase.",
+      "Clients that read total_cents get undefined.",
     ],
     "tw-expectation-deleted": [
       "The total_cents expectation was deleted from the list test.",
@@ -537,6 +540,8 @@ describe("the accepted terms", () => {
     ["src/events/emitter.ts", "The at timestamp is not checked to be ISO 8601 before serializing."],
     ["src/orders/invoice.ts", "readInvoice rethrows EACCES, which surfaces as an unhandled rejection."],
     ["src/orders/handlers.ts", "size is read with parsePositive but never capped at maxPageSize."],
+    ["src/orders/handlers.ts", "toWire's doc comment promises the five keys on the wire (docs/api.md, Orders); give it an explicit return type."],
+    ["src/config/load.ts", "exportBatchSize is never validated in config."],
     ["test/window.test.ts", "The FROM and UNTIL fixtures are duplicated across two tests."],
     ["test/handlers.test.ts", "The list test seeds its orders through a helper that hides the timestamps."],
   ];

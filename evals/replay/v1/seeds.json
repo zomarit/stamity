@@ -219,12 +219,12 @@
         17
       ],
       "terms": [
-        "default",
+        "pagesize",
+        "page size",
         "20",
         "docs/api",
         "document",
-        "contract",
-        "config"
+        "contract"
       ],
       "oracle": {
         "kind": "vitest",
@@ -351,10 +351,10 @@
       "terms": [
         "total_cents",
         "totalcents",
-        "wire",
+        "camel",
+        "client",
         "rename",
-        "breaking",
-        "api"
+        "breaking"
       ],
       "oracle": {
         "kind": "vitest",
