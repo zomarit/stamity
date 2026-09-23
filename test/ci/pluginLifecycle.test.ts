@@ -136,6 +136,12 @@ import { document } from "./downstreamFixture.js";
  * the base, and its ceiling is unmeasured, so the answer is scheduling rather than a wider margin:
  * on win32 `vitest.config.ts`'s `fixtureScheduling` runs this file in the serialized
  * `windows-fixtures` group, alone, after the parallel one — every budget here unchanged.
+ * That diagnosis is consistent with the logs, not proved by them (the passing base leaves about 2x
+ * under the 48s budget, not the 8x MARGIN was set for), so it counts as verified after the next ten
+ * consecutive Windows legs pass with this file serialized — ten because, at the parallel group's
+ * 3-in-13 red rate, ten greens in a row happen by chance only about 7% of the time (0.77^10) — and
+ * if a red recurs inside the serialized group the next lever is a win32 STUB_BUILD_MS derived from
+ * the measured 17.0s to 24.8s base, not a wider MARGIN.
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
