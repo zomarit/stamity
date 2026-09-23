@@ -5,3 +5,7 @@
 # Evaluation run evidence files carry exact task and output bytes; a Brief block ends with its own
 # blank line and a model output may end however it ended, so whitespace hygiene does not apply.
 evals/runs/*/calls/*.txt -whitespace
+
+# Replay patches carry planted lines byte-for-byte, trailing whitespace included; a whitespace
+# check that flagged them would push a fix into the very bytes the replay measures.
+evals/replay/v1/**/*.patch -whitespace
