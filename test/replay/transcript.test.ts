@@ -445,6 +445,7 @@ describe("scanSubagent", () => {
       toolUseId: "tu-rev",
       description: "u1-p1 review",
       forbidHits: [],
+      parseErrors: 0,
     });
   });
 
@@ -458,6 +459,7 @@ describe("scanSubagent", () => {
       toolUseId: null,
       description: null,
       nReq: 0,
+      parseErrors: 1,
       processed: 0,
       firstPrompt: "p",
     });

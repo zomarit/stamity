@@ -586,7 +586,7 @@ async function readMeta(metaPath) {
  * (`toolUseId`, the join to the main walk's dispatch and delivery rows) and description the client recorded,
  * the models that answered (per distinct request), and the tokens it processed — Σ over requests,
  * deduplicated by `message.id`, of input + cache creation + cache read + output. API-error stubs
- * are not requests; unparseable lines are skipped. A missing meta file reads as unknown role and
+ * are not requests; unparseable lines are skipped and counted (`parseErrors`). A missing meta file reads as unknown role and
  * model.
  */
 export async function scanSubagent(jsonlPath, metaPath, { forbid = [] } = {}) {
@@ -596,11 +596,16 @@ export async function scanSubagent(jsonlPath, metaPath, { forbid = [] } = {}) {
   const forbidHits = []
   let firstPrompt = null
   let lineNo = 0
+  let parseErrors = 0
   const rl = createInterface({ input: createReadStream(jsonlPath), crlfDelay: Infinity })
   for await (const text of rl) {
     lineNo++
+    if (!text.trim()) continue
     const o = parseLine(text)
-    if (o === null || typeof o !== 'object') continue
+    if (o === null || typeof o !== 'object') {
+      parseErrors++
+      continue
+    }
     if (o.type === 'user' && firstPrompt === null) firstPrompt = promptText(o.message?.content)
     if (o.type !== 'assistant' || o.isApiErrorMessage) continue
     const m = o.message || {}
@@ -633,6 +638,6 @@ export async function scanSubagent(jsonlPath, metaPath, { forbid = [] } = {}) {
   }
   return {
     agentType: meta.agentType ?? null, requestedModel: meta.model ?? null, models, nReq: reqs.size, processed, inputSide, outTok, think, firstPrompt,
-    toolUseId: meta.toolUseId ?? null, description: meta.description ?? null, forbidHits,
+    toolUseId: meta.toolUseId ?? null, description: meta.description ?? null, forbidHits, parseErrors,
   }
 }

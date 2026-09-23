@@ -13,7 +13,7 @@
 //     agents whose role function is build, fix, verdict or gate (resumes reported apart), plus
 //     (c) ledger writes of the kinds `LEDGER_GATED_KINDS` names (every other kind the walk returns
 //     is reported beside the gated figure, never inside it), (d) brief files and (e) report reads
-//     (Read, read-class Bash, and Grep or Glob on a report path),
+//     (Read, read- or search-class Bash, and Grep or Glob on a report path),
 //     each with its tool results; ÷ 6 per pass;
 //   * sub-agent tokens — Σ `processed` over the loop-function agents, ÷ 6;
 //   * recall, decoy flags and unmatched findings, by the deterministic matcher
@@ -63,11 +63,11 @@ const REPORT_FILE = /^(.+)-(implementer|fixer|reviewer|security|performance|desi
 /** A C2 `stamity-findings` fence: with a digest's `status:` and `report:` pair, the mark of a structured return. */
 const C2_FENCE = /^ {0,3}```stamity-findings[ \t]*$/m
 /**
- * Bash classes that count as a read for term (e): `read` and `rs`, and `mixed`, which pairs a read
- * or search head verb with another verb — counting it can only raise the loop figure, never hide
- * an on-demand read.
+ * Bash classes that count as a read for term (e): `read`, `search` (a grep or rg prints the lines it
+ * finds, build/185) and `rs`, and `mixed`, which pairs a read or search head verb with another
+ * verb — counting it can only raise the loop figure, never hide an on-demand read.
  */
-const READ_CLASSES = new Set(['read', 'rs', 'mixed'])
+const READ_CLASSES = new Set(['read', 'rs', 'mixed', 'search'])
 /** Tool results whose text is a sub-agent's delivery. */
 const DELIVERY_TOOLS = new Set(['Agent', 'Task', 'SendMessage', 'TaskOutput'])
 /** Tools whose results term (e) reads when their input names a report path (build/169). */
@@ -117,7 +117,18 @@ async function readLines(path) {
   return out
 }
 
-const jsonlRows = (text) => (text ?? '').split(/\r?\n/).filter((l) => l.trim()).map(parseJson).filter((o) => o && typeof o === 'object')
+/** The object rows of a JSONL text, and how many non-blank lines were no JSON object. */
+function jsonlCounted(text) {
+  const rows = []
+  let errors = 0
+  for (const line of (text ?? '').split(/\r?\n/)) {
+    if (!line.trim()) continue
+    const o = parseJson(line)
+    if (o && typeof o === 'object' && !Array.isArray(o)) rows.push(o)
+    else errors++
+  }
+  return { rows, errors }
+}
 
 /** Text of a tool_result's content: a string, or its text blocks joined by newlines. */
 function resultText(content) {
@@ -166,6 +177,29 @@ function rootSpellings(paths) {
   return [...out]
 }
 
+/** The worktree paths run.json records (`worktrees`: strings, or objects with a `path` or `worktree`). */
+function worktreesOf(run) {
+  const list = Array.isArray(run?.worktrees) ? run.worktrees : []
+  return list.map((w) => (typeof w === 'string' ? w : typeof w?.path === 'string' ? w.path : typeof w?.worktree === 'string' ? w.worktree : null)).filter(Boolean)
+}
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * Every absolute path prefix in `texts` that ends at a directory named like a snapshot copy
+ * (`…/<worktree>/`), the split point a lane-worktree locator is made relative at (build/182). A
+ * prefix must start a path token, so a relative path that passes through such a name is left alone.
+ */
+function splitRoots(texts, names) {
+  const out = new Set()
+  for (const name of names) {
+    if (!name) continue
+    const re = new RegExp(`(?<![\\w.~-])(/[^\\s'"\`|()<>\\[\\]{},;]*?/${escapeRe(name)})(?=/)`, 'g')
+    for (const text of texts) for (const m of String(text ?? '').matchAll(re)) out.add(m[1])
+  }
+  return [...out]
+}
+
 // ---------- seeds ----------
 
 function checkSeeds(seeds) {
@@ -201,8 +235,7 @@ function presentIn(copy, item) {
  * which drift from the pure seeded tree's `span` as the chain's own edits land. With no located
  * line anywhere, the matcher falls back to the item's `span`.
  */
-function relocatedSpans(items, snapshots) {
-  const passes = entriesOf(snapshots).filter((e) => e.isDirectory()).map((e) => e.name)
+function relocatedSpans(items, snapshots, passes = entriesOf(snapshots).filter((e) => e.isDirectory()).map((e) => e.name)) {
   const byFile = {}
   for (const item of items) {
     const needle = item.locate?.text
@@ -243,11 +276,13 @@ const passKey = (p) => (isPass(p) ? p : 'unattributed')
 
 /**
  * One streamed pass over the main transcript for what the walk's rows do not carry: every tool
- * input by id, the text of every delivery-tool result, and the `cwd` of every entry.
+ * input by id, the text of every delivery-tool and Grep or Glob result, the ids of the Bash calls
+ * whose result names a report path, and the `cwd` of every entry.
  */
 function indexTranscript(lines) {
   const uses = new Map()
   const results = new Map()
+  const bashNamesReport = new Set()
   const cwds = new Set()
   for (const text of lines) {
     if (!text.trim()) continue
@@ -261,10 +296,11 @@ function indexTranscript(lines) {
       else if (o.type === 'user' && b?.type === 'tool_result') {
         const name = uses.get(b.tool_use_id)?.name
         if (DELIVERY_TOOLS.has(name) || SEARCH_TOOLS.has(name)) results.set(b.tool_use_id, resultText(b.content))
+        else if (name === 'Bash' && REPORT_READ.test(resultText(b.content))) bashNamesReport.add(b.tool_use_id)
       }
     }
   }
-  return { uses, results, cwds }
+  return { uses, results, bashNamesReport, cwds }
 }
 
 async function cwdsOf(path) {
@@ -326,9 +362,16 @@ function rangesMeet(a, b, tolerance) {
   return a.line <= (b.lineEnd ?? b.line) + tolerance && (a.lineEnd ?? a.line) >= b.line - tolerance
 }
 
-/** Whether a ledger row covers a finding: its `report` is the finding's report, or the same file within ±tolerance. */
+/**
+ * Whether a ledger row covers a finding: its `report` is the finding's report, or the same file within
+ * ±tolerance, or — for a finding with no file (a gate command, build/202) — a row whose text holds the
+ * finding's text.
+ */
 function hasRow(f, rows, tolerance) {
-  return rows.some((r) => (f.reportPath && r.reportPath === f.reportPath) || (f.file != null && r.file === f.file && r.line != null && rangesMeet(f, r, tolerance)))
+  const text = f.file == null ? String(f.text ?? '').trim() : ''
+  return rows.some((r) => (f.reportPath && r.reportPath === f.reportPath)
+    || (f.file != null && r.file === f.file && r.line != null && rangesMeet(f, r, tolerance))
+    || (text !== '' && String(r.text ?? '').includes(text)))
 }
 
 /** The fixture run folders of one state copy (`compaction-<n>-pre` or `end`): ledger rows and report files. */
@@ -336,13 +379,16 @@ function readState(stateDir) {
   const runsDir = join(stateDir, 'runs')
   const ledger = []
   const reports = []
+  let ledgerParseErrors = 0
   for (const run of entriesOf(runsDir).filter((e) => e.isDirectory())) {
-    ledger.push(...jsonlRows(readTextIfPresent(join(runsDir, run.name, 'ledger.jsonl'))))
+    const { rows, errors } = jsonlCounted(readTextIfPresent(join(runsDir, run.name, 'ledger.jsonl')))
+    ledger.push(...rows)
+    ledgerParseErrors += errors
     for (const file of entriesOf(join(runsDir, run.name, 'reports')).filter((e) => e.isFile() && e.name.endsWith('.md'))) {
       reports.push({ runId: run.name, file: file.name, text: readTextIfPresent(join(runsDir, run.name, 'reports', file.name)) ?? '' })
     }
   }
-  return { present: entriesOf(stateDir).length > 0, ledger, reports }
+  return { present: entriesOf(stateDir).length > 0, ledger, reports, ledgerParseErrors }
 }
 
 /** The final class from the last delivery; `rounds` counts only the deliveries that are rounds (build/175). */
@@ -394,7 +440,6 @@ async function loadCapture(runDir, forbid) {
     return Object.assign(scan, { agentId, cwds })
   }))
   const init = await initEvent(L.stdout)
-  const roots = rootSpellings([...index.cwds, ...subs.flatMap((s) => [...s.cwds]), init?.cwd])
 
   const orchestratorModels = {}
   for (const r of walk.requests) if (r.model && r.model !== '<synthetic>') orchestratorModels[r.model] = (orchestratorModels[r.model] ?? 0) + 1
@@ -406,6 +451,14 @@ async function loadCapture(runDir, forbid) {
 
   const stateNames = entriesOf(L.state).filter((e) => e.isDirectory()).map((e) => e.name)
   const states = Object.fromEntries(stateNames.map((name) => [name, readState(join(L.state, name))]))
+  // build/182: every root a locator may be spelled under — the transcripts' cwds, the init cwd, the
+  // worktrees run.json records, and every absolute path that ends in a snapshot copy's worktree name.
+  const texts = [
+    ...walk.deliveries.map((d) => d.result ?? ''), ...index.results.values(),
+    ...stateNames.flatMap((n) => [...states[n].reports.map((r) => r.text), ...states[n].ledger.map((r) => String(r.evidence ?? ''))]),
+  ]
+  const copyNames = new Set(entriesOf(L.snapshots).filter((e) => e.isDirectory()).flatMap((e) => copiesOf(L.snapshots, e.name).map((c) => c.split(/[\\/]/).pop())))
+  const roots = rootSpellings([...index.cwds, ...subs.flatMap((s) => [...s.cwds]), init?.cwd, ...worktreesOf(run), ...splitRoots(texts, copyNames)])
   const oracle = readJsonIfPresent(L.oracle)
   const oracleStatus = new Map((Array.isArray(oracle?.results) ? oracle.results : []).map((r) => [r.seed, r.status]))
   return { L, run, invalid, walk, index, subs, init, roots, orchestratorModels, stateNames, states, oracleStatus }
@@ -450,15 +503,34 @@ function joinAgents(walk, index, subs, roots) {
 
   // A delivery is a round (build/175) when it completed and carries a verdict: a failed
   // notification is none, and neither is a TaskOutput re-read of a task already notified.
+  // build/184: a delivery joined to no dispatch falls back to the sub-agent file its notification
+  // names (the file's agent id is the task id, or its meta records the tool_use id); the agent
+  // built from that file's meta carries no prompt characters, since the main transcript shows none.
+  const fromFile = new Map()
+  const fileAgent = (key, line) => {
+    const s = key ? subs.find((x) => x.agentId === key || (x.toolUseId && x.toolUseId === key)) : null
+    if (!s) return null
+    if (byAgentId.has(s.agentId)) return byAgentId.get(s.agentId)
+    if (!fromFile.has(s.agentId)) {
+      const agent = {
+        toolUseId: s.toolUseId, line, role: roleName(s.agentType), fn: roleFunction(s.agentType), desc: s.description ?? '', prompt: s.firstPrompt ?? '', chars: 0,
+        model: null, name: null, pass: attributePass(s.description, s.firstPrompt), branch: false, round: 1, resume: false, fromFile: true,
+      }
+      fromFile.set(s.agentId, agent)
+      agents.push(agent)
+      byAgentId.set(s.agentId, agent)
+    }
+    return fromFile.get(s.agentId)
+  }
   const deliveries = []
   const taskAgent = new Map()
   const notified = new Map()
   for (const d of walk.deliveries) {
-    const agent = byUse.get(d.toolUseId) ?? sendByUse.get(d.toolUseId)?.target ?? null
+    const agent = byUse.get(d.toolUseId) ?? sendByUse.get(d.toolUseId)?.target ?? fileAgent(d.taskId, d.line) ?? fileAgent(d.toolUseId, d.line)
     if (agent && d.taskId) taskAgent.set(d.taskId, agent)
     if (d.taskId && !notified.has(d.taskId)) notified.set(d.taskId, d.line)
     const failed = typeof d.status === 'string' && d.status !== 'completed'
-    deliveries.push({ line: d.line, chars: d.chars, text: d.result ?? '', agent, trailer: d.subagentTokens ?? 0, failed, reread: false })
+    deliveries.push({ line: d.line, chars: d.chars, text: d.result ?? '', agent, trailer: d.subagentTokens ?? 0, failed, reread: false, tool: 'task-notification' })
   }
   const notes = []
   const longAcks = []
@@ -468,14 +540,17 @@ function joinAgents(walk, index, subs, roots) {
     if (e.cls !== 'returns.report') continue
     let agent = null
     let reread = false
-    if (e.tool === 'Agent' || e.tool === 'Task') agent = byUse.get(e.toolUseId) ?? null
-    else if (e.tool === 'SendMessage') agent = sendByUse.get(e.toolUseId)?.target ?? null
-    else if (e.tool === 'TaskOutput') {
+    if (e.tool === 'Agent' || e.tool === 'Task') agent = byUse.get(e.toolUseId) ?? fileAgent(e.toolUseId, e.line)
+    else if (e.tool === 'SendMessage') {
+      const send = sendByUse.get(e.toolUseId)
+      agent = send?.target ?? fileAgent(index.uses.get(e.toolUseId)?.input?.to, e.line)
+      if (send && send.target === null) send.target = agent
+    } else if (e.tool === 'TaskOutput') {
       const taskId = index.uses.get(e.toolUseId)?.input?.task_id
-      agent = taskAgent.get(taskId) ?? null
+      agent = taskAgent.get(taskId) ?? byAgentId.get(taskId) ?? fileAgent(taskId, e.line)
       reread = notified.has(taskId) && notified.get(taskId) < e.line
     }
-    deliveries.push({ line: e.line, chars: e.chars, text: index.results.get(e.toolUseId) ?? '', agent, trailer: 0, failed: false, reread })
+    deliveries.push({ line: e.line, chars: e.chars, text: index.results.get(e.toolUseId) ?? '', agent, trailer: 0, failed: false, reread, tool: e.tool })
   }
   // build/165: a SendMessage result is a delivery by its content; a long one with no delivery mark
   // is read as an acknowledgement, out of term (a) and the rounds, and named here.
@@ -484,8 +559,15 @@ function joinAgents(walk, index, subs, roots) {
   for (const d of deliveries) {
     d.digest = parseDigest(d.text, { source: 'digest', role: d.agent?.role ?? null, roots })
     d.verdict = verdictOfDelivery(d.text, d.digest)
-    d.round = !d.failed && !d.reread && d.verdict !== null
+    // build/201: every completed delivery that is no re-read is a round, as §8 words it; a
+    // reviewer's round with no readable verdict is named below.
+    d.round = !d.failed && !d.reread
   }
+  for (const d of deliveries) {
+    if (d.agent === null) notes.push(`delivery joined to no agent: main transcript line ${d.line}, ${d.tool}, ${d.chars} characters — out of the findings, rounds and compaction samples, kept in term (a) unattributed`)
+    else if (d.agent.role === 'reviewer' && d.round && d.verdict === null) notes.push(`reviewer round with no readable verdict: main transcript line ${d.line}, ${d.chars} characters — counted as a round`)
+  }
+  for (const s of sends) if (s.target === null) notes.push(`SendMessage joined to no agent: main transcript line ${s.line}, ${s.chars} characters — kept in term (b) unattributed`)
 
   // Branch-level verdict dispatches: after u3-p2's last reviewer approval with no single pass id,
   // or named a whole-branch pass. The prompt is read for the name only when the dispatch carries
@@ -592,7 +674,8 @@ function loopCharacters(walk, index, agents, sends, deliveries) {
     }
   }
   for (const b of walk.bash) {
-    if (b.kind !== 'command' || counted.has(b.toolUseId) || !READ_CLASSES.has(b.cls) || !REPORT_READ.test(b.command)) continue
+    if (b.kind !== 'command' || counted.has(b.toolUseId) || !READ_CLASSES.has(b.cls)) continue
+    if (!REPORT_READ.test(b.command) && !index.bashNamesReport.has(b.toolUseId)) continue
     perPass[passAt(b.line)].reportReads += withResult(b.chars, b.toolUseId)
   }
   return { perPass, beside, unresolved }
@@ -612,7 +695,7 @@ function subagentUsage(subs, byAgentId, deliveries, invalid, notes) {
   for (const s of subs) {
     const agent = byAgentId.get(s.agentId) ?? null
     const requested = s.requestedModel ?? agent?.model ?? null
-    models.push({ agentId: s.agentId, agentType: s.agentType, requested, resolved: s.models })
+    models.push({ agentId: s.agentId, agentType: s.agentType, requested, resolved: s.models, unparseableLines: s.parseErrors ?? 0 })
     for (const model of Object.keys(s.models)) {
       if (model !== '<synthetic>' && !withinPin(requested, model)) invalid.push(`sub-agent ${s.agentType ?? 'unknown'} (${s.agentId}) answered on ${model}, outside the pin for ${requested}`)
     }
@@ -627,6 +710,25 @@ function subagentUsage(subs, byAgentId, deliveries, invalid, notes) {
   const trailer = sum(deliveries.filter((d) => d.agent && LOOP_FUNCTIONS.has(d.agent.fn)), (d) => d.trailer)
   if (unjoined.length > 0) notes.push(`${unjoined.length} sub-agent(s) joined to no dispatch and naming no agent type, their tokens kept in the sub-agent-token sum unattributed: ${unjoined.join(', ')}`)
   return { tokensByPass, tokens, outputTokens, trailer, models, unjoined: unjoined.length }
+}
+
+/**
+ * build/186: the dispatches reconciled against the scanned sub-agent files. `agentsWithoutTranscript`
+ * lists every dispatched agent no sub-agent file joins to (its tokens are missing from the sum), and
+ * one note compares, per loop agent, the notification's `subagent_tokens` with the file's `processed`.
+ */
+function reconcileAgents(agents, subs, byAgentId, deliveries, notes) {
+  const processed = new Map()
+  for (const s of subs) {
+    const agent = byAgentId.get(s.agentId)
+    if (agent) processed.set(agent, (processed.get(agent) ?? 0) + s.processed)
+  }
+  const agentsWithoutTranscript = agents.filter((a) => !a.fromFile && !processed.has(a)).map((a) => ({ toolUseId: a.toolUseId, role: a.role, fn: a.fn, pass: a.pass, line: a.line }))
+  const loop = agents.filter((a) => LOOP_FUNCTIONS.has(a.fn))
+  const trailerOf = (a) => sum(deliveries.filter((d) => d.agent === a), (d) => d.trailer)
+  const over = loop.filter((a) => trailerOf(a) > (processed.get(a) ?? 0))
+  notes.push(`sub-agent tokens reconciled: Σ notification subagent_tokens ${sum(loop, trailerOf)} against Σ processed ${sum(loop, (a) => processed.get(a) ?? 0)} over ${loop.length} loop agent(s); ${agentsWithoutTranscript.length} dispatched agent(s) with no transcript file${over.length > 0 ? `; notification tokens above processed for ${over.map((a) => `${a.role ?? 'unknown'} at line ${a.line}`).join(', ')}` : ''}`)
+  return agentsWithoutTranscript
 }
 
 // ---------- the measurement: findings ----------
@@ -644,21 +746,28 @@ const slugOf = (reportPath) => {
  */
 function collectFindings(deliveries, stateNames, states, roots) {
   const all = []
-  const readerSkips = { unreadFreeText: { 'severity-without-locator': 0, 'locator-without-severity': 0 }, digestErrors: 0, findingsBlockErrors: 0 }
+  const readerSkips = {
+    unreadFreeText: { 'severity-without-locator': 0, 'locator-without-severity': 0 }, digestErrors: 0, findingsBlockErrors: 0,
+    ledgerParseErrors: sum(stateNames, (n) => states[n].ledgerParseErrors ?? 0),
+  }
   deliveries.filter((d) => d.agent?.fn === 'verdict').forEach((d, k) => {
     const where = { pass: d.agent.pass, branch: d.agent.branch, round: d.agent.round, delivered: d.line }
     const meta = { role: d.agent.role, roots, source: 'return' }
-    for (const f of extractFreeText(d.text, meta)) all.push({ ...f, ...where, unit: `return:${k}:${f.text}` })
-    const block = parseFindingsBlock(d.text, meta)
+    const digest = d.digest.status !== null && d.digest.report !== null
+    const structured = digest || C2_FENCE.test(d.text)
+    // build/183: a structured return is read by its own readers only, so a digest's entries are
+    // never folded into one free-text block.
+    if (!structured) for (const f of extractFreeText(d.text, meta)) all.push({ ...f, ...where, unit: `return:${k}:${f.text}` })
+    // build/202: an inline block carries the digest's report path, the key its ledger rows cite.
+    const block = parseFindingsBlock(d.text, { ...meta, reportPath: d.digest.report })
     readerSkips.findingsBlockErrors += block.errors.length
     for (const f of block.findings) all.push({ ...f, ...where, unit: null })
     for (const f of d.digest.findings) all.push({ ...f, ...where, unit: null })
     // A digest (its `status:` and `report:` pair) and a C2 block are no free text: counting their
     // locators as unread blocks would charge the changed shape for the baseline heuristic's skips.
     // A free-text return's `Findings:` heading is no digest, so it adds no digest error (build/166).
-    const digest = d.digest.status !== null && d.digest.report !== null
     if (digest) readerSkips.digestErrors += d.digest.errors.length
-    if (!digest && !C2_FENCE.test(d.text)) for (const u of unreadFreeText(d.text, meta)) readerSkips.unreadFreeText[u.reason]++
+    if (!structured) for (const u of unreadFreeText(d.text, meta)) readerSkips.unreadFreeText[u.reason]++
   })
 
   // Reports by path, the end state last so the final copy of a report wins.
@@ -687,12 +796,36 @@ function collectFindings(deliveries, stateNames, states, roots) {
  * Critical and Warning for the flags; the unmatched count (build/91: a finding with no file is
  * not unmatched) and the adjudication list.
  */
+/**
+ * build/190: the matcher per pass — a finding attributed to a pass meets the items' spans as that
+ * pass's snapshot copies locate them; only a finding with no pass (a ledger row with no report, a
+ * multi-pass or branch finding naming none) meets the union over every pass. Indices stay `all`'s.
+ */
+function matchByPass(all, items, snapshots, opts) {
+  const groups = new Map()
+  all.forEach((f, i) => {
+    const key = isPass(f.pass) ? f.pass : '*'
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(i)
+  })
+  const matched = Object.fromEntries(items.map((item) => [item.id, []]))
+  const adjudication = []
+  for (const [key, idxs] of groups) {
+    const spans = relocatedSpans(items, snapshots, key === '*' ? undefined : [key])
+    const part = matchItems(idxs.map((i) => all[i]), items, spans, opts)
+    for (const [id, hits] of Object.entries(part.matched)) matched[id].push(...hits.map((h) => idxs[h]))
+    adjudication.push(...part.adjudication.map((a) => ({ id: a.id, findingIdx: idxs[a.findingIdx] })))
+  }
+  for (const id of Object.keys(matched)) matched[id].sort((a, b) => a - b)
+  adjudication.sort((a, b) => a.findingIdx - b.findingIdx)
+  return { matched, adjudication }
+}
+
 function scoreFindings(all, seeds, snapshots) {
   const items = [...seeds.seeds, ...seeds.decoys]
-  const spansByFile = relocatedSpans(items, snapshots)
   const tolerance = seeds.matcher?.lineTolerance ?? 3
-  const seedMatch = matchItems(all, seeds.seeds, spansByFile, { tolerance, severities: seeds.matcher?.severities ?? FLAG_SEVERITIES })
-  const flagMatch = matchItems(all, items, spansByFile, { tolerance, severities: FLAG_SEVERITIES })
+  const seedMatch = matchByPass(all, seeds.seeds, snapshots, { tolerance, severities: seeds.matcher?.severities ?? FLAG_SEVERITIES })
+  const flagMatch = matchByPass(all, items, snapshots, { tolerance, severities: FLAG_SEVERITIES })
   const flagged = new Set(Object.values(flagMatch.matched).flat())
 
   // One per free-text block and one per location, so a finding repeated by a digest, a report and
@@ -758,6 +891,9 @@ function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes) {
     }
   })
   for (const pass of missing) notes.push(`no snapshot under captures/snapshots/${pass}/: its seeds stay in the recall denominator with presence unknown`)
+  for (const r of rows) {
+    if (r.present === true && !r.found && r.oracle === 'pass') notes.push(`seed ${r.id} (${r.pass}): present in the snapshot and not found by a verdict role, while its oracle passes at run end — scored not found (build/197)`)
+  }
   for (const seed of absent) notes.push(`seed ${seed}: the file is absent from every snapshot copy of the pass, so the seed stays in the recall denominator with presence unknown`)
   return rows
 }
@@ -827,6 +963,11 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
   const { agents, byAgentId, sends, deliveries, notes } = joinAgents(walk, cap.index, cap.subs, roots)
   const { perPass, beside, unresolved } = loopCharacters(walk, cap.index, agents, sends, deliveries)
   const usage = subagentUsage(cap.subs, byAgentId, deliveries, invalid, notes)
+  const agentsWithoutTranscript = reconcileAgents(agents, cap.subs, byAgentId, deliveries, notes)
+  // build/196: a pass no loop agent was dispatched for still divides the figures by six.
+  for (const id of PASS_IDS) {
+    if (!agents.some((a) => LOOP_FUNCTIONS.has(a.fn) && !a.branch && a.pass === id)) notes.push(`pass ${id} has no loop dispatch: its loop characters and sub-agent tokens are 0 and still count in the ÷ 6`)
+  }
   const { all, readerSkips } = collectFindings(deliveries, cap.stateNames, states, roots)
   const { seedMatch, decoysFlagged, unmatched, adjudication, tolerance } = scoreFindings(all, seeds, L.snapshots)
   const seedRows = seedRowsOf(seeds, all, seedMatch, L.snapshots, oracleStatus, notes)
@@ -881,6 +1022,8 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
       ledgerBeside: beside,
       subagentTokens: usage.tokens,
       unjoinedSubagents: usage.unjoined,
+      agentsWithoutTranscript,
+      walkSkipped: walk.skipped,
       subagentTokensPerPass: usage.tokens / PASS_COUNT,
       subagentOutputTokens: usage.outputTokens,
       notificationTrailerTokens: usage.trailer,
