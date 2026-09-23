@@ -154,7 +154,7 @@ The fork declares its upstream in `.stamity/upstream.json` at the repository roo
     "node scripts/generate-plugin-manifests.mjs",
     "npm run build && node dist/cli.js sync"
   ],
-  "generatedPaths": [".apm/**", ".claude/**", "AGENTS.md", "CLAUDE.md", ".stamity/manifest.json", ".stamity/generated/**", "apm.yml", "plugin.json", ".claude-plugin/**", ".cursor-plugin/**", "docs/cli-reference.md", "docs/configuration.md", "docs/reference/**", "docs/capability-matrix.md", "llms.txt", "src/pack/catalogPins.ts"],
+  "generatedPaths": [".apm/**", ".claude/**", "AGENTS.md", "CLAUDE.md", ".stamity/manifest.json", ".stamity/generated/**", "apm.yml", "plugin.json", ".claude-plugin/**", ".cursor-plugin/**", "docs/cli-reference.md", "docs/configuration.md", "docs/reference/**", "docs/capability-matrix.md", "docs/measurements.md", "llms.txt", "src/pack/catalogPins.ts"],
   "watch": ["content/charter/**", "src/types/core.ts"],
   "shadows": { "packs/acme/rules/acme-secrets.md": "content/rules/stamity-secrets.md" }
 }
@@ -305,7 +305,9 @@ merge commit always contains exactly the tree the gates tested. The commands run
 merged tree's own scripts with the caller's environment — the report says so on the first
 run — which is why the GitHub layer runs them in a job that holds no credential. The
 default list for this repository is written into the guide and mirrors
-`CONTRIBUTING.md`'s regeneration table.
+`CONTRIBUTING.md`'s regeneration table less its two `--write` maintenance rows and its ignored
+`dist/plugins/` row, with `.stamity/manifest.json` and `docs/measurements.md` added because
+`sync` and plain `generate-docs.mjs` write them; the guide says which rows and why.
 
 ### REQ-UPSTREAM-008 — Drift a clean merge hides is reported
 

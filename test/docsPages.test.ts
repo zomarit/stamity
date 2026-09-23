@@ -408,6 +408,18 @@ const CURRENCY_HEADER =
  * so the constant has to move on the next cut or the assertion fails, and no page claims a
  * verification later than the cut it shipped in.
  */
+// MOVED 2026-09-23, from "2026-09-21" (the 1.9.0 cut) to the 1.9.1 cut. Four read-only attestors
+// at the stronger class re-read every claim of the bucket against the 1.9.1 candidate, and the
+// whole bucket was restamped onto the cut form; the claims that moved with it: the frozen
+// merge-ready snapshot README links (2026-09-23, still 6 of 8), the run of record's carried-to
+// release and candidate on README, in the doctrine and on the measurements page, the DCO walk in
+// GOVERNANCE and CONTRIBUTING (the base-to-head comparison, not the commit list), the e2e lane's
+// six files and the authoring suite among the harness-driven five in CONTRIBUTING, the dogfood
+// provenance line and the learnings count in troubleshooting, the regeneration-list sentence and
+// the recommended `generatedPaths` (now naming `docs/measurements.md`) in the enterprise guide,
+// and on the plugins page the three remote-source provenance notes, the migration-engine version
+// and the Renovate preset's scope.
+//
 // MOVED 2026-09-21, from "2026-09-15" (the 1.8.0 cut) to the 1.9.0 cut. The whole hand bucket
 // was re-read claim by claim against the candidate tree and restamped onto the cut form, which is
 // what the release controls checklist's fourth line asks for; nine claims moved with it (the
@@ -428,7 +440,7 @@ const CURRENCY_HEADER =
 // REATTESTATION_DATE below, and each form's newest date is pinned to its own constant. The
 // direction the pin is written for is unchanged — it fails a re-cut that restamps nothing, never
 // one that restamps honestly.
-const RELEASE_CUT_DATE = "2026-09-21";
+const RELEASE_CUT_DATE = "2026-09-23";
 
 /**
  * The date the current re-verification pass re-read the hand bucket on.
@@ -464,8 +476,13 @@ const RELEASE_CUT_DATE = "2026-09-21";
  * cut re-attests every hand page against the candidate tree and stamps the cut form on all
  * fourteen, so there is no between-cuts pass left to date. The pin below covers that state rather
  * than skipping it — see the assertion's own note.
+ *
+ * MOVED 2026-09-23, to the 1.9.1 cut date. The 1.9.1 cut restamped all fourteen pages, the
+ * plugins page included, onto the cut form — its 2026-09-22 Copilot measurements were re-read
+ * against the candidate with everything else — so the commit form again has no members and the
+ * constant equals the cut, as the assertion's else branch requires.
  */
-const REATTESTATION_DATE = "2026-09-22";
+const REATTESTATION_DATE = "2026-09-23";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");

@@ -2,7 +2,7 @@
 title: Doctrine
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.0 release cut (2026-09-21). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.1 release cut (2026-09-23). -->
 <!-- Re-open when: an invariant's text changes, a pillar gains or loses a public enforcement
      surface, the root question's three answers change, the always-on split across clients moves,
      or the deferred with-versus-without measurement lands. `test/docsPages.test.ts` holds this
@@ -95,8 +95,9 @@ A claim about behaviour is worth what its instrument is worth.
 - The corpus is prose executed by a model, so a test suite cannot decide it. The
   [eval set](../evals/README.md) decides it instead. Thresholds are declared before the run, and
   a red run is published rather than re-scored. The run of record is
-  [run 32](../evals/runs/2026-09-22-run-32/RESULTS.md), the 1.9.0 release run, which passed every
-  declared threshold. It is composed rather than measured end to end, under the set's incremental
+  [run 32](../evals/runs/2026-09-22-run-32/RESULTS.md), the 1.9.0 release run carried to 1.9.1
+  under the set's incremental rule — no case input moved since its candidate `e5e54c9` — which
+  passed every declared threshold. It is composed rather than measured end to end, under that
   rule. Run 27 measured every case in full. Runs 29, 30, 31 and 32 then re-measured only the cases
   whose inputs had moved, and carried the rest with their hashes.
   [The measurements page](measurements.md) rolls an eval run of record up beside the verified
