@@ -40,13 +40,36 @@ const REQUIRED_FIELDS = [
 ] as const;
 
 /**
- * The one field beyond the seven, and the shape `/st-work` declares for it: an
- * optional EIGHTH field on the same row, `retired`, whose value opens with the
- * date and then states the disposition. Not a rewritten `state`, and not a
- * second row — the ledger's converge-by-id rule forbids both, and that rule is
- * itself asserted below.
+ * The fields beyond the seven, each optional on the same row:
+ *
+ * - `retired`, the shape `/st-work` declares: its value opens with the date and
+ *   then states the disposition. Not a rewritten `state`, and not a second row —
+ *   the ledger's converge-by-id rule forbids both, and that rule is itself
+ *   asserted below.
+ * - `report`, the repo-relative path of the full role report the row was
+ *   appended from (C1): exactly `<run dir>/reports/<name>.md`, POSIX-spelled,
+ *   where `<run dir>` is the ledger's own folder. Its existence is NOT checked:
+ *   the reports folder is git-ignored, so CI never has the file.
+ * - `decision_needed`, present only as `true` (C3): a row whose fix changes a
+ *   shared contract or needs a product choice. Absent is the "no" — a `false`
+ *   would be a second spelling of the same answer.
  */
-const OPTIONAL_FIELDS = ["retired"] as const;
+const OPTIONAL_FIELDS = ["retired", "report", "decision_needed"] as const;
+
+/** A report's file name: one path segment, no separator of either kind, `.md`. */
+const REPORT_NAME = /^[^/\\]+\.md$/;
+
+/**
+ * Whether `report` names a markdown file directly inside this ledger's run's
+ * `reports/` folder. The run folder is the ledger path minus `/ledger.jsonl`,
+ * so a report under another run, a nested folder or a backslash spelling fails.
+ */
+const isRunReport = (ledgerPath: string, report: unknown): boolean => {
+  const suffix = `/${LEDGER_SUFFIX}`;
+  if (typeof report !== "string" || !ledgerPath.endsWith(suffix)) return false;
+  const prefix = `${ledgerPath.slice(0, -suffix.length)}/reports/`;
+  return report.startsWith(prefix) && REPORT_NAME.test(report.slice(prefix.length));
+};
 
 /**
  * The terminal states a committed row may end in. `closed` is a LEGACY terminal
@@ -160,7 +183,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 /**
  * Parse one ledger's text. Blank lines are skipped; every other line must be a
- * JSON object carrying exactly the seven required fields, optionally `retired`.
+ * JSON object carrying exactly the seven required fields, optionally `retired`,
+ * `report` and `decision_needed`.
  * Rows that fail to parse are reported and dropped, so a later check never
  * reasons about a row whose shape it could not read.
  */
@@ -197,6 +221,14 @@ const parseLedger = (ledgerPath: string, text: string): LedgerParse => {
     }
     if (parsed["retired"] !== undefined && typeof parsed["retired"] !== "string") {
       problems.push(`${at}: \`retired\` is a string when present`);
+      return;
+    }
+    if (parsed["report"] !== undefined && !isRunReport(ledgerPath, parsed["report"])) {
+      problems.push(`${at}: \`report\` is a POSIX path inside this run's reports/ folder`);
+      return;
+    }
+    if (parsed["decision_needed"] !== undefined && parsed["decision_needed"] !== true) {
+      problems.push(`${at}: \`decision_needed\` is present only as true`);
       return;
     }
 
@@ -625,5 +657,121 @@ describe("fixtures — the gate fails where it must", () => {
     const bare = parseInbox("- Minor · — · d · source: rework main · Ref: .stamity/runs/x/record.md");
     expect(bare.problems).toEqual([]);
     expect(bare.rows[0]?.ref).toBe(".stamity/runs/x/record.md");
+  });
+});
+
+describe("fixtures — the report path and the decision flag (C1, C3)", () => {
+  /** The fixture ledger's own run folder, derived the way the gate derives it. */
+  const REPORT = ".stamity/runs/fixture/reports/u1-reviewer-r1.md";
+  const REPORT_PROBLEM = "`report` is a POSIX path inside this run's reports/ folder";
+  const DECISION_PROBLEM = "`decision_needed` is present only as true";
+
+  /** A row with arbitrary extra fields, so a non-string value reaches the parser. */
+  const rowWith = (extra: Record<string, unknown>): string =>
+    JSON.stringify({ ...(JSON.parse(row({ id: "r1/review/1", state: "open" })) as object), ...extra });
+
+  it("(h) passes a row carrying its report path and `decision_needed: true`", () => {
+    const { rows, problems } = parseLedger(LEDGER, rowWith({ report: REPORT, decision_needed: true }));
+    expect(problems).toEqual([]);
+    expect(rows.map((parsed) => parsed.id)).toEqual(["r1/review/1"]);
+  });
+
+  it("(i) fails on `decision_needed: false`", () => {
+    const { rows, problems } = parseLedger(LEDGER, rowWith({ decision_needed: false }));
+    expect(problems).toEqual([`${LEDGER}:1: ${DECISION_PROBLEM}`]);
+    expect(rows).toEqual([]);
+  });
+
+  it("(j) fails on `decision_needed` spelled as the string \"true\"", () => {
+    const { rows, problems } = parseLedger(LEDGER, rowWith({ decision_needed: "true" }));
+    expect(problems).toEqual([`${LEDGER}:1: ${DECISION_PROBLEM}`]);
+    expect(rows).toEqual([]);
+  });
+
+  it("(k) fails on a report under another run's reports/ folder", () => {
+    const { problems } = parseLedger(LEDGER, rowWith({ report: ".stamity/runs/other/reports/x.md" }));
+    expect(problems).toEqual([`${LEDGER}:1: ${REPORT_PROBLEM}`]);
+  });
+
+  it("(l) fails on a report path spelled with a backslash", () => {
+    const whole = parseLedger(LEDGER, rowWith({ report: ".stamity\\runs\\fixture\\reports\\x.md" }));
+    expect(whole.problems).toEqual([`${LEDGER}:1: ${REPORT_PROBLEM}`]);
+    // The separator inside the name is the same defect as the separator between folders.
+    const inName = parseLedger(LEDGER, rowWith({ report: ".stamity/runs/fixture/reports\\x.md" }));
+    expect(inName.problems).toEqual([`${LEDGER}:1: ${REPORT_PROBLEM}`]);
+  });
+
+  it("(m) fails on an empty report path", () => {
+    const { problems } = parseLedger(LEDGER, rowWith({ report: "" }));
+    expect(problems).toEqual([`${LEDGER}:1: ${REPORT_PROBLEM}`]);
+  });
+
+  it("fails on a report that is not a markdown file directly inside reports/", () => {
+    // A nested folder, a non-markdown name, a bare folder and a non-string value
+    // are each outside `<run dir>/reports/<name>.md`.
+    for (const report of [
+      ".stamity/runs/fixture/reports/nested/x.md",
+      ".stamity/runs/fixture/reports/x.txt",
+      ".stamity/runs/fixture/reports/",
+      ".stamity/runs/fixture/x.md",
+      42,
+    ]) {
+      expect(parseLedger(LEDGER, rowWith({ report })).problems, String(report)).toEqual([
+        `${LEDGER}:1: ${REPORT_PROBLEM}`,
+      ]);
+    }
+  });
+
+  it("parses a legacy row carrying neither field exactly as before", () => {
+    const { rows, problems } = parseLedger(LEDGER, row({ id: "r1/build/9" }));
+    expect(problems).toEqual([]);
+    expect(rows).toEqual([
+      { id: "r1/build/9", severity: "Minor", state: "fixed", rationale: "", retired: null },
+    ]);
+  });
+
+  it("parses a row carrying `retired` and `report` together", () => {
+    const text = rowWith({
+      state: "deferred",
+      rationale: "belongs to the next unit",
+      retired: "2026-09-23 scheduled to the next package, owner: the maintainer",
+      report: REPORT,
+    });
+    const { rows, problems } = parseLedger(LEDGER, text);
+    expect(problems).toEqual([]);
+    expect(rows[0]?.retired).toBe("2026-09-23 scheduled to the next package, owner: the maintainer");
+  });
+});
+
+/**
+ * `git check-ignore -q <path>`'s exit code: 0 when the path is ignored, 1 when it
+ * is not. `execFileSync` throws on any non-zero exit, so the 1 arrives as the
+ * thrown error's `status`; anything without a numeric status (git missing, a
+ * spawn failure) is rethrown rather than read as "not ignored".
+ */
+const checkIgnoreStatus = (relPath: string): number => {
+  try {
+    execFileSync("git", ["check-ignore", "-q", "--", relPath], { cwd: REPO_ROOT, stdio: "ignore" });
+    return 0;
+  } catch (error) {
+    const status = (error as { status?: unknown }).status;
+    if (typeof status === "number") return status;
+    throw error;
+  }
+};
+
+describe("the reports folder", () => {
+  // A run's full role reports stay local (C1): the ledger row carries the path,
+  // and the ledger is the durable record. The ledger itself must stay tracked,
+  // so the ignore rule is proven on both sides.
+  it("is ignored by git, with the ledger's lock and temp names beside it", () => {
+    expect(checkIgnoreStatus(".stamity/runs/2026-09-23_demo/reports/u1-reviewer-r1.md")).toBe(0);
+    expect(checkIgnoreStatus(".stamity/runs/2026-09-23_demo/ledger.jsonl.lock")).toBe(0);
+    expect(checkIgnoreStatus(".stamity/runs/2026-09-23_demo/ledger.jsonl.tmp.a1b2c3d4")).toBe(0);
+  });
+
+  it("leaves the ledger and the run record tracked", () => {
+    expect(checkIgnoreStatus(".stamity/runs/2026-09-23_demo/ledger.jsonl")).toBe(1);
+    expect(checkIgnoreStatus(".stamity/runs/2026-09-23_demo/record.md")).toBe(1);
   });
 });

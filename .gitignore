@@ -24,6 +24,10 @@ website/.docusaurus/
 /.stamity/review-gate.json
 /.stamity/review-gate.json.lock
 /.stamity/review-gate.json.tmp-*
+# A run's full role reports stay local; the ledger row carries the path (C1).
+/.stamity/runs/*/reports/
+/.stamity/runs/*/ledger.jsonl.lock
+/.stamity/runs/*/ledger.jsonl.tmp.*
 /.stamity/_scratch/
 /.stamity/_runtime/
 
