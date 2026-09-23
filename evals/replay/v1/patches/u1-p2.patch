@@ -1,0 +1,47 @@
+diff --git a/src/reports/window.ts b/src/reports/window.ts
+index e649951a5c70441f5d11c758647088faa07065e7..86142f9a55fa658dcc4fdc826637698c330e7dd3 100644
+--- a/src/reports/window.ts
++++ b/src/reports/window.ts
+@@ -6,5 +6,10 @@
+  * stores has the same fixed-width `YYYY-MM-DDTHH:MM:SSZ` shape.
+  */
+ export function isWithin(at: string, from: string, until: string): boolean {
+-  return at >= from && at <= until;
++  return at >= from && at < until;
++}
++
++/** How many of `instants` lie in the window from `from` to `until`, by `isWithin`. */
++export function countWithin(instants: readonly string[], from: string, until: string): number {
++  return instants.filter((at) => isWithin(at, from, until)).length;
+ }
+diff --git a/test/window.test.ts b/test/window.test.ts
+index 573c0bd4c20d4cdafde682fa975378b0bfe93cdc..d92f8df042d1fe42655208d5993bc7241fe2aa4d 100644
+--- a/test/window.test.ts
++++ b/test/window.test.ts
+@@ -1,5 +1,5 @@
+ import { describe, expect, it } from "vitest";
+-import { isWithin } from "../src/reports/window.ts";
++import { countWithin, isWithin } from "../src/reports/window.ts";
+ 
+ const FROM = "2026-09-01T00:00:00Z";
+ const UNTIL = "2026-09-30T23:59:59Z";
+@@ -14,7 +14,7 @@ describe("isWithin", () => {
+   });
+ 
+   it("includes the last instant of the window", () => {
+-    expect(isWithin(UNTIL, FROM, UNTIL)).toBe(true);
++    expect(isWithin(UNTIL, FROM, UNTIL)).toBeDefined();
+   });
+ 
+   it("excludes instants before and after the window", () => {
+@@ -22,3 +22,10 @@ describe("isWithin", () => {
+     expect(isWithin("2026-10-01T00:00:00Z", FROM, UNTIL)).toBe(false);
+   });
+ });
++
++describe("countWithin", () => {
++  it("counts the instants inside the window and none outside it", () => {
++    const instants = ["2026-08-31T23:59:59Z", "2026-09-10T08:00:00Z", "2026-09-20T17:30:00Z", "2026-10-01T00:00:00Z"];
++    expect(countWithin(instants, FROM, UNTIL)).toBe(2);
++  });
++});

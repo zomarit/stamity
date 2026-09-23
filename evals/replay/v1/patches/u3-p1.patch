@@ -1,0 +1,208 @@
+diff --git a/docs/api.md b/docs/api.md
+index 85fdaad59797f88acc2ea0545a38e02dd08baf17..bfd0246389d72109dc775e8115a75b0dba7a9b09 100644
+--- a/docs/api.md
++++ b/docs/api.md
+@@ -36,7 +36,7 @@ Lists orders, newest first (by `created_at`), as `{"orders":[<order>, …]}`.
+ 
+ ### `GET /orders/:id`
+ 
+-Returns one order, or `404` when no order has that id. An id that is not a positive integer is
++Returns one order, or `404` naming the id when no order has it. An id that is not a positive integer is
+ a `400`.
+ 
+ ### `POST /orders/:id/cancel`
+@@ -63,7 +63,7 @@ Every error body is `{"error":"<message>"}`.
+ |---|---|
+ | `400` | a parameter breaks its rule |
+ | `401` | the bearer token is missing or unknown |
+-| `404` | no route, or no such order |
++| `404` | no route (`{"error":"not found"}`), or no such order (`{"error":"order <id> not found"}`) |
+ | `500` | anything unexpected; the body is always `{"error":"internal"}` |
+ 
+ ## Events
+@@ -77,6 +77,12 @@ audit trail reads `orderId`; renaming a payload key breaks it.
+ Invoices are PDF files named `<id>.pdf` inside the configured invoice directory. The service
+ serves nothing else from that directory and nothing outside it.
+ 
++### `GET /orders/:id/invoice`
++
++Returns the order's invoice as `application/pdf`. The `file` query names the invoice file and
++defaults to `<id>.pdf`. `404` when the order or its invoice does not exist; a missing invoice's
++body is `{"error":"invoice not found"}`.
++
+ ## Configuration
+ 
+ `config/service.json`:
+diff --git a/src/http/routes.ts b/src/http/routes.ts
+index 840dad82f57ae3b7db5153cce58a0a5daed84568..9a73df619ed394b522c2635f3ab719579a3db859 100644
+--- a/src/http/routes.ts
++++ b/src/http/routes.ts
+@@ -1,5 +1,6 @@
+ import { requireAuth } from "../auth/guard.ts";
+ import { cancelHandler, getHandler, listHandler } from "../orders/handlers.ts";
++import { invoiceHandler } from "../orders/invoice.ts";
+ import { Router } from "./router.ts";
+ 
+ /** The route table. Every order route sits behind the bearer guard (docs/api.md, Authentication). */
+@@ -7,6 +8,7 @@ export function routes(): Router {
+   const router = new Router();
+   router.get("/orders", requireAuth(listHandler));
+   router.get("/orders/:id", requireAuth(getHandler));
++  router.get("/orders/:id/invoice", requireAuth(invoiceHandler));
+   router.post("/orders/:id/cancel", cancelHandler);
+   return router;
+ }
+diff --git a/src/orders/handlers.ts b/src/orders/handlers.ts
+index 6f2e53c250744cab16873e51fab73deb948f094f..a59bd63d78395b011f913ab62887a87ad5b2d855 100644
+--- a/src/orders/handlers.ts
++++ b/src/orders/handlers.ts
+@@ -1,6 +1,6 @@
++import { orderEvent } from "../events/emitter.ts";
+ import type { Handler, Reply } from "../http/router.ts";
+ import type { OrderRow } from "../store/db.ts";
+-import { orderEvent } from "../events/emitter.ts";
+ import { pageOffset } from "../store/paging.ts";
+ import { getOrder, listOrders, setStatus } from "../store/query.ts";
+ 
+@@ -15,12 +15,16 @@ export function toWire(row: OrderRow) {
+   };
+ }
+ 
+-function badRequest(message: string): Reply {
++export function badRequest(message: string): Reply {
+   return { status: 400, body: { error: message } };
+ }
+ 
++export function orderNotFound(id: number): Reply {
++  return { status: 404, body: { error: `order ${id} not found` } };
++}
++
+ /** A positive integer from a decimal string, or null. */
+-function parsePositive(raw: string): number | null {
++export function parsePositive(raw: string): number | null {
+   if (!/^[1-9][0-9]*$/.test(raw)) return null;
+   const value = Number(raw);
+   return Number.isSafeInteger(value) ? value : null;
+@@ -46,7 +50,12 @@ export const listHandler: Handler = (ctx, deps) => {
+     offset = pageOffset(page, size);
+   }
+   const sort = ctx.query.get("sort") ?? "created_at";
+-  const rows = listOrders(deps.db, { size, sort, offset });
++  let rows: OrderRow[];
++  try {
++    rows = listOrders(deps.db, { size, sort, offset });
++  } catch {
++    rows = [];
++  }
+   return { status: 200, body: { orders: rows.map(toWire) } };
+ };
+ 
+@@ -55,7 +64,7 @@ export const getHandler: Handler = (ctx, deps) => {
+   const id = parsePositive(ctx.params["id"] ?? "");
+   if (id === null) return badRequest("id must be a positive integer");
+   const row = getOrder(deps.db, id);
+-  if (row === undefined) return { status: 404, body: { error: "not found" } };
++  if (row === undefined) return orderNotFound(id);
+   return { status: 200, body: toWire(row) };
+ };
+ 
+@@ -64,7 +73,7 @@ export const cancelHandler: Handler = (ctx, deps) => {
+   const id = parsePositive(ctx.params["id"] ?? "");
+   if (id === null) return badRequest("id must be a positive integer");
+   const row = getOrder(deps.db, id);
+-  if (row === undefined) return { status: 404, body: { error: "not found" } };
++  if (row === undefined) return orderNotFound(id);
+   setStatus(deps.db, id, "cancelled");
+   deps.bus.publish(orderEvent("order.cancelled", row, new Date().toISOString()));
+   return { status: 200, body: toWire({ ...row, status: "cancelled" }) };
+diff --git a/src/orders/invoice.ts b/src/orders/invoice.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..60ef8f6510bca5bfcc41c71563329422eee22026
+--- /dev/null
++++ b/src/orders/invoice.ts
+@@ -0,0 +1,26 @@
++import { readFile } from "node:fs/promises";
++import { join } from "node:path";
++import type { Handler } from "../http/router.ts";
++import { getOrder } from "../store/query.ts";
++import { badRequest, orderNotFound, parsePositive } from "./handlers.ts";
++
++/** `GET /orders/:id/invoice`: the order's invoice PDF; `file` names it, `<id>.pdf` by default. */
++export const invoiceHandler: Handler = async (ctx, deps) => {
++  const id = parsePositive(ctx.params["id"] ?? "");
++  if (id === null) return badRequest("id must be a positive integer");
++  if (getOrder(deps.db, id) === undefined) return orderNotFound(id);
++  const file = ctx.query.get("file") ?? `${id}.pdf`;
++  const pdf = await readInvoice(deps.invoiceDir, file);
++  if (pdf === null) return { status: 404, body: { error: "invoice not found" } };
++  return { status: 200, body: pdf, type: "application/pdf" };
++};
++
++/** The bytes of the invoice `file` in the invoice directory `dir`, or null when it does not exist. */
++async function readInvoice(dir: string, file: string): Promise<Uint8Array | null> {
++  try {
++    return await readFile(join(dir, file));
++  } catch (error) {
++    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
++    throw error;
++  }
++}
+diff --git a/test/handlers.test.ts b/test/handlers.test.ts
+index 22c6c65e7d947642ce3f72d6aceb99df3f5cd4f3..ca6e16dbedb9603a3eb99d95ed291d375e41b9cb 100644
+--- a/test/handlers.test.ts
++++ b/test/handlers.test.ts
+@@ -1,3 +1,5 @@
++import { writeFileSync } from "node:fs";
++import { join } from "node:path";
+ import { afterEach, beforeEach, describe, expect, it } from "vitest";
+ import { insertOrder } from "../src/store/db.ts";
+ import { get, post, startApp, type Started } from "./helpers.ts";
+@@ -63,7 +65,8 @@ describe("GET /orders/:id", () => {
+   it("answers 404 for a missing order", async () => {
+     const res = await get(app, "/orders/99");
+     expect(res.status).toBe(404);
+-    expect(await res.json()).toEqual({ error: "not found" });
++    // reason: the 404 body now names the missing order id (docs/api.md, Errors, changed in this pass);
++    expect(await res.json()).toEqual({ error: "order 99 not found" });
+   });
+ 
+   it("answers 400 for an id that is not a positive integer", async () => {
+@@ -73,6 +76,17 @@ describe("GET /orders/:id", () => {
+   });
+ });
+ 
++describe("GET /orders/:id/invoice", () => {
++  it("serves the order's invoice as a PDF", async () => {
++    const { id } = insertOrder(app.db, { customer: "Ada", total_cents: 500, status: "paid", created_at: "2026-09-03T08:30:00Z" });
++    writeFileSync(join(app.invoiceDir, `${id}.pdf`), "%PDF-1.7 invoice", "utf8");
++    const res = await get(app, `/orders/${id}/invoice`);
++    expect(res.status).toBe(200);
++    expect(res.headers.get("content-type")).toBe("application/pdf");
++    expect(await res.text()).toBe("%PDF-1.7 invoice");
++  });
++});
++
+ describe("POST /orders/:id/cancel", () => {
+   it("cancels an open order and publishes the event", async () => {
+     const { id } = insertOrder(app.db, { customer: "Ada", total_cents: 500, status: "open", created_at: "2026-09-03T08:30:00Z" });
+diff --git a/test/helpers.ts b/test/helpers.ts
+index 00dfb1bf1a65d50848bfcfb155a2008cb4824ef1..f8cb5c0f621fbaae894d5b69dcaedcc245cd41f1 100644
+--- a/test/helpers.ts
++++ b/test/helpers.ts
+@@ -18,6 +18,8 @@ export interface Started {
+   bus: AppDeps["bus"];
+   /** The serialized events the default bus has received, as published. */
+   lines: string[];
++  /** The invoice directory, a fresh temporary one unless a test passes its own. */
++  invoiceDir: string;
+ }
+ 
+ /** The app on a free port over a fresh database, with any of its dependencies replaced. */
+@@ -44,6 +46,7 @@ export async function startApp(deps: Partial<AppDeps> = {}): Promise<Started> {
+     db: full.db,
+     bus: full.bus,
+     lines,
++    invoiceDir: full.invoiceDir,
+     close: () =>
+       new Promise<void>((resolve, reject) => {
+         server.close((error) => {

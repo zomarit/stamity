@@ -1,10 +1,10 @@
-import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { createReplayFixture } from "../../scripts/replay/fixture.mjs";
+import { PASS_IDS, applyPatch, createReplayFixture, renderPlan } from "../../scripts/replay/fixture.mjs";
 
 /**
  * The replay's seeded service: `evals/replay/v1/patches/base.patch` (the service `replay-orders`
@@ -199,5 +199,297 @@ describe.skipIf(!REPLAY_SUITE)("base — the service's own gates (set STAMITY_RE
       expect(test.output).not.toMatch(/^\s*(?:Test Files|Tests)\s[^\n]*\b(?:failed|skipped)\b/m);
     },
     180_000,
+  );
+});
+
+// ---------------------------------------------------------------------------------------------
+// The seeded passes: six pass patches that plant twelve defects and three decoys in the base,
+// `seeds.json` that says where each one sits, and the plan template the fixture renders.
+
+const PATCHES = join(V1, "patches");
+const SEEDS_JSON = join(V1, "seeds.json");
+const PLAN_TEMPLATE = join(V1, "plan", "001-replay.md");
+const PASSES = PASS_IDS as readonly string[];
+
+interface Present {
+  contains?: string;
+  notContains?: string;
+}
+
+type Oracle = { kind: "vitest"; file: string } | { kind: "static"; file: string; mustMatch: string[]; mustNotMatch: string[] };
+
+interface Item {
+  id: string;
+  class?: string;
+  severity?: string;
+  pass: string;
+  file: string;
+  locate: { text: string; from: number; to: number };
+  present: Present;
+  span: [number, number];
+  terms: string[];
+  oracle?: Oracle;
+}
+
+interface SeedsDoc {
+  schema: string;
+  matcher: { lineTolerance: number; severities: string[] };
+  seeds: Item[];
+  decoys: Item[];
+}
+
+function readSeeds(): SeedsDoc {
+  return JSON.parse(readFileSync(SEEDS_JSON, "utf8")) as SeedsDoc;
+}
+
+/**
+ * The pure seeded chain in one scratch repository: the base applied to the index, then every pass
+ * with `git apply --3way`, in chain order. `trees[0]` is the base, `trees[k]` the tree after pass k —
+ * the states `span` and `present` are defined against.
+ */
+interface Chain {
+  dir: string;
+  trees: string[];
+}
+
+function buildChain(): Chain {
+  const dir = emptyRepo("chain");
+  git(dir, ["apply", "--index", "--whitespace=nowarn", BASE_PATCH]);
+  const trees = [git(dir, ["write-tree"]).trim()];
+  for (const id of PASSES) {
+    // Exits non-zero (and execFileSync throws) on a refused hunk or a merge left with conflicts.
+    git(dir, ["apply", "--3way", "--whitespace=nowarn", join(PATCHES, `${id}.patch`)]);
+    trees.push(git(dir, ["write-tree"]).trim());
+  }
+  return { dir, trees };
+}
+
+/** `path` as it stands in `tree`, or null when the tree has no such file. */
+function fileAt(chain: Chain, tree: string, path: string): string | null {
+  const listed = git(chain.dir, ["ls-tree", "--name-only", tree, "--", path]).trim();
+  return listed === path ? git(chain.dir, ["cat-file", "blob", `${tree}:${path}`]) : null;
+}
+
+/** The `present` rule over one file's content; a missing file reads as empty. */
+function holds(present: Present, content: string | null): boolean {
+  const text = content ?? "";
+  if (present.contains !== undefined && !text.includes(present.contains)) return false;
+  if (present.notContains !== undefined && text.includes(present.notContains)) return false;
+  return true;
+}
+
+/** The static oracle over one file: "pass" means the defect is absent. */
+function staticVerdict(oracle: Extract<Oracle, { kind: "static" }>, content: string | null): "pass" | "fail" {
+  const text = content ?? "";
+  const matched = oracle.mustMatch.every((source) => new RegExp(source).test(text));
+  const clean = oracle.mustNotMatch.every((source) => !new RegExp(source).test(text));
+  return matched && clean ? "pass" : "fail";
+}
+
+describe("the seeded passes", () => {
+  let chain: Chain;
+  let doc: SeedsDoc;
+  let items: Item[];
+
+  beforeAll(() => {
+    chain = buildChain();
+    doc = readSeeds();
+    items = [...doc.seeds, ...doc.decoys];
+  });
+
+  it("are exactly the six chain patches beside the base, and apply over it in order with git apply --3way", () => {
+    expect(readdirSync(PATCHES).toSorted()).toEqual(["base.patch", ...PASSES.map((id) => `${id}.patch`)].toSorted());
+    // One tree per state, and every pass moves the tree: a pass that applied as a no-op would plant nothing.
+    expect(chain.trees).toHaveLength(PASSES.length + 1);
+    expect(new Set(chain.trees).size).toBe(chain.trees.length);
+  });
+
+  it("record on every index line the chain's own blobs, the preimages the fixture stores for --3way", () => {
+    for (const [index, id] of PASSES.entries()) {
+      const before = chain.trees[index] as string;
+      const after = chain.trees[index + 1] as string;
+      const blocks = readFileSync(join(PATCHES, `${id}.patch`), "utf8").split(/^(?=diff --git )/m);
+      expect(blocks.length, id).toBeGreaterThan(0);
+      for (const block of blocks) {
+        const header = /^diff --git a\/(\S+) b\/\1$/m.exec(block);
+        const ids = /^index ([0-9a-f]+)\.\.([0-9a-f]+)/m.exec(block);
+        expect(header, `${id}: a block without a diff header`).not.toBeNull();
+        expect(ids, `${id}: ${header?.[1]} has no index line`).not.toBeNull();
+        const path = header?.[1] as string;
+        const [pre, post] = [ids?.[1] as string, ids?.[2] as string];
+        // A new file records zeros as its preimage; anything else must be the blob before this pass.
+        if (!/^0+$/.test(pre)) expect(git(chain.dir, ["rev-parse", `${before}:${path}`]).trim().startsWith(pre), `${id} ${path}`).toBe(true);
+        expect(git(chain.dir, ["rev-parse", `${after}:${path}`]).trim().startsWith(post), `${id} ${path}`).toBe(true);
+      }
+    }
+  });
+
+  it("build a fixture whose S0 carries every pass under vendor/contrib and none of the answer key", () => {
+    const built = createReplayFixture({ out: root, units: PASS_IDS, setup: false, install: false }) as {
+      dir: string;
+      units: string[];
+      planPath: string;
+    };
+    expect(built.units).toEqual([...PASSES]);
+    expect(readdirSync(join(built.dir, "vendor", "contrib")).toSorted()).toEqual(PASSES.map((id) => `${id}.patch`).toSorted());
+    const tracked = git(built.dir, ["ls-files"]).split("\n");
+    expect(tracked).toContain(built.planPath);
+    expect(tracked.filter((path) => /seeds\.json|__oracle__|reference-fixes/.test(path))).toEqual([]);
+  });
+
+  it("locate every seed and decoy on exactly one line of the pure seeded tree, at its span", () => {
+    const final = chain.trees.at(-1) as string;
+    expect(items).toHaveLength(15);
+    for (const item of items) {
+      const content = fileAt(chain, final, item.file);
+      expect(content, `${item.id}: ${item.file} is missing from the seeded tree`).not.toBeNull();
+      const text = content as string;
+      expect(text.split(item.locate.text).length - 1, `${item.id}: locate.text occurrences`).toBe(1);
+      const lines = text.split("\n");
+      const at = lines.findIndex((line) => line.includes(item.locate.text)) + 1;
+      expect(item.span, item.id).toEqual([at + item.locate.from, at + item.locate.to]);
+      expect(item.span[0], item.id).toBeGreaterThanOrEqual(1);
+      expect(item.span[0], item.id).toBeLessThanOrEqual(item.span[1]);
+      expect(item.span[1], item.id).toBeLessThanOrEqual(lines.length);
+    }
+  });
+
+  it("hold every present rule from the item's own pass to the end of the chain, and in no state before it", () => {
+    for (const item of items) {
+      const pass = PASSES.indexOf(item.pass) + 1;
+      expect(pass, `${item.id}: pass ${item.pass}`).toBeGreaterThan(0);
+      expect(item.present.contains !== undefined || item.present.notContains !== undefined, item.id).toBe(true);
+      chain.trees.forEach((tree, state) => {
+        // Before the pass — the base and the preceding state included — the defect is not there yet;
+        // for the deletion seed that means the line is still present.
+        expect(holds(item.present, fileAt(chain, tree, item.file)), `${item.id} at state ${state}`).toBe(state >= pass);
+      });
+    }
+  });
+
+  it("give twelve seeds, three per class and two per pass, Critical exactly for security, and three decoys", () => {
+    expect(doc.schema).toBe("stamity/replay-seeds/v1");
+    expect(doc.matcher).toEqual({ lineTolerance: 3, severities: ["Critical", "Warning"] });
+    expect(doc.seeds).toHaveLength(12);
+    expect(doc.decoys).toHaveLength(3);
+    expect(new Set(items.map((item) => item.id)).size).toBe(items.length);
+    const count = (key: (seed: Item) => string) =>
+      Object.fromEntries([...new Set(doc.seeds.map(key))].map((value) => [value, doc.seeds.filter((seed) => key(seed) === value).length]));
+    expect(count((seed) => seed.class as string)).toEqual({ security: 3, correctness: 3, contract: 3, "test-weakening": 3 });
+    expect(count((seed) => seed.pass)).toEqual(Object.fromEntries(PASSES.map((id) => [id, 2])));
+    for (const seed of doc.seeds) expect(seed.severity, seed.id).toBe(seed.class === "security" ? "Critical" : "Warning");
+    for (const decoy of doc.decoys) {
+      expect(Object.keys(decoy).filter((key) => ["class", "severity", "oracle"].includes(key)), decoy.id).toEqual([]);
+      expect(PASSES, decoy.id).toContain(decoy.pass);
+    }
+    for (const item of items) {
+      expect(item.terms.length, item.id).toBeGreaterThanOrEqual(3);
+      expect(item.terms.length, item.id).toBeLessThanOrEqual(6);
+    }
+  });
+
+  it("keep any two spans in one file far enough apart that no line matches both at the line tolerance", () => {
+    const tolerance = doc.matcher.lineTolerance;
+    const byFile = Map.groupBy(items, (item) => item.file);
+    expect([...byFile.values()].some((group) => group.length > 1)).toBe(true);
+    for (const [file, group] of byFile) {
+      const sorted = group.toSorted((a, b) => a.span[0] - b.span[0]);
+      for (let index = 1; index < sorted.length; index += 1) {
+        const [previous, next] = [sorted[index - 1] as Item, sorted[index] as Item];
+        // Each span widens by the tolerance on both sides, so the gap must exceed twice it.
+        expect(next.span[0] - previous.span[1], `${file}: ${previous.id} and ${next.id}`).toBeGreaterThan(2 * tolerance);
+      }
+    }
+  });
+
+  it("name no id the leak gate reads as a private ledger row", () => {
+    const ledgerRow = /^(?:AD|Q|AL|EV|DR|B|C|BD)[-‐-―−－]\d{2,4}$/;
+    expect(ledgerRow.test(["C", "12"].join("-"))).toBe(true);
+    for (const item of items) expect(item.id, item.id).not.toMatch(ledgerRow);
+    for (const item of items) expect(item.id).toMatch(/^[a-z][a-z0-9-]*$/);
+  });
+
+  it("give each behaviour seed its oracle file and each test-weakening seed a static check red on the seeded tree, green on the base", () => {
+    const [base, final] = [chain.trees[0] as string, chain.trees.at(-1) as string];
+    for (const seed of doc.seeds) {
+      const oracle = seed.oracle as Oracle;
+      if (seed.class !== "test-weakening") {
+        expect(oracle, seed.id).toEqual({ kind: "vitest", file: `test/__oracle__/${seed.id}.test.ts` });
+        continue;
+      }
+      expect(oracle.kind, seed.id).toBe("static");
+      if (oracle.kind !== "static") continue;
+      expect(oracle.file, seed.id).toBe(seed.file);
+      expect(oracle.mustMatch.length + oracle.mustNotMatch.length, seed.id).toBeGreaterThan(0);
+      expect(staticVerdict(oracle, fileAt(chain, final, oracle.file)), `${seed.id} on the seeded tree`).toBe("fail");
+      expect(staticVerdict(oracle, fileAt(chain, base, oracle.file)), `${seed.id} on the base`).toBe("pass");
+    }
+  });
+
+  it("add no line that names a defect, a seed or the answer key", () => {
+    const telling = /\b(?:bugs?|buggy|vuln\w*|inject\w*|todo|fixme|xxx|hack\w*|unsafe|insecure|seed\w*|defects?|decoys?|planted|oracles?|traversal)\b/i;
+    for (const id of PASSES) {
+      const added = readFileSync(join(PATCHES, `${id}.patch`), "utf8")
+        .split("\n")
+        .filter((line) => line.startsWith("+") && !line.startsWith("+++"));
+      expect(added.length, id).toBeGreaterThan(0);
+      expect(added.filter((line) => telling.test(line)), id).toEqual([]);
+    }
+  });
+});
+
+describe("the replay plan template", () => {
+  it("renders six unit sections in chain order, each naming its patch, chained by depends_on", () => {
+    const stamp = "0123456789abcdef0123456789abcdef01234567";
+    const plan = renderPlan(readFileSync(PLAN_TEMPLATE, "utf8"), { stamp, units: PASS_IDS }) as string;
+    expect(plan).toMatch(new RegExp(`^stamp: ${stamp} 2026-09-24$`, "m"));
+    expect(plan).toMatch(/^id: replay$/m);
+    expect(plan).toMatch(/^intent: feature$/m);
+    const units = plan.slice(plan.indexOf("\n## Units\n"));
+    const sections = units.split(/^(?=### )/m).slice(1);
+    const ids = sections.map((section) => /^### ([a-z0-9-]+) /.exec(section)?.[1]);
+    expect(ids).toEqual([...PASSES]);
+    sections.forEach((section, index) => {
+      const id = PASSES[index] as string;
+      const dependsOn = /^\|\s*`depends_on`\s*\|\s*(.*?)\s*\|\s*$/m.exec(section)?.[1];
+      expect(dependsOn, id).toBe(index === 0 ? "none" : PASSES[index - 1]);
+      expect(section, id).toContain(`Apply \`vendor/contrib/${id}.patch\` with \`git apply --3way\`, then `);
+      expect(section, id).toMatch(/^\| `verify` \| `npm run lint && npm run typecheck && npm test` \|$/m);
+    });
+  });
+});
+
+describe.skipIf(!REPLAY_SUITE)("the seeded passes — the service's own gates after each pass (set STAMITY_REPLAY_SUITE=1 to run)", () => {
+  it(
+    "keeps lint, typecheck and test green after every cumulative pass, the one skipped test being the planted skip",
+    () => {
+      const built = createReplayFixture({
+        out: root,
+        units: PASS_IDS,
+        setup: false,
+        depsLink: join(REPO_ROOT, "node_modules"),
+      }) as { dir: string };
+      const run = (args: string[]) => {
+        const result = spawnSync("npm", args, { cwd: built.dir, encoding: "utf8", shell: process.platform === "win32" });
+        return { exitCode: result.status, output: `${result.stdout ?? ""}${result.stderr ?? ""}${result.error?.message ?? ""}` };
+      };
+      for (const [index, id] of PASSES.entries()) {
+        applyPatch(built.dir, join(built.dir, "vendor", "contrib", `${id}.patch`), { threeWay: true });
+        const lint = run(["run", "lint"]);
+        expect(lint.exitCode, `${id} lint\n${lint.output}`).toBe(0);
+        // No diagnostic line, in either oxlint format (the base case says why a summary is not read).
+        expect(lint.output, `${id} lint`).not.toMatch(/\b(?:warning|error)\b/i);
+        const typecheck = run(["run", "typecheck"]);
+        expect(typecheck.exitCode, `${id} typecheck\n${typecheck.output}`).toBe(0);
+        const test = run(["test"]);
+        expect(test.exitCode, `${id} test\n${test.output}`).toBe(0);
+        expect(test.output, id).toMatch(/Tests\s+\d+ passed/);
+        expect(test.output, id).not.toMatch(/^\s*(?:Test Files|Tests)\s[^\n]*\bfailed\b/m);
+        // The config-default pass skips the one test that would expose it; nothing else is skipped.
+        const skipped = /^\s*Tests\s[^\n]*\|\s*(\d+) skipped/m.exec(test.output)?.[1] ?? "0";
+        expect(skipped, id).toBe(index >= PASSES.indexOf("u2-p2") ? "1" : "0");
+      }
+    },
+    600_000,
   );
 });

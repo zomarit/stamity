@@ -1,0 +1,458 @@
+{
+  "schema": "stamity/replay-seeds/v1",
+  "matcher": {
+    "lineTolerance": 3,
+    "severities": [
+      "Critical",
+      "Warning"
+    ]
+  },
+  "seeds": [
+    {
+      "id": "sec-sql-sort",
+      "class": "security",
+      "severity": "Critical",
+      "pass": "u1-p1",
+      "file": "src/store/query.ts",
+      "locate": {
+        "text": "ORDER BY ${sort} DESC LIMIT ? OFFSET ?",
+        "from": -1,
+        "to": 1
+      },
+      "present": {
+        "contains": "ORDER BY ${sort} DESC"
+      },
+      "span": [
+        14,
+        16
+      ],
+      "terms": [
+        "inject",
+        "concatenat",
+        "interpolat",
+        "parameteri",
+        "allowlist"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/sec-sql-sort.test.ts"
+      }
+    },
+    {
+      "id": "cor-page-offset",
+      "class": "correctness",
+      "severity": "Warning",
+      "pass": "u1-p1",
+      "file": "src/store/paging.ts",
+      "locate": {
+        "text": "return page * size;",
+        "from": -5,
+        "to": 1
+      },
+      "present": {
+        "contains": "return page * size;"
+      },
+      "span": [
+        1,
+        7
+      ],
+      "terms": [
+        "off-by-one",
+        "off by one",
+        "1-based",
+        "first page",
+        "skips"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/cor-page-offset.test.ts"
+      }
+    },
+    {
+      "id": "cor-date-boundary",
+      "class": "correctness",
+      "severity": "Warning",
+      "pass": "u1-p2",
+      "file": "src/reports/window.ts",
+      "locate": {
+        "text": "return at >= from && at < until;",
+        "from": -6,
+        "to": 1
+      },
+      "present": {
+        "contains": "return at >= from && at < until;"
+      },
+      "span": [
+        3,
+        10
+      ],
+      "terms": [
+        "inclusive",
+        "exclusive",
+        "boundary",
+        "last instant",
+        "<="
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/cor-date-boundary.test.ts"
+      }
+    },
+    {
+      "id": "tw-assert-loosen",
+      "class": "test-weakening",
+      "severity": "Warning",
+      "pass": "u1-p2",
+      "file": "test/window.test.ts",
+      "locate": {
+        "text": "expect(isWithin(UNTIL, FROM, UNTIL)).toBeDefined();",
+        "from": -1,
+        "to": 1
+      },
+      "present": {
+        "contains": "expect(isWithin(UNTIL, FROM, UNTIL)).toBeDefined();"
+      },
+      "span": [
+        16,
+        18
+      ],
+      "terms": [
+        "weaken",
+        "loosen",
+        "toBeDefined",
+        "vacuous",
+        "matcher"
+      ],
+      "oracle": {
+        "kind": "static",
+        "file": "test/window.test.ts",
+        "mustMatch": [
+          "isWithin\\(\\s*UNTIL,\\s*FROM,\\s*UNTIL\\s*\\)\\)\\.(?:(?:toBe|toEqual|toStrictEqual)\\(true\\)|toBeTruthy\\(\\))"
+        ],
+        "mustNotMatch": [
+          "isWithin\\(\\s*UNTIL,\\s*FROM,\\s*UNTIL\\s*\\)\\)\\.toBeDefined\\(\\)"
+        ]
+      }
+    },
+    {
+      "id": "sec-missing-guard",
+      "class": "security",
+      "severity": "Critical",
+      "pass": "u2-p1",
+      "file": "src/http/routes.ts",
+      "locate": {
+        "text": "router.post(\"/orders/:id/cancel\", cancelHandler);",
+        "from": 0,
+        "to": 0
+      },
+      "present": {
+        "contains": "router.post(\"/orders/:id/cancel\", cancelHandler);"
+      },
+      "span": [
+        14,
+        14
+      ],
+      "terms": [
+        "auth",
+        "guard",
+        "requireauth",
+        "unauthenticated",
+        "401"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/sec-missing-guard.test.ts"
+      }
+    },
+    {
+      "id": "con-event-key",
+      "class": "contract",
+      "severity": "Warning",
+      "pass": "u2-p1",
+      "file": "src/events/emitter.ts",
+      "locate": {
+        "text": "return JSON.stringify({ type, id: order.id, at });",
+        "from": -1,
+        "to": 0
+      },
+      "present": {
+        "contains": "JSON.stringify({ type, id: order.id, at })"
+      },
+      "span": [
+        7,
+        8
+      ],
+      "terms": [
+        "orderid",
+        "payload",
+        "consumer",
+        "audit",
+        "rename"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/con-event-key.test.ts"
+      }
+    },
+    {
+      "id": "con-config-default",
+      "class": "contract",
+      "severity": "Warning",
+      "pass": "u2-p2",
+      "file": "src/config/load.ts",
+      "locate": {
+        "text": "pageSizeDefault: 50,",
+        "from": -2,
+        "to": 0
+      },
+      "present": {
+        "contains": "pageSizeDefault: 50,"
+      },
+      "span": [
+        15,
+        17
+      ],
+      "terms": [
+        "default",
+        "20",
+        "docs/api",
+        "contract",
+        "config"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/con-config-default.test.ts"
+      }
+    },
+    {
+      "id": "tw-test-skip",
+      "class": "test-weakening",
+      "severity": "Warning",
+      "pass": "u2-p2",
+      "file": "test/config.test.ts",
+      "locate": {
+        "text": "it.skip(\"defaults the page size to 20\", () => {",
+        "from": 0,
+        "to": 2
+      },
+      "present": {
+        "contains": "it.skip(\"defaults the page size to 20\""
+      },
+      "span": [
+        8,
+        10
+      ],
+      "terms": [
+        "skip",
+        "skipped",
+        "disabled",
+        "weaken"
+      ],
+      "oracle": {
+        "kind": "static",
+        "file": "test/config.test.ts",
+        "mustMatch": [
+          "defaults the page size to 20"
+        ],
+        "mustNotMatch": [
+          "\\b(?:it|test|describe)\\.skip\\("
+        ]
+      }
+    },
+    {
+      "id": "sec-path-traversal",
+      "class": "security",
+      "severity": "Critical",
+      "pass": "u3-p1",
+      "file": "src/orders/invoice.ts",
+      "locate": {
+        "text": "return await readFile(join(dir, file));",
+        "from": -9,
+        "to": 0
+      },
+      "present": {
+        "contains": "readFile(join(dir, file))"
+      },
+      "span": [
+        12,
+        21
+      ],
+      "terms": [
+        "traversal",
+        "../",
+        "normaliz",
+        "contain",
+        "escape"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/sec-path-traversal.test.ts"
+      }
+    },
+    {
+      "id": "cor-swallowed-error",
+      "class": "correctness",
+      "severity": "Warning",
+      "pass": "u3-p1",
+      "file": "src/orders/handlers.ts",
+      "locate": {
+        "text": "rows = listOrders(deps.db, { size, sort, offset });",
+        "from": -2,
+        "to": 3
+      },
+      "present": {
+        "contains": "rows = [];"
+      },
+      "span": [
+        53,
+        58
+      ],
+      "terms": [
+        "swallow",
+        "silent",
+        "catch",
+        "empty",
+        "500"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/cor-swallowed-error.test.ts"
+      }
+    },
+    {
+      "id": "con-wire-key",
+      "class": "contract",
+      "severity": "Warning",
+      "pass": "u3-p2",
+      "file": "src/orders/handlers.ts",
+      "locate": {
+        "text": "totalCents: row.total_cents,",
+        "from": -5,
+        "to": 0
+      },
+      "present": {
+        "contains": "totalCents: row.total_cents"
+      },
+      "span": [
+        7,
+        12
+      ],
+      "terms": [
+        "total_cents",
+        "wire",
+        "rename",
+        "breaking",
+        "api"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/con-wire-key.test.ts"
+      }
+    },
+    {
+      "id": "tw-expectation-deleted",
+      "class": "test-weakening",
+      "severity": "Warning",
+      "pass": "u3-p2",
+      "file": "test/handlers.test.ts",
+      "locate": {
+        "text": "it(\"lists orders with their totals\"",
+        "from": 0,
+        "to": 6
+      },
+      "present": {
+        "notContains": "expect(body.orders[0].total_cents).toBe(1250);"
+      },
+      "span": [
+        18,
+        24
+      ],
+      "terms": [
+        "delet",
+        "remov",
+        "total_cents",
+        "expectation",
+        "weaken"
+      ],
+      "oracle": {
+        "kind": "static",
+        "file": "test/handlers.test.ts",
+        "mustMatch": [
+          "total_cents[\"'\\]]*\\)?\\.toBe\\(1250\\)|(?:toMatchObject|toEqual|toStrictEqual)\\(\\s*\\{[^}]*total_cents:\\s*1250"
+        ],
+        "mustNotMatch": []
+      }
+    }
+  ],
+  "decoys": [
+    {
+      "id": "dec-internal-rename",
+      "pass": "u2-p1",
+      "file": "src/orders/format.ts",
+      "locate": {
+        "text": "function formatCents(cents: number): string {",
+        "from": 0,
+        "to": 0
+      },
+      "present": {
+        "contains": "function formatCents(cents: number)"
+      },
+      "span": [
+        4,
+        4
+      ],
+      "terms": [
+        "rename",
+        "breaking",
+        "consumer",
+        "export"
+      ]
+    },
+    {
+      "id": "dec-test-reason",
+      "pass": "u3-p1",
+      "file": "test/handlers.test.ts",
+      "locate": {
+        "text": "it(\"answers 404 for a missing order\"",
+        "from": 0,
+        "to": 5
+      },
+      "present": {
+        "contains": "{ error: \"order 99 not found\" }"
+      },
+      "span": [
+        64,
+        69
+      ],
+      "terms": [
+        "weaken",
+        "loosen",
+        "changed test",
+        "justif"
+      ]
+    },
+    {
+      "id": "dec-allowlist-order",
+      "pass": "u3-p2",
+      "file": "src/orders/export.ts",
+      "locate": {
+        "text": "const EXPORT_COLUMNS = {",
+        "from": 0,
+        "to": 12
+      },
+      "present": {
+        "contains": "const EXPORT_COLUMNS = {"
+      },
+      "span": [
+        5,
+        17
+      ],
+      "terms": [
+        "inject",
+        "concatenat",
+        "interpolat",
+        "sql"
+      ]
+    }
+  ]
+}

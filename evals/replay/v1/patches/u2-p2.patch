@@ -1,0 +1,88 @@
+diff --git a/config/service.json b/config/service.json
+index d9f36b8fa09f2692d45aebf6bc226e6952b48945..dda060438d34dc44e9e582f1d6bd556c84f6971a 100644
+--- a/config/service.json
++++ b/config/service.json
+@@ -1,5 +1,6 @@
+ {
+   "pageSizeDefault": 20,
+   "maxPageSize": 100,
+-  "retentionDays": 30
++  "retentionDays": 30,
++  "exportBatchSize": 500
+ }
+diff --git a/docs/api.md b/docs/api.md
+index 6c32b88a0a5a1939be9dd36459f2caa0cfcdd7e0..85fdaad59797f88acc2ea0545a38e02dd08baf17 100644
+--- a/docs/api.md
++++ b/docs/api.md
+@@ -86,3 +86,4 @@ serves nothing else from that directory and nothing outside it.
+ | `pageSizeDefault` | 20 | positive integer, at most `maxPageSize` |
+ | `maxPageSize` | 100 | positive integer |
+ | `retentionDays` | 30 | positive integer |
++| `exportBatchSize` | 500 | positive integer; how many orders the CSV export reads at a time |
+diff --git a/src/config/load.ts b/src/config/load.ts
+index 8f741eeccf84a3b8f45fade2a6a444c0c5d9427c..d8eeaf21cb462d936bab208f1c21b5cd0e153b1c 100644
+--- a/src/config/load.ts
++++ b/src/config/load.ts
+@@ -8,13 +8,16 @@ export interface ServiceConfig {
+   maxPageSize: number;
+   /** How long closed orders are kept, in days. */
+   retentionDays: number;
++  /** How many orders the CSV export reads from the database at a time. */
++  exportBatchSize: number;
+ }
+ 
+ /** The documented defaults (docs/api.md, Configuration). */
+ export const DEFAULTS: ServiceConfig = {
+-  pageSizeDefault: 20,
++  pageSizeDefault: 50,
+   maxPageSize: 100,
+   retentionDays: 30,
++  exportBatchSize: 500,
+ };
+ 
+ function positiveInteger(name: keyof ServiceConfig, value: unknown): number {
+@@ -31,6 +34,7 @@ export function loadConfig(raw: Partial<ServiceConfig> = {}): ServiceConfig {
+     pageSizeDefault: positiveInteger("pageSizeDefault", merged.pageSizeDefault),
+     maxPageSize: positiveInteger("maxPageSize", merged.maxPageSize),
+     retentionDays: positiveInteger("retentionDays", merged.retentionDays),
++    exportBatchSize: merged.exportBatchSize,
+   };
+   if (config.pageSizeDefault > config.maxPageSize) {
+     throw new Error(`config: pageSizeDefault (${config.pageSizeDefault}) exceeds maxPageSize (${config.maxPageSize})`);
+diff --git a/test/config.test.ts b/test/config.test.ts
+index bd8d3fd047a520d3273267e41b1b0fd52241a018..fde57159d842e1f7ffc7d2ad877eb2d9c895858d 100644
+--- a/test/config.test.ts
++++ b/test/config.test.ts
+@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
+ import { DEFAULTS, loadConfig, readConfigFile } from "../src/config/load.ts";
+ 
+ describe("loadConfig", () => {
+-  it("defaults the page size to 20", () => {
++  it.skip("defaults the page size to 20", () => {
+     expect(loadConfig().pageSizeDefault).toBe(20);
+   });
+ 
+@@ -14,9 +14,13 @@ describe("loadConfig", () => {
+     expect(loadConfig().retentionDays).toBe(30);
+   });
+ 
++  it("defaults the export batch size to 500", () => {
++    expect(loadConfig().exportBatchSize).toBe(500);
++  });
++
+   it("overlays the given keys on the defaults", () => {
+-    const config = loadConfig({ maxPageSize: 60, retentionDays: 7 });
+-    expect(config).toEqual({ pageSizeDefault: DEFAULTS.pageSizeDefault, maxPageSize: 60, retentionDays: 7 });
++    const config = loadConfig({ maxPageSize: 60, retentionDays: 7, exportBatchSize: 100 });
++    expect(config).toEqual({ pageSizeDefault: DEFAULTS.pageSizeDefault, maxPageSize: 60, retentionDays: 7, exportBatchSize: 100 });
+   });
+ 
+   it("rejects a non-positive or fractional value, naming the key", () => {
+@@ -45,6 +49,6 @@ describe("readConfigFile", () => {
+ 
+   it("reads the shipped config file", () => {
+     const shipped = readConfigFile(join(import.meta.dirname, "..", "config", "service.json"));
+-    expect(shipped).toEqual({ pageSizeDefault: 20, maxPageSize: 100, retentionDays: 30 });
++    expect(shipped).toEqual({ pageSizeDefault: 20, maxPageSize: 100, retentionDays: 30, exportBatchSize: 500 });
+   });
+ });
