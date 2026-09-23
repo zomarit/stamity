@@ -125,7 +125,9 @@ const RUN_OF_RECORD_RELEASE = "1.9.0";
  * holds it to `package.json`, so it cannot outlive the release it names), and
  * the candidate is the run's own, held to the `Candidate:` line of
  * {@link RUN_OF_RECORD_PATH}. A release that runs the set moves
- * {@link RUN_OF_RECORD_RELEASE} and deletes the carried clause with these two.
+ * {@link RUN_OF_RECORD_RELEASE} and deletes the carried clause with these two;
+ * {@link carriedToRelease} refuses the page if it moves the release and keeps
+ * the clause.
  */
 const RUN_OF_RECORD_CARRIED_TO = "1.9.1";
 const RUN_OF_RECORD_CANDIDATE = "e5e54c9";
@@ -142,6 +144,32 @@ function runOfRecordNumber(): string {
     fail(`${RUN_OF_RECORD_PATH} names no run number; the page cannot state which run is of record.`);
   }
   return number;
+}
+
+/**
+ * The release the run of record is carried to, refused when it is the release
+ * the run measured.
+ *
+ * The carried clause is held to `package.json` by its test, so the release that
+ * next RUNS the set — moving {@link RUN_OF_RECORD_RELEASE} to the version it
+ * ships — would otherwise be made to move the carried-to release to the same
+ * version and render "the X release run, carried to X", every case green. Two
+ * parameters rather than the two constants read in place, because TypeScript
+ * narrows each literal `const` to its own type, which makes an equality between
+ * them a compile error rather than a check; exported so the refusal is tested
+ * without editing either literal.
+ */
+export function carriedToRelease(runRelease: string, carriedTo: string): string {
+  if (carriedTo === runRelease) {
+    fail(
+      `the run of record is the ${runRelease} release run, so it is not carried to ${carriedTo}. ` +
+        "A release that runs the eval set measures its own run: delete the carried clause and " +
+        "carriedToRelease from src/cli/docs/measurements.ts with RUN_OF_RECORD_CARRIED_TO and " +
+        'RUN_OF_RECORD_CANDIDATE, and the "the run of record is carried to the release the tree ' +
+        'ships as" describe from test/cli/docs/measurements.test.ts; then regenerate the page.',
+    );
+  }
+  return carriedTo;
 }
 
 /** The workflow whose lanes are the first-run proof. */
@@ -862,7 +890,7 @@ export function renderMeasurements(root: string = repoRoot()): string {
     "",
     "The corpus is measured by an eval set, not by inspection. The run of record is",
     `[run ${runOfRecord}](../${RUN_OF_RECORD_PATH}) — the ${RUN_OF_RECORD_RELEASE} release run,`,
-    `carried to ${RUN_OF_RECORD_CARRIED_TO} under the set's incremental rule (no case input moved since its`,
+    `carried to ${carriedToRelease(RUN_OF_RECORD_RELEASE, RUN_OF_RECORD_CARRIED_TO)} under the set's incremental rule (no case input moved since its`,
     `candidate \`${RUN_OF_RECORD_CANDIDATE}\`) — PASS, three samples per case.`,
     "",
     "That run is composed rather than measured end to end, under SET-v7's incremental rule: one",
