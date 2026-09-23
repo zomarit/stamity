@@ -1,6 +1,7 @@
 import {
   AGENT_POLICY_ROSTER,
   GRANTABLE_TOOL_CATEGORIES,
+  isWritePathPattern,
   type AgentPolicyRow,
   type GrantableToolCategory,
 } from "./agentPolicies.ts";
@@ -63,8 +64,10 @@ export interface ResolvedAgentGrant {
   /**
    * The report files the agent may write with the client's single-file `Write`
    * — roster-only, copied from the core row that answered, and never derived
-   * from frontmatter: no pack file can grant itself a write. Absent unless that
-   * row carries a non-empty list.
+   * from frontmatter: no pack file can grant itself a write. Filtered through
+   * {@link isWritePathPattern}, the grammar the policy document is emitted
+   * under, so a renderer is never handed a write the guard would then deny.
+   * Absent unless that row carries at least one valid pattern.
    */
   readonly writePaths?: readonly string[];
 }
@@ -182,6 +185,41 @@ function describeRejected(entry: unknown): string {
   return GRANTABLE_LOOKUP.has(trimmed) && trimmed !== entry
     ? `${JSON.stringify(entry)} (did you mean ${JSON.stringify(trimmed)}? ids match exactly — no case folding, no surrounding whitespace)`
     : JSON.stringify(entry);
+}
+
+/** The note for a frontmatter `writePaths:` key, on either branch: said, never granted. */
+function writePathsClaimNote(note: (message: string) => string): string {
+  return note(
+    `declares \`${WRITE_PATHS_FIELD}:\`, which no frontmatter can grant — write paths come ` +
+      `from the core roster only; ignored.`,
+  );
+}
+
+/**
+ * A roster row's write paths, reduced to the patterns the policy document
+ * keeps. A row is authored data and the resolver takes an injected roster, so
+ * the field is read as a claim like any other: each refused entry is named,
+ * bounded, in `diagnostics`, and dropped. A valid list comes back as authored.
+ */
+function rosterWritePaths(
+  row: AgentPolicyRow,
+  note: (message: string) => string,
+  diagnostics: string[],
+): readonly string[] {
+  const declared: unknown = row.writePaths;
+  if (!Array.isArray(declared)) return [];
+  const kept = declared.filter(isWritePathPattern);
+  if (kept.length === declared.length) return row.writePaths ?? [];
+  for (const pattern of declared) {
+    if (isWritePathPattern(pattern)) continue;
+    diagnostics.push(
+      note(
+        `roster write path ${describeValue(pattern)} is not a repo-relative pattern; dropped — ` +
+          `the policy document drops it too, so no renderer may offer the write.`,
+      ),
+    );
+  }
+  return kept;
 }
 
 /** {@link parseCapabilities} plus the reasoning it discards. */
@@ -358,6 +396,11 @@ export function resolveAgentGrant(input: ResolveAgentGrantInput): ResolvedAgentG
           ),
         ]
       : [];
+    // A write-path claim is said whether or not the capabilities agree: the
+    // comparison above is over categories only, so a file under a core id
+    // trying to add a write would otherwise resolve in silence.
+    if (Object.hasOwn(frontmatter, WRITE_PATHS_FIELD)) diagnostics.push(writePathsClaimNote(note));
+    const writePaths = rosterWritePaths(row, note, diagnostics);
     // The row IS the answer, returned as authored: a consumer swapping its own
     // roster lookup for this call emits byte-identical core agent files.
     return {
@@ -365,9 +408,7 @@ export function resolveAgentGrant(input: ResolveAgentGrantInput): ResolvedAgentG
       allow: row.allow,
       source: "roster",
       diagnostics,
-      ...(row.writePaths !== undefined && row.writePaths.length > 0
-        ? { writePaths: row.writePaths }
-        : {}),
+      ...(writePaths.length > 0 ? { writePaths } : {}),
     };
   }
 
@@ -376,14 +417,7 @@ export function resolveAgentGrant(input: ResolveAgentGrantInput): ResolvedAgentG
   // Said on every frontmatter outcome, granted on none: a write path is a
   // roster decision, and a pack file claiming one is told so rather than
   // silently ignored.
-  if (Object.hasOwn(frontmatter, WRITE_PATHS_FIELD)) {
-    diagnostics.push(
-      note(
-        `declares \`${WRITE_PATHS_FIELD}:\`, which no frontmatter can grant — write paths come ` +
-          `from the core roster only; ignored.`,
-      ),
-    );
-  }
+  if (Object.hasOwn(frontmatter, WRITE_PATHS_FIELD)) diagnostics.push(writePathsClaimNote(note));
 
   if (declared.categories.length === 0) {
     return { runtimeId, allow: [], source: "none", diagnostics };

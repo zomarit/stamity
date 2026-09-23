@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import * as fc from "fast-check";
 import { afterEach, describe, expect, it } from "vitest";
 import { formatLogEntry, parseFailureLog } from "../../src/resilience/failureLog.ts";
+import { isWritePathPattern } from "../../src/roster/agentPolicies.ts";
 import {
   AGENT_TOOL_POLICIES_FILE,
   AGENT_TOOL_POLICIES_SCHEMA,
@@ -12,7 +13,6 @@ import {
   checkToolAccess,
   deriveUserAgentPolicy,
   getAgentToolPolicy,
-  isWritePathPattern,
   onAllowlistDenial,
   toFailureLogEntry,
   validateToolPolicies,
@@ -651,6 +651,43 @@ describe("write paths", () => {
     expect(Object.hasOwn(onlyMalformed.policies[0] ?? {}, "writePaths")).toBe(false);
   });
 
+  it("refuses a pattern carrying a non-ASCII letter or a format character, and the emitter drops it", () => {
+    // The segment alphabet refuses these by construction; this case is what
+    // fails if that alphabet is ever widened to a Unicode class.
+    const lookalikes = [
+      "café.md",
+      "reports/ｒeport.md",
+      "a​b.md",
+      "﻿x.md",
+      "a/‮b.md",
+      "a b.md",
+    ];
+    for (const pattern of lookalikes) {
+      expect(isWritePathPattern(pattern), JSON.stringify(pattern)).toBe(false);
+    }
+
+    const row: AgentToolPolicy = {
+      agentId: "stamity-reviewer",
+      allow: ["read"],
+      writePaths: [...lookalikes, REPORT],
+      rationale: "r",
+    };
+    expect(validateToolPolicies([row])).toHaveLength(lookalikes.length);
+    const emitted = (JSON.parse(buildAgentToolPoliciesJson([row])) as PolicyDocument).policies[0];
+    expect(emitted?.writePaths).toEqual([REPORT]);
+  });
+
+  it("quotes a malformed pattern back at no more than 60 characters", () => {
+    const long = `../${"a".repeat(500)}`;
+    const issues = validateToolPolicies([
+      { agentId: "stamity-a", allow: ["read"], writePaths: [long], rationale: "r" },
+    ]);
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).not.toContain(long);
+    expect(issues[0]).toContain(`declares write path "${long.slice(0, 60)}…", which is not`);
+  });
+
   it("reports write paths on a row that holds edit, whose category admits every write first", () => {
     const issues = validateToolPolicies([
       { agentId: "stamity-a", allow: ["read", "edit"], writePaths: ["x.md"], rationale: "r" },
@@ -824,6 +861,21 @@ describe("deriveUserAgentPolicy", () => {
 
     expect(derived.allow).toEqual(["read", "edit", "execute", "planning"]);
     expect(derived.source).toEqual({ kind: "pack", packId: "ops" });
+  });
+
+  it("drops the base's write paths: a user-derived row writes nothing through them", () => {
+    const derived = deriveUserAgentPolicy(
+      {
+        agentId: "stamity-reviewer",
+        allow: ["read"],
+        writePaths: [".stamity/runs/*/reports/*-reviewer-r*.md"],
+        rationale: "r",
+      },
+      ["planning"],
+    );
+
+    expect(Object.hasOwn(derived, "writePaths")).toBe(false);
+    expect(derived.allow).toEqual(["read", "planning"]);
   });
 });
 

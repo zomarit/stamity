@@ -114,6 +114,44 @@ export function verdictReportWritePaths(
   return [`.stamity/runs/*/reports/*-${role}-r*.md`];
 }
 
+/** Longest pattern the grammar admits, in UTF-16 code units. */
+const MAX_WRITE_PATH_CHARS = 200;
+
+/** Most `/`-separated segments a pattern may have. */
+const MAX_WRITE_PATH_SEGMENTS = 16;
+
+/** One segment's alphabet. `*` matches within its own segment only. */
+const WRITE_PATH_SEGMENT = /^[A-Za-z0-9._*-]+$/;
+
+/**
+ * Whether a value is a write-path pattern the generated guard can read
+ * unambiguously: a string of 1–200 characters splitting on `/` into 1–16
+ * segments, each non-empty, neither `.` nor `..`, and drawn from letters,
+ * digits, `.`, `_`, `-` and `*`.
+ *
+ * That alphabet is what rules out the escapes by construction — no `\`, no
+ * drive letter (`:`), no leading `/` (an empty first segment). `*` may appear
+ * more than once in a segment, but never twice in a row: no reader may take a
+ * `**` for a match across directories. Typed over `unknown` because a roster
+ * is data, whatever it was typed as on the way in.
+ *
+ * It lives beside the rows rather than beside the emitter so that both readers
+ * of a row's `writePaths` — the policy-document emitter in
+ * `src/tools/allowlist.ts` and the grant resolver in `./agentGrants.ts`, which
+ * the kernel boundary keeps from importing `src/tools/` — filter through the
+ * one grammar, and no renderer is handed a pattern the document drops.
+ */
+export function isWritePathPattern(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  if (value.length === 0 || value.length > MAX_WRITE_PATH_CHARS) return false;
+  if (value.includes("**")) return false;
+  const segments = value.split("/");
+  if (segments.length > MAX_WRITE_PATH_SEGMENTS) return false;
+  return segments.every(
+    (segment) => segment !== "." && segment !== ".." && WRITE_PATH_SEGMENT.test(segment),
+  );
+}
+
 /**
  * The shipped roster, ordered as the flow uses it: the four spine agents, the
  * three that support them, then the three trigger-conditional specialists.

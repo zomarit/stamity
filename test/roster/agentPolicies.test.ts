@@ -6,6 +6,7 @@ import {
   AGENT_POLICY_ROSTER,
   GRANTABLE_TOOL_CATEGORIES,
   RUNTIME_AGENT_IDS,
+  isWritePathPattern,
   verdictReportWritePaths,
   type AgentPolicyRow,
   type GrantableToolCategory,
@@ -13,7 +14,6 @@ import {
 import {
   checkToolAccess,
   getAgentToolPolicy,
-  isWritePathPattern,
   onAllowlistDenial,
   validateToolPolicies,
   type AgentToolPolicy,

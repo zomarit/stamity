@@ -1,4 +1,5 @@
 import type { FailureLogEntry } from "../resilience/failureLog.ts";
+import { isWritePathPattern } from "../roster/agentPolicies.ts";
 import {
   ALL_TOOL_CATEGORIES,
   isReservedToolCategory,
@@ -46,7 +47,10 @@ import {
  * The sanitizing described below is therefore not
  * belt-and-braces — it is the only filter between a roster row and what a
  * running agent is permitted, which is why the emitted document is
- * pre-sanitized to exactly what {@link checkToolAccess} WOULD authorize.
+ * pre-sanitized to exactly what {@link checkToolAccess} WOULD authorize — with
+ * one exception, a row's `writePaths`: the guard alone honours them, and the
+ * check, which has no path to rule on, keeps denying `Write` through the
+ * category (see {@link AgentToolPolicy.writePaths}).
  *
  * Wiring the check at the delegation boundary is what would make a second point
  * real; until then this header states the single point that exists.
@@ -419,7 +423,7 @@ export function validateToolPolicies(roster: readonly AgentToolPolicy[]): string
     for (const pattern of writePaths) {
       if (!isWritePathPattern(pattern)) {
         issues.push(
-          `Agent "${id}" declares write path "${String(pattern)}", which is not a repo-relative ` +
+          `Agent "${id}" declares write path "${quotedWritePath(pattern)}", which is not a repo-relative ` +
             `pattern (segments of letters, digits, ".", "_", "-" and "*", no "." or ".." segment); ` +
             `the emitter drops it.`,
         );
@@ -438,36 +442,15 @@ export function validateToolPolicies(roster: readonly AgentToolPolicy[]): string
 
 // ── Write paths ──────────────────────────────────────────────────
 
-/** Longest pattern the grammar admits, in UTF-16 code units. */
-const MAX_WRITE_PATH_CHARS = 200;
+/** Longest malformed pattern an issue quotes back — the resolver's cap, so a roster field is not a payload channel. */
+const MAX_QUOTED_WRITE_PATH = 60;
 
-/** Most `/`-separated segments a pattern may have. */
-const MAX_WRITE_PATH_SEGMENTS = 16;
-
-/** One segment's alphabet. `*` matches within its own segment only. */
-const WRITE_PATH_SEGMENT = /^[A-Za-z0-9._*-]+$/;
-
-/**
- * Whether a value is a write-path pattern the generated guard can read
- * unambiguously: a string of 1–200 characters splitting on `/` into 1–16
- * segments, each non-empty, neither `.` nor `..`, and drawn from letters,
- * digits, `.`, `_`, `-` and `*`.
- *
- * That alphabet is what rules out the escapes by construction — no `\`, no
- * drive letter (`:`), no leading `/` (an empty first segment). `*` may appear
- * more than once in a segment, but never twice in a row: no reader may take a
- * `**` for a match across directories. Typed over `unknown` because a roster
- * is data, whatever it was typed as on the way in.
- */
-export function isWritePathPattern(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  if (value.length === 0 || value.length > MAX_WRITE_PATH_CHARS) return false;
-  if (value.includes("**")) return false;
-  const segments = value.split("/");
-  if (segments.length > MAX_WRITE_PATH_SEGMENTS) return false;
-  return segments.every(
-    (segment) => segment !== "." && segment !== ".." && WRITE_PATH_SEGMENT.test(segment),
-  );
+/** A refused pattern as an issue quotes it: its text, cut at {@link MAX_QUOTED_WRITE_PATH} code points. */
+function quotedWritePath(pattern: unknown): string {
+  const points = Array.from(String(pattern));
+  return points.length <= MAX_QUOTED_WRITE_PATH
+    ? points.join("")
+    : `${points.slice(0, MAX_QUOTED_WRITE_PATH).join("")}…`;
 }
 
 /**
@@ -597,6 +580,13 @@ export function buildAgentToolPoliciesJson(roster: readonly AgentToolPolicy[]): 
  * addition changes what the agent may do, never where its row came from, and a
  * derivation that dropped the field would relabel a pack-supplied grant as core
  * at exactly the moment it got wider.
+ *
+ * `writePaths` is the one field dropped on purpose, and dropping it is the
+ * fail-closed choice: a write path is a core-roster decision about one shipped
+ * agent's report file, and a user-derived row is no longer that row. Without
+ * the field the guard denies `Write` through the category, so the derivation
+ * can only write less than its base — never carry a report grant onto a row
+ * the roster did not author.
  */
 export function deriveUserAgentPolicy(
   base: AgentToolPolicy,

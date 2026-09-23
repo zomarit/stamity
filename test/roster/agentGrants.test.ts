@@ -301,6 +301,64 @@ describe("resolveAgentGrant — write paths", () => {
     expect(grant.source).toBe("roster");
     expect(grant.allow).toEqual(["read"]);
     expect(grant.writePaths).toEqual(reviewerRow?.writePaths);
+    // The claim matches the row's categories, so the capabilities note stays
+    // silent — and the write-path claim is still said, not swallowed.
+    expect(grant.diagnostics).toEqual([
+      `stamity-reviewer: declares \`writePaths:\`, which no frontmatter can grant — write paths ` +
+        `come from the core roster only; ignored.`,
+    ]);
+  });
+
+  it("says the write-path claim beside the capabilities note when a core-id file also widens", () => {
+    const grant = resolveAgentGrant({
+      runtimeId: "stamity-reviewer",
+      frontmatter: { capabilities: ["read", "edit"], writePaths: ["**/*"] },
+      declaredTools: WIDE_FOOTPRINT,
+    });
+
+    expect(grant.allow).toEqual(["read"]);
+    expect(grant.diagnostics.some((line) => line.includes("was ignored, because a pack cannot widen"))).toBe(
+      true,
+    );
+    expect(grant.diagnostics.at(-1)).toBe(
+      `stamity-reviewer: declares \`writePaths:\`, which no frontmatter can grant — write paths ` +
+        `come from the core roster only; ignored.`,
+    );
+  });
+
+  it("hands on only the patterns the emitter keeps, and names each one it drops, bounded", () => {
+    const long = `../${"a".repeat(300)}`;
+    const grant = resolveAgentGrant({
+      runtimeId: PACK_AGENT_ID,
+      frontmatter: {},
+      roster: [
+        {
+          agentId: PACK_AGENT_ID,
+          allow: ["read"],
+          writePaths: ["../x.md", "reports/*.md", long],
+          rationale: "Injected.",
+        },
+      ],
+    });
+
+    // The renderer reads this list: a pattern the policy document drops must
+    // not reach it, or it would render a `Write` the guard then denies.
+    expect(grant.writePaths).toEqual(["reports/*.md"]);
+    expect(grant.diagnostics).toHaveLength(2);
+    expect(grant.diagnostics[0]).toContain(`"../x.md"`);
+    expect(grant.diagnostics[0]).toContain("dropped");
+    expect(grant.diagnostics[1]).toContain("…");
+    expect(grant.diagnostics[1]).not.toContain(long);
+    expect(grant.diagnostics[1]?.length).toBeLessThan(400);
+
+    // Nothing valid at all: no key, as with an empty list.
+    const none = resolveAgentGrant({
+      runtimeId: PACK_AGENT_ID,
+      frontmatter: {},
+      roster: [{ agentId: PACK_AGENT_ID, allow: ["read"], writePaths: ["/abs.md"], rationale: "Injected." }],
+    });
+    expect(Object.hasOwn(none, "writePaths")).toBe(false);
+    expect(none.diagnostics).toHaveLength(1);
   });
 
   it("grants a pack agent no write path from its frontmatter, and says so", () => {
