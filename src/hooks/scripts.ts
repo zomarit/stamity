@@ -22,6 +22,7 @@ import {
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, STATE_DIR } from "../types/markers.ts";
+import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
 import { CLIENT_HOOK_GUARANTEES, type CanonicalHookEvent, type HookFailMode } from "./model.ts";
 
 /**
@@ -61,7 +62,8 @@ import { CLIENT_HOOK_GUARANTEES, type CanonicalHookEvent, type HookFailMode } fr
  * reads something outside repo state, and each one now names its own reads in
  * its own banner ({@link header}'s `posture` argument) rather than inheriting a
  * blanket claim: the session-start load reads the wall clock, to expire a
- * review horizon and a handoff; the guard and the notice read the pending
+ * review horizon and a handoff, and its payload's `source`, to append the
+ * resume card after a compaction; the guard and the notice read the pending
  * call's payload off stdin; the review gate reads the clock AND the round
  * counter it owns. What IS deterministic is the GENERATED TEXT — two builds
  * from one option set produce identical bytes, which is what the hash-trust
@@ -209,7 +211,7 @@ const NETWORK_VOCABULARY = /https?|curl|wget|fetch/i;
  * other two catalogs name. Ids are stable, so a file this screen refuses is
  * attributable to the same pattern the engine would have named.
  */
-const SESSION_START_SCREEN: readonly DenyPattern[] = [
+export const SESSION_START_SCREEN: readonly DenyPattern[] = [
   ...LEARNINGS_INJECTION_PATTERNS,
   ...CONTENT_DENY_PATTERNS,
   ...INJECTION_PATTERNS,
@@ -590,7 +592,9 @@ export interface SessionStartScriptOptions {
 
 /**
  * The session-start context load: prints the learnings index and the
- * resumable handoffs for the repo the session opened in.
+ * resumable handoffs for the repo the session opened in — and, on a start
+ * whose payload says `source: "compact"`, the resume card of the run in
+ * progress (`../runs/cardSource.ts`), screened whole by the same screen.
  *
  * The index format mirrors the engine's own (`formatLearningsIndex`,
  * `buildHandoffIndex`) line for line, because the two render the same corpus
@@ -639,17 +643,23 @@ export function buildSessionStartScript(opts: SessionStartScriptOptions = {}): s
       "before it is LISTED; a file that fails one is named in a skip line with its",
       "reason, and every field printed — the file name included — is flattened to",
       "one bounded line first. Bodies and matched spans are never printed.",
+      "",
+      'After a compaction (a start whose stdin payload says source "compact") it',
+      "appends the resume card of the run in progress: counts and pointers, never",
+      "finding text.",
     ],
     [
       "Reads outside repo state: the wall clock, which decides whether a learning's",
-      "review horizon has passed and whether a handoff has expired. Same repo, two",
-      "different days, two different banners.",
+      "review horizon has passed and whether a handoff has expired,",
+      "and the source field of the stdin payload, which decides whether the resume",
+      "card is appended. Same repo, two different days or two different starts,",
+      "two different banners.",
     ],
   )}
 
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync, statSync } from "node:fs";
-${namedImport(["join", "resolve", "sep", ...extra.path], "node:path")}
+${namedImport(["readFileSync", "readdirSync", "statSync", ...RESUME_CARD_HOST_NAMES.fs], "node:fs")}
+${namedImport(["join", "resolve", "sep", ...extra.path, ...RESUME_CARD_HOST_NAMES.path], "node:path")}
 ${extra.url}
 const STATE_SEGMENTS = ${json(segments)};
 const MAX_ITEM_LINES = ${maxLines};
@@ -721,13 +731,16 @@ function inspect(dir, name, maxBytes, coversSummary) {
  * copy. A union, never a replacement — the normalized copy adds the refusals a
  * lookalike or a combining mark hid, and the raw copy keeps the ones NFKC
  * destroys by composing a trailing mark into the letter before it.
+ *
+ * Returns the first matching pattern id in SCREEN order, or "" when none
+ * matches: a refusal that names its pattern is one somebody can attribute.
  */
-function screened(raw) {
+function screenHit(raw) {
   const stripped = raw.replace(INVISIBLE, "");
   const copies = [raw, stripped];
   const normalized = normalizeForScreen(stripped);
   if (normalized !== stripped) copies.push(normalized);
-  return SCREEN.some((entry) =>
+  const hit = SCREEN.find((entry) =>
     copies.some((copy) => {
       // A \`g\`-flagged row carries \`lastIndex\` between calls, and this now tests
       // three copies per row: without the reset the second copy would resume
@@ -736,6 +749,12 @@ function screened(raw) {
       return entry.re.test(copy);
     }),
   );
+  return hit === undefined ? "" : hit.id;
+}
+
+/** Whether any screen pattern matches. */
+function screened(raw) {
+  return screenHit(raw) !== "";
 }
 
 /**
@@ -960,10 +979,28 @@ function fileName(doc) {
   return text(doc.name, "(unnamed file)");
 }
 
+${READ_STDIN}
+
+${READ_FIELD}
+
+${buildResumeCardSource()}
+
+// Which start this is. A person running the script at a terminal sends no
+// payload, so a TTY is never read — reading it would wait for input nobody is
+// going to type. Only a start after a compaction appends the card: a fresh
+// session has no run state to lose, and a client that sends no source (or
+// never sends "compact") gets the banner it always got.
+const SOURCE = process.stdin.isTTY ? "" : field(readPayload(), ["source"]);
+
 // Written once, then the process ends on its own. \`process.exit\` would race
 // the write: stdout is asynchronous when it is a pipe on macOS and the BSDs,
 // which is exactly how a client runs a hook.
-process.stdout.write(render().join("\\n") + "\\n");
+const lines = render();
+if (SOURCE === "compact") {
+  const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW);
+  if (card !== null) lines.push("", ...card);
+}
+process.stdout.write(lines.join("\\n") + "\\n");
 `;
 }
 

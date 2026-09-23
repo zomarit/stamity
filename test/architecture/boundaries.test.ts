@@ -279,6 +279,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // above: kept at its true depth so a future consumer of the pins is not
   // forced above the catalog reader that ships with it.
   "src/pack/catalogPins.ts": { unit: "p5-curated-catalog", wave: 1 },
+  // A work run's on-disk shape: constants and two helpers over the markers and
+  // the error type, nothing else — so it sits at kernel depth, below every
+  // reader of a run folder.
+  "src/runs/layout.ts": { unit: "ctx-hook-card", wave: 1 },
   // wave 2
   "src/merge/fsErrors.ts": { unit: "p1-08", wave: 2 },
   "src/merge/managedBlocks.ts": { unit: "p1-08", wave: 2 },
@@ -311,6 +315,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // the installer, and the CLI check command reaches it from wave 15.
   "src/pack/verifyInstalled.ts": { unit: "s2d-10", wave: 2 },
   "src/learnings/validation.ts": { unit: "p1-20", wave: 2 },
+  // The resume card's embeddable body: a string builder over the run layout
+  // (wave 1), read by the wave-4 session-start builder that embeds it.
+  "src/runs/cardSource.ts": { unit: "ctx-hook-card", wave: 2 },
   "src/handoffs/schema.ts": { unit: "p1-21", wave: 2 },
   "src/handoffs/validation.ts": { unit: "p1-21", wave: 2 },
   // wave 3
