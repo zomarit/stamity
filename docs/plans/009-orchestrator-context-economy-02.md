@@ -112,10 +112,17 @@ the declared default, option 2, and `build/93`.)
 
 **C9 — Re-review closures.** A re-review carries a `stamity-closures` block, one object per prior ledger id:
 `{"ledger_id":"<id>","status":"fixed|not-fixed|regressed|rejection-upheld|rejection-overturned"}` with an optional
-`rationale`; plus new Critical/Warning only (C2), the reviewer's labelled `verdict:`/`confidence:` lines, and one line
-`read: <files>; lenses: <list>`. `ledger close --report` maps `fixed` → `fixed`, `rejection-upheld` → `rejected`
-(its rationale, default `rejection upheld by <report>`), and keeps `not-fixed`, `regressed`, `rejection-overturned`
-open with a note appended; `regressed` also reopens a `fixed` row.
+`rationale` (one line, non-blank, at most 2,000 code points, stripped of C1, bidi and zero-width characters); any other
+key refuses the block. Plus new Critical/Warning only (C2), the reviewer's labelled `verdict:`/`confidence:` lines, and
+one line `read: <files>; lenses: <list>`. `ledger close --report` maps `fixed` → `fixed`, `rejection-upheld` →
+`rejected`, and keeps `not-fixed`, `regressed`, `rejection-overturned` open; `regressed` also reopens a `fixed` row.
+Each applied closure appends its note `re-review <status>: <report>` to the row's rationale, followed by
+` — <rationale>` when the closure carries one. A closure whose note is already present is `unchanged` only when the
+row's state is also the closure's target; otherwise the state problem refuses the close. A row the fixer answers as
+wrong stays `open` until the re-review upholds or overturns the rejection (both rejection statuses meet only an open
+row). Apply problems print as `<report>:<line>: …`. (Amended 2026-09-23: the closure's optional rationale is admitted
+and appended after its note — ledger row `build/128`; `unchanged` needs the target state — `build/127`; a rejected
+finding stays open until the re-review rules — `build/130`; all signed off at 22:52Z as the declared defaults.)
 
 **C10 — Pointer dispatch** (at most 15 lines): role, class and run id; the plan path and unit id, never a line number;
 worktree, branch and base; the absolute report path (C1); the unit's `verify`; its `files` cell as the boundary; the
