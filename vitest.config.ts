@@ -5,6 +5,10 @@ import { configDefaults, defineConfig, type TestUserConfig } from "vitest/config
  * suites. CI 34588320202 later timed out the all-four fresh-directory golden
  * while it ran in the ordinary parallel group. Isolate these four fixtures,
  * keeping all assertions and timeouts.
+ * 2026-09-23: the plugin-lifecycle fixture build (a child process writing two
+ * four-root trees) hit its 48s spawn budget in CI 35837987995, 35845305397 and
+ * 35852090952 (attempt 1 each) while ten passing legs built it in 17-25s; the
+ * same legs ran its smaller builds up to 3x slower, so it joins this group.
  * The host-level cause remains unproved; an actual Windows run must verify this.
  * Vitest groups execute in order; one worker serializes only the second group:
  * https://vitest.dev/config/sequence.html#sequence-grouporder
@@ -16,6 +20,7 @@ export function fixtureScheduling(platform: NodeJS.Platform): Pick<TestUserConfi
     "test/pack/installSmoke.e2e.test.ts",
     "test/cli/commands/syncMcpOwnership.test.ts",
     "test/emit/crossClientGoldens.test.ts",
+    "test/ci/pluginLifecycle.test.ts",
   ];
   return {
     // Inline projects inherit arrays by concatenation. An empty root include
