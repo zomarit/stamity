@@ -1,0 +1,328 @@
+diff --git a/test/__oracle__/con-config-default.test.ts b/test/__oracle__/con-config-default.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..60b65de346808cc95eef769941a5c081b3bfc20a
+--- /dev/null
++++ b/test/__oracle__/con-config-default.test.ts
+@@ -0,0 +1,9 @@
++import { expect, it } from "vitest";
++import * as config from "../../src/config/load.ts";
++import { seam } from "./harness.ts";
++
++const loadConfig = seam<typeof config.loadConfig>(config, "loadConfig", "src/config/load.ts");
++
++it("defaults the page size to the documented 20", () => {
++  expect(loadConfig({}).pageSizeDefault).toBe(20);
++});
+diff --git a/test/__oracle__/con-event-key.test.ts b/test/__oracle__/con-event-key.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..2bbce1cf394a5339ec19ad7c95b4c822d5ff2bfb
+--- /dev/null
++++ b/test/__oracle__/con-event-key.test.ts
+@@ -0,0 +1,26 @@
++import { afterEach, beforeEach, expect, it } from "vitest";
++import * as audit from "../../src/events/audit.ts";
++import { loadHttp, order, seam, type OracleApp } from "./harness.ts";
++
++const auditLine = seam<typeof audit.auditLine>(audit, "auditLine", "src/events/audit.ts");
++const http = await loadHttp();
++let o: OracleApp;
++
++beforeEach(async () => {
++  o = await http.start();
++});
++
++afterEach(async () => {
++  await o.close();
++});
++
++it("publishes the cancel event in the payload the audit trail reads", async () => {
++  http.insertOrder(o.app.db, order(1, "2026-09-01T00:00:00Z"));
++  const res = await http.post(o.app, "/orders/1/cancel");
++  expect(res.status).toBe(200);
++  expect(o.app.lines).toHaveLength(1);
++  const raw = o.app.lines[0] as string;
++  const payload = JSON.parse(raw) as Record<string, unknown>;
++  expect(payload["orderId"]).toBe(1);
++  expect(auditLine(raw)).toBe(`${String(payload["at"])} order.cancelled order=1`);
++});
+diff --git a/test/__oracle__/con-wire-key.test.ts b/test/__oracle__/con-wire-key.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..a1579a0ebb451d80265ddc94bc6a9ca6731fdea1
+--- /dev/null
++++ b/test/__oracle__/con-wire-key.test.ts
+@@ -0,0 +1,21 @@
++import { afterEach, beforeEach, expect, it } from "vitest";
++import { loadHttp, order, type OracleApp } from "./harness.ts";
++
++const http = await loadHttp();
++let o: OracleApp;
++
++beforeEach(async () => {
++  o = await http.start();
++});
++
++afterEach(async () => {
++  await o.close();
++});
++
++it("lists each order's total under the documented key total_cents", async () => {
++  http.insertOrder(o.app.db, order(1, "2026-09-01T00:00:00Z"));
++  const res = await http.get(o.app, "/orders");
++  expect(res.status).toBe(200);
++  const body = (await res.json()) as { orders: Record<string, unknown>[] };
++  expect(typeof body.orders[0]?.["total_cents"]).toBe("number");
++});
+diff --git a/test/__oracle__/cor-date-boundary.test.ts b/test/__oracle__/cor-date-boundary.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..5034841efa26b2e9b4ce37681fd15a0a4db91d58
+--- /dev/null
++++ b/test/__oracle__/cor-date-boundary.test.ts
+@@ -0,0 +1,11 @@
++import { expect, it } from "vitest";
++import * as window from "../../src/reports/window.ts";
++import { seam } from "./harness.ts";
++
++const isWithin = seam<typeof window.isWithin>(window, "isWithin", "src/reports/window.ts");
++
++it("counts the last instant of a window as inside it", () => {
++  const from = "2026-09-01T00:00:00Z";
++  const until = "2026-09-30T23:59:59Z";
++  expect(isWithin(until, from, until)).toBe(true);
++});
+diff --git a/test/__oracle__/cor-page-offset.test.ts b/test/__oracle__/cor-page-offset.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..dcd51faa404211ddf30f1a9c39e97d98d2d89486
+--- /dev/null
++++ b/test/__oracle__/cor-page-offset.test.ts
+@@ -0,0 +1,21 @@
++import { afterEach, beforeEach, expect, it } from "vitest";
++import { loadHttp, order, type OracleApp } from "./harness.ts";
++
++const http = await loadHttp();
++let o: OracleApp;
++
++beforeEach(async () => {
++  o = await http.start();
++});
++
++afterEach(async () => {
++  await o.close();
++});
++
++it("answers page 1 with the newest orders", async () => {
++  for (const id of [1, 2, 3, 4]) http.insertOrder(o.app.db, order(id, `2026-09-0${id}T00:00:00Z`));
++  const res = await http.get(o.app, "/orders?page=1&size=2");
++  expect(res.status).toBe(200);
++  const body = (await res.json()) as { orders: { id: unknown }[] };
++  expect(body.orders.map((row) => row.id)).toEqual([4, 3]);
++});
+diff --git a/test/__oracle__/cor-swallowed-error.test.ts b/test/__oracle__/cor-swallowed-error.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..93dbdf812e2c308c6d652c25285e2a791d61fc5f
+--- /dev/null
++++ b/test/__oracle__/cor-swallowed-error.test.ts
+@@ -0,0 +1,21 @@
++import { afterEach, beforeEach, expect, it } from "vitest";
++import { loadHttp, order, type OracleApp } from "./harness.ts";
++
++const http = await loadHttp();
++let o: OracleApp;
++
++beforeEach(async () => {
++  o = await http.start();
++});
++
++afterEach(async () => {
++  await o.close();
++});
++
++it("answers 500 when the store fails under the list", async () => {
++  http.insertOrder(o.app.db, order(1, "2026-09-01T00:00:00Z"));
++  // A closed database throws on every statement, the way a lost store does.
++  o.app.db.close();
++  const res = await http.get(o.app, "/orders");
++  expect(res.status).toBe(500);
++});
+diff --git a/test/__oracle__/harness.ts b/test/__oracle__/harness.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..37885ebf25c4ff787ce75b459977dd0d88bd40a3
+--- /dev/null
++++ b/test/__oracle__/harness.ts
+@@ -0,0 +1,87 @@
++import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import type { DatabaseSync } from "node:sqlite";
++import type * as Db from "../../src/store/db.ts";
++import type * as Helpers from "../helpers.ts";
++
++/**
++ * The replay's hidden checks, one file per seed, each asking whether that seed's defect is absent.
++ * They reach the service over HTTP or through its exported functions only, so a refactor that keeps
++ * the behaviour keeps them valid.
++ *
++ * A check whose module no longer exports what it reaches the service through must report an
++ * error, never a pass or a fail: vitest turns a missing named import into `undefined`, so a renamed
++ * function would surface as a TypeError inside the test, which reads as a failed assertion. Each
++ * check therefore resolves what it uses through `seam` at load time, and a missing export fails
++ * the file before any test runs.
++ */
++export function seam<T>(mod: object, name: string, where: string): T {
++  const value = (mod as Record<string, unknown>)[name];
++  if (typeof value !== "function") throw new Error(`oracle seam: ${where} no longer exports ${name}()`);
++  return value as T;
++}
++
++/** A running app whose database records the text of every statement it prepares. */
++export interface OracleApp {
++  app: Helpers.Started;
++  /** Every SQL text passed to `db.prepare`, in order. */
++  sql: string[];
++  /** The invoice directory handed to the app; its parent holds nothing the app may serve. */
++  invoiceDir: string;
++  close(): Promise<void>;
++}
++
++export interface Http {
++  start(): Promise<OracleApp>;
++  insertOrder: typeof Db.insertOrder;
++  get: typeof Helpers.get;
++  post: typeof Helpers.post;
++}
++
++/**
++ * The HTTP seams, loaded and checked: the test helpers' `startApp`, `get` and `post`, and the
++ * store's `openDb` and `insertOrder`. Imported here rather than at the top of this file so the
++ * pure checks, which import only `seam`, do not depend on the helpers existing.
++ */
++export async function loadHttp(): Promise<Http> {
++  const helpers = await import("../helpers.ts");
++  const db = await import("../../src/store/db.ts");
++  const startApp = seam<typeof Helpers.startApp>(helpers, "startApp", "test/helpers.ts");
++  const openDb = seam<typeof Db.openDb>(db, "openDb", "src/store/db.ts");
++  return {
++    insertOrder: seam<typeof Db.insertOrder>(db, "insertOrder", "src/store/db.ts"),
++    get: seam<typeof Helpers.get>(helpers, "get", "test/helpers.ts"),
++    post: seam<typeof Helpers.post>(helpers, "post", "test/helpers.ts"),
++    async start() {
++      const database: DatabaseSync = openDb();
++      const sql: string[] = [];
++      const prepare = database.prepare.bind(database);
++      database.prepare = ((...args: Parameters<DatabaseSync["prepare"]>) => {
++        sql.push(String(args[0]));
++        return prepare(...args);
++      }) as DatabaseSync["prepare"];
++      const root = mkdtempSync(join(tmpdir(), "replay-oracle-"));
++      const invoiceDir = join(root, "invoices");
++      mkdirSync(invoiceDir);
++      const app = await startApp({ db: database, invoiceDir });
++      return {
++        app,
++        sql,
++        invoiceDir,
++        async close() {
++          try {
++            await app.close();
++          } finally {
++            rmSync(root, { recursive: true, force: true });
++          }
++        },
++      };
++    },
++  };
++}
++
++/** One order row with the given id and creation time. */
++export function order(id: number, createdAt: string, status = "open") {
++  return { id, customer: `Customer ${id}`, total_cents: 1000 + id, status, created_at: createdAt };
++}
+diff --git a/test/__oracle__/sec-missing-guard.test.ts b/test/__oracle__/sec-missing-guard.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..7e45f75d7954f9d9ba3f5566d82ca940f4574427
+--- /dev/null
++++ b/test/__oracle__/sec-missing-guard.test.ts
+@@ -0,0 +1,21 @@
++import { afterEach, beforeEach, expect, it } from "vitest";
++import { loadHttp, order, type OracleApp } from "./harness.ts";
++
++const http = await loadHttp();
++let o: OracleApp;
++
++beforeEach(async () => {
++  o = await http.start();
++});
++
++afterEach(async () => {
++  await o.close();
++});
++
++it("refuses an unauthenticated cancel with 401 and leaves the order open", async () => {
++  http.insertOrder(o.app.db, order(1, "2026-09-01T00:00:00Z"));
++  const res = await http.post(o.app, "/orders/1/cancel", null);
++  expect(res.status).toBe(401);
++  const after = (await (await http.get(o.app, "/orders/1")).json()) as Record<string, unknown>;
++  expect(after["status"]).toBe("open");
++});
+diff --git a/test/__oracle__/sec-path-traversal.test.ts b/test/__oracle__/sec-path-traversal.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..791057ff65167a31e43a0cc167d21429dfcf83d3
+--- /dev/null
++++ b/test/__oracle__/sec-path-traversal.test.ts
+@@ -0,0 +1,28 @@
++import { writeFileSync } from "node:fs";
++import { randomUUID } from "node:crypto";
++import { dirname, join } from "node:path";
++import { afterEach, beforeEach, expect, it } from "vitest";
++import { loadHttp, order, type OracleApp } from "./harness.ts";
++
++const http = await loadHttp();
++let o: OracleApp;
++
++beforeEach(async () => {
++  o = await http.start();
++});
++
++afterEach(async () => {
++  await o.close();
++});
++
++it("serves nothing from outside the invoice directory", async () => {
++  // The app serves from the directory the check handed it, so the secret below sits in its parent.
++  expect(o.app.invoiceDir).toBe(o.invoiceDir);
++  const secret = `replay-secret-${randomUUID()}`;
++  writeFileSync(join(dirname(o.invoiceDir), "secret.txt"), secret, "utf8");
++  http.insertOrder(o.app.db, order(1, "2026-09-01T00:00:00Z"));
++  const res = await http.get(o.app, "/orders/1/invoice?file=..%2Fsecret.txt");
++  const body = await res.text();
++  expect([400, 404]).toContain(res.status);
++  expect(body).not.toContain(secret);
++});
+diff --git a/test/__oracle__/sec-sql-sort.test.ts b/test/__oracle__/sec-sql-sort.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..e3c412f00406c39eb0d14a4e5f261e98608869a8
+--- /dev/null
++++ b/test/__oracle__/sec-sql-sort.test.ts
+@@ -0,0 +1,23 @@
++import { afterEach, beforeEach, expect, it } from "vitest";
++import { loadHttp, order, type OracleApp } from "./harness.ts";
++
++const http = await loadHttp();
++let o: OracleApp;
++
++beforeEach(async () => {
++  o = await http.start();
++});
++
++afterEach(async () => {
++  await o.close();
++});
++
++it("keeps a sort value from the query out of every SQL text", async () => {
++  http.insertOrder(o.app.db, order(1, "2026-09-01T00:00:00Z"));
++  http.insertOrder(o.app.db, order(2, "2026-09-02T00:00:00Z"));
++  // The recorder sees the list query at all: without this, a silent recorder would pass the check below.
++  await http.get(o.app, "/orders");
++  expect(o.sql.some((text) => /\bFROM orders\b/.test(text))).toBe(true);
++  await http.get(o.app, "/orders?sort=zz_marker_col");
++  expect(o.sql.filter((text) => text.includes("zz_marker_col"))).toEqual([]);
++});
