@@ -65,13 +65,24 @@ const SPECIALIST_IDS: readonly string[] = SPECIALIST_TRIGGER_TABLE.map((row) =>
 /** Body cap for this command, in body lines (frontmatter head excluded). */
 const BODY_LINE_CAP = 500;
 
-/** The section skeleton, in reading order; extra subheadings may appear between rows. */
+/**
+ * The section skeleton, in reading order; extra subheadings may appear between rows.
+ *
+ * TEST CHANGE, justified (2026-09-23): the order moved on purpose. `## Dispatch
+ * contract` and `## Return contract` now follow Phase 3 and precede Phase 4, and
+ * `## Dials` and `## Testing philosophy` close the body, so the two contracts a
+ * resumed run needs sit inside the client's post-compaction re-attachment of the
+ * command body (REQ-CTX-014). The move removes no text; the same headings are
+ * pinned, only their order changed.
+ */
 const SKELETON = [
   "# /st-work",
   "## Phase 0 — Frame",
   "## Phase 1 — Understand",
   "## Phase 2 — Plan",
   "## Phase 3 — Build",
+  "## Dispatch contract",
+  "## Return contract",
   "## Phase 4 — Prove",
   "### Gates",
   "### Review loop",
@@ -79,11 +90,21 @@ const SKELETON = [
   "### QA checkpoint",
   "### Proof block",
   "### Side effects",
-  "## Dispatch contract",
   "## Dials",
   "## Testing philosophy",
-  "## Return contract",
 ] as const;
+
+/**
+ * The body characters a resumed run can rely on after a compaction.
+ *
+ * Claude Code re-attaches only the first 5,000 tokens of an invoked command body
+ * after it compacts a conversation. Measured on this body (the phrase
+ * "whole-branch multi-lens rev" was the last text re-attached), the cut sits at
+ * about 19,890 body characters, about 4.0 characters per token; 18,000 keeps
+ * margin under it. What a resumed run needs — the Dispatch contract, the Return
+ * contract and the review-loop caps — must end before this offset.
+ */
+const REATTACH_BUDGET_CHARS = 18_000;
 
 /** The plan artifact: owner of the intake contract this command cites. */
 const PLAN_PATH = "commands/st-plan.md";
@@ -135,6 +156,18 @@ function section(text: string, heading: string): string {
     return found !== null && found <= level;
   });
   return rest.slice(0, end === -1 ? rest.length : end).join("\n");
+}
+
+/**
+ * The character offset in `text` where one section ends: the newline that
+ * closes its last line, directly before the next heading of the same or a
+ * higher level (or the end of the text). The heading must stand on its own
+ * line after a newline.
+ */
+function sectionEnd(text: string, heading: string): number {
+  const at = text.indexOf("\n" + heading + "\n");
+  if (at === -1) throw new Error(`heading not found on its own line: ${JSON.stringify(heading)}`);
+  return at + 1 + heading.length + 1 + section(text, heading).length;
 }
 
 /** Whitespace-collapsed view for prose-phrase matching across wrapped lines. */
@@ -320,6 +353,45 @@ describe("/st-work — body skeleton", () => {
       expect(headings.indexOf(heading, at + 1), `duplicate heading: ${heading}`).toBe(-1);
       from = at + 1;
     }
+  });
+
+  it("ends what a resumed run needs before the client's re-attachment cut", async () => {
+    const text = await body();
+    const returnEnd = sectionEnd(text, "## Return contract");
+    expect(sectionEnd(text, "## Dispatch contract")).toBeLessThan(REATTACH_BUDGET_CHARS);
+    expect(returnEnd).toBeLessThan(REATTACH_BUDGET_CHARS);
+
+    // The review-loop caps end where the Minor/nit bullet starts.
+    const capsEnd = text.indexOf("- Minor/nit findings are ledgered");
+    expect(capsEnd).toBeGreaterThan(text.indexOf("- Escape before the cap"));
+    expect(capsEnd).toBeLessThan(REATTACH_BUDGET_CHARS);
+
+    expect(text.indexOf("\n## Dials\n")).toBeGreaterThan(returnEnd);
+    expect(text.indexOf("\n## Testing philosophy\n")).toBeGreaterThan(returnEnd);
+  });
+
+  it("fixture: a contract pushed past the re-attachment cut is flagged", () => {
+    const contracts = [
+      "## Dispatch contract",
+      "",
+      "Every spawn runs under these contracts.",
+      "",
+      "## Return contract",
+      "",
+      "Every sub-agent returns a structured result.",
+      "",
+      "## Dials",
+      "",
+    ].join("\n");
+    const inside = `# /st-work\n\n${contracts}`;
+    const pushed = `# /st-work\n\n${"x".repeat(18_000)}\n\n${contracts}`;
+
+    // Control: the same contracts near the top end inside the budget.
+    expect(sectionEnd(inside, "## Dispatch contract")).toBeLessThan(REATTACH_BUDGET_CHARS);
+    expect(sectionEnd(pushed, "## Dispatch contract")).toBeGreaterThan(REATTACH_BUDGET_CHARS);
+    expect(sectionEnd(pushed, "## Return contract")).toBeGreaterThan(REATTACH_BUDGET_CHARS);
+    // The helper lands on the newline directly before the next heading.
+    expect(pushed.slice(sectionEnd(pushed, "## Dispatch contract"))).toMatch(/^\n## Return contract\n/);
   });
 
   it("stays within the body line cap and the write-path deny set", async () => {

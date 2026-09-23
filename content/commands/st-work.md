@@ -109,6 +109,52 @@ and type fixes land inline in the owning unit; they spawn nothing. An
 implementer that finds its unit mis-scoped returns BLOCKED_AMBIGUITY or
 BLOCKED_DEPENDENCY (Return contract) instead of improvising scope.
 
+## Dispatch contract
+
+Every spawn in every phase runs under these contracts:
+
+- **Parallel safety.** Fan out only when all three conditions hold:
+  (1) read-only or disjoint writes, (2) deterministic aggregation of results,
+  (3) no shared mutable state. A dependency edge is the only valid reason to
+  serialize; token cost is not.
+- **Single-writer synthesis.** Reads fan out; exactly one writer merges
+  results into any one artifact. Two writers on one file is a protocol
+  violation, not a race to tolerate.
+- **Build isolation, native-first.** Parallel implementers run under the
+  client's own isolation primitive where it has one — a per-sub-agent workspace
+  the client provisions, or its parallel-agent lane. The primitive in use is
+  declared once, before the first Phase 3 dispatch, and travels in the proof
+  block. One of the four supported clients publishes no primitive at all: there
+  the fallback is manual, an operator-prepared second checkout per parallel
+  unit, and a run that cannot get one serializes Phase 3 rather than fanning
+  out into a shared tree. Isolation is never inferred from disjoint file lists —
+  it is declared or it is absent, and absent reads as serialize.
+- **Failure ladder.** A failed sub-agent is retried once with an enriched
+  brief — the failure excerpt plus sharpened task boundaries; a second failure
+  reassigns the work to a stronger model class; a third goes to the human as
+  BLOCKED_FAILURE. No silent drops: every spawn resolves to a result or a
+  BLOCKED status in the run report.
+- **Context degradation.** Under budget pressure, degrade summaries before
+  evidence. Security-relevant content — findings, injection-screening results,
+  secret-scan hits — is exempt from truncation at every budget level, deep
+  included.
+- **Findings ledger.** The write-ahead JSONL described under Proof block;
+  failure-ladder outcomes and degradation events append to it, so the ledger —
+  not orchestrator memory — is the recovery point.
+
+## Return contract
+
+Every sub-agent returns a structured result the orchestrator consumes without
+re-reading its transcript:
+
+- **status:** DONE | BLOCKED_AMBIGUITY | BLOCKED_DEPENDENCY | BLOCKED_FAILURE
+- **severity scale** for findings: Critical / Warning / Minor
+- DONE carries the unit's artifact list and evidence pointers. BLOCKED_*
+  carries what was attempted, what blocks, and the smallest unblocking input.
+- Sub-agents do not ask the operator questions. Ambiguity returns as
+  BLOCKED_AMBIGUITY naming the competing readings and the smallest input that
+  unblocks it; the orchestrator runs the ambiguity gate from Frame.
+
 ## Phase 4 — Prove
 
 ### Gates
@@ -308,39 +354,6 @@ Run after gates pass; each lands in the run report:
   board source is linked, emission is a silent no-op; events publish only when
   a linked source exists.
 
-## Dispatch contract
-
-Every spawn in every phase runs under these contracts:
-
-- **Parallel safety.** Fan out only when all three conditions hold:
-  (1) read-only or disjoint writes, (2) deterministic aggregation of results,
-  (3) no shared mutable state. A dependency edge is the only valid reason to
-  serialize; token cost is not.
-- **Single-writer synthesis.** Reads fan out; exactly one writer merges
-  results into any one artifact. Two writers on one file is a protocol
-  violation, not a race to tolerate.
-- **Build isolation, native-first.** Parallel implementers run under the
-  client's own isolation primitive where it has one — a per-sub-agent workspace
-  the client provisions, or its parallel-agent lane. The primitive in use is
-  declared once, before the first Phase 3 dispatch, and travels in the proof
-  block. One of the four supported clients publishes no primitive at all: there
-  the fallback is manual, an operator-prepared second checkout per parallel
-  unit, and a run that cannot get one serializes Phase 3 rather than fanning
-  out into a shared tree. Isolation is never inferred from disjoint file lists —
-  it is declared or it is absent, and absent reads as serialize.
-- **Failure ladder.** A failed sub-agent is retried once with an enriched
-  brief — the failure excerpt plus sharpened task boundaries; a second failure
-  reassigns the work to a stronger model class; a third goes to the human as
-  BLOCKED_FAILURE. No silent drops: every spawn resolves to a result or a
-  BLOCKED status in the run report.
-- **Context degradation.** Under budget pressure, degrade summaries before
-  evidence. Security-relevant content — findings, injection-screening results,
-  secret-scan hits — is exempt from truncation at every budget level, deep
-  included.
-- **Findings ledger.** The write-ahead JSONL described under Proof block;
-  failure-ladder outcomes and degradation events append to it, so the ledger —
-  not orchestrator memory — is the recovery point.
-
 ## Dials
 
 ### Intensity
@@ -393,16 +406,3 @@ flow's own escalation and drop, marked as such below.
 > that makes them pass — any test modification in that change requires the
 > same inline justification as a mock, and review treats changed tests as part
 > of the diff under scrutiny.
-
-## Return contract
-
-Every sub-agent returns a structured result the orchestrator consumes without
-re-reading its transcript:
-
-- **status:** DONE | BLOCKED_AMBIGUITY | BLOCKED_DEPENDENCY | BLOCKED_FAILURE
-- **severity scale** for findings: Critical / Warning / Minor
-- DONE carries the unit's artifact list and evidence pointers. BLOCKED_*
-  carries what was attempted, what blocks, and the smallest unblocking input.
-- Sub-agents do not ask the operator questions. Ambiguity returns as
-  BLOCKED_AMBIGUITY naming the competing readings and the smallest input that
-  unblocks it; the orchestrator runs the ambiguity gate from Frame.
