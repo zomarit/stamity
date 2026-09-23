@@ -266,7 +266,7 @@ Evidence-graded reviewer ↔ fixer loop over the built units:
   nits are suppressed: only regressions on prior findings and new
   Critical/Warning findings count.
 - A re-review is handed the ledger ids it verifies and returns one closure
-  per id in its `stamity-closures` block — `fixed`, `not-fixed`, `regressed`,
+  per id in its closures block — `fixed`, `not-fixed`, `regressed`,
   `rejection-upheld`, `rejection-overturned` — plus new Critical/Warning
   findings only; `stamity ledger close --report` applies the closures, so an
   unchanged finding set or an oscillation reads off the ids.

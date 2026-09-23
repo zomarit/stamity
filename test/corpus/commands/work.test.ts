@@ -818,7 +818,11 @@ describe("/st-work — Prove", () => {
     // A re-review that re-lists findings in prose leaves the orchestrator to
     // diff two reports by hand; one closure per ledger id lets the ledger verb
     // apply them and makes an unchanged set or an oscillation readable off ids.
-    expect(loop).toContain("`stamity-closures`");
+    // The block's info string is not pinned here: the reviewer definition writes
+    // it and the ledger verb parses it, while this body only routes the report,
+    // and a prefixed literal in a command body reads as an artifact mention to
+    // invariant 13.
+    expect(loop).toContain("one closure per id in its closures block");
     for (const status of [
       "`fixed`",
       "`not-fixed`",
