@@ -116,7 +116,10 @@ export interface AgentPolicyRow {
  * token. The rule's precondition is that no role token is a suffix of another:
  * `-reviewer-r`, `-security-r`, `-performance-r` and `-design-quality-r` today.
  * A future role such as `quality` would collide with `design-quality`, so adding
- * a role re-checks this precondition.
+ * a role re-checks this precondition. The rule's limit: the round takes the
+ * LONGEST trailing digit run, so a pattern whose piece just before that last `*`
+ * ends in a digit (`*-v2*.md`) matches nothing; every role token here ends in
+ * `-r`, so no pattern this returns has one.
  */
 export function verdictReportWritePaths(
   role: "reviewer" | "security" | "performance" | "design-quality",

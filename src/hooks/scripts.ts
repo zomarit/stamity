@@ -1088,7 +1088,12 @@ const MAX_WRITE_FILE_PATH_CHARS = 1024;
  *    `..` segment: a checked path and a written path that differ lexically are
  *    two paths, so `runs/x/../x/reports/…` is refused even though it resolves
  *    inside the pattern. On win32 a UNC or device prefix and an alternate data
- *    stream (`:` past the drive) are refused as well.
+ *    stream (`:` past the drive) are refused as well (`device-path`), and so is
+ *    any segment naming a reserved device — `CON`, `PRN`, `AUX`, `NUL`,
+ *    `CONIN$`, `CONOUT$`, `COM` and `LPT` with a digit or a superscript digit —
+ *    in any case, with any extension and trailing dots or spaces
+ *    (`device-name`): such a name opens the device, never a file, and the lstat
+ *    walk below cannot be trusted to refuse it.
  * 3. **The anchor is found top down.** Among the requested path's ancestors,
  *    the FIRST whose real path is the root's real path anchors the rest, which
  *    absorbs a `/var` -> `/private/var` link above the root; bottom up, a link
@@ -1103,7 +1108,10 @@ const MAX_WRITE_FILE_PATH_CHARS = 1024;
  *    final segment's LAST `*` — the round number before `.md` — matches one or
  *    more ASCII digits only. That is what keeps `*-reviewer-r*.md` from
  *    admitting `x-reviewer-report-security-r1.md`, whatever role tokens a pass
- *    slug holds. No `RegExp` is ever built from document data.
+ *    slug holds. No `RegExp` is ever built from document data. The limit: the
+ *    round takes the LONGEST trailing digit run, so a pattern whose piece just
+ *    before that last `*` ends in a digit (`*-v2*.md`) matches nothing — no
+ *    shipped pattern has one.
  *
  * The patterns are filtered first by a literal twin of `isWritePathPattern`
  * (`../roster/agentPolicies.ts`), which this module may not import from the
@@ -1197,6 +1205,23 @@ function patternMatches(path, pattern) {
   return finalSegmentMatches(pathSegments[last], patternSegments[last]);
 }
 
+/** The win32 reserved device names, upper case: each opens a device wherever it sits in a path. */
+const RESERVED_DEVICE_NAMES = new Set([
+  "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$",
+  ...["COM", "LPT"].flatMap((port) => Array.from("0123456789\\u00b9\\u00b2\\u00b3", (digit) => port + digit)),
+]);
+
+/**
+ * True when one path segment names a win32 reserved device: the text before its
+ * first \`.\`, trailing spaces dropped, compared case-insensitively — so
+ * \`con\`, \`CON.md\`, \`CON.-reviewer-r1.md\` and \`CON . .\` all name the console.
+ */
+function isReservedDeviceSegment(segment) {
+  const dot = segment.indexOf(".");
+  const stem = (dot < 0 ? segment : segment.slice(0, dot)).trimEnd();
+  return RESERVED_DEVICE_NAMES.has(stem.toUpperCase());
+}
+
 /**
  * "" when this Write may land, or the one reason it may not. Reads file-system
  * metadata of the requested path's ancestors (realpath, lstat), never content.
@@ -1216,6 +1241,7 @@ function writePathCheck(payload, patterns) {
   if (process.platform === "win32") {
     if (/^[\\\\/]{2}/.test(raw)) return "device-path";
     if (segments.slice(1).some((segment) => segment.includes(":"))) return "device-path";
+    if (segments.some(isReservedDeviceSegment)) return "device-name";
   }
 
   const target = resolve(raw);
@@ -1233,8 +1259,9 @@ function writePathCheck(payload, patterns) {
     try {
       real = realpathSync.native(chain[index]);
     } catch (error) {
-      // An ancestor that does not resolve anchors nothing, and no deeper one
-      // can; anything that is not a file-system answer is a real fault.
+      // An ancestor that does not resolve anchors nothing; the walk goes on to
+      // the next deeper one, and if none anchors the path is outside-root.
+      // Anything that is not a file-system answer is a real fault.
       if (error && typeof error.code === "string") continue;
       throw error;
     }

@@ -3,6 +3,7 @@ import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { link, rm, symlink, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 import {
   CONTENT_DENY_PATTERNS,
@@ -1425,6 +1426,75 @@ describe("the guard's path-scoped report write", () => {
     }
   });
 
+  it("names every win32 reserved device in a segment, whatever its case, extension or trailing dots and spaces", () => {
+    // The rendered predicate itself, lifted out of the guard text, so its table
+    // runs on every host; the guard calls it only on win32, where the cases in
+    // the describe below prove the refusal end to end.
+    const text = buildPreToolUseGuardScript({ policiesJsonPath: `../../${POLICY_FILE}`, failMode: "fail-closed" });
+    const start = text.indexOf("const RESERVED_DEVICE_NAMES");
+    const fn = text.indexOf("function isReservedDeviceSegment(", start);
+    const end = text.indexOf("\n}\n", fn);
+    expect(start, "the device-name table is not rendered").toBeGreaterThanOrEqual(0);
+    expect(fn, "the device-name predicate is not rendered").toBeGreaterThan(start);
+    const isReservedDeviceSegment = runInNewContext(
+      `${text.slice(start, end + 2)}\nisReservedDeviceSegment;`,
+    ) as (segment: string) => boolean;
+
+    const devices = [
+      "CON",
+      "con",
+      "Prn",
+      "AUX",
+      "nul",
+      "CON.",
+      "CON...",
+      "CON  ",
+      "CON . .",
+      "CON.md",
+      "CON.-reviewer-r1.md",
+      "NUL.tar.gz",
+      "CON .md",
+      "COM1",
+      "COM1.-reviewer-r1.md",
+      "com9.txt",
+      "LPT1",
+      "lpt9.md",
+      "COM0",
+      "LPT0",
+      "COM\u00b9",
+      "com\u00b2.md",
+      "LPT\u00b3.-reviewer-r1.md",
+      "CONIN$",
+      "conout$.md",
+    ];
+    for (const segment of devices) {
+      expect(isReservedDeviceSegment(segment), JSON.stringify(segment)).toBe(true);
+    }
+    const names = [
+      "",
+      "C:",
+      "CONSOLE",
+      "CON1",
+      "CONx.md",
+      "xCON",
+      " CON",
+      ".CON",
+      "COM",
+      "COM10",
+      "COM1x.md",
+      "LPT",
+      "COM\u2074",
+      "NULL",
+      "AUXILIARY.md",
+      "u1-reviewer-r1.md",
+      "2026-09-23_ctx",
+      "reports",
+    ];
+    for (const segment of names) {
+      expect(isReservedDeviceSegment(segment), JSON.stringify(segment)).toBe(false);
+    }
+  });
+
   describe.skipIf(!WINDOWS)("on win32", () => {
     it("allows the report under either drive-letter case and either separator", async () => {
       const guard = await placeWriteGuard();
@@ -1444,6 +1514,33 @@ describe("the guard's path-scoped report write", () => {
 
       expectWriteDenied(run(guard, { input: writeTo("stamity-reviewer", `\\\\?\\${report}`) }), "device-path");
       expectWriteDenied(run(guard, { input: writeTo("stamity-reviewer", `${report}:evil`) }), "device-path");
+    });
+
+    it("refuses a reserved device name in the run, the folder or the report segment, before any lookup", async () => {
+      // Red first on win32 only: a device name passes the final-segment
+      // pattern (`CON.-reviewer-r1.md`), and in an earlier segment the lstat
+      // walk may answer ENOENT and admit a Write that lands on the device.
+      const guard = await placeWriteGuard();
+      const base = REPORT.slice(0, 3);
+      const cases: string[][] = [
+        [...base, "CON", "reports", "u1-reviewer-r1.md"],
+        [...base, "nul.txt", "reports", "u1-reviewer-r1.md"],
+        [...base, "Aux. ", "reports", "u1-reviewer-r1.md"],
+        [...base, RUN, "PRN", "u1-reviewer-r1.md"],
+        [...base, RUN, "reports", "CON.-reviewer-r1.md"],
+        [...base, RUN, "reports", "COM1.-reviewer-r1.md"],
+        [...base, RUN, "reports", "lpt\u00b9.-reviewer-r1.md"],
+      ];
+      for (const segments of cases) {
+        const path = spelled(...segments);
+        expectWriteDenied(run(guard, { input: writeTo("stamity-reviewer", path) }), "device-name", path);
+      }
+    });
+
+    it("admits a report whose name only begins with a device name", async () => {
+      const guard = await placeWriteGuard();
+      const path = spelled(...REPORT.slice(0, -1), "CONSOLE-reviewer-r1.md");
+      expect(run(guard, { input: writeTo("stamity-reviewer", path) }).code, path).toBe(0);
     });
   });
 });
