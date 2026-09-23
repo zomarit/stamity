@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { FIXED_GIT_ENV, PASS_IDS, applyPatch, createReplayFixture, renderPlan } from "../../scripts/replay/fixture.mjs";
+import { FIXED_GIT_ENV, PASS_IDS, applyPatch, createReplayFixture, refuseOutInsideRepository, renderPlan } from "../../scripts/replay/fixture.mjs";
 
 /**
  * The replay fixture generator, over a synthetic `v1Dir` this suite writes: a two-file base patch,
@@ -65,7 +65,8 @@ function writeV1(name: string, base: Record<string, string>, passes: Record<stri
   git(scratch, ["init", "--quiet", "--initial-branch", "main"]);
   const cut = (files: Record<string, string>, patch: string): void => {
     writeTree(scratch, files);
-    git(scratch, ["add", "-A"]);
+    // `--force`, so a case can cut a patch that carries a file its own .gitignore covers.
+    git(scratch, ["add", "-A", "--force"]);
     writeFileSync(join(dir, "patches", patch), git(scratch, ["diff", "--cached"]), "utf8");
     git(scratch, ["commit", "--quiet", "-m", patch]);
   };
@@ -235,6 +236,52 @@ describe("createReplayFixture — S0", () => {
     expect(existsSync(inside)).toBe(false);
   });
 
+  it("holds S0 fixed under a global attributes file with a filter driver and a template that excludes vendor/", () => {
+    const reference = build({ units: "u1-p1,u1-p2" }).baseCommit;
+    const attributes = join(root, "hostile-attributes");
+    writeFileSync(attributes, "* filter=hostile\n", "utf8");
+    const template = join(root, "hostile-template");
+    mkdirSync(join(template, "info"), { recursive: true });
+    writeFileSync(join(template, "info", "exclude"), "vendor/\n", "utf8");
+    const hostile = join(root, "hostile-attributes.gitconfig");
+    writeFileSync(
+      hostile,
+      [
+        "[core]",
+        `\tattributesFile = ${attributes}`,
+        '[filter "hostile"]',
+        "\tclean = sed s/line/LINE/",
+        "[init]",
+        `\ttemplateDir = ${template}`,
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    process.env["GIT_CONFIG_GLOBAL"] = hostile;
+    try {
+      const built = build({ units: "u1-p1,u1-p2" });
+      expect(lsFiles(built.dir)).toEqual(expect.arrayContaining(["vendor/contrib/u1-p1.patch", "vendor/contrib/u1-p2.patch"]));
+      expect(built.baseCommit).toBe(reference);
+    } finally {
+      process.env["GIT_CONFIG_GLOBAL"] = cleanGlobal;
+    }
+  });
+
+  it("refuses an --out inside another worktree of the same repository, through the git common dir", () => {
+    const main = join(root, "wt-main");
+    mkdirSync(main, { recursive: true });
+    git(main, ["init", "--quiet", "--initial-branch", "main"]);
+    writeFileSync(join(main, "f.txt"), "f\n", "utf8");
+    git(main, ["add", "-A"]);
+    git(main, ["commit", "--quiet", "-m", "f"]);
+    const linked = join(root, "wt-linked");
+    git(main, ["worktree", "add", "--quiet", "--detach", linked]);
+    // A path that does not exist yet: the nearest existing ancestor decides.
+    expect(() => refuseOutInsideRepository(join(linked, "not", "yet"), main)).toThrow(/inside this repository.*leak gate/s);
+    expect(() => refuseOutInsideRepository(join(main, "sub"), main)).toThrow(/leak gate/);
+    expect(() => refuseOutInsideRepository(join(root, "elsewhere"), main)).not.toThrow();
+  });
+
   it("refuses the same --out from the command line with exit 1", () => {
     const inside = join(REPO_ROOT, "replay-fixture-out-test");
     const result = spawnSync(process.execPath, [FIXTURE_MJS, "--out", inside, "--no-setup", "--no-install"], {
@@ -272,6 +319,20 @@ describe("createReplayFixture — S0", () => {
     expect(() => build({ v1Dir: leaky, units: "none" })).toThrow(/answer-key paths \(test\/__oracle__\/x\.test\.ts\)/);
   });
 
+  it("refuses S0 when a patch leaves an answer-key file in the tree behind a .gitignore line", () => {
+    const hidden = writeV1("v1-hidden", { "src/a.txt": "a\n", ".gitignore": "seeds.json\n", "seeds.json": "{}\n" }, [], TEMPLATE);
+    let caught: (Error & { dir?: string }) | undefined;
+    try {
+      build({ v1Dir: hidden, units: "none" });
+    } catch (error) {
+      caught = error as typeof caught;
+    }
+    expect(caught?.message).toMatch(/answer-key paths \(seeds\.json\)/);
+    // The refused tree is named, so the caller can inspect or remove it.
+    expect(caught?.dir).toMatch(/stamity-replay-/);
+    expect(existsSync(caught!.dir!)).toBe(true);
+  });
+
   it("stamps the plan with S0 and the fixture date", () => {
     const built = build({ units: "u1-p1,u1-p2" });
     const plan = readFileSync(join(built.dir, built.planPath), "utf8");
@@ -300,6 +361,8 @@ describe("createReplayFixture — stored preimages", () => {
     const aPath = join(built.dir, "src", "a.txt");
     writeFileSync(aPath, readFileSync(aPath, "utf8").replace("line 9\n", "line 9 edited by an agent\n"), "utf8");
     git(built.dir, ["add", "src/a.txt"]);
+    // On its own this case passes without the stored preimages: `--3way` of pass 1 implies
+    // `--index`, which writes pass 1's postimage blob itself. The two cases around it are the proof.
     // The edit breaks a context line, so a plain apply refuses and only the fallback can land it.
     expect(() => applyPatch(built.dir, join(contrib, "u1-p2.patch"))).toThrow();
     applyPatch(built.dir, join(contrib, "u1-p2.patch"), { threeWay: true });
@@ -319,6 +382,23 @@ describe("createReplayFixture — stored preimages", () => {
     git(built.dir, ["add", "-A"]);
     applyPatch(built.dir, join(contrib, "u1-p2.patch"), { threeWay: true });
     expect(readFileSync(aPath, "utf8")).toContain("line 12 changed by pass 2\n");
+  });
+
+  it("keeps the stored preimages reachable from a ref, so a gc --prune=now leaves the fallback working", () => {
+    const built = build({ units: "u1-p1,u1-p2" });
+    git(built.dir, ["gc", "--quiet", "--prune=now"]);
+    for (const id of preimages(join(built.dir, "vendor", "contrib", "u1-p2.patch"))) {
+      expect(spawnSync("git", ["cat-file", "-e", `${id}^{blob}`], { cwd: built.dir, env: gitEnv() }).status).toBe(0);
+    }
+    const contrib = join(built.dir, "vendor", "contrib");
+    applyPatch(built.dir, join(contrib, "u1-p1.patch"));
+    const aPath = join(built.dir, "src", "a.txt");
+    writeFileSync(aPath, readFileSync(aPath, "utf8").replace("line 9\n", "line 9 edited by an agent\n"), "utf8");
+    git(built.dir, ["add", "-A"]);
+    applyPatch(built.dir, join(contrib, "u1-p2.patch"), { threeWay: true });
+    expect(readFileSync(aPath, "utf8")).toContain("line 12 changed by pass 2\n");
+    // The refs name trees, which a history walk does not show the agent.
+    expect(git(built.dir, ["log", "--all", "--format=%s"])).toBe("replay plan\nservice base\n");
   });
 
   it("refuses a pass patch cut from bytes other than the chain's", () => {
@@ -352,6 +432,63 @@ describe("createReplayFixture — dependencies and gates", () => {
     expect(last?.output).not.toBe("");
   });
 
+  it("names the partial tree a failed step leaves behind", () => {
+    const broken = writeV1("v1-broken-dir", { "package.json": "{ this is not json\n" }, [], TEMPLATE);
+    let caught: (Error & { dir?: string }) | undefined;
+    try {
+      build({ v1Dir: broken, units: "none", install: true });
+    } catch (error) {
+      caught = error as typeof caught;
+    }
+    expect(caught?.dir).toMatch(/stamity-replay-/);
+    expect(existsSync(join(caught!.dir!, ".git"))).toBe(true);
+    expect(caught?.message).toContain(caught!.dir!);
+  });
+
+  it("bounds a hung step with a timeout, records the signal and the elapsed time, and throws naming it", () => {
+    // A stand-in CLI whose bin never exits: the step that runs it is `stamity init`. (A hung
+    // `preinstall` would not do: this checkout's .npmrc sets ignore-scripts, which npx hands down.)
+    const pkg = join(root, "hung-cli");
+    writeTree(pkg, {
+      "package.json": `${JSON.stringify({ name: "@zomarit/stamity", version: "0.0.0-hung", bin: { stamity: "bin.mjs" } })}\n`,
+      "bin.mjs": "setInterval(() => {}, 1000);\n",
+    });
+    const packs = join(root, "hung-cli-packs");
+    mkdirSync(packs, { recursive: true });
+    const packed = spawnSync("npm", ["pack", "--pack-destination", packs], { cwd: pkg, encoding: "utf8", shell: process.platform === "win32" });
+    expect(packed.status, packed.stderr).toBe(0);
+    const tarball = join(packs, readdirSync(packs)[0]!);
+    let caught: (Error & { step?: string; steps?: { name: string; exitCode: number | null; output: string }[] }) | undefined;
+    const started = Date.now();
+    try {
+      build({ units: "none", setup: true, cliTarball: tarball, timeouts: { command: 3000 } });
+    } catch (error) {
+      caught = error as typeof caught;
+    }
+    expect(Date.now() - started).toBeLessThan(30_000);
+    expect(caught?.step).toBe("stamity init");
+    const last = caught?.steps?.at(-1);
+    expect(last?.exitCode).toBeNull();
+    expect(last?.output).toMatch(/timed out after 3000 ms: killed by SIGTERM after \d+ ms/);
+  }, 60_000);
+
+  it("records a hung gate as timed out without throwing", () => {
+    const gated = writeV1(
+      "v1-gate-hung",
+      {
+        "package.json": `${JSON.stringify({ name: "gate-hung", private: true, scripts: { lint: "node ok.mjs", typecheck: "node ok.mjs", test: "node hang.mjs" } })}\n`,
+        "ok.mjs": "process.exitCode = 0;\n",
+        "hang.mjs": "setInterval(() => {}, 1000);\n",
+      },
+      [],
+      TEMPLATE,
+    );
+    const built = build({ v1Dir: gated, units: "none", runGates: true, timeouts: { command: 3000 } });
+    expect(built.gates?.["lint"]?.exitCode).toBe(0);
+    expect(built.gates?.["test"]?.exitCode).toBeNull();
+    expect(built.gates?.["test"]?.output).toMatch(/timed out after 3000 ms: killed by SIGTERM after \d+ ms/);
+  }, 60_000);
+
   it("copies --deps with its links verbatim and links --deps-link, keeping both out of git", () => {
     const deps = join(root, "deps");
     writeTree(deps, { "pkg/index.js": "export default 1;\n" });
@@ -362,6 +499,14 @@ describe("createReplayFixture — dependencies and gates", () => {
     expect(readFileSync(join(linked.dir, "node_modules", "pkg", "index.js"), "utf8")).toBe("export default 1;\n");
     expect(git(linked.dir, ["status", "--porcelain"])).toBe("");
     expect(() => build({ deps, depsLink: deps })).toThrow(/exclusive/);
+  });
+
+  it("refuses --deps-link on a setup build, before building anything", () => {
+    const deps = join(root, "deps");
+    writeTree(deps, { "pkg/index.js": "export default 1;\n" });
+    const before = readdirSync(root).filter((name) => name.startsWith("stamity-replay-")).length;
+    expect(() => build({ units: "none", depsLink: deps, setup: true, cliTarball: join(root, "no-such.tgz") })).toThrow(/--deps-link.*setup/s);
+    expect(readdirSync(root).filter((name) => name.startsWith("stamity-replay-"))).toHaveLength(before);
   });
 
   it.skipIf(process.platform === "win32")("keeps a relative link inside --deps pointing where it pointed", () => {
@@ -456,6 +601,17 @@ describe("renderPlan", () => {
   it("refuses a unit the template does not carry, and a template without a stamp", () => {
     expect(() => renderPlan(TEMPLATE, { stamp: "abc", units: ["u2-p1"] })).toThrow(/no unit section for u2-p1/);
     expect(() => renderPlan(TEMPLATE.replace("{{STAMP}}", "x"), { stamp: "abc", units: [] })).toThrow(/STAMP/);
+  });
+
+  it("rewrites a kept unit's depends_on past the dropped units, so no reference dangles", () => {
+    const three = TEMPLATE.replace("## Risks", `${unitSection("u2-p1", "u1-p2")}## Risks`);
+    // The full selection renders the template's bytes, depends_on rows included.
+    expect(renderPlan(three, { stamp: "abc", units: ["u1-p1", "u1-p2", "u2-p1"] })).toBe(three.replace("{{STAMP}}", "abc 2026-09-24"));
+    const skipOne = renderPlan(three, { stamp: "abc", units: ["u1-p1", "u2-p1"] });
+    expect(skipOne).toContain("| `depends_on` | u1-p1 |");
+    expect(skipOne).not.toContain("u1-p2");
+    const alone = renderPlan(three, { stamp: "abc", units: ["u2-p1"] });
+    expect(alone.split("\n").filter((line: string) => line.includes("`depends_on`"))).toEqual(["| `depends_on` | none |"]);
   });
 
   it("names the six passes in chain order", () => {

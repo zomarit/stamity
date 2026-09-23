@@ -40,7 +40,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isOutsideRoot } from '../qa/run.mjs'
 
@@ -65,6 +65,16 @@ export const FIXED_GIT_ENV = {
   GIT_AUTHOR_DATE: `${FIXTURE_DATE}T00:00:00Z`,
   GIT_COMMITTER_DATE: `${FIXTURE_DATE}T00:00:00Z`,
 }
+
+/**
+ * How long one child may run before it is killed. Git calls against a fixture finish in well under
+ * a second, so a minute means something is stuck (a credential prompt, a lock); an install, a
+ * `stamity` verb or a fixture gate can take minutes, and fifteen of them means it never ends (a
+ * verb waiting on a TTY, a test runner left in watch mode). `createReplayFixture` takes
+ * `timeouts: { git, command }` in milliseconds to change either.
+ */
+const GIT_TIMEOUT_MS = 60_000
+const COMMAND_TIMEOUT_MS = 15 * 60_000
 
 /** Where the rendered plan lands in the fixture. The start message of REPLAY-v1 §6 names it. */
 const PLAN_PATH = 'docs/plans/001-replay.md'
@@ -98,6 +108,8 @@ const REDIRECTING_GIT_ENV = new Set([
   'GIT_CONFIG',
   'GIT_CONFIG_PARAMETERS',
   'GIT_CONFIG_COUNT',
+  'GIT_TEMPLATE_DIR',
+  'GIT_ATTR_SOURCE',
 ])
 
 /** The environment every child of this script runs under. */
@@ -119,6 +131,10 @@ function childEnv(extra = {}) {
  * - `core.autocrlf=false` — line-ending conversion changes blob bytes.
  * - `core.excludesFile` at a path that does not exist — a global ignore file could hide
  *   `vendor/` or `*.patch` from `git add -A`, and S0 would silently lack the pass patches.
+ * - `core.attributesFile` at a path that does not exist — a global attributes file could assign a
+ *   `filter=` driver (or an `eol`) that rewrites blob bytes on `git add`.
+ * The template directory is the fourth route in (`init.templateDir`: an `info/exclude` hiding
+ * `vendor/`, or hooks); `git init --template=` copies none, and it outranks the config key.
  */
 function gitConfigArgs(dir) {
   return [
@@ -132,28 +148,43 @@ function gitConfigArgs(dir) {
     'core.autocrlf=false',
     '-c',
     `core.excludesFile=${join(dir, '.git', 'replay-no-excludes')}`,
+    '-c',
+    `core.attributesFile=${join(dir, '.git', 'replay-no-attributes')}`,
   ]
 }
 
-/** Run one command, capturing both streams. Never throws: the caller decides what a failure means. */
-function exec(cwd, file, args, { env, shell = false } = {}) {
+/**
+ * Run one command, capturing both streams, killed after `timeoutMs`. Never throws: the caller
+ * decides what a failure means. A child ended by a signal (the timeout's SIGTERM, or any other)
+ * reports a null exit code, and its output gains a line naming the signal and the elapsed time, so
+ * a recorded step says why it stopped.
+ */
+function exec(cwd, file, args, { env, shell = false, timeoutMs = COMMAND_TIMEOUT_MS } = {}) {
+  const started = Date.now()
   const result = spawnSync(file, args, {
     cwd,
     encoding: 'utf8',
     env: env ?? childEnv(),
     maxBuffer: 256 * 1024 * 1024,
     shell,
+    timeout: timeoutMs,
   })
-  const spawnError = result.error ? `\n${result.error.message}` : ''
+  const elapsed = Date.now() - started
+  const timedOut = result.error?.code === 'ETIMEDOUT'
+  const spawnError = result.error && !timedOut ? `\n${result.error.message}` : ''
+  const killed = result.signal
+    ? `\n[replay] ${file} ${timedOut ? `timed out after ${timeoutMs} ms: ` : ''}killed by ${result.signal} after ${elapsed} ms`
+    : ''
   return {
     exitCode: result.status,
-    output: `${result.stdout ?? ''}${result.stderr ?? ''}${spawnError}`,
+    stdout: result.stdout ?? '',
+    output: `${result.stdout ?? ''}${result.stderr ?? ''}${spawnError}${killed}`,
   }
 }
 
 /** Run git in a fixture with the overrides. Throws with git's own output when git refuses. */
-function git(dir, args, { env } = {}) {
-  const { exitCode, output } = exec(dir, 'git', [...gitConfigArgs(dir), ...args], { env })
+function git(dir, args, { env, timeoutMs = GIT_TIMEOUT_MS } = {}) {
+  const { exitCode, output } = exec(dir, 'git', [...gitConfigArgs(dir), ...args], { env, timeoutMs })
   if (exitCode !== 0) {
     throw new Error(`git ${args.join(' ')} exited ${exitCode} in ${dir}:\n${output.trim()}`)
   }
@@ -195,7 +226,10 @@ export function applyPatch(dir, patchPath, { threeWay = false } = {}) {
  *
  * `stamp` is S0's commit id; the rendered `stamp:` value is `<S0> 2026-09-24`, the `/st-plan` head
  * shape (`<head-commit-sha> <UTC date>`). A unit section is a `### <id> …` heading under
- * `## Units` and everything up to the next `###` or `##` heading. A requested unit the template
+ * `## Units` and everything up to the next `###` or `##` heading. A kept unit whose
+ * `depends_on` row names a dropped unit gets that unit replaced by the dropped unit's own
+ * dependencies, transitively, and `none` when nothing is left — so a subset keeps the chain's
+ * order and names no unit the plan lacks; a row naming no dropped unit keeps its bytes. A requested unit the template
  * does not carry, a template with no `{{STAMP}}` or no `## Units` section, all refuse: each would
  * render a plan the run then executes as if it were the one the protocol describes.
  */
@@ -205,23 +239,57 @@ export function renderPlan(template, { stamp, units }) {
   const unitsStart = lines.findIndex((line) => /^## Units\s*$/.test(line))
   if (unitsStart === -1) throw new Error('the plan template has no "## Units" section')
   const found = new Set()
-  const kept = []
-  let keep = true
+  const dependsOn = new Map()
+  const sections = []
+  let current = null
   let inUnits = false
   for (const [index, line] of lines.entries()) {
     if (index === unitsStart) inUnits = true
     else if (line.startsWith('## ')) inUnits = false
-    if (/^#{1,3} /.test(line)) keep = true
+    if (/^#{1,3} /.test(line)) current = null
     const unit = inUnits ? /^### `?([a-z0-9][a-z0-9-]*)`?(?:\s|$)/.exec(line) : null
     if (unit) {
-      found.add(unit[1])
-      keep = units.includes(unit[1])
+      current = unit[1]
+      found.add(current)
     }
-    if (keep) kept.push(line)
+    const row = current === null ? null : DEPENDS_ON_ROW.exec(line)
+    if (row) dependsOn.set(current, parseDependsOn(row[2]))
+    sections.push({ line, unit: current, row })
   }
   const missing = units.filter((id) => !found.has(id))
   if (missing.length > 0) throw new Error(`the plan template has no unit section for ${missing.join(', ')}`)
+  const dropped = (id) => found.has(id) && !units.includes(id)
+  const expand = (ids, seen) =>
+    ids.flatMap((id) => {
+      if (!dropped(id)) return [id]
+      if (seen.has(id)) return []
+      seen.add(id)
+      return expand(dependsOn.get(id) ?? [], seen)
+    })
+  const kept = []
+  for (const { line, unit, row } of sections) {
+    if (unit !== null && !units.includes(unit)) continue
+    const deps = row ? dependsOn.get(unit) : []
+    if (!row || !deps.some(dropped)) {
+      kept.push(line)
+      continue
+    }
+    const rewritten = [...new Set(expand(deps, new Set()))]
+    kept.push(`${row[1]}${rewritten.length === 0 ? 'none' : rewritten.join(', ')}${row[3]}`)
+  }
   return kept.join('\n')
+}
+
+/** A unit's `depends_on` table row: the prefix up to the value, the value, and the closing cell. */
+const DEPENDS_ON_ROW = /^(\|\s*`depends_on`\s*\|\s*)(.*?)(\s*\|\s*)$/
+
+/** The unit ids a `depends_on` value names; `none` is the empty list. */
+function parseDependsOn(value) {
+  if (value.trim() === 'none') return []
+  return value
+    .split(',')
+    .map((id) => id.trim().replace(/^`|`$/g, ''))
+    .filter((id) => id !== '')
 }
 
 /** `--units` as the ordered selection it names. `none` is the empty selection; order follows the chain. */
@@ -267,22 +335,29 @@ function preimageIds(patchText) {
  * preimage set of the next pass. Then each recorded preimage id is checked to resolve: a patch cut
  * from bytes other than the chain's would otherwise apply by context today and fail its
  * three-way fallback mid-run.
+ *
+ * Loose objects nothing reaches are what `git gc --prune=now` deletes, so the chain state before
+ * each pass is written as a tree and pinned under `refs/replay/preimages/<pass>`. A ref naming a
+ * tree keeps every blob in it through any gc, and a history walk (`git log --all`) does not show
+ * it — the agent sees no extra commits.
  */
-function storeChainPreimages(dir, basePatch, chain) {
+function storeChainPreimages(dir, basePatch, chain, timeoutMs) {
   const scratchIndex = join(dir, '.git', 'replay-chain.index')
   rmSync(scratchIndex, { force: true })
   const env = childEnv({ GIT_INDEX_FILE: scratchIndex })
   try {
-    git(dir, ['apply', '--cached', '--whitespace=nowarn', basePatch], { env })
+    git(dir, ['apply', '--cached', '--whitespace=nowarn', basePatch], { env, timeoutMs })
     for (const pass of chain) {
+      const tree = git(dir, ['write-tree'], { env, timeoutMs }).trim()
+      git(dir, ['update-ref', `refs/replay/preimages/${pass.id}`, tree], { env, timeoutMs })
       const ids = preimageIds(readFileSync(pass.path, 'utf8'))
       for (const id of ids) {
-        const found = exec(dir, 'git', [...gitConfigArgs(dir), 'cat-file', '-e', `${id}^{blob}`], { env })
+        const found = exec(dir, 'git', [...gitConfigArgs(dir), 'cat-file', '-e', `${id}^{blob}`], { env, timeoutMs })
         if (found.exitCode !== 0) {
           throw new Error(`${pass.id}.patch records preimage blob ${id}, which is not the chain's content before ${pass.id}; regenerate the patch from the pure seeded chain`)
         }
       }
-      git(dir, ['apply', '--cached', '--whitespace=nowarn', pass.path], { env })
+      git(dir, ['apply', '--cached', '--whitespace=nowarn', pass.path], { env, timeoutMs })
     }
   } finally {
     rmSync(scratchIndex, { force: true })
@@ -291,6 +366,44 @@ function storeChainPreimages(dir, basePatch, chain) {
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex')
+}
+
+/** The absolute, real git common dir of the repository holding `dir`, or null outside any. */
+function gitCommonDir(dir) {
+  const { exitCode, stdout } = exec(dir, 'git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { timeoutMs: GIT_TIMEOUT_MS })
+  const found = stdout.trim()
+  return exitCode === 0 && found !== '' && existsSync(found) ? realpathSync(found) : null
+}
+
+/** `path` itself when it exists, else its nearest existing ancestor. */
+function nearestExisting(path) {
+  let current = resolve(path)
+  while (!existsSync(current) && dirname(current) !== current) current = dirname(current)
+  return current
+}
+
+/**
+ * Throw when `out` lies inside `repoRoot` or inside any other worktree of the same repository.
+ *
+ * The leak gate walks a worktree's untracked files, and a lane runs it from its own worktree while
+ * the main checkout (or a sibling lane) is a different directory tree. So the path check against
+ * `repoRoot` is not enough: the repository is every worktree sharing its git common dir, and an
+ * `out` is refused when its nearest existing directory resolves to that same common dir.
+ */
+export function refuseOutInsideRepository(out, repoRoot = REPO_ROOT) {
+  const refuse = () => {
+    throw new Error(
+      `--out ${out} is inside this repository (or one of its worktrees). The leak gate walks untracked files ` +
+        '(scripts/leak-gate.mjs), so a fixture tree there would be scanned by every later gate run; ' +
+        'point --out under the OS temp directory, or omit it.',
+    )
+  }
+  if (!isOutsideRoot(repoRoot, resolve(out))) refuse()
+  const existing = nearestExisting(out)
+  // A symlink can put a temp-looking path inside the repository; the real paths decide.
+  if (existsSync(repoRoot) && !isOutsideRoot(realpathSync(repoRoot), realpathSync(existing))) refuse()
+  const own = gitCommonDir(repoRoot)
+  if (own !== null && gitCommonDir(existing) === own) refuse()
 }
 
 /**
@@ -304,8 +417,11 @@ function sha256(bytes) {
  * `runGates`, the fixture's own lint, typecheck and test.
  *
  * Every command lands in `steps` with its exit code and output. A failed step throws naming it,
- * with `error.steps` carrying everything recorded up to and including the failure. A gate that
- * fails is a measurement, not a failure: it lands in `gates` and the build still returns.
+ * with `error.steps` carrying everything recorded up to and including the failure. Any error after
+ * the fixture directory exists carries `error.dir` and names it in the message, so the partial
+ * tree can be inspected or removed. A gate that fails (or times out) is a measurement, not a
+ * failure: it lands in `gates` and the build still returns. Every child is killed after
+ * `timeouts.git` (git) or `timeouts.command` (npm, the CLI, the gates) milliseconds.
  */
 export function createReplayFixture({
   out,
@@ -317,19 +433,18 @@ export function createReplayFixture({
   install = true,
   runGates = false,
   v1Dir,
+  timeouts = {},
 } = {}) {
+  const gitTimeoutMs = timeouts.git ?? GIT_TIMEOUT_MS
+  const commandTimeoutMs = timeouts.command ?? COMMAND_TIMEOUT_MS
   const parent = resolve(out ?? tmpdir())
-  const refuseInside = (candidate, root) => {
-    if (!isOutsideRoot(root, candidate)) {
-      throw new Error(
-        `--out ${parent} is inside this repository. The leak gate walks untracked files ` +
-          '(scripts/leak-gate.mjs), so a fixture tree there would be scanned by every later gate run; ' +
-          'point --out under the OS temp directory, or omit it.',
-      )
-    }
-  }
-  refuseInside(parent, REPO_ROOT)
+  refuseOutInsideRepository(parent)
   if (deps !== undefined && depsLink !== undefined) throw new Error('--deps and --deps-link are exclusive; pass one')
+  if (depsLink !== undefined && setup) {
+    // A linked node_modules resolves into the linked checkout, so `node_modules/../evals/replay/v1`
+    // would put the answer key one `..` away from the agents a setup build is made for.
+    throw new Error('--deps-link is for tests only and is refused on a setup build: the agents under measurement could follow the link back into its checkout; use --deps or npm install, or pass --no-setup')
+  }
   if (setup && cliTarball === undefined) throw new Error('the setup step needs --cli-tarball <tgz>, or pass --no-setup')
   const selected = normalizeUnits(units)
   const source = resolve(v1Dir ?? join(REPO_ROOT, 'evals', 'replay', 'v1'))
@@ -343,14 +458,26 @@ export function createReplayFixture({
   if (absent.length > 0) throw new Error(`no pass patch for ${absent.join(', ')} in ${join(source, 'patches')}`)
 
   mkdirSync(parent, { recursive: true })
-  // A symlink can put a temp-looking path inside the repository; the real paths decide.
-  refuseInside(realpathSync(parent), realpathSync(REPO_ROOT))
+  refuseOutInsideRepository(realpathSync(parent))
   const dir = realpathSync(mkdtempSync(join(parent, 'stamity-replay-')))
+  try {
+    return buildFixture({ dir, source, basePatch, templatePath, chain, selected, deps, depsLink, install, setup, cliTarball, runGates, gitTimeoutMs, commandTimeoutMs })
+  } catch (error) {
+    if (error instanceof Error && error.dir === undefined) {
+      error.dir = dir
+      error.message = `${error.message}\nThe partial fixture is at ${dir}.`
+    }
+    throw error
+  }
+}
+
+/** Steps (1) to (6) of `createReplayFixture`, inside the fixture directory it has made. */
+function buildFixture({ dir, source, basePatch, templatePath, chain, selected, deps, depsLink, install, setup, cliTarball, runGates, gitTimeoutMs, commandTimeoutMs }) {
 
   const steps = []
   const step = (name, file, args, options = {}) => {
     const shown = options.shown ?? [file, ...args]
-    const { exitCode, output } = exec(dir, file, args, options)
+    const { exitCode, output } = exec(dir, file, args, { timeoutMs: commandTimeoutMs, ...options })
     steps.push({ name, command: shown.join(' '), exitCode, output })
     if (exitCode !== 0) {
       const error = new Error(`replay fixture step "${name}" exited ${exitCode}:\n${output.trim()}`)
@@ -360,7 +487,8 @@ export function createReplayFixture({
     }
     return output
   }
-  const gitStep = (name, args) => step(name, 'git', [...gitConfigArgs(dir), ...args], { shown: ['git', ...args] })
+  const gitStep = (name, args) =>
+    step(name, 'git', [...gitConfigArgs(dir), ...args], { shown: ['git', ...args], timeoutMs: gitTimeoutMs })
   const commit = (name, message) => {
     gitStep('git add', ['add', '-A'])
     gitStep(name, ['commit', '--quiet', '-m', message])
@@ -368,13 +496,15 @@ export function createReplayFixture({
   }
 
   // (1) and (2): the service at S0, with the pass patches and their preimages beside it.
-  gitStep('git init', ['init', '--quiet'])
+  gitStep('git init', ['init', '--quiet', '--template='])
   gitStep('apply base.patch', ['apply', '--whitespace=nowarn', basePatch])
   mkdirSync(join(dir, CONTRIB_DIR), { recursive: true })
   for (const id of selected) copyFileSync(join(source, 'patches', `${id}.patch`), join(dir, CONTRIB_DIR, `${id}.patch`))
-  storeChainPreimages(dir, basePatch, chain)
+  storeChainPreimages(dir, basePatch, chain, gitTimeoutMs)
   gitStep('git add', ['add', '-A'])
-  const leaked = gitStep('git ls-files', ['ls-files', '--cached'])
+  // Tracked, untracked and ignored alike: with no exclude option, `--others` lists every file in
+  // the working tree, so a patch that ignores its own answer-key file does not hide it here.
+  const leaked = gitStep('git ls-files', ['ls-files', '--cached', '--others'])
     .split('\n')
     .filter((path) => ANSWER_KEY.test(path))
   if (leaked.length > 0) {
@@ -435,7 +565,7 @@ export function createReplayFixture({
       ['typecheck', ['run', 'typecheck']],
       ['test', ['test']],
     ]) {
-      const { exitCode, output } = exec(dir, 'npm', gateArgs, npmArgs(gateArgs))
+      const { exitCode, output } = exec(dir, 'npm', gateArgs, { ...npmArgs(gateArgs), timeoutMs: commandTimeoutMs })
       steps.push({ name: `gate ${key}`, command: ['npm', ...gateArgs].join(' '), exitCode, output })
       gates[key] = { exitCode, output }
     }
