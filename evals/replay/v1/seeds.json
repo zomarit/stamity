@@ -28,10 +28,11 @@
       ],
       "terms": [
         "inject",
-        "concatenat",
         "interpolat",
-        "parameteri",
-        "allowlist"
+        "concatenat",
+        "allowlist",
+        "whitelist",
+        "validat"
       ],
       "oracle": {
         "kind": "vitest",
@@ -61,7 +62,8 @@
         "off by one",
         "1-based",
         "first page",
-        "skips"
+        "second page",
+        "page - 1"
       ],
       "oracle": {
         "kind": "vitest",
@@ -88,10 +90,11 @@
       ],
       "terms": [
         "inclusive",
-        "exclusive",
-        "boundary",
+        "exclu",
+        "bound",
         "last instant",
-        "<="
+        "<=",
+        "off-by-one"
       ],
       "oracle": {
         "kind": "vitest",
@@ -121,7 +124,8 @@
         "loosen",
         "toBeDefined",
         "vacuous",
-        "matcher"
+        "always pass",
+        "never fail"
       ],
       "oracle": {
         "kind": "static",
@@ -155,9 +159,10 @@
       "terms": [
         "auth",
         "guard",
-        "requireauth",
-        "unauthenticated",
-        "401"
+        "401",
+        "protect",
+        "access control",
+        "anyone"
       ],
       "oracle": {
         "kind": "vitest",
@@ -186,6 +191,7 @@
         "orderid",
         "payload",
         "consumer",
+        "subscriber",
         "audit",
         "rename"
       ],
@@ -216,6 +222,7 @@
         "default",
         "20",
         "docs/api",
+        "document",
         "contract",
         "config"
       ],
@@ -244,8 +251,10 @@
       ],
       "terms": [
         "skip",
-        "skipped",
-        "disabled",
+        "disabl",
+        "silenc",
+        "no longer run",
+        "never run",
         "weaken"
       ],
       "oracle": {
@@ -280,8 +289,9 @@
       "terms": [
         "traversal",
         "../",
-        "normaliz",
-        "contain",
+        "outside",
+        "arbitrary",
+        "sanitiz",
         "escape"
       ],
       "oracle": {
@@ -312,6 +322,7 @@
         "silent",
         "catch",
         "empty",
+        "mask",
         "500"
       ],
       "oracle": {
@@ -339,6 +350,7 @@
       ],
       "terms": [
         "total_cents",
+        "totalcents",
         "wire",
         "rename",
         "breaking",
@@ -370,6 +382,7 @@
       "terms": [
         "delet",
         "remov",
+        "drop",
         "total_cents",
         "expectation",
         "weaken"

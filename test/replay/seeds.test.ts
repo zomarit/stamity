@@ -438,6 +438,118 @@ describe("the seeded passes", () => {
   });
 });
 
+/** REPLAY-v1 §9 clause 3: an accepted term matches as a case-insensitive substring of the finding's text. */
+function matches(item: Item, finding: string): boolean {
+  return item.terms.some((term) => finding.toLowerCase().includes(term.toLowerCase()));
+}
+
+describe("the accepted terms", () => {
+  const doc = readSeeds();
+  const items = [...doc.seeds, ...doc.decoys];
+  const byId = new Map(items.map((item) => [item.id, item]));
+
+  it("spend no slot on a term another term of the same item already covers", () => {
+    for (const item of items) {
+      const lowered = item.terms.map((term) => term.toLowerCase());
+      for (const [index, term] of lowered.entries()) {
+        const covering = lowered.filter((other, at) => at !== index && term.includes(other));
+        expect(covering, `${item.id}: ${term}`).toEqual([]);
+      }
+    }
+  });
+
+  // A finding a competent reviewer writes for the defect, in words other than the planted shape's own.
+  const phrasings: Record<string, string[]> = {
+    "sec-sql-sort": [
+      "The sort query parameter goes straight into ORDER BY; check it against a whitelist of columns.",
+      "`sort` is never validated before it reaches the query.",
+      "User-controlled sort is interpolated into the SQL string.",
+      "SQL injection through ?sort=.",
+    ],
+    "cor-page-offset": [
+      "pageOffset should be (page - 1) * size.",
+      "page=1 returns the second page of results.",
+      "Off-by-one: pages are documented 1-based but the offset treats them as 0-based.",
+    ],
+    "cor-date-boundary": [
+      "isWithin excludes the until instant although the doc comment says both ends are inclusive.",
+      "The upper bound is compared with < instead of <=.",
+    ],
+    "tw-assert-loosen": [
+      "The window assertion now uses toBeDefined, which passes for false as well.",
+      "This expectation always passes, so it no longer checks the upper edge.",
+    ],
+    "sec-missing-guard": [
+      "POST /orders/:id/cancel is registered without requireAuth, so anyone can cancel any order.",
+      "The cancel route is unprotected.",
+      "Missing access control on the cancel route.",
+    ],
+    "con-event-key": [
+      "The event now sends `id` where subscribers read `orderId`.",
+      "Renaming the payload key breaks the audit consumer.",
+    ],
+    "con-config-default": [
+      "pageSizeDefault changed to 50 while docs/api.md still says 20.",
+      "The documented page size no longer holds.",
+    ],
+    "tw-test-skip": [
+      "The page-size test is skipped.",
+      "it.skip silences the only test that pins the page size, so it never runs.",
+      "The default page size test was disabled.",
+    ],
+    "sec-path-traversal": [
+      "`file` can contain ../ and read files outside the invoice directory.",
+      "Arbitrary file read through the file query parameter.",
+      "The file name is joined without being sanitized.",
+    ],
+    "cor-swallowed-error": [
+      "The catch swallows database errors and answers 200 with an empty list.",
+      "A failing query is masked as no orders instead of a 500.",
+    ],
+    "con-wire-key": [
+      "toWire renames total_cents to totalCents, a breaking change for API clients.",
+      "The wire key changed to totalCents.",
+    ],
+    "tw-expectation-deleted": [
+      "The total_cents expectation was deleted from the list test.",
+      "The patch drops the assertion on the order total.",
+      "The totals check was removed.",
+    ],
+    "dec-internal-rename": ["Renaming fmt is a breaking change for consumers of the export."],
+    "dec-test-reason": ["The 404 test's expected body was loosened."],
+    "dec-allowlist-order": ["The export column is interpolated into the SQL."],
+  };
+
+  it("accept each item's common reviewer phrasings, the ledger's named ones among them", () => {
+    expect(Object.keys(phrasings).toSorted()).toEqual(items.map((item) => item.id).toSorted());
+    for (const [id, texts] of Object.entries(phrasings)) {
+      const item = byId.get(id) as Item;
+      for (const text of texts) expect(matches(item, text), `${id}: ${text}`).toBe(true);
+    }
+  });
+
+  // A finding about something else that a reviewer could place at the same lines: no item in that file may accept it.
+  const unrelated: [string, string][] = [
+    ["src/store/query.ts", "listOrders has no stable tiebreaker, so rows with equal created_at can repeat across pages."],
+    ["src/store/paging.ts", "pageOffset can exceed Number.MAX_SAFE_INTEGER for very large sizes."],
+    ["src/reports/window.ts", "Comparing timestamps as strings breaks once a stored value carries milliseconds."],
+    ["src/http/routes.ts", "routes() builds a new Router on every call; build it once."],
+    ["src/events/emitter.ts", "The at timestamp is not checked to be ISO 8601 before serializing."],
+    ["src/orders/invoice.ts", "readInvoice rethrows EACCES, which surfaces as an unhandled rejection."],
+    ["src/orders/handlers.ts", "size is read with parsePositive but never capped at maxPageSize."],
+    ["test/window.test.ts", "The FROM and UNTIL fixtures are duplicated across two tests."],
+    ["test/handlers.test.ts", "The list test seeds its orders through a helper that hides the timestamps."],
+  ];
+
+  it("reject an unrelated finding placed in the item's own file", () => {
+    for (const [file, text] of unrelated) {
+      const inFile = items.filter((item) => item.file === file);
+      expect(inFile.length, file).toBeGreaterThan(0);
+      expect(inFile.filter((item) => matches(item, text)).map((item) => item.id), `${file}: ${text}`).toEqual([]);
+    }
+  });
+});
+
 describe("the replay plan template", () => {
   it("renders six unit sections in chain order, each naming its patch, chained by depends_on", () => {
     const stamp = "0123456789abcdef0123456789abcdef01234567";
