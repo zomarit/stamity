@@ -352,12 +352,14 @@ describe("ledgerWrite — both shapes", () => {
   // build/67: a read or search that names the ledger and "phase" is not a write; a redirect into
   // the ledger is, whatever the head verb; a script body typing a phase row beside it still is.
   it("counts the heredoc-free rule as a write only for a redirect or a non-read script", () => {
-    for (const read of [
-      `grep '"phase"' .stamity/runs/r/ledger.jsonl`,
-      `cat .stamity/runs/r/ledger.jsonl | grep '"phase":"build"'`,
-      `grep -c '"phase"' .stamity/runs/r/ledger.jsonl && ls .stamity/runs/r`,
-      `jq -c 'select(.phase)' .stamity/runs/r/ledger.jsonl && git status`,
-    ]) {
+    // One case per member of the read/search set, each pinned to its class so the member is reached.
+    for (const [read, cls] of [
+      [`grep '"phase"' .stamity/runs/r/ledger.jsonl`, "search"],
+      [`cat .stamity/runs/r/ledger.jsonl | grep '"phase":"build"'`, "read"],
+      [`cat .stamity/runs/r/ledger.jsonl && grep '"phase"' .stamity/runs/r/ledger.jsonl`, "rs"],
+      [`jq -c 'select(."phase")' .stamity/runs/r/ledger.jsonl && git status`, "mixed"],
+    ] as const) {
+      expect(bashClass(read).cls, read).toBe(cls);
       expect(ledgerWrite(bash(read)), read).toBeNull();
     }
     const echo = `echo '{"id":"r/build/5","phase":"build"}' >> .stamity/runs/r/ledger.jsonl`;
