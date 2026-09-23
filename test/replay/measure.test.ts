@@ -898,6 +898,27 @@ describe("measureRun — review round 2 fixes", () => {
   });
 });
 
+describe("measureRun — review round 3 fixes", () => {
+  it("(build/206) a file-less finding is not covered by a row that has a file, even when that row holds its text", async () => {
+    const review = "status: DONE\nverdict: request-changes\nfindings:\nW-3 npm run lint — the lint gate fails on the new file";
+    const lens: AgentSpec = { id: "tu_nor", agentId: "anor", type: "stamity-reviewer", description: "Review u1-p1", prompt: "Review unit u1-p1.", result: review, tokens: 10 };
+    const filed = ledgerRows(THREE);
+    const withFile = { ...filed[0]!, id: `${RUN}/build/9`, severity: "Warning", evidence: "src/http/app.ts:30 — the lint gate fails on the new file" };
+    const m = await measure(passCapture({ shape: "baseline", extra: dispatch(lens), extraSubagents: [subagentOf(lens)], preLedger: [...filed, withFile] }).layout.runDir);
+    expect(m.compactionSamples[0]).toEqual(expect.objectContaining({ atRisk: 1 }));
+  });
+
+  it("(build/207) counts the dispatch prompt of an agent built from its sub-agent file in term (b), and names it", async () => {
+    const tail = [mainLine.taskNotification({ taskId: "alost", toolUseId: "tu_lost", result: "**Verdict:** request-changes\n\nOne more thing." })];
+    const [a, b] = [
+      await measure(passCapture({ shape: "baseline", tail }).layout.runDir),
+      await measure(passCapture({ shape: "baseline", tail, extraSubagents: [reviewerFile("alost", "tu_lost")] }).layout.runDir),
+    ];
+    expect(b.totals.breakdown["prompts"]! - a.totals.breakdown["prompts"]!).toBe("Review unit u1-p1.".length);
+    expect(notesOf(b)).toMatch(/agent alost built from its sub-agent file \(reviewer, u1-p1\): its dispatch prompt of 18 characters counted in term \(b\)/);
+  });
+});
+
 describe("measure.mjs — the CLI", () => {
   it("writes the measurement for --run-dir, --seeds and --out", () => {
     const { layout } = passCapture({ shape: "baseline" });

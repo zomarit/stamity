@@ -364,14 +364,15 @@ function rangesMeet(a, b, tolerance) {
 
 /**
  * Whether a ledger row covers a finding: its `report` is the finding's report, or the same file within
- * ±tolerance, or — for a finding with no file (a gate command, build/202) — a row whose text holds the
- * finding's text.
+ * ±tolerance, or — for a finding with no file (a gate command, build/202) — a row that has no file
+ * either and whose text holds the finding's text (build/206: a row with a file covers only its own
+ * location, so it never lowers at-risk for a file-less finding).
  */
 function hasRow(f, rows, tolerance) {
   const text = f.file == null ? String(f.text ?? '').trim() : ''
   return rows.some((r) => (f.reportPath && r.reportPath === f.reportPath)
     || (f.file != null && r.file === f.file && r.line != null && rangesMeet(f, r, tolerance))
-    || (text !== '' && String(r.text ?? '').includes(text)))
+    || (text !== '' && r.file == null && String(r.text ?? '').includes(text)))
 }
 
 /** The fixture run folders of one state copy (`compaction-<n>-pre` or `end`): ledger rows and report files. */
@@ -505,16 +506,18 @@ function joinAgents(walk, index, subs, roots) {
   // notification is none, and neither is a TaskOutput re-read of a task already notified.
   // build/184: a delivery joined to no dispatch falls back to the sub-agent file its notification
   // names (the file's agent id is the task id, or its meta records the tool_use id); the agent
-  // built from that file's meta carries no prompt characters, since the main transcript shows none.
+  // built from that file's meta carries the file's first prompt as its dispatch prompt in term (b)
+  // (build/207), since the main transcript shows none, and is named in the notes.
   const fromFile = new Map()
   const fileAgent = (key, line) => {
     const s = key ? subs.find((x) => x.agentId === key || (x.toolUseId && x.toolUseId === key)) : null
     if (!s) return null
     if (byAgentId.has(s.agentId)) return byAgentId.get(s.agentId)
     if (!fromFile.has(s.agentId)) {
+      const prompt = s.firstPrompt ?? ''
       const agent = {
-        toolUseId: s.toolUseId, line, role: roleName(s.agentType), fn: roleFunction(s.agentType), desc: s.description ?? '', prompt: s.firstPrompt ?? '', chars: 0,
-        model: null, name: null, pass: attributePass(s.description, s.firstPrompt), branch: false, round: 1, resume: false, fromFile: true,
+        toolUseId: s.toolUseId, line, role: roleName(s.agentType), fn: roleFunction(s.agentType), desc: s.description ?? '', prompt, chars: prompt.length,
+        model: null, name: null, pass: attributePass(s.description, s.firstPrompt), branch: false, round: 1, resume: RESUME.test(prompt), fromFile: true, agentId: s.agentId,
       }
       fromFile.set(s.agentId, agent)
       agents.push(agent)
@@ -567,6 +570,7 @@ function joinAgents(walk, index, subs, roots) {
     if (d.agent === null) notes.push(`delivery joined to no agent: main transcript line ${d.line}, ${d.tool}, ${d.chars} characters — out of the findings, rounds and compaction samples, kept in term (a) unattributed`)
     else if (d.agent.role === 'reviewer' && d.round && d.verdict === null) notes.push(`reviewer round with no readable verdict: main transcript line ${d.line}, ${d.chars} characters — counted as a round`)
   }
+  for (const a of fromFile.values()) notes.push(`agent ${a.agentId} built from its sub-agent file (${a.role ?? 'unknown'}, ${a.pass ?? 'no pass'}): its dispatch prompt of ${a.chars} characters counted in term (b)${a.resume ? ' as a resume' : ''}, read from the file's first prompt`)
   for (const s of sends) if (s.target === null) notes.push(`SendMessage joined to no agent: main transcript line ${s.line}, ${s.chars} characters — kept in term (b) unattributed`)
 
   // Branch-level verdict dispatches: after u3-p2's last reviewer approval with no single pass id,
