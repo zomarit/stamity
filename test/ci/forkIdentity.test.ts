@@ -38,8 +38,9 @@ import { downstreamCheckout } from "./downstreamFixture.ts";
  *
  * A third group comes first, because it is the cheapest: the CLI and CI suites are read as
  * text and held to deriving the name, the owner and the owner/repository route rather than
- * spelling them. It is the one of the three CI runs, so it is the one that has to catch a
- * new canonical literal; the opt-in witness only confirms what it lets through.
+ * spelling them. Of the three it is the only one that reads the suites on every CI run (no
+ * workflow sets the inherited gate's opt-in), so it is the one that has to catch a new
+ * canonical literal; the opt-in witness only confirms what it lets through.
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -115,17 +116,20 @@ const marketplaceEntry = (root: string): Record<string, unknown> => {
 };
 
 /**
- * The canonical identity's three spellings, each a value a renamed fork derives differently:
+ * The canonical identity's four spellings, each a value a renamed fork derives differently:
  * the package NAME (`name`), the `<owner>/<repository>` ROUTE a marketplace add, an install
- * spec or a github.com URL carries (`repository.url`), and the OWNER or publisher as a whole
- * quoted string (`stamity.publisher`). The route excludes a leading `@` so the name is not
- * counted twice. Written as patterns with an escaped separator, so this file does not match
- * its own table.
+ * spec or a github.com URL carries (`repository.url`), the OWNER or publisher as a whole
+ * quoted string (`stamity.publisher`), and the owner's github.com URL the catalogs emit as
+ * `owner.url`. The route excludes a leading `@` so the name is not counted twice, and the
+ * owner URL excludes a following `/stamity` so a repository URL is counted once, as a route;
+ * any other continuation (a closing quote, a slash, a `${…}` repository) still counts.
+ * Written as patterns with an escaped separator, so this file does not match its own table.
  */
 const CANONICAL_SPELLINGS = {
   name: /@zomarit\/stamity/g,
   route: /(?<!@)zomarit\/stamity/g,
   owner: /(["'`])zomarit\1/g,
+  ownerUrl: /github\.com\/zomarit(?![\w-])(?!\/stamity)/g,
 } as const;
 
 type Spelling = keyof typeof CANONICAL_SPELLINGS;
@@ -135,10 +139,15 @@ type SpellingCounts = Partial<Record<Spelling, number>>;
  * A suite's code with the prose taken out: block comments, line comments (not the `//` of a
  * URL, which is a value) and test titles. All three may name the canonical identity as prose,
  * and none of them is an assertion a fork can fail.
+ *
+ * A block comment is taken only where it opens a line: a `/*` anywhere else in these suites is
+ * a glob inside a string (`"**\/*.md"`, `"@acme/*"`, `"plugins/*.zip"`), and stripping from
+ * there to the next `*\/` hid whole stretches of real code from the count. A future inline
+ * comment the anchor misses is left in as code, which can only make this check louder.
  */
 function codeOf(relPath: string): string {
   return readFileSync(join(REPO_ROOT, relPath), "utf8")
-    .replaceAll(/\/\*[\s\S]*?\*\//g, "")
+    .replaceAll(/^[ \t]*\/\*[\s\S]*?\*\//gm, "")
     .replaceAll(/(?<!:)\/\/[^\n]*/g, "")
     .replaceAll(/\b(?:it|test|describe)(?:\.\w+)*\(\s*(["'])(?:\\.|(?!\1).)*\1/g, "");
 }
@@ -226,7 +235,11 @@ describe("the identity the CLI and CI suites assert against", () => {
     const pinned = Object.fromEntries(
       Object.entries(deliberate).map(([relPath, { why: _why, ...counts }]) => [relPath, counts]),
     );
-    expect(found).toEqual(pinned);
+    expect(
+      found,
+      "a canonical spelling count changed: derive the value from test/support/identity.ts, or " +
+        "pin the literal in `deliberate` above with the reason it is not this checkout's identity",
+    ).toEqual(pinned);
   });
 
   // Canonical-only by construction: it asserts the canonical identity itself. Skipped
