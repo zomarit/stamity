@@ -44,6 +44,15 @@ function git(cwd: string, args: string[]): string {
   });
 }
 
+/**
+ * A real path as it is spelled inside a gitconfig value: git reads a backslash there as an escape,
+ * so a native Windows path (`C:\Users\…`) is a "bad config line". Git on Windows accepts forward
+ * slashes, so every path this suite writes into config text goes through here.
+ */
+function configPath(path: string): string {
+  return path.replaceAll("\\", "/");
+}
+
 function writeTree(dir: string, files: Record<string, string>): void {
   for (const [path, content] of Object.entries(files)) {
     mkdirSync(join(dir, path, ".."), { recursive: true });
@@ -194,6 +203,21 @@ describe("createReplayFixture — S0", () => {
     );
   });
 
+  it("spells a native Windows path in config text with forward slashes, which git parses", () => {
+    // The two hostile-config cases below failed on the Windows leg at `git init` with "bad config
+    // line": a backslash in a gitconfig value is an escape. The shape reproduces on any platform.
+    const windowsPath = "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\no-such-gpg";
+    const spelled = configPath(windowsPath);
+    expect(spelled).toBe("C:/Users/RUNNER~1/AppData/Local/Temp/no-such-gpg");
+    const probe = (value: string): number => {
+      const file = join(root, "probe.gitconfig");
+      writeFileSync(file, ["[gpg]", `\tprogram = ${value}`, ""].join("\n"), "utf8");
+      return spawnSync("git", ["config", "--file", file, "gpg.program"], { encoding: "utf8", env: gitEnv() }).status ?? -1;
+    };
+    expect(probe(windowsPath)).not.toBe(0);
+    expect(probe(spelled)).toBe(0);
+  });
+
   it("holds S0 fixed under a global config that signs, hooks, excludes and fixes whitespace", () => {
     const reference = build({ units: "u1-p1,u1-p2" }).baseCommit;
     const hooks = join(root, "hostile-hooks");
@@ -209,10 +233,10 @@ describe("createReplayFixture — S0", () => {
         "[commit]",
         "\tgpgsign = true",
         "[gpg]",
-        `\tprogram = ${join(root, "no-such-gpg")}`,
+        `\tprogram = ${configPath(join(root, "no-such-gpg"))}`,
         "[core]",
-        `\thooksPath = ${hooks}`,
-        `\texcludesFile = ${excludes}`,
+        `\thooksPath = ${configPath(hooks)}`,
+        `\texcludesFile = ${configPath(excludes)}`,
         "\tautocrlf = true",
         "[apply]",
         "\twhitespace = error",
@@ -220,6 +244,7 @@ describe("createReplayFixture — S0", () => {
       ].join("\n"),
       "utf8",
     );
+    expect(readFileSync(hostile, "utf8")).not.toContain("\\");
     process.env["GIT_CONFIG_GLOBAL"] = hostile;
     try {
       const built = build({ units: "u1-p1,u1-p2" });
@@ -248,15 +273,16 @@ describe("createReplayFixture — S0", () => {
       hostile,
       [
         "[core]",
-        `\tattributesFile = ${attributes}`,
+        `\tattributesFile = ${configPath(attributes)}`,
         '[filter "hostile"]',
         "\tclean = sed s/line/LINE/",
         "[init]",
-        `\ttemplateDir = ${template}`,
+        `\ttemplateDir = ${configPath(template)}`,
         "",
       ].join("\n"),
       "utf8",
     );
+    expect(readFileSync(hostile, "utf8")).not.toContain("\\");
     process.env["GIT_CONFIG_GLOBAL"] = hostile;
     try {
       const built = build({ units: "u1-p1,u1-p2" });
