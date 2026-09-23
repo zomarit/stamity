@@ -107,6 +107,16 @@ export interface AgentPolicyRow {
  * other role's. One pattern per role rather than one for the whole folder, so
  * a verdict role steered by text in the code under review cannot overwrite
  * another role's findings before they reach the ledger.
+ *
+ * The isolation between roles is enforced by the generated guard's round-number
+ * rule, not by the pass slug: in a pattern's final segment the LAST `*` — the
+ * round, just before `.md` — matches ASCII digits only, so `*-reviewer-r*.md`
+ * admits `<pass>-reviewer-r<N>.md` and never a name in which another role's
+ * token follows `-reviewer-r`, even when the pass slug itself holds a role
+ * token. The rule's precondition is that no role token is a suffix of another:
+ * `-reviewer-r`, `-security-r`, `-performance-r` and `-design-quality-r` today.
+ * A future role such as `quality` would collide with `design-quality`, so adding
+ * a role re-checks this precondition.
  */
 export function verdictReportWritePaths(
   role: "reviewer" | "security" | "performance" | "design-quality",
