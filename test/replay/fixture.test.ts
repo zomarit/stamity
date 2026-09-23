@@ -477,7 +477,12 @@ describe("createReplayFixture — dependencies and gates", () => {
     expect(last?.output).toMatch(/timed out after 20000 ms: killed by SIGTERM after \d+ ms/);
   }, 180_000);
 
-  it("records a hung gate as timed out without throwing", () => {
+  // Skipped on win32: npm goes through cmd.exe there (`shell: true`), and the spawnSync timeout
+  // kills only that shell, so npm and the hung `node hang.mjs` live on with their cwd inside the
+  // fixture, and afterAll's rmSync cannot remove the directory. The timeout logic under test does
+  // not depend on the platform, and the POSIX legs cover it. The hung-step case runs its bin through
+  // process.execPath with no shell, so it stays on every platform.
+  it.skipIf(process.platform === "win32")("records a hung gate as timed out without throwing", () => {
     // The hung gate is lint, the first step the command budget binds (no install, no setup): no
     // earlier step can use up the budget on a slow runner. The two gates after it may time out
     // there too, so only that the build returns with all three recorded is asserted of them.
