@@ -109,8 +109,10 @@ export const RUN_OF_RECORD_PATH = "evals/runs/2026-09-22-run-32/RESULTS.md";
  * candidate ships as — the version is decided at the release, after the run.
  * Verify it against the `## 0. Composition` candidate of
  * {@link RUN_OF_RECORD_PATH} and the release that shipped that commit.
+ * Exported so `test/docsPages.test.ts` holds README and the doctrine, which
+ * type the same run and release by hand, to this one.
  */
-const RUN_OF_RECORD_RELEASE = "1.9.0";
+export const RUN_OF_RECORD_RELEASE = "1.9.0";
 
 /**
  * The later release the run of record is carried to, and the candidate it is
@@ -127,9 +129,9 @@ const RUN_OF_RECORD_RELEASE = "1.9.0";
  * {@link RUN_OF_RECORD_PATH}. A release that runs the set moves
  * {@link RUN_OF_RECORD_RELEASE} and deletes the carried clause with these two;
  * {@link carriedToRelease} refuses the page if it moves the release and keeps
- * the clause.
+ * the clause. The carried-to release is exported for the same hand-page case.
  */
-const RUN_OF_RECORD_CARRIED_TO = "1.9.1";
+export const RUN_OF_RECORD_CARRIED_TO = "1.9.1";
 const RUN_OF_RECORD_CANDIDATE = "e5e54c9";
 
 /**
@@ -165,8 +167,10 @@ export function carriedToRelease(runRelease: string, carriedTo: string): string 
       `the run of record is the ${runRelease} release run, so it is not carried to ${carriedTo}. ` +
         "A release that runs the eval set measures its own run: delete the carried clause and " +
         "carriedToRelease from src/cli/docs/measurements.ts with RUN_OF_RECORD_CARRIED_TO and " +
-        'RUN_OF_RECORD_CANDIDATE, and the "the run of record is carried to the release the tree ' +
-        'ships as" describe from test/cli/docs/measurements.test.ts; then regenerate the page.',
+        'RUN_OF_RECORD_CANDIDATE, the "the run of record is carried to the release the tree ' +
+        'ships as" describe from test/cli/docs/measurements.test.ts, and the carried clause of ' +
+        "README.md and docs/doctrine.md with its case in test/docsPages.test.ts; then regenerate " +
+        "the page.",
     );
   }
   return carriedTo;

@@ -552,6 +552,8 @@ describe("the run of record is carried to the release the tree ships as", () => 
     expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/carriedToRelease from src\/cli\/docs\/measurements\.ts/);
     expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/RUN_OF_RECORD_CARRIED_TO and\s+RUN_OF_RECORD_CANDIDATE/);
     expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/test\/cli\/docs\/measurements\.test\.ts/);
+    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/README\.md and docs\/doctrine\.md/);
+    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/test\/docsPages\.test\.ts/);
   });
 });
 
