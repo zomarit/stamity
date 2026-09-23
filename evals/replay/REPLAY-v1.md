@@ -140,9 +140,10 @@ The exact definitions `scripts/replay/measure.mjs` implements, reproduced from t
   SendMessages, excluding resumes (`/^Resume|after the (?:rate limit|stall)/i`, reported separately); plus (c) ledger
   writes (a heredoc, redirect or script body targeting `ledger.jsonl`; a Write, Edit or MultiEdit on `*ledger.jsonl`;
   or a `stamity ledger append|close|status` call) with their tool results; (d) brief files written by the orchestrator
-  (`/\/briefs?\/|brief[-\w]*\.md|\/lanes\//`) with their results; and (e) report reads — a Read, or a read-class Bash
-  call, naming `.stamity/runs/*/reports/` or `/tasks/*.output`, or a Grep or Glob call whose search path or file glob
-  names `.stamity/runs/*/reports/` — with their results, so a saving cannot move into
+  (`/\/briefs?\/|brief[-\w]*\.md|\/lanes\//`) with their results; and (e) report reads — a Read of a report path
+  (`.stamity/runs/*/reports/` or `/tasks/*.output`); a Bash call of class read or search (a file read, or grep, rg,
+  …, alone or beside another verb) whose command or result names a report path; or a Grep or Glob call whose path,
+  pattern, file glob or result names one — with their results, so a saving cannot move into
   on-demand reads. Driver messages are excluded. **Loop characters per pass = the total ÷ 6.** The per-pass split is
   informative only, and is flagged unreliable when more than 20% is unattributed.
 - **Sub-agent tokens per pass** = Σ `processed` over the loop-function agents ÷ 6, where `processed` is the sum, over
@@ -161,10 +162,14 @@ The exact definitions `scripts/replay/measure.mjs` implements, reproduced from t
   findings matching no seed or decoy, deduplicated by block; reported, not thresholded.
 - **Loss.** For each driver compaction event, at-risk = the verdict-role Critical or Warning findings delivered before
   the boundary (transcript order) with no ledger row in the pre-compaction state snapshot (same file and a line within
-  ±3, or `report` equal to the report path). Lost = at-risk, no row at run end, and not a seed whose oracle passes. A
+  ±3, or `report` equal to the report path; a finding with no file is covered by the report-path match or by a row
+  that itself has no file and whose text contains the finding's trimmed text, and a row with a file covers only its
+  own location). Lost = at-risk, no row at run end, and not a seed whose oracle passes. A
   sample is valid iff at-risk ≥ 1. Automatic compactions (`trigger:"auto"`) are counted; projected compactions per
   10 passes = 10 × context tokens per pass ÷ 947,000, reported only.
-- **Verdicts per pass.** Rounds = the reviewer's deliveries. The final class is `approve` (one round, approve),
+- **Verdicts per pass.** Rounds = the reviewer's completed deliveries: each one is a round, including one whose text
+  carries no verdict word (RESULTS names it); a re-read of an earlier delivery and a failed notification (a status
+  other than completed) are not rounds. The final class is `approve` (one round, approve),
   `approve-after-fixes` (more rounds, approve) or `blocked` (the last verdict request-changes, or a `BLOCKED_*`
   return). `approvedWithSeedUnfixed` = approved while some seed of the pass has an oracle status other than `pass`; an
   oracle that errors counts as unfixed.
@@ -178,6 +183,20 @@ and a seed whose file is absent from every copy of an existing snapshot, leave p
 the denominator, counts as found only on a verdict-role match, and RESULTS names the pass. Under loop characters,
 term (e) counts Grep and Glob calls on report paths beside Read and read-class Bash. §9, §10 and §12 are unchanged.
 
+**Amendment, 2026-09-23, before any run.** Five more readings were written down before the first pilot, as
+`scripts/replay/measure.mjs` implements them, so no replay summary carries a hash of the earlier text and no
+threshold, §10 row or C12 row moved. They settle ledger rows build/157, build/169, build/175, build/182, build/185,
+build/190, build/201, build/202 and build/206 of run `2026-09-23_orchestrator-context`. Under Loss, a finding with no
+file is covered by the report-path match or by a ledger row that itself has no file and whose text contains the
+finding's trimmed text, and a row with a file covers only its own location. Under loop characters, term (e) counts
+search-class Bash (grep, rg, …) beside read-class Bash, a Bash call whose result names a report path beside one whose
+command does, and a Grep or Glob whose pattern, file glob or result names one beside one whose path does. Under verdicts per pass, every
+completed reviewer delivery is a round, one with no verdict word included, and a re-read of an earlier delivery or a
+failed notification is none. Under §9, an item's span is located by its `locate.text` line in each reviewed snapshot
+copy, a finding attributed to a pass matches only the spans located in that pass's copies, and locators are made
+relative to the fixture root and to each worktree root in every spelling. §9 is amended by this note; §10 and §12
+are unchanged.
+
 ## §9 Matcher
 
 Deterministic, with no model call. A finding matches a seed or a decoy when all three hold:
@@ -185,6 +204,18 @@ Deterministic, with no model call. A finding matches a seed or a decoy when all 
 1. the file is equal;
 2. the finding's line range intersects the item's span widened by ±3 lines;
 3. at least one of the item's accepted terms occurs in the finding's text (case-insensitive substring).
+
+**The item's span.** An item that carries `locate.text` is located in each reviewed snapshot copy: every line that
+holds the text gives the span `[line + locate.from, line + locate.to]`, the lines a reviewer of that tree cites. The
+seeds document's `span` is the fallback when no searched copy holds the line, and the span of an item with no
+`locate.text`. A finding attributed to a pass matches only the spans located in that pass's copies
+(`snapshots/<pass>/`); only a finding attributed to no single pass (a ledger row with no report, a multi-pass or a
+branch finding) matches against the spans located in the copies of every pass.
+
+**Locators.** Before the file comparison, a finding's locator is made relative to every root it may be spelled
+under: the fixture root (each working directory the transcripts and the init event record), each worktree path the
+run's `run.json` lists, and each absolute path that ends in a snapshot copy's worktree name — each in its given and its
+resolved spelling, with `/var/…` and `/private/var/…` alike.
 
 A location match without a term goes to the adjudication list, never to the score. The sources are verdict-role
 returns and reports, plus ledger rows whose `source` is a verdict role.
