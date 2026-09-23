@@ -85,6 +85,12 @@ export const RECORD_HEAD_READ_BYTES = 65_536;
  * findings cannot be ruled out without reading it.
  */
 export const REPORT_READ_MAX_BYTES = 1_048_576;
+/**
+ * Past this size a git metadata file the card reads (the `.git` pointer, a
+ * worktree's `commondir`, `gitdir` and `HEAD`) is not read: git writes each as
+ * one path or one ref, and a path longer than this is not one any platform opens.
+ */
+export const GIT_METADATA_MAX_BYTES = 4_096;
 /** The card's ceiling, all lines joined by newlines. */
 export const CARD_MAX_CHARS = 2_000;
 /** Items a card list names before it shrinks. */

@@ -660,6 +660,7 @@ export function buildSessionStartScript(opts: SessionStartScriptOptions = {}): s
 import { createHash } from "node:crypto";
 ${namedImport(["readFileSync", "readdirSync", "statSync", ...RESUME_CARD_HOST_NAMES.fs], "node:fs")}
 ${namedImport(["join", "resolve", "sep", ...extra.path, ...RESUME_CARD_HOST_NAMES.path], "node:path")}
+import { isatty } from "node:tty";
 ${extra.url}
 const STATE_SEGMENTS = ${json(segments)};
 const MAX_ITEM_LINES = ${maxLines};
@@ -987,10 +988,13 @@ ${buildResumeCardSource()}
 
 // Which start this is. A person running the script at a terminal sends no
 // payload, so a TTY is never read — reading it would wait for input nobody is
-// going to type. Only a start after a compaction appends the card: a fresh
-// session has no run state to lose, and a client that sends no source (or
-// never sends "compact") gets the banner it always got.
-const SOURCE = process.stdin.isTTY ? "" : field(readPayload(), ["source"]);
+// going to type. The check asks fd 0 directly: touching process.stdin would
+// open it as a non-blocking stream, and the read below would then fail with
+// EAGAIN whenever the client had not finished writing yet. Only a start after
+// a compaction appends the card: a fresh session has no run state to lose, and
+// a client that sends no source (or never sends "compact") gets the banner it
+// always got.
+const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);
 
 // Written once, then the process ends on its own. \`process.exit\` would race
 // the write: stdout is asynchronous when it is a pipe on macOS and the BSDs,

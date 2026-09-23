@@ -1,5 +1,5 @@
-import { spawnSync } from "node:child_process";
-import { rmSync, symlinkSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { chmodSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildPortableHookRunner, PORTABLE_RUNNER_FILE } from "../../src/hooks/portableRunner.ts";
@@ -109,6 +109,8 @@ async function seedDemo(): Promise<string> {
     [runFile(RUN, "reports/u3-reviewer-r1.md")]: reportWith([]),
     ".git/worktrees/lane-a/gitdir": `${join(lanePath, ".git")}\n`,
     ".git/worktrees/lane-a/HEAD": "ref: refs/heads/lane/a\n",
+    // The lane's own .git pointer: a lane whose gitdir names nothing is a dead one.
+    "lanes/lane-a/.git": "gitdir: ../../.git/worktrees/lane-a\n",
   });
   return lanePath.replaceAll("\\", "/");
 }
@@ -193,7 +195,7 @@ describe("the session-start resume card", () => {
 
   it("matches in progress through case and decoration, and reads a CRLF record behind a BOM", async () => {
     const script = await placeScript();
-    const crlf = "﻿" + record({ status: "**In Progress** — opened" }).replaceAll("\n", "\r\n");
+    const crlf = "\uFEFF" + record({ status: "**In Progress** — opened" }).replaceAll("\n", "\r\n");
     await getRepo().seedFiles({ [runFile(RUN, "record.md")]: crlf });
 
     const card = cardOf(start(script, COMPACT).stdout);
@@ -243,6 +245,7 @@ describe("the session-start resume card", () => {
       files[runFile(RUN, `reports/u${String(i).padStart(2, "0")}-reviewer-r1.md`)] = reportWith([FINDING]);
       files[`.git/worktrees/lane-${String(i).padStart(2, "0")}/gitdir`] = `${getRepo().path("lanes", `lane-${i}`, ".git")}\n`;
       files[`.git/worktrees/lane-${String(i).padStart(2, "0")}/HEAD`] = `ref: refs/heads/lane/${i}\n`;
+      files[`lanes/lane-${i}/.git`] = "gitdir: (a lane that exists)\n";
     }
     await getRepo().seedFiles(files);
 
@@ -355,6 +358,134 @@ describe("the session-start resume card", () => {
   });
 });
 
+describe("the resume card's read guards", () => {
+  it.skipIf(WINDOWS)("follows no symbolic link at the runs folder or a run's reports folder", async () => {
+    const script = await placeScript();
+    const repo = getRepo();
+    await repo.seedFiles({
+      [runFile(RUN, "record.md")]: record(),
+      "elsewhere/reports/u9-reviewer-r1.md": reportWith([FINDING]),
+      [`elsewhere/runs/${RUN}/record.md`]: record({ plan: "docs/plans/linked-runs.md" }),
+    });
+    // A linked reports/ lists nothing: its names and bytes live outside the tree.
+    symlinkSync(repo.path("elsewhere", "reports"), repo.path(".stamity", "runs", RUN, "reports"));
+    expect(cardOf(start(script, COMPACT).stdout)[3]).toBe("reports without a ledger row: 0");
+
+    // A linked runs/ holds no run at all: the banner, byte for byte.
+    const banner = start(script, STARTUP).stdout;
+    rmSync(repo.path(".stamity", "runs"), { recursive: true, force: true });
+    symlinkSync(repo.path("elsewhere", "runs"), repo.path(".stamity", "runs"));
+    const compact = start(script, COMPACT);
+    expect(compact.code).toBe(0);
+    expect(compact.stdout).toBe(banner);
+  });
+
+  it("skips a lane whose worktree no longer exists", async () => {
+    const script = await placeScript();
+    const lanePath = await seedDemo();
+    await getRepo().seedFiles({
+      ".git/worktrees/lane-gone/gitdir": `${getRepo().path("lanes", "lane-gone", ".git")}\n`,
+      ".git/worktrees/lane-gone/HEAD": "ref: refs/heads/lane/gone\n",
+      ".git/worktrees/lane-gone-relative/gitdir": "../../../lanes/lane-gone-relative/.git\n",
+    });
+
+    expect(cardOf(start(script, COMPACT).stdout)[4]).toBe(`lanes: 1 (${lanePath} [lane/a])`);
+  });
+
+  it.skipIf(WINDOWS || process.getuid?.() === 0)("lists a report it cannot read: its findings cannot be ruled out", async () => {
+    const script = await placeScript();
+    await getRepo().seedFiles({
+      [runFile(RUN, "record.md")]: record(),
+      [runFile(RUN, "reports/locked-reviewer-r1.md")]: reportWith([]),
+    });
+    const locked = getRepo().path(".stamity", "runs", RUN, "reports", "locked-reviewer-r1.md");
+    chmodSync(locked, 0o000);
+    try {
+      expect(cardOf(start(script, COMPACT).stdout)[3]).toBe(
+        `reports without a ledger row: 1 (.stamity/runs/${RUN}/reports/locked-reviewer-r1.md)`,
+      );
+    } finally {
+      chmodSync(locked, 0o600);
+    }
+  });
+
+  it.skipIf(WINDOWS)("reads no git metadata through a link or past its size bound", async () => {
+    const script = await placeScript();
+    const repo = getRepo();
+    const lanePath = await seedDemo();
+    const linkedLane = repo.path("lanes", "linked", ".git");
+    await repo.seedFiles({
+      "lanes/linked/.git": "gitdir: (a lane that exists)\n",
+      "lanes/big/.git": "gitdir: (a lane that exists)\n",
+      "lanes/head-linked/.git": "gitdir: (a lane that exists)\n",
+      "elsewhere/gitdir": `${linkedLane}\n`,
+      "elsewhere/HEAD": "ref: refs/heads/from-outside\n",
+      // Past the bound, even though it trims to a lane that exists.
+      ".git/worktrees/big/gitdir": `${repo.path("lanes", "big", ".git")}\n${" ".repeat(8_192)}`,
+      ".git/worktrees/head-linked/gitdir": `${repo.path("lanes", "head-linked", ".git")}\n`,
+    });
+    await repo.seedFiles({ ".git/worktrees/linked/HEAD": "ref: refs/heads/linked\n" });
+    symlinkSync(repo.path("elsewhere", "gitdir"), repo.path(".git", "worktrees", "linked", "gitdir"));
+    symlinkSync(repo.path("elsewhere", "HEAD"), repo.path(".git", "worktrees", "head-linked", "HEAD"));
+
+    const base = repo.dir.replaceAll("\\", "/");
+    expect(cardOf(start(script, COMPACT).stdout)[4]).toBe(
+      `lanes: 2 (${base}/lanes/head-linked [unknown], ${lanePath} [lane/a])`,
+    );
+  });
+
+  it.skipIf(WINDOWS)("finds no lanes when a linked worktree's commondir is a link", async () => {
+    const repo = getRepo();
+    await seedLinkedLayout("0123456789abcdef0123456789abcdef01234567");
+    await repo.seedFiles({ [`checkout/${SCRIPT_PATH}`]: buildSessionStartScript(), "elsewhere/commondir": "../..\n" });
+    rmSync(repo.path("main", ".git", "worktrees", "self", "commondir"));
+    symlinkSync(repo.path("elsewhere", "commondir"), repo.path("main", ".git", "worktrees", "self", "commondir"));
+
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    delete env["STAMITY_REPO_ROOT"];
+    const result = spawnSync(process.execPath, [repo.path("checkout", SCRIPT_PATH)], {
+      cwd: repo.path("checkout"),
+      input: COMPACT,
+      env,
+      encoding: "utf8",
+    });
+    expect(cardOf(result.stdout)[4]).toBe("lanes: 0");
+  });
+
+  it("waits for a payload the client writes after the hook has started", async () => {
+    const script = await placeScript();
+    await seedDemo();
+
+    const result = await startLate(script, COMPACT, 300);
+    expect(result.code).toBe(0);
+    expect(result.stdout.split("\n").some((line) => line.startsWith(`stamity resume card — run ${RUN} (as of `))).toBe(true);
+    // fd 0 is asked whether it is a terminal, never opened as a stream to find out.
+    const body = buildSessionStartScript();
+    expect(body).toContain("isatty(0)");
+    expect(body).not.toContain("process.stdin.");
+  });
+});
+
+/**
+ * Runs the script with stdin held open, writing the payload only after
+ * `delayMs`: the shape of a client that starts the hook before its payload is
+ * ready. A read that treats "nothing yet" as "nothing" loses the card here.
+ */
+function startLate(file: string, input: string, delayMs: number): Promise<RunResult> {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  delete env["STAMITY_REPO_ROOT"];
+  return new Promise((resolveRun, rejectRun) => {
+    const child = spawn(process.execPath, [file], { cwd: getRepo().dir, env, stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
+    child.stderr.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
+    child.on("error", rejectRun);
+    child.on("close", (code) => resolveRun({ code: code ?? -1, stdout, stderr }));
+    setTimeout(() => child.stdin.end(input), delayMs);
+  });
+}
+
 /**
  * repo/checkout is a linked worktree of repo/main: its .git is a pointer file
  * whose admin dir names the common dir through a relative commondir.
@@ -373,6 +504,10 @@ async function seedLinkedLayout(sha: string): Promise<void> {
     "main/.git/worktrees/remote/HEAD": "ref: refs/remotes/origin/x\n",
     "main/.git/worktrees/headless/gitdir": `${join(repo.dir, "headless", ".git")}\n`,
     "main/.git/worktrees/orphan/HEAD": "ref: refs/heads/orphan\n",
+    // Every lane above exists on disk, so none is skipped as dead.
+    "detached/.git": "gitdir: (a lane that exists)\n",
+    "remote/.git": "gitdir: (a lane that exists)\n",
+    "headless/.git": "gitdir: (a lane that exists)\n",
   });
 }
 

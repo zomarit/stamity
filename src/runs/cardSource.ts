@@ -8,6 +8,7 @@ import {
   FENCE_CLOSE_PATTERN,
   FINDINGS_FENCE,
   fenceOpenPattern,
+  GIT_METADATA_MAX_BYTES,
   IN_PROGRESS_PATTERN,
   LEDGER_FILE,
   RECORD_FILE,
@@ -89,6 +90,7 @@ const CARD_IN_PROGRESS = ${regex(IN_PROGRESS_PATTERN)};
 const CARD_HEAD_LINES = ${json(RECORD_HEAD_LINES)};
 const CARD_HEAD_READ_BYTES = ${json(RECORD_HEAD_READ_BYTES)};
 const CARD_REPORT_MAX_BYTES = ${json(REPORT_READ_MAX_BYTES)};
+const CARD_GIT_MAX_BYTES = ${json(GIT_METADATA_MAX_BYTES)};
 const CARD_MAX_CHARS = ${json(CARD_MAX_CHARS)};
 const CARD_LIST_MAX = ${json(CARD_LIST_MAX)};
 const CARD_FIELD_MAX = ${json(CARD_FIELD_MAX)};
@@ -102,6 +104,39 @@ function cardRegularFile(path) {
     return lstatSync(path).isFile();
   } catch {
     return false;
+  }
+}
+
+/** A real directory, never through a link. Absent or unreadable reads as not one. */
+function cardRealDir(path) {
+  try {
+    return lstatSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** Whether anything, a dangling link included, sits at path. */
+function cardExists(path) {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A git metadata file's text, trimmed: only a regular file (never through a
+ * link) of at most CARD_GIT_MAX_BYTES bytes. Null otherwise, or when unreadable.
+ */
+function cardGitText(path) {
+  try {
+    const stats = lstatSync(path);
+    if (!stats.isFile() || stats.size > CARD_GIT_MAX_BYTES) return null;
+    return readFileSync(path, "utf8").trim();
+  } catch {
+    return null;
   }
 }
 
@@ -194,12 +229,15 @@ function cardHasFindings(raw) {
 
 /**
  * Reports that hold findings no ledger row points at, as repo-relative paths.
- * A report too large to read is listed: its findings cannot be ruled out.
+ * A report too large to read, or one that cannot be read, is listed: its
+ * findings cannot be ruled out. A linked reports folder is not read at all.
  */
 function cardUnledgered(runDir, run, ledgered) {
+  const reportsDir = join(runDir, CARD_REPORTS_DIR);
+  if (!cardRealDir(reportsDir)) return [];
   let entries;
   try {
-    entries = readdirSync(join(runDir, CARD_REPORTS_DIR), { withFileTypes: true });
+    entries = readdirSync(reportsDir, { withFileTypes: true });
   } catch {
     return [];
   }
@@ -228,6 +266,8 @@ function cardUnledgered(runDir, run, ledgered) {
     try {
       raw = readFileSync(path, "utf8");
     } catch {
+      // Unreadable is not empty: what it holds cannot be ruled out.
+      out.push(rel);
       continue;
     }
     if (cardHasFindings(raw)) out.push(rel);
@@ -246,7 +286,8 @@ function cardBranch(head) {
 /**
  * The git common dir: .git itself when it is a directory, or, when .git is the
  * pointer file a linked worktree carries, the directory it names followed
- * through its commondir. Null when neither holds.
+ * through its commondir. Null when neither holds, or when the pointer or the
+ * commondir is a link, too large, or unreadable.
  */
 function cardCommonDir(rootDir) {
   const dotGit = join(rootDir, ".git");
@@ -254,17 +295,20 @@ function cardCommonDir(rootDir) {
     const stats = lstatSync(dotGit);
     if (stats.isDirectory()) return dotGit;
     if (!stats.isFile()) return null;
-    const pointer = /^gitdir:[ \t]*(.+)$/.exec(readFileSync(dotGit, "utf8").split(/\r?\n/)[0].trim());
+    const text = cardGitText(dotGit);
+    if (text === null) return null;
+    const pointer = /^gitdir:[ \t]*(.+)$/.exec(text.split(/\r?\n/)[0].trim());
     if (pointer === null) return null;
     const target = pointer[1].trim();
     // Git resolves a relative pointer against the directory holding .git.
     const gitDir = isAbsolute(target) ? target : resolve(dirname(dotGit), target);
+    // No commondir: the pointer names the common dir itself.
     let common = "";
-    try {
-      common = readFileSync(join(gitDir, "commondir"), "utf8").trim();
-    } catch {
-      // No commondir: the pointer names the common dir itself.
-      common = "";
+    const commondir = join(gitDir, "commondir");
+    if (cardExists(commondir)) {
+      const named = cardGitText(commondir);
+      if (named === null) return null;
+      common = named;
     }
     return resolve(gitDir, common);
   } catch {
@@ -272,7 +316,11 @@ function cardCommonDir(rootDir) {
   }
 }
 
-/** Linked worktrees as "<path> [<branch>]", sorted. The main checkout is not a lane. */
+/**
+ * Linked worktrees as "<path> [<branch>]", sorted. The main checkout is not a
+ * lane, and neither is one whose gitdir names nothing on disk any more: git
+ * calls that lane prunable, and it holds no work to resume.
+ */
 function cardLanes(rootDir) {
   const common = cardCommonDir(rootDir);
   if (common === null) return [];
@@ -289,22 +337,13 @@ function cardLanes(rootDir) {
   const out = [];
   for (const name of admins) {
     const admin = join(worktrees, name);
-    let gitdir;
-    try {
-      gitdir = readFileSync(join(admin, "gitdir"), "utf8").trim();
-    } catch {
-      continue;
-    }
-    const located = (isAbsolute(gitdir) ? gitdir : resolve(admin, gitdir))
-      .replace(/[\\/]\.git$/, "")
-      .replaceAll("\\", "/");
-    let branch = "unknown";
-    try {
-      branch = cardBranch(readFileSync(join(admin, "HEAD"), "utf8").trim());
-    } catch {
-      branch = "unknown";
-    }
-    out.push(located + " [" + branch + "]");
+    const gitdir = cardGitText(join(admin, "gitdir"));
+    if (gitdir === null) continue;
+    const target = isAbsolute(gitdir) ? gitdir : resolve(admin, gitdir);
+    if (!cardExists(target)) continue;
+    const located = target.replace(/[\\/]\.git$/, "").replaceAll("\\", "/");
+    const head = cardGitText(join(admin, "HEAD"));
+    out.push(located + " [" + (head === null ? "unknown" : cardBranch(head)) + "]");
   }
   return out.sort();
 }
@@ -344,6 +383,8 @@ function cardRender(run, head, open, unledgered, lanes, nowMs, k) {
  */
 function resumeCardLines(rootDir, stateRoot, nowMs) {
   const runsDir = join(stateRoot, CARD_RUNS_DIR);
+  // A linked runs folder is not this repo's runs: nothing in it is read.
+  if (!cardRealDir(runsDir)) return null;
   let entries;
   try {
     entries = readdirSync(runsDir, { withFileTypes: true });
