@@ -4479,3 +4479,48 @@ merge the dependabot prs and release 1.9.1 alltogether".
   maintainer); the carried-to clause at the next release that runs the set (`prove/333`); Dependabot on the private mirror
   (owner-dependent); the standing inbox. Session status: **closed** with merge evidence. Then Package 16 (orchestrator
   context economy, 1.10.0), Track B, Package 12.
+
+## After 1.9.1 — the cleanup merged without a release, P3 and P4 walked, a learning retired (2026-09-23T12:24Z–13:12Z)
+
+At 12:24Z the maintainer asked to be walked through what remained and at 12:28Z proposed "lets get it all done cleaned
+up via a 1.9.2 release, what do you think?". The recommendation was to merge without a release — nothing in the cleanup
+changes what a user runs — and at 12:32Z the answers were "Merge to main, no release", "Run QA rows P3 and P4" with the
+pattern-kill guard, and "Retire it" for the rubric-core learning.
+
+- **The lane** `p15s4/cleanup`, pull request #53, merged by rebase at 13:12Z as `34cec90`…`5f318d4`:
+  the Windows flake (`prove/335`) — `test/ci/pluginLifecycle.test.ts`'s stub build had timed out the Windows leg in three
+  of thirteen runs that day, each time in the suite's `beforeAll` and each rerun green; the suite joins
+  `vitest.config.ts`'s serialized `windows-fixtures` project with its 48 s budget and every assertion unchanged
+  (`34cec90`), and the file now names its verify condition, ten consecutive green Windows legs, and its next lever
+  (`5f318d4`); the carried-to guard (`prove/333`, retired) — the measurements page refuses to render a run of record
+  carried to its own release (`8d39d8a`), README's and the doctrine's hand-typed clause is held to the same constants
+  through the same guard (`a058169`), the template's call is pinned (`af6ab72`) and REQ-PROVE-020 states it
+  (`8a02af0`), each case proved red first; the learning retired (`46e9e2d`) — "the rubric core is hashed above the
+  calibration boundary", whose rule `test/evals/rubricCoreHash.test.ts` has enforced since `0dae2f4`: the test's header
+  now carries the observation, and `docs/troubleshooting.md`'s sample `check` says `10 learning(s)` under the commit form
+  of its currency header (`Re-attested 2026-09-23`, citing the cut's re-attestation commit `3fa99f9`).
+- **Review** at the stronger class: approve, then the fixer's round and a re-read of it — three Warnings and a Minor, all
+  fixed (`prove/336`): the hand pages' clause untested, the spec delta's id already taken, the serialization's verify
+  condition unstated, the template's call untested. The re-read approved with every finding closed and five new Minors,
+  kept out of the loop by the review policy — four deferred to the inbox (`prove/339`: the hand pages' candidate and
+  second claim unheld, the verify condition's independence assumption, two stale spec citations), one judged
+  proportionate.
+- **Gate of record** at `55bfb17`, whose tree is the merged tree: every gate exit 0 — lint, typecheck, build, `stamity check` (all green), 236 files / 9,438 passed / 8 skipped / 0 failed at 96.6 / 89.94 / 98.9 / 97.47 with the per-file floors, knip, the leak gate 0 hits over 1,575 files, the hygiene gate, both generators' `--check` at 1.9.1, `test/evals` 1,290, the measurements page byte-identical on regenerate, and the `STAMITY_FORK_SUITE=1` witness.
+- **CI**: green at the lane head on the first attempt (run 35863900013) — the floor and LTS legs in 4–5 minutes, the Windows leg in 12, where the lifecycle suite ran inside the serialized `windows-fixtures` group (21 tests, 4 skipped, 70.6 s), the first of the ten consecutive legs the verify condition counts; `all-ci-checks` and `all-pr-checks` passed. The earlier run at `eb6eca6` was cancelled by the fix round's push before its Windows leg finished.
+- **QA rows P3 and P4** (`qa-session-4.md`), walked 12:37Z–12:45Z against the published 1.9.1 by the session's QA walker
+  with empty Claude configuration directories of its own: P3 **passed** — a hand-written `model` key survived `init`, a
+  hand-added `env` survived `check` and `sync`, and `clean` reduced the file to the two keys with no `.bak`; P4 **deviated**
+  at its last step — after the plugin route's install and st-setup's commands the settings file held `enabledPlugins` and
+  `permissions` as expected, but `check` run through the plugin root's locator warns `plugin-runtime` (exit 0), because the
+  locator hands its root to `plugin` subcommands only and st-setup never runs `check` (`prove/337`, deferred); the walk also
+  measured that `plugin install` writes `enabledPlugins` alone while a shipped capability note says it writes
+  `extraKnownMarketplaces` too (`prove/338`, deferred). The no-op `sync` restamps the manifest's `updatedAt`, which the sync
+  contract states; not a finding.
+- **The pattern-kill guard**, outside this repository: the workstation's Claude configurations now carry a user-level
+  pre-tool hook that refuses `pkill` and `killall` and a `kill` fed by a `pgrep` whose options follow its pattern — the
+  command class of 00:13:11Z (the tail's entry above). Nothing of it is in this tree.
+- **Close**: this entry, the QA form's two rows, the ledger (`prove/333` retired; `prove/335`, `prove/336` fixed;
+  `prove/337` to `prove/339` deferred with their inbox rows, `prove/333`'s removed) — 427 rows, no open row; no active
+  handoff; no release — the lane rides to 1.10.0. `Not done`: P1 and P2 of `qa-session-4.md` (owner: the maintainer); the
+  three new inbox rows; the standing inbox; the serialization's verify condition (the next ten Windows legs). Session status:
+  **closed** with merge evidence. Then Package 16 (orchestrator context economy, 1.10.0), Track B, Package 12.
