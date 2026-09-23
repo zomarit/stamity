@@ -95,14 +95,25 @@ const SKELETON = [
 ] as const;
 
 /**
- * The body characters a resumed run can rely on after a compaction.
+ * The characters a resumed run can rely on after a compaction, counted from the
+ * file's first byte with the frontmatter included.
  *
  * Claude Code re-attaches only the first 5,000 tokens of an invoked command body
- * after it compacts a conversation. Measured on this body (the phrase
+ * after it compacts a conversation. Measured on this command (the phrase
  * "whole-branch multi-lens rev" was the last text re-attached), the cut sits at
- * about 19,890 body characters, about 4.0 characters per token; 18,000 keeps
- * margin under it. What a resumed run needs — the Dispatch contract, the Return
- * contract and the review-loop caps — must end before this offset.
+ * about 19,890 body characters (a file offset between 20,250 and 20,500), about
+ * 4.0 characters per token; 18,000 file characters keeps margin under it. What
+ * a resumed run needs — the Dispatch contract, the Return contract and the
+ * whole Review loop, caps included — must end before this offset.
+ *
+ * The offsets are measured on this corpus source, not on the emitted
+ * `.claude/commands/st-work.md` the client re-attaches. The source is the
+ * conservative proxy: its frontmatter head (about 480 characters) is larger than
+ * the emitted head (about 160, the description alone), so every section sits
+ * later here than in the emitted copy. One caveat bounds that margin: the
+ * `### Gates` substitution tokens precede the Review loop and expand to the
+ * consumer's gate commands, so a gate command set about 320 characters longer
+ * than its tokens would move the emitted Review loop past where it sits here.
  */
 const REATTACH_BUDGET_CHARS = 18_000;
 
@@ -356,7 +367,8 @@ describe("/st-work — body skeleton", () => {
   });
 
   it("ends what a resumed run needs before the client's re-attachment cut", async () => {
-    const text = await body();
+    // From the file's first byte, frontmatter included — not the parsed body.
+    const text = (await workFile).raw;
     const returnEnd = sectionEnd(text, "## Return contract");
     expect(sectionEnd(text, "## Dispatch contract")).toBeLessThan(REATTACH_BUDGET_CHARS);
     expect(returnEnd).toBeLessThan(REATTACH_BUDGET_CHARS);
@@ -365,6 +377,9 @@ describe("/st-work — body skeleton", () => {
     const capsEnd = text.indexOf("- Minor/nit findings are ledgered");
     expect(capsEnd).toBeGreaterThan(text.indexOf("- Escape before the cap"));
     expect(capsEnd).toBeLessThan(REATTACH_BUDGET_CHARS);
+    // The whole Review loop, not only its caps, ends inside the budget.
+    expect(sectionEnd(text, "### Review loop")).toBeGreaterThan(capsEnd);
+    expect(sectionEnd(text, "### Review loop")).toBeLessThan(REATTACH_BUDGET_CHARS);
 
     expect(text.indexOf("\n## Dials\n")).toBeGreaterThan(returnEnd);
     expect(text.indexOf("\n## Testing philosophy\n")).toBeGreaterThan(returnEnd);
