@@ -49,7 +49,13 @@ export interface RepositoryIdentity {
 interface Manifest {
   readonly name?: unknown;
   readonly private?: unknown;
+  readonly repository?: { readonly url?: unknown };
   readonly stamity?: { readonly publisher?: unknown };
+}
+
+/** This checkout's own `package.json`, parsed. */
+function readManifest(): Manifest {
+  return JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as Manifest;
 }
 
 let cached: RepositoryIdentity | null = null;
@@ -57,7 +63,7 @@ let cached: RepositoryIdentity | null = null;
 /** The identity of the checkout the suite is running in. Memoized: the manifest cannot move mid-run. */
 export function canonical(): RepositoryIdentity {
   if (cached === null) {
-    const manifest = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as Manifest;
+    const manifest = readManifest();
     const name = typeof manifest.name === "string" ? manifest.name : "";
     const publisher =
       typeof manifest.stamity?.publisher === "string" ? manifest.stamity.publisher : DEFAULT_PUBLISHER;
@@ -70,6 +76,38 @@ export function canonical(): RepositoryIdentity {
     };
   }
   return cached;
+}
+
+/** Where the checkout under test is published from — the other half of the identity a fork repoints. */
+export interface RepositoryRoute {
+  /** `repository.url` without its `git+` prefix and `.git` suffix: `https://github.com/<owner>/<repository>`. */
+  readonly url: string;
+  /** `<owner>/<repository>` — what a `marketplace add`, an `apm install` spec or a Renovate pin names. */
+  readonly slug: string;
+}
+
+let cachedRoute: RepositoryRoute | null = null;
+
+/**
+ * The route every generated install command, marketplace source and install spec is built
+ * from, read from this manifest's `repository.url` the way a reader of the file would read
+ * it. A fork that repointed `repository.url` gets its own route here, so an assertion on a
+ * generated `marketplace add <slug>` holds on the canonical tree and on the fork alike.
+ * Memoized, like {@link canonical}.
+ */
+export function repositoryRoute(): RepositoryRoute {
+  if (cachedRoute === null) {
+    const raw = readManifest().repository?.url;
+    const url = typeof raw === "string" ? raw.replace(/^git\+/, "").replace(/\.git$/, "") : "";
+    const slug = /^https:\/\/github\.com\/([^/]+\/[^/]+)$/.exec(url)?.[1];
+    if (slug === undefined) {
+      // No fallback on purpose: a guessed route would make every derived assertion agree
+      // with a value this checkout does not publish from.
+      throw new Error("package.json repository.url is not https://github.com/<owner>/<repository>");
+    }
+    cachedRoute = { url, slug };
+  }
+  return cachedRoute;
 }
 
 /**
