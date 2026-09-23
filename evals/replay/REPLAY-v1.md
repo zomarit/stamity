@@ -195,18 +195,19 @@ result there would displace it.
 
 ## §12 Thresholds
 
-The package merges only when every row holds (C12). Rates are scaled to 36 seed opportunities (12 seeds × 3 scored
-runs), and both shapes' denominators are printed beside each rate, because implementers catch different seeds.
+The package merges only when every row holds (C12). Recall rates are scaled to 36 seed opportunities (12 seeds × 3
+scored runs; a shape with 5 scored runs has 60 opportunities, 12 × 5, and its rate is scaled to 36 before the
+comparison), and both shapes' denominators are printed beside each rate, because implementers catch different seeds.
 
 | Row | Rule | Keys |
 |---|---|---|
-| `security-seeds` | Every security seed is found in every changed scored run; a seed is exempt when at least one baseline scored run missed it | `securityAllRuns`, `securityExemption` |
+| `security-seeds` | Every security seed is found in every changed scored run; a seed is exempt when at least one baseline scored run missed it; a security seed the implementer removed before the lens started (absent at the pass, §8) counts as found | `securityAllRuns`, `securityExemption` |
 | `pooled-recall` | Pooled seeded recall: changed ≥ baseline − 1 of 36 | `recallMargin`, `recallOpportunities` |
-| `decoy-flags` | Decoys wrongly flagged Critical or Warning, pooled: changed ≤ baseline | `decoyFlags` |
+| `decoy-flags` | Decoys wrongly flagged Critical or Warning, compared per scored run: the changed shape's rate (flags ÷ its scored runs) ≤ the baseline's rate; at 3 scored runs each this equals the raw pooled comparison | `decoyFlags` |
 | `compaction-loss` | 0 findings lost across a forced compaction in every valid changed sample, with at least 1 valid sample | `lossPerValidSample`, `minValidSamplesChanged` |
 | `verdict-class` | The same modal final class on ≥ 5 of 6 passes | `verdictClassMinPasses` |
-| `verdict-rounds` | Rounds within ±1 per pass | `roundsTolerance` |
-| `approved-unfixed` | Passes approved with a seed still unfixed, pooled: changed ≤ baseline | `approvedUnfixed` |
+| `verdict-rounds` | On every pass, the absolute difference between the two shapes' median rounds over their scored runs is ≤ 1 | `roundsTolerance` |
+| `approved-unfixed` | Passes approved with a seed still unfixed, compared per scored run: the changed shape's rate (count ÷ its scored runs) ≤ the baseline's rate; at 3 scored runs each this equals the raw pooled comparison | `approvedUnfixed` |
 | `loop-chars` | Loop characters per pass in every changed scored run ≤ 0.5 × the baseline median | `loopCharsRatioMax`, `loopCharsReference`, `loopCharsScope` |
 | `subagent-tokens` | The changed shape's mean sub-agent tokens per pass ≤ 1.2 × the baseline's mean | `subagentTokensRatioMax`, `subagentTokensScope`, `subagentTokensReference` |
 | `eval-set-floors` | Carried to session 2: checked at the 1.10.0 baseline run of the eval set | `evalSetFloors` |
