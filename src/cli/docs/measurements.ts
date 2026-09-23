@@ -113,6 +113,24 @@ export const RUN_OF_RECORD_PATH = "evals/runs/2026-09-22-run-32/RESULTS.md";
 const RUN_OF_RECORD_RELEASE = "1.9.0";
 
 /**
+ * The later release the run of record is carried to, and the candidate it is
+ * carried from.
+ *
+ * A release that moves no case input — nothing under `evals/` outside `runs/`
+ * and `measurements/`, nothing under `content/`, none of the sources the case
+ * set cites — has zero cases to re-measure under SET-v7's incremental rule, so
+ * the prior run stands and the page says so beside the release it measured,
+ * rather than presenting the run as this release's own. Two literals: the
+ * release is the version the tree ships as (`test/cli/docs/measurements.test.ts`
+ * holds it to `package.json`, so it cannot outlive the release it names), and
+ * the candidate is the run's own, held to the `Candidate:` line of
+ * {@link RUN_OF_RECORD_PATH}. A release that runs the set moves
+ * {@link RUN_OF_RECORD_RELEASE} and deletes the carried clause with these two.
+ */
+const RUN_OF_RECORD_CARRIED_TO = "1.9.1";
+const RUN_OF_RECORD_CANDIDATE = "e5e54c9";
+
+/**
  * The run of record's own number, read off {@link RUN_OF_RECORD_PATH}.
  *
  * Derived rather than typed: the number and the path are one fact, and a second
@@ -844,7 +862,8 @@ export function renderMeasurements(root: string = repoRoot()): string {
     "",
     "The corpus is measured by an eval set, not by inspection. The run of record is",
     `[run ${runOfRecord}](../${RUN_OF_RECORD_PATH}) — the ${RUN_OF_RECORD_RELEASE} release run,`,
-    "PASS, three samples per case.",
+    `carried to ${RUN_OF_RECORD_CARRIED_TO} under the set's incremental rule (no case input moved since its`,
+    `candidate \`${RUN_OF_RECORD_CANDIDATE}\`) — PASS, three samples per case.`,
     "",
     "That run is composed rather than measured end to end, under SET-v7's incremental rule: one",
     "full baseline run per release, and a later run on another candidate re-measures only the cases",

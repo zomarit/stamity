@@ -503,6 +503,28 @@ describe("the restated figures are held to the artifacts they come from", () => 
   });
 });
 
+describe("the run of record is carried to the release the tree ships as", () => {
+  // ADDED at the 1.9.1 cut: the release moved no case input since run 32's candidate, so the run
+  // stands under SET-v7's incremental rule and the page says which release it is carried to and
+  // from which candidate. Each half is held to its own source rather than to the other: the
+  // candidate to the results file's `Candidate:` line, the release to package.json — so the
+  // clause cannot outlive the release it names, and the next cut either runs the set or moves it.
+  it("names the shipped version as the carried-to release, and the run's own candidate", () => {
+    const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
+    const candidate = /^Candidate: `([0-9a-f]{40})`/m.exec(results)?.[1];
+    expect(candidate, `${RUN_OF_RECORD_PATH} states no candidate`).toBeDefined();
+    const manifest = readFileSync(join(REPO_ROOT, "package.json"), "utf-8");
+    const shipped = (JSON.parse(manifest) as { version: string }).version;
+
+    const page = renderMeasurements();
+    const release = /release run,\ncarried to (\d+\.\d+\.\d+) under the set's/.exec(page)?.[1];
+    expect(release, "the page states no carried-to release beside the run of record").toBe(shipped);
+    const named = /no case input moved since its\ncandidate `([0-9a-f]{7,40})`\)/.exec(page)?.[1];
+    expect(named, "the page names no candidate the run is carried from").toBeDefined();
+    expect(candidate?.startsWith(named ?? "\u0000"), `${named} is not ${candidate}`).toBe(true);
+  });
+});
+
 describe("the committed snapshot the page renders from", () => {
   it("parses, and states a rate that matches the lists it carries", () => {
     const { path, report } = readMeasurementSnapshot();
