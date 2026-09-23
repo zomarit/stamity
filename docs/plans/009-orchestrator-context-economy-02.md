@@ -118,7 +118,7 @@ one line `read: <files>; lenses: <list>`. `ledger close --report` maps `fixed` �
 `rejected`, and keeps `not-fixed`, `regressed`, `rejection-overturned` open; `regressed` also reopens a `fixed` row.
 Each applied closure appends its note `re-review <status>: <report>` to the row's rationale, followed by
 ` — <rationale>` when the closure carries one. A closure whose note is already present is `unchanged` only when the
-row's state is also the closure's target; otherwise the state problem refuses the close. A row the fixer answers as
+row's state is also the closure's target; otherwise the close is refused with `<id> is <state>, not <target>, but its rationale already records <note>; a closure is applied once` (`src/runs/ledgerStore.ts:626`). A row the fixer answers as
 wrong stays `open` until the re-review upholds or overturns the rejection (both rejection statuses meet only an open
 row). Apply problems print as `<report>:<line>: …`. (Amended 2026-09-23: the closure's optional rationale is admitted
 and appended after its note — ledger row `build/128`; `unchanged` needs the target state — `build/127`; a rejected
