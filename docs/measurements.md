@@ -136,7 +136,8 @@ Three consequences worth stating, because they are what make the number worth re
 
 The corpus is measured by an eval set, not by inspection. The run of record is
 [run 32](../evals/runs/2026-09-22-run-32/RESULTS.md) — the 1.9.0 release run,
-PASS, three samples per case.
+carried to 1.9.1 under the set's incremental rule (no case input moved since its
+candidate `e5e54c9`) — PASS, three samples per case.
 
 That run is composed rather than measured end to end, under SET-v7's incremental rule: one
 full baseline run per release, and a later run on another candidate re-measures only the cases
