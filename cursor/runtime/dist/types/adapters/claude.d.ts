@@ -1,0 +1,10 @@
+import type { AdapterDialectFacts, ResiduePlanner } from "../emit/planner.ts";
+import type { SetupManifest } from "../types/manifest.ts";
+export declare const CLAUDE_MD_PATH = "CLAUDE.md";
+export declare const CLAUDE_SKILLS_DIR: string;
+export declare const CLAUDE_COMMANDS_DIR = ".claude/commands";
+export declare const CLAUDE_SETTINGS_PATH = ".claude/settings.json";
+export declare function claudeSettingsOwnedKeys(manifest: SetupManifest | null | undefined): readonly string[];
+export declare const CLAUDE_REVIEW_GATE_PATH: string;
+export declare const CLAUDE_DIALECT_FACTS: AdapterDialectFacts;
+export declare const claudeResiduePlanner: ResiduePlanner;

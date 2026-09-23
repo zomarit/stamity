@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "client": "claude",
+  "version": "1.9.1",
+  "sourceCommit": "27c9cc50cff48fbb3dcc3ce73c9637dbc1104eee",
+  "invocation": {
+    "agents": "@stamity:<id>",
+    "commands": "/stamity:<id>",
+    "skills": "/stamity:<id>"
+  },
+  "clientFloor": {
+    "version": "2.1.224",
+    "citation": {
+      "url": "https://code.claude.com/docs/en/plugin-marketplaces",
+      "accessDate": "2026-09-20"
+    },
+    "reason": "the archive-source floor; no floor for the plugin system as a whole is stated"
+  },
+  "prerequisites": {
+    "node": ">=22.22.2",
+    "git": "optional"
+  },
+  "classes": {
+    "agent": {
+      "status": "carried",
+      "count": 10
+    },
+    "skill": {
+      "status": "carried",
+      "count": 10
+    },
+    "command": {
+      "status": "carried",
+      "count": 10
+    },
+    "rule": {
+      "status": "repository-owned",
+      "reason": "the Claude Code plugin manifest has no rules field (json.schemastore.org/claude-code-plugin-manifest.json, 2026-09-20); glob-scoped rules are written by stamity plugin setup into .claude/rules/; glob-less rules ride as skills"
+    },
+    "hooks": {
+      "status": "carried",
+      "count": 4
+    },
+    "mcp": {
+      "status": "repository-owned",
+      "reason": "MCP server selection and credential references are repository-owned"
+    }
+  },
+  "runtime": {
+    "path": "runtime",
+    "locator": "runtime/locate.mjs",
+    "companion": {
+      "package": "@zomarit/stamity",
+      "compatible": "^1.9.1"
+    }
+  },
+  "distribution": {
+    "note": "an operator runs `claude plugin marketplace add <owner/repo | git URL#ref | local path>` and `claude plugin install stamity@stamity --scope project`, which writes `enabledPlugins` and `extraKnownMarketplaces`; a third-party marketplace has auto-update off by default, so `claude plugin update stamity@stamity --scope project` is the refresh — the scope has to match the install's, so a user-scope install refreshes with `--scope user` — and a marketplace added at a tag or a commit is the pin. A `rollback` subcommand is settled absent: one vendor page quoted it in slash form and the CLI reference omitted it (code.claude.com/docs/en/plugin-marketplaces and code.claude.com/docs/en/cli-reference, accessed 2026-09-20), and `claude plugin rollback stamity` answers `error: unknown command 'rollback'` on 2.1.278 (measured 2026-09-22). The route back is three commands, walked the same day: the marketplace re-added at the previous tag, `claude plugin install stamity@stamity --scope project`, then `claude plugin update stamity@stamity --scope project` — the first two answer already on disk and already installed and leave the recorded version where it was, and the third is what re-records it"
+  }
+}
