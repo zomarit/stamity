@@ -24,7 +24,10 @@
       "allow": [
         "read"
       ],
-      "rationale": "Measures rendered surfaces against named success criteria and the project's token source, so its output is numbers rather than preferences. Inspection alone — nudging a spacing value while judging it would make one pass both author and judge of the same pixel."
+      "writePaths": [
+        ".stamity/runs/*/reports/*-design-quality-r*.md"
+      ],
+      "rationale": "Measures rendered surfaces against named success criteria and the project's token source, so its output is numbers rather than preferences. Inspection alone — nudging a spacing value while judging it would make one pass both author and judge of the same pixel. The lone file it creates is that measurement report."
     },
     {
       "agentId": "stamity-fixer",
@@ -49,7 +52,10 @@
       "allow": [
         "read"
       ],
-      "rationale": "Weighs cost per operation against declared budgets across data-access, background-work and cache paths. Nothing beyond inspection: an agent tuning what it measures forfeits the independence that makes the measurement worth reading, and tuning is the implementer's lane."
+      "writePaths": [
+        ".stamity/runs/*/reports/*-performance-r*.md"
+      ],
+      "rationale": "Weighs cost per operation against declared budgets across data-access, background-work and cache paths. Nothing beyond inspection: an agent tuning what it measures forfeits the independence that makes the measurement worth reading, and tuning is the implementer's lane. Keeping its budget report on disk is the exception."
     },
     {
       "agentId": "stamity-researcher",
@@ -64,14 +70,20 @@
       "allow": [
         "read"
       ],
-      "rationale": "Returns a verdict on a change set it must not touch, citing path:line for every behavior claim it makes. Withholding edit is what keeps the following round reviewing the author's work instead of the reviewer's own."
+      "writePaths": [
+        ".stamity/runs/*/reports/*-reviewer-r*.md"
+      ],
+      "rationale": "Returns a verdict on a change set it must not touch, citing path:line for every behavior claim it makes. Withholding edit is what keeps the following round reviewing the author's work instead of the reviewer's own. Its single file write is the review report it saves for the run."
     },
     {
       "agentId": "stamity-security",
       "allow": [
         "read"
       ],
-      "rationale": "Judges authentication, cryptography, trust boundaries and the dependency set on triggered paths, quoting locations for each defect it names. No write grant: those surfaces are where an unexamined edit costs most, and the repair belongs to a later pass under its own review."
+      "writePaths": [
+        ".stamity/runs/*/reports/*-security-r*.md"
+      ],
+      "rationale": "Judges authentication, cryptography, trust boundaries and the dependency set on triggered paths, quoting locations for each defect it names. No code write grant: those surfaces are where an unexamined edit costs most, and the repair belongs to a later pass under its own review. Only its own findings report may be saved."
     },
     {
       "agentId": "stamity-spec-author",

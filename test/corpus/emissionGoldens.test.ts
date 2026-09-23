@@ -85,6 +85,33 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-24, Package 16 session 1's second batch sync (run
+ *     2026-09-23_orchestrator-context). TWO goldens moved:
+ *
+ *     SUBSTITUTION moved on `commands/st-work.md`: 400 -> 486 lines, +6153
+ *     bytes, the /st-work text unit (the run-record head and `reports/`
+ *     folder at Preflight, the in-flow `plan.md` copy, the capacity rung,
+ *     ledger writes, pointer dispatch, resume after a compaction, the two
+ *     return tiers with the digest and the report path, re-review closures
+ *     confined to the handed ids, the two optional ledger fields, and the
+ *     capacity rung's third placement under the model table). The golden's
+ *     106 changed lines, unescaped, are the corpus diff's 96 added and 10
+ *     removed lines and nothing else, so substitution left no token behind.
+ *
+ *     POLICY DOCUMENT moved on the four verdict rows (design-quality,
+ *     performance, reviewer, security): each gains a `writePaths` array
+ *     holding its one report glob, `*-<role>-r*.md` under any run's
+ *     `reports/` folder in `.stamity/runs/`, and a closing rationale
+ *     sentence naming that report as its lone write (security's "No write
+ *     grant" now reads "No code write grant"), from the verdict write-paths
+ *     roster unit; the rows' `allow` stays `read` and every other row is
+ *     unchanged.
+ *
+ *     NOTHING else moved here: the charter, the catalog, the MDC companion
+ *     heads, every agent body, the hook scripts and the three portable
+ *     runners are byte-identical. The replay walk and the eval-case moves
+ *     emit nothing.
+ *
  *   - 2026-09-24, Package 16 session 1's first batch sync (run
  *     2026-09-23_orchestrator-context). SIX goldens moved:
  *

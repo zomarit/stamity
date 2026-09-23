@@ -178,6 +178,35 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-24, Package 16 session 1's second batch sync (run
+  //     2026-09-23_orchestrator-context). ONE command body and the policy
+  //     document moved, plus the manifest rows that record them. No emitted
+  //     path was added or removed, and no residue document moved.
+  //
+  //     CHANGED `commands/st-work.md` by +6153 bytes in every dialect — 23533
+  //       -> 29686 in the claude and copilot dialects, 23578 -> 29731 as the
+  //       cursor skill — the same +6153 (408 -> 494 lines) the corpus source
+  //       moved in the /st-work text unit: the run-record head and `reports/`
+  //       folder, the in-flow `plan.md` copy, the capacity rung, ledger
+  //       writes, pointer dispatch, resume after a compaction, the two return
+  //       tiers, the digest, the report path and the re-review closures. The
+  //       dogfood copies `.claude/commands/st-work.md` and
+  //       `.apm/prompts/st-work.prompt.md` carry the same changed lines, in
+  //       order, as `content/commands/st-work.md`.
+  //     CHANGED `.stamity/generated/agent-tool-policies.json` 3871 -> 4426
+  //       bytes in all five selections, one digest as before: the verdict
+  //       write-paths roster unit gives the four verdict rows a `writePaths`
+  //       report glob and a rationale sentence naming it; `allow` is unchanged.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the two files above.
+  //
+  //     What did NOT move: every agent dialect (the roster grant changes are
+  //       inert in frontmatter), every rule dialect, skill other than the
+  //       cursor st-work skill, generated page, client entry file, hook script,
+  //       portable runner and residue document. The replay walk and the
+  //       eval-case moves emit nothing. `stamity check` reported
+  //       `drift: clean` after the dogfood sync.
+  //
   //   - 2026-09-24, Package 16 session 1's first batch sync (run
   //     2026-09-23_orchestrator-context). EIGHT agent bodies, ONE command body
   //     and ONE hook script moved, plus the manifest rows that record them. No
