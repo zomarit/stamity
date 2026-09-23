@@ -178,6 +178,46 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-24, Package 16 session 1's first batch sync (run
+  //     2026-09-23_orchestrator-context). EIGHT agent bodies, ONE command body
+  //     and ONE hook script moved, plus the manifest rows that record them. No
+  //     emitted path was added or removed, and no residue document moved.
+  //
+  //     CHANGED the eight roles in all four agent dialects
+  //       (`.claude/agents/*.md`, `.codex/agents/*.toml`, `.cursor/agents/*.md`,
+  //       `.github/agents/*.agent.md`), each by the same byte count in every
+  //       dialect as its corpus source moved: design-quality +1465, fixer
+  //       +1607, implementer +1727, performance +1540, reviewer +2110,
+  //       security +1554, spec-author +1315, test-runner +576. The four verdict
+  //       roles (reviewer, security, performance, design-quality) write their
+  //       own report, carry a `stamity-findings` block and return a digest; the
+  //       implementer, fixer and spec-author write the report and return a
+  //       digest (fixer and spec-author reports carry the findings block, the
+  //       implementer gains the unresolvable-cell stop and census closure, the
+  //       spec-author gains the plan-cell amendment job); the test-runner may
+  //       digest a green verdict and returns a red one in full. The dogfood
+  //       copies under `.claude/agents/` and `.apm/agents/` carry the same
+  //       changed lines, in order, as `content/agents/`.
+  //     CHANGED `commands/st-work.md` at UNCHANGED byte length — 23533 in the
+  //       claude and copilot dialects, 23578 as the cursor skill — because the
+  //       edit is a pure reorder: `## Dispatch contract` and `## Return
+  //       contract` moved ahead of Phase 4, and the sorted line multiset of the
+  //       corpus source is identical before and after (23872 bytes, 408 lines).
+  //     CHANGED `stamity-session-start.mjs` 23600 -> 37779 bytes, one digest
+  //       for all four clients as before: the script inlines the resume card
+  //       (`src/runs/cardSource.ts`), the stdin payload reader and field
+  //       helper, reads the payload's `source` behind an `isatty(0)` check,
+  //       names the screen hit (`screenHit`) and appends the card only on a
+  //       `compact` start. Full bytes are goldened in the sibling suite.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the files above.
+  //
+  //     What did NOT move: every rule dialect, skill, generated page, client
+  //       entry file, the codex `AGENTS.md` appendix (neither an agent nor a
+  //       command is always-on), the other hook scripts, the portable runners
+  //       and every residue document. `stamity check` reported `drift: clean`
+  //       after the dogfood sync.
+  //
   //   - 2026-09-10, Package 10 integration. All five selections gain the eight
   //     skill metadata companions and structural verify helper; their native
   //     copies retain source bytes. Corpus digests move for the reviewed

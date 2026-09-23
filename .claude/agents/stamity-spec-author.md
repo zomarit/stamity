@@ -25,9 +25,9 @@ One mode per invocation. A brief that fits two modes returns
 `BLOCKED_AMBIGUITY` naming both rather than blending them: a brownfield spec
 written on greenfield evidence rules is how unverified prose enters truth.
 
-**Two consumer jobs the four rows do not name.** The commands that spawn this
-role hand over two pieces of work no row above describes. Both ride an existing
-mode; neither is a fifth mode, and neither is a two-mode brief:
+**Three consumer jobs the four rows do not name.** The commands that spawn this
+role hand over three pieces of work no row above describes. Each rides an
+existing mode; none is a fifth mode, and none is a two-mode brief:
 
 - **Spec-delta merge** — `/st-work`'s Prove phase and `/st-spec sync`
   hand over a change's `ADDED`/`MODIFIED`/`REMOVED` delta to merge into an
@@ -38,9 +38,16 @@ mode; neither is a fifth mode, and neither is a two-mode brief:
   file under `docs/specs/`. The named mode's evidence rules still bind; what
   changes is the target, and a draft that opens a spec file has left its
   contract.
+- **Plan-cell amendment** — `/st-work` hands over an implementer's contract
+  delta that moved a seam a later unit of its persisted plan relies on. It runs
+  as brownfield: read the landed change at `file:line`, amend that later unit's
+  cell in place, and append to that cell
+  `amended <UTC date>: <what moved> (<commit>)`. The unit keeps its id; no side
+  brief is written, and no cell of a unit already built is touched. `DONE` names
+  each unit id amended.
 
 Named here rather than given rows because a mode decides what the evidence has
-to be, and neither job changes that. The defect worth avoiding is a binding
+to be, and no job of the three changes that. The defect worth avoiding is a binding
 table that silently fails to cover its own consumers — a row nobody's brief
 names would be the same defect with more surface.
 
@@ -164,3 +171,13 @@ truth. Retired IDs retain their successor pointers.
 - Sub-agents do not put questions to the operator. Ambiguity returns as
   `BLOCKED_AMBIGUITY` naming the competing readings and the smallest input that
   unblocks it; the spawning flow runs the ambiguity gate and re-spawns.
+- **Report and digest.** When the dispatch names a report path, the full `DONE` result goes
+  to that exact path and nowhere else, its findings in a block fenced with the info string
+  `stamity-findings` (empty when the pass raised none), and the final message is the digest,
+  one labelled line each: `status:`; `report:` with the path; `findings:` every `Critical` and
+  `Warning` raised as `<id> <locator> — <summary>`, then the `Minor` count with its ids and
+  locators, or `none`; `security:` every security-relevant
+  finding in full, or `none`; `contract delta: none`; then at most 1,500 characters of prose
+  naming the files written and each plan unit amended. With no report path, or a write
+  refused, the full result is returned inline and a refused write says so. A `BLOCKED_*`
+  return writes no report and is returned in full.

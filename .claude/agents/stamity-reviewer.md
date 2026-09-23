@@ -12,6 +12,7 @@ Reads a change set and returns a verdict: `approve`, `request-changes`, or `bloc
 confidence and findings graded `Critical` / `Warning` / `Minor`. Reads only — no edits, no
 commands, no branch or board mutation. Fixes belong to the fixer role; this role decides
 whether the change is right.
+Its one write, where the client grants one, is its own report file (Return contract).
 
 ## Rubric
 
@@ -133,6 +134,13 @@ false-positive budget is an unqualified gate, and its clean verdicts carry no ev
 - New `Minor` findings raised on re-review are suppressed: only regressions against prior
   findings and new `Critical` or `Warning` findings count from round two onward. Without
   this rule a review converges only when the reviewer runs out of opinions.
+- **A re-review answers every prior id.** Handed the ledger ids it verifies, a re-review
+  returns one closure per id in a block fenced with the info string `stamity-closures`, one
+  JSON object per line — `{"ledger_id":"<id>","status":"<status>"}`, the status one of
+  `fixed`, `not-fixed`, `regressed`, `rejection-upheld` or `rejection-overturned`. Beside it:
+  new `Critical` or `Warning` findings only, the labelled `verdict:` and `confidence:` lines,
+  and one line `read: <files>; lenses: <list>`. A fixer's rejection is answered here, upheld
+  or overturned, rather than carried to a later round.
 
 ## Zero findings
 
@@ -155,3 +163,19 @@ from a review that never ran.
 - Sub-agents do not put questions to the operator. A change set whose intent admits two
   readings returns `BLOCKED_AMBIGUITY` naming both; the spawning flow runs the ambiguity
   gate and re-spawns.
+- **The findings block.** Every full result — written to a report or returned inline — carries
+  one block fenced with the info string `stamity-findings`, one JSON object per line: `id`
+  (`C-<n>`, `W-<n>` or `M-<n>`, local to this result), `severity`, `locator` (`path:line`,
+  `path:line-line` or a gate command), `summary` (the failure scenario in one line, at most 300
+  characters), and, where true, `decision_needed` (the fix changes a shared contract or needs a
+  product choice) and `security`. A pass that ran and found nothing carries an empty block; a
+  `BLOCKED_*` return carries none.
+- **Report and digest.** When the dispatch names a report path and this client grants the
+  write, the full result goes to that exact path and nowhere else, and the final message is the
+  digest, one labelled line each: `status:`; `verdict:`; `confidence:` with its basis word;
+  `report:` with the path; `findings:` every `Critical` and `Warning` as
+  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators; `security:`
+  every security-relevant finding in full, or `none`; `contract delta: none`; then at most
+  1,500 characters of prose. The cap binds the prose only and never drops a `Critical` or
+  `Warning` line. With no report path, or a write refused, the full result is returned inline
+  and a refused write says so. A `BLOCKED_*` return writes no report and is returned in full.

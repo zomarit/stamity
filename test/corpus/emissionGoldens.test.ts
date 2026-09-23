@@ -85,6 +85,34 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-24, Package 16 session 1's first batch sync (run
+ *     2026-09-23_orchestrator-context). SIX goldens moved:
+ *
+ *     HOOK SCRIPTS: `stamity-session-start.mjs` moved for all four clients,
+ *     445 -> 849 snapshot lines, with the SAME delta in each and the four
+ *     bodies still identical to one another. The script now imports the fs
+ *     and path names the resume card needs plus `isatty`, splits `screened`
+ *     into `screenHit` (returns the first matching pattern id) and a boolean
+ *     wrapper, inlines the stdin payload reader, the field helper and the
+ *     resume-card source from `src/runs/cardSource.ts`, and appends the card
+ *     to the banner only when the payload's `source` is `compact`; its header
+ *     names the payload read. The claude golden is byte-identical to the
+ *     dogfood copy at `.stamity/generated/hooks/claude/`.
+ *
+ *     SUBSTITUTION moved on two bodies. `agents/stamity-test-runner.md`
+ *     5425 -> 6001 bytes, 113 -> 120 lines: the seven-line paragraph that
+ *     lets a green verdict be digested to a report and keeps a red one in
+ *     full, the same +576 the corpus source moved. `commands/st-work.md` at
+ *     UNCHANGED 23375 bytes and 400 lines: a pure reorder that moves
+ *     `## Dispatch contract` and `## Return contract` ahead of Phase 4. In
+ *     both, the golden's changed lines are the corpus diff's changed lines
+ *     and nothing else, so substitution left no token behind.
+ *
+ *     NOTHING else moved here: the charter, the catalog, the MDC companion
+ *     heads, the policy document, the guard and tamper scripts and the three
+ *     portable runners are byte-identical. The seven other agent bodies moved
+ *     too; this suite holds none of them, and the sibling ledger itemises them.
+ *
  *   - 2026-09-10, Package 10 client and authoring integration. The three
  *     core script paths and portable event triple are unchanged. Codex's role
  *     guard now declares BLOCKING=false; its header and the Cursor/Copilot

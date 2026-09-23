@@ -8,15 +8,22 @@
 // reason, and every field printed — the file name included — is flattened to
 // one bounded line first. Bodies and matched spans are never printed.
 //
+// After a compaction (a start whose stdin payload says source "compact") it
+// appends the resume card of the run in progress: counts and pointers, never
+// finding text.
+//
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
 // Reads outside repo state: the wall clock, which decides whether a learning's
-// review horizon has passed and whether a handoff has expired. Same repo, two
-// different days, two different banners.
+// review horizon has passed and whether a handoff has expired,
+// and the source field of the stdin payload, which decides whether the resume
+// card is appended. Same repo, two different days or two different starts,
+// two different banners.
 
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { basename, dirname, join, resolve, sep } from "node:path";
+import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
+import { isatty } from "node:tty";
 import { fileURLToPath } from "node:url";
 
 const STATE_SEGMENTS = [".stamity"];
@@ -199,13 +206,16 @@ function inspect(dir, name, maxBytes, coversSummary) {
  * copy. A union, never a replacement — the normalized copy adds the refusals a
  * lookalike or a combining mark hid, and the raw copy keeps the ones NFKC
  * destroys by composing a trailing mark into the letter before it.
+ *
+ * Returns the first matching pattern id in SCREEN order, or "" when none
+ * matches: a refusal that names its pattern is one somebody can attribute.
  */
-function screened(raw) {
+function screenHit(raw) {
   const stripped = raw.replace(INVISIBLE, "");
   const copies = [raw, stripped];
   const normalized = normalizeForScreen(stripped);
   if (normalized !== stripped) copies.push(normalized);
-  return SCREEN.some((entry) =>
+  const hit = SCREEN.find((entry) =>
     copies.some((copy) => {
       // A `g`-flagged row carries `lastIndex` between calls, and this now tests
       // three copies per row: without the reset the second copy would resume
@@ -214,6 +224,12 @@ function screened(raw) {
       return entry.re.test(copy);
     }),
   );
+  return hit === undefined ? "" : hit.id;
+}
+
+/** Whether any screen pattern matches. */
+function screened(raw) {
+  return screenHit(raw) !== "";
 }
 
 /**
@@ -438,7 +454,395 @@ function fileName(doc) {
   return text(doc.name, "(unnamed file)");
 }
 
+function readPayload() {
+  let raw = "";
+  try {
+    raw = readFileSync(0, "utf8");
+  } catch {
+    return {};
+  }
+  if (raw.trim() === "") return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed !== null && typeof parsed === "object" ? parsed : {};
+  } catch {
+    // An unparseable payload names no agent and no tool, so it attributes to
+    // nothing this script governs — treated as out of scope, never as a
+    // finding, so a client's payload change cannot brick a session.
+    return {};
+  }
+}
+
+function field(payload, names) {
+  for (const name of names) {
+    const value = Object.hasOwn(payload, name) ? payload[name] : undefined;
+    if (typeof value === "string" && value !== "") return value;
+  }
+  return "";
+}
+
+const CARD_RUNS_DIR = "runs";
+const CARD_RUNS_REL = ".stamity/runs";
+const CARD_RUN_ID = new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}_[a-z0-9-]+$", "");
+const CARD_REPORTS_DIR = "reports";
+const CARD_LEDGER_FILE = "ledger.jsonl";
+const CARD_RECORD_FILE = "record.md";
+const CARD_FINDINGS_OPEN = new RegExp("^ {0,3}```stamity-findings[ \\t]*$", "");
+const CARD_FENCE_CLOSE = new RegExp("^ {0,3}```[ \\t]*$", "");
+const CARD_STATUS = new RegExp("^status:\\s*(.*)$", "i");
+const CARD_PLAN = new RegExp("^plan:\\s*(.+)$", "i");
+const CARD_INVOCATION = new RegExp("^invocation:\\s*(.+)$", "i");
+const CARD_IN_PROGRESS = new RegExp("\\bin progress\\b", "i");
+const CARD_HEAD_LINES = 15;
+const CARD_HEAD_READ_BYTES = 65536;
+const CARD_REPORT_MAX_BYTES = 1048576;
+const CARD_GIT_MAX_BYTES = 4096;
+const CARD_MAX_CHARS = 2000;
+const CARD_LIST_MAX = 10;
+const CARD_FIELD_MAX = 200;
+const CARD_RECOVERY_NOTE = "the ledger is the recovery point";
+const CARD_NEXT_LINE = "next: read the open rows and the listed reports before dispatching anything";
+const CARD_NOT_RECORDED = "(not recorded)";
+
+/** A regular file, never through a link. Absent or unreadable reads as not one. */
+function cardRegularFile(path) {
+  try {
+    return lstatSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** A real directory, never through a link. Absent or unreadable reads as not one. */
+function cardRealDir(path) {
+  try {
+    return lstatSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** Whether anything, a dangling link included, sits at path. */
+function cardExists(path) {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A git metadata file's text, trimmed: only a regular file (never through a
+ * link) of at most CARD_GIT_MAX_BYTES bytes. Null otherwise, or when unreadable.
+ */
+function cardGitText(path) {
+  try {
+    const stats = lstatSync(path);
+    if (!stats.isFile() || stats.size > CARD_GIT_MAX_BYTES) return null;
+    return readFileSync(path, "utf8").trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The record's head: its first CARD_HEAD_LINES lines, from at most
+ * CARD_HEAD_READ_BYTES bytes, BOM stripped. The first status, plan and
+ * invocation line each win. Null when the record is absent, a link, or
+ * unreadable.
+ */
+function cardRecordHead(path) {
+  if (!cardRegularFile(path)) return null;
+  let raw = "";
+  let fd = -1;
+  try {
+    fd = openSync(path, "r");
+    const buffer = Buffer.alloc(CARD_HEAD_READ_BYTES);
+    let filled = 0;
+    while (filled < buffer.length) {
+      const read = readSync(fd, buffer, filled, buffer.length - filled, filled);
+      if (read === 0) break;
+      filled += read;
+    }
+    raw = buffer.toString("utf8", 0, filled);
+  } catch {
+    return null;
+  } finally {
+    if (fd !== -1) {
+      try {
+        closeSync(fd);
+      } catch {
+        // The bytes are already read; a failed close changes nothing printed.
+      }
+    }
+  }
+  const text = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+  const head = { status: null, plan: "", invocation: "" };
+  for (const line of text.split(/\r?\n/).slice(0, CARD_HEAD_LINES)) {
+    const status = CARD_STATUS.exec(line);
+    if (status !== null && head.status === null) head.status = status[1];
+    const plan = CARD_PLAN.exec(line);
+    if (plan !== null && head.plan === "") head.plan = plan[1];
+    const invocation = CARD_INVOCATION.exec(line);
+    if (invocation !== null && head.invocation === "") head.invocation = invocation[1];
+  }
+  return {
+    inProgress: head.status !== null && CARD_IN_PROGRESS.test(head.status),
+    plan: head.plan,
+    invocation: head.invocation,
+  };
+}
+
+/** Open row ids in file order, and every report path a row carries. Bad lines are skipped. */
+function cardLedger(path) {
+  const open = [];
+  const ledgered = new Set();
+  if (!cardRegularFile(path)) return { open, ledgered };
+  let raw;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch {
+    return { open, ledgered };
+  }
+  for (const line of raw.split(/\r?\n/)) {
+    if (line.trim() === "") continue;
+    let row;
+    try {
+      row = JSON.parse(line);
+    } catch {
+      // One torn or hand-mangled line; the rows around it still count.
+      continue;
+    }
+    if (row === null || typeof row !== "object" || Array.isArray(row)) continue;
+    if (typeof row.id === "string" && row.state === "open") open.push(row.id);
+    if (typeof row.report === "string") ledgered.add(row.report);
+  }
+  return { open, ledgered };
+}
+
+/** Whether the first findings block holds at least one non-blank line before it closes. */
+function cardHasFindings(raw) {
+  const lines = raw.split(/\r?\n/);
+  const start = lines.findIndex((line) => CARD_FINDINGS_OPEN.test(line));
+  if (start === -1) return false;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (CARD_FENCE_CLOSE.test(lines[index])) return false;
+    if (lines[index].trim() !== "") return true;
+  }
+  return false;
+}
+
+/**
+ * Reports that hold findings no ledger row points at, as repo-relative paths.
+ * A report too large to read, or one that cannot be read, is listed: its
+ * findings cannot be ruled out. A linked reports folder is not read at all.
+ */
+function cardUnledgered(runDir, run, ledgered) {
+  const reportsDir = join(runDir, CARD_REPORTS_DIR);
+  if (!cardRealDir(reportsDir)) return [];
+  let entries;
+  try {
+    entries = readdirSync(reportsDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const names = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+    .map((entry) => entry.name)
+    .sort();
+  const out = [];
+  for (const name of names) {
+    const rel = CARD_RUNS_REL + "/" + run + "/" + CARD_REPORTS_DIR + "/" + name;
+    if (ledgered.has(rel)) continue;
+    const path = join(runDir, CARD_REPORTS_DIR, name);
+    let size;
+    try {
+      const stats = lstatSync(path);
+      if (!stats.isFile()) continue;
+      size = stats.size;
+    } catch {
+      continue;
+    }
+    if (size > CARD_REPORT_MAX_BYTES) {
+      out.push(rel);
+      continue;
+    }
+    let raw;
+    try {
+      raw = readFileSync(path, "utf8");
+    } catch {
+      // Unreadable is not empty: what it holds cannot be ruled out.
+      out.push(rel);
+      continue;
+    }
+    if (cardHasFindings(raw)) out.push(rel);
+  }
+  return out;
+}
+
+/** A worktree HEAD as the branch it names. */
+function cardBranch(head) {
+  if (head.startsWith("ref: refs/heads/")) return head.slice("ref: refs/heads/".length);
+  if (head.startsWith("ref: ")) return head.slice("ref: ".length);
+  if (/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(head)) return "detached " + head.slice(0, 7);
+  return "unknown";
+}
+
+/**
+ * The git common dir: .git itself when it is a directory, or, when .git is the
+ * pointer file a linked worktree carries, the directory it names followed
+ * through its commondir. Null when neither holds, or when the pointer or the
+ * commondir is a link, too large, or unreadable.
+ */
+function cardCommonDir(rootDir) {
+  const dotGit = join(rootDir, ".git");
+  try {
+    const stats = lstatSync(dotGit);
+    if (stats.isDirectory()) return dotGit;
+    if (!stats.isFile()) return null;
+    const text = cardGitText(dotGit);
+    if (text === null) return null;
+    const pointer = /^gitdir:[ \t]*(.+)$/.exec(text.split(/\r?\n/)[0].trim());
+    if (pointer === null) return null;
+    const target = pointer[1].trim();
+    // Git resolves a relative pointer against the directory holding .git.
+    const gitDir = isAbsolute(target) ? target : resolve(dirname(dotGit), target);
+    // No commondir: the pointer names the common dir itself.
+    let common = "";
+    const commondir = join(gitDir, "commondir");
+    if (cardExists(commondir)) {
+      const named = cardGitText(commondir);
+      if (named === null) return null;
+      common = named;
+    }
+    return resolve(gitDir, common);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Linked worktrees as "<path> [<branch>]", sorted. The main checkout is not a
+ * lane, and neither is one whose gitdir names nothing on disk any more: git
+ * calls that lane prunable, and it holds no work to resume.
+ */
+function cardLanes(rootDir) {
+  const common = cardCommonDir(rootDir);
+  if (common === null) return [];
+  const worktrees = join(common, "worktrees");
+  let admins;
+  try {
+    admins = readdirSync(worktrees, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return [];
+  }
+  const out = [];
+  for (const name of admins) {
+    const admin = join(worktrees, name);
+    const gitdir = cardGitText(join(admin, "gitdir"));
+    if (gitdir === null) continue;
+    const target = isAbsolute(gitdir) ? gitdir : resolve(admin, gitdir);
+    if (!cardExists(target)) continue;
+    const located = target.replace(/[\\/]\.git$/, "").replaceAll("\\", "/");
+    const head = cardGitText(join(admin, "HEAD"));
+    out.push(located + " [" + (head === null ? "unknown" : cardBranch(head)) + "]");
+  }
+  return out.sort();
+}
+
+/** One field as one bounded line. */
+function cardFlat(value) {
+  const flat = String(value).replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+  return flat.length > CARD_FIELD_MAX ? flat.slice(0, CARD_FIELD_MAX - 1) + "…" : flat;
+}
+
+/** " (<first k>, … +<rest> more)", or "" for an empty list. */
+function cardList(items, k) {
+  if (items.length === 0) return "";
+  const shown = items.slice(0, k).map(cardFlat);
+  if (items.length > k) shown.push("… +" + (items.length - k) + " more");
+  return " (" + shown.join(", ") + ")";
+}
+
+function cardRender(run, head, open, unledgered, lanes, nowMs, k) {
+  const plan = cardFlat(head.plan);
+  const invocation = cardFlat(head.invocation);
+  return [
+    "stamity resume card — run " + run + " (as of " + new Date(nowMs).toISOString().slice(0, 16) + "Z)",
+    "plan: " + (plan === "" ? CARD_NOT_RECORDED : plan) +
+      "  ·  invocation: " + (invocation === "" ? CARD_NOT_RECORDED : invocation),
+    "ledger: " + open.length + " open rows" + cardList(open, k) + "  ·  " + CARD_RECOVERY_NOTE,
+    "reports without a ledger row: " + unledgered.length + cardList(unledgered, k),
+    "lanes: " + lanes.length + cardList(lanes, k),
+    CARD_NEXT_LINE,
+  ];
+}
+
+/**
+ * The resume card of the newest run in progress, or null when none is. Lists
+ * shrink until the card fits CARD_MAX_CHARS; with every list at zero it always
+ * does. A card whose text trips the screen is withheld whole.
+ */
+function resumeCardLines(rootDir, stateRoot, nowMs) {
+  const runsDir = join(stateRoot, CARD_RUNS_DIR);
+  // A linked runs folder is not this repo's runs: nothing in it is read.
+  if (!cardRealDir(runsDir)) return null;
+  let entries;
+  try {
+    entries = readdirSync(runsDir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  let chosen = null;
+  for (const entry of entries) {
+    // A link to a directory is not a directory here: a run is never followed out of the tree.
+    if (!entry.isDirectory() || !CARD_RUN_ID.test(entry.name)) continue;
+    const head = cardRecordHead(join(runsDir, entry.name, CARD_RECORD_FILE));
+    if (head === null || !head.inProgress) continue;
+    if (chosen === null || entry.name > chosen.run) chosen = { run: entry.name, head };
+  }
+  if (chosen === null) return null;
+
+  const runDir = join(runsDir, chosen.run);
+  const ledger = cardLedger(join(runDir, CARD_LEDGER_FILE));
+  const unledgered = cardUnledgered(runDir, chosen.run, ledger.ledgered);
+  const lanes = cardLanes(rootDir);
+
+  let lines = [];
+  for (let k = CARD_LIST_MAX; k >= 0; k -= 1) {
+    lines = cardRender(chosen.run, chosen.head, ledger.open, unledgered, lanes, nowMs, k);
+    if (lines.join("\n").length <= CARD_MAX_CHARS) break;
+  }
+  const hit = screenHit(lines.join("\n"));
+  if (hit !== "") {
+    return [
+      "stamity resume card — run " + chosen.run + " withheld: its text matched screen pattern " + hit + "; " +
+        CARD_RECOVERY_NOTE,
+    ];
+  }
+  return lines;
+}
+
+// Which start this is. A person running the script at a terminal sends no
+// payload, so a TTY is never read — reading it would wait for input nobody is
+// going to type. The check asks fd 0 directly: touching process.stdin would
+// open it as a non-blocking stream, and the read below would then fail with
+// EAGAIN whenever the client had not finished writing yet. Only a start after
+// a compaction appends the card: a fresh session has no run state to lose, and
+// a client that sends no source (or never sends "compact") gets the banner it
+// always got.
+const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);
+
 // Written once, then the process ends on its own. `process.exit` would race
 // the write: stdout is asynchronous when it is a pipe on macOS and the BSDs,
 // which is exactly how a client runs a hook.
-process.stdout.write(render().join("\n") + "\n");
+const lines = render();
+if (SOURCE === "compact") {
+  const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW);
+  if (card !== null) lines.push("", ...card);
+}
+process.stdout.write(lines.join("\n") + "\n");
