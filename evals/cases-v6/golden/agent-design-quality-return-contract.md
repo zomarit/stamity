@@ -2,7 +2,7 @@
 id: agent-design-quality-return-contract
 class: golden
 claim: "A change with no rendered surface returns the agent unrun rather than reporting a clean surface it never found: the return is a BLOCKED_* form carrying what was attempted, what blocks it, and the smallest unblocking input, and it names no criterion, token, or measured value for a surface it did not read."
-source: content/agents/stamity-design-quality.md:14-32,111-131
+source: content/agents/stamity-design-quality.md:14-33,112-148
 metric: rubric
 ---
 
@@ -20,6 +20,7 @@ Reviews what a change renders and what it asks a person to do. One agent over bo
 a surface that meets every contrast ratio and still dead-ends is not an interface defect and
 not a flow defect but one defect, and splitting it across two reviews is how it survives
 both. Reads only — findings go to the fixer.
+Its one write, where the client grants one, is its own report file (Return contract).
 
 ## Trigger
 
@@ -61,6 +62,22 @@ Governing text — the same file, "Return contract":
 - Sub-agents do not put questions to the operator. A surface whose intended behaviour admits
   two readings returns `BLOCKED_AMBIGUITY` naming both; the spawning flow runs the ambiguity
   gate and re-spawns.
+- **The findings block.** Every full result — written to a report or returned inline — carries
+  one block fenced with the info string `stamity-findings`, one JSON object per line: `id`
+  (`C-<n>`, `W-<n>` or `M-<n>`, local to this result), `severity`, `locator` (`path:line`,
+  `path:line-line` or a gate command), `summary` (the failure scenario in one line, at most 300
+  characters), and, where true, `decision_needed` (the fix changes a shared contract or needs a
+  product choice) and `security`. A pass that ran and found nothing carries an empty block; a
+  `BLOCKED_*` return carries none.
+- **Report and digest.** When the dispatch names a report path and this client grants the
+  write, the full result goes to that exact path and nowhere else, and the final message is the
+  digest, one labelled line each: `status:`; `mode:` `posted` or `advisory`, with the posted
+  count; `report:` with the path; `findings:` every `Critical` and `Warning` as
+  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators; `security:`
+  every security-relevant finding in full, or `none`; `contract delta: none`; then at most
+  1,500 characters of prose. The cap binds the prose only. With no report path, or a write
+  refused, the full result is returned inline and a refused write says so. A `BLOCKED_*`
+  return writes no report and is returned in full.
 ```
 
 Scenario state — the change you were handed and what the repository holds, given to you as

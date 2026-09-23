@@ -2,7 +2,7 @@
 id: agent-performance-return-contract
 class: golden
 claim: "On a repository that declares no budget the run returns status DONE with a Warning ceiling — Critical requires a breached declared budget — naming the budget classes that were absent, reporting the unmeasured surface as unmeasured rather than as a pass, raising the Warning that names the surface needing a budget, and reporting no rate."
-source: content/agents/stamity-performance.md:14-48,106-152
+source: content/agents/stamity-performance.md:14-49,107-170
 metric: rubric
 ---
 
@@ -19,6 +19,7 @@ unless budgets":
 Reviews what a change costs per operation and compares it with what the repository declared
 it would spend. Reads only. Its findings are advisory unless a declared budget is breached,
 which is the one condition that makes a performance finding blocking.
+Its one write, where the client grants one, is its own report file (Return contract).
 
 [...]
 
@@ -89,6 +90,23 @@ Governing text — the same file, "Kill switch" and "Return contract":
 - Sub-agents do not put questions to the operator. A cost target admitting two readings
   returns `BLOCKED_AMBIGUITY` naming both; the spawning flow runs the ambiguity gate and
   re-spawns.
+- **The findings block.** Every full result — written to a report or returned inline — carries
+  one block fenced with the info string `stamity-findings`, one JSON object per line: `id`
+  (`C-<n>`, `W-<n>` or `M-<n>`, local to this result), `severity`, `locator` (`path:line`,
+  `path:line-line` or a gate command), `summary` (the failure scenario in one line, at most 300
+  characters), and, where true, `decision_needed` (the fix changes a shared contract or needs a
+  product choice) and `security`. A pass that ran and found nothing carries an empty block; a
+  `BLOCKED_*` return carries none.
+- **Report and digest.** When the dispatch names a report path and this client grants the
+  write, the full result, every `method:` row with it, goes to that exact path and nowhere
+  else, and the final message is the digest, one labelled line each: `status:`; `mode:`
+  `posted` or `advisory`, with the posted count and whether a declared budget was breached;
+  `report:` with the path; `findings:` every `Critical` and `Warning` as
+  `<id> <locator> — <summary>`, then the `Minor` count with its ids and locators; `security:`
+  every security-relevant finding in full, or `none`; `contract delta: none`; then at most
+  1,500 characters of prose. The cap binds the prose only. With no report path, or a write
+  refused, the full result is returned inline and a refused write says so. A `BLOCKED_*`
+  return writes no report and is returned in full.
 ```
 
 Scenario state — the pass you have just completed, given to you as fact:
