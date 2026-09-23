@@ -542,6 +542,16 @@ describe("the run of record is carried to the release the tree ships as", () => 
     ).not.toBe(runRelease);
   });
 
+  it("renders the carried-to release through the guard, not the bare constant", () => {
+    // The guard is only a guard if the template calls it: interpolating RUN_OF_RECORD_CARRIED_TO
+    // directly renders the same page today and leaves every other case green.
+    const source = readFileSync(MODULE_SOURCE_PATH, "utf-8");
+    expect(source).toMatch(
+      /carried to \$\{carriedToRelease\(RUN_OF_RECORD_RELEASE, RUN_OF_RECORD_CARRIED_TO\)\}/,
+    );
+    expect(source).not.toMatch(/carried to \$\{RUN_OF_RECORD_CARRIED_TO\}/);
+  });
+
   it("refuses to render a carried-to release equal to the run's own, naming what to delete", () => {
     // Non-degenerate on both sides: two distinct releases pass through untouched, and the equal
     // pair is refused with the instruction rather than rendered.
