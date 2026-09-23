@@ -33,8 +33,8 @@
  * top class for the whole-branch pass, and the fixer's drop to the cheapest
  * class once a round is mechanical.
  *
- * ONE FLOW PLACEMENT IS NOT RECORDED HERE, and a reader has to know which.
- * The review loop's round-4 rule — a fresh fixer on a stronger model class,
+ * TWO FLOW PLACEMENTS ARE NOT RECORDED HERE, and a reader has to know which.
+ * The first is the review loop's round-4 rule. That rule — a fresh fixer on a stronger model class,
  * stated in `content/agents/stamity-fixer.md` and `content/commands/st-work.md`
  * — names no class, and no row below places `fixer` above `standard`. So an
  * agent verifying a role's class against this table after substitution will not
@@ -44,6 +44,14 @@
  * because a role column here is pinned in both directions against the corpus
  * frontmatter and the shipped table, and inventing a placement to make the
  * sentence resolve would move all three.
+ *
+ * The second is the capacity rung in `content/commands/st-work.md`'s Dispatch
+ * contract: under a `limit-no-reset` stop (credits, or a model limit with no
+ * reset) a build role may drop one class, named in the proof block as the class
+ * it ran at. The drop is relative to the role's own class and names no target
+ * rung, so no row below carries it and nothing here resolves a value for it:
+ * that drop is prompt-carried too, for the same reason the round-4 class is.
+ * Verdict roles and the spec-author never fall back to a weaker class.
  *
  * NEVER INVENT A VALUE. A class this module cannot resolve for a client yields
  * `undefined`, and the adapter omits the key. The client then applies its own

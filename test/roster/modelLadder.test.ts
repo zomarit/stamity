@@ -698,9 +698,19 @@ describe("the ladder's own exposure disclosures", () => {
     expect(rungs).toEqual(["standard", "economy"]);
 
     const prose = ladderProse();
-    expect(prose).toContain("ONE FLOW PLACEMENT IS NOT RECORDED HERE");
+    // TEST CHANGE, justified (2026-09-23): the pin read "ONE FLOW PLACEMENT IS NOT
+    // RECORDED HERE". The /st-work capacity rung (REQ-LADDER-003) added a second
+    // unrecorded placement — a build role's one-class drop under `limit-no-reset` —
+    // so the header's count moved from one to two on purpose; the round-4 pins below
+    // are unchanged and the new placement gets its own assertions.
+    expect(prose).toContain("TWO FLOW PLACEMENTS ARE NOT RECORDED HERE");
+    expect(prose).not.toContain("ONE FLOW PLACEMENT IS NOT RECORDED HERE");
     expect(prose).toMatch(/no row below places `fixer` above `standard`/);
     expect(prose).toMatch(/that escalation is prompt-carried/i);
+    // The second: the capacity rung's drop names no target class either.
+    expect(prose).toMatch(/capacity rung/i);
+    expect(prose).toMatch(/`limit-no-reset`/);
+    expect(prose).toMatch(/that drop is prompt-carried too/i);
     // The two placements that ARE recorded stay recorded, so the correction narrows the
     // claim rather than dropping it.
     expect(prose).toMatch(/two placements no frontmatter can declare ARE recorded here/i);
