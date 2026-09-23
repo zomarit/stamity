@@ -1,0 +1,468 @@
+// The replay's findings reader and its deterministic matcher (REPLAY-v1 §9).
+//
+// Findings reach the measurement in two shapes. The 1.9.1 baseline returns free text, read here by
+// a block heuristic (`extractFreeText`). The changed shape writes a report whose `stamity-findings`
+// block (C2) is read strictly (`parseFindingsBlock`), returns a digest (C4, both the reviewer's and
+// a lens's) read by its labels (`parseDigest`), closes rows with a `stamity-closures` block (C9,
+// `parseClosures`), and appends ledger rows (C3, `ledgerFindings`). Every reader returns the same
+// `Finding` row:
+//
+//   { source: "return" | "report" | "digest" | "ledger", role, file, line, lineEnd, severity, text,
+//     localId | null, ledgerId | null, reportPath | null }
+//
+// plus `decisionNeeded: true` and `security: true` only where the source says so. `file` is the
+// repo-relative POSIX path (absolute fixture and worktree paths are made relative first); `file`
+// and `line` are null where the locator is a gate command or absent.
+//
+// `matchItems` scores findings against the seeded items by the three §9 rules — the same file, a
+// line range intersecting the item's span widened by the tolerance, and one accepted term as a
+// case-insensitive substring — with no model call. A location match without a term goes to the
+// adjudication list, never to the score.
+//
+// The fence grammar (a backtick fence, at most three spaces of indent, the info string exact) is
+// the product's own (`src/runs/layout.ts`, `fenceOpenPattern`), restated here because a contributor
+// script cannot import the TypeScript engine.
+
+// ---------- shared grammar ----------
+
+const SEVERITY_BY_LETTER = { C: 'Critical', W: 'Warning', M: 'Minor' }
+const SEVERITIES = new Set(Object.values(SEVERITY_BY_LETTER))
+const CLOSURE_STATUSES = new Set(['fixed', 'not-fixed', 'regressed', 'rejection-upheld', 'rejection-overturned'])
+const SUMMARY_MAX = 300
+
+/** The free-text locator (the unit's contract, verbatim): a path with a code or doc extension, then `:<n>` or `#L<n>`. */
+const LOCATOR = /(?<![\w/.-])((?:[\w.-]+\/)*[\w.-]+\.(?:ts|js|mjs|json|md))(?::|#L)(\d+)(?:\s*[-–]\s*(\d+))?/g
+const FINDING_WORD = /\b(Critical|Warning)\b/
+const SEVERITY_WORD = /\b(Critical|Warning|Minor)\b/
+
+const FENCE_OPEN = /^ {0,3}```([^`]*?)[ \t]*$/
+const FENCE_CLOSE = /^ {0,3}```[ \t]*$/
+const STRUCTURED_FENCES = new Set(['stamity-findings', 'stamity-closures'])
+
+/** Replace every `<root>/` prefix with nothing, the longest root first so a worktree inside the fixture wins. */
+function relativize(text, roots) {
+  let out = String(text ?? '')
+  const sorted = (roots || []).filter((r) => typeof r === 'string' && r).map((r) => r.replace(/[\\/]+$/, '')).toSorted((a, b) => b.length - a.length)
+  for (const root of sorted) out = out.split(`${root}/`).join('')
+  return out
+}
+
+const normalizeFile = (file) => file.replace(/^(?:\.\/)+/, '')
+
+/**
+ * A structured locator (C2's `path:line`, `path:line-line`, or a gate command). Anything that is
+ * not a single path token ending in a line number reads as a command: no file, no line.
+ */
+function parseLocator(locator, roots) {
+  const raw = relativize(String(locator ?? '').trim().replace(/^`+|`+$/g, ''), roots).trim()
+  const m = raw.match(/^(\S+?)(?::|#L)(\d+)(?:\s*[-–]\s*L?(\d+))?$/)
+  if (!m) return { file: null, line: null, lineEnd: null }
+  const line = Number(m[2])
+  const end = m[3] === undefined ? line : Number(m[3])
+  return { file: normalizeFile(m[1]), line: Math.min(line, end), lineEnd: Math.max(line, end) }
+}
+
+/** Every distinct free-text locator in a text, in order of first appearance. */
+function locatorsIn(text) {
+  const seen = new Set()
+  const out = []
+  for (const m of text.matchAll(LOCATOR)) {
+    const line = Number(m[2])
+    const end = m[3] === undefined ? line : Number(m[3])
+    const loc = { file: normalizeFile(m[1]), line: Math.min(line, end), lineEnd: Math.max(line, end) }
+    const key = `${loc.file}:${loc.line}:${loc.lineEnd}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      out.push(loc)
+    }
+  }
+  return out
+}
+
+function finding(meta, loc, fields) {
+  return {
+    source: meta.source,
+    role: meta.role ?? null,
+    file: loc.file,
+    line: loc.line,
+    lineEnd: loc.lineEnd,
+    severity: fields.severity ?? null,
+    text: fields.text ?? '',
+    localId: fields.localId ?? null,
+    ledgerId: fields.ledgerId ?? null,
+    reportPath: fields.reportPath ?? null,
+    ...(fields.decisionNeeded === true ? { decisionNeeded: true } : {}),
+    ...(fields.security === true ? { security: true } : {}),
+  }
+}
+
+/**
+ * The JSON lines of every fence whose info string is exactly `info`, each with its 1-based line
+ * number in `text`. An unclosed fence runs to the end of the text and is reported as an error.
+ */
+function fencedLines(text, info) {
+  const lines = String(text ?? '').split(/\r?\n/)
+  const rows = []
+  const errors = []
+  for (let i = 0; i < lines.length; i++) {
+    const open = lines[i].match(FENCE_OPEN)
+    if (!open) continue
+    const isTarget = open[1].trim() === info
+    let j = i + 1
+    while (j < lines.length && !FENCE_CLOSE.test(lines[j])) {
+      if (isTarget && lines[j].trim() !== '') rows.push({ line: j + 1, text: lines[j] })
+      j++
+    }
+    if (isTarget && j >= lines.length) errors.push({ line: i + 1, text: lines[i], reason: `unclosed ${info} fence` })
+    i = j
+  }
+  return { rows, errors }
+}
+
+function parseJsonObject(raw) {
+  try {
+    const value = JSON.parse(raw)
+    return value && typeof value === 'object' && !Array.isArray(value) ? { value } : { reason: 'not a JSON object' }
+  } catch (error) {
+    return { reason: `not JSON (${error instanceof Error ? error.message : String(error)})` }
+  }
+}
+
+// ---------- free text (the baseline) ----------
+
+const HEADING = /^ {0,3}#{1,6}(?:\s|$)/
+const TABLE_ROW = /^\s*\|/
+const LIST_ITEM = /^(\s*)(?:[-*+]|\d+[.)])\s+/
+const indentOf = (line) => line.match(/^\s*/)[0].length
+
+/**
+ * The text split into sections (a heading and the lines below it up to the next heading; the lines
+ * before the first heading form a section with no heading) and, inside each, leaf blocks: a table
+ * row, a list item with its indented continuation, a paragraph, or a fence other than the two
+ * structured ones (those belong to `parseFindingsBlock` and `parseClosures`, and are dropped).
+ */
+function sectionsOf(text) {
+  const lines = text.split(/\r?\n/)
+  const sections = [{ head: null, leaves: [] }]
+  let current = sections[0]
+  let paragraph = null
+  const endParagraph = () => {
+    if (paragraph) current.leaves.push(paragraph.join('\n'))
+    paragraph = null
+  }
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const fence = line.match(FENCE_OPEN)
+    if (fence) {
+      endParagraph()
+      let j = i + 1
+      while (j < lines.length && !FENCE_CLOSE.test(lines[j])) j++
+      if (!STRUCTURED_FENCES.has(fence[1].trim())) current.leaves.push(lines.slice(i, j + 1).join('\n'))
+      i = j
+    } else if (line.trim() === '') {
+      endParagraph()
+    } else if (HEADING.test(line)) {
+      endParagraph()
+      current = { head: line, leaves: [] }
+      sections.push(current)
+    } else if (TABLE_ROW.test(line)) {
+      endParagraph()
+      current.leaves.push(line)
+    } else if (LIST_ITEM.test(line)) {
+      endParagraph()
+      const indent = indentOf(line)
+      const item = [line]
+      while (
+        i + 1 < lines.length &&
+        lines[i + 1].trim() !== '' &&
+        indentOf(lines[i + 1]) > indent &&
+        !LIST_ITEM.test(lines[i + 1]) &&
+        !TABLE_ROW.test(lines[i + 1]) &&
+        !HEADING.test(lines[i + 1]) &&
+        !FENCE_OPEN.test(lines[i + 1])
+      ) item.push(lines[++i])
+      current.leaves.push(item.join('\n'))
+    } else {
+      if (!paragraph) paragraph = []
+      paragraph.push(line)
+    }
+  }
+  endParagraph()
+  return sections
+}
+
+/** One Finding per distinct locator of a block that holds `Critical` or `Warning`; its severity is the block's first severity word. */
+function blockFindings(block, meta) {
+  if (!FINDING_WORD.test(block)) return []
+  const severity = block.match(SEVERITY_WORD)[1]
+  return locatorsIn(block).map((loc) => finding(meta, loc, { severity, text: block, reportPath: meta.reportPath }))
+}
+
+/**
+ * Findings in a free-text return (the baseline shape). A block is a finding iff it holds
+ * `Critical` or `Warning` and at least one locator; one Finding per distinct locator, with the
+ * block's first severity word (`Critical`, `Warning` or `Minor`) and the block as its text.
+ *
+ * Leaf blocks are read first. A leaf holding any severity word classifies itself, so a `Minor` row
+ * is never promoted by a sibling's word. What is left of a headed section — the heading line plus
+ * its unclassified leaves — is then read as one block, so `## Critical` over a bare list item
+ * still yields a Critical finding. A path with no line (a directory, a bare file) is no locator and
+ * yields nothing, counted neither as a finding nor as unmatched.
+ *
+ * meta: `{ source = "return", role, roots: absolute fixture and worktree roots to strip, reportPath }`.
+ */
+export function extractFreeText(text, meta = {}) {
+  const m = { ...meta, source: meta.source ?? 'return' }
+  const out = []
+  for (const section of sectionsOf(relativize(text, meta.roots))) {
+    const unclassified = []
+    for (const leaf of section.leaves) {
+      if (SEVERITY_WORD.test(leaf)) out.push(...blockFindings(leaf, m))
+      else unclassified.push(leaf)
+    }
+    if (section.head !== null) out.push(...blockFindings([section.head, ...unclassified].join('\n'), m))
+  }
+  return out
+}
+
+// ---------- the C2 findings block ----------
+
+function checkFindingRow(row) {
+  const id = typeof row.id === 'string' ? row.id.match(/^([CWM])-(\d+)$/) : null
+  if (!id) return 'id is not C-<n>, W-<n> or M-<n>'
+  if (!SEVERITIES.has(row.severity)) return 'severity is not Critical, Warning or Minor'
+  if (SEVERITY_BY_LETTER[id[1]] !== row.severity) return `id letter ${id[1]} does not match severity ${row.severity}`
+  if (typeof row.locator !== 'string' || !row.locator.trim()) return 'locator is missing'
+  if (typeof row.summary !== 'string' || !row.summary.trim()) return 'summary is missing'
+  if (/[\r\n]/.test(row.summary)) return 'summary is not one line'
+  if (row.summary.length > SUMMARY_MAX) return `summary is over ${SUMMARY_MAX} characters`
+  for (const key of ['decision_needed', 'security']) {
+    if (row[key] !== undefined && typeof row[key] !== 'boolean') return `${key} is not a boolean`
+  }
+  return null
+}
+
+/**
+ * The C2 rows of every `stamity-findings` fence in `text`. A malformed line goes to `errors` as
+ * `{ line, text, reason }` (its 1-based line number in `text`) and is skipped; keys beyond C2's
+ * are tolerated. meta: `{ source = "report", role, roots, reportPath }`.
+ */
+export function parseFindingsBlock(text, meta = {}) {
+  const m = { ...meta, source: meta.source ?? 'report' }
+  const { rows, errors } = fencedLines(text, 'stamity-findings')
+  const findings = []
+  for (const { line, text: raw } of rows) {
+    const parsed = parseJsonObject(raw)
+    const reason = parsed.reason ?? checkFindingRow(parsed.value)
+    if (reason) {
+      errors.push({ line, text: raw, reason })
+      continue
+    }
+    const row = parsed.value
+    findings.push(finding(m, parseLocator(row.locator, meta.roots), {
+      severity: row.severity,
+      text: row.summary,
+      localId: row.id,
+      reportPath: meta.reportPath,
+      decisionNeeded: row.decision_needed,
+      security: row.security,
+    }))
+  }
+  return { findings, errors: errors.toSorted((a, b) => a.line - b.line) }
+}
+
+// ---------- the C4 digest ----------
+
+const DIGEST_LABELS = ['status', 'verdict', 'confidence', 'mode', 'report', 'findings', 'security', 'contract delta']
+const DIGEST_LABEL = new RegExp(`^\\s*(?:[-*]\\s+)?\\**\\s*(${DIGEST_LABELS.join('|')})\\s*\\**\\s*:\\s*\\**\\s*(.*?)\\s*$`, 'i')
+const stripTicks = (value) => value.replace(/^`+|`+$/g, '').trim()
+
+/**
+ * The labelled lines of a digest: the first occurrence of each label wins, and a label's value runs
+ * on over the following lines until a blank line or the next label.
+ */
+function digestFields(text) {
+  const fields = {}
+  let current = null
+  for (const line of String(text ?? '').split(/\r?\n/)) {
+    const label = line.match(DIGEST_LABEL)
+    if (label) {
+      const key = label[1].toLowerCase()
+      current = key in fields ? null : key
+      if (current) fields[current] = [label[2]]
+    } else if (line.trim() === '') current = null
+    else if (current) fields[current].push(line.trim())
+  }
+  return Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.join('\n').trim()]))
+}
+
+/** An entry id starts an entry only at the start of the value, a line, or after a separator. */
+const ENTRY_ID = /(?<![A-Za-z0-9-])([CWM])-(\d+)(?=\s)/g
+const ENTRY_LEAD = /(?:^|[;,·(|:]|^\s*(?:[-*]\s+)?)\s*$/
+
+/**
+ * The entries of a digest's `findings:` value: `<id> <locator> — <summary>` for Critical and
+ * Warning, `<id> <locator>` for the Minors it lists. The locator is the text between the id and
+ * the first spaced dash (a gate command may hold spaces), or the first token when there is none;
+ * the summary runs to the end of its line.
+ */
+function digestEntries(value) {
+  const starts = []
+  for (const m of value.matchAll(ENTRY_ID)) {
+    const before = value.slice(0, m.index)
+    const lineStart = before.lastIndexOf('\n') + 1
+    if (ENTRY_LEAD.test(before.slice(lineStart))) starts.push(m)
+  }
+  return starts.map((m, k) => {
+    const end = k + 1 < starts.length ? starts[k + 1].index : value.length
+    const body = value.slice(m.index + m[0].length, end).split('\n')[0].trim()
+    const dash = body.match(/\s[—–-]\s/)
+    const locator = (dash ? body.slice(0, dash.index) : body.split(/\s/)[0]).replace(/[;,·|()]+$/, '')
+    const summary = dash ? body.slice(dash.index + dash[0].length).replace(/[\s;,·|(]+$/, '').trim() : ''
+    return { localId: `${m[1]}-${m[2]}`, severity: SEVERITY_BY_LETTER[m[1]], locator, summary }
+  })
+}
+
+/**
+ * A C4 digest in either shape: the reviewer's (`verdict:`, `confidence:`) or a lens's (`mode:`
+ * posted or advisory, with the posted count). An absent label reads null; `findings: none` reads
+ * as no findings. meta: `{ source = "digest", role, roots }`; each finding carries the digest's
+ * `report:` path.
+ */
+export function parseDigest(text, meta = {}) {
+  const m = { ...meta, source: meta.source ?? 'digest' }
+  const f = digestFields(relativize(text, meta.roots))
+  const verdict = f.verdict?.match(/\b(approve|request-changes|blocked)\b/i)
+  const mode = f.mode?.match(/\b(posted|advisory)\b/i)
+  const posted = f.mode?.match(/\d+/)
+  const report = f.report !== undefined ? stripTicks(f.report) || null : null
+  const findings = digestEntries(f.findings ?? '').map((entry) =>
+    finding(m, parseLocator(entry.locator, meta.roots), { severity: entry.severity, text: entry.summary, localId: entry.localId, reportPath: report }),
+  )
+  return {
+    status: f.status !== undefined ? stripTicks(f.status) : null,
+    verdict: verdict ? verdict[1].toLowerCase() : null,
+    confidence: f.confidence ?? null,
+    mode: mode ? mode[1].toLowerCase() : null,
+    posted: posted ? Number(posted[0]) : null,
+    report,
+    findings,
+    security: f.security ?? null,
+  }
+}
+
+// ---------- the C9 closures block ----------
+
+/**
+ * The C9 rows of every `stamity-closures` fence: `{ ledgerId, status, rationale | null }`. Keys
+ * beyond `ledger_id`, `status` and `rationale` are tolerated; a malformed line goes to `errors`
+ * as `{ line, text, reason }` and is skipped.
+ */
+export function parseClosures(text) {
+  const { rows, errors } = fencedLines(text, 'stamity-closures')
+  const closures = []
+  for (const { line, text: raw } of rows) {
+    const parsed = parseJsonObject(raw)
+    let reason = parsed.reason ?? null
+    const row = parsed.value
+    if (!reason && (typeof row.ledger_id !== 'string' || !row.ledger_id.trim())) reason = 'ledger_id is missing'
+    if (!reason && !CLOSURE_STATUSES.has(row.status)) reason = `status is not one of ${[...CLOSURE_STATUSES].join(', ')}`
+    if (!reason && row.rationale !== undefined && typeof row.rationale !== 'string') reason = 'rationale is not a string'
+    if (reason) {
+      errors.push({ line, text: raw, reason })
+      continue
+    }
+    closures.push({ ledgerId: row.ledger_id, status: row.status, rationale: row.rationale ?? null })
+  }
+  return { closures, errors: errors.toSorted((a, b) => a.line - b.line) }
+}
+
+// ---------- the C3 ledger rows ----------
+
+/**
+ * Findings from ledger rows (C3). The locator is the evidence up to ` — `, the text what follows.
+ * Where the evidence has no ` — ` or its head is no `path:line`, the free-text locators in the
+ * evidence are read instead (one Finding each, the evidence as text); a row with no locator at all
+ * still yields one Finding with a null file, so a `report` comparison can find it. The role is the
+ * row's `source`; `report` and `decision_needed` are carried when present.
+ * opts: `{ roots }`.
+ */
+export function ledgerFindings(rows, opts = {}) {
+  const meta = { source: 'ledger' }
+  const out = []
+  for (const row of rows || []) {
+    if (!row || typeof row !== 'object') continue
+    const evidence = relativize(String(row.evidence ?? ''), opts.roots)
+    const fields = {
+      severity: typeof row.severity === 'string' ? row.severity : null,
+      ledgerId: typeof row.id === 'string' ? row.id : null,
+      reportPath: typeof row.report === 'string' ? row.report : null,
+      decisionNeeded: row.decision_needed,
+    }
+    const rowMeta = { ...meta, role: typeof row.source === 'string' ? row.source : null }
+    const cut = evidence.indexOf(' — ')
+    const head = cut >= 0 ? parseLocator(evidence.slice(0, cut)) : null
+    if (head && head.file !== null) {
+      out.push(finding(rowMeta, head, { ...fields, text: evidence.slice(cut + 3).trim() }))
+      continue
+    }
+    const locs = locatorsIn(evidence)
+    if (locs.length === 0) locs.push({ file: null, line: null, lineEnd: null })
+    for (const loc of locs) out.push(finding(rowMeta, loc, { ...fields, text: evidence }))
+  }
+  return out
+}
+
+// ---------- verdicts ----------
+
+/** The verdict word of a return in either shape (`**Verdict:** request-changes`, `verdict: approve`), or null. */
+export function verdictOf(text) {
+  const m = String(text ?? '').match(/verdict[:*\s]*\**\s*(approve|request-changes)/i)
+  return m ? m[1].toLowerCase() : null
+}
+
+// ---------- the matcher ----------
+
+/**
+ * The spans an item is matched against. `spansByFile[file]` may relocate an item in the reviewed
+ * tree, either as an object keyed by item id (a `[start, end]` span, or a list of spans when the
+ * item has several copies) or as a list of `{ id, span }` rows; with no entry, the item's own
+ * `span` is used.
+ */
+function spansOf(item, spansByFile) {
+  const perFile = spansByFile?.[item.file]
+  let entry
+  if (Array.isArray(perFile)) entry = perFile.find((row) => row?.id === item.id)?.span
+  else if (perFile && Object.hasOwn(perFile, item.id)) entry = perFile[item.id]
+  if (entry === undefined) entry = item.span
+  if (!Array.isArray(entry) || entry.length === 0) return []
+  return Array.isArray(entry[0]) ? entry : [entry]
+}
+
+/**
+ * Score findings against seeds and decoys (REPLAY-v1 §9). A finding matches an item when the file
+ * is equal, its line range intersects a span of the item widened by `tolerance`, and one of the
+ * item's terms occurs in its text (case-insensitive substring). A location match without a term
+ * goes to `adjudication` only. One finding may match several items. A finding with no file or line
+ * is skipped, and so is one whose severity is outside `severities` when that list is given.
+ *
+ * Returns `{ matched: { <item id>: findingIdx[] } (every item listed), adjudication: [{ id, findingIdx }] }`.
+ */
+export function matchItems(findings, items, spansByFile = {}, { tolerance = 3, severities = null } = {}) {
+  const matched = Object.fromEntries(items.map((item) => [item.id, []]))
+  const adjudication = []
+  findings.forEach((f, findingIdx) => {
+    if (!f || f.file == null || f.line == null) return
+    if (severities && !severities.includes(f.severity)) return
+    const lo = f.line
+    const hi = f.lineEnd ?? f.line
+    const text = String(f.text ?? '').toLowerCase()
+    for (const item of items) {
+      if (item.file !== f.file) continue
+      if (!spansOf(item, spansByFile).some(([start, end]) => lo <= end + tolerance && hi >= start - tolerance)) continue
+      if ((item.terms || []).some((term) => text.includes(String(term).toLowerCase()))) matched[item.id].push(findingIdx)
+      else adjudication.push({ id: item.id, findingIdx })
+    }
+  })
+  return { matched, adjudication }
+}
