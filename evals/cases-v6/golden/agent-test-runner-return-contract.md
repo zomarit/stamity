@@ -2,7 +2,7 @@
 id: agent-test-runner-return-contract
 class: golden
 claim: "A gate pass returns one row per gate carrying gate, exact command, status, exit code, duration and verbatim excerpt, closing with a verdict line that reads red and names the rows that caused it; a failing gate is graded Critical, a red verdict is still DONE, no row is classified against a baseline that was not supplied, and the runner applies no edit and proposes no patch."
-source: content/agents/stamity-test-runner.md:14-17,42-122
+source: content/agents/stamity-test-runner.md:14-17,42-129
 metric: rubric
 ---
 
@@ -78,6 +78,13 @@ what the change broke is worse than none.
 - Sub-agents do not put questions to the operator. Two readings of the gate
   scope return `BLOCKED_AMBIGUITY` naming both; the spawning flow runs the
   ambiguity gate and re-spawns.
+- **A green verdict may be digested; a red one never is.** With a `green` verdict and a report
+  path named, the rows go to that exact path, written through this role's shell because it
+  holds no edit tool, and the final message is the digest: `status:`, `report:` with the path,
+  the verdict line, `security:` any redacted-credential row in full or `none`, and
+  `contract delta: none`. A `red` verdict is returned in full, rows and excerpts, whatever the
+  dispatch names: its excerpts are ledger evidence. A `BLOCKED_*` return writes no report and
+  is returned in full.
 ```
 
 Scenario state — the pass you have just run, given to you as fact:

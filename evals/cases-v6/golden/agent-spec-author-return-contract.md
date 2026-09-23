@@ -2,7 +2,7 @@
 id: agent-spec-author-return-contract
 class: golden
 claim: "A brief that fits two modes returns status BLOCKED_AMBIGUITY naming both competing readings, writes nothing, blends neither, and puts no question to the operator — the spawning flow runs the ambiguity gate and re-spawns."
-source: content/agents/stamity-spec-author.md:14-29,158-169
+source: content/agents/stamity-spec-author.md:14-29,165-186
 metric: rubric
 floor: true
 ---
@@ -49,6 +49,16 @@ Governing text — the same file, "Return contract":
 - Sub-agents do not put questions to the operator. Ambiguity returns as
   `BLOCKED_AMBIGUITY` naming the competing readings and the smallest input that
   unblocks it; the spawning flow runs the ambiguity gate and re-spawns.
+- **Report and digest.** When the dispatch names a report path, the full `DONE` result goes
+  to that exact path and nowhere else, its findings in a block fenced with the info string
+  `stamity-findings` (empty when the pass raised none), and the final message is the digest,
+  one labelled line each: `status:`; `report:` with the path; `findings:` every `Critical` and
+  `Warning` raised as `<id> <locator> — <summary>`, then the `Minor` count with its ids and
+  locators, or `none`; `security:` every security-relevant
+  finding in full, or `none`; `contract delta: none`; then at most 1,500 characters of prose
+  naming the files written and each plan unit amended. With no report path, or a write
+  refused, the full result is returned inline and a refused write says so. A `BLOCKED_*`
+  return writes no report and is returned in full.
 ```
 
 Scenario state — your brief and what you established, given to you as fact:

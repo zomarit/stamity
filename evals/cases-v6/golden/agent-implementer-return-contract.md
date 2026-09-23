@@ -2,7 +2,7 @@
 id: agent-implementer-return-contract
 class: golden
 claim: "A finished unit returns status DONE carrying files changed, tests, gate results, the spec delta and deferrals; every gate is reported as its exact command plus pass or fail with the verbatim failing excerpt, a failure that predates the unit is reported as pre-existing rather than adopted, fixed, or hidden behind a green claim, and the spec delta is returned as a proposal naming the spec file and the requirement id rather than written into the spec tree."
-source: content/agents/stamity-implementer.md:14-16,56-97
+source: content/agents/stamity-implementer.md:14-16,62-117
 metric: rubric
 ---
 
@@ -65,6 +65,20 @@ Run before returning, over the unit's surface:
 - Sub-agents do not put questions to the operator. A unit whose interfaces admit two
   materially different builds returns `BLOCKED_AMBIGUITY` naming the readings; the
   spawning flow runs the ambiguity gate and re-spawns.
+- **Census closure.** Every return, `DONE` or `BLOCKED_*`, carries the contract census for the
+  shared contracts the unit touched, one row each — contract, class, producer, consumers,
+  change kind, closure (`clean`, `reconciled(N)`, or `N unreconciled` naming each consumer left
+  behind) — or `none touched`. The rows are never shortened.
+- **Report and digest.** When the dispatch names a report path, the full `DONE` result goes to
+  that exact path and nowhere else, its findings in a block fenced with the info string
+  `stamity-findings` (empty when the unit raised none), and the final message is the digest,
+  one labelled line each: `status:`; `report:` with the path; `findings:` every `Critical` and
+  `Warning` raised as `<id> <locator> — <summary>`, then the `Minor` count with its ids and
+  locators; `security:` every security-relevant finding in full, or `none`; `contract delta:`
+  the census rows in full, or `none`; then at most 1,500 characters of prose naming the files
+  changed and each gate's result. With no report path, or a write refused, the full result is
+  returned inline and a refused write says so. A `BLOCKED_*` return writes no report and is
+  returned in full.
 ```
 
 Scenario state — the unit as you finished it, given to you as fact:
