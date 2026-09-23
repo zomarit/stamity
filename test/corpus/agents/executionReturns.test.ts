@@ -121,6 +121,12 @@ describe("fixer — ledger ids, sign-off, report and digest", () => {
     expect(contract).toContain("the rejection reasoning with it");
     expect(contract).toContain("a refused write says so");
   });
+
+  it("carries a stamity-findings block in the report so a finding it raises reaches the ledger", async () => {
+    const contract = section(await load(FIXER), "Return contract");
+    expect(contract).toContain("its new findings in a block fenced with the info string `stamity-findings`");
+    expect(contract).toContain("(empty when the round raised none)");
+  });
 });
 
 describe("test-runner — a green verdict may be digested, a red one never", () => {
@@ -166,5 +172,12 @@ describe("spec-author — plan-cell amendment, report and digest", () => {
     expect(contract).toContain("`contract delta: none`");
     expect(contract).toContain("each plan unit amended");
     expect(contract).toContain("a refused write says so");
+  });
+
+  it("carries a stamity-findings block and the Minor count in its digest", async () => {
+    const contract = section(await load(SPEC_AUTHOR), "Return contract");
+    expect(contract).toContain("its findings in a block fenced with the info string `stamity-findings`");
+    expect(contract).toContain("(empty when the pass raised none)");
+    expect(contract).toContain("then the `Minor` count with its ids and locators");
   });
 });

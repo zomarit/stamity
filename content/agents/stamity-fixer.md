@@ -113,8 +113,9 @@ the economy class:
   different fixes returns `BLOCKED_AMBIGUITY` naming both; the spawning flow runs the
   ambiguity gate and re-spawns.
 - **Report and digest.** When the dispatch names a report path, the full `DONE` result — the
-  rejection reasoning with it — goes to that exact path and nowhere else, and the final message
-  is the digest, one labelled line each: `status:`; `report:` with the path; `findings:` one
+  rejection reasoning with it — goes to that exact path and nowhere else, its new findings in a
+  block fenced with the info string `stamity-findings` (empty when the round raised none), and
+  the final message is the digest, one labelled line each: `status:`; `report:` with the path; `findings:` one
   disposition per ledger id handed — `<id> fixed`, `<id> rejected` or
   `<id> unresolved — <reason>` — then any new `Critical` or `Warning` as
   `<id> <locator> — <summary>`; `security:` every security-relevant finding in full, or

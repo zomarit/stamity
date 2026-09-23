@@ -175,9 +175,11 @@ truth. Retired IDs retain their successor pointers.
   `BLOCKED_AMBIGUITY` naming the competing readings and the smallest input that
   unblocks it; the spawning flow runs the ambiguity gate and re-spawns.
 - **Report and digest.** When the dispatch names a report path, the full `DONE` result goes
-  to that exact path and nowhere else, and the final message is the digest, one labelled
-  line each: `status:`; `report:` with the path; `findings:` every `Critical` and `Warning`
-  raised as `<id> <locator> — <summary>`, or `none`; `security:` every security-relevant
+  to that exact path and nowhere else, its findings in a block fenced with the info string
+  `stamity-findings` (empty when the pass raised none), and the final message is the digest,
+  one labelled line each: `status:`; `report:` with the path; `findings:` every `Critical` and
+  `Warning` raised as `<id> <locator> — <summary>`, then the `Minor` count with its ids and
+  locators, or `none`; `security:` every security-relevant
   finding in full, or `none`; `contract delta: none`; then at most 1,500 characters of prose
   naming the files written and each plan unit amended. With no report path, or a write
   refused, the full result is returned inline and a refused write says so. A `BLOCKED_*`
