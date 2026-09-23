@@ -141,7 +141,8 @@ The exact definitions `scripts/replay/measure.mjs` implements, reproduced from t
   writes (a heredoc, redirect or script body targeting `ledger.jsonl`; a Write, Edit or MultiEdit on `*ledger.jsonl`;
   or a `stamity ledger append|close|status` call) with their tool results; (d) brief files written by the orchestrator
   (`/\/briefs?\/|brief[-\w]*\.md|\/lanes\//`) with their results; and (e) report reads — a Read, or a read-class Bash
-  call, naming `.stamity/runs/*/reports/` or `/tasks/*.output` — with their results, so a saving cannot move into
+  call, naming `.stamity/runs/*/reports/` or `/tasks/*.output`, or a Grep or Glob call whose search path or file glob
+  names `.stamity/runs/*/reports/` — with their results, so a saving cannot move into
   on-demand reads. Driver messages are excluded. **Loop characters per pass = the total ÷ 6.** The per-pass split is
   informative only, and is flagged unreliable when more than 20% is unattributed.
 - **Sub-agent tokens per pass** = Σ `processed` over the loop-function agents ÷ 6, where `processed` is the sum, over
@@ -151,6 +152,11 @@ The exact definitions `scripts/replay/measure.mjs` implements, reproduced from t
   checkout or any worktree); otherwise it is "caught by implementer" and leaves the denominator. Found = matched (§9)
   by any verdict-role finding (return, digest, report, or a ledger row from a verdict source), with the stage (pass or
   branch) and whether it was found in round 1 recorded.
+  Presence is unknown, and the seed is neither "caught by implementer" nor absent at the pass for `security-seeds`
+  (§12), in two cases: pass P has no snapshot at all, or the seed's file is absent from every copy under an existing
+  `snapshots/P/`. A seed whose presence is unknown stays in the denominator; it counts as found only when a
+  verdict-role finding matches it (§9), and otherwise it is not found. RESULTS names each such pass, and in the second
+  case the file.
 - **Precision.** A decoy is flagged when a Critical or Warning finding matches it. Unmatched = Critical or Warning
   findings matching no seed or decoy, deduplicated by block; reported, not thresholded.
 - **Loss.** For each driver compaction event, at-risk = the verdict-role Critical or Warning findings delivered before
@@ -164,6 +170,13 @@ The exact definitions `scripts/replay/measure.mjs` implements, reproduced from t
   oracle that errors counts as unfixed.
 - **Invalid run.** An init or sub-agent model outside the pins; a forbidden path (this checkout, the private layer,
   `seeds.json` or `__oracle__`) in any tool input; or a run whose end reason is not `complete`.
+
+**Amendment, 2026-09-23, before any run.** Three readings of this section were written down before the first pilot,
+so no replay summary carries a hash of the earlier text and no threshold moved. They settle ledger rows build/151,
+build/167, build/169 and build/171 of run `2026-09-23_orchestrator-context`. Under Recall, a pass with no snapshot,
+and a seed whose file is absent from every copy of an existing snapshot, leave presence unknown: the seed stays in
+the denominator, counts as found only on a verdict-role match, and RESULTS names the pass. Under loop characters,
+term (e) counts Grep and Glob calls on report paths beside Read and read-class Bash. §9, §10 and §12 are unchanged.
 
 ## §9 Matcher
 
