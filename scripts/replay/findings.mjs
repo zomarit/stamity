@@ -32,8 +32,17 @@ const SUMMARY_MAX = 300
 
 /** The free-text locator (the unit's contract, verbatim): a path with a code or doc extension, then `:<n>` or `#L<n>`. */
 const LOCATOR = /(?<![\w/.-])((?:[\w.-]+\/)*[\w.-]+\.(?:ts|js|mjs|json|md))(?::|#L)(\d+)(?:\s*[-–]\s*(\d+))?/g
-const FINDING_WORD = /\b(Critical|Warning)\b/
-const SEVERITY_WORD = /\b(Critical|Warning|Minor)\b/
+// The severity words match in any case and in the plural (`warning`, `WARNING`, `## Warnings`) and are
+// normalized to title case — a recorded deviation from the cell's literal `\b(Critical|Warning)\b`,
+// because every free-text miss lowers the baseline's recall and so eases the merge gate.
+const FINDING_WORD = /\b(critical|warning)s?\b/i
+const SEVERITY_WORD = /\b(critical|warning|minor)s?\b/i
+
+/** `warning`, `WARNINGS` → `Warning`; a string that is no severity word is returned unchanged. */
+function normalizeSeverity(word) {
+  const m = String(word).trim().match(/^(critical|warning|minor)s?$/i)
+  return m ? m[1][0].toUpperCase() + m[1].slice(1).toLowerCase() : word
+}
 
 const FENCE_OPEN = /^ {0,3}```([^`]*?)[ \t]*$/
 const FENCE_CLOSE = /^ {0,3}```[ \t]*$/
@@ -51,10 +60,13 @@ const normalizeFile = (file) => file.replace(/^(?:\.\/)+/, '')
 
 /**
  * A structured locator (C2's `path:line`, `path:line-line`, or a gate command). Anything that is
- * not a single path token ending in a line number reads as a command: no file, no line.
+ * not a single path token ending in a line number reads as a command: no file, no line. A
+ * `path:line:col` locator is off the contract and is refused with a `reason`, never read as the
+ * file `path:line`.
  */
 function parseLocator(locator, roots) {
   const raw = relativize(String(locator ?? '').trim().replace(/^`+|`+$/g, ''), roots).trim()
+  if (/^\S+:\d+:\d+$/.test(raw)) return { file: null, line: null, lineEnd: null, reason: 'locator has a column (path:line:col); expected path:line' }
   const m = raw.match(/^(\S+?)(?::|#L)(\d+)(?:\s*[-–]\s*L?(\d+))?$/)
   if (!m) return { file: null, line: null, lineEnd: null }
   const line = Number(m[2])
@@ -194,8 +206,42 @@ function sectionsOf(text) {
 /** One Finding per distinct locator of a block that holds `Critical` or `Warning`; its severity is the block's first severity word. */
 function blockFindings(block, meta) {
   if (!FINDING_WORD.test(block)) return []
-  const severity = block.match(SEVERITY_WORD)[1]
+  const severity = normalizeSeverity(block.match(SEVERITY_WORD)[1])
   return locatorsIn(block).map((loc) => finding(meta, loc, { severity, text: block, reportPath: meta.reportPath }))
+}
+
+const hasLocator = (block) => locatorsIn(block).length > 0
+
+/**
+ * The free-text read shared by `extractFreeText` and `unreadFreeText`. A leaf holding both a
+ * severity word and a locator classifies itself. Every other leaf folds into its section block —
+ * the heading line (if any) plus the folded leaves — so a finding split over sibling leaves
+ * (`Severity: Warning` and `Locator: src/x.ts:9` as two paragraphs or two list items) is read as
+ * one. A section block that is no finding is unread when it holds a Critical or Warning word but
+ * no locator, or a locator but no severity word; a heading left alone because its every leaf
+ * classified itself is a summary line, not an unread block.
+ */
+function readFreeText(text, meta) {
+  const m = { ...meta, source: meta.source ?? 'return' }
+  const findings = []
+  const unread = []
+  for (const section of sectionsOf(relativize(text, meta.roots))) {
+    const folded = []
+    let classified = 0
+    for (const leaf of section.leaves) {
+      if (SEVERITY_WORD.test(leaf) && hasLocator(leaf)) {
+        findings.push(...blockFindings(leaf, m))
+        classified++
+      } else folded.push(leaf)
+    }
+    if (folded.length === 0 && (section.head === null || classified > 0)) continue
+    const block = (section.head === null ? folded : [section.head, ...folded]).join('\n')
+    const read = blockFindings(block, m)
+    if (read.length > 0) findings.push(...read)
+    else if (FINDING_WORD.test(block) && !hasLocator(block)) unread.push({ block, reason: 'severity-without-locator' })
+    else if (hasLocator(block) && !SEVERITY_WORD.test(block)) unread.push({ block, reason: 'locator-without-severity' })
+  }
+  return { findings, unread }
 }
 
 /**
@@ -203,26 +249,31 @@ function blockFindings(block, meta) {
  * `Critical` or `Warning` and at least one locator; one Finding per distinct locator, with the
  * block's first severity word (`Critical`, `Warning` or `Minor`) and the block as its text.
  *
- * Leaf blocks are read first. A leaf holding any severity word classifies itself, so a `Minor` row
- * is never promoted by a sibling's word. What is left of a headed section — the heading line plus
- * its unclassified leaves — is then read as one block, so `## Critical` over a bare list item
- * still yields a Critical finding. A path with no line (a directory, a bare file) is no locator and
- * yields nothing, counted neither as a finding nor as unmatched.
+ * Severity words match in any case and in the plural, and are normalized to title case.
+ *
+ * Leaf blocks are read first. A leaf holding a severity word and a locator classifies itself, so a
+ * `Minor` row is never promoted by a sibling's word. Every other leaf folds into its section block
+ * — the heading line (if any) plus the folded leaves — which is then read as one block, so
+ * `## Critical` over a bare list item still yields a Critical finding, and `Severity: Warning` and
+ * `Locator: src/x.ts:9` split over sibling paragraphs or list items are one finding. A path with no
+ * line (a directory, a bare file) is no locator and yields nothing, counted neither as a finding
+ * nor as unmatched; `unreadFreeText` names such blocks.
  *
  * meta: `{ source = "return", role, roots: absolute fixture and worktree roots to strip, reportPath }`.
  */
 export function extractFreeText(text, meta = {}) {
-  const m = { ...meta, source: meta.source ?? 'return' }
-  const out = []
-  for (const section of sectionsOf(relativize(text, meta.roots))) {
-    const unclassified = []
-    for (const leaf of section.leaves) {
-      if (SEVERITY_WORD.test(leaf)) out.push(...blockFindings(leaf, m))
-      else unclassified.push(leaf)
-    }
-    if (section.head !== null) out.push(...blockFindings([section.head, ...unclassified].join('\n'), m))
-  }
-  return out
+  return readFreeText(text, meta).findings
+}
+
+/**
+ * The free-text section blocks `extractFreeText` read as no finding although they look like one:
+ * `[{ block, reason }]`, reason `severity-without-locator` (a Critical or Warning word, no
+ * readable locator — `query.ts line 12`, a directory) or `locator-without-severity` (a locator, no
+ * severity word). The measurement reports them per shape so the heuristic's skips stay visible.
+ * meta: as `extractFreeText`.
+ */
+export function unreadFreeText(text, meta = {}) {
+  return readFreeText(text, meta).unread
 }
 
 // ---------- the C2 findings block ----------
@@ -259,7 +310,12 @@ export function parseFindingsBlock(text, meta = {}) {
       continue
     }
     const row = parsed.value
-    findings.push(finding(m, parseLocator(row.locator, meta.roots), {
+    const loc = parseLocator(row.locator, meta.roots)
+    if (loc.reason) {
+      errors.push({ line, text: raw, reason: loc.reason })
+      continue
+    }
+    findings.push(finding(m, loc, {
       severity: row.severity,
       text: row.summary,
       localId: row.id,
@@ -296,8 +352,11 @@ function digestFields(text) {
   return Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.join('\n').trim()]))
 }
 
-/** An entry id starts an entry only at the start of the value, a line, or after a separator. */
-const ENTRY_ID = /(?<![A-Za-z0-9-])([CWM])-(\d+)(?=\s)/g
+/**
+ * An entry id starts an entry only at the start of the value, a line, or after a separator. The id
+ * may be bold and may carry a colon: `C-1`, `**C-1**`, `C-1:`, `**C-1:**`, `**C-1**:`.
+ */
+const ENTRY_ID = /(?<![\w*-])\**([CWM])-(\d+)\**:?\**(?=\s)/g
 const ENTRY_LEAD = /(?:^|[;,·(|:]|^\s*(?:[-*]\s+)?)\s*$/
 
 /**
@@ -327,7 +386,8 @@ function digestEntries(value) {
  * A C4 digest in either shape: the reviewer's (`verdict:`, `confidence:`) or a lens's (`mode:`
  * posted or advisory, with the posted count). An absent label reads null; `findings: none` reads
  * as no findings. meta: `{ source = "digest", role, roots }`; each finding carries the digest's
- * `report:` path.
+ * `report:` path. `errors` (`[{ text, reason }]`) names a `findings:` value other than `none` that
+ * yields no entry, and an entry whose locator is refused (`path:line:col`), which is skipped.
  */
 export function parseDigest(text, meta = {}) {
   const m = { ...meta, source: meta.source ?? 'digest' }
@@ -336,9 +396,20 @@ export function parseDigest(text, meta = {}) {
   const mode = f.mode?.match(/\b(posted|advisory)\b/i)
   const posted = f.mode?.match(/\d+/)
   const report = f.report !== undefined ? stripTicks(f.report) || null : null
-  const findings = digestEntries(f.findings ?? '').map((entry) =>
-    finding(m, parseLocator(entry.locator, meta.roots), { severity: entry.severity, text: entry.summary, localId: entry.localId, reportPath: report }),
-  )
+  const errors = []
+  const entries = digestEntries(f.findings ?? '')
+  if (f.findings !== undefined && entries.length === 0 && !/^\W*none\W*$/i.test(f.findings)) {
+    errors.push({ text: f.findings, reason: 'findings value is not none and holds no <id> <locator> entry' })
+  }
+  const findings = []
+  for (const entry of entries) {
+    const loc = parseLocator(entry.locator, meta.roots)
+    if (loc.reason) {
+      errors.push({ text: `${entry.localId} ${entry.locator}`, reason: loc.reason })
+      continue
+    }
+    findings.push(finding(m, loc, { severity: entry.severity, text: entry.summary, localId: entry.localId, reportPath: report }))
+  }
   return {
     status: f.status !== undefined ? stripTicks(f.status) : null,
     verdict: verdict ? verdict[1].toLowerCase() : null,
@@ -348,6 +419,7 @@ export function parseDigest(text, meta = {}) {
     report,
     findings,
     security: f.security ?? null,
+    errors,
   }
 }
 
@@ -382,9 +454,11 @@ export function parseClosures(text) {
 /**
  * Findings from ledger rows (C3). The locator is the evidence up to ` — `, the text what follows.
  * Where the evidence has no ` — ` or its head is no `path:line`, the free-text locators in the
- * evidence are read instead (one Finding each, the evidence as text); a row with no locator at all
+ * evidence are read instead (one Finding each, the evidence as text; a `path:line:col` head reads
+ * there as file `path`, line `line`, the same reading the free-text shape gives); a row with no locator at all
  * still yields one Finding with a null file, so a `report` comparison can find it. The role is the
- * row's `source`; `report` and `decision_needed` are carried when present.
+ * row's `source`; `report` and `decision_needed` are carried when present, and a severity word is
+ * title-cased (`warning` → `Warning`) so the matcher's severities filter reads it.
  * opts: `{ roots }`.
  */
 export function ledgerFindings(rows, opts = {}) {
@@ -394,7 +468,7 @@ export function ledgerFindings(rows, opts = {}) {
     if (!row || typeof row !== 'object') continue
     const evidence = relativize(String(row.evidence ?? ''), opts.roots)
     const fields = {
-      severity: typeof row.severity === 'string' ? row.severity : null,
+      severity: typeof row.severity === 'string' ? normalizeSeverity(row.severity) : null,
       ledgerId: typeof row.id === 'string' ? row.id : null,
       reportPath: typeof row.report === 'string' ? row.report : null,
       decisionNeeded: row.decision_needed,

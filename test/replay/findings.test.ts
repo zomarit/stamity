@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { extractFreeText, ledgerFindings, matchItems, parseClosures, parseDigest, parseFindingsBlock, verdictOf } from "../../scripts/replay/findings.mjs";
+import { extractFreeText, ledgerFindings, matchItems, parseClosures, parseDigest, parseFindingsBlock, unreadFreeText, verdictOf } from "../../scripts/replay/findings.mjs";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
 import { walkTranscriptLines } from "../../scripts/replay/transcript.mjs";
 import { mainLine, writeCapture } from "./synth.ts";
@@ -231,6 +231,61 @@ describe("extractFreeText — the baseline's free-text returns", () => {
     ].join("\n");
     expect(extractFreeText(text, REVIEWER)).toEqual([]);
   });
+
+  it("folds a labelled-field finding split over sibling paragraphs into one block", () => {
+    const text = ["Severity: Warning", "", "Locator: src/store/paging.ts:4", "", "Page 1 skips the first 10 rows."].join("\n");
+    const findings = extractFreeText(text, REVIEWER) as Finding[];
+    expect(findings.map((f) => [f.file, f.line, f.severity])).toEqual([["src/store/paging.ts", 4, "Warning"]]);
+    expect(match(findings).matched["cor-page-offset"]).toEqual([0]);
+    expect(unreadFreeText(text, REVIEWER)).toEqual([]);
+  });
+
+  it("folds a labelled-field finding split over loose list items, with or without a heading", () => {
+    const items = ["- Severity: Critical", "", "- Locator: src/store/query.ts:12", "", "- Summary: sort value concatenated into SQL"];
+    for (const text of [items.join("\n"), ["## u1-p1 review", "", ...items].join("\n")]) {
+      const findings = extractFreeText(text, REVIEWER) as Finding[];
+      expect(findings.map((f) => [f.file, f.line, f.severity])).toEqual([["src/store/query.ts", 12, "Critical"]]);
+      expect(match(findings).matched["sec-sql-sort"]).toEqual([0]);
+    }
+  });
+
+  it("reads a severity word in any case and in the plural, normalized to title case", () => {
+    const lower = extractFreeText("- warning: src/store/paging.ts:4 — page 1 skips the first 10 rows", REVIEWER) as Finding[];
+    expect(lower.map((f) => f.severity)).toEqual(["Warning"]);
+    const upper = extractFreeText("| WARNING | src/store/paging.ts:4 | page 1 skips |", REVIEWER) as Finding[];
+    expect(upper.map((f) => f.severity)).toEqual(["Warning"]);
+    const critical = extractFreeText("CRITICAL src/store/query.ts:12 sort concatenated", REVIEWER) as Finding[];
+    expect(critical.map((f) => f.severity)).toEqual(["Critical"]);
+    const plural = extractFreeText(["## Warnings", "", "- src/store/paging.ts:4 — page 1 skips the first 10 rows"].join("\n"), REVIEWER) as Finding[];
+    expect(plural.map((f) => [f.file, f.severity])).toEqual([["src/store/paging.ts", "Warning"]]);
+    // A lowercase Minor classifies its own row: the plural heading does not promote it to Critical,
+    // and a block of Minor alone is no finding and no unread block.
+    const minor = ["## Criticals", "- minor: src/a.ts:3 naming"].join("\n");
+    expect(extractFreeText(minor, REVIEWER)).toEqual([]);
+    expect(unreadFreeText(minor, REVIEWER)).toEqual([]);
+  });
+
+  it("names each skipped free-text block and its reason in unreadFreeText", () => {
+    const text = [
+      "Warning: the paging in src/store/paging.ts line 4 skips the first page.",
+      "",
+      "## Notes",
+      "",
+      "- src/store/query.ts:40 reads well.",
+      "",
+      "## Critical",
+      "",
+      "- src/http/routes.ts:9 — the cancel route skips requireAuth",
+    ].join("\n");
+    expect(unreadFreeText(text, REVIEWER)).toEqual([
+      { block: "Warning: the paging in src/store/paging.ts line 4 skips the first page.", reason: "severity-without-locator" },
+      { block: "## Notes\n- src/store/query.ts:40 reads well.", reason: "locator-without-severity" },
+    ]);
+    // The read section is a finding, never an unread block.
+    expect((extractFreeText(text, REVIEWER) as Finding[]).map((f) => f.file)).toEqual(["src/http/routes.ts"]);
+    // Absolute roots are stripped before a block is judged.
+    expect(unreadFreeText("- Critical /work/fixture/src/a.ts:3 — x", { ...REVIEWER, roots: ["/work/fixture"] })).toEqual([]);
+  });
 });
 
 describe("parseFindingsBlock — the C2 block of a report", () => {
@@ -300,6 +355,15 @@ describe("parseFindingsBlock — the C2 block of a report", () => {
     expect(findings.map((f) => f.localId)).toEqual(["W-3"]);
     expect(findings[0]!.source).toBe("report");
     expect(errors.map((e) => e.line)).toEqual([2, 3, 4]);
+  });
+
+  it("refuses a path:line:col locator as an error, never as the file `path:line`", () => {
+    const text = ["```stamity-findings", '{"id":"W-1","severity":"Warning","locator":"src/store/paging.ts:4:7","summary":"page 1 skips"}', "```"].join("\n");
+    const { findings, errors } = parseFindingsBlock(text) as { findings: Finding[]; errors: { line: number; reason: string }[] };
+    expect(findings).toEqual([]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ line: 2 });
+    expect(errors[0]!.reason).toMatch(/column/);
   });
 
   it("reads an empty block as no findings and no errors, and ignores other fences", () => {
@@ -378,7 +442,38 @@ describe("parseDigest — the C4 digest of both shapes", () => {
 
   it("reads `findings: none` as no findings and an absent label as null", () => {
     const parsed = parseDigest("status: DONE\nfindings: none\n") as Record<string, unknown>;
-    expect(parsed).toMatchObject({ status: "DONE", verdict: null, report: null, security: null, findings: [] });
+    expect(parsed).toMatchObject({ status: "DONE", verdict: null, report: null, security: null, findings: [], errors: [] });
+    expect(parseDigest("status: DONE\n")).toMatchObject({ findings: [], errors: [] });
+  });
+
+  it("reads bold and colon-suffixed entry ids", () => {
+    const parsed = parseDigest(
+      [
+        "status: DONE",
+        "findings: **C-1** src/store/query.ts:12 — sort value concatenated into SQL; W-1: src/store/paging.ts:4 — page 1 skips the first 10 rows",
+        "  **W-2:** src/http/routes.ts:9 — the cancel route has no guard",
+      ].join("\n"),
+    ) as { findings: Finding[]; errors: unknown[] };
+    expect(parsed.findings.map((f) => [f.localId, f.severity, f.file, f.line, f.text])).toEqual([
+      ["C-1", "Critical", "src/store/query.ts", 12, "sort value concatenated into SQL"],
+      ["W-1", "Warning", "src/store/paging.ts", 4, "page 1 skips the first 10 rows"],
+      ["W-2", "Warning", "src/http/routes.ts", 9, "the cancel route has no guard"],
+    ]);
+    expect(parsed.errors).toEqual([]);
+  });
+
+  it("reports an error when a findings value other than none yields no entry", () => {
+    const parsed = parseDigest("status: DONE\nfindings: two Warnings, see the report\n") as { findings: Finding[]; errors: { text: string; reason: string }[] };
+    expect(parsed.findings).toEqual([]);
+    expect(parsed.errors).toHaveLength(1);
+    expect(parsed.errors[0]!.text).toBe("two Warnings, see the report");
+  });
+
+  it("refuses a path:line:col entry locator as an error", () => {
+    const parsed = parseDigest("findings: W-1 src/store/paging.ts:4:7 — page 1 skips\n") as { findings: Finding[]; errors: { text: string; reason: string }[] };
+    expect(parsed.findings).toEqual([]);
+    expect(parsed.errors).toHaveLength(1);
+    expect(parsed.errors[0]!.reason).toMatch(/column/);
   });
 });
 
@@ -448,6 +543,18 @@ describe("ledgerFindings — the C3 rows", () => {
     expect(findings[2]).toMatchObject({ file: null, line: null, ledgerId: `${RUN}/review/3` });
 
     expect(match(findings).matched["sec-missing-guard"]).toEqual([0, 1]);
+  });
+});
+
+describe("ledgerFindings — severity spelling", () => {
+  it("title-cases the severity a row carries", () => {
+    const rows = [
+      { id: `${RUN}/build/1`, source: "implementer", severity: "warning", evidence: "src/store/paging.ts:4 — page 1 skips", state: "open", rationale: "" },
+      { id: `${RUN}/build/2`, source: "implementer", severity: "CRITICAL", evidence: "src/store/query.ts:12 — sort concatenated", state: "open", rationale: "" },
+    ];
+    const findings = ledgerFindings(rows) as Finding[];
+    expect(findings.map((f) => f.severity)).toEqual(["Warning", "Critical"]);
+    expect(match(findings, {}, { severities: ["Critical", "Warning"] }).matched["cor-page-offset"]).toEqual([0]);
   });
 });
 
