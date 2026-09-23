@@ -134,6 +134,24 @@ describe("walkTranscriptLines — deliveries", () => {
   });
 });
 
+describe("walkTranscriptLines — SendMessage results by content (build/165)", () => {
+  const sendResult = (text: string): string | undefined => {
+    const w = walk([mainLine.sendMessage({ id: "tu-s", to: "a1", message: "Re-review W-1." }), mainLine.toolResult("tu-s", text)]);
+    return w.events.find((event) => event["toolUseId"] === "tu-s" && event["dir"] === "in")?.["cls"] as string | undefined;
+  };
+
+  it("classes a short digest, a BLOCKED_* status and a verdict word as a report, whatever the length", () => {
+    expect(sendResult("status: DONE\nverdict: approve\nreport: .stamity/runs/r/reports/u1-p1-reviewer-r2.md\nfindings: none")).toBe("returns.report");
+    expect(sendResult("status: BLOCKED_DEPENDENCY\nThe lockfile is missing.")).toBe("returns.report");
+    expect(sendResult("**Verdict:** approve\n\nNo findings.")).toBe("returns.report");
+  });
+
+  it("classes an acknowledgement as an ack, however long it is", () => {
+    expect(sendResult('{"success":true,"message":"Message queued for delivery to a1"}')).toBe("returns.sendAck");
+    expect(sendResult(`Message queued for delivery to a1. ${"x".repeat(2000)}`)).toBe("returns.sendAck");
+  });
+});
+
 describe("walkTranscriptLines — compaction, requests, exclusions", () => {
   it("starts seg 1 at a compact_boundary and records its trigger and preTokens", () => {
     const w = walk([

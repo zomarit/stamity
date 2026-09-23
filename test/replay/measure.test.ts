@@ -58,6 +58,7 @@ interface Measurement {
     compactionsAuto: number;
     recall: { found: number; denominator: number; byClass: Record<string, { found: number; denominator: number }> };
     readerSkips: { unreadFreeText: Record<string, number>; digestErrors: number; findingsBlockErrors: number };
+    unjoinedSubagents: number;
     decoyFalseFlags: number;
     unmatched: number;
     oraclePass: number;
@@ -218,6 +219,10 @@ interface PassCaptureOptions {
   /** Replaces the pre-compaction ledger (defaults to the rows the first review filed). */
   preLedger?: Record<string, unknown>[];
   endLedger?: Record<string, unknown>[];
+  /** Lines appended to the main transcript after every dispatch. */
+  tail?: string[];
+  /** Sub-agent files with no dispatch in the main transcript. */
+  extraSubagents?: SubagentFile[];
 }
 
 interface Built {
@@ -276,13 +281,14 @@ function passCapture(options: PassCaptureOptions): Built {
     ...dispatch(fix),
     ...dispatch(rev2),
     ...after.flatMap(dispatch),
+    ...(options.tail ?? []),
   ];
   const reports = shape === "changed" ? { "u1-p1-reviewer-r1.md": reportText(rows) } : undefined;
   const layout = writeCapture(dir, {
     run: { runId: "2026-09-24-replay-1", shape, kind: "scored", ...options.run },
     stdout: options.init === null ? [] : [JSON.stringify({ type: "system", subtype: "init", model: "claude-opus-5-5", cwd: fixture, ...options.init })],
     transcript,
-    subagents: agents.map(subagentOf),
+    subagents: [...agents.map(subagentOf), ...(options.extraSubagents ?? [])],
     snapshots: options.snapshots ?? { "u1-p1": SNAPSHOT_U1P1 },
     state: {
       "compaction-1-pre": { runId: RUN, ledger: options.preLedger ?? filed, ...(reports ? { reports } : {}) },
@@ -292,6 +298,17 @@ function passCapture(options: PassCaptureOptions): Built {
   });
   return { layout, fixture, agents };
 }
+
+/** A main-transcript tool_use of any tool, in the client's line shape. */
+function toolUseLine(name: string, id: string, input: Record<string, unknown>): string {
+  const line = JSON.parse(mainLine.readToolUse({ id, filePath: "unused" })) as { message: { content: { name: string; input: unknown }[] } };
+  line.message.content[0]!.name = name;
+  line.message.content[0]!.input = input;
+  return JSON.stringify(line);
+}
+
+/** An Agent tool_use's characters, the walk's rule: key lengths plus leaf-string lengths. */
+const inputChars = (input: Record<string, string>): number => Object.entries(input).reduce((a, [k, v]) => a + k.length + v.length, 0);
 
 /** A third review of u1-p1, after the approving second one. */
 const thirdReview = (result: string): AgentSpec => ({
@@ -589,6 +606,111 @@ describe("measureRun — validity", () => {
   it("refuses a seeds document of another schema", async () => {
     const { layout } = passCapture({ shape: "baseline" });
     await expect(measureRun(layout.runDir, { seeds: { ...SEEDS, schema: "other" } })).rejects.toThrow(/stamity\/replay-seeds\/v1/);
+  });
+});
+
+describe("measureRun — review round 1 fixes", () => {
+  it("(build/164) keeps an unjoined sub-agent's tokens in the sum, counted and noted", async () => {
+    const orphan = subagentFile({ agentId: "aorphan", agentType: "x", prompt: "Do the thing.", requests: [{ id: "msg_orphan", usage: { input: 600, output: 100 } }] });
+    orphan.meta = { description: "" };
+    const m = await measure(passCapture({ shape: "baseline", extraSubagents: [orphan] }).layout.runDir);
+    expect(m.totals.subagentTokens).toBe(5830 + 700);
+    expect(m.totals.unjoinedSubagents).toBe(1);
+    expect(m.notes.join("\n")).toMatch(/aorphan/);
+    const base = await measure(passCapture({ shape: "baseline" }).layout.runDir);
+    expect(base.totals.unjoinedSubagents).toBe(0);
+  });
+
+  it("(build/165) reads a short SendMessage digest as the reviewer's delivery: a round and its verdict", async () => {
+    const digest = digestReturn([SEED_FINDING], "request-changes", `.stamity/runs/${RUN}/reports/u1-p1-reviewer-r3.md`);
+    expect(digest.length).toBeLessThan(1500);
+    const tail = [mainLine.sendMessage({ id: "tu_send", to: "arev1", message: "Re-review u1-p1 after the fix." }), mainLine.toolResult("tu_send", digest)];
+    const m = await measure(passCapture({ shape: "changed", tail }).layout.runDir);
+    expect(m.passes.find((p) => p.id === "u1-p1")!.verdict).toEqual(expect.objectContaining({ finalClass: "blocked", rounds: 3 }));
+  });
+
+  it("(build/165) names a long SendMessage result read as an acknowledgement beside the figure", async () => {
+    const tail = [mainLine.sendMessage({ id: "tu_send", to: "arev1", message: "Hold on." }), mainLine.toolResult("tu_send", `Message queued. ${"x".repeat(1600)}`)];
+    const m = await measure(passCapture({ shape: "changed", tail }).layout.runDir);
+    expect(m.notes.join("\n")).toMatch(/SendMessage result/);
+  });
+
+  it("(build/166) a baseline free-text return under a Findings: heading keeps its unread count and adds no digest error", async () => {
+    const lens: AgentSpec = {
+      id: "tu_lens", agentId: "alens", type: "stamity-security", description: "Security lens u1-p1", prompt: "Lens u1-p1.",
+      result: "**Verdict:** request-changes\n\nFindings:\n\n## Query\nWarning: the query builder in query.ts line 12 trusts its input.", tokens: 10,
+    };
+    const m = await measure(passCapture({ shape: "baseline", after: [lens] }).layout.runDir);
+    expect(m.totals.readerSkips.unreadFreeText["severity-without-locator"]).toBe(1);
+    expect(m.totals.readerSkips.digestErrors).toBe(0);
+  });
+
+  it("(build/167) a seed whose file is absent from every copy of an existing snapshot has presence unknown and stays in the denominator", async () => {
+    const without = { "src/orders/format.ts": FORMAT };
+    const m = await measure(passCapture({ shape: "baseline", snapshots: { "u1-p1": { main: without, "lane-u1-p1": without } } }).layout.runDir);
+    expect(m.passes.find((p) => p.id === "u1-p1")!.seeds[0]).toEqual(expect.objectContaining({ present: null, caughtByImplementer: false, found: true }));
+    expect(m.totals.recall).toEqual(expect.objectContaining({ found: 1, denominator: 1 }));
+    expect(m.notes.join("\n")).toMatch(/u1-p1[^\n]*src\/store\/query\.ts/);
+    // Absent from one copy and failing in the other is the implementer's catch.
+    const fixed = { "src/store/query.ts": fileWith(11, "  const sql = `SELECT id FROM orders ORDER BY created_at DESC`;"), "src/orders/format.ts": FORMAT };
+    const mixed = await measure(passCapture({ shape: "baseline", snapshots: { "u1-p1": { main: without, "lane-u1-p1": fixed } } }).layout.runDir);
+    expect(mixed.passes.find((p) => p.id === "u1-p1")!.seeds[0]).toEqual(expect.objectContaining({ present: false, caughtByImplementer: true }));
+  });
+
+  it("(build/168) classes a pass blocked on a baseline blocked verdict the digest reader does not take", async () => {
+    // A heading-led verdict is no digest label, so only the free-text reader can read it.
+    const m = await measure(passCapture({ shape: "baseline", after: [thirdReview("## Verdict: blocked\n\nThe fixture does not build.")] }).layout.runDir);
+    expect(m.passes.find((p) => p.id === "u1-p1")!.verdict).toEqual(expect.objectContaining({ finalClass: "blocked", rounds: 3 }));
+  });
+
+  it("(build/169) counts Grep and Glob results on report paths inside term (e)", async () => {
+    const grep = { pattern: "Critical", path: `.stamity/runs/${RUN}/reports/` };
+    const glob = { pattern: ".stamity/runs/*/reports/*.md" };
+    const grepOut = `.stamity/runs/${RUN}/reports/u1-p1-reviewer-r1.md:3:{"id":"C-1","severity":"Critical"}`;
+    const globOut = `.stamity/runs/${RUN}/reports/u1-p1-reviewer-r1.md`;
+    const extra = [toolUseLine("Grep", "tu_grep", grep), mainLine.toolResult("tu_grep", grepOut), toolUseLine("Glob", "tu_glob", glob), mainLine.toolResult("tu_glob", globOut)];
+    const [a, b] = [await measure(passCapture({ shape: "changed" }).layout.runDir), await measure(passCapture({ shape: "changed", extra }).layout.runDir)];
+    expect(b.totals.breakdown["reportReads"]! - a.totals.breakdown["reportReads"]!).toBe(inputChars(grep) + grepOut.length + inputChars(glob) + globOut.length);
+  });
+
+  it("(build/170) keeps a verdict-source ledger row with no locator out of the unmatched count", async () => {
+    const filed = ledgerRows(THREE);
+    const noLocator = { ...filed[0]!, id: `${RUN}/build/9`, severity: "Warning", evidence: "the lint gate fails on the new file" };
+    const m = await measure(passCapture({ shape: "baseline", endLedger: [...filed, noLocator] }).layout.runDir);
+    expect(m.totals.unmatched).toBe(1);
+  });
+
+  it("(build/173) keeps a brief heredoc's body in term (d) beside a gated ledger heredoc in the same command", async () => {
+    const row = JSON.stringify(ledgerRows([LOOSE_FINDING])[0]);
+    const brief = "Fix the findings of u1-p1: C-1 and W-2.";
+    const command = `cat >> .stamity/runs/${RUN}/ledger.jsonl <<'EOF'\n${row}\nEOF\ncat > /tmp/scratch/briefs/u1-p1-fixer.md <<'EOF'\n${brief}\nEOF`;
+    const extra = [mainLine.bashToolUse({ id: "tu_both", command }), mainLine.toolResult("tu_both", "")];
+    const [a, b] = [await measure(passCapture({ shape: "changed" }).layout.runDir), await measure(passCapture({ shape: "changed", extra }).layout.runDir)];
+    expect(b.totals.breakdown["briefs"]! - a.totals.breakdown["briefs"]!).toBe(brief.length);
+    expect(b.totals.breakdown["ledger"]! - a.totals.breakdown["ledger"]!).toBe(row.length);
+  });
+
+  it("(build/174) reads the init event from the head of a long stdout stream", async () => {
+    const { layout } = passCapture({ shape: "baseline" });
+    const init = JSON.stringify({ type: "system", subtype: "init", model: "claude-opus-5-5" });
+    const noise = Array.from({ length: 20_000 }, (_, i) => JSON.stringify({ type: "assistant", n: i }));
+    writeFileSync(join(layout.runDir, "captures", "stdout.jsonl"), [init, ...noise, "{broken"].join("\n") + "\n");
+    const m = await measure(layout.runDir);
+    expect(m.models.init).toBe("claude-opus-5-5");
+    expect(m.invalid).toEqual([]);
+  });
+
+  it("(build/175) counts neither a TaskOutput re-read nor a failed notification as a round", async () => {
+    const reread = [toolUseLine("TaskOutput", "tu_out", { task_id: "task-arev2" }), mainLine.toolResult("tu_out", "**Verdict:** approve\n\nNo findings.")];
+    const failed = [
+      mainLine.agentToolUse({ id: "tu_rev4", subagentType: "stamity-reviewer", description: "Review u1-p1", prompt: "Review unit u1-p1.", background: true }),
+      mainLine.toolResult("tu_rev4", "Async agent launched successfully.\nagentId: arev4"),
+      mainLine.taskNotification({ taskId: "task-arev4", toolUseId: "tu_rev4", status: "failed", result: "API error" }),
+    ];
+    const m = await measure(passCapture({ shape: "baseline", tail: [...reread, ...failed] }).layout.runDir);
+    expect(m.passes.find((p) => p.id === "u1-p1")!.verdict.rounds).toBe(2);
+    const once = await measure(passCapture({ shape: "baseline", tail: reread }).layout.runDir);
+    expect(once.passes.find((p) => p.id === "u1-p1")!.verdict).toEqual(expect.objectContaining({ finalClass: "approve-after-fixes", rounds: 2 }));
   });
 });
 

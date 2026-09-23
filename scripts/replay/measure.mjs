@@ -12,7 +12,8 @@
 //   * loop characters — (a) deliveries and (b) Agent prompts and SendMessages of the non-branch
 //     agents whose role function is build, fix, verdict or gate (resumes reported apart), plus
 //     (c) ledger writes of the kinds `LEDGER_GATED_KINDS` names (every other kind the walk returns
-//     is reported beside the gated figure, never inside it), (d) brief files and (e) report reads,
+//     is reported beside the gated figure, never inside it), (d) brief files and (e) report reads
+//     (Read, read-class Bash, and Grep or Glob on a report path),
 //     each with its tool results; ÷ 6 per pass;
 //   * sub-agent tokens — Σ `processed` over the loop-function agents, ÷ 6;
 //   * recall, decoy flags and unmatched findings, by the deterministic matcher
@@ -23,7 +24,7 @@
 // Where §8 leaves a reading open, this file takes the one that cannot ease the merge gate; each
 // such reading is named at its rule below.
 
-import { createReadStream, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createReadStream, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
@@ -59,7 +60,8 @@ const REPORT_READ = /\.stamity\/runs\/[^/\s'"]+\/reports\/|\/tasks\/[^/\s'"]+\.o
 /** A `BLOCKED_*` status at the start of a line (a bare mention inside a sentence is no status). */
 const BLOCKED = /^[\s*#>-]*(?:status[\s*:]*)?`?BLOCKED_[A-Z]+/im
 const REPORT_FILE = /^(.+)-(implementer|fixer|reviewer|security|performance|design-quality|test-runner|spec-author)-r(\d+)\.md$/
-const STRUCTURED_RETURN = /^\s*(?:[-*]\s+)?\**\s*findings\s*\**\s*:|^ {0,3}```stamity-findings[ \t]*$/im
+/** A C2 `stamity-findings` fence: with a digest's `status:` and `report:` pair, the mark of a structured return. */
+const C2_FENCE = /^ {0,3}```stamity-findings[ \t]*$/m
 /**
  * Bash classes that count as a read for term (e): `read` and `rs`, and `mixed`, which pairs a read
  * or search head verb with another verb — counting it can only raise the loop figure, never hide
@@ -68,6 +70,10 @@ const STRUCTURED_RETURN = /^\s*(?:[-*]\s+)?\**\s*findings\s*\**\s*:|^ {0,3}```st
 const READ_CLASSES = new Set(['read', 'rs', 'mixed'])
 /** Tool results whose text is a sub-agent's delivery. */
 const DELIVERY_TOOLS = new Set(['Agent', 'Task', 'SendMessage', 'TaskOutput'])
+/** Tools whose results term (e) reads when their input names a report path (build/169). */
+const SEARCH_TOOLS = new Set(['Grep', 'Glob'])
+/** The length above which the walk once read a SendMessage result as a report; now only a visibility mark. */
+const LONG_SEND_RESULT = 1500
 
 // ---------- small readers ----------
 
@@ -181,10 +187,10 @@ const copiesOf = (snapshots, pass) => entriesOf(join(snapshots, pass)).filter((e
 const fileIn = (copy, file) => readTextIfPresent(join(copy, ...file.split('/')))
 const asList = (v) => (v === undefined || v === null ? [] : Array.isArray(v) ? v : [v])
 
-/** Whether a seed's `present` rule holds in one snapshot copy; a missing file does not hold. */
+/** Whether a seed's `present` rule holds in one snapshot copy; `null` when the copy lacks the file. */
 function presentIn(copy, item) {
   const text = fileIn(copy, item.file)
-  if (text === null) return false
+  if (text === null) return null
   const rule = item.present ?? {}
   return asList(rule.contains).every((s) => text.includes(s)) && asList(rule.notContains).every((s) => !text.includes(s))
 }
@@ -252,7 +258,10 @@ function indexTranscript(lines) {
     if (!Array.isArray(content)) continue
     for (const b of content) {
       if (o.type === 'assistant' && b?.type === 'tool_use') uses.set(b.id, { name: b.name, input: b.input ?? {} })
-      else if (o.type === 'user' && b?.type === 'tool_result' && DELIVERY_TOOLS.has(uses.get(b.tool_use_id)?.name)) results.set(b.tool_use_id, resultText(b.content))
+      else if (o.type === 'user' && b?.type === 'tool_result') {
+        const name = uses.get(b.tool_use_id)?.name
+        if (DELIVERY_TOOLS.has(name) || SEARCH_TOOLS.has(name)) results.set(b.tool_use_id, resultText(b.content))
+      }
     }
   }
   return { uses, results, cwds }
@@ -267,9 +276,27 @@ async function cwdsOf(path) {
   return out
 }
 
+/** The first `system`/`init` event of the driver's stdout, streamed and stopped there (stdout is the largest capture). */
 async function initEvent(stdoutPath) {
-  const text = readTextIfPresent(stdoutPath)
-  return jsonlRows(text).find((o) => o.type === 'system' && o.subtype === 'init') ?? null
+  try {
+    if (!statSync(stdoutPath).isFile()) return null
+  } catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return null
+    throw error
+  }
+  const input = createReadStream(stdoutPath)
+  const rl = createInterface({ input, crlfDelay: Infinity })
+  try {
+    for await (const text of rl) {
+      if (!text.includes('"init"')) continue
+      const o = parseJson(text)
+      if (o && o.type === 'system' && o.subtype === 'init') return o
+    }
+    return null
+  } finally {
+    rl.close()
+    input.destroy()
+  }
 }
 
 /**
@@ -318,10 +345,12 @@ function readState(stateDir) {
   return { present: entriesOf(stateDir).length > 0, ledger, reports }
 }
 
+/** The final class from the last delivery; `rounds` counts only the deliveries that are rounds (build/175). */
 function finalClassOf(reviews) {
   if (reviews.length === 0) return null
   const last = reviews.at(-1).verdict
-  if (last === 'approve') return reviews.length === 1 ? 'approve' : 'approve-after-fixes'
+  const rounds = reviews.filter((d) => d.round).length
+  if (last === 'approve') return rounds <= 1 ? 'approve' : 'approve-after-fixes'
   if (last === 'request-changes' || last === 'blocked') return 'blocked'
   return null
 }
@@ -419,25 +448,43 @@ function joinAgents(walk, index, subs, roots) {
   })
   const sendByUse = new Map(sends.map((s) => [s.toolUseId, s]))
 
+  // A delivery is a round (build/175) when it completed and carries a verdict: a failed
+  // notification is none, and neither is a TaskOutput re-read of a task already notified.
   const deliveries = []
   const taskAgent = new Map()
+  const notified = new Map()
   for (const d of walk.deliveries) {
     const agent = byUse.get(d.toolUseId) ?? sendByUse.get(d.toolUseId)?.target ?? null
     if (agent && d.taskId) taskAgent.set(d.taskId, agent)
-    deliveries.push({ line: d.line, chars: d.chars, text: d.result ?? '', agent, trailer: d.subagentTokens ?? 0 })
+    if (d.taskId && !notified.has(d.taskId)) notified.set(d.taskId, d.line)
+    const failed = typeof d.status === 'string' && d.status !== 'completed'
+    deliveries.push({ line: d.line, chars: d.chars, text: d.result ?? '', agent, trailer: d.subagentTokens ?? 0, failed, reread: false })
   }
+  const notes = []
+  const longAcks = []
   for (const e of walk.events) {
-    if (e.dir !== 'in' || e.cls !== 'returns.report' || !e.toolUseId) continue
+    if (e.dir !== 'in' || !e.toolUseId) continue
+    if (e.tool === 'SendMessage' && e.cls === 'returns.sendAck' && e.chars > LONG_SEND_RESULT) longAcks.push(e.line)
+    if (e.cls !== 'returns.report') continue
     let agent = null
+    let reread = false
     if (e.tool === 'Agent' || e.tool === 'Task') agent = byUse.get(e.toolUseId) ?? null
     else if (e.tool === 'SendMessage') agent = sendByUse.get(e.toolUseId)?.target ?? null
-    else if (e.tool === 'TaskOutput') agent = taskAgent.get(index.uses.get(e.toolUseId)?.input?.task_id) ?? null
-    deliveries.push({ line: e.line, chars: e.chars, text: index.results.get(e.toolUseId) ?? '', agent, trailer: 0 })
+    else if (e.tool === 'TaskOutput') {
+      const taskId = index.uses.get(e.toolUseId)?.input?.task_id
+      agent = taskAgent.get(taskId) ?? null
+      reread = notified.has(taskId) && notified.get(taskId) < e.line
+    }
+    deliveries.push({ line: e.line, chars: e.chars, text: index.results.get(e.toolUseId) ?? '', agent, trailer: 0, failed: false, reread })
   }
+  // build/165: a SendMessage result is a delivery by its content; a long one with no delivery mark
+  // is read as an acknowledgement, out of term (a) and the rounds, and named here.
+  if (longAcks.length > 0) notes.push(`${longAcks.length} SendMessage result(s) over ${LONG_SEND_RESULT} characters read as acknowledgements (no digest label, BLOCKED_ status or verdict word), outside term (a) and the rounds: main transcript line(s) ${longAcks.join(', ')}`)
   deliveries.sort((a, b) => a.line - b.line)
   for (const d of deliveries) {
     d.digest = parseDigest(d.text, { source: 'digest', role: d.agent?.role ?? null, roots })
     d.verdict = verdictOfDelivery(d.text, d.digest)
+    d.round = !d.failed && !d.reread && d.verdict !== null
   }
 
   // Branch-level verdict dispatches: after u3-p2's last reviewer approval with no single pass id,
@@ -450,10 +497,18 @@ function joinAgents(walk, index, subs, roots) {
   // A verdict agent's round: one more than the fixers of its pass dispatched before it.
   const fixers = agents.filter((a) => a.fn === 'fix')
   for (const a of agents) a.round = 1 + fixers.filter((f) => f.pass === a.pass && f.line < a.line).length
-  return { agents, byAgentId, sends, deliveries }
+  return { agents, byAgentId, sends, deliveries, notes }
 }
 
 // ---------- the measurement: loop characters and sub-agent tokens ----------
+
+/** Whether a Grep or Glob reads report text: its path, pattern or glob names a report path, or its results do. */
+function searchesReports(input, result) {
+  const i = input && typeof input === 'object' ? input : {}
+  const path = typeof i.path === 'string' ? i.path : ''
+  const spellings = [path, i.pattern, i.glob, `${path.replace(/\/+$/, '')}/${typeof i.glob === 'string' ? i.glob : typeof i.pattern === 'string' ? i.pattern : ''}`]
+  return spellings.some((s) => typeof s === 'string' && REPORT_READ.test(s)) || REPORT_READ.test(result ?? '')
+}
 
 const blankBreakdown = () => ({ returns: 0, prompts: 0, ledger: 0, briefs: 0, reportReads: 0, resumes: 0 })
 /** The loop figure of a breakdown row: every term but the resumes, which are reported apart. */
@@ -467,7 +522,7 @@ const byPass = (make) => Object.fromEntries([...PASS_IDS, 'unattributed'].map((k
  * unresolved delivery or send (no dispatch to join it to) stays in the loop, unattributed: leaving
  * it out could only lower the figure.
  */
-function loopCharacters(walk, agents, sends, deliveries) {
+function loopCharacters(walk, index, agents, sends, deliveries) {
   const perPass = byPass(blankBreakdown)
   const inLoop = (agent) => agent === null || (LOOP_FUNCTIONS.has(agent.fn) && !agent.branch)
   const passLines = agents.filter((a) => LOOP_FUNCTIONS.has(a.fn) && !a.branch && isPass(a.pass)).map((a) => [a.line, a.pass])
@@ -515,16 +570,26 @@ function loopCharacters(walk, agents, sends, deliveries) {
     perPass[passAt(e.line)].briefs += withResult(e.chars, e.toolUseId)
   }
   for (const b of walk.bash) {
-    if (b.kind !== 'command' || counted.has(b.toolUseId)) continue
+    if (b.kind !== 'command') continue
     const briefChars = sum(b.heredocs.filter((h) => BRIEF.test(h.target)), (h) => h.chars)
     if (briefChars === 0) continue
+    // A command already counted under (c) keeps its brief bodies here; its result is counted there once (build/173).
+    if (counted.has(b.toolUseId)) {
+      perPass[passAt(b.line)].briefs += briefChars
+      continue
+    }
     counted.add(b.toolUseId)
     perPass[passAt(b.line)].briefs += withResult(briefChars, b.toolUseId)
   }
 
-  // (e) report reads: a Read, or a read-class Bash call, naming a report or a task output.
+  // (e) report reads: a Read, a read-class Bash call, or a Grep or Glob (build/169) naming a report
+  // or a task output, or a Grep or Glob whose results name one.
   for (const e of walk.events) {
-    if (e.dir === 'out' && e.tool === 'Read' && REPORT_READ.test(String(e.filePath ?? ''))) perPass[passAt(e.line)].reportReads += withResult(e.chars, e.toolUseId)
+    if (e.dir !== 'out') continue
+    if (e.tool === 'Read' && REPORT_READ.test(String(e.filePath ?? ''))) perPass[passAt(e.line)].reportReads += withResult(e.chars, e.toolUseId)
+    else if (SEARCH_TOOLS.has(e.tool) && searchesReports(index.uses.get(e.toolUseId)?.input, index.results.get(e.toolUseId))) {
+      perPass[passAt(e.line)].reportReads += withResult(e.chars, e.toolUseId)
+    }
   }
   for (const b of walk.bash) {
     if (b.kind !== 'command' || counted.has(b.toolUseId) || !READ_CLASSES.has(b.cls) || !REPORT_READ.test(b.command)) continue
@@ -538,11 +603,12 @@ function loopCharacters(walk, agents, sends, deliveries) {
  * rule names no exclusion), the output tokens and notification trailer reported beside them, and
  * each sub-agent's models against its pin.
  */
-function subagentUsage(subs, byAgentId, deliveries, invalid) {
+function subagentUsage(subs, byAgentId, deliveries, invalid, notes) {
   const tokensByPass = byPass(() => 0)
   let tokens = 0
   let outputTokens = 0
   const models = []
+  const unjoined = []
   for (const s of subs) {
     const agent = byAgentId.get(s.agentId) ?? null
     const requested = s.requestedModel ?? agent?.model ?? null
@@ -550,13 +616,17 @@ function subagentUsage(subs, byAgentId, deliveries, invalid) {
     for (const model of Object.keys(s.models)) {
       if (model !== '<synthetic>' && !withinPin(requested, model)) invalid.push(`sub-agent ${s.agentType ?? 'unknown'} (${s.agentId}) answered on ${model}, outside the pin for ${requested}`)
     }
-    if (!LOOP_FUNCTIONS.has(agent?.fn ?? roleFunction(s.agentType))) continue
+    // build/164: a sub-agent joined to no dispatch and naming no type could be any role, so its
+    // tokens stay in the sum, unattributed, and it is counted and named.
+    if (agent === null && !s.agentType) unjoined.push(s.agentId)
+    else if (!LOOP_FUNCTIONS.has(agent?.fn ?? roleFunction(s.agentType))) continue
     tokens += s.processed
     outputTokens += s.outTok
     tokensByPass[passKey(agent?.pass)] += s.processed
   }
   const trailer = sum(deliveries.filter((d) => d.agent && LOOP_FUNCTIONS.has(d.agent.fn)), (d) => d.trailer)
-  return { tokensByPass, tokens, outputTokens, trailer, models }
+  if (unjoined.length > 0) notes.push(`${unjoined.length} sub-agent(s) joined to no dispatch and naming no agent type, their tokens kept in the sub-agent-token sum unattributed: ${unjoined.join(', ')}`)
+  return { tokensByPass, tokens, outputTokens, trailer, models, unjoined: unjoined.length }
 }
 
 // ---------- the measurement: findings ----------
@@ -582,11 +652,13 @@ function collectFindings(deliveries, stateNames, states, roots) {
     const block = parseFindingsBlock(d.text, meta)
     readerSkips.findingsBlockErrors += block.errors.length
     for (const f of block.findings) all.push({ ...f, ...where, unit: null })
-    readerSkips.digestErrors += d.digest.errors.length
     for (const f of d.digest.findings) all.push({ ...f, ...where, unit: null })
-    // A digest's `findings:` line and a C2 block are no free text: counting their locators as
-    // unread blocks would charge the changed shape for the baseline heuristic's skips.
-    if (!STRUCTURED_RETURN.test(d.text)) for (const u of unreadFreeText(d.text, meta)) readerSkips.unreadFreeText[u.reason]++
+    // A digest (its `status:` and `report:` pair) and a C2 block are no free text: counting their
+    // locators as unread blocks would charge the changed shape for the baseline heuristic's skips.
+    // A free-text return's `Findings:` heading is no digest, so it adds no digest error (build/166).
+    const digest = d.digest.status !== null && d.digest.report !== null
+    if (digest) readerSkips.digestErrors += d.digest.errors.length
+    if (!digest && !C2_FENCE.test(d.text)) for (const u of unreadFreeText(d.text, meta)) readerSkips.unreadFreeText[u.reason]++
   })
 
   // Reports by path, the end state last so the final copy of a report wins.
@@ -670,10 +742,14 @@ const stageOf = (f, seed) => (f.branch ? 'branch' : f.pass === seed.pass ? 'pass
  */
 function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes) {
   const missing = new Set()
+  const absent = []
   const rows = seeds.seeds.map((seed) => {
     const copies = copiesOf(snapshots, seed.pass)
     if (copies.length === 0) missing.add(seed.pass)
-    const present = copies.length === 0 ? null : copies.some((copy) => presentIn(copy, seed))
+    // build/167: a file absent from every copy says nothing of the rule, so presence is unknown.
+    const held = new Set(copies.map((copy) => presentIn(copy, seed)))
+    const present = held.has(true) ? true : held.has(false) ? false : null
+    if (copies.length > 0 && present === null) absent.push(`${seed.id} (${seed.pass}, ${seed.file})`)
     const hits = seedMatch.matched[seed.id].map((i) => all[i])
     const stages = hits.map((f) => stageOf(f, seed)).toSorted((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b))
     return {
@@ -682,6 +758,7 @@ function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes) {
     }
   })
   for (const pass of missing) notes.push(`no snapshot under captures/snapshots/${pass}/: its seeds stay in the recall denominator with presence unknown`)
+  for (const seed of absent) notes.push(`seed ${seed}: the file is absent from every snapshot copy of the pass, so the seed stays in the recall denominator with presence unknown`)
   return rows
 }
 
@@ -747,10 +824,9 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
   checkSeeds(seeds)
   const cap = await loadCapture(runDir, forbid)
   const { L, run, invalid, walk, roots, states, oracleStatus } = cap
-  const notes = []
-  const { agents, byAgentId, sends, deliveries } = joinAgents(walk, cap.index, cap.subs, roots)
-  const { perPass, beside, unresolved } = loopCharacters(walk, agents, sends, deliveries)
-  const usage = subagentUsage(cap.subs, byAgentId, deliveries, invalid)
+  const { agents, byAgentId, sends, deliveries, notes } = joinAgents(walk, cap.index, cap.subs, roots)
+  const { perPass, beside, unresolved } = loopCharacters(walk, cap.index, agents, sends, deliveries)
+  const usage = subagentUsage(cap.subs, byAgentId, deliveries, invalid, notes)
   const { all, readerSkips } = collectFindings(deliveries, cap.stateNames, states, roots)
   const { seedMatch, decoysFlagged, unmatched, adjudication, tolerance } = scoreFindings(all, seeds, L.snapshots)
   const seedRows = seedRowsOf(seeds, all, seedMatch, L.snapshots, oracleStatus, notes)
@@ -777,7 +853,7 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
     return {
       id, loopChars: loopOf(perPass[id]), breakdown: perPass[id], subagentTokens: usage.tokensByPass[id],
       // An oracle that errors, or has no result, counts as unfixed (§8).
-      verdict: { finalClass, rounds: reviews.length, approvedWithSeedUnfixed: approved && ownSeeds.some((s) => s.oracle !== 'pass') },
+      verdict: { finalClass, rounds: reviews.filter((d) => d.round).length, approvedWithSeedUnfixed: approved && ownSeeds.some((s) => s.oracle !== 'pass') },
       seeds: ownSeeds,
       decoysFlagged: decoysFlagged.filter((d) => d.pass === id).map((d) => d.id),
     }
@@ -804,6 +880,7 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
       unresolvedDeliveriesAndSends: unresolved,
       ledgerBeside: beside,
       subagentTokens: usage.tokens,
+      unjoinedSubagents: usage.unjoined,
       subagentTokensPerPass: usage.tokens / PASS_COUNT,
       subagentOutputTokens: usage.outputTokens,
       notificationTrailerTokens: usage.trailer,
@@ -819,7 +896,7 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
       oracleError: statuses.filter((s) => s === 'error').length,
     },
     compactionSamples,
-    wholeBranch: { finalClass: finalClassOf(branchReviews), rounds: branchReviews.length },
+    wholeBranch: { finalClass: finalClassOf(branchReviews), rounds: branchReviews.filter((d) => d.round).length },
     adjudication,
     models: { pin: ORCHESTRATOR_MODEL, init: cap.init?.model ?? null, orchestrator: cap.orchestratorModels, subagents: usage.models },
   }

@@ -310,12 +310,22 @@ function splitNotifications(text) {
   return { parts, wrapperChars: text.length - covered }
 }
 
+/**
+ * Whether a result's text is a sub-agent's delivery, read by its content and never by its length (a
+ * short digest is a whole re-review): a C4 digest label at the start of a line, a `BLOCKED_*`
+ * status, or a verdict word.
+ */
+const DELIVERY_LABEL = /^\s*(?:[-*]\s+)?\**\s*(?:status|verdict|mode|report|findings)\s*\**\s*:/im
+const DELIVERY_BLOCKED = /\bBLOCKED_[A-Z]+/
+const DELIVERY_VERDICT = /verdict[:*\s]*\**\s*(?:approve|request-changes|blocked)\b/i
+const isReportText = (text) => DELIVERY_LABEL.test(text) || DELIVERY_BLOCKED.test(text) || DELIVERY_VERDICT.test(text)
+
 function toolResultClass(name, meta, text) {
   if (/^PreToolUse:|^PostToolUse:|hook error: Blocked by|^Hook /.test(text)) return ['hook', 'tool-result-hook-message']
   switch (name) {
     case 'Agent': case 'Task':
       return text.startsWith('Async agent launched') ? ['returns.launchAck', 'agent-launch'] : ['returns.report', 'sync-agent-result']
-    case 'SendMessage': return text.length > 1500 ? ['returns.report', 'sendmessage-result'] : ['returns.sendAck', 'sendmessage-ack']
+    case 'SendMessage': return isReportText(text) ? ['returns.report', 'sendmessage-result'] : ['returns.sendAck', 'sendmessage-ack']
     case 'TaskOutput': return ['returns.report', 'taskoutput']
     case 'Bash': {
       const c = meta ? meta.bashCls : 'other'

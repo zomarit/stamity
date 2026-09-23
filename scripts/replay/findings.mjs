@@ -504,9 +504,12 @@ export function ledgerFindings(rows, opts = {}) {
 
 // ---------- verdicts ----------
 
-/** The verdict word of a return in either shape (`**Verdict:** request-changes`, `verdict: approve`), or null. */
+/**
+ * The verdict word of a return in either shape (`**Verdict:** request-changes`, `verdict: approve`,
+ * `**Verdict:** blocked`), or null — the same three words the digest's `verdict:` label reads.
+ */
 export function verdictOf(text) {
-  const m = String(text ?? '').match(/verdict[:*\s]*\**\s*(approve|request-changes)/i)
+  const m = String(text ?? '').match(/verdict[:*\s]*\**\s*(approve|request-changes|blocked)\b/i)
   return m ? m[1].toLowerCase() : null
 }
 

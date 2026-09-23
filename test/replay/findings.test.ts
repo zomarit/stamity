@@ -606,6 +606,12 @@ describe("verdictOf", () => {
     expect(verdictOf("VERDICT — Approve")).toBeNull();
     expect(verdictOf("status: BLOCKED_AMBIGUITY")).toBeNull();
   });
+
+  it("(build/168) reads a baseline blocked verdict as blocked, as the digest's label reads it", () => {
+    expect(verdictOf("Summary.\n**Verdict:** blocked\n")).toBe("blocked");
+    expect(verdictOf("Verdict: Blocked — the fixture will not build")).toBe("blocked");
+    expect(verdictOf("**Verdict:** blockers remain")).toBeNull();
+  });
 });
 
 describe("matchItems", () => {
