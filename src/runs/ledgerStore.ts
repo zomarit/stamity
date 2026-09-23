@@ -362,7 +362,7 @@ function printableId(id: string): string {
   return id
     .replace(/[\r\n\t]/gu, " ")
     // oxlint-disable-next-line no-control-regex -- stripping control bytes IS the point
-    .replace(/[\u0000-\u001F\u007F-\u009F​-‏‪-‮⁠⁦-⁩﻿]/gu, "");
+    .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/gu, "");
 }
 
 /**
