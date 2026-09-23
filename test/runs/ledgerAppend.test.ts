@@ -217,6 +217,26 @@ describe("parseFindingsBlock", () => {
     const parsed = parseFindingsBlock(report([{ ...C1, summary: "x".repeat(300) }]));
     expect(parsed.ok).toBe(true);
   });
+
+  it("cuts every quoted fragment of report text at 60 code points plus an ellipsis", () => {
+    const long = "\u{1F600}".repeat(100);
+    const parsed = parseFindingsBlock(
+      report([
+        { ...C1, [long]: 1 },
+        { ...W1, severity: long },
+        { ...M1, id: long },
+        { ...M1, severity: { nested: long } },
+      ]),
+    );
+
+    const cut = JSON.stringify(`${"\u{1F600}".repeat(60)}…`);
+    expect(parsed.ok ? [] : parsed.problems.map((problem) => problem.message)).toEqual([
+      `unknown key ${cut}`,
+      `severity ${cut} is not Critical, Warning or Minor`,
+      `id ${cut} is not C-<n>, W-<n> or M-<n>`,
+      `severity ${Array.from(JSON.stringify({ nested: long })).slice(0, 60).join("")}… is not Critical, Warning or Minor`,
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -584,6 +604,18 @@ describe("appendFindings", () => {
     expect(await readText(dir, LEDGER)).toBe(before);
   });
 
+  it("strips control and bidi characters from the on-disk ids the duplicate-report refusal echoes", async () => {
+    const dir = tempDir();
+    const forged = "\u001b[31mred\u009b2J\u202Eflip\nline";
+    await seedRun(dir, {
+      [LEDGER]: `${JSON.stringify({ id: forged, report: REPORT_REL })}\n`,
+    });
+
+    await expect(append(dir, [finding()], REPORT_REL)).rejects.toThrow(
+      `ledger append refused ${REPORT_REL}: the ledger already carries rows from this report ([31mred2Jflip line)`,
+    );
+  });
+
   it("takes no lock and creates no ledger for zero findings", async () => {
     const dir = tempDir();
     await seedRun(dir);
@@ -665,6 +697,47 @@ describe("stamity ledger append", () => {
     expect(await readText(dir, LEDGER)).toBe(`{"id":"${RUN}/review/1"}\n`);
   });
 
+  it("lists the first 20 problems of a 1,000-line malformed block and counts the rest", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [REPORT_REL]: report(Array.from({ length: 1000 }, () => "x")) });
+
+    const human = await cli(dir, [...APPEND, "--report", REPORT_REL]);
+    const json = await cli(dir, [...APPEND, "--report", REPORT_REL, "--json"]);
+
+    expect(human.code).toBe(1);
+    const listed = human.stderr
+      .split("\n")
+      .filter((line) => line.startsWith(`${REPORT_REL}:`) || line.startsWith("… +"));
+    expect(listed).toHaveLength(21);
+    expect(listed[0]).toMatch(new RegExp(`^${REPORT_REL}:6: not JSON \\(`));
+    expect(listed[19]).toMatch(new RegExp(`^${REPORT_REL}:25: not JSON \\(`));
+    expect(listed[20]).toBe("… +980 more problem(s)");
+
+    expect(json.code).toBe(1);
+    const doc = JSON.parse(json.stdout) as { problems: { line: number }[]; omitted: number };
+    expect(doc.problems).toHaveLength(20);
+    expect(doc.problems.at(-1)?.line).toBe(25);
+    expect(doc.omitted).toBe(980);
+    expect(existsSync(dir.path(LEDGER))).toBe(false);
+  });
+
+  it("strips control and bidi characters from every problem line it prints", async () => {
+    const dir = tempDir();
+    await seedRun(dir, {
+      [REPORT_REL]: report(["\u009b2J", { ...C1, "k\u001b[31m\u202E": 1 }]),
+    });
+
+    const result = await cli(dir, [...APPEND, "--report", REPORT_REL]);
+    const json = await cli(dir, [...APPEND, "--report", REPORT_REL, "--json"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain(`${REPORT_REL}:6: not JSON (`);
+    expect(result.stderr).toContain(`${REPORT_REL}:7: unknown key "k\\u001b[31m"`);
+    for (const output of [result.stderr, json.stdout]) {
+      expect(output).not.toMatch(/[\u0080-\u009F\u202A-\u202E]/u);
+    }
+  });
+
   it.each([
     ["no block", "# prose\n", ":0: no stamity-findings block"],
     ["two blocks", `${report([C1])}${report([W1])}`, "a second stamity-findings block"],
@@ -689,6 +762,18 @@ describe("stamity ledger append", () => {
     expect(result.code).toBe(0);
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(`ledger append: no findings in ${REPORT_REL}; nothing appended\n`);
+    expect(existsSync(dir.path(LEDGER))).toBe(false);
+  });
+
+  it("refuses a stdin block over the 250,000-character input ceiling and writes nothing", async () => {
+    const dir = tempDir();
+    await seedRun(dir);
+
+    const over = await cli(dir, [...APPEND, "--stdin"], ["x".repeat(250_001)]);
+
+    expect(over.code).toBe(1);
+    expect(over.stdout).toBe("");
+    expect(over.stderr).toContain("the block piped on stdin is over the 250000 byte input ceiling");
     expect(existsSync(dir.path(LEDGER))).toBe(false);
   });
 

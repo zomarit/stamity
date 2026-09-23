@@ -56,6 +56,24 @@ const OPTIONAL_KEYS = ["decision_needed", "security"] as const;
 const ALLOWED_KEYS: ReadonlySet<string> = new Set<string>([...REQUIRED_KEYS, ...OPTIONAL_KEYS]);
 const FINDING_ID_PATTERN = /^([CWM])-[1-9][0-9]*$/;
 
+/** Longest fragment of report text a problem message quotes back, in code points. */
+const QUOTED_MAX = 60;
+
+/**
+ * A value read from the report as a problem message quotes it: a string is cut
+ * at {@link QUOTED_MAX} code points plus `…` and then JSON-quoted; anything
+ * else is JSON-spelled and that spelling cut the same way. A key, an id or a
+ * severity is report-authored text of any length, and a refusal names every
+ * problem, so an uncut quote would let one report size the refusal's output.
+ */
+function quoted(value: unknown): string {
+  const cut = (text: string): string => {
+    const points = Array.from(text);
+    return points.length <= QUOTED_MAX ? text : `${points.slice(0, QUOTED_MAX).join("")}…`;
+  };
+  return typeof value === "string" ? JSON.stringify(cut(value)) : cut(String(JSON.stringify(value)));
+}
+
 /**
  * Where the one block sits: its opening line and closing line (0-based), or the
  * structural problem that stops the parse before any line is read.
@@ -118,7 +136,7 @@ function readFindingLine(
   const problems: string[] = [];
 
   for (const key of Object.keys(object)) {
-    if (!ALLOWED_KEYS.has(key)) problems.push(`unknown key ${JSON.stringify(key)}`);
+    if (!ALLOWED_KEYS.has(key)) problems.push(`unknown key ${quoted(key)}`);
   }
   for (const key of REQUIRED_KEYS) {
     if (!Object.hasOwn(object, key)) problems.push(`missing ${JSON.stringify(key)}`);
@@ -128,16 +146,16 @@ function readFindingLine(
   const severityOk =
     typeof severity === "string" && (SEVERITIES as readonly string[]).includes(severity);
   if (Object.hasOwn(object, "severity") && !severityOk) {
-    problems.push(`severity ${JSON.stringify(severity)} is not Critical, Warning or Minor`);
+    problems.push(`severity ${quoted(severity)} is not Critical, Warning or Minor`);
   }
 
   const id = object["id"];
   if (Object.hasOwn(object, "id")) {
     const match = typeof id === "string" ? FINDING_ID_PATTERN.exec(id) : null;
     if (match === null) {
-      problems.push(`id ${JSON.stringify(id)} is not C-<n>, W-<n> or M-<n>`);
+      problems.push(`id ${quoted(id)} is not C-<n>, W-<n> or M-<n>`);
     } else if (severityOk && match[1] !== severity.charAt(0)) {
-      problems.push(`id ${JSON.stringify(id)} does not match severity ${severity}`);
+      problems.push(`id ${quoted(id)} does not match severity ${severity}`);
     }
   }
 
@@ -199,7 +217,7 @@ export function parseFindingsBlock(text: string): BlockParse<Finding> {
     if (read.id !== null) {
       const earlier = firstLineOfId.get(read.id);
       if (earlier !== undefined) {
-        problems.push({ line, message: `id ${JSON.stringify(read.id)} repeats line ${earlier}` });
+        problems.push({ line, message: `id ${quoted(read.id)} repeats line ${earlier}` });
         continue;
       }
       firstLineOfId.set(read.id, line);

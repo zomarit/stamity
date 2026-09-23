@@ -351,6 +351,21 @@ async function readLedger(path: string, relPath: string): Promise<string> {
 }
 
 /**
+ * An id read back from the ledger file as a refusal may print it: line breaks
+ * and tabs become spaces, and control bytes, the bidi controls and the
+ * zero-width marks are dropped. The ledger is a committed file anyone can edit,
+ * so an id carrying an escape sequence would otherwise reach the operator's
+ * terminal raw. The rule `../cli/kit/prompts.ts::sanitizeLabel` applies,
+ * restated here because the engine never imports the CLI layer.
+ */
+function printableId(id: string): string {
+  return id
+    .replace(/[\r\n\t]/gu, " ")
+    // oxlint-disable-next-line no-control-regex -- stripping control bytes IS the point
+    .replace(/[\u0000-\u001F\u007F-\u009F​-‏‪-‮⁠⁦-⁩﻿]/gu, "");
+}
+
+/**
  * Append one `open` row per finding to the run's ledger, under its write lock.
  *
  * Refuses a report the ledger already carries rows from, naming them, so a
@@ -384,7 +399,7 @@ export async function appendFindings(req: {
       const already = held.filter((row) => row.report === req.report).map((row) => row.id);
       if (already.length > 0) {
         throw new EngineError(
-          `ledger append refused ${req.report}: the ledger already carries rows from this report (${already.join(", ")})`,
+          `ledger append refused ${req.report}: the ledger already carries rows from this report (${already.map(printableId).join(", ")})`,
           {
             code: "VALIDATION_ERROR",
             next: "close or amend those rows instead; a report is appended once",

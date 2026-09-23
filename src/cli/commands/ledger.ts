@@ -6,6 +6,7 @@ import type { AppendResult } from "../../runs/ledgerStore.ts";
 import { CliFailure, renderFailureHuman, type FailureDoc } from "../kit/output.ts";
 import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
+import { sanitizeLabel } from "../kit/prompts.ts";
 
 /**
  * `stamity ledger append` — the one serialized writer of a work run's findings
@@ -38,6 +39,14 @@ const APPEND = "append";
 
 /** Where the block came from when it was piped rather than named. */
 const STDIN_SOURCE = "stdin";
+
+/**
+ * How many problems a parse refusal lists. A report may be up to 1 MiB of
+ * one-character bad lines, one problem each, and the refusal lands in the
+ * orchestrator's tool output: the first twenty are enough to start fixing, and
+ * the count of the rest says how far there is to go.
+ */
+const PROBLEMS_LISTED = 20;
 
 function text(opts: Record<string, unknown>, key: string): string | undefined {
   const value = opts[key];
@@ -166,11 +175,19 @@ async function runAppend(ctx: CliContext, opts: Record<string, unknown>): Promis
       why: "the stamity-findings block does not parse, so no row was appended",
       next: "fix every line named above in the report, then re-run the append",
     };
+    // A message quotes report text (and V8's own window of it, for a line that
+    // is not JSON), so every one is sanitised here, where it meets the terminal
+    // and the JSON document, not in the parser that names it.
+    const listed = parsed.problems
+      .slice(0, PROBLEMS_LISTED)
+      .map((problem) => ({ line: problem.line, message: sanitizeLabel(problem.message) }));
+    const omitted = parsed.problems.length - listed.length;
     if (!ctx.json) {
-      const problems = parsed.problems.map((problem) => `${src}:${problem.line}: ${problem.message}`);
-      ctx.io.err(`${renderFailureHuman(doc, ctx.palette)}\n${problems.join("\n")}\n`);
+      const lines = listed.map((problem) => `${src}:${problem.line}: ${problem.message}`);
+      if (omitted > 0) lines.push(`… +${omitted} more problem(s)`);
+      ctx.io.err(`${renderFailureHuman(doc, ctx.palette)}\n${lines.join("\n")}\n`);
     }
-    return { exitCode: 1, json: { error: doc, problems: [...parsed.problems] } };
+    return { exitCode: 1, json: { error: doc, problems: listed, omitted } };
   }
 
   if (parsed.items.length > 0 && !ctx.engine.merge.atomicWrite.isCrossProcessLockingEnabled()) {
