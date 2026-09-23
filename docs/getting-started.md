@@ -2,7 +2,7 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.0 release cut (2026-09-21). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.1 release cut (2026-09-23). -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run line changes, a verb joins
      or leaves the CLI, a probe joins or leaves `check`, a path joins or leaves `.stamity/`, or the
      APM route's client floor or per-target output moves. `test/docsPages.test.ts` holds this page

@@ -2,7 +2,7 @@
 title: Plugins
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6f8f103. Re-attested 2026-09-22 against the Copilot CLI measurements of that date. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.1 release cut (2026-09-23). -->
 <!-- Re-open when: the capability-file schema changes shape, the locator's exit codes or its
      candidate order move, or a vendor page behind a command block is re-read on a later access
      date than the newest this page carries, 2026-09-22. `test/docsPages.test.ts` holds this
@@ -87,9 +87,12 @@ the vendor's documentation** is transcribed from a page read on 2026-09-21 and h
 here. Two proofs have since run — the release's route proof, and the upgrade-and-rollback lifecycle
 walk — and between them they executed the LOCAL form of every client's route, a marketplace or a
 plugin directory on disk. They did not execute the same commands as each other, so each block below
-names which one ran what. What neither executed is the remote `<owner>/stamity#plugin-dist` source:
-it has nothing to point at until the 1.9.0 release publishes the distribution branch. No block on
-this page is presented as executed when it was not.
+names which one ran what. Neither executed the remote `<owner>/stamity#plugin-dist` source against
+this repository's own distribution, and nothing has since. The branch exists — the 1.9.0 release
+published `plugin-dist`, one orphan commit, tagged `plugins/v1.9.0` — but the one walk of a remote
+source, the private-chain rehearsal of 2026-09-22, pointed Claude Code and Copilot CLI at a
+private mirror pinned at that tag, and Codex's remote form has not run at all. No block on this
+page is presented as executed when it was not.
 
 `<owner>/stamity` below is your own mirror or this repository, whichever your organization serves
 from. The branch a release publishes the distribution to is `plugin-dist`, and each release also
@@ -103,7 +106,11 @@ claude plugin install stamity@stamity --scope project
 ```
 
 *From the vendor's plugin-marketplaces and CLI reference pages, accessed 2026-09-21; the remote
-source above waits for the distribution branch. Two proofs executed different halves of this route,
+source above is unexecuted against this repository's distribution. Its GitHub-source form ran once,
+in the private-chain rehearsal of 2026-09-22: `plugin marketplace add` on a private catalog
+repository whose Claude entry is a `git-subdir` source pinning a private mirror at
+`plugins/v1.9.0`, then the project-scope install from it, both exit 0 on Claude Code 2.1.278. Two
+proofs executed different halves of this route,
 both on Claude Code 2.1.278 on 2026-09-20. The route proof took the root's own side and never ran
 these two commands: `claude plugin validate --strict <root>/claude` printed `✔ Validation passed`
 and exited 0, and a `--plugin-dir` run listed the plugin's ids and then ran the setup command. The
@@ -163,7 +170,10 @@ copilot plugin install stamity@stamity
 ```
 
 *From the vendor's CLI plugin reference, accessed 2026-09-21. The route proof executed this route
-from a marketplace on disk; the remote source above waits for the distribution branch.* Take the
+from a marketplace on disk. The remote form ran once, in the private-chain rehearsal of
+2026-09-22 — `copilot plugin marketplace add <owner>/stamity-plugins-mirror#plugins/v1.9.0`, then
+the install, both exit 0 on GitHub Copilot CLI 1.0.87 — against a private mirror at that tag, not
+against this repository's own distribution.* Take the
 marketplace route rather than a direct install: `copilot plugin install <path>` still works and
 prints a deprecation warning in favour of `plugin@marketplace` *(executed 2026-09-20 on GitHub
 Copilot CLI 1.0.85, which installed 10 skills unauthenticated and listed `stamity` under `copilot
@@ -227,7 +237,8 @@ codex plugin add stamity@stamity
 `CODEX_HOME`: both commands exited 0 with no login, and the installed cache tree was byte-identical
 to the built root over all 45 files outside its bundled `runtime/`, which the route proof compared
 again at this release. The `<owner>/stamity` spelling of a remote source is from the vendor's build
-page, accessed 2026-09-21, and waits for the distribution branch.*
+page, accessed 2026-09-21; the distribution branch it would point at exists since 1.9.0, and no
+proof has walked Codex's remote form against it or against a mirror.*
 
 A marketplace entry on its own installs nothing — both commands are needed. The marketplace file
 this repository publishes lives at `.agents/plugins/marketplace.json`, and an entry's `source` is
@@ -445,7 +456,7 @@ own hooks — none of them is a ledger row, and none of them is the engine's to 
 prints one uninstall command line per client the manifest recorded, so the plugin side can be
 removed the same way it was added.
 
-There is no migration engine in 1.9.0. Detecting a generated setup, previewing the removals and
+There is no migration engine in 1.9.1. Detecting a generated setup, previewing the removals and
 refusing on a conflict were planned and cut: the clean-then-setup route above is the documented
 one, and it is the one this page will describe until a later minor ships the engine.
 
@@ -460,8 +471,13 @@ floor. Verify the digest you fetched against it before you serve it.
 
 Two Renovate presets ship in this repository, and they do different jobs:
 
-- **`renovate/plugins.json`** tracks the `"ref": "plugins/v…"` value inside each of the four
-  marketplace files and opens a pull request when a newer release tag exists.
+- **`renovate/plugins.json`** watches all four marketplace files for a `"ref": "plugins/v…"`
+  value and opens a pull request when a newer release tag exists. Only a catalog that carries a
+  `ref` moves: the Claude catalog on a `github` or `git-subdir` source — which is what this
+  repository's own distribution publishes — and a Codex catalog pointed at a mirror rather than
+  its own tree. The Copilot and Cursor catalogs address their roots by relative path, a Codex
+  catalog on its own tree is `local`, and a Claude catalog on an `npm` or `archive` source carries
+  no `ref`, so none of those is bumped by the preset.
 - **`renovate/companion.json`** pins the repository's own `@zomarit/stamity` dependency to one
   exact version rather than a range, so the companion cannot drift away from the pinned plugin.
 

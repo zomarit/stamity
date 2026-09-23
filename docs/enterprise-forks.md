@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.0 release cut (2026-09-21). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.1 release cut (2026-09-23). -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes in `src/content/catalog.ts`,
      or the jobs or the permissions in `.github/workflows/upstream-update.yml` change. `test/docsPages.test.ts`
@@ -251,7 +251,7 @@ JSON object, and a missing or non-`1` `version` are each a configuration error t
     ".stamity/generated/**",
     "apm.yml", "plugin.json", ".claude-plugin/**", ".cursor-plugin/**",
     "docs/cli-reference.md", "docs/configuration.md", "docs/reference/**",
-    "docs/capability-matrix.md", "llms.txt", "src/pack/catalogPins.ts"
+    "docs/capability-matrix.md", "docs/measurements.md", "llms.txt", "src/pack/catalogPins.ts"
   ],
   "watch": ["content/charter/**", "src/types/core.ts", "src/roster/**", "src/mcp/catalog.ts"],
   "shadows": { "packs/acme/rules/acme-secrets.md": "content/rules/stamity-secrets.md" }
@@ -259,9 +259,18 @@ JSON object, and a missing or non-`1` `version` are each a configuration error t
 ```
 
 `remote`, `branch` and `releases` are left at their defaults here. The `regenerate` list is
-[the regeneration table in CONTRIBUTING.md](../CONTRIBUTING.md) in command form, and
-`generatedPaths` is that table's left column. `npm ci --ignore-scripts` leads the list because the
-commands run in a fresh linked worktree that has no `node_modules` of its own.
+[the regeneration table in CONTRIBUTING.md](../CONTRIBUTING.md) in command form, less three rows:
+the measurements row, whose `merge-ready-rate.mjs --write` freezes a dated snapshot and whose
+second command the plain `generate-docs.mjs` above already covers; the pack-manifest
+`generate-pack-manifests.mjs --write` row, which rewrites an integrity map after a deliberate pack
+edit; and the `dist/plugins/` row, which is ignored rather than tracked. `generatedPaths` is the
+tracked left column of the rows that remain, plus `.stamity/manifest.json`, which `sync` writes
+beside `.stamity/generated/`, and `docs/measurements.md`, because plain
+`node scripts/generate-docs.mjs` renders every page family, the measurements page included — a
+fork whose tree renders that page differently, from its own snapshot under `evals/measurements/`
+say, would otherwise meet the rewrite as an unlisted generated path. `npm ci --ignore-scripts`
+leads the list because the commands run in a fresh linked worktree that has no `node_modules` of
+its own.
 
 Keep the two lists in step. A generated path that is not listed is offered to a human as a conflict
 nobody should resolve by hand. A listed path that nothing regenerates keeps its conflict markers

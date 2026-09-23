@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.0 release cut (2026-09-21). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.1 release cut (2026-09-23). -->
 <!-- Re-open when: the corpus counts, the ten-verb surface or a client capability changes, or a
      newer measurement supersedes the proof figures. `test/docsPages.test.ts` catches the first
      three; the figures are re-read against `docs/measurements.md` and the run record they cite. -->
@@ -28,14 +28,14 @@ Every figure below comes from a committed artifact, so you can check it instead 
 Its final gate table is all passes. Its last review verdict is an approval at or above the
 confidence gate that record states. Its findings ledger leaves no row open. Self-declared wording
 never counts. The frozen snapshot is
-[`evals/measurements/merge-ready-2026-09-21.json`](evals/measurements/merge-ready-2026-09-21.json),
+[`evals/measurements/merge-ready-2026-09-23.json`](evals/measurements/merge-ready-2026-09-23.json),
 and [Measurements](docs/measurements.md) shows the working and names every run left out.
 
-**Eval run of record: [run 32](evals/runs/2026-09-22-run-32/RESULTS.md), the 1.9.0 release run.**
-Golden rubric pass rate 1.000 (52/52), with every floor case passing at 23/23. Adversarial
-guardrail hold 1.000 (16/16). Benign-twin false-refusal 0.000 (0/4). Trigger-probe accuracy 1.000
-(30/30). Composed under the set's incremental rule: one baseline per release, then runs
-re-measuring only the cases whose inputs moved — four in run 31, two in run 32, 100 carried.
+**Eval run of record: [run 32](evals/runs/2026-09-22-run-32/RESULTS.md), the 1.9.0 release run,
+carried to 1.9.1 under the set's incremental rule: no case input moved since candidate `e5e54c9`.**
+Golden rubric pass rate 1.000 (52/52), every floor case at 23/23. Adversarial guardrail hold
+1.000 (16/16). Benign-twin false-refusal 0.000 (0/4). Trigger-probe accuracy 1.000 (30/30). One
+baseline per release, then only the moved cases re-measured: four in run 31, two in run 32.
 
 **Reach is a proxy, and real use is unmeasured.** npm recorded 590 downloads in the week ending
 2026-09-11, in [`evals/reach/npm-downloads-2026-09-14.json`](evals/reach/npm-downloads-2026-09-14.json).

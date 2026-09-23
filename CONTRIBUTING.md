@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.0 release cut (2026-09-21). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.1 release cut (2026-09-23). -->
 <!-- Re-open when: a step joins or leaves `npm run check`, a generated artifact class gains or loses a
      regeneration command, either Node floor moves, a test lane joins or leaves, a coverage floor in
      `vitest.config.ts` moves, a type-only dependency exception joins or leaves `knip.json`, or the
@@ -134,8 +134,9 @@ One runner, Vitest, and three lanes:
    The suites are `test/emit/crossClientGoldens.test.ts` and `test/corpus/emissionGoldens.test.ts`.
    The snapshots sit under `test/emit/__snapshots__/` and `test/corpus/__snapshots__/`.
 3. **Child-process end-to-end.** The real CLI spawned against a pseudo-home and a scratch
-   repository, serialized. These are `test/cli/*.e2e.test.ts` and `test/pack/*.e2e.test.ts`, running
-   through `test/support/cliHarness.ts`. The fifth `.e2e.test.ts` file,
+   repository, serialized. These are `test/cli/*.e2e.test.ts`, `test/pack/*.e2e.test.ts` and
+   `test/authoring/onboardingRecovery.e2e.test.ts`, five files running through
+   `test/support/cliHarness.ts`. The sixth `.e2e.test.ts` file,
    `test/emit/syncDriftProof.e2e.test.ts`, spawns nothing. It is an in-process sync-loop proof over
    the golden fixture, with the git seam stubbed.
 
@@ -297,8 +298,10 @@ lower-case `(scope)` in parentheses is optional. A `!` before the colon marks a 
 same pattern applies to the pull-request title.
 
 The DCO trailer and the title are both checked by the `pr-checks` workflow on every pull request. It
-walks the pull request's own commit list for the sign-off trailer and fails naming the commits that
-lack one. It matches the title against the conventional-commit pattern.
+walks the base-to-head comparison of the pull request to its declared `total_commits` for the
+sign-off trailer and fails naming the commits that lack one (an unsigned commit is exempt only when
+a configured upstream's default branch already carries it, which this repository never configures).
+It matches the title against the conventional-commit pattern.
 
 Missed the sign-off on a branch? Run `git rebase --signoff origin/main`.
 

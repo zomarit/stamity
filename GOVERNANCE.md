@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.0 release cut (2026-09-21). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.1 release cut (2026-09-23). -->
 <!-- Re-open when: a check named below is added, renamed or removed in `.github/workflows/`, the
      required-approval count changes, the MAJOR/MINOR/PATCH bump rules change, what the private
      layer holds changes, or a trigger in the EU AI Act section fires. `test/docsPages.test.ts`
@@ -7,7 +7,7 @@
 
 # Governance
 
-> Last updated: 2026-09-21
+> Last updated: 2026-09-23
 
 This page is for a contributor or a reviewer who wants to know who runs stamity and how a change
 gets in. It answers four questions: who decides, the two required checks a change passes to land,
@@ -86,10 +86,10 @@ rather than reddening the lane; a broken root is red.
 `all-pr-checks` is the aggregator job in `.github/workflows/pr-checks.yml`, and it runs on pull
 requests only. It carries the three things that can only be asked about a pull request.
 
-1. **DCO sign-off on every commit.** Sign off with `git commit -s`. The job walks the pull
-   request's own commit list and fails naming the commits that lack the trailer. That trailer is
-   the Developer Certificate of Origin. It is what lets the patch be taken under this repository's
-   MIT licence.
+1. **DCO sign-off on every commit.** Sign off with `git commit -s`. The job walks every commit
+   the pull request contains — its base-to-head comparison, page by page — and fails naming the
+   commits that lack the trailer. That trailer is the Developer Certificate of Origin. It is what
+   lets the patch be taken under this repository's MIT licence.
 2. **A conventional-commit pull-request title.** The shape is `type(scope): message`. A release
    note is read out of it.
 3. **The dual size budget** measured over the built `dist/`. Both halves are checked, and both
