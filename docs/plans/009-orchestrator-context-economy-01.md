@@ -992,6 +992,14 @@ criteria count with `grep -c "^- GIVEN" docs/specs/orchestrator-context.md` and 
   criteria: GIVEN the emitted Claude pre-tool-use guard and the shipped roster WHEN the reviewer calls `Write` on
   `<project root>/.stamity/runs/2026-09-23_demo/reports/ctx-reviewer-report-security-r1.md` THEN the guard exits 2,
   and WHEN the security lens calls `Write` on that same path THEN it exits 0.
+- **A21 — the parse refusal's cap (ledger row `build/80`, built in the ctx-ledger-append lane as 83585c48).**
+  REQ-CTX-005: a parse refusal lists at most the first 20 problems, then one line `… +<m> more problem(s)`; its
+  `--json` document is `{ error, problems, omitted }`, with `problems` holding those 20 at most and `omitted` always
+  present, 0 included; every fragment of report text a message quotes is cut at 60 code points plus `…`. Add the
+  criterion: GIVEN a report whose `stamity-findings` block holds 25 malformed lines, the first of them quoting more
+  than 60 code points of report text, WHEN `stamity ledger append` runs THEN it exits 1, stderr names the first 20 problems as
+  `<src>:<line>: <message>` followed by `… +5 more problem(s)`, the quoted fragment shows 60 code points plus `…`, the
+  ledger is byte-identical, and WHEN it runs with `--json` THEN the document carries 20 `problems` and `omitted: 5`.
 
 ### The new spec's frame, merged with the requirements above
 
