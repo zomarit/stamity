@@ -68,7 +68,7 @@ P3 and P4 need the published package and a real repository.
 | P3 | A real repository's hand-written settings keys survive init, sync and clean | 1. In a repository with `.claude/settings.json` = `{"model": "opus"}` and no `.stamity/`: `npx @zomarit/stamity@1.9.0 init` selecting Claude. 2. `cat .claude/settings.json`. 3. Add `"env": {"X": "1"}` by hand; `npx @zomarit/stamity check`; `npx @zomarit/stamity sync`. 4. `npx @zomarit/stamity clean -y`; `cat .claude/settings.json`. | Step 2: `model` kept beside `permissions` and `hooks`, the init panel says the file was adopted. Step 3: `check` clean, `sync` 0 updated, `env` intact. Step 4: `clean` reports `co-owned-reduced .claude/settings.json`; the file holds `model` and `env` only, no `.bak` | M | 5 | ☐ |
 | P4 | The plugin route on a fresh clone after the release: install, setup, check clean | 1. In a fresh clone of any repository, with Claude Code: `claude plugin marketplace add zomarit/stamity#plugins/v1.9.0` and `claude plugin install stamity@stamity --scope project`. 2. Start a session and run `/stamity:st-setup`. 3. `cat .claude/settings.json`; then, through the root's runtime (the locator line the plugin's README prints), `check`. | Step 3: the file holds `enabledPlugins` and `permissions`; `check` prints fourteen `ok` rows, `drift: clean`, `all green`, exit 0 | M | 6 | ☐ |
 
-**Sign-off** — Package 15 session 4, candidate `c3d98d6`, 2026-09-22 — OPEN (the maintainer's)
+**Sign-off** — Package 15 session 4, candidate `c3d98d6`, 2026-09-22 — SIGNED 2026-09-23 by the maintainer (in chat: "you have my sign offs"), with the release of 1.9.1
 
 The 22 auto-proven rows carry their pointers; the four person rows are unperformed. The release proceeds on the
 maintainer's standing instruction for this session (the audit's fixes before the tag, then ship) with this checkpoint
@@ -84,3 +84,6 @@ sign-off of 2026-09-22T13:20Z covers the release's other human rows.
   `5f3d62e..d9b56f1`; the docs rounds `f3f92c5..cb36119`, `3eef4a6`; the test fix `c3d98d6`.
 - Shippable: YES on the auto-proven rows and the session-3 sign-off; the person rows above are the release's
   `Not done` lines until the maintainer walks or waives them.
+- Signed 2026-09-23: the maintainer signed this checkpoint off with the four person rows accepted and unperformed —
+  the session-3 form's precedent — so P1 to P4 stay `Not done` lines of 1.9.0 and of 1.9.1 (P4's route now at
+  `plugins/v1.9.1`), owned by the maintainer, and none blocks either release.

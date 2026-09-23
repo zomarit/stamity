@@ -4422,3 +4422,60 @@ fired at 01:30Z.
 - **Handoffs**: V4's completed with this entry (its twelfth step recorded in `private-chain.md`), then the session-4
   handoff, last. The ledger: 419 rows, no open row. Session status: **closed**, unchanged. Then Package 16,
   Track B, Package 12.
+
+## 1.9.1 — the maintainer's sign-offs, the cleanup, the Dependabot updates and the patch release (2026-09-23T09:29Z–11:00Z)
+
+The maintainer answered the tail's summary in chat at 09:29Z: "you have my sign offs, please clean it up (except the repo deletions),
+merge the dependabot prs and release 1.9.1 alltogether".
+
+- **Sign-offs**: the thirteen defaults of the session-4 proof block confirmed; the fourteenth — the fork-test fix without a
+  patch release — reversed by the instruction to cut 1.9.1; the session-4 QA checkpoint signed with its four person rows
+  accepted and unperformed (`qa-session-4.md`), which stay `Not done` lines of 1.9.0 and 1.9.1 owned by the maintainer.
+- **The cleanup**: the rehearsal's scratch tree deleted (the public record cites its captures by digest); in the private
+  mirror the hourly upstream workflow and the nightly switched off, its Actions workflow permission restored to `read`
+  with pull-request approval off, its two Dependabot pull requests closed with a note, and the recovered pull request #3
+  left open as the twelfth step's evidence; the two consumers run nothing; the three fixture repositories kept, as asked.
+  Dependabot's version updates on the mirror can only stop through the mirror's own `dependabot.yml`, left as it is.
+- **The Dependabot updates**: #48 (`p-limit` 7.3.3 in the lockfile; the manifest's `^7.3.1` unchanged) merged at 09:48Z
+  after Dependabot rebased it onto the moved `main` and both aggregators passed; #49 was closed by Dependabot as superseded
+  and reopened as #51 (the development group's nine updates, `tsx` 4.23.15 joining), merged at 10:17Z after one rerun of
+  its Windows leg — the first attempt timed out four suites on a slow runner (15 minutes), the rerun passed in 9.
+- **The cut** (the lane `p15s4/release-1.9.1`, pull request #52, merged by rebase at 10:50Z as `de13e71`…`27c9cc5`): the
+  release mechanics, each commit the 1.9.0 cut's counterpart in kind — the version (`de13e71`), the four container
+  manifests (`adba8e5`), `apm.yml` (`aad01d3`), the dogfood re-sync (`d36adb9`); the checklist's fourth line — four
+  read-only attestors at the stronger class re-read every claim of the fourteen hand pages and `GOVERNANCE.md` against the
+  candidate: eight pages held whole, fifteen claims moved on seven pages and in the measurements generator (`prove/332`),
+  and a docs pass at the stronger class corrected them and restamped the bucket to the 1.9.1 cut (`3fa99f9`), the enterprise
+  guide's recommended `generatedPaths` gaining `docs/measurements.md` and the spec with it; the fifth line — the
+  measurements page regenerated with run 32 carried to 1.9.1 (`8fd737c`; `merge-ready-rate.mjs --write` refuses to rewrite
+  a day's snapshot, by design, so `merge-ready-2026-09-23.json` stands); the CHANGELOG section (`27c9cc5`).
+- **The checklist's other lines**: the second — run 32 stays the run of record: since its candidate `e5e54c9` no file under
+  `evals/` outside `runs/` and `measurements/`, none under `content/` and none of the 41 files the case set cites changed,
+  so the incremental rule re-measures no case; the third — the repository's description and topics read and judged current
+  (they name the generated setup for the four clients from one canonical source, which 1.9.1 ships by both routes, and name
+  no route), the admin roster reviewed (the maintainer alone, repository admin and organization owner; the registry's owners:
+  the maintainer's account alone); the first, after the tag, in the private layer's own commit.
+- **Review** of the cut at the stronger class: approve, nothing before the tag; one Warning that bites at the next release
+  that runs the set (`prove/333`: the carried-to clause must go then, and nothing enforces it) and four Minors
+  (`prove/334`), both deferred to the inbox.
+- **Gate of record** at `9e3710a`, whose tree is the merged tree: every gate exit 0 — lint, typecheck, build, `--version`
+  1.9.1, `stamity check`, 236 files / 9,432 passed / 8 skipped / 0 failed at 96.6 / 89.94 / 98.9 / 97.47 with the per-file
+  floors, knip, the leak gate 0 hits over 1,576 files, the hygiene gate, both generators' `--check` at 1.9.1, `test/evals`
+  1,290, both `STAMITY_FORK_SUITE=1` witnesses, and `npm pack --dry-run`: 228 files, no distribution build inside `dist/`.
+  CI green at the head on every leg (run 35849897194, the Windows leg in 11 minutes).
+- **The tag and the release run**: the annotated tag `v1.9.1` at `27c9cc5` pushed at 10:50Z; the release run 35851119085 —
+  `apm route smoke` and `gates and pack` success; the `publish` job waited on the `npm-publish` environment and was approved
+  from this session at 10:56Z once `gates and pack` had passed (the environment's required reviewer is the maintainer's own
+  account; the comment names the gate, CI, the review, the eval carry and the QA sign-off); `publish` success.
+- **Verified from here**: `npm publish "./zomarit-stamity-1.9.1.tgz" --provenance --access public` signed its provenance
+  statement (Rekor log index 2918747509) and the registry's own view reads `dist-tags.latest` = 1.9.1 with the attestation
+  (`…/-/npm/v1/attestations/@zomarit%2fstamity@1.9.1`) since 10:59Z; the GitHub release `v1.9.1` (published 10:56Z, not a
+  draft) carries `release.json`, `sbom.cdx.json`, the tarball and the four plugin archives with their `.sha256` files — the
+  archives downloaded again match their digests and `gh attestation verify … --repo zomarit/stamity` accepts each (Rekor log
+  index 2918747862); `refs/heads/plugin-dist` = `refs/tags/plugins/v1.9.1` = `79b4a4e`, one orphan commit "plugins: v1.9.1
+  from 27c9cc5…", whose `release.json` says version 1.9.1, source commit `27c9cc5`, runtime 1.9.1, node floor `>=22.22.2`.
+- **Close**: this entry, the QA form's sign-off, the ledger (`prove/332` fixed; `prove/333`, `prove/334` deferred with their
+  inbox rows) — 422 rows, no open row; no active handoff. `Not done`: the four person rows of `qa-session-4.md` (owner: the
+  maintainer); the carried-to clause at the next release that runs the set (`prove/333`); Dependabot on the private mirror
+  (owner-dependent); the standing inbox. Session status: **closed** with merge evidence. Then Package 16 (orchestrator
+  context economy, 1.10.0), Track B, Package 12.
