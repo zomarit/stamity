@@ -50,6 +50,62 @@ function policyFileSegments(body: string): string[] {
   if (match === null) throw new Error("the guard declares no directory-relative POLICY_FILE");
   return JSON.parse(`[${match[1]!}]`) as string[];
 }
+
+/** The names only the path-scoped report `Write` imports, beside the ones every guard imports. */
+const PATH_SCOPED_IMPORTS = new Set(["realpathSync", "basename", "isAbsolute", "relative", "resolve"]);
+
+/**
+ * A guard body with its path-scoped report `Write` taken out — the header
+ * lines, the imported names, the helpers and the branch — each region named by
+ * the markers it renders, never by a line count, so a block that later grows
+ * is still removed whole. Every region must be present exactly once: a marker
+ * that stops matching throws here instead of quietly stripping nothing.
+ */
+function withoutPathScopedWrite(body: string): string[] {
+  const lines = body.split("\n");
+  /** The one index at or after `from` whose line satisfies `test`; throws when there is none. */
+  const find = (region: string, from: number, test: (line: string) => boolean): number => {
+    const offset = lines.slice(from).findIndex(test);
+    if (offset === -1) throw new Error(`the path-scoped ${region} marker is missing`);
+    return from + offset;
+  };
+  /** The one line satisfying `test`; throws on none and on more than one. */
+  const only = (region: string, test: (line: string) => boolean): number => {
+    const hits = lines.flatMap((line, i) => (test(line) ? [i] : []));
+    if (hits.length !== 1) throw new Error(`the path-scoped ${region} starts ${hits.length} times, not once`);
+    return hits[0]!;
+  };
+  // Cut from the bottom up, so an earlier cut never shifts a later index.
+  // The branch: its opening comment up to, not including, the category refusal it precedes.
+  const branch = only("branch", (line) => line === "    // A verdict role's one write: its own report, through the single-file Write");
+  lines.splice(
+    branch,
+    find("branch", branch, (line) => line === "    if (!Array.isArray(policy.allow) || !policy.allow.includes(category)) {") - branch,
+  );
+  // The helpers: `WRITE_TOOL` through the close of their last function, `printable`.
+  const helpers = only("helpers", (line) => line.startsWith("const WRITE_TOOL = "));
+  const printable = find("helpers", helpers, (line) => line.startsWith("function printable("));
+  lines.splice(helpers, find("helpers", printable, (line) => line === "}") + 1 - helpers);
+  // The header: the lines declaring the file-system metadata the Write check reads.
+  const header = only("header", (line) => line.startsWith("// For a path-scoped Write it also reads file-system metadata"));
+  lines.splice(header, find("header", header, (line) => line.endsWith("never file content, never an environment variable.")) + 1 - header);
+  let importsNarrowed = 0;
+  const out = lines.map((line) => {
+    const match = /^import \{ (.+) \} from "(node:fs|node:path)";$/.exec(line);
+    if (match === null) return line;
+    const names = match[1]!.split(", ");
+    const kept = names.filter((name) => !PATH_SCOPED_IMPORTS.has(name));
+    if (kept.length !== names.length) importsNarrowed += 1;
+    return `import { ${kept.join(", ")} } from "${match[2]!}";`;
+  });
+  if (importsNarrowed !== 2) throw new Error(`the path-scoped imports narrowed ${importsNarrowed} lines, not 2`);
+  const rest = out.join("\n");
+  for (const name of ["WRITE_TOOL", "writePathCheck", "isWritePathPattern", "printable(", "guardRoot"]) {
+    if (rest.includes(name)) throw new Error(`the path-scoped name ${name} survived the cut`);
+  }
+  return out;
+}
+
 const TAMPER = "stamity-config-tamper-notice.mjs";
 
 const hookDoc = (...hooks: unknown[]): string => JSON.stringify({ hooks }, null, 2);
@@ -962,7 +1018,21 @@ describe("hookScriptsRoot: the client-visible root the plugin emission needs", (
     expect(repoSession).toContain("function derivedRoot()");
     expect(policyFileSegments(pluginGuard!)).toEqual(["agent-tool-policies.json"]);
     expect(policyFileSegments(repoGuard!)).toEqual(["..", "..", "agent-tool-policies.json"]);
-    expect(pluginGuard!.split("\n").filter((line, i) => line !== repoGuard!.split("\n")[i])).toHaveLength(1);
+    // TEST CHANGE 2026-09-24 (the path-scoped report Write), justified: the
+    // repository guard now also renders the path-scoped report `Write` — its
+    // header lines, imported names, helpers and branch — and the container
+    // guard deliberately does not, because a plugin root names no repository a
+    // `writePaths` pattern could be relative to. The pin keeps its strength:
+    // the plugin guard must EQUAL the repository guard with that block cut out
+    // by its rendered markers (never a line count, so a block that grows is
+    // still cut whole and a marker that drifts fails the cut), save the one
+    // POLICY_FILE line pinned above — the same whole difference as before.
+    const pluginLines = pluginGuard!.split("\n");
+    expect(pluginGuard).not.toContain("WRITE_TOOL");
+    const repoWithoutWrite = withoutPathScopedWrite(repoGuard!);
+    expect(repoWithoutWrite).toHaveLength(pluginLines.length);
+    const differing = pluginLines.filter((line, i) => line !== repoWithoutWrite[i]);
+    expect(differing).toEqual([expect.stringMatching(/^const POLICY_FILE = /)]);
 
     expect(plugin.interchangeFor("claude").map((row) => row.command)).toEqual([
       ["node", `${PLUGIN_ROOT}/${SESSION_START}`],
