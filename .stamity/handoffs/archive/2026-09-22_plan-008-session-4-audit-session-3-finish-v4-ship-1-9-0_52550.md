@@ -1,6 +1,6 @@
 ---
 id: 2026-09-22_plan-008-session-4-audit-session-3-finish-v4-ship-1-9-0_52550
-status: active
+status: archived
 created: 2026-09-22T15:00:32.832Z
 expires: 2026-10-22T15:00:32.832Z
 summary: A fresh session audits session 3's late work for context-rot damage, then finishes V4 from its on-disk state (the mirror is pushed) and ships 1.9.0 through the release handoff

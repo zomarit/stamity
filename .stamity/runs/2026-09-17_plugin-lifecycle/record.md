@@ -4371,3 +4371,54 @@ Handoffs: the release handoff completed here; V4's completes once the fork's ups
 twelfth) is recorded in `private-chain.md`; the session-4 handoff last. Session status: **closed** with merge
 evidence. Then Package 16, Track B, Package 12.
 
+
+## V4's twelfth step, its finding and the fork-test fix (2026-09-23T00:13Z–09:08Z)
+
+The upstream-lane step in the private fork ran after the tag as the release entries planned (2026-09-22T23:37Z to
+2026-09-23T00:07Z), and its report never reached this session: at 00:13:11Z an unrelated agent session on the
+workstation ran a `pkill` whose trailing options macOS read as extra patterns, which sent SIGTERM to most of the
+workstation's processes, this session's among them, while the step's agent waited for the hourly schedule. Nothing
+on `main` was at risk: the close above was pushed and green (`fb7cb22`). A fresh session finished the tail from the
+on-disk state from 08:10Z: the step's captures in the scratch tree, the transcript, and the schedule's run, which had
+fired at 01:30Z.
+
+- **The step** (`private-chain.md`: row 11 of the walk and its own section): the lane configuration and a consumer
+  manifest carrying `ruleDelivery` committed in the fork; `status` → `update-available`; `integrate --release
+  v1.9.0` → a clean merge (no conflict, every regenerate command passed) ending `validation-failed`; the real
+  workflow with the pull-request setting off pushed the owned branch and was refused the pull request; with the
+  setting corrected the recovery proved ownership against the remote objects and rebuilt the missing pull request
+  on the retained commit without a rewrite; the schedule's repeat touched nothing. Two deviations are stated there
+  (GitHub cannot delete a pull request, so the missing one was produced by the refused creation; the integrate did
+  not end `integrated`), and four `Not done` lines, three owner-dependent and one deliberate.
+- **The finding** (`prove/328`, Warning): a renamed fork's inherited gate is red on `v1.9.0`. Two suites that shipped
+  in 1.9.0 (`test/ci/pluginDistribution.test.ts`, `test/ci/pluginPackages.claude.test.ts`) assert the canonical
+  publisher and routes as literals over values the product derives from the checkout's own identity — 9 cases a
+  fork cannot turn green — while `docs/enterprise-forks.md` and `test/support/identity.ts` promise the opposite.
+  The fork-identity guard missed it: its always-on check read `test/cli` only, and its renamed-copy run covers a
+  hand-kept list of suites.
+- **The fix** (the lane `p15s4/forktests`, pull request #50, merged by rebase as `60f13d6`, `cf5c26e` and `5e12096`): both suites derive
+  every identity value from `test/support/identity.ts` — `canonical()` and the new `repositoryRoute()`, read from
+  the manifest's `repository.url` with the normalization the product applies — and no case is skipped; the
+  fork-identity guard's always-on check walks `test/ci` as well as `test/cli` and counts four canonical spellings
+  (the package name, the owner/repository route, a quoted bare owner, the owner url) per file against pinned counts,
+  each with its written reason; its comment stripper no longer opens a phantom comment at a `/*` inside a string
+  (round 2 measured eleven walked files with about 108 kB of code the old stripper had hidden from the check); both
+  suites joined the renamed-copy witness (eighteen suites); the guide names the repository route among the identity
+  record's answers. Red first: the witness failed 10 cases in the renamed copy before the fix and passes after (the
+  rehearsal's 9 plus the npm source, which a renamed package also moves); the canonical run of the three suites
+  stayed 45 passed and 2 skipped; single-literal mutations each turned the always-on check red, one of them planted
+  inside a formerly hidden window. Reviewed at the stronger class: request-changes (three Warnings, three Minors),
+  one fixer round, approve — `prove/329` fixed; `prove/330` and the fixer's own `prove/331` deferred to the inbox.
+  The gate of record at the lane's head `e82edd8a` (the merged tree), gate by gate: lint, typecheck, build, `stamity
+  check`, 236 files / 9,431 passed / 8 skipped / 0 failed at 96.6 / 89.97 / 98.9 / 97.47 with the per-file floors,
+  knip, the leak gate 0 hits over 1,576 files, the hygiene gate, both generators' `--check`, `test/evals` 1,290 and
+  both `STAMITY_FORK_SUITE=1` witnesses — every exit 0. CI green at the head on every leg, Windows included (run
+  35837987995 — the Windows leg green on its second attempt, after the first, on a runner that took 16 minutes
+  against the usual 10 to 13, timed out in two suites the lane does not touch).
+- **A fourteenth default**, for the maintainer's confirmation beside the thirteen above: the finding fixed on `main`
+  after the release and not cut as a patch release. The fix ships with the next release; until then a fork
+  integrating `v1.9.0` meets the 9 cases, and its route is the fix taken onto its update branch followed by
+  `validate`. The alternative is a 1.9.1 cut now.
+- **Handoffs**: V4's completed with this entry (its twelfth step recorded in `private-chain.md`), then the session-4
+  handoff, last. The ledger: 419 rows, no open row. Session status: **closed**, unchanged. Then Package 16,
+  Track B, Package 12.

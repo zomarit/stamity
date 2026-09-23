@@ -1,6 +1,6 @@
 ---
 id: 2026-09-22_v4-private-chain-rehearsal-1-9-0_508a7
-status: active
+status: archived
 created: 2026-09-22T09:19:11.412Z
 expires: 2026-10-22T09:19:11.412Z
 summary: "V4 — the maintainer-run private-chain rehearsal for 1.9.0: two fixture repositories, a transient token, the eleven-step walk, its credential-free record and its owner-dependent Not done lines"
