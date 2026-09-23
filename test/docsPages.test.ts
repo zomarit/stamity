@@ -481,6 +481,12 @@ const RELEASE_CUT_DATE = "2026-09-23";
  * plugins page included, onto the cut form — its 2026-09-22 Copilot measurements were re-read
  * against the candidate with everything else — so the commit form again has no members and the
  * constant equals the cut, as the assertion's else branch requires.
+ *
+ * NOT MOVED, 2026-09-23, after the 1.9.1 cut: the commit form has one member again. Retiring one
+ * learning moved the learnings count in `docs/troubleshooting.md`'s sample `check` transcript, so
+ * that page carries the commit form naming the cut's re-attestation commit plus `Re-attested
+ * 2026-09-23` — the same day as the cut, so this constant already names the pass and the
+ * assertion's first branch now reads it.
  */
 const REATTESTATION_DATE = "2026-09-23";
 
