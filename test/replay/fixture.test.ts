@@ -448,6 +448,9 @@ describe("createReplayFixture — dependencies and gates", () => {
   it("bounds a hung step with a timeout, records the signal and the elapsed time, and throws naming it", () => {
     // A stand-in CLI whose bin never exits: the step that runs it is `stamity init`. (A hung
     // `preinstall` would not do: this checkout's .npmrc sets ignore-scripts, which npx hands down.)
+    // The command budget also binds the tarball install before it, which cannot be made to hang, so
+    // the budget is one that install clears on a slow runner (npm.cmd through a shell on Windows, a
+    // loaded CI leg): the step that times out is always `stamity init`, and the case costs 20 s.
     const pkg = join(root, "hung-cli");
     writeTree(pkg, {
       "package.json": `${JSON.stringify({ name: "@zomarit/stamity", version: "0.0.0-hung", bin: { stamity: "bin.mjs" } })}\n`,
@@ -461,22 +464,27 @@ describe("createReplayFixture — dependencies and gates", () => {
     let caught: (Error & { step?: string; steps?: { name: string; exitCode: number | null; output: string }[] }) | undefined;
     const started = Date.now();
     try {
-      build({ units: "none", setup: true, cliTarball: tarball, timeouts: { command: 3000 } });
+      build({ units: "none", setup: true, cliTarball: tarball, timeouts: { command: 20_000 } });
     } catch (error) {
       caught = error as typeof caught;
     }
-    expect(Date.now() - started).toBeLessThan(30_000);
+    // Bounded by the budget plus the steps before it, not by the case's own timeout.
+    expect(Date.now() - started).toBeLessThan(90_000);
+    expect(caught?.steps?.find((step) => step.name === "npm install cli tarball")?.exitCode).toBe(0);
     expect(caught?.step).toBe("stamity init");
     const last = caught?.steps?.at(-1);
     expect(last?.exitCode).toBeNull();
-    expect(last?.output).toMatch(/timed out after 3000 ms: killed by SIGTERM after \d+ ms/);
-  }, 60_000);
+    expect(last?.output).toMatch(/timed out after 20000 ms: killed by SIGTERM after \d+ ms/);
+  }, 180_000);
 
   it("records a hung gate as timed out without throwing", () => {
+    // The hung gate is lint, the first step the command budget binds (no install, no setup): no
+    // earlier step can use up the budget on a slow runner. The two gates after it may time out
+    // there too, so only that the build returns with all three recorded is asserted of them.
     const gated = writeV1(
       "v1-gate-hung",
       {
-        "package.json": `${JSON.stringify({ name: "gate-hung", private: true, scripts: { lint: "node ok.mjs", typecheck: "node ok.mjs", test: "node hang.mjs" } })}\n`,
+        "package.json": `${JSON.stringify({ name: "gate-hung", private: true, scripts: { lint: "node hang.mjs", typecheck: "node ok.mjs", test: "node ok.mjs" } })}\n`,
         "ok.mjs": "process.exitCode = 0;\n",
         "hang.mjs": "setInterval(() => {}, 1000);\n",
       },
@@ -484,9 +492,10 @@ describe("createReplayFixture — dependencies and gates", () => {
       TEMPLATE,
     );
     const built = build({ v1Dir: gated, units: "none", runGates: true, timeouts: { command: 3000 } });
-    expect(built.gates?.["lint"]?.exitCode).toBe(0);
-    expect(built.gates?.["test"]?.exitCode).toBeNull();
-    expect(built.gates?.["test"]?.output).toMatch(/timed out after 3000 ms: killed by SIGTERM after \d+ ms/);
+    expect(built.steps.filter((step) => step.command.startsWith("npm")).map((step) => step.name)).toEqual(["gate lint", "gate typecheck", "gate test"]);
+    expect(built.gates?.["lint"]?.exitCode).toBeNull();
+    expect(built.gates?.["lint"]?.output).toMatch(/timed out after 3000 ms: killed by SIGTERM after \d+ ms/);
+    expect(Object.keys(built.gates ?? {})).toEqual(["lint", "typecheck", "test"]);
   }, 60_000);
 
   it("copies --deps with its links verbatim and links --deps-link, keeping both out of git", () => {
