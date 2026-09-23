@@ -124,6 +124,18 @@ import { document } from "./downstreamFixture.js";
  *
  * The bases below round each figure up. MARGIN is the one guessed number and it is wide, because
  * the required CI legs include a Windows runner that is not measurable from here.
+ *
+ * THE WINDOWS LEG, as measured from its logs on 2026-09-23 rather than guessed: thirteen legs of
+ * the parallel group, three red. In the ten passes the one full stub build a case times on its own
+ * — "rebuilds the same bytes" — took 17.0s to 24.8s, about 5x darwin at worst and half the budget.
+ * In the three reds (CI 35837987995, 35845305397 and 35852090952, attempt 1 each) the `beforeAll`
+ * build ran past 48s and the spawn timeout killed it ("exited null"), and the one-root fork-layer
+ * case of the same legs took 16.5s to 42.9s against 8.8s to 14.2s in the passes — the same work,
+ * up to three times slower, beside neighbours that were slow too (`test/cli/commands/init.test.ts` ran
+ * beside the build in all three reds and in two of the ten passes). The fault is contention, not
+ * the base, and its ceiling is unmeasured, so the answer is scheduling rather than a wider margin:
+ * on win32 `vitest.config.ts`'s `fixtureScheduling` runs this file in the serialized
+ * `windows-fixtures` group, alone, after the parallel one — every budget here unchanged.
  */
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));

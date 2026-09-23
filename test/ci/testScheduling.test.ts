@@ -7,6 +7,7 @@ import config, { fixtureScheduling } from "../../vitest.config.ts";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const HEAVY = [
+  "test/ci/pluginLifecycle.test.ts",
   "test/cli/commands/syncMcpOwnership.test.ts",
   "test/emit/crossClientGoldens.test.ts",
   "test/pack/installSmoke.e2e.test.ts",
@@ -16,10 +17,14 @@ const HEAVY = [
 // 2026-09-11: CI 34588320202 also timed out the all-four fresh-directory golden
 // in the ordinary parallel group. That observed real-disk fixture extends the
 // earlier three-suite scheduling contract; no golden assertion/budget changes.
+// 2026-09-23: the contract moves again, from four suites to five — the plugin-
+// lifecycle fixture build timed out under parallel-group contention in three
+// Windows legs (CI 35837987995, 35845305397, 35852090952); its assertions and
+// budgets stay.
 // Check Vitest's resolved projects and actual discovery: grouping must lose or
 // duplicate no test and must leave the remaining parallelism intact.
 describe("Windows fixture scheduling", () => {
-  it("isolates exactly the observed four suites without losing or repeating any test file", async () => {
+  it("isolates exactly the observed five suites without losing or repeating any test file", async () => {
     const runner = await createVitest(
       { watch: false, run: true, config: false, root: ROOT },
       { test: { ...config.test, ...fixtureScheduling("win32") } },
