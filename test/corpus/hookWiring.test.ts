@@ -107,6 +107,7 @@ interface EmittedPolicy {
   agentId: string;
   allow: string[];
   denyTools?: string[];
+  writePaths?: string[];
   rationale: string;
 }
 
@@ -269,8 +270,66 @@ describe("emitted policy document", () => {
       // guard enforcing a narrower grant than the roster states.
       expect(emitted?.allow.length, row.agentId).toBe(row.allow.length);
       expect(Object.hasOwn(emitted ?? {}, "denyTools"), row.agentId).toBe(false);
+      // The report write path reaches the document exactly as the row states
+      // it, and a row without one carries no key at all.
+      expect(emitted?.writePaths, row.agentId).toEqual(row.writePaths);
+      expect(Object.hasOwn(emitted ?? {}, "writePaths"), row.agentId).toBe(
+        row.writePaths !== undefined,
+      );
     }
+
+    // Stated as literals, independent of the roster: exactly the four verdict
+    // rows carry a write path, each naming only its own role's reports, and
+    // each keeps the read-only grant a guard that predates the field decides on.
+    const carriers = Object.fromEntries(
+      document.policies
+        .filter((policy) => Object.hasOwn(policy, "writePaths"))
+        .map((policy) => [policy.agentId, { allow: policy.allow, writePaths: policy.writePaths }]),
+    );
+    expect(carriers).toEqual({
+      "stamity-design-quality": {
+        allow: ["read"],
+        writePaths: [".stamity/runs/*/reports/*-design-quality-r*.md"],
+      },
+      "stamity-performance": {
+        allow: ["read"],
+        writePaths: [".stamity/runs/*/reports/*-performance-r*.md"],
+      },
+      "stamity-reviewer": {
+        allow: ["read"],
+        writePaths: [".stamity/runs/*/reports/*-reviewer-r*.md"],
+      },
+      "stamity-security": {
+        allow: ["read"],
+        writePaths: [".stamity/runs/*/reports/*-security-r*.md"],
+      },
+    });
   });
+
+  it.each(["stamity-reviewer", "stamity-security", "stamity-performance", "stamity-design-quality"])(
+    "still refuses %s's report Write through the category: the field ships inert",
+    async (agentId) => {
+      // The guard does not read `writePaths` yet, so a verdict role's report
+      // write is denied exactly as before — the fail-closed posture an older
+      // guard keeps when it meets the new document.
+      const guard = await placeGuardFor("claude");
+      const role = agentId.slice("stamity-".length);
+      const result = run(
+        guard,
+        JSON.stringify({
+          agent_type: agentId,
+          agent_id: `${agentId}-01`,
+          tool_name: "Write",
+          tool_input: {
+            file_path: getRepo().path(".stamity", "runs", "2026-09-23_demo", "reports", `u1-${role}-r1.md`),
+          },
+        }),
+      );
+
+      expect(result.code).toBe(2);
+      expect(refusal(result)).toMatchObject({ blocked: true, agentId, reasonCode: "CATEGORY_DENIED" });
+    },
+  );
 
   it("fits well under the size the guard refuses to parse", () => {
     const bytes = Buffer.byteLength(buildAgentToolPoliciesJson(AGENT_POLICY_ROSTER), "utf8");

@@ -12,6 +12,7 @@ import {
   checkToolAccess,
   deriveUserAgentPolicy,
   getAgentToolPolicy,
+  isWritePathPattern,
   onAllowlistDenial,
   toFailureLogEntry,
   validateToolPolicies,
@@ -82,6 +83,7 @@ interface PolicyDocument {
     agentId: string;
     allow: string[];
     denyTools?: string[];
+    writePaths?: string[];
     rationale: string;
     source?: { kind: string; packId?: string };
   }>;
@@ -573,6 +575,195 @@ describe("policy provenance", () => {
     }
     expect(withoutSource.policies.every((row) => !Object.hasOwn(row, "source"))).toBe(true);
     expect(withSource.policies.every((row) => Object.hasOwn(row, "source"))).toBe(true);
+  });
+});
+
+/**
+ * A row's `writePaths`: the report files a verdict role may create with the
+ * client's single-file `Write`, read by the generated Claude guard alone. This
+ * module owns the pattern grammar, the two roster problems it can carry, and
+ * the serialized form — and the promise that a row without the field keeps the
+ * bytes it had before the field existed.
+ */
+describe("write paths", () => {
+  const REPORT = ".stamity/runs/*/reports/*-reviewer-r*.md";
+  /** The six shapes the plan names, each one a way out of the segment grammar. */
+  const MALFORMED = ["../x.md", "/abs/*.md", "a\\b.md", "**/x.md", "", "a//b"] as const;
+
+  it("accepts a repo-relative pattern of plain segments, with several `*` in one segment", () => {
+    expect(isWritePathPattern(REPORT)).toBe(true);
+    expect(isWritePathPattern("x.md")).toBe(true);
+    expect(isWritePathPattern("a/b/c-*_d.*.md")).toBe(true);
+    // The two ceilings are inclusive: 16 segments, 200 characters.
+    expect(isWritePathPattern(Array.from({ length: 16 }, () => "a").join("/"))).toBe(true);
+    expect(isWritePathPattern("a".repeat(200))).toBe(true);
+  });
+
+  it("refuses every pattern that leaves the segment grammar, and every non-string", () => {
+    const refused = [
+      ...MALFORMED,
+      ".",
+      "..",
+      "./x.md",
+      "a/./b",
+      "a/..",
+      "a/",
+      "C:/x.md",
+      "a b.md",
+      "a/**",
+      "a/x**.md",
+      "a".repeat(201),
+      Array.from({ length: 17 }, () => "a").join("/"),
+    ];
+    for (const pattern of refused) {
+      expect(isWritePathPattern(pattern), JSON.stringify(pattern)).toBe(false);
+    }
+    for (const value of [undefined, null, 7, ["x.md"], { pattern: "x.md" }]) {
+      expect(isWritePathPattern(value), JSON.stringify(value) ?? "undefined").toBe(false);
+    }
+  });
+
+  it("reports each malformed pattern, and the emitter drops every one of them", () => {
+    const row: AgentToolPolicy = {
+      agentId: "stamity-reviewer",
+      allow: ["read"],
+      writePaths: [...MALFORMED, REPORT],
+      rationale: "Review reads the change and saves one report.",
+    };
+
+    const issues = validateToolPolicies([row]);
+
+    expect(issues).toEqual(
+      MALFORMED.map(
+        (pattern) =>
+          `Agent "stamity-reviewer" declares write path "${pattern}", which is not a repo-relative ` +
+          `pattern (segments of letters, digits, ".", "_", "-" and "*", no "." or ".." segment); ` +
+          `the emitter drops it.`,
+      ),
+    );
+    const emitted = (JSON.parse(buildAgentToolPoliciesJson([row])) as PolicyDocument).policies[0];
+    // Non-degenerate: the one valid pattern survives, so the drop is selective.
+    expect(emitted?.writePaths).toEqual([REPORT]);
+
+    const onlyMalformed = JSON.parse(
+      buildAgentToolPoliciesJson([{ ...row, writePaths: [...MALFORMED] }]),
+    ) as PolicyDocument;
+    expect(Object.hasOwn(onlyMalformed.policies[0] ?? {}, "writePaths")).toBe(false);
+  });
+
+  it("reports write paths on a row that holds edit, whose category admits every write first", () => {
+    const issues = validateToolPolicies([
+      { agentId: "stamity-a", allow: ["read", "edit"], writePaths: ["x.md"], rationale: "r" },
+      // The control: the same paths on a read-only row are the intended shape.
+      { agentId: "stamity-b", allow: ["read"], writePaths: ["x.md"], rationale: "r" },
+    ]);
+
+    expect(issues).toEqual([
+      `Agent "stamity-a" holds "edit", so its write paths scope nothing — the guard admits every ` +
+        `write through the category first. Drop one.`,
+    ]);
+  });
+
+  it("emits the valid patterns deduplicated and code-unit sorted, between denyTools and rationale", () => {
+    const first = buildAgentToolPoliciesJson([
+      {
+        agentId: "stamity-a",
+        allow: ["read"],
+        denyTools: ["Zed"],
+        writePaths: ["b/*.md", "B/*.md", "a/*.md", "b/*.md"],
+        rationale: "r",
+      },
+    ]);
+    const reordered = buildAgentToolPoliciesJson([
+      {
+        agentId: "stamity-a",
+        allow: ["read"],
+        denyTools: ["Zed"],
+        writePaths: ["a/*.md", "B/*.md", "b/*.md"],
+        rationale: "r",
+      },
+    ]);
+
+    expect(reordered).toBe(first);
+    const row = (JSON.parse(first) as PolicyDocument).policies[0] ?? {};
+    // Code units, not the host locale: upper case sorts before lower case.
+    expect(row).toMatchObject({ writePaths: ["B/*.md", "a/*.md", "b/*.md"] });
+    expect(Object.keys(row)).toEqual(["agentId", "allow", "denyTools", "writePaths", "rationale"]);
+
+    const withSource = (
+      JSON.parse(
+        buildAgentToolPoliciesJson([
+          {
+            agentId: "stamity-a",
+            allow: ["read"],
+            writePaths: ["a/*.md"],
+            rationale: "r",
+            source: { kind: "core" },
+          },
+        ]),
+      ) as PolicyDocument
+    ).policies[0];
+    expect(Object.keys(withSource ?? {})).toEqual(["agentId", "allow", "writePaths", "rationale", "source"]);
+  });
+
+  it("leaves a row without write paths byte-identical to its serialization before the field", () => {
+    // Today's shipped reviewer row, as it read before the field existed, and
+    // the bytes the emitter wrote for it then. An empty list and a list of
+    // nothing valid both have to land on the same bytes as an absent one.
+    const reviewer: AgentToolPolicy = {
+      agentId: "stamity-reviewer",
+      allow: ["read"],
+      rationale:
+        "Returns a verdict on a change set it must not touch, citing path:line for every behavior claim it makes. Withholding edit is what keeps the following round reviewing the author's work instead of the reviewer's own.",
+    };
+    const before = [
+      "{",
+      '  "schema": "stamity/agent-tool-policies/v1",',
+      '  "categories": [',
+      '    "read",',
+      '    "edit",',
+      '    "execute",',
+      '    "network",',
+      '    "spawn",',
+      '    "planning",',
+      '    "git",',
+      '    "board"',
+      "  ],",
+      '  "policies": [',
+      "    {",
+      '      "agentId": "stamity-reviewer",',
+      '      "allow": [',
+      '        "read"',
+      "      ],",
+      `      "rationale": "${reviewer.rationale}"`,
+      "    }",
+      "  ]",
+      "}",
+    ].join("\n");
+
+    expect(buildAgentToolPoliciesJson([reviewer])).toBe(before);
+    expect(buildAgentToolPoliciesJson([{ ...reviewer, writePaths: [] }])).toBe(before);
+    expect(buildAgentToolPoliciesJson([{ ...reviewer, writePaths: ["../x.md"] }])).toBe(before);
+    // A field that is not a list at all is not read as one, character by character.
+    expect(
+      buildAgentToolPoliciesJson([
+        { ...reviewer, writePaths: "x.md" } as unknown as AgentToolPolicy,
+      ]),
+    ).toBe(before);
+  });
+
+  it("widens nothing in the in-process check, which never reads the field", () => {
+    const scoped: readonly AgentToolPolicy[] = [
+      { agentId: "stamity-reviewer", allow: ["read"], writePaths: [REPORT], rationale: "r" },
+    ];
+
+    // `Write` resolves to `edit`, which the row does not hold; the path list is
+    // the generated guard's to honour, so this check still refuses the call.
+    expect(checkToolAccess(scoped, "stamity-reviewer", "Write", TOOL_MAP)).toMatchObject({
+      allowed: false,
+      category: "edit",
+    });
+    expect(checkToolAccess(scoped, "stamity-reviewer", "Read", TOOL_MAP).allowed).toBe(true);
   });
 });
 

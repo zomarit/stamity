@@ -60,6 +60,13 @@ export interface ResolvedAgentGrant {
   readonly source: GrantSource;
   /** Operator-readable notes: each dropped category, malformed field, and ignored override. */
   readonly diagnostics: readonly string[];
+  /**
+   * The report files the agent may write with the client's single-file `Write`
+   * — roster-only, copied from the core row that answered, and never derived
+   * from frontmatter: no pack file can grant itself a write. Absent unless that
+   * row carries a non-empty list.
+   */
+  readonly writePaths?: readonly string[];
 }
 
 /** Everything the resolver rules on. No handle, path, or manifest — see the module header. */
@@ -95,6 +102,9 @@ export const NEVER_DERIVABLE_CATEGORIES: ReadonlySet<GrantableToolCategory> =
 
 /** The frontmatter key that declares an agent's capabilities. */
 const CAPABILITIES_FIELD = "capabilities";
+
+/** The roster field a frontmatter map may spell but can never grant. */
+const WRITE_PATHS_FIELD = "writePaths";
 
 /** Membership over `unknown`: frontmatter is parsed data, so its types are claims, not facts. */
 const GRANTABLE_LOOKUP: ReadonlySet<string> = new Set<string>(GRANTABLE_TOOL_CATEGORIES);
@@ -350,11 +360,30 @@ export function resolveAgentGrant(input: ResolveAgentGrantInput): ResolvedAgentG
       : [];
     // The row IS the answer, returned as authored: a consumer swapping its own
     // roster lookup for this call emits byte-identical core agent files.
-    return { runtimeId, allow: row.allow, source: "roster", diagnostics };
+    return {
+      runtimeId,
+      allow: row.allow,
+      source: "roster",
+      diagnostics,
+      ...(row.writePaths !== undefined && row.writePaths.length > 0
+        ? { writePaths: row.writePaths }
+        : {}),
+    };
   }
 
   const declared = readCapabilities(frontmatter);
   const diagnostics = declared.diagnostics.map((message) => note(message));
+  // Said on every frontmatter outcome, granted on none: a write path is a
+  // roster decision, and a pack file claiming one is told so rather than
+  // silently ignored.
+  if (Object.hasOwn(frontmatter, WRITE_PATHS_FIELD)) {
+    diagnostics.push(
+      note(
+        `declares \`${WRITE_PATHS_FIELD}:\`, which no frontmatter can grant — write paths come ` +
+          `from the core roster only; ignored.`,
+      ),
+    );
+  }
 
   if (declared.categories.length === 0) {
     return { runtimeId, allow: [], source: "none", diagnostics };

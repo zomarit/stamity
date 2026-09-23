@@ -6,12 +6,14 @@ import {
   AGENT_POLICY_ROSTER,
   GRANTABLE_TOOL_CATEGORIES,
   RUNTIME_AGENT_IDS,
+  verdictReportWritePaths,
   type AgentPolicyRow,
   type GrantableToolCategory,
 } from "../../src/roster/agentPolicies.ts";
 import {
   checkToolAccess,
   getAgentToolPolicy,
+  isWritePathPattern,
   onAllowlistDenial,
   validateToolPolicies,
   type AgentToolPolicy,
@@ -67,6 +69,17 @@ const SPECIALIST_IDS: readonly string[] = [
   "stamity-design-quality",
   "stamity-performance",
 ];
+
+/**
+ * The four verdict roles and the role word each one's report name carries —
+ * the rows whose one write is their own report file, and no other row.
+ */
+const VERDICT_REPORT_ROLES = {
+  "stamity-reviewer": "reviewer",
+  "stamity-security": "security",
+  "stamity-performance": "performance",
+  "stamity-design-quality": "design-quality",
+} as const;
 
 /**
  * One client-native tool name per category — enough to rule on a grant without
@@ -198,6 +211,40 @@ describe("AGENT_POLICY_ROSTER", () => {
         expect(row?.allow as readonly string[], `${id} must not hold ${withheld}`).not.toContain(
           withheld,
         );
+      }
+    }
+  });
+
+  it("holds exactly the report write path and no edit category", () => {
+    // Only the four verdict rows carry the field; a fifth carrier would be a
+    // write nobody decided on.
+    const carriers = AGENT_POLICY_ROSTER.filter((row) => row.writePaths !== undefined).map(
+      (row) => row.agentId,
+    );
+    expect(carriers.toSorted()).toEqual(Object.keys(VERDICT_REPORT_ROLES).toSorted());
+    // The security row still refuses code writes, and now says which kind it refuses.
+    expect(
+      AGENT_POLICY_ROSTER.find((entry) => entry.agentId === "stamity-security")?.rationale,
+    ).toContain("No code write grant:");
+
+    const roles = Object.values(VERDICT_REPORT_ROLES);
+    for (const [id, role] of Object.entries(VERDICT_REPORT_ROLES)) {
+      const row = AGENT_POLICY_ROSTER.find((entry) => entry.agentId === id);
+
+      // `allow` is what a guard that predates the field decides on, so it
+      // stays read-only: that guard denies the report write, fail-closed.
+      expect(row?.allow, id).toEqual(["read"]);
+      expect(row?.writePaths, id).toEqual([`.stamity/runs/*/reports/*-${role}-r*.md`]);
+      expect(row?.writePaths, id).toEqual(verdictReportWritePaths(role));
+      // The rationale an operator audits names the one write the row holds.
+      expect(row?.rationale, id).toMatch(/\breport\b/);
+      for (const pattern of row?.writePaths ?? []) {
+        expect(isWritePathPattern(pattern), `${id}: ${pattern}`).toBe(true);
+        // One role's pattern names no other role's report, so no verdict role
+        // can overwrite another's findings.
+        for (const other of roles.filter((candidate) => candidate !== role)) {
+          expect(pattern, `${id} reaches ${other}'s reports`).not.toContain(`-${other}-r`);
+        }
       }
     }
   });

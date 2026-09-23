@@ -85,6 +85,16 @@ export interface AgentToolPolicy {
    * {@link allow}: a denied name stays denied however the category resolves.
    */
   denyTools?: readonly string[];
+  /**
+   * Repo-relative patterns ({@link isWritePathPattern}) this agent may create or
+   * overwrite with the client's single-file `Write` tool, outside its
+   * {@link allow} categories. Read only by the generated pre-tool-use guard,
+   * never by {@link checkToolAccess}: the in-process check has no path to rule
+   * on, so it keeps denying `Write` through the category. The two points
+   * therefore diverge in one direction only, and a caller wiring the check must
+   * give it a path parameter first.
+   */
+  writePaths?: readonly string[];
   /** Why this agent holds this grant. Read by operators auditing privilege. */
   rationale: string;
   /**
@@ -140,6 +150,11 @@ export const ALLOWLIST_FAILURE_PHASE = "tool-allowlist";
  * ignores an unknown key, and a reader that knows it treats absence as core, so
  * both directions of the version skew answer identically. A discriminator bump
  * is for a change that would make an older reader wrong — this one does not.
+ *
+ * The optional per-row `writePaths` field leaves it unchanged for the same
+ * reason, from the safe side: a guard that predates the field ignores it and
+ * decides on `allow` alone, so a verdict role's report `Write` is denied there
+ * through the category — fail-closed, never wider.
  */
 export const AGENT_TOOL_POLICIES_SCHEMA = "stamity/agent-tool-policies/v1";
 
@@ -330,7 +345,11 @@ export function checkToolAccess(
  *   nobody can justify is privilege nobody will remove;
  * - unnamed provenance — a `source` the schema does not name, or a pack source
  *   with no pack id, is dropped by the emitter, and an operator auditing where
- *   a grant came from would read the surviving row as core.
+ *   a grant came from would read the surviving row as core;
+ * - a malformed write path — dropped by the emitter, so the row writes less
+ *   than it reads as writing;
+ * - write paths beside `edit` — the category admits every write before a path
+ *   is ever consulted, so the list scopes nothing while reading as a limit.
  *
  * Issues are returned rather than thrown: the caller owns whether a roster
  * problem is fatal (a `validate` command reporting all of them) or tolerable.
@@ -395,9 +414,70 @@ export function validateToolPolicies(roster: readonly AgentToolPolicy[]): string
         );
       }
     }
+
+    const writePaths = declaredWritePaths(policy);
+    for (const pattern of writePaths) {
+      if (!isWritePathPattern(pattern)) {
+        issues.push(
+          `Agent "${id}" declares write path "${String(pattern)}", which is not a repo-relative ` +
+            `pattern (segments of letters, digits, ".", "_", "-" and "*", no "." or ".." segment); ` +
+            `the emitter drops it.`,
+        );
+      }
+    }
+    if (writePaths.length > 0 && policy.allow.includes("edit")) {
+      issues.push(
+        `Agent "${id}" holds "edit", so its write paths scope nothing — the guard admits every ` +
+          `write through the category first. Drop one.`,
+      );
+    }
   }
 
   return issues;
+}
+
+// ── Write paths ──────────────────────────────────────────────────
+
+/** Longest pattern the grammar admits, in UTF-16 code units. */
+const MAX_WRITE_PATH_CHARS = 200;
+
+/** Most `/`-separated segments a pattern may have. */
+const MAX_WRITE_PATH_SEGMENTS = 16;
+
+/** One segment's alphabet. `*` matches within its own segment only. */
+const WRITE_PATH_SEGMENT = /^[A-Za-z0-9._*-]+$/;
+
+/**
+ * Whether a value is a write-path pattern the generated guard can read
+ * unambiguously: a string of 1–200 characters splitting on `/` into 1–16
+ * segments, each non-empty, neither `.` nor `..`, and drawn from letters,
+ * digits, `.`, `_`, `-` and `*`.
+ *
+ * That alphabet is what rules out the escapes by construction — no `\`, no
+ * drive letter (`:`), no leading `/` (an empty first segment). `*` may appear
+ * more than once in a segment, but never twice in a row: no reader may take a
+ * `**` for a match across directories. Typed over `unknown` because a roster
+ * is data, whatever it was typed as on the way in.
+ */
+export function isWritePathPattern(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  if (value.length === 0 || value.length > MAX_WRITE_PATH_CHARS) return false;
+  if (value.includes("**")) return false;
+  const segments = value.split("/");
+  if (segments.length > MAX_WRITE_PATH_SEGMENTS) return false;
+  return segments.every(
+    (segment) => segment !== "." && segment !== ".." && WRITE_PATH_SEGMENT.test(segment),
+  );
+}
+
+/**
+ * A row's declared write paths as a list, whatever the field held: a value
+ * that is not an array is read as nothing, never iterated character by
+ * character into patterns.
+ */
+function declaredWritePaths(policy: AgentToolPolicy): readonly unknown[] {
+  const declared: unknown = policy.writePaths;
+  return Array.isArray(declared) ? declared : [];
 }
 
 // ── Emission ─────────────────────────────────────────────────────
@@ -406,6 +486,7 @@ interface EmittedPolicy {
   agentId: string;
   allow: readonly ToolCategory[];
   denyTools?: readonly string[];
+  writePaths?: readonly string[];
   rationale: string;
   source?: AgentPolicySource;
 }
@@ -429,7 +510,8 @@ function emittedSource(source: AgentPolicySource | undefined): AgentPolicySource
 
 /**
  * One row as the document carries it: categories filtered to what an access
- * check would authorize, denied names deduplicated and sorted, provenance
+ * check would authorize, denied names deduplicated and sorted, write paths
+ * reduced to the valid patterns and deduplicated and sorted, provenance
  * rebuilt. Key order is fixed here rather than by the input, and an optional key
  * is omitted rather than emitted as null — both are what make the bytes a
  * function of the grant instead of of how the row was written.
@@ -439,11 +521,13 @@ function emittedRow(policy: AgentToolPolicy): EmittedPolicy {
     (category) => !isReservedToolCategory(category) && policy.allow.includes(category),
   );
   const denyTools = [...new Set(policy.denyTools ?? [])].toSorted();
+  const writePaths = [...new Set(declaredWritePaths(policy).filter(isWritePathPattern))].toSorted();
   const source = emittedSource(policy.source);
   return {
     agentId: policy.agentId,
     allow,
     ...(denyTools.length > 0 ? { denyTools } : {}),
+    ...(writePaths.length > 0 ? { writePaths } : {}),
     rationale: policy.rationale,
     ...(source === undefined ? {} : { source }),
   };
@@ -460,9 +544,11 @@ function emittedRow(policy: AgentToolPolicy): EmittedPolicy {
  * committed artifact and never invalidates a drift check.
  *
  * Emission is also sanitizing: unknown and reserved categories are dropped, an
- * unnamed {@link AgentPolicySource} is dropped, and a duplicated agent id keeps
+ * unnamed {@link AgentPolicySource} is dropped, a write path outside the
+ * {@link isWritePathPattern} grammar is dropped, and a duplicated agent id keeps
  * its first row. The guard has no validator, so what it reads must already be
- * exactly what {@link checkToolAccess} would authorize — the pre-emission call
+ * exactly what {@link checkToolAccess} would authorize, write paths aside (the
+ * guard's alone, see {@link AgentToolPolicy.writePaths}) — the pre-emission call
  * to {@link validateToolPolicies} is what reports the entries dropped here, and
  * skipping it means dropping them silently.
  *

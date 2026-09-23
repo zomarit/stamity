@@ -89,8 +89,29 @@ export interface AgentPolicyRow {
   readonly allow: readonly GrantableToolCategory[];
   /** Client-native tool names denied regardless of category — unused, see the module header. */
   readonly denyTools?: readonly string[];
+  /**
+   * Repo-relative patterns this agent may create or overwrite with the client's
+   * single-file `Write` tool only — never `Edit`, `NotebookEdit` or the `edit`
+   * category, which {@link allow} still withholds. Honoured only by the
+   * generated Claude Code guard in the repository layout; ignored by every
+   * other reader, so a reader unaware of the field denies the write through the
+   * category. Absent on every row but the four verdict roles'.
+   */
+  readonly writePaths?: readonly string[];
   /** Why this agent holds this grant, in its own terms. Read by operators auditing privilege. */
   readonly rationale: string;
+}
+
+/**
+ * The report files one verdict role may write: its own, in any run, and no
+ * other role's. One pattern per role rather than one for the whole folder, so
+ * a verdict role steered by text in the code under review cannot overwrite
+ * another role's findings before they reach the ledger.
+ */
+export function verdictReportWritePaths(
+  role: "reviewer" | "security" | "performance" | "design-quality",
+): readonly string[] {
+  return [`.stamity/runs/*/reports/*-${role}-r*.md`];
 }
 
 /**
@@ -115,8 +136,9 @@ export const AGENT_POLICY_ROSTER: readonly AgentPolicyRow[] = [
   {
     agentId: "stamity-reviewer",
     allow: ["read"],
+    writePaths: verdictReportWritePaths("reviewer"),
     rationale:
-      "Returns a verdict on a change set it must not touch, citing path:line for every behavior claim it makes. Withholding edit is what keeps the following round reviewing the author's work instead of the reviewer's own.",
+      "Returns a verdict on a change set it must not touch, citing path:line for every behavior claim it makes. Withholding edit is what keeps the following round reviewing the author's work instead of the reviewer's own. Its single file write is the review report it saves for the run.",
   },
   {
     agentId: "stamity-fixer",
@@ -145,20 +167,23 @@ export const AGENT_POLICY_ROSTER: readonly AgentPolicyRow[] = [
   {
     agentId: "stamity-security",
     allow: ["read"],
+    writePaths: verdictReportWritePaths("security"),
     rationale:
-      "Judges authentication, cryptography, trust boundaries and the dependency set on triggered paths, quoting locations for each defect it names. No write grant: those surfaces are where an unexamined edit costs most, and the repair belongs to a later pass under its own review.",
+      "Judges authentication, cryptography, trust boundaries and the dependency set on triggered paths, quoting locations for each defect it names. No code write grant: those surfaces are where an unexamined edit costs most, and the repair belongs to a later pass under its own review. Only its own findings report may be saved.",
   },
   {
     agentId: "stamity-design-quality",
     allow: ["read"],
+    writePaths: verdictReportWritePaths("design-quality"),
     rationale:
-      "Measures rendered surfaces against named success criteria and the project's token source, so its output is numbers rather than preferences. Inspection alone — nudging a spacing value while judging it would make one pass both author and judge of the same pixel.",
+      "Measures rendered surfaces against named success criteria and the project's token source, so its output is numbers rather than preferences. Inspection alone — nudging a spacing value while judging it would make one pass both author and judge of the same pixel. The lone file it creates is that measurement report.",
   },
   {
     agentId: "stamity-performance",
     allow: ["read"],
+    writePaths: verdictReportWritePaths("performance"),
     rationale:
-      "Weighs cost per operation against declared budgets across data-access, background-work and cache paths. Nothing beyond inspection: an agent tuning what it measures forfeits the independence that makes the measurement worth reading, and tuning is the implementer's lane.",
+      "Weighs cost per operation against declared budgets across data-access, background-work and cache paths. Nothing beyond inspection: an agent tuning what it measures forfeits the independence that makes the measurement worth reading, and tuning is the implementer's lane. Keeping its budget report on disk is the exception.",
   },
 ];
 

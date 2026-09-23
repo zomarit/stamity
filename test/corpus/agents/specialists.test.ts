@@ -240,6 +240,18 @@ describe("specialist agents — frontmatter contract", () => {
     expect(frontmatterField(file.parsed, "tools")).toBeUndefined();
   });
 
+  it.each(SPECIALISTS)("$id's roster row saves its own report and nothing wider", (agent) => {
+    const row = AGENT_POLICY_ROSTER.find(
+      (entry) => entry.agentId === `${CONTENT_PREFIX}${agent.id}`,
+    );
+
+    // The one write a specialist holds is its own report, named by its own id,
+    // so it can neither touch code nor overwrite another role's findings. The
+    // category grant stays read-only, which is what the file above declares.
+    expect(row?.writePaths).toEqual([`.stamity/runs/*/reports/*-${agent.id}-r*.md`]);
+    expect(row?.allow).toEqual(["read"]);
+  });
+
   it.each(SPECIALISTS)("$id declares a plain model class from the ladder", async (agent) => {
     const file = await load(agent.relPath);
 

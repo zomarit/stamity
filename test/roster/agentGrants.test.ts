@@ -262,6 +262,66 @@ describe("resolveAgentGrant — the frontmatter branch", () => {
   });
 });
 
+/**
+ * `writePaths` travels from the core roster only. A frontmatter key of the same
+ * name is a claim no pack can turn into a write, and a pack file shipped under
+ * a core id gets the core row whole — the write path included.
+ */
+describe("resolveAgentGrant — write paths", () => {
+  const reviewerRow = AGENT_POLICY_ROSTER.find((row) => row.agentId === "stamity-reviewer");
+
+  it("carries a core row's write paths, and adds no key to a row without them", () => {
+    // Non-degenerate: the shipped reviewer row does carry the field.
+    expect(reviewerRow?.writePaths?.length).toBeGreaterThan(0);
+
+    const grant = resolveAgentGrant({ runtimeId: "stamity-reviewer", frontmatter: {} });
+    expect(grant.writePaths).toEqual(reviewerRow?.writePaths);
+    expect(grant.diagnostics).toEqual([]);
+
+    for (const row of AGENT_POLICY_ROSTER.filter((entry) => entry.writePaths === undefined)) {
+      const plain = resolveAgentGrant({ runtimeId: row.agentId, frontmatter: {} });
+      expect(Object.hasOwn(plain, "writePaths"), row.agentId).toBe(false);
+    }
+    // An empty list on an injected row is the same as none: no key.
+    const empty = resolveAgentGrant({
+      runtimeId: PACK_AGENT_ID,
+      frontmatter: {},
+      roster: [{ agentId: PACK_AGENT_ID, allow: ["read"], writePaths: [], rationale: "Injected." }],
+    });
+    expect(Object.hasOwn(empty, "writePaths")).toBe(false);
+  });
+
+  it("resolves a pack file shipped under a core id to the core row, write paths included", () => {
+    const grant = resolveAgentGrant({
+      runtimeId: "stamity-reviewer",
+      frontmatter: { capabilities: ["read"], writePaths: ["**/*"] },
+      declaredTools: WIDE_FOOTPRINT,
+    });
+
+    expect(grant.source).toBe("roster");
+    expect(grant.allow).toEqual(["read"]);
+    expect(grant.writePaths).toEqual(reviewerRow?.writePaths);
+  });
+
+  it("grants a pack agent no write path from its frontmatter, and says so", () => {
+    for (const declaredTools of [WIDE_FOOTPRINT, undefined]) {
+      const grant = resolveAgentGrant({
+        runtimeId: PACK_AGENT_ID,
+        frontmatter: { capabilities: ["read"], writePaths: [".stamity/runs/*/reports/*.md"] },
+        ...(declaredTools === undefined ? {} : { declaredTools }),
+      });
+
+      expect(Object.hasOwn(grant, "writePaths")).toBe(false);
+      expect(grant.diagnostics).toContain(
+        `${PACK_AGENT_ID}: declares \`writePaths:\`, which no frontmatter can grant — write paths ` +
+          `come from the core roster only; ignored.`,
+      );
+    }
+    // The control: the same agent without the key draws no such note.
+    expect(reasoning(resolvePackAgent(["read"]))).not.toContain("writePaths");
+  });
+});
+
 describe("resolveAgentGrant — malformed and hostile capability fields", () => {
   it.each([
     ["absent", undefined, /declares no `capabilities:`/],
