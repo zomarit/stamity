@@ -79,15 +79,19 @@ no new hook event is added.
 
 **C7 — `stamity ledger`** (hidden plumbing verb, beside `learn` and `handoff`; the one serialized ledger writer,
 through the engine's existing write lock). `append --run <run-id> --phase <phase> --source <role> (--report <path> |
---stdin)`: validates the C2 block (any bad line refuses the whole append, naming the line), appends one `open` row per
-finding (ids `<run-id>/<phase>/<n>`, n continuing that run and phase's highest, numerically), prints
+--stdin)`: validates the C2 block (any bad line refuses the whole append, naming the line; a refusal lists the first
+20 problems, then one `… +<m> more problem(s)` line, its JSON is `{ error, problems, omitted }` with `omitted` always
+present, and every quoted fragment is cut at 60 code points plus `…`), appends one `open` row per finding (ids
+`<run-id>/<phase>/<n>`, n continuing that run and phase's highest, numerically), prints
 `<ledger-id> <severity> <report-local id>` per row with a trailing ` decision-needed` on such rows, and refuses a
 report already appended. `close --run <run-id> (--report <path> --ids <comma list> | --id <ledger-id> --state
 <fixed|rejected|deferred> --rationale <text>)`: applies a C9 closures block, or one manual transition, rewriting rows in
-place; `--ids` lists the ledger ids handed to that re-review, and an unknown id, or a closure naming an id outside
-`--ids`, refuses the whole close. `status [--run <run-id>]`: prints C6. Every refusal exits 1; a report path must
-resolve directly inside that run's `reports/`, with no `..` segment and no symlink. (Amended 2026-09-23: `close
---report` takes `--ids`, and a closure outside it refuses the whole close — resolution R38, ledger row `build/58`.)
+place; `--ids` lists the ledger ids handed to that re-review and is required with `--report` (a `--report` close
+without it is refused), and an unknown id, or a closure naming an id outside `--ids`, refuses the whole close.
+`status [--run <run-id>]`: prints C6. Every refusal exits 1; a report path must resolve directly inside that run's
+`reports/`, with no `..` segment and no symlink. (Amended 2026-09-23: `close --report` requires `--ids`, and a closure
+outside it refuses the whole close — resolution R38, ledger rows `build/58` and `build/96`; an append refusal lists
+at most 20 problems and cuts each quoted fragment at 60 code points — ledger row `build/80`.)
 
 **C8 — Verdict-role report write on Claude Code only.** An optional `writePaths` on the four verdict policy rows,
 each naming only its own role's reports: `.stamity/runs/*/reports/*-reviewer-r*.md`, `*-security-r*.md`,
@@ -96,13 +100,15 @@ each naming only its own role's reports: `.stamity/runs/*/reports/*-reviewer-r*.
 or `NotebookEdit` — for those agents in the repository layout only; a plugin install (the container hook layout,
 which anchors no project root) renders none. The generated pre-tool-use guard allows such a `Write` only for a regular
 file resolving inside the root its own location names and matching the row's pattern, with no `..`, no symlink, no hard
-link; every other edit-category call by those agents stays denied. The guard's matcher reads a pattern's last `*` (the
-round number just before the `.md` suffix) as one or more ASCII digits only, so `*-reviewer-r*.md` matches
-`<pass>-reviewer-r<N>.md` and never a basename in which another role's token comes after it — the per-role isolation
-rests on that rule, not on the pass slug. Cursor, Copilot and Codex keep read-only grants and their capability
-disclosure says verdict reports are returned inline there. The guard change gets a security lens pass and a security
-review of its diff. (Amended 2026-09-23: the round-number rule of the guard's matcher — ledger row `build/70`, signed
-off as the declared default, option 2.)
+link; every other edit-category call by those agents stays denied. The guard's matcher works per segment: every
+segment before the final one matches by prefix, ordered `indexOf` and suffix; a final segment with no `*` matches
+exactly; in a final segment that has one, its last `*` (the round number just before the `.md` suffix) matches one or
+more ASCII digits only, and its other `*`s keep the plain rule. So `*-reviewer-r*.md` matches `<pass>-reviewer-r<N>.md`
+and never a basename in which another role's token comes after it — the per-role isolation rests on that rule, not on
+the pass slug. Cursor, Copilot and Codex keep read-only grants and their capability disclosure says verdict reports
+are returned inline there. The guard change gets a security lens pass and a security review of its diff. (Amended
+2026-09-23: the round-number rule of the guard's matcher, stated per segment — ledger rows `build/70`, signed off as
+the declared default, option 2, and `build/93`.)
 
 **C9 — Re-review closures.** A re-review carries a `stamity-closures` block, one object per prior ledger id:
 `{"ledger_id":"<id>","status":"fixed|not-fixed|regressed|rejection-upheld|rejection-overturned"}` with an optional
@@ -652,7 +658,7 @@ which no row records.
 | `edgeCases` | A landed `st-work.md` whose line count differs from 486, for example because an implementer rewrapped: re-derive each range by searching for its first quoted line in the landed file. The range text must be byte-identical to the old range, except where the landed body reworded the quoted text; then the Brief is re-quoted from the landed file, as for `security-content-exempt-from-truncation`. |
 | `depends_on` | p16-work-text, p16-evals-execution |
 | `verify` | `npx vitest run test/evals && npm run lint` |
-| `amended` | amended 2026-09-23: the landed SET-v7 amendment names ten Brief-moved cases and three range-only ones, not nine and four, because the work-text fix round reworded the Findings-ledger bullet that `security-content-exempt-from-truncation` quotes, so its Brief was re-quoted; the landed ranges sit below the projected ones (ledger row `build/71`; lane commit d9b21357) |
+| `amended` | amended 2026-09-23: the landed SET-v7 amendment names ten Brief-moved cases and three range-only ones, not nine and four, because the work-text fix round reworded the Findings-ledger bullet that `security-content-exempt-from-truncation` quotes, so its Brief was re-quoted; the landed ranges sit below the projected ones (ledger row `build/71`; integrated on the package branch as 82a582d5). Amended again 2026-09-23 on the plan review: the commit cited is the package branch's, not the lane's (`build/97`) |
 
 ### p16-docs — the hand pages: three plumbing verbs, the reports folder, the manual resume card
 
