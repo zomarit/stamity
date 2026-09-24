@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { FIXED_GIT_ENV, PASS_IDS, applyPatch, createReplayFixture, refuseOutInsideRepository, renderPlan } from "../../scripts/replay/fixture.mjs";
+import { FIXED_GIT_ENV, PASS_IDS, applyPatch, createReplayFixture, dataDirOf, refuseOutInsideRepository, renderPlan } from "../../scripts/replay/fixture.mjs";
 
 /**
  * The replay fixture generator, over a synthetic `v1Dir` this suite writes: a two-file base patch,
@@ -656,5 +656,34 @@ describe("renderPlan", () => {
 
   it("names the six passes in chain order", () => {
     expect(PASS_IDS).toEqual(["u1-p1", "u1-p2", "u2-p1", "u2-p2", "u3-p1", "u3-p2"]);
+  });
+});
+
+describe("--protocol (plan 011 v2-protocol-paths)", () => {
+  it("reads each version's data directory from the protocol table", () => {
+    expect(dataDirOf("v1")).toBe(join(REPO_ROOT, "evals", "replay", "v1"));
+    expect(dataDirOf("v2")).toBe(join(REPO_ROOT, "evals", "replay", "v2"));
+  });
+
+  it("builds S0 from v1's data under --protocol v1, the same commit as with no --protocol", () => {
+    const buildCli = (extra: string[]): { baseCommit: string; dir: string } => {
+      const out = mkdtempSync(join(tmpdir(), "stamity-replay-protocol-"));
+      const result = spawnSync(process.execPath, [FIXTURE_MJS, "--out", out, "--no-setup", "--no-install", "--units", "none", "--json", ...extra], { encoding: "utf8", env: gitEnv() });
+      expect(result.stderr).toBe("");
+      expect(result.status).toBe(0);
+      const built = JSON.parse(result.stdout) as { baseCommit: string; dir: string };
+      rmSync(out, { recursive: true, force: true });
+      return built;
+    };
+    const explicit = buildCli(["--protocol", "v1"]);
+    expect(explicit.baseCommit).toMatch(/^[0-9a-f]{40}$/);
+    expect(explicit.baseCommit).toBe(buildCli([]).baseCommit);
+  });
+
+  it("exits 2 with the usage on an unknown version", () => {
+    const result = spawnSync(process.execPath, [FIXTURE_MJS, "--protocol", "v3", "--no-setup", "--no-install"], { encoding: "utf8", env: gitEnv() });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toMatch(/--protocol v3 is not a protocol version: v1 or v2/);
+    expect(result.stderr).toContain("Usage: node scripts/replay/fixture.mjs");
   });
 });

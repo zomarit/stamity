@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -590,5 +590,111 @@ describe("the committed COMPARISON-v1.md", () => {
     const pilots = Object.fromEntries(["baseline", "changed"].flatMap((which) => summaries.filter((s) => s.shape === which && s.kind === "pilot" && s.invalid.length === 0).slice(0, 1).map((s) => [which, s])));
     const derived = run(scored("baseline"), scored("changed"), pilots);
     expect(readFileSync(COMMITTED, "utf8")).toMatch(new RegExp(`\\nMerge gate: ${derived.mergeGate}\\n`));
+  });
+});
+
+// ---------- protocol versions (plan 011 v2-protocol-paths) ----------
+
+const V2_PATH = "evals/replay/REPLAY-v2.md";
+/** `s` scored under REPLAY-v2: its path, and `sha` as the sha256 every input of one comparison shares. */
+const underV2 = (s: Summary, sha: string): Summary => ({ ...s, protocol: { ...(s["protocol"] as Record<string, string>), path: V2_PATH, sha256: sha } }) as Summary;
+const v2Pilots = (sha: string): Record<string, Summary> => Object.fromEntries(Object.entries(pilotsOf()).map(([k, p]) => [k, underV2(p, sha)]));
+
+describe("compare under REPLAY-v2", () => {
+  it("names REPLAY-v2 and COMPARISON-v2 in the header when the summaries record REPLAY-v2's path", () => {
+    const sha = "7".repeat(64);
+    const md = renderComparison(run(base3().map((s) => underV2(s, sha)), changed3().map((s) => underV2(s, sha)), v2Pilots(sha)), T) as string;
+    const head = md.split("\n");
+    expect(head[0]).toBe("# Replay comparison — `COMPARISON-v2`");
+    expect(head[2]).toMatch(/^The changed shape against the 1\.9\.1 baseline under REPLAY-v2, /);
+    expect(md).toContain(`- Protocol: REPLAY-v2 (\`${V2_PATH}\`), sha256 \`${sha}\`.`);
+    expect(md).not.toMatch(/REPLAY-v1|COMPARISON-v1/);
+    expect(md).toContain("\nMerge gate: PASS\n");
+  });
+
+  it("with no scored run in either shape, reads every row NOT-EVALUATED but the carried one, and the gate FAIL", () => {
+    const r = compare([], [], T, {}, { protocol: { path: V2_PATH, sha256: "7".repeat(64) } }) as Result & { rows: (Row & { reason?: string })[] };
+    expect(r.rows.filter((x) => x.id !== "eval-set-floors").map((x) => x.verdict)).toEqual(Array(9).fill("NOT-EVALUATED"));
+    expect(row(r, "eval-set-floors").verdict).toBe("CARRIED");
+    expect(r.mergeGate).toBe("FAIL");
+    expect(r.rows.find((x) => x.id === "pooled-recall")!.reason).toMatch(/no baseline scored run given; no changed scored run given/);
+    const md = renderComparison(r, T) as string;
+    expect(md.split("\n")[0]).toBe("# Replay comparison — `COMPARISON-v2`");
+    expect(md).toContain("- Instrument: no run read.");
+  });
+
+  it("a shape with no scored run leaves only the rows it feeds NOT-EVALUATED, even with both pilots named", () => {
+    const r = run([], changed3());
+    expect(row(r, "compaction-loss").verdict).toBe("PASS");
+    expect(row(r, "loop-chars").verdict).toBe("NOT-EVALUATED");
+    expect(r.mergeGate).toBe("FAIL");
+  });
+});
+
+/**
+ * A copy of the instrument in a scratch root with a REPLAY-v2.md beside REPLAY-v1.md (v1's text
+ * plus one line, so its sha256 differs and its thresholds still parse). `score.mjs` resolves
+ * `--protocol v2` against its own checkout, and REPLAY-v2.md is not committed until the v2-protocol
+ * unit; a file written into this checkout would collide with that unit's.
+ */
+function instrumentCopy(): { root: string; scoreMjs: string; v2Sha: string } {
+  // The real path: `score.mjs` runs its CLI only when argv[1] resolves to its own module path, and
+  // the OS temp root is a symlink on macOS.
+  const root = realpathSync(scratch());
+  for (const part of ["scripts/replay", "scripts/qa"]) cpSync(join(REPO, part), join(root, part), { recursive: true });
+  cpSync(join(REPO, "scripts/leak-gate.mjs"), join(root, "scripts/leak-gate.mjs"));
+  cpSync(PROTOCOL, join(root, "evals/replay/REPLAY-v1.md"));
+  const v2Text = `${PROTOCOL_TEXT}\n<!-- a scratch REPLAY-v2 for the comparison's tests -->\n`;
+  writeFileSync(join(root, V2_PATH), v2Text);
+  return { root, scoreMjs: join(root, "scripts/replay/score.mjs"), v2Sha: createHash("sha256").update(v2Text).digest("hex") };
+}
+
+describe("score.mjs compare --protocol v2", () => {
+  function compareV2(baseline: Summary[], changed: Summary[], pilots: Record<string, Summary>, outName = "COMPARISON-v2.md") {
+    const copy = instrumentCopy();
+    const dir = scratch();
+    const write = (s: Summary): string => {
+      const path = join(dir, `${s.runId}.json`);
+      writeFileSync(path, JSON.stringify(s));
+      return path;
+    };
+    mkdirSync(join(dir, "out"));
+    const out = join(dir, "out", outName);
+    const args = ["compare", "--protocol", "v2", ...baseline.flatMap((s) => ["--baseline", write(s)]), ...changed.flatMap((s) => ["--changed", write(s)]), ...Object.entries(pilots).flatMap(([k, s]) => [`--pilot-${k}`, write(s)]), "--out", out];
+    return { out, copy, result: spawnSync(process.execPath, [copy.scoreMjs, ...args], { encoding: "utf8" }) };
+  }
+  const sha = (): string => instrumentCopy().v2Sha;
+
+  it("writes COMPARISON-v2.md naming REPLAY-v2, and exits 0 on a merge gate of PASS", () => {
+    const v2 = sha();
+    const { out, result } = compareV2(base3().map((s) => underV2(s, v2)), changed3().map((s) => underV2(s, v2)), v2Pilots(v2));
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
+    const md = readFileSync(out, "utf8");
+    expect(md.split("\n")[0]).toBe("# Replay comparison — `COMPARISON-v2`");
+    expect(md).toContain(`- Protocol: REPLAY-v2 (\`${V2_PATH}\`), sha256 \`${v2}\`.`);
+  });
+
+  it("refuses inputs holding runs of both protocols, and a v1-named --out, writing nothing", () => {
+    const v2 = sha();
+    const c = changed3().map((s) => underV2(s, v2));
+    // Same sha256, v1's path: the path alone decides the refusal.
+    const mixed = compareV2(base3().map((s) => underV2(s, v2)), [c[0]!, c[1]!, { ...c[2]!, protocol: { ...(c[2]!["protocol"] as Record<string, string>), path: "evals/replay/REPLAY-v1.md" } } as Summary], v2Pilots(v2));
+    expect(mixed.result.status).toBe(1);
+    expect(mixed.result.stderr).toContain("2026-09-26-replay-3 was scored under protocol path evals/replay/REPLAY-v1.md, not evals/replay/REPLAY-v2.md");
+    expect(existsSync(mixed.out)).toBe(false);
+    const misnamed = compareV2(base3().map((s) => underV2(s, v2)), c, v2Pilots(v2), "COMPARISON-v1.md");
+    expect(misnamed.result.status).toBe(1);
+    expect(misnamed.result.stderr).toMatch(/--out must be named COMPARISON-v2\.md \(§11: evals\/replay\/COMPARISON-v2\.md\)/);
+    expect(existsSync(misnamed.out)).toBe(false);
+  });
+
+  it("with no summaries, writes every row NOT-EVALUATED and exits 2 on the gate's FAIL", () => {
+    const { out, result } = compareV2([], [], {});
+    expect(result.status).toBe(2);
+    const md = readFileSync(out, "utf8");
+    expect(md).toContain("\nMerge gate: FAIL\n");
+    expect(md).toMatch(/\| `pooled-recall` \|.*\| NOT-EVALUATED — /);
+    expect(md).toContain("- Protocol: REPLAY-v2 (`evals/replay/REPLAY-v2.md`)");
   });
 });

@@ -22,7 +22,10 @@
 // Usage:
 //   node scripts/replay/fixture.mjs [--out <parentDir>] [--cli-tarball <tgz>]
 //                                   [--deps <dir> | --deps-link <dir>] [--units <id,…|none>]
-//                                   [--no-setup] [--no-install] [--run-gates] [--json]
+//                                   [--protocol v1|v2] [--no-setup] [--no-install] [--run-gates] [--json]
+//
+// `--protocol` picks the replay data the version's `PROTOCOLS` entry names (`protocols.mjs`),
+// passed as the `v1Dir` override; absent, v1's `evals/replay/v1`.
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -43,9 +46,13 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isOutsideRoot } from '../qa/run.mjs'
+import { DEFAULT_PROTOCOL, PROTOCOLS, isProtocolVersion } from './protocols.mjs'
 
 const SELF = fileURLToPath(import.meta.url)
 const REPO_ROOT = resolve(SELF, '..', '..', '..')
+
+/** The replay data directory of a protocol version (`PROTOCOLS[version].data`), absolute. */
+export const dataDirOf = (version) => join(REPO_ROOT, ...PROTOCOLS[version].data.split('/'))
 
 /** The six passes of the replay plan, in chain order. Each names one `v1/patches/<id>.patch`. */
 export const PASS_IDS = ['u1-p1', 'u1-p2', 'u2-p1', 'u2-p2', 'u3-p1', 'u3-p2']
@@ -447,7 +454,7 @@ export function createReplayFixture({
   }
   if (setup && cliTarball === undefined) throw new Error('the setup step needs --cli-tarball <tgz>, or pass --no-setup')
   const selected = normalizeUnits(units)
-  const source = resolve(v1Dir ?? join(REPO_ROOT, 'evals', 'replay', 'v1'))
+  const source = resolve(v1Dir ?? dataDirOf(DEFAULT_PROTOCOL))
   const basePatch = join(source, 'patches', 'base.patch')
   const templatePath = join(source, 'plan', '001-replay.md')
   for (const required of [basePatch, templatePath]) {
@@ -588,12 +595,13 @@ function buildFixture({ dir, source, basePatch, templatePath, chain, selected, d
 export const USAGE =
   'Usage: node scripts/replay/fixture.mjs [--out <parentDir>] [--cli-tarball <tgz>]\n' +
   '                                       [--deps <dir> | --deps-link <dir>] [--units <id,…|none>]\n' +
-  '                                       [--no-setup] [--no-install] [--run-gates] [--json]'
+  `                                       [--protocol ${Object.keys(PROTOCOLS).join('|')}] [--no-setup] [--no-install] [--run-gates] [--json]\n` +
+  `  --protocol defaults to ${DEFAULT_PROTOCOL}; an unknown version exits 2.`
 
 /** `--flag value` and `--flag` over argv, the shape `scripts/qa/run.mjs` uses. */
 function parseArgs(argv) {
   const options = {}
-  const valued = { '--out': 'out', '--cli-tarball': 'cliTarball', '--deps': 'deps', '--deps-link': 'depsLink', '--units': 'units' }
+  const valued = { '--out': 'out', '--cli-tarball': 'cliTarball', '--deps': 'deps', '--deps-link': 'depsLink', '--units': 'units', '--protocol': 'protocol' }
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     if (arg === '--help' || arg === '-h') options.help = true
@@ -612,12 +620,15 @@ function parseArgs(argv) {
 }
 
 function main(argv) {
-  const { help, json, ...options } = parseArgs(argv)
+  const { help, json, protocol, ...options } = parseArgs(argv)
   if (help) {
     process.stdout.write(`${USAGE}\n`)
     return
   }
-  const result = createReplayFixture(options)
+  if (protocol !== undefined && !isProtocolVersion(protocol)) {
+    throw Object.assign(new Error(`--protocol ${protocol} is not a protocol version: ${Object.keys(PROTOCOLS).join(' or ')}.\n${USAGE}`), { exitCode: 2 })
+  }
+  const result = createReplayFixture({ ...options, v1Dir: dataDirOf(protocol ?? DEFAULT_PROTOCOL) })
   if (json) {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
     return
@@ -634,6 +645,6 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === SELF) {
     main(process.argv.slice(2))
   } catch (error) {
     process.stderr.write(`[replay] the fixture could not be built: ${error.message}\n`)
-    process.exitCode = 1
+    process.exitCode = error.exitCode ?? 1
   }
 }

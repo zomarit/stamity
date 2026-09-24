@@ -10,6 +10,12 @@
 // the figure it qualifies, never folded away. Every string that reaches either file passes
 // through `redactPaths` with the fixture root and the worktrees labelled, both files are read
 // through the leak gate's own rules, and `run` refuses to write a file that `check` would refuse.
+//
+// Every command takes `--protocol v1|v2` (or the committed protocol path), defaulting to v1, and
+// reads the protocol path, the runs folder and the comparison name from `PROTOCOLS`
+// (`protocols.mjs`). The summary schema lives in `summary.mjs` and the shared scoring rules in
+// `protocols.mjs`, so `compare.mjs` imports neither this file nor anything that imports it
+// (`build/273`); every name moved there is re-exported here.
 
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
@@ -18,18 +24,18 @@ import { RULES as LEAK_RULES, decodeCandidates, normalizeViews } from '../leak-g
 import { sha256 } from '../qa/bind.mjs'
 import { redactPaths, spellingsOf } from '../qa/redact.mjs'
 import { PASS_IDS } from './fixture.mjs'
-import { COMPARISON_FILE, COMPARISON_PATH, compare, loopCharsHeld, renderComparison } from './compare.mjs'
+import { compare, loopCharsHeld, renderComparison } from './compare.mjs'
 import { AMBIENT_LISTS, MEASUREMENT_SCHEMA, UNATTRIBUTED_MAX } from './measure.mjs'
+import { DEFAULT_PROTOCOL, MAX_REPLACEMENTS_PER_SHAPE, PROTOCOLS, ROW_IDS, isProtocolVersion, median, protocolNames, securityHeld, versionOfPath } from './protocols.mjs'
+import { BREAKDOWN_KEYS, EXCERPT_MAX, RUN_ID, SUMMARY_SCHEMA, TOTALS_KEYS, isAmbient, isObject, numOrNull, validateSummary } from './summary.mjs'
+
+export { MAX_REPLACEMENTS_PER_SHAPE, ROW_IDS, median, securityHeld } from './protocols.mjs'
+export { SUMMARY_SCHEMA, TOTALS_KEYS, validateSummary } from './summary.mjs'
 
 const SELF = fileURLToPath(import.meta.url)
 const REPO_ROOT = resolve(SELF, '..', '..', '..')
 
-export const SUMMARY_SCHEMA = 'stamity/replay-summary/v1'
 const THRESHOLDS_SCHEMA = 'stamity/replay-thresholds/v1'
-const DEFAULT_PROTOCOL = 'evals/replay/REPLAY-v1.md'
-/** §11: `<date>-replay-<n>`, never `-run-<n>` (the eval set's run of record is the newest `-run-<n>`). */
-const RUN_ID = /^\d{4}-\d{2}-\d{2}-replay-\d+$/
-const SHA256 = /^[0-9a-f]{64}$/
 /** `writeRunFolder`'s staging folder, `.<run-id>.partial-<random>`, which a hard kill can leave behind (build/256). */
 const STAGING = /^\.(.+)\.partial-[^/\\]*$/
 /** The path shapes `check` refuses anywhere in a summary or a RESULTS file. */
@@ -39,10 +45,7 @@ const FORBIDDEN_SHAPES = ['/Users/', '/home/', '/private/var/', '/var/folders/']
  * `/var/folders/…/T` spelling a path that no longer resolves keeps is swept here, under the same label.
  */
 const BARE_TMP_PATHS = /\/var\/folders\/[^/\s"']+\/[^/\s"']+\/T(?![^/\s"'])/g
-const EXCERPT_MAX = 200
 const PASS_COUNT = PASS_IDS.length
-/** §10: an invalid run is replaced, at most this many times per shape (a test pins the sentence). */
-export const MAX_REPLACEMENTS_PER_SHAPE = 2
 const SHAPES = ['baseline', 'changed']
 
 /** Every key of the protocol's `replay-thresholds` block and the type of its value (r1). */
@@ -67,20 +70,6 @@ const IMPLEMENTED_READINGS = {
   evalSetFloors: 'carried-to-session-2',
 }
 
-/** Every total of the measurement, carried into the summary whole (a test pins it to r7's list). */
-export const TOTALS_KEYS = [
-  'loopChars', 'loopCharsPerPass', 'breakdown', 'unattributedShare', 'perPassUnreliable', 'unresolvedDeliveriesAndSends',
-  'ledgerBeside', 'subagentTokens', 'subagentTokensPerPass', 'subagentOutputTokens', 'notificationTrailerTokens',
-  'unjoinedSubagents', 'agentsWithoutTranscript', 'walkSkipped', 'mainContextChars', 'contextTokensPerPass', 'compactionsAuto',
-  'projectedPer10', 'recall', 'readerSkips', 'decoyFalseFlags', 'unmatched', 'oraclePass', 'oracleError', 'oracleRun',
-]
-const NUMERIC_TOTALS = [
-  'loopChars', 'loopCharsPerPass', 'unattributedShare', 'unresolvedDeliveriesAndSends', 'subagentTokens', 'subagentTokensPerPass',
-  'subagentOutputTokens', 'notificationTrailerTokens', 'unjoinedSubagents', 'mainContextChars', 'contextTokensPerPass',
-  'compactionsAuto', 'projectedPer10', 'decoyFalseFlags', 'unmatched', 'oraclePass', 'oracleError',
-]
-const BREAKDOWN_KEYS = ['returns', 'prompts', 'ledger', 'briefs', 'reportReads', 'resumes']
-
 /**
  * The §12 rows a notes line of `measure.mjs` qualifies, by a phrase the line always carries (a test
  * pins each phrase to `measure.mjs`). A line matching none is rendered under the other notes.
@@ -99,25 +88,13 @@ export const NOTE_ROWS = [
   { includes: 'the file is absent from every snapshot copy of the pass', rows: ['pooled-recall', 'security-seeds'] },
 ]
 
-/** The §12 rows, in the protocol's order. */
-export const ROW_IDS = ['security-seeds', 'pooled-recall', 'decoy-flags', 'compaction-loss', 'verdict-class', 'verdict-rounds', 'approved-unfixed', 'loop-chars', 'subagent-tokens', 'eval-set-floors']
-
 // ---------- small helpers ----------
 
-const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const str = (v) => (typeof v === 'string' && v !== '' ? v : null)
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 const sum = (list, f) => list.reduce((a, x) => a + f(x), 0)
 const clone = (v) => (v === undefined ? null : JSON.parse(JSON.stringify(v)))
 const cutCodePoints = (text, max) => [...text].slice(0, max).join('')
-const strOrNull = (v) => v === null || typeof v === 'string'
-const numOrNull = (v) => v === null || (typeof v === 'number' && Number.isFinite(v))
-
-export function median(values) {
-  const sorted = values.toSorted((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
-}
 
 /** Every `/var/…` spelling beside its `/private/var/…` twin, so a root that no longer resolves is still met. */
 function withTwins(pairs) {
@@ -169,8 +146,8 @@ function leakRulesIn(text, logicalPath) {
   return [...hit].toSorted()
 }
 
-/** Where §11 places a run's file, the path the leak gate reads it under once committed. */
-const committedPath = (runId, file) => `evals/replay/runs/${runId}/${file}`
+/** Where §11 places a run's file under the protocol's runs folder, the path the leak gate reads it under once committed. */
+const committedPath = (version, runId, file) => `${PROTOCOLS[version].runs}/${runId}/${file}`
 
 // ---------- thresholds ----------
 
@@ -236,8 +213,6 @@ const isNum = (v) => typeof v === 'number' && Number.isFinite(v)
 const isBool = (v) => typeof v === 'boolean'
 const isStrOrNull = (v) => v === null || typeof v === 'string'
 const isOptStrOrNull = (v) => v === undefined || isStrOrNull(v)
-/** §3's five ambient lists (build/250): null with no init event, else each list of names, or null when the event lacks it. */
-const isAmbient = (v) => v === null || (isObject(v) && Object.keys(AMBIENT_LISTS).every((k) => v[k] === null || (Array.isArray(v[k]) && v[k].every((x) => typeof x === 'string'))))
 
 /**
  * Every malformed row of the measurement's passes, seeds, compaction samples, whole-branch row and
@@ -293,9 +268,10 @@ function rowProblems(m) {
   return out
 }
 
+const at = (obj, key) => (isObject(obj) ? obj[key] : undefined)
+
 /** The provenance fields read from run.json, each named by its summary path. */
 function provenanceOf(run) {
-  const at = (obj, key) => (isObject(obj) ? obj[key] : undefined)
   return {
     cli: { commit: str(at(run.cli, 'commit')), version: str(at(run.cli, 'version')), tarballSha256: str(at(run.cli, 'tarballSha256')) },
     client: { version: str(at(run.client, 'version')), binarySha256: str(at(run.client, 'binarySha256')) },
@@ -314,7 +290,7 @@ function provenanceOf(run) {
  * protocol file. A missing provenance field is recorded as null and named in `notDone`. The
  * protocol is read at the instrument commit (§13), so `protocol.commit` is that commit.
  */
-export function summarize(measurement, runJson, protocolSha, { protocolPath = DEFAULT_PROTOCOL, runId, kind } = {}) {
+export function summarize(measurement, runJson, protocolSha, { protocolPath = PROTOCOLS[DEFAULT_PROTOCOL].path, runId, kind } = {}) {
   checkMeasurement(measurement)
   const m = measurement
   const run = isObject(runJson) ? runJson : {}
@@ -386,62 +362,12 @@ export function summarize(measurement, runJson, protocolSha, { protocolPath = DE
   return out
 }
 
-// ---------- validation ----------
-
-/** Every way `s` departs from `stamity/replay-summary/v1`; empty when it conforms. */
-export function validateSummary(s) {
-  const problems = []
-  const need = (cond, what) => {
-    if (!cond) problems.push(what)
-  }
-  if (!isObject(s)) return ['the summary is not a JSON object']
-  need(s.schema === SUMMARY_SCHEMA, `schema is not ${SUMMARY_SCHEMA}`)
-  need(typeof s.runId === 'string' && RUN_ID.test(s.runId), 'runId is not <YYYY-MM-DD>-replay-<n>')
-  need(s.kind === 'pilot' || s.kind === 'scored', 'kind is not pilot or scored')
-  need(s.shape === 'baseline' || s.shape === 'changed', 'shape is not baseline or changed')
-  need(isObject(s.protocol) && typeof s.protocol.path === 'string' && SHA256.test(s.protocol.sha256 ?? '') && typeof s.protocol.commit === 'string', 'protocol is not {path, sha256, commit}')
-  need(isObject(s.instrument) && typeof s.instrument.commit === 'string' && s.instrument.commit !== '' && isObject(s.instrument.files) && Object.values(s.instrument.files).every((v) => typeof v === 'string'), 'instrument is not {commit, files}')
-  need(isObject(s.cli) && ['commit', 'version', 'tarballSha256'].every((k) => strOrNull(s.cli[k])), 'cli is not {commit, version, tarballSha256}')
-  need(
-    isObject(s.client) && ['version', 'binarySha256', 'orchestratorModel', 'initVersion'].every((k) => strOrNull(s.client[k])) && Array.isArray(s.client.resolvedModels) && isAmbient(s.client.ambient),
-    'client is not {version, binarySha256, orchestratorModel, resolvedModels, initVersion, ambient}',
-  )
-  need(isObject(s.fixture) && ['baseCommit', 'planSha256', 'depsSha256'].every((k) => strOrNull(s.fixture[k])), 'fixture is not {baseCommit, planSha256, depsSha256}')
-  need(s.mechanism === 'interrupt' || s.mechanism === 'auto-window', 'mechanism is not interrupt or auto-window')
-  need(isObject(s.timing) && ['activeMs', 'pausedMs', 'capacityHolds', 'nudges', 'restarts'].every((k) => numOrNull(s.timing[k])), 'timing is not {activeMs, pausedMs, capacityHolds, nudges, restarts}')
-  const passesOk = Array.isArray(s.passes) && s.passes.map((p) => p?.id).join(',') === PASS_IDS.join(',')
-  need(passesOk, `passes are not ${PASS_IDS.join(', ')}`)
-  if (passesOk) {
-    for (const p of s.passes) {
-      need(typeof p.loopChars === 'number' && typeof p.subagentTokens === 'number' && isObject(p.breakdown) && BREAKDOWN_KEYS.every((k) => typeof p.breakdown[k] === 'number'), `pass ${p.id}: loopChars, breakdown or subagentTokens is malformed`)
-      need(isObject(p.verdict) && strOrNull(p.verdict.finalClass) && typeof p.verdict.rounds === 'number' && typeof p.verdict.approvedWithSeedUnfixed === 'boolean', `pass ${p.id}: verdict is malformed`)
-      need(Array.isArray(p.seeds) && p.seeds.every((x) => typeof x?.id === 'string' && typeof x.found === 'boolean' && typeof x.caughtByImplementer === 'boolean' && typeof x.foundRound1 === 'boolean' && (x.present === null || typeof x.present === 'boolean')), `pass ${p.id}: seeds are malformed`)
-      need(Array.isArray(p.decoysFlagged) && p.decoysFlagged.every((d) => typeof d === 'string'), `pass ${p.id}: decoysFlagged is malformed`)
-    }
-  }
-  const totalsOk = isObject(s.totals) && TOTALS_KEYS.every((k) => k in s.totals)
-  need(totalsOk, 'totals lack a measured key')
-  if (totalsOk) {
-    for (const k of NUMERIC_TOTALS) need(typeof s.totals[k] === 'number' && Number.isFinite(s.totals[k]), `totals.${k} is not a number`)
-    need(isObject(s.totals.recall) && typeof s.totals.recall.found === 'number' && typeof s.totals.recall.denominator === 'number' && isObject(s.totals.recall.byClass), 'totals.recall is not {found, denominator, byClass}')
-    need(isObject(s.totals.readerSkips), 'totals.readerSkips is not an object')
-    need(isObject(s.totals.oracleRun) && strOrNull(s.totals.oracleRun.status) && typeof s.totals.oracleRun.detail === 'string', 'totals.oracleRun is not {status, detail}')
-  }
-  need(Array.isArray(s.compactionSamples) && s.compactionSamples.every((c) => typeof c?.atRisk === 'number' && typeof c.lost === 'number' && typeof c.valid === 'boolean'), 'compactionSamples are malformed')
-  need(isObject(s.wholeBranch) && strOrNull(s.wholeBranch.finalClass), 'wholeBranch is not {finalClass}')
-  need(Array.isArray(s.adjudication) && s.adjudication.every((a) => typeof a?.item === 'string' && typeof a.locator === 'string' && typeof a.excerpt === 'string' && [...a.excerpt].length <= EXCERPT_MAX), `adjudication is malformed or an excerpt is over ${EXCERPT_MAX} characters`)
-  for (const key of ['notes', 'invalid', 'notDone']) need(Array.isArray(s[key]) && s[key].every((x) => typeof x === 'string'), `${key} is not a list of strings`)
-  return problems
-}
-
 // ---------- RESULTS.md ----------
 
 const cell = (v) => String(v).replaceAll('|', '\\|').replace(/\r?\n/g, ' ')
 const fmt = (v, digits = 0) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(digits) : 'n/a')
 const pct = (v) => (typeof v === 'number' ? `${(v * 100).toFixed(1)}%` : 'n/a')
 const securitySeedsOf = (s) => s.passes.flatMap((p) => p.seeds.filter((x) => x.class === 'security'))
-/** §12: a security seed the implementer removed before the lens started counts as found. */
-export const securityHeld = (x) => x.found || x.caughtByImplementer
 
 /** The Client line's ambient sizes (build/289), in `AMBIENT_LISTS` order. */
 const AMBIENT_LABELS = { skills: 'skills', agents: 'agents', slashCommands: 'slash commands', plugins: 'plugins', mcpServers: 'MCP servers' }
@@ -474,10 +400,13 @@ function checkReferences(summary, reference) {
   }
 }
 
+const missedBy = (ref, id) => ref.passes.some((p) => p.seeds.some((x) => x.id === id && !securityHeld(x)))
+
 /** The per-run check of each §12 row against the baseline references, where the rule binds per run. */
 function perRunChecks(s, t, reference) {
   const out = {}
-  const pooled = 'pooled — decided in COMPARISON-v1'
+  const { comparison } = protocolNames(s.protocol.path)
+  const pooled = `pooled — decided in ${comparison}`
   for (const id of ROW_IDS) out[id] = { verdict: pooled, baseline: '' }
   const refLoop = median(reference.map((r) => r.totals.loopCharsPerPass))
   const ratio = refLoop === 0 ? (s.totals.loopCharsPerPass === 0 ? 0 : Infinity) : s.totals.loopCharsPerPass / refLoop
@@ -486,7 +415,6 @@ function perRunChecks(s, t, reference) {
     verdict: `${loopCharsHeld(s.totals.loopCharsPerPass, reference.map((r) => r.totals.loopCharsPerPass), t.loopCharsRatioMax) ? 'PASS' : 'FAIL'} — ${fmt(ratio, 3)} × the baseline median (≤ ${t.loopCharsRatioMax})`,
     baseline: `median ${fmt(refLoop)} per pass over ${reference.length} run(s)`,
   }
-  const missedBy = (ref, id) => ref.passes.some((p) => p.seeds.some((x) => x.id === id && !securityHeld(x)))
   const exempt = []
   const missed = []
   for (const x of securitySeedsOf(s)) {
@@ -499,7 +427,7 @@ function perRunChecks(s, t, reference) {
   }
   const valid = s.compactionSamples.filter((c) => c.valid)
   out['compaction-loss'] = {
-    verdict: valid.length === 0 ? `no valid sample in this run — the minimum of ${t.minValidSamplesChanged} is pooled, decided in COMPARISON-v1` : `${valid.every((c) => c.lost <= t.lossPerValidSample) ? 'PASS' : 'FAIL'} — lost ${sum(valid, (c) => c.lost)} over ${valid.length} valid sample(s)`,
+    verdict: valid.length === 0 ? `no valid sample in this run — the minimum of ${t.minValidSamplesChanged} is pooled, decided in ${comparison}` : `${valid.every((c) => c.lost <= t.lossPerValidSample) ? 'PASS' : 'FAIL'} — lost ${sum(valid, (c) => c.lost)} over ${valid.length} valid sample(s)`,
     baseline: '',
   }
   const found = sum(reference, (r) => r.totals.recall.found)
@@ -520,7 +448,8 @@ function perRunChecks(s, t, reference) {
  * each §12 threshold (a per-run column only where baseline references are supplied); what stands
  * beside each figure; the per-pass table; seeds; decoys; compaction samples; adjudication; then the
  * closing line and `Not done:`. `reference` is the baseline scored summaries a changed run is read
- * against; the verdict of record is always COMPARISON-v1's.
+ * against; the verdict of record is always the comparison's of the summary's protocol
+ * (`COMPARISON-v1` for REPLAY-v1, `protocolNames`).
  */
 export function renderResults(summary, thresholds, reference = []) {
   const s = summary
@@ -531,6 +460,7 @@ export function renderResults(summary, thresholds, reference = []) {
   const lines = []
   const push = (...xs) => lines.push(...xs)
   const pilot = s.kind === 'pilot'
+  const names = protocolNames(s.protocol.path)
 
   push(pilot ? `# Replay run \`${s.runId}\` — pilot — not scored (${s.shape} shape)` : `# Replay run \`${s.runId}\` — ${s.shape} shape, ${s.kind}`, '')
   if (pilot) {
@@ -540,7 +470,7 @@ export function renderResults(summary, thresholds, reference = []) {
     )
   }
   push(
-    `- Protocol: REPLAY-v1 (\`${s.protocol.path}\`), sha256 \`${s.protocol.sha256}\`, read at commit \`${s.protocol.commit}\`.`,
+    `- Protocol: ${names.protocol} (\`${s.protocol.path}\`), sha256 \`${s.protocol.sha256}\`, read at commit \`${s.protocol.commit}\`.`,
     `- Instrument: commit \`${s.instrument.commit}\`, ${Object.keys(s.instrument.files).length} file(s) hashed.`,
     `- CLI: commit \`${s.cli.commit ?? 'unrecorded'}\`, version ${s.cli.version ?? 'unrecorded'}, tarball sha256 \`${s.cli.tarballSha256 ?? 'unrecorded'}\`.`,
     `- Client: Claude Code ${s.client.version ?? 'unrecorded'} (the init event reads ${s.client.initVersion ?? 'no version'}; ambient lists: ${ambientSizes(s.client.ambient)}), binary sha256 \`${s.client.binarySha256 ?? 'unrecorded'}\`; orchestrator model \`${s.client.orchestratorModel ?? 'unrecorded'}\` (pin \`${s.models?.pin ?? 'unrecorded'}\`); models answering: ${s.client.resolvedModels.map((x) => `\`${x}\``).join(', ') || 'none recorded'}.`,
@@ -589,7 +519,7 @@ export function renderResults(summary, thresholds, reference = []) {
   const perRun = refs.length > 0 ? perRunChecks(s, t, refs) : null
   push('## Metrics beside their thresholds (§12)', '')
   if (perRun) {
-    push(`The per-run check reads this run against ${refs.length} baseline scored run(s): ${refs.map((r) => `\`${r.runId}\``).join(', ')}. The verdict of record is COMPARISON-v1's.`, '')
+    push(`The per-run check reads this run against ${refs.length} baseline scored run(s): ${refs.map((r) => `\`${r.runId}\``).join(', ')}. The verdict of record is ${names.comparison}'s.`, '')
     push('| Row | Threshold | This run | Baseline reference | Per-run check |', '|---|---|---|---|---|')
     for (const id of ROW_IDS) push(`| \`${id}\` | ${cell(rows[id].threshold)} | ${cell(rows[id].value)} | ${cell(perRun[id].baseline || '—')} | ${cell(perRun[id].verdict)} |`)
   } else {
@@ -695,11 +625,13 @@ export function renderResults(summary, thresholds, reference = []) {
 /**
  * Every problem of a runs folder: each `<date>-replay-<n>/` holds a `summary.json` that conforms,
  * names its own folder, was scored under the given protocol's sha256 at the committed protocol
- * path, and a `RESULTS.md`; neither file carries a home or temp path shape or a leak-gate hit;
- * every run shares one instrument commit; and no shape holds more invalid runs than §10's
- * replacements. `invalid` lists each shape's invalid runs, reported whether or not they pass.
+ * path of `version`, and a `RESULTS.md`; neither file carries a home or temp path shape or a
+ * leak-gate hit; every run shares one instrument commit; and no shape holds more invalid runs than
+ * §10's replacements. `invalid` lists each shape's invalid runs, reported whether or not they pass.
+ * With no `version`, it is the one whose committed path `protocolPath` is, else v1.
  */
-export function checkRuns(runsDir, protocolPath) {
+export function checkRuns(runsDir, protocolPath, version = versionOfPath(protocolPathOf(protocolPath)) ?? DEFAULT_PROTOCOL) {
+  const expectedPath = PROTOCOLS[version].path
   const protocolSha = sha256(readFileSync(protocolPath))
   const problems = []
   const invalid = Object.fromEntries(SHAPES.map((shape) => [shape, []]))
@@ -741,13 +673,13 @@ export function checkRuns(runsDir, protocolPath) {
     for (const p of validateSummary(s)) problems.push(`${name}: summary.json ${p}`)
     if (s?.runId !== name) problems.push(`${name}: summary.json names run ${JSON.stringify(s?.runId ?? null)}`)
     if (s?.protocol?.sha256 !== protocolSha) problems.push(`${name}: protocol sha256 ${s?.protocol?.sha256 ?? 'absent'} is not the sha256 of the protocol (${protocolSha})`)
-    if (s?.protocol?.path !== DEFAULT_PROTOCOL) problems.push(`${name}: protocol path ${JSON.stringify(s?.protocol?.path ?? null)} is not ${DEFAULT_PROTOCOL}`)
+    if (s?.protocol?.path !== expectedPath) problems.push(`${name}: protocol path ${JSON.stringify(s?.protocol?.path ?? null)} is not ${expectedPath}`)
     if (typeof s?.instrument?.commit === 'string') commits.add(s.instrument.commit)
     if (Array.isArray(s?.invalid) && s.invalid.length > 0 && SHAPES.includes(s.shape)) invalid[s.shape].push(`${name} (${s.kind})`)
     for (const shape of forbiddenIn(summaryText)) problems.push(`${name}/summary.json carries "${shape}"`)
     for (const shape of forbiddenIn(results ?? '')) problems.push(`${name}/RESULTS.md carries "${shape}"`)
-    for (const rule of leakRulesIn(summaryText, committedPath(name, 'summary.json'))) problems.push(`${name}/summary.json matches the leak gate's rule ${rule}`)
-    for (const rule of leakRulesIn(results ?? '', committedPath(name, 'RESULTS.md'))) problems.push(`${name}/RESULTS.md matches the leak gate's rule ${rule}`)
+    for (const rule of leakRulesIn(summaryText, committedPath(version, name, 'summary.json'))) problems.push(`${name}/summary.json matches the leak gate's rule ${rule}`)
+    for (const rule of leakRulesIn(results ?? '', committedPath(version, name, 'RESULTS.md'))) problems.push(`${name}/RESULTS.md matches the leak gate's rule ${rule}`)
   }
   if (commits.size > 1) problems.push(`${commits.size} instrument commits across the runs: ${[...commits].toSorted().join(', ')}`)
   for (const shape of SHAPES) {
@@ -790,6 +722,33 @@ function protocolPathOf(path) {
   return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel) ? rel.split(/[\\/]/).join('/') : basename(path)
 }
 
+/** An error the CLI reports with exit 2, the usage appended: the command line itself is wrong. */
+const usageError = (message) => Object.assign(new Error(`${message}\n${USAGE}`), { exitCode: 2 })
+
+/**
+ * `--protocol` as given: a version of `PROTOCOLS` (read from this checkout), or a protocol file
+ * path; absent, v1's, so v1's recorded commands keep working. `version` is null for a path until
+ * `committedVersion` reads it. An unknown version token is a usage error.
+ */
+function protocolOption(value) {
+  if (value === undefined) return { file: join(REPO_ROOT, PROTOCOLS[DEFAULT_PROTOCOL].path), version: DEFAULT_PROTOCOL }
+  if (isProtocolVersion(value)) return { file: join(REPO_ROOT, PROTOCOLS[value].path), version: value }
+  if (/^v\d+$/.test(value)) throw usageError(`--protocol ${value} is not a protocol version: ${Object.keys(PROTOCOLS).join(' or ')}, or the committed protocol path`)
+  return { file: value, version: null }
+}
+
+/**
+ * The version whose committed protocol path the option's file is, or the refusal (build/233) naming
+ * the committed path it should have been: the one of its file name, else v1's.
+ */
+function committedVersion(option) {
+  const rel = protocolPathOf(option.file)
+  const version = versionOfPath(rel)
+  if (version !== null) return version
+  const meant = Object.values(PROTOCOLS).find((entry) => basename(entry.path) === basename(rel)) ?? PROTOCOLS[DEFAULT_PROTOCOL]
+  throw new Error(`--protocol must be the committed ${meant.path}, not ${rel}`)
+}
+
 function readJson(path, what) {
   try {
     return JSON.parse(readFileSync(path, 'utf8'))
@@ -799,12 +758,13 @@ function readJson(path, what) {
 }
 
 function runCommand(o) {
-  for (const key of ['measurement', 'runJson', 'protocol', 'runId', 'kind', 'outDir']) if (!o[key]) throw new Error(`--${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)} is required.\n${USAGE}`)
+  const protocol = protocolOption(o.protocol)
+  for (const key of ['measurement', 'runJson', 'runId', 'kind', 'outDir']) if (!o[key]) throw new Error(`--${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)} is required.\n${USAGE}`)
   if (!RUN_ID.test(o.runId)) throw new Error(`--run-id ${JSON.stringify(o.runId)} does not match <YYYY-MM-DD>-replay-<n> (§11: never -run-<n>)`)
   if (o.kind !== 'pilot' && o.kind !== 'scored') throw new Error(`--kind ${JSON.stringify(o.kind)} is not pilot or scored`)
   if (basename(resolve(o.outDir)) !== o.runId) throw new Error(`--out-dir must end in the run id ${o.runId} (§11)`)
   if (existsSync(o.outDir)) throw new Error(`--out-dir already exists: a run is scored once, into a directory of its own (${o.runId})`)
-  const protocolBytes = readFileSync(o.protocol)
+  const protocolBytes = readFileSync(protocol.file)
   const protocolSha = sha256(protocolBytes)
   const runJson = readJson(o.runJson, '--run-json')
   const declared = runJson?.instrument?.protocolSha256
@@ -820,8 +780,8 @@ function runCommand(o) {
   const references = o.reference.map((path, k) => readJson(path, `--reference ${k + 1}`))
   if (references.length > 0 && o.kind === 'pilot') throw new Error('a pilot is not scored: it takes no --reference')
 
-  const protocolPath = protocolPathOf(o.protocol)
-  if (protocolPath !== DEFAULT_PROTOCOL) throw new Error(`--protocol must be the committed ${DEFAULT_PROTOCOL}, not ${protocolPath}`)
+  const version = committedVersion(protocol)
+  const protocolPath = PROTOCOLS[version].path
   const summary = summarize(measurement, runJson, protocolSha, { protocolPath, runId: o.runId, kind: o.kind })
   const problems = validateSummary(summary)
   if (problems.length > 0) throw new Error(`the summary does not conform: ${problems.join('; ')}`)
@@ -830,8 +790,8 @@ function runCommand(o) {
   const leaks = [
     ...forbiddenIn(summaryText).map((x) => `summary.json carries "${x}" after redaction`),
     ...forbiddenIn(results).map((x) => `RESULTS.md carries "${x}" after redaction`),
-    ...leakRulesIn(summaryText, committedPath(o.runId, 'summary.json')).map((rule) => `summary.json matches the leak gate's rule ${rule}`),
-    ...leakRulesIn(results, committedPath(o.runId, 'RESULTS.md')).map((rule) => `RESULTS.md matches the leak gate's rule ${rule}`),
+    ...leakRulesIn(summaryText, committedPath(version, o.runId, 'summary.json')).map((rule) => `summary.json matches the leak gate's rule ${rule}`),
+    ...leakRulesIn(results, committedPath(version, o.runId, 'RESULTS.md')).map((rule) => `RESULTS.md matches the leak gate's rule ${rule}`),
   ]
   if (leaks.length > 0) throw new Error(`nothing written: ${leaks.join('; ')}`)
   writeRunFolder(o.outDir, [['summary.json', summaryText], ['RESULTS.md', results]])
@@ -839,9 +799,14 @@ function runCommand(o) {
   process.stdout.write(`[replay] scored ${summary.runId} (${summary.shape}, ${summary.kind}): recall ${r.found}/${r.denominator}, loop chars/pass ${Math.round(summary.totals.loopCharsPerPass)}, ${summary.invalid.length === 0 ? 'valid' : `INVALID (${summary.invalid.length})`}\n`)
 }
 
+/**
+ * `check`: the runs folder (the version's own by default) against the protocol. A protocol file
+ * outside the committed paths is read as v1's, as it always was; `run` and `compare` refuse one.
+ */
 function checkCommand(o) {
-  if (!o.runs || !o.protocol) throw new Error(`check needs --runs and --protocol.\n${USAGE}`)
-  const { runs, problems, invalid } = checkRuns(o.runs, o.protocol)
+  const protocol = protocolOption(o.protocol)
+  const version = protocol.version ?? versionOfPath(protocolPathOf(protocol.file)) ?? DEFAULT_PROTOCOL
+  const { runs, problems, invalid } = checkRuns(o.runs ?? join(REPO_ROOT, PROTOCOLS[version].runs), protocol.file, version)
   if (problems.length > 0) {
     process.stderr.write(`[replay] check failed over ${runs} run folder(s):\n${problems.map((p) => `  - ${p}`).join('\n')}\n[replay] ${invalidLine(invalid)}\n`)
     process.exitCode = 1
@@ -851,17 +816,19 @@ function checkCommand(o) {
 }
 
 /**
- * `compare`: the summaries and the committed protocol in, COMPARISON-v1.md out (`compare.mjs`).
- * Exits 0 on a merge gate of PASS, 2 on FAIL with the file written, 1 on a refusal with nothing
- * written — so no caller reads a FAIL as success.
+ * `compare`: the summaries and the committed protocol in, the protocol's comparison out
+ * (`COMPARISON-v1.md` or `COMPARISON-v2.md`, `compare.mjs`). Exits 0 on a merge gate of PASS, 2 on
+ * FAIL with the file written, 1 on a refusal with nothing written — so no caller reads a FAIL as
+ * success. With no summary at all, every row the shapes feed is NOT-EVALUATED and the gate FAILs.
  */
 function compareCommand(o) {
-  if (o.baseline.length === 0 || o.changed.length === 0 || !o.protocol || !o.out) throw new Error(`compare needs --baseline, --changed, --protocol and --out.\n${USAGE}`)
-  const protocolPath = protocolPathOf(o.protocol)
-  if (protocolPath !== DEFAULT_PROTOCOL) throw new Error(`--protocol must be the committed ${DEFAULT_PROTOCOL}, not ${protocolPath}`)
-  if (basename(resolve(o.out)) !== COMPARISON_FILE) throw new Error(`--out must be named ${COMPARISON_FILE} (§11: ${COMPARISON_PATH})`)
-  if (existsSync(o.out)) throw new Error(`--out already exists: the comparison is written once (${COMPARISON_FILE})`)
-  const protocolBytes = readFileSync(o.protocol)
+  const protocol = protocolOption(o.protocol)
+  if (!o.out) throw new Error(`compare needs --out.\n${USAGE}`)
+  const entry = PROTOCOLS[committedVersion(protocol)]
+  const comparisonFile = basename(entry.comparison)
+  if (basename(resolve(o.out)) !== comparisonFile) throw new Error(`--out must be named ${comparisonFile} (§11: ${entry.comparison})`)
+  if (existsSync(o.out)) throw new Error(`--out already exists: the comparison is written once (${comparisonFile})`)
+  const protocolBytes = readFileSync(protocol.file)
   const protocolSha = sha256(protocolBytes)
   const thresholds = parseThresholds(protocolBytes.toString('utf8'))
   const read = (paths, flag) => paths.map((path, k) => readJson(path, `--${flag} ${k + 1}`))
@@ -873,12 +840,14 @@ function compareCommand(o) {
   }
   for (const s of [...baseline, ...changed, ...Object.values(pilots)]) {
     if (s?.protocol?.sha256 !== protocolSha) throw new Error(`${s?.runId ?? 'a summary'} was scored under protocol sha256 ${s?.protocol?.sha256 ?? 'absent'}, not the sha256 of the protocol (${protocolSha})`)
+    // One protocol per comparison: runs of v1 and v2 never enter one file, whatever their bytes.
+    if (s?.protocol?.path !== entry.path) throw new Error(`${s?.runId ?? 'a summary'} was scored under protocol path ${s?.protocol?.path ?? 'absent'}, not ${entry.path}`)
   }
-  const result = compare(baseline, changed, thresholds, pilots)
+  const result = compare(baseline, changed, thresholds, pilots, { protocol: { path: entry.path, sha256: protocolSha } })
   const text = renderComparison(result, thresholds)
   const leaks = [
-    ...forbiddenIn(text).map((x) => `${COMPARISON_FILE} carries "${x}"`),
-    ...leakRulesIn(text, COMPARISON_PATH).map((rule) => `${COMPARISON_FILE} matches the leak gate's rule ${rule}`),
+    ...forbiddenIn(text).map((x) => `${comparisonFile} carries "${x}"`),
+    ...leakRulesIn(text, entry.comparison).map((rule) => `${comparisonFile} matches the leak gate's rule ${rule}`),
   ]
   if (leaks.length > 0) throw new Error(`nothing written: ${leaks.join('; ')}`)
   writeFileSync(o.out, text, { flag: 'wx' })
@@ -888,13 +857,18 @@ function compareCommand(o) {
 
 // ---------- CLI ----------
 
+const PROTOCOL_FLAG = `[--protocol ${Object.keys(PROTOCOLS).join('|')}|<REPLAY-vN.md>]`
+
 export const USAGE = [
-  'Usage: node scripts/replay/score.mjs run --measurement <m.json> --run-json <run.json> --protocol <REPLAY-v1.md>',
-  '         --run-id <YYYY-MM-DD>-replay-<n> --kind pilot|scored --out-dir <evals/replay/runs/<run-id>> [--reference <baseline summary.json>]…',
-  '       node scripts/replay/score.mjs check --runs <evals/replay/runs> --protocol <REPLAY-v1.md>',
+  `Usage: node scripts/replay/score.mjs run --measurement <m.json> --run-json <run.json> ${PROTOCOL_FLAG}`,
+  '         --run-id <YYYY-MM-DD>-replay-<n> --kind pilot|scored --out-dir <runs folder>/<run-id> [--reference <baseline summary.json>]…',
+  `       node scripts/replay/score.mjs check [--runs <runs folder>] ${PROTOCOL_FLAG}`,
   '       node scripts/replay/score.mjs compare --baseline <summary.json>… --changed <summary.json>… [--pilot-baseline <summary.json>]',
-  '         [--pilot-changed <summary.json>] --protocol <REPLAY-v1.md> --out <evals/replay/COMPARISON-v1.md>',
+  `         [--pilot-changed <summary.json>] ${PROTOCOL_FLAG} --out <COMPARISON-vN.md>`,
   '         (exit 0: merge gate PASS; 2: FAIL, the file written; 1: refused, nothing written)',
+  `  --protocol defaults to ${DEFAULT_PROTOCOL}; each version's paths (scripts/replay/protocols.mjs):`,
+  ...Object.entries(PROTOCOLS).map(([v, e]) => `    ${v}: ${e.path}, runs ${e.runs}, comparison ${e.comparison}`),
+  '  An unknown --protocol version exits 2 with this usage, and nothing is written.',
 ].join('\n')
 
 /** The flags that repeat, each collected into a list. */
@@ -940,6 +914,6 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === SELF) {
     main(process.argv.slice(2))
   } catch (error) {
     process.stderr.write(`[replay] ${error.message}\n`)
-    process.exitCode = 1
+    process.exitCode = error.exitCode ?? 1
   }
 }
