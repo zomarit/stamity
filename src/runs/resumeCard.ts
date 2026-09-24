@@ -4,6 +4,7 @@ import { INVISIBLE_SMUGGLING_CHARS, normalizeForDenyScan } from "../denyscan/den
 import { SESSION_START_SCREEN } from "../hooks/scripts.ts";
 import {
   CARD_FIELD_MAX,
+  CARD_LEDGER_TOO_LARGE,
   CARD_LEDGER_UNREADABLE,
   CARD_LIST_MAX,
   CARD_MAX_CHARS,
@@ -11,12 +12,14 @@ import {
   CARD_NOT_RECORDED,
   CARD_NOT_REPORT_NAMED,
   CARD_RECOVERY_NOTE,
+  CARD_REPORTS_NOT_CHECKED,
   FENCE_CLOSE_PATTERN,
   FINDINGS_FENCE,
   fenceOpenPattern,
   GIT_METADATA_MAX_BYTES,
   IN_PROGRESS_PATTERN,
   LEDGER_FILE,
+  LEDGER_READ_MAX_BYTES,
   RECORD_FILE,
   RECORD_HEAD_LINES,
   RECORD_HEAD_READ_BYTES,
@@ -25,6 +28,7 @@ import {
   RECORD_STATUS_PATTERN,
   REPORT_NAME_PATTERN,
   REPORT_READ_MAX_BYTES,
+  REPORT_READS_MAX,
   REPORTS_DIR,
   RUN_ID_PATTERN,
   RUNS_SEGMENTS,
@@ -81,11 +85,19 @@ export interface ResumeCard {
   readonly unreadableLedgerLines: number;
   /**
    * A ledger is there but was not read (a link, anything else that is not a
-   * regular file, or a read that fails); the card says so instead of a count.
+   * regular file, one over LEDGER_READ_MAX_BYTES, or a read that fails); the
+   * card says so instead of a count.
    */
   readonly ledgerUnreadable: boolean;
+  /**
+   * The unread ledger was over LEDGER_READ_MAX_BYTES, so the card says it is too
+   * large rather than unreadable. Implies `ledgerUnreadable`.
+   */
+  readonly ledgerTooLarge: boolean;
   /** `.md` files in `reports/` whose names are not report names: counted, never listed. */
   readonly notReportNamed: number;
+  /** Unledgered reports past the first REPORT_READS_MAX: counted, never read, never taken as clean. */
+  readonly reportsNotChecked: number;
 }
 
 const FINDINGS_OPEN = fenceOpenPattern(FINDINGS_FENCE);
@@ -215,8 +227,10 @@ function runsDirOf(rootDir: string): string {
 
 /**
  * The lexicographically greatest run folder whose record head says it is in
- * progress, or null. A linked runs folder, a linked run folder, a name that is
- * not a run id and a record that is a link are all passed over.
+ * progress, or null. Names are walked newest first by code-unit order and the
+ * walk stops at the first run in progress, so no older record head is read. A
+ * linked runs folder, a linked run folder, a name that is not a run id and a
+ * record that is a link are all passed over.
  */
 export function findInProgressRun(rootDir: string): string | null {
   const runsDir = runsDirOf(rootDir);
@@ -224,15 +238,13 @@ export function findInProgressRun(rootDir: string): string | null {
   if (!realDir(runsDir)) return null;
   const entries = listDir(runsDir);
   if (entries === null) return null;
-  let chosen: string | null = null;
-  for (const entry of entries) {
+  const runs = entries
     // A link to a directory is not a directory here: a run is never followed out of the tree.
-    if (!entry.isDirectory() || !RUN_ID_PATTERN.test(entry.name)) continue;
-    const head = readRecordHeadFile(join(runsDir, entry.name, RECORD_FILE));
-    if (head === null || !head.inProgress) continue;
-    if (chosen === null || entry.name > chosen) chosen = entry.name;
-  }
-  return chosen;
+    .filter((entry) => entry.isDirectory() && RUN_ID_PATTERN.test(entry.name))
+    .map((entry) => entry.name)
+    .toSorted()
+    .toReversed();
+  return runs.find((run) => readRecordHeadFile(join(runsDir, run, RECORD_FILE))?.inProgress === true) ?? null;
 }
 
 interface LedgerRead {
@@ -241,24 +253,33 @@ interface LedgerRead {
   readonly unreadable: number;
   /** The ledger is there but was not read; an absent ledger is not this. */
   readonly failed: boolean;
+  /** Not read because it is over LEDGER_READ_MAX_BYTES; `failed` is set too. */
+  readonly tooLarge: boolean;
 }
 
 /**
  * Open row ids in file order, every report path a row carries, and the lines
  * that are not rows. `failed` when a ledger is there but is not read — a link,
- * anything else that is not a regular file, or a read that fails — so the card
- * never counts it as empty; an absent ledger is a run with no rows yet.
+ * anything else that is not a regular file, one over LEDGER_READ_MAX_BYTES
+ * (`tooLarge` too), or a read that fails — so the card never counts it as
+ * empty; an absent ledger is a run with no rows yet. An unread ledger ledgers
+ * no report.
  */
 function readLedger(path: string): LedgerRead {
-  const read: LedgerRead = { open: [], ledgered: new Set(), unreadable: 0, failed: false };
+  const read: LedgerRead = { open: [], ledgered: new Set(), unreadable: 0, failed: false, tooLarge: false };
   let isFile: boolean;
+  let size: number;
   try {
-    isFile = lstatSync(path).isFile();
+    const stats = lstatSync(path);
+    isFile = stats.isFile();
+    size = stats.size;
   } catch (error) {
     // ENOENT is no ledger yet; any other lstat failure is one that cannot be read.
     return { ...read, failed: (error as NodeJS.ErrnoException).code !== "ENOENT" };
   }
   if (!isFile) return { ...read, failed: true };
+  // Too large to read whole, and no part of it can stand for the rest: not read at all (inbox row 229).
+  if (size > LEDGER_READ_MAX_BYTES) return { ...read, failed: true, tooLarge: true };
   let raw: string;
   try {
     raw = readFileSync(path, "utf8");
@@ -305,26 +326,32 @@ interface ReportsRead {
   readonly listed: string[];
   /** `.md` files whose names are not report names. */
   readonly other: number;
+  /** Unledgered report-named files past the first REPORT_READS_MAX, not checked. */
+  readonly notChecked: number;
 }
 
 /**
  * Reports that hold findings no ledger row points at, as repo-relative paths,
- * and the count of `.md` files whose names are not report names. A report too
+ * the count of `.md` files whose names are not report names, and the count of
+ * reports past the first REPORT_READS_MAX that were not checked. A report too
  * large to read, or one that cannot be read, is listed: its findings cannot be
  * ruled out. Any other name is counted and never listed, because its text is
  * whatever the writer chose. A linked reports folder is not read at all.
  */
 function unledgeredReports(runDir: string, runId: string, ledgered: ReadonlySet<string>): ReportsRead {
+  const none: ReportsRead = { listed: [], other: 0, notChecked: 0 };
   const reportsDir = join(runDir, REPORTS_DIR);
-  if (!realDir(reportsDir)) return { listed: [], other: 0 };
+  if (!realDir(reportsDir)) return none;
   const entries = listDir(reportsDir);
-  if (entries === null) return { listed: [], other: 0 };
+  if (entries === null) return none;
   const names = entries
     .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
     .map((entry) => entry.name)
     .toSorted();
   const out: string[] = [];
   let other = 0;
+  let checked = 0;
+  let notChecked = 0;
   for (const name of names) {
     if (!REPORT_NAME_PATTERN.test(name)) {
       other += 1;
@@ -332,6 +359,12 @@ function unledgeredReports(runDir: string, runId: string, ledgered: ReadonlySet<
     }
     const rel = [...RUNS_SEGMENTS, runId, REPORTS_DIR, name].join("/");
     if (ledgered.has(rel)) continue;
+    // Past the cap a report is counted, never read, and never taken as clean.
+    if (checked >= REPORT_READS_MAX) {
+      notChecked += 1;
+      continue;
+    }
+    checked += 1;
     const path = join(reportsDir, name);
     let size: number;
     try {
@@ -356,7 +389,7 @@ function unledgeredReports(runDir: string, runId: string, ledgered: ReadonlySet<
     }
     if (hasFindings(raw)) out.push(rel);
   }
-  return { listed: out, other };
+  return { listed: out, other, notChecked };
 }
 
 /** A worktree HEAD as the branch it names. */
@@ -465,11 +498,16 @@ function renderAt(
   const invocation = flat(parts.invocation ?? "");
   const other = parts.notReportNamed ?? 0;
   const otherPart = other > 0 ? `  ·  ${CARD_NOT_REPORT_NAMED}: ${other}` : "";
+  const notChecked = parts.reportsNotChecked ?? 0;
+  const notCheckedPart = notChecked > 0 ? `, ${CARD_REPORTS_NOT_CHECKED}: ${notChecked}` : "";
+  let ledger = `${parts.openRowIds.length} open rows${listPart(parts.openRowIds, k)}`;
+  if (parts.ledgerUnreadable === true) ledger = CARD_LEDGER_UNREADABLE;
+  if (parts.ledgerTooLarge === true) ledger = CARD_LEDGER_TOO_LARGE;
   return [
     `stamity resume card — run ${parts.runId} (as of ${now.toISOString().slice(0, 16)}Z)`,
     `plan: ${plan === "" ? CARD_NOT_RECORDED : plan}  ·  invocation: ${invocation === "" ? CARD_NOT_RECORDED : invocation}`,
-    `ledger: ${parts.ledgerUnreadable === true ? CARD_LEDGER_UNREADABLE : `${parts.openRowIds.length} open rows${listPart(parts.openRowIds, k)}`}  ·  ${CARD_RECOVERY_NOTE}`,
-    `reports without a ledger row: ${parts.unledgeredReports.length}${listPart(parts.unledgeredReports, k)}${otherPart}`,
+    `ledger: ${ledger}  ·  ${CARD_RECOVERY_NOTE}`,
+    `reports without a ledger row: ${parts.unledgeredReports.length}${listPart(parts.unledgeredReports, k)}${notCheckedPart}${otherPart}`,
     `lanes: ${parts.lanes.length}${listPart(parts.lanes, k)}`,
     CARD_NEXT_LINE,
   ];
@@ -491,6 +529,10 @@ export function renderResumeCard(
     readonly ledgerUnreadable?: boolean;
     /** `.md` files not report-named; the reports line counts them when there are any. */
     readonly notReportNamed?: number;
+    /** The ledger was over LEDGER_READ_MAX_BYTES: the ledger line says it is too large, whatever else is set. */
+    readonly ledgerTooLarge?: boolean;
+    /** Reports past REPORT_READS_MAX; the reports line appends `, not checked: <n>` after its list. */
+    readonly reportsNotChecked?: number;
   },
   now: Date,
 ): string[] {
@@ -553,7 +595,9 @@ export function collectResumeCard(opts: {
       unledgeredReports: unledgered,
       lanes,
       ledgerUnreadable: ledger.failed,
+      ledgerTooLarge: ledger.tooLarge,
       notReportNamed: reportsRead.other,
+      reportsNotChecked: reportsRead.notChecked,
     },
     opts.now,
   );
@@ -579,6 +623,8 @@ export function collectResumeCard(opts: {
     listsWithheld: listsWithheld === "" ? null : listsWithheld,
     unreadableLedgerLines: ledger.unreadable,
     ledgerUnreadable: ledger.failed,
+    ledgerTooLarge: ledger.tooLarge,
     notReportNamed: reportsRead.other,
+    reportsNotChecked: reportsRead.notChecked,
   };
 }

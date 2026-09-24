@@ -497,6 +497,8 @@ const CARD_IN_PROGRESS = new RegExp("\\bin progress\\b", "i");
 const CARD_HEAD_LINES = 15;
 const CARD_HEAD_READ_BYTES = 65536;
 const CARD_REPORT_MAX_BYTES = 1048576;
+const CARD_REPORT_READS_MAX = 256;
+const CARD_LEDGER_MAX_BYTES = 4194304;
 const CARD_GIT_MAX_BYTES = 4096;
 const CARD_MAX_CHARS = 2000;
 const CARD_LIST_MAX = 10;
@@ -506,6 +508,8 @@ const CARD_RECOVERY_NOTE = "the ledger is the recovery point";
 const CARD_NEXT_LINE = "next: read the open rows and the listed reports before dispatching anything";
 const CARD_NOT_RECORDED = "(not recorded)";
 const CARD_LEDGER_UNREADABLE = "could not be read";
+const CARD_LEDGER_TOO_LARGE = "too large to read (over 4 MiB)";
+const CARD_REPORTS_NOT_CHECKED = "not checked";
 const CARD_NOT_REPORT_NAMED = "not report-named";
 
 /** A regular file, never through a link. Absent or unreadable reads as not one. */
@@ -601,8 +605,9 @@ function cardRecordHead(path) {
 /**
  * Open row ids in file order, and every report path a row carries. Bad lines
  * are skipped. "failed" when a ledger is there but is not read — a link, anything
- * else that is not a regular file, or a read that fails — so the card never
- * counts it as empty; an absent ledger is a run with no rows yet.
+ * else that is not a regular file, one over CARD_LEDGER_MAX_BYTES ("tooLarge"
+ * too), or a read that fails — so the card never counts it as empty; an absent
+ * ledger is a run with no rows yet. An unread ledger ledgers no report.
  */
 function cardLedger(path) {
   const open = [];
@@ -612,15 +617,17 @@ function cardLedger(path) {
     stats = lstatSync(path);
   } catch (error) {
     // ENOENT is no ledger yet; any other lstat failure is one that cannot be read.
-    return { open, ledgered, failed: !(error && error.code === "ENOENT") };
+    return { open, ledgered, failed: !(error && error.code === "ENOENT"), tooLarge: false };
   }
-  if (!stats.isFile()) return { open, ledgered, failed: true };
+  if (!stats.isFile()) return { open, ledgered, failed: true, tooLarge: false };
+  // Too large to read whole, and no part of it can stand for the rest: not read at all.
+  if (stats.size > CARD_LEDGER_MAX_BYTES) return { open, ledgered, failed: true, tooLarge: true };
   let raw;
   try {
     raw = readFileSync(path, "utf8");
   } catch {
     // EACCES, EBUSY and the rest: there, but not read.
-    return { open, ledgered, failed: true };
+    return { open, ledgered, failed: true, tooLarge: false };
   }
   for (const line of raw.split(/\r?\n/)) {
     if (line.trim() === "") continue;
@@ -635,7 +642,7 @@ function cardLedger(path) {
     if (typeof row.id === "string" && row.state === "open") open.push(row.id);
     if (typeof row.report === "string") ledgered.add(row.report);
   }
-  return { open, ledgered, failed: false };
+  return { open, ledgered, failed: false, tooLarge: false };
 }
 
 /** Whether the first findings block holds at least one non-blank line before it closes. */
@@ -652,13 +659,14 @@ function cardHasFindings(raw) {
 
 /**
  * Reports that hold findings no ledger row points at, as repo-relative paths,
- * and the count of .md files whose names are not report names. A report too
- * large to read, or one that cannot be read, is listed: its findings cannot be
- * ruled out. Any other name is counted and never listed, because its text is
+ * the count of .md files whose names are not report names, and the count of
+ * reports past the first CARD_REPORT_READS_MAX that were not checked. A report
+ * too large to read, or one that cannot be read, is listed: its findings cannot
+ * be ruled out. Any other name is counted and never listed, because its text is
  * whatever the writer chose. A linked reports folder is not read at all.
  */
 function cardUnledgered(runDir, run, ledgered) {
-  const none = { listed: [], other: 0 };
+  const none = { listed: [], other: 0, notChecked: 0 };
   const reportsDir = join(runDir, CARD_REPORTS_DIR);
   if (!cardRealDir(reportsDir)) return none;
   let entries;
@@ -673,6 +681,8 @@ function cardUnledgered(runDir, run, ledgered) {
     .sort();
   const out = [];
   let other = 0;
+  let checked = 0;
+  let notChecked = 0;
   for (const name of names) {
     if (!CARD_REPORT_NAME.test(name)) {
       other += 1;
@@ -680,6 +690,12 @@ function cardUnledgered(runDir, run, ledgered) {
     }
     const rel = CARD_RUNS_REL + "/" + run + "/" + CARD_REPORTS_DIR + "/" + name;
     if (ledgered.has(rel)) continue;
+    // Past the cap a report is counted, never read, and never taken as clean.
+    if (checked >= CARD_REPORT_READS_MAX) {
+      notChecked += 1;
+      continue;
+    }
+    checked += 1;
     const path = join(runDir, CARD_REPORTS_DIR, name);
     let size;
     try {
@@ -703,7 +719,7 @@ function cardUnledgered(runDir, run, ledgered) {
     }
     if (cardHasFindings(raw)) out.push(rel);
   }
-  return { listed: out, other };
+  return { listed: out, other, notChecked };
 }
 
 /** A worktree HEAD as the branch it names. */
@@ -812,9 +828,15 @@ function cardRender(run, head, ledger, reports, lanes, nowMs, k) {
     "stamity resume card — run " + run + " (as of " + new Date(nowMs).toISOString().slice(0, 16) + "Z)",
     "plan: " + (plan === "" ? CARD_NOT_RECORDED : plan) +
       "  ·  invocation: " + (invocation === "" ? CARD_NOT_RECORDED : invocation),
-    "ledger: " + (ledger.failed ? CARD_LEDGER_UNREADABLE : open.length + " open rows" + cardList(open, k)) +
+    "ledger: " +
+      (ledger.tooLarge
+        ? CARD_LEDGER_TOO_LARGE
+        : ledger.failed
+          ? CARD_LEDGER_UNREADABLE
+          : open.length + " open rows" + cardList(open, k)) +
       "  ·  " + CARD_RECOVERY_NOTE,
     "reports without a ledger row: " + unledgered.length + cardList(unledgered, k) +
+      (reports.notChecked > 0 ? ", " + CARD_REPORTS_NOT_CHECKED + ": " + reports.notChecked : "") +
       (reports.other > 0 ? "  ·  " + CARD_NOT_REPORT_NAMED + ": " + reports.other : ""),
     "lanes: " + lanes.length + cardList(lanes, k),
     CARD_NEXT_LINE,
@@ -836,13 +858,21 @@ function resumeCardLines(rootDir, stateRoot, nowMs) {
   } catch {
     return null;
   }
+  // Newest first by code-unit order, stopping at the first run in progress: the
+  // same run the greatest in-progress name picks, for fewer record heads read.
+  // A link to a directory is not a directory here: a run is never followed out of the tree.
+  const runs = entries
+    .filter((entry) => entry.isDirectory() && CARD_RUN_ID.test(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+    .reverse();
   let chosen = null;
-  for (const entry of entries) {
-    // A link to a directory is not a directory here: a run is never followed out of the tree.
-    if (!entry.isDirectory() || !CARD_RUN_ID.test(entry.name)) continue;
-    const head = cardRecordHead(join(runsDir, entry.name, CARD_RECORD_FILE));
-    if (head === null || !head.inProgress) continue;
-    if (chosen === null || entry.name > chosen.run) chosen = { run: entry.name, head };
+  for (const run of runs) {
+    const head = cardRecordHead(join(runsDir, run, CARD_RECORD_FILE));
+    if (head !== null && head.inProgress) {
+      chosen = { run, head };
+      break;
+    }
   }
   if (chosen === null) return null;
 

@@ -92,6 +92,15 @@ function runFile(run: string, name: string): string {
   return `.stamity/runs/${run}/${name}`;
 }
 
+/** The ledger read cap, restated as a literal so the test pins the number, not the constant. */
+const LEDGER_CAP = 4_194_304;
+
+/** `rows` as a ledger of exactly `bytes` bytes, padded by one blank line the reader skips. */
+function ledgerOfBytes(rows: readonly string[], bytes: number): string {
+  const head = `${rows.join("\n")}\n`;
+  return `${head}${" ".repeat(bytes - Buffer.byteLength(head) - 1)}\n`;
+}
+
 /** The fixture of criterion (c): two open rows, one ledgered report, one unledgered, one empty, one lane. */
 async function seedDemo(): Promise<string> {
   const repo = getRepo();
@@ -273,6 +282,60 @@ describe("the session-start resume card", () => {
     const card = cardOf(start(script, COMPACT).stdout);
     expect(card[2]).toBe(`ledger: 2 open rows (${RUN}/a/1, ${RUN}/a/2)  ·  the ledger is the recovery point`);
     expect(card[3]).toBe(`reports without a ledger row: 1 (.stamity/runs/${RUN}/reports/big-reviewer-r1.md)`);
+  });
+
+  // Ledger rows build/32 and build/40 (plan 010, card-read-caps): the ledger
+  // was read whole whatever its size.
+  it("reads a ledger of exactly 4 MiB and refuses one a byte over, printing no open count", async () => {
+    const script = await placeScript();
+    const rows = [row(`${RUN}/a/1`, "open"), row(`${RUN}/a/2`, "open")];
+    await getRepo().seedFiles({ [runFile(RUN, "record.md")]: record(), [runFile(RUN, "ledger.jsonl")]: ledgerOfBytes(rows, LEDGER_CAP) });
+    const atCap = cardOf(start(script, COMPACT).stdout);
+    expect(atCap[2]).toBe(`ledger: 2 open rows (${RUN}/a/1, ${RUN}/a/2)  ·  the ledger is the recovery point`);
+
+    await getRepo().seedFiles({ [runFile(RUN, "ledger.jsonl")]: ledgerOfBytes(rows, LEDGER_CAP + 1) });
+    const over = cardOf(start(script, COMPACT).stdout);
+    expect(over).toHaveLength(6);
+    expect(over[2]).toBe("ledger: too large to read (over 4 MiB)  ·  the ledger is the recovery point");
+    expect(over.join("\n").length).toBeLessThanOrEqual(CARD_MAX_CHARS);
+  });
+
+  it("counts every report as unledgered when the ledger is too large to read, shrinking the list to fit", async () => {
+    const script = await placeScript();
+    const files: Record<string, string> = { [runFile(RUN, "record.md")]: record() };
+    const rows: string[] = [];
+    for (let i = 1; i <= 25; i += 1) {
+      const name = `u${String(i).padStart(2, "0")}-reviewer-r1.md`;
+      files[runFile(RUN, `reports/${name}`)] = reportWith([FINDING]);
+      // Every report is ledgered: a ledger the card could read would list none of them.
+      rows.push(row(`${RUN}/review/${i}`, "fixed", { report: `.stamity/runs/${RUN}/reports/${name}` }));
+    }
+    files[runFile(RUN, "ledger.jsonl")] = ledgerOfBytes(rows, LEDGER_CAP + 1);
+    await getRepo().seedFiles(files);
+
+    const card = cardOf(start(script, COMPACT).stdout);
+    expect(card[2]).toBe("ledger: too large to read (over 4 MiB)  ·  the ledger is the recovery point");
+    expect(card[3]).toMatch(/^reports without a ledger row: 25 \(.*… \+\d+ more\)$/);
+    expect(card.join("\n").length).toBeLessThanOrEqual(CARD_MAX_CHARS);
+
+    // The same reports under a ledger it can read: all 25 ledgered, none listed.
+    await getRepo().seedFiles({ [runFile(RUN, "ledger.jsonl")]: `${rows.join("\n")}\n` });
+    expect(cardOf(start(script, COMPACT).stdout)[3]).toBe("reports without a ledger row: 0");
+  });
+
+  it("reads at most 256 reports and counts the rest as not checked, never as clean", async () => {
+    const script = await placeScript();
+    const files: Record<string, string> = { [runFile(RUN, "record.md")]: record() };
+    for (let i = 1; i <= 257; i += 1) {
+      files[runFile(RUN, `reports/u${String(i).padStart(3, "0")}-reviewer-r1.md`)] = reportWith([FINDING]);
+    }
+    await getRepo().seedFiles(files);
+
+    const card = cardOf(start(script, COMPACT).stdout);
+    expect(card).toHaveLength(6);
+    expect(card[3]).toMatch(/^reports without a ledger row: 256 \(.*… \+\d+ more\), not checked: 1$/);
+    expect(card[3]).not.toContain("u257-reviewer-r1.md");
+    expect(card.join("\n").length).toBeLessThanOrEqual(CARD_MAX_CHARS);
   });
 
   it("reaches the common dir from a linked worktree and reads every HEAD shape", async () => {
