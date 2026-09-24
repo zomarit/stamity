@@ -1559,8 +1559,8 @@ describe("write containment — a component that cannot be inspected is not a co
   });
 });
 
-/** Every `.ts` file of the write substrate, as absolute paths. */
-const MERGE_SRC_DIR = fileURLToPath(new URL("../../src/merge/", import.meta.url));
+/** The product source tree the byte-hygiene gate below walks, as an absolute path. */
+const SRC_DIR = fileURLToPath(new URL("../../src/", import.meta.url));
 
 /**
  * Code points that must appear in source as an escape rather than as a literal
@@ -1583,7 +1583,7 @@ function isLiteralControlCodePoint(code: number): boolean {
 }
 
 /**
- * Byte hygiene for the write substrate's own source.
+ * Byte hygiene for the product source, the write substrate's first.
  *
  * A raw NUL in the deny-scan dedup key made `safeWrite.ts` — the write gate and
  * the merge decision engine, a thousand lines of it — read as binary to
@@ -1594,19 +1594,31 @@ function isLiteralControlCodePoint(code: number): boolean {
  * not a literal, so the byte is visible in a diff"); this is the convention
  * enforced rather than remembered.
  *
- * Scope is `src/merge/` — this suite's own subject. A repository-wide gate
- * belongs in the CI script lane, which is a different file set.
+ * Scope is every `.ts` file under `src/`. It began as `src/merge/`, this
+ * suite's own subject; it widened once a respell of the ledger store's raw
+ * zero-width and bidi literals left the whole tree clean, since a literal
+ * outside the write substrate hides from a grep the same way. Tests, fixtures
+ * and scripts stay outside it: a test may hold such a byte on purpose.
  */
 describe("write substrate — control bytes are written as escapes, not as literals", () => {
-  it("holds no literal control, invisible, or bidi code point in src/merge", async () => {
-    const files = (await readdir(MERGE_SRC_DIR)).filter((name) => name.endsWith(".ts"));
-    // A guard that scanned nothing would pass forever.
-    expect(files.length).toBeGreaterThan(0);
+  it("holds no literal control, invisible, or bidi code point in src", async () => {
+    // Paths print POSIX whatever the host separator, so an offender reads the same on every leg.
+    const files = (await readdir(SRC_DIR, { recursive: true }))
+      .filter((name) => name.endsWith(".ts"))
+      .map((name) => name.split(sep).join("/"));
+    // A guard that scanned nothing would pass forever, and one that stopped at the top level
+    // would miss the subfolders: both src/merge and a nested folder are in the walk.
+    expect(files).toContain("merge/safeWrite.ts");
+    expect(files).toContain("runs/ledgerStore.ts");
+    expect(files.some((name) => name.split("/").length > 2)).toBe(true);
 
     // Independent reads, so they run together; the offender list is sorted
     // afterwards rather than built in read order.
     const sources = await Promise.all(
-      files.map(async (name) => ({ name, text: await readFile(join(MERGE_SRC_DIR, name), "utf8") })),
+      files.map(async (name) => ({
+        name,
+        text: await readFile(join(SRC_DIR, ...name.split("/")), "utf8"),
+      })),
     );
     const offenders = sources
       .flatMap(({ name, text }) =>
