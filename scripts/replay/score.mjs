@@ -18,6 +18,7 @@ import { RULES as LEAK_RULES, decodeCandidates, normalizeViews } from '../leak-g
 import { sha256 } from '../qa/bind.mjs'
 import { redactPaths, spellingsOf } from '../qa/redact.mjs'
 import { PASS_IDS } from './fixture.mjs'
+import { COMPARISON_FILE, COMPARISON_PATH, compare, renderComparison } from './compare.mjs'
 import { MEASUREMENT_SCHEMA, UNATTRIBUTED_MAX } from './measure.mjs'
 
 const SELF = fileURLToPath(import.meta.url)
@@ -39,7 +40,7 @@ const BARE_TMP_PATHS = /\/var\/folders\/[^/\s"']+\/[^/\s"']+\/T(?![^/\s"'])/g
 const EXCERPT_MAX = 200
 const PASS_COUNT = PASS_IDS.length
 /** §10: an invalid run is replaced, at most this many times per shape (a test pins the sentence). */
-const MAX_REPLACEMENTS_PER_SHAPE = 2
+export const MAX_REPLACEMENTS_PER_SHAPE = 2
 const SHAPES = ['baseline', 'changed']
 
 /** Every key of the protocol's `replay-thresholds` block and the type of its value (r1). */
@@ -53,11 +54,12 @@ const THRESHOLD_TYPES = {
 }
 
 /**
- * The one reading of each string threshold that the arithmetic below implements (build/226). A
- * fence naming another reading would change the table's words and not its numbers, so it is
- * refused instead: a new reading lands with its code in the same change.
+ * The one reading of each string threshold that the arithmetic below implements (build/226), and
+ * of `securityAllRuns` (build/240). A fence naming another reading would change the table's words
+ * and not its numbers, so it is refused instead: a new reading lands with its code in the same change.
  */
 const IMPLEMENTED_READINGS = {
+  securityAllRuns: true,
   decoyFlags: '<=baseline', approvedUnfixed: '<=baseline', loopCharsReference: 'baseline-median', loopCharsScope: 'every-scored-run',
   subagentTokensScope: 'pooled-mean', subagentTokensReference: 'baseline-mean', securityExemption: 'any-baseline-scored-run-missed',
   evalSetFloors: 'carried-to-session-2',
@@ -96,7 +98,7 @@ export const NOTE_ROWS = [
 ]
 
 /** The §12 rows, in the protocol's order. */
-const ROW_IDS = ['security-seeds', 'pooled-recall', 'decoy-flags', 'compaction-loss', 'verdict-class', 'verdict-rounds', 'approved-unfixed', 'loop-chars', 'subagent-tokens', 'eval-set-floors']
+export const ROW_IDS = ['security-seeds', 'pooled-recall', 'decoy-flags', 'compaction-loss', 'verdict-class', 'verdict-rounds', 'approved-unfixed', 'loop-chars', 'subagent-tokens', 'eval-set-floors']
 
 // ---------- small helpers ----------
 
@@ -109,7 +111,7 @@ const cutCodePoints = (text, max) => [...text].slice(0, max).join('')
 const strOrNull = (v) => v === null || typeof v === 'string'
 const numOrNull = (v) => v === null || (typeof v === 'number' && Number.isFinite(v))
 
-function median(values) {
+export function median(values) {
   const sorted = values.toSorted((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)
   return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
@@ -424,7 +426,7 @@ const fmt = (v, digits = 0) => (typeof v === 'number' && Number.isFinite(v) ? v.
 const pct = (v) => (typeof v === 'number' ? `${(v * 100).toFixed(1)}%` : 'n/a')
 const securitySeedsOf = (s) => s.passes.flatMap((p) => p.seeds.filter((x) => x.class === 'security'))
 /** §12: a security seed the implementer removed before the lens started counts as found. */
-const securityHeld = (x) => x.found || x.caughtByImplementer
+export const securityHeld = (x) => x.found || x.caughtByImplementer
 
 const bullets = (list) => (list.length === 0 ? ['- no notes line'] : list.map((x) => `- ${x}`))
 
@@ -817,28 +819,73 @@ function checkCommand(o) {
   process.stdout.write(`[replay] ${runs} run(s) checked: every summary conforms, one instrument commit, the protocol sha and path match, no home or temp path, no leak-gate hit\n[replay] ${invalidLine(invalid)}\n`)
 }
 
+/**
+ * `compare`: the summaries and the committed protocol in, COMPARISON-v1.md out (`compare.mjs`).
+ * Exits 0 on a merge gate of PASS, 2 on FAIL with the file written, 1 on a refusal with nothing
+ * written — so no caller reads a FAIL as success.
+ */
+function compareCommand(o) {
+  if (o.baseline.length === 0 || o.changed.length === 0 || !o.protocol || !o.out) throw new Error(`compare needs --baseline, --changed, --protocol and --out.\n${USAGE}`)
+  const protocolPath = protocolPathOf(o.protocol)
+  if (protocolPath !== DEFAULT_PROTOCOL) throw new Error(`--protocol must be the committed ${DEFAULT_PROTOCOL}, not ${protocolPath}`)
+  if (basename(resolve(o.out)) !== COMPARISON_FILE) throw new Error(`--out must be named ${COMPARISON_FILE} (§11: ${COMPARISON_PATH})`)
+  if (existsSync(o.out)) throw new Error(`--out already exists: the comparison is written once (${COMPARISON_FILE})`)
+  const protocolBytes = readFileSync(o.protocol)
+  const protocolSha = sha256(protocolBytes)
+  const thresholds = parseThresholds(protocolBytes.toString('utf8'))
+  const read = (paths, flag) => paths.map((path, k) => readJson(path, `--${flag} ${k + 1}`))
+  const baseline = read(o.baseline, 'baseline')
+  const changed = read(o.changed, 'changed')
+  const pilots = {
+    ...(o.pilotBaseline ? { baseline: readJson(o.pilotBaseline, '--pilot-baseline') } : {}),
+    ...(o.pilotChanged ? { changed: readJson(o.pilotChanged, '--pilot-changed') } : {}),
+  }
+  for (const s of [...baseline, ...changed, ...Object.values(pilots)]) {
+    if (s?.protocol?.sha256 !== protocolSha) throw new Error(`${s?.runId ?? 'a summary'} was scored under protocol sha256 ${s?.protocol?.sha256 ?? 'absent'}, not the sha256 of the protocol (${protocolSha})`)
+  }
+  const result = compare(baseline, changed, thresholds, pilots)
+  const text = renderComparison(result, thresholds)
+  const leaks = [
+    ...forbiddenIn(text).map((x) => `${COMPARISON_FILE} carries "${x}"`),
+    ...leakRulesIn(text, COMPARISON_PATH).map((rule) => `${COMPARISON_FILE} matches the leak gate's rule ${rule}`),
+  ]
+  if (leaks.length > 0) throw new Error(`nothing written: ${leaks.join('; ')}`)
+  writeFileSync(o.out, text, { flag: 'wx' })
+  process.stdout.write(`[replay] compared ${baseline.length} baseline and ${changed.length} changed scored run(s): Merge gate: ${result.mergeGate}\n`)
+  if (result.mergeGate !== 'PASS') process.exitCode = 2
+}
+
 // ---------- CLI ----------
 
 export const USAGE = [
   'Usage: node scripts/replay/score.mjs run --measurement <m.json> --run-json <run.json> --protocol <REPLAY-v1.md>',
   '         --run-id <YYYY-MM-DD>-replay-<n> --kind pilot|scored --out-dir <evals/replay/runs/<run-id>> [--reference <baseline summary.json>]…',
   '       node scripts/replay/score.mjs check --runs <evals/replay/runs> --protocol <REPLAY-v1.md>',
+  '       node scripts/replay/score.mjs compare --baseline <summary.json>… --changed <summary.json>… [--pilot-baseline <summary.json>]',
+  '         [--pilot-changed <summary.json>] --protocol <REPLAY-v1.md> --out <evals/replay/COMPARISON-v1.md>',
+  '         (exit 0: merge gate PASS; 2: FAIL, the file written; 1: refused, nothing written)',
 ].join('\n')
+
+/** The flags that repeat, each collected into a list. */
+const REPEATED = { '--reference': 'reference', '--baseline': 'baseline', '--changed': 'changed' }
 
 function parseArgs(argv) {
   const [command, ...rest] = argv
-  const options = { command, reference: [] }
-  const valued = { '--measurement': 'measurement', '--run-json': 'runJson', '--protocol': 'protocol', '--run-id': 'runId', '--kind': 'kind', '--out-dir': 'outDir', '--runs': 'runs' }
+  const options = { command, reference: [], baseline: [], changed: [] }
+  const valued = {
+    '--measurement': 'measurement', '--run-json': 'runJson', '--protocol': 'protocol', '--run-id': 'runId', '--kind': 'kind', '--out-dir': 'outDir', '--runs': 'runs',
+    '--pilot-baseline': 'pilotBaseline', '--pilot-changed': 'pilotChanged', '--out': 'out',
+  }
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i]
     if (arg === '--help' || arg === '-h') {
       options.help = true
       continue
     }
-    if (!(arg in valued) && arg !== '--reference') throw new Error(`Unknown option ${arg}.\n${USAGE}`)
+    if (!(arg in valued) && !(arg in REPEATED)) throw new Error(`Unknown option ${arg}.\n${USAGE}`)
     const value = rest[i + 1]
     if (value === undefined || value.startsWith('--')) throw new Error(`${arg} needs a value.\n${USAGE}`)
-    if (arg === '--reference') options.reference.push(value)
+    if (arg in REPEATED) options[REPEATED[arg]].push(value)
     else options[valued[arg]] = value
     i += 1
   }
@@ -853,7 +900,8 @@ function main(argv) {
   }
   if (options.command === 'run') runCommand(options)
   else if (options.command === 'check') checkCommand(options)
-  else throw new Error(`Unknown command ${options.command}: run or check.\n${USAGE}`)
+  else if (options.command === 'compare') compareCommand(options)
+  else throw new Error(`Unknown command ${options.command}: run, check or compare.\n${USAGE}`)
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === SELF) {
