@@ -158,11 +158,15 @@ describe("spec-author — plan-cell amendment, report and digest", () => {
     expect(modes).not.toContain("neither job changes that");
   });
 
-  it("amends a later, unbuilt cell in place with a dated line", async () => {
+  it("amends a later cell in place with a dated line, a built one only as the as-landed record", async () => {
     const modes = section(await load(SPEC_AUTHOR), "Modes");
     expect(modes).toContain("Plan-cell amendment");
     expect(modes).toContain("`amended <UTC date>: <what moved> (<commit>)`");
-    expect(modes).toContain("no cell of a unit already built");
+    // A built unit's cell moves only as the as-landed record, with an `amended` row naming the
+    // commit (the signed-off amendment; the old absolute ban contradicted the recorded practice).
+    expect(modes).toContain("A cell of a unit already built is touched only as the record of what landed");
+    expect(modes).toContain("with an `amended` row naming the commit");
+    expect(modes).not.toContain("no cell of a unit already built is touched");
     expect(modes).toContain("The unit keeps its id");
   });
 

@@ -208,6 +208,10 @@ describe("reviewer — a re-review answers every prior id", () => {
       expect(nit, `Nit policy: no ${status} status`).toContain(status);
     }
     expect(nit).toContain("`read: <files>; lenses: <list>`");
+    // The optional closure key C9 as built reads (`src/runs/blocks.ts`, `readRationale`), so a
+    // not-fixed or regressed reason lands on the ledger row rather than in prose.
+    expect(nit).toContain('`"rationale":"<one line>"`');
+    expect(nit).toContain("recorded on the ledger row");
   });
 });
 

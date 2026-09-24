@@ -611,14 +611,21 @@ describe("injection-screening — the perimeter, stated as it holds", () => {
   it("says plainly that agent-authored state meets no write gate", async () => {
     // The other half: `inbox`, run notes, evidence and verification
     // records are written by agents with their own tools. No engine writer sees
-    // them, and the session-start read pass walks `learnings/` and `handoffs/`
-    // only (`src/hooks/scripts.ts`), so nothing screens them at any point.
+    // them, and the session-start read pass walks `learnings/`, `handoffs/` and (after a
+    // compaction) the resume card's sources, and nothing else (`src/hooks/scripts.ts`), so
+    // nothing screens them at any point.
     const floor = flatten(section(await load(SCREENING), "Floor"));
 
     expect(floor).toMatch(/most of it meets no gate/i);
     expect(floor).toMatch(/inbox`, run notes,\s*evidence, verification records/i);
     expect(floor).toMatch(/arrive unscreened/i);
-    expect(floor).toMatch(/covers `learnings\/` and `handoffs\/` and\s*nothing else/i);
+    // TEST CHANGE, justified: the read pass grew one source. After a compaction the
+    // session-start hook also reads the resume card's sources (`src/runs/cardSource.ts`),
+    // screened as the printed card only, so the pin names that source and still holds the
+    // "nothing else" closure and the unscreened bodies the card points at.
+    expect(floor).toMatch(/covers `learnings\/` and `handoffs\/` and, after a compaction, the resume card's sources/i);
+    expect(floor).toMatch(/screened only as the printed card\. It screens nothing else/);
+    expect(floor).toMatch(/a record body or a report the card points at is unscreened when opened/i);
     expect(floor).toMatch(/for the rest, this floor is the gate/i);
   });
 

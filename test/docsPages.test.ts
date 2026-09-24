@@ -1482,6 +1482,30 @@ describe("SECURITY.md", () => {
     expect(text).toContain("MAX_USER_CONTENT_LENGTH");
     expect(text).toMatch(/250 000-character ceiling/);
     expect(text).toMatch(/250 000-byte ceiling/);
+    // `ledger append --stdin` is the third byte-ceiling caller (`src/cli/commands/ledger.ts`,
+    // `readAll`), named both in the control table and in the bounded-IO bullet.
+    expect(text.replace(/\s+/g, " ")).toContain(
+      "`learn`, `handoff` and `ledger append --stdin` reads apply it as a byte one",
+    );
+    expect(text).toContain("applied over stdin in `src/cli/commands/learn.ts`, `src/cli/commands/handoff.ts` and `src/cli/commands/ledger.ts`");
+  });
+
+  it("states the resume card's re-entry surface: what screens it and what it does not defend", () => {
+    // After a compaction the session-start hook and `stamity ledger status` read the record
+    // head, ledger ids, report names and lane paths back into the model's context and the
+    // terminal. The table names the control at the symbols that run it, and the residual
+    // names the screen subset and the unscreened files the card points at.
+    const table = text.slice(
+      text.indexOf("## What the engine defends today"),
+      text.indexOf("## Network and data handling"),
+    );
+    const row = table.split("\n").find((line) => line.includes("through the resume card")) ?? "";
+    expect(row, "the control table has no resume card row").not.toBe("");
+    expect(row).toContain("`src/runs/resumeCard.ts::screenCard`");
+    expect(row).toContain("`src/runs/cardSource.ts::buildResumeCardSource`");
+    expect(row).toMatch(/never a finding's text/);
+    expect(row).toMatch(/session-start subset/);
+    expect(row).toMatch(/meet no screen/);
   });
 
   it("covers the four surfaces the phase claims, and the limits", () => {
@@ -2040,6 +2064,19 @@ describe("the guides", () => {
     for (const key of ["arrow keys", "space toggles", "enter confirms"]) {
       expect(text, `the getting-started guide omits how to work the menu: ${key}`).toContain(key);
     }
+  });
+
+  it("tells a Codex reader when to print the resume card by hand", () => {
+    // The by-hand `stamity ledger status` advice named Cursor and Copilot only, while Codex
+    // prints the card only with its hooks enabled and trusted, and never under `codex exec`
+    // (learning codex-hooks-need-the-features-flag-and-exec-runs-none). All three loading
+    // steps are named, since a reply naming only the flag is the half-answer that learning
+    // records.
+    const text = read(GETTING_STARTED).replace(/\s+/g, " ");
+    expect(text).toContain("Run it on Codex too when its hooks are not running");
+    expect(text).toContain("`[features] hooks = true`");
+    expect(text).toContain("the project trusted, and each hook trusted through `/hooks`");
+    expect(text).toContain("`codex exec` runs no project hook at all");
   });
 
   it("names the managed CLAUDE.md block wherever a page enumerates what init writes", () => {

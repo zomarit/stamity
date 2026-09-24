@@ -2,7 +2,7 @@
 id: agent-spec-author-return-contract
 class: golden
 claim: "A brief that fits two modes returns status BLOCKED_AMBIGUITY naming both competing readings, writes nothing, blends neither, and puts no question to the operator — the spawning flow runs the ambiguity gate and re-spawns."
-source: content/agents/stamity-spec-author.md:14-29,165-186
+source: content/agents/stamity-spec-author.md:14-29,166-187
 metric: rubric
 floor: true
 ---

@@ -235,7 +235,10 @@ those same gates. `ledger` appends a run's findings to its ledger, closes its ro
 resume card of a run in progress, as the one serialized writer. All three are plumbing an agent
 calls; `stamity ledger status` is the one you may run yourself — after a compaction on Cursor or
 Copilot, whose session-start hooks never print the card: Cursor sends the hook no `source`, and
-Copilot's `source` is never `compact`.
+Copilot's `source` is never `compact`. Run it on Codex too when its hooks are not running: Codex
+loads the project's hooks only with `[features] hooks = true` in `.codex/config.toml` (init writes
+it), the project trusted, and each hook trusted through `/hooks` — and `codex exec` runs no
+project hook at all, so a headless run never prints the card.
 
 Those gates exist because a learning is text that re-enters an agent's context on a later
 session. Anything with write access to the repository can author a file that is read back into a

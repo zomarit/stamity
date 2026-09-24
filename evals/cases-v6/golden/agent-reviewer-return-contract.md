@@ -2,7 +2,7 @@
 id: agent-reviewer-return-contract
 class: golden
 claim: "A review returns status DONE carrying the verdict, the confidence with its basis, the applied-lens list with what was recorded not applicable, and the findings with their path:line locators and evidence classes; only Critical and Warning reach the human checkpoint while Minor rows are ledgered and travel with the run, and the read-only role claims no edit and no command; with no recorded catch-rate baseline and no declared false-positive budget the verdict is stated as advisory and routed through human triage."
-source: content/agents/stamity-reviewer.md:14-24,93-184
+source: content/agents/stamity-reviewer.md:14-24,93-187
 metric: rubric
 ---
 
@@ -82,10 +82,13 @@ false-positive budget is an unqualified gate, and its clean verdicts carry no ev
 - **A re-review answers every prior id.** Handed the ledger ids it verifies, a re-review
   returns one closure per id in a block fenced with the info string `stamity-closures`, one
   JSON object per line — `{"ledger_id":"<id>","status":"<status>"}`, the status one of
-  `fixed`, `not-fixed`, `regressed`, `rejection-upheld` or `rejection-overturned`. Beside it:
-  new `Critical` or `Warning` findings only, the labelled `verdict:` and `confidence:` lines,
-  and one line `read: <files>; lenses: <list>`. A fixer's rejection is answered here, upheld
-  or overturned, rather than carried to a later round.
+  `fixed`, `not-fixed`, `regressed`, `rejection-upheld` or `rejection-overturned`. A closure
+  may add one optional key, `"rationale":"<one line>"` — what is still wrong in a `not-fixed`
+  or `regressed` row, what decided a rejection — and that line is recorded on the ledger row
+  rather than left in prose. Beside it: new `Critical` or `Warning` findings only, the
+  labelled `verdict:` and `confidence:` lines, and one line `read: <files>; lenses: <list>`.
+  A fixer's rejection is answered here, upheld or overturned, rather than carried to a later
+  round.
 
 [...]
 
