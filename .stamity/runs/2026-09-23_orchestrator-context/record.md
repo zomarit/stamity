@@ -206,3 +206,49 @@ checkpoint and the merge to `main` wait for the maintainer.
     - one `/st-work` invocation per pass;
     - seeds the research phase cannot pre-empt;
     - or the replay leaves the merge gate.
+- 2026-09-24T06:00Z the seed trace of the baseline pilot (a read-only researcher over the run's transcripts, the final tree, the
+  oracles and the instrument's code; every claim cites a transcript line). Its findings:
+  - All 12 seeds were flagged by the orchestrator's own pre-read before the build. The contrib patches are readable in
+    Understand, and the plan asks the units to fix contract defects.
+  - Every implementer applied its patch and fixed its seeds before returning, so no seed reached the review round as a
+    defect. The reviewers only confirmed that the fixes held.
+  - All three recall credits are the matcher's false matches on findings about other problems:
+    - a negated severity word ("No Critical findings") is read as a severity;
+    - a seed term matched inside a locator's own text ("20" in load.ts:20) or an unrelated phrase ("bearer guard");
+    - the true reading is 0 of 0 reachable seeds.
+  - As built, the replay measures the pre-read, not review recall. Ledgered, all deferred to REPLAY-v2's scope: build/362
+    (decision needed: the fixture keeps no seed from the pre-read), build/363 (negated severity words), build/364 (terms
+    matched in locators), build/365 (sec-sql-sort's presence test), build/366 (the first-round flag under a multi-pass
+    review).
+  - Consequence: v1's recall, security and verdict rows cannot evaluate the package's claim on this fixture. Its
+    context-cost rows can: loop characters per pass and sub-agent tokens do not depend on where a seed is caught. So
+    the two pilots are the first unscored look at the economy. No scored run starts.
+  - The maintainer chooses the protocol for the merge gate: REPLAY-v2 (a fixture whose seeds the pre-read cannot see,
+    such as a replay of the review phase on a prepared change set, plus the matcher fixes and per-pass snapshots), or
+    another gate.
+- 2026-09-24T06:28Z r11a, the changed pilot `2026-09-24-replay-2` (the candidate bf5a8d3f, auto-window): valid and complete in
+  39 min active, against 53 for the baseline. The end condition closed on the ledger with one confirming nudge; this
+  shape's record had no bare C5 Status line either.
+  - Its outcomes: five automatic compactions, oracles `ok` with 12 of 12 passing, and recall 0/12, as the seed trace
+    predicts (no seed reaches review, and no false credit this time).
+  - The two pilots side by side, unscored, the first look at the economy:
+
+    | Measure | Baseline | Changed | Change |
+    |---|---|---|---|
+    | Loop characters per pass | 24,703 | 13,341 | −46% (§12's bar asks ≤ 0.5×) |
+    | Returns in the loop | 96,954 | 39,774 | −59% |
+    | Prompts in the loop | 35,227 | 11,474 | −67% |
+    | Report reads (none in the baseline) | 0 | 15,770 | — |
+    | Ledger writes | 16,036 | 13,026 | — |
+    | Sub-agent tokens per pass | 1,267,526 | 915,725 | −28% (bar ≤ 1.2×) |
+    | Orchestrator's main transcript (characters) | 782,358 | 731,167 | −7% |
+    | Context per pass (tokens) | 31,166 | 27,838 | — |
+    | Compactions | 5 | 5 | — |
+
+    The orchestrator's own inline pre-read of code and patches, which neither shape delegates, dominates what is left.
+  - Compaction samples: the baseline has 3 valid samples and lost 23 findings. The changed shape has none valid
+    (nothing at risk at any boundary), so §12's compaction-loss row would read NOT-EVALUATED.
+  - Exported to `evals/replay/runs/2026-09-24-replay-2/`: `score.mjs check` over both runs exits 0, `test/replay`
+    passes (338), and the leak gate exits 0.
+  - r11a is complete. r11b does not start: v1 cannot evaluate the package's review-quality claim on this fixture
+    (build/362), and the protocol for the merge gate is the maintainer's choice.

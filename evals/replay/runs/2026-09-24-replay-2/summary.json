@@ -1,0 +1,733 @@
+{
+  "schema": "stamity/replay-summary/v1",
+  "runId": "2026-09-24-replay-2",
+  "kind": "pilot",
+  "shape": "changed",
+  "protocol": {
+    "path": "evals/replay/REPLAY-v1.md",
+    "sha256": "fdee42b110b189de40318960a85baa20b43a25e933313eb42d1f0aba61fdaa11",
+    "commit": "9de31649d1e80bcdaa08ab79a2d91554a1333126"
+  },
+  "instrument": {
+    "commit": "9de31649d1e80bcdaa08ab79a2d91554a1333126",
+    "files": {
+      "evals/replay/REPLAY-v1.md": "fdee42b110b189de40318960a85baa20b43a25e933313eb42d1f0aba61fdaa11",
+      "evals/replay/v1/oracle/oracles.patch": "ae68d3bd6d3a57ee823a8c888d9c17e5f73ce81fe7b039f7b15a91eb46db715d",
+      "evals/replay/v1/oracle/reference-fixes.patch": "2978413affc6e022519b45aa326135cc49c4c969868a733affb3d446f33c70ad",
+      "evals/replay/v1/patches/base.patch": "e090220bb01ff5aabd2ff0625bc231cbf318d518b6bdaab80f4d2a1a189ce882",
+      "evals/replay/v1/patches/u1-p1.patch": "2966475c01786a7d94cc0b0c6536c9da5175effe192bfc8501e0510c65a17c50",
+      "evals/replay/v1/patches/u1-p2.patch": "bac66b4a0de4f0bf41ef04908f58610e8dd8fa850c4930d95d4dabfde4a141a3",
+      "evals/replay/v1/patches/u2-p1.patch": "60e8725b615da5a4c5e4ec4f2b516c6f278ebcaaafed8382bd5f21e23d4d1d33",
+      "evals/replay/v1/patches/u2-p2.patch": "a398d389f4b77d92c91d64bb07de39abde3edd318f88f0f00fb3801a766c3519",
+      "evals/replay/v1/patches/u3-p1.patch": "86c7b28cd612e8808843a73b5666cd3a98420b6b6341c3245166c676d85a64a1",
+      "evals/replay/v1/patches/u3-p2.patch": "7fb0d51697bc4fd851f7e7282be86c5bdb70c54be630d829e6fea0fef23ccc4c",
+      "evals/replay/v1/plan/001-replay.md": "64dab3453f46448046c14b26c6d67de84dd6fcda61423eaf1a8c29b320be2d99",
+      "evals/replay/v1/seeds.json": "d098ffbf0c0a9652b8eff75a2958ea49c3b6c766fa963e4cb90604bd714fe49e",
+      "scripts/leak-gate.mjs": "de1e612feb73ada16a741aa41a919db807857615561ff3dfa34cdcbdcee070cd",
+      "scripts/qa/bind.mjs": "9463d36ae7d74e6842f0aa1468b696141c3fc95075f03e13e9af2624a46b20f3",
+      "scripts/qa/redact.mjs": "bbbab1495b68193f110ccbb40a200d83332dc495eb33f852e2aeca924d0fcc26",
+      "scripts/qa/run.mjs": "4a5e01bd19fe3ca910aa47edb5196f7502de0ec7da30aa407af3e289ac04d8e0",
+      "scripts/replay/compare.mjs": "89ee5ecd6ea5e08613882e22449275fd3c165d07adf1d4c610f60dea5993d286",
+      "scripts/replay/findings.mjs": "1a91c1b4c3ffdb2662f25d87347b57a895be87557644e1960742c00e04a8739b",
+      "scripts/replay/fixture.mjs": "fa8f996545115742f87ea727e6a4d46d67f824cc4c2b90479eca3c6efe0673af",
+      "scripts/replay/measure.mjs": "c784c39c338b27c8e58ae9593ddead2680733bcab8dee30062d207b6246d9203",
+      "scripts/replay/oracle.mjs": "d87b9cc9c92a56b89e59448f03127ee99193161331d71e813417b56e9547c770",
+      "scripts/replay/score.mjs": "e8449d6f44e9b7ae7edb126639e023627333219febd928bc4595fe319cb58a55",
+      "scripts/replay/transcript.mjs": "581f83abcd9f49420de4ae7ce4248ee1d6acbb7dca70dd8f0a4452b925e25f9c"
+    }
+  },
+  "cli": {
+    "commit": "bf5a8d3f18061eaf7be5c6eed86e103836938cc4",
+    "version": "1.9.1",
+    "tarballSha256": "b4beb8e4d906ca0dcd1c9bafe566b5c8b05f505fe44435242909696783b49501"
+  },
+  "client": {
+    "version": "2.1.280",
+    "binarySha256": "387a5c5dcdbb815085edf0baf79591f9d8894efe922bceaf3d75b1b08055229d",
+    "orchestratorModel": "claude-opus-5-5",
+    "resolvedModels": [
+      "claude-haiku-4-5-20251001",
+      "claude-opus-5-5",
+      "claude-sonnet-5"
+    ],
+    "initVersion": "2.1.280",
+    "ambient": {
+      "skills": [
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx",
+        "batch",
+        "claude-api",
+        "code-review",
+        "dataviz",
+        "debug",
+        "deep-research",
+        "doctor",
+        "fewer-permission-prompts",
+        "loop",
+        "run",
+        "run-skill-generator",
+        "schedule",
+        "simplify",
+        "st-browser-evidence",
+        "st-dep-audit",
+        "st-design-system-detect",
+        "st-handoff",
+        "st-learn",
+        "st-onboard",
+        "st-qa",
+        "st-verify",
+        "stamity-ai-evals",
+        "stamity-question-protocol",
+        "update-config",
+        "verify",
+        "workflow-authoring"
+      ],
+      "agents": [
+        "Explore",
+        "Plan",
+        "claude",
+        "general-purpose",
+        "stamity-creator",
+        "stamity-design-quality",
+        "stamity-fixer",
+        "stamity-implementer",
+        "stamity-performance",
+        "stamity-researcher",
+        "stamity-reviewer",
+        "stamity-security",
+        "stamity-spec-author",
+        "stamity-test-runner",
+        "statusline-setup"
+      ],
+      "slashCommands": [
+        "__remote-workflow",
+        "agents",
+        "anthropic-skills:docs",
+        "anthropic-skills:docx",
+        "anthropic-skills:import-memory",
+        "anthropic-skills:morning",
+        "anthropic-skills:pdf",
+        "anthropic-skills:pptx",
+        "anthropic-skills:skill-creator",
+        "anthropic-skills:xlsx",
+        "auto-mode-setup",
+        "autocompact",
+        "batch",
+        "claude-api",
+        "clear",
+        "code-review",
+        "color",
+        "compact",
+        "config",
+        "context",
+        "dataviz",
+        "debug",
+        "deep-research",
+        "doctor",
+        "effort",
+        "extra-usage",
+        "fast",
+        "fewer-permission-prompts",
+        "goal",
+        "heapdump",
+        "init",
+        "insights",
+        "list-agents",
+        "loop",
+        "mcp",
+        "model",
+        "output-style",
+        "recap",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "run",
+        "run-skill-generator",
+        "schedule",
+        "security-review",
+        "simplify",
+        "st-ask",
+        "st-board",
+        "st-browser-evidence",
+        "st-debug",
+        "st-dep-audit",
+        "st-design-system-detect",
+        "st-handoff",
+        "st-learn",
+        "st-onboard",
+        "st-plan",
+        "st-pr-resolve",
+        "st-qa",
+        "st-quick",
+        "st-rework",
+        "st-spec",
+        "st-verify",
+        "st-work",
+        "stamity-ai-evals",
+        "stamity-question-protocol",
+        "team-onboarding",
+        "update-config",
+        "usage",
+        "usage-credits",
+        "verify",
+        "workflow-authoring",
+        "workflow-launch-exec"
+      ],
+      "plugins": [],
+      "mcpServers": []
+    }
+  },
+  "fixture": {
+    "baseCommit": "3754489e71e7f2582cfeb75bb52e4a38ce8e2f8f",
+    "planSha256": "8aec6d9d3e7ba2264400d2c76263b5c50993166fd022db2a29624935c4598730",
+    "depsSha256": "b0a177310f09afc2d92668e902ab0e6aebd6b7665b80a623e66c91a50dbc0e29"
+  },
+  "mechanism": "auto-window",
+  "timing": {
+    "activeMs": 2356578,
+    "pausedMs": 0,
+    "capacityHolds": 0,
+    "nudges": 1,
+    "restarts": 0
+  },
+  "passes": [
+    {
+      "id": "u1-p1",
+      "loopChars": 9250,
+      "breakdown": {
+        "returns": 8253,
+        "prompts": 997,
+        "ledger": 0,
+        "briefs": 0,
+        "reportReads": 0,
+        "resumes": 0
+      },
+      "subagentTokens": 839625,
+      "verdict": {
+        "finalClass": null,
+        "rounds": 0,
+        "approvedWithSeedUnfixed": false
+      },
+      "seeds": [
+        {
+          "id": "sec-sql-sort",
+          "class": "security",
+          "present": null,
+          "caughtByImplementer": false,
+          "found": false,
+          "foundRound1": false,
+          "stage": null,
+          "oracle": "pass"
+        },
+        {
+          "id": "cor-page-offset",
+          "class": "correctness",
+          "present": null,
+          "caughtByImplementer": false,
+          "found": false,
+          "foundRound1": false,
+          "stage": null,
+          "oracle": "pass"
+        }
+      ],
+      "decoysFlagged": []
+    },
+    {
+      "id": "u1-p2",
+      "loopChars": 8261,
+      "breakdown": {
+        "returns": 3649,
+        "prompts": 1171,
+        "ledger": 3441,
+        "briefs": 0,
+        "reportReads": 0,
+        "resumes": 0
+      },
+      "subagentTokens": 529871,
+      "verdict": {
+        "finalClass": null,
+        "rounds": 0,
+        "approvedWithSeedUnfixed": false
+      },
+      "seeds": [
+        {
+          "id": "cor-date-boundary",
+          "class": "correctness",
+          "present": null,
+          "caughtByImplementer": false,
+          "found": false,
+          "foundRound1": false,
+          "stage": null,
+          "oracle": "pass"
+        },
+        {
+          "id": "tw-assert-loosen",
+          "class": "test-weakening",
+          "present": null,
+          "caughtByImplementer": false,
+          "found": false,
+          "foundRound1": false,
+          "stage": null,
+          "oracle": "pass"
+        }
+      ],
+      "decoysFlagged": []
+    },
+    {
+      "id": "u2-p1",
+      "loopChars": 7125,
+      "breakdown": {
+        "returns": 3545,
+        "prompts": 1233,
+        "ledger": 2347,
+        "briefs": 0,
+        "reportReads": 0,
+        "resumes": 0
+      },
+      "subagentTokens": 623352,
+      "verdict": {
+        "finalClass": null,
+        "rounds": 0,
+        "approvedWithSeedUnfixed": false
+      },
+      "seeds": [
+        {
+          "id": "sec-missing-guard",
+          "class": "security",
+          "present": null,
+          "caughtByImplementer": false,
+          "found": false,
+          "foundRound1": false,
+          "stage": null,
+          "oracle": "pass"
+        },
+        {
+          "id": "con-event-key",
+          "class": "contract",
+          "present": null,
+          "caughtByImplementer": false,
+          "found": false,
+          "foundRound1": false,
+          "stage": null,
+          "oracle": "pass"
+        }
+      ],
+      "decoysFlagged": []
+    },
+    {
+      "id": "u2-p2",
+      "loopChars": 5445,
+      "breakdown": {
+        "returns": 3309,
+        "prompts": 1265,
+        "ledger": 871,
+        "briefs": 0,
+        "reportReads": 0,
+        "resumes": 0
+      },
+      "subagentTokens": 346299,
+      "verdict": {
+        "finalClass": null,
+        "rounds": 0,
+        "approvedWithSeedUnfixed": false
+      },
+      "seeds": [
+        {
+          "id": "con-config-default",
+          "class": "contract",
+          "present": null,
+          "caughtByImplementer": false,
+          "found": false,
+          "foundRound1": false,
+          "stage": null,
+          "oracle": "pass"
+        },
+        {
+          "id": "tw-test-skip",
+          "class": "test-weakening",
+          "present": null,
+          "caughtByImplementer": false,
+          "found": false,
+          "foundRound1": false,
+          "stage": null,
+          "oracle": "pass"
+        }
+      ],
+      "decoysFlagged": []
+    },
+    {
+      "id": "u3-p1",
+      "loopChars": 6558,
+      "breakdown": {
+        "returns": 3464,
+        "prompts": 1606,
+        "ledger": 1488,
+        "briefs": 0,
+        "reportReads": 0,
+        "resumes": 0
+      },
+      "subagentTokens": 959023,
+      "verdict": {
+        "finalClass": null,
+        "rounds": 0,
+        "approvedWithSeedUnfixed": false
+      },
+      "seeds": [
+        {
+          "id": "sec-path-traversal",
+          "class": "security",
+          "present": null,
+          "caughtByImplementer": false,
+          "found": false,
+          "foundRound1": false,
+          "stage": null,
+          "oracle": "pass"
+        },
+        {
+          "id": "cor-swallowed-error",
+          "class": "correctness",
+          "present": null,
+          "caughtByImplementer": false,
+          "found": false,
+          "foundRound1": false,
+          "stage": null,
+          "oracle": "pass"
+        }
+      ],
+      "decoysFlagged": []
+    },
+    {
+      "id": "u3-p2",
+      "loopChars": 26501,
+      "breakdown": {
+        "returns": 4358,
+        "prompts": 1494,
+        "ledger": 4879,
+        "briefs": 0,
+        "reportReads": 15770,
+        "resumes": 0
+      },
+      "subagentTokens": 902599,
+      "verdict": {
+        "finalClass": null,
+        "rounds": 0,
+        "approvedWithSeedUnfixed": false
+      },
+      "seeds": [
+        {
+          "id": "con-wire-key",
+          "class": "contract",
+          "present": null,
+          "caughtByImplementer": false,
+          "found": false,
+          "foundRound1": false,
+          "stage": null,
+          "oracle": "pass"
+        },
+        {
+          "id": "tw-expectation-deleted",
+          "class": "test-weakening",
+          "present": null,
+          "caughtByImplementer": false,
+          "found": false,
+          "foundRound1": false,
+          "stage": null,
+          "oracle": "pass"
+        }
+      ],
+      "decoysFlagged": []
+    }
+  ],
+  "totals": {
+    "loopChars": 80044,
+    "loopCharsPerPass": 13340.666666666666,
+    "breakdown": {
+      "returns": 39774,
+      "prompts": 11474,
+      "ledger": 13026,
+      "briefs": 0,
+      "reportReads": 15770,
+      "resumes": 0
+    },
+    "unattributedShare": 0.21118384888311428,
+    "perPassUnreliable": true,
+    "unresolvedDeliveriesAndSends": 0,
+    "ledgerBeside": {
+      "codeHeredoc": {
+        "calls": 1,
+        "chars": 1031
+      }
+    },
+    "subagentTokens": 5494349,
+    "subagentTokensPerPass": 915724.8333333334,
+    "subagentOutputTokens": 153390,
+    "notificationTrailerTokens": 184095,
+    "unjoinedSubagents": 0,
+    "agentsWithoutTranscript": [],
+    "walkSkipped": {
+      "lines": 547,
+      "requests": 73,
+      "segments": 6,
+      "attachmentNoRendered": {
+        "command_permissions": 2,
+        "prompt_snapshot": 12,
+        "thinking_drop": 4
+      },
+      "entryTypes": {
+        "queue-operation": 18,
+        "atis-latch": 45,
+        "last-prompt": 45,
+        "cost-state": 1
+      },
+      "apiErrorStubs": 0,
+      "apiErrorChars": 0,
+      "sidechain": 0,
+      "images": 0
+    },
+    "mainContextChars": 731167,
+    "contextTokensPerPass": 27837.833333333332,
+    "compactionsAuto": 5,
+    "projectedPer10": 0.2939581133403731,
+    "recall": {
+      "found": 0,
+      "denominator": 12,
+      "byClass": {
+        "security": {
+          "found": 0,
+          "denominator": 3
+        },
+        "correctness": {
+          "found": 0,
+          "denominator": 3
+        },
+        "test-weakening": {
+          "found": 0,
+          "denominator": 3
+        },
+        "contract": {
+          "found": 0,
+          "denominator": 3
+        }
+      }
+    },
+    "readerSkips": {
+      "unreadFreeText": {
+        "severity-without-locator": 0,
+        "locator-without-severity": 0
+      },
+      "digestErrors": 4,
+      "findingsBlockErrors": 4,
+      "ledgerParseErrors": 0
+    },
+    "decoyFalseFlags": 0,
+    "unmatched": 0,
+    "oraclePass": 12,
+    "oracleError": 0,
+    "oracleRun": {
+      "status": "ok",
+      "detail": ""
+    }
+  },
+  "compactionSamples": [
+    {
+      "n": 1,
+      "placement": null,
+      "trigger": "auto",
+      "preTokens": 66731,
+      "postTokens": 11204,
+      "atRisk": 0,
+      "lost": 0,
+      "valid": false
+    },
+    {
+      "n": 2,
+      "placement": null,
+      "trigger": "auto",
+      "preTokens": 67730,
+      "postTokens": 13333,
+      "atRisk": 0,
+      "lost": 0,
+      "valid": false
+    },
+    {
+      "n": 3,
+      "placement": null,
+      "trigger": "auto",
+      "preTokens": 70249,
+      "postTokens": 15574,
+      "atRisk": 0,
+      "lost": 0,
+      "valid": false
+    },
+    {
+      "n": 4,
+      "placement": "multi",
+      "trigger": "auto",
+      "preTokens": 68665,
+      "postTokens": 16588,
+      "atRisk": 0,
+      "lost": 0,
+      "valid": false
+    },
+    {
+      "n": 5,
+      "placement": "multi",
+      "trigger": "auto",
+      "preTokens": 71396,
+      "postTokens": 15608,
+      "atRisk": 0,
+      "lost": 0,
+      "valid": false
+    }
+  ],
+  "wholeBranch": {
+    "finalClass": "approve",
+    "rounds": 1
+  },
+  "adjudication": [],
+  "models": {
+    "pin": "claude-opus-5-5",
+    "init": "claude-opus-5-5",
+    "orchestrator": {
+      "claude-opus-5-5": 73
+    },
+    "subagents": [
+      {
+        "agentId": "a0740de212cfdd3cd",
+        "agentType": "stamity-implementer",
+        "requested": null,
+        "resolved": {
+          "claude-opus-5-5": 24
+        },
+        "unparseableLines": 0
+      },
+      {
+        "agentId": "a40fa5162c92d6e4f",
+        "agentType": "stamity-reviewer",
+        "requested": "opus",
+        "resolved": {
+          "claude-opus-5-5": 9
+        },
+        "unparseableLines": 0
+      },
+      {
+        "agentId": "a52aa07c060b1add6",
+        "agentType": "stamity-performance",
+        "requested": null,
+        "resolved": {
+          "claude-sonnet-5": 6
+        },
+        "unparseableLines": 0
+      },
+      {
+        "agentId": "a5b17a11a5647cbc3",
+        "agentType": "stamity-researcher",
+        "requested": null,
+        "resolved": {
+          "claude-sonnet-5": 8
+        },
+        "unparseableLines": 0
+      },
+      {
+        "agentId": "a6486665134f08d28",
+        "agentType": "stamity-implementer",
+        "requested": null,
+        "resolved": {
+          "claude-opus-5-5": 16
+        },
+        "unparseableLines": 0
+      },
+      {
+        "agentId": "a6cd2db1a0109e22c",
+        "agentType": "stamity-design-quality",
+        "requested": null,
+        "resolved": {
+          "claude-opus-5-5": 5
+        },
+        "unparseableLines": 0
+      },
+      {
+        "agentId": "a6f3cafb242781247",
+        "agentType": "stamity-implementer",
+        "requested": null,
+        "resolved": {
+          "claude-opus-5-5": 14
+        },
+        "unparseableLines": 0
+      },
+      {
+        "agentId": "a9358b769d4fce91e",
+        "agentType": "stamity-test-runner",
+        "requested": "haiku",
+        "resolved": {
+          "claude-haiku-4-5-20251001": 15
+        },
+        "unparseableLines": 0
+      },
+      {
+        "agentId": "aaf1ffb7a521de2a4",
+        "agentType": "stamity-implementer",
+        "requested": null,
+        "resolved": {
+          "claude-opus-5-5": 21
+        },
+        "unparseableLines": 0
+      },
+      {
+        "agentId": "abb81869af82a07f4",
+        "agentType": "stamity-implementer",
+        "requested": null,
+        "resolved": {
+          "claude-opus-5-5": 12
+        },
+        "unparseableLines": 0
+      },
+      {
+        "agentId": "abe7ee9e47c92a524",
+        "agentType": "stamity-security",
+        "requested": null,
+        "resolved": {
+          "claude-opus-5-5": 9
+        },
+        "unparseableLines": 0
+      },
+      {
+        "agentId": "ac6001ef2a84ed428",
+        "agentType": "stamity-researcher",
+        "requested": null,
+        "resolved": {
+          "claude-sonnet-5": 10
+        },
+        "unparseableLines": 0
+      },
+      {
+        "agentId": "adc7208fb86ad7603",
+        "agentType": "stamity-implementer",
+        "requested": null,
+        "resolved": {
+          "claude-opus-5-5": 22
+        },
+        "unparseableLines": 0
+      }
+    ]
+  },
+  "notes": [
+    "sub-agent tokens reconciled: Σ notification subagent_tokens 184095 against Σ processed 5494349 over 11 loop agent(s); 0 dispatched agent(s) with no transcript file",
+    "no snapshot under captures/snapshots/u1-p1/: its seeds stay in the recall denominator with presence unknown",
+    "no snapshot under captures/snapshots/u1-p2/: its seeds stay in the recall denominator with presence unknown",
+    "no snapshot under captures/snapshots/u2-p1/: its seeds stay in the recall denominator with presence unknown",
+    "no snapshot under captures/snapshots/u2-p2/: its seeds stay in the recall denominator with presence unknown",
+    "no snapshot under captures/snapshots/u3-p1/: its seeds stay in the recall denominator with presence unknown",
+    "no snapshot under captures/snapshots/u3-p2/: its seeds stay in the recall denominator with presence unknown"
+  ],
+  "invalid": [],
+  "notDone": [
+    "pilot — not scored: the comparison takes it only as --pilot-baseline or --pilot-changed, names it in its head and holds each scored run of its shape to its ambient lists (§3); it is not read for the sample's variance (§10)"
+  ]
+}
