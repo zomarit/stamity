@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { extractFreeText, ledgerFindings, matchItems, parseClosures, parseDigest, parseFindingsBlock, unreadFreeText, verdictOf } from "../../scripts/replay/findings.mjs";
+import { extractFreeText, ledgerFindings, maskNegated, matchItems, parseClosures, parseDigest, parseFindingsBlock, unreadFreeText, verdictOf } from "../../scripts/replay/findings.mjs";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
 import { walkTranscriptLines } from "../../scripts/replay/transcript.mjs";
 import { mainLine, writeCapture } from "./synth.ts";
@@ -644,5 +644,99 @@ describe("matchItems", () => {
     ];
     expect(match(findings).matched["sec-sql-sort"]).toEqual([1, 2]);
     expect(match(findings, {}, { severities: ["Critical", "Warning"] }).matched["sec-sql-sort"]).toEqual([2]);
+  });
+});
+
+describe("(build/363, REQ-CTX-015) a severity word governed by a negation is no severity", () => {
+  it("(a) reads `fix held. No Critical findings.` after a locator as no finding", () => {
+    const text = "- src/config/load.ts:15 — fix held. No Critical findings.";
+    expect(extractFreeText(text, REVIEWER)).toEqual([]);
+    // The locator stays visible as an unread block with no live severity word.
+    expect(unreadFreeText(text, REVIEWER)).toEqual([{ block: text, reason: "locator-without-severity" }]);
+  });
+
+  it("(b) masks a run of severity words joined by or/and/nor after a negator and a modifier", () => {
+    expect(extractFreeText("no new Critical or Warning at src/a.ts:3", REVIEWER)).toEqual([]);
+    for (const text of [
+      "zero remaining Criticals and Warnings at src/a.ts:3",
+      "none of the open Warnings at src/a.ts:3 is left",
+      "without further Critical nor Warning at src/a.ts:3",
+      "0 Critical at src/a.ts:3",
+      "No **Critical** findings at src/a.ts:3",
+    ]) expect(extractFreeText(text, REVIEWER), text).toEqual([]);
+  });
+
+  it("(c) keeps a Warning whose negation governs another word", () => {
+    const findings = extractFreeText("Warning: no tests at src/a.ts:3", REVIEWER) as Finding[];
+    expect(findings.map((f) => [f.file, f.line, f.severity])).toEqual([["src/a.ts", 3, "Warning"]]);
+    expect(findings[0]!.text).toBe("Warning: no tests at src/a.ts:3");
+  });
+
+  it("(d) reads the count forms `Critical: 0` and `0 Critical` as no finding", () => {
+    for (const text of [
+      "Critical: 0 — src/a.ts:3 reviewed",
+      "**Critical:** 0, **Warnings**: 0 at src/a.ts:3",
+      "Findings: 0 Critical, 0 Warnings; src/a.ts:3 reviewed",
+    ]) expect(extractFreeText(text, REVIEWER), text).toEqual([]);
+    // A count other than zero, and a line number of zero, are not negations.
+    expect((extractFreeText("Critical: 2 — src/a.ts:3 sort concatenated", REVIEWER) as Finding[]).map((f) => f.severity)).toEqual(["Critical"]);
+    expect((extractFreeText("10 Critical findings, the first at src/a.ts:3", REVIEWER) as Finding[]).map((f) => f.severity)).toEqual(["Critical"]);
+  });
+
+  it("keeps the Warning in `no Critical, but a Warning at src/x.ts:3`", () => {
+    const findings = extractFreeText("no Critical, but a Warning at src/x.ts:3", REVIEWER) as Finding[];
+    expect(findings.map((f) => [f.file, f.line, f.severity])).toEqual([["src/x.ts", 3, "Warning"]]);
+  });
+
+  it("gives a folded locator the nearest live severity word, skipping a masked `0 Critical`", () => {
+    const text = ["Findings: 1 Warning, 0 Critical", "", "- src/store/paging.ts:4 — page 1 skips the first 10 rows"].join("\n");
+    const findings = extractFreeText(text, REVIEWER) as Finding[];
+    expect(findings.map((f) => [f.file, f.severity])).toEqual([["src/store/paging.ts", "Warning"]]);
+    // `text` keeps the original words.
+    expect(findings[0]!.text).toContain("0 Critical");
+  });
+
+  it("maskNegated keeps the text's length and every other character, and masks nothing un-negated", () => {
+    const text = "No Critical or Warning; Warning: no tests; Critical: 0; not a Critical; no critical.ts:3";
+    const masked = maskNegated(text) as string;
+    expect(masked).toHaveLength(text.length);
+    expect(masked).toBe("No          or        ; Warning: no tests;         : 0; not a Critical; no critical.ts:3");
+    expect(maskNegated("a Critical at src/a.ts:3")).toBe("a Critical at src/a.ts:3");
+  });
+});
+
+const LOAD: Item = { id: "cor-batch-size", file: "src/config/load.ts", span: [20, 20], terms: ["20", "unvalidated"] };
+/** A report row at `src/config/load.ts:20` with the given summary. */
+const at = (text: string): Finding => ({
+  source: "report", role: "reviewer", file: "src/config/load.ts", line: 20, lineEnd: 20, severity: "Warning",
+  text, localId: "W-1", ledgerId: null, reportPath: null,
+});
+
+describe("(build/364, REQ-CTX-015) a term inside a locator credits no seed", () => {
+
+  it("(e) sends a Warning whose only matching term sits in its own locator to adjudication", () => {
+    const only20: Item = { ...LOAD, terms: ["20"] };
+    const result = matchItems([at("src/config/load.ts:20 — exportBatchSize never checked")], [only20], {}, { tolerance: 3 }) as Match;
+    expect(result.matched).toEqual({ "cor-batch-size": [] });
+    expect(result.adjudication).toEqual([{ id: "cor-batch-size", findingIdx: 0 }]);
+    // A generic word term inside a path is refused the same way.
+    const guard: Item = { id: "sec-missing-guard", file: "src/http/routes.ts", span: [9, 9], terms: ["guard"] };
+    const f = { ...at("the handler at src/http/guard.ts:9 returns early"), file: "src/http/routes.ts", line: 9, lineEnd: 9 };
+    expect((matchItems([f], [guard], {}, { tolerance: 3 }) as Match).matched).toEqual({ "sec-missing-guard": [] });
+  });
+
+  it("(f) still matches an all-digit term standing as its own number, and only there", () => {
+    const only20: Item = { ...LOAD, terms: ["20"] };
+    const hit = (text: string): number[] => (matchItems([at(text)], [only20], {}, { tolerance: 3 }) as Match).matched["cor-batch-size"]!;
+    expect(hit("the default is 20 vs 50")).toEqual([0]);
+    expect(hit("(20) rows per batch")).toEqual([0]);
+    for (const text of ["the default is 220", "a 20ms wait", "version 1.20 of the parser", "see line:20 again"]) expect(hit(text), text).toEqual([]);
+  });
+
+  it("credits a term in the sentence after a locator on its own line", () => {
+    const findings = extractFreeText(["- Warning", "  src/config/load.ts:20", "  exportBatchSize is unvalidated; the default is 20."].join("\n"), REVIEWER) as Finding[];
+    expect(findings.map((f) => [f.file, f.line])).toEqual([["src/config/load.ts", 20]]);
+    expect((matchItems(findings, [LOAD], {}, { tolerance: 3 }) as Match).matched).toEqual({ "cor-batch-size": [0] });
+    expect((matchItems(findings, [{ ...LOAD, terms: ["20"] }], {}, { tolerance: 3 }) as Match).matched).toEqual({ "cor-batch-size": [0] });
   });
 });

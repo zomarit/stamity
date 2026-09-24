@@ -17,7 +17,10 @@
 // `matchItems` scores findings against the seeded items by the three §9 rules — the same file, a
 // line range intersecting the item's span widened by the tolerance, and one accepted term as a
 // case-insensitive substring — with no model call. A location match without a term goes to the
-// adjudication list, never to the score.
+// adjudication list, never to the score. Two REPLAY-v2 scoring rules sit on top (build/363,
+// build/364): a severity word governed by a negation is no severity (`maskNegated`), and a term
+// found only inside a locator credits nothing. A v1 result stays scored at its pinned instrument
+// commit (REPLAY-v1 §13), so these rules never re-score it.
 //
 // The fence grammar (a backtick fence, at most three spaces of indent, the info string exact) is
 // the product's own (`src/runs/layout.ts`, `fenceOpenPattern`), restated here because a contributor
@@ -37,6 +40,37 @@ const LOCATOR = /(?<![\w/.-])((?:[\w.-]+\/)*[\w.-]+\.(?:ts|js|mjs|json|md))(?::|
 // because every free-text miss lowers the baseline's recall and so eases the merge gate.
 const FINDING_WORD = /\b(critical|warning)s?\b/i
 const SEVERITY_WORD = /\b(critical|warning|minor)s?\b/i
+
+// build/363: a severity word governed by a negation is no severity. (a) A severity word, or a run
+// of them joined by `or`/`and`/`nor`, after `no`, `zero`, `0`, `none of the` or `without`, with
+// `new`, `remaining`, `open` or `further` optionally between; (b) the count form `Critical: 0`
+// (`0 Critical` is (a) with the negator `0`). The gaps are spaces and tabs only, never a line
+// break, so a mask never reaches across two lines of a return and hides a real finding. A zero
+// that is part of a number or a locator (`10`, `1.0`, `x.ts:0`) negates nothing, and neither does
+// a severity word that is part of a path (`no critical.ts:3`).
+const GAP = String.raw`[ \t]+`
+const SEVERITY_TOKEN = String.raw`[*_]*(?:critical|warning|minor)s?[*_]*(?![\w/-]|\.\w)`
+const NEGATOR = String.raw`(?:\b(?:no|zero|without)|(?<![\w.:/#-])0|\bnone${GAP}of${GAP}the)`
+const MODIFIERS = String.raw`(?:(?:new|remaining|open|further)${GAP})*`
+const NEGATED_RUN = new RegExp(
+  String.raw`(${NEGATOR}${GAP}${MODIFIERS})(${SEVERITY_TOKEN}(?:,?${GAP}(?:or|and|nor)${GAP}${SEVERITY_TOKEN})*)`,
+  'gi',
+)
+const ZERO_COUNT = new RegExp(String.raw`\b((?:critical|warning|minor)s?)([*_]*[ \t]*:[*_]*[ \t]*0)(?![\w.])`, 'gi')
+const SEVERITY_IN_RUN = /(?:critical|warning|minor)s?/gi
+const blank = (word) => ' '.repeat(word.length)
+
+/**
+ * `text` with spaces in place of every negated severity word (the rules above). The result has the
+ * text's length and every other character, so an index into it (a locator's `at`) is an index into
+ * `text`. The readers test severity words on the masked text only; a finding's `text` keeps the
+ * original.
+ */
+export function maskNegated(text) {
+  return String(text ?? '')
+    .replace(NEGATED_RUN, (_, lead, run) => lead + run.replace(SEVERITY_IN_RUN, blank))
+    .replace(ZERO_COUNT, (_, word, rest) => blank(word) + rest)
+}
 
 /** `warning`, `WARNINGS` → `Warning`; a string that is no severity word is returned unchanged. */
 function normalizeSeverity(word) {
@@ -209,8 +243,10 @@ function sectionsOf(text) {
  * severity word before the locator, falling back to the block's first when none precedes it.
  */
 function blockFindings(block, meta, { nearest = false } = {}) {
-  if (!FINDING_WORD.test(block)) return []
-  const words = [...block.matchAll(new RegExp(SEVERITY_WORD.source, 'gi'))]
+  // build/363: the severity words are read from the masked block, which keeps the block's indices.
+  const live = maskNegated(block)
+  if (!FINDING_WORD.test(live)) return []
+  const words = [...live.matchAll(new RegExp(SEVERITY_WORD.source, 'gi'))]
   const first = normalizeSeverity(words[0][1])
   return locatorsIn(block).map((loc) => {
     const before = nearest ? words.findLast((w) => w.index < loc.at) : undefined
@@ -244,7 +280,7 @@ function readFreeText(text, meta) {
     const folded = []
     let classified = 0
     for (const leaf of section.leaves) {
-      if (SEVERITY_WORD.test(leaf) && hasLocator(leaf)) {
+      if (SEVERITY_WORD.test(maskNegated(leaf)) && hasLocator(leaf)) {
         findings.push(...blockFindings(leaf, m))
         classified++
       } else folded.push(leaf)
@@ -252,9 +288,10 @@ function readFreeText(text, meta) {
     if (folded.length === 0 && (section.head === null || classified > 0)) continue
     const block = (section.head === null ? folded : [section.head, ...folded]).join('\n')
     const read = blockFindings(block, m, { nearest: true })
+    const live = maskNegated(block)
     if (read.length > 0) findings.push(...read)
-    else if (FINDING_WORD.test(block) && !hasLocator(block)) unread.push({ block, reason: 'severity-without-locator' })
-    else if (hasLocator(block) && !SEVERITY_WORD.test(block)) unread.push({ block, reason: 'locator-without-severity' })
+    else if (FINDING_WORD.test(live) && !hasLocator(block)) unread.push({ block, reason: 'severity-without-locator' })
+    else if (hasLocator(block) && !SEVERITY_WORD.test(live)) unread.push({ block, reason: 'locator-without-severity' })
   }
   return { findings, unread }
 }
@@ -532,11 +569,23 @@ function spansOf(item, spansByFile) {
 }
 
 /**
- * Score findings against seeds and decoys (REPLAY-v1 §9). A finding matches an item when the file
- * is equal, its line range intersects a span of the item widened by `tolerance`, and one of the
- * item's terms occurs in its text (case-insensitive substring). A location match without a term
- * goes to `adjudication` only. One finding may match several items. A finding with no file or line
- * is skipped, and so is one whose severity is outside `severities` when that list is given.
+ * Whether an accepted term occurs in a finding's text (both lower-cased, the locators already
+ * blanked): a case-insensitive substring, except that an all-digit term matches only as a number
+ * of its own (build/364: `20` is not read in `220`, `20ms`, `1.20` or `:20`).
+ */
+function termIn(text, term) {
+  if (!/^\d+$/.test(term)) return text.includes(term)
+  return new RegExp(String.raw`(?<![\w.:])${term}(?!\w)`).test(text)
+}
+
+/**
+ * Score findings against seeds and decoys (REPLAY-v1 §9, with REPLAY-v2's locator rule). A finding
+ * matches an item when the file is equal, its line range intersects a span of the item widened by
+ * `tolerance`, and one of the item's terms occurs in its text (`termIn`) once every free-text
+ * locator in that text is blanked (build/364: a term inside a locator's path or line credits
+ * nothing). A location match without a term goes to `adjudication` only. One finding may match
+ * several items. A finding with no file or line is skipped, and so is one whose severity is
+ * outside `severities` when that list is given.
  *
  * Returns `{ matched: { <item id>: findingIdx[] } (every item listed), adjudication: [{ id, findingIdx }] }`.
  */
@@ -548,11 +597,11 @@ export function matchItems(findings, items, spansByFile = {}, { tolerance = 3, s
     if (severities && !severities.includes(f.severity)) return
     const lo = f.line
     const hi = f.lineEnd ?? f.line
-    const text = String(f.text ?? '').toLowerCase()
+    const text = String(f.text ?? '').replace(LOCATOR, ' ').toLowerCase()
     for (const item of items) {
       if (item.file !== f.file) continue
       if (!spansOf(item, spansByFile).some(([start, end]) => lo <= end + tolerance && hi >= start - tolerance)) continue
-      if ((item.terms || []).some((term) => text.includes(String(term).toLowerCase()))) matched[item.id].push(findingIdx)
+      if ((item.terms || []).some((term) => termIn(text, String(term).toLowerCase()))) matched[item.id].push(findingIdx)
       else adjudication.push({ id: item.id, findingIdx })
     }
   })
