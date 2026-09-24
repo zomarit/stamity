@@ -184,8 +184,9 @@ grep -n 'through the resume card' SECURITY.md; grep -n 'into the committed ledge
 
 ## Deferred Warnings the maintainer should see
 
-The checkpoint's severity floor: every ledger row at Warning whose state is `deferred`. There are five, and each is
-in `.stamity/inbox.md` (lines 210–214).
+The checkpoint's severity floor: every ledger row at Warning whose state is `deferred`. There are eight, and each is
+in `.stamity/inbox.md` (lines 210–217); the last three came from the seed trace of the baseline pilot, after this
+form was first written.
 
 - `2026-09-23_orchestrator-context/build/31` — the session-start hook row declares no `timeoutMs` and no size
   ceiling, while the compact path now reads records and reports; a hook budget is a product choice across every hook
@@ -200,6 +201,14 @@ in `.stamity/inbox.md` (lines 210–214).
   joins build/31's budget choice (inbox line 213).
 - `2026-09-23_orchestrator-context/build/325` — the specs' requirement-statement line citations name the older tree
   (`fed39ac`); the refresh is set for the 1.10.0 close (inbox line 214).
+- `2026-09-23_orchestrator-context/build/362` — decision needed: the replay's fixture lets the orchestrator's
+  pre-read flag every seed before the build, so no seed reaches review and v1's recall rows cannot evaluate the
+  review-quality claim; the protocol for the merge gate is the maintainer's choice (inbox line 215; the run record's
+  pilot entries).
+- `2026-09-23_orchestrator-context/build/363` — the replay's free-text reader reads a negated severity word ("No
+  Critical findings") as a severity (inbox line 216); REPLAY-v2 scope.
+- `2026-09-23_orchestrator-context/build/364` — the replay's term matching credits a term found inside a locator or
+  an unrelated phrase (inbox line 217); REPLAY-v2 scope.
 
 ## The replay
 
