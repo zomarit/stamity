@@ -4,10 +4,12 @@ import { INVISIBLE_SMUGGLING_CHARS, normalizeForDenyScan } from "../denyscan/den
 import { SESSION_START_SCREEN } from "../hooks/scripts.ts";
 import {
   CARD_FIELD_MAX,
+  CARD_LEDGER_UNREADABLE,
   CARD_LIST_MAX,
   CARD_MAX_CHARS,
   CARD_NEXT_LINE,
   CARD_NOT_RECORDED,
+  CARD_NOT_REPORT_NAMED,
   CARD_RECOVERY_NOTE,
   FENCE_CLOSE_PATTERN,
   FINDINGS_FENCE,
@@ -21,6 +23,7 @@ import {
   RECORD_INVOCATION_PATTERN,
   RECORD_PLAN_PATTERN,
   RECORD_STATUS_PATTERN,
+  REPORT_NAME_PATTERN,
   REPORT_READ_MAX_BYTES,
   REPORTS_DIR,
   RUN_ID_PATTERN,
@@ -76,6 +79,13 @@ export interface ResumeCard {
   readonly listsWithheld: string | null;
   /** Non-blank ledger lines that are not JSON objects. */
   readonly unreadableLedgerLines: number;
+  /**
+   * A ledger is there but was not read (a link, anything else that is not a
+   * regular file, or a read that fails); the card says so instead of a count.
+   */
+  readonly ledgerUnreadable: boolean;
+  /** `.md` files in `reports/` whose names are not report names: counted, never listed. */
+  readonly notReportNamed: number;
 }
 
 const FINDINGS_OPEN = fenceOpenPattern(FINDINGS_FENCE);
@@ -229,18 +239,32 @@ interface LedgerRead {
   readonly open: string[];
   readonly ledgered: Set<string>;
   readonly unreadable: number;
+  /** The ledger is there but was not read; an absent ledger is not this. */
+  readonly failed: boolean;
 }
 
-/** Open row ids in file order, every report path a row carries, and the lines that are not rows. */
+/**
+ * Open row ids in file order, every report path a row carries, and the lines
+ * that are not rows. `failed` when a ledger is there but is not read — a link,
+ * anything else that is not a regular file, or a read that fails — so the card
+ * never counts it as empty; an absent ledger is a run with no rows yet.
+ */
 function readLedger(path: string): LedgerRead {
-  const read: LedgerRead = { open: [], ledgered: new Set(), unreadable: 0 };
-  if (!regularFile(path)) return read;
+  const read: LedgerRead = { open: [], ledgered: new Set(), unreadable: 0, failed: false };
+  let isFile: boolean;
+  try {
+    isFile = lstatSync(path).isFile();
+  } catch (error) {
+    // ENOENT is no ledger yet; any other lstat failure is one that cannot be read.
+    return { ...read, failed: (error as NodeJS.ErrnoException).code !== "ENOENT" };
+  }
+  if (!isFile) return { ...read, failed: true };
   let raw: string;
   try {
     raw = readFileSync(path, "utf8");
   } catch {
-    // An unreadable ledger reads as empty: the card says 0 open rows rather than failing.
-    return read;
+    // EACCES, EBUSY and the rest: there, but not read. The card says so rather than failing.
+    return { ...read, failed: true };
   }
   let unreadable = 0;
   for (const line of raw.split(/\r?\n/)) {
@@ -276,22 +300,36 @@ function hasFindings(raw: string): boolean {
   return false;
 }
 
+interface ReportsRead {
+  /** Report-named files holding findings no row carries, repo-relative. */
+  readonly listed: string[];
+  /** `.md` files whose names are not report names. */
+  readonly other: number;
+}
+
 /**
- * Reports that hold findings no ledger row points at, as repo-relative paths.
- * A report too large to read, or one that cannot be read, is listed: its
- * findings cannot be ruled out. A linked reports folder is not read at all.
+ * Reports that hold findings no ledger row points at, as repo-relative paths,
+ * and the count of `.md` files whose names are not report names. A report too
+ * large to read, or one that cannot be read, is listed: its findings cannot be
+ * ruled out. Any other name is counted and never listed, because its text is
+ * whatever the writer chose. A linked reports folder is not read at all.
  */
-function unledgeredReports(runDir: string, runId: string, ledgered: ReadonlySet<string>): string[] {
+function unledgeredReports(runDir: string, runId: string, ledgered: ReadonlySet<string>): ReportsRead {
   const reportsDir = join(runDir, REPORTS_DIR);
-  if (!realDir(reportsDir)) return [];
+  if (!realDir(reportsDir)) return { listed: [], other: 0 };
   const entries = listDir(reportsDir);
-  if (entries === null) return [];
+  if (entries === null) return { listed: [], other: 0 };
   const names = entries
     .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
     .map((entry) => entry.name)
     .toSorted();
   const out: string[] = [];
+  let other = 0;
   for (const name of names) {
+    if (!REPORT_NAME_PATTERN.test(name)) {
+      other += 1;
+      continue;
+    }
     const rel = [...RUNS_SEGMENTS, runId, REPORTS_DIR, name].join("/");
     if (ledgered.has(rel)) continue;
     const path = join(reportsDir, name);
@@ -318,7 +356,7 @@ function unledgeredReports(runDir: string, runId: string, ledgered: ReadonlySet<
     }
     if (hasFindings(raw)) out.push(rel);
   }
-  return out;
+  return { listed: out, other };
 }
 
 /** A worktree HEAD as the branch it names. */
@@ -425,11 +463,13 @@ function renderAt(
 ): string[] {
   const plan = flat(parts.plan ?? "");
   const invocation = flat(parts.invocation ?? "");
+  const other = parts.notReportNamed ?? 0;
+  const otherPart = other > 0 ? `  ·  ${CARD_NOT_REPORT_NAMED}: ${other}` : "";
   return [
     `stamity resume card — run ${parts.runId} (as of ${now.toISOString().slice(0, 16)}Z)`,
     `plan: ${plan === "" ? CARD_NOT_RECORDED : plan}  ·  invocation: ${invocation === "" ? CARD_NOT_RECORDED : invocation}`,
-    `ledger: ${parts.openRowIds.length} open rows${listPart(parts.openRowIds, k)}  ·  ${CARD_RECOVERY_NOTE}`,
-    `reports without a ledger row: ${parts.unledgeredReports.length}${listPart(parts.unledgeredReports, k)}`,
+    `ledger: ${parts.ledgerUnreadable === true ? CARD_LEDGER_UNREADABLE : `${parts.openRowIds.length} open rows${listPart(parts.openRowIds, k)}`}  ·  ${CARD_RECOVERY_NOTE}`,
+    `reports without a ledger row: ${parts.unledgeredReports.length}${listPart(parts.unledgeredReports, k)}${otherPart}`,
     `lanes: ${parts.lanes.length}${listPart(parts.lanes, k)}`,
     CARD_NEXT_LINE,
   ];
@@ -447,6 +487,10 @@ export function renderResumeCard(
     readonly openRowIds: readonly string[];
     readonly unledgeredReports: readonly string[];
     readonly lanes: readonly string[];
+    /** The ledger is there but was not read: the ledger line says so instead of a count. */
+    readonly ledgerUnreadable?: boolean;
+    /** `.md` files not report-named; the reports line counts them when there are any. */
+    readonly notReportNamed?: number;
   },
   now: Date,
 ): string[] {
@@ -496,7 +540,8 @@ export function collectResumeCard(opts: {
 
   const head = readRecordHeadFile(join(runDir, RECORD_FILE));
   const ledger = readLedger(join(runDir, LEDGER_FILE));
-  const unledgered = unledgeredReports(runDir, runId, ledger.ledgered);
+  const reportsRead = unledgeredReports(runDir, runId, ledger.ledgered);
+  const unledgered = reportsRead.listed;
   const lanes = lanesOf(opts.rootDir);
 
   const card = renderResumeCard(
@@ -507,6 +552,8 @@ export function collectResumeCard(opts: {
       openRowIds: ledger.open,
       unledgeredReports: unledgered,
       lanes,
+      ledgerUnreadable: ledger.failed,
+      notReportNamed: reportsRead.other,
     },
     opts.now,
   );
@@ -531,5 +578,7 @@ export function collectResumeCard(opts: {
     withheld: withheld === "" ? null : withheld,
     listsWithheld: listsWithheld === "" ? null : listsWithheld,
     unreadableLedgerLines: ledger.unreadable,
+    ledgerUnreadable: ledger.failed,
+    notReportNamed: reportsRead.other,
   };
 }

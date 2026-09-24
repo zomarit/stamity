@@ -32,7 +32,8 @@ import {
 import { formatLearningsIndex, loadValidatedLearnings } from "../../src/learnings/store.ts";
 import { computeLearningIntegrity } from "../../src/learnings/validation.ts";
 import { RENAME_RETRY_COUNT } from "../../src/merge/atomicWrite.ts";
-import { AGENT_POLICY_ROSTER, isWritePathPattern } from "../../src/roster/agentPolicies.ts";
+import { AGENT_POLICY_ROSTER, isWritePathPattern, verdictReportWritePaths } from "../../src/roster/agentPolicies.ts";
+import { REPORT_NAME_PATTERN, REPORT_ROLES, UNPRINTABLE_CHARS } from "../../src/runs/layout.ts";
 import {
   clampReviewIterations,
   DEFAULT_MAX_REVIEW_ITERATIONS,
@@ -1493,6 +1494,78 @@ describe("the guard's path-scoped report write", () => {
     for (const segment of names) {
       expect(isReservedDeviceSegment(segment), JSON.stringify(segment)).toBe(false);
     }
+  });
+
+  /** A rendered helper and everything from `from` up to it, lifted out of the guard text and evaluated alone. */
+  function liftGuardHelper<T>(from: string, fn: string): T {
+    const text = buildPreToolUseGuardScript({ policiesJsonPath: `../../${POLICY_FILE}`, failMode: "fail-closed" });
+    const start = text.indexOf(from);
+    const at = text.indexOf(`function ${fn}(`, start);
+    const end = text.indexOf("\n}\n", at);
+    expect(start, `${from} is not rendered`).toBeGreaterThanOrEqual(0);
+    expect(at, `${fn} is not rendered after ${from}`).toBeGreaterThanOrEqual(start);
+    return runInNewContext(`${text.slice(start, end + 2)}\n${fn};`) as T;
+  }
+
+  it("strips a refusal line by the shared unprintable class, embedded by source", () => {
+    // Ledger row build/259: the guard restated a narrower strip set by hand
+    // (no zero-width marks, no word joiner, no byte-order mark).
+    const text = buildPreToolUseGuardScript({ policiesJsonPath: `../../${POLICY_FILE}`, failMode: "fail-closed" });
+    expect(text).toContain(
+      `const GUARD_UNPRINTABLE = new RegExp(${JSON.stringify(UNPRINTABLE_CHARS.source)}, ${JSON.stringify(UNPRINTABLE_CHARS.flags)});`,
+    );
+    const printable = liftGuardHelper<(text: string) => string>("const GUARD_UNPRINTABLE", "printable");
+    const dirty = "a\u0007b\u001b[2Jc\u009bd\u200be\u200ff\u202eg\u2060h\u2066i\u2069j\ufeffk\u2028l\u2029m\u00adn";
+    // The soft hyphen stays, as it does in every other sink: only the screens strip it.
+    expect(printable(dirty)).toBe("ab[2Jcdefghijklm\u00adn");
+  });
+
+  it("admits, through each verdict role's pattern, every name C1's grammar admits for that role, and no other role's", () => {
+    // Ledger row build/261: nothing bound the guard's matcher to REPORT_NAME_PATTERN,
+    // so a name the store appends could have been one the guard refuses to write.
+    const patternMatches = liftGuardHelper<(path: string, pattern: string) => boolean>(
+      "function piecesMatch(",
+      "patternMatches",
+    );
+    const verdictRoles = ["reviewer", "security", "performance", "design-quality"] as const;
+    for (const role of verdictRoles) expect(REPORT_ROLES).toContain(role);
+
+    // A seeded generator, so a failure names a name that reproduces.
+    let seed = 0x5eed_c1;
+    const next = (): number => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return seed;
+    };
+    const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789-";
+    const passes = [
+      "u1", "branch", "plan", "u-report", "u-summary-x", "ctx-hook-card", "0", "9x", "a-b-c",
+      "x-security", "x-reviewer-r1", "x-security-r2-y", "design", "quality", "r1", "reviewer",
+    ];
+    for (let index = 0; index < 400; index += 1) {
+      const length = 1 + (next() % 14);
+      let pass = alphabet[next() % 36] ?? "a";
+      for (let char = 1; char < length; char += 1) pass += alphabet[next() % alphabet.length] ?? "a";
+      passes.push(pass);
+    }
+    const rounds = [1, 2, 9, 10, 19, 100, 1234];
+
+    let admitted = 0;
+    for (const pass of passes) {
+      for (const role of REPORT_ROLES) {
+        for (const round of rounds) {
+          const name = `${pass}-${role}-r${round}.md`;
+          if (!REPORT_NAME_PATTERN.test(name)) continue;
+          admitted += 1;
+          const path = `.stamity/runs/2026-09-23_ctx/reports/${name}`;
+          for (const guarded of verdictRoles) {
+            const [pattern] = verdictReportWritePaths(guarded);
+            expect(patternMatches(path, pattern ?? ""), `${name} against ${guarded}`).toBe(guarded === role);
+          }
+        }
+      }
+    }
+    // The corpus is not vacuous: most of it is C1 names.
+    expect(admitted).toBeGreaterThan(passes.length * REPORT_ROLES.length * rounds.length * 0.8);
   });
 
   describe.skipIf(!WINDOWS)("on win32", () => {

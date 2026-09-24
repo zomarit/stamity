@@ -320,7 +320,8 @@ describe("the session-start resume card", () => {
 
     const card = cardOf(start(script, COMPACT).stdout);
     expect(card[0]).toContain("run 2026-09-01_real ");
-    expect(card[2]).toBe("ledger: 0 open rows  ·  the ledger is the recovery point");
+    // Ledger row build/258: a linked ledger is not followed, and no longer reads as "0 open rows".
+    expect(card[2]).toBe("ledger: could not be read  ·  the ledger is the recovery point");
     expect(card[3]).toBe("reports without a ledger row: 1 (.stamity/runs/2026-09-01_real/reports/u1-reviewer-r1.md)");
   });
 

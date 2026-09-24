@@ -429,6 +429,23 @@ describe("requireRunDir and resolveReportPath", () => {
     }
   });
 
+  it("strips control and bidi characters from the --report value its refusal quotes", async () => {
+    // Ledger row build/260: the one store refusal that echoed caller text raw.
+    const dir = tempDir();
+    await seedRun(dir);
+
+    const error = await resolveReportPath(dir.dir, RUN, "notes\u001b[2J\u202E\u2028x.md").then(
+      () => null,
+      (caught: unknown) => caught as { message?: unknown },
+    );
+
+    expect(error?.message).toEqual(expect.stringContaining("--report notes[2Jx.md is not a report of run "));
+    for (const char of String(error?.message)) {
+      const code = char.codePointAt(0) ?? 0;
+      expect(code < 0x20 || (code >= 0x7f && code <= 0x9f) || code === 0x202e || code === 0x2028, code.toString(16)).toBe(false);
+    }
+  });
+
   it("refuses a report over 1 MiB", async () => {
     const dir = tempDir();
     await seedRun(dir, { [REPORT_REL]: `${report([C1])}${"x".repeat(1_048_576)}` });
@@ -615,6 +632,21 @@ describe("appendFindings", () => {
     await expect(append(dir, [finding()], REPORT_REL)).rejects.toThrow(
       `ledger append refused ${REPORT_REL}: the ledger already carries rows from this report ([31mred2Jflip line)`,
     );
+  });
+
+  it("strips control, bidi, zero-width and line-separator characters from a locator and summary before the row", async () => {
+    // Ledger row build/248: the evidence of a row is committed and diffed, so a
+    // bidi override or a line separator from verdict-role text would spoof it.
+    const dir = tempDir();
+    await seedRun(dir);
+
+    await append(dir, [
+      finding({ locator: "src/a.ts:1\u202E\u200B", summary: "a\u2028b\u2029c\u0085d\u2066e\u2069\uFEFF\u009B2J\tf" }),
+    ]);
+
+    const [row] = (await readText(dir, LEDGER)).trimEnd().split("\n");
+    const evidence = (JSON.parse(row ?? "{}") as Record<string, unknown>)["evidence"];
+    expect(evidence).toBe("src/a.ts:1 — abcde2J f");
   });
 
   it("takes no lock and creates no ledger for zero findings", async () => {
@@ -833,6 +865,29 @@ describe("stamity ledger append", () => {
     expect(second.code).toBe(1);
     expect(second.stderr).toContain(`(${RUN}/review/1, ${RUN}/review/2)`);
     expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("refuses a --source that is not the role the --report name carries, and writes nothing", async () => {
+    // Ledger row build/263: a report of one role could be filed under another's source.
+    const dir = tempDir();
+    const designReport = `${RUN_DIR}/reports/u1-design-quality-r2.md`;
+    await seedRun(dir, { [REPORT_REL]: report([C1]), [designReport]: report([W1]) });
+
+    const wrong = await cli(dir, ["ledger", "append", "--run", RUN, "--phase", "review", "--source", "security", "--report", REPORT_REL]);
+    expect(wrong.code).toBe(1);
+    expect(wrong.stdout).toBe("");
+    expect(wrong.stderr).toContain('ledger: --source "security" is not reviewer, the role the report name');
+    expect(existsSync(dir.path(LEDGER))).toBe(false);
+
+    // A hyphenated role reads whole, and the matching source appends.
+    const hyphenated = await cli(dir, [
+      "ledger", "append", "--run", RUN, "--phase", "review", "--source", "design-quality", "--report", designReport,
+    ]);
+    expect(hyphenated.code, hyphenated.stderr).toBe(0);
+    expect(hyphenated.stdout).toBe(`${RUN}/review/1 Warning W-1\n`);
+    // --stdin carries no report name, so its --source is not compared.
+    const piped = await cli(dir, ["ledger", "append", "--run", RUN, "--phase", "review", "--source", "orchestrator", "--stdin"], report([M1]).split("\n"));
+    expect(piped.code, piped.stderr).toBe(0);
   });
 
   it("previews the rows under --dry-run and writes nothing, not even the ignore file", async () => {

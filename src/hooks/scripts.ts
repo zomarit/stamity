@@ -24,6 +24,7 @@ import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, STATE_DIR } from "../types/markers.ts";
 import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
+import { UNPRINTABLE_CHARS } from "../runs/layout.ts";
 import { CLIENT_HOOK_GUARANTEES, type CanonicalHookEvent, type HookFailMode } from "./model.ts";
 
 /**
@@ -1292,16 +1293,16 @@ function writePathCheck(payload, patterns) {
   return patterns.some((pattern) => patternMatches(path, pattern)) ? "" : "no-pattern-match";
 }
 
-/** Drops C0, DEL, C1 and bidirectional controls, so a refusal prints as one inert line. */
+/**
+ * The engine's shared unprintable class, embedded by source and flags: C0, DEL,
+ * C1, the zero-width marks, the line and paragraph separators, the bidi
+ * controls and the byte-order mark.
+ */
+const GUARD_UNPRINTABLE = new RegExp(${json(UNPRINTABLE_CHARS.source)}, ${json(UNPRINTABLE_CHARS.flags)});
+
+/** Drops every character of that class, so a refusal prints as one inert line. */
 function printable(text) {
-  let out = "";
-  for (const char of text) {
-    const code = char.codePointAt(0);
-    if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) continue;
-    if ((code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069)) continue;
-    out += char;
-  }
-  return out;
+  return String(text).replace(GUARD_UNPRINTABLE, "");
 }`;
 }
 

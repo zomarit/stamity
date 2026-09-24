@@ -805,6 +805,76 @@ describe("stamity ledger close", () => {
     expect(await readText(dir, LEDGER)).toBe(before);
   });
 
+  it("qualifies a <phase>/<n> id with --run's id, in the closures block and in --ids alike", async () => {
+    // Ledger row build/264: the engine matched only the full id while the
+    // run's own reviewers wrote the short form, so closures were applied by hand.
+    const dir = tempDir();
+    await seedRun(dir, {
+      [LEDGER]: `${row(1)}\n${row(2)}\n${row(3)}\n`,
+      [REPORT_REL]: rereview([
+        { ledger_id: "review/1", status: "fixed" },
+        closure(2, "fixed"),
+        { ledger_id: "review/3", status: "not-fixed" },
+      ]),
+    });
+
+    const result = await cli(dir, [...CLOSE, "--report", REPORT_REL, "--ids", `review/1,review/2,${rid(3)}`]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toBe(
+      `${rid(1)} open -> fixed (fixed)\n${rid(2)} open -> fixed (fixed)\n${rid(3)} open -> open (not-fixed)\n`,
+    );
+    expect(rowsOf(await readText(dir, LEDGER)).map((r) => r["state"])).toEqual(["fixed", "fixed", "open"]);
+
+    // The re-run reads the same rows through either spelling: unchanged, byte-identical.
+    const once = await readText(dir, LEDGER);
+    const again = await cli(dir, [...CLOSE, "--report", REPORT_REL, "--ids", ids(1, 2, 3)]);
+    expect(again.code, again.stderr).toBe(0);
+    expect(again.stdout).toBe(
+      `${rid(1)} unchanged (already recorded)\n${rid(2)} unchanged (already recorded)\n${rid(3)} unchanged (already recorded)\n`,
+    );
+    expect(await readText(dir, LEDGER)).toBe(once);
+  });
+
+  it("refuses the whole close when a closure or --ids names another run's row", async () => {
+    const dir = tempDir();
+    const other = "2026-09-22_other/review/2";
+    const before = `${row(1)}\n${row(2)}\n`;
+    await seedRun(dir, {
+      [LEDGER]: before,
+      [REPORT_REL]: rereview([closure(1, "fixed"), { ledger_id: other, status: "fixed" }]),
+    });
+
+    const inBlock = await cli(dir, [...CLOSE, "--report", REPORT_REL, "--ids", `${ids(1)},${other}`]);
+    expect(inBlock.code).toBe(1);
+    expect(inBlock.stdout).toBe("");
+    expect(inBlock.stderr).toContain(`ledger close refused: --ids names ${other}, a row of run 2026-09-22_other, not ${RUN}`);
+    expect(await readText(dir, LEDGER)).toBe(before);
+
+    // Handed only this run's ids: the foreign closure alone refuses the close, naming its line.
+    const blockOnly = await cli(dir, [...CLOSE, "--report", REPORT_REL, "--ids", ids(1, 2)]);
+    expect(blockOnly.code).toBe(1);
+    expect(blockOnly.stderr).toContain(
+      `${REPORT_REL}:7: ledger_id "${other}" names run 2026-09-22_other, not ${RUN}; a close moves only its own run's rows`,
+    );
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("refuses one row closed twice through its two spellings", async () => {
+    const dir = tempDir();
+    const before = `${row(1)}\n`;
+    await seedRun(dir, {
+      [LEDGER]: before,
+      [REPORT_REL]: rereview([closure(1, "fixed"), { ledger_id: "review/1", status: "not-fixed" }]),
+    });
+
+    const result = await cli(dir, [...CLOSE, "--report", REPORT_REL, "--ids", ids(1)]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain(`${REPORT_REL}:7: ledger_id "review/1" is ${rid(1)}, which line 6 already closes`);
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
   it("refuses an unknown ledger_id with exit 1, naming the id", async () => {
     const dir = tempDir();
     const before = `${row(1)}\n`;

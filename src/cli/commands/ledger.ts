@@ -239,7 +239,7 @@ async function runAppend(ctx: CliContext, opts: Record<string, unknown>): Promis
   if (source === undefined) throw missingFlag(APPEND, "--source");
   requireRun(ctx, APPEND, opts);
 
-  const { ledgerStore, blocks } = ctx.engine.runs;
+  const { ledgerStore, blocks, layout } = ctx.engine.runs;
   for (const [flag, value] of [
     ["--phase", phase],
     ["--source", source],
@@ -271,6 +271,16 @@ async function runAppend(ctx: CliContext, opts: Record<string, unknown>): Promis
   let report: string | null = null;
   if (reportFlag !== undefined) {
     const resolved = await ledgerStore.resolveReportPath(rootDir, run, reportFlag);
+    // The name is a C1 report name by now, so it carries a role; --stdin carries no name to compare.
+    const role = layout.reportNameRole(resolved.relative.slice(resolved.relative.lastIndexOf("/") + 1));
+    if (role !== source) {
+      throw new CliFailure({
+        code: "VALIDATION_ERROR",
+        message: `ledger: --source ${JSON.stringify(source)} is not ${role ?? "the role"}, the role the report name ${resolved.relative} carries`,
+        why: "a report's rows are filed under the role that wrote it, so one role's findings never read as another's",
+        next: `re-run with --source ${role ?? "<role>"}, or name that role's own report`,
+      });
+    }
     blockText = resolved.text;
     report = resolved.relative;
   } else {
@@ -474,6 +484,8 @@ const NO_CARD_JSON = {
   withheld: null,
   listsWithheld: null,
   unreadableLedgerLines: 0,
+  ledgerUnreadable: false,
+  notReportNamed: 0,
 } as const;
 
 /**
@@ -502,6 +514,8 @@ function statusJson(card: ResumeCard): Record<string, unknown> {
     withheld: card.withheld,
     listsWithheld: card.listsWithheld,
     unreadableLedgerLines: card.unreadableLedgerLines,
+    ledgerUnreadable: card.ledgerUnreadable,
+    notReportNamed: card.notReportNamed,
   };
 }
 
@@ -533,6 +547,11 @@ async function runStatus(ctx: CliContext, opts: Record<string, unknown>): Promis
     return { exitCode: 0, json: { ...NO_CARD_JSON, counts: { ...NO_CARD_JSON.counts } } };
   }
 
+  if (card.ledgerUnreadable) {
+    ctx.io.err(
+      `warning: ${layout.runRelPath(card.runId, layout.LEDGER_FILE)} exists but could not be read; its open rows are not counted\n`,
+    );
+  }
   if (card.unreadableLedgerLines > 0) {
     ctx.io.err(
       `warning: ${layout.runRelPath(card.runId, layout.LEDGER_FILE)} has ${card.unreadableLedgerLines} line(s) that are not ledger rows\n`,

@@ -54,6 +54,18 @@ export const REPORT_NAME_PATTERN: RegExp = new RegExp(
   `^(?!(?:report|summary|findings|analysis))[a-z0-9][a-z0-9-]*-(?:${REPORT_ROLES.join("|")})-r[1-9][0-9]*\\.md$`,
 );
 
+const REPORT_ROLE_SUFFIX = new RegExp(`-(${REPORT_ROLES.join("|")})-r[1-9][0-9]*\\.md$`);
+
+/**
+ * The `<role>` segment of a report name, or null when `name` is not one. No
+ * role is a suffix of another, so the role just before `-r<N>.md` is the only
+ * reading, whatever role tokens the pass slug holds.
+ */
+export function reportNameRole(name: string): string | null {
+  if (!REPORT_NAME_PATTERN.test(name)) return null;
+  return REPORT_ROLE_SUFFIX.exec(name)?.[1] ?? null;
+}
+
 /** The info string of a report's findings block. */
 export const FINDINGS_FENCE = "stamity-findings";
 /** The info string of a re-review's closures block. */
@@ -106,21 +118,34 @@ export const CARD_FIELD_MAX = 200;
 
 /**
  * The characters a printed or recorded field drops: the C0 and C1 controls,
- * DEL, the zero-width marks, the bidi controls and the byte-order mark. Text
- * read from a committed file (a ledger id, a record line, a branch) would
- * otherwise reach a terminal as an escape sequence, or a context or a diff
- * reordered. The Unicode tag block is deliberately NOT here: the screens'
+ * DEL, the zero-width marks, the line and paragraph separators, the bidi
+ * controls and the byte-order mark. Text read from a committed file (a ledger
+ * id, a record line, a branch) or written into one (a finding's locator and
+ * summary) would otherwise reach a terminal as an escape sequence, or a
+ * context or a diff reordered or broken across lines. The Unicode tag block is deliberately NOT here: the screens'
  * `unicode-tag-smuggling` row refuses a payload by those characters, and
  * stripping them first would launder it. Global and Unicode-aware, for
  * `String.prototype.replace`; the hook's card embeds it by source and flags.
  */
 // oxlint-disable-next-line no-control-regex -- matching control characters IS the point
-export const UNPRINTABLE_CHARS = /[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/gu;
+export const UNPRINTABLE_CHARS = /[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/gu;
 
 /** The card's fixed words. */
 export const CARD_RECOVERY_NOTE = "the ledger is the recovery point";
 export const CARD_NEXT_LINE = "next: read the open rows and the listed reports before dispatching anything";
 export const CARD_NOT_RECORDED = "(not recorded)";
+/**
+ * What the ledger line says instead of a count when a ledger is there but
+ * cannot be read (not absent: a permission, a link, a folder in its place), so
+ * a resumed session is never told a run it cannot see has nothing open.
+ */
+export const CARD_LEDGER_UNREADABLE = "could not be read";
+/**
+ * The label of the count of `.md` files in `reports/` whose names are not
+ * report names. Only a report name is ever listed: any other name is
+ * text a steered role chose, and the card would carry it into context.
+ */
+export const CARD_NOT_REPORT_NAMED = "not report-named";
 
 /** Whether `value` is a run folder's name. */
 export function isRunId(value: string): boolean {

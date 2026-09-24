@@ -257,7 +257,7 @@ export async function resolveReportPath(
   given: string,
 ): Promise<ResolvedReport> {
   const refuse = (reason: string): EngineError =>
-    new EngineError(`--report ${given} is not a report of run ${runId}: ${reason}`, {
+    new EngineError(`--report ${printableText(given)} is not a report of run ${runId}: ${reason}`, {
       code: "VALIDATION_ERROR",
       next: `name a file directly inside ${runRelPath(runId, REPORTS_DIR)}/, or pipe the block with --stdin`,
     });
@@ -417,7 +417,9 @@ export async function appendFindings(req: {
           phase: req.phase,
           source: req.source,
           severity: finding.severity,
-          evidence: `${finding.locator} — ${finding.summary}`,
+          // Stripped before the row is built: the ledger is committed and diffed,
+          // so a bidi override or a line separator would spoof the line it lands on.
+          evidence: `${printableText(finding.locator)} — ${printableText(finding.summary)}`,
           state: "open",
           rationale: "",
           ...(req.report === null ? {} : { report: req.report }),
@@ -441,6 +443,25 @@ export async function appendFindings(req: {
   } finally {
     await release?.();
   }
+}
+
+/** A ledger id's short form, `<phase>/<n>`, as a re-review may spell it. */
+const SHORT_LEDGER_ID = new RegExp(`^${LEDGER_SLUG_PATTERN.source.slice(1, -1)}/[1-9][0-9]*$`);
+
+/**
+ * A ledger id as `ledger close` matches it: `<phase>/<n>` qualified with the
+ * run's id (C7, ledger row build/264), any other spelling as given. `foreignRun`
+ * names the run an id belongs to when that is not this run, which refuses the
+ * whole close rather than leaving a row of this run unmatched.
+ */
+export function qualifyLedgerId(
+  runId: string,
+  given: string,
+): { readonly id: string; readonly foreignRun: string | null } {
+  if (SHORT_LEDGER_ID.test(given)) return { id: `${runId}/${given}`, foreignRun: null };
+  const slash = given.indexOf("/");
+  const named = slash < 0 ? "" : given.slice(0, slash);
+  return { id: given, foreignRun: isRunId(named) && named !== runId ? named : null };
 }
 
 /** Where each closure status leaves its row (C9). */
@@ -575,6 +596,9 @@ async function rewriteRows(
  * hand-planted note — is refused, because the closure cannot hold. An applied
  * closure appends its note, then ` — <rationale>` when it carries one; the note
  * alone is the idempotency key. A handed id with no closure is left as it is.
+ * Every id, handed or closed, is read through {@link qualifyLedgerId} first:
+ * `<phase>/<n>` names this run's row, and an id naming another run refuses the
+ * whole close; one row closed through both spellings is refused as a repeat.
  */
 export async function applyClosures(req: {
   readonly rootDir: string;
@@ -584,19 +608,53 @@ export async function applyClosures(req: {
   readonly report: string;
   readonly dryRun: boolean;
 }): Promise<CloseResult> {
+  const handed = new Set<string>();
+  for (const given of req.handedIds) {
+    const qualified = qualifyLedgerId(req.runId, given);
+    if (qualified.foreignRun !== null) {
+      throw new EngineError(
+        `ledger close refused: --ids names ${printableText(cutReportText(given))}, a row of run ${qualified.foreignRun}, not ${req.runId}`,
+        {
+          code: "VALIDATION_ERROR",
+          why: "a close moves only the rows of the run it names, so no row changed",
+          next: `hand only rows of ${req.runId}, or close the other run's rows with its own --run`,
+        },
+      );
+    }
+    handed.add(qualified.id);
+  }
   if (req.closures.length === 0) {
     runDir(req.rootDir, req.runId);
     if (!req.dryRun) await ensureReportsIgnore(req.rootDir, req.runId);
     return { ledger: runRelPath(req.runId, LEDGER_FILE), changes: [], unreadableLines: [] };
   }
-  const handed = new Set(req.handedIds);
   return await rewriteRows(req, (parsed, ledgerRel) => {
     const indexOf = rowIndex(parsed);
     const problems: BlockProblem[] = [];
     const changes: CloseChange[] = [];
     const rewrites = new Map<number, LedgerRow>();
+    const closedAt = new Map<string, number>();
     for (const closure of req.closures) {
-      const { ledgerId, status, line } = closure;
+      const { status, line } = closure;
+      const qualified = qualifyLedgerId(req.runId, closure.ledgerId);
+      if (qualified.foreignRun !== null) {
+        problems.push({
+          line,
+          message: `ledger_id ${quoteReportText(closure.ledgerId)} names run ${qualified.foreignRun}, not ${req.runId}; a close moves only its own run's rows`,
+        });
+        continue;
+      }
+      const ledgerId = qualified.id;
+      const earlier = closedAt.get(ledgerId);
+      if (earlier !== undefined) {
+        // The parser refuses one spelling twice; this is the same row through its two spellings.
+        problems.push({
+          line,
+          message: `ledger_id ${quoteReportText(closure.ledgerId)} is ${cutReportText(ledgerId)}, which line ${earlier} already closes`,
+        });
+        continue;
+      }
+      closedAt.set(ledgerId, line);
       if (!handed.has(ledgerId)) {
         problems.push({
           line,
