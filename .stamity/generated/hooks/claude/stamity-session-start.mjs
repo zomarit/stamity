@@ -485,6 +485,7 @@ const CARD_RUNS_DIR = "runs";
 const CARD_RUNS_REL = ".stamity/runs";
 const CARD_RUN_ID = new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}_[a-z0-9-]+$", "");
 const CARD_REPORTS_DIR = "reports";
+const CARD_REPORT_NAME = new RegExp("^(?!(?:report|summary|findings|analysis))[a-z0-9][a-z0-9-]*-(?:implementer|fixer|reviewer|security|performance|design-quality|test-runner|spec-author)-r[1-9][0-9]*\\.md$", "");
 const CARD_LEDGER_FILE = "ledger.jsonl";
 const CARD_RECORD_FILE = "record.md";
 const CARD_FINDINGS_OPEN = new RegExp("^ {0,3}```stamity-findings[ \\t]*$", "");
@@ -500,10 +501,12 @@ const CARD_GIT_MAX_BYTES = 4096;
 const CARD_MAX_CHARS = 2000;
 const CARD_LIST_MAX = 10;
 const CARD_FIELD_MAX = 200;
-const CARD_UNPRINTABLE = new RegExp("[\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]", "gu");
+const CARD_UNPRINTABLE = new RegExp("[\\u0000-\\u001F\\u007F-\\u009F\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]", "gu");
 const CARD_RECOVERY_NOTE = "the ledger is the recovery point";
 const CARD_NEXT_LINE = "next: read the open rows and the listed reports before dispatching anything";
 const CARD_NOT_RECORDED = "(not recorded)";
+const CARD_LEDGER_UNREADABLE = "could not be read";
+const CARD_NOT_REPORT_NAMED = "not report-named";
 
 /** A regular file, never through a link. Absent or unreadable reads as not one. */
 function cardRegularFile(path) {
@@ -595,16 +598,29 @@ function cardRecordHead(path) {
   };
 }
 
-/** Open row ids in file order, and every report path a row carries. Bad lines are skipped. */
+/**
+ * Open row ids in file order, and every report path a row carries. Bad lines
+ * are skipped. "failed" when a ledger is there but is not read — a link, anything
+ * else that is not a regular file, or a read that fails — so the card never
+ * counts it as empty; an absent ledger is a run with no rows yet.
+ */
 function cardLedger(path) {
   const open = [];
   const ledgered = new Set();
-  if (!cardRegularFile(path)) return { open, ledgered };
+  let stats;
+  try {
+    stats = lstatSync(path);
+  } catch (error) {
+    // ENOENT is no ledger yet; any other lstat failure is one that cannot be read.
+    return { open, ledgered, failed: !(error && error.code === "ENOENT") };
+  }
+  if (!stats.isFile()) return { open, ledgered, failed: true };
   let raw;
   try {
     raw = readFileSync(path, "utf8");
   } catch {
-    return { open, ledgered };
+    // EACCES, EBUSY and the rest: there, but not read.
+    return { open, ledgered, failed: true };
   }
   for (const line of raw.split(/\r?\n/)) {
     if (line.trim() === "") continue;
@@ -619,7 +635,7 @@ function cardLedger(path) {
     if (typeof row.id === "string" && row.state === "open") open.push(row.id);
     if (typeof row.report === "string") ledgered.add(row.report);
   }
-  return { open, ledgered };
+  return { open, ledgered, failed: false };
 }
 
 /** Whether the first findings block holds at least one non-blank line before it closes. */
@@ -635,25 +651,33 @@ function cardHasFindings(raw) {
 }
 
 /**
- * Reports that hold findings no ledger row points at, as repo-relative paths.
- * A report too large to read, or one that cannot be read, is listed: its
- * findings cannot be ruled out. A linked reports folder is not read at all.
+ * Reports that hold findings no ledger row points at, as repo-relative paths,
+ * and the count of .md files whose names are not report names. A report too
+ * large to read, or one that cannot be read, is listed: its findings cannot be
+ * ruled out. Any other name is counted and never listed, because its text is
+ * whatever the writer chose. A linked reports folder is not read at all.
  */
 function cardUnledgered(runDir, run, ledgered) {
+  const none = { listed: [], other: 0 };
   const reportsDir = join(runDir, CARD_REPORTS_DIR);
-  if (!cardRealDir(reportsDir)) return [];
+  if (!cardRealDir(reportsDir)) return none;
   let entries;
   try {
     entries = readdirSync(reportsDir, { withFileTypes: true });
   } catch {
-    return [];
+    return none;
   }
   const names = entries
     .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
     .map((entry) => entry.name)
     .sort();
   const out = [];
+  let other = 0;
   for (const name of names) {
+    if (!CARD_REPORT_NAME.test(name)) {
+      other += 1;
+      continue;
+    }
     const rel = CARD_RUNS_REL + "/" + run + "/" + CARD_REPORTS_DIR + "/" + name;
     if (ledgered.has(rel)) continue;
     const path = join(runDir, CARD_REPORTS_DIR, name);
@@ -679,7 +703,7 @@ function cardUnledgered(runDir, run, ledgered) {
     }
     if (cardHasFindings(raw)) out.push(rel);
   }
-  return out;
+  return { listed: out, other };
 }
 
 /** A worktree HEAD as the branch it names. */
@@ -779,15 +803,19 @@ function cardList(items, k) {
   return " (" + shown.join(", ") + ")";
 }
 
-function cardRender(run, head, open, unledgered, lanes, nowMs, k) {
+function cardRender(run, head, ledger, reports, lanes, nowMs, k) {
   const plan = cardFlat(head.plan);
   const invocation = cardFlat(head.invocation);
+  const open = ledger.open;
+  const unledgered = reports.listed;
   return [
     "stamity resume card — run " + run + " (as of " + new Date(nowMs).toISOString().slice(0, 16) + "Z)",
     "plan: " + (plan === "" ? CARD_NOT_RECORDED : plan) +
       "  ·  invocation: " + (invocation === "" ? CARD_NOT_RECORDED : invocation),
-    "ledger: " + open.length + " open rows" + cardList(open, k) + "  ·  " + CARD_RECOVERY_NOTE,
-    "reports without a ledger row: " + unledgered.length + cardList(unledgered, k),
+    "ledger: " + (ledger.failed ? CARD_LEDGER_UNREADABLE : open.length + " open rows" + cardList(open, k)) +
+      "  ·  " + CARD_RECOVERY_NOTE,
+    "reports without a ledger row: " + unledgered.length + cardList(unledgered, k) +
+      (reports.other > 0 ? "  ·  " + CARD_NOT_REPORT_NAMED + ": " + reports.other : ""),
     "lanes: " + lanes.length + cardList(lanes, k),
     CARD_NEXT_LINE,
   ];
@@ -820,12 +848,12 @@ function resumeCardLines(rootDir, stateRoot, nowMs) {
 
   const runDir = join(runsDir, chosen.run);
   const ledger = cardLedger(join(runDir, CARD_LEDGER_FILE));
-  const unledgered = cardUnledgered(runDir, chosen.run, ledger.ledgered);
+  const reports = cardUnledgered(runDir, chosen.run, ledger.ledgered);
   const lanes = cardLanes(rootDir);
 
   let lines = [];
   for (let k = CARD_LIST_MAX; k >= 0; k -= 1) {
-    lines = cardRender(chosen.run, chosen.head, ledger.open, unledgered, lanes, nowMs, k);
+    lines = cardRender(chosen.run, chosen.head, ledger, reports, lanes, nowMs, k);
     if (lines.join("\n").length <= CARD_MAX_CHARS) break;
   }
   const hit = screenHit(lines.join("\n"));

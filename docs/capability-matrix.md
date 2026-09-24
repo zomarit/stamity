@@ -62,8 +62,8 @@ plan against, not a reading this page took as it rendered.
 
 **What co-selecting codex costs every other client.** Selecting `codex` does not add a
 codex-only file. It rewrites the root `AGENTS.md` that every other selected client already
-reads, so a claude+codex repository hands claude the codex rules appendix too: 24952 bytes of
-shared instruction text against 5192 without it — ≈4.8x the always-on bytes every co-selected
+reads, so a claude+codex repository hands claude the codex rules appendix too: 25190 bytes of
+shared instruction text against 5192 without it — ≈4.9x the always-on bytes every co-selected
 client pays.
 
 **What codex folds, and what it pulls.** Under the delivery mode above, the appendix carries 3

@@ -178,6 +178,53 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-24, Package 16 session 1's fifth batch sync, after the
+  //     whole-branch fixes (run 2026-09-23_orchestrator-context). TWO agent
+  //     bodies, ONE rule, TWO hook scripts and the codex appendix moved, plus
+  //     the manifest rows that record them. No emitted path was added or
+  //     removed.
+  //
+  //     CHANGED `stamity-reviewer` by +230 bytes in every dialect (claude
+  //       12658 -> 12888, codex toml 13251 -> 13481, cursor 12581 -> 12811,
+  //       copilot 12640 -> 12870), the corpus source 12927 -> 13157, 184 ->
+  //       187 lines: a closure may carry the optional one-line `rationale`
+  //       (build/266, corpus round 1, fc7d80c1).
+  //     CHANGED `stamity-spec-author` by +126 bytes in every dialect (claude
+  //       10454 -> 10580, codex toml 11069 -> 11195, cursor 10339 -> 10465,
+  //       copilot 10424 -> 10550), the corpus source 10521 -> 10647, 186 ->
+  //       187 lines: a built unit's cell is amended only as the as-landed
+  //       record with an `amended` row naming the commit (build/267).
+  //     CHANGED `stamity-injection-screening` by +238 bytes in every rule
+  //       dialect (claude and copilot 7379 -> 7617, cursor mdc 7394 -> 7632)
+  //       at an unchanged line count, the corpus source 7635 -> 7873 at 109
+  //       lines: item 1's session-start read pass also reads the resume
+  //       card's sources after a compaction, screened only as the printed
+  //       card, with items 3 to 5 rewrapped to hold the line count
+  //       (build/249). The same +238 lands in the shared `AGENTS.md`
+  //       24952 -> 25190 in the codex and all-four selections — the rule is
+  //       in codex's appendix — and so in their residue-document goldens;
+  //       `ALWAYS_ON_SHARED_BYTES_WITH_CODEX` and `docs/capability-matrix.md`
+  //       moved to 25190 with it (≈4.9x against the unchanged 5192).
+  //     CHANGED `stamity-session-start.mjs` 38280 -> 39677 bytes under every
+  //       client's hooks folder in every selection, one digest as before,
+  //       from whole-branch engine rounds 1 and 2 (510d8a24, ca0669d6): the
+  //       card lists only report-named files and counts the rest, says
+  //       "could not be read" for a ledger that is there but unread, and its
+  //       unprintable class gains U+061C, U+2028 and U+2029.
+  //     CHANGED the claude `stamity-pre-tool-use-guard.mjs` 18995 -> 19125
+  //       bytes in the claude and all-four selections: `printable()` strips
+  //       with the shared class embedded by source (build/259, build/299).
+  //       The codex, copilot and cursor guards are unchanged.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the files above.
+  //
+  //     What did NOT move: the policy document, every command, skill,
+  //       generated page, other agent and rule, portable runner, tamper
+  //       notice and review gate. The dogfood `.claude/` and `.apm/` copies
+  //       of the three corpus artifacts carry the same changed lines as
+  //       their sources. Engine round 3 (59add396) and the replay rounds emit
+  //       nothing. `stamity check` reported `drift: clean` after the sync.
+  //
   //   - 2026-09-24, Package 16 session 1's final sync, unit p16-dogfood-sync
   //     (run 2026-09-23_orchestrator-context). ONE command body moved, plus
   //     the manifest rows that record it. No emitted path was added or

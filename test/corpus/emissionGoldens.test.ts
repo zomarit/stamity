@@ -85,6 +85,36 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-24, Package 16 session 1's fifth batch sync, after the
+ *     whole-branch fixes (run 2026-09-23_orchestrator-context). FIVE goldens
+ *     moved:
+ *
+ *     SESSION START moved on `stamity-session-start.mjs` for all four clients
+ *     (one shared body): 859 -> 887 lines, 38280 -> 39677 bytes, from the
+ *     whole-branch engine rounds 1 and 2 (510d8a24, ca0669d6) on the card
+ *     twin `src/runs/cardSource.ts`: `CARD_REPORT_NAME` so only report-named
+ *     files are listed as unledgered and every other `.md` is counted as
+ *     "not report-named", never printed (build/247); `cardLedger` lstat-ing
+ *     the ledger and returning `failed` so a ledger that is there but not
+ *     read prints "could not be read" (build/258); `cardRender` taking the
+ *     ledger and reports records; and `CARD_UNPRINTABLE` gaining U+061C,
+ *     U+2028 and U+2029 (build/248, build/299).
+ *
+ *     CLAUDE GUARD moved on `stamity-pre-tool-use-guard.mjs` for claude only:
+ *     475 -> 475 lines, 18995 -> 19125 bytes, from build/259 and build/299:
+ *     `printable()` now strips with `GUARD_UNPRINTABLE`, the engine's shared
+ *     unprintable class embedded by source and flags, in place of its own
+ *     code-point loop — so the guard also drops the zero-width marks, the
+ *     line and paragraph separators, U+061C and the byte-order mark. The
+ *     codex, copilot and cursor guards are byte-identical.
+ *
+ *     NOTHING else moved here: the charter, the catalog, the MDC companion
+ *     heads, the policy document, the tamper notice, the review gate, the
+ *     three portable runners and the substituted bodies are byte-identical.
+ *     The corpus round's reviewer, spec-author and injection-screening edits
+ *     are itemised in the sibling ledger; this suite holds none of them.
+ *     Engine round 3 (59add396) and the replay rounds emit nothing.
+ *
  *   - 2026-09-24, Package 16 session 1's final sync, unit p16-dogfood-sync
  *     (run 2026-09-23_orchestrator-context). ONE golden moved:
  *

@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.9.1",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-24T01:33:34.635Z",
+  "updatedAt": "2026-09-24T02:35:44.391Z",
   "tools": [
     "claude"
   ],
@@ -106,7 +106,7 @@
       "adapter": "claude",
       "artifactId": "reviewer",
       "artifactType": "agent",
-      "contentHash": "55320cc647d1ae8679911eb1e311a375ab52bc14342ba33afe9aebcfd1cdbdc8",
+      "contentHash": "d484a79bd021107747863c325a0db1d98353b368f1ae0b217b031ee53f2e254b",
       "path": ".claude/agents/stamity-reviewer.md"
     },
     {
@@ -120,7 +120,7 @@
       "adapter": "claude",
       "artifactId": "spec-author",
       "artifactType": "agent",
-      "contentHash": "8b90ae348bd461391169e9a76e0e29c6dcf273ddb12e786df3f3f8dc825ca4cd",
+      "contentHash": "348d1bfeb368e0ab85adee957d3a3fbcf04db133bb7708d3fe90412ccf2169fd",
       "path": ".claude/agents/stamity-spec-author.md"
     },
     {
@@ -211,7 +211,7 @@
       "adapter": "claude",
       "artifactId": "injection-screening",
       "artifactType": "rule",
-      "contentHash": "0248e5bb77ee02f2738bf33eb42db91666bec24dde21d6fe5ace16e5c0fa7aab",
+      "contentHash": "6992bb0199d12eb9429e224f4245550168c8f9806ecfc5842128fd55565e2886",
       "path": ".claude/rules/stamity-injection-screening.md"
     },
     {
@@ -498,7 +498,7 @@
       "adapter": "claude",
       "artifactId": "stamity-pre-tool-use-guard",
       "artifactType": "infra",
-      "contentHash": "ead335316ffd2a260a18c114316d8240a73f9cfb65aff158da5e68e41d893edd",
+      "contentHash": "2d7566b153de1f1a178b4967e70fb23c36976fc4300d41fcc91d136b4ffe91f4",
       "path": ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs"
     },
     {
@@ -512,7 +512,7 @@
       "adapter": "claude",
       "artifactId": "stamity-session-start",
       "artifactType": "infra",
-      "contentHash": "2178ca7e5f64f5d60ce556652dfdcaf5437ddd7303fcf8f3d34e7babd834620b",
+      "contentHash": "489018e239196fa8a0b5c1d02537839ef6dd1c192c7933bbf8b12c0b11f88e21",
       "path": ".stamity/generated/hooks/claude/stamity-session-start.mjs"
     },
     {

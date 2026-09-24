@@ -262,7 +262,15 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // twelve lines it already had — `ALWAYS_ON_BUDGET_LINES` is pinned on this rule
 // and did not move, and the figure below, which is the charter alone, did not
 // move either.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 24_952;
+// 24_952 -> 25_190 on 2026-09-24, the whole-branch corpus round of the
+// orchestrator-context run: the injection-screening rule's item 1 now says the
+// session-start read pass also covers, after a compaction, the resume card's
+// sources (screened only as the printed card), and that a record body or report
+// the card points at is unscreened when opened. The rule is in codex's appendix,
+// so its +238 bytes land here and nowhere else — item 1 grew two lines and items
+// 3 to 5 were rewrapped to give them back, so the rule's line count did not move,
+// and the charter-alone figure below did not move either. Ratio ≈4.85x.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 25_190;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.

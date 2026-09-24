@@ -40,8 +40,9 @@ existing mode; none is a fifth mode, and none is a two-mode brief:
   as brownfield: read the landed change at `file:line`, amend that later unit's
   cell in place, and append to that cell
   `amended <UTC date>: <what moved> (<commit>)`. The unit keeps its id; no side
-  brief is written, and no cell of a unit already built is touched. `DONE` names
-  each unit id amended.
+  brief is written. A cell of a unit already built is touched only as the record
+  of what landed, with an `amended` row naming the commit — never to change what
+  that unit was asked to build. `DONE` names each unit id amended.
 
 Named here rather than given rows because a mode decides what the evidence has
 to be, and no job of the three changes that. The defect worth avoiding is a binding
