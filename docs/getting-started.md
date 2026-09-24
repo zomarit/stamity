@@ -234,7 +234,8 @@ engine's write gates. `handoff` prepares, resumes, lists, completes and prunes h
 those same gates. `ledger` appends a run's findings to its ledger, closes its rows and prints the
 resume card of a run in progress, as the one serialized writer. All three are plumbing an agent
 calls; `stamity ledger status` is the one you may run yourself — after a compaction on Cursor or
-Copilot, whose session-start hook does not re-run after one.
+Copilot, whose session-start hooks never print the card: Cursor sends the hook no `source`, and
+Copilot's `source` is never `compact`.
 
 Those gates exist because a learning is text that re-enters an agent's context on a later
 session. Anything with write access to the repository can author a file that is read back into a
