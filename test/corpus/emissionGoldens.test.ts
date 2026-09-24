@@ -85,6 +85,23 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-24, Package 16 session 1's sixth batch sync (run
+ *     2026-09-23_orchestrator-context). ONE golden moved:
+ *
+ *     SUBSTITUTION moved on `commands/st-work.md` by +24 bytes, 486 -> 487
+ *     lines, from the capacity rung (ad520576, build/340): a later
+ *     `limit-reset` is BLOCKED_DEPENDENCY "naming the reset time". The
+ *     golden's one removed and two added lines are the corpus diff's lines
+ *     and nothing else; the corpus source went 30021 -> 30045 bytes, 494 ->
+ *     495 lines.
+ *
+ *     NOTHING else moved here: no file under `src/` changed since the fifth
+ *     sync, so the session-start scripts, the four guards, the charter, the
+ *     catalog, the MDC companion heads, the policy document, the tamper
+ *     notice, the review gate and the three portable runners are
+ *     byte-identical. The replay instrument, the specs, the plans and
+ *     SECURITY.md emit nothing.
+ *
  *   - 2026-09-24, Package 16 session 1's fifth batch sync, after the
  *     whole-branch fixes (run 2026-09-23_orchestrator-context). FIVE goldens
  *     moved:

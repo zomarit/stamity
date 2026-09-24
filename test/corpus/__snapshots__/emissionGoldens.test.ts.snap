@@ -6456,7 +6456,8 @@ Every spawn in every phase runs under these contracts:
   agent; a second stop waits five minutes, then resumes; a third returns
   BLOCKED_DEPENDENCY with the smallest unblocking input. \`limit-reset\` (a limit
   naming its reset time): wait for a reset within 12 hours, then resume one
-  agent as a probe before the rest; a later reset is BLOCKED_DEPENDENCY.
+  agent as a probe before the rest; a later reset is BLOCKED_DEPENDENCY naming
+  the reset time.
   \`limit-no-reset\` (credits, or a model limit with no reset): a build role —
   the implementer, the fixer on rounds 1–3, the researcher, the creator, the
   test-runner — may run one class below its assigned class and no further,

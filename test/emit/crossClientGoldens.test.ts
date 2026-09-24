@@ -178,6 +178,32 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-24, Package 16 session 1's sixth batch sync (run
+  //     2026-09-23_orchestrator-context). ONE command body moved, plus the
+  //     manifest rows that record it. No emitted path was added or removed,
+  //     and no residue document moved.
+  //
+  //     CHANGED `commands/st-work.md` by +24 bytes in every dialect, one
+  //       line more — 29682 -> 29706 in the claude and copilot dialects,
+  //       29727 -> 29751 as the cursor skill — from the capacity rung
+  //       (ad520576, build/340): a later `limit-reset` is BLOCKED_DEPENDENCY
+  //       "naming the reset time". The corpus source went 30021 -> 30045
+  //       bytes, 494 -> 495 lines. The dogfood copies
+  //       `.claude/commands/st-work.md` (29676 -> 29700) and
+  //       `.apm/prompts/st-work.prompt.md` (29698 -> 29722) carry the same
+  //       one removed and two added lines as `content/commands/st-work.md`.
+  //     CHANGED `.stamity/manifest.json` in the claude, copilot, cursor and
+  //       all-four selections at UNCHANGED byte length — the fixed-width
+  //       sha256 row of the body above. The codex selection emits no command
+  //       and did not move.
+  //
+  //     What did NOT move: nothing under `src/` changed since the fifth
+  //       sync, so every hook script, guard, policy document, agent, rule,
+  //       skill, generated page, portable runner, tamper notice, review gate
+  //       and `AGENTS.md` is byte-identical. The replay instrument, the
+  //       specs, the plans and SECURITY.md emit nothing. `stamity check`
+  //       reported `drift: clean` after the sync.
+  //
   //   - 2026-09-24, Package 16 session 1's fifth batch sync, after the
   //     whole-branch fixes (run 2026-09-23_orchestrator-context). TWO agent
   //     bodies, ONE rule, TWO hook scripts and the codex appendix moved, plus
