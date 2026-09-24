@@ -1037,6 +1037,9 @@ describe("/st-work — dispatch contract", () => {
       expect(dispatch, `stop class missing: ${stop}`).toContain(stop);
     }
     expect(dispatch).toContain("within 12 hours");
+    // build/340: a reset beyond the 12-hour wait stops the run, and the stop names
+    // the reset time so the operator knows when to resume (REQ-LADDER-002, C11).
+    expect(dispatch).toContain("a later reset is BLOCKED_DEPENDENCY naming the reset time");
     expect(dispatch).toContain("neither a ladder rung nor a review round");
     expect(dispatch).toContain("never fall back to a weaker class");
     expect(dispatch).toContain("`- <UTC> capacity: ");
