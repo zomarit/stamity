@@ -169,7 +169,7 @@ own run, measured in full. The stated-confidence reading ignores version numbers
 | `id` | confidence-version |
 | `requirements` | REQ-PROVE-020 |
 | `files` | `src/cli/docs/measurements.ts` (`:254`), `test/cli/docs/measurements.test.ts` |
-| `interfaces` | `CONFIDENCE` becomes `/(?<![\w.])([01]\.\d+)(?!\.\d)/g`. A match preceded by a word character or a dot (`v1.0`, `x1.5`) is refused, and so is one followed by a dot and a digit (`1.10.0`, `1.9.0`). A sentence-final `0.85.` still reads 0.85. `statedConfidence` (`:462-465`) is unchanged: it takes the last match. The existing fixture helper `record({ verdict })` (`:93`) is used for the cases |
+| `interfaces` | `CONFIDENCE` becomes `/(?<![\w.])([01]\.\d+)(?!\w\|\.\d)/g`. (Amended 2026-09-24 to the implementer's landed form at `da6f502f`: the planned `(?!\.\d)` alone backtracks on `1.10.0` and reads `1.1`.) A match preceded by a word character or a dot (`v1.0`, `x1.5`) is refused, and so is one followed by a word character, or by a dot and a digit (`1.10.0`, `1.9.0`). A sentence-final `0.85.` still reads 0.85. `statedConfidence` (`:462-465`) is unchanged: it takes the last match. The existing fixture helper `record({ verdict })` (`:93`) is used for the cases |
 | `testCriteria` | GIVEN these verdict lines THEN the stated confidence reads: "medium / 0.60 … 1.10.0" gives 0.60; "approve for 1.10.0" gives none; "high / 0.90" gives 0.90; "v1.0" gives none; "1.9.0" gives none; "1.0" gives 1.0; "confidence 0.85." gives 0.85 |
 | `edgeCases` | A line with two confidences takes the last one, as today |
 | `depends_on` | none |
