@@ -85,6 +85,28 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-24, Package 16 session 1's final sync, unit p16-dogfood-sync
+ *     (run 2026-09-23_orchestrator-context). ONE golden moved:
+ *
+ *     SUBSTITUTION moved on `commands/st-work.md` by -4 bytes at an unchanged
+ *     486 lines, from the Minor sweep's re-review sentence (f33cb6ad): a
+ *     closure naming an id the re-review was not handed now "refuses the
+ *     whole close" where it read "is a finding, never applied", matching the
+ *     landed `stamity ledger close`. The golden's two changed lines are the
+ *     corpus diff's two changed lines and nothing else.
+ *
+ *     CUMULATIVE for the package against its base fed39ac, the three batch
+ *     rows below plus this one, on the byte scale those rows use:
+ *     `commands/st-work.md` 23375 -> 29524 bytes (+6149), 400 -> 486 lines;
+ *     `agents/stamity-test-runner.md` 5425 -> 6001 bytes (+576), 113 -> 120
+ *     lines; the session-start script for all four clients 23600 -> 38280
+ *     bytes; the claude guard 10398 -> 18995 bytes, the other three guards
+ *     unchanged; the policy document's four verdict rows gain a `writePaths`
+ *     report glob. The charter, the catalog, the MDC companion heads, the
+ *     tamper notice, the review gate and the three portable runners are
+ *     byte-identical to the base. The other seven agent bodies moved and are
+ *     itemised in the sibling ledger; this suite holds none of them.
+ *
  *   - 2026-09-24, Package 16 session 1's third batch sync (run
  *     2026-09-23_orchestrator-context). FIVE goldens moved:
  *

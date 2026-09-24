@@ -267,8 +267,8 @@ Evidence-graded reviewer ↔ fixer loop over the built units:
   per id in its closures block — `fixed`, `not-fixed`, `regressed`,
   `rejection-upheld`, `rejection-overturned` — plus new Critical/Warning
   findings only. `stamity ledger close --report` applies the closures, with
-  the handed ids as `--ids`: a closure naming any other id is a finding, never
-  applied. An unchanged finding set or an oscillation reads off the ids.
+  the handed ids as `--ids`: a closure naming any other id refuses the whole
+  close. An unchanged finding set or an oscillation reads off the ids.
 
 Two client events sit under this loop and they do different jobs, and the gate
 rides both, fail-closed. The task-completion event is the one that HOLDS: a

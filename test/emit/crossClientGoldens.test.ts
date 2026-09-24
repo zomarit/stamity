@@ -178,6 +178,45 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-24, Package 16 session 1's final sync, unit p16-dogfood-sync
+  //     (run 2026-09-23_orchestrator-context). ONE command body moved, plus
+  //     the manifest rows that record it. No emitted path was added or
+  //     removed, and no residue document moved.
+  //
+  //     CHANGED `commands/st-work.md` by -4 bytes in every dialect at an
+  //       unchanged line count — 29686 -> 29682 in the claude and copilot
+  //       dialects, 29731 -> 29727 as the cursor skill — from the Minor
+  //       sweep's re-review sentence (f33cb6ad): a closure naming an id the
+  //       re-review was not handed "refuses the whole close" where it read
+  //       "is a finding, never applied". The dogfood copies
+  //       `.claude/commands/st-work.md` and `.apm/prompts/st-work.prompt.md`
+  //       carry the same two changed lines as `content/commands/st-work.md`.
+  //     CHANGED `.stamity/manifest.json` in the claude, copilot, cursor and
+  //       all-four selections at UNCHANGED byte length — the fixed-width
+  //       sha256 row of the body above. The codex selection emits no command
+  //       and did not move.
+  //
+  //     CUMULATIVE for the package against its base fed39ac, the three batch
+  //     rows below plus this one. Agent bodies, each moving by the same bytes
+  //     in the codex, cursor and copilot dialects as its corpus source, and in
+  //     the claude dialect by that plus 7 on the four verdict roles (the
+  //     `, Write` in their `tools:` line): design-quality +1465 (claude 7859
+  //     -> 9331), fixer +1607 (6138 -> 7745), implementer +1727 (5490 ->
+  //     7217), performance +1540 (9422 -> 10969), reviewer +2110 (10541 ->
+  //     12658), security +1554 (7665 -> 9226), spec-author +1315 (9139 ->
+  //     10454), test-runner +576 (5682 -> 6258). `commands/st-work.md` 23533
+  //     -> 29682 in the claude and copilot dialects and 23578 -> 29727 as the
+  //     cursor skill (+6149 each; the corpus source 23872 -> 30021, 408 ->
+  //     494 lines). The dogfood `.claude/commands/st-work.md` went 23527 ->
+  //     29676 and `.apm/prompts/st-work.prompt.md` 23549 -> 29698, the same
+  //     +6149; the dogfood `.claude/agents/` and `.apm/agents/` copies moved
+  //     by the byte counts above. `agent-tool-policies.json` 3871 -> 4426;
+  //     `stamity-session-start.mjs` 23600 -> 38280 under every client's hooks
+  //     folder; the claude `stamity-pre-tool-use-guard.mjs` 10398 -> 18995,
+  //     the other three guards unchanged. Every other digest row in every
+  //     selection is byte-identical to the base. `stamity check` reported
+  //     `drift: clean` after the dogfood sync.
+  //
   //   - 2026-09-24, Package 16 session 1's third batch sync (run
   //     2026-09-23_orchestrator-context). FOUR agent frontmatters and TWO hook
   //     scripts moved, plus the manifest rows that record them. No emitted
