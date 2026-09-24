@@ -44,6 +44,7 @@ interface Result {
 
 interface Run {
   schema: string;
+  run: { status: "ok" | "no-report" | "killed" | "failed-to-start"; detail: string };
   results: Result[];
 }
 
@@ -108,10 +109,10 @@ describe("the oracle patches", () => {
     applyCheck(seeded, FIXES_PATCH);
   });
 
-  it("carry one oracle file per behaviour seed beside the harness, all new, and nothing else", () => {
+  it("carry one oracle file per behaviour seed beside the harness and the run's own config, all new, and nothing else", () => {
     expect(BEHAVIOUR).toHaveLength(9);
     const { files, created } = patchFiles(ORACLES_PATCH);
-    expect(files.toSorted()).toEqual(["test/__oracle__/harness.ts", ...BEHAVIOUR.map((seed) => seed.oracle.file)].toSorted());
+    expect(files.toSorted()).toEqual(["test/__oracle__/harness.ts", "test/__oracle__/vitest.config.ts", ...BEHAVIOUR.map((seed) => seed.oracle.file)].toSorted());
     expect(created).toBe(files.length);
     for (const seed of BEHAVIOUR) expect(seed.oracle.file, seed.id).toBe(`test/__oracle__/${seed.id}.test.ts`);
   });
@@ -132,6 +133,7 @@ describe("the oracle patches", () => {
     // Static seeds only: the runner spawns no vitest, so this half needs no dependencies.
     const onSeeded = runOracles(seeded, { seeds: STATIC }) as Run;
     expect(onSeeded.schema).toBe(ORACLE_SCHEMA);
+    expect(onSeeded.run).toEqual({ status: "ok", detail: "no behaviour oracle to run; vitest not started" });
     expect(statuses(onSeeded)).toEqual(Object.fromEntries(STATIC.map((seed) => [seed.id, "fail"])));
     expect(statuses(runOracles(baseTree(), { seeds: STATIC }) as Run)).toEqual(Object.fromEntries(STATIC.map((seed) => [seed.id, "pass"])));
     const fixed = seededTree();
@@ -148,7 +150,7 @@ describe("the oracle patches", () => {
 /**
  * Write a stand-in vitest CLI that records its argv and whether it saw a `VITEST*` variable, then
  * writes `report` to `--outputFile` (or, for `null`, writes nothing and exits 3 after printing a line;
- * for `"hang"`, never exits).
+ * for `"hang"`, never exits; for any other string, writes that text as it is).
  */
 function fakeVitest(name: string, report: unknown): { entry: string; seen: string } {
   const dir = join(root, name);
@@ -160,7 +162,7 @@ function fakeVitest(name: string, report: unknown): { entry: string; seen: strin
       ? "setInterval(() => {}, 1000)\n"
       : report === null
         ? "process.stdout.write('boom: the runner crashed\\n')\nprocess.exit(3)\n"
-        : `writeFileSync(argv[argv.indexOf('--outputFile') + 1], ${JSON.stringify(JSON.stringify(report))})\nprocess.exit(1)\n`;
+        : `writeFileSync(argv[argv.indexOf('--outputFile') + 1], ${JSON.stringify(typeof report === "string" ? report : JSON.stringify(report))})\nprocess.exit(1)\n`;
   writeFileSync(
     entry,
     [
@@ -176,6 +178,9 @@ function fakeVitest(name: string, report: unknown): { entry: string; seen: strin
 
 const vitestSeed = (id: string): Seed => ({ id, class: "correctness", file: `src/${id}.ts`, oracle: { kind: "vitest", file: `test/__oracle__/${id}.test.ts` } });
 
+/** Where the oracle patch puts the run's own vitest config, which the runner passes with `--config`. */
+const ORACLE_CONFIG = join("test", "__oracle__", "vitest.config.ts");
+
 describe("runOracles — reading the report", () => {
   let tree: string;
 
@@ -183,12 +188,13 @@ describe("runOracles — reading the report", () => {
     tree = join(root, "tree");
     mkdirSync(join(tree, "test", "__oracle__"), { recursive: true });
     mkdirSync(join(tree, "test", "nested"), { recursive: true });
+    writeFileSync(join(tree, ORACLE_CONFIG), "export default {};\n", "utf8");
     writeFileSync(join(tree, "test", "weak.test.ts"), 'it("x", () => { expect(value).toBe(true); });\n', "utf8");
   });
 
   const at = (id: string) => join(tree, "test", "__oracle__", `${id}.test.ts`);
 
-  it("classifies passed, failed, unloaded, skipped-only and absent oracle files, and runs the CLI as specified", () => {
+  it("classifies passed, failed, unloaded, skipped-only, absent and could-not-say oracle files, and runs the CLI as specified", () => {
     const long = `AssertionError: ${"x".repeat(400)} at ${at("long")}`;
     const report = {
       testResults: [
@@ -208,20 +214,57 @@ describe("runOracles — reading the report", () => {
           message: "",
           assertionResults: [{ status: "failed", title: "t", failureMessages: [`Error: ENOENT: no such file, open '${join(tree, "secret.txt")}'`] }],
         },
+        // A beforeEach throw, as vitest 5.0.1 reports it (measured): the test reads failed, the hook's
+        // error comes first, and the afterEach's error on the never-started app follows it.
+        {
+          name: at("nostart"),
+          status: "failed",
+          message: "",
+          assertionResults: [
+            {
+              status: "failed",
+              title: "t",
+              failureMessages: [
+                `Error: oracle precondition: the app did not start: listen EADDRINUSE\n    at ${at("nostart")}:10:3`,
+                `TypeError: Cannot read properties of undefined (reading 'close')\n    at ${at("nostart")}:14:3`,
+              ],
+            },
+          ],
+        },
+        // A precondition inside the test body.
+        {
+          name: at("unmet"),
+          status: "failed",
+          message: "",
+          assertionResults: [{ status: "failed", title: "t", failureMessages: ["Error: oracle precondition: GET /orders answered 404, not 200\n    at x:1:1"] }],
+        },
       ],
     };
     const { entry, seen } = fakeVitest("classify", report);
-    const seeds = ["green", "red", "unloaded", "skipped", "absent", "long", "pathy"].map(vitestSeed);
+    const seeds = ["green", "red", "unloaded", "skipped", "absent", "long", "pathy", "nostart", "unmet"].map(vitestSeed);
     const decoy = { id: "decoy", file: "src/x.ts" };
     // The parent is a vitest run, so the child would inherit its variables unless the runner drops them.
     expect(Object.keys(process.env).some((key) => key.startsWith("VITEST"))).toBe(true);
     const run = runOracles(tree, { seeds: [...seeds, decoy], vitestEntry: entry }) as Run;
     expect(run.schema).toBe("stamity/replay-oracle/v1");
-    expect(run.results.map((result) => result.seed)).toEqual(["green", "red", "unloaded", "skipped", "absent", "long", "pathy"]);
-    expect(statuses(run)).toEqual({ green: "pass", red: "fail", unloaded: "error", skipped: "error", absent: "error", long: "fail", pathy: "fail" });
+    expect(run.run).toEqual({ status: "ok", detail: "" });
+    expect(run.results.map((result) => result.seed)).toEqual(["green", "red", "unloaded", "skipped", "absent", "long", "pathy", "nostart", "unmet"]);
+    expect(statuses(run)).toEqual({
+      green: "pass",
+      red: "fail",
+      unloaded: "error",
+      skipped: "error",
+      absent: "error",
+      long: "fail",
+      pathy: "fail",
+      nostart: "error",
+      unmet: "error",
+    });
     const byId = new Map(run.results.map((result) => [result.seed, result]));
     expect(byId.get("red")?.detail).toBe("refuses it: AssertionError: expected 200 to be 401");
     expect(byId.get("unloaded")?.detail).toContain("oracle seam: src/reports/window.ts no longer exports isWithin()");
+    expect(byId.get("nostart")?.detail).toBe("t: the oracle could not say: Error: oracle precondition: the app did not start: listen EADDRINUSE");
+    expect(byId.get("unmet")?.detail).toBe("t: the oracle could not say: Error: oracle precondition: GET /orders answered 404, not 200");
     const longDetail = byId.get("long")?.detail as string;
     expect([...longDetail]).toHaveLength(300);
     expect(longDetail.endsWith("…")).toBe(true);
@@ -229,24 +272,41 @@ describe("runOracles — reading the report", () => {
     expect(byId.get("pathy")?.detail).toBe(`t: Error: ENOENT: no such file, open '${join("<tree>", "secret.txt")}'`);
     for (const result of run.results) expect(result.detail, result.seed).not.toContain(tree);
     const { argv, cwd, vitestEnv } = JSON.parse(readFileSync(seen, "utf8")) as { argv: string[]; cwd: string; vitestEnv: string[] };
-    expect(argv.slice(0, 6)).toEqual(["run", "test/__oracle__", "--root", tree, "--pool=threads", "--reporter=json"]);
-    expect(argv[6]).toBe("--outputFile");
+    // The run's own config, so a vitest config in the tree cannot narrow what the run collects.
+    expect(argv.slice(0, 8)).toEqual(["run", "test/__oracle__", "--root", tree, "--config", join(tree, ORACLE_CONFIG), "--pool=threads", "--reporter=json"]);
+    expect(argv[8]).toBe("--outputFile");
     expect(realpathSync(cwd)).toBe(tree);
     expect(vitestEnv).toEqual([]);
   });
 
-  it("reports every behaviour oracle as an error, naming why, when the run writes no report or times out", () => {
+  it("reports every behaviour oracle as an error, and the run's own status, when the run writes no report, times out or cannot start", () => {
     const seeds = [vitestSeed("a"), vitestSeed("b")];
     const crashed = runOracles(tree, { seeds, vitestEntry: fakeVitest("crash", null).entry }) as Run;
     expect(statuses(crashed)).toEqual({ a: "error", b: "error" });
+    expect(crashed.run).toEqual({ status: "no-report", detail: "the oracle run exited 3 with no report: boom: the runner crashed" });
     expect(crashed.results[0]?.detail).toBe("the oracle run exited 3 with no report: boom: the runner crashed");
+    const garbled = runOracles(tree, { seeds, vitestEntry: fakeVitest("garbled", "not json").entry }) as Run;
+    expect(statuses(garbled)).toEqual({ a: "error", b: "error" });
+    expect(garbled.run.status).toBe("no-report");
+    expect(garbled.run.detail).toMatch(/^the oracle run's report is not JSON: /);
     const started = Date.now();
     const hung = runOracles(tree, { seeds, vitestEntry: fakeVitest("hang", "hang").entry, timeoutMs: 1_000 }) as Run;
     expect(Date.now() - started).toBeLessThan(15_000);
     expect(statuses(hung)).toEqual({ a: "error", b: "error" });
+    expect(hung.run.status).toBe("killed");
     expect(hung.results[0]?.detail).toMatch(/^the oracle run was killed by SIGKILL after \d+ ms \(limit 1000 ms\)$/);
+    expect(hung.run.detail).toBe(hung.results[0]?.detail);
     const missing = runOracles(tree, { seeds, vitestEntry: join(root, "no-such-vitest.mjs") }) as Run;
     expect(statuses(missing)).toEqual({ a: "error", b: "error" });
+    expect(missing.run.status).toBe("failed-to-start");
+    // A tree without the oracle patch's config: the runner does not fall back to the tree's own.
+    const bare = join(root, "bare");
+    mkdirSync(join(bare, "test", "__oracle__"), { recursive: true });
+    const { entry, seen } = fakeVitest("unconfigured", { testResults: [] });
+    const unconfigured = runOracles(bare, { seeds, vitestEntry: entry }) as Run;
+    expect(statuses(unconfigured)).toEqual({ a: "error", b: "error" });
+    expect(unconfigured.run).toEqual({ status: "failed-to-start", detail: "no oracle config at test/__oracle__/vitest.config.ts in the tree: apply the oracle patch first" });
+    expect(() => readFileSync(seen, "utf8")).toThrow(/ENOENT/);
   });
 
   it("reads a static oracle as error when its file is missing, its pattern does not compile or its path leaves the tree", () => {
@@ -274,11 +334,13 @@ describe.skipIf(!REPLAY_SUITE)("the oracles in a real fixture (set STAMITY_REPLA
 
   const run = () => runOracles(tree, { seeds: SEEDS, vitestEntry: VITEST_ENTRY }) as Run;
 
-  // The cases share one tree and run in file order: seeded, then fixed, then a seam renamed.
+  // The cases share one tree and run in file order: seeded, then fixed, then a seam renamed, then
+  // restored with a start-up failure, a precondition unmet and an agent's narrowing config in turn.
   it(
     "reports all twelve oracles fail on the pure seeded tree, none error",
     () => {
       const result = run();
+      expect(result.run).toEqual({ status: "ok", detail: "" });
       expect(result.results).toHaveLength(12);
       expect(statuses(result), JSON.stringify(result.results, null, 2)).toEqual(Object.fromEntries(SEEDS.map((seed) => [seed.id, "fail"])));
     },
@@ -325,6 +387,68 @@ describe.skipIf(!REPLAY_SUITE)("the oracles in a real fixture (set STAMITY_REPLA
       const result = run().results.find((entry) => entry.seed === "cor-date-boundary");
       expect(result?.status).toBe("error");
       expect(result?.detail).toContain("oracle seam: src/reports/window.ts no longer exports isWithin()");
+      writeFileSync(window, text, "utf8");
+    },
+    180_000,
+  );
+
+  /** Run the oracles with `path` (tree-relative) edited by `edit`, then put the file back. */
+  const runEdited = (path: string, edit: (text: string) => string): Run => {
+    const file = join(tree, path);
+    const text = readFileSync(file, "utf8");
+    const edited = edit(text);
+    expect(edited, `the edit changed ${path}`).not.toBe(text);
+    writeFileSync(file, edited, "utf8");
+    try {
+      return run();
+    } finally {
+      writeFileSync(file, text, "utf8");
+    }
+  };
+
+  it(
+    "reports an app that does not start as an error for every HTTP oracle, never a fail",
+    () => {
+      // A beforeEach throw, which vitest reports as a failed test: the harness names it a precondition.
+      const result = runEdited("test/helpers.ts", (text) =>
+        text.replace(/(export async function startApp\([^)]*\): Promise<Started> \{\n)/, '$1  throw new Error("the port is taken");\n'),
+      );
+      const http = new Set(["sec-sql-sort", "sec-missing-guard", "sec-path-traversal", "cor-page-offset", "cor-swallowed-error", "con-event-key", "con-wire-key"]);
+      expect(statuses(result), JSON.stringify(result.results, null, 2)).toEqual(
+        Object.fromEntries(SEEDS.map((seed) => [seed.id, http.has(seed.id) ? "error" : "pass"])),
+      );
+      for (const entry of result.results.filter((item) => http.has(item.seed))) {
+        expect(entry.detail, entry.seed).toContain("oracle precondition: the app did not start: the port is taken");
+      }
+    },
+    180_000,
+  );
+
+  it(
+    "reports an unmet precondition inside a check as an error, never a fail",
+    () => {
+      // The recorder goes silent, so sec-sql-sort cannot say whether the sort value reaches the SQL.
+      const result = runEdited("test/__oracle__/harness.ts", (text) => text.replace("sql.push(String(args[0]));", ""));
+      expect(statuses(result), JSON.stringify(result.results, null, 2)).toEqual(
+        Object.fromEntries(SEEDS.map((seed) => [seed.id, seed.id === "sec-sql-sort" ? "error" : "pass"])),
+      );
+      expect(result.results.find((entry) => entry.seed === "sec-sql-sort")?.detail).toContain("oracle precondition:");
+    },
+    180_000,
+  );
+
+  it(
+    "collects every oracle through its own config when the tree carries a vitest config that narrows include",
+    () => {
+      const config = join(tree, "vitest.config.ts");
+      writeFileSync(config, 'export default { test: { include: ["test/handlers.test.ts"] } };\n', "utf8");
+      try {
+        const result = run();
+        expect(result.run).toEqual({ status: "ok", detail: "" });
+        expect(statuses(result), JSON.stringify(result.results, null, 2)).toEqual(Object.fromEntries(SEEDS.map((seed) => [seed.id, "pass"])));
+      } finally {
+        rmSync(config, { force: true });
+      }
     },
     180_000,
   );

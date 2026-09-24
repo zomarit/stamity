@@ -11,9 +11,16 @@
 //
 // A result is `pass` when the defect is absent, `fail` when an oracle's assertion saw it, and
 // `error` when the oracle could not say: its file did not load (a seam it reaches the service
-// through is gone — the oracles resolve those at load time for exactly this reason), no result came
-// back, every test was skipped, the run timed out, or a static file is missing. RESULTS counts
-// `error` separately, and an erroring seed counts as unfixed.
+// through is gone — the oracles resolve those at load time for exactly this reason), a check stopped
+// on an unmet precondition or an app that did not start (a failure whose message starts
+// `oracle precondition:` or `oracle seam:`), no result came back, every test was skipped, the run
+// timed out, or a static file is missing. RESULTS counts `error` separately, and an erroring seed
+// counts as unfixed.
+//
+// Beside the per-seed results, `run` says whether the vitest run itself happened: `ok`, `no-report`
+// (it exited without a readable JSON report), `killed` (the time limit, or a signal) or
+// `failed-to-start` (no vitest entry, no oracle config, or the spawn failed). So a consumer tells a
+// run that did not execute from an oracle that errored without comparing detail strings.
 //
 // `evals/replay/v1/oracle/reference-fixes.patch` fixes all twelve seeds on the pure seeded tree; the
 // replay suite (`test/replay/oracle.test.ts`) proves each oracle red on that tree and green after it.
@@ -30,14 +37,26 @@ export const ORACLE_SCHEMA = 'stamity/replay-oracle/v1'
 /** Where the behaviour oracles land in a tree, and the argument that selects them. */
 const ORACLE_DIR = 'test/__oracle__'
 
+/**
+ * The run's own vitest config, shipped in the oracle patch and passed with `--config`, so a config
+ * file in the tree (an agent's `vitest.config.*` whose `include` leaves the oracles out) cannot
+ * decide what the run collects.
+ */
+const ORACLE_CONFIG = 'test/__oracle__/vitest.config.ts'
+
+/** A failure an oracle raises when it cannot say, as opposed to an assertion that saw the defect. */
+const CANNOT_SAY = /^(?:[A-Za-z]*Error: )?oracle (?:precondition|seam): /
+
 /** The longest `detail` a result carries, in code points. */
 const DETAIL_MAX = 300
 
 /**
  * How long the whole vitest run may take before it is killed. Nine small files finish in seconds;
  * a run past two minutes is stuck, and a stuck run is what an agent's edit can cause: the export's
- * batch loop never ends on a batch size of 0 until the pass that adds that check
- * (`evals/replay/v1/patches/u2-p2.patch`), and a synchronous loop is past vitest's own test timeout.
+ * batch loop never ends on a batch size of 0, `evals/replay/v1/patches/u2-p2.patch` adds
+ * `exportBatchSize` to the config unvalidated, and rejecting a non-positive value is that pass's task
+ * for the agent under replay — no patch carries the check — while a synchronous loop is past
+ * vitest's own test timeout.
  */
 const RUN_TIMEOUT_MS = 120_000
 
@@ -103,14 +122,23 @@ function staticResult(seed, treeDir) {
 }
 
 /**
- * One behaviour seed's verdict from the vitest JSON report's entry for its file. A failed
- * assertion is `fail`; a file that failed with no failed assertion (it did not load, or a hook
- * outside the tests threw) is `error`; every test passed, at least one, is `pass`; a file whose
- * tests were all skipped proves nothing and is `error`.
+ * One behaviour seed's verdict from the vitest JSON report's entry for its file. A failed test
+ * carrying an `oracle precondition:` or `oracle seam:` failure is `error` — vitest 5 reports a
+ * throwing `beforeEach` as the test's own failure, that hook's error first — and any other failed
+ * assertion is `fail`; a file that failed with no failed test (it did not load, or a hook outside
+ * the tests threw) is `error`; every test passed, at least one, is `pass`; a file whose tests were
+ * all skipped proves nothing and is `error`.
  */
 function vitestResult(seed, entry, treeDir) {
   const base = { seed: seed.id, kind: 'vitest' }
   const assertions = Array.isArray(entry.assertionResults) ? entry.assertionResults : []
+  for (const assertion of assertions) {
+    if (assertion.status !== 'failed') continue
+    const unable = (assertion.failureMessages ?? []).map((message) => firstLine(message).trim()).find((line) => CANNOT_SAY.test(line))
+    if (unable !== undefined) {
+      return { ...base, status: 'error', detail: detailOf(`${assertion.title ?? ''}: the oracle could not say: ${unable}`, treeDir) }
+    }
+  }
   const failed = assertions.find((assertion) => assertion.status === 'failed')
   if (failed) {
     const message = (failed.failureMessages ?? []).join('\n')
@@ -142,71 +170,85 @@ function treeRelative(name, realTree) {
 }
 
 /**
- * Run every seed's oracle over `treeDir` and return one result per seed that carries an oracle, in
- * the order given. `seeds` is `seeds.json`'s `seeds` array (or the whole document). `vitestEntry`
- * is the vitest CLI script (`node_modules/vitest/vitest.mjs`); it is spawned once, as
- * `node <vitestEntry> run test/__oracle__ --root <treeDir> --pool=threads --reporter=json --outputFile <tmp>`,
+ * Run every seed's oracle over `treeDir` and return `{ schema, run: { status, detail }, results }`:
+ * one result per seed that carries an oracle, in the order given, and the vitest run's own status.
+ * `seeds` is `seeds.json`'s `seeds` array (or the whole document). `vitestEntry` is the vitest CLI
+ * script (`node_modules/vitest/vitest.mjs`); it is spawned once, as
+ * `node <vitestEntry> run test/__oracle__ --root <treeDir> --config <treeDir>/test/__oracle__/vitest.config.ts --pool=threads --reporter=json --outputFile <tmp>`,
  * only when a behaviour seed is present, and killed after `timeoutMs`. The tree must already carry
- * the oracle patch (`applyOraclePatch`).
+ * the oracle patch (`applyOraclePatch`). With no behaviour seed, `run` is `ok` and says vitest was
+ * not started.
  */
 export function runOracles(treeDir, { seeds, vitestEntry, timeoutMs = RUN_TIMEOUT_MS } = {}) {
   const list = Array.isArray(seeds) ? seeds : seeds?.seeds
   if (!Array.isArray(list)) throw new Error('runOracles needs seeds: the seeds array of evals/replay/v1/seeds.json')
   const withOracle = list.filter((seed) => seed?.oracle !== undefined)
   const behaviour = withOracle.filter((seed) => seed.oracle.kind === 'vitest')
-  const entries = behaviour.length === 0 ? null : runVitest(treeDir, { vitestEntry, timeoutMs })
+  const entries =
+    behaviour.length === 0
+      ? { byFile: new Map(), run: { status: 'ok', detail: 'no behaviour oracle to run; vitest not started' } }
+      : runVitest(treeDir, { vitestEntry, timeoutMs })
   const results = withOracle.map((seed) => {
     if (seed.oracle.kind === 'static') return staticResult(seed, treeDir)
     if (seed.oracle.kind !== 'vitest') {
       return { seed: seed.id, kind: String(seed.oracle.kind), status: 'error', detail: detailOf(`unknown oracle kind ${JSON.stringify(seed.oracle.kind)}`, treeDir) }
     }
-    if (entries.failure !== null) return { seed: seed.id, kind: 'vitest', status: 'error', detail: entries.failure }
+    if (entries.run.status !== 'ok') return { seed: seed.id, kind: 'vitest', status: 'error', detail: entries.run.detail }
     const entry = entries.byFile.get(seed.oracle.file)
     if (entry === undefined) {
       return { seed: seed.id, kind: 'vitest', status: 'error', detail: detailOf(`no result for ${seed.oracle.file}: the file is not in the tree or the run did not collect it`, treeDir) }
     }
     return vitestResult(seed, entry, treeDir)
   })
-  return { schema: ORACLE_SCHEMA, results }
+  return { schema: ORACLE_SCHEMA, run: entries.run, results }
 }
 
-/** The vitest run: its JSON report's entries by tree-relative file, or the one failure every behaviour result then carries. */
+/** A run that produced no entries, with its status and the detail every behaviour result then carries. */
+function runFailed(status, text, treeDir) {
+  return { byFile: new Map(), run: { status, detail: detailOf(text, treeDir) } }
+}
+
+/** The vitest run: its status, and its JSON report's entries by tree-relative file. */
 function runVitest(treeDir, { vitestEntry, timeoutMs }) {
   if (typeof vitestEntry !== 'string' || !existsSync(vitestEntry)) {
-    return { byFile: new Map(), failure: detailOf(`no vitest entry at ${String(vitestEntry)}`, treeDir) }
+    return runFailed('failed-to-start', `no vitest entry at ${String(vitestEntry)}`, treeDir)
   }
   const realTree = realpathSync(treeDir)
+  const config = join(realTree, ...ORACLE_CONFIG.split('/'))
+  if (!existsSync(config)) {
+    return runFailed('failed-to-start', `no oracle config at ${ORACLE_CONFIG} in the tree: apply the oracle patch first`, treeDir)
+  }
   const scratch = mkdtempSync(join(tmpdir(), 'stamity-replay-oracle-'))
   const outputFile = join(scratch, 'vitest.json')
   try {
     const started = Date.now()
     const child = spawnSync(
       process.execPath,
-      [resolve(vitestEntry), 'run', ORACLE_DIR, '--root', realTree, '--pool=threads', '--reporter=json', '--outputFile', outputFile],
+      [resolve(vitestEntry), 'run', ORACLE_DIR, '--root', realTree, '--config', config, '--pool=threads', '--reporter=json', '--outputFile', outputFile],
       // Worker threads, not forked workers, and SIGKILL: a timed-out run must take its workers with
       // it, and a forked worker spinning in a synchronous loop would outlive a killed parent.
       { cwd: realTree, encoding: 'utf8', env: childEnv(), maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs, killSignal: 'SIGKILL' },
     )
     if (child.error?.code === 'ETIMEDOUT' || (child.signal !== null && child.signal !== undefined)) {
-      return { byFile: new Map(), failure: detailOf(`the oracle run was killed by ${child.signal ?? 'SIGKILL'} after ${Date.now() - started} ms (limit ${timeoutMs} ms)`, treeDir) }
+      return runFailed('killed', `the oracle run was killed by ${child.signal ?? 'SIGKILL'} after ${Date.now() - started} ms (limit ${timeoutMs} ms)`, treeDir)
     }
-    if (child.error) return { byFile: new Map(), failure: detailOf(`the oracle run did not start: ${child.error.message}`, treeDir) }
+    if (child.error) return runFailed('failed-to-start', `the oracle run did not start: ${child.error.message}`, treeDir)
     if (!existsSync(outputFile)) {
       const said = firstLine(`${child.stderr ?? ''}\n${child.stdout ?? ''}`)
-      return { byFile: new Map(), failure: detailOf(`the oracle run exited ${child.status} with no report: ${said}`, treeDir) }
+      return runFailed('no-report', `the oracle run exited ${child.status} with no report: ${said}`, treeDir)
     }
     let report
     try {
       report = JSON.parse(readFileSync(outputFile, 'utf8'))
     } catch (error) {
-      return { byFile: new Map(), failure: detailOf(`the oracle run's report is not JSON: ${error instanceof Error ? error.message : String(error)}`, treeDir) }
+      return runFailed('no-report', `the oracle run's report is not JSON: ${error instanceof Error ? error.message : String(error)}`, treeDir)
     }
     const byFile = new Map()
     for (const entry of Array.isArray(report?.testResults) ? report.testResults : []) {
       const file = treeRelative(entry?.name, realTree)
       if (file !== null) byFile.set(file, entry)
     }
-    return { byFile, failure: null }
+    return { byFile, run: { status: 'ok', detail: '' } }
   } finally {
     rmSync(scratch, { recursive: true, force: true })
   }
