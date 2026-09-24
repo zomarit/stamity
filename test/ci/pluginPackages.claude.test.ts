@@ -545,6 +545,9 @@ describe("what the root carries", () => {
     );
     expect(readme).not.toContain("prefer a `rollback` subcommand");
     expect(readme).not.toContain("not established");
+    // The README quotes the capability file's note, so the place the marketplace declaration
+    // lands (the configuration directory's user settings, prove/338) reaches the operator here too.
+    expect(readme).toContain("user settings");
   });
 });
 
@@ -586,6 +589,14 @@ describe("the capability file", () => {
     expect(note).not.toContain("until an installed client is measured");
     expect(note).toContain("2026-09-20");
     expect(note).toContain("2026-09-22");
+    // Where the two commands write (prove/338), measured on Claude Code 2.1.278 (2026-09-22) and
+    // 2.1.280 (2026-09-23): the project-scope install writes the enablement alone into the
+    // project's `.claude/settings.json`, and `marketplace add` declares the marketplace in the
+    // configuration directory's user settings. The note used to credit the install with the
+    // marketplace key as well, which sent a consumer looking for it in the committed file.
+    expect(note).toContain("`enabledPlugins` alone");
+    expect(note).toContain("user settings");
+    expect(note).not.toContain("extraKnownMarketplaces");
   });
 });
 

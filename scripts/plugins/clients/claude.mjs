@@ -162,8 +162,10 @@ export const MANIFEST_PATH = '.claude-plugin/plugin.json'
 export const DISTRIBUTION = {
   note:
     'an operator runs `claude plugin marketplace add <owner/repo | git URL#ref | local path>` and ' +
-    '`claude plugin install stamity@stamity --scope project`, which writes `enabledPlugins` and ' +
-    '`extraKnownMarketplaces`; a third-party marketplace has auto-update off by default, so ' +
+    '`claude plugin install stamity@stamity --scope project`, which writes `enabledPlugins` alone into ' +
+    "the project's `.claude/settings.json`; `marketplace add` declares the marketplace in the " +
+    "configuration directory's user settings (measured on Claude Code 2.1.278, 2026-09-22, and " +
+    '2.1.280, 2026-09-23); a third-party marketplace has auto-update off by default, so ' +
     '`claude plugin update stamity@stamity --scope project` is the refresh — the scope has to match ' +
     'the install\'s, so a user-scope install refreshes with `--scope user` — and a marketplace added ' +
     'at a tag or a commit is the pin. A `rollback` subcommand is settled absent: one vendor page quoted it in slash form ' +
