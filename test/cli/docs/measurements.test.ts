@@ -719,7 +719,8 @@ describe("the rule, exercised against fixture trees", () => {
   // REQ-PROVE-020 (build/369): a version number on a verdict line is not a confidence. The
   // record states a 1.99 gate that no confidence can clear, so the reason line prints the exact
   // value read, and a line that states none reads as none rather than as a pass. The version
-  // rows are the ones the old `\b([01]\.\d+)\b` read as 1.1 and 1.9, over the 0.8 fallback.
+  // rows are the ones the old `\b([01]\.\d+)\b` read as 1.1 and 1.9, over the 0.8 fallback;
+  // a two-part version reads above 1 and is skipped, and a `.x` patch refuses the match.
   it.each([
     { line: "| 2 | approve | medium / 0.60 — the cut for 1.10.0 | none |", reads: 0.6 },
     { line: "| 2 | approve for 1.10.0 | stated nowhere | none |", reads: null },
@@ -729,6 +730,11 @@ describe("the rule, exercised against fixture trees", () => {
     { line: "| 2 | approve | 1.0 | none |", reads: 1 },
     { line: "| 2 | approve | confidence 0.85. | none |", reads: 0.85 },
     { line: "| 2 | approve | high / 0.85, re-read at 0.92 | none |", reads: 0.92 },
+    { line: "| 2 | approve | stated nowhere, on 1.9 | none |", reads: null },
+    { line: "| 2 | approve | stated nowhere, the 1.10 line | none |", reads: null },
+    { line: "| 2 | approve | on 1.9 at 0.85 | none |", reads: 0.85 },
+    { line: "| 2 | approve | stated nowhere, on 1.0.x | none |", reads: null },
+    { line: "| 2 | approve | stated nowhere, on 1.10.x | none |", reads: null },
   ])("reads the stated confidence of $line as $reads", ({ line, reads }) => {
     const root = fixture({
       "2026-01-02_release-2.0.0": {
