@@ -250,8 +250,14 @@ const APPROVAL = /\bapprove[ds]?\b/i;
 /** The change-requesting half of {@link VERDICT}. */
 const CHANGES_REQUESTED = /\b(?:request-changes|needs-fixes)\b/i;
 
-/** A stated confidence, as a review line writes it: `0.86`, `0.9`, `1.0`. */
-const CONFIDENCE = /\b([01]\.\d+)\b/g;
+/**
+ * A stated confidence, as a review line writes it: `0.86`, `0.9`, `1.0`, and a
+ * sentence-final `0.85.`. A version number is not one (build/369): a match
+ * preceded by a word character or a dot (`v1.0`, `x1.5`) is refused, and so is
+ * one followed by a word character or by a dot and a digit (`1.10.0`, `1.9.0`).
+ * The trailing guard refuses a digit too, so `1.10.0` cannot backtrack to `1.1`.
+ */
+const CONFIDENCE = /(?<![\w.])([01]\.\d+)(?!\w|\.\d)/g;
 
 /** The confidence gate a record declares for its own approvals. */
 const STATED_GATE = /confidence gate[^\n\d]*([01]\.\d+)/i;
