@@ -332,6 +332,11 @@ export function summarize(measurement, runJson, protocolSha, { protocolPath = DE
   for (const [group, fields] of Object.entries(prov)) for (const [field, value] of Object.entries(fields)) if (value === null) notDone.push(`run.json records no ${group}.${field}`)
   if (Object.keys(files).length === 0) notDone.push('run.json records no instrument.files')
   if (m.models.init == null) notDone.push('the init event names no orchestrator model')
+  // build/289: a list the init event does not carry under its key reads null in every run, so the
+  // pilot comparison passes it vacuously; each one is named, so a key mismatch shows at the pilot.
+  if (m.client.ambient !== null) {
+    for (const [key, field] of Object.entries(AMBIENT_LISTS)) if (m.client.ambient[key] === null) notDone.push(`the init event carries no ${field} list, so the ambient-list check (§3) holds nothing for it`)
+  }
   if (!isObject(run.fixture) || str(run.fixture.root) === null) notDone.push('run.json records no fixture.root, so no fixture path is redacted from the excerpts and notes')
 
   const summary = {
@@ -437,6 +442,11 @@ const securitySeedsOf = (s) => s.passes.flatMap((p) => p.seeds.filter((x) => x.c
 /** §12: a security seed the implementer removed before the lens started counts as found. */
 export const securityHeld = (x) => x.found || x.caughtByImplementer
 
+/** The Client line's ambient sizes (build/289), in `AMBIENT_LISTS` order. */
+const AMBIENT_LABELS = { skills: 'skills', agents: 'agents', slashCommands: 'slash commands', plugins: 'plugins', mcpServers: 'MCP servers' }
+const ambientSizes = (ambient) =>
+  ambient === null ? 'none recorded' : Object.keys(AMBIENT_LISTS).map((k) => `${AMBIENT_LABELS[k]} ${ambient[k] === null ? 'absent' : ambient[k].length}`).join(', ')
+
 const bullets = (list) => (list.length === 0 ? ['- no notes line'] : list.map((x) => `- ${x}`))
 
 /** The notes lines filed beside each §12 row, and the ones no row claims. */
@@ -526,7 +536,7 @@ export function renderResults(summary, thresholds, reference = []) {
     `- Protocol: REPLAY-v1 (\`${s.protocol.path}\`), sha256 \`${s.protocol.sha256}\`, read at commit \`${s.protocol.commit}\`.`,
     `- Instrument: commit \`${s.instrument.commit}\`, ${Object.keys(s.instrument.files).length} file(s) hashed.`,
     `- CLI: commit \`${s.cli.commit ?? 'unrecorded'}\`, version ${s.cli.version ?? 'unrecorded'}, tarball sha256 \`${s.cli.tarballSha256 ?? 'unrecorded'}\`.`,
-    `- Client: Claude Code ${s.client.version ?? 'unrecorded'} (the init event reads ${s.client.initVersion ?? 'no version'}), binary sha256 \`${s.client.binarySha256 ?? 'unrecorded'}\`; orchestrator model \`${s.client.orchestratorModel ?? 'unrecorded'}\` (pin \`${s.models?.pin ?? 'unrecorded'}\`); models answering: ${s.client.resolvedModels.map((x) => `\`${x}\``).join(', ') || 'none recorded'}.`,
+    `- Client: Claude Code ${s.client.version ?? 'unrecorded'} (the init event reads ${s.client.initVersion ?? 'no version'}; ambient lists: ${ambientSizes(s.client.ambient)}), binary sha256 \`${s.client.binarySha256 ?? 'unrecorded'}\`; orchestrator model \`${s.client.orchestratorModel ?? 'unrecorded'}\` (pin \`${s.models?.pin ?? 'unrecorded'}\`); models answering: ${s.client.resolvedModels.map((x) => `\`${x}\``).join(', ') || 'none recorded'}.`,
     `- Fixture: base commit \`${s.fixture.baseCommit ?? 'unrecorded'}\`, plan sha256 \`${s.fixture.planSha256 ?? 'unrecorded'}\`, deps sha256 \`${s.fixture.depsSha256 ?? 'unrecorded'}\`.`,
     `- Compaction mechanism (§7): \`${s.mechanism}\`.`,
     `- Timing: active ${fmt(s.timing.activeMs)} ms, paused ${fmt(s.timing.pausedMs)} ms, capacity holds ${fmt(s.timing.capacityHolds)}, nudges ${fmt(s.timing.nudges)}, restarts ${fmt(s.timing.restarts)}.`,

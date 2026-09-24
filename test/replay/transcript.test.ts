@@ -331,12 +331,13 @@ describe("ledgerWrite — both shapes", () => {
     "/tmp/fx/node_modules/.bin/stamity ledger close --run r --id r/build/1 --state fixed --rationale ok",
     "node ./node_modules/@zomarit/stamity/dist/cli.js ledger status --run r",
     "cd fx && node dist/cli.js ledger append --run r --phase build --source fixer --stdin <<EOF\n{}\nEOF",
+    "./node_modules/.bin/st ledger close --run r --id r/build/1 --state fixed --rationale ok",
   ])("(build/253) detects the ledger verb spelled by a path: %s", (command) => {
     expect(ledgerWrite(bash(command))).toEqual({ kind: "verb", chars: command.length });
   });
 
   it("(build/253) reads no ledger verb in a path that only ends in stamity-something or a cli.js of another verb", () => {
-    for (const command of ["./node_modules/.bin/stamity-lint ledger append", "node dist/cli.js sync", "cat docs/stamity ledger.md"]) expect(ledgerWrite(bash(command))).toBeNull();
+    for (const command of ["./node_modules/.bin/stamity-lint ledger append", "./bin/test ledger append", "node dist/cli.js sync", "cat docs/stamity ledger.md"]) expect(ledgerWrite(bash(command))).toBeNull();
   });
 
   it("detects an echo redirect, a python body and a Write/Edit on the ledger", () => {

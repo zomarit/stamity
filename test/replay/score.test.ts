@@ -464,6 +464,19 @@ describe("summarize — the measurement into stamity/replay-summary/v1", () => {
     expect(() => summarize({ ...m, client: undefined }, runJson, PROTOCOL_SHA)).toThrow(/measurement: client is not \{version, ambient\}/);
   });
 
+  it("(build/289) names in notDone each ambient list an existing init event does not carry, so a vacuous §3 check is visible", async () => {
+    const { m, runJson } = await measured();
+    const client = m["client"] as { version: string; ambient: Record<string, string[] | null> };
+    const s = summarize({ ...m, client: { ...client, ambient: { ...client.ambient, skills: null, mcpServers: null } } }, runJson, PROTOCOL_SHA) as Summary;
+    expect(s.notDone).toEqual([
+      "the init event carries no skills list, so the ambient-list check (§3) holds nothing for it",
+      "the init event carries no mcp_servers list, so the ambient-list check (§3) holds nothing for it",
+    ]);
+    // With no init event at all the run is already invalid; no per-list line is added.
+    const none = summarize({ ...m, client: { version: null, ambient: null } }, runJson, PROTOCOL_SHA) as Summary;
+    expect(none.notDone.filter((x) => x.includes("ambient-list check"))).toEqual([]);
+  });
+
   it("(build/257) names a run.json with no fixture.root in notDone", async () => {
     const { m, runJson } = await measured();
     const s = summarize(m, runJson, PROTOCOL_SHA) as Summary;
@@ -568,6 +581,17 @@ describe("renderResults — RESULTS.md", () => {
     expect(md).toContain(`the per-pass split is UNRELIABLE (over ${(UNATTRIBUTED_MAX as number) * 100}% unattributed)`);
     const floors = md.slice(md.indexOf("#### Beside `eval-set-floors`"), md.indexOf("#### Other measurement notes"));
     expect(floors).toContain("evalSetFloors carried-to-session-2");
+  });
+
+  it("(build/289) prints each ambient list's size on the Client line, and an absent list as absent", async () => {
+    const { m, runJson } = await measured();
+    const md = renderResults(summarize(m, runJson, PROTOCOL_SHA), parseThresholds(PROTOCOL_TEXT)) as string;
+    expect(md).toContain("ambient lists: skills 1, agents 0, slash commands 1, plugins 0, MCP servers 0");
+    const client = m["client"] as { version: string; ambient: Record<string, string[] | null> };
+    const absent = renderResults(summarize({ ...m, client: { ...client, ambient: { ...client.ambient, plugins: null } } }, runJson, PROTOCOL_SHA), parseThresholds(PROTOCOL_TEXT)) as string;
+    expect(absent).toContain("plugins absent");
+    const none = renderResults(summarize({ ...m, client: { version: null, ambient: null } }, runJson, PROTOCOL_SHA), parseThresholds(PROTOCOL_TEXT)) as string;
+    expect(none).toContain("ambient lists: none recorded");
   });
 
   it("renders the oracle run's own status beside approved-unfixed (build/230)", async () => {
