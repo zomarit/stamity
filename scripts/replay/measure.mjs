@@ -44,8 +44,8 @@ const ORCHESTRATOR_MODEL = 'claude-opus-5-5'
 const PASS_COUNT = 6
 /** §8: projected compactions per 10 passes = 10 × context tokens per pass ÷ this. */
 const COMPACTION_TOKENS = 947_000
-/** §8: the per-pass split is flagged unreliable above this unattributed share. */
-const UNATTRIBUTED_MAX = 0.2
+/** §8: the per-pass split is flagged unreliable above this unattributed share (RESULTS words its note from it). */
+export const UNATTRIBUTED_MAX = 0.2
 /** §8: substrings whose appearance in any tool input voids the run, beside the `--forbid` paths. */
 const ALWAYS_FORBIDDEN = ['seeds.json', '__oracle__']
 
@@ -462,7 +462,18 @@ async function loadCapture(runDir, forbid) {
   const roots = rootSpellings([...index.cwds, ...subs.flatMap((s) => [...s.cwds]), init?.cwd, ...worktreesOf(run), ...splitRoots(texts, copyNames)])
   const oracle = readJsonIfPresent(L.oracle)
   const oracleStatus = new Map((Array.isArray(oracle?.results) ? oracle.results : []).map((r) => [r.seed, r.status]))
-  return { L, run, invalid, walk, index, subs, init, roots, orchestratorModels, stateNames, states, oracleStatus }
+  return { L, run, invalid, walk, index, subs, init, roots, orchestratorModels, stateNames, states, oracleStatus, oracleRun: oracleRunOf(oracle) }
+}
+
+/**
+ * The oracle run's own `run.{status, detail}` (`stamity/replay-oracle/v1`), so a harness that never
+ * ran reads as that, not as one error per seed. A null status names why none was recorded.
+ */
+function oracleRunOf(oracle) {
+  if (oracle === null) return { status: null, detail: 'no captures/oracle.json' }
+  const run = oracle?.run
+  if (run === null || typeof run !== 'object' || typeof run.status !== 'string') return { status: null, detail: 'the oracle document records no run-level status' }
+  return { status: run.status, detail: typeof run.detail === 'string' ? run.detail : '' }
 }
 
 // ---------- the measurement: agents ----------
@@ -963,7 +974,7 @@ function contextTokensPerPassOf(walk) {
 export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
   checkSeeds(seeds)
   const cap = await loadCapture(runDir, forbid)
-  const { L, run, invalid, walk, roots, states, oracleStatus } = cap
+  const { L, run, invalid, walk, roots, states, oracleStatus, oracleRun } = cap
   const { agents, byAgentId, sends, deliveries, notes } = joinAgents(walk, cap.index, cap.subs, roots)
   const { perPass, beside, unresolved } = loopCharacters(walk, cap.index, agents, sends, deliveries)
   const usage = subagentUsage(cap.subs, byAgentId, deliveries, invalid, notes)
@@ -1041,6 +1052,7 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
       unmatched,
       oraclePass: statuses.filter((s) => s === 'pass').length,
       oracleError: statuses.filter((s) => s === 'error').length,
+      oracleRun,
     },
     compactionSamples,
     wholeBranch: { finalClass: finalClassOf(branchReviews), rounds: branchReviews.filter((d) => d.round).length },

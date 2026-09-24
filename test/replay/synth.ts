@@ -352,6 +352,6 @@ export function writeCapture(dir: string, spec: CaptureSpec): CaptureLayout {
     for (const [file, content] of Object.entries(runState.reports ?? {})) put(join(runFolder, "reports", file), content);
   }
   put(layout.finalDiff, spec.finalDiff ?? "");
-  put(layout.oracle, `${JSON.stringify(spec.oracle ?? { schema: "stamity/replay-oracle/v1", results: [] }, null, 2)}\n`);
+  put(layout.oracle, `${JSON.stringify(spec.oracle ?? { schema: "stamity/replay-oracle/v1", run: { status: "ok", detail: "" }, results: [] }, null, 2)}\n`);
   return layout;
 }

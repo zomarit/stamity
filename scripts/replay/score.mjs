@@ -8,16 +8,17 @@
 // readers' skips, the unjoined and transcript-less agents, the walk's skips, the unparseable
 // sub-agent lines, the ledger kinds reported beside the gated figure, every notes line — beside
 // the figure it qualifies, never folded away. Every string that reaches either file passes
-// through `redactPaths` with the fixture root and the worktrees labelled, and `run` refuses to
-// write a file that `check` would refuse.
+// through `redactPaths` with the fixture root and the worktrees labelled, both files are read
+// through the leak gate's own rules, and `run` refuses to write a file that `check` would refuse.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { RULES as LEAK_RULES, decodeCandidates, normalizeViews } from '../leak-gate.mjs'
 import { sha256 } from '../qa/bind.mjs'
 import { redactPaths, spellingsOf } from '../qa/redact.mjs'
 import { PASS_IDS } from './fixture.mjs'
-import { MEASUREMENT_SCHEMA } from './measure.mjs'
+import { MEASUREMENT_SCHEMA, UNATTRIBUTED_MAX } from './measure.mjs'
 
 const SELF = fileURLToPath(import.meta.url)
 const REPO_ROOT = resolve(SELF, '..', '..', '..')
@@ -37,6 +38,9 @@ const FORBIDDEN_SHAPES = ['/Users/', '/home/', '/private/var/', '/var/folders/']
 const BARE_TMP_PATHS = /\/var\/folders\/[^/\s"']+\/[^/\s"']+\/T(?![^/\s"'])/g
 const EXCERPT_MAX = 200
 const PASS_COUNT = PASS_IDS.length
+/** §10: an invalid run is replaced, at most this many times per shape (a test pins the sentence). */
+const MAX_REPLACEMENTS_PER_SHAPE = 2
+const SHAPES = ['baseline', 'changed']
 
 /** Every key of the protocol's `replay-thresholds` block and the type of its value (r1). */
 const THRESHOLD_TYPES = {
@@ -48,12 +52,23 @@ const THRESHOLD_TYPES = {
   evalSetFloors: 'string',
 }
 
+/**
+ * The one reading of each string threshold that the arithmetic below implements (build/226). A
+ * fence naming another reading would change the table's words and not its numbers, so it is
+ * refused instead: a new reading lands with its code in the same change.
+ */
+const IMPLEMENTED_READINGS = {
+  decoyFlags: '<=baseline', approvedUnfixed: '<=baseline', loopCharsReference: 'baseline-median', loopCharsScope: 'every-scored-run',
+  subagentTokensScope: 'pooled-mean', subagentTokensReference: 'baseline-mean', securityExemption: 'any-baseline-scored-run-missed',
+  evalSetFloors: 'carried-to-session-2',
+}
+
 /** Every total of the measurement, carried into the summary whole (a test pins it to r7's list). */
 export const TOTALS_KEYS = [
   'loopChars', 'loopCharsPerPass', 'breakdown', 'unattributedShare', 'perPassUnreliable', 'unresolvedDeliveriesAndSends',
   'ledgerBeside', 'subagentTokens', 'subagentTokensPerPass', 'subagentOutputTokens', 'notificationTrailerTokens',
   'unjoinedSubagents', 'agentsWithoutTranscript', 'walkSkipped', 'mainContextChars', 'contextTokensPerPass', 'compactionsAuto',
-  'projectedPer10', 'recall', 'readerSkips', 'decoyFalseFlags', 'unmatched', 'oraclePass', 'oracleError',
+  'projectedPer10', 'recall', 'readerSkips', 'decoyFalseFlags', 'unmatched', 'oraclePass', 'oracleError', 'oracleRun',
 ]
 const NUMERIC_TOTALS = [
   'loopChars', 'loopCharsPerPass', 'unattributedShare', 'unresolvedDeliveriesAndSends', 'subagentTokens', 'subagentTokensPerPass',
@@ -124,6 +139,35 @@ function redactDeep(value, pairs) {
 /** The path shapes of `FORBIDDEN_SHAPES` that `text` carries. */
 const forbiddenIn = (text) => FORBIDDEN_SHAPES.filter((shape) => text.includes(shape))
 
+/**
+ * The ids of the leak gate's rules (`scripts/leak-gate.mjs`, its `RULES`) that `text` would hit at
+ * `logicalPath`, read through the gate's own views: every decoding of the bytes, raw and through
+ * each normalizing fold a rule asks for, minus the rules whose path allowlist covers the file.
+ */
+function leakRulesIn(text, logicalPath) {
+  const rules = LEAK_RULES.filter((rule) => !rule.allow.some((allowed) => allowed(logicalPath)))
+  const hit = new Set()
+  for (const view of decodeCandidates(Buffer.from(text, 'utf8'))) {
+    const readings = [{ text: view.text, fold: null }]
+    if (view.rawOnly !== true) {
+      const folds = normalizeViews(view.text, { caseFolded: true, casePreserving: true })
+      readings.push({ text: folds.folded.text, fold: 'folded' }, { text: folds.preserving.text, fold: 'case-preserving' })
+    }
+    for (const reading of readings) {
+      for (const rule of rules) {
+        if (hit.has(rule.id) || (reading.fold !== null && !rule.normalizedViews.includes(reading.fold))) continue
+        rule.pattern.lastIndex = 0
+        if (rule.pattern.test(reading.text)) hit.add(rule.id)
+        rule.pattern.lastIndex = 0
+      }
+    }
+  }
+  return [...hit].toSorted()
+}
+
+/** Where §11 places a run's file, the path the leak gate reads it under once committed. */
+const committedPath = (runId, file) => `evals/replay/runs/${runId}/${file}`
+
 // ---------- thresholds ----------
 
 /**
@@ -164,6 +208,9 @@ export function parseThresholds(md) {
   }
   for (const key of Object.keys(THRESHOLD_TYPES)) if (!(key in parsed)) throw new Error(`replay-thresholds: missing key "${key}"`)
   if (parsed.schema !== THRESHOLDS_SCHEMA) throw new Error(`replay-thresholds: schema is ${JSON.stringify(parsed.schema)}, not ${THRESHOLDS_SCHEMA}`)
+  for (const [key, reading] of Object.entries(IMPLEMENTED_READINGS)) {
+    if (parsed[key] !== reading) throw new Error(`replay-thresholds: "${key}" is ${JSON.stringify(parsed[key])}; this scorer implements only ${JSON.stringify(reading)}`)
+  }
   return parsed
 }
 
@@ -176,6 +223,67 @@ function checkMeasurement(m) {
   for (const key of TOTALS_KEYS) if (!(key in m.totals)) throw new Error(`measurement: totals.${key} is missing`)
   for (const key of ['invalid', 'notes', 'compactionSamples', 'adjudication']) if (!Array.isArray(m[key])) throw new Error(`measurement: ${key} is not a list`)
   if (!isObject(m.models) || !isObject(m.wholeBranch)) throw new Error('measurement: models or wholeBranch is missing')
+  const problems = rowProblems(m)
+  if (problems.length > 0) throw new Error(`measurement: ${problems.join('; ')}`)
+}
+
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v)
+const isBool = (v) => typeof v === 'boolean'
+const isStrOrNull = (v) => v === null || typeof v === 'string'
+const isOptStrOrNull = (v) => v === undefined || isStrOrNull(v)
+
+/**
+ * Every malformed row of the measurement's passes, seeds, compaction samples, whole-branch row and
+ * adjudication list (build/232): a field r7 always writes is refused when it is missing or of the
+ * wrong type, never coerced into a zero or a false that would score as a figure.
+ */
+function rowProblems(m) {
+  const out = []
+  const expect = (cond, what) => {
+    if (!cond) out.push(what)
+  }
+  for (const p of m.passes) {
+    const at = `pass ${p.id}`
+    expect(isNum(p.loopChars), `${at}: loopChars is not a number`)
+    expect(isNum(p.subagentTokens), `${at}: subagentTokens is not a number`)
+    if (isObject(p.breakdown)) for (const k of BREAKDOWN_KEYS) expect(isNum(p.breakdown[k]), `${at}: breakdown.${k} is not a number`)
+    else out.push(`${at}: breakdown is not an object`)
+    if (isObject(p.verdict)) {
+      expect(isStrOrNull(p.verdict.finalClass), `${at}: verdict.finalClass is not a string or null`)
+      expect(isNum(p.verdict.rounds), `${at}: verdict.rounds is not a number`)
+      expect(isBool(p.verdict.approvedWithSeedUnfixed), `${at}: verdict.approvedWithSeedUnfixed is not a boolean`)
+    } else out.push(`${at}: verdict is not an object`)
+    if (Array.isArray(p.seeds)) {
+      for (const x of p.seeds) {
+        if (!isObject(x) || typeof x.id !== 'string') {
+          out.push(`${at}: a seed row has no id`)
+          continue
+        }
+        const seed = `${at}: seed ${x.id}`
+        for (const k of ['caughtByImplementer', 'found', 'foundRound1']) expect(isBool(x[k]), `${seed}: ${k} is not a boolean`)
+        expect(x.present === null || isBool(x.present), `${seed}: present is not a boolean or null`)
+        for (const k of ['class', 'stage', 'oracle']) expect(isStrOrNull(x[k]), `${seed}: ${k} is not a string or null`)
+      }
+    } else out.push(`${at}: seeds is not a list`)
+    expect(Array.isArray(p.decoysFlagged) && p.decoysFlagged.every((d) => typeof d === 'string'), `${at}: decoysFlagged is not a list of strings`)
+  }
+  m.compactionSamples.forEach((c, k) => {
+    const at = `compaction sample ${k + 1}`
+    if (!isObject(c)) return out.push(`${at}: not an object`)
+    expect(isNum(c.n), `${at}: n is not a number`)
+    for (const key of ['atRisk', 'lost']) expect(isNum(c[key]), `${at}: ${key} is not a number`)
+    expect(isBool(c.valid), `${at}: valid is not a boolean`)
+    for (const key of ['placement', 'trigger']) expect(isStrOrNull(c[key]), `${at}: ${key} is not a string or null`)
+    for (const key of ['preTokens', 'postTokens']) expect(numOrNull(c[key]), `${at}: ${key} is not a number or null`)
+    expect(c.reason === undefined || typeof c.reason === 'string', `${at}: reason is not a string`)
+  })
+  expect(isStrOrNull(m.wholeBranch.finalClass), 'wholeBranch.finalClass is not a string or null')
+  expect(isNum(m.wholeBranch.rounds), 'wholeBranch.rounds is not a number')
+  m.adjudication.forEach((a, k) => {
+    const ok = isObject(a) && typeof a.item === 'string' && typeof a.locator === 'string' && typeof a.excerpt === 'string' && isOptStrOrNull(a.pass) && isOptStrOrNull(a.role)
+    expect(ok, `adjudication row ${k + 1} is not {item, pass, role, locator, excerpt}`)
+  })
+  return out
 }
 
 /** The provenance fields read from run.json, each named by its summary path. */
@@ -233,23 +341,23 @@ export function summarize(measurement, runJson, protocolSha, { protocolPath = DE
     passes: m.passes.map((p) => ({
       id: p.id,
       loopChars: p.loopChars,
-      breakdown: Object.fromEntries(BREAKDOWN_KEYS.map((k) => [k, p.breakdown?.[k] ?? 0])),
+      breakdown: Object.fromEntries(BREAKDOWN_KEYS.map((k) => [k, p.breakdown[k]])),
       subagentTokens: p.subagentTokens,
-      verdict: { finalClass: p.verdict?.finalClass ?? null, rounds: p.verdict?.rounds ?? 0, approvedWithSeedUnfixed: p.verdict?.approvedWithSeedUnfixed === true },
+      verdict: { finalClass: p.verdict.finalClass, rounds: p.verdict.rounds, approvedWithSeedUnfixed: p.verdict.approvedWithSeedUnfixed },
       // `class` rides along: the comparison's security row needs to know which seeds are security seeds.
-      seeds: (p.seeds ?? []).map((s) => ({
-        id: s.id, class: s.class ?? null, present: s.present ?? null, caughtByImplementer: s.caughtByImplementer === true, found: s.found === true,
-        foundRound1: s.foundRound1 === true, stage: s.stage ?? null, oracle: s.oracle ?? null,
+      seeds: p.seeds.map((s) => ({
+        id: s.id, class: s.class, present: s.present, caughtByImplementer: s.caughtByImplementer, found: s.found,
+        foundRound1: s.foundRound1, stage: s.stage, oracle: s.oracle,
       })),
-      decoysFlagged: [...(p.decoysFlagged ?? [])],
+      decoysFlagged: [...p.decoysFlagged],
     })),
     totals: Object.fromEntries(TOTALS_KEYS.map((k) => [k, clone(m.totals[k])])),
     compactionSamples: m.compactionSamples.map((s) => ({
-      n: s.n ?? null, placement: s.placement ?? null, trigger: s.trigger ?? null, preTokens: s.preTokens ?? null, postTokens: s.postTokens ?? null,
-      atRisk: s.atRisk ?? 0, lost: s.lost ?? 0, valid: s.valid === true, ...(typeof s.reason === 'string' ? { reason: s.reason } : {}),
+      n: s.n, placement: s.placement, trigger: s.trigger, preTokens: s.preTokens, postTokens: s.postTokens,
+      atRisk: s.atRisk, lost: s.lost, valid: s.valid, ...(typeof s.reason === 'string' ? { reason: s.reason } : {}),
     })),
-    wholeBranch: { finalClass: m.wholeBranch.finalClass ?? null, rounds: m.wholeBranch.rounds ?? 0 },
-    adjudication: m.adjudication.map((a) => ({ item: a.item, pass: a.pass ?? null, role: a.role ?? null, locator: String(a.locator ?? ''), excerpt: String(a.excerpt ?? '') })),
+    wholeBranch: { finalClass: m.wholeBranch.finalClass, rounds: m.wholeBranch.rounds },
+    adjudication: m.adjudication.map((a) => ({ item: a.item, pass: a.pass ?? null, role: a.role ?? null, locator: a.locator, excerpt: a.excerpt })),
     models: clone(m.models),
     notes: [...m.notes],
     invalid: [...m.invalid],
@@ -300,6 +408,7 @@ export function validateSummary(s) {
     for (const k of NUMERIC_TOTALS) need(typeof s.totals[k] === 'number' && Number.isFinite(s.totals[k]), `totals.${k} is not a number`)
     need(isObject(s.totals.recall) && typeof s.totals.recall.found === 'number' && typeof s.totals.recall.denominator === 'number' && isObject(s.totals.recall.byClass), 'totals.recall is not {found, denominator, byClass}')
     need(isObject(s.totals.readerSkips), 'totals.readerSkips is not an object')
+    need(isObject(s.totals.oracleRun) && strOrNull(s.totals.oracleRun.status) && typeof s.totals.oracleRun.detail === 'string', 'totals.oracleRun is not {status, detail}')
   }
   need(Array.isArray(s.compactionSamples) && s.compactionSamples.every((c) => typeof c?.atRisk === 'number' && typeof c.lost === 'number' && typeof c.valid === 'boolean'), 'compactionSamples are malformed')
   need(isObject(s.wholeBranch) && strOrNull(s.wholeBranch.finalClass), 'wholeBranch is not {finalClass}')
@@ -339,6 +448,7 @@ function checkReferences(summary, reference) {
     if (problems.length > 0) throw new Error(`reference ${k + 1} is no replay summary: ${problems[0]}`)
     if (ref.shape !== 'baseline' || ref.kind !== 'scored') throw new Error(`reference ${k + 1} (${ref.runId}) is not a baseline scored run`)
     if (ref.protocol.sha256 !== summary.protocol.sha256) throw new Error(`reference ${k + 1} (${ref.runId}) was scored under protocol sha256 ${ref.protocol.sha256}, not ${summary.protocol.sha256}`)
+    if (ref.invalid.length > 0) throw new Error(`reference ${k + 1} (${ref.runId}) is an invalid run (§10): it is replaced, never read as a baseline`)
   }
 }
 
@@ -376,7 +486,9 @@ function perRunChecks(s, t, reference) {
   out['approved-unfixed'].baseline = `${fmt(sum(reference, (r) => r.passes.filter((p) => p.verdict.approvedWithSeedUnfixed).length) / reference.length, 2)} per run`
   const refTokens = sum(reference, (r) => r.totals.subagentTokensPerPass) / reference.length
   out['subagent-tokens'].baseline = `mean ${fmt(refTokens)} per pass; this run ${fmt(refTokens === 0 ? NaN : s.totals.subagentTokensPerPass / refTokens, 3)} × it`
-  out['eval-set-floors'].verdict = 'CARRIED to session 2'
+  out['eval-set-floors'].verdict = `CARRIED — evalSetFloors ${t.evalSetFloors}`
+  // §10: an invalid run is replaced; no row is read off it.
+  if (s.invalid.length > 0) for (const id of ROW_IDS) out[id].verdict = 'not evaluated — invalid (§10)'
   return out
 }
 
@@ -483,13 +595,17 @@ export function renderResults(summary, thresholds, reference = []) {
   )
   push('#### Beside `verdict-class`', '', `- whole-branch review: ${s.wholeBranch.finalClass ?? 'none'} after ${s.wholeBranch.rounds} round(s)`, ...bullets(byRow['verdict-class']), '')
   push('#### Beside `verdict-rounds`', '', ...bullets(byRow['verdict-rounds']), '')
-  push('#### Beside `approved-unfixed`', '', `- oracles passing: ${T.oraclePass}; oracles erroring (counted unfixed): ${T.oracleError}`, ...bullets(byRow['approved-unfixed']), '')
+  const oracleRun = T.oracleRun
+  const runLine = `- oracle run: ${oracleRun.status ?? 'unrecorded'}${oracleRun.detail !== '' ? ` — ${oracleRun.detail}` : ''}${
+    typeof oracleRun.status === 'string' && oracleRun.status !== 'ok' ? ' — the run itself did not complete, so its behaviour seeds\' errors are this one failure, not seed results' : ''
+  }`
+  push('#### Beside `approved-unfixed`', '', `- oracles passing: ${T.oraclePass}; oracles erroring (counted unfixed): ${T.oracleError}`, runLine, ...bullets(byRow['approved-unfixed']), '')
   const beside = Object.entries(T.ledgerBeside ?? {})
   push(
     '#### Beside `loop-chars`',
     '',
     `- breakdown: ${BREAKDOWN_KEYS.map((k) => `${k} ${T.breakdown?.[k] ?? 0}`).join(', ')} (resumes reported apart, outside the figure)`,
-    `- unattributed share ${pct(T.unattributedShare)}${T.perPassUnreliable ? ' — the per-pass split is UNRELIABLE (over 20% unattributed)' : ''}`,
+    `- unattributed share ${pct(T.unattributedShare)}${T.perPassUnreliable ? ` — the per-pass split is UNRELIABLE (over ${UNATTRIBUTED_MAX * 100}% unattributed)` : ''}`,
     `- unresolved deliveries and sends: ${T.unresolvedDeliveriesAndSends} (kept in the figure, unattributed)`,
     `- ledger kinds beside the gated figure, never inside it: ${beside.length === 0 ? 'none' : beside.map(([k, v]) => `${k} ${v.calls} call(s), ${v.chars} characters`).join('; ')}`,
     `- walk skipped: ${JSON.stringify(T.walkSkipped)}`,
@@ -508,7 +624,7 @@ export function renderResults(summary, thresholds, reference = []) {
     ...bullets(byRow['subagent-tokens']),
     '',
   )
-  push('#### Beside `eval-set-floors`', '', '- carried to session 2 of the package, where the eval set runs once as the new baseline', '')
+  push('#### Beside `eval-set-floors`', '', `- evalSetFloors ${t.evalSetFloors}: the eval set runs once as the new baseline, outside the replay`, '')
   push('#### Other measurement notes', '', ...bullets(other), '')
 
   // The per-pass table.
@@ -550,14 +666,17 @@ export function renderResults(summary, thresholds, reference = []) {
 
 /**
  * Every problem of a runs folder: each `<date>-replay-<n>/` holds a `summary.json` that conforms,
- * names its own folder, was scored under the given protocol's sha256, and a `RESULTS.md`; neither
- * file carries a home or temp path shape; and every run shares one instrument commit.
+ * names its own folder, was scored under the given protocol's sha256 at the committed protocol
+ * path, and a `RESULTS.md`; neither file carries a home or temp path shape or a leak-gate hit;
+ * every run shares one instrument commit; and no shape holds more invalid runs than §10's
+ * replacements. `invalid` lists each shape's invalid runs, reported whether or not they pass.
  */
 export function checkRuns(runsDir, protocolPath) {
   const protocolSha = sha256(readFileSync(protocolPath))
   const problems = []
+  const invalid = Object.fromEntries(SHAPES.map((shape) => [shape, []]))
   const dirs = readdirSync(runsDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).toSorted()
-  if (dirs.length === 0) return { runs: 0, problems: ['no run directory under the runs folder'] }
+  if (dirs.length === 0) return { runs: 0, problems: ['no run directory under the runs folder'], invalid }
   const commits = new Set()
   for (const name of dirs) {
     if (!RUN_ID.test(name)) {
@@ -589,12 +708,45 @@ export function checkRuns(runsDir, protocolPath) {
     for (const p of validateSummary(s)) problems.push(`${name}: summary.json ${p}`)
     if (s?.runId !== name) problems.push(`${name}: summary.json names run ${JSON.stringify(s?.runId ?? null)}`)
     if (s?.protocol?.sha256 !== protocolSha) problems.push(`${name}: protocol sha256 ${s?.protocol?.sha256 ?? 'absent'} is not the sha256 of the protocol (${protocolSha})`)
+    if (s?.protocol?.path !== DEFAULT_PROTOCOL) problems.push(`${name}: protocol path ${JSON.stringify(s?.protocol?.path ?? null)} is not ${DEFAULT_PROTOCOL}`)
     if (typeof s?.instrument?.commit === 'string') commits.add(s.instrument.commit)
+    if (Array.isArray(s?.invalid) && s.invalid.length > 0 && SHAPES.includes(s.shape)) invalid[s.shape].push(`${name} (${s.kind})`)
     for (const shape of forbiddenIn(summaryText)) problems.push(`${name}/summary.json carries "${shape}"`)
     for (const shape of forbiddenIn(results ?? '')) problems.push(`${name}/RESULTS.md carries "${shape}"`)
+    for (const rule of leakRulesIn(summaryText, committedPath(name, 'summary.json'))) problems.push(`${name}/summary.json matches the leak gate's rule ${rule}`)
+    for (const rule of leakRulesIn(results ?? '', committedPath(name, 'RESULTS.md'))) problems.push(`${name}/RESULTS.md matches the leak gate's rule ${rule}`)
   }
   if (commits.size > 1) problems.push(`${commits.size} instrument commits across the runs: ${[...commits].toSorted().join(', ')}`)
-  return { runs: dirs.length, problems }
+  for (const shape of SHAPES) {
+    const n = invalid[shape].length
+    if (n > MAX_REPLACEMENTS_PER_SHAPE) problems.push(`${shape}: ${n} invalid runs, over the ${MAX_REPLACEMENTS_PER_SHAPE} replacements §10 allows per shape — the rows they feed are not evaluated and the merge gate fails`)
+  }
+  return { runs: dirs.length, problems, invalid }
+}
+
+/** The invalid runs of each shape as one line, printed by `check` on a pass and a failure alike. */
+function invalidLine(invalid) {
+  const parts = SHAPES.map((shape) => `${shape} ${invalid[shape].length} — ${invalid[shape].join(', ') || 'none'}`)
+  return `invalid runs (§10, at most ${MAX_REPLACEMENTS_PER_SHAPE} replacements per shape): ${parts.join('; ')}`
+}
+
+/**
+ * Write `files` (`[name, text]` pairs) as the new directory `outDir`, whole or not at all: into a
+ * temporary sibling first, renamed into place once every file is written. A failure removes the
+ * temporary directory and leaves no `outDir`; an `outDir` that exists by then refuses the rename.
+ */
+export function writeRunFolder(outDir, files) {
+  const parent = dirname(resolve(outDir))
+  mkdirSync(parent, { recursive: true })
+  const staging = mkdtempSync(join(parent, `.${basename(resolve(outDir))}.partial-`))
+  try {
+    for (const [name, text] of files) writeFileSync(join(staging, name), text)
+    if (existsSync(outDir)) throw new Error(`--out-dir already exists: a run is scored once, into a directory of its own (${basename(resolve(outDir))})`)
+    renameSync(staging, outDir)
+  } catch (error) {
+    rmSync(staging, { recursive: true, force: true })
+    throw error
+  }
 }
 
 // ---------- run ----------
@@ -635,30 +787,34 @@ function runCommand(o) {
   const references = o.reference.map((path, k) => readJson(path, `--reference ${k + 1}`))
   if (references.length > 0 && o.kind === 'pilot') throw new Error('a pilot is not scored: it takes no --reference')
 
-  const summary = summarize(measurement, runJson, protocolSha, { protocolPath: protocolPathOf(o.protocol), runId: o.runId, kind: o.kind })
+  const protocolPath = protocolPathOf(o.protocol)
+  if (protocolPath !== DEFAULT_PROTOCOL) throw new Error(`--protocol must be the committed ${DEFAULT_PROTOCOL}, not ${protocolPath}`)
+  const summary = summarize(measurement, runJson, protocolSha, { protocolPath, runId: o.runId, kind: o.kind })
   const problems = validateSummary(summary)
   if (problems.length > 0) throw new Error(`the summary does not conform: ${problems.join('; ')}`)
   const results = renderResults(summary, thresholds, references)
   const summaryText = `${JSON.stringify(summary, null, 2)}\n`
-  const leaks = [...forbiddenIn(summaryText).map((x) => `summary.json carries "${x}"`), ...forbiddenIn(results).map((x) => `RESULTS.md carries "${x}"`)]
-  if (leaks.length > 0) throw new Error(`nothing written: ${leaks.join('; ')} after redaction`)
-  mkdirSync(dirname(resolve(o.outDir)), { recursive: true })
-  mkdirSync(o.outDir)
-  writeFileSync(join(o.outDir, 'summary.json'), summaryText)
-  writeFileSync(join(o.outDir, 'RESULTS.md'), results)
+  const leaks = [
+    ...forbiddenIn(summaryText).map((x) => `summary.json carries "${x}" after redaction`),
+    ...forbiddenIn(results).map((x) => `RESULTS.md carries "${x}" after redaction`),
+    ...leakRulesIn(summaryText, committedPath(o.runId, 'summary.json')).map((rule) => `summary.json matches the leak gate's rule ${rule}`),
+    ...leakRulesIn(results, committedPath(o.runId, 'RESULTS.md')).map((rule) => `RESULTS.md matches the leak gate's rule ${rule}`),
+  ]
+  if (leaks.length > 0) throw new Error(`nothing written: ${leaks.join('; ')}`)
+  writeRunFolder(o.outDir, [['summary.json', summaryText], ['RESULTS.md', results]])
   const r = summary.totals.recall
   process.stdout.write(`[replay] scored ${summary.runId} (${summary.shape}, ${summary.kind}): recall ${r.found}/${r.denominator}, loop chars/pass ${Math.round(summary.totals.loopCharsPerPass)}, ${summary.invalid.length === 0 ? 'valid' : `INVALID (${summary.invalid.length})`}\n`)
 }
 
 function checkCommand(o) {
   if (!o.runs || !o.protocol) throw new Error(`check needs --runs and --protocol.\n${USAGE}`)
-  const { runs, problems } = checkRuns(o.runs, o.protocol)
+  const { runs, problems, invalid } = checkRuns(o.runs, o.protocol)
   if (problems.length > 0) {
-    process.stderr.write(`[replay] check failed over ${runs} run folder(s):\n${problems.map((p) => `  - ${p}`).join('\n')}\n`)
+    process.stderr.write(`[replay] check failed over ${runs} run folder(s):\n${problems.map((p) => `  - ${p}`).join('\n')}\n[replay] ${invalidLine(invalid)}\n`)
     process.exitCode = 1
     return
   }
-  process.stdout.write(`[replay] ${runs} run(s) checked: every summary conforms, one instrument commit, the protocol sha matches, no home or temp path\n`)
+  process.stdout.write(`[replay] ${runs} run(s) checked: every summary conforms, one instrument commit, the protocol sha and path match, no home or temp path, no leak-gate hit\n[replay] ${invalidLine(invalid)}\n`)
 }
 
 // ---------- CLI ----------

@@ -64,6 +64,8 @@ interface Measurement {
     decoyFalseFlags: number;
     unmatched: number;
     oraclePass: number;
+    oracleError: number;
+    oracleRun: { status: string | null; detail: string };
   };
   compactionSamples: Sample[];
   wholeBranch: { finalClass: string | null; rounds: number };
@@ -298,7 +300,7 @@ function passCapture(options: PassCaptureOptions): Built {
       "compaction-1-pre": { runId: RUN, ledger: options.preLedger ?? filed, ...(reports ? { reports } : {}) },
       end: { runId: RUN, ledger: options.endLedger ?? filed, ...(reports ? { reports } : {}) },
     },
-    oracle: { schema: "stamity/replay-oracle/v1", results: [{ seed: "sec-sql-sort", kind: "vitest", status: options.oracle ?? "pass", detail: "" }] },
+    oracle: { schema: "stamity/replay-oracle/v1", run: { status: "ok", detail: "" }, results: [{ seed: "sec-sql-sort", kind: "vitest", status: options.oracle ?? "pass", detail: "" }] },
   });
   return { layout, fixture, agents };
 }
@@ -916,6 +918,27 @@ describe("measureRun — review round 3 fixes", () => {
     ];
     expect(b.totals.breakdown["prompts"]! - a.totals.breakdown["prompts"]!).toBe("Review unit u1-p1.".length);
     expect(notesOf(b)).toMatch(/agent alost built from its sub-agent file \(reviewer, u1-p1\): its dispatch prompt of 18 characters counted in term \(b\)/);
+  });
+});
+
+describe("measureRun — the oracle run's own status (build/230)", () => {
+  it("carries the oracle document's run.{status, detail} as the oracleRun total", async () => {
+    const ok = await measure(passCapture({ shape: "baseline" }).layout.runDir);
+    expect(ok.totals.oracleRun).toEqual({ status: "ok", detail: "" });
+    const { layout } = passCapture({ shape: "baseline" });
+    const detail = "the oracle run was killed by SIGKILL after 600000 ms (limit 600000 ms)";
+    writeFileSync(layout.oracle, JSON.stringify({ schema: "stamity/replay-oracle/v1", run: { status: "killed", detail }, results: [{ seed: "sec-sql-sort", kind: "vitest", status: "error", detail }] }));
+    const killed = await measure(layout.runDir);
+    expect(killed.totals.oracleRun).toEqual({ status: "killed", detail });
+    expect(killed.totals.oracleError).toBe(1);
+  });
+
+  it("records a null status, with the reason, when the document or its run-level status is absent", async () => {
+    const { layout } = passCapture({ shape: "baseline" });
+    writeFileSync(layout.oracle, JSON.stringify({ schema: "stamity/replay-oracle/v1", results: [] }));
+    expect((await measure(layout.runDir)).totals.oracleRun).toEqual({ status: null, detail: "the oracle document records no run-level status" });
+    rmSync(layout.oracle);
+    expect((await measure(layout.runDir)).totals.oracleRun).toEqual({ status: null, detail: "no captures/oracle.json" });
   });
 });
 

@@ -1,13 +1,13 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { measureRun } from "../../scripts/replay/measure.mjs";
+import { UNATTRIBUTED_MAX, measureRun } from "../../scripts/replay/measure.mjs";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { NOTE_ROWS, TOTALS_KEYS, checkRuns, parseThresholds, renderResults, summarize, validateSummary } from "../../scripts/replay/score.mjs";
+import { NOTE_ROWS, TOTALS_KEYS, checkRuns, parseThresholds, renderResults, summarize, validateSummary, writeRunFolder } from "../../scripts/replay/score.mjs";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
 import { LEDGER_GATED_KINDS, roleFunction } from "../../scripts/replay/transcript.mjs";
 import { type CaptureLayout, type SubagentFile, mainLine, subagentFile, writeCapture } from "./synth.ts";
@@ -203,7 +203,7 @@ function capture(runOver: Record<string, unknown> = {}): Built {
     subagents: agents.map(subagentOf),
     snapshots: { "u1-p1": { main: SNAPSHOT } },
     state: { "compaction-1-pre": { runId: RUN, ledger: [] }, end: { runId: RUN, ledger: rows } },
-    oracle: { schema: "stamity/replay-oracle/v1", results: [{ seed: "sec-sql-sort", kind: "vitest", status: "pass", detail: "" }, { seed: "cor-page-offset", kind: "vitest", status: "fail", detail: "" }] },
+    oracle: { schema: "stamity/replay-oracle/v1", run: { status: "ok", detail: "" }, results: [{ seed: "sec-sql-sort", kind: "vitest", status: "pass", detail: "" }, { seed: "cor-page-offset", kind: "vitest", status: "fail", detail: "" }] },
   });
   return { layout, fixture, runJson: JSON.parse(readFileSync(layout.runJson, "utf8")) as Record<string, unknown> };
 }
@@ -265,6 +265,17 @@ describe("REPLAY-v1 as committed — the thresholds and the invocation bytes (r1
     expect(() => parseThresholds(withBlock(block.replace('"lineTolerance":3,', '"lineTolerance":3,"loopCharsFloor":0.4,')))).toThrow(/unknown key "loopCharsFloor"/);
     expect(() => parseThresholds(withBlock(block.replace('"roundsTolerance":1,', "")))).toThrow(/missing key "roundsTolerance"/);
   });
+
+  // build/226: a string threshold names a reading; the scorer implements exactly one per key, so a
+  // fence edit that names another reading is refused rather than printed beside unchanged arithmetic.
+  it.each(["decoyFlags", "approvedUnfixed", "loopCharsReference", "loopCharsScope", "subagentTokensScope", "subagentTokensReference", "securityExemption", "evalSetFloors"])(
+    "refuses %s set to a reading the scorer does not implement (build/226)",
+    (key) => {
+      const other = block.replace(new RegExp(`"${key}":"[^"]*"`), `"${key}":"other-reading"`);
+      expect(other).not.toBe(block);
+      expect(() => parseThresholds(withBlock(other))).toThrow(new RegExp(`"${key}" is "other-reading"; this scorer implements only "${R1_THRESHOLDS[key as keyof typeof R1_THRESHOLDS]}"`));
+    },
+  );
 
   it("refuses a value of the wrong type and a second or absent block", () => {
     expect(() => parseThresholds(withBlock(block.replace('"recallMargin":1', '"recallMargin":"1"')))).toThrow(/"recallMargin" must be a number/);
@@ -443,6 +454,23 @@ describe("summarize — the measurement into stamity/replay-summary/v1", () => {
     );
   });
 
+  it("refuses a malformed pass row, seed row, compaction sample or whole-branch row instead of coercing it (build/232)", async () => {
+    const { m, runJson } = await measured();
+    const passes = m["passes"] as Record<string, unknown>[];
+    const u1 = passes[0]!;
+    const withPass = (over: Record<string, unknown>): Record<string, unknown> => ({ ...m, passes: [{ ...u1, ...over }, ...passes.slice(1)] });
+    const verdict = u1["verdict"] as Record<string, unknown>;
+    const seeds = u1["seeds"] as Record<string, unknown>[];
+    expect(() => summarize(withPass({ verdict: { ...verdict, rounds: undefined } }), runJson, PROTOCOL_SHA)).toThrow(/measurement: pass u1-p1: verdict\.rounds is not a number/);
+    expect(() => summarize(withPass({ verdict: { ...verdict, approvedWithSeedUnfixed: "yes" } }), runJson, PROTOCOL_SHA)).toThrow(/pass u1-p1: verdict\.approvedWithSeedUnfixed is not a boolean/);
+    expect(() => summarize(withPass({ breakdown: { ...(u1["breakdown"] as object), briefs: undefined } }), runJson, PROTOCOL_SHA)).toThrow(/pass u1-p1: breakdown\.briefs is not a number/);
+    expect(() => summarize(withPass({ seeds: [{ ...seeds[0]!, found: undefined }] }), runJson, PROTOCOL_SHA)).toThrow(/pass u1-p1: seed sec-sql-sort: found is not a boolean/);
+    expect(() => summarize(withPass({ decoysFlagged: undefined }), runJson, PROTOCOL_SHA)).toThrow(/pass u1-p1: decoysFlagged is not a list of strings/);
+    const samples = m["compactionSamples"] as Record<string, unknown>[];
+    expect(() => summarize({ ...m, compactionSamples: [{ ...samples[0]!, valid: undefined }] }, runJson, PROTOCOL_SHA)).toThrow(/compaction sample 1: valid is not a boolean/);
+    expect(() => summarize({ ...m, wholeBranch: { finalClass: null } }, runJson, PROTOCOL_SHA)).toThrow(/wholeBranch\.rounds is not a number/);
+  });
+
   it("refuses a document that is not an r7 measurement", () => {
     expect(() => summarize({ schema: "other" }, {}, PROTOCOL_SHA)).toThrow(/not stamity\/replay-measurement\/v1/);
   });
@@ -455,6 +483,9 @@ const withLoop = (s: Summary, v: number): Summary => ({ ...s, totals: { ...s.tot
 const lastCell = (md: string, row: string): string => md.split("\n").find((l) => l.startsWith(`| \`${row}\` |`))!.split(" | ").at(-1)!;
 /** `s` with the security seed not found. */
 const miss = (s: Summary): Summary => ({ ...s, passes: s.passes.map((p) => ({ ...p, seeds: p.seeds.map((x) => (x.id === "sec-sql-sort" ? { ...x, found: false } : x)) })) });
+
+/** The approved-unfixed qualifiers of a RESULTS file. */
+const besideApproved = (md: string): string => md.slice(md.indexOf("#### Beside `approved-unfixed`"), md.indexOf("#### Beside `loop-chars`"));
 
 describe("renderResults — RESULTS.md", () => {
   it("opens with the pins and the protocol sha, and closes with the closing line and Not done", async () => {
@@ -511,6 +542,25 @@ describe("renderResults — RESULTS.md", () => {
     expect(section("#### Other measurement notes")).toContain(notes[3]);
   });
 
+  it("words the unreliable split from measure.mjs's UNATTRIBUTED_MAX and eval-set-floors from the fence's reading (build/231)", async () => {
+    const { m, runJson } = await measured();
+    const s = summarize(m, runJson, PROTOCOL_SHA) as Summary;
+    const md = renderResults({ ...s, totals: { ...s.totals, perPassUnreliable: true } }, parseThresholds(PROTOCOL_TEXT)) as string;
+    expect(md).toContain(`the per-pass split is UNRELIABLE (over ${(UNATTRIBUTED_MAX as number) * 100}% unattributed)`);
+    const floors = md.slice(md.indexOf("#### Beside `eval-set-floors`"), md.indexOf("#### Other measurement notes"));
+    expect(floors).toContain("evalSetFloors carried-to-session-2");
+  });
+
+  it("renders the oracle run's own status beside approved-unfixed (build/230)", async () => {
+    const { m, runJson } = await measured();
+    const s = summarize(m, runJson, PROTOCOL_SHA) as Summary;
+    expect(s.totals["oracleRun"]).toEqual({ status: "ok", detail: "" });
+    expect(besideApproved(renderResults(s, parseThresholds(PROTOCOL_TEXT)) as string)).toContain("- oracle run: ok");
+    const killed = summarize({ ...m, totals: { ...(m["totals"] as object), oracleRun: { status: "killed", detail: "the oracle run was killed by SIGKILL" } } }, runJson, PROTOCOL_SHA);
+    expect(besideApproved(renderResults(killed, parseThresholds(PROTOCOL_TEXT)) as string)).toMatch(/- oracle run: killed — the oracle run was killed by SIGKILL — the run itself did not complete/);
+    expect(validateSummary({ ...s, totals: { ...s.totals, oracleRun: { status: 3 } } })).toContain("totals.oracleRun is not {status, detail}");
+  });
+
   it("heads a pilot 'pilot — not scored' and lists it under Not done", async () => {
     const { m, runJson } = await measured({ kind: "pilot" });
     const s = summarize(m, runJson, PROTOCOL_SHA) as Summary;
@@ -542,6 +592,14 @@ describe("renderResults — RESULTS.md", () => {
       expect(lastCell(renderResults(miss(changed), T(), baseline) as string, "security-seeds")).toMatch(/^FAIL.*sec-sql-sort/);
       expect(lastCell(renderResults(miss(changed), T(), [miss(baseline[0]!), baseline[1]!, baseline[2]!]) as string, "security-seeds")).toMatch(/^PASS.*exempt: sec-sql-sort/);
       expect(lastCell(renderResults(changed, T(), baseline) as string, "security-seeds")).toMatch(/^PASS/);
+    });
+
+    it("refuses an invalid baseline as a reference, and renders an invalid run's per-run column not evaluated (build/229)", async () => {
+      const { changed, baseline } = await pair();
+      expect(() => renderResults(changed, T(), [{ ...baseline[0]!, invalid: ["run.json end.reason is \"stalled\", not \"complete\""] }, baseline[1]!])).toThrow(/reference 1 \(2026-09-24-replay-1\) is an invalid run \(§10\)/);
+      const md = renderResults({ ...miss(changed), invalid: ["a stall"] }, T(), baseline) as string;
+      for (const row of ["security-seeds", "loop-chars", "compaction-loss", "pooled-recall"]) expect(lastCell(md, row), row).toBe("not evaluated — invalid (§10) |");
+      expect(md).not.toMatch(/\| (PASS|FAIL)\b/);
     });
 
     it("refuses a reference on a baseline-shape run and a reference that is no baseline scored run", async () => {
@@ -614,6 +672,111 @@ describe("score.mjs run and check", () => {
     writeFileSync(join(misnamed, "2026-09-24-replay-7", "summary.json"), good);
     writeFileSync(join(misnamed, "2026-09-24-replay-7", "RESULTS.md"), "No threshold moved.\n");
     expect(checkRuns(misnamed, PROTOCOL).problems).toEqual([expect.stringMatching(/2026-09-24-replay-7: summary\.json names run "2026-09-24-replay-1"/)]);
+  });
+
+  // Assembled from fragments, so this file spells none of the names the leak gate refuses.
+  const PRIVATE_NAME = ["stam", "ity", "-gov", "ernance"].join("");
+
+  it("run refuses to write a summary or RESULTS the leak gate would refuse, naming the rule and the file (build/227)", async () => {
+    const built = await measured();
+    const measurement = join(built.layout.runDir, "measurement.json");
+    writeFileSync(measurement, JSON.stringify({ ...built.m, notes: [...built.m.notes, `see the ${PRIVATE_NAME} checkout`] }));
+    const outDir = join(scratch(), "runs", RUN_ID);
+    const result = score(["run", "--measurement", measurement, "--run-json", built.layout.runJson, "--protocol", PROTOCOL, "--run-id", RUN_ID, "--kind", "scored", "--out-dir", outDir]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/nothing written: summary\.json matches the leak gate's rule private-repo-name; RESULTS\.md matches the leak gate's rule private-repo-name/);
+    expect(result.stderr).not.toContain(PRIVATE_NAME);
+    expect(existsSync(outDir)).toBe(false);
+  });
+
+  it("check fails on a summary or RESULTS the leak gate would refuse, naming the rule and the file (build/227)", async () => {
+    const { runsDir, outDir } = await runInto();
+    const s = JSON.parse(readFileSync(join(outDir, "summary.json"), "utf8")) as Summary;
+    writeFileSync(join(outDir, "summary.json"), JSON.stringify({ ...s, notes: [`the ${PRIVATE_NAME} layer`] }));
+    writeFileSync(join(outDir, "RESULTS.md"), `row ${["A", "D"].join("")}-137\n`);
+    expect(checkRuns(runsDir, PROTOCOL).problems).toEqual([
+      `${RUN_ID}/summary.json matches the leak gate's rule private-repo-name`,
+      `${RUN_ID}/RESULTS.md matches the leak gate's rule private-ledger-id`,
+    ]);
+  });
+
+  it("check refuses a summary whose protocol path is not the committed evals/replay/REPLAY-v1.md (build/233)", async () => {
+    const { runsDir, outDir } = await runInto();
+    const s = JSON.parse(readFileSync(join(outDir, "summary.json"), "utf8")) as Summary;
+    writeFileSync(join(outDir, "summary.json"), JSON.stringify({ ...s, protocol: { ...s.protocol, path: "REPLAY-v1.md" } }));
+    expect(checkRuns(runsDir, PROTOCOL).problems).toEqual([`${RUN_ID}: protocol path "REPLAY-v1.md" is not evals/replay/REPLAY-v1.md`]);
+  });
+
+  it("run refuses a --protocol other than the committed evals/replay/REPLAY-v1.md, since check would refuse its folder (build/233)", async () => {
+    const copy = join(scratch(), "REPLAY-v1.md");
+    writeFileSync(copy, PROTOCOL_TEXT);
+    const built = await runInto({ extra: [] });
+    rmSync(built.outDir, { recursive: true });
+    const args = built.args.map((a) => (a === PROTOCOL ? copy : a));
+    const result = score(args);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/--protocol must be the committed evals\/replay\/REPLAY-v1\.md, not REPLAY-v1\.md/);
+    expect(existsSync(built.outDir)).toBe(false);
+  });
+
+  describe("invalid runs per shape (§10, build/228)", () => {
+    /** A runs folder holding `good` under each run id, with the ids in `invalid` marked invalid and `shape` set. */
+    function folder(good: Summary, runs: { id: string; shape: string; kind?: string; invalid?: boolean }[]): string {
+      const dir = join(scratch(), "runs");
+      for (const r of runs) {
+        mkdirSync(join(dir, r.id), { recursive: true });
+        writeFileSync(join(dir, r.id, "summary.json"), JSON.stringify({ ...good, runId: r.id, shape: r.shape, kind: r.kind ?? "scored", invalid: r.invalid ? ["run.json end.reason is \"stalled\", not \"complete\""] : [] }));
+        writeFileSync(join(dir, r.id, "RESULTS.md"), "No threshold moved.\n");
+      }
+      return dir;
+    }
+
+    it("lists the invalid runs of each shape, and passes at two replacements", async () => {
+      const { outDir } = await runInto();
+      const good = JSON.parse(readFileSync(join(outDir, "summary.json"), "utf8")) as Summary;
+      const dir = folder(good, [
+        { id: "2026-09-24-replay-1", shape: "baseline", invalid: true },
+        { id: "2026-09-24-replay-2", shape: "baseline", kind: "pilot", invalid: true },
+        { id: "2026-09-24-replay-3", shape: "baseline" },
+        { id: "2026-09-24-replay-4", shape: "changed" },
+      ]);
+      const r = checkRuns(dir, PROTOCOL);
+      expect(r.problems).toEqual([]);
+      expect(r.invalid).toEqual({ baseline: ["2026-09-24-replay-1 (scored)", "2026-09-24-replay-2 (pilot)"], changed: [] });
+      const cli = score(["check", "--runs", dir, "--protocol", PROTOCOL]);
+      expect(cli.status).toBe(0);
+      expect(cli.stdout).toContain("invalid runs (§10, at most 2 replacements per shape): baseline 2 — 2026-09-24-replay-1 (scored), 2026-09-24-replay-2 (pilot); changed 0 — none");
+    });
+
+    it("refuses a shape with more than two replacements, and lists them in its output", async () => {
+      const { outDir } = await runInto();
+      const good = JSON.parse(readFileSync(join(outDir, "summary.json"), "utf8")) as Summary;
+      const dir = folder(good, [1, 2, 3].map((n) => ({ id: `2026-09-24-replay-${n}`, shape: "changed", invalid: true })));
+      expect(checkRuns(dir, PROTOCOL).problems).toEqual([
+        "changed: 3 invalid runs, over the 2 replacements §10 allows per shape — the rows they feed are not evaluated and the merge gate fails",
+      ]);
+      const cli = score(["check", "--runs", dir, "--protocol", PROTOCOL]);
+      expect(cli.status).toBe(1);
+      expect(cli.stderr).toContain("invalid runs (§10, at most 2 replacements per shape): baseline 0 — none; changed 3 — 2026-09-24-replay-1 (scored), 2026-09-24-replay-2 (scored), 2026-09-24-replay-3 (scored)");
+    });
+
+    it("§10 states the two replacements the check enforces", () => {
+      expect(PROTOCOL_TEXT.replace(/\s+/g, " ")).toContain("An incomplete, contaminated or pin-drifted run is invalid and replaced, at most 2 replacements per shape.");
+    });
+  });
+
+  it("writes the run folder whole or not at all (build/235)", () => {
+    const parent = join(scratch(), "runs");
+    mkdirSync(parent);
+    const outDir = join(parent, RUN_ID);
+    expect(() => writeRunFolder(outDir, [["summary.json", "{}\n"], ["missing/RESULTS.md", "x\n"]])).toThrow(/ENOENT/);
+    expect(existsSync(outDir)).toBe(false);
+    expect(readdirSync(parent)).toEqual([]);
+    writeRunFolder(outDir, [["summary.json", "{}\n"], ["RESULTS.md", "x\n"]]);
+    expect(readdirSync(outDir).toSorted()).toEqual(["RESULTS.md", "summary.json"]);
+    expect(readdirSync(parent)).toEqual([RUN_ID]);
+    expect(() => writeRunFolder(outDir, [["summary.json", "{}\n"]])).toThrow();
+    expect(readdirSync(parent)).toEqual([RUN_ID]);
   });
 
   it("check refuses a folder with no run in it", () => {
