@@ -253,3 +253,19 @@ checkpoint and the merge to `main` wait for the maintainer.
   - r11a is complete. r11b does not start: v1 cannot evaluate the package's review-quality claim on this fixture
     (build/362), and the protocol for the merge gate is the maintainer's choice.
 - 2026-09-24T06:45Z CI round-trip 7 at the head f58231a2 green on every leg (runs 35964754192, 35964754138 and 35964754189), Windows included (14 min 41 s). The private layer carries the pilots' outcome and the gate question (its main at c8428e81, pushed). Where the session stops: #54 is not merged; the maintainer's first question is the merge gate's protocol (REPLAY-v2 recommended, no default), then the sign-offs and the QA walk in qa-session-1.md.
+- 2026-09-24T08:51Z the maintainer's answers, through the question tool, four questions in one turn:
+  - **The merge gate:** "Merge after QA; replay gates 1.10.0". Plan decision D10 moves from "measure before merge" to
+    "measure before the release". #54 merges after the QA sign-off, and a REPLAY-v2 (a fixture whose seeds reach
+    review) must pass before 1.10.0, beside the eval-set run. The pilots' savings stay in the record, unscored. The
+    spec and plan text that still says "before merge" (REQ-CTX-015's merge-gate clause, D10, C12) is amended before
+    the merge. REPLAY-v1.md stays frozen as its pilots recorded it.
+  - **The 48 unattended sign-offs:** "Confirm all 48", confirmed as executed.
+  - **The QA checkpoint:** "you got my sign off and approval". `qa-session-1.md` is signed by the maintainer on
+    2026-09-24; the six person rows were not walked.
+  - **The eight deferred Warnings:** "schedule for next session if it makes sense":
+    - scheduled into session 2: build/31 and build/139 (the hook time and size budget, a unit before 1.10.0),
+      build/325 (the spec line refresh at the 1.10.0 close), and build/362 to build/364 (REPLAY-v2's fixture and
+      matcher fixes, before 1.10.0);
+    - kept deferred with their reason: build/116 and build/134, CI flakes outside this package that were rerun-only
+      so far and are worth a unit only if they recur.
+- 2026-09-24T09:01Z the gate decision in the specs and plans: approved at high confidence and integrated as 1ba8dcee. The merge now rests on the QA sign-off, the gate of record and CI; the replay (REPLAY-v2, seeds that reach review) gates the 1.10.0 release, beside the eval-set floors. REQ-CTX-015 is renamed to the release gate; D10, C12 and R14 keep their original text with dated amendments; r11b moves to REPLAY-v2; REPLAY-v1.md is untouched. Coverage reports 0 findings on all three plan files, the spec suites pass (138), there are 99 criteria, and the leak gate exits 0. build/367 (criteria that will need REPLAY-v2's protocol) is scheduled into session 2. The QA form is signed, and the six scheduled Warnings carry their retired lines, their inbox rows removed.

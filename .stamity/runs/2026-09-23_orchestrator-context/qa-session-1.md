@@ -230,12 +230,14 @@ Where it stands at this form's writing (2026-09-24T05:10Z; the run record carrie
   (five on variance), one at a time on the operator's account, about two hours each; then `evals/replay/COMPARISON-v1.md`
   and its `Merge gate:` line. None exists yet, so the merge-gate line above is not yet derivable.
 
-**Sign-off** — Package 16 session 1, candidate `bf5a8d3f` — OPEN
+**Sign-off** — Package 16 session 1, candidate `bf5a8d3f` — SIGNED 2026-09-24 by the maintainer, through the
+question tool: "you got my sign off and approval". The six person rows were not walked; the sign-off accepts them.
 
-- [ ] Every H row walked and passing — P1, P2 and P4.
-- [ ] Every failing M row has a filed follow-up, linked — P3, P5 and P6.
+- [x] The H rows (P1, P2 and P4) — accepted by the sign-off, not walked.
+- [x] The M rows (P3, P5 and P6) — accepted by the sign-off, not walked; none was observed failing.
 - L failures are recorded, not blocking — no L row.
 - Rollback: the package branch merges by rebase; reverting the merged range restores `main` at `fed39ac`, the branch's
   base (record.md:7). This run publishes nothing: its frame names the QA checkpoint and the merge as the maintainer's,
   and no release (record.md:14-15).
-- Shippable: ☐ YES ☐ NO — the maintainer's call; the merge also waits for the replay's COMPARISON verdict.
+- Shippable: YES — the maintainer, 2026-09-24. In the same turn they moved the replay's gate from the merge to the
+  1.10.0 release (a REPLAY-v2 whose seeds reach review), so #54 merges on this sign-off, the gate of record and CI.
