@@ -18,7 +18,7 @@ import { RULES as LEAK_RULES, decodeCandidates, normalizeViews } from '../leak-g
 import { sha256 } from '../qa/bind.mjs'
 import { redactPaths, spellingsOf } from '../qa/redact.mjs'
 import { PASS_IDS } from './fixture.mjs'
-import { COMPARISON_FILE, COMPARISON_PATH, compare, renderComparison } from './compare.mjs'
+import { COMPARISON_FILE, COMPARISON_PATH, compare, loopCharsHeld, renderComparison } from './compare.mjs'
 import { AMBIENT_LISTS, MEASUREMENT_SCHEMA, UNATTRIBUTED_MAX } from './measure.mjs'
 
 const SELF = fileURLToPath(import.meta.url)
@@ -327,7 +327,8 @@ export function summarize(measurement, runJson, protocolSha, { protocolPath = DE
   const summaryKind = kind ?? m.kind ?? run.kind ?? null
 
   const notDone = []
-  if (summaryKind === 'pilot') notDone.push('pilot — not scored: excluded from the COMPARISON inputs except the pilot-variance check (§10)')
+  // build/313: what `compare.mjs` reads a pilot for (`checkInputs`, `heldToPilot`, the head), never the variance (`sampleOf`).
+  if (summaryKind === 'pilot') notDone.push("pilot — not scored: the comparison takes it only as --pilot-baseline or --pilot-changed, names it in its head and holds each scored run of its shape to its ambient lists (§3); it is not read for the sample's variance (§10)")
   for (const reason of m.invalid) notDone.push(`invalid run — ${reason}; replace it (§10: at most 2 replacements per shape)`)
   for (const [group, fields] of Object.entries(prov)) for (const [field, value] of Object.entries(fields)) if (value === null) notDone.push(`run.json records no ${group}.${field}`)
   if (Object.keys(files).length === 0) notDone.push('run.json records no instrument.files')
@@ -481,7 +482,8 @@ function perRunChecks(s, t, reference) {
   const refLoop = median(reference.map((r) => r.totals.loopCharsPerPass))
   const ratio = refLoop === 0 ? (s.totals.loopCharsPerPass === 0 ? 0 : Infinity) : s.totals.loopCharsPerPass / refLoop
   out['loop-chars'] = {
-    verdict: `${s.totals.loopCharsPerPass <= t.loopCharsRatioMax * refLoop ? 'PASS' : 'FAIL'} — ${fmt(ratio, 3)} × the baseline median (≤ ${t.loopCharsRatioMax})`,
+    // build/283: the bar is decided exactly, in whole characters; the ratio beside it is display only.
+    verdict: `${loopCharsHeld(s.totals.loopCharsPerPass, reference.map((r) => r.totals.loopCharsPerPass), t.loopCharsRatioMax) ? 'PASS' : 'FAIL'} — ${fmt(ratio, 3)} × the baseline median (≤ ${t.loopCharsRatioMax})`,
     baseline: `median ${fmt(refLoop)} per pass over ${reference.length} run(s)`,
   }
   const missedBy = (ref, id) => ref.passes.some((p) => p.seeds.some((x) => x.id === id && !securityHeld(x)))
@@ -531,7 +533,12 @@ export function renderResults(summary, thresholds, reference = []) {
   const pilot = s.kind === 'pilot'
 
   push(pilot ? `# Replay run \`${s.runId}\` — pilot — not scored (${s.shape} shape)` : `# Replay run \`${s.runId}\` — ${s.shape} shape, ${s.kind}`, '')
-  if (pilot) push('This run is a pilot. It is not scored, and it enters the comparison only through the pilot-variance check (§10).', '')
+  if (pilot) {
+    push(
+      "This run is a pilot. It is never scored: the comparison takes it only as `--pilot-baseline` or `--pilot-changed`, names it in its head, and holds each scored run of its shape to its ambient lists (§3); a shape given no pilot leaves every row it feeds not evaluated. It is not read for the sample's variance, which its shape's scored runs decide (§10).",
+      '',
+    )
+  }
   push(
     `- Protocol: REPLAY-v1 (\`${s.protocol.path}\`), sha256 \`${s.protocol.sha256}\`, read at commit \`${s.protocol.commit}\`.`,
     `- Instrument: commit \`${s.instrument.commit}\`, ${Object.keys(s.instrument.files).length} file(s) hashed.`,

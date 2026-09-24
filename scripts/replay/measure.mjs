@@ -40,7 +40,7 @@ const SEEDS_SCHEMA = 'stamity/replay-seeds/v1'
 
 /** REPLAY-v1 §3: the orchestrator's model pin. */
 const ORCHESTRATOR_MODEL = 'claude-opus-5-5'
-/** §3: the client version the init event's `claude_code_version` must read (build/250). */
+/** §3: the client version the init event's `claude_code_version` (build/250) and run.json's `client.version` (build/282) must read. */
 const CLIENT_VERSION = '2.1.280'
 /**
  * §3's five ambient lists, as the measurement names them and as the init event keys them. A run
@@ -472,6 +472,8 @@ async function loadCapture(runDir, forbid) {
   if (init === null) invalid.push('no init event in captures/stdout.jsonl, so the orchestrator model pin cannot be checked')
   else if (init.model !== ORCHESTRATOR_MODEL) invalid.push(`init model ${JSON.stringify(init.model ?? null)} is not the pin ${ORCHESTRATOR_MODEL}`)
   if (init !== null && init.claude_code_version !== CLIENT_VERSION) invalid.push(`init claude_code_version ${JSON.stringify(init.claude_code_version ?? null)} is not the pin ${CLIENT_VERSION}`)
+  // build/282: §3 holds `claude --version` too, which the driver records as run.json client.version.
+  if (run !== null && run.client?.version !== CLIENT_VERSION) invalid.push(`run.json client.version ${JSON.stringify(run.client?.version ?? null)} is not the pin ${CLIENT_VERSION}`)
   for (const model of Object.keys(orchestratorModels)) if (model !== ORCHESTRATOR_MODEL) invalid.push(`orchestrator request answered on ${model}, not the pin ${ORCHESTRATOR_MODEL}`)
   for (const hit of walk.forbidHits) invalid.push(`forbidden ${forbidLabels.get(hit.forbid)} in a ${hit.tool} input (main transcript line ${hit.line})`)
   for (const s of subs) for (const hit of s.forbidHits) invalid.push(`forbidden ${forbidLabels.get(hit.forbid)} in a ${hit.tool} input (sub-agent ${s.agentId} line ${hit.line})`)

@@ -219,9 +219,26 @@ function roundsRow(b, c, t) {
   }
 }
 
+/** A run's loop characters in whole characters: its per-pass figure times the six passes is its total. */
+const wholeChars = (perPass) => BigInt(Math.round(perPass * PASS_IDS.length))
+
+/**
+ * build/283: loop characters per pass ≤ `ratio` × the median of `referencePerPass`, exact in integers
+ * the way the sub-agent-token row is (build/270): over whole characters, with the median doubled so
+ * an even-count median (the mean of the two middle runs) stays whole — c × den × 2 ≤ num × 2·median.
+ * `score.mjs`'s per-run check reads the same bar through this function.
+ */
+export function loopCharsHeld(perPass, referencePerPass, ratio) {
+  const [num, den] = fractionOf(ratio)
+  const sorted = referencePerPass.map(wholeChars).toSorted((x, y) => (x < y ? -1 : x > y ? 1 : 0))
+  const mid = Math.floor(sorted.length / 2)
+  const twiceMedian = sorted.length % 2 === 1 ? 2n * sorted[mid] : sorted[mid - 1] + sorted[mid]
+  return wholeChars(perPass) * den * 2n <= num * twiceMedian
+}
+
 function loopRow(b, c, t) {
   const ref = median(b.runs.map((s) => s.totals.loopCharsPerPass))
-  const over = c.runs.filter((s) => s.totals.loopCharsPerPass > t.loopCharsRatioMax * ref)
+  const over = c.runs.filter((s) => !loopCharsHeld(s.totals.loopCharsPerPass, b.runs.map((r) => r.totals.loopCharsPerPass), t.loopCharsRatioMax))
   const ratio = (v) => (ref === 0 ? (v === 0 ? 0 : Infinity) : v / ref)
   return {
     verdict: over.length === 0 ? 'PASS' : 'FAIL',

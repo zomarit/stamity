@@ -613,6 +613,20 @@ describe("renderResults — RESULTS.md", () => {
     expect(md).toMatch(/Not done:\n\n- pilot — not scored/);
   });
 
+  it("(build/313) words a pilot's part in the comparison as compare.mjs reads it: the head and the ambient lists, never the variance", async () => {
+    const { m, runJson } = await measured({ kind: "pilot" });
+    const s = summarize(m, runJson, PROTOCOL_SHA) as Summary;
+    expect(s.notDone[0]).toBe(
+      "pilot — not scored: the comparison takes it only as --pilot-baseline or --pilot-changed, names it in its head and holds each scored run of its shape to its ambient lists (§3); it is not read for the sample's variance (§10)",
+    );
+    expect(renderResults(s, parseThresholds(PROTOCOL_TEXT)) as string).toContain(
+      "This run is a pilot. It is never scored: the comparison takes it only as `--pilot-baseline` or `--pilot-changed`, names it in its head, and holds each scored run of its shape to its ambient lists (§3); a shape given no pilot leaves every row it feeds not evaluated. It is not read for the sample's variance, which its shape's scored runs decide (§10).",
+    );
+    // compare.mjs::sampleOf reads the scored runs only (R28), so no instrument file may still claim a pilot-variance check.
+    const dir = join(REPO, "scripts/replay");
+    for (const file of readdirSync(dir)) expect(readFileSync(join(dir, file), "utf8"), file).not.toMatch(/pilot[- ]variance/i);
+  });
+
   describe("per-run rows against baseline references", () => {
     async function pair(): Promise<{ changed: Summary; baseline: Summary[] }> {
       const { m, runJson } = await measured();
@@ -628,6 +642,16 @@ describe("renderResults — RESULTS.md", () => {
       expect(at(500)).toMatch(/^PASS/);
       expect(at(510)).toMatch(/^FAIL/);
       expect(renderResults(changed, T(), baseline)).toContain("Per-run check");
+    });
+
+    it("(build/283) loop-chars reads the bar exactly: a changed run at exactly 0.5 × an even-count baseline median passes", async () => {
+      const { changed, baseline } = await pair();
+      // Two references of 30000 and 36008 characters in all: the median is 33004 ÷ 6 per pass, and a changed
+      // run of 16502 characters is exactly half of it, which the floating-point product reads as over.
+      const refs = [withLoop(baseline[0]!, 30_000 / 6), withLoop(baseline[1]!, 36_008 / 6)];
+      const at = (chars: number): string => lastCell(renderResults(withLoop(changed, chars / 6), T(), refs) as string, "loop-chars");
+      expect(at(16_502)).toMatch(/^PASS/);
+      expect(at(16_503)).toMatch(/^FAIL/);
     });
 
     it("security-seeds: a miss the baseline always found fails; one baseline run missing it exempts it", async () => {

@@ -418,6 +418,31 @@ describe("compare — the whole-branch review's fixes", () => {
     expect(at(43)).toBe("FAIL");
   });
 
+  it("(build/283) compares the loop-character row exactly: a changed run at exactly the ratio × the baseline median passes", () => {
+    // At the committed 0.5 over an odd sample the product is exact, so the case takes a fence ratio that is no binary
+    // fraction: 21603 characters ≤ 0.6 × the median 36005 holds exactly, while the floating-point product falls short.
+    const t = { ...T, loopCharsRatioMax: 0.6 };
+    const baseline = base3().map((s, k) => totals(s, { loopCharsPerPass: [30_000, 36_005, 40_000][k]! / 6 }));
+    const at = (chars: number): string => row(compare(baseline, changed3().map((s) => totals(s, { loopCharsPerPass: chars / 6 })), t, pilotsOf()) as Result, "loop-chars").verdict;
+    expect(at(21_603)).toBe("PASS");
+    expect(at(21_604)).toBe("FAIL");
+  });
+
+  it("(build/315) verdict-class reads a modal tie as a set: the same tie in another run order is the same class, one of its members alone is not", () => {
+    // Passes u1-p1 and u1-p2 close differently in each run of a shape: three classes at one run each, a three-way tie.
+    const closes = (list: Summary[], perRun: string[]): Summary[] => list.map((s, k) => verdictOf(s, (_, p) => (p < 2 ? { finalClass: perRun[k]! } : {})));
+    const baseline = closes(base3(), ["approve", "approve-after-fixes", "blocked"]);
+    const permuted = row(run(baseline, closes(changed3(), ["blocked", "approve", "approve-after-fixes"])), "verdict-class");
+    expect(permuted.verdict).toBe("PASS");
+    expect(permuted.baseline).toContain("u1-p1 approve/approve-after-fixes/blocked, u1-p2 approve/approve-after-fixes/blocked");
+    expect(permuted.changed).toContain("the same on 6 of 6");
+    // Two of three changed runs approve: a single mode that is one member of the baseline's tie differs on both passes.
+    const single = row(run(baseline, closes(changed3(), ["approve", "approve", "blocked"])), "verdict-class");
+    expect(single.verdict).toBe("FAIL");
+    expect(single.changed).toContain("u1-p1 approve, u1-p2 approve,");
+    expect(single.changed).toContain("the same on 4 of 6");
+  });
+
   it("(build/272) the committed-comparison reader takes only the run directories that carry a summary.json", () => {
     const dir = scratch();
     const s = summary("baseline", 1);

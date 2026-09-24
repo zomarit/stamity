@@ -306,7 +306,9 @@ function passCapture(options: PassCaptureOptions): Built {
   ];
   const reports = shape === "changed" ? { "u1-p1-reviewer-r1.md": reportText(rows) } : undefined;
   const layout = writeCapture(dir, {
-    run: { runId: "2026-09-24-replay-1", shape, kind: "scored", ...options.run },
+    // build/282: run.json's client.version is now held to the §3 pin like the init event's version, so the
+    // pinned capture records it the way the driver does; a case moves it through `options.run`.
+    run: { runId: "2026-09-24-replay-1", shape, kind: "scored", client: { version: "2.1.280" }, ...options.run },
     stdout: options.init === null ? [] : [JSON.stringify({ type: "system", subtype: "init", ...INIT_PINNED, cwd: fixture, ...options.init })],
     transcript,
     subagents: [...agents.filter((a) => !(options.noTranscript ?? []).includes(a.agentId)).map(subagentOf), ...(options.extraSubagents ?? [])],
@@ -976,6 +978,13 @@ describe("measureRun — the whole-branch review's fixes", () => {
     expect(drift.invalid).toEqual(['init claude_code_version "2.1.281" is not the pin 2.1.280']);
     const unset = await measure(passCapture({ shape: "baseline", init: { claude_code_version: undefined } }).layout.runDir);
     expect(unset.invalid).toEqual(["init claude_code_version null is not the pin 2.1.280"]);
+  });
+
+  it("(build/282) marks the run invalid on a run.json client.version (`claude --version`) off the §3 pin, or none", async () => {
+    const drift = await measure(passCapture({ shape: "baseline", run: { client: { version: "2.1.281" } } }).layout.runDir);
+    expect(drift.invalid).toEqual(['run.json client.version "2.1.281" is not the pin 2.1.280']);
+    const unset = await measure(passCapture({ shape: "baseline", run: { client: {} } }).layout.runDir);
+    expect(unset.invalid).toEqual(["run.json client.version null is not the pin 2.1.280"]);
   });
 
   it("(build/251) marks the run invalid when a verdict agent was dispatched for a pass whose snapshot is missing", async () => {
