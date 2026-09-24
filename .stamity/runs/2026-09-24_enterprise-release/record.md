@@ -78,3 +78,29 @@ The other 42 overlapping rows stay in the inbox. They sit on files this package 
 `ledger.jsonl` beside this record is the write-ahead findings ledger. Rows are appended through
 `stamity ledger append` and moved through `stamity ledger close`; the first two rows are the kickoff's two Windows
 timeouts on `main`'s CI after session 1's close.
+
+## Build
+
+Lanes are dispatched as pointer dispatches from the three plan files. Implementers run at Opus 5.5 with targeted
+tests only; the full suite runs once per integration batch through a test-runner. Reviewers and lenses run at
+Fable 5.1. Each approved lane is cherry-picked onto the package branch in plan order of its wave.
+
+- 11:04Z–11:10Z: 13 lanes dispatched (wave 0, wave A, plan 011's three instrument units, plan 010 file 2's two
+  independent units).
+- `win-timeouts` approved (high); integrated at `9d4a1946`; the draft pull request #55 opened at `6e0ba35f`.
+- `e6-claude-install-note` approved (high); integrated at `871ee7bd`.
+- `v2-protocol-paths` returned `BLOCKED_AMBIGUITY`: the cell's "neither file imports the other" would break v1's
+  recorded `score.mjs compare` and six unedited cases. The orchestrator took reading 1: the cycle breaks in one
+  direction, and the shared bindings move to leaf modules. The plan's own byte-identical rule excludes the literal
+  reading, and the remaining variants do not differ materially, so the maintainer was not asked. The cell was
+  amended, and the same implementer resumed.
+- `confidence-version`: the implementer showed that the planned pattern backtracks on `1.10.0` (ledger `build/1`,
+  fixed). The cell took the landed form.
+- `e6-locator-check-root` approved (medium; the security lens posted 0 findings); integrated at `cb4fdb1f`.
+- Sign-off, 11:17Z, `2026-09-24_enterprise-release/review/6` (decision needed; a two-part version such as "on 1.9"
+  reads as a confidence): add a value guard in `statedConfidence`, because a read number above 1 is never a
+  confidence. Also widen the lookahead to `(?!\w|\.\w)`, so that a dot followed by any word character is refused;
+  this folds in `review/7` (`1.0.x`). This states the invariant directly, not through a narrower pattern.
+- Sign-off, 11:20Z, `2026-09-24_enterprise-release/review/18` (decision needed; the plan cell's homepage rule has no
+  referent): amend the plan cell to `https://github.com/<owner>/<repo>`, the guide's value and both fixtures'; the
+  code stands. The implementer's `build/2` is the same finding.
