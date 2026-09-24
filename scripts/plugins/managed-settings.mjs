@@ -43,7 +43,23 @@ export const MANAGED_SETTINGS_KEYS = [
  */
 export const REF_NAME = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/
 
-const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/
+// SemVer numeric identifiers carry no leading zero: `2.1.0277` would pass a numeric floor, and the
+// client drops the invalid value, so an older client would start under the policy.
+const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
+
+/** `owner/repo`: one `/`, a non-empty part either side, no whitespace. */
+const SLUG = /^[^/\s]+\/[^/\s]+$/
+
+/** `identity`, or a throw naming the field. A missing field would render as `undefined` on both sides. */
+function requireIdentity(identity) {
+  if (typeof identity?.name !== 'string' || identity.name === '') {
+    throw new Error('managed-settings: identity.name must be a non-empty string. Pass buildCatalogIdentity(pkg, resolved).')
+  }
+  if (typeof identity.slug !== 'string' || !SLUG.test(identity.slug)) {
+    throw new Error('managed-settings: identity.slug must be a string in owner/repo form. Pass buildCatalogIdentity(pkg, resolved).')
+  }
+  return identity
+}
 
 /** `ref`, or a throw naming the field. The value is a git ref a client fetches, so it is narrow. */
 function requireRef(ref) {
@@ -60,7 +76,9 @@ function requireRef(ref) {
 function requireMinimumVersion(minimumVersion) {
   const parts = typeof minimumVersion === 'string' ? SEMVER.exec(minimumVersion) : null
   if (parts === null) {
-    throw new Error('managed-settings: minimumVersion must be a semantic version x.y.z, for example 2.1.277.')
+    throw new Error(
+      'managed-settings: minimumVersion must be a semantic version x.y.z with no leading zeros, for example 2.1.277.',
+    )
   }
   const floor = SEMVER.exec(MIN_CLAUDE_VERSION).slice(1).map(Number)
   const given = parts.slice(1).map(Number)
@@ -80,6 +98,7 @@ function requireMinimumVersion(minimumVersion) {
  * other host, so the marketplace source is always the `github` kind.
  */
 export function renderClaudeManagedSettings(identity, { ref, minimumVersion = MIN_CLAUDE_VERSION } = {}) {
+  requireIdentity(identity)
   const pinned = requireRef(ref)
   const floor = requireMinimumVersion(minimumVersion)
   // A fresh object per use, so a caller that edits one copy cannot silently edit the other.

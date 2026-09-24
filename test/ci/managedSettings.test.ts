@@ -163,6 +163,33 @@ describe("the minimum client version", () => {
       expect(refusal(own, { ref: TAG, minimumVersion }), String(minimumVersion)).toContain("minimumVersion");
     }
   });
+
+  it("refuses a leading zero in any component, which the client would drop as invalid, naming the field", () => {
+    // `2.1.0277` is 277 as a number, so the floor alone would pass it and the file would carry
+    // a value the client ignores — an older client would then start under the policy.
+    for (const minimumVersion of ["2.1.0277", "02.1.277", "2.01.277", "002.1.277"]) {
+      expect(refusal(own, { ref: TAG, minimumVersion }), String(minimumVersion)).toContain("minimumVersion");
+    }
+  });
+});
+
+describe("the identity", () => {
+  it("refuses an identity without a non-empty name or an owner/repo slug, naming the field", () => {
+    const cases: [unknown, string][] = [
+      [undefined, "identity.name"],
+      [{ ...acme, name: "" }, "identity.name"],
+      [{ ...acme, name: 7 }, "identity.name"],
+      [{ name: "stamity" }, "identity.slug"],
+      [{ ...acme, slug: "" }, "identity.slug"],
+      [{ ...acme, slug: "Acme-Corp" }, "identity.slug"],
+      [{ ...acme, slug: "Acme-Corp/stamity/extra" }, "identity.slug"],
+      [{ ...acme, slug: "/stamity" }, "identity.slug"],
+      [{ ...acme, slug: "Acme Corp/stamity" }, "identity.slug"],
+    ];
+    for (const [identity, field] of cases) {
+      expect(refusal(identity as Identity, { ref: TAG }), JSON.stringify(identity)).toContain(field);
+    }
+  });
 });
 
 describe("the ref", () => {
