@@ -47,7 +47,7 @@
 // Usage: node locate.mjs [--print] [--project <dir>] [--companion <package>] -- <stamity args>
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -341,7 +341,7 @@ if (refusal !== null) {
 
 /**
  * The plugin root this locator sits in, handed to a `plugin` subcommand as `--plugin-root`
- * (prove/259). The locator KNOWS its root — `dirname(RUNTIME_DIR)` — and until 2026-09-22 never
+ * (prove/259) and to `check` as `PLUGIN_ROOT` in the child's environment (prove/337). The locator KNOWS its root — `dirname(RUNTIME_DIR)` — and until 2026-09-22 never
  * said so: it spawned the CLI with only `cwd` and `stdio`, so the Codex README's setup line,
  * followed literally with the cache path substituted, exited 1 with "No installed plugin root"
  * (measured on codex-cli 0.154.0), while the same line with `PLUGIN_ROOT` set exited 0.
@@ -358,6 +358,11 @@ if (refusal !== null) {
  * and only when the parent directory IS a plugin root (it carries `stamity-plugin.json`): a
  * bare runtime directory locates itself too, and handing the CLI a directory that is not a root
  * would turn "no root" into "malformed root".
+ *
+ * `check` takes no options, so the flag cannot reach it, and run through this locator it read no
+ * root at all: its `plugin-runtime` row warned on every repository recording a client. It gets
+ * the root through the ENVIRONMENT instead, as `PLUGIN_ROOT` — see `checkEnvironment` below, and
+ * the shadowing rule above is why that happens only when no root variable already names one.
  */
 function withPluginRoot(stamityArgs) {
   // Both spellings commander accepts — `--plugin-root <path>` and `--plugin-root=<path>` —
@@ -369,8 +374,40 @@ function withPluginRoot(stamityArgs) {
   return [...stamityArgs, '--plugin-root', root]
 }
 
+/**
+ * The variables a client sets to name its plugin root, in the order the CLI reads them. A COPY of
+ * `PLUGIN_ROOT_VARIABLES` in `src/plugins/capabilityFile.ts:441-446`, because this file imports
+ * builtins only; `test/ci/pluginLocate.test.ts` pins the two equal.
+ */
+const ROOT_VARIABLES = ['CLAUDE_PLUGIN_ROOT', 'CURSOR_PLUGIN_ROOT', 'PLUGIN_ROOT', 'COPILOT_PLUGIN_ROOT']
+
+/** A regular file — not a directory, and not a symbolic link, whatever it points at. */
+function isRegularFile(path) {
+  try {
+    return lstatSync(path).isFile()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The child's environment: `PLUGIN_ROOT=<root>` added for `check` (prove/337), and the parent's
+ * environment untouched otherwise. Three conditions, all required: the subcommand is `check`; no
+ * root variable names a root already (trimmed — blank and absent read alike, as the CLI reads
+ * them), because a variable a client set wins and this must not replace it; and the parent
+ * directory is a plugin root, its `stamity-plugin.json` a regular file.
+ */
+function checkEnvironment(stamityArgs) {
+  if (stamityArgs[0] !== 'check') return process.env
+  if (ROOT_VARIABLES.some((name) => (process.env[name] ?? '').trim() !== '')) return process.env
+  const root = dirname(RUNTIME_DIR)
+  if (!isRegularFile(join(root, 'stamity-plugin.json'))) return process.env
+  return { ...process.env, PLUGIN_ROOT: root }
+}
+
 const child = spawnSync(process.execPath, [resolved.path, ...withPluginRoot(forwarded)], {
   cwd: project,
+  env: checkEnvironment(forwarded),
   stdio: 'inherit',
   shell: false,
 })

@@ -518,7 +518,9 @@ at all, whatever its client settings say.
 - **`plugin-runtime`** — the locator's resolved kind, path and version. It passes with a note
   when the manifest records no plugin client and no plugin root is in the environment — the
   ordinary state for a repository that is not plugin-backed, and nothing to act on. It warns
-  only where a client IS recorded and no root is found. It fails on two states, and both are
+  only where a client IS recorded and no root is found: run check through the installed root's
+  locator (`node <root>/runtime/locate.mjs -- check`), which hands it the root as `PLUGIN_ROOT`,
+  or set `PLUGIN_ROOT` to that root. It fails on two states, and both are
   plugins this repository claims — a recorded client, or `mode: "plugin-backed"`: the locator
   refuses, or the resolved runtime's major differs from the major that wrote your `.stamity/`
   state. A refusal with no client recorded and no `plugin-backed` mode warns instead — the root

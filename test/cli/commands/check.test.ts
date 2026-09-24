@@ -1890,6 +1890,14 @@ describe("check — plugin-runtime", () => {
     expect(probe.detail).toBe("no plugin recorded and no plugin root in the environment");
   });
 
+  /**
+   * TEST CHANGE, justified (2026-09-24, prove/337 / REQ-PLUGIN-016): this case pinned the remedy
+   * "run this check through the plugin's st-setup or set CLAUDE_PLUGIN_ROOT". Its first half could
+   * not be followed — st-setup runs `plugin status` and `plugin setup`, never `check` — and its
+   * second named one client's variable. The locator now hands `check` its root as PLUGIN_ROOT, so
+   * the remedy names that route and the client-neutral variable. Only the detail text moved; the
+   * `warn` for a recorded client with no root is the same verdict.
+   */
   it("warns with the two ways to make it answerable when a recorded client has no root", async () => {
     const root = await seedRepo(getRepo(), {
       plugin: {
@@ -1902,8 +1910,66 @@ describe("check — plugin-runtime", () => {
 
     expect(probe.status).toBe("warn");
     expect(probe.detail).toBe(
-      "no plugin root in the environment; run this check through the plugin's st-setup or " +
-        "set CLAUDE_PLUGIN_ROOT",
+      "no plugin root in the environment; run check through the installed root's locator " +
+        "(node <root>/runtime/locate.mjs -- check) or set PLUGIN_ROOT to that root",
+    );
+  });
+
+  it("passes on a recorded client when check runs through the installed root's locator (prove/337)", async () => {
+    // Two real halves composed, because neither fixture can be the whole: the REAL locator, copied
+    // into a plugin root, starts a stub runtime that reports the environment it was handed — no
+    // built CLI exists in a test run — and that environment is then the one `check` reads, whose
+    // probe runs the same real locator with `--print`.
+    const handle = getRepo();
+    const root = await seedRepo(handle, {
+      plugin: {
+        mode: "generated",
+        clients: { claude: { version: "1.9.0", classes: ["agent"] } },
+      },
+    });
+    const version = createApp().version;
+    await handle.seedFiles({
+      "plugin-real/stamity-plugin.json": JSON.stringify({ name: "stamity", version }),
+      "plugin-real/runtime/package.json": JSON.stringify({
+        name: "@zomarit/stamity",
+        version,
+        engines: { node: ">=22.0.0" },
+      }),
+      "plugin-real/runtime/locate.mjs": readFileSync(
+        fileURLToPath(new URL("../../../scripts/plugins/locate.mjs", import.meta.url)),
+        "utf8",
+      ),
+      "plugin-real/runtime/dist/cli.js":
+        "process.stdout.write(JSON.stringify({ args: process.argv.slice(2), PLUGIN_ROOT: process.env.PLUGIN_ROOT }))\n",
+    });
+    const pluginDir = handle.path("plugin-real");
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined) env[key] = value;
+    }
+    // The vitest process may itself run inside a plugin session; a root variable inherited from it
+    // would decide what the locator hands over.
+    for (const name of ["CLAUDE_PLUGIN_ROOT", "CURSOR_PLUGIN_ROOT", "PLUGIN_ROOT", "COPILOT_PLUGIN_ROOT"]) {
+      delete env[name];
+    }
+
+    const located = await new Promise<{ error: Error | null; stdout: string }>((settle) => {
+      execFile(
+        process.execPath,
+        [join(pluginDir, "runtime", "locate.mjs"), "--project", root, "--", "check"],
+        { cwd: root, env, encoding: "utf8", timeout: 20_000 },
+        (error, stdout) => settle({ error, stdout }),
+      );
+    });
+    expect(located.error).toBeNull();
+    const handed = JSON.parse(located.stdout) as { args: string[]; PLUGIN_ROOT?: string };
+    expect(handed).toEqual({ args: ["check"], PLUGIN_ROOT: pluginDir });
+
+    const probe = await doctorRow(root, "plugin-runtime", { PLUGIN_ROOT: handed.PLUGIN_ROOT });
+
+    expect(probe.status).toBe("pass");
+    expect(probe.detail).toBe(
+      `runtime bundled ${version} at ${join(pluginDir, "runtime", "dist", "cli.js")}`,
     );
   });
 
