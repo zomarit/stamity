@@ -114,8 +114,12 @@ proposal:
 The implementer, the fixer, the spec-author, and a test-runner whose gates all pass each write
 their full report to the C1 path and return the C4 digest. This holds on all four clients.
 These roles already hold edit on every client, so the change is carried in their definitions
-and needs no engine grant. An execution role's digest carries no `verdict:` or `confidence:`
-line; only the reviewer's does (amendment A4). A report write that is refused falls back to the
+and needs no engine grant. Only the reviewer's digest carries the labelled `verdict:` and
+`confidence:` lines the review gate reads (amendment A4). The test-runner's green digest is
+`status:`, `report:`, its verdict line (`green`), `security:` and `contract delta: none`, with
+no `findings:` line because green means every gate passed; `green` lies outside the review
+gate's vocabulary, to which `src/hooks/scripts.ts::buildReviewGateScript` narrows its parse, so
+the gate never reads it as a review verdict (C4). A report write that is refused falls back to the
 full inline return with its findings block, saying so, and the dispatch names the report by its
 absolute path in the main checkout (amendment A12).
 
@@ -213,10 +217,21 @@ Implements C1.
 - **Output.** It prints one line per row: `<ledger-id> <severity> <report-local id>`, with a
   trailing ` decision-needed` on the line of a row carrying `decision_needed: true`
   (amendment A5).
+- **One report, one role, once.** `append --report` refuses a `--source` other than the
+  `<role>` segment of the report's name (`src/cli/commands/ledger.ts:286-296`); a `--stdin`
+  append names no report, so no role is compared. A report the ledger already carries rows
+  from is refused, naming those rows: a report is appended once
+  (`src/runs/ledgerStore.ts:412-423`).
+- **Ids a close reads.** `close --report` reads every id, in `--ids` and in the closures block,
+  through `qualifyLedgerId`: a short `<phase>/<n>` is qualified with the `--run` id, any other
+  spelling is taken as given, and an id whose first segment names another run refuses the whole
+  close (`src/runs/ledgerStore.ts:469-486`, `:638`, `:665`).
 - **Write scope.** It writes only under `.stamity/runs/<run-id>/`. A report path must resolve
   inside that run's `reports/`.
-- **Locking.** It takes one lock file per run's ledger: exclusive create, temp file plus
-  rename.
+- **Locking.** It serializes through the engine's write lock (`acquireWriteLock`, R22): a lock
+  directory, `<ledger>.lock`, created exclusively beside the ledger and stale after 15 s by
+  default; the ledger then lands through a temp file plus rename (`src/runs/ledgerStore.ts:35-41`,
+  `src/merge/atomicWrite.ts:162`, `:381`).
 
 Implements C2, C7 (D2).
 
@@ -382,7 +397,9 @@ A replay compares the changed shape with the 1.9.1 baseline:
 - **Floor readings.** A security seed is exempt when at least one baseline scored run missed
   it; the loop-character bar binds every changed scored run against the baseline median; the
   sub-agent-token bar compares the changed shape's mean per pass over its scored runs with the
-  baseline shape's mean (amendment A8).
+  baseline shape's mean (amendment A8). Decoy flags and passes approved with a seed unfixed
+  compare per-scored-run rates, because the shapes may run 3 or 5 scored runs
+  (`scripts/replay/compare.mjs:170-175`).
 - **Merge gate.** The package merges only after the floor holds.
 - **Release gate.** Every eval-set floor holds at the 1.10.0 release run.
 
@@ -390,8 +407,8 @@ Implements C12 (D9, D10).
 
 ## Acceptance criteria
 
-One set per requirement, plus one for the invariants. There are ninety-seven criteria:
-`grep -c "^- GIVEN" docs/specs/orchestrator-context.md` returns 97. Each is machine-checkable
+One set per requirement, plus one for the invariants. There are ninety-nine criteria:
+`grep -c "^- GIVEN" docs/specs/orchestrator-context.md` returns 99. Each is machine-checkable
 unless tagged `judgment:`. Run the command again whenever this section grows; do not count by
 eye.
 
@@ -404,9 +421,14 @@ eye.
 
 - GIVEN `stamity sync` on a manifest selecting all four clients WHEN each client's emitted
   definition of the implementer, fixer, spec-author and test-runner is read THEN its return
-  contract names the path `.stamity/runs/<run-id>/reports/<pass>-<role>-r<N>.md` and the
-  labels `status:`, `report:`, `findings:`, `security:` and `contract delta:` in that order,
-  and names no `verdict:` or `confidence:` label.
+  contract writes the full result to the report path the dispatch names (the grammar
+  `.stamity/runs/<run-id>/reports/<pass>-<role>-r<N>.md` is the Report path bullet of
+  `content/commands/st-work.md`, which the dispatch applies) and names no `confidence:` label;
+  the implementer's, fixer's and spec-author's digest names the labels `status:`, `report:`,
+  `findings:`, `security:` and `contract delta:` in that order and no `verdict:` label; and the
+  test-runner's digest, on a green verdict only, names `status:`, `report:`, its verdict line
+  (`green`), `security:` and `contract delta: none` in that order, with no `findings:` line,
+  because green means every gate passed (C4).
 - GIVEN a changed-shape replay run WHEN an implementer, fixer or spec-author dispatch returns
   `status: DONE` THEN a file exists at the path its `report:` line names, and the message's
   text outside the labelled lines and their rows is at most 1,500 characters.
@@ -424,9 +446,14 @@ eye.
   for them.
 - GIVEN `content/agents/stamity-researcher.md` WHEN `git diff v1.9.1 -- content/agents/stamity-researcher.md`
   runs on the merged tree THEN the Return contract section shows no changed line.
-- GIVEN each emitted two-tier role definition WHEN read THEN it states that the 1,500-character
-  cap binds prose only, and that no Critical or Warning line, security-relevant finding or
-  contract-delta row is dropped to meet it.
+- GIVEN each of `content/agents/stamity-{implementer,fixer,reviewer,security,performance,design-quality,spec-author}.md`
+  WHEN its digest sentence is read THEN it lists, before "then at most 1,500 characters of
+  prose", a `findings:` line carrying every Critical and Warning (the fixer's: one disposition
+  per handed ledger id, then every new Critical and Warning), a `security:` line carrying every
+  security-relevant finding in full, and a `contract delta:` line carrying the census rows in
+  full or `none`, so the cap attaches to the prose alone; and GIVEN
+  `content/agents/stamity-test-runner.md` WHEN read THEN it digests only a `green` verdict, one
+  in which every requested gate reported `pass`, and returns a `red` one in full.
 - GIVEN every digest in the changed-shape replay runs WHEN compared with the `stamity-findings`
   block of the report its `report:` line names THEN all of these hold:
   - every Critical and Warning appears in `findings:` as `<id> <locator> — <summary>`;
@@ -485,11 +512,14 @@ eye.
 
 **REQ-CTX-004**
 
-- GIVEN `content/commands/st-work.md` WHEN read THEN it states:
-  - the report path grammar;
-  - the eight role names `implementer`, `fixer`, `reviewer`, `security`, `performance`,
-    `design-quality`, `test-runner` and `spec-author`;
-  - that `<pass>` never begins with `report`, `summary`, `findings` or `analysis`.
+- GIVEN `content/commands/st-work.md` WHEN read THEN:
+  - its Report path bullet states the report path grammar,
+    `.stamity/runs/<run-id>/reports/<pass>-<role>-r<N>.md`;
+  - its frontmatter `spawns:` list names the eight roles `<role>` takes — `implementer`,
+    `fixer`, `reviewer`, `security`, `performance`, `design-quality`, `test-runner` and
+    `spec-author` — beside `researcher`, which writes no report;
+  - its Report path bullet states that a unit id beginning `report`, `summary`, `findings` or
+    `analysis` takes a `u-` prefix, so `<pass>` never begins with one of them.
 - GIVEN this repository's `.gitignore` WHEN `git check-ignore -q .stamity/runs/2026-09-23_demo/reports/u1-reviewer-r1.md`
   runs THEN it exits 0, and the same command on `.stamity/runs/2026-09-23_demo/ledger.jsonl`
   and on `.stamity/runs/2026-09-23_demo/record.md` exits 1.
@@ -508,8 +538,9 @@ eye.
 
 - GIVEN the built CLI WHEN `stamity --help` runs THEN no `ledger` row is listed, and WHEN
   `stamity ledger --help` runs THEN it exits 0 and names `append`, `close` and `status`.
-- GIVEN run `R` whose ledger holds `R/review/1` to `R/review/3`, and a report under `R`'s
-  `reports/` whose `stamity-findings` block holds `C-1` (Critical) and `W-1` (Warning), WHEN
+- GIVEN run `R` whose ledger holds `R/review/1` to `R/review/3`, and a reviewer report,
+  `R`'s `reports/u1-reviewer-r1.md` (its name's role is the `--source` below), whose
+  `stamity-findings` block holds `C-1` (Critical) and `W-1` (Warning), WHEN
   `stamity ledger append --run R --phase review --source reviewer --report <that path>` runs
   THEN:
   - it exits 0;
@@ -520,6 +551,16 @@ eye.
 
   The same append, run on a block whose `W-1` carries `"decision_needed":true`, prints its
   second line as `R/review/5 Warning W-1 decision-needed` (amendment A5).
+- GIVEN the report of the second criterion WHEN `stamity ledger append` runs on it with
+  `--source fixer` THEN it exits 1, the message names `reviewer`, the role the report name
+  carries, and the ledger is byte-identical; and WHEN the append with `--source reviewer` has
+  succeeded once and runs again on that report THEN it exits 1, naming the rows the ledger
+  already carries from it, and the ledger is byte-identical.
+- GIVEN run `R`'s open rows `R/review/4` and `R/review/5` and a closures block whose
+  `ledger_id` values read `review/4` and `R/review/5` WHEN
+  `stamity ledger close --run R --report <path> --ids review/4,R/review/5` runs THEN both
+  closures apply to `R/review/4` and `R/review/5`; and WHEN `--ids` or the block names an id
+  whose first segment is another run's id THEN it exits 1 and the ledger is byte-identical.
 - GIVEN a block whose second line carries `"severity":"High"`, a summary of 301 characters, or
   no `locator` WHEN append runs THEN it exits 1, the message names line 2, and the ledger file
   is byte-identical to before.
@@ -540,7 +581,8 @@ eye.
   are appended as in the second criterion, and neither carries a `report` key.
 - GIVEN two `stamity ledger append` processes started together on run `R`, carrying 3 and 4
   findings WHEN both exit THEN both exit 0, the ledger holds 7 new rows whose ids are distinct
-  and contiguous after the previous highest, and no lock or temp file remains in `R`'s folder.
+  and contiguous after the previous highest, and no lock directory or temp file remains in
+  `R`'s folder.
 - GIVEN any `stamity ledger` subcommand run in a clean checkout WHEN it exits THEN
   `git status --porcelain --ignored` lists changes only under `.stamity/runs/<run-id>/`.
 - GIVEN `--run ../x` or any value failing `^[0-9]{4}-[0-9]{2}-[0-9]{2}_[a-z0-9-]+$` WHEN any
@@ -765,15 +807,17 @@ eye.
   (amendment A8).
 - GIVEN both shapes' scored runs WHEN seeded recall is pooled over 36 seed opportunities per
   shape THEN changed ≥ baseline − 1.
-- GIVEN both shapes' scored runs WHEN decoys flagged Critical or Warning are counted THEN
-  changed ≤ baseline.
+- GIVEN both shapes' scored runs WHEN decoys flagged Critical or Warning are counted per scored
+  run THEN the changed shape's rate is at most the baseline's — a rate, not a raw count, because
+  the shapes may run different sample sizes, 3 or 5 (`compare.mjs::rateRow`).
 - GIVEN every valid forced-compaction sample of the changed shape WHEN findings lost are
   counted THEN the count is 0 in each sample.
 - GIVEN both shapes' scored runs WHEN verdicts are compared per pass THEN:
   - the final verdict class agrees on at least 5 of 6 passes;
   - rounds agree within ±1 on every pass, comparing each shape's median rounds for that pass
     (`scripts/replay/compare.mjs`);
-  - the changed shape approves no more passes with a seed still unfixed than the baseline.
+  - the changed shape approves no more passes with a seed still unfixed per scored run than
+    the baseline — a rate, for the same reason (`compare.mjs::rateRow`).
 - GIVEN each scored changed-shape run WHEN loop characters per pass are computed THEN each is
   at most 50 % of the baseline shape's median over its scored runs (amendment A8).
 - GIVEN the scored runs WHEN sub-agent tokens per pass are computed THEN the changed shape's

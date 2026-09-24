@@ -66,7 +66,11 @@ characters of prose. The cap binds the prose only. **Never digested** (returned 
 test-runner return, a researcher return, a verdict role's return where its client grants no report write, and any
 return whose report write was refused (it says so). Execution roles (implementer, fixer, spec-author, test-runner on a
 green verdict — the test-runner writes through its shell) are two-tier on every client; verdict roles are two-tier only
-where the client grants the report write (C8).
+where the client grants the report write (C8). The test-runner's digest, on a green verdict, is `status:`, `report:`,
+its verdict line (`green`), `security:` and `contract delta: none`, with no `findings:` line, because green means every
+gate passed; `green` lies outside the review gate's vocabulary (`approve | request-changes | blocked`), to which
+`src/hooks/scripts.ts::buildReviewGateScript` narrows its parse, so the gate never reads it as a review verdict.
+(Amended 2026-09-24: the test-runner's green digest — ledger row `build/339`.)
 
 **C5 — Run record head.** Among the first 15 lines of `.stamity/runs/<run-id>/record.md`: the existing `Status:` line
 (in progress while it matches `\bin progress\b`, case-insensitive), `Plan: <repo-relative plan path>` and
@@ -193,9 +197,9 @@ same class, naming the on-disk state). One run-record line per event:
 on Claude Code, one run at a time on the account the operator's client folder is logged into (shared login, no copied
 credential), scored by a deterministic matcher (file + line ±3 + one accepted term; no model judge):
 every security seed found in every changed scored run (exempt when at least one baseline scored run missed it);
-pooled seeded recall ≥ baseline − 1 of 36; decoys wrongly flagged ≤ baseline; 0 findings lost across a forced
+pooled seeded recall ≥ baseline − 1 of 36; decoys wrongly flagged per scored run ≤ baseline; 0 findings lost across a forced
 compaction in every valid sample; verdicts — the same modal final class on ≥ 5 of 6 passes, rounds within ±1 per pass,
-no more passes approved with a seed still unfixed than the baseline. Saving shown: loop characters per pass in every
+no more passes approved with a seed still unfixed per scored run than the baseline (rates, as the shapes may run 3 or 5). Saving shown: loop characters per pass in every
 changed scored run ≤ 0.5 × the baseline median; the changed shape's mean sub-agent tokens per pass ≤ 1.2 × the
 baseline's mean. Samples: 1 pilot plus 3 scored runs per shape; a shape whose three scored runs differ by more than 2
 seeds found gets 5. Protocol and thresholds are committed in `evals/replay/REPLAY-v1.md` before the pilot and never
