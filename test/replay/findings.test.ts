@@ -740,3 +740,46 @@ describe("(build/364, REQ-CTX-015) a term inside a locator credits no seed", () 
     expect((matchItems(findings, [{ ...LOAD, terms: ["20"] }], {}, { tolerance: 3 }) as Match).matched).toEqual({ "cor-batch-size": [0] });
   });
 });
+
+describe("(review round 1) the negation mask and the locator blank, narrowed and widened at their causes", () => {
+  it("(review/12) keeps a live severity whose summary starts with a zero that is no count", () => {
+    for (const [text, severity] of [
+      ["Warning: 0-based page arithmetic skips the first page at src/store/paging.ts:4", "Warning"],
+      ["Critical: 0 validation on the sort key at src/store/query.ts:11", "Critical"],
+      ["Warning: 0 rows are read on page 1 at src/store/paging.ts:4", "Warning"],
+    ] as const) expect((extractFreeText(text, REVIEWER) as Finding[]).map((f) => f.severity), text).toEqual([severity]);
+    // The count form still masks where a count ends: a clause end, a closing mark, or a count noun.
+    for (const text of ["Critical: 0 findings; src/a.ts:3 reviewed", "**Critical: 0** at src/a.ts:3", "Critical: 0.\nsrc/a.ts:3 reviewed"])
+      expect(extractFreeText(text, REVIEWER), text).toEqual([]);
+  });
+
+  it("(review/13) credits no all-digit term from a prose line reference", () => {
+    const only20: Item = { ...LOAD, terms: ["20"] };
+    const hit = (text: string): number[] => (matchItems([at(text)], [only20], {}, { tolerance: 3 }) as Match).matched["cor-batch-size"]!;
+    for (const text of ["src/config/load.ts:20 — the default at line 20 is unchecked", "Lines 20-21 hold the default", "lines 20 – 21 are unchecked"])
+      expect(hit(text), text).toEqual([]);
+    expect((matchItems([at("the default at line 20 is unchecked")], [only20], {}, { tolerance: 3 }) as Match).adjudication).toEqual([{ id: "cor-batch-size", findingIdx: 0 }]);
+    expect(hit("line 20 sets a default of 20 rows")).toEqual([0]);
+  });
+
+  it("(review/14) masks `none of the` only where it governs the severity word itself", () => {
+    const read = (text: string): [string | null, string | null][] => (extractFreeText(text, REVIEWER) as Finding[]).map((f) => [f.file, f.severity]);
+    expect(read("None of the Critical paths are guarded at src/http/routes.ts:3")).toEqual([["src/http/routes.ts", "Critical"]]);
+    expect(read("None of the Critical findings were fixed; src/store/query.ts:11 still concatenates sort")).toEqual([["src/store/query.ts", "Critical"]]);
+    for (const text of ["none of the Warnings remain; src/a.ts:3 reviewed", "None of the Criticals. src/a.ts:3 reviewed"])
+      expect(extractFreeText(text, REVIEWER), text).toEqual([]);
+  });
+
+  it("(review/15) credits no word term found only inside a bare path or another extension", () => {
+    const guard: Item = { id: "sec-missing-guard", file: "src/http/routes.ts", span: [9, 9], terms: ["guard"] };
+    const credit = (text: string, item: Item = guard): number[] =>
+      (matchItems([{ ...at(text), file: item.file, line: 9, lineEnd: 9 }], [item], {}, { tolerance: 3 }) as Match).matched[item.id]!;
+    for (const text of ["the handler in src/http/guard.ts returns early", "see src/http/guard.py:9", "guard.ts is imported but never called"])
+      expect(credit(text), text).toEqual([]);
+    expect(credit("no guard on the route; src/http/guard.ts exists")).toEqual([0]);
+    // A term that is itself a path fragment is still read in a bare path, and a slash without an extension is no path.
+    expect(credit("docs/api.md still documents the old default", { ...guard, terms: ["docs/api"] })).toEqual([0]);
+    expect(credit("a name like ../secret.txt escapes the directory", { ...guard, terms: ["../"] })).toEqual([0]);
+    expect(credit("the try/catch returns 200", { ...guard, terms: ["catch"] })).toEqual([0]);
+  });
+});

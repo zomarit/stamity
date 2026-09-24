@@ -47,16 +47,27 @@ const SEVERITY_WORD = /\b(critical|warning|minor)s?\b/i
 // (`0 Critical` is (a) with the negator `0`). The gaps are spaces and tabs only, never a line
 // break, so a mask never reaches across two lines of a return and hides a real finding. A zero
 // that is part of a number or a locator (`10`, `1.0`, `x.ts:0`) negates nothing, and neither does
-// a severity word that is part of a path (`no critical.ts:3`).
+// a severity word that is part of a path (`no critical.ts:3`). Two negations are read only where
+// they govern the severity word itself: `none of the` only when the run ends the clause or is
+// followed by a place or a remaining-word (`None of the Critical paths are guarded` is a live
+// Critical), and the count form only when the `0` ends there too (`Warning: 0-based offset` is a
+// live Warning). Every over-mask lowers the baseline's recall alone, so the doubtful case stays live.
 const GAP = String.raw`[ \t]+`
 const SEVERITY_TOKEN = String.raw`[*_]*(?:critical|warning|minor)s?[*_]*(?![\w/-]|\.\w)`
-const NEGATOR = String.raw`(?:\b(?:no|zero|without)|(?<![\w.:/#-])0|\bnone${GAP}of${GAP}the)`
+const NEGATOR = String.raw`(?:\b(?:no|zero|without)|(?<![\w.:/#-])0)`
 const MODIFIERS = String.raw`(?:(?:new|remaining|open|further)${GAP})*`
-const NEGATED_RUN = new RegExp(
-  String.raw`(${NEGATOR}${GAP}${MODIFIERS})(${SEVERITY_TOKEN}(?:,?${GAP}(?:or|and|nor)${GAP}${SEVERITY_TOKEN})*)`,
-  'gi',
+const SEVERITY_RUN = String.raw`${SEVERITY_TOKEN}(?:,?${GAP}(?:or|and|nor)${GAP}${SEVERITY_TOKEN})*`
+/** What may follow a negated run or a zero count: a clause end, a closing mark, a dash, or a place or remaining-word. */
+const clauseEnd = (words) => String.raw`(?=[ \t]*(?:$|[,;:)|!?*_]|\.(?!\w)|[-–—](?=[ \t]|$)|(?:${words})\b))`
+const NEGATED_RUN = new RegExp(String.raw`(${NEGATOR}${GAP}${MODIFIERS})(${SEVERITY_RUN})`, 'gi')
+const NONE_OF_THE_RUN = new RegExp(
+  String.raw`(\bnone${GAP}of${GAP}the${GAP}${MODIFIERS})(${SEVERITY_RUN})${clauseEnd('at|in|on|across|remain|remains|remaining|left|open|found|outstanding')}`,
+  'gim',
 )
-const ZERO_COUNT = new RegExp(String.raw`\b((?:critical|warning|minor)s?)([*_]*[ \t]*:[*_]*[ \t]*0)(?![\w.])`, 'gi')
+const ZERO_COUNT = new RegExp(
+  String.raw`\b((?:critical|warning|minor)s?)([*_]*[ \t]*:[*_]*[ \t]*0)(?!\w)${clauseEnd('at|in|on|across|remaining|open|left|found|after|findings?|issues?')}`,
+  'gim',
+)
 const SEVERITY_IN_RUN = /(?:critical|warning|minor)s?/gi
 const blank = (word) => ' '.repeat(word.length)
 
@@ -69,6 +80,7 @@ const blank = (word) => ' '.repeat(word.length)
 export function maskNegated(text) {
   return String(text ?? '')
     .replace(NEGATED_RUN, (_, lead, run) => lead + run.replace(SEVERITY_IN_RUN, blank))
+    .replace(NONE_OF_THE_RUN, (_, lead, run) => lead + run.replace(SEVERITY_IN_RUN, blank))
     .replace(ZERO_COUNT, (_, word, rest) => blank(word) + rest)
 }
 
@@ -568,6 +580,15 @@ function spansOf(item, spansByFile) {
   return Array.isArray(entry[0]) ? entry : [entry]
 }
 
+/** A prose line reference (`line 20`, `lines 20-21`): a location, never a term's evidence. */
+const LINE_REF = /\blines?[ \t]+\d+(?:[ \t]*[-–][ \t]*\d+)?/gi
+/**
+ * A path outside `LOCATOR`'s shape: a slashed path ending in any extension, or a bare file name with
+ * a code or doc extension, either with an optional line. A slash without an extension (`try/catch`)
+ * is no path.
+ */
+const PATH_TOKEN = /(?<![\w/.-])(?:(?:[\w.-]+\/)+[\w.-]*\.[a-z][a-z0-9]*|[\w-][\w.-]*\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|ya?ml|toml|py|go|rs|java|rb|sh|css|html))(?![\w/])(?:(?::|#L)\d+(?:\s*[-–]\s*\d+)?)?/gi
+
 /**
  * Whether an accepted term occurs in a finding's text (both lower-cased, the locators already
  * blanked): a case-insensitive substring, except that an all-digit term matches only as a number
@@ -582,8 +603,8 @@ function termIn(text, term) {
  * Score findings against seeds and decoys (REPLAY-v1 §9, with REPLAY-v2's locator rule). A finding
  * matches an item when the file is equal, its line range intersects a span of the item widened by
  * `tolerance`, and one of the item's terms occurs in its text (`termIn`) once every free-text
- * locator in that text is blanked (build/364: a term inside a locator's path or line credits
- * nothing). A location match without a term goes to `adjudication` only. One finding may match
+ * locator and prose line reference in that text is blanked (build/364: a term inside a locator's
+ * path or line credits nothing), and, for a term with no slash, every other path too. A location match without a term goes to `adjudication` only. One finding may match
  * several items. A finding with no file or line is skipped, and so is one whose severity is
  * outside `severities` when that list is given.
  *
@@ -597,11 +618,18 @@ export function matchItems(findings, items, spansByFile = {}, { tolerance = 3, s
     if (severities && !severities.includes(f.severity)) return
     const lo = f.line
     const hi = f.lineEnd ?? f.line
-    const text = String(f.text ?? '').replace(LOCATOR, ' ').toLowerCase()
+    // A term that is itself a path fragment (`docs/api`, `../`) is read with the paths kept; every
+    // other term is read with every path blanked too, so a word inside a path credits nothing.
+    const located = String(f.text ?? '').replace(LOCATOR, ' ').replace(LINE_REF, ' ').toLowerCase()
+    const prose = located.replace(PATH_TOKEN, ' ')
     for (const item of items) {
       if (item.file !== f.file) continue
       if (!spansOf(item, spansByFile).some(([start, end]) => lo <= end + tolerance && hi >= start - tolerance)) continue
-      if ((item.terms || []).some((term) => termIn(text, String(term).toLowerCase()))) matched[item.id].push(findingIdx)
+      const hit = (item.terms || []).some((term) => {
+        const t = String(term).toLowerCase()
+        return termIn(t.includes('/') ? located : prose, t)
+      })
+      if (hit) matched[item.id].push(findingIdx)
       else adjudication.push({ id: item.id, findingIdx })
     }
   })
