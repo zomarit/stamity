@@ -20,6 +20,8 @@ import { validateReleaseManifest } from "../../scripts/plugins/releaseManifest.m
 import { resolveDistributionIdentity } from "../../scripts/distribution-identity.mjs";
 // @ts-expect-error — see above.
 import { buildZip } from "../../scripts/plugins/zip.mjs";
+// @ts-expect-error — see above.
+import { renderClaudeManagedSettings } from "../../scripts/plugins/managed-settings.mjs";
 
 /**
  * `scripts/build-plugin-distribution.mjs` end to end: the distribution root a release publishes
@@ -579,6 +581,71 @@ describe("the tree as a whole", () => {
     // paragraph is not a failure while a deleted reason is.
     expect(readme).toContain("`.gitignore` of its own");
   });
+
+  it(
+    "writes the managed-settings template for a build with Claude, identically every time, and none without it",
+    () => {
+      // REQ-PLUGIN-029. What lands on disk is the renderer's output for THIS checkout's identity
+      // at the tag the manifest names — derived, so a renamed fork runs this case unedited.
+      const path = join(dist, "admin", "claude-managed-settings.json");
+      const bytes = readFileSync(path);
+      const identity = buildCatalogIdentity(basePackage, resolveDistributionIdentity(basePackage));
+      expect(bytes.toString("utf8")).toBe(
+        `${JSON.stringify(renderClaudeManagedSettings(identity, { ref: manifest.distribution.tag }), null, 2)}\n`,
+      );
+      const settings = JSON.parse(bytes.toString("utf8")) as {
+        extraKnownMarketplaces: Record<string, { source: CatalogEntrySource }>;
+        strictKnownMarketplaces: CatalogEntrySource[];
+      };
+      // The marketplace it declares is the catalog this same tree ships, at this tree's tag.
+      const catalog = catalogOf(dist, "claude");
+      expect(Object.keys(settings.extraKnownMarketplaces)).toEqual([catalog.name]);
+      expect(settings.extraKnownMarketplaces[catalog.name]?.source).toEqual({
+        source: "github",
+        repo: SLUG,
+        ref: manifest.distribution.tag,
+      });
+      expect(settings.strictKnownMarketplaces).toEqual([settings.extraKnownMarketplaces[catalog.name]?.source]);
+      // The README tells the admin the file is there, under the Claude install section.
+      const readme = readFileSync(join(dist, "README.md"), "utf8");
+      const claudeSection = readme.split(/^## /m).find((part) => part.includes("Root: `claude/`")) ?? "";
+      const install = claudeSection.slice(claudeSection.indexOf("### Install"), claudeSection.indexOf("### Pin"));
+      expect(install).toContain(
+        "An organization can roll this plugin out through Claude Code's managed settings: " +
+          'admin/claude-managed-settings.json (see the fork guide, "Roll the plugin out to your organization").',
+      );
+
+      // A second build — a different client selection, so a template that depended on anything
+      // but the identity and the tag would show it — writes the same bytes.
+      const again = join(work, "dist-managed-again");
+      const second = buildInto(again, ["--client", "claude"]);
+      expect(second.status, `${second.stdout}\n${second.stderr}`).toBe(0);
+      expect(readFileSync(join(again, "admin", "claude-managed-settings.json"))).toEqual(bytes);
+
+      // The credential scan reads it: a root holding only this file reports one TEXT file
+      // scanned (content read, not merely listed) and no path exempted.
+      const scanRoot = tempDir("managed-scan");
+      mkdirSync(join(scanRoot, "admin"));
+      writeFileSync(join(scanRoot, "admin", "claude-managed-settings.json"), bytes);
+      const scan = spawnSync(
+        process.execPath,
+        [join(REPO_ROOT, "scripts", "leak-gate.mjs"), "--root", scanRoot, "--include-build"],
+        { cwd: REPO_ROOT, encoding: "utf8" },
+      );
+      expect(scan.status, `${scan.stdout}\n${scan.stderr}`).toBe(0);
+      expect(scan.stdout).toContain("scanned 1 file(s) [1 text]");
+      expect(scan.stdout).toContain("0 hits");
+      expect(scan.stdout).not.toContain("not scanned");
+
+      // A build without Claude writes no template, and no README line pointing at one.
+      const without = join(work, "dist-no-claude");
+      const third = buildInto(without, ["--client", "cursor"]);
+      expect(third.status, `${third.stdout}\n${third.stderr}`).toBe(0);
+      expect(existsSync(join(without, "admin"))).toBe(false);
+      expect(readFileSync(join(without, "README.md"), "utf8")).not.toContain("claude-managed-settings.json");
+    },
+    2 * ONE_ROOT_MS,
+  );
 
   it("pins the Codex routes to the --ref spelling the CLI's own help documents", () => {
     // Inbox row of 2026-09-20 (build/63): these three lines named a `--ref` flag

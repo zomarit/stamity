@@ -21,6 +21,10 @@
 //   <out>/…zip.sha256               `<hex>  <name>`, the line `sha256sum -c` reads.
 //   <out>/release.json              the machine-readable manifest, validated before it is
 //                                   written (`scripts/plugins/releaseManifest.mjs`).
+//   <out>/admin/claude-managed-settings.json   the Claude Code managed-settings template an
+//                                   organization's admin installs, rendered from the same
+//                                   identity at the release tag (`scripts/plugins/managed-settings.mjs`);
+//                                   written only when Claude is among the built clients.
 //   <out>/README.md                 install, pin, update and rollback per client, the APM
 //                                   install spec, and the two bounds a mirror has to know.
 //
@@ -52,6 +56,7 @@ import { fileURLToPath } from 'node:url'
 import { DISTRIBUTION_CLIENTS, resolveDistributionIdentity } from './distribution-identity.mjs'
 import { isMain } from './native-typescript.mjs'
 import { buildCatalogIdentity, CATALOG_PATHS, releaseTag, renderCatalog } from './plugins/catalogs.mjs'
+import { renderClaudeManagedSettings } from './plugins/managed-settings.mjs'
 import { buildReleaseManifest, validateReleaseManifest } from './plugins/releaseManifest.mjs'
 import { PLUGIN_VERSION } from './plugins/version.mjs'
 import { buildZip } from './plugins/zip.mjs'
@@ -68,6 +73,8 @@ const COMMIT_SHA = /^[0-9a-f]{40}$/
 const RELEASE_MANIFEST = 'release.json'
 const APM_MANIFEST = 'apm.yml'
 const APM_PRIMITIVES = '.apm'
+/** The admin template's place in the tree, beside the catalogs rather than inside a client root. */
+const CLAUDE_MANAGED_SETTINGS = 'admin/claude-managed-settings.json'
 
 function usage(problem) {
   console.error(`${problem}\n${USAGE}`)
@@ -235,6 +242,11 @@ function clientRoutes(slug, tag, branch) {
     claude: {
       title: 'Claude Code',
       install: [`claude plugin marketplace add ${slug}#${branch}`, 'claude plugin install stamity@stamity --scope project'],
+      // Printed only in this section, and the section exists only when Claude was built — the
+      // same condition under which `build` writes the file this line names.
+      installNote:
+        "An organization can roll this plugin out through Claude Code's managed settings: " +
+        `${CLAUDE_MANAGED_SETTINGS} (see the fork guide, "Roll the plugin out to your organization").`,
       pin: [`claude plugin marketplace add ${slug}#${tag}`],
       // `@stamity --scope project` is not decoration: `plugin update` defaults to user scope, and
       // MEASURED on Claude Code 2.1.278 the bare form refuses a project-scope install with
@@ -339,6 +351,7 @@ function renderReadme({ identity, version, sourceCommit, sourceCommitDate, tag, 
       '### Install',
       '',
       block(route.install),
+      ...(route.installNote === undefined ? [] : ['', route.installNote]),
       '',
       '### Pin',
       '',
@@ -539,6 +552,17 @@ function build(parsed) {
     })
     writeDocument(join(outDir, ...CATALOG_PATHS[client].split('/')), jsonDocument(catalog))
     catalogs[client] = CATALOG_PATHS[client]
+  }
+
+  // ── the admin template ───────────────────────────────────────────
+  // Pinned to the release TAG, the ref an admin rolls out and the one the allowlist must match
+  // exactly; an admin who prefers the branch edits the declared source and the allowlist entry
+  // together, or the client admits neither.
+  if (clients.includes('claude')) {
+    writeDocument(
+      join(outDir, ...CLAUDE_MANAGED_SETTINGS.split('/')),
+      jsonDocument(renderClaudeManagedSettings(identity, { ref: tag })),
+    )
   }
 
   // ── the manifest ─────────────────────────────────────────────────
