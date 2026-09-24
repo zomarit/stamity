@@ -23,6 +23,7 @@ import {
   RUN_ID_PATTERN,
   RUNS_SEGMENTS,
   runRelPath,
+  UNICODE_TAG_CHARS,
 } from "./layout.ts";
 
 /**
@@ -345,6 +346,19 @@ export interface AppendResult {
   readonly rows: readonly AppendedRow[];
   /** 1-based ledger lines that are not rows; kept as they are. */
   readonly unreadableLines: readonly number[];
+  /** Ids of rows whose locator or summary carried Unicode tag characters, stripped before the write. */
+  readonly tagsStripped: readonly string[];
+}
+
+/**
+ * A finding's text as its row records it: stripped by {@link printableText},
+ * then of the Unicode tag block, which printableText keeps for the screens and
+ * no screen reads on this path. `tagged` says the second strip removed something.
+ */
+function evidenceText(text: string): { readonly text: string; readonly tagged: boolean } {
+  const printable = printableText(text);
+  const stripped = printable.replace(UNICODE_TAG_CHARS, "");
+  return { text: stripped, tagged: stripped !== printable };
 }
 
 /** The ledger text, or `""` when the ledger does not exist yet. A link is refused. */
@@ -384,7 +398,7 @@ export async function appendFindings(req: {
   const dir = runDir(req.rootDir, req.runId);
   const ledgerRel = runRelPath(req.runId, LEDGER_FILE);
   if (!req.dryRun) await ensureReportsIgnore(req.rootDir, req.runId);
-  if (req.findings.length === 0) return { ledger: ledgerRel, rows: [], unreadableLines: [] };
+  if (req.findings.length === 0) return { ledger: ledgerRel, rows: [], unreadableLines: [], tagsStripped: [] };
 
   const ledgerPath = join(dir, LEDGER_FILE);
   const release = req.dryRun ? null : await acquireWriteLock(ledgerPath, dir);
@@ -409,8 +423,12 @@ export async function appendFindings(req: {
     const first = nextRowNumber(held, req.runId, req.phase);
     const rows: AppendedRow[] = [];
     const lines: string[] = [];
+    const tagsStripped: string[] = [];
     for (const [offset, finding] of req.findings.entries()) {
       const ledgerId = `${req.runId}/${req.phase}/${first + offset}`;
+      const locator = evidenceText(finding.locator);
+      const summary = evidenceText(finding.summary);
+      if (locator.tagged || summary.tagged) tagsStripped.push(ledgerId);
       lines.push(
         JSON.stringify({
           id: ledgerId,
@@ -418,8 +436,9 @@ export async function appendFindings(req: {
           source: req.source,
           severity: finding.severity,
           // Stripped before the row is built: the ledger is committed and diffed,
-          // so a bidi override or a line separator would spoof the line it lands on.
-          evidence: `${printableText(finding.locator)} — ${printableText(finding.summary)}`,
+          // so a bidi override or a line separator would spoof the line it lands on,
+          // and a tag-block payload would return to context with the open rows.
+          evidence: `${locator.text} — ${summary.text}`,
           state: "open",
           rationale: "",
           ...(req.report === null ? {} : { report: req.report }),
@@ -439,7 +458,7 @@ export async function appendFindings(req: {
       const text = head + lines.join(parsed.eol) + parsed.eol;
       await atomicWriteFileUnlocked(ledgerPath, text, { boundaryDir: dir });
     }
-    return { ledger: ledgerRel, rows, unreadableLines: parsed.unreadable };
+    return { ledger: ledgerRel, rows, unreadableLines: parsed.unreadable, tagsStripped };
   } finally {
     await release?.();
   }

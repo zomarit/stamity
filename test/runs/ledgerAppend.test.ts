@@ -634,6 +634,18 @@ describe("appendFindings", () => {
     );
   });
 
+  it("strips the Arabic letter mark (U+061C) from a locator and summary, as the shared class does", async () => {
+    // Ledger row build/299's second half: a bidi mark the class missed.
+    const dir = tempDir();
+    await seedRun(dir);
+    const alm = String.fromCharCode(0x061c);
+
+    await append(dir, [finding({ locator: `src/a.ts:1${alm}`, summary: `left${alm}right` })]);
+
+    const [row] = (await readText(dir, LEDGER)).trimEnd().split("\n");
+    expect((JSON.parse(row ?? "{}") as Record<string, unknown>)["evidence"]).toBe("src/a.ts:1 — leftright");
+  });
+
   it("strips control, bidi, zero-width and line-separator characters from a locator and summary before the row", async () => {
     // Ledger row build/248: the evidence of a row is committed and diffed, so a
     // bidi override or a line separator from verdict-role text would spoof it.
@@ -865,6 +877,46 @@ describe("stamity ledger append", () => {
     expect(second.code).toBe(1);
     expect(second.stderr).toContain(`(${RUN}/review/1, ${RUN}/review/2)`);
     expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("strips a Unicode tag-block payload from a locator and summary, and names each cleaned row on stderr", async () => {
+    // Ledger row build/299: printableText keeps the tag block for the screens,
+    // and no screen runs on the append path, so the payload reached the
+    // committed evidence and came back into context with the open rows.
+    const dir = tempDir();
+    const payload = String.fromCodePoint(0xe0001, 0xe0069, 0xe0067, 0xe006e, 0xe006f, 0xe0072, 0xe0065, 0xe007f);
+    await seedRun(dir, {
+      [REPORT_REL]: report([
+        C1,
+        { ...W1, summary: `the retry${payload} never backs off` },
+        { ...M1, locator: `npm run lint${payload}` },
+      ]),
+    });
+
+    const result = await cli(dir, [...APPEND, "--report", REPORT_REL]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toBe(`${RUN}/review/1 Critical C-1\n${RUN}/review/2 Warning W-1\n${RUN}/review/3 Minor M-1\n`);
+    expect(result.stderr).toBe(
+      [2, 3]
+        .map((n) => `warning: ${RUN}/review/${n} carried Unicode tag characters in its locator or summary; they were stripped before the row was written\n`)
+        .join(""),
+    );
+    const evidence = (await readText(dir, LEDGER))
+      .trimEnd()
+      .split("\n")
+      .map((line) => (JSON.parse(line) as Record<string, unknown>)["evidence"]);
+    expect(evidence).toEqual([
+      "src/a.ts:10 — a null row crashes the merge",
+      "src/b.ts:3-7 — the retry never backs off",
+      "npm run lint — an unused import",
+    ]);
+    for (const text of evidence) {
+      for (const char of String(text)) {
+        const code = char.codePointAt(0) ?? 0;
+        expect(code >= 0xe0000 && code <= 0xe007f, code.toString(16)).toBe(false);
+      }
+    }
   });
 
   it("refuses a --source that is not the role the --report name carries, and writes nothing", async () => {

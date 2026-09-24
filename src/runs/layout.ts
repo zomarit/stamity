@@ -118,17 +118,26 @@ export const CARD_FIELD_MAX = 200;
 
 /**
  * The characters a printed or recorded field drops: the C0 and C1 controls,
- * DEL, the zero-width marks, the line and paragraph separators, the bidi
- * controls and the byte-order mark. Text read from a committed file (a ledger
- * id, a record line, a branch) or written into one (a finding's locator and
- * summary) would otherwise reach a terminal as an escape sequence, or a
- * context or a diff reordered or broken across lines. The Unicode tag block is deliberately NOT here: the screens'
+ * DEL, the Arabic letter mark, the zero-width marks, the line and paragraph
+ * separators, the bidi controls and the byte-order mark. Text read from a
+ * committed file (a ledger id, a record line, a branch) or written into one (a
+ * finding's locator and summary) would otherwise reach a terminal as an escape
+ * sequence, or a context or a diff reordered or broken across lines. The
+ * Unicode tag block is deliberately NOT here: the screens'
  * `unicode-tag-smuggling` row refuses a payload by those characters, and
  * stripping them first would launder it. Global and Unicode-aware, for
- * `String.prototype.replace`; the hook's card embeds it by source and flags.
+ * `String.prototype.replace`; the hook's card and guard embed it by source and flags.
  */
 // oxlint-disable-next-line no-control-regex -- matching control characters IS the point
-export const UNPRINTABLE_CHARS = /[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/gu;
+export const UNPRINTABLE_CHARS = /[\u0000-\u001F\u007F-\u009F\u061C\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/gu;
+
+/**
+ * The Unicode tag block, U+E0000 to U+E007F: invisible characters that can spell
+ * a whole instruction. Kept out of {@link UNPRINTABLE_CHARS} so the screens still
+ * see a payload; stripped only where no screen runs before the text is
+ * committed — `ledger append`'s locator and summary — and said so there.
+ */
+export const UNICODE_TAG_CHARS = /[\u{E0000}-\u{E007F}]/gu;
 
 /** The card's fixed words. */
 export const CARD_RECOVERY_NOTE = "the ledger is the recovery point";

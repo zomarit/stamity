@@ -318,6 +318,12 @@ async function runAppend(ctx: CliContext, opts: Record<string, unknown>): Promis
   });
 
   warnUnreadable(ctx, result.ledger, result.unreadableLines);
+  for (const ledgerId of result.tagsStripped) {
+    // Non-blocking: no legitimate finding carries these characters, and the orchestrator is told.
+    ctx.io.err(
+      `warning: ${ledgerId} carried Unicode tag characters in its locator or summary; they were stripped before the row was written\n`,
+    );
+  }
   if (result.rows.length === 0) {
     // stderr, so stdout stays the rows a caller parses: zero lines there is the
     // machine's answer, this sentence is the person's.

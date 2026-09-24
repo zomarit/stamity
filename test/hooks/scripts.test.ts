@@ -1515,7 +1515,7 @@ describe("the guard's path-scoped report write", () => {
       `const GUARD_UNPRINTABLE = new RegExp(${JSON.stringify(UNPRINTABLE_CHARS.source)}, ${JSON.stringify(UNPRINTABLE_CHARS.flags)});`,
     );
     const printable = liftGuardHelper<(text: string) => string>("const GUARD_UNPRINTABLE", "printable");
-    const dirty = "a\u0007b\u001b[2Jc\u009bd\u200be\u200ff\u202eg\u2060h\u2066i\u2069j\ufeffk\u2028l\u2029m\u00adn";
+    const dirty = "a\u0007b\u001b[2Jc\u009bd\u200be\u200ff\u202eg\u2060h\u2066i\u2069j\ufeffk\u061c\u2028l\u2029m\u00adn";
     // The soft hyphen stays, as it does in every other sink: only the screens strip it.
     expect(printable(dirty)).toBe("ab[2Jcdefghijklm\u00adn");
   });
