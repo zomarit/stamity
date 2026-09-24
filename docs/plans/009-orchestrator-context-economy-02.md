@@ -43,6 +43,18 @@ and two new optional fields: `report` (the repo-relative report path) and `decis
 The states stay `open | fixed | deferred | rejected`. A row appended from a C2 block has `evidence` =
 `<locator> — <summary>`, `state` `open`, `rationale` `""`. A `decision_needed` row is signed off by the orchestrator
 in a run-record line `- <UTC> sign-off: <ledger-id> — <decision>` before the first fixer dispatch naming its id.
+Every text a row records from a report or a caller — the appended `evidence`'s locator and summary, a closures-block
+`rationale`, and a manual `ledger close --rationale` — is stripped before the write by
+`src/runs/ledgerStore.ts::committedText`: first `src/runs/blocks.ts::printableText` (CR, LF and tab become a space, and
+the `src/runs/layout.ts::UNPRINTABLE_CHARS` class is dropped: the C0 and C1 controls, DEL, U+061C, U+200B–U+200F,
+U+2028, U+2029, U+202A–U+202E, U+2060, U+2066–U+2069 and U+FEFF), then the Unicode tag block U+E0000–U+E007F
+(`layout.ts::UNICODE_TAG_CHARS`, kept out of the shared class so the screens still see a payload). A closure's
+rationale also passes `printableText` at the parse (`blocks.ts::readRationale`). A row written after a tag-block strip
+gets one non-blocking stderr line, `warning: <ledger-id> carried Unicode tag characters in its <field>; they were
+stripped before the row was written`, the field being `locator or summary` or `rationale`
+(`src/cli/commands/ledger.ts::warnTagsStripped`). (Amended 2026-09-24: the committed-text strip — ledger rows
+`build/248` and `build/299`, signed off at 02:00Z and 02:22Z as the declared defaults, and `build/300`, the same
+sign-off extended to the rationales at 02:27Z.)
 
 **C4 — The digest.** The final message of a two-tier role, one labelled line each: `status:`; for the reviewer only,
 `verdict:` (`approve | request-changes | blocked`) and `confidence:` with its basis word (the review gate parses these);
@@ -75,7 +87,20 @@ report files whose C2 block holds ≥ 1 finding and whose path no row carries in
 from the git common dir with `node:fs` (a hook spawns no process). Lists shrink to fit and end `… +<n> more`. Printed by
 the session-start hook when its stdin `source` is `compact` (Claude Code, Codex) and by `stamity ledger status` (every
 client; by hand where the client does not re-run its session-start hook after a compaction). No pre-compaction hook and
-no new hook event is added.
+no new hook event is added. The reports line names only files whose names match C1's grammar
+(`src/runs/layout.ts::REPORT_NAME_PATTERN`); any other `.md` file in `reports/` is counted, never named, as
+`  ·  not report-named: <m>` at the end of that line when m > 0. A ledger that is there but cannot be read (a link, not
+a regular file, a read that fails) prints `ledger: could not be read  ·  the ledger is the recovery point` instead of a
+count, in both twins (`src/runs/resumeCard.ts::collectResumeCard`, `src/runs/cardSource.ts::buildResumeCardSource`);
+`ledger status` then also warns on stderr and sets `ledgerUnreadable` in `--json`. Every printed field is flattened
+(`resumeCard.ts::flat`, the hook's `cardFlat`): C0 controls and DEL become a space, the
+`layout.ts::UNPRINTABLE_CHARS` class is dropped (the C0 and C1 controls, DEL, U+061C, U+200B–U+200F, U+2028, U+2029,
+U+202A–U+202E, U+2060, U+2066–U+2069 and U+FEFF), whitespace collapses, and a field is cut to 200 characters, the `…`
+included; the tag block is kept so the screen still sees it. `ledger status --json` screens the full lists as well as
+the card: it echoes `openRowIds`, `unledgeredReports` and `lanes` only when neither the card (`withheld`) nor the full
+lists (`listsWithheld`) match a screen pattern, and always carries the counts, `ledgerUnreadable` and `notReportNamed`
+(`src/cli/commands/ledger.ts::statusJson`). (Amended 2026-09-24: report-named lists only — ledger row `build/247`,
+signed off at 02:00Z as the declared default; the unreadable ledger — `build/258`, signed off at 02:01Z.)
 
 **C7 — `stamity ledger`** (hidden plumbing verb, beside `learn` and `handoff`; the one serialized ledger writer,
 through the engine's existing write lock). `append --run <run-id> --phase <phase> --source <role> (--report <path> |
@@ -89,9 +114,22 @@ report already appended. `close --run <run-id> (--report <path> --ids <comma lis
 place; `--ids` lists the ledger ids handed to that re-review and is required with `--report` (a `--report` close
 without it is refused), and an unknown id, or a closure naming an id outside `--ids`, refuses the whole close.
 `status [--run <run-id>]`: prints C6. Every refusal exits 1; a report path must resolve directly inside that run's
-`reports/`, with no `..` segment and no symlink. (Amended 2026-09-23: `close --report` requires `--ids`, and a closure
+`reports/`, with no `..` segment and no symlink. `append --report` refuses a `--source` other than the `<role>` segment
+of the report's name (`src/runs/layout.ts::reportNameRole`, checked in `src/cli/commands/ledger.ts::runAppend`); a
+`--stdin` append names no report, so no role is compared. The 20-problem cap and `omitted` bind every refusal that
+lists problems, a close's too: a closures block that does not parse, and closures that cannot apply
+(`ledger.ts::refuseWithProblems`). `close --report` reads every id, in `--ids` and in the closures block, through
+`src/runs/ledgerStore.ts::qualifyLedgerId`: a short `<phase>/<n>` (phase `[a-z][a-z0-9-]*`) is qualified with the
+`--run` id, any other spelling is taken as given, an id whose first segment names another run refuses the whole close,
+and one row closed through both spellings is refused as a repeat. `close --id` matches only the full
+`<run-id>/<phase>/<n>` (`ledgerStore.ts::closeRow`), so a short id there is refused as not a row — the landed reading.
+`close --id` refuses `--ids`, and `close --report` refuses `--state` and `--rationale` (`ledger.ts::runClose`).
+(Amended 2026-09-23: `close --report` requires `--ids`, and a closure
 outside it refuses the whole close — resolution R38, ledger rows `build/58` and `build/96`; an append refusal lists
-at most 20 problems and cuts each quoted fragment at 60 code points — ledger row `build/80`.)
+at most 20 problems and cuts each quoted fragment at 60 code points — ledger row `build/80`.) (Amended 2026-09-24: the
+`--source` check — ledger row `build/263`, fixed in the whole-branch engine round; a short id qualified by `--run` in
+`--ids` and the closures block — `build/264`, signed off at 02:02Z as the declared default; `close --id` keeps the full
+id — `build/285`, a Minor still open in the ledger.)
 
 **C8 — Verdict-role report write on Claude Code only.** An optional `writePaths` on the four verdict policy rows,
 each naming only its own role's reports: `.stamity/runs/*/reports/*-reviewer-r*.md`, `*-security-r*.md`,
@@ -112,17 +150,21 @@ the declared default, option 2, and `build/93`.)
 
 **C9 — Re-review closures.** A re-review carries a `stamity-closures` block, one object per prior ledger id:
 `{"ledger_id":"<id>","status":"fixed|not-fixed|regressed|rejection-upheld|rejection-overturned"}` with an optional
-`rationale` (one line, non-blank, at most 2,000 code points, stripped of C1, bidi and zero-width characters); any other
-key refuses the block. Plus new Critical/Warning only (C2), the reviewer's labelled `verdict:`/`confidence:` lines, and
+`rationale` (one line, non-blank, at most 2,000 code points, stripped by `printableText` at the parse and of the
+Unicode tag block where the row is written, C3); any other key refuses the block. `ledger_id` is the full
+`<run-id>/<phase>/<n>` or its short `<phase>/<n>`, which the close qualifies with `--run`; an id naming another run
+refuses the whole close (C7, `src/runs/ledgerStore.ts::qualifyLedgerId`). Plus new Critical/Warning only (C2), the reviewer's labelled `verdict:`/`confidence:` lines, and
 one line `read: <files>; lenses: <list>`. `ledger close --report` maps `fixed` → `fixed`, `rejection-upheld` →
 `rejected`, and keeps `not-fixed`, `regressed`, `rejection-overturned` open; `regressed` also reopens a `fixed` row.
 Each applied closure appends its note `re-review <status>: <report>` to the row's rationale, followed by
 ` — <rationale>` when the closure carries one. A closure whose note is already present is `unchanged` only when the
-row's state is also the closure's target; otherwise the close is refused with `<id> is <state>, not <target>, but its rationale already records <note>; a closure is applied once` (`src/runs/ledgerStore.ts:626`). A row the fixer answers as
+row's state is also the closure's target; otherwise the close is refused with `<id> is <state>, not <target>, but its rationale already records <note>; a closure is applied once` (`src/runs/ledgerStore.ts::applyClosures`). A row the fixer answers as
 wrong stays `open` until the re-review upholds or overturns the rejection (both rejection statuses meet only an open
 row). Apply problems print as `<report>:<line>: …`. (Amended 2026-09-23: the closure's optional rationale is admitted
 and appended after its note — ledger row `build/128`; `unchanged` needs the target state — `build/127`; a rejected
 finding stays open until the re-review rules — `build/130`; all signed off at 22:52Z as the declared defaults.)
+(Amended 2026-09-24: the two `ledger_id` forms — ledger row `build/264`, signed off at 02:02Z; the rationale's
+tag-block strip — `build/300`; the refusal cited by symbol, not line.)
 
 **C10 — Pointer dispatch** (at most 15 lines): role, class and run id; the plan path and unit id, never a line number;
 worktree, branch and base; the absolute report path (C1); the unit's `verify`; its `files` cell as the boundary; the
@@ -710,7 +752,7 @@ slice's docs unit and the corpus slice's docs unit are merged here). `docs/cli-r
 | `stamity-findings` block keys (`id, severity, locator, summary, decision_needed?, security?`) | wire-field | p16-verdict-roles VR-3, p16-execution-roles EX-I4 | the C7 `ledger append` parser (engine unit); the replay matcher (`evals/replay`); the C6 "reports without a ledger row" scan | add | reconciled(3): the key names are verbatim from C2. Clarification: **a `BLOCKED_*` return carries no block**, which C2 does not say; the planner should confirm |
 | Digest labels `status: verdict: confidence: report: findings: security: contract delta:` | wire-field | VR-4*, EX-*, WT-8 | the review-gate parser of `verdict:` and `confidence:` (`src/hooks/scripts.ts:1478-1482,1566-1576`); the orchestrator | add | reconciled(1): the labels are kept, and `verdict:` uses the reviewer's own vocabulary including `blocked` (C4 lists only approve and request-changes) |
 | Lens `mode:` line | wire-field | VR-4s, VR-4p, VR-4d, WT-8 | the orchestrator | add | **1 unreconciled vs C4**: C4 prints `verdict:` and `confidence:` for "verdict roles only", but lenses carry no verdict today. Planner decision |
-| `stamity-closures` block, 5 statuses | wire-field | VR-2, WT-9 | `stamity ledger close --report` (engine, C9) | add | reconciled(1) |
+| `stamity-closures` block, 5 statuses | wire-field | VR-2, WT-9 | `stamity ledger close --report` (engine, C9) | add | reconciled(1). Amended 2026-09-24: the engine reads `ledger_id` in the full or the short `<phase>/<n>` form, qualifying the short one with `--run` (`src/runs/ledgerStore.ts::qualifyLedgerId`, `build/264`), so the reviewer body's `<id>` holds in either spelling with no body change |
 | Report path `.stamity/runs/<run-id>/reports/<pass>-<role>-r<N>.md` + the `u-` prefix | config-key | WT-8 | the C8 guard pattern `.stamity/runs/*/reports/*.md`; the `ledger append --report` confinement; the ignore rule; the C6 scan | add | reconciled(4); the `u-` prefix is a drafting addition to C1 |
 | Ledger optional fields `report`, `decision_needed` | persisted-name | WT-10 (prose) | `test/records/ledgers.test.ts:49` OPTIONAL_FIELDS; `src/cli/docs/measurements.ts:616-618` (tolerant); `/st-rework` | add | reconciled: owned by the C3 engine/records unit |
 | Record head `Status:` / `Plan:` / `Invocation:` | persisted-name | WT-1 | the C6 card / `ledger status`; `src/cli/docs/measurements.ts:75,297,300` reads `Status:` | add | reconciled(2) |
