@@ -1146,6 +1146,46 @@ describe("stamity ledger close", () => {
     });
   });
 
+  it("strips a Unicode tag-block payload from a closure's rationale and names the cleaned row on stderr", async () => {
+    // Ledger row build/300: printableText keeps the tag block for the screens, and
+    // no screen runs before a rationale is committed to the row.
+    const dir = tempDir();
+    const payload = String.fromCodePoint(0xe0001, 0xe0069, 0xe0067, 0xe006e, 0xe006f, 0xe0072, 0xe0065, 0xe007f);
+    await seedRun(dir, {
+      [LEDGER]: `${row(1)}\n${row(2)}\n`,
+      [REPORT_REL]: rereview([
+        { ...closure(1, "fixed"), rationale: `covered${payload} by the new test` },
+        { ...closure(2, "fixed"), rationale: "clean" },
+      ]),
+    });
+
+    const result = await cli(dir, [...CLOSE, "--report", REPORT_REL, "--ids", ids(1, 2)]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toBe(`${rid(1)} open -> fixed (fixed)\n${rid(2)} open -> fixed (fixed)\n`);
+    expect(result.stderr).toBe(
+      `warning: ${rid(1)} carried Unicode tag characters in its rationale; they were stripped before the row was written\n`,
+    );
+    const rows = rowsOf(await readText(dir, LEDGER));
+    expect(rows[0]).toMatchObject({ rationale: `re-review fixed: ${REPORT_REL} — covered by the new test` });
+    expect(JSON.stringify(rows)).not.toMatch(/[\u{E0000}-\u{E007F}]/u);
+  });
+
+  it("strips a Unicode tag-block payload from a manual --rationale and names the row on stderr", async () => {
+    const dir = tempDir();
+    const payload = String.fromCodePoint(0xe0001, 0xe0069, 0xe0067, 0xe006e, 0xe006f, 0xe0072, 0xe0065, 0xe007f);
+    await seedRun(dir, { [LEDGER]: `${row(1)}\n` });
+
+    const result = await cli(dir, [...CLOSE, "--id", rid(1), "--state", "deferred", "--rationale", `after${payload} the release`]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toBe(`${rid(1)} open -> deferred\n`);
+    expect(result.stderr).toBe(
+      `warning: ${rid(1)} carried Unicode tag characters in its rationale; they were stripped before the row was written\n`,
+    );
+    expect(rowsOf(await readText(dir, LEDGER))[0]).toMatchObject({ state: "deferred", rationale: "after the release" });
+  });
+
   it("applies one manual transition with --id and prints `<id> <from> -> <to>`", async () => {
     const dir = tempDir();
     await seedRun(dir, { [LEDGER]: `${row(1)}\n${row(2)}\n` });

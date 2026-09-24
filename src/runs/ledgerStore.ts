@@ -351,11 +351,13 @@ export interface AppendResult {
 }
 
 /**
- * A finding's text as its row records it: stripped by {@link printableText},
- * then of the Unicode tag block, which printableText keeps for the screens and
- * no screen reads on this path. `tagged` says the second strip removed something.
+ * Report or caller text as a row records it — a finding's locator and summary,
+ * a closure's rationale, a manual `--rationale`: stripped by
+ * {@link printableText}, then of the Unicode tag block, which printableText
+ * keeps for the screens and no screen reads before the row is written.
+ * `tagged` says the second strip removed something.
  */
-function evidenceText(text: string): { readonly text: string; readonly tagged: boolean } {
+function committedText(text: string): { readonly text: string; readonly tagged: boolean } {
   const printable = printableText(text);
   const stripped = printable.replace(UNICODE_TAG_CHARS, "");
   return { text: stripped, tagged: stripped !== printable };
@@ -426,8 +428,8 @@ export async function appendFindings(req: {
     const tagsStripped: string[] = [];
     for (const [offset, finding] of req.findings.entries()) {
       const ledgerId = `${req.runId}/${req.phase}/${first + offset}`;
-      const locator = evidenceText(finding.locator);
-      const summary = evidenceText(finding.summary);
+      const locator = committedText(finding.locator);
+      const summary = committedText(finding.summary);
       if (locator.tagged || summary.tagged) tagsStripped.push(ledgerId);
       lines.push(
         JSON.stringify({
@@ -512,6 +514,8 @@ export interface CloseResult {
   readonly changes: readonly CloseChange[];
   /** 1-based ledger lines that are not rows; kept as they are. */
   readonly unreadableLines: readonly number[];
+  /** Ids of rows written with a rationale that carried Unicode tag characters, stripped first. */
+  readonly tagsStripped: readonly string[];
 }
 
 /**
@@ -560,6 +564,8 @@ interface RowRewrite {
   readonly changes: readonly CloseChange[];
   /** New row objects keyed by 0-based line. */
   readonly rewrites: ReadonlyMap<number, LedgerRow>;
+  /** Rewritten rows whose rationale had Unicode tag characters stripped. */
+  readonly tagsStripped?: readonly string[];
 }
 
 /**
@@ -582,7 +588,7 @@ async function rewriteRows(
   try {
     const existing = await readLedger(ledgerPath, ledgerRel);
     const parsed = parseLedgerText(existing);
-    const { changes, rewrites } = decide(parsed, ledgerRel);
+    const { changes, rewrites, tagsStripped = [] } = decide(parsed, ledgerRel);
     if (!req.dryRun && rewrites.size > 0) {
       // The same split as parseLedgerText's, so indices agree; each raw line
       // keeps its trailing `\r`, and a final EOL (or its absence) is untouched.
@@ -593,7 +599,7 @@ async function rewriteRows(
       }
       await atomicWriteFileUnlocked(ledgerPath, raw.join("\n"), { boundaryDir: dir });
     }
-    return { ledger: ledgerRel, changes, unreadableLines: parsed.unreadable };
+    return { ledger: ledgerRel, changes, unreadableLines: parsed.unreadable, tagsStripped };
   } finally {
     await release?.();
   }
@@ -645,7 +651,7 @@ export async function applyClosures(req: {
   if (req.closures.length === 0) {
     runDir(req.rootDir, req.runId);
     if (!req.dryRun) await ensureReportsIgnore(req.rootDir, req.runId);
-    return { ledger: runRelPath(req.runId, LEDGER_FILE), changes: [], unreadableLines: [] };
+    return { ledger: runRelPath(req.runId, LEDGER_FILE), changes: [], unreadableLines: [], tagsStripped: [] };
   }
   return await rewriteRows(req, (parsed, ledgerRel) => {
     const indexOf = rowIndex(parsed);
@@ -653,6 +659,7 @@ export async function applyClosures(req: {
     const changes: CloseChange[] = [];
     const rewrites = new Map<number, LedgerRow>();
     const closedAt = new Map<string, number>();
+    const tagsStripped: string[] = [];
     for (const closure of req.closures) {
       const { status, line } = closure;
       const qualified = qualifyLedgerId(req.runId, closure.ledgerId);
@@ -712,19 +719,24 @@ export async function applyClosures(req: {
         });
         continue;
       }
-      const recorded = closure.rationale === null ? note : `${note} — ${closure.rationale}`;
+      // The parser already stripped and bounded it; the tag block goes here, where the row is written.
+      const reason = closure.rationale === null ? null : committedText(closure.rationale);
+      const reasonText = reason?.text.trim() ?? "";
+      if (reason?.tagged === true) tagsStripped.push(ledgerId);
+      const recorded = reasonText === "" ? note : `${note} — ${reasonText}`;
       rewrites.set(index, { ...row, state: to, rationale: extendRationale(prior, recorded) });
       changes.push({ ledgerId, from, to, status, unchanged: false });
     }
     if (problems.length > 0) throw new ClosuresRefused(req.report, problems);
-    return { changes, rewrites };
+    return { changes, rewrites, tagsStripped };
   });
 }
 
 /**
  * Apply one manual transition (`ledger close --id`): set `state` and append
- * the rationale — stripped by `printableText`, then trimmed, before the cap and
- * the write — by the same rule as a closure's note. Any prior state
+ * the rationale — stripped by `committedText` (printableText, then the Unicode
+ * tag block), then trimmed, before the cap and the write — by the same rule as
+ * a closure's note. Any prior state
  * may move; an id that is not a row is refused, and a row already in `state`
  * whose rationale carries the text is `unchanged`.
  */
@@ -736,7 +748,8 @@ export async function closeRow(req: {
   readonly rationale: string;
   readonly dryRun: boolean;
 }): Promise<CloseResult> {
-  const text = printableText(req.rationale).trim();
+  const cleaned = committedText(req.rationale);
+  const text = cleaned.text.trim();
   if (text === "" || Array.from(text).length > RATIONALE_MAX) {
     throw new EngineError(
       `ledger close --id needs a non-empty --rationale of at most ${RATIONALE_MAX} characters`,
@@ -769,6 +782,7 @@ export async function closeRow(req: {
     return {
       changes: [{ ledgerId: req.ledgerId, from, to: req.state, status: null, unchanged: false }],
       rewrites: new Map([[index, { ...row, state: req.state, rationale: extendRationale(prior, text) }]]),
+      tagsStripped: cleaned.tagged ? [req.ledgerId] : [],
     };
   });
 }

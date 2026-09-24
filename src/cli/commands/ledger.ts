@@ -204,6 +204,19 @@ function warnUnreadable(ctx: CliContext, ledger: string, lines: readonly number[
   }
 }
 
+/**
+ * One stderr line per row written after Unicode tag characters were stripped
+ * from `field`. Non-blocking: no legitimate finding or rationale carries them,
+ * and the orchestrator is told which rows were cleaned.
+ */
+function warnTagsStripped(ctx: CliContext, ledgerIds: readonly string[], field: string): void {
+  for (const ledgerId of ledgerIds) {
+    ctx.io.err(
+      `warning: ${ledgerId} carried Unicode tag characters in its ${field}; they were stripped before the row was written\n`,
+    );
+  }
+}
+
 /** The `--run` value, checked: present and a run id. */
 function requireRun(ctx: CliContext, subcommand: string, opts: Record<string, unknown>): string {
   const run = text(opts, "run");
@@ -318,12 +331,7 @@ async function runAppend(ctx: CliContext, opts: Record<string, unknown>): Promis
   });
 
   warnUnreadable(ctx, result.ledger, result.unreadableLines);
-  for (const ledgerId of result.tagsStripped) {
-    // Non-blocking: no legitimate finding carries these characters, and the orchestrator is told.
-    ctx.io.err(
-      `warning: ${ledgerId} carried Unicode tag characters in its locator or summary; they were stripped before the row was written\n`,
-    );
-  }
+  warnTagsStripped(ctx, result.tagsStripped, "locator or summary");
   if (result.rows.length === 0) {
     // stderr, so stdout stays the rows a caller parses: zero lines there is the
     // machine's answer, this sentence is the person's.
@@ -466,6 +474,7 @@ async function runClose(ctx: CliContext, opts: Record<string, unknown>): Promise
   }
 
   warnUnreadable(ctx, result.ledger, result.unreadableLines);
+  warnTagsStripped(ctx, result.tagsStripped, "rationale");
   for (const change of result.changes) ctx.io.out(`${changeLine(change)}\n`);
   if (ctx.dryRun) {
     const moving = result.changes.filter((change) => !change.unchanged).length;
