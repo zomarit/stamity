@@ -40,14 +40,24 @@ const SEEDS_SCHEMA = 'stamity/replay-seeds/v1'
 
 /** REPLAY-v1 §3: the orchestrator's model pin. */
 const ORCHESTRATOR_MODEL = 'claude-opus-5-5'
+/** §3: the client version the init event's `claude_code_version` must read (build/250). */
+const CLIENT_VERSION = '2.1.280'
+/**
+ * §3's five ambient lists, as the measurement names them and as the init event keys them. A run
+ * whose lists differ from its shape's pilot is invalid; `compare.mjs` holds each run to its pilot.
+ */
+export const AMBIENT_LISTS = { skills: 'skills', agents: 'agents', slashCommands: 'slash_commands', plugins: 'plugins', mcpServers: 'mcp_servers' }
 /** §8: every per-pass figure divides the run's total by the six passes. */
 const PASS_COUNT = 6
 /** §8: projected compactions per 10 passes = 10 × context tokens per pass ÷ this. */
 const COMPACTION_TOKENS = 947_000
 /** §8: the per-pass split is flagged unreliable above this unattributed share (RESULTS words its note from it). */
 export const UNATTRIBUTED_MAX = 0.2
-/** §8: substrings whose appearance in any tool input voids the run, beside the `--forbid` paths. */
-const ALWAYS_FORBIDDEN = ['seeds.json', '__oracle__']
+/**
+ * §8: substrings whose appearance in any tool input voids the run, beside the `--forbid` paths —
+ * §8's two and §5's reference fixes, the answer key `fixture.mjs` also keeps out of the fixture (build/254).
+ */
+const ALWAYS_FORBIDDEN = ['seeds.json', '__oracle__', 'reference-fixes']
 
 const LOOP_FUNCTIONS = new Set(['build', 'fix', 'verdict', 'gate'])
 const FLAG_SEVERITIES = ['Critical', 'Warning']
@@ -348,6 +358,18 @@ function withinPin(requested, model) {
   return model === requested
 }
 
+/** An ambient entry by its name: a plugin or an MCP server is an object whose path must not reach a summary. */
+const ambientName = (entry) => (typeof entry === 'string' ? entry : typeof entry?.name === 'string' ? entry.name : JSON.stringify(entry))
+
+/**
+ * The init event's five ambient lists (§3), each entry by its name, deduplicated and sorted; a list
+ * the event does not carry is null. Null with no init event.
+ */
+function ambientOf(init) {
+  if (init === null) return null
+  return Object.fromEntries(Object.entries(AMBIENT_LISTS).map(([key, field]) => [key, Array.isArray(init[field]) ? [...new Set(init[field].map(ambientName))].toSorted() : null]))
+}
+
 // ---------- findings ----------
 
 /** A delivery's verdict: `blocked` on a `BLOCKED_*` return, else the digest's label, else the free-text word. */
@@ -425,9 +447,12 @@ async function loadCapture(runDir, forbid) {
   const forbidList = [...forbidLabels.keys()]
 
   const sessions = entriesOf(L.transcriptDir).filter((e) => e.isFile() && e.name.endsWith('.jsonl')).map((e) => e.name)
-  if (sessions.length !== 1) throw new Error(`expected one main transcript under captures/transcript/, found ${sessions.length}`)
-  const session = sessions[0].slice(0, -'.jsonl'.length)
-  const lines = await readLines(join(L.transcriptDir, sessions[0]))
+  if (sessions.length === 0) throw new Error('expected one main transcript under captures/transcript/, found 0')
+  // build/255: a restart or a stray file leaves several; the newest session is measured and the run is invalid.
+  const newest = sessions.map((name) => ({ name, mtime: statSync(join(L.transcriptDir, name)).mtimeMs })).toSorted((a, b) => b.mtime - a.mtime || (a.name < b.name ? 1 : -1))[0].name
+  const session = newest.slice(0, -'.jsonl'.length)
+  if (sessions.length > 1) invalid.push(`${sessions.length} main transcripts under captures/transcript/ (a restart or a stray file): measured on the newest, ${session}`)
+  const lines = await readLines(join(L.transcriptDir, newest))
   const walk = walkTranscriptLines(lines, { forbid: forbidList })
   const index = indexTranscript(lines)
   const subDir = join(L.transcriptDir, session, 'subagents')
@@ -446,6 +471,7 @@ async function loadCapture(runDir, forbid) {
   for (const r of walk.requests) if (r.model && r.model !== '<synthetic>') orchestratorModels[r.model] = (orchestratorModels[r.model] ?? 0) + 1
   if (init === null) invalid.push('no init event in captures/stdout.jsonl, so the orchestrator model pin cannot be checked')
   else if (init.model !== ORCHESTRATOR_MODEL) invalid.push(`init model ${JSON.stringify(init.model ?? null)} is not the pin ${ORCHESTRATOR_MODEL}`)
+  if (init !== null && init.claude_code_version !== CLIENT_VERSION) invalid.push(`init claude_code_version ${JSON.stringify(init.claude_code_version ?? null)} is not the pin ${CLIENT_VERSION}`)
   for (const model of Object.keys(orchestratorModels)) if (model !== ORCHESTRATOR_MODEL) invalid.push(`orchestrator request answered on ${model}, not the pin ${ORCHESTRATOR_MODEL}`)
   for (const hit of walk.forbidHits) invalid.push(`forbidden ${forbidLabels.get(hit.forbid)} in a ${hit.tool} input (main transcript line ${hit.line})`)
   for (const s of subs) for (const hit of s.forbidHits) invalid.push(`forbidden ${forbidLabels.get(hit.forbid)} in a ${hit.tool} input (sub-agent ${s.agentId} line ${hit.line})`)
@@ -462,7 +488,10 @@ async function loadCapture(runDir, forbid) {
   const roots = rootSpellings([...index.cwds, ...subs.flatMap((s) => [...s.cwds]), init?.cwd, ...worktreesOf(run), ...splitRoots(texts, copyNames)])
   const oracle = readJsonIfPresent(L.oracle)
   const oracleStatus = new Map((Array.isArray(oracle?.results) ? oracle.results : []).map((r) => [r.seed, r.status]))
-  return { L, run, invalid, walk, index, subs, init, roots, orchestratorModels, stateNames, states, oracleStatus, oracleRun: oracleRunOf(oracle) }
+  const oracleRun = oracleRunOf(oracle)
+  // build/252: an oracle harness that did not run reads every behaviour seed as unfixed, so the run is re-run, never scored.
+  if (oracleRun.status !== 'ok') invalid.push(`oracle run status ${JSON.stringify(oracleRun.status)}${oracleRun.detail !== '' ? ` (${oracleRun.detail})` : ''}, not "ok": the run is re-run, never scored`)
+  return { L, run, invalid, walk, index, subs, init, roots, orchestratorModels, stateNames, states, oracleStatus, oracleRun }
 }
 
 /**
@@ -888,7 +917,7 @@ const stageOf = (f, seed) => (f.branch ? 'branch' : f.pass === seed.pass ? 'pass
  * started it) leaves presence unknown and keeps the seed in the denominator rather than read it as
  * "caught by implementer", which would ease the recall row; `notes` names each such pass.
  */
-function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes) {
+function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, invalid) {
   const missing = new Set()
   const absent = []
   const rows = seeds.seeds.map((seed) => {
@@ -897,7 +926,7 @@ function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes) {
     // build/167: a file absent from every copy says nothing of the rule, so presence is unknown.
     const held = new Set(copies.map((copy) => presentIn(copy, seed)))
     const present = held.has(true) ? true : held.has(false) ? false : null
-    if (copies.length > 0 && present === null) absent.push(`${seed.id} (${seed.pass}, ${seed.file})`)
+    if (copies.length > 0 && present === null) absent.push(seed)
     const hits = seedMatch.matched[seed.id].map((i) => all[i])
     const stages = hits.map((f) => stageOf(f, seed)).toSorted((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b))
     return {
@@ -909,7 +938,11 @@ function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes) {
   for (const r of rows) {
     if (r.present === true && !r.found && r.oracle === 'pass') notes.push(`seed ${r.id} (${r.pass}): present in the snapshot and not found by a verdict role, while its oracle passes at run end — scored not found (build/197)`)
   }
-  for (const seed of absent) notes.push(`seed ${seed}: the file is absent from every snapshot copy of the pass, so the seed stays in the recall denominator with presence unknown`)
+  for (const seed of absent) {
+    notes.push(`seed ${seed.id} (${seed.pass}, ${seed.file}): the file is absent from every snapshot copy of the pass, so the seed stays in the recall denominator with presence unknown`)
+    // build/251: a seeded file no copy holds is a capture defect, in either shape.
+    invalid.push(`capture defect: seed ${seed.id} (${seed.pass}): ${seed.file} is absent from every snapshot copy of the pass`)
+  }
   return rows
 }
 
@@ -985,7 +1018,13 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
   }
   const { all, readerSkips } = collectFindings(deliveries, cap.stateNames, states, roots)
   const { seedMatch, decoysFlagged, unmatched, adjudication, tolerance } = scoreFindings(all, seeds, L.snapshots)
-  const seedRows = seedRowsOf(seeds, all, seedMatch, L.snapshots, oracleStatus, notes)
+  // build/251: a pass a verdict agent was dispatched for holds a snapshot, by the marker hook's rule; none is a capture defect.
+  for (const id of PASS_IDS) {
+    if (agents.some((a) => a.fn === 'verdict' && !a.branch && a.pass === id) && copiesOf(L.snapshots, id).length === 0) {
+      invalid.push(`capture defect: a verdict agent was dispatched for ${id}, but captures/snapshots/${id}/ holds no copy`)
+    }
+  }
+  const seedRows = seedRowsOf(seeds, all, seedMatch, L.snapshots, oracleStatus, notes, invalid)
   const mechanism = run?.mechanism ?? 'interrupt'
   const compactionSamples = compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, oracleStatus, roots, tolerance })
 
@@ -1058,6 +1097,7 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
     wholeBranch: { finalClass: finalClassOf(branchReviews), rounds: branchReviews.filter((d) => d.round).length },
     adjudication,
     models: { pin: ORCHESTRATOR_MODEL, init: cap.init?.model ?? null, orchestrator: cap.orchestratorModels, subagents: usage.models },
+    client: { version: typeof cap.init?.claude_code_version === 'string' ? cap.init.claude_code_version : null, ambient: ambientOf(cap.init) },
   }
 }
 

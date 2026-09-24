@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -71,6 +71,7 @@ interface Measurement {
   wholeBranch: { finalClass: string | null; rounds: number };
   adjudication: { item: string; locator: string }[];
   models: { init: string | null; subagents: { agentId: string; unparseableLines: number }[] };
+  client: { version: string | null; ambient: Record<string, string[] | null> | null };
 }
 
 const measure = (runDir: string, forbid: string[] = []): Promise<Measurement> => measureRun(runDir, { seeds: SEEDS, forbid }) as Promise<Measurement>;
@@ -156,6 +157,20 @@ const ledgerRows = (rows: Row[], report?: string): Record<string, unknown>[] =>
     rationale: "",
     ...(report ? { report } : {}),
   }));
+
+/**
+ * The init event's pinned fields (§3): the model, the client version and the five ambient lists.
+ * A plugin and an MCP server are objects in the client's init event; only their names are recorded.
+ */
+const INIT_PINNED = {
+  model: "claude-opus-5-5",
+  claude_code_version: "2.1.280",
+  skills: ["st-work", "dataviz"],
+  agents: ["general-purpose", "stamity-reviewer"],
+  slash_commands: ["st-work", "compact"],
+  plugins: [{ name: "stamity", path: "/plugins/stamity" }],
+  mcp_servers: [],
+};
 
 const VERB_CMD = `npx @zomarit/stamity ledger append --run ${RUN} --phase build --source reviewer --report ${REPORT_REL}`;
 const VERB_RESULT = `${RUN}/build/1 Critical C-1\n${RUN}/build/2 Warning W-1\n${RUN}/build/3 Warning W-2`;
@@ -292,7 +307,7 @@ function passCapture(options: PassCaptureOptions): Built {
   const reports = shape === "changed" ? { "u1-p1-reviewer-r1.md": reportText(rows) } : undefined;
   const layout = writeCapture(dir, {
     run: { runId: "2026-09-24-replay-1", shape, kind: "scored", ...options.run },
-    stdout: options.init === null ? [] : [JSON.stringify({ type: "system", subtype: "init", model: "claude-opus-5-5", cwd: fixture, ...options.init })],
+    stdout: options.init === null ? [] : [JSON.stringify({ type: "system", subtype: "init", ...INIT_PINNED, cwd: fixture, ...options.init })],
     transcript,
     subagents: [...agents.filter((a) => !(options.noTranscript ?? []).includes(a.agentId)).map(subagentOf), ...(options.extraSubagents ?? [])],
     snapshots: options.snapshots ?? { "u1-p1": SNAPSHOT_U1P1 },
@@ -701,7 +716,7 @@ describe("measureRun — review round 1 fixes", () => {
 
   it("(build/174) reads the init event from the head of a long stdout stream", async () => {
     const { layout } = passCapture({ shape: "baseline" });
-    const init = JSON.stringify({ type: "system", subtype: "init", model: "claude-opus-5-5" });
+    const init = JSON.stringify({ type: "system", subtype: "init", ...INIT_PINNED });
     const noise = Array.from({ length: 20_000 }, (_, i) => JSON.stringify({ type: "assistant", n: i }));
     writeFileSync(join(layout.runDir, "captures", "stdout.jsonl"), [init, ...noise, "{broken"].join("\n") + "\n");
     const m = await measure(layout.runDir);
@@ -939,6 +954,69 @@ describe("measureRun — the oracle run's own status (build/230)", () => {
     expect((await measure(layout.runDir)).totals.oracleRun).toEqual({ status: null, detail: "the oracle document records no run-level status" });
     rmSync(layout.oracle);
     expect((await measure(layout.runDir)).totals.oracleRun).toEqual({ status: null, detail: "no captures/oracle.json" });
+  });
+});
+
+describe("measureRun — the whole-branch review's fixes", () => {
+  it("(build/250) records the init event's client version and its five ambient lists, by name and sorted", async () => {
+    const m = await measure(passCapture({ shape: "baseline" }).layout.runDir);
+    expect(m.invalid).toEqual([]);
+    expect(m.client).toEqual({
+      version: "2.1.280",
+      ambient: { skills: ["dataviz", "st-work"], agents: ["general-purpose", "stamity-reviewer"], slashCommands: ["compact", "st-work"], plugins: ["stamity"], mcpServers: [] },
+    });
+    const bare = await measure(passCapture({ shape: "baseline", init: { skills: undefined } }).layout.runDir);
+    expect(bare.client.ambient!["skills"]).toBeNull();
+    const none = await measure(passCapture({ shape: "baseline", init: null }).layout.runDir);
+    expect(none.client).toEqual({ version: null, ambient: null });
+  });
+
+  it("(build/250) marks the run invalid on a client version off the §3 pin, or none", async () => {
+    const drift = await measure(passCapture({ shape: "baseline", init: { claude_code_version: "2.1.281" } }).layout.runDir);
+    expect(drift.invalid).toEqual(['init claude_code_version "2.1.281" is not the pin 2.1.280']);
+    const unset = await measure(passCapture({ shape: "baseline", init: { claude_code_version: undefined } }).layout.runDir);
+    expect(unset.invalid).toEqual(["init claude_code_version null is not the pin 2.1.280"]);
+  });
+
+  it("(build/251) marks the run invalid when a verdict agent was dispatched for a pass whose snapshot is missing", async () => {
+    const m = await measure(passCapture({ shape: "baseline", snapshots: {} }).layout.runDir);
+    expect(m.invalid).toEqual(["capture defect: a verdict agent was dispatched for u1-p1, but captures/snapshots/u1-p1/ holds no copy"]);
+    // A pass no verdict agent started has no snapshot by design: no reason for it.
+    expect(m.invalid.join("\n")).not.toMatch(/u2-p1/);
+  });
+
+  it("(build/251) marks the run invalid when a seeded file is absent from every copy of its pass", async () => {
+    const without = { "src/orders/format.ts": FORMAT };
+    const m = await measure(passCapture({ shape: "baseline", snapshots: { "u1-p1": { main: without, "lane-u1-p1": without } } }).layout.runDir);
+    expect(m.invalid).toEqual(["capture defect: seed sec-sql-sort (u1-p1): src/store/query.ts is absent from every snapshot copy of the pass"]);
+  });
+
+  it("(build/252) marks the run invalid when the oracle run's status is not ok, or none is recorded", async () => {
+    const { layout } = passCapture({ shape: "baseline" });
+    const detail = "the oracle run was killed by SIGKILL after 600000 ms (limit 600000 ms)";
+    writeFileSync(layout.oracle, JSON.stringify({ schema: "stamity/replay-oracle/v1", run: { status: "killed", detail }, results: [{ seed: "sec-sql-sort", kind: "vitest", status: "error", detail }] }));
+    expect((await measure(layout.runDir)).invalid).toEqual([`oracle run status "killed" (${detail}), not "ok": the run is re-run, never scored`]);
+    rmSync(layout.oracle);
+    expect((await measure(layout.runDir)).invalid).toEqual(['oracle run status null (no captures/oracle.json), not "ok": the run is re-run, never scored']);
+  });
+
+  it("(build/254) marks a read of the reference fixes invalid without any --forbid", async () => {
+    const extra = [mainLine.bashToolUse({ id: "tu_ref", command: "cat ../evals/replay/v1/oracle/reference-fixes.patch" }), mainLine.toolResult("tu_ref", "diff")];
+    const m = await measure(passCapture({ shape: "baseline", extra }).layout.runDir);
+    expect(m.invalid).toEqual([expect.stringMatching(/^forbidden reference-fixes in a Bash input/)]);
+  });
+
+  it("(build/255) measures a capture with two main transcripts on the newest and marks it invalid, instead of throwing", async () => {
+    const { layout } = passCapture({ shape: "baseline" });
+    const base = await measure(layout.runDir);
+    const stray = join(layout.captures, "transcript", "an-older-session.jsonl");
+    writeFileSync(stray, `${mainLine.userText("hello")}\n`);
+    const old = new Date("2026-09-01T00:00:00Z");
+    utimesSync(stray, old, old);
+    const m = await measure(layout.runDir);
+    expect(m.invalid).toEqual(["2 main transcripts under captures/transcript/ (a restart or a stray file): measured on the newest, synth-session"]);
+    expect(m.totals.loopChars).toBe(base.totals.loopChars);
+    expect(m.totals.recall).toEqual(base.totals.recall);
   });
 });
 

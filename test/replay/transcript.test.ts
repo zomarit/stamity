@@ -325,6 +325,20 @@ describe("ledgerWrite — both shapes", () => {
     }
   });
 
+  // build/253: the fixture installs the CLI with no PATH entry, so an orchestrator may call it by a path.
+  it.each([
+    "./node_modules/.bin/stamity ledger append --run r --phase build --source reviewer --report .stamity/runs/r/reports/u1-p1-reviewer-r1.md",
+    "/tmp/fx/node_modules/.bin/stamity ledger close --run r --id r/build/1 --state fixed --rationale ok",
+    "node ./node_modules/@zomarit/stamity/dist/cli.js ledger status --run r",
+    "cd fx && node dist/cli.js ledger append --run r --phase build --source fixer --stdin <<EOF\n{}\nEOF",
+  ])("(build/253) detects the ledger verb spelled by a path: %s", (command) => {
+    expect(ledgerWrite(bash(command))).toEqual({ kind: "verb", chars: command.length });
+  });
+
+  it("(build/253) reads no ledger verb in a path that only ends in stamity-something or a cli.js of another verb", () => {
+    for (const command of ["./node_modules/.bin/stamity-lint ledger append", "node dist/cli.js sync", "cat docs/stamity ledger.md"]) expect(ledgerWrite(bash(command))).toBeNull();
+  });
+
   it("detects an echo redirect, a python body and a Write/Edit on the ledger", () => {
     const echo = `echo '{"id":"r/prove/2"}' >> .stamity/runs/r/ledger.jsonl`;
     expect(ledgerWrite(bash(echo))).toEqual({ kind: "echo", chars: echo.length });

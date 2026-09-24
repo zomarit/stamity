@@ -14,7 +14,10 @@
 //   - decoy-flags and approved-unfixed compare per-scored-run rates, so a shape at 5 runs meets
 //     one at 3 on equal terms; recall rates are scaled to `recallOpportunities` with both
 //     denominators printed; verdict-rounds compares median rounds per pass;
-//   - a security seed the implementer removed counts as found (r8a's `securityHeld`).
+//   - a security seed the implementer removed counts as found (r8a's `securityHeld`);
+//   - the ambient lists (§3, build/250): a scored run whose lists differ from its shape's pilot is
+//     an invalid run, counted and replaced like any other; a shape given no pilot cannot be
+//     checked, so every row it feeds is NOT-EVALUATED and the merge gate fails.
 
 import { PASS_IDS } from './fixture.mjs'
 import { MAX_REPLACEMENTS_PER_SHAPE, ROW_IDS, median, securityHeld, validateSummary } from './score.mjs'
@@ -102,6 +105,25 @@ function sampleOf(shape, runs, t) {
     throw new Error(`${shape}: ${valid.length} valid scored runs, the sample is ${required} (§10): a scored run beyond the sample is not read, so none is chosen`)
   }
   return { shape, runs: valid, invalid, required, spread, variance, exhausted }
+}
+
+/** The five ambient lists of a summary, one comparable string each (`measure.mjs` sorts every list). */
+const ambientOf = (s) => s.client?.ambient ?? null
+const ambientKeys = (a, b) => [...new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])].toSorted()
+
+/**
+ * §3: each scored run of a shape against that shape's pilot. A run whose lists differ gains an
+ * `invalid` reason naming the lists, so the §10 sample counts it as a replaced run.
+ */
+function heldToPilot(shape, runs, pilot) {
+  if (pilot == null) return runs
+  const want = ambientOf(pilot)
+  return runs.map((s) => {
+    const got = ambientOf(s)
+    const differ = want === null || got === null ? ['every list'] : ambientKeys(want, got).filter((k) => JSON.stringify(want[k] ?? null) !== JSON.stringify(got[k] ?? null))
+    if (differ.length === 0) return s
+    return { ...s, invalid: [...s.invalid, `its ambient lists (§3) differ from the ${shape} pilot ${pilot.runId}: ${differ.join(', ')}`] }
+  })
 }
 
 // ---------- rows ----------
@@ -208,11 +230,25 @@ function loopRow(b, c, t) {
   }
 }
 
+/** A decimal threshold as the exact fraction its digits spell, `[numerator, denominator]` in BigInt. */
+function fractionOf(value) {
+  const m = String(value).match(/^(\d+)(?:\.(\d+))?$/)
+  if (!m) throw new Error(`a threshold ${value} is not a plain non-negative decimal`)
+  const digits = m[2] ?? ''
+  return [BigInt(m[1] + digits), 10n ** BigInt(digits.length)]
+}
+
+/** A shape's sub-agent tokens in whole tokens: each run's per-pass mean times the six passes is its total. */
+const wholeTokens = (runs) => runs.reduce((a, s) => a + BigInt(Math.round(s.totals.subagentTokensPerPass * PASS_IDS.length)), 0n)
+
 function tokensRow(b, c, t) {
   const mb = mean(b.runs.map((s) => s.totals.subagentTokensPerPass))
   const mc = mean(c.runs.map((s) => s.totals.subagentTokensPerPass))
+  // build/270: Σ changed ÷ (6·nc) ≤ num/den × Σ baseline ÷ (6·nb), multiplied through, exact in integers.
+  const [num, den] = fractionOf(t.subagentTokensRatioMax)
+  const holds = wholeTokens(c.runs) * BigInt(b.runs.length) * den <= num * wholeTokens(b.runs) * BigInt(c.runs.length)
   return {
-    verdict: mc <= t.subagentTokensRatioMax * mb ? 'PASS' : 'FAIL',
+    verdict: holds ? 'PASS' : 'FAIL',
     baseline: `mean ${fmt(mb)} per pass over ${b.runs.length} run(s)`,
     changed: `mean ${fmt(mc)} per pass over ${c.runs.length} run(s) = ${fmt(mb === 0 ? NaN : mc / mb, 3)} × the baseline mean`,
   }
@@ -258,14 +294,21 @@ export function compare(baseline, changed, thresholds, pilots = {}) {
   const t = thresholds
   const p = pilots ?? {}
   const all = checkInputs({ baseline, changed }, p)
-  const samples = { baseline: sampleOf('baseline', baseline, t), changed: sampleOf('changed', changed, t) }
+  const samples = {
+    baseline: sampleOf('baseline', heldToPilot('baseline', baseline, p.baseline), t),
+    changed: sampleOf('changed', heldToPilot('changed', changed, p.changed), t),
+  }
   const ruleOf = rules(t)
   const rows = ROW_IDS.map((id) => {
     const rule = ruleOf[id]
     if (id === 'eval-set-floors') return { id, rule, baseline: 'not measured by the replay', changed: 'not measured by the replay', verdict: 'CARRIED', reason: 'carried to session 2' }
     const spent = FED_BY[id].map((shape) => samples[shape]).filter((x) => x.exhausted)
-    if (spent.length > 0) {
-      const reason = spent.map((x) => `${x.shape}: ${x.invalid.length} invalid runs, over the ${MAX_REPLACEMENTS_PER_SHAPE} replacements §10 allows per shape`).join('; ')
+    const unchecked = FED_BY[id].filter((shape) => p[shape] == null)
+    if (spent.length > 0 || unchecked.length > 0) {
+      const reason = [
+        ...spent.map((x) => `${x.shape}: ${x.invalid.length} invalid runs, over the ${MAX_REPLACEMENTS_PER_SHAPE} replacements §10 allows per shape`),
+        ...unchecked.map((shape) => `no ${shape} pilot supplied: its scored runs' ambient lists (§3) cannot be checked`),
+      ].join('; ')
       return { id, rule, baseline: '—', changed: '—', verdict: 'NOT-EVALUATED', reason }
     }
     return Object.assign({ id, rule }, COMPUTE[id](samples.baseline, samples.changed, t))

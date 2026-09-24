@@ -84,7 +84,10 @@ function summary(shape: "baseline" | "changed", n: number, over: Partial<Summary
     protocol: { path: "evals/replay/REPLAY-v1.md", sha256: PROTOCOL_SHA, commit: COMMIT },
     instrument: { commit: COMMIT, files: { "scripts/replay/measure.mjs": "b".repeat(64) } },
     cli: { commit: "c".repeat(40), version: baseline ? "1.9.1" : "1.10.0-rc", tarballSha256: "d".repeat(64) },
-    client: { version: "2.1.280", binarySha256: "e".repeat(64), orchestratorModel: "claude-opus-5-5", resolvedModels: ["claude-opus-5-5"] },
+    client: {
+      version: "2.1.280", binarySha256: "e".repeat(64), orchestratorModel: "claude-opus-5-5", resolvedModels: ["claude-opus-5-5"], initVersion: "2.1.280",
+      ambient: { skills: ["st-work"], agents: [], slashCommands: ["st-work"], plugins: [], mcpServers: [] },
+    },
     fixture: { baseCommit: "f".repeat(40), planSha256: "1".repeat(64), depsSha256: "2".repeat(64) },
     mechanism: "interrupt",
     timing: { activeMs: 7_200_000, pausedMs: 0, capacityHolds: 0, nudges: 0, restarts: 0 },
@@ -121,7 +124,18 @@ const perPass = (s: Summary, f: (p: Pass, k: number) => Partial<Pass>): Summary 
 const verdictOf = (s: Summary, f: (p: Pass, k: number) => Partial<Pass["verdict"]>): Summary => perPass(s, (p, k) => ({ verdict: { ...p.verdict, ...f(p, k) } }));
 const invalid = (s: Summary): Summary => ({ ...s, invalid: ['run.json end.reason is "stalled", not "complete"'] });
 
-const run = (baseline: Summary[], changed: Summary[], pilots?: Record<string, Summary>): Result => compare(baseline, changed, T, pilots) as Result;
+/** One valid pilot per shape, with the ambient lists every built scored run carries (§3). */
+const pilotsOf = (): Record<string, Summary> => ({
+  baseline: { ...summary("baseline", 1), runId: "2026-09-24-replay-1", kind: "pilot" },
+  changed: { ...summary("changed", 2), runId: "2026-09-24-replay-2", kind: "pilot" },
+});
+/** `compare` with both pilots unless the case names its own (`{}` for none). */
+const run = (baseline: Summary[], changed: Summary[], pilots: Record<string, Summary> = pilotsOf()): Result => compare(baseline, changed, T, pilots) as Result;
+/** `s` with the ambient list `key` replaced (§3: a run whose lists differ from its shape's pilot is invalid). */
+const ambient = (s: Summary, key: string, list: string[]): Summary => {
+  const client = s["client"] as { ambient: Record<string, string[]> };
+  return { ...s, client: { ...client, ambient: { ...client.ambient, [key]: list } } };
+};
 const row = (r: Result, id: string): Row => r.rows.find((x) => x.id === id)!;
 const verdicts = (r: Result): Record<string, string> => Object.fromEntries(r.rows.map((x) => [x.id, x.verdict]));
 const ALL_PASS = {
@@ -375,6 +389,46 @@ describe("compare — samples (§10) and refusals", () => {
   });
 });
 
+describe("compare — the whole-branch review's fixes", () => {
+  it("(build/250) reads a scored run whose ambient lists differ from its shape's pilot as an invalid run: counted, replaced, never scored", () => {
+    const c = changed3();
+    const drifted = ambient(c[0]!, "skills", ["st-work", "a-new-skill"]);
+    const r = run(base3(), [drifted, ...shape("changed", 3, 4)]);
+    expect(r.sampleCount.invalid.changed).toBe(1);
+    expect(r.mergeGate).toBe("PASS");
+    expect(renderComparison(r, T)).toMatch(/Samples, changed .*invalid: `2026-09-26-replay-1`/);
+    expect(() => run(base3(), [drifted, c[1]!, c[2]!])).toThrow(/changed: 2 valid scored run\(s\), 3 required .*1 of 2 replacement/);
+    // Three drifted baseline runs are over the replacements: every row the baseline feeds is not evaluated.
+    const spent = run([...base3().map((s) => ambient(s, "mcpServers", ["github"])), ...shape("baseline", 2, 4)], changed3());
+    expect(row(spent, "pooled-recall")).toEqual(expect.objectContaining({ verdict: "NOT-EVALUATED", reason: expect.stringMatching(/baseline: 3 invalid runs/) }));
+  });
+
+  it("(build/250) leaves every row a shape feeds NOT-EVALUATED when that shape's pilot is not supplied, since its lists cannot be checked", () => {
+    const r = run(base3(), changed3(), { changed: pilotsOf()["changed"]! });
+    expect(row(r, "pooled-recall")).toEqual(expect.objectContaining({ verdict: "NOT-EVALUATED", reason: "no baseline pilot supplied: its scored runs' ambient lists (§3) cannot be checked" }));
+    expect(row(r, "compaction-loss").verdict).toBe("PASS");
+    expect(r.mergeGate).toBe("FAIL");
+    expect(Object.values(verdicts(run(base3(), changed3(), {}))).filter((v) => v === "NOT-EVALUATED")).toHaveLength(9);
+  });
+
+  it("(build/270) compares the sub-agent-token row exactly: a changed mean at exactly 1.2 × the baseline mean passes", () => {
+    // 35 tokens per run ÷ 6 against 42 ÷ 6: 7 ≤ 1.2 × 5.8333… holds exactly, while the floating-point product falls short of 7.
+    const at = (tokens: number): string => row(run(base3().map((s) => totals(s, { subagentTokensPerPass: 35 / 6 })), changed3().map((s) => totals(s, { subagentTokensPerPass: tokens / 6 }))), "subagent-tokens").verdict;
+    expect(at(42)).toBe("PASS");
+    expect(at(43)).toBe("FAIL");
+  });
+
+  it("(build/272) the committed-comparison reader takes only the run directories that carry a summary.json", () => {
+    const dir = scratch();
+    const s = summary("baseline", 1);
+    mkdirSync(join(dir, s.runId));
+    writeFileSync(join(dir, s.runId, "summary.json"), JSON.stringify(s));
+    mkdirSync(join(dir, "2026-09-25-replay-9"));
+    writeFileSync(join(dir, "README.md"), "The replay's run folders.\n");
+    expect(committedSummaries(dir).map((x) => x.runId)).toEqual([s.runId]);
+  });
+});
+
 describe("renderComparison", () => {
   it("heads the pilots, the mechanism, the instrument commit and the protocol sha, then the ten rows, the merge gate, the closing line and Not done", () => {
     const pilots = { baseline: { ...summary("baseline", 1), runId: "2026-09-24-replay-1", kind: "pilot" }, changed: { ...summary("changed", 2), runId: "2026-09-24-replay-2", kind: "pilot" } };
@@ -392,7 +446,8 @@ describe("renderComparison", () => {
     const md = renderComparison(run(base3(), none), T) as string;
     expect(md).toContain("Merge gate: FAIL");
     expect(md).toMatch(/- `compaction-loss`: NOT-EVALUATED — 0 valid changed sample\(s\), at least 1 required/);
-    expect(md).toContain("Pilots (not scored): none supplied");
+    // With no pilot, no row is evaluated (build/250), so the head's pilot line is read on a run of its own.
+    expect(renderComparison(run(base3(), changed3(), {}), T)).toContain("Pilots (not scored): none supplied");
   });
 });
 
@@ -411,7 +466,7 @@ afterEach(() => {
 const score = (args: string[]): { status: number | null; stdout: string; stderr: string } => spawnSync(process.execPath, [SCORE_MJS, ...args], { encoding: "utf8" });
 
 /** Each summary written to `<scratch>/<runId>.json`, then `compare` into `<scratch>/out/COMPARISON-v1.md`. */
-function compareCli(baseline: Summary[], changed: Summary[], extra: string[] = []): { result: ReturnType<typeof score>; out: string; args: string[] } {
+function compareCli(baseline: Summary[], changed: Summary[], extra: string[] = [], pilots: Record<string, Summary> = extra.some((a) => a.startsWith("--pilot-")) ? {} : pilotsOf()): { result: ReturnType<typeof score>; out: string; args: string[] } {
   const dir = scratch();
   const write = (s: Summary): string => {
     const path = join(dir, `${s.runId}.json`);
@@ -420,7 +475,8 @@ function compareCli(baseline: Summary[], changed: Summary[], extra: string[] = [
   };
   const out = join(dir, "out", "COMPARISON-v1.md");
   mkdirSync(join(dir, "out"));
-  const args = ["compare", ...baseline.flatMap((s) => ["--baseline", write(s)]), ...changed.flatMap((s) => ["--changed", write(s)]), "--protocol", PROTOCOL, "--out", out, ...extra];
+  const pilotArgs = Object.entries(pilots).flatMap(([which, s]) => [`--pilot-${which}`, write(s)]);
+  const args = ["compare", ...baseline.flatMap((s) => ["--baseline", write(s)]), ...changed.flatMap((s) => ["--changed", write(s)]), ...pilotArgs, "--protocol", PROTOCOL, "--out", out, ...extra];
   return { result: score(args), out, args };
 }
 
@@ -475,7 +531,7 @@ describe("score.mjs compare", () => {
     expect(home.result.stderr).toMatch(/nothing written: COMPARISON-v1\.md carries "\/Users\/"/);
     expect(existsSync(home.out)).toBe(false);
     const leaky = (s: Summary): Summary => Object.assign(s, { instrument: { ...s.instrument, commit: `the ${PRIVATE_NAME} head` } });
-    const leak = compareCli(base3().map(leaky), changed3().map(leaky));
+    const leak = compareCli(base3().map(leaky), changed3().map(leaky), [], Object.fromEntries(Object.entries(pilotsOf()).map(([k, s]) => [k, leaky(s)])));
     expect(leak.result.status).toBe(1);
     expect(leak.result.stderr).toMatch(/nothing written: COMPARISON-v1\.md matches the leak gate's rule private-repo-name/);
     expect(leak.result.stderr).not.toContain(PRIVATE_NAME);
@@ -493,12 +549,21 @@ describe("score.mjs compare", () => {
 const COMMITTED = join(REPO, "evals/replay/COMPARISON-v1.md");
 const RUNS = join(REPO, "evals/replay/runs");
 
+/** The summaries of a runs folder: only its directories that carry a summary.json (build/272). */
+function committedSummaries(dir: string): Summary[] {
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && existsSync(join(dir, e.name, "summary.json")))
+    .map((e) => JSON.parse(readFileSync(join(dir, e.name, "summary.json"), "utf8")) as Summary);
+}
+
 describe("the committed COMPARISON-v1.md", () => {
   // Written by r11b; until then there is nothing to re-derive.
   it.skipIf(!existsSync(COMMITTED))("its merge-gate line equals compare() re-derived from the committed summaries", () => {
-    const summaries = readdirSync(RUNS).map((d) => JSON.parse(readFileSync(join(RUNS, d, "summary.json"), "utf8")) as Summary);
+    const summaries = committedSummaries(RUNS);
     const scored = (which: string): Summary[] => summaries.filter((s) => s.shape === which && s.kind === "scored");
-    const derived = run(scored("baseline"), scored("changed"));
+    // The valid pilot of each shape, which the ambient-list check (§3, build/250) reads.
+    const pilots = Object.fromEntries(["baseline", "changed"].flatMap((which) => summaries.filter((s) => s.shape === which && s.kind === "pilot" && s.invalid.length === 0).slice(0, 1).map((s) => [which, s])));
+    const derived = run(scored("baseline"), scored("changed"), pilots);
     expect(readFileSync(COMMITTED, "utf8")).toMatch(new RegExp(`\\nMerge gate: ${derived.mergeGate}\\n`));
   });
 });

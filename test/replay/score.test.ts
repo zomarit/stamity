@@ -198,7 +198,7 @@ function capture(runOver: Record<string, unknown> = {}): Built {
   const runJson = provenance(fixture, runOver);
   const layout = writeCapture(dir, {
     run: runJson,
-    stdout: [JSON.stringify({ type: "system", subtype: "init", model: "claude-opus-5-5", cwd: fixture })],
+    stdout: [JSON.stringify({ type: "system", subtype: "init", model: "claude-opus-5-5", claude_code_version: "2.1.280", skills: ["st-work"], agents: [], slash_commands: ["st-work"], plugins: [], mcp_servers: [], cwd: fixture })],
     transcript,
     subagents: agents.map(subagentOf),
     snapshots: { "u1-p1": { main: SNAPSHOT } },
@@ -352,7 +352,7 @@ const PINS: { rule: string; protocol: string[]; code: string[] }[] = [
     code: ["if (last === 'approve') return rounds <= 1 ? 'approve' : 'approve-after-fixes'", "if (last === 'request-changes' || last === 'blocked') return 'blocked'"],
   },
   { rule: "verdicts: an erroring oracle is unfixed", protocol: ["an oracle that errors counts as unfixed"], code: ["approvedWithSeedUnfixed: approved && ownSeeds.some((s) => s.oracle !== 'pass')"] },
-  { rule: "invalid run", protocol: ["`seeds.json` or `__oracle__`) in any tool input; or a run whose end reason is not `complete`"], code: ["const ALWAYS_FORBIDDEN = ['seeds.json', '__oracle__']", "if (endReason !== 'complete')"] },
+  { rule: "invalid run", protocol: ["`seeds.json` or `__oracle__`) in any tool input; or a run whose end reason is not `complete`"], code: ["const ALWAYS_FORBIDDEN = ['seeds.json', '__oracle__', 'reference-fixes']", "if (endReason !== 'complete')"] },
 ];
 
 describe("REPLAY-v1 §8 pinned against measure.mjs (build/5)", () => {
@@ -452,6 +452,25 @@ describe("summarize — the measurement into stamity/replay-summary/v1", () => {
         expect.stringMatching(/^invalid run — run\.json end\.reason is "stalled".*replace it/),
       ]),
     );
+  });
+
+  it("(build/250) carries the init event's client version and ambient lists into the client block", async () => {
+    const { m, runJson } = await measured();
+    const s = summarize(m, runJson, PROTOCOL_SHA) as Summary & { client: Record<string, unknown> };
+    expect(s.client).toEqual(expect.objectContaining({ version: "2.1.280", initVersion: "2.1.280", ambient: { skills: ["st-work"], agents: [], slashCommands: ["st-work"], plugins: [], mcpServers: [] } }));
+    expect(validateSummary(s)).toEqual([]);
+    expect(validateSummary({ ...s, client: { ...s.client, ambient: { skills: ["st-work"] } } })).toContain("client is not {version, binarySha256, orchestratorModel, resolvedModels, initVersion, ambient}");
+    expect(validateSummary({ ...s, client: { ...s.client, initVersion: undefined } })).toContain("client is not {version, binarySha256, orchestratorModel, resolvedModels, initVersion, ambient}");
+    expect(() => summarize({ ...m, client: undefined }, runJson, PROTOCOL_SHA)).toThrow(/measurement: client is not \{version, ambient\}/);
+  });
+
+  it("(build/257) names a run.json with no fixture.root in notDone", async () => {
+    const { m, runJson } = await measured();
+    const s = summarize(m, runJson, PROTOCOL_SHA) as Summary;
+    expect(s.notDone).toEqual([]);
+    const fixture = runJson["fixture"] as Record<string, unknown>;
+    const bare = summarize(m, { ...runJson, fixture: { ...fixture, root: undefined } }, PROTOCOL_SHA) as Summary;
+    expect(bare.notDone).toEqual(["run.json records no fixture.root, so no fixture path is redacted from the excerpts and notes"]);
   });
 
   it("refuses a malformed pass row, seed row, compaction sample or whole-branch row instead of coercing it (build/232)", async () => {
@@ -777,6 +796,14 @@ describe("score.mjs run and check", () => {
     expect(readdirSync(parent)).toEqual([RUN_ID]);
     expect(() => writeRunFolder(outDir, [["summary.json", "{}\n"]])).toThrow();
     expect(readdirSync(parent)).toEqual([RUN_ID]);
+  });
+
+  it("(build/256) check names a leftover staging folder of an interrupted run as such", async () => {
+    const { runsDir } = await runInto();
+    mkdirSync(join(runsDir, `.${RUN_ID}.partial-Ab12Cd`));
+    expect(checkRuns(runsDir, PROTOCOL).problems).toEqual([
+      `.${RUN_ID}.partial-Ab12Cd: a leftover staging folder of an interrupted score run for ${RUN_ID} — remove it`,
+    ]);
   });
 
   it("check refuses a folder with no run in it", () => {

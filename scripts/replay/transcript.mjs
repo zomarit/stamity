@@ -189,8 +189,12 @@ const heredocTarget = (p) => {
 /** `bashClass` classes with a read or search head verb: a `"phase"` beside the ledger there is a read, not a write. */
 const READS_OR_SEARCHES = new Set(['read', 'search', 'rs', 'mixed'])
 
-/** The changed shape's one ledger writer, in the three spellings an orchestrator types. */
-const LEDGER_VERB = /(?:^|[\s;&(])(?:npx\s+(?:--yes\s+)?)?(?:@zomarit\/stamity|stamity|st)\s+ledger\s+(?:append|close|status)\b/
+/**
+ * The changed shape's one ledger writer, in every spelling an orchestrator types: the bare
+ * `stamity` or `st`, through `npx`, by a path (`./node_modules/.bin/stamity`, any `…/stamity`: the
+ * fixture puts the CLI on no PATH, build/253), and `node …/cli.js`.
+ */
+const LEDGER_VERB = /(?:^|[\s;&(])(?:(?:npx\s+(?:--yes\s+)?)?(?:@zomarit\/stamity|(?:[^\s;&|()'"`]*\/)?stamity|st)|node\s+(?:[^\s;&|()'"`]*\/)?cli\.js)\s+ledger\s+(?:append|close|status)\b/
 
 /**
  * The ledger kinds REPLAY-v1 §8 names, and so the only ones the loop-characters term (c) sums: a

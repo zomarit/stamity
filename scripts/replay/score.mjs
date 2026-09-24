@@ -19,7 +19,7 @@ import { sha256 } from '../qa/bind.mjs'
 import { redactPaths, spellingsOf } from '../qa/redact.mjs'
 import { PASS_IDS } from './fixture.mjs'
 import { COMPARISON_FILE, COMPARISON_PATH, compare, renderComparison } from './compare.mjs'
-import { MEASUREMENT_SCHEMA, UNATTRIBUTED_MAX } from './measure.mjs'
+import { AMBIENT_LISTS, MEASUREMENT_SCHEMA, UNATTRIBUTED_MAX } from './measure.mjs'
 
 const SELF = fileURLToPath(import.meta.url)
 const REPO_ROOT = resolve(SELF, '..', '..', '..')
@@ -30,6 +30,8 @@ const DEFAULT_PROTOCOL = 'evals/replay/REPLAY-v1.md'
 /** §11: `<date>-replay-<n>`, never `-run-<n>` (the eval set's run of record is the newest `-run-<n>`). */
 const RUN_ID = /^\d{4}-\d{2}-\d{2}-replay-\d+$/
 const SHA256 = /^[0-9a-f]{64}$/
+/** `writeRunFolder`'s staging folder, `.<run-id>.partial-<random>`, which a hard kill can leave behind (build/256). */
+const STAGING = /^\.(.+)\.partial-[^/\\]*$/
 /** The path shapes `check` refuses anywhere in a summary or a RESULTS file. */
 const FORBIDDEN_SHAPES = ['/Users/', '/home/', '/private/var/', '/var/folders/']
 /**
@@ -225,6 +227,7 @@ function checkMeasurement(m) {
   for (const key of TOTALS_KEYS) if (!(key in m.totals)) throw new Error(`measurement: totals.${key} is missing`)
   for (const key of ['invalid', 'notes', 'compactionSamples', 'adjudication']) if (!Array.isArray(m[key])) throw new Error(`measurement: ${key} is not a list`)
   if (!isObject(m.models) || !isObject(m.wholeBranch)) throw new Error('measurement: models or wholeBranch is missing')
+  if (!isObject(m.client) || !isStrOrNull(m.client.version) || !isAmbient(m.client.ambient)) throw new Error('measurement: client is not {version, ambient}')
   const problems = rowProblems(m)
   if (problems.length > 0) throw new Error(`measurement: ${problems.join('; ')}`)
 }
@@ -233,6 +236,8 @@ const isNum = (v) => typeof v === 'number' && Number.isFinite(v)
 const isBool = (v) => typeof v === 'boolean'
 const isStrOrNull = (v) => v === null || typeof v === 'string'
 const isOptStrOrNull = (v) => v === undefined || isStrOrNull(v)
+/** §3's five ambient lists (build/250): null with no init event, else each list of names, or null when the event lacks it. */
+const isAmbient = (v) => v === null || (isObject(v) && Object.keys(AMBIENT_LISTS).every((k) => v[k] === null || (Array.isArray(v[k]) && v[k].every((x) => typeof x === 'string'))))
 
 /**
  * Every malformed row of the measurement's passes, seeds, compaction samples, whole-branch row and
@@ -327,6 +332,7 @@ export function summarize(measurement, runJson, protocolSha, { protocolPath = DE
   for (const [group, fields] of Object.entries(prov)) for (const [field, value] of Object.entries(fields)) if (value === null) notDone.push(`run.json records no ${group}.${field}`)
   if (Object.keys(files).length === 0) notDone.push('run.json records no instrument.files')
   if (m.models.init == null) notDone.push('the init event names no orchestrator model')
+  if (!isObject(run.fixture) || str(run.fixture.root) === null) notDone.push('run.json records no fixture.root, so no fixture path is redacted from the excerpts and notes')
 
   const summary = {
     schema: SUMMARY_SCHEMA,
@@ -336,7 +342,7 @@ export function summarize(measurement, runJson, protocolSha, { protocolPath = DE
     protocol: { path: protocolPath, sha256: protocolSha, commit: str(instrument.commit) },
     instrument: { commit: str(instrument.commit), files },
     cli: prov.cli,
-    client: { ...prov.client, orchestratorModel: m.models.init ?? null, resolvedModels: [...resolvedModels].toSorted() },
+    client: { ...prov.client, orchestratorModel: m.models.init ?? null, resolvedModels: [...resolvedModels].toSorted(), initVersion: m.client.version, ambient: clone(m.client.ambient) },
     fixture: prov.fixture,
     mechanism: m.mechanism ?? null,
     timing: prov.timing,
@@ -390,7 +396,10 @@ export function validateSummary(s) {
   need(isObject(s.protocol) && typeof s.protocol.path === 'string' && SHA256.test(s.protocol.sha256 ?? '') && typeof s.protocol.commit === 'string', 'protocol is not {path, sha256, commit}')
   need(isObject(s.instrument) && typeof s.instrument.commit === 'string' && s.instrument.commit !== '' && isObject(s.instrument.files) && Object.values(s.instrument.files).every((v) => typeof v === 'string'), 'instrument is not {commit, files}')
   need(isObject(s.cli) && ['commit', 'version', 'tarballSha256'].every((k) => strOrNull(s.cli[k])), 'cli is not {commit, version, tarballSha256}')
-  need(isObject(s.client) && ['version', 'binarySha256', 'orchestratorModel'].every((k) => strOrNull(s.client[k])) && Array.isArray(s.client.resolvedModels), 'client is not {version, binarySha256, orchestratorModel, resolvedModels}')
+  need(
+    isObject(s.client) && ['version', 'binarySha256', 'orchestratorModel', 'initVersion'].every((k) => strOrNull(s.client[k])) && Array.isArray(s.client.resolvedModels) && isAmbient(s.client.ambient),
+    'client is not {version, binarySha256, orchestratorModel, resolvedModels, initVersion, ambient}',
+  )
   need(isObject(s.fixture) && ['baseCommit', 'planSha256', 'depsSha256'].every((k) => strOrNull(s.fixture[k])), 'fixture is not {baseCommit, planSha256, depsSha256}')
   need(s.mechanism === 'interrupt' || s.mechanism === 'auto-window', 'mechanism is not interrupt or auto-window')
   need(isObject(s.timing) && ['activeMs', 'pausedMs', 'capacityHolds', 'nudges', 'restarts'].every((k) => numOrNull(s.timing[k])), 'timing is not {activeMs, pausedMs, capacityHolds, nudges, restarts}')
@@ -517,7 +526,7 @@ export function renderResults(summary, thresholds, reference = []) {
     `- Protocol: REPLAY-v1 (\`${s.protocol.path}\`), sha256 \`${s.protocol.sha256}\`, read at commit \`${s.protocol.commit}\`.`,
     `- Instrument: commit \`${s.instrument.commit}\`, ${Object.keys(s.instrument.files).length} file(s) hashed.`,
     `- CLI: commit \`${s.cli.commit ?? 'unrecorded'}\`, version ${s.cli.version ?? 'unrecorded'}, tarball sha256 \`${s.cli.tarballSha256 ?? 'unrecorded'}\`.`,
-    `- Client: Claude Code ${s.client.version ?? 'unrecorded'}, binary sha256 \`${s.client.binarySha256 ?? 'unrecorded'}\`; orchestrator model \`${s.client.orchestratorModel ?? 'unrecorded'}\` (pin \`${s.models?.pin ?? 'unrecorded'}\`); models answering: ${s.client.resolvedModels.map((x) => `\`${x}\``).join(', ') || 'none recorded'}.`,
+    `- Client: Claude Code ${s.client.version ?? 'unrecorded'} (the init event reads ${s.client.initVersion ?? 'no version'}), binary sha256 \`${s.client.binarySha256 ?? 'unrecorded'}\`; orchestrator model \`${s.client.orchestratorModel ?? 'unrecorded'}\` (pin \`${s.models?.pin ?? 'unrecorded'}\`); models answering: ${s.client.resolvedModels.map((x) => `\`${x}\``).join(', ') || 'none recorded'}.`,
     `- Fixture: base commit \`${s.fixture.baseCommit ?? 'unrecorded'}\`, plan sha256 \`${s.fixture.planSha256 ?? 'unrecorded'}\`, deps sha256 \`${s.fixture.depsSha256 ?? 'unrecorded'}\`.`,
     `- Compaction mechanism (§7): \`${s.mechanism}\`.`,
     `- Timing: active ${fmt(s.timing.activeMs)} ms, paused ${fmt(s.timing.pausedMs)} ms, capacity holds ${fmt(s.timing.capacityHolds)}, nudges ${fmt(s.timing.nudges)}, restarts ${fmt(s.timing.restarts)}.`,
@@ -681,6 +690,11 @@ export function checkRuns(runsDir, protocolPath) {
   if (dirs.length === 0) return { runs: 0, problems: ['no run directory under the runs folder'], invalid }
   const commits = new Set()
   for (const name of dirs) {
+    const staging = name.match(STAGING)
+    if (staging) {
+      problems.push(`${name}: a leftover staging folder of an interrupted score run for ${staging[1]} — remove it`)
+      continue
+    }
     if (!RUN_ID.test(name)) {
       problems.push(`${name}: the folder name is not <YYYY-MM-DD>-replay-<n>`)
       continue
