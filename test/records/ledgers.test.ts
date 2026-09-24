@@ -56,6 +56,9 @@ const REQUIRED_FIELDS = [
  */
 const OPTIONAL_FIELDS = ["retired", "report", "decision_needed"] as const;
 
+/** A ledger's file name; the run folder is its path minus `/<this>`. */
+const LEDGER_SUFFIX = "ledger.jsonl";
+
 /** A report's file name: one path segment, no separator of either kind, `.md`. */
 const REPORT_NAME = /^[^/\\]+\.md$/;
 
@@ -150,7 +153,6 @@ const RETIRED_DATE = /^\d{4}-\d{2}-\d{2}\s+\S/;
  */
 const REF_PATH = /^[^\s#]+$/;
 const REF_ANCHORED = /^[^\s#]+#\S+$/;
-const LEDGER_SUFFIX = "ledger.jsonl";
 
 /** The grammar problem with a `Ref:` value, or null where it parses. */
 const refProblem = (ref: string): string | null => {
