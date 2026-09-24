@@ -179,3 +179,30 @@ checkpoint and the merge to `main` wait for the maintainer.
 - **Not done:** the QA sign-off (the maintainer's); the replay's changed pilot, scored runs and COMPARISON-v1 (hours of
   live runs, one at a time on one account); the merge of #54 (waits for both); the eval-set floors row (carried to
   session 2 by the plan).
+- 2026-09-24T05:16Z observation from the baseline pilot, for the COMPARISON's reader: the auto-window variable applies to every agent in the client session, so the reviewers and lenses compact their own contexts at the same window (three PreCompact markers between 05:14 and 05:16Z while the lenses and the reviewer read the change set, with the stream carrying on). Both shapes run under the same variable, so the effect is symmetric by construction. The instrument takes its compaction samples from the main session's boundaries.
+- 2026-09-24T05:23Z CI round-trip 6 at the close commit 18b88803 green on every leg (runs 35958672953 and 35958672942): check on the floor, LTS and Windows (13 min 33 s), both aggregators, the docs site. The branch head carries the candidate bf5a8d3f plus the learnings and the run's state files only.
+- 2026-09-24T05:47Z r11a, the baseline pilot `2026-09-24-replay-1` (1.9.1 shape, auto-window): valid and complete in 53 min
+  active. The end condition closed on the ledger, one confirming nudge held it, and no capacity hold was needed.
+  - Measurements: five automatic compactions, one session id, 22 sub-agents, the oracles executed `ok` with 12 of 12
+    passing (every seeded defect fixed in the final tree), and loop characters 24,703 per pass. Exported to
+    `evals/replay/runs/2026-09-24-replay-1/`: `score.mjs check` exits 0, `test/replay` passes (338), and the leak gate
+    exits 0.
+  - Its pilot checks fail, and the cause is the protocol's pass-scoped machinery, not the seeds. The baseline builds
+    all six passes and then reviews them in one round, with attribution `multi` and lenses that carry no pass id, as
+    the canary showed too. As a result:
+    - no pass-scoped verdict dispatch fires, so no per-pass snapshot is taken;
+    - every seed's presence at review is unknown, so each stays in the recall denominator as not found, and recall
+      reads 3/12 = 0.25, below §11's pilot band of 0.5–0.95;
+    - the verdict class and rounds read `none` and 0 on every pass;
+    - 55.7% of the loop characters are unattributed, so the per-pass split is unreliable.
+  - The baseline's research phase also audited the contrib patches before the build, and the final tree fixed all
+    twelve defects. So the seeds may never have reached review, and nothing at review time can show whether they did.
+  - The r11a default, re-authoring the seeds as a new v1 commit before any scored run, answers a seed-difficulty cause
+    that this evidence contradicts. It is not executed, and no scored run starts.
+  - The changed pilot still runs as r11a's second half, so the maintainer decides with both shapes' pilot checks in
+    hand. The decision is recorded for them as the replay's open question. The options:
+    - the driver snapshots every covered pass at a multi-pass verdict dispatch, and a REPLAY-v2 reads the verdict rows
+      per run;
+    - one `/st-work` invocation per pass;
+    - seeds the research phase cannot pre-empt;
+    - or the replay leaves the merge gate.
