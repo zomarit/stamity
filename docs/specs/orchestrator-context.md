@@ -12,8 +12,9 @@ ledger. A dispatch points at a plan unit instead of restating it. After a compac
 recomputed from disk re-grounds the run. The requirements are merged to `main` for 1.10.0 and
 are not released: `status: design` records that state, because the spec-status gate admits only
 `design`, `shipped` and `shipped-with-<x.y.z>` (amendment A15), and the 1.10.0 release close
-moves it to `shipped-with-1.10.0`. No requirement here merged before the replay's quality floor
-held (REQ-CTX-015).
+moves it to `shipped-with-1.10.0`. The requirements merge on the QA sign-off, the gate of record
+and CI; none ships before the replay's quality floor holds (REQ-CTX-015; D10, amended
+2026-09-24).
 
 Contract numbers (C1–C12) and decision numbers (D1–D11) refer to the shared-contract and
 decision sections of `docs/plans/009-orchestrator-context-economy-01.md`. That plan carries the byte shapes. Amendment
@@ -55,10 +56,10 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 
 ## Invariants
 
-1. **The quality floor binds every merge.** No requirement below reaches `main` unless the
-   replay's committed comparison shows the C12 floor held for its proposal (REQ-CTX-015). A
-   proposal that fails is reworked and re-measured, or dropped. When dropped, its ids are
-   retired here with a pointer to the failing result.
+1. **The quality floor binds the release.** No requirement below ships in 1.10.0 unless the
+   replay's committed comparison shows the C12 floor held for its proposal (REQ-CTX-015; D10,
+   amended 2026-09-24). A proposal that fails is reworked and re-measured, or dropped. When
+   dropped, its ids are retired here with a pointer to the failing result.
 2. **Four-client parity, or a declared degradation per client.** The table below is the
    declaration. A cell that is not `yes` is a degradation, stated here rather than discovered.
 3. **Never digested, never cut (C4).** The following are returned in full:
@@ -99,8 +100,8 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 
 ## Requirements
 
-Each requirement is listed with the proposal it belongs to. REQ-CTX-015 decides merges per
-proposal:
+Each requirement is listed with the proposal it belongs to. REQ-CTX-015 decides, per
+proposal, what the 1.10.0 release ships:
 
 - P1: 001–004
 - P2: 005–007
@@ -379,7 +380,7 @@ The body stays within its 500-line cap (`test/corpus/commands/work.test.ts:66`).
 
 Implements D7.
 
-### REQ-CTX-015 — The replay, its floor, and the merge gate
+### REQ-CTX-015 — The replay, its floor, and the release gate
 
 A replay compares the changed shape with the 1.9.1 baseline:
 
@@ -400,7 +401,14 @@ A replay compares the changed shape with the 1.9.1 baseline:
   baseline shape's mean (amendment A8). Decoy flags and passes approved with a seed unfixed
   compare per-scored-run rates, because the shapes may run 3 or 5 scored runs
   (`scripts/replay/compare.mjs:170-175`).
-- **Merge gate.** The package merges only after the floor holds.
+- **Merge.** The package merges on the QA sign-off, the gate of record and CI (D10, amended
+  2026-09-24; it read "the package merges only after the floor holds").
+- **Replay gate.** The 1.10.0 release proceeds only after the floor holds on a fixture where
+  seeds reach review (REPLAY-v2, session 2). v1's fixture lets the orchestrator's pre-read catch
+  every seed before review, so its two pilots stay in `evals/replay/runs/` as unscored evidence
+  and `evals/replay/REPLAY-v1.md` stays frozen. The COMPARISON's literal `Merge gate:` line keeps
+  its name, because the frozen instrument renders it (`scripts/replay/compare.mjs:380`), and it
+  now gates the release.
 - **Release gate.** Every eval-set floor holds at the 1.10.0 release run.
 
 Implements C12 (D9, D10).
@@ -838,9 +846,9 @@ eye.
   pilot (amendment A8).
 - GIVEN the committed replay results WHEN read THEN they carry one `not-run` row each for
   Cursor, GitHub Copilot CLI and Codex, each with its reason.
-- GIVEN the package's pull request WHEN it merges to `main` THEN its merge commit descends from
-  a committed comparison that shows the floor criteria above (the fourth to the tenth) holding
-  for every proposal kept, and every dropped proposal's ids read retired in this spec with a
-  pointer to the failing result.
+- GIVEN the 1.10.0 release WHEN the `v1.10.0` tag is created THEN the tagged commit descends
+  from a committed REPLAY-v2 comparison that shows the floor criteria above (the fourth to the
+  tenth) holding for every proposal kept, and every dropped proposal's ids read retired in this
+  spec with a pointer to the failing result (D10, amended 2026-09-24).
 - GIVEN the 1.10.0 eval-set run WHEN it is scored THEN every eval-set floor holds before the
   `v1.10.0` tag is created.

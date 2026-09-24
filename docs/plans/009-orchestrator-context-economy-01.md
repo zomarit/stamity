@@ -14,13 +14,14 @@ the `/st-work` body.
 
 ## Context
 
-The plan is split in three self-contained files: this one (research, decisions, contracts, the spec delta and the eight engine units), `docs/plans/009-orchestrator-context-economy-02.md` (the corpus, the eval cases and the docs, nine units) and `docs/plans/009-orchestrator-context-economy-03.md` (the replay and its merge gate, fourteen units). Each carries the shared contracts word for word.
+The plan is split in three self-contained files: this one (research, decisions, contracts, the spec delta and the eight engine units), `docs/plans/009-orchestrator-context-economy-02.md` (the corpus, the eval cases and the docs, nine units) and `docs/plans/009-orchestrator-context-economy-03.md` (the replay and its gate, a release gate since D10's amendment of 2026-09-24, fourteen units). Each carries the shared contracts word for word.
 
 Long `/st-work` runs fill the orchestrator's context window until the client compacts it, and a compaction can drop a
 finding that was received but not yet ledgered. A consumer run's brief measured the shape and proposed nine changes
 (P1–P9); this plan researched them against this repository's own runs, the vendors' current practice and the four
 clients' capabilities, and the maintainer decided on 2026-09-23 to build P1, P2, P3 (per-id re-reviews only), P4, P7,
-P8 and P9, to decline P5, and to prove "no quality loss" with an old-vs-new replay before the merge. P6 (the relative
+P8 and P9, to decline P5, and to prove "no quality loss" with an old-vs-new replay before the merge (before the
+1.10.0 release since D10's amendment of 2026-09-24). P6 (the relative
 hook path) shipped in plan 008 session 3. Out of scope: P5 (inbox row), new eval-set cases (inbox row), the enterprise
 work and the 1.10.0 cut (Package 16's second session). This package merges to `main` without a release.
 
@@ -142,7 +143,7 @@ pass: 218.2K. Not addressed by any proposal: thinking (20.3 % of the fill), file
 | D7 | 20:30 | P8: reorder the `/st-work` body so what a resumed run needs precedes the re-attachment cut; pinned by a test |
 | D8 | 20:31 | P9: a capacity rung and a no-downgrade rule for verdict roles in the `/st-work` body, with two model-ladder requirements |
 | D9 | 20:34 | The quality floor below, declared before any run |
-| D10 | 20:41 | Measure before merge: the replay is built and run in this session on a fresh-limits account (the maintainer re-logs in; the replay's clean client folder gets one login); the package merges only after the floor holds |
+| D10 | 20:41 | Measure before merge: the replay is built and run in this session on a fresh-limits account (the maintainer re-logs in; the replay's clean client folder gets one login); the package merges only after the floor holds. Amended 2026-09-24 by the maintainer: measure before the 1.10.0 release, not before the merge (v1's fixture cannot measure review recall; the run record's pilot entries) |
 | D11 | 21:12 | Unattended execution and the replay's account: "i will go to sleep, work as far as you possibly can. you can also run the replay with this account" — the build runs on each question's declared default; the replay runs on the account this session's client folder is logged into (a shared login, no copied credential); the QA sign-off and the merge to `main` wait for the maintainer |
 
 ## Shared contracts
@@ -335,6 +336,10 @@ changed scored run ≤ 0.5 × the baseline median; the changed shape's mean sub-
 baseline's mean. Samples: 1 pilot plus 3 scored runs per shape; a shape whose three scored runs differ by more than 2
 seeds found gets 5. Protocol and thresholds are committed in `evals/replay/REPLAY-v1.md` before the pilot and never
 moved. The package merges only when every row holds; the eval-set floors are checked at the 1.10.0 baseline run.
+(Amended 2026-09-24 by the maintainer, D10: every row holds before the 1.10.0 release, not before the merge, on a
+fixture whose seeds reach review — REPLAY-v2, in session 2; the package merges on the QA sign-off, the gate of record
+and CI. v1's fixture cannot measure review recall: the run record's pilot entries. Its two pilots stay in
+`evals/replay/runs/` as unscored evidence, and `evals/replay/REPLAY-v1.md` stays frozen.)
 
 ## Spec delta
 
@@ -859,7 +864,7 @@ Acceptance criteria:
 - GIVEN the eval cases whose `source:` cites `content/commands/st-work.md` WHEN
   `test/evals/locators.test.ts` runs on the merged tree THEN it passes with their moved ranges.
 
-### REQ-CTX-015 — The replay, its floor, and the merge gate
+### REQ-CTX-015 — The replay, its floor, and the release gate
 
 A replay compares the changed shape with the 1.9.1 baseline:
 
@@ -871,7 +876,14 @@ A replay compares the changed shape with the 1.9.1 baseline:
   before the pilot.
 - **Samples.** 1 pilot plus 3 scored runs per shape, or 5 when the pilot varies by more than 2
   seeds.
-- **Merge gate.** The package merges only after the floor holds.
+- **Merge.** The package merges on the QA sign-off, the gate of record and CI (D10, amended
+  2026-09-24; it read "the package merges only after the floor holds").
+- **Replay gate.** The 1.10.0 release proceeds only after the floor holds on a fixture where
+  seeds reach review (REPLAY-v2, session 2). v1's fixture lets the orchestrator's pre-read catch
+  every seed before review, so its two pilots stay in `evals/replay/runs/` as unscored evidence
+  and `evals/replay/REPLAY-v1.md` stays frozen. The COMPARISON's literal `Merge gate:` line keeps
+  its name, because the frozen instrument renders it (`scripts/replay/compare.mjs:380`), and it
+  now gates the release.
 - **Release gate.** Every eval-set floor holds at the 1.10.0 release run.
 
 Implements C12 (D9, D10).
@@ -909,10 +921,10 @@ Acceptance criteria:
   every result of both shapes records the same version.
 - GIVEN the committed replay results WHEN read THEN they carry one `not-run` row each for
   Cursor, GitHub Copilot CLI and Codex, each with its reason.
-- GIVEN the package's pull request WHEN it merges to `main` THEN its merge commit descends from
-  a committed comparison that shows the floor criteria above (the fourth to the tenth) holding
-  for every proposal kept, and every dropped proposal's ids read retired in this spec with a
-  pointer to the failing result.
+- GIVEN the 1.10.0 release WHEN the `v1.10.0` tag is created THEN the tagged commit descends
+  from a committed REPLAY-v2 comparison that shows the floor criteria above (the fourth to the
+  tenth) holding for every proposal kept, and every dropped proposal's ids read retired in this
+  spec with a pointer to the failing result (D10, amended 2026-09-24).
 - GIVEN the 1.10.0 eval-set run WHEN it is scored THEN every eval-set floor holds before the
   `v1.10.0` tag is created.
 
@@ -1086,8 +1098,9 @@ Full reports stay on disk and the orchestrator gets a digest. A CLI verb writes 
 ledger. A dispatch points at a plan unit instead of restating it. After a compaction, a card
 recomputed from disk re-grounds the run. The requirements are merged to `main` for 1.10.0 and
 are not released: `status: merged-for-1.10.0` records that state, and the 1.10.0 release close
-moves it to `shipped-with-1.10.0`. No requirement here merged before the replay's quality floor
-held (REQ-CTX-015).
+moves it to `shipped-with-1.10.0`. The requirements merge on the QA sign-off, the gate of record
+and CI; none ships before the replay's quality floor holds (REQ-CTX-015; D10, amended
+2026-09-24).
 
 Contract numbers (C1–C12) and decision numbers (D1–D10) refer to the shared-contract and
 decision sections of `docs/plans/009-orchestrator-context-economy-01.md`. That plan carries the byte shapes. Once a test
@@ -1125,10 +1138,10 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 
 ## Invariants
 
-1. **The quality floor binds every merge.** No requirement below reaches `main` unless the
-   replay's committed comparison shows the C12 floor held for its proposal (REQ-CTX-015). A
-   proposal that fails is reworked and re-measured, or dropped. When dropped, its ids are
-   retired here with a pointer to the failing result.
+1. **The quality floor binds the release.** No requirement below ships in 1.10.0 unless the
+   replay's committed comparison shows the C12 floor held for its proposal (REQ-CTX-015; D10,
+   amended 2026-09-24). A proposal that fails is reworked and re-measured, or dropped. When
+   dropped, its ids are retired here with a pointer to the failing result.
 2. **Four-client parity, or a declared degradation per client.** The table below is the
    declaration. A cell that is not `yes` is a degradation, stated here rather than discovered.
 3. **Never digested, never cut (C4).** The following are returned in full:
@@ -1168,8 +1181,8 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 
 (the statements above, in order, after this intro)
 
-Each requirement is listed with the proposal it belongs to. REQ-CTX-015 decides merges per
-proposal:
+Each requirement is listed with the proposal it belongs to. REQ-CTX-015 decides, per
+proposal, what the 1.10.0 release ships:
 
 - P1: 001–004
 - P2: 005–007
@@ -1367,11 +1380,12 @@ its own entries moved.
 | 4 | `c8c-claude-write-render` ∥ `ctx-ledger-status` | `p16-evals-work` | `r4b-oracles` · `r8a-score-run` → `r8b-score-compare` |
 | 5 | — | `p16-docs` → `p16-dogfood-sync` (last writer of the emitted copies) | `r9-driver` → `r10-canary` → baseline pilot and the three baseline scored runs (`r11a`, then `r11b`'s baseline half) |
 | 6 | the candidate: files 1 and 2 merged on the package branch, the full gate green, the Windows CI leg green | | the changed pilot, the three changed scored runs, `COMPARISON-v1.md` (`r11a`, `r11b`) |
-| 7 | the Prove phase: the whole-branch deep review, the spec delta merged, the QA checkpoint (the maintainer's), the merge only when the comparison's merge gate reads PASS | | |
+| 7 | the Prove phase: the whole-branch deep review, the spec delta merged, the QA checkpoint (the maintainer's), the merge on the QA sign-off, the gate of record and CI (the comparison's `Merge gate:` line gates the 1.10.0 release since D10's amendment of 2026-09-24) | | |
 
 Replay runs go one at a time on the account the operator's client folder is logged into; the baseline runs may start
 as soon as the canary passes, before the candidate exists. The merge to `main` waits for the maintainer's QA answer
-(the kickoff's rule) and for `Merge gate: PASS`; a failing row sends its proposal back for rework and a re-measure, or
+(the kickoff's rule), the gate of record and CI; the 1.10.0 release waits for REPLAY-v2's `Merge gate: PASS` (D10,
+amended 2026-09-24); a failing row sends its proposal back for rework and a re-measure, or
 drops it with its requirement ids retired in the spec.
 
 ## Follow-ups (appended to `.stamity/inbox.md` at this plan's write)
@@ -1548,7 +1562,8 @@ R14 Replay: rounds within ±1 is per pass (the modal rounds of each pass); the v
     of a shape — if two differ by more than 2 seeds found, that shape gets 2 more scored runs (5); the sub-agent-token
     bar is pooled per pass over the scored runs; results live in `evals/replay/runs/<date>-replay-<n>/` and
     `evals/replay/COMPARISON-v1.md`; the merge gate (this session) and the release gate (the eval-set floors at the
-    1.10.0 run, session 2) are separate criteria.
+    1.10.0 run, session 2) are separate criteria. (Amended 2026-09-24, D10: the replay's gate moves to the 1.10.0
+    release, measured by REPLAY-v2 in session 2; both remain separate criteria, and both gate the release.)
 R15 Codex receives no touchpoint bodies today (`docs/capability-matrix.md:240`): every body-carried requirement has no
     carrier there — an accepted, declared degradation (the agent-definition parts still reach Codex).
 R16 Per-role report patterns (from the verdict-write draft's R2, adopted — stricter than D1's "limited to that folder"):

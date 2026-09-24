@@ -6,13 +6,13 @@ reads: [content/commands/st-plan.md, content/commands/st-work.md, scripts/qa/fix
 depends_on: [docs/plans/009-orchestrator-context-economy-01.md, docs/plans/009-orchestrator-context-economy-02.md]
 ---
 
-# Orchestrator context economy — file 3 of 3: the replay, the old-vs-new measurement and the merge gate
+# Orchestrator context economy — file 3 of 3: the replay, the old-vs-new measurement and the release gate
 
-intent chosen: feature because a new measurement instrument is named — a fixture with seeded defects, a deterministic matcher, a forced compaction, an analyzer and a scorer — and it gates the merge of the capabilities files 1 and 2 build.
+intent chosen: feature because a new measurement instrument is named — a fixture with seeded defects, a deterministic matcher, a forced compaction, an analyzer and a scorer — and it gates the 1.10.0 release of the capabilities files 1 and 2 build (it gated their merge until D10's amendment of 2026-09-24).
 
 ## Context
 
-The maintainer's research directive for this package asks that the solution be "as effective as possible without quality loss". No outside source has measured what a digest costs an orchestrator's decisions on coding work, so this file builds and runs a replay: the same three-unit, six-pass `/st-work` run at the deep tier, on a throwaway service with twelve planted defects and three decoys, once with 1.9.1 and once with the candidate of files 1 and 2, a forced compaction right after a lens returns, scored by a deterministic matcher against the floor the maintainer declared before any run (C12). It is not an eval-set run (the set runs once, as the new baseline, at the 1.10.0 cut). The runs go one at a time on Claude Code, on the account the operator's client folder is logged into (the maintainer's decision D11; no extra login). The package merges only on `Merge gate: PASS`.
+The maintainer's research directive for this package asks that the solution be "as effective as possible without quality loss". No outside source has measured what a digest costs an orchestrator's decisions on coding work, so this file builds and runs a replay: the same three-unit, six-pass `/st-work` run at the deep tier, on a throwaway service with twelve planted defects and three decoys, once with 1.9.1 and once with the candidate of files 1 and 2, a forced compaction right after a lens returns, scored by a deterministic matcher against the floor the maintainer declared before any run (C12). It is not an eval-set run (the set runs once, as the new baseline, at the 1.10.0 cut). The runs go one at a time on Claude Code, on the account the operator's client folder is logged into (the maintainer's decision D11; no extra login). The package merges on the QA sign-off, the gate of record and CI; the 1.10.0 release waits for REPLAY-v2's `Merge gate: PASS` (D10, amended 2026-09-24).
 
 ## Shared contracts
 
@@ -204,6 +204,10 @@ changed scored run ≤ 0.5 × the baseline median; the changed shape's mean sub-
 baseline's mean. Samples: 1 pilot plus 3 scored runs per shape; a shape whose three scored runs differ by more than 2
 seeds found gets 5. Protocol and thresholds are committed in `evals/replay/REPLAY-v1.md` before the pilot and never
 moved. The package merges only when every row holds; the eval-set floors are checked at the 1.10.0 baseline run.
+(Amended 2026-09-24 by the maintainer, D10: every row holds before the 1.10.0 release, not before the merge, on a
+fixture whose seeds reach review — REPLAY-v2, in session 2; the package merges on the QA sign-off, the gate of record
+and CI. v1's fixture cannot measure review recall: the run record's pilot entries. Its two pilots stay in
+`evals/replay/runs/` as unscored evidence, and `evals/replay/REPLAY-v1.md` stays frozen.)
 
 ## Spec delta
 
@@ -221,7 +225,7 @@ The requirements this file's units implement. Their statements, acceptance crite
 
 ### REQ-CTX-013 — The resume card, and `stamity ledger status`
 
-### REQ-CTX-015 — The replay, its floor, and the merge gate
+### REQ-CTX-015 — The replay, its floor, and the release gate
 
 ## Units
 
@@ -428,7 +432,7 @@ Confidence: medium on the design (inferred from `final.md` §2.4 and the binary)
 | `edgeCases` | Baseline pilot recall outside [0.5, 0.95]: the seeds are re-authored as a new `v1` commit before any scored run, and the thresholds do not move. If that is not acceptable, the result is REPLAY-v2 and the pilots restart |
 | `depends_on` | r10-canary, r1-protocol, r8b-score-compare; the changed pilot also depends on every unit of `docs/plans/009-orchestrator-context-economy-01.md` and `docs/plans/009-orchestrator-context-economy-02.md` (the candidate) |
 | `verify` | `node scripts/replay/score.mjs check --runs evals/replay/runs --protocol evals/replay/REPLAY-v1.md && npm run gate && node scripts/repo-hygiene.mjs --base fed39ac` |
-| `amended` | amended 2026-09-24 (plan amendment 7): the K-compact canary decided `auto-window` (r10's amended line), so the pilots run with `--mechanism auto-window`, their placements are recorded rather than fired, and samples follow §7's auto-window rule |
+| `amended` | amended 2026-09-24 (plan amendment 7): the K-compact canary decided `auto-window` (r10's amended line), so the pilots run with `--mechanism auto-window`, their placements are recorded rather than fired, and samples follow §7's auto-window rule · amended 2026-09-24, recording what landed: both pilots ran and are committed, `2026-09-24-replay-1` (baseline, d2bc74cf) and `2026-09-24-replay-2` (changed, 8a6aad49). The baseline pilot's recall read 3/12 (`evals/replay/runs/2026-09-24-replay-1/RESULTS.md:19`), outside the band, and the edge case's seed re-authoring was not executed: the seed trace found every seed caught by the orchestrator's pre-read before review (`build/362`). The two pilots stay in `evals/replay/runs/` as unscored evidence, and REPLAY-v1.md stays frozen (D10, amended 2026-09-24) |
 
 Confidence: medium (inferred; the budget of about 2 h per run is an estimate, `final.md:168`).
 
@@ -444,6 +448,7 @@ Confidence: medium (inferred; the budget of about 2 h per run is an estimate, `f
 | `edgeCases` | A changed run hits a capacity hold of up to 12 h: the pause is excluded from active time and recorded. A run marked invalid is replaced, at most 2 times per shape; beyond that the COMPARISON row is NOT-EVALUATED and the merge gate is FAIL |
 | `depends_on` | r11a-pilots |
 | `verify` | `node scripts/replay/score.mjs check --runs evals/replay/runs --protocol evals/replay/REPLAY-v1.md && npx vitest run test/replay && npm run gate && node scripts/repo-hygiene.mjs --base fed39ac` |
+| `amended` | amended 2026-09-24 (D10, amended by the maintainer the same day), not started: the COMPARISON no longer gates the merge. Its `Merge gate:` line keeps the name the frozen instrument renders (`scripts/replay/compare.mjs:380`) and now gates the 1.10.0 release. This unit's scored runs and comparison move to REPLAY-v2 in session 2, on a fixture whose seeds reach review, because v1's fixture lets the orchestrator's pre-read catch every seed before review (the seed trace, `build/362`); REPLAY-v1.md stays frozen, and the amended D10 supersedes its §12 sentence "The package merges only when every row holds" |
 
 Confidence: medium (inferred).
 

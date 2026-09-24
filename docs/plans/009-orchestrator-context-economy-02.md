@@ -204,6 +204,10 @@ changed scored run ≤ 0.5 × the baseline median; the changed shape's mean sub-
 baseline's mean. Samples: 1 pilot plus 3 scored runs per shape; a shape whose three scored runs differ by more than 2
 seeds found gets 5. Protocol and thresholds are committed in `evals/replay/REPLAY-v1.md` before the pilot and never
 moved. The package merges only when every row holds; the eval-set floors are checked at the 1.10.0 baseline run.
+(Amended 2026-09-24 by the maintainer, D10: every row holds before the 1.10.0 release, not before the merge, on a
+fixture whose seeds reach review — REPLAY-v2, in session 2; the package merges on the QA sign-off, the gate of record
+and CI. v1's fixture cannot measure review recall: the run record's pilot entries. Its two pilots stay in
+`evals/replay/runs/` as unscored evidence, and `evals/replay/REPLAY-v1.md` stays frozen.)
 
 ## Spec delta
 
