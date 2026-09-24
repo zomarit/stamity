@@ -26,6 +26,7 @@ import {
 } from "../../src/runs/ledgerStore.ts";
 import { useCliFixture } from "../support/cliHarness.ts";
 import { runInProcess } from "../support/inProcess.ts";
+import { parseLedger } from "../support/ledgerGrammar.ts";
 import { makeTempDir, useTempDir, type TempDirHandle } from "../support/tempDir.ts";
 
 /**
@@ -661,6 +662,35 @@ describe("stamity ledger append", () => {
       REPORT_REL,
       REPORT_REL,
       REPORT_REL,
+    ]);
+  });
+
+  it("lands bytes the records gate's own parser reads with no problem, report and stdin rows alike", async () => {
+    // The row-shape pins above are this suite's hand copy of the grammar. This case holds the
+    // written bytes to the records gate's parser itself, so a grammar move there reaches here.
+    const dir = tempDir();
+    await seedRun(dir, {
+      [REPORT_REL]: report([{ ...C1, security: true }, { ...W1, decision_needed: true }, M1]),
+    });
+    expect((await cli(dir, [...APPEND, "--report", REPORT_REL])).code).toBe(0);
+    const piped = report([{ ...C1, id: "C-2" }]).split("\n");
+    expect((await cli(dir, [...APPEND, "--stdin"], piped)).code).toBe(0);
+
+    const text = await readText(dir, LEDGER);
+    const parsed = parseLedger(LEDGER, text);
+
+    expect(parsed.problems).toEqual([]);
+    expect(parsed.rows.map((row) => [row.id, row.severity, row.state])).toEqual([
+      [`${RUN}/review/1`, "Critical", "open"],
+      [`${RUN}/review/2`, "Warning", "open"],
+      [`${RUN}/review/3`, "Minor", "open"],
+      [`${RUN}/review/4`, "Critical", "open"],
+    ]);
+    // The parser is not a no-op on these bytes: the one key the writer must never persist
+    // (`security`) is refused when planted on the first row.
+    const planted = text.replace(/\}\n/, ',"security":true}\n');
+    expect(parseLedger(LEDGER, planted).problems).toEqual([
+      `${LEDGER}:1: field(s) outside the row schema — security`,
     ]);
   });
 
