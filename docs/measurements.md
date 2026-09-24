@@ -6,19 +6,19 @@ title: Measurements
 
 # Measurements
 
-What this repository can prove about its own output, as of 2026-09-17 — the newest
+What this repository can prove about its own output, as of 2026-09-23 — the newest
 closed run record's date, which is what this page is stamped with rather than the day it was
 rendered. Every number below is computed from a committed artifact, so a claim here can be
 checked rather than believed.
 
-The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-09-23.json`](../evals/measurements/merge-ready-2026-09-23.json), the frozen
+The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-09-24.json`](../evals/measurements/merge-ready-2026-09-24.json), the frozen
 measurement committed beside this page. Refreshed per release by `node scripts/merge-ready-rate.mjs --write`
 (the release checklist's record-currency line); the snapshot named above is the input, and a
 run record written after it is not on this page until the next refresh.
 
 ## Verified merge-ready rate
 
-**6 of 8 runs** (0.750).
+**6 of 9 runs** (0.667).
 
 The rule: verified merge-ready = the final gate table all pass, the last review verdict an approval at or above the record's stated confidence gate (0.8 when unstated), and a findings ledger with no open row; merge evidence is reported per run, never a clause; self-declared wording never counts.
 
@@ -57,6 +57,7 @@ is the first clause each one missed.
 |---|---|---|
 | `2026-09-09_package-9` | the final gate table reports a failure | none in committed artifacts |
 | `2026-09-10_release-1.4.0` | the last review verdict is not an approval | released version 1.4.0 in CHANGELOG |
+| `2026-09-23_orchestrator-context` | the approval states no confidence to compare to the gate | none in committed artifacts |
 
 ### Excluded, with the evidence each one lacks
 

@@ -1,6 +1,6 @@
 # Package 16, session 1 — the orchestrator's context economy (plan 009)
 
-Status: in progress — opened 2026-09-23T21:32Z on the kickoff "Package 16, session 1 of 2"; unattended since 2026-09-23T21:12Z on the maintainer's instruction ("i will go to sleep, work as far as you possibly can. you can also run the replay with this account").
+Status: **closed** — opened 2026-09-23T21:32Z on the kickoff "Package 16, session 1 of 2"; ran unattended overnight on the maintainer's instruction; merged 2026-09-24T09:23Z as PR #54 (`main` `ef5cc568`, a fast-forward: GitHub refuses to rebase a branch this long) on the maintainer's QA sign-off, the gate of record and CI; the replay's gate moved to the 1.10.0 release (REPLAY-v2, session 2).
 Plan: docs/plans/009-orchestrator-context-economy-01.md
 Invocation: /st-work docs/plans/009-orchestrator-context-economy-01.md docs/plans/009-orchestrator-context-economy-02.md docs/plans/009-orchestrator-context-economy-03.md --effort deep
 
@@ -153,6 +153,28 @@ checkpoint and the merge to `main` wait for the maintainer.
   `npm test -- --coverage` 0 — 250 files, 10,137 passed, 22 skipped, coverage 96.62 / 90.04 / 98.94 / 97.54, no floor
   missed; the leak gate 0 (1,622 files). CI round-trip 5 at `bf5a8d3f` green on every leg, Windows included (runs
   35954773187 and 35954773189; class 1, native).
+Gate results (the gate of record at `bf5a8d3f`, test-runner, `reports/gate-of-record-6-test-runner-r1.md`):
+
+| Gate | Command | Result |
+|---|---|---|
+| build | `npm run build` | pass |
+| drift | `node dist/cli.js check` | pass (drift clean) |
+| APM package | `node scripts/generate-apm-package.mjs --check` | pass |
+| lint | `npm run lint` | pass |
+| typecheck | `npm run typecheck` | pass |
+| unused code | `npm run knip` | pass |
+| tests with coverage | `npm test -- --coverage` | pass (250 files, 10,137 passed, 22 skipped; 96.62 / 90.04 / 98.94 / 97.54) |
+| leak gate | `node scripts/leak-gate.mjs` | pass (1,622 files) |
+
+Review verdicts, per round (the last round of each loop that closed the merged work, as the reviewers stated them; this run declared its confidence gate in words, medium or high counts, 22:09Z, so no numeric confidence is stated):
+
+| Loop | Last round | Verdict | Confidence |
+|---|---|---|---|
+| whole-branch review (engine, corpus and docs, the replay chain) | fix rounds 1–3 | approve | medium to high |
+| Prove spec merge | round 2 | approve | high |
+| replay driver (r9), and its canary-raised loop | rounds 4 and 3 | approve | medium |
+| the last merged unit (gate-amend, the replay's gate moved to the release) | round 1 | approve | high |
+
 - **Review verdicts.** Every unit and every fix round closed on an approval at or above the declared gate (medium or high
   counts, 22:09Z); the whole-branch deep review (engine with the security lens, corpus and docs, the replay chain)
   approved after its fix rounds; the Prove spec merge approved at high in round 2; the replay driver approved at medium
@@ -269,3 +291,22 @@ checkpoint and the merge to `main` wait for the maintainer.
     - kept deferred with their reason: build/116 and build/134, CI flakes outside this package that were rerun-only
       so far and are worth a unit only if they recur.
 - 2026-09-24T09:01Z the gate decision in the specs and plans: approved at high confidence and integrated as 1ba8dcee. The merge now rests on the QA sign-off, the gate of record and CI; the replay (REPLAY-v2, seeds that reach review) gates the 1.10.0 release, beside the eval-set floors. REQ-CTX-015 is renamed to the release gate; D10, C12 and R14 keep their original text with dated amendments; r11b moves to REPLAY-v2; REPLAY-v1.md is untouched. Coverage reports 0 findings on all three plan files, the spec suites pass (138), there are 99 criteria, and the leak gate exits 0. build/367 (criteria that will need REPLAY-v2's protocol) is scheduled into session 2. The QA form is signed, and the six scheduled Warnings carry their retired lines, their inbox rows removed.
+- 2026-09-24T09:23Z the close. CI round-trip 9 at ef5cc568:
+  - the floor and Windows legs passed;
+  - the LTS leg failed once, on a pre-existing upstream-lane test outside this package (`test/upstream/lane.test.ts:1398`, ancestry-missing read as update-available);
+  - the failed job's re-run passed, and three local runs pass. Recorded as 2026-09-23_orchestrator-context/build/368, deferred, rerun-only.
+
+  Both aggregators then read pass.
+
+  GitHub refused the rebase merge of this 111-commit branch ("This branch can't be rebased"), as it did for plan 008's #47. `main` was fast-forwarded to the verified head ef5cc568 under the admin bypass, and GitHub marked #54 merged at 09:23:00Z.
+
+  The run closes:
+  - every unit of plan files 1 and 2 is on `main`;
+  - the spec is merged (99 criteria);
+  - the ledger has no open row;
+  - the QA checkpoint is signed.
+
+  Session 2 carries:
+  - REPLAY-v2 before the 1.10.0 release;
+  - the scheduled Warnings (build/31, build/139, build/325, build/362 to build/364, build/367);
+  - the enterprise work.
