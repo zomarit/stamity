@@ -1,10 +1,12 @@
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
+// @ts-expect-error — the script is a native ESM source-checkout tool with no declaration file.
+import { replaceFile } from "../../scripts/fork-identity.mjs";
 import { repositoryRoute } from "../support/identity.ts";
 import { downstreamCheckout } from "./downstreamFixture.ts";
 
@@ -76,8 +78,25 @@ function fork(): string {
   return root;
 }
 
-function run(root: string, args: string[], script = "fork-identity.mjs"): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, [join(root, "scripts", script), ...args], { cwd: root, encoding: "utf8" });
+function run(
+  root: string,
+  args: string[],
+  script = "fork-identity.mjs",
+  env: NodeJS.ProcessEnv = process.env,
+): SpawnSyncReturns<string> {
+  return spawnSync(process.execPath, [join(root, "scripts", script), ...args], { cwd: root, encoding: "utf8", env });
+}
+
+/** Run `mutate` against one file of the shared checkout, then put its exact bytes back. */
+function withFile(root: string, relPath: string, mutate: (path: string) => void, body: () => void): void {
+  const path = join(root, relPath);
+  const original = readFileSync(path);
+  try {
+    mutate(path);
+    body();
+  } finally {
+    writeFileSync(path, original);
+  }
 }
 
 const output = (result: SpawnSyncReturns<string>): string => `${result.stdout}\n${result.stderr}`;
@@ -354,5 +373,86 @@ describe("scripts/fork-identity.mjs", () => {
       }
       expect(digests(root(), TARGETS)).toEqual(imported);
     }, GENERATOR_BUDGET);
+
+    it("never echoes a value given as --flag=value or with no flag before it", () => {
+      const repository = "https://fixture-user:fixture-pass@github.com/Acme-Corp/stamity-internal";
+      const registry = "https://fixture-user:fixture-pass@registry.example.invalid";
+      for (const args of [
+        [`--repository=${repository}`],
+        ["--repository", FORK_URL, `--registry=${registry}`],
+        [repository],
+      ]) {
+        const label = args.join(" ");
+        const result = run(root(), args);
+        expect(result.status, label).toBe(2);
+        expect(result.stderr, label).toContain("the value is not echoed");
+        expect(output(result), label).not.toContain("fixture-pass");
+        expect(output(result), label).not.toContain("fixture-user");
+        expect(output(result), label).not.toContain("registry.example.invalid");
+      }
+      expect(run(root(), [`--repository=${repository}`]).stderr).toContain("--repository <value>");
+    }, GENERATOR_BUDGET);
+
+    it("exits 2 when a flag is given twice", () => {
+      const result = run(root(), ["--repository", FORK_URL, "--repository", FORK_URL]);
+      expect(result.status, output(result)).toBe(2);
+      expect(result.stderr).toContain("--repository is given twice.");
+    }, GENERATOR_BUDGET);
+
+    it("exits 1 naming a target file that is missing or malformed, and writes nothing", () => {
+      const relPath = "renovate/companion.json";
+      const others = TARGETS.filter((target) => target !== relPath);
+      const imported = digests(root(), others);
+      withFile(root(), relPath, (path) => rmSync(path), () => {
+        const result = run(root(), ["--repository", FORK_URL]);
+        expect(result.status, output(result)).toBe(1);
+        expect(result.stderr).toContain(`cannot read ${relPath}`);
+      });
+      withFile(root(), relPath, (path) => writeFileSync(path, "{"), () => {
+        const result = run(root(), ["--repository", FORK_URL]);
+        expect(result.status, output(result)).toBe(1);
+        expect(result.stderr).toContain(`${relPath} is not valid JSON`);
+      });
+      expect(digests(root(), others)).toEqual(imported);
+    }, GENERATOR_BUDGET);
+
+    it("exits 1 naming the file when git cannot read the checkout's status, and writes nothing", () => {
+      const imported = digests(root(), TARGETS);
+      // GIT_DIR at a path that does not exist makes every git call in the child fail as outside
+      // a repository would, without touching the shared checkout's own .git.
+      const env = { ...process.env, GIT_DIR: join(root(), "no-such-git-dir") };
+      const result = run(root(), ["--repository", FORK_URL], "fork-identity.mjs", env);
+      expect(result.status, output(result)).toBe(1);
+      expect(result.stderr).toMatch(/cannot read git status for (package\.json|renovate\/)/);
+      expect(digests(root(), TARGETS)).toEqual(imported);
+    }, GENERATOR_BUDGET);
+
+    it("labels a file that differs from its target only in line endings (line endings)", () => {
+      // The preset already carries the canonical route, so under the canonical repository its
+      // value is at target and a CRLF copy differs in bytes alone.
+      const { slug } = repositoryRoute();
+      const relPath = "renovate/plugins.json";
+      withFile(
+        root(),
+        relPath,
+        (path) => writeFileSync(path, readFileSync(path, "utf8").replaceAll("\r\n", "\n").replaceAll("\n", "\r\n")),
+        () => {
+          const result = run(root(), ["--repository", `https://github.com/${slug}`, "--check"]);
+          expect(result.status, output(result)).toBe(1);
+          expect(result.stdout).toContain(`drift ${relPath} (line endings)`);
+        },
+      );
+    }, GENERATOR_BUDGET);
+  });
+
+  it("removes the temporary file when the rename fails, and rethrows", () => {
+    // A non-empty directory cannot be replaced by a file, on POSIX or Windows.
+    const dir = mkdtempSync(join(work, "rename-"));
+    const target = join(dir, "target");
+    mkdirSync(target);
+    writeFileSync(join(target, "occupant"), "");
+    expect(() => replaceFile(target, "text")).toThrow();
+    expect(existsSync(join(target, "occupant"))).toBe(true);
+    expect(readdirSync(dir)).toEqual(["target"]);
   });
 });

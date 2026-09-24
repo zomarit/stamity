@@ -37,7 +37,7 @@
 // Then the two generators, from this checkout, so the committed surfaces follow the manifest.
 
 import { spawnSync } from 'node:child_process'
-import { readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -77,11 +77,29 @@ function parseArgs(args) {
       if (parsed[key] !== undefined) return { problem: `${arg} is given twice.` }
       parsed[key] = args[i]
     } else {
-      return { problem: `Unknown argument: ${arg}` }
+      return { problem: unknownArgument(arg) }
     }
   }
   if (parsed.repository === undefined) return { problem: '--repository is required.' }
   return parsed
+}
+
+/** A flag's name, the only part of an argv token that is ever printed. */
+const FLAG_NAME = /^--?[A-Za-z][A-Za-z0-9-]*$/
+
+/**
+ * The refusal for an argument the table does not know, naming at most the flag. A value is never
+ * echoed: `--repository=<url>`, `--registry=<url>` and a bare positional URL all arrive here, and
+ * a URL with a token in its userinfo is the input the two value refusals already withhold.
+ */
+function unknownArgument(arg) {
+  if (FLAG_NAME.test(arg)) return `Unknown argument: ${arg}`
+  const at = arg.indexOf('=')
+  const name = at === -1 ? '' : arg.slice(0, at)
+  if (FLAG_NAME.test(name)) {
+    return `Unknown argument: ${name}=<value>; the value is not echoed. Give the value as the next argument: ${name} <value>.`
+  }
+  return 'Unknown argument: a value with no flag before it; the value is not echoed.'
 }
 
 /** `<owner>/<repo>` from the accepted spellings; the resolver re-validates both slugs. */
@@ -246,11 +264,20 @@ function dirty(relPath) {
   return status.stdout.trim() !== ''
 }
 
-function write(relPath, text) {
-  const path = join(ROOT, relPath)
+/** One temporary file and one rename; a failed rename removes the temporary file before it rethrows. */
+export function replaceFile(path, text) {
   const temporary = `${path}.tmp-${process.pid}`
   writeFileSync(temporary, text)
-  renameSync(temporary, path)
+  try {
+    renameSync(temporary, path)
+  } catch (error) {
+    rmSync(temporary, { force: true })
+    throw error
+  }
+}
+
+function write(relPath, text) {
+  replaceFile(join(ROOT, relPath), text)
 }
 
 function runGenerators(check) {
