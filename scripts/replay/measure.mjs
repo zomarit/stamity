@@ -212,7 +212,50 @@ function splitRoots(texts, names) {
 
 // ---------- seeds ----------
 
-function checkSeeds(seeds) {
+/**
+ * S1 (REPLAY-v2): an item's optional `injection` — `{ file, find, replace }`, the text the driver's
+ * hook turns the clean tree's `find` into at the first review dispatch covering the item's pass.
+ * It edits the item's own file only (an injection never spans two files), and `find` and `replace`
+ * are non-empty strings that differ. v1's items carry none.
+ */
+function checkInjection(item, where) {
+  if (item.injection === undefined) return
+  const inj = item.injection
+  if (inj === null || typeof inj !== 'object' || Array.isArray(inj)) throw new Error(`${where} injection is not an object`)
+  for (const key of ['file', 'find', 'replace']) {
+    if (typeof inj[key] !== 'string') throw new Error(`${where} injection.${key} is not a string`)
+    if (inj[key] === '') throw new Error(`${where} injection.${key} is empty`)
+  }
+  if (inj.file !== item.file) throw new Error(`${where} injection.file ${JSON.stringify(inj.file)} is not the item's file ${JSON.stringify(item.file)}: an injection edits one file`)
+  if (inj.find === inj.replace) throw new Error(`${where} injection.find equals injection.replace, so the injection changes nothing`)
+}
+
+/** A `present.notMatch` source compiled, or a refusal naming the item and the source. */
+function compileNotMatch(source, where) {
+  try {
+    return new RegExp(source)
+  } catch (error) {
+    throw new Error(`${where} present.notMatch ${JSON.stringify(source)} is no regex: ${error.message}`, { cause: error })
+  }
+}
+
+/**
+ * S1 (REPLAY-v2, build/365): an item's optional `present.notMatch`, regex sources beside
+ * `present.contains`, each non-empty and compiling. v1's items carry none.
+ */
+function checkNotMatch(item, where) {
+  const list = item.present?.notMatch
+  if (list === undefined) return
+  if (!Array.isArray(list) || !list.every((s) => typeof s === 'string' && s !== '')) throw new Error(`${where} present.notMatch is not a list of non-empty strings`)
+  for (const source of list) compileNotMatch(source, where)
+}
+
+/**
+ * The seeds document's schema check (`stamity/replay-seeds/v1`): each item's id, pass, file, span
+ * and terms, and the two optional v2 fields (S1), `injection` and `present.notMatch`. A v1 document,
+ * which has neither field, reads exactly as before. Throws on the first refusal, naming the item.
+ */
+export function checkSeeds(seeds) {
   if (!seeds || typeof seeds !== 'object' || seeds.schema !== SEEDS_SCHEMA) throw new Error(`seeds: the document is not ${SEEDS_SCHEMA}`)
   for (const list of ['seeds', 'decoys']) {
     if (!Array.isArray(seeds[list])) throw new Error(`seeds: "${list}" is not a list`)
@@ -223,6 +266,8 @@ function checkSeeds(seeds) {
       if (typeof item.file !== 'string' || !item.file) throw new Error(`${where} names no file`)
       if (!Array.isArray(item.span) || item.span.length !== 2 || !item.span.every(Number.isInteger)) throw new Error(`${where} has no [start, end] span`)
       if (!Array.isArray(item.terms) || item.terms.length === 0) throw new Error(`${where} has no terms`)
+      checkInjection(item, where)
+      checkNotMatch(item, where)
     }
   }
 }
@@ -231,12 +276,19 @@ const copiesOf = (snapshots, pass) => entriesOf(join(snapshots, pass)).filter((e
 const fileIn = (copy, file) => readTextIfPresent(join(copy, ...file.split('/')))
 const asList = (v) => (v === undefined || v === null ? [] : Array.isArray(v) ? v : [v])
 
-/** Whether a seed's `present` rule holds in one snapshot copy; `null` when the copy lacks the file. */
-function presentIn(copy, item) {
+/**
+ * Whether an item's `present` rule holds in one tree (a snapshot copy, or any checkout); `null`
+ * when the tree lacks the file. Present iff every `contains` string occurs, no `notContains` string
+ * does, and no `notMatch` pattern matches (S1, build/365: the fixed code that keeps the seeded text
+ * beside a guard reads absent).
+ */
+export function presentIn(copy, item) {
   const text = fileIn(copy, item.file)
   if (text === null) return null
   const rule = item.present ?? {}
-  return asList(rule.contains).every((s) => text.includes(s)) && asList(rule.notContains).every((s) => !text.includes(s))
+  return asList(rule.contains).every((s) => text.includes(s))
+    && asList(rule.notContains).every((s) => !text.includes(s))
+    && asList(rule.notMatch).every((source) => !new RegExp(source).test(text))
 }
 
 /**
@@ -281,8 +333,28 @@ export function attributePass(desc, prompt) {
   return ids.size > 1 ? 'multi' : null
 }
 
+/**
+ * build/366: the distinct passes a dispatch covers, in pass order, by `attributePass`'s precedence —
+ * the ids its description names when it names any, else the ids its prompt names. A single-pass
+ * dispatch gives its one pass, a `multi` one every pass it names, one naming none `[]`. The
+ * description wins so a single-pass brief that mentions another pass stays that pass's.
+ */
+export function passesOf(desc, prompt) {
+  const named = (text) => new Set(String(text ?? '').match(PASS_IDS_G) ?? [])
+  const inDesc = named(desc)
+  const ids = inDesc.size > 0 ? inDesc : named(prompt)
+  return PASS_IDS.filter((id) => ids.has(id))
+}
+
 const isPass = (p) => PASS_IDS.includes(p)
 const passKey = (p) => (isPass(p) ? p : 'unattributed')
+/** build/366: whether an agent or a finding covers `pass` — its attributed pass, or one of the passes a multi dispatch names. */
+const covers = (x, pass) => x.pass === pass || (Array.isArray(x.passes) && x.passes.includes(pass))
+/**
+ * build/366: whether two agents share a pass, for the fixer round count: any common pass when both
+ * name passes, else the attributed pass as before (two agents naming no pass, say).
+ */
+const sharePass = (x, y) => (x.passes.length > 0 && y.passes.length > 0 ? x.passes.some((p) => y.passes.includes(p)) : x.pass === y.pass)
 
 /**
  * One streamed pass over the main transcript for what the walk's rows do not carry: every tool
@@ -523,7 +595,7 @@ function joinAgents(walk, index, subs, roots) {
     const agent = {
       toolUseId: d.toolUseId, line: d.line, role: roleName(d.role), fn: roleFunction(d.role), desc: d.desc ?? '', prompt, chars: d.chars,
       model: d.model ?? null, name: typeof input.name === 'string' && input.name ? input.name : null, pass: attributePass(d.desc, prompt),
-      branch: false, round: 1, resume: RESUME.test(prompt),
+      passes: passesOf(d.desc, prompt), branch: false, round: 1, resume: RESUME.test(prompt),
     }
     agents.push(agent)
     byUse.set(d.toolUseId, agent)
@@ -559,7 +631,8 @@ function joinAgents(walk, index, subs, roots) {
       const prompt = s.firstPrompt ?? ''
       const agent = {
         toolUseId: s.toolUseId, line, role: roleName(s.agentType), fn: roleFunction(s.agentType), desc: s.description ?? '', prompt, chars: prompt.length,
-        model: null, name: null, pass: attributePass(s.description, s.firstPrompt), branch: false, round: 1, resume: RESUME.test(prompt), fromFile: true, agentId: s.agentId,
+        model: null, name: null, pass: attributePass(s.description, s.firstPrompt), passes: passesOf(s.description, s.firstPrompt),
+        branch: false, round: 1, resume: RESUME.test(prompt), fromFile: true, agentId: s.agentId,
       }
       fromFile.set(s.agentId, agent)
       agents.push(agent)
@@ -622,9 +695,10 @@ function joinAgents(walk, index, subs, roots) {
   for (const a of agents) {
     if (a.fn === 'verdict') a.branch = WHOLE_BRANCH.test(a.desc) || (!isPass(a.pass) && (a.line > lastApproval || WHOLE_BRANCH.test(a.prompt)))
   }
-  // A verdict agent's round: one more than the fixers of its pass dispatched before it.
+  // A verdict agent's round: one more than the fixers of its pass dispatched before it (build/366:
+  // of any pass it covers, so a u1-p1 fixer counts toward a round covering u1-p1 and u1-p2).
   const fixers = agents.filter((a) => a.fn === 'fix')
-  for (const a of agents) a.round = 1 + fixers.filter((f) => f.pass === a.pass && f.line < a.line).length
+  for (const a of agents) a.round = 1 + fixers.filter((f) => sharePass(f, a) && f.line < a.line).length
   return { agents, byAgentId, sends, deliveries, notes }
 }
 
@@ -797,7 +871,7 @@ function collectFindings(deliveries, stateNames, states, roots) {
     ledgerParseErrors: sum(stateNames, (n) => states[n].ledgerParseErrors ?? 0),
   }
   deliveries.filter((d) => d.agent?.fn === 'verdict').forEach((d, k) => {
-    const where = { pass: d.agent.pass, branch: d.agent.branch, round: d.agent.round, delivered: d.line }
+    const where = { pass: d.agent.pass, passes: d.agent.passes, branch: d.agent.branch, round: d.agent.round, delivered: d.line }
     const meta = { role: d.agent.role, roots, source: 'return' }
     const digest = d.digest.status !== null && d.digest.report !== null
     const structured = digest || C2_FENCE.test(d.text)
@@ -826,15 +900,45 @@ function collectFindings(deliveries, stateNames, states, roots) {
     if (!slug || roleFunction(slug.role) !== 'verdict') continue
     const parsed = parseFindingsBlock(r.text, { source: 'report', role: slug.role, roots, reportPath })
     readerSkips.findingsBlockErrors += parsed.errors.length
-    for (const f of parsed.findings) all.push({ ...f, pass: slug.pass, branch: slug.pass === 'branch', round: slug.round, delivered: null, unit: null })
+    for (const f of parsed.findings) all.push({ ...f, pass: slug.pass, passes: passesIn(slug.pass), branch: slug.pass === 'branch', round: slug.round, delivered: null, unit: null })
   }
   const endLedger = states.end?.present ? states.end.ledger : stateNames.flatMap((n) => states[n].ledger)
   for (const f of ledgerFindings(endLedger, { roots })) {
     if (roleFunction(f.role) !== 'verdict') continue
     const slug = slugOf(f.reportPath)
-    all.push({ ...f, pass: slug?.pass ?? null, branch: slug?.pass === 'branch', round: slug?.round ?? null, delivered: null, unit: null })
+    all.push({ ...f, pass: slug?.pass ?? null, passes: passesIn(slug?.pass), branch: slug?.pass === 'branch', round: slug?.round ?? null, delivered: null, unit: null })
   }
+  widenToEntries(all)
   return { all, readerSkips }
+}
+
+/** The pass ids a report's slug names (`u1-p1`, or a multi round's `u1-p1-u1-p2`), in pass order. */
+const passesIn = (slugPass) => passesOf(slugPass, '')
+
+/**
+ * Inbox rows 228 and 231: one term window in both shapes. A free-text finding's terms are read over
+ * its own block (`extractFreeText`); a structured finding's over its own entry — its summary plus the
+ * matching entry of its report's `stamity-findings` block (by the report path and the local id, or,
+ * for a ledger row, which carries no local id, the same locator). So a digest whose summary is
+ * shorter than its report row reads what the row reads, and neither shape reads report prose. A
+ * finding with no file is left as it is: the matcher skips it, and at-risk coverage reads its text.
+ */
+function widenToEntries(all) {
+  const byId = new Map()
+  const byLocator = new Map()
+  const index = (f) => {
+    if (f.reportPath === null || f.file == null) return
+    if (f.localId !== null && !byId.has(`${f.reportPath}#${f.localId}`)) byId.set(`${f.reportPath}#${f.localId}`, f.text)
+    if (!byLocator.has(`${f.reportPath}@${locKey(f)}`)) byLocator.set(`${f.reportPath}@${locKey(f)}`, f.text)
+  }
+  // The report of record first (its last state copy), then a block carried inline in a return.
+  for (const f of all) if (f.source === 'report') index(f)
+  for (const f of all) if (f.source === 'return' && f.localId !== null) index(f)
+  for (const f of all) {
+    if (f.file == null || f.reportPath === null || (f.source !== 'digest' && f.source !== 'ledger')) continue
+    const entry = f.source === 'digest' ? byId.get(`${f.reportPath}#${f.localId}`) : byLocator.get(`${f.reportPath}@${locKey(f)}`)
+    if (typeof entry === 'string' && entry !== f.text) f.text = `${f.text}\n${entry}`
+  }
 }
 
 /**
@@ -911,7 +1015,8 @@ function scoreFindings(all, seeds, snapshots) {
 
 /** Where a seed was first found: its own pass, another pass, the whole-branch review, or a source naming no pass (a ledger row with no report). */
 const STAGE_ORDER = ['pass', 'other-pass', 'branch', 'unknown']
-const stageOf = (f, seed) => (f.branch ? 'branch' : f.pass === seed.pass ? 'pass' : isPass(f.pass) ? 'other-pass' : 'unknown')
+// build/366: a finding of a multi round is at the pass stage for every pass the round covers.
+const stageOf = (f, seed) => (f.branch ? 'branch' : covers(f, seed.pass) ? 'pass' : isPass(f.pass) ? 'other-pass' : 'unknown')
 
 /**
  * One row per seed: presence at its pass from the snapshot copies, found, the earliest stage and
@@ -933,7 +1038,7 @@ function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, inval
     const stages = hits.map((f) => stageOf(f, seed)).toSorted((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b))
     return {
       id: seed.id, class: seed.class ?? null, pass: seed.pass, present, caughtByImplementer: present === false, found: hits.length > 0,
-      foundRound1: hits.some((f) => !f.branch && f.pass === seed.pass && f.round === 1), stage: stages[0] ?? null, oracle: oracleStatus.get(seed.id) ?? null,
+      foundRound1: hits.some((f) => !f.branch && covers(f, seed.pass) && f.round === 1), stage: stages[0] ?? null, oracle: oracleStatus.get(seed.id) ?? null,
     }
   })
   for (const pass of missing) notes.push(`no snapshot under captures/snapshots/${pass}/: its seeds stay in the recall denominator with presence unknown`)
@@ -955,18 +1060,30 @@ function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, inval
  * 1 in transcript order, read against `captures/state/compaction-<n>-pre/`. At risk: a verdict-role
  * Critical or Warning finding delivered before the boundary with no pre-compaction row; lost: no
  * row at run end either, and no seed it matches has a passing oracle. Valid iff at risk ≥ 1.
+ * Inbox row 230: an `auto` boundary is a sample only inside §7's window — after a lens (verdict-role)
+ * delivery, with no ledger write between that delivery and the boundary. One outside it keeps its
+ * `n`, so the pre-compaction copies stay aligned, and is named in `notes`, never sampled.
  */
-function compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, oracleStatus, roots, tolerance }) {
+function compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, oracleStatus, roots, tolerance, notes }) {
   const driverCompactions = walk.compactions.filter((c) => c.trigger === 'manual' || (mechanism === 'auto-window' && c.trigger === 'auto'))
   const endRows = ledgerFindings(states.end?.ledger ?? [], { roots })
   const seedsOfFinding = new Map()
   for (const [id, idxs] of Object.entries(seedMatch.matched)) for (const i of idxs) seedsOfFinding.set(i, [...(seedsOfFinding.get(i) ?? []), id])
-  return driverCompactions.map((c, k) => {
+  const writes = ledgerWriteLines(walk)
+  const inWindow = (c) => {
+    const lens = deliveries.findLast((d) => d.line < c.line && d.agent?.fn === 'verdict')
+    return lens !== undefined && !writes.some((line) => line > lens.line && line < c.line)
+  }
+  return driverCompactions.flatMap((c, k) => {
     const n = k + 1
+    if (c.trigger === 'auto' && !inWindow(c)) {
+      notes.push(`auto compaction ${n} at main transcript line ${c.line} falls outside §7's window (no lens delivery before it without a ledger write since): no sample`)
+      return []
+    }
     const placement = deliveries.findLast((d) => d.line < c.line && d.agent?.fn === 'verdict')?.agent.pass ?? null
     const sample = { n, placement, trigger: c.trigger ?? null, preTokens: c.preTokens ?? null, postTokens: c.postTokens ?? null, atRisk: 0, lost: 0, valid: false }
     const pre = states[`compaction-${n}-pre`]
-    if (!pre?.present) return Object.assign(sample, { reason: `no captures/state/compaction-${n}-pre/ copy` })
+    if (!pre?.present) return [Object.assign(sample, { reason: `no captures/state/compaction-${n}-pre/ copy` })]
     const preRows = ledgerFindings(pre.ledger, { roots })
     const seen = new Set()
     all.forEach((f, i) => {
@@ -979,8 +1096,19 @@ function compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMat
       if (!hasRow(f, endRows, tolerance) && !fixed) sample.lost++
     })
     sample.valid = sample.atRisk >= 1
-    return sample
+    return [sample]
   })
+}
+
+/** A `stamity ledger status` call: the verb's read, which writes nothing and closes no window. */
+const LEDGER_STATUS = /\bledger\s+status\b/
+
+/** The main-transcript lines of the orchestrator's ledger writes: the gated kinds of term (c), a `ledger status` read excepted. */
+function ledgerWriteLines(walk) {
+  return [
+    ...walk.bash.filter((b) => b.kind === 'command' && b.ledger && LEDGER_GATED_KINDS.has(b.ledger.kind) && !(b.ledger.kind === 'verb' && LEDGER_STATUS.test(b.command ?? ''))).map((b) => b.line),
+    ...walk.events.filter((e) => e.dir === 'out' && e.ledger && LEDGER_GATED_KINDS.has(e.ledger.kind)).map((e) => e.line),
+  ]
 }
 
 /** The orchestrator's context growth per pass: Σ over compaction segments of the last request's context minus the first's input, ÷ 6. */
@@ -1003,7 +1131,7 @@ function contextTokensPerPassOf(walk) {
 /**
  * Measure one replay run. `seeds` is the parsed `stamity/replay-seeds/v1` document; `forbid` the
  * absolute paths whose appearance in any tool input voids the run (each is matched in every
- * spelling, beside `seeds.json` and `__oracle__`). Returns the `stamity/replay-measurement/v1`
+ * spelling, beside `ALWAYS_FORBIDDEN`'s three: `seeds.json`, `__oracle__` and `reference-fixes`). Returns the `stamity/replay-measurement/v1`
  * document; a run that breaks a validity rule is measured anyway and names each reason in `invalid`.
  */
 export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
@@ -1020,15 +1148,16 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
   }
   const { all, readerSkips } = collectFindings(deliveries, cap.stateNames, states, roots)
   const { seedMatch, decoysFlagged, unmatched, adjudication, tolerance } = scoreFindings(all, seeds, L.snapshots)
-  // build/251: a pass a verdict agent was dispatched for holds a snapshot, by the marker hook's rule; none is a capture defect.
+  // build/251: a pass a verdict agent was dispatched for holds a snapshot, by the marker hook's rule; none is a capture defect
+  // (build/366: for each pass a multi dispatch covers).
   for (const id of PASS_IDS) {
-    if (agents.some((a) => a.fn === 'verdict' && !a.branch && a.pass === id) && copiesOf(L.snapshots, id).length === 0) {
+    if (agents.some((a) => a.fn === 'verdict' && !a.branch && covers(a, id)) && copiesOf(L.snapshots, id).length === 0) {
       invalid.push(`capture defect: a verdict agent was dispatched for ${id}, but captures/snapshots/${id}/ holds no copy`)
     }
   }
   const seedRows = seedRowsOf(seeds, all, seedMatch, L.snapshots, oracleStatus, notes, invalid)
   const mechanism = run?.mechanism ?? 'interrupt'
-  const compactionSamples = compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, oracleStatus, roots, tolerance })
+  const compactionSamples = compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, oracleStatus, roots, tolerance, notes })
 
   const loopChars = sum(Object.values(perPass), loopOf)
   const unattributedShare = loopChars === 0 ? 0 : loopOf(perPass.unattributed) / loopChars
@@ -1043,7 +1172,8 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
   }
   const reviewsOf = (pred) => deliveries.filter((d) => d.agent?.role === 'reviewer' && pred(d.agent))
   const passes = PASS_IDS.map((id) => {
-    const reviews = reviewsOf((a) => !a.branch && a.pass === id)
+    // build/366: one review round's verdict and round count are recorded for every pass it covers.
+    const reviews = reviewsOf((a) => !a.branch && covers(a, id))
     const finalClass = finalClassOf(reviews)
     const approved = finalClass === 'approve' || finalClass === 'approve-after-fixes'
     const ownSeeds = seedRows.filter((s) => s.pass === id)

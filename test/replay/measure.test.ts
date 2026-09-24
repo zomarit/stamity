@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { attributePass, measureRun } from "../../scripts/replay/measure.mjs";
+import { attributePass, checkSeeds, measureRun, passesOf, presentIn } from "../../scripts/replay/measure.mjs";
 import { type CaptureLayout, type CaptureSpec, type SubagentFile, mainLine, subagentFile, writeCapture } from "./synth.ts";
 
 /**
@@ -229,6 +229,8 @@ interface PassCaptureOptions {
   locate?: (r: Row, fixture: string) => string;
   /** The first review's rows. */
   rows?: Row[];
+  /** Changed shape only: the rows the first review's digest shows, when they differ from its report's (defaults to `rows`). */
+  digestRows?: Row[];
   run?: Record<string, unknown>;
   snapshots?: CaptureSpec["snapshots"];
   oracle?: "pass" | "fail";
@@ -263,9 +265,10 @@ function passCapture(options: PassCaptureOptions): Built {
   mkdirSync(fixture);
   const { shape } = options;
   const rows = options.rows ?? THREE;
+  const shown = options.digestRows ?? rows;
   const locate = (r: Row): string => (options.locate ? options.locate(r, fixture) : r.locator);
   const firstReview =
-    shape === "baseline" ? freeTextReturn(rows, "request-changes", locate) : digestReturn(rows.map((r) => ({ ...r, locator: locate(r) })), "request-changes", REPORT_REL);
+    shape === "baseline" ? freeTextReturn(rows, "request-changes", locate) : digestReturn(shown.map((r) => ({ id: r.id, severity: r.severity, locator: locate(r), summary: r.summary })), "request-changes", REPORT_REL);
   const secondReview =
     shape === "baseline" ? "**Verdict:** approve\n\nNo findings." : digestReturn([], "approve", `.stamity/runs/${RUN}/reports/u1-p1-reviewer-r2.md`);
   const agents: AgentSpec[] = [
@@ -1026,6 +1029,197 @@ describe("measureRun — the whole-branch review's fixes", () => {
     expect(m.invalid).toEqual(["2 main transcripts under captures/transcript/ (a restart or a stray file): measured on the newest, synth-session"]);
     expect(m.totals.loopChars).toBe(base.totals.loopChars);
     expect(m.totals.recall).toEqual(base.totals.recall);
+  });
+});
+
+/** One review round of a multi-pass capture: the reviewer's dispatch and its delivery. */
+interface RoundSpec {
+  result: string;
+  description?: string;
+  prompt?: string;
+}
+
+/**
+ * u1-p1 and u1-p2 built apart and reviewed together (build/366): two implementers, then each
+ * round is one reviewer whose prompt names both passes and whose description names neither, with a
+ * u1-p1 fixer between rounds. No compaction; the end ledger holds the seed's row.
+ */
+const implementerOf = (pass: string): AgentSpec => ({
+  id: `tu_impl_${pass}`, agentId: `aimpl${pass.replace("-", "")}`, type: "stamity-implementer", description: `Implement ${pass}`, prompt: `Build unit ${pass}.`, result: "status: DONE", tokens: 100,
+});
+
+function multiCapture(options: { rounds: RoundSpec[]; snapshots?: CaptureSpec["snapshots"] }): Built {
+  const dir = scratch();
+  const fixture = join(dir, "fx");
+  mkdirSync(fixture);
+  const agents: AgentSpec[] = [implementerOf("u1-p1"), implementerOf("u1-p2")];
+  options.rounds.forEach((round, k) => {
+    if (k > 0) agents.push({ id: `tu_fix${k}`, agentId: `afix${k}`, type: "stamity-fixer", description: "Fix u1-p1", prompt: "Fix the findings of u1-p1.", result: "status: DONE", tokens: 100 });
+    agents.push({
+      id: `tu_rev${k + 1}`, agentId: `arev${k + 1}`, type: "stamity-reviewer", description: round.description ?? "Review the batch", prompt: round.prompt ?? "Review u1-p1 u1-p2.", result: round.result, tokens: 100,
+    });
+  });
+  const layout = writeCapture(dir, {
+    run: { runId: "2026-09-24-replay-v2-1", shape: "baseline", kind: "scored", client: { version: "2.1.280" } },
+    stdout: [JSON.stringify({ type: "system", subtype: "init", ...INIT_PINNED, cwd: fixture })],
+    transcript: [mainLine.userText("/st-work docs/plans/001-replay.md --effort deep"), ...agents.flatMap(dispatch)],
+    subagents: agents.map(subagentOf),
+    snapshots: options.snapshots ?? { "u1-p1": SNAPSHOT_U1P1, "u1-p2": SNAPSHOT_U1P1 },
+    state: { end: { runId: RUN, ledger: ledgerRows([SEED_FINDING]) } },
+    oracle: { schema: "stamity/replay-oracle/v1", run: { status: "ok", detail: "" }, results: [{ seed: "sec-sql-sort", kind: "vitest", status: "pass", detail: "" }] },
+  });
+  return { layout, fixture, agents };
+}
+
+const APPROVE = "**Verdict:** approve\n\nNo findings.";
+const passOf = (m: Measurement, id: string): PassRow => m.passes.find((p) => p.id === id)!;
+const seedOf = (m: Measurement): PassRow["seeds"][number] => passOf(m, "u1-p1").seeds[0]!;
+
+describe("REPLAY-v2 — multi-pass review rounds (build/366)", () => {
+  it("passesOf names the distinct passes a dispatch covers, by attributePass's precedence, while attributePass still reads multi", () => {
+    expect(passesOf("Review the batch", "Review u1-p2 then u1-p1, and u1-p1 again.")).toEqual(["u1-p1", "u1-p2"]);
+    expect(attributePass("Review the batch", "Review u1-p2 then u1-p1, and u1-p1 again.")).toBe("multi");
+    // A description naming a pass wins over the prompt, as it does for attributePass.
+    expect(passesOf("Review u2-p2", "Review u2-p1 and then u3-p1.")).toEqual(["u2-p2"]);
+    expect(passesOf("Review u1-p1 and u1-p2", "Review both.")).toEqual(["u1-p1", "u1-p2"]);
+    expect(passesOf("Review the lane", "No pass named.")).toEqual([]);
+  });
+
+  it("(a) a seed found by a reviewer whose prompt names u1-p1 u1-p2 is a round-1 find at its own pass", async () => {
+    const m = await measure(multiCapture({ rounds: [{ result: freeTextReturn([SEED_FINDING], "request-changes") }, { result: APPROVE }] }).layout.runDir);
+    expect(m.invalid).toEqual([]);
+    expect(seedOf(m)).toEqual(expect.objectContaining({ id: "sec-sql-sort", present: true, found: true, foundRound1: true, stage: "pass" }));
+  });
+
+  it("(b) one review round's final class and round count are recorded for every pass it covers", async () => {
+    const m = await measure(multiCapture({ rounds: [{ result: freeTextReturn([SEED_FINDING], "request-changes") }, { result: APPROVE }] }).layout.runDir);
+    for (const id of ["u1-p1", "u1-p2"]) expect([id, passOf(m, id).verdict]).toEqual([id, { finalClass: "approve-after-fixes", rounds: 2, approvedWithSeedUnfixed: false }]);
+    expect(m.passes.filter((p) => !["u1-p1", "u1-p2"].includes(p.id)).map((p) => p.verdict.rounds)).toEqual([0, 0, 0, 0]);
+  });
+
+  it("counts a single-pass fixer of a covered pass toward the multi reviewer's round", async () => {
+    // The seed is first cited in the round after the u1-p1 fixer, so it is no round-1 find.
+    const loose = "**Verdict:** request-changes\n\n| Warning | src/http/app.ts:30 | the error handler logs the whole request body |";
+    const m = await measure(multiCapture({ rounds: [{ result: loose }, { result: freeTextReturn([SEED_FINDING], "request-changes") }, { result: APPROVE }] }).layout.runDir);
+    expect(seedOf(m)).toEqual(expect.objectContaining({ found: true, foundRound1: false, stage: "pass" }));
+    expect(passOf(m, "u1-p2").verdict).toEqual(expect.objectContaining({ finalClass: "approve-after-fixes", rounds: 3 }));
+  });
+
+  it("a multi dispatch naming a pass with no snapshot is a capture defect for that pass", async () => {
+    const m = await measure(multiCapture({ rounds: [{ result: freeTextReturn([SEED_FINDING], "request-changes") }, { result: APPROVE }], snapshots: { "u1-p1": SNAPSHOT_U1P1 } }).layout.runDir);
+    expect(m.invalid).toEqual(["capture defect: a verdict agent was dispatched for u1-p2, but captures/snapshots/u1-p2/ holds no copy"]);
+  });
+
+  it("a whole-branch finding stays at the branch stage, and its round is no pass's verdict", async () => {
+    const rounds = [{ result: APPROVE }, { result: freeTextReturn([SEED_FINDING], "request-changes"), description: "Whole-branch review", prompt: "Review u1-p1 u1-p2 as one branch." }];
+    const m = await measure(multiCapture({ rounds }).layout.runDir);
+    expect(seedOf(m)).toEqual(expect.objectContaining({ found: true, foundRound1: false, stage: "branch" }));
+    expect(passOf(m, "u1-p2").verdict).toEqual(expect.objectContaining({ finalClass: "approve", rounds: 1 }));
+    expect(m.wholeBranch).toEqual({ finalClass: "blocked", rounds: 1 });
+  });
+});
+
+/** The allowlist guard's shape (`oracle/reference-fixes.patch`), which v1's contains-only rule read as the seed (build/365). */
+const NOT_GUARDED = "\\.(has|includes)\\(\\s*sort\\s*\\)";
+const SEEDED_LINE = "  const sql = `SELECT id FROM orders ORDER BY ${sort} DESC LIMIT ? OFFSET ?`;";
+const GUARDED_QUERY = ["// line 1", "  if (!SORT_COLUMNS.has(sort)) throw new Error(\"unknown sort column\");", ...Array.from({ length: 8 }, (_, i) => `// line ${i + 3}`), SEEDED_LINE, "// line 12", ""].join("\n");
+const SEED_V2 = { ...SEEDS.seeds[0]!, present: { contains: "ORDER BY ${sort}", notMatch: [NOT_GUARDED] } };
+const INJECTION = { file: "src/store/query.ts", find: "ORDER BY ${column} DESC", replace: "ORDER BY ${sort} DESC" };
+const seedsWith = (patch: Record<string, unknown>): Record<string, unknown> => ({ ...SEEDS, seeds: [{ ...SEEDS.seeds[0]!, ...patch }] });
+
+function treeWith(files: Record<string, string>): string {
+  const dir = scratch();
+  for (const [rel, content] of Object.entries(files)) {
+    mkdirSync(join(dir, rel, ".."), { recursive: true });
+    writeFileSync(join(dir, rel), content);
+  }
+  return dir;
+}
+
+describe("REPLAY-v2 — the seeds schema (S1) and the presence rule (build/365)", () => {
+  it("(c) a seed with present.notMatch reads absent on a tree holding the allowlist guard, and present on the seeded tree", async () => {
+    expect(presentIn(treeWith({ "src/store/query.ts": QUERY_AT(11) }), SEED_V2)).toBe(true);
+    expect(presentIn(treeWith({ "src/store/query.ts": GUARDED_QUERY }), SEED_V2)).toBe(false);
+    // v1's rule, with no notMatch, still reads the guarded tree as present.
+    expect(presentIn(treeWith({ "src/store/query.ts": GUARDED_QUERY }), SEEDS.seeds[0])).toBe(true);
+    const seeds = { ...SEEDS, seeds: [SEED_V2] };
+    const guarded = passCapture({ shape: "baseline", snapshots: { "u1-p1": { main: { "src/store/query.ts": GUARDED_QUERY, "src/orders/format.ts": FORMAT } } } });
+    const g = (await measureRun(guarded.layout.runDir, { seeds, forbid: [] })) as Measurement;
+    expect(seedOf(g)).toEqual(expect.objectContaining({ present: false, caughtByImplementer: true }));
+    expect(g.totals.recall.denominator).toBe(0);
+    const s = (await measureRun(passCapture({ shape: "baseline" }).layout.runDir, { seeds, forbid: [] })) as Measurement;
+    expect(seedOf(s)).toEqual(expect.objectContaining({ present: true, found: true }));
+  });
+
+  it("(d) v1's committed seeds.json passes the schema check unchanged", () => {
+    const v1 = JSON.parse(readFileSync(resolve(import.meta.dirname, "../../evals/replay/v1/seeds.json"), "utf8")) as { seeds: Record<string, unknown>[] };
+    expect(() => checkSeeds(v1)).not.toThrow();
+    expect(v1.seeds.some((s) => "injection" in s || "notMatch" in (s["present"] as object))).toBe(false);
+  });
+
+  it("accepts an injection of one file with a find and a replace that differ, and a notMatch list", () => {
+    expect(() => checkSeeds(seedsWith({ injection: INJECTION, present: SEED_V2.present }))).not.toThrow();
+  });
+
+  it.each<[string, Record<string, unknown>, RegExp]>([
+    ["a find equal to its replace", { injection: { ...INJECTION, replace: INJECTION.find } }, /sec-sql-sort.*injection\.find equals injection\.replace/],
+    ["an empty find", { injection: { ...INJECTION, find: "" } }, /sec-sql-sort.*injection\.find is empty/],
+    ["an empty replace", { injection: { ...INJECTION, replace: "" } }, /sec-sql-sort.*injection\.replace is empty/],
+    ["a replace that is no string", { injection: { ...INJECTION, replace: 3 } }, /sec-sql-sort.*injection\.replace is not a string/],
+    ["an injection spanning a second file", { injection: { ...INJECTION, file: "src/store/paging.ts" } }, /sec-sql-sort.*injection\.file "src\/store\/paging\.ts" is not the item's file "src\/store\/query\.ts"/],
+    ["an injection that is no object", { injection: "ORDER BY" }, /sec-sql-sort.*injection is not an object/],
+    ["a notMatch that is no list", { present: { contains: "x", notMatch: NOT_GUARDED } }, /sec-sql-sort.*present\.notMatch is not a list of non-empty strings/],
+    ["a notMatch pattern that does not compile", { present: { contains: "x", notMatch: ["(sort"] } }, /sec-sql-sort.*present\.notMatch "\(sort" is no regex/],
+  ])("refuses %s", (_label, patch, reason) => {
+    expect(() => checkSeeds(seedsWith(patch))).toThrow(reason);
+  });
+});
+
+describe("REPLAY-v2 — one term window in both shapes (inbox rows 228, 231)", () => {
+  it("scores one finding identically as a free-text row and as a digest entry whose report row carries the term", async () => {
+    // The digest's summary carries no accepted term; its report's `stamity-findings` entry does.
+    const digestRows = [{ ...SEED_FINDING, summary: "the sort value reaches ORDER BY" }];
+    const common = { rows: [SEED_FINDING], preLedger: [], endLedger: [], oracle: "pass" as const };
+    const [free, structured] = [await measure(passCapture({ shape: "baseline", ...common }).layout.runDir), await measure(passCapture({ shape: "changed", ...common, digestRows }).layout.runDir)];
+    for (const m of [free, structured]) {
+      expect([m.shape, seedOf(m)]).toEqual([m.shape, expect.objectContaining({ found: true, foundRound1: true, stage: "pass" })]);
+      expect([m.shape, m.totals.unmatched, m.adjudication]).toEqual([m.shape, 0, []]);
+      expect([m.shape, m.compactionSamples[0]]).toEqual([m.shape, expect.objectContaining({ atRisk: 1, lost: 0, valid: true })]);
+    }
+  });
+
+  it("reads no more than the entry: a term only in the report's prose still goes to adjudication", async () => {
+    const digestRows = [{ ...SEED_FINDING, summary: "the sort value reaches ORDER BY" }];
+    const reportRows = [{ ...SEED_FINDING, summary: "the sort value reaches ORDER BY unchecked" }];
+    const { layout } = passCapture({ shape: "changed", rows: reportRows, digestRows });
+    const report = join(layout.state, "end", "runs", RUN, "reports", "u1-p1-reviewer-r1.md");
+    writeFileSync(report, `${readFileSync(report, "utf8")}\nThe value is concatenated into the SQL text.\n`);
+    const m = await measure(layout.runDir);
+    expect(m.totals.recall.found).toBe(0);
+    expect(m.adjudication).toEqual([expect.objectContaining({ item: "sec-sql-sort", locator: "src/store/query.ts:11" })]);
+  });
+});
+
+describe("REPLAY-v2 — the auto-window compaction window (inbox row 230)", () => {
+  const AUTO = mainLine.compactBoundary({ trigger: "auto", preTokens: 900_000 });
+  const autoWindow = { mechanism: "auto-window" };
+
+  it("keeps no sample for an auto boundary after the ledger write that closed the lens delivery's window", async () => {
+    // `extra` lands after the first review's delivery and the ledger write that follows it.
+    const m = await measure(passCapture({ shape: "baseline", run: autoWindow, extra: [AUTO] }).layout.runDir);
+    expect(m.compactionSamples.map((s) => [s.n, s.trigger])).toEqual([[2, "manual"]]);
+    expect(notesOf(m)).toMatch(/auto compaction 1 at main transcript line \d+ falls outside §7's window/);
+  });
+
+  it("keeps a sample for an auto boundary after a lens delivery with no ledger write since, a ledger status read included", async () => {
+    const status = [mainLine.bashToolUse({ id: "tu_status", command: `npx @zomarit/stamity ledger status --run ${RUN}` }), mainLine.toolResult("tu_status", "0 open")];
+    const m = await measure(passCapture({ shape: "baseline", run: autoWindow, tail: [...status, AUTO] }).layout.runDir);
+    expect(m.compactionSamples.map((s) => [s.n, s.trigger])).toEqual([[1, "manual"], [2, "auto"]]);
+  });
+
+  it("applies no window under the interrupt mechanism, where an auto boundary is no driver compaction", async () => {
+    const m = await measure(passCapture({ shape: "baseline", extra: [AUTO] }).layout.runDir);
+    expect(m.compactionSamples.map((s) => [s.n, s.trigger])).toEqual([[1, "manual"]]);
   });
 });
 
