@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { COMMANDS } from "../../src/cli.ts";
+import { runCli } from "../../src/cli/kit/program.ts";
 import { buildSessionStartScript, SESSION_START_SCREEN_PATTERN_IDS } from "../../src/hooks/scripts.ts";
 import { CARD_MAX_CHARS } from "../../src/runs/layout.ts";
 import { collectResumeCard, readRecordHead, renderResumeCard, screenCard } from "../../src/runs/resumeCard.ts";
@@ -572,6 +573,35 @@ function printedMinute(lines: readonly string[] | null): Date {
   return minute === undefined ? new Date() : new Date(minute.replace("Z", ":00Z"));
 }
 
+/**
+ * `stamity ledger status` in process, reading the clock it is handed.
+ *
+ * The kit's own clock seam (`RunCliOptions.clock`), not a mock: `runInProcess`
+ * forwards no clock, and the verb stamps its card `(as of <minute>)` from it.
+ * Ledger row build/343: read off the wall, that stamp moved whenever a UTC
+ * minute boundary fell between the hook's print and this one, and parity went
+ * red on the stamp alone.
+ */
+async function statusAt(root: string, now: Date): Promise<{ code: number; stdout: string; stderr: string }> {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const code = await runCli(["ledger", "status"], COMMANDS, {
+    cwd: root,
+    env: {},
+    io: {
+      out: (text) => {
+        stdout.push(text);
+      },
+      err: (text) => {
+        stderr.push(text);
+      },
+    },
+    terminal: { stdoutIsTTY: false, stderrIsTTY: false, stdinIsTTY: false },
+    clock: { now: () => now },
+  });
+  return { code, stdout: stdout.join(""), stderr: stderr.join("") };
+}
+
 async function assertParity(repo: TempDirHandle, rootRel: string | undefined): Promise<string[] | null> {
   const root = rootRel === undefined ? repo.dir : repo.path(rootRel);
   mkdirSync(join(root, ".stamity", "generated", "hooks", "claude"), { recursive: true });
@@ -581,7 +611,9 @@ async function assertParity(repo: TempDirHandle, rootRel: string | undefined): P
   const twin = collectResumeCard({ rootDir: root, now: printedMinute(lines) });
   expect(twin?.lines ?? null).toEqual(lines);
 
-  const status = await runInProcess(COMMANDS, ["ledger", "status"], { cwd: root });
+  // Both readers run at the minute the hook printed, so every byte — the stamp
+  // included — is compared, and a minute boundary between the prints is not a diff.
+  const status = await statusAt(root, printedMinute(lines));
   expect(status.code, status.stderr).toBe(0);
   expect(status.stdout).toBe(lines === null ? NO_CARD : `${lines.join("\n")}\n`);
   return lines;
@@ -633,6 +665,26 @@ describe("the resume card's two twins", () => {
 
     const lines = await assertParity(repo, "main");
     expect(lines?.[4]).toBe(`lanes: 1 (${linked[0]})`);
+  });
+
+  it("keeps parity when a UTC minute boundary falls between the two prints (build/343)", async () => {
+    const repo = getRepo();
+    await seedDemo(repo);
+    // `Date` is faked in this process only; the hook runs in a child process on
+    // the real wall clock. Every in-process reading therefore sits one minute
+    // past the hook's print — the boundary the flake straddled, made certain
+    // rather than waited for.
+    const realNow = Date.now();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(realNow + 60_000);
+    try {
+      const lines = await assertParity(repo, undefined);
+      expect(lines).not.toBeNull();
+      // The boundary was really there: this process's minute is past the hook's.
+      expect(printedMinute(lines).getTime()).toBeLessThan(Math.floor(Date.now() / 60_000) * 60_000);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
