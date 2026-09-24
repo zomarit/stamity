@@ -582,10 +582,14 @@ function printedMinute(lines: readonly string[] | null): Date {
  * minute boundary fell between the hook's print and this one, and parity went
  * red on the stamp alone.
  */
-async function statusAt(root: string, now: Date): Promise<{ code: number; stdout: string; stderr: string }> {
+async function statusAt(
+  root: string,
+  now: Date,
+  ...flags: readonly string[]
+): Promise<{ code: number; stdout: string; stderr: string }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
-  const code = await runCli(["ledger", "status"], COMMANDS, {
+  const code = await runCli(["ledger", "status", ...flags], COMMANDS, {
     cwd: root,
     env: {},
     io: {
@@ -671,12 +675,15 @@ describe("the resume card's two twins", () => {
     const repo = getRepo();
     await seedDemo(repo);
     // `Date` is faked in this process only; the hook runs in a child process on
-    // the real wall clock. Every in-process reading therefore sits one minute
-    // past the hook's print — the boundary the flake straddled, made certain
-    // rather than waited for.
+    // the real wall clock. `realNow` is read before the two hook spawns, so a
+    // real minute boundary inside their latency can move the hook's print one
+    // minute past it; freezing two minutes ahead (build/346) keeps every
+    // in-process reading strictly past any minute the hook can print for any
+    // spawn shorter than a minute — the boundary the flake straddled, made
+    // certain rather than waited for.
     const realNow = Date.now();
     vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(realNow + 60_000);
+    vi.setSystemTime(realNow + 120_000);
     try {
       const lines = await assertParity(repo, undefined);
       expect(lines).not.toBeNull();
@@ -794,9 +801,13 @@ describe("stamity ledger status", () => {
       [runFile(RUN, "record.md")]: record(),
       [runFile(RUN, "ledger.jsonl")]: [row(`${RUN}/a/1`, "open"), "{torn", "[1]", ""].join("\n"),
     });
-    const plain = await runInProcess(COMMANDS, ["ledger", "status"], { cwd: repo.dir });
+    // Ledger row build/344: both prints read one pinned minute, so the byte
+    // comparison below holds across a UTC minute boundary between them.
+    const now = new Date("2026-09-23T09:00:30Z");
+    const plain = await statusAt(repo.dir, now);
+    expect(plain.stdout.split("\n")[0]).toBe(`stamity resume card — run ${RUN} (as of 2026-09-23T09:00Z)`);
     expect(plain.stderr).toBe(`warning: .stamity/runs/${RUN}/ledger.jsonl has 2 line(s) that are not ledger rows\n`);
-    const dry = await runInProcess(COMMANDS, ["ledger", "status", "--dry-run"], { cwd: repo.dir });
+    const dry = await statusAt(repo.dir, now, "--dry-run");
     expect(dry.code).toBe(0);
     expect(dry.stdout).toBe(plain.stdout);
   });
