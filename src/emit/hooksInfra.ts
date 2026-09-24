@@ -60,7 +60,7 @@
  */
 
 import { resolve } from "node:path";
-import type { HookInterchange } from "../hooks/model.ts";
+import { HOOK_SESSION_START_TIMEOUT_MS, type HookInterchange } from "../hooks/model.ts";
 import { MAX_POLICY_FILE_BYTES, planCoreHookScripts } from "../hooks/scripts.ts";
 import { readHookDefinitions, type ReadHooksResult } from "../hooks/userHooks.ts";
 import { resolveAgentGrant } from "../roster/agentGrants.ts";
@@ -443,6 +443,9 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
             ? path
             : `${ctx.hookScriptsRoot}/${script.fileName}`,
         ],
+        // Session start declares its budget; the guard declares none, on
+        // purpose — see HOOK_SESSION_START_TIMEOUT_MS for why each way.
+        ...(script.event === "session_start" ? { timeoutMs: HOOK_SESSION_START_TIMEOUT_MS } : {}),
       });
     }
     rowsByTool.set(tool, rows);
