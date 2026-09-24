@@ -108,8 +108,13 @@ describe("prospective calibration keys", () => {
     // `claude` profile as well as both Codex profiles; v2 is the retained prospective
     // document and keeps the set and the three rubrics it was written against, so each one
     // it pins differently is now named here rather than inherited from v1.
+    // Behaviour moved, not weakened: at 1.10.0 v1's `claude` scenario model moved in place from
+    // `claude-opus-5` to `claude-opus-5-5` (plan 010 D4, REQ-PROVE-009). v2 is the retained
+    // prospective document and keeps the pair it was written against, so its claude scenario is
+    // named here too; `evals/model-profiles-v2.json` itself does not change.
     expect(current).toEqual({ ...legacy, set: "evals/SET-v5.md", profiles: { ...legacy.profiles,
-      claude: { ...legacy.profiles["claude"], rubric: "evals/rubric-v4.md" },
+      claude: { ...legacy.profiles["claude"], rubric: "evals/rubric-v4.md",
+        scenario: { model: "claude-opus-5", reasoningEffort: null } },
       "codex-astra": { ...legacy.profiles["codex-astra"], rubric: "evals/rubric-v6.md" },
       "codex-astra-judge": { ...legacy.profiles["codex-astra-judge"], rubric: "evals/rubric-v5.md" } } });
   });
