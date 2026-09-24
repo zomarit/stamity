@@ -219,6 +219,11 @@ describe("the identity the CLI and CI suites assert against", () => {
       // customization, and the tests that pin it, to the fork.
       "test/ci/workflow.test.ts": { route: 13, why: "the workflows' canonical repository guard and the contexts evaluated against it" },
       "test/ci/packSigningRehearsal.test.ts": { route: 4, why: "the rehearsal workflow's repository guard and its Actions environment fixture" },
+      // ADDED by plan 010, unit e1-fork-release-workflow: the fork release workflow refuses the
+      // canonical repository and the canonical package name, and its suite runs those guards
+      // with the two values they refuse. Committed workflow text, which a fork's rename leaves
+      // alone, so the suite passes unedited on a renamed checkout.
+      "test/ci/forkReleaseWorkflow.test.ts": { name: 1, route: 1, why: "the fork release workflow's canonical repository and package refusals" },
       // ── test/ci: synthetic records ──
       "test/ci/apmInstall.test.ts": { route: 1, why: "a synthetic apm.lock.yaml written into the suite's own consumer" },
       "test/ci/evidenceSummary.test.ts": { route: 2, why: "a synthetic evidence pointer's source and archive URL" },
