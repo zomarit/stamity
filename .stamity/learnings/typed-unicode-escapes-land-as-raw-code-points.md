@@ -5,8 +5,8 @@ date: 2026-09-24
 confidence: high
 summary: a unicode escape typed into an Edit, Write or Bash call lands as the raw code point (build/103); a doubled backslash lands as two; write such lines by script, then prove them with an rg grep
 reviewBy: 2026-12-03
-validatedAgainst: "the rg code-point grep over src/runs/ledgerStore.ts before and after 58312346, and od -c reads of escapes typed through Write and Bash on 2026-09-24"
-integrity: sha256:0d6f054bd063c22d625fa9dd61d6f2e52e57a7a4d898efd24c0b6c2184125628
+validatedAgainst: "the rg code-point grep over src/runs/ledgerStore.ts before and after 58312346 and over seven code points planted by script (U+061C and U+E0041 among them), and od -c reads of escapes typed through Write and Bash on 2026-09-24"
+integrity: sha256:76696e5a38341dcf1af5439e6a9037679d94f1a8ac2678b61beb35ed623ec9be
 ---
 
 A `\uXXXX` escape that an agent types into a tool call does not reach the tool as text.
@@ -35,9 +35,12 @@ finds line 365 in `git show 58312346^:src/runs/ledgerStore.ts` and nothing in th
 file. The byte-hygiene case in `test/merge/writeEscape.test.ts` ("holds no literal control,
 invisible, or bidi code point in src") was widened from `src/merge/` to all of `src/` after
 that respell. It now fails on such a byte, but only in `.ts` under `src/`; tests, fixtures,
-scripts and corpus files are outside it by design. Review horizon: re-probe on the next
-client minor; retire if typed escapes start reaching tools as text, or if a gate covers
-every tracked text file.
+scripts and corpus files are outside it by design. The class this learning first shipped
+held only the zero-width, bidi and BOM ranges, so a raw U+061C or tag character read clean
+(build/359). The class below finds U+061C, U+E0041, U+0001, U+0085, U+00AD, U+180E and
+U+2028 planted by script on 2026-09-24, and skips escape text. Review horizon: re-probe on
+the next client minor; retire if typed escapes start reaching tools as text, or if a gate
+covers every tracked text file.
 
 ## How to apply
 
@@ -47,10 +50,16 @@ the line with a script that builds the backslash itself (a placeholder replaced 
 the exit code (1 means clean):
 
 ```sh
-rg -n '[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}\x{2066}-\x{2069}\x{FEFF}]' <file>
+rg -a -n '[\x{00}-\x{08}\x{0B}\x{0C}\x{0E}-\x{1F}\x{7F}-\x{9F}\x{AD}\x{61C}\x{180E}\x{200B}-\x{200F}\x{2028}\x{2029}\x{202A}-\x{202E}\x{2060}\x{2066}-\x{2069}\x{FEFF}\x{E0000}-\x{E007F}]' <file>
 ```
 
-ripgrep reads `\x{…}` as a code point, so escape text such as `\u200B` does not match
-and only raw characters do. For a file under `src/`, `npx vitest run
-test/merge/writeEscape.test.ts` is the backstop. For any other file, the grep is the only
-proof.
+The class is the union of the two lists this repository already keeps:
+`isLiteralControlCodePoint` in `test/merge/writeEscape.test.ts` (the C0 controls but tab,
+LF and CR, DEL, the C1 range, U+00AD, U+061C, U+180E, the zero-width and bidi ranges,
+U+2060, U+FEFF and the tag block) and `UNPRINTABLE_CHARS` with `UNICODE_TAG_CHARS` in
+`src/runs/layout.ts` (which add U+2028 and U+2029). When either list moves, this class
+moves with it. `-a` is required: without it ripgrep treats a file holding a raw NUL as
+binary and exits 1, which reads as clean. ripgrep reads `\x{…}` as a code point, so escape
+text such as `\u200B` does not match and only raw characters do. For a file under `src/`,
+`npx vitest run test/merge/writeEscape.test.ts` is the backstop. For any other file, the
+grep is the only proof.
