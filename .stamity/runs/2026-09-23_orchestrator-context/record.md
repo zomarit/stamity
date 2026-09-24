@@ -252,3 +252,4 @@ checkpoint and the merge to `main` wait for the maintainer.
     passes (338), and the leak gate exits 0.
   - r11a is complete. r11b does not start: v1 cannot evaluate the package's review-quality claim on this fixture
     (build/362), and the protocol for the merge gate is the maintainer's choice.
+- 2026-09-24T06:45Z CI round-trip 7 at the head f58231a2 green on every leg (runs 35964754192, 35964754138 and 35964754189), Windows included (14 min 41 s). The private layer carries the pilots' outcome and the gate question (its main at c8428e81, pushed). Where the session stops: #54 is not merged; the maintainer's first question is the merge gate's protocol (REPLAY-v2 recommended, no default), then the sign-offs and the QA walk in qa-session-1.md.
