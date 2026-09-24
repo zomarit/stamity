@@ -834,8 +834,11 @@ describe("/st-work — Prove", () => {
     }
     expect(loop).toContain("`stamity ledger close --report`");
     // build/58: only the handed ids close; a closure for any other row is refused, not applied.
+    // build/101: the pin moved with the body — C7 refuses the WHOLE close on such a closure, so the old
+    // "is a finding, never applied" wording read as a partial apply; the behaviour pinned is unchanged.
     expect(loop).toContain("with the handed ids as `--ids`");
-    expect(loop).toContain("a closure naming any other id is a finding, never applied");
+    expect(loop).toContain("a closure naming any other id refuses the whole close");
+    expect(loop).not.toContain("never applied");
   });
 
   it("names the two optional ledger fields a report-appended row carries (REQ-CTX-006)", async () => {
