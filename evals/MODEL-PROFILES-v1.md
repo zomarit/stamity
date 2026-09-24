@@ -7,7 +7,7 @@ No profile starts a model call or changes Stamity's product-level `models.pins` 
 
 | Profile | Model under test | Judge | Rubric |
 |---|---|---|---|
-| `claude` (default) | `claude-opus-5` | `claude-fable-5-1` | `rubric-v7.md` |
+| `claude` (default) | `claude-opus-5-5` | `claude-fable-5-1` | `rubric-v7.md` |
 | `codex-astra` | `gpt-6-astra` | `gpt-5.6-sol` | `rubric-v7.md` |
 | `codex-astra-judge` | `gpt-5.6-sol` | `gpt-6-astra` | `rubric-v7.md` |
 
@@ -26,8 +26,8 @@ unknown profile, unavailable exact model or effort setting, or identical scenari
 model blocks the run with the unmet requirement named. A context-window suffix does not
 make one model two different models. Never use a tier alias, change one role ad hoc, or fall
 back to another profile. New pairs are declared in a reviewed profile document before a run.
-The legacy scenario's reported `claude-opus-5[1m]` is the one accepted reporting variant of
-`claude-opus-5`, preserving the existing run contract; record the suffix verbatim. No other
+The scenario's reported `claude-opus-5-5[1m]` is the one accepted reporting variant of
+`claude-opus-5-5`, preserving the existing run contract; record the suffix verbatim. No other
 suffix or substitution is implicitly accepted. Codex model reports must match the selected
 exact ID, including `gpt-6-astra` or `gpt-5.6-sol`, without normalization.
 

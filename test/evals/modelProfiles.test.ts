@@ -26,14 +26,18 @@ const baseId = (id: string): string => id.replace(/\[[^\]]+\]$/, "");
 const grading = (text: string): string => text.slice(text.indexOf("## Verdict vocabulary\n"));
 
 describe("eval model profiles", () => {
-  it("keeps the Claude instrument as the default with its original explicit model pins", () => {
+  it("keeps the Claude instrument as the default, its scenario model on Opus 5.5 from 1.10.0", () => {
+    // Behaviour moved, not weakened: at 1.10.0 the `claude` profile's scenario model moved
+    // from `claude-opus-5` to `claude-opus-5-5` (the model mix of 2026-09-23, plan 010 D4,
+    // REQ-PROVE-009); the judge pin does not move. The move is in place in the v1 document,
+    // so this pin names the new pair rather than the original one.
     expect(document.schemaVersion).toBe(1);
     expect(document.set).toBe(SET_FILE);
     expect(document.defaultProfile).toBe("claude");
     expect(document.profiles[document.defaultProfile]).toEqual({
       harness: "claude-code",
       rubric: RUBRIC_FILE,
-      scenario: { model: "claude-opus-5", reasoningEffort: null },
+      scenario: { model: "claude-opus-5-5", reasoningEffort: null },
       judge: { model: "claude-fable-5-1", reasoningEffort: null },
     });
   });

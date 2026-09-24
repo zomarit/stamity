@@ -481,6 +481,15 @@ because their case-file bytes moved. The 2026-09-15 disposition in
 `probe-none-work-run-qa-checkpoint` that cites `content/commands/st-work.md:200-216` is a dated
 record and stays as it was.
 
+**The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
+scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
+profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
+comparator key carries the model pair from this release on, so a run on another pair is never
+composed with this one. § 8 names the pair among the comparator's fields, and its sentence on
+unrecorded fields now ends in one more rule: a run that recorded none of the fields matches no
+key, where before it matched every key. The judge, `claude-fable-5-1`, does not move. No case, no
+Expected block and no roster count moves.
+
 **Incremental runs, declared 2026-09-15.** The maintainer decision under "Incremental runs —
 declared 2026-09-15" above lets a later candidate in the same configuration re-measure only the
 cases whose inputs moved and carry every other case from a prior complete run. It moves no count
@@ -529,12 +538,14 @@ run. Results are artifacts, not chat. The file records, at minimum:
 8. **Advisory repeats** — any advisory criterion that has now failed in two consecutive runs,
    named, so the obligation above has something to act on. Track repeats within the same
    full model/rubric/harness configuration; a profile change starts a separate baseline.
-   The comparator keys on exactly those three fields — `{ profile, rubricCoreHash, harness }`,
-   recorded as `comparatorKey` on each run summary — and never on the candidate or the case and
-   content bytes: a rule that tracks one criterion across candidates cannot key on what every
-   candidate moves. (A summary written before that field existed is keyed from its own
-   `inputs.json`, and a field neither file recorded is not compared.) `configurationHash` stays
-   the exact-input receipt of one run; it is evidence, not the comparison key.
+   The comparator keys on exactly those fields — `{ profile, rubricCoreHash, harness, models }`,
+   `models` being the `{ scenario, judge }` pair, recorded as `comparatorKey` on each run
+   summary — and never on the candidate or the case and content bytes: a rule that tracks one
+   criterion across candidates cannot key on what every candidate moves. (A summary written
+   before that field existed is keyed from its own `inputs.json`, and a field neither file
+   recorded is not compared; a run that recorded none of the fields matches no key.)
+   `configurationHash` stays the exact-input receipt of one run; it is evidence, not the
+   comparison key.
 9. **Judge calibration result** — one verdict line per fixture, for **every fixture the rubric
    declares under a `### Fixture` heading — five today** — whether all of them matched, the
    advisory labels on the fixtures whose cases declare advisory criteria, and any recalibration

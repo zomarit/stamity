@@ -77,8 +77,11 @@ export function loadInputs(root, profileName) {
 
 /**
  * What "the same configuration" means to the advisory-repeat comparator: the profile, the rubric's
- * core text and the harness — the driver's notion, and the one `SET-v7.md` § 8 and the
- * incremental-run paragraph state (the same model pair, harness and rubric core).
+ * core text, the harness and the model pair — the driver's notion, and the one `SET-v7.md` § 8 and
+ * the incremental-run paragraph state (the same model pair, harness and rubric core). The pair
+ * joined at 1.10.0, when the `claude` profile's scenario model moved under an unchanged profile
+ * name: a run on another pair is never this run's prior run. It is read from `models` (the
+ * driver's configuration and a recorded key) or, failing that, from this runner's `roles`.
  *
  * Case bytes, corpus bytes and the candidate are deliberately OUT of it. `configurationHash`
  * covers every input byte, so two runs on two candidates never share one; keying the comparator
@@ -87,27 +90,45 @@ export function loadInputs(root, profileName) {
  * criterion ACROSS candidates, which is exactly the axis the hash cannot hold still.
  */
 export function comparatorKey(configuration = {}) {
+  const models = configuration.models ?? { scenario: configuration.roles?.scenario?.model,
+    judge: configuration.roles?.judge?.model }
   return { profile: configuration.profile ?? null, rubricCoreHash: configuration.rubricCoreHash ?? null,
-    harness: configuration.harness ?? null }
+    harness: configuration.harness ?? null,
+    models: { scenario: models?.scenario ?? null, judge: models?.judge ?? null } }
 }
-const COMPARATOR_FIELDS = ['profile', 'rubricCoreHash', 'harness']
+/** Each compared field as a path into the key; the pair is compared half by half. */
+const COMPARATOR_FIELDS = ['profile', 'rubricCoreHash', 'harness', 'models.scenario', 'models.judge']
+const keyField = (key, field) => field.split('.').reduce((value, part) => value?.[part], key) ?? null
+const pairRecorded = key => keyField(key, 'models.scenario') != null || keyField(key, 'models.judge') != null
 
 /**
  * The comparator key a committed run recorded. Summaries written before `comparatorKey` existed
- * carry none, so the three fields are read from the run's own `inputs.json` — this runner writes
- * them at its top level, the driver nests them under `configuration` — and a field that neither
- * file recorded is left null. Backward compatibility rule: a null field on the OLDER run is not
- * compared, so a historical run matches on exactly the fields it recorded and no more.
+ * carry none, so the fields are read from the run's own `inputs.json` — this runner writes them at
+ * its top level, the driver nests them under `configuration` — and a field that neither file
+ * recorded is left null. A stored key written before the pair joined it takes the pair from the
+ * same `inputs.json`. Backward compatibility rule: a null field on the OLDER run is not compared,
+ * so a historical run matches on exactly the fields it recorded and no more.
  */
 function recordedKey(directory, summary) {
-  if (summary.comparatorKey) return comparatorKey(summary.comparatorKey)
+  const stored = summary.comparatorKey ? comparatorKey(summary.comparatorKey) : null
+  if (stored && pairRecorded(stored)) return stored
   let raw
   try { raw = readFileSync(join(directory, 'inputs.json'), 'utf8') }
   catch (error) { if (error.code !== 'ENOENT') throw error }
   let parsed = {}
   if (raw) { try { parsed = JSON.parse(raw) } catch { parsed = {} } }
   const recorded = comparatorKey(parsed.configuration ?? parsed)
+  if (stored) return { ...stored, models: recorded.models }
   return { ...recorded, profile: recorded.profile ?? summary.profile ?? null }
+}
+
+/**
+ * Whether a recorded key admits the current one. A run that recorded none of the fields matches
+ * no key: saying nothing about its configuration is not evidence of the same one.
+ */
+function sameConfiguration(recorded, key) {
+  if (COMPARATOR_FIELDS.every(field => keyField(recorded, field) == null)) return false
+  return COMPARATOR_FIELDS.every(field => keyField(recorded, field) == null || keyField(recorded, field) === keyField(key, field))
 }
 
 /** New directories and exclusive writes only; no historical artifact can be replaced. */
@@ -193,10 +214,18 @@ export function undisposedRepeats(previous, cases, root) {
   })
 }
 
+/**
+ * `case-id:A2` ids from a recorded failure: this runner writes the joined string, the driver's
+ * export an object naming the case and every criterion that sample failed (`failed`).
+ */
+const failureIds = failure => typeof failure === 'string' ? [failure]
+  : (failure?.failed ?? []).map(criterion => `${failure.caseId}:${criterion}`)
+
 export function advisoryRepeats(aggregateResult, previous) {
   const failures = aggregateResult.rows.flatMap(row => [...new Set(row.samples.flatMap(sample =>
     sample.grade.advisory.filter(item => item.verdict === 'fail').map(item => `${row.caseId}:${item.id}`)))])
-  return { failures, repeats: failures.filter(id => previous?.advisory?.failures.includes(id)) }
+  const prior = new Set((previous?.advisory?.failures ?? []).flatMap(failureIds))
+  return { failures, repeats: failures.filter(id => prior.has(id)) }
 }
 
 /** The latest scored run this run may be compared with: same comparator key, PASS or FAIL. */
@@ -210,8 +239,7 @@ export function previousRun(root, key) {
     catch (error) { if (error.code === 'ENOENT') continue; throw error }
     const summary = JSON.parse(raw)
     const recorded = recordedKey(join(directory, name), summary)
-    const same = COMPARATOR_FIELDS.every(field => recorded[field] == null || recorded[field] === key[field])
-    if (same && ['PASS', 'FAIL'].includes(summary.status)) matches.push(summary)
+    if (sameConfiguration(recorded, key) && ['PASS', 'FAIL'].includes(summary.status)) matches.push(summary)
   }
   return matches.toSorted((a, b) => a.startedAt.localeCompare(b.startedAt)).at(-1)
 }

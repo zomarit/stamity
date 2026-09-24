@@ -75,7 +75,8 @@ golden, 16 adversarial (12 guardrail, 4 benign twins), 12 probes, with 20 carryi
 ## The judge is pinned to an explicit id, and its inputs are stated
 
 The default `claude` profile selects `rubric-v7.md`, judge **`claude-fable-5-1`** and model
-under test `claude-opus-5`, the same two ids v3 declared. Every verdict role runs at an
+under test `claude-opus-5-5` from 1.10.0 (v3 declared `claude-opus-5`; the judge id has not
+moved). Every verdict role runs at an
 explicit model id — a tier alias is never sufficient — and the run records the id each agent attests rather
 than the id the harness requested. Run 1 is why: it measured an alias that resolved to a
 different model than the set declared.
