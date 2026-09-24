@@ -13,6 +13,8 @@
  * `reports/` folder, never for a read.
  */
 
+import { posix } from "node:path";
+
 /** The seven fields a ledger row carries, per the Proof block's row schema. */
 const REQUIRED_FIELDS = [
   "id",
@@ -51,11 +53,16 @@ const REPORT_NAME = /^[^/\\]+\.md$/;
  * Whether `report` names a markdown file directly inside this ledger's run's
  * `reports/` folder. The run folder is the ledger path minus `/ledger.jsonl`,
  * so a report under another run, a nested folder or a backslash spelling fails.
+ *
+ * The separator is `posix.sep` because both paths are POSIX spellings on every
+ * platform. The run folder stays a slice rather than `posix.dirname`: dirname
+ * reads a root-anchored `/ledger.jsonl` as the folder `/`, not the empty
+ * string, and would move this check's answer for it.
  */
 const isRunReport = (ledgerPath: string, report: unknown): boolean => {
-  const suffix = `/${LEDGER_SUFFIX}`;
+  const suffix = `${posix.sep}${LEDGER_SUFFIX}`;
   if (typeof report !== "string" || !ledgerPath.endsWith(suffix)) return false;
-  const prefix = `${ledgerPath.slice(0, -suffix.length)}/reports/`;
+  const prefix = `${ledgerPath.slice(0, -suffix.length)}${posix.sep}reports${posix.sep}`;
   return report.startsWith(prefix) && REPORT_NAME.test(report.slice(prefix.length));
 };
 
