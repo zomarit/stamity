@@ -106,14 +106,18 @@ whether it covers one pass or several, the driver's hook does this for each cove
 same hook call and before the reviewer's first tool call:
 
 1. For each seed of the pass, replace the seed's `injection.find` with its `injection.replace`, once, in every
-   worktree of the run. The `find` text occurs exactly once in its file on the clean chain.
+   worktree of the run that is not pristine (step 2). The `find` text occurs exactly once in its file on the clean
+   chain.
 2. Put the change in one of two forms, read per changed worktree at the injection. While the worktree's HEAD is still
    the fixture's base, its HEAD at the session's start (the setup commit), the seeds go into the working tree and
    nothing is committed: the shape has committed nothing, and the seeds sit in its uncommitted change set beside the
    units' own work. Otherwise they go in as one commit of exactly the seeded files, with the session's own git
    identity and clock and the subject `chore(<pass>): save work in progress`, so no author, date or subject marks the
    commit that holds the seeds. The driver records each injection commit's sha and finds its commits by those shas,
-   never by author or subject.
+   never by author or subject. A pristine worktree takes no injection: pristine means its HEAD is still the setup
+   commit and its tree is clean, like an unstarted lane or the orchestrator's untouched checkout. Every other worktree
+   that holds a seed's anchor takes the seed in one of the two forms above. When every worktree holding the anchor is
+   pristine, the seed is recorded as not injected and counts as a seed that is not injected (below).
 3. Record each seed in the run journal as `injected` or `not injected (anchor missing)`; `run.json` carries the
    record as `injection`, whose `forms` names each changed worktree's form (`working-tree` or `commit`), its files,
    and its commit sha (null for `working-tree`).
