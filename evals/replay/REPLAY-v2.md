@@ -118,9 +118,12 @@ same hook call and before the reviewer's first tool call:
    commit and its tree is clean, like an unstarted lane or the orchestrator's untouched checkout. Every other worktree
    that holds a seed's anchor takes the seed in one of the two forms above. When every worktree holding the anchor is
    pristine, the seed is recorded as not injected and counts as a seed that is not injected (below).
-3. Record each seed in the run journal as `injected` or `not injected (anchor missing)`; `run.json` carries the
-   record as `injection`, whose `forms` names each changed worktree's form (`working-tree` or `commit`), its files,
-   and its commit sha (null for `working-tree`).
+3. Record each seed in the run journal as `injected` or `not injected (anchor missing)`; `run.json` carries the record
+   as `injection`, whose `forms` holds one entry, with its form, files and commit sha, per worktree that took the
+   seeds or was skipped as pristine. The form is one of three values: `working-tree` for a worktree that took the
+   seeds as working-tree edits (sha null), `commit` for one that took them as a commit, and `skipped-pristine` for a
+   pristine worktree that holds a seed's anchor and took nothing (its files are the seeded files whose anchor it
+   holds, sha null).
 4. Snapshot the pass (`captures/snapshots/<pass>/`).
 
 The seeds take the form of the work around them because a reviewer reads what the shape hands it: a shape that has
