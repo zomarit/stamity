@@ -86,6 +86,7 @@ export const NOTE_ROWS = [
   { includes: 'no snapshot under captures/snapshots/', rows: ['pooled-recall', 'security-seeds'] },
   { includes: 'present in the snapshot and not found by a verdict role', rows: ['pooled-recall'] },
   { includes: 'the file is absent from every snapshot copy of the pass', rows: ['pooled-recall', 'security-seeds'] },
+  { includes: " falls outside §7's window ", rows: ['compaction-loss'] },
 ]
 
 // ---------- small helpers ----------

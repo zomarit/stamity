@@ -397,6 +397,37 @@ describe("REPLAY-v1 §8 pinned against measure.mjs (build/5)", () => {
   });
 });
 
+// ---------- REPLAY-v2 as committed (plan 011 v2-protocol) ----------
+
+/** A protocol's §6 from its first message to the next section: the four fenced messages with their counts and digests. */
+const messages = (t: string): string => t.slice(t.indexOf("**Start message**"), t.indexOf("## §7 "));
+
+describe("REPLAY-v2 as committed (plan 011 v2-protocol)", () => {
+  // Read inside each case, not at module load: a missing file then fails these cases by name
+  // instead of every case in this file.
+  const v2Text = (): string => readFileSync(join(REPO, "evals/replay/REPLAY-v2.md"), "utf8");
+
+  it("its one replay-thresholds block holds v1's values, and its invocation bytes are v1's", () => {
+    const text = v2Text();
+    expect(parseThresholds(text)).toEqual(R1_THRESHOLDS);
+    expect(parseThresholds(text)).toEqual(parseThresholds(PROTOCOL_TEXT));
+    expect(messages(PROTOCOL_TEXT)).toContain("sha256");
+    expect(messages(text)).toBe(messages(PROTOCOL_TEXT));
+  });
+
+  it("REPLAY-v2 §8 names every ALWAYS_FORBIDDEN term (build/355)", () => {
+    const declared = MEASURE_SRC.match(/^const ALWAYS_FORBIDDEN = \[([^\]]*)\]/m);
+    expect(declared, "measure.mjs no longer declares ALWAYS_FORBIDDEN").not.toBeNull();
+    const terms = [...declared![1]!.matchAll(/'([^']+)'/g)].map((x) => x[1]!);
+    expect(terms.length).toBeGreaterThanOrEqual(3);
+    const text = v2Text();
+    const section8 = fold(text.slice(text.indexOf("## §8 Metrics"), text.indexOf("## §9 Matcher")));
+    const sentence = section8.match(/\*\*Invalid run\.\*\*(.*?)(?= - \*\*|$)/)?.[1] ?? "";
+    expect(sentence, "§8 has no **Invalid run.** bullet").toContain("in any tool input");
+    for (const term of terms) expect(sentence, `§8's invalid-run sentence omits ${term}`).toContain(`\`${term}\``);
+  });
+});
+
 // ---------- summarize ----------
 
 describe("summarize — the measurement into stamity/replay-summary/v1", () => {
@@ -578,6 +609,18 @@ describe("renderResults — RESULTS.md", () => {
     expect(section("#### Beside `loop-chars`")).toContain(notes[2]);
     expect(section("#### Beside `subagent-tokens`")).toContain(notes[2]);
     expect(section("#### Other measurement notes")).toContain(notes[3]);
+  });
+
+  it("files the auto-window's out-of-window note beside compaction-loss, not under the other notes (review/43)", async () => {
+    const { m, runJson } = await measured();
+    // The line measure.mjs writes for an automatic compaction outside §7's window (inbox row 230), filled in.
+    expect(MEASURE_SRC).toContain("} falls outside §7's window (no lens delivery before it without a ledger write since): no sample`");
+    const note = "auto compaction 2 at main transcript line 41 falls outside §7's window (no lens delivery before it without a ledger write since): no sample";
+    const md = renderResults(summarize({ ...m, notes: [note] }, runJson, PROTOCOL_SHA), parseThresholds(PROTOCOL_TEXT)) as string;
+    const section = (head: string): string => md.slice(md.indexOf(head), md.indexOf("####", md.indexOf(head) + 4));
+    expect(section("#### Beside `compaction-loss`")).toContain(note);
+    expect(section("#### Other measurement notes")).not.toContain(note);
+    expect(section("#### Other measurement notes")).toContain("- no notes line");
   });
 
   it("words the unreliable split from measure.mjs's UNATTRIBUTED_MAX and eval-set-floors from the fence's reading (build/231)", async () => {
