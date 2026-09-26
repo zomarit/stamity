@@ -326,6 +326,7 @@ interface Manifest {
 interface HookEntry {
   type?: string;
   command?: string;
+  timeout?: number;
 }
 interface HookRow {
   matcher?: string;
@@ -451,6 +452,21 @@ describe("the plugin hooks document", () => {
     expect(
       (hooksDocument.hooks["ConfigChange"] ?? []).flatMap((row) => row.hooks.map((hook) => hook.command ?? "")).join(" "),
     ).toContain("stamity-config-tamper-notice.mjs");
+  });
+
+  it("budgets the session-start hooks and the tamper notice at 30 s, and never the guard or the review gate", () => {
+    // Criterion (d) of hook-row-timeout, asserted on the BUILT root rather than through the
+    // adapter render: a builder that dropped or rewrote the key would fail here and nowhere else.
+    const timeouts = (event: string) =>
+      (hooksDocument.hooks[event] ?? []).flatMap((row) => row.hooks.map((hook) => hook.timeout));
+    expect(timeouts("SessionStart")).toEqual([30, 30]);
+    expect(timeouts("ConfigChange")).toEqual([30]);
+    for (const event of ["PreToolUse", "TaskCompleted", "SubagentStop"] as const) {
+      const hooks = (hooksDocument.hooks[event] ?? []).flatMap((row) => row.hooks);
+      // Non-degenerate: the event is wired, so an absent key is an absent budget, not an absent hook.
+      expect(hooks.length, event).toBeGreaterThan(0);
+      for (const hook of hooks) expect(Object.hasOwn(hook, "timeout"), event).toBe(false);
+    }
   });
 
   it("keeps a matcher the settings row carried", () => {

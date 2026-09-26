@@ -42,7 +42,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\""
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\"",
+            "timeout": 30
           }
         ]
       }

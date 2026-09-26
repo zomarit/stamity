@@ -890,8 +890,10 @@ function buildSettingsJson(
   if (tamper !== undefined) {
     // No matcher: the notice should fire on every configuration change the
     // client reports, and the script itself names the changed file from the
-    // payload — narrowing here would trade coverage for nothing.
-    hooks[CONFIG_CHANGE_EVENT] = [hookEntry({ event: tamper.event, command: tamper.command })];
+    // payload — narrowing here would trade coverage for nothing. The row goes
+    // whole, so the notice keeps its session-start budget on this event too
+    // (REQ-CTX-016: every wired hook declares its budget; it blocks nothing).
+    hooks[CONFIG_CHANGE_EVENT] = [hookEntry(tamper)];
   }
   // Same wiring as the extension above — no matcher, one exec-form command —
   // on each of the two events, and the ONE script decides per event what to do

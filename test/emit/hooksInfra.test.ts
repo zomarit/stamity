@@ -1205,17 +1205,25 @@ describe("hook budgets: session start carries 30 s, the guard and the review gat
     ]);
   });
 
-  it("renders Claude's SessionStart at 30 s and its guard, config-change notice and review gate with no timeout, in a repository and in a plugin root", async () => {
+  it("renders Claude's SessionStart and the tamper notice's ConfigChange at 30 s, and its guard and review gate with no timeout, in a repository and in a plugin root", async () => {
     const layouts = [undefined, "${CLAUDE_PLUGIN_ROOT}/hooks"] as const;
     const rendered = await Promise.all(layouts.map((hookScriptsRoot) => renderedHooks("claude", hookScriptsRoot)));
     for (const [i, hooks] of rendered.entries()) {
       const hookScriptsRoot = layouts[i];
       const label = hookScriptsRoot ?? "repository";
       expect(leaves(hooks["SessionStart"]).map((hook) => hook.timeout), label).toEqual([30, 30]);
-      // The guard, the tamper notice's ConfigChange wiring, and the review gate on
-      // TaskCompleted and SubagentStop: every other event, and none may time out.
-      const others = Object.keys(hooks).filter((event) => event !== "SessionStart").toSorted();
-      expect(others, label).toEqual(["ConfigChange", "PreToolUse", "SubagentStop", "TaskCompleted"]);
+      // TEST CHANGE, justified — review/28 and review/36, signed off 2026-09-26. ConfigChange
+      // was pinned here with the guard and the gate as "none may time out", with no source.
+      // REQ-CTX-016 opens with "every wired hook declares its budget" and exempts only the
+      // guard (a timed-out PreToolUse opens it) and the gate (its win32 worst case exceeds
+      // 30 s). The tamper notice is the same script SessionStart budgets and blocks nothing,
+      // so its ConfigChange wiring now carries the same 30 s, and the pin moved with it.
+      expect(leaves(hooks["ConfigChange"]).map((hook) => hook.timeout), label).toEqual([30]);
+      // The guard, and the review gate on TaskCompleted and SubagentStop: none may time out.
+      const others = Object.keys(hooks)
+        .filter((event) => event !== "SessionStart" && event !== "ConfigChange")
+        .toSorted();
+      expect(others, label).toEqual(["PreToolUse", "SubagentStop", "TaskCompleted"]);
       for (const event of others) {
         for (const hook of leaves(hooks[event])) expect(Object.hasOwn(hook, "timeout"), `${label} ${event}`).toBe(false);
       }
