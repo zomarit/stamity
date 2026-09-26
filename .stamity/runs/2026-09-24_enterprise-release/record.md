@@ -104,3 +104,17 @@ Fable 5.1. Each approved lane is cherry-picked onto the package branch in plan o
 - Sign-off, 11:20Z, `2026-09-24_enterprise-release/review/18` (decision needed; the plan cell's homepage rule has no
   referent): amend the plan cell to `https://github.com/<owner>/<repo>`, the guide's value and both fixtures'; the
   code stands. The implementer's `build/2` is the same finding.
+- The session resumed 2026-09-26T14:07Z, two days after the last activity; the state on disk was intact.
+- The E4 walk returned `BLOCKED_DEPENDENCY` (`build/17`): `CLAUDE_CODE_MANAGED_SETTINGS_PATH` is a stub in the public
+  builds. The orchestrator's earlier claim that the client reads it rested on a string in the binary, not on use.
+  The maintainer chose the Linux-container walk. The cell is amended.
+- Sign-offs, 14:08Z:
+  - `review/28` and `review/36`: Claude's ConfigChange tamper entry declares the same 30 s budget.
+  - `review/38`: a dispatch covers the one pass its description names (first-wins, like the pinned attribution),
+    else the distinct passes its prompt names; REPLAY-v2 words it and the driver mirrors it.
+  - `review/46`: v2 runs keep the `<date>-replay-<n>` id form inside `evals/replay/v2/runs/`.
+  - `review/48`: an unknown `--protocol` exits 1 in every command, so `compare`'s exit 2 keeps one meaning.
+- Sign-off, 14:15Z, the card reviewer's `SECURITY.md:104` Warning (decision needed: no unit owns `SECURITY.md`): the
+  card's stack owns the correction, because the bound it documents is the card's. It lands in a lane stacked on
+  `p16s2/hook-fix`. The implementer's `build/15` is the same finding.
+- `v2-multipass`'s new NOTE_ROWS entry (`review/43`) is routed to `v2-protocol-paths`, which owns `score.mjs`.
