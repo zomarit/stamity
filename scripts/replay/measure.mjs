@@ -1078,7 +1078,7 @@ function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, inval
     const stages = hits.map((f) => stageOf(f, seed)).toSorted((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b))
     const found = { found: hits.length > 0, foundRound1: hits.some((f) => !f.branch && covers(f, seed.pass) && f.round === 1), stage: stages[0] ?? null, oracle: oracleStatus.get(seed.id) ?? null }
     if (injected?.get(seed.id) === NOT_INJECTED) {
-      notes.push(`seed ${seed.id} (${seed.pass}): recorded ${NOT_INJECTED} in run.json's injection record, so it is filed absent at the pass and leaves the recall denominator, whatever the snapshot reads`)
+      notes.push(`seed ${seed.id} (${seed.pass}): recorded ${NOT_INJECTED} in run.json's injection record, so it is filed absent at the pass and leaves the recall denominator, whatever the snapshot reads${seed.class === 'security' ? '; a security seed, so it holds its security-seeds row' : ''}`)
       return { id: seed.id, class: seed.class ?? null, pass: seed.pass, present: false, caughtByImplementer: true, ...found }
     }
     const copies = copiesOf(snapshots, seed.pass)

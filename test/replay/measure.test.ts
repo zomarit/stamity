@@ -1257,6 +1257,10 @@ describe("REPLAY-v2 — the driver's injection record decides a seed that was no
       expect(m.notes).toContainEqual(expect.stringContaining(`seed ${id} (`));
     }
     expect(securityHeld(rowOf(m, "sec-path-traversal"))).toBe(true);
+    // The security seed's note carries the suffix score.mjs files beside security-seeds; the other's does not.
+    const noteOf = (id: string): string => m.notes.find((n) => n.startsWith(`seed ${id} (`))!;
+    expect(noteOf("sec-path-traversal")).toContain("; a security seed, so it holds its security-seeds row");
+    expect(noteOf("tw-expectation-deleted")).not.toContain("a security seed");
     expect(m.totals.recall).toEqual({ found: 1, denominator: 1, byClass: { security: { found: 1, denominator: 1 } } });
   });
 

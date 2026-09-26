@@ -87,6 +87,9 @@ export const NOTE_ROWS = [
   { includes: 'present in the snapshot and not found by a verdict role', rows: ['pooled-recall'] },
   { includes: 'the file is absent from every snapshot copy of the pass', rows: ['pooled-recall', 'security-seeds'] },
   { includes: " falls outside §7's window ", rows: ['compaction-loss'] },
+  // review/135: a seed the injection record names not injected; the security suffix comes first, since the first match wins.
+  { includes: '; a security seed, so it holds its security-seeds row', rows: ['pooled-recall', 'security-seeds'] },
+  { includes: "in run.json's injection record, so it is filed absent at the pass", rows: ['pooled-recall'] },
 ]
 
 // ---------- small helpers ----------

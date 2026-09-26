@@ -674,6 +674,24 @@ describe("renderResults — RESULTS.md", () => {
     expect(section("#### Other measurement notes")).toContain("- no notes line");
   });
 
+  it("files a not-injected seed's note beside pooled-recall, and beside security-seeds too for a security seed, not under the other notes (review/135)", async () => {
+    const { m, runJson } = await measured();
+    // The lines measure.mjs writes for a seed the injection record names not injected, filled in.
+    const filed = "in run.json's injection record, so it is filed absent at the pass and leaves the recall denominator, whatever the snapshot reads";
+    const held = "; a security seed, so it holds its security-seeds row";
+    for (const literal of [filed, held]) expect(MEASURE_SRC).toContain(literal);
+    const security = `seed sec-path-traversal (u3-p1): recorded not injected (anchor missing) ${filed}${held}`;
+    const other = `seed tw-expectation-deleted (u3-p2): recorded not injected (anchor missing) ${filed}`;
+    const md = renderResults(summarize({ ...m, notes: [security, other] }, runJson, PROTOCOL_SHA, { protocolPath: "evals/replay/REPLAY-v2.md" }), parseThresholds(PROTOCOL_TEXT)) as string;
+    const section = (head: string): string => md.slice(md.indexOf(head), md.indexOf("####", md.indexOf(head) + 4));
+    expect(section("#### Beside `pooled-recall`")).toContain(security);
+    expect(section("#### Beside `pooled-recall`")).toContain(other);
+    expect(section("#### Beside `security-seeds`")).toContain(security);
+    expect(section("#### Beside `security-seeds`")).not.toContain(other);
+    expect(section("#### Other measurement notes")).not.toContain("recorded not injected");
+    expect(section("#### Other measurement notes")).toContain("- no notes line");
+  });
+
   it("words the unreliable split from measure.mjs's UNATTRIBUTED_MAX and eval-set-floors from the fence's reading (build/231)", async () => {
     const { m, runJson } = await measured();
     const s = summarize(m, runJson, PROTOCOL_SHA) as Summary;
