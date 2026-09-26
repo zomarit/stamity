@@ -1369,3 +1369,99 @@ describe("measure.mjs — the CLI", () => {
     expect(run.stderr).toMatch(/--seeds is required[\s\S]*Usage: node scripts\/replay\/measure\.mjs/);
   });
 });
+
+// ---------- R3: a named pass range (review/150) ----------
+
+/** The range marks beside `..`, spelled by code point so no raw or escaped character sits in this file. */
+const ELLIPSIS = String.fromCodePoint(0x2026);
+const EN_DASH = String.fromCodePoint(0x2013);
+const EM_DASH = String.fromCodePoint(0x2014);
+const ALL_SIX = ["u1-p1", "u1-p2", "u2-p1", "u2-p2", "u3-p1", "u3-p2"];
+
+/**
+ * Every text the measurement hands passesOf in the two committed v1 pilots (2026-09-24-replay-1 and
+ * -2: the main transcripts' Agent dispatches and the sub-agent files' descriptions and first prompts,
+ * 70 in all), reduced to the pass ids each names and the text between consecutive ids, a gap of more
+ * than 24 characters written as " [long gap] ", and de-duplicated; with the passes the pre-R3
+ * passesOf (2f8ac546) returned for the unreduced text. Three rows name a range (the round-1 review's
+ * "u1-p1", an ellipsis and "u3-p2", and two "u1-p1..u3-p2"), so v1's measurement is unchanged only
+ * because it reads no range.
+ */
+const V1_PILOT_TEXTS: [desc: string, prompt: string, passes: string[]][] = [
+  ["", "u1-p1.patch, u1-p2.patch, u2-p1.patch, u2-p2.patch, u3-p1.patch, u3-p2", ALL_SIX],
+  ["u1-p1", "u1-p1 [long gap] u1-p1", ["u1-p1"]],
+  ["", "", []],
+  ["u1-p2", "u1-p2 [long gap] u1-p1 [long gap] u1-p2 [long gap] u1-p1", ["u1-p2"]],
+  ["u2-p1", "u2-p1 [long gap] u1-p1 [long gap] u1-p2 [long gap] u2-p1", ["u2-p1"]],
+  ["u2-p2", "u2-p2 [long gap] u1-p1, u1-p2, u2-p1 [long gap] u2-p2", ["u2-p2"]],
+  ["u3-p1", "u3-p1 [long gap] u1-p1..u2-p2 [long gap] u3-p1", ["u3-p1"]],
+  ["u3-p2", "u3-p2 [long gap] u1-p1 through u3-p1 [long gap] u3-p2", ["u3-p2"]],
+  ["", `u1-p1 ${ELLIPSIS} u3-p2 [long gap] u3-p1`, ["u1-p1", "u3-p1", "u3-p2"]],
+  ["", "u1-p1..u3-p2", ["u1-p1", "u3-p2"]],
+  ["", "u1-p1.patch .. u3-p2 [long gap] u1-p1..u3-p2", ["u1-p1", "u3-p2"]],
+  ["u1-p1", "u1-p1 [long gap] u1-p1 [long gap] u1-p1 [long gap] u1-p1", ["u1-p1"]],
+  ["u1-p2", "u1-p2 [long gap] u1-p2 [long gap] u1-p1 [long gap] u1-p2 [long gap] u1-p2", ["u1-p2"]],
+  ["u2-p1", "u2-p1 [long gap] u2-p1 [long gap] u1-p1 and u1-p2 [long gap] u2-p1 [long gap] u2-p1", ["u2-p1"]],
+  ["u2-p2", "u2-p2 [long gap] u2-p2 [long gap] u1-p1, u1-p2 and u2-p1 [long gap] u2-p2 [long gap] u2-p2", ["u2-p2"]],
+  ["u3-p1", "u3-p1 [long gap] u3-p1 [long gap] u1-p1 through u2-p2 [long gap] u3-p1 [long gap] u3-p1", ["u3-p1"]],
+  ["u3-p2", "u3-p2 [long gap] u3-p2 [long gap] u3-p2 [long gap] u1-p1 through u3-p1 [long gap] u3-p2 [long gap] u3-p2", ["u3-p2"]],
+  ["", "u3-p1's `file` query; u3-p2", ["u3-p1", "u3-p2"]],
+];
+
+/** Each pass's review round count, in pass order. */
+const roundsOf = (m: Measurement): number[] => m.passes.map((p) => p.verdict.rounds);
+
+describe("R3 — a named pass range covers every pass in it (review/150)", () => {
+  it("\"units u1-p1..u3-p2\" covers all six passes", () => {
+    expect(passesOf("Review the change set", "Review units u1-p1..u3-p2.")).toEqual(ALL_SIX);
+  });
+
+  it("\"u2-p1 to u2-p2\" covers two, and every accepted range mark reads alike", () => {
+    expect(passesOf("Review the lane", "Review u2-p1 to u2-p2.")).toEqual(["u2-p1", "u2-p2"]);
+    for (const gap of ["..", "...", ` ${ELLIPSIS} `, ELLIPSIS, EN_DASH, ` ${EN_DASH} `, EM_DASH, ` ${EM_DASH} `, " to ", " through ", " .. "]) {
+      expect([gap, passesOf("Review the lane", `Review u1-p2${gap}u2-p2 now.`)]).toEqual([gap, ["u1-p2", "u2-p1", "u2-p2"]]);
+    }
+  });
+
+  it("a plain list stays a list: \"u1-p1, u3-p2\" covers two", () => {
+    expect(passesOf("Review the lane", "Review u1-p1, u3-p2.")).toEqual(["u1-p1", "u3-p2"]);
+    expect(passesOf("Review the lane", "Review u1-p1 and u3-p2.")).toEqual(["u1-p1", "u3-p2"]);
+  });
+
+  it("a range named backwards expands, in pass order: coverage is a set, and refusing it would leave only its two ends", () => {
+    expect(passesOf("Review the change set", "Review u3-p2..u1-p1.")).toEqual(ALL_SIX);
+    expect(passesOf("Review the lane", "Review u2-p2 through u2-p1.")).toEqual(["u2-p1", "u2-p2"]);
+  });
+
+  it("the hyphen inside an id, a slug's joint and a list bullet are no range, and neither is a line break", () => {
+    for (const prompt of ["Review u1-p1-u3-p2.", "Review u1-p1 - u3-p2.", "Review:\n- u1-p1\n- u3-p2", "Review u1-p1\n..\nu3-p2", "Review u1-p1 and then to u3-p2."]) {
+      expect([prompt, passesOf("Review the lane", prompt)]).toEqual([prompt, ["u1-p1", "u3-p2"]]);
+    }
+  });
+
+  it("chains and mixes: each range covers its span, each listed id itself", () => {
+    expect(passesOf("Review the lane", "Review u1-p1..u1-p2, then u3-p1 to u3-p2.")).toEqual(["u1-p1", "u1-p2", "u3-p1", "u3-p2"]);
+    expect(passesOf("Review the lane", "Review u1-p1..u2-p1..u3-p2.")).toEqual(ALL_SIX);
+  });
+
+  it("the one-pass description rule stays: a description naming a pass, a range included, covers that one pass", () => {
+    expect(passesOf("Review u2-p1", "Review units u1-p1..u3-p2.")).toEqual(["u2-p1"]);
+    expect(passesOf("Review u1-p1..u3-p2", "Review both.")).toEqual(["u1-p1"]);
+  });
+
+  it("v1's measurement of its two committed pilots is unchanged: with ranges off, every pilot text keeps its pre-R3 passes", () => {
+    for (const [desc, prompt, passes] of V1_PILOT_TEXTS) expect([desc, prompt, passesOf(desc, prompt, { ranges: false })]).toEqual([desc, prompt, passes]);
+    // The pin has teeth: under the range rule the pilots' three range prompts would cover all six.
+    const widened = V1_PILOT_TEXTS.filter(([desc, prompt, passes]) => JSON.stringify(passesOf(desc, prompt)) !== JSON.stringify(passes));
+    expect(widened).toHaveLength(3);
+    for (const [desc, prompt] of widened) expect(passesOf(desc, prompt)).toEqual(ALL_SIX);
+  });
+
+  it("measureRun reads ranges under REPLAY-v2 (an injecting seeds document) and not under v1", async () => {
+    const rounds = [{ result: APPROVE, prompt: "Review u1-p1..u2-p1." }];
+    const v2 = (await measureRun(multiCapture({ rounds }).layout.runDir, { seeds: INJECTING, forbid: [] })) as Measurement;
+    const v1 = await measure(multiCapture({ rounds }).layout.runDir);
+    expect(roundsOf(v2)).toEqual([1, 1, 1, 0, 0, 0]);
+    expect(roundsOf(v1)).toEqual([1, 0, 1, 0, 0, 0]);
+  });
+});

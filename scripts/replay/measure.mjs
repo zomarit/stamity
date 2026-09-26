@@ -333,9 +333,33 @@ export function attributePass(desc, prompt) {
   return ids.size > 1 ? 'multi' : null
 }
 
-/** The distinct pass ids a text names, in pass order. */
-const passIdsIn = (text) => {
-  const ids = new Set(String(text ?? '').match(PASS_IDS_G) ?? [])
+/**
+ * R3 (review/150): the whole text between two consecutive pass ids that makes them a named range, as in
+ * `u1-p1..u3-p2`: two or three dots, an ellipsis, an en dash or an em dash, with optional spaces or tabs
+ * around it, or the word `to` or `through` between spaces. An ASCII hyphen is none, since it is the
+ * hyphen inside an id, a report slug's joint (`u1-p1-u1-p2`) and a list bullet; and the gap is the
+ * whole text between the ids, so a range never spans a line break or another word.
+ */
+const RANGE_GAP = /^(?:[ \t]*(?:\.{2,3}|\u2026|\u2013|\u2014)[ \t]*|[ \t]+(?:to|through)[ \t]+)$/i
+
+/**
+ * The distinct pass ids a text names, in pass order. With `ranges` (R3, review/150), two consecutive
+ * ids joined by a range gap also name every pass between them, in the protocol's pass order; a range
+ * named backwards (`u3-p2..u1-p1`) covers the same passes, because coverage is a set and refusing it
+ * would leave only its two ends, the under-coverage review/150 records.
+ */
+const passIdsIn = (text, ranges = false) => {
+  const s = String(text ?? '')
+  const ids = new Set()
+  let prev = null
+  for (const m of s.matchAll(PASS_IDS_G)) {
+    ids.add(m[0])
+    if (ranges && prev && RANGE_GAP.test(s.slice(prev.index + prev[0].length, m.index))) {
+      const [a, b] = [PASS_IDS.indexOf(prev[0]), PASS_IDS.indexOf(m[0])]
+      for (const id of PASS_IDS.slice(Math.min(a, b), Math.max(a, b) + 1)) ids.add(id)
+    }
+    prev = m
+  }
   return PASS_IDS.filter((id) => ids.has(id))
 }
 
@@ -345,9 +369,13 @@ const passIdsIn = (text) => {
  * `passes` never disagree (review/38, signed off 2026-09-26); otherwise the distinct ids its prompt
  * names, in pass order — a `multi` dispatch every pass it names, one naming none `[]`. One rule for
  * the loop measures, the verdict mapping, the fixer join and the capture-defect check.
+ *
+ * R3 (review/150, REPLAY-v2 §8): a range the prompt names (`u1-p1..u3-p2`) covers every pass in it.
+ * `ranges` is on by default, which is REPLAY-v2's rule and the one the driver's v2 hook reads; v1's
+ * measurement passes `{ ranges: false }`, since REPLAY-v1 is frozen and its pilots name ranges.
  */
-export function passesOf(desc, prompt) {
-  return PASS_ID.test(String(desc ?? '')) ? [attributePass(desc, prompt)] : passIdsIn(prompt)
+export function passesOf(desc, prompt, { ranges = true } = {}) {
+  return PASS_ID.test(String(desc ?? '')) ? [attributePass(desc, prompt)] : passIdsIn(prompt, ranges)
 }
 
 const isPass = (p) => PASS_IDS.includes(p)
@@ -590,7 +618,7 @@ function oracleRunOf(oracle) {
  * and pass, the SendMessages that reach it, and every delivery — a notification, or a synchronous
  * Agent, SendMessage or TaskOutput result — with its digest and verdict read once.
  */
-function joinAgents(walk, index, subs, roots) {
+function joinAgents(walk, index, subs, roots, ranges) {
   const agents = []
   const byUse = new Map()
   for (const d of walk.dispatches.filter((x) => x.kind === 'agent')) {
@@ -599,7 +627,7 @@ function joinAgents(walk, index, subs, roots) {
     const agent = {
       toolUseId: d.toolUseId, line: d.line, role: roleName(d.role), fn: roleFunction(d.role), desc: d.desc ?? '', prompt, chars: d.chars,
       model: d.model ?? null, name: typeof input.name === 'string' && input.name ? input.name : null, pass: attributePass(d.desc, prompt),
-      passes: passesOf(d.desc, prompt), branch: false, round: 1, resume: RESUME.test(prompt),
+      passes: passesOf(d.desc, prompt, { ranges }), branch: false, round: 1, resume: RESUME.test(prompt),
     }
     agents.push(agent)
     byUse.set(d.toolUseId, agent)
@@ -635,7 +663,7 @@ function joinAgents(walk, index, subs, roots) {
       const prompt = s.firstPrompt ?? ''
       const agent = {
         toolUseId: s.toolUseId, line, role: roleName(s.agentType), fn: roleFunction(s.agentType), desc: s.description ?? '', prompt, chars: prompt.length,
-        model: null, name: null, pass: attributePass(s.description, s.firstPrompt), passes: passesOf(s.description, s.firstPrompt),
+        model: null, name: null, pass: attributePass(s.description, s.firstPrompt), passes: passesOf(s.description, s.firstPrompt, { ranges }),
         branch: false, round: 1, resume: RESUME.test(prompt), fromFile: true, agentId: s.agentId,
       }
       fromFile.set(s.agentId, agent)
@@ -1025,6 +1053,9 @@ const STAGE_ORDER = ['pass', 'other-pass', 'branch', 'unknown']
 // build/366: a finding of a multi round is at the pass stage for every pass the round covers.
 const stageOf = (f, seed) => (f.branch ? 'branch' : covers(f, seed.pass) ? 'pass' : isPass(f.pass) ? 'other-pass' : 'unknown')
 
+/** Whether a seeds document is REPLAY-v2's: a seed carries an `injection` (S1). A v1 document carries none. */
+const injecting = (seeds) => seeds.seeds.some((seed) => seed.injection !== undefined)
+
 /** The two per-seed states the driver's hook records in `run.json`'s `injection` (REPLAY-v2 §5). */
 const INJECTED = 'injected'
 const NOT_INJECTED = 'not injected (anchor missing)'
@@ -1036,7 +1067,7 @@ const NOT_INJECTED = 'not injected (anchor missing)'
  * record the driver would not write, is invalid, naming why.
  */
 function injectionStatesOf(seeds, run, invalid) {
-  if (!seeds.seeds.some((seed) => seed.injection !== undefined)) return null
+  if (!injecting(seeds)) return null
   const states = new Map()
   const record = run?.injection
   if (record === undefined || record === null) {
@@ -1186,7 +1217,8 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
   checkSeeds(seeds)
   const cap = await loadCapture(runDir, forbid)
   const { L, run, invalid, walk, roots, states, oracleStatus, oracleRun } = cap
-  const { agents, byAgentId, sends, deliveries, notes } = joinAgents(walk, cap.index, cap.subs, roots)
+  // R3 (review/150): a named pass range is REPLAY-v2's rule; v1's measurement reads none (REPLAY-v1 §14).
+  const { agents, byAgentId, sends, deliveries, notes } = joinAgents(walk, cap.index, cap.subs, roots, injecting(seeds))
   const { perPass, beside, unresolved } = loopCharacters(walk, cap.index, agents, sends, deliveries)
   const usage = subagentUsage(cap.subs, byAgentId, deliveries, invalid, notes)
   const agentsWithoutTranscript = reconcileAgents(agents, cap.subs, byAgentId, deliveries, notes)

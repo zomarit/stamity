@@ -11,7 +11,7 @@ contrib patches the units applied, so the orchestrator's reading of the plan cau
 the replay could not score review. v2 keeps v1's shapes, pins, messages, samples and thresholds. What changes:
 
 - **The seeds arrive at review.** The units start clean. At the first review dispatch that covers a pass, the driver
-  commits that pass's seeds and snapshots the tree (§5).
+  puts that pass's seeds in, in the shape's own form, and snapshots the tree (§5).
 - **The fixture** is `evals/replay/v2/` (§5, Fixture notes).
 - **Scoring.** A negated severity word is no severity, a term inside the finding's own locator credits nothing, one
   term window serves both shapes, and one review round's verdict counts for every pass the round covers (§8, §9).
@@ -98,20 +98,26 @@ binary stays where it is.
 - The fixture never contains `seeds.json`, the oracles or the reference fixes.
 
 **Injection.** A review dispatch covers the one pass its description names (the first pass id, as §8's attribution
-reads it), else the distinct pass ids its prompt names. When the first verdict-role dispatch that covers a pass starts,
+reads it), else the distinct pass ids its prompt names, where a named range such as `u1-p1..u3-p2` covers every pass
+in it (§8, Covered passes). When the first verdict-role dispatch that covers a pass starts,
 whether it covers one pass or several, the driver's hook does this for each covered pass not yet injected, all in the
 same hook call and before the reviewer's first tool call:
 
 1. For each seed of the pass, replace the seed's `injection.find` with its `injection.replace`, once, in every
    worktree of the run. The `find` text occurs exactly once in its file on the clean chain.
-2. Commit the change with the session's own git identity and clock, and the neutral message
-   `chore(<pass>): save work in progress`, so no author, date or subject marks the commit that holds the seeds. The
-   driver records each injection commit's sha and finds its commits by those shas, never by author or subject.
+2. Put the change in the shape's own form, read per worktree at the injection. While the worktree's HEAD is still the
+   fixture's base commit (the shape has committed nothing), leave the change in the working tree and commit nothing,
+   so the seeds sit in the uncommitted change set beside the units' own work. Otherwise commit the change with the
+   session's own git identity and clock, and the neutral message `chore(<pass>): save work in progress`, so no
+   author, date or subject marks the commit that holds the seeds. The driver records each injection commit's sha and
+   finds its commits by those shas, never by author or subject.
 3. Record each seed in the run journal as `injected` or `not injected (anchor missing)`; `run.json` carries the
    record as `injection`.
 4. Snapshot the pass (`captures/snapshots/<pass>/`).
 
-A commit is used, not a working-tree edit, because reviewers read the branch diff. A pass is injected once. The hook
+The seeds take the form of the work around them because a reviewer reads what the shape hands it: a shape that has
+committed nothing reviews its uncommitted change set, and a shape that commits reviews the branch diff. A commit in a
+shape that never commits is foreign to its orchestrator (§15). A pass is injected once. The hook
 has 120 seconds; a hook that runs out records a partial injection, and the driver marks the run invalid, to be
 replaced (§10).
 
@@ -127,7 +133,7 @@ injection record is invalid (§8).
 **Canary.** Before any pilot, one canary run per shape (`K-inject-baseline`, `K-inject-changed`) proves the
 mechanics on the pinned client. Its new checks: at least 10 of 12 seeds injected in each shape (K11); each covered
 pass's snapshot exists, and each injected seed reads present in it (K12); at least one verdict-role finding cites an
-injected file (K13); the orchestrator does not end blocked over the injected commit (K14). K11's record also names,
+injected file (K13); the orchestrator does not end blocked over the injection (K14). K11's record also names,
 per injected pass, every unit test the injection turned red (§15). If K11 falls below 10 of 12 in either shape, the
 fallback, where the seeds arrive as a prepared change set, is written as a revised protocol before any pilot.
 
@@ -227,7 +233,16 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   the prompt; several distinct ids attribute to `multi`. **Branch-level** dispatches are verdict dispatches after
   `u3-p2`'s last reviewer approval that carry no single id, or that match `/whole[- ]branch/i`.
 - **Covered passes.** Beside its attribution, each dispatch records the passes it covers: the one pass its description
-  names, else the distinct pass ids its prompt names. A `multi` dispatch covers every pass it names. The verdicts, the
+  names, else the distinct pass ids its prompt names. A range the prompt names covers every pass between its two ends,
+  inclusive, in pass order: `u1-p1..u3-p2` covers all six, and a range named backwards (`u3-p2..u1-p1`) covers the
+  same passes, since coverage is a set and reading only the two ends would leave the passes between them unreviewed.
+  A range is two pass ids whose whole gap is one range mark: `..`, `...`, `…`, an en dash or an em dash, each with
+  optional spaces or tabs around it, or the word `to` or `through` between spaces; ranges chain
+  (`u1-p1..u2-p1..u3-p2`). A list (`u1-p1, u3-p2`, `u1-p1 and u3-p2`) covers its ids alone. An ASCII hyphen is never
+  a range mark, since it is the hyphen inside an id, a report slug's joint and a list bullet, and neither is a line
+  break. A description still names one pass, a range included. A `multi` dispatch covers every pass it names. The
+  driver's hook reads the same rule (`passesOf` in `scripts/replay/measure.mjs`). REPLAY-v1 reads no range: its
+  pilots name ranges, and its measurement stays as it was. The verdicts, the
   round-1 flag, the stage, the fixer round count and the capture-defect check read the covered passes, so a round that
   reviews several passes counts for each of them.
 - **Loop characters.** Characters are JS string length. The sum, over non-branch agents with a loop function, of
@@ -398,12 +413,16 @@ which §7 branch applied, and the RESULTS of every run name it.
   `total_cents`. The red test hints at the seed, and a late red gate may derail the run at review. The fixture cannot
   forbid such tests without a hint of its own. The effect is the same in both shapes. The canary measures it: K11's
   record names, per injected pass, every unit test the injection turned red.
-- **The orchestrator may notice a commit it did not make** and stop. K14 checks it in the canary. It hits both shapes
-  alike, and a run lost this way counts against the two replacements (§10).
-- **An agent reading history may still notice a commit it did not make.** The injection commit carries the session's
-  own git identity and clock and a neutral subject (§5), so nothing in its author, date or subject marks it, but an
-  agent that reads the log can still find a commit no dispatch of the run made, and read the seeds from it. This is
-  symmetric across the shapes, and K14 measures a run it derails.
+- **The orchestrator may notice a commit it did not make** and stop. In a shape that never commits, any commit is
+  foreign to its orchestrator: `K-inject-baseline`'s first record ended blocked, naming the injection commits as a
+  Critical. So a shape whose worktree has committed nothing takes the seeds as working-tree edits, which carry no
+  author and read as the units' own work, and only a shape that has committed takes an injection commit (§5). K14
+  checks it in the canary. It hits both shapes alike, and a run lost this way counts against the two replacements
+  (§10).
+- **An agent reading history may still notice a commit it did not make**, in a shape that takes an injection commit
+  (§5). The injection commit carries the session's own git identity and clock and a neutral subject (§5), so nothing
+  in its author, date or subject marks it, but an agent that reads the log can still find a commit no dispatch of the
+  run made, and read the seeds from it. This is symmetric across the shapes, and K14 measures a run it derails.
 - **An implementer may rewrite an anchor**, so a seed is not injected and the recall denominator shrinks. K11 needs at
   least 10 of 12 injected in the canary, and every run records each seed as injected or not.
 - **One round's verdict counts for every pass it covers.** A shape that reviews all six passes in one round gives six
