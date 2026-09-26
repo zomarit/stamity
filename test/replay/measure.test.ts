@@ -1081,8 +1081,31 @@ describe("REPLAY-v2 — multi-pass review rounds (build/366)", () => {
     expect(attributePass("Review the batch", "Review u1-p2 then u1-p1, and u1-p1 again.")).toBe("multi");
     // A description naming a pass wins over the prompt, as it does for attributePass.
     expect(passesOf("Review u2-p2", "Review u2-p1 and then u3-p1.")).toEqual(["u2-p2"]);
-    expect(passesOf("Review u1-p1 and u1-p2", "Review both.")).toEqual(["u1-p1", "u1-p2"]);
     expect(passesOf("Review the lane", "No pass named.")).toEqual([]);
+  });
+
+  it("review/38: a description naming several passes covers the one pass attributePass takes (first-wins), so pass and passes never disagree", () => {
+    for (const [desc, prompt] of [["Review u1-p2 after u1-p1", "Review both."], ["Review u1-p1 and u1-p2", "Review u1-p1 u1-p2."]] as const) {
+      expect([desc, passesOf(desc, prompt)]).toEqual([desc, [attributePass(desc, prompt)]]);
+    }
+    expect(passesOf("Review u1-p2 after u1-p1", "Review both.")).toEqual(["u1-p2"]);
+  });
+
+  it("review/38: a round whose description names u1-p2 first is u1-p2's verdict alone, and is no round of u1-p1", async () => {
+    const rounds = [{ result: APPROVE, description: "Review u1-p2 after u1-p1" }];
+    const m = await measure(multiCapture({ rounds }).layout.runDir);
+    expect(passOf(m, "u1-p2").verdict).toEqual(expect.objectContaining({ finalClass: "approve", rounds: 1 }));
+    expect(passOf(m, "u1-p1").verdict).toEqual(expect.objectContaining({ finalClass: null, rounds: 0 }));
+  });
+
+  it("review/42: a ledger row filed from a multi round's report (u1-p1-u1-p2-reviewer-r1.md) is a round-1 find at the pass stage of each pass the slug names", async () => {
+    // The reviewer's own return cites no seed, so the ledger row is the seed's only finding. A slug is
+    // no description: it covers every pass it names, not the first (a slug naming u1-p2 first included).
+    const slugs = ["u1-p1-u1-p2", "u1-p2-u1-p1"];
+    const runs = await Promise.all(
+      slugs.map((slug) => measure(passCapture({ shape: "baseline", rows: [LOOSE_FINDING], endLedger: ledgerRows([SEED_FINDING], `.stamity/runs/${RUN}/reports/${slug}-reviewer-r1.md`) }).layout.runDir)),
+    );
+    runs.forEach((m, k) => expect([slugs[k], seedOf(m)]).toEqual([slugs[k], expect.objectContaining({ found: true, foundRound1: true, stage: "pass" })]));
   });
 
   it("(a) a seed found by a reviewer whose prompt names u1-p1 u1-p2 is a round-1 find at its own pass", async () => {
@@ -1186,6 +1209,16 @@ describe("REPLAY-v2 — one term window in both shapes (inbox rows 228, 231)", (
       expect([m.shape, m.totals.unmatched, m.adjudication]).toEqual([m.shape, 0, []]);
       expect([m.shape, m.compactionSamples[0]]).toEqual([m.shape, expect.objectContaining({ atRisk: 1, lost: 0, valid: true })]);
     }
+  });
+
+  it("review/41: a ledger row gains its report's entry only at the exact same locator", async () => {
+    // The report's entry carries an accepted term; the ledger row's evidence does not.
+    const termless = { ...SEED_FINDING, summary: "the sort value reaches ORDER BY" };
+    const joined = await measure(passCapture({ shape: "changed", rows: [SEED_FINDING], endLedger: ledgerRows([termless], REPORT_REL) }).layout.runDir);
+    expect([joined.totals.unmatched, joined.adjudication]).toEqual([0, []]);
+    // Two lines off, inside the matcher's tolerance but not the same locator: the row is read as it is.
+    const apart = await measure(passCapture({ shape: "changed", rows: [SEED_FINDING], endLedger: ledgerRows([{ ...termless, locator: "src/store/query.ts:13" }], REPORT_REL) }).layout.runDir);
+    expect(apart.adjudication).toEqual([expect.objectContaining({ item: "sec-sql-sort", source: "ledger", locator: "src/store/query.ts:13" })]);
   });
 
   it("reads no more than the entry: a term only in the report's prose still goes to adjudication", async () => {

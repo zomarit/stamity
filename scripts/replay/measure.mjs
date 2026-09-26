@@ -333,17 +333,21 @@ export function attributePass(desc, prompt) {
   return ids.size > 1 ? 'multi' : null
 }
 
+/** The distinct pass ids a text names, in pass order. */
+const passIdsIn = (text) => {
+  const ids = new Set(String(text ?? '').match(PASS_IDS_G) ?? [])
+  return PASS_IDS.filter((id) => ids.has(id))
+}
+
 /**
- * build/366: the distinct passes a dispatch covers, in pass order, by `attributePass`'s precedence —
- * the ids its description names when it names any, else the ids its prompt names. A single-pass
- * dispatch gives its one pass, a `multi` one every pass it names, one naming none `[]`. The
- * description wins so a single-pass brief that mentions another pass stays that pass's.
+ * build/366: the passes a dispatch covers. When its description names a pass, that is
+ * `[attributePass(...)]`, the one pass the pinned attribution rule takes (first-wins), so `pass` and
+ * `passes` never disagree (review/38, signed off 2026-09-26); otherwise the distinct ids its prompt
+ * names, in pass order — a `multi` dispatch every pass it names, one naming none `[]`. One rule for
+ * the loop measures, the verdict mapping, the fixer join and the capture-defect check.
  */
 export function passesOf(desc, prompt) {
-  const named = (text) => new Set(String(text ?? '').match(PASS_IDS_G) ?? [])
-  const inDesc = named(desc)
-  const ids = inDesc.size > 0 ? inDesc : named(prompt)
-  return PASS_IDS.filter((id) => ids.has(id))
+  return PASS_ID.test(String(desc ?? '')) ? [attributePass(desc, prompt)] : passIdsIn(prompt)
 }
 
 const isPass = (p) => PASS_IDS.includes(p)
@@ -912,8 +916,11 @@ function collectFindings(deliveries, stateNames, states, roots) {
   return { all, readerSkips }
 }
 
-/** The pass ids a report's slug names (`u1-p1`, or a multi round's `u1-p1-u1-p2`), in pass order. */
-const passesIn = (slugPass) => passesOf(slugPass, '')
+/**
+ * The pass ids a report's slug names (`u1-p1`, or a multi round's `u1-p1-u1-p2`), in pass order. A
+ * slug is no dispatch description: a multi round's report is named for every pass it covers.
+ */
+const passesIn = (slugPass) => passIdsIn(slugPass)
 
 /**
  * Inbox rows 228 and 231: one term window in both shapes. A free-text finding's terms are read over
