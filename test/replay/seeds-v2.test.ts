@@ -349,8 +349,9 @@ describe("the v2 fixture data", () => {
       // The same shape as build/365: the clean name check sits beside the unchanged `readFile(join(dir, file))`.
       "sec-path-traversal": { present: { contains: "readFile(join(dir, file))", notMatch: ["(?:\\.test|basename)\\(\\s*file\\s*\\)"] } },
       // build/364: a bare `guard` credited any finding in the route file that named the bearer guard;
-      // review/92: a bare `auth` credited any finding there that named `requireAuth`.
-      "sec-missing-guard": { terms: ["authenticat", "unguarded", "401", "protect", "access control", "anyone"] },
+      // review/92: a bare `auth` credited any finding there that named `requireAuth`; review/97 keeps
+      // its authorization wording by a second narrow term.
+      "sec-missing-guard": { terms: ["authenticat", "authoriz", "unguarded", "401", "protect", "access control", "anyone"] },
     };
     for (const [index, seed] of doc.seeds.entries()) {
       const { injection, ...rest } = seed;
@@ -359,7 +360,7 @@ describe("the v2 fixture data", () => {
     }
   });
 
-  it("gives twelve seeds, three per class and two per pass, Critical exactly for security, and three to six terms an item", () => {
+  it("gives twelve seeds, three per class and two per pass, Critical exactly for security, and three to six terms an item (seven for the missing guard)", () => {
     expect(doc.seeds).toHaveLength(12);
     expect(doc.decoys).toHaveLength(3);
     const count = (key: (seed: Seed) => string) =>
@@ -369,7 +370,8 @@ describe("the v2 fixture data", () => {
     for (const seed of doc.seeds) expect(seed.severity, seed.id).toBe(seed.class === "security" ? "Critical" : "Warning");
     for (const item of items) {
       expect(item.terms.length, item.id).toBeGreaterThanOrEqual(3);
-      expect(item.terms.length, item.id).toBeLessThanOrEqual(6);
+      // review/97: `auth` split into `authenticat` and `authoriz`, so the missing guard holds one term more than v1's cap.
+      expect(item.terms.length, item.id).toBeLessThanOrEqual(item.id === "sec-missing-guard" ? 7 : 6);
       // A slashed term is read with the paths kept (`matchItems`), so it must itself name a path.
       for (const term of item.terms.filter((t) => t.includes("/"))) expect(term, item.id).toMatch(/^(?:\.\.\/|[\w.-]+\/[\w.-]+)$/);
     }
@@ -500,6 +502,14 @@ describe("the accepted terms, read by the matcher's own matchItems", () => {
     };
     expect(matched[seed.id]).toEqual([0]);
     expect(credited(seed.file, line, "The cancel route is registered without requireAuth, so unauthenticated callers can cancel an order.")).toEqual([seed.id]);
+  });
+
+  it("credits the missing guard for a finding worded only with authorization or unauthorized", () => {
+    // review/97: `authenticat` alone dropped this wording, which v1's bare `auth` credited.
+    const seed = byId.get("sec-missing-guard") as Item;
+    for (const text of ["There is no authorization check on the cancel route.", "An unauthorized caller can cancel an order."]) {
+      expect(credited(seed.file, seed.span[0], text), text).toEqual([seed.id]);
+    }
   });
 
   it("credits each item with its common reviewer phrasings at its span", () => {
