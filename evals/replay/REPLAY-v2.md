@@ -128,8 +128,8 @@ fallback, where the seeds arrive as a prepared change set, is written as a revis
 What `evals/replay/v2/` carries over from `evals/replay/v1/`, and where it differs.
 
 - **Copies of v1.** `patches/base.patch` and `oracle/oracles.patch` are v1's, byte for byte. The three decoys are v1's
-  unchanged. Each seed keeps v1's `id`, `class`, `severity`, `pass`, `file`, `locate`, `terms` and `oracle`, with the
-  changes below.
+  unchanged. Each seed keeps v1's `id`, `class`, `severity`, `pass`, `file`, `locate`, `span`, `terms` and `oracle`,
+  with the changes below.
 - **The pass patches** are v1's with the seeded hunks taken out, so a unit that applies one adds correct code.
   `oracle/reference-fixes.patch` is the injections turned around.
 - **The plan** is v1's, with the same units, reads and contract of record. One line differs: u2-p1's interfaces say
@@ -145,8 +145,9 @@ What `evals/replay/v2/` carries over from `evals/replay/v1/`, and where it diffe
   checks the file name and keeps `readFile(join(dir, file))`, so v1's `contains` alone read the clean and the fixed
   trees as present. Every presence rule must read false on the reference-fixed tree, so this rule needs the
   `notMatch` too, although the plan's list of changes did not name it (`review/90`).
-- **Terms.** No bare generic term remains. sec-missing-guard's `guard` becomes `unguarded`. Its bare term `auth` is
-  narrowed so that it no longer credits a finding that names `requireAuth`, which every route line of the file names.
+- **Terms.** No bare generic term remains. sec-missing-guard's `guard` becomes `unguarded`, and its bare term `auth`
+  becomes `authenticat` and `authoriz`, so it no longer credits a finding that names `requireAuth`, which every route
+  line of the file names.
 - **Presence.** Every presence rule reads false on each clean state of the chain and on the reference-fixed tree, and
   true once the seed is injected (`test/replay/seeds-v2.test.ts`). The injected tree fails all 12 oracles, and the
   reference-fixed tree passes them (`test/replay/oracle-v2.test.ts`, behind `STAMITY_REPLAY_SUITE=1`).
