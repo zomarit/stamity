@@ -363,8 +363,21 @@ export function compare(baseline, changed, thresholds, pilots = {}, options = {}
 // ---------- COMPARISON-v1.md, COMPARISON-v2.md ----------
 
 /**
+ * The spec's replay row per client (REQ-CTX-015; build/70): the replay measures Claude Code, and
+ * the other three clients are not run. The reason is the protocol's own pin (§3: one Claude Code
+ * CLI, run from a pinned binary). The table gates nothing.
+ */
+const NOT_RUN_REASON = 'not replayed: the instrument drives only the pinned Claude Code CLI (§3)'
+const CLIENT_ROWS = [
+  ['Claude Code', 'measured', 'the rows above'],
+  ['Cursor', '`not-run`', NOT_RUN_REASON],
+  ['GitHub Copilot CLI', '`not-run`', NOT_RUN_REASON],
+  ['Codex', '`not-run`', NOT_RUN_REASON],
+]
+
+/**
  * The comparison file: the head (protocol sha, instrument commit, mechanism, pilots, samples), the
- * ten §12 rows, `Merge gate: PASS|FAIL`, "No threshold moved." and `Not done:`. Its title and
+ * ten §12 rows, the clients table, `Merge gate: PASS|FAIL`, "No threshold moved." and `Not done:`. Its title and
  * protocol line name the protocol the head records (`protocolNames`: v1's for a path no version
  * commits).
  */
@@ -391,6 +404,7 @@ export function renderComparison(result, thresholds) {
   }
   push('', '## Rows (§12)', '', '| Row | Rule | Baseline | Changed | Verdict |', '|---|---|---|---|---|')
   for (const r of result.rows) push(`| \`${r.id}\` | ${cell(r.rule)} | ${cell(r.baseline)} | ${cell(r.changed)} | ${r.verdict}${r.reason ? ` — ${cell(r.reason)}` : ''} |`)
+  push('', '## Clients', '', '| Client | Status | Reason |', '|---|---|---|', ...CLIENT_ROWS.map((row) => `| ${row.join(' | ')} |`))
   push('', `Merge gate: ${result.mergeGate}`, '', 'No threshold moved.', '', 'Not done:', '')
   const open = result.rows.filter((r) => r.verdict === 'CARRIED' || r.verdict === 'NOT-EVALUATED')
   push(...(open.length === 0 ? ['- none'] : open.map((r) => `- \`${r.id}\`: ${r.verdict} — ${r.reason}`)))

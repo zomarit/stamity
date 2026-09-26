@@ -539,7 +539,7 @@ export function renderResults(summary, thresholds, reference = []) {
     `- readers' skips (never folded into recall): unread free-text blocks severity-without-locator ${unread['severity-without-locator'] ?? 0}, locator-without-severity ${unread['locator-without-severity'] ?? 0}; digest errors ${rs.digestErrors ?? 0}; findings-block errors ${rs.findingsBlockErrors ?? 0}; ledger parse errors ${rs.ledgerParseErrors ?? 0}`,
     `- unmatched Critical or Warning findings: ${T.unmatched} (reported, not thresholded)`,
     `- by class: ${Object.entries(rc.byClass).map(([k, v]) => `${k} ${v.found}/${v.denominator}`).join(', ') || 'none'}`,
-    '- a changed-shape report is read for its `stamity-findings` block only, while a baseline free-text return is read whole: a term that stands only in a report\'s prose goes to adjudication, never to the score — a known conservative asymmetry that can only cost the changed shape recall',
+    '- a changed-shape report is read for its `stamity-findings` block only, and every finding\'s terms are read over its own entry in both shapes: a structured finding\'s summary plus its entry in the report\'s block, a free-text finding\'s own block; a term that stands only in the prose around an entry goes to adjudication, never to the score',
     ...bullets(byRow['pooled-recall']),
     '',
   )

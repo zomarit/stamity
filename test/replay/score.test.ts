@@ -611,6 +611,14 @@ describe("renderResults — RESULTS.md", () => {
     expect(section("#### Other measurement notes")).toContain(notes[3]);
   });
 
+  it("(build/73) states one term window in both shapes beside pooled-recall, not the old asymmetry", async () => {
+    const { m, runJson } = await measured();
+    const md = renderResults(summarize(m, runJson, PROTOCOL_SHA), parseThresholds(PROTOCOL_TEXT)) as string;
+    const section = md.slice(md.indexOf("#### Beside `pooled-recall`"), md.indexOf("#### Beside `decoy-flags`"));
+    expect(section).toContain("every finding's terms are read over its own entry in both shapes");
+    expect(section).not.toMatch(/read whole|asymmetry/);
+  });
+
   it("files the auto-window's out-of-window note beside compaction-loss, not under the other notes (review/43)", async () => {
     const { m, runJson } = await measured();
     // The line measure.mjs writes for an automatic compaction outside §7's window (inbox row 230), filled in.
@@ -922,8 +930,8 @@ function specifiersOf(file: string): string[] {
  * A copy of the instrument in a scratch root: the scripts `score.mjs` loads, REPLAY-v1.md as
  * committed, and a REPLAY-v2.md that is v1's text plus one line — so its sha256 differs and its
  * one thresholds block still parses. `score.mjs` resolves `--protocol v2` against its own checkout,
- * and REPLAY-v2.md is not committed until the v2-protocol unit; a copy is the real CLI over a real
- * tree, where a file written into this checkout would collide with that unit's.
+ * so a copy is the real CLI over a real tree whose REPLAY-v2.md these cases write themselves: they
+ * never read or write the committed REPLAY-v2.md, and an edit of its text never moves their sha256.
  */
 function instrumentCopy(): { root: string; scoreMjs: string; v2Sha: string } {
   // The real path: `score.mjs` runs its CLI only when argv[1] resolves to its own module path, and

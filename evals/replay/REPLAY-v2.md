@@ -15,7 +15,7 @@ the replay could not score review. v2 keeps v1's shapes, pins, messages, samples
 - **The fixture** is `evals/replay/v2/` (§5, Fixture notes).
 - **Scoring.** A negated severity word is no severity, a term inside the finding's own locator credits nothing, one
   term window serves both shapes, and one review round's verdict counts for every pass the round covers (§8, §9).
-- **Compaction** keeps v1's placement passes, and each fires at the first review round that covers its pass (§7).
+- **Compaction** keeps v1's placement passes and v1's trigger, read over the review rounds that cover the pass (§7).
 - **§8's invalid-run sentence** names all three forbidden terms.
 - **Runs and the comparison** live under v2's own paths (§11).
 - **Threats to validity** are written down (§15).
@@ -29,7 +29,9 @@ the replay could not score review. v2 keeps v1's shapes, pins, messages, samples
   floors are not the replay's to measure, so the `eval-set-floors` row is carried, not measured (§12).
 - The replay runs `/st-work` at the deep tier over a three-unit, six-pass plan on a disposable fixture, with twelve
   seeds injected at review and three decoys, on Claude Code only, one run at a time. Cursor, GitHub Copilot CLI and
-  Codex are not replayed: the driver speaks Claude Code's stream-json only.
+  Codex are not replayed, because the instrument drives only the pinned Claude Code CLI (§3). The comparison's
+  Clients table, between its rows and its `Merge gate:` line, carries Claude Code as `measured` and one `not-run` row
+  for each of the other three, with that reason. The table gates nothing.
 
 ## §2 Shapes
 
@@ -193,9 +195,10 @@ The usage limit has reset. Continue the /st-work run from where it stopped.
 ## §7 Compaction
 
 - **Placements.** `u2-p1` and `u3-p1`, as in v1.
-- **Trigger.** A placement fires when the first review round that covers its pass has returned: every verdict-role
-  agent of that round has stopped. The round may cover that pass alone or several passes. The driver checks the
-  condition on each poll, and the placement fires only when it holds on two polls in a row.
+- **Trigger.** v1's trigger, read over the review rounds that cover the placement pass. Such a round may cover that
+  pass alone or several passes. The placement fires when every verdict-role agent dispatched for such a round has
+  stopped, at least two of them have returned, and no fixer has been dispatched for the pass. The driver checks this
+  on each poll, and the placement fires only when it holds on two polls in a row.
 - **Sequence.** Interrupt; wait for `result`; snapshot the fixture's `.stamity/runs/`; send `/compact`; wait for
   `compact_boundary` with `trigger:"manual"`; send the resume message (§6).
 - **Decision rule.** Interrupt mode if the canary (`K-inject-baseline` and `K-inject-changed`) passes K1–K4, and

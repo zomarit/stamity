@@ -474,6 +474,23 @@ describe("renderComparison", () => {
     // With no pilot, no row is evaluated (build/250), so the head's pilot line is read on a run of its own.
     expect(renderComparison(run(base3(), changed3(), {}), T)).toContain("Pilots (not scored): none supplied");
   });
+
+  it("(build/70) carries a clients table between the rows and the merge gate: Claude Code measured, and one not-run row with its reason each for Cursor, GitHub Copilot CLI and Codex", () => {
+    const md = renderComparison(run(base3(), changed3()), T) as string;
+    const at = md.indexOf("## Clients");
+    expect(at).toBeGreaterThan(md.indexOf("## Rows (§12)"));
+    expect(at).toBeLessThan(md.indexOf("\nMerge gate: "));
+    const cells = md.slice(at, md.indexOf("\nMerge gate: ")).split("\n").filter((l) => l.startsWith("| ") && !l.startsWith("| Client ")).map((l) => l.slice(2, -2).split(" | "));
+    const notRun = "not replayed: the instrument drives only the pinned Claude Code CLI (§3)";
+    expect(cells).toEqual([
+      ["Claude Code", "measured", "the rows above"],
+      ["Cursor", "`not-run`", notRun],
+      ["GitHub Copilot CLI", "`not-run`", notRun],
+      ["Codex", "`not-run`", notRun],
+    ]);
+    // The table gates nothing: the same inputs still read PASS.
+    expect(md).toContain("\nMerge gate: PASS\n");
+  });
 });
 
 // ---------- the CLI: score.mjs compare ----------
@@ -634,8 +651,8 @@ describe("compare under REPLAY-v2", () => {
 /**
  * A copy of the instrument in a scratch root with a REPLAY-v2.md beside REPLAY-v1.md (v1's text
  * plus one line, so its sha256 differs and its thresholds still parse). `score.mjs` resolves
- * `--protocol v2` against its own checkout, and REPLAY-v2.md is not committed until the v2-protocol
- * unit; a file written into this checkout would collide with that unit's.
+ * `--protocol v2` against its own checkout, so these cases write their own REPLAY-v2.md into the
+ * copy: they never read or write the committed one, and an edit of its text never moves their sha256.
  */
 function instrumentCopy(): { root: string; scoreMjs: string; v2Sha: string } {
   // The real path: `score.mjs` runs its CLI only when argv[1] resolves to its own module path, and
