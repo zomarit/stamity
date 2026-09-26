@@ -27,7 +27,8 @@ since moved most `content/commands/st-work.md` lines.
 REQ-CTX-016, and the paragraphs and criteria marked "amended 2026-09-26" under REQ-CTX-013 and
 REQ-CTX-015, come from the spec deltas of `docs/plans/010-enterprise-release-01.md` and
 `docs/plans/011-replay-v2.md` and from the deltas their units' reports declared. Their citations
-are to the tree at `e995fe02`.
+are to the tree at `e995fe02`, re-pointed to the package head `0a251039` where the cited file
+changed since.
 
 ## Context
 
@@ -443,12 +444,15 @@ A replay compares the changed shape with the 1.9.1 baseline:
 - **Seeds reach review (v2)** (amended 2026-09-26, the maintainer's decision R1): the units start
   clean. At the first review dispatch covering a pass, the driver commits that pass's seeds and
   snapshots the tree in the same hook call. A seed whose anchor is missing is recorded as not
-  injected, and it leaves the recall denominator. The pass snapshot decides that reading: a seed
-  the unit wrote itself reads present and is scored, and one whose file the unit removed reads
-  unknown and stays in the denominator (`build/69`). A dispatch covers the one pass its description
-  names, else the distinct passes its prompt names; a pass is injected once, in one commit
-  `replay: <pass> review fixture` under the fixed replay author; and a hook that runs out of its
-  120 seconds records a partial injection, which makes the run invalid.
+  injected, and it leaves the recall denominator. The measurement reads that from the driver's
+  injection record (`run.json`'s `injection`), not from the snapshot: a seed recorded not injected
+  is out of the pooled recall denominator and counts as found in the `security-seeds` row,
+  whatever the snapshot reads, and a seed recorded injected is read from its pass's snapshot
+  (`review/135`). A v2 run without the injection record is invalid. A dispatch covers the one pass
+  its description names, else the distinct passes its prompt names; a pass is injected once, in one
+  commit that carries the session's own git identity and clock and the subject
+  `chore(<pass>): save work in progress`, so nothing in it marks the seeds; and a hook that runs out
+  of its 120 seconds records a partial injection, which makes the run invalid.
 - **Scoring (v2)** (amended 2026-09-26, `build/363`, `build/364`, `build/366`):
   - A severity word governed by a negation ("no", "zero", "0", "none of the", "without") is no
     severity. `new`, `remaining`, `open` or `further` may stand between the two, a run of severity
@@ -490,17 +494,22 @@ A replay compares the changed shape with the 1.9.1 baseline:
   now gates the release.
 - **Release gate.** Every eval-set floor holds at the 1.10.0 release run.
 
-As built (2026-09-26, at `e995fe02`): `evals/replay/REPLAY-v2.md` states the rules above — the
-injection (§5, `:100-121`), the matcher (§9, `:283-297`), the covered passes and the verdict mapping
-(§8, `:225-228`, `:263-268`), compaction (§7, `:197-213`), the result paths (§11, `:326-334`) and
-the Clients table (§1, `:30-35`) — and its one `replay-thresholds` block holds v1's values
-(`:364-366`). The protocol table is `PROTOCOLS` (`scripts/replay/protocols.mjs:11-14`, default v1 at
+As built (2026-09-26; citations re-pointed to the package head `0a251039`):
+`evals/replay/REPLAY-v2.md` states the rules above — the injection and the not-injected reading
+(§5, `:100-125`), the matcher (§9, `:290-304`), the covered passes and the verdict mapping (§8,
+`:229-232`, `:273-274`), the injection record in the recall reading and the invalid run (§8,
+`:257-259`, `:277-279`), compaction (§7, `:201-217`), the result paths (§11, `:333-341`) and the
+Clients table (§1, `:30-35`) — and its one `replay-thresholds` block holds v1's values
+(`:371-373`). The protocol table is `PROTOCOLS` (`scripts/replay/protocols.mjs:11-14`, default v1 at
 `:17`). The scorer refuses a `run.json` whose recorded protocol sha256 is not the protocol's
-(`scripts/replay/score.mjs:806-807`) and a summary scored under another protocol's sha256 or path
-(`:878-882`). The matcher's rules are `maskNegated` (`scripts/replay/findings.mjs:82`) and
+(`scripts/replay/score.mjs:809-810`) and a summary scored under another protocol's sha256 or path
+(`:882-884`). The matcher's rules are `maskNegated` (`scripts/replay/findings.mjs:82`) and
 `matchItems` (`:615`); the covered passes are `passesOf` (`scripts/replay/measure.mjs:349-351`); the
-seeds schema adds `injection` and `present.notMatch`, and a seed is present only when no `notMatch`
-pattern matches (`checkSeeds`, `presentIn`, `:258`, `:285-291`); the Clients table is `clientsTable`
+measurement reads the driver's injection record, files a seed recorded not injected as absent at
+its pass whatever the snapshot reads, and marks a v2 run with no record invalid
+(`injectionStatesOf`, `:1038-1062`; `seedRowsOf`, `:1080-1083`); the seeds schema adds `injection`
+and `present.notMatch`, and a seed is present only when no `notMatch` pattern matches (`checkSeeds`,
+`presentIn`, `:258`, `:285-292`); the Clients table is `clientsTable`
 (`scripts/replay/compare.mjs:379-383`), empty under v1 so v1's files stay byte for byte. A comparison
 given no scored run for a shape reads every row that shape feeds NOT-EVALUATED, and the merge gate
 fails (`compare.mjs:96`, `:339`). The v2 fixture is `evals/replay/v2/`. The injection, the
@@ -539,7 +548,7 @@ As built (2026-09-26): the budget is `HOOK_SESSION_START_TIMEOUT_MS = 30_000`
 (`src/hooks/model.ts:232`, its reasons in the comment at `:210-231`), set only on the core
 `session_start` rows (`src/emit/hooksInfra.ts:448`); the adapters render it as each client's own
 field, and Claude's ConfigChange entry takes the whole tamper row, budget included
-(`src/adapters/claude.ts:896`). The ceilings are `HOOK_SCRIPT_BUDGETS` (`src/hooks/scripts.ts:124-139`),
+(`src/adapters/claude.ts:896`). The ceilings are `HOOK_SCRIPT_BUDGETS` (`src/hooks/scripts.ts:128-144`),
 each row with the size it was measured at beside it. The latency check is
 `node scripts/hook-latency.mjs [--runs <n>] [--guard <path>] [--budget <ms>]`
 (`scripts/hook-latency.mjs:7-11`): 7 runs after one warm-up by default (`:53`), a budget of 15 ms by

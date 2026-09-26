@@ -19,7 +19,8 @@ REQ-PLUGIN-027 to REQ-PLUGIN-030, and every paragraph headed "Amended 2026-09-26
 spec delta of `docs/plans/010-enterprise-release-01.md` (the enterprise work of Package 16) and
 from the deltas its units' reports declared. They are merged on the package branch and are not in
 a release yet: `status` still names 1.9.0, the release that shipped REQ-PLUGIN-001 to 026. Their
-`path:line` citations are to the tree at `e995fe02`.
+`path:line` citations are to the tree at `e995fe02`, re-pointed to the package head `0a251039`
+where the cited file changed since.
 
 ## Intent
 
@@ -1254,7 +1255,7 @@ version and its commit to be reachable from the release branch on every run that
 canonical name, `private: true`, a `publishConfig.registry` other than the variable, and, on GitHub
 Packages, a scope other than the owner (`:252-278`); a failure prints the remedy naming
 `scripts/fork-identity.mjs` (`:280-283`). The ladder copied from `release.yml` follows (`:292-316`),
-then the pack and the plugin build. **Publish** (`:399-795`) runs in the `fork-release`
+then the pack and the plugin build. **Publish** (`:399-797`) runs in the `fork-release`
 environment with `contents: write` and `packages: write` and no `id-token` (`:409-415`). It
 re-checks the destination (`:419-441`), then verifies the tarball digest and every archive digest
 against the gates job's outputs before anything irreversible (`:456-520`). Two checks beyond the
@@ -1263,14 +1264,17 @@ regular file, with every member under `package/`, and must carry the proved name
 registry (`:534-594`, `review/54`), and every `plugins/*.sha256` file must state the digest the
 verified manifest carries, with none missing or extra (`:600-627`, `review/32`). The npm step
 gives the per-run token only to the exact host `npm.pkg.github.com`, and the
-`STAMITY_REGISTRY_TOKEN` secret otherwise (`:644`); it exits 1 before npm with no credential,
+`STAMITY_REGISTRY_TOKEN` secret otherwise (`:646`); it exits 1 before npm with no credential,
 skips a version already published with the same integrity, refuses one published from another
-tarball, and publishes with no `--provenance` (`:648-664`). The distribution push refuses to move a
-tag that names another commit and to force-push over a branch head that has a parent (`:669-749`),
-and the release step uploads only the assets a re-run finds missing (`:755-795`). A dispatch that
-leaves `dry_run` at its default `true` runs `dry-run-summary` instead of publish (`:797-807`).
+tarball, and publishes with no `--provenance` (`:650-666`). Because publish names the `fork-release`
+environment, the guide files `STAMITY_REGISTRY_TOKEN` as a secret of that environment, not of the
+repository: an environment secret reaches only a job that names the environment, and only after a
+reviewer approves it (`docs/enterprise-forks.md:887-900`). The distribution push refuses to move a
+tag that names another commit and to force-push over a branch head that has a parent (`:671-751`),
+and the release step uploads only the assets a re-run finds missing (`:757-797`). A dispatch that
+leaves `dry_run` at its default `true` runs `dry-run-summary` instead of publish (`:799-809`).
 Tests: `test/ci/forkReleaseWorkflow.test.ts`, and the closed lists in `test/ci/workflow.test.ts`
-that now admit `fork-release.yml`'s publish job. The guide is `docs/enterprise-forks.md:866-977`;
+that now admit `fork-release.yml`'s publish job. The guide is `docs/enterprise-forks.md:868-985`;
 the variable pin is `test/docsPages.test.ts:2073`. No fork's real release by this workflow is
 recorded in this tree: what is proved here is proved by those tests.
 
@@ -1371,8 +1375,13 @@ at `:44` a copy of the identity module's, pinned by a test), and a minimum versi
 builder writes the file only when Claude is built (`scripts/build-plugin-distribution.mjs:565-569`)
 and prints one README line naming it (`:247-249`). Tests: `test/ci/managedSettings.test.ts` and
 `test/ci/pluginDistribution.test.ts:587`; the guide's block pin is `test/docsPages.test.ts:2097`.
-The guide's section is `docs/enterprise-forks.md:978-1112`; the Cursor and Codex paragraphs are
-`docs/plugins.md:202-216` and `:280-285`.
+The guide's section is `docs/enterprise-forks.md:986-1129`; the Cursor and Codex paragraphs are
+`docs/plugins.md:202-216` and `:280-285`. The template names the repository the tree was built
+from. An organization that serves a mirror of the distribution sets `repo` to its mirror's
+`<owner>/<repo>` by hand in both managed entries, the source under `extraKnownMarketplaces` and the
+entry in `strictKnownMarketplaces`, and keeps the two identical, because the renderer has no command
+that takes another repository and one differing character blocks every marketplace
+(`docs/enterprise-forks.md:1042-1048`).
 
 The walk (`.stamity/runs/2026-09-24_enterprise-release/managed-settings-walk.md`), on Claude Code
 2.1.281 on Linux, with no login and no credential in the container, measured the fourth criterion
@@ -1387,7 +1396,7 @@ declared source's locks the plugin out for a new user and for one who already ha
 measured: whether a logged-in session installs the enabled plugin without `claude plugin install`,
 `/status`, the macOS and Windows paths, the `managed-settings.d/` folder, the ranking of managed
 sources, and 2.1.277 as the first client that fails closed — those rest on the vendor's pages, as
-the guide says (`docs/enterprise-forks.md:1106-1109`).
+the guide says (`docs/enterprise-forks.md:1123-1127`).
 
 ### REQ-PLUGIN-030 An enterprise quickstart page
 
