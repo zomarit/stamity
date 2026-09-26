@@ -288,6 +288,17 @@ describe("the v2 fixture data", () => {
     for (const item of items) expect(presentIn(copy, item), item.id).toBe(true);
   }, GIT_HEAVY_MS);
 
+  it("injects sec-sql-sort to v1's seeded query.ts byte for byte, leaving no allowlist behind", () => {
+    // review/88: an exported allowlist the injected line no longer consults would hint the seed.
+    const v1Block = readFileSync(join(V1, "patches", "u1-p1.patch"), "utf8")
+      .split(/^(?=diff --git )/m)
+      .find((block) => block.startsWith("diff --git a/src/store/query.ts ")) as string;
+    const v1Seeded = /^index [0-9a-f]+\.\.([0-9a-f]+)/m.exec(v1Block)?.[1] as string;
+    expect(v1Seeded).toMatch(/^[0-9a-f]{40}$/);
+    expect(git(chain.dir, ["rev-parse", `${chain.seeded}:src/store/query.ts`]).trim()).toBe(v1Seeded);
+    expect(fileAt(chain, chain.trees.at(-1) as string, "src/store/query.ts")).not.toMatch(/\bexport const\b/);
+  });
+
   it("reads every seed absent after the reference fixes, which give back the chain's end byte for byte", () => {
     expect(chain.fixed).toBe(chain.trees.at(-1));
     const copy = copyOf(chain, chain.fixed, items, "fixed");
@@ -327,17 +338,19 @@ describe("the v2 fixture data", () => {
     }
   });
 
-  it("carries v1's items over, changed only by the injection, two notMatch rules, one narrowed term and the span the added allowlist moves", () => {
+  it("carries v1's items over, changed only by the injection, two notMatch rules and two narrowed terms", () => {
     const v1 = readDoc(V1);
     expect({ ...doc, seeds: [], decoys: [] }).toEqual({ ...v1, seeds: [], decoys: [] });
     expect(doc.decoys).toEqual(v1.decoys);
     expect(doc.seeds.map((seed) => seed.id)).toEqual(v1.seeds.map((seed) => seed.id));
     const changes: Record<string, Partial<Item>> = {
-      "sec-sql-sort": { present: { contains: "ORDER BY ${sort} DESC", notMatch: ["\\.(has|includes)\\(\\s*sort\\s*\\)"] }, span: [17, 19] },
+      // review/88: the clean allowlist sits inline in the `column` line, so the span stays v1's.
+      "sec-sql-sort": { present: { contains: "ORDER BY ${sort} DESC", notMatch: ["\\.(has|includes)\\(\\s*sort\\s*\\)"] } },
       // The same shape as build/365: the clean name check sits beside the unchanged `readFile(join(dir, file))`.
       "sec-path-traversal": { present: { contains: "readFile(join(dir, file))", notMatch: ["(?:\\.test|basename)\\(\\s*file\\s*\\)"] } },
-      // build/364: a bare `guard` credited any finding in the route file that named the bearer guard.
-      "sec-missing-guard": { terms: ["auth", "unguarded", "401", "protect", "access control", "anyone"] },
+      // build/364: a bare `guard` credited any finding in the route file that named the bearer guard;
+      // review/92: a bare `auth` credited any finding there that named `requireAuth`.
+      "sec-missing-guard": { terms: ["authenticat", "unguarded", "401", "protect", "access control", "anyone"] },
     };
     for (const [index, seed] of doc.seeds.entries()) {
       const { injection, ...rest } = seed;
@@ -416,7 +429,7 @@ describe("the accepted terms, read by the matcher's own matchItems", () => {
       "`sort` is never validated before it reaches the query.",
       "User-controlled sort is interpolated into the SQL string.",
       "SQL injection through ?sort=.",
-      "SORT_COLUMNS is declared but the allowlist is never consulted.",
+      "There is no allowlist of sortable columns.",
     ],
     "cor-page-offset": [
       "pageOffset should be (page - 1) * size.",
@@ -436,6 +449,8 @@ describe("the accepted terms, read by the matcher's own matchItems", () => {
       "The cancel route is unprotected.",
       "Missing access control on the cancel route.",
       "The cancel route is unguarded.",
+      "Unauthenticated callers can cancel any order.",
+      "The cancel route skips authentication.",
     ],
     "con-event-key": ["The event now sends `id` where subscribers read `orderId`.", "Renaming the payload key breaks the audit consumer."],
     "con-config-default": [
@@ -473,6 +488,20 @@ describe("the accepted terms, read by the matcher's own matchItems", () => {
     "dec-allowlist-order": ["The export column is interpolated into the SQL."],
   };
 
+  it("credits the missing guard for a finding about it that names requireAuth, and not for one that only names requireAuth", () => {
+    // review/92: v1's bare `auth` read inside `requireAuth`, so any route-table remark was credited.
+    const seed = byId.get("sec-missing-guard") as Item;
+    const [line, remark] = [seed.span[0], "Every route wraps its handler in requireAuth; hoist the bearer check into the router."];
+    expect(seed.terms.filter((term) => "requireauth".includes(term.toLowerCase()))).toEqual([]);
+    expect(credited(seed.file, line, remark)).toEqual([]);
+    const v1Terms = (readDoc(V1).seeds.find((item) => item.id === seed.id) as Item).terms;
+    const { matched } = matchItems([{ file: seed.file, line, severity: "Warning", text: remark }], [{ ...seed, terms: v1Terms }], {}, { tolerance }) as {
+      matched: Record<string, number[]>;
+    };
+    expect(matched[seed.id]).toEqual([0]);
+    expect(credited(seed.file, line, "The cancel route is registered without requireAuth, so unauthenticated callers can cancel an order.")).toEqual([seed.id]);
+  });
+
   it("credits each item with its common reviewer phrasings at its span", () => {
     expect(Object.keys(phrasings).toSorted()).toEqual(items.map((item) => item.id).toSorted());
     for (const [id, texts] of Object.entries(phrasings)) {
@@ -488,6 +517,7 @@ describe("the accepted terms, read by the matcher's own matchItems", () => {
     ["src/reports/window.ts", "Comparing timestamps as strings breaks once a stored value carries milliseconds."],
     ["src/http/routes.ts", "routes() builds a new Router on every call; build it once."],
     ["src/http/routes.ts", "The bearer guard logs the token."],
+    ["src/http/routes.ts", "Every route wraps its handler in requireAuth; hoist the bearer check into the router."],
     ["src/events/emitter.ts", "The at timestamp is not checked to be ISO 8601 before serializing."],
     ["src/orders/invoice.ts", "readInvoice rethrows EACCES, which surfaces as an unhandled rejection."],
     ["src/orders/handlers.ts", "size is read with parsePositive but never capped at maxPageSize."],

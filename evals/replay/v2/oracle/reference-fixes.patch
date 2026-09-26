@@ -98,15 +98,15 @@ index 9a488231a8872e21053c87d5124f52a4b0087edd..59c112198ba5ed7f9d53c1562e174798
 +  return (page - 1) * size;
  }
 diff --git a/src/store/query.ts b/src/store/query.ts
-index c52f93a7a180eedc3dbf6517de4885cf2466b3df..1655ee00709ae981506d0bb166dc89c073b3917a 100644
+index b6cb34df9e73177ea502f494c86cb8b902d9c044..d6c04b4f7224360f0d18ab1b9fc8fae2d7fad810 100644
 --- a/src/store/query.ts
 +++ b/src/store/query.ts
-@@ -15,7 +15,8 @@ export interface ListOptions {
+@@ -12,7 +12,8 @@ export interface ListOptions {
  
  /** The orders by `sort`, largest first, at most `size` of them after the first `offset`. */
  export function listOrders(db: DatabaseSync, { size, sort = "created_at", offset = 0 }: ListOptions): OrderRow[] {
 -  const sql = `SELECT id, customer, total_cents, status, created_at FROM orders ORDER BY ${sort} DESC LIMIT ? OFFSET ?`;
-+  const column = SORT_COLUMNS.has(sort) ? sort : "created_at";
++  const column = ["id", "customer", "total_cents", "status", "created_at"].includes(sort) ? sort : "created_at";
 +  const sql = `SELECT id, customer, total_cents, status, created_at FROM orders ORDER BY ${column} DESC LIMIT ? OFFSET ?`;
    return db.prepare(sql).all(size, offset) as OrderRow[];
  }

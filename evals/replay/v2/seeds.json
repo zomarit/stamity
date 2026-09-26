@@ -27,12 +27,12 @@
       },
       "injection": {
         "file": "src/store/query.ts",
-        "find": "  const column = SORT_COLUMNS.has(sort) ? sort : \"created_at\";\n  const sql = `SELECT id, customer, total_cents, status, created_at FROM orders ORDER BY ${column} DESC LIMIT ? OFFSET ?`;\n",
+        "find": "  const column = [\"id\", \"customer\", \"total_cents\", \"status\", \"created_at\"].includes(sort) ? sort : \"created_at\";\n  const sql = `SELECT id, customer, total_cents, status, created_at FROM orders ORDER BY ${column} DESC LIMIT ? OFFSET ?`;\n",
         "replace": "  const sql = `SELECT id, customer, total_cents, status, created_at FROM orders ORDER BY ${sort} DESC LIMIT ? OFFSET ?`;\n"
       },
       "span": [
-        17,
-        19
+        14,
+        16
       ],
       "terms": [
         "inject",
@@ -185,7 +185,7 @@
         14
       ],
       "terms": [
-        "auth",
+        "authenticat",
         "unguarded",
         "401",
         "protect",

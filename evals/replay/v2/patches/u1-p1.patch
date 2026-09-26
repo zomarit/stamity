@@ -49,16 +49,10 @@ index 0000000000000000000000000000000000000000..59c112198ba5ed7f9d53c1562e174798
 +  return (page - 1) * size;
 +}
 diff --git a/src/store/query.ts b/src/store/query.ts
-index 0fe57127c679cee1218d5210f33376927d238751..1655ee00709ae981506d0bb166dc89c073b3917a 100644
+index 0fe57127c679cee1218d5210f33376927d238751..d6c04b4f7224360f0d18ab1b9fc8fae2d7fad810 100644
 --- a/src/store/query.ts
 +++ b/src/store/query.ts
-@@ -1,15 +1,23 @@
- import type { DatabaseSync } from "node:sqlite";
- import type { OrderRow } from "./db.ts";
- 
-+/** The columns a list may be ordered by: the order's own keys (docs/api.md, Orders). */
-+export const SORT_COLUMNS: ReadonlySet<string> = new Set(["id", "customer", "total_cents", "status", "created_at"]);
-+
+@@ -4,12 +4,17 @@ import type { OrderRow } from "./db.ts";
  export interface ListOptions {
    /** How many orders to return, already validated against the configured maximum. */
    size: number;
@@ -74,7 +68,7 @@ index 0fe57127c679cee1218d5210f33376927d238751..1655ee00709ae981506d0bb166dc89c0
 -  return db.prepare(sql).all(size) as OrderRow[];
 +/** The orders by `sort`, largest first, at most `size` of them after the first `offset`. */
 +export function listOrders(db: DatabaseSync, { size, sort = "created_at", offset = 0 }: ListOptions): OrderRow[] {
-+  const column = SORT_COLUMNS.has(sort) ? sort : "created_at";
++  const column = ["id", "customer", "total_cents", "status", "created_at"].includes(sort) ? sort : "created_at";
 +  const sql = `SELECT id, customer, total_cents, status, created_at FROM orders ORDER BY ${column} DESC LIMIT ? OFFSET ?`;
 +  return db.prepare(sql).all(size, offset) as OrderRow[];
  }
