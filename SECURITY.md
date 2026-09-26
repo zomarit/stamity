@@ -197,6 +197,14 @@ properties of that file, rather than properties of a maintainer's laptop.
   that carries a parent, because a head with history is a source branch whatever the manifest
   called it; and a release tag that already names a different commit.
 
+A second release workflow ships in this package: `.github/workflows/fork-release.yml`, which lets a
+private fork release itself. It does nothing in this repository. Its first job sees the canonical
+repository, ends green with a notice, and every other job is skipped, so it publishes nothing from
+here and reads no secret here. In a fork that arms it, its `publish` job holds `contents: write`
+and `packages: write` and no OIDC token. It waits for a reviewer in the fork's `fork-release`
+environment, and for a registry other than GitHub Packages it reads the fork's own stored token,
+`STAMITY_REGISTRY_TOKEN`. The fork guide, `docs/enterprise-forks.md`, describes that setup.
+
 What no file here can do is the platform half, and that is maintainer setup rather than code. It is
 three things. A required reviewer on the `npm-publish` deployment environment, a `v*` tag ruleset,
 and the trusted-publisher entry on the registry. That entry names this repository, this workflow

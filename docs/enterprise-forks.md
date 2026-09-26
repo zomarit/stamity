@@ -163,9 +163,11 @@ The script moves the two Renovate presets because they carry the identity as dat
 deriving it: `renovate/plugins.json` names the repository its tag manager watches, and
 `renovate/companion.json` names the npm package it pins. Everything else follows your manifest on
 its own. The runtime's own remedies (`run: npx <your package> init`) and `scripts/tarball-smoke.mjs`
-read `name` from `package.json`, and the four plugin manifests are projected from it. A private
-package has no npm channel, so the regenerated marketplace entry carries a `github` source naming
-your repository instead of an npm package you never publish.
+read `name` from `package.json`, and the four plugin manifests are projected from it. The
+regenerated marketplace entry follows the package. Without `--registry` the package is private and
+has no npm channel, so the entry carries a `github` source naming your repository instead of an
+npm package you never publish. With `--registry` the entry carries an `npm` source naming your
+package, which your developers fetch from your registry.
 
 The release and docs-deployment workflows you inherit also check the running repository's identity
 and visibility. Their public publication jobs run only in the public canonical repository. Preserve
@@ -877,14 +879,25 @@ describes. The workflow publishes the CLI in the same run as the distribution, s
 package that is still `private: true`, one that still carries the canonical name, and one whose
 `publishConfig.registry` differs from the registry you name below.
 
-Then set these in the repository's Actions settings:
+Next, create the `fork-release` environment in the repository's settings, with required
+reviewers. It is the run's one approval point: the publish job waits there, and it holds the only
+credential the run has. Create it before anything else, and before the first tag, because GitHub
+creates an environment that a job names and nobody created, with no protection rules.
+
+Then set the three variables in the repository's Actions settings, and the secret in the
+`fork-release` environment:
 
 | Name | Kind | Value |
 |---|---|---|
-| `STAMITY_FORK_RELEASE` | variable | This repository's own `<owner>/<repo>`. Until it names this repository, every run ends green with a notice and nothing else runs, which is what keeps a copy of the file inert. |
-| `STAMITY_RELEASE_REGISTRY` | variable | The registry's https URL, the one you passed to `--registry`. A value with credentials, a query or a fragment fails the run, which names the variable and never prints the value. |
-| `STAMITY_RELEASE_BRANCH` | variable, optional | The branch a release tag must be reachable from. The default is `main`. |
-| `STAMITY_REGISTRY_TOKEN` | secret | The registry's publish token. GitHub Packages does not need it. |
+| `STAMITY_FORK_RELEASE` | repository variable | This repository's own `<owner>/<repo>`. Until it names this repository, every run ends green with a notice and nothing else runs, which is what keeps a copy of the file inert. |
+| `STAMITY_RELEASE_REGISTRY` | repository variable | The registry's https URL, the one you passed to `--registry`. A value with credentials, a query or a fragment fails the run, which names the variable and never prints the value. |
+| `STAMITY_RELEASE_BRANCH` | repository variable, optional | The branch a release tag must be reachable from. The default is `main`. |
+| `STAMITY_REGISTRY_TOKEN` | environment secret on `fork-release` | The registry's publish token. GitHub Packages does not need it. |
+
+Put the token in the environment, not in the repository's secrets. A repository secret reaches
+every workflow a push starts, so anyone who can push a branch could add a workflow that reads it,
+and your reviewers would never see that run. An environment secret reaches only a job that names
+the environment, and only after a reviewer approves it.
 
 GitHub Packages takes scoped names only, and it authenticates the per-run `GITHUB_TOKEN`, which
 the publish job holds with `packages: write`. The workflow hands that token only to a registry
@@ -892,11 +905,6 @@ whose host is exactly GitHub Packages' npm host. Every other host, including one
 starts with it, gets `STAMITY_REGISTRY_TOKEN` instead. On GitHub Packages the scope must also be
 this repository's owner, and the gates refuse any other. GitHub's *Working with the npm registry*
 page gives that registry's URL.
-
-Last, create the `fork-release` environment in the repository's settings, with required
-reviewers. It is the run's one approval point: the publish job waits there, and it holds the only
-credential the run has. Create it before the first tag, because GitHub creates an environment that
-a job names and nobody created, with no protection rules.
 
 ### Tag a release
 
@@ -984,11 +992,12 @@ the plugin once, as **Start Claude Code once on each machine** below describes. 
 Codex's workspace route are the other two organization routes, and
 [the plugins guide](plugins.md) describes them under each client's install.
 
-Every distribution tree a release builds carries `admin/claude-managed-settings.json`.
-`scripts/build-plugin-distribution.mjs` renders it through `scripts/plugins/managed-settings.mjs`
-from the identity the catalogs come from, so it names your repository and the tag the tree was
-built at. Take it from the tree at the tag you roll out. This is the file the renderer writes for
-this repository at the tag its `ref` names:
+A distribution tree carries `admin/claude-managed-settings.json` when Claude is among the clients
+it was built for. A release builds all four, so every release tree carries it; a build you run for
+other clients only does not. `scripts/build-plugin-distribution.mjs` renders it through
+`scripts/plugins/managed-settings.mjs` from the identity the catalogs come from, so it names your
+repository and the tag the tree was built at. Take it from the tree at the tag you roll out. This
+is the file the renderer writes for this repository at the tag its `ref` names:
 
 ```json
 {
@@ -1029,6 +1038,14 @@ The four keys do four jobs:
 
 The template pins the release tag. To follow the distribution branch instead, change the `ref` in
 the declared source and in the allowlist entry together, as described under the warnings below.
+
+The template names the repository the tree was built from. An organization that serves a mirror
+of the distribution instead, as [the plugins guide](plugins.md) describes under **Private catalogs
+and Renovate**, also sets `repo` to its mirror's `<owner>/<repo>`, in the same two places: the
+source under `extraKnownMarketplaces` and the entry in `strictKnownMarketplaces`. The renderer has
+no command that takes another repository, so this is a hand edit. Keep the two entries identical,
+`repo` and `ref` alike. If they differ by one character, every marketplace is blocked, as the
+warnings below describe.
 
 ### Put the file where the client reads it
 

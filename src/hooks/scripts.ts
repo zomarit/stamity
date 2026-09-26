@@ -112,10 +112,14 @@ export const REVIEW_GATE_FILE = "stamity-review-gate.mjs";
  * growth into a reviewed edit of this table rather than drift nobody saw.
  *
  * `test/hooks/scriptBudget.test.ts` renders every script for every client in
- * both the generated layout and a plugin root, and holds the larger render to
- * its row. Lines count `\n` only, so CRLF and LF count alike. A row moves with
- * the reason it moved, stated beside it; raising a ceiling because a script
- * grew into it is how the ceiling stops meaning anything.
+ * both the generated layout and a plugin root, and holds the render with more
+ * bytes to its row. The two layouts differ in lines as well as bytes: measured
+ * at e995fe02, the generated layout has 917 lines of session start against 896,
+ * 891 of review gate against 870, and 475 of the claude guard against 266; the
+ * tamper notice has 67 in both. So today the render with more bytes is also the
+ * one with more lines. Lines count `\n` only, so CRLF and LF count alike.
+ * A row moves with the reason it moved, stated beside it; raising a ceiling
+ * because a script grew into it is how the ceiling stops meaning anything.
  *
  * The guard and session-start rows are the plan's fixed ceilings. The review
  * gate and the tamper notice are their measured size times 1.25, bytes rounded
@@ -130,7 +134,8 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   [SESSION_START_FILE]: { bytes: 49_152, lines: 1_100 },
   // Measured 2026-09-24 and again 2026-09-26 at 8c08660e: 40,740 bytes / 891
   // lines (claude, generated layout, the default cap of 4; the cap of 10 adds
-  // 2 bytes). × 1.25 = 50,925 / 1,113.75, rounded up to 51,200 / 1,120.
+  // 2 bytes; a plugin root renders 40,021 / 870). × 1.25 = 50,925 / 1,113.75,
+  // rounded up to 51,200 / 1,120.
   [REVIEW_GATE_FILE]: { bytes: 51_200, lines: 1_120 },
   // Measured 2026-09-24 and again 2026-09-26 at 8c08660e: 2,383 bytes / 67
   // lines, the same in both layouts. × 1.25 = 2,978.75 / 83.75, rounded up to

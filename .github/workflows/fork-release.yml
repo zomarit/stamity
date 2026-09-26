@@ -635,6 +635,8 @@ jobs:
       # The credential: the per-run token for GitHub Packages, the STAMITY_REGISTRY_TOKEN secret
       # for any other registry. The GitHub Packages arm matches the host exactly, never a prefix,
       # so a lookalike host such as `npm.pkg.github.com.example` never receives the per-run token.
+      # GitHub compares strings, `startsWith` included, without regard to case, so an uppercase
+      # host routes here as it does in gates, which lowercases the host before its scope check.
       #
       # Idempotent: a version already on the registry with the same integrity is skipped, and one
       # held by another tarball is refused, never overwritten. No `--provenance` (it needs a public

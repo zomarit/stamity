@@ -415,6 +415,16 @@ describe("fork-release.yml — the trust split", () => {
       expect(chosen(registry, both), registry).toBe("STAMITY_REGISTRY_TOKEN");
       expect(chosen(registry, perRunOnly), registry).toBe("none");
     }
+    // GitHub compares strings, `startsWith` included, without regard to case (the expressions
+    // reference, "Operators" and "startsWith"), and the probe admits an uppercase host. So an
+    // uppercase GitHub Packages host is GitHub Packages here too, the same answer the gates'
+    // lowercased scope check gives it; an uppercase lookalike stays a lookalike.
+    for (const registry of ["https://NPM.PKG.GITHUB.COM", "https://Npm.Pkg.GitHub.com/ACME-CORP"]) {
+      expect(chosen(registry, both), registry).toBe("GITHUB_TOKEN");
+      expect(chosen(registry, perRunOnly), registry).toBe("GITHUB_TOKEN");
+    }
+    expect(chosen("https://NPM.PKG.GITHUB.COM.EXAMPLE", both)).toBe("STAMITY_REGISTRY_TOKEN");
+    expect(chosen("https://NPM.PKG.GITHUB.COM.EXAMPLE", perRunOnly)).toBe("none");
   });
 });
 
@@ -685,6 +695,18 @@ describe.skipIf(WINDOWS)("fork-release.yml — the proofs, executed", () => {
   it("refuses an unscoped name, or another owner's scope, on GitHub Packages", () => {
     expectRefused(prove(proofRepo({ ...CONSISTENT, name: "stamity" })), "GitHub Packages publishes only @acme-corp/");
     expectRefused(prove(proofRepo({ ...CONSISTENT, name: "@other/stamity" })), "GitHub Packages publishes only @acme-corp/");
+  });
+
+  it("treats an uppercase GitHub Packages host as GitHub Packages, as the publish token route does", () => {
+    // The publish step hands this host the per-run token, because GitHub compares strings without
+    // regard to case; the scope check here must hold the same host to the owner's scope.
+    const registry = "https://NPM.PKG.GITHUB.COM";
+    expectRefused(
+      prove(proofRepo({ ...CONSISTENT, name: "@other/stamity", publishConfig: { registry } }), { REGISTRY: registry }),
+      "GitHub Packages publishes only @acme-corp/",
+    );
+    const run = prove(proofRepo({ ...CONSISTENT, publishConfig: { registry } }), { REGISTRY: registry });
+    expect(run.status, run.out).toBe(0);
   });
 
   it("refuses a tag whose commit never reached the release branch", () => {
