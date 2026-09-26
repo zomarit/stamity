@@ -18,6 +18,13 @@ import {
 import { TRUST_TIERS } from "../src/pack/trust.ts";
 import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
+// @ts-expect-error — the distribution modules ship as plain .mjs with no type declarations:
+// they run under bare Node in a release job, with no TypeScript nearby.
+import { buildCatalogIdentity } from "../scripts/plugins/catalogs.mjs";
+// @ts-expect-error — see above.
+import { resolveDistributionIdentity } from "../scripts/distribution-identity.mjs";
+// @ts-expect-error — see above.
+import { renderClaudeManagedSettings } from "../scripts/plugins/managed-settings.mjs";
 
 /**
  * The gate on the fourteen hand-written pages: three at the root, eleven guides
@@ -499,8 +506,16 @@ const RELEASE_CUT_DATE = "2026-09-23";
  * table's runs row with its uncommitted `reports/` folder, and what to commit), and moved both onto
  * the commit form naming that pass's base commit plus `Re-attested 2026-09-23`. The pass ran on
  * the constant's own date, so the constant already names it.
+ *
+ * TEST CHANGE, justified: MOVED 2026-09-26, from 2026-09-23, by plan 010's docs-guides pass. That
+ * pass re-read `docs/enterprise-forks.md` (the identity script, the fork release workflow and the
+ * managed-settings template) and `docs/plugins.md` (the Codex remote walk of 2026-09-24 and the
+ * Cursor and Codex organization routes) against the package head fcc4f59e, and moved both onto the
+ * commit form with `Re-attested 2026-09-26`. A page re-read today can honestly carry only today's
+ * date, which the 2026-09-23 pin refused as later than the pass it ships in. Every other page
+ * keeps the date it was actually verified on.
  */
-const REATTESTATION_DATE = "2026-09-23";
+const REATTESTATION_DATE = "2026-09-26";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");
@@ -581,6 +596,31 @@ const afterFrontmatter = (text: string): string =>
 
 const linkTargets = (text: string): string[] =>
   [...text.matchAll(MARKDOWN_LINK)].map((match) => match[1] ?? "");
+
+/**
+ * One heading's section of a page: from the heading line to the next heading of the same or a
+ * higher level, or the page's end. Lines inside a fenced block are never read as headings, so a
+ * shell comment in a command block cannot end a section early. Empty when the heading is absent,
+ * so a pin reading it fails on its own non-empty assertion rather than on a thrown index.
+ */
+function sectionOf(text: string, heading: string): string {
+  const all = lines(text);
+  const start = all.indexOf(heading);
+  if (start === -1) return "";
+  const level = (/^#+/.exec(heading)?.[0] ?? "").length;
+  let fenced = false;
+  for (let at = start + 1; at < all.length; at += 1) {
+    const line = all[at] ?? "";
+    if (line.startsWith("```")) fenced = !fenced;
+    const depth = fenced ? 0 : (/^(#+) /.exec(line)?.[1] ?? "").length;
+    if (depth > 0 && depth <= level) return all.slice(start, at).join("\n");
+  }
+  return all.slice(start).join("\n");
+}
+
+/** The bodies of a text's fenced blocks carrying one info string, in page order. */
+const fencedBlocksOf = (text: string, info: string): string[] =>
+  [...text.matchAll(new RegExp(`^\`\`\`${info}\\n([\\s\\S]*?)^\`\`\`$`, "gm"))].map((match) => match[1] ?? "");
 
 /** A relative target resolved from the linking page's own directory. */
 const resolveTarget = (page: string, target: string): string =>
@@ -1993,6 +2033,95 @@ describe("the guides", () => {
     expect(guide, "the fork guide never says the tag is what keeps history").toMatch(
       /tag\*{0,2} is what keeps history/,
     );
+  });
+
+  it("the enterprise-forks guide sets a fork's identity with the one command, not a copy-paste block", () => {
+    // Plan 010, unit docs-guides (REQ-PLUGIN-028). The identity step was a hand-typed block whose
+    // `node -e` rewrote the two presets with a plain `replaceAll`, which a rerun applied twice to a
+    // slug carrying the canonical route as a prefix. `scripts/fork-identity.mjs` replaced it. The
+    // pin reads the fenced block of that one subsection, so the copy-paste coming back fails here
+    // instead of passing on a mention of the script somewhere else on the page.
+    const script = "scripts/fork-identity.mjs";
+    expect(existsSync(join(REPO_ROOT, script)), `the fork guide names missing ${script}`).toBe(true);
+    const section = sectionOf(read(ENTERPRISE_FORKS), "### Set the private package's identity");
+    const block = fencedBlocksOf(section, "sh")[0] ?? "";
+    expect(block, "the identity step carries no sh block").not.toBe("");
+    expect(block, "the identity block does not run the identity script").toContain(`node ${script} --repository`);
+    expect(block, "the identity block still carries a hand-typed node -e rewrite").not.toContain("node -e");
+    // The lockfile is the one identity-bearing file the script leaves alone, to stay offline.
+    expect(block, "the identity block no longer refreshes the lockfile's name").toContain(
+      "npm install --package-lock-only",
+    );
+    // Both flags the script takes beyond the repository, named where a reader chooses them.
+    for (const flag of ["--registry", "--scope"]) {
+      expect(section, `the identity step never says when to pass ${flag}`).toContain(`\`${flag}`);
+    }
+  });
+
+  it("the enterprise-forks guide names every variable and secret the fork release workflow reads, and no other", () => {
+    // Plan 010, unit docs-guides (REQ-PLUGIN-027). A fork arms `.github/workflows/fork-release.yml`
+    // by setting exactly the names the workflow reads, so the pin runs both ways: a name the
+    // workflow gains that the guide never tells a fork to set leaves the release inert or
+    // credential-less, and a name the guide prints that the workflow never reads is a setting
+    // that does nothing. Read off the workflow's own `vars.`/`secrets.` expressions, never typed.
+    const workflow = read(".github/workflows/fork-release.yml");
+    const reads = new Set(
+      [...workflow.matchAll(/\b(?:vars|secrets)\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((match) => match[1] ?? ""),
+    );
+    // Non-degenerate: the three variables, the registry secret and the per-run token.
+    expect(reads.size, "the workflow read as naming almost nothing").toBeGreaterThanOrEqual(5);
+    const section = sectionOf(read(ENTERPRISE_FORKS), "## Release your fork");
+    expect(section, "the fork guide has no release section").not.toBe("");
+    for (const name of reads) {
+      expect(section, `the release section never names \`${name}\``).toContain(`\`${name}\``);
+    }
+    const printed = new Set([...section.matchAll(/`(STAMITY_[A-Z0-9_]+)`/g)].map((match) => match[1] ?? ""));
+    expect(printed.size, "the release section names no STAMITY_ setting").toBeGreaterThan(0);
+    for (const name of printed) {
+      expect(reads.has(name), `the release section names \`${name}\`, which the workflow never reads`).toBe(true);
+    }
+  });
+
+  it("the enterprise-forks guide's managed-settings block is the renderer's own output", () => {
+    // Plan 010, unit docs-guides (REQ-PLUGIN-029). The template's allowlist entry must equal the
+    // declared source field for field, or the client admits no marketplace at all, so a block an
+    // admin copies from the page is held to `renderClaudeManagedSettings` for the canonical
+    // identity. The ref is read from the block itself, so a version bump moves the page without
+    // breaking the pin — and a block whose two refs disagree still fails, because the renderer
+    // writes one ref into both places.
+    const section = sectionOf(read(ENTERPRISE_FORKS), "## Roll the plugin out to your organization");
+    const block = fencedBlocksOf(section, "json")[0];
+    expect(block, "the rollout section carries no json block").toBeDefined();
+    const shown = JSON.parse(block ?? "{}") as {
+      extraKnownMarketplaces?: Record<string, { source?: { ref?: unknown } }>;
+    };
+    const ref = Object.values(shown.extraKnownMarketplaces ?? {})[0]?.source?.ref;
+    expect(typeof ref, "the block's declared marketplace carries no ref").toBe("string");
+    const pkg = {
+      name: SCOPED_PACKAGE,
+      repository: { type: "git", url: `git+https://github.com/${OWNER}/${PRODUCT}.git` },
+    };
+    const identity = buildCatalogIdentity(pkg, resolveDistributionIdentity(pkg)) as Record<string, unknown>;
+    const rendered = JSON.parse(JSON.stringify(renderClaudeManagedSettings(identity, { ref }))) as Record<
+      string,
+      unknown
+    >;
+    expect(Object.keys(rendered).length, "the renderer rendered no keys").toBe(4);
+    expect(shown, "the page's template is not the renderer's output").toEqual(rendered);
+    expect(Object.keys(shown), "the page's template reorders the renderer's keys").toEqual(Object.keys(rendered));
+  });
+
+  it("the plugins guide adds a Codex marketplace only at a ref", () => {
+    // Ledger build/18 and review/61 (plan 010). Measured on codex-cli 0.155.1: a Codex marketplace
+    // added with no `--ref` checks out the default branch, which carries no Codex catalog, falls
+    // back to that branch's Claude catalog and installs the PUBLIC npm package it names — on a
+    // private fork, the public registry in place of the private source. Every Codex add line the
+    // page prints carries a ref, as the Codex root README's does.
+    const adds = [...read(PLUGINS).matchAll(/^.*codex plugin marketplace add .*$/gm)].map((match) => match[0]);
+    expect(adds.length, "the plugins guide prints no Codex marketplace add").toBeGreaterThan(1);
+    for (const line of adds) {
+      expect(line, "a Codex marketplace add line carries no --ref").toMatch(/ --ref \S/);
+    }
   });
 
   it("the pages that describe signature verification say the client is optional", () => {

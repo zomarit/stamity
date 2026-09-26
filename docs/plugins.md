@@ -2,10 +2,10 @@
 title: Plugins
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.1 release cut (2026-09-23). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit fcc4f59e. Re-attested 2026-09-26 against the Codex remote walk of 2026-09-24 and the organization routes. -->
 <!-- Re-open when: the capability-file schema changes shape, the locator's exit codes or its
      candidate order move, or a vendor page behind a command block is re-read on a later access
-     date than the newest this page carries, 2026-09-22. `test/docsPages.test.ts` holds this
+     date than the newest this page carries, 2026-09-24. `test/docsPages.test.ts` holds this
      page to the hand-page contract; `docs/capability-matrix.md` carries the dated source URL
      behind each client's container facts, and `docs/cli-reference.md` is what the `stamity
      plugin` blocks must not contradict. -->
@@ -82,17 +82,19 @@ URL, under **Plugin containers** in [the capability matrix](capability-matrix.md
 ## Install
 
 Each block below carries a provenance line. A block that says **executed** was run on a real client
-on 2026-09-20 or 2026-09-21 and the output is what this page describes. A block that says **from
-the vendor's documentation** is transcribed from a page read on 2026-09-21 and has not been run
-here. Two proofs have since run — the release's route proof, and the upgrade-and-rollback lifecycle
+on the date its line gives, and the output is what this page describes. A block that says **from
+the vendor's documentation** is transcribed from a page read on the date its line gives and has
+not been run here. Two proofs have since run — the release's route proof, and the upgrade-and-rollback lifecycle
 walk — and between them they executed the LOCAL form of every client's route, a marketplace or a
 plugin directory on disk. They did not execute the same commands as each other, so each block below
 names which one ran what. Neither executed the remote `<owner>/stamity#plugin-dist` source against
 this repository's own distribution, and nothing has since. The branch exists — the 1.9.0 release
-published `plugin-dist`, one orphan commit, tagged `plugins/v1.9.0` — but the one walk of a remote
-source, the private-chain rehearsal of 2026-09-22, pointed Claude Code and Copilot CLI at a
-private mirror pinned at that tag, and Codex's remote form has not run at all. No block on this
-page is presented as executed when it was not.
+published `plugin-dist`, one orphan commit, tagged `plugins/v1.9.0` — and the walks of a remote
+source ran against a private mirror of it instead. The private-chain rehearsal of 2026-09-22
+pointed Claude Code and Copilot CLI at that mirror pinned at the tag. The Codex walk of 2026-09-24
+added it to codex-cli 0.155.1 at both release tags and at the distribution branch. Both are
+recorded in `.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md`, the Codex walk under its
+"The Codex half (E3)" section. No block on this page is presented as executed when it was not.
 
 `<owner>/stamity` below is your own mirror or this repository, whichever your organization serves
 from. The branch a release publishes the distribution to is `plugin-dist`, and each release also
@@ -199,15 +201,19 @@ shadowed rather than merged.
 
 ### Cursor
 
-For an organization, the route is the dashboard, not the CLI: **Dashboard → Plugins & MCPs → Team
-Marketplaces → Add Marketplace**, pointed at your mirror of the distribution branch. Choose the
-install mode there (Default Off, Default On, Required), and restrict who sees it under
+For an organization, the route is the dashboard, not the CLI. Team marketplaces come with Cursor's
+Teams and Enterprise plans: **Dashboard → Plugins & MCPs → Team Marketplaces → Add Marketplace**,
+pointed at your mirror of the distribution branch. Each plugin in a team marketplace takes one of
+three install modes, **Default Off**, **Default On** or **Required**, and Required is the one that
+rolls the plugin out to the whole team, as the managed-settings template does for Claude Code in
+[the enterprise forks guide](enterprise-forks.md). Restrict who sees the marketplace under
 **Marketplace Settings → Marketplace Access**. Cursor re-indexes a marketplace *"at most once
 every 10 minutes, batching rapid pushes to the latest commit"*.
 
-*From the vendor's plugins page, accessed 2026-09-21. The dashboard is an organization action in
-a browser, so no proof here executes it; what the route proof executed for this client is the
-`--plugin-dir` form below.*
+*From the vendor's plugins page (`/docs/plugins` on Cursor's documentation site), accessed
+2026-09-21 and again 2026-09-24 for the plans and the three modes. The dashboard is an
+organization action in a browser, and a team marketplace needs a team account, so no proof here
+executes it; what the route proof executed for this client is the `--plugin-dir` form below.*
 
 For one developer, install from the Customize view, or run the agent against a root on disk:
 
@@ -229,16 +235,37 @@ per-project scratch, it holds nothing of the plugin, and deleting it costs nothi
 ### Codex
 
 ```sh
-codex plugin marketplace add <owner>/stamity
+codex plugin marketplace add <owner>/stamity --ref plugin-dist
 codex plugin add stamity@stamity
 ```
 
-*Executed 2026-09-20 on codex-cli 0.154.0, against a marketplace on a local path in a scratch
-`CODEX_HOME`: both commands exited 0 with no login, and the installed cache tree was byte-identical
-to the built root over all 45 files outside its bundled `runtime/`, which the route proof compared
-again at this release. The `<owner>/stamity` spelling of a remote source is from the vendor's build
-page, accessed 2026-09-21; the distribution branch it would point at exists since 1.9.0, and no
-proof has walked Codex's remote form against it or against a mirror.*
+*Executed 2026-09-24 on codex-cli 0.155.1 against a private mirror of the distribution, not
+against this repository's own.
+`codex plugin marketplace add <owner>/stamity-plugins-mirror --ref plugins/v1.9.0`, then
+`codex plugin add stamity@stamity`, both exited 0 with Codex not logged in.
+The clone authenticated through the machine's git credential helper, and no token was passed.
+The installed cache's per-file sha-256 map equalled the tag's `codex/` tree over 681 files. The
+same walk added the mirror at `--ref plugin-dist`, the branch form above, and installed a root
+equal to the `plugins/v1.9.1` tree over 682 files. The local form ran first, on 2026-09-20 on
+codex-cli 0.154.0, against a marketplace on a local path in a scratch `CODEX_HOME`: both commands
+exited 0 with no login, and the installed cache tree was byte-identical to the built root over all
+45 files outside its bundled `runtime/`, which the route proof compared again at the 1.9.1 cut.*
+
+**The `--ref` is not optional, and it matters most for a private fork.** Without it, Codex checks
+out the repository's default branch, which carries no Codex catalog: the distribution's Codex
+catalog lives only on the distribution branch and its tags. codex-cli 0.155.1 then falls back to
+that branch's Claude catalog and installs the npm package the catalog names, and both commands
+still exit 0 with nothing in their output to say so. On the private mirror the walk measured, the
+result was the PUBLIC package from the public registry, with no `runtime/`, no hooks and no
+locator — for a private fork, the public source in place of its own. The same line against this
+repository's own slug is expected to behave the same way, because its default branch carries the
+same npm-sourced Claude catalog, but that was not measured. Pin with `--ref plugins/v<version>`
+in place of the branch. This is the line the Codex root's own `README.md` prints.
+
+Codex keeps a git marketplace's checkout at `$CODEX_HOME/.tmp/marketplaces/<name>` and records its
+source and `ref` in `config.toml` under `[marketplaces.<name>]`. `codex plugin list --json` names
+the marketplace's source without its ref, so `config.toml` is where you read which ref you are on
+*(measured 2026-09-24 on 0.155.1)*.
 
 A marketplace entry on its own installs nothing — both commands are needed. The marketplace file
 this repository publishes lives at `.agents/plugins/marketplace.json`, and an entry's `source` is
@@ -249,8 +276,12 @@ Installs land under `~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/`. 
 running session is the view that shows what is installed, and **skills need a fresh session** —
 an install does not reach the session that performed it.
 
-An administrator who wants the plugin available across a workspace publishes it through the
-vendor's workspace route instead, which is admin-gated.
+An administrator who wants the plugin available across a ChatGPT workspace uses the vendor's
+workspace route instead, which is admin-gated. The admin imports a GitHub marketplace into the
+workspace, and then sets each plugin to **Installed**, **Available** or **Not available** for each
+role. *From OpenAI's enterprise plugin-management page (`/docs/enterprise/plugin-management` on
+its ChatGPT learning site), accessed 2026-09-24. It is a workspace admin's action, so no proof here
+executes it.*
 
 A built distribution tree carries its own `README.md` with each client's install, pin, update and
 rollback lines already filled in for the tag that tree was built at — including the flag this
@@ -408,12 +439,17 @@ codex plugin marketplace add <owner>/stamity --ref plugins/v<previous>
 codex plugin add stamity@stamity
 ```
 
-*What was walked, 2026-09-20 on codex-cli 0.154.0: the marketplace directory moved in place and
-`codex plugin add stamity@stamity` again — both the update and the rollback for a marketplace on a
-local path; re-adding that directory answered "already added". What is recommended and was not
-walked: the `marketplace remove` step, whose verb is listed by `codex plugin marketplace --help` on
-0.155.1 (read 2026-09-22). It comes first because re-pointing a git marketplace already on record
-is unmeasured, and the "already added" answer may leave such a marketplace's ref where it was.*
+*Walked 2026-09-24 on codex-cli 0.155.1 by the Codex walk, with exactly these four commands,
+against a private mirror, moving from `plugins/v1.9.0` to `plugins/v1.9.1`. Each exited 0.
+`plugin remove` deleted that version's cache directory, `marketplace remove` deleted the
+marketplace checkout and its `config.toml` table, and the re-add and install gave a root equal to
+the new tag's `codex/` tree over 682 files. Earlier, on 2026-09-20 on 0.154.0, the update and the
+rollback of a marketplace on a local path were walked as the directory moved in place and
+`codex plugin add stamity@stamity` again; re-adding that directory answered "already added".* The
+`marketplace remove` step is required, not a precaution. Re-adding a git marketplace that is
+already on record at another ref exits 1 with `marketplace 'stamity' is already added from a
+different source; remove it before adding this source`, and it leaves the ref, the checkout and
+the installed version where they were *(measured 2026-09-24 on 0.155.1)*.
 `codex plugin remove` takes the qualified id: `codex plugin remove stamity` refuses with `plugin
 requires --marketplace unless passed as <plugin>@<marketplace>`, and `codex plugin remove
 stamity@stamity` purges that version's local cache, which is why the route ends in `plugin add`
