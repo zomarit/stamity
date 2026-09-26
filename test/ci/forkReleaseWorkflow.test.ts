@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -773,16 +773,22 @@ describe.skipIf(WINDOWS)("fork-release.yml — the tarball's identity, executed 
   const TARBALL = `acme-corp-stamity-${FORK_VERSION}.tgz`;
   const PACKED = { name: FORK_PACKAGE, version: FORK_VERSION, publishConfig: { registry: GITHUB_PACKAGES } };
 
-  /** A tarball in npm pack's layout, its manifest at package/package.json, checked by the step. */
+  /**
+   * A tarball in npm pack's layout, its manifest at package/package.json, checked by the step.
+   * `craft`, when given, writes the tarball itself from the scratch directory, for the shapes
+   * npm pack never makes and an attacker would.
+   */
   function identity(
     packed: Readonly<Record<string, unknown>> | null,
     env: Readonly<Record<string, string>> = {},
+    craft?: (dir: string) => void,
   ): { status: number | null; out: string } {
     const dir = scratchDir("identity");
     mkdirSync(join(dir, "package"));
     if (packed === null) writeFileSync(join(dir, "package", "README.md"), "no manifest\n");
     else writeFileSync(join(dir, "package", "package.json"), `${JSON.stringify(packed, null, 2)}\n`);
-    execFileSync("tar", ["-czf", TARBALL, "package"], { cwd: dir, stdio: "pipe" });
+    if (craft === undefined) execFileSync("tar", ["-czf", TARBALL, "package"], { cwd: dir, stdio: "pipe" });
+    else craft(dir);
     const result = spawnSync("bash", ["-c", IDENTITY], {
       cwd: dir,
       encoding: "utf8",
@@ -830,7 +836,53 @@ describe.skipIf(WINDOWS)("fork-release.yml — the tarball's identity, executed 
     expect(identity(PACKED, { EXPECTED_NAME: "" }).status).toBe(1);
     const bare = identity(null);
     expect(bare.status).toBe(1);
-    expect(bare.out).toContain("carries no readable package/package.json");
+    expect(bare.out).toContain("carries 0 package/package.json members");
+  });
+
+  /** The members, in this order, into the tarball: npm pack's own layout is one call with `package`. */
+  const tarOf = (...members: string[]) => (dir: string): void => {
+    execFileSync("tar", ["-czf", TARBALL, ...members], { cwd: dir, stdio: "pipe" });
+  };
+  const EVIL = `${JSON.stringify({ ...PACKED, name: CANONICAL_PACKAGE })}\n`;
+
+  it("refuses package/package.json followed by another directory's package.json, which npm would read instead", () => {
+    const run = identity(PACKED, {}, (dir) => {
+      mkdirSync(join(dir, "another-dir"));
+      writeFileSync(join(dir, "another-dir", "package.json"), EVIL);
+      tarOf("package/package.json", "another-dir/package.json")(dir);
+    });
+    expect(run.status).toBe(1);
+    expect(run.out).toContain('"another-dir/package.json", outside package/');
+    expect(run.out).not.toContain("Tarball identity verified");
+  });
+
+  it("refuses a stray top-level member", () => {
+    const run = identity(PACKED, {}, (dir) => {
+      writeFileSync(join(dir, "stray.txt"), "stray\n");
+      tarOf("package", "stray.txt")(dir);
+    });
+    expect(run.status).toBe(1);
+    expect(run.out).toContain('"stray.txt", outside package/');
+    expect(run.out).not.toContain("Tarball identity verified");
+  });
+
+  it("refuses a second package/package.json appended after the first, and a manifest that is not a regular file", () => {
+    const appended = identity(PACKED, {}, (dir) => {
+      const plain = join(dir, "plain.tar");
+      execFileSync("tar", ["-cf", plain, "package/package.json"], { cwd: dir, stdio: "pipe" });
+      writeFileSync(join(dir, "package", "package.json"), EVIL);
+      execFileSync("tar", ["-rf", plain, "package/package.json"], { cwd: dir, stdio: "pipe" });
+      writeFileSync(join(dir, TARBALL), execFileSync("gzip", ["-c", plain], { cwd: dir }));
+    });
+    expect(appended.status).toBe(1);
+    expect(appended.out).toContain("carries 2 package/package.json members");
+    const linked = identity(null, {}, (dir) => {
+      writeFileSync(join(dir, "real.json"), `${JSON.stringify(PACKED)}\n`);
+      symlinkSync("../real.json", join(dir, "package", "package.json"));
+      tarOf("package")(dir);
+    });
+    expect(linked.status).toBe(1);
+    expect(linked.out).toContain("0 of them a regular file");
   });
 });
 

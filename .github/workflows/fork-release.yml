@@ -524,6 +524,13 @@ jobs:
       # the proofs read, so the manifest inside it is held to the proved name, version and
       # registry before anything is published (fork-release only: release.yml publishes one
       # fixed name).
+      #
+      # The members are checked FIRST. npm reads a tarball's manifest by extracting it with the
+      # first path component stripped, whatever that component is, and a later member overwrites
+      # an earlier one: `package/package.json` followed by `other/package.json` shows `tar` the
+      # first and npm the second. So every member must sit under `package/`, with no empty, `.` or
+      # `..` component that could collapse onto another path, and exactly one member may be
+      # `package/package.json`, a regular file.
       - name: Verify the tarball's identity
         env:
           EXPECTED_NAME: ${{ needs.gates.outputs.package_name }}
@@ -531,6 +538,32 @@ jobs:
           EXPECTED_REGISTRY: ${{ needs.probe.outputs.registry }}
         run: |
           set -euo pipefail
+          MEMBERS_FILE="$(mktemp)"
+          LISTING_FILE="$(mktemp)"
+          if ! tar -tzf "$TARBALL" > "$MEMBERS_FILE" || ! tar -tvzf "$TARBALL" > "$LISTING_FILE"; then
+            echo "::error::$TARBALL cannot be listed. Refusing to publish."
+            exit 1
+          fi
+          MEMBERS_FILE="$MEMBERS_FILE" LISTING_FILE="$LISTING_FILE" node -e '
+            const fs = require("node:fs");
+            const lines = (path) => fs.readFileSync(path, "utf8").split("\n").filter((line) => line !== "");
+            const members = lines(process.env.MEMBERS_FILE);
+            let bad = 0;
+            for (const member of members) {
+              const parts = member.replace(/\/$/, "").split("/");
+              if (parts[0] !== "package" || parts.slice(1).some((part) => part === "" || part === "." || part === "..")) {
+                console.log(`::error::The tarball carries ${JSON.stringify(member)}, outside package/ or through an empty, . or .. component, and npm would read it in place of what this step checks. Refusing to publish.`);
+                bad += 1;
+              }
+            }
+            const manifests = members.filter((member) => member === "package/package.json").length;
+            const regular = lines(process.env.LISTING_FILE).filter((line) => /^-.* package\/package\.json$/.test(line)).length;
+            if (manifests !== 1 || regular !== 1) {
+              console.log(`::error::The tarball carries ${manifests} package/package.json members, ${regular} of them a regular file, and exactly one regular file is required. Refusing to publish.`);
+              bad += 1;
+            }
+            if (bad > 0) process.exit(1);
+          '
           if ! PACKED_MANIFEST="$(tar -xzOf "$TARBALL" package/package.json)"; then
             echo "::error::$TARBALL carries no readable package/package.json. Refusing to publish."
             exit 1
