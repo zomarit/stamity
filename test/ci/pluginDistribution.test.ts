@@ -780,17 +780,18 @@ describe("a fork with its own distribution branch and tag pattern", () => {
         "--source-commit-date",
         FIXED_COMMIT_DATE,
         "--client",
-        "claude,codex",
+        "claude,copilot,codex",
       ],
       { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
     );
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
   }, 2 * ONE_ROOT_MS);
 
-  it("names the fork's branch and tag in both root READMEs and the distribution README, and never the defaults", () => {
+  it("names the fork's branch and tag in every root README and the distribution README, and never the defaults", () => {
     const slug = `${FORK_PUBLISHER}/${FORK_REPOSITORY_SLUG}`;
     const pages = {
       claude: readFileSync(join(out, "claude", "README.md"), "utf8"),
+      copilot: readFileSync(join(out, "copilot", "README.md"), "utf8"),
       codex: readFileSync(join(out, "codex", "README.md"), "utf8"),
       distribution: readFileSync(join(out, "README.md"), "utf8"),
     };
@@ -798,6 +799,11 @@ describe("a fork with its own distribution branch and tag pattern", () => {
       claude: [
         `claude plugin marketplace add ${slug}#${FORK_BRANCH}`,
         `claude plugin marketplace add ${slug}#${forkPrevious}`,
+      ],
+      copilot: [
+        `copilot plugin marketplace add ${slug}#${FORK_BRANCH}`,
+        `copilot plugin marketplace add ${slug}#${forkTag}`,
+        `copilot plugin marketplace add ${slug}#${forkPrevious}`,
       ],
       codex: [
         `codex plugin marketplace add ${slug} --ref ${FORK_BRANCH}`,
@@ -808,6 +814,9 @@ describe("a fork with its own distribution branch and tag pattern", () => {
         `claude plugin marketplace add ${slug}#${FORK_BRANCH}`,
         `claude plugin marketplace add ${slug}#${forkTag}`,
         `claude plugin marketplace add ${slug}#${forkPrevious}`,
+        `copilot plugin marketplace add ${slug}#${FORK_BRANCH}`,
+        `copilot plugin marketplace add ${slug}#${forkTag}`,
+        `copilot plugin marketplace add ${slug}#${forkPrevious}`,
         `codex plugin marketplace add ${slug} --ref ${FORK_BRANCH}`,
         `codex plugin marketplace add ${slug} --ref ${forkTag}`,
         `codex plugin marketplace add ${slug} --ref ${forkPrevious}`,
