@@ -4,16 +4,20 @@
 // neighbours than about the guard, so the number of record is the one a person takes on a
 // quiet machine and pastes into the release record.
 //
-// Usage: node scripts/hook-latency.mjs [--runs <n>] [--guard <path>]
+// Usage: node scripts/hook-latency.mjs [--runs <n>] [--guard <path>] [--budget <ms>]
 //        --runs   timed runs per case, after one untimed warm-up round. Default 7.
 //        --guard  the guard script to time. Default: this checkout's
 //                 .stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs
+//        --budget the overhead allowed per case, in ms. Default 15; the release uses the default.
 //
-// Exit codes: 0 every overhead within the 15 ms budget, 1 one or more over it, 2 the check
-// could not run (a bad argument, a missing guard, a spawn that failed or a guard that exited
-// non-zero on a payload — a refused payload times the refusal, not the call it stands for).
+// Exit codes: 0 every overhead within the budget, 1 one or more over it, 2 the check could not
+// run (a bad argument, a missing guard, a spawn that failed or did not return in time, a guard
+// that exited non-zero on a payload — a refused payload times the refusal, not the call it
+// stands for — or any other crash, printed with its stack).
 //
-// METHOD. Three cases: node's own start (`node -e ""`), a non-Write call and an allowed Write,
+// METHOD. Three cases: node's own start (`node -e ""`), a governed non-Write call (a verdict
+// role's `Read`, which carries its `agent_type` so the guard reads the policy, as the D2
+// baseline's call did) and an allowed Write,
 // each spawned with no shell as `spawnSync(process.execPath, [...])` and timed with
 // `process.hrtime.bigint()` around the spawn. The cases are interleaved round by round, so a
 // machine that slows down part-way slows every case alike rather than the last one measured.
@@ -47,10 +51,13 @@ const FALLBACK_WRITE_PATH = '.stamity/runs/hook-latency/reports/latency-reviewer
 export const BUDGET_MS = 15
 export const VERDICT_AGENT = 'stamity-reviewer'
 const DEFAULT_RUNS = 7
+// One spawn's ceiling: the guard takes tens of ms, so a spawn still running after this is hung.
+export const SPAWN_TIMEOUT_MS = 30_000
 
-const USAGE = `Usage: node scripts/hook-latency.mjs [--runs <n>] [--guard <path>]
+const USAGE = `Usage: node scripts/hook-latency.mjs [--runs <n>] [--guard <path>] [--budget <ms>]
   --runs   timed runs per case after one warm-up round (default ${DEFAULT_RUNS})
-  --guard  the guard to time (default .stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs)`
+  --guard  the guard to time (default .stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs)
+  --budget the overhead allowed per case in ms (default ${BUDGET_MS})`
 
 class CannotRun extends Error {}
 
@@ -100,22 +107,30 @@ export function payloads(guard) {
   return [
     {
       name: 'non-Write call',
-      input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls' } }),
+      input: JSON.stringify({
+        hook_event_name: 'PreToolUse',
+        agent_type: VERDICT_AGENT,
+        tool_name: 'Read',
+        tool_input: { file_path: join(root, 'package.json') },
+      }),
     },
     { name: 'allowed Write', input: JSON.stringify(writePayload(root, reportText)) },
   ]
 }
 
 function parseArgs(args) {
-  const parsed = { runs: DEFAULT_RUNS, guard: DEFAULT_GUARD }
+  const parsed = { runs: DEFAULT_RUNS, guard: DEFAULT_GUARD, budget: BUDGET_MS }
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i]
     if (arg === '--help' || arg === '-h') return { help: true }
-    if (arg !== '--runs' && arg !== '--guard') throw new CannotRun(`Unknown argument: ${arg}\n${USAGE}`)
+    if (arg !== '--runs' && arg !== '--guard' && arg !== '--budget') throw new CannotRun(`Unknown argument: ${arg}\n${USAGE}`)
     i += 1
     if (i >= args.length) throw new CannotRun(`${arg} needs a value.\n${USAGE}`)
     if (arg === '--guard') {
       parsed.guard = resolve(args[i])
+    } else if (arg === '--budget') {
+      if (!/^[0-9]+(\.[0-9]+)?$/.test(args[i])) throw new CannotRun(`--budget must be a number of ms, 0 or more.\n${USAGE}`)
+      parsed.budget = Number(args[i])
     } else {
       if (!/^[1-9][0-9]*$/.test(args[i])) throw new CannotRun(`--runs must be a positive whole number.\n${USAGE}`)
       parsed.runs = Number(args[i])
@@ -124,11 +139,12 @@ function parseArgs(args) {
   return parsed
 }
 
-/** One spawn's wall time in ms; any failure or non-zero exit stops the whole check. */
-function timeOnce(name, args, input) {
+/** One spawn's wall time in ms; any failure, hang or non-zero exit stops the whole check. */
+export function timeOnce(name, args, input, timeoutMs = SPAWN_TIMEOUT_MS) {
   const start = process.hrtime.bigint()
-  const result = spawnSync(process.execPath, args, { input, encoding: 'utf8', windowsHide: true })
+  const result = spawnSync(process.execPath, args, { input, encoding: 'utf8', windowsHide: true, timeout: timeoutMs })
   const elapsed = Number(process.hrtime.bigint() - start) / 1e6
+  if (result.error?.code === 'ETIMEDOUT') throw new CannotRun(`${name}: the spawn did not return within ${timeoutMs} ms.`)
   if (result.error !== undefined) throw new CannotRun(`${name}: the spawn failed (${result.error.message}).`)
   if (result.status !== 0) {
     const how = result.status === null ? `was killed by ${result.signal}` : `exited ${result.status}`
@@ -167,10 +183,11 @@ function main(args) {
   }
 
   const medians = samples.map(median)
+  // The verdict reads the raw difference; the one-decimal form is for the print only.
   const rows = cases.map((entry, index) => ({
     name: entry.name,
     median: medians[index].toFixed(1),
-    overhead: index === 0 ? undefined : (medians[index] - medians[0]).toFixed(1),
+    overheadMs: index === 0 ? undefined : medians[index] - medians[0],
   }))
 
   console.log(
@@ -179,24 +196,36 @@ function main(args) {
   console.log('')
   console.log('| case | median (ms) | overhead (ms) |')
   console.log('|---|---|---|')
-  for (const row of rows) console.log(`| ${row.name} | ${row.median} | ${row.overhead ?? '—'} |`)
+  for (const row of rows) console.log(`| ${row.name} | ${row.median} | ${row.overheadMs?.toFixed(1) ?? '—'} |`)
   console.log('')
 
-  const over = rows.filter((row) => row.overhead !== undefined && Number(row.overhead) > BUDGET_MS)
+  const over = rows.filter((row) => row.overheadMs !== undefined && row.overheadMs > parsed.budget)
   for (const row of over) {
-    console.error(`hook-latency: ${row.name}: guard overhead ${row.overhead} ms over the ${BUDGET_MS} ms budget`)
+    console.error(
+      `hook-latency: ${row.name}: guard overhead ${row.overheadMs.toFixed(1)} ms over the ${parsed.budget} ms budget`,
+    )
   }
   if (over.length > 0) return 1
-  console.log(`hook-latency: every overhead within the ${BUDGET_MS} ms budget`)
+  console.log(`hook-latency: every overhead within the ${parsed.budget} ms budget`)
   return 0
 }
 
-if (isMain(import.meta.url)) {
+/**
+ * The exit code for one run of `body`: its own code, or 2 for anything that stopped the check —
+ * a known cannot-run case by its message, any other throw with its stack, since a crash measured
+ * nothing and 1 is reserved for over budget.
+ */
+export function cli(args, body = main) {
   try {
-    process.exitCode = main(process.argv.slice(2))
+    return body(args)
   } catch (error) {
-    if (!(error instanceof CannotRun)) throw error
-    console.error(`hook-latency: ${error.message}`)
-    process.exitCode = 2
+    if (error instanceof CannotRun) {
+      console.error(`hook-latency: ${error.message}`)
+    } else {
+      console.error(`hook-latency: the check crashed and measured nothing.\n${error?.stack ?? String(error)}`)
+    }
+    return 2
   }
 }
+
+if (isMain(import.meta.url)) process.exitCode = cli(process.argv.slice(2))
