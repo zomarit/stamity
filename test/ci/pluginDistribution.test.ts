@@ -659,10 +659,14 @@ describe("the tree as a whole", () => {
     const readme = readFileSync(join(dist, "README.md"), "utf8");
     const section = readme.split(/^## /m).find((part) => part.includes("Root: `codex/`"));
     expect(section).toBeDefined();
-    expect(section).toContain(`codex plugin marketplace add ${SLUG} --ref plugin-dist`);
-    expect(section).toContain(
-      `codex plugin marketplace add ${SLUG} --ref plugins/v${VERSION}`,
-    );
+    // TEST CHANGE, justified (inbox row 100, e3-codex-install-ref). The install and pin lines were
+    // pinned here as the literals `--ref plugin-dist` and `--ref plugins/v${VERSION}` — a literal
+    // compared with a literal, which a changed distribution branch or tag pattern moves on one side
+    // only. They moved to `test/ci/pluginPackages.codex.test.ts` ("the root README's routes against
+    // the distribution README's, for one identity"), which extracts every `marketplace add` line
+    // from this section and from the Codex root README of the same build, compares them, and reads
+    // the branch and the tag from the resolved identity. The `--ref` spelling stays pinned here by
+    // the rollback line below and the exact rollback block further down.
     expect(section).toContain(`codex plugin marketplace add ${SLUG} --ref plugins/v<previous>`);
     // The three subcommands the same help output documents, so a pin that only
     // held the flag could not go green against a renamed verb.

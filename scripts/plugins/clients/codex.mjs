@@ -155,9 +155,15 @@ A plugin root built from the stamity corpus at version ${version}, commit ${sour
 ## Install
 
 \`\`\`sh
-codex plugin marketplace add ${slug}
+codex plugin marketplace add ${slug} --ref plugin-dist
 codex plugin add stamity@stamity
 \`\`\`
+
+The \`--ref\` is not optional. Without it the client checks out the repository's default branch,
+which carries no Codex catalog, falls back to that branch's Claude catalog and installs the npm
+package that catalog names — on the private mirror it was measured against, the public package,
+with no \`runtime/\` and no hooks. Measured on codex-cli 0.155.1 on 2026-09-24, as is
+\`--ref plugin-dist\` installing this root.
 
 \`/plugins\` lists what the running session has installed, and is the view to check the install
 against before anything else.
@@ -203,18 +209,28 @@ per-hook trust review through \`/hooks\`. A headless run proves discovery, never
 
 ## Pin, roll back, remove
 
+The install above resolves to a branch, so it takes whatever that branch points at, and
+\`codex plugin marketplace upgrade\` refreshes it. Pin by adding the marketplace at this version's
+tag instead:
+
 \`\`\`sh
-codex plugin marketplace upgrade
-codex plugin marketplace remove stamity
-codex plugin remove stamity@stamity
+codex plugin marketplace add ${slug} --ref plugins/v${version}
+codex plugin add stamity@stamity
 \`\`\`
 
-The marketplace entry resolves to a branch, so an install takes whatever that branch points at.
-Pin by adding the marketplace at a tag; roll back by removing the marketplace, re-adding it at the
-previous tag and installing again — \`marketplace remove\` is listed by \`codex plugin marketplace
---help\` on 0.155.1 (read 2026-09-22), and the re-point of a git marketplace already on record is
-unmeasured, which is why the removal comes first. \`codex plugin remove\` uninstalls and clears the
-local cache.
+Roll back by removing the plugin and the marketplace, re-adding the marketplace at the previous tag
+and installing again:
+
+\`\`\`sh
+codex plugin remove stamity@stamity
+codex plugin marketplace remove stamity
+codex plugin marketplace add ${slug} --ref plugins/v<previous>
+codex plugin add stamity@stamity
+\`\`\`
+
+The removal comes first because a git marketplace already on record is not re-pointed in place:
+the re-add at another ref answers "already added from a different source" (codex-cli 0.155.1,
+measured 2026-09-24). \`codex plugin remove\` uninstalls and clears the local cache.
 
 ## Where this root is read
 
