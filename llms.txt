@@ -28,7 +28,8 @@ hand-written or corpus source. Nothing here links outside this tree.
 - [Troubleshooting](docs/troubleshooting.md): the exit model, every check row and its remedy, the common failures, and where to report one.
 - [Workspaces](docs/workspaces.md): one policy across several repositories — what a workspace is, the manifest, the two ways to create one, the status rows, and what the cascade pushes down.
 - [Packs and trust](docs/packs-and-trust.md): what a pack is, the four-rung trust ladder, what a verified signature does and does not prove, signing one of your own, the org policy, and how to remove a pack.
-- [Enterprise forks](docs/enterprise-forks.md): taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, the gates that decide, landing, the fork layer, and the opt-in workflow.
+- [Enterprise quickstart](docs/enterprise-quickstart.md): the enterprise route in order — who does what, day 0 the fork, day 1 the release and the rollout, day 2 the updates — with each step linked to the guide section that has its commands.
+- [Enterprise forks](docs/enterprise-forks.md): taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, the gates that decide, landing, the fork layer, releasing the fork through its own workflow, rolling the plugin out to an organization with managed settings, and the opt-in update workflow.
 - [Security mapping](docs/security-mapping.md): the version-pinned crosswalk from this repository's own controls to the OWASP agentic, LLM and web lists, the joint guidance and the NIST AI RMF — seven surfaces, their residuals, and the gaps.
 - [Migration](docs/migration.md): moving a repository off the predecessor setup — the in-place path, the uninstall-first path, what transfers, and the removal left to you.
 

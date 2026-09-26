@@ -27,11 +27,11 @@ import { resolveDistributionIdentity } from "../scripts/distribution-identity.mj
 import { renderClaudeManagedSettings } from "../scripts/plugins/managed-settings.mjs";
 
 /**
- * The gate on the fourteen hand-written pages: three at the root, eleven guides
+ * The gate on the fifteen hand-written pages: three at the root, twelve guides
  * under `docs/`.
  *
  * The rest of `docs/` is generated and drift-tested against its renderer; these
- * thirteen are typed by a human, so the only guard is this file.
+ * fifteen are typed by a human, so the only guard is this file.
  * It asserts the properties a rewrite could silently break — the public
  * opening surviving a reflow, the ≤150-line budget, links that stay inside the
  * tree or inside this repository's own GitHub home, no bare domain, no contact
@@ -63,7 +63,7 @@ import { renderClaudeManagedSettings } from "../scripts/plugins/managed-settings
  * of about nine targets; all four have shipped, and an exemption kept past its
  * reason means renaming one of them breaks README and passes both suites.
  *
- * Two properties are asserted on all thirteen pages because the hand bucket is
+ * Two properties are asserted on all fifteen pages because the hand bucket is
  * DEFINED by them: a currency header naming what the page was verified against,
  * and a published re-open trigger — a falsifiable condition under which the page
  * must be rewritten. A hand page without them is a page nobody can tell is
@@ -124,6 +124,7 @@ const PAGES: readonly string[] = [README, SECURITY, CONTRIBUTING];
 const CUSTOMIZATION = "docs/customization.md";
 const DOCTRINE = "docs/doctrine.md";
 const ENTERPRISE_FORKS = "docs/enterprise-forks.md";
+const ENTERPRISE_QUICKSTART = "docs/enterprise-quickstart.md";
 const GETTING_STARTED = "docs/getting-started.md";
 const MIGRATION = "docs/migration.md";
 const PACKS_AND_TRUST = "docs/packs-and-trust.md";
@@ -134,10 +135,10 @@ const WORKING_WITH_STAMITY = "docs/working-with-stamity.md";
 const WORKSPACES = "docs/workspaces.md";
 
 /**
- * The eleven hand-written guides under `docs/`.
+ * The twelve hand-written guides under `docs/`.
  *
  * Everything else in that directory is rendered from code and carries a
- * "GENERATED FILE, rewrite it with X" header; these eleven are the only pages
+ * "GENERATED FILE, rewrite it with X" header; these twelve are the only pages
  * there a human types, which is exactly the line the hand bucket is drawn on.
  *
  * `docs/specs/` is outside the bucket and outside the site: five engineering
@@ -155,6 +156,11 @@ const GUIDES: readonly string[] = [
   MIGRATION,
   CUSTOMIZATION,
   WORKSPACES,
+  // Eighth, directly before the fork guide it routes into, as the sidebar and the README map put
+  // it. Inserted after WORKSPACES on purpose: the ordinals the comment above the path constants
+  // names (the customization guide SIXTH, the workspaces guide SEVENTH) sit before it and do not
+  // move.
+  ENTERPRISE_QUICKSTART,
   ENTERPRISE_FORKS,
   PACKS_AND_TRUST,
   TROUBLESHOOTING,
@@ -309,8 +315,13 @@ const MAX_LINES = 150;
  * gained `plugin` and re-wrapped inside its own five lines, the count word moved from nine to
  * ten, and the `llms.txt` row's guide count from ten to eleven. So the budget moves by exactly
  * the row, and by nothing else.
+ *
+ * TEST CHANGE, justified: 158 to 159, the cost of ONE more map row, on the same reasoning a
+ * fourth time. `docs/enterprise-quickstart.md` is a new hand page (plan 010, unit
+ * docs-quickstart), so the map owes it a row. The `llms.txt` row's guide count moved from eleven
+ * to twelve IN PLACE and paid for nothing. So the budget moves by exactly the row.
  */
-const README_MAX_LINES = 158;
+const README_MAX_LINES = 159;
 
 /**
  * The product, its installable package, and the owner the pages name.
@@ -699,9 +710,10 @@ async function corpusCounts(): Promise<Map<string, number>> {
 describe("hand pages", () => {
   // Renamed on each growth of the bucket — "all seven" when the workflow guide joined, "all
   // eight" when the customization guide did, "all nine" when the workspaces guide did, "all
-  // twelve" when the enterprise-forks guide did: the name states the membership count, and the
-  // loop below is unchanged through all of them and still runs over every member.
-  it("all fourteen exist and carry real content", () => {
+  // twelve" when the enterprise-forks guide did, "all fifteen" when the enterprise quickstart did:
+  // the name states the membership count, and the loop below is unchanged through all of them and
+  // still runs over every member.
+  it("all fifteen exist and carry real content", () => {
     for (const page of HAND_PAGES) {
       expect(existsSync(join(REPO_ROOT, page)), `${page} is missing`).toBe(true);
       expect(read(page).trim().length, `${page} is empty`).toBeGreaterThan(500);
@@ -2109,6 +2121,52 @@ describe("the guides", () => {
     expect(Object.keys(rendered).length, "the renderer rendered no keys").toBe(4);
     expect(shown, "the page's template is not the renderer's output").toEqual(rendered);
     expect(Object.keys(shown), "the page's template reorders the renderer's keys").toEqual(Object.keys(rendered));
+  });
+
+  it("the enterprise quickstart routes into the two guides and repeats none of their commands", () => {
+    // Plan 010, unit docs-quickstart (REQ-PLUGIN-030). The page is a route map, not a third copy:
+    // it orders the enterprise steps by day and hands each one to the guide that owns it. Three
+    // properties hold it to that. It links both guides; it carries no fenced block longer than one
+    // line, so no command block from either guide is restated here to drift from its owner; and
+    // it stays within its 120-line budget, which the cell declares.
+    const text = read(ENTERPRISE_QUICKSTART);
+    const targets = linkTargets(text);
+    expect(targets, "the quickstart does not link the fork guide").toContain("enterprise-forks.md");
+    expect(targets, "the quickstart does not link the plugins guide").toContain("plugins.md");
+    for (const block of fencedBlocks(text)) {
+      expect(lines(block.trim()).length, "the quickstart carries a multi-line fenced block").toBeLessThanOrEqual(1);
+    }
+    expect(lines(text).length, "the quickstart is over its 120-line budget").toBeLessThanOrEqual(120);
+
+    // A step names the section it hands off to as its link text, because a cross-page `#fragment`
+    // is refused by the link check above. So the heading is the only anchor the page has, and it
+    // is held here: every link into either guide names a heading that guide carries, and a heading
+    // renamed there fails here instead of leaving a step that points at nothing.
+    const headings = new Map<string, Set<string>>();
+    for (const guide of [ENTERPRISE_FORKS, PLUGINS]) {
+      const found = [...read(guide).matchAll(/^#{1,6} (.+)$/gm)].map((match) => match[1] ?? "");
+      headings.set(guide.replace(/^docs\//, ""), new Set(found));
+    }
+    let routed = 0;
+    for (const match of text.matchAll(/\[([^\]]+)\]\(([^)]+)\)/g)) {
+      const known = headings.get(match[2] ?? "");
+      if (known === undefined) continue;
+      expect(known.has(match[1] ?? ""), `the quickstart links "${match[1]}", no heading in ${match[2]}`).toBe(true);
+      routed += 1;
+    }
+    // Every step the cell names, and nothing degenerate: a page that dropped to a bare link per
+    // guide would pass the two containment checks above.
+    expect(routed, "the quickstart routes fewer steps than the day sections name").toBeGreaterThanOrEqual(16);
+
+    // One link per step. A step is a bullet under a day heading; two links in one is two steps,
+    // and none is a step the reader cannot follow.
+    for (const day of ["## Day 0: make the fork", "## Day 1: release and roll out", "## Day 2: take updates"]) {
+      const bullets = lines(sectionOf(text, day)).filter((line) => line.startsWith("- "));
+      expect(bullets.length, `${day} carries no steps`).toBeGreaterThan(0);
+      for (const bullet of bullets) {
+        expect(linkTargets(bullet).length, `a step under ${day} carries other than one link`).toBe(1);
+      }
+    }
   });
 
   it("the plugins guide adds a Codex marketplace only at a ref", () => {
