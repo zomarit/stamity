@@ -443,8 +443,9 @@ describe("the page an operator reads before installing", () => {
       "codex plugin add stamity@stamity",
       "codex plugin marketplace upgrade",
       // `marketplace remove` is listed by `codex plugin marketplace --help` on 0.155.1 (read
-      // 2026-09-22) and comes before the re-add at the previous tag, because the re-point of a git
-      // marketplace already on record is unmeasured — the page says so beside it.
+      // 2026-09-22) and comes before the re-add at the previous tag, because a git marketplace
+      // already on record is not re-pointed in place: the re-add was refused with "already added
+      // from a different source" (E3 walk C7g, 2026-09-24) — the page says so beside it.
       "codex plugin marketplace remove stamity",
       "codex plugin remove",
       "/plugins",

@@ -237,7 +237,7 @@ function writeDocument(path, contents) {
  * plugin install, update or rollback subcommand at all, so its section is the dashboard route
  * and the mirror branch, which is what an operator actually does there.
  */
-function clientRoutes(slug, tag, branch) {
+function clientRoutes(slug, tag, branch, previous) {
   return {
     claude: {
       title: 'Claude Code',
@@ -260,7 +260,7 @@ function clientRoutes(slug, tag, branch) {
       // documented commands leave the recorded version where it was, and the third — the command
       // the CLI's own message names — is what re-records it (`updateOutcome: "updated"`).
       rollback: [
-        `claude plugin marketplace add ${slug}#plugins/v<previous>`,
+        `claude plugin marketplace add ${slug}#${previous}`,
         'claude plugin install stamity@stamity --scope project',
         'claude plugin update stamity@stamity --scope project',
       ],
@@ -280,7 +280,7 @@ function clientRoutes(slug, tag, branch) {
       ],
       pin: [`git push <mirror> ${tag}^{commit}:refs/heads/${branch}`],
       update: ['# the re-index runs at most once every 10 minutes, batching rapid pushes'],
-      rollback: [`git push --force <mirror> plugins/v<previous>^{commit}:refs/heads/${branch}`],
+      rollback: [`git push --force <mirror> ${previous}^{commit}:refs/heads/${branch}`],
       note:
         'Cursor documents no plugin install, update, rollback or uninstall subcommand. A team ' +
         'marketplace is added through Dashboard → Plugins & MCPs → Team Marketplaces → Add ' +
@@ -297,7 +297,7 @@ function clientRoutes(slug, tag, branch) {
       ],
       pin: [`copilot plugin marketplace add ${slug}#${tag}`],
       update: ['copilot plugin update stamity'],
-      rollback: ['copilot plugin uninstall stamity', `copilot plugin marketplace add ${slug}#plugins/v<previous>`, 'copilot plugin install stamity@stamity'],
+      rollback: ['copilot plugin uninstall stamity', `copilot plugin marketplace add ${slug}#${previous}`, 'copilot plugin install stamity@stamity'],
       note:
         'Installed plugins are cached: a local plugin has to be reinstalled to pick up a change, and ' +
         '`COPILOT_AUTO_UPDATE=false` turns off the CLI\'s own updates.',
@@ -311,23 +311,22 @@ function clientRoutes(slug, tag, branch) {
       // with "plugin requires --marketplace unless passed as <plugin>@<marketplace>" (the lifecycle
       // walk, 2026-09-20) — and purges that version's local cache, so the marketplace re-added at
       // the previous tag installs nothing until `plugin add` runs again. The marketplace itself is
-      // removed before the re-add: the walk re-added a LOCAL directory and the client answered
-      // "already added", and for a git marketplace already on record that answer may leave the ref
-      // where it was; `codex plugin marketplace --help` on 0.155.1 (read 2026-09-22) lists `remove`.
+      // removed before the re-add: a git marketplace already on record is not re-pointed in place —
+      // the E3 walk's C7g (`.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md`, 0.155.1,
+      // 2026-09-24) re-added it at another tag and was refused, the recorded ref unchanged.
       rollback: [
         'codex plugin remove stamity@stamity',
         'codex plugin marketplace remove stamity',
-        `codex plugin marketplace add ${slug} --ref plugins/v<previous>`,
+        `codex plugin marketplace add ${slug} --ref ${previous}`,
         'codex plugin add stamity@stamity',
       ],
       note:
         'An entry in a marketplace file installs nothing on its own — the two install commands above ' +
         'are both needed, and the same `plugin add` closes the rollback because `plugin remove` purges ' +
-        'the local cache. The marketplace is removed before it is re-added at the previous tag: ' +
-        '`codex plugin marketplace --help` on 0.155.1 (read 2026-09-22) lists `remove`, and the walk ' +
-        'measured only a local marketplace re-added in place ("already added"), so the re-point of a ' +
-        'git marketplace already on record is unmeasured and removing it first is the route this page ' +
-        'can stand behind. Plugin hooks additionally need `features.hooks = true`, project trust, and a ' +
+        'the local cache. The marketplace is removed before it is re-added at the previous tag because a ' +
+        'git marketplace already on record is not re-pointed in place: the re-add at another ref answers ' +
+        '"already added from a different source" and leaves the recorded ref where it was (codex-cli ' +
+        '0.155.1, measured 2026-09-24). Plugin hooks additionally need `features.hooks = true`, project trust, and a ' +
         'per-hook trust review before any of them runs.',
     },
   }
@@ -340,7 +339,12 @@ function block(lines) {
 
 /** `<out>/README.md` — what a person who just mirrored this tree needs to read. */
 function renderReadme({ identity, version, sourceCommit, sourceCommitDate, tag, clients, packages }) {
-  const routes = clientRoutes(identity.slug, tag, identity.distribution.branch)
+  const routes = clientRoutes(
+    identity.slug,
+    tag,
+    identity.distribution.branch,
+    identity.distribution.tagPattern.replaceAll('<version>', '<previous>'),
+  )
   const sections = clients.map((client) => {
     const route = routes[client]
     return [
@@ -416,10 +420,10 @@ An organization that cannot fetch from the public repository mirrors this tree i
 re-deriving it:
 
 \`\`\`sh
-git init dist && cd dist && git switch --orphan plugin-dist
+git init dist && cd dist && git switch --orphan ${identity.distribution.branch}
 cp -R <this tree>/. . && git add -A -f && git commit -m 'plugins: v${version}'
 git tag ${tag}
-git push <your remote> plugin-dist ${tag}
+git push <your remote> ${identity.distribution.branch} ${tag}
 \`\`\`
 
 \`-f\` is load-bearing, not tidiness: a dependency inside the bundled runtime may ship a

@@ -147,7 +147,12 @@ export function buildManifest({ identity, version }) {
   }
 }
 
-export function renderReadme({ identity, version, sourceCommit, sourceCommitDate, slug }) {
+export function renderReadme({ identity, version, sourceCommit, sourceCommitDate, slug, distribution }) {
+  // The resolved `stamity.distribution`, so a fork's own branch and tag pattern are what the page
+  // names — the refs its remote carries, and the ones the distribution README prints.
+  const { branch, tagPattern } = distribution
+  const tag = tagPattern.replaceAll('<version>', version)
+  const previous = tagPattern.replaceAll('<version>', '<previous>')
   return `# stamity for Codex
 
 A plugin root built from the stamity corpus at version ${version}, commit ${sourceCommit} (${sourceCommitDate}).
@@ -155,7 +160,7 @@ A plugin root built from the stamity corpus at version ${version}, commit ${sour
 ## Install
 
 \`\`\`sh
-codex plugin marketplace add ${slug} --ref plugin-dist
+codex plugin marketplace add ${slug} --ref ${branch}
 codex plugin add stamity@stamity
 \`\`\`
 
@@ -163,7 +168,7 @@ The \`--ref\` is not optional. Without it the client checks out the repository's
 which carries no Codex catalog, falls back to that branch's Claude catalog and installs the npm
 package that catalog names — on the private mirror it was measured against, the public package,
 with no \`runtime/\` and no hooks. Measured on codex-cli 0.155.1 on 2026-09-24, as is
-\`--ref plugin-dist\` installing this root.
+the \`--ref\` form above installing this root.
 
 \`/plugins\` lists what the running session has installed, and is the view to check the install
 against before anything else.
@@ -214,7 +219,7 @@ The install above resolves to a branch, so it takes whatever that branch points 
 tag instead:
 
 \`\`\`sh
-codex plugin marketplace add ${slug} --ref plugins/v${version}
+codex plugin marketplace add ${slug} --ref ${tag}
 codex plugin add stamity@stamity
 \`\`\`
 
@@ -224,7 +229,7 @@ and installing again:
 \`\`\`sh
 codex plugin remove stamity@stamity
 codex plugin marketplace remove stamity
-codex plugin marketplace add ${slug} --ref plugins/v<previous>
+codex plugin marketplace add ${slug} --ref ${previous}
 codex plugin add stamity@stamity
 \`\`\`
 

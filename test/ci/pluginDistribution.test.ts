@@ -4,13 +4,14 @@
 
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inflateRawSync } from "node:zlib";
 import { beforeAll, describe, expect, it } from "vitest";
 import { canonical, repositoryRoute } from "../support/identity.ts";
+import { downstreamCheckout, FORK_PUBLISHER, FORK_REPOSITORY_SLUG } from "./downstreamFixture.ts";
 // @ts-expect-error — the distribution modules ship as plain .mjs with no type declarations:
 // they run under bare Node in a release job, with no TypeScript nearby.
 import { buildCatalogIdentity, CATALOG_PATHS, renderCatalog } from "../../scripts/plugins/catalogs.mjs";
@@ -682,11 +683,11 @@ describe("the tree as a whole", () => {
     // `docs/plugins.md` both say so.
     expect(section).toContain("codex plugin remove stamity@stamity");
     expect(section).not.toContain("codex plugin remove stamity\n");
-    // The marketplace itself is removed before it is re-added: the walk's middle step re-added a
-    // LOCAL directory and the client answered "already added", and for a git marketplace already
-    // on record that answer may leave the ref where it was. `codex plugin marketplace --help` on
-    // 0.155.1 (read 2026-09-22) lists `remove` ("Remove a configured marketplace source by name"),
-    // so the block prints it, and the note says the re-point itself is unmeasured.
+    // The marketplace itself is removed before it is re-added: a git marketplace already on record
+    // is not re-pointed in place. The E3 walk's C7g (`.stamity/runs/2026-09-17_plugin-lifecycle/
+    // private-chain.md`, codex-cli 0.155.1, 2026-09-24) re-added it at another tag and was refused
+    // with "already added from a different source", the recorded ref unchanged — so the block
+    // prints the removal, and the note states the measured refusal rather than an unmeasured one.
     expect(section).toContain(
       [
         "```sh",
@@ -697,7 +698,8 @@ describe("the tree as a whole", () => {
         "```",
       ].join("\n"),
     );
-    expect(section).toContain("unmeasured");
+    expect(section).toContain('"already added from a different source"');
+    expect(section).not.toContain("unmeasured");
   });
 });
 
@@ -726,6 +728,97 @@ describe("a narrowed build", () => {
       expect(existsSync(join(narrow, ...CATALOG_PATHS[client].split("/"))), client).toBe(false);
       expect(existsSync(join(narrow, client)), client).toBe(false);
       expect(existsSync(join(narrow, `stamity-plugin-${client}-${VERSION}.zip`)), client).toBe(false);
+    }
+  });
+});
+
+/**
+ * A fork that sets `stamity.distribution.branch` and `tagPattern` (`docs/enterprise-forks.md`
+ * names both configurable) publishes its roots on ITS branch and tags them with ITS pattern — so
+ * every README the build writes has to name those, and none may name the defaults, which the
+ * fork's remote need not carry (review/60, build/23). Built from a fork checkout, because the
+ * builder resolves the identity from its own repository root; the fork's values are chosen to
+ * share no substring with the defaults this checkout resolves, so a default left in a page is a
+ * red line rather than a coincidence.
+ */
+describe("a fork with its own distribution branch and tag pattern", () => {
+  const defaults = (
+    resolveDistributionIdentity(JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8"))) as {
+      distribution: { branch: string; tagPattern: string };
+    }
+  ).distribution;
+  const FORK_BRANCH = "acme-release-roots";
+  const FORK_TAG_PATTERN = "acme-roots-<version>";
+  const forkTag = FORK_TAG_PATTERN.replaceAll("<version>", VERSION);
+  const forkPrevious = FORK_TAG_PATTERN.replaceAll("<version>", "<previous>");
+  const defaultTagPrefix = defaults.tagPattern.slice(0, defaults.tagPattern.indexOf("<version>"));
+  let out: string;
+
+  beforeAll(() => {
+    expect(FORK_BRANCH).not.toBe(defaults.branch);
+    expect(FORK_TAG_PATTERN).not.toContain(defaultTagPrefix);
+    const root = tempDir("fork-checkout");
+    downstreamCheckout(root, { identity: true });
+    cpSync(join(REPO_ROOT, "content", "charter"), join(root, "content", "charter"), { recursive: true });
+    const pkgPath = join(root, "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { stamity: Record<string, unknown> };
+    pkg.stamity["distribution"] = { branch: FORK_BRANCH, tagPattern: FORK_TAG_PATTERN };
+    writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+    out = join(tempDir("fork-dist"), "dist");
+    const result = spawnSync(
+      process.execPath,
+      [
+        join(root, "scripts", "build-plugin-distribution.mjs"),
+        "--out",
+        out,
+        "--runtime",
+        RUNTIME,
+        "--version",
+        VERSION,
+        "--source-commit",
+        FIXED_COMMIT,
+        "--source-commit-date",
+        FIXED_COMMIT_DATE,
+        "--client",
+        "claude,codex",
+      ],
+      { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+    );
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+  }, 2 * ONE_ROOT_MS);
+
+  it("names the fork's branch and tag in both root READMEs and the distribution README, and never the defaults", () => {
+    const slug = `${FORK_PUBLISHER}/${FORK_REPOSITORY_SLUG}`;
+    const pages = {
+      claude: readFileSync(join(out, "claude", "README.md"), "utf8"),
+      codex: readFileSync(join(out, "codex", "README.md"), "utf8"),
+      distribution: readFileSync(join(out, "README.md"), "utf8"),
+    };
+    const expected = {
+      claude: [
+        `claude plugin marketplace add ${slug}#${FORK_BRANCH}`,
+        `claude plugin marketplace add ${slug}#${forkPrevious}`,
+      ],
+      codex: [
+        `codex plugin marketplace add ${slug} --ref ${FORK_BRANCH}`,
+        `codex plugin marketplace add ${slug} --ref ${forkTag}`,
+        `codex plugin marketplace add ${slug} --ref ${forkPrevious}`,
+      ],
+      distribution: [
+        `claude plugin marketplace add ${slug}#${FORK_BRANCH}`,
+        `claude plugin marketplace add ${slug}#${forkTag}`,
+        `claude plugin marketplace add ${slug}#${forkPrevious}`,
+        `codex plugin marketplace add ${slug} --ref ${FORK_BRANCH}`,
+        `codex plugin marketplace add ${slug} --ref ${forkTag}`,
+        `codex plugin marketplace add ${slug} --ref ${forkPrevious}`,
+      ],
+    };
+    for (const [page, text] of Object.entries(pages)) {
+      for (const line of expected[page as keyof typeof expected]) {
+        expect(text, `${page} does not print \`${line}\``).toContain(line);
+      }
+      expect(text, `${page} still names the default branch`).not.toContain(defaults.branch);
+      expect(text, `${page} still names the default tag pattern`).not.toContain(defaultTagPrefix);
     }
   });
 });

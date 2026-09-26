@@ -197,7 +197,11 @@ export function buildManifest({ identity, version }) {
 }
 
 /** The page an operator reads before installing: the route in, the route to a pin, the route back. */
-export function renderReadme({ identity, version, sourceCommit, sourceCommitDate, slug }) {
+export function renderReadme({ identity, version, sourceCommit, sourceCommitDate, slug, distribution }) {
+  // The resolved `stamity.distribution`, so a fork's own branch and tag pattern are what the page
+  // names — the refs its remote carries, and the ones the distribution README prints.
+  const { branch, tagPattern } = distribution
+  const previous = tagPattern.replaceAll('<version>', '<previous>')
   return `# stamity for Claude Code
 
 A plugin root built from the stamity corpus at version ${version}, commit ${sourceCommit} (${sourceCommitDate}).
@@ -205,7 +209,7 @@ A plugin root built from the stamity corpus at version ${version}, commit ${sour
 ## Install
 
 \`\`\`sh
-claude plugin marketplace add ${slug}#plugin-dist
+claude plugin marketplace add ${slug}#${branch}
 claude plugin install stamity@stamity --scope project
 \`\`\`
 
@@ -222,7 +226,7 @@ through the runtime bundled at \`runtime/\`.
 ## Pin, update, roll back
 
 The marketplace entry above resolves to a branch, so an install takes whatever that branch points
-at. Pin by adding the marketplace at a tag or a commit instead of \`#plugin-dist\`, and record the
+at. Pin by adding the marketplace at a tag or a commit instead of \`#${branch}\`, and record the
 pin with the repository rather than in a shell history. The refresh, at the install's own scope:
 
 \`\`\`sh
@@ -235,7 +239,7 @@ answers already installed, and the third command is what re-records the version.
 subcommand answers \`error: unknown command 'rollback'\` on that build.
 
 \`\`\`sh
-claude plugin marketplace add ${slug}#plugins/v<previous>
+claude plugin marketplace add ${slug}#${previous}
 claude plugin install stamity@stamity --scope project
 claude plugin update stamity@stamity --scope project
 \`\`\`

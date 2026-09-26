@@ -596,6 +596,9 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
             sourceCommit,
             sourceCommitDate,
             slug,
+            // The branch and tag pattern the fork's remote carries, so a README names the refs the
+            // catalogs and the distribution README name rather than this repository's defaults.
+            distribution: distributionIdentity.distribution,
           }),
         )
 
