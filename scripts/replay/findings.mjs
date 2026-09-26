@@ -49,8 +49,9 @@ const SEVERITY_WORD = /\b(critical|warning|minor)s?\b/i
 // that is part of a number or a locator (`10`, `1.0`, `x.ts:0`) negates nothing, and neither does
 // a severity word that is part of a path (`no critical.ts:3`). Two negations are read only where
 // they govern the severity word itself: `none of the` only when the run ends the clause or is
-// followed by a place or a remaining-word (`None of the Critical paths are guarded` is a live
-// Critical), and the count form only when the `0` ends there too (`Warning: 0-based offset` is a
+// followed by a place or a remaining-word, with an optional count noun and copula between
+// (`None of the Critical findings are left` is masked; `None of the Critical paths are guarded`
+// and `None of the Critical findings were fixed` are live Criticals), and the count form only when the `0` ends there too (`Warning: 0-based offset` is a
 // live Warning). Every over-mask lowers the baseline's recall alone, so the doubtful case stays live.
 const GAP = String.raw`[ \t]+`
 const SEVERITY_TOKEN = String.raw`[*_]*(?:critical|warning|minor)s?[*_]*(?![\w/-]|\.\w)`
@@ -61,7 +62,8 @@ const SEVERITY_RUN = String.raw`${SEVERITY_TOKEN}(?:,?${GAP}(?:or|and|nor)${GAP}
 const clauseEnd = (words) => String.raw`(?=[ \t]*(?:$|[,;:)|!?*_]|\.(?!\w)|[-–—](?=[ \t]|$)|(?:${words})\b))`
 const NEGATED_RUN = new RegExp(String.raw`(${NEGATOR}${GAP}${MODIFIERS})(${SEVERITY_RUN})`, 'gi')
 const NONE_OF_THE_RUN = new RegExp(
-  String.raw`(\bnone${GAP}of${GAP}the${GAP}${MODIFIERS})(${SEVERITY_RUN})${clauseEnd('at|in|on|across|remain|remains|remaining|left|open|found|outstanding')}`,
+  String.raw`(\bnone${GAP}of${GAP}the${GAP}${MODIFIERS})(${SEVERITY_RUN})((?:${GAP}(?:findings?|issues?|items?|rows?))?)` +
+    clauseEnd(String.raw`at|in|on|across|remain|remains|(?:(?:is|are|was|were)${GAP})?(?:remaining|left|open|found|outstanding)`),
   'gim',
 )
 const ZERO_COUNT = new RegExp(
@@ -80,7 +82,7 @@ const blank = (word) => ' '.repeat(word.length)
 export function maskNegated(text) {
   return String(text ?? '')
     .replace(NEGATED_RUN, (_, lead, run) => lead + run.replace(SEVERITY_IN_RUN, blank))
-    .replace(NONE_OF_THE_RUN, (_, lead, run) => lead + run.replace(SEVERITY_IN_RUN, blank))
+    .replace(NONE_OF_THE_RUN, (_, lead, run, noun) => lead + run.replace(SEVERITY_IN_RUN, blank) + noun)
     .replace(ZERO_COUNT, (_, word, rest) => blank(word) + rest)
 }
 

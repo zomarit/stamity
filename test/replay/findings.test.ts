@@ -770,6 +770,22 @@ describe("(review round 1) the negation mask and the locator blank, narrowed and
       expect(extractFreeText(text, REVIEWER), text).toEqual([]);
   });
 
+  it("(review/31) masks `none of the` before a count noun and a remaining-word, and keeps a noun with any other verb live", () => {
+    const sql: Item = { id: "sec-sql-sort", file: "src/store/query.ts", span: [14, 14], terms: ["allowlist", "validat"] };
+    for (const text of [
+      "None of the Critical findings remain open; src/store/query.ts:14 now validates sort against an allowlist",
+      "None of the Critical findings are left; src/store/query.ts:14 reviewed",
+      "none of the Warning issues remain at src/a.ts:3",
+    ]) {
+      expect(extractFreeText(text, REVIEWER), text).toEqual([]);
+      expect(maskNegated(text), text).toHaveLength(text.length);
+    }
+    expect((matchItems(extractFreeText("None of the Critical findings remain open; src/store/query.ts:14 now validates sort against an allowlist", REVIEWER) as Finding[], [sql], {}, { tolerance: 3 }) as Match).matched).toEqual({ "sec-sql-sort": [] });
+    const read = (text: string): (string | null)[] => (extractFreeText(text, REVIEWER) as Finding[]).map((f) => f.severity);
+    expect(read("None of the Critical findings were fixed; src/store/query.ts:14 still concatenates sort")).toEqual(["Critical"]);
+    expect(read("None of the Critical paths are guarded at src/http/routes.ts:3")).toEqual(["Critical"]);
+  });
+
   it("(review/15) credits no word term found only inside a bare path or another extension", () => {
     const guard: Item = { id: "sec-missing-guard", file: "src/http/routes.ts", span: [9, 9], terms: ["guard"] };
     const credit = (text: string, item: Item = guard): number[] =>
