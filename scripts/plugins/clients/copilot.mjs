@@ -247,6 +247,13 @@ copilot plugin marketplace add ${slug}#${previous}
 copilot plugin install stamity@stamity
 \`\`\`
 
+What stands behind these: the marketplace add at a release tag, then the install, was walked on
+2026-09-22 against a private mirror (both exit 0 on GitHub Copilot CLI 1.0.87). The rollback is
+taken from the vendor's reference and was not executed — and Codex refuses the same shape, a
+marketplace re-added at another ref over one already on record, with "already added from a
+different source" (codex-cli 0.155.1, measured 2026-09-24), so check the re-add's answer before
+the install.
+
 ## What this root does not carry
 
 - rules — ${RULE_REASON}

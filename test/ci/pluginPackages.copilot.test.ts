@@ -502,6 +502,18 @@ describe("the copilot root's README", () => {
     expect(readme).toContain(".claude/skills/");
     expect(readme).toMatch(/VS\s*\n?Code is not on it/);
   });
+
+  it("says beside the pin and the rollback what was walked and what is vendor-stated only (review/77)", () => {
+    // `docs/plugins.md` records the Copilot rollback as vendor-stated and never executed, while the
+    // remote add at a tag ran once (the private-chain rehearsal, 2026-09-22, Copilot CLI 1.0.87).
+    // The page prints both, so it has to say which is which — the Claude and Codex pages each do.
+    const readme = read("README.md");
+    const section = readme.slice(readme.indexOf("## Pin and roll back"), readme.indexOf("## What this root does not carry"));
+    expect(section).toMatch(/walked\s+on\s+2026-09-22/);
+    expect(section).toMatch(/GitHub\s+Copilot\s+CLI\s+1\.0\.87/);
+    expect(section).toMatch(/vendor's\s+reference\s+and\s+was\s+not\s+executed/);
+    expect(section).toMatch(/already\s+added\s+from\s+a\s+different\s+source/);
+  });
 });
 
 /**
