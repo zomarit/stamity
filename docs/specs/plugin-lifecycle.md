@@ -1,6 +1,6 @@
 ---
 id: plugin-lifecycle
-# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17 and excluded from the site build.
+# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26, and excluded from the site build.
 status: shipped-with-1.9.0
 obsolete_when: every supported client installs the corpus through its own plugin container and the generated-setup route is retired, or a decision row cuts the surface
 ---
@@ -14,6 +14,12 @@ are the plan files' own delta sections, assembled here so the two cannot disagre
 moves `status` to `shipped-with-1.9.0` at the close. `REQ-PLUGIN-018` is not allocated: the
 CLI-to-plugin migration it would have carried was cut on 2026-09-17 because the consuming
 enterprise re-creates its private fork and sets its repositories up fresh.
+
+REQ-PLUGIN-027 to REQ-PLUGIN-030, and every paragraph headed "Amended 2026-09-26", come from the
+spec delta of `docs/plans/010-enterprise-release-01.md` (the enterprise work of Package 16) and
+from the deltas its units' reports declared. They are merged on the package branch and are not in
+a release yet: `status` still names 1.9.0, the release that shipped REQ-PLUGIN-001 to 026. Their
+`path:line` citations are to the tree at `e995fe02`.
 
 ## Intent
 
@@ -32,7 +38,10 @@ The request of 2026-09-17 from a consuming organization, the eleven decisions th
 that day, the research that shaped the design and the audit of the earlier Codex and GPT-6 Astra
 sessions are recorded in the three plan files and in
 `.stamity/runs/2026-09-17_codex-astra-audit/findings.md`. The APM canonical distribution, fork
-layer and enterprise upstream lane specs stay as shipped; REQ-PLUGIN-026 says so.
+layer and enterprise upstream lane specs stay as shipped; REQ-PLUGIN-026 says so. The enterprise
+work of 2026-09-24 — a fork's own release workflow, a one-command identity step, the Codex half of
+the private route, a Claude Code managed-settings template and a quickstart page — and the
+maintainer's decisions behind it are recorded in `docs/plans/010-enterprise-release-01.md`.
 
 ## Invariants
 
@@ -112,6 +121,15 @@ agents (no `@<id>` form exists), and `$<id>` for Codex skills. The class counts 
 claude agent 10, skill 10, command 10, hooks 4; cursor agent 10, skill 8, command 10 (carried as
 skills), rule 12, hooks 6; copilot agent 10, skill 10, command 10, hooks 4; codex skill 17,
 hooks 4.
+
+Amended 2026-09-26 (plan 010 file 1, unit `e6-claude-install-note`, `prove/338`; the statement
+above is unchanged, because it pins the capability file's keys and not the note's words): the
+Claude root's `distribution.note` says what each command writes. `claude plugin install
+stamity@stamity --scope project` writes `enabledPlugins` alone into the project's
+`.claude/settings.json`, and `claude plugin marketplace add` declares the marketplace in the
+configuration directory's user settings, measured on Claude Code 2.1.278 (2026-09-22) and 2.1.280
+(2026-09-23). The note no longer credits the install with `extraKnownMarketplaces`
+(`scripts/plugins/clients/claude.mjs:162-168`; test: `test/ci/pluginPackages.claude.test.ts`).
 
 ### REQ-PLUGIN-003 Companion files and the generated setup command travel
 
@@ -261,6 +279,27 @@ project rule mirrors both halves of the repo-root bound (an ancestor-or-equal of
 directory AND a directory holding `.stamity/`), the spawn goes through `process.execPath` with
 `shell: false`, and `PATH` is never consulted.
 
+Amended 2026-09-26 (plan 010 file 1, `prove/337`): the locator hands its root to `check` through
+the child's environment.
+
+- GIVEN `locate.mjs -- check`, no plugin-root variable set, and `stamity-plugin.json` beside the
+  runtime, WHEN the locator spawns THEN the child's environment carries `PLUGIN_ROOT=<root>` and
+  its argv is unchanged.
+- An already-set root variable passes through untouched.
+- `plugin` subcommands still receive `--plugin-root`.
+
+As built (2026-09-26): `checkEnvironment` (`scripts/plugins/locate.mjs:400-406`) adds
+`PLUGIN_ROOT` only when all three hold: the subcommand is `check`; no variable in `ROOT_VARIABLES`
+(`:382`) holds a value that is not blank after trimming, so a blank one reads as unset; and
+`<root>/stamity-plugin.json` is a regular file (`isRegularFile`, `:385-391`), so a directory or a
+symbolic link there adds nothing. The spawn passes that environment at `:408-413`. `withPluginRoot`
+(`:367-375`) is unchanged, so `plugin` subcommands still get the flag and every other subcommand
+gets neither the flag nor the variable. `check` takes no options, which is why its root travels
+in the environment. `ROOT_VARIABLES` is a copy of `PLUGIN_ROOT_VARIABLES`
+(`src/plugins/capabilityFile.ts:441`), because the locator imports builtins only, and a test pins
+the two equal. Tests: `test/ci/pluginLocate.test.ts:487`, the describe "hands check its root
+through the child's environment (prove/337)".
+
 ### REQ-PLUGIN-008 Prerequisites declared and probed
 
 Given a root, When `stamity-plugin.json` is read, Then `prerequisites` declares `node` (the floor
@@ -360,6 +399,14 @@ different Node is outside the reproducibility claim this requirement makes. The 
 for a package is its `packages[].sha256` in `release.json`, proven at the build with `shasum -c`
 and re-verified in the release job against the manifest the job outputs channel pinned.
 
+Amended 2026-09-26 (plan 010 file 1, unit `e2-fork-identity-script`): a fork moves the two presets
+with `scripts/fork-identity.mjs` (REQ-PLUGIN-028) instead of by hand. The script finds each current
+value by parsing — `renovate/plugins.json`'s `customManagers[0].depNameTemplate` and
+`renovate/companion.json`'s `packageRules[0].matchPackageNames[0]` — and replaces exactly that
+quoted string once in the text, so the file keeps its hand formatting, and it refuses a rewrite
+whose result parses to anything but that one change (`scripts/fork-identity.mjs:199-250`). The
+preset files themselves are unchanged in this repository.
+
 ### REQ-PLUGIN-012 Release workflow publishes the distribution
 
 Given a `v<version>` tag push, When `release.yml` runs, Then the gates job uploads a
@@ -439,14 +486,19 @@ stamity`: on codex-cli 0.154.0 `plugin remove` takes `<plugin>@<marketplace>`, t
 the marketplace at the earlier tag and `codex plugin add` again — four commands as the built tree's
 `README.md` prints them (amended 2026-09-22): `codex plugin remove stamity@stamity`,
 `codex plugin marketplace remove stamity`, `codex plugin marketplace add <owner>/stamity --ref
-plugins/v<previous>`, `codex plugin add stamity@stamity`, where the `marketplace remove` verb is
-read from `codex plugin marketplace --help` on 0.155.1 and was not walked, and stands ahead of the
-re-add because the walk re-added only a local directory (answered "already added") and re-pointing
-a git marketplace already on record is unmeasured; `docs/plugins.md` prints the same four and says
-which were walked. The clause is therefore amended
+plugins/v<previous>`, `codex plugin add stamity@stamity`. The `marketplace remove` verb was first
+read from `codex plugin marketplace --help` on 0.155.1. Amended 2026-09-26 (plan 010 file 1, the
+Codex walk E3): all four commands were walked on 2026-09-24 on codex-cli 0.155.1 against a private
+mirror, each exiting 0, and the walk measured why `marketplace remove` must come before the re-add
+— it is required, not a precaution. A re-add at another ref over a git marketplace already on
+record exits 1 with `marketplace 'stamity' is already added from a different source; remove it
+before adding this source`, and the ref, the checkout and the installed version stay where they
+were (`.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md:303-310`). `docs/plugins.md`
+prints the same four and says which were walked (`docs/plugins.md:437-454`). The clause is
+therefore amended
 to read "through the route `docs/plugins.md` records per client — a vendor command where one
-exists, and a documented re-add at the earlier pin where none does" (`docs/plugins.md:321-409`,
-the **Pin, update, roll back** section), which is what the lifecycle proof will
+exists, and a documented re-add at the earlier pin where none does" (`docs/plugins.md:364-459`,
+the **Pin, update, roll back** section, re-pointed 2026-09-26), which is what the lifecycle proof will
 walk and what REQ-PLUGIN-021's per-client row already anticipated.
 
 As built (2026-09-21), two facts the lifecycle fixture settled. The `rollback` subcommand this
@@ -629,6 +681,22 @@ with the manifest's mode then hand-edited back to repository ownership and the f
 matching a ledgered hash, reads as unedited and is regenerated silently — the route that reaches it,
 a hand-edited manifest mode, is outside the supported ones. Aligned to the header of
 `src/manifest/claudeSettings.ts` at the settings lane's round-3 commit, the wording of record.
+
+Amended 2026-09-26 (plan 010 file 1, `prove/337`): the `plugin-runtime` row's warning names a step
+a person can take. The `warn` for a recorded client with no root in the environment now reads
+`no plugin root in the environment; run check through the installed root's locator (node
+<root>/runtime/locate.mjs -- check) or set PLUGIN_ROOT to that root`. It used to end `run this
+check through the plugin's st-setup or set CLAUDE_PLUGIN_ROOT`, and neither half could be
+followed: the generated st-setup command never runs `check`, and the variable named one client.
+
+- GIVEN a recorded client and a `check` run through the locator THEN the row reads `pass`.
+
+As built (2026-09-26): the warning is `src/cli/commands/check.ts:921-927`, and the locator hands
+the root over as REQ-PLUGIN-007's amendment states. `docs/plugins.md:560` and
+`docs/troubleshooting.md:102` print the same remedy. Tests: `test/cli/commands/check.test.ts:1901`
+pins the warning, and `:1918` runs the real locator into the row and reads `pass`. The Codex walk
+of 2026-09-24 reproduced the old warning on a 1.9.0 root, where it named the Claude variable on a
+Codex-only consumer (`.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md:302`).
 
 ### REQ-PLUGIN-017 Explicit facts and gates replace placeholders
 
@@ -823,6 +891,38 @@ mapped to the variable its client honours as measured from the binaries, with on
 secret, `--invoke` scoped to the armed clients, and a 45-minute ceiling derived from the measured
 distribution build.
 
+Amended 2026-09-26 (plan 010 file 1, units `e3-codex-remote-walk` and `e3-codex-install-ref`): the
+Codex route now runs against a remote source, and its install line carries a ref. On codex-cli
+0.155.1, `codex plugin marketplace add <owner>/<repo> --ref <ref>` cloned a private mirror of the
+distribution through git's credential helper, with Codex not logged in and no token in any argv,
+and `codex plugin add stamity@stamity` installed a root whose per-file sha-256 map equals the
+tag's `codex/` tree: 681 files at `plugins/v1.9.0`, 682 at `plugins/v1.9.1`
+(`.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md:295-299`, `:305-308`). The same walk
+measured the form without `--ref`: the default branch carries no Codex catalog, so the client falls
+back to that branch's Claude catalog and installs the npm package it names — on the mirror, the
+public package, with no `runtime/`, no hooks and no locator — and both commands still exit 0
+(`:311-317`). For a private fork that swaps the private source for the public registry, so:
+
+- GIVEN one identity THEN the Codex root README's install command equals the distribution README's,
+  `codex plugin marketplace add <owner>/<repo> --ref <distribution branch>`, its pin is
+  `--ref <release tag>`, and neither README offers a `marketplace add` without `--ref`.
+- GIVEN `docs/plugins.md` THEN every Codex `marketplace add` line carries `--ref`, and the page says
+  why the form without it installs the npm package instead of the distribution's Codex root.
+
+As built (2026-09-26): the Codex root README prints the branch form at
+`scripts/plugins/clients/codex.mjs:163`, the reason at `:167-171`, the pin at `:222` and the route
+back at `:229-238`, each built from the resolved `stamity.distribution` (`:150-155`), so a fork
+with its own branch and tag pattern gets its own refs; the distribution README prints the same
+lines (`scripts/build-plugin-distribution.mjs:305-322`). The route back is REQ-PLUGIN-013's four
+commands, walked by the same walk (see the amendment there). Tests:
+`test/ci/pluginPackages.codex.test.ts:528`, the describe "the root README's routes against the
+distribution README's, for one identity"; `test/ci/pluginDistribution.test.ts:744`, "a fork with its
+own distribution branch and tag pattern"; `test/docsPages.test.ts:2172`, "the plugins guide adds a
+Codex marketplace only at a ref". The page's Codex block and its reason are
+`docs/plugins.md:235-264`. Two things stay unmeasured and the record says so: the form without
+`--ref` against this repository's own public slug (`private-chain.md:378-380`), and skill discovery
+in a Codex session, which needs a login (`:319`).
+
 ### REQ-PLUGIN-021 Upgrade and rollback proof
 
 Given two fixture versions of the distribution pushed to a fixture repository, When a consumer
@@ -952,6 +1052,29 @@ finding of the rehearsal went back to the code: the documented consumer route �
 install first, then `plugin setup` — ended in a red `check` (`collision .claude/settings.json`, the
 file the client had written and the setup then skipped), fixed on the branch by key-level
 ownership of that file. The two fixture versions the rehearsal reused are REQ-PLUGIN-021's.
+
+Amended 2026-09-26 (plan 010 file 1, E3): the Codex half of the private route is walked against the
+private mirror and recorded in the same record with the same row format. The record's "Not done"
+line narrows to Cursor's team marketplace.
+
+- GIVEN the walk THEN add, install, the cache's per-file sha-256 map against the tag's `codex/`
+  tree, setup and the route back are recorded with exit codes and digests, and the leak gate passes
+  over the record.
+
+As built (walked 2026-09-24): the section "The Codex half (E3), 2026-09-24" is
+`.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md:272-362`, each row with its UTC time,
+its exit code and the sha-256 of its raw capture, and the full digests under "Captured output
+digests" (`:396` onward). Add, install and list are rows E3-C2 to E3-C4 (`:295-297`); the cache's
+sha-256 map equals the `plugins/v1.9.0` `codex/` tree over 681 files (E3-C5b, `:299`), and a
+control comparison against the other tag reads `DIFFERENT`, so the comparison tells versions apart
+(`:309`). Setup (E3-C6, `:300-302`): on the existing plugin consumer the Codex setup was refused,
+because that repository already carries a generated setup, so it ran in a fresh repository, where
+it exited 0 and wrote `[features] hooks = true`. The route back (E3-C7, `:303-310`) is
+REQ-PLUGIN-013's four commands. The leak gate exited 0 with the record present (E3-C10, `:320`).
+The "Not done" line on the private route now names the Cursor half only, and says the Cursor team
+marketplace is not walked at all (`:372-375`); two new "Not done" lines name skill discovery in a
+Codex session (`:376-377`) and the form without `--ref` against this repository's public slug
+(`:378-380`).
 
 ### REQ-PLUGIN-024 Documentation and pinned surfaces
 
@@ -1087,6 +1210,207 @@ document moved with them. What this requirement now proves is narrower and check
 row moves except where a named unit regenerated it with its reason, and the cross-client golden is
 byte-stable for every unit that did not.
 
+### REQ-PLUGIN-027 A fork releases through its own workflow
+
+Added 2026-09-26 (plan 010 file 1, E1). `.github/workflows/fork-release.yml` releases a fork's CLI,
+plugin distribution and APM refs from one tag. It is inert until the fork names its destinations in
+repository variables, and the canonical `release.yml` stays canonical-only. A fork's release is
+proved by checksums and the registry's own authentication. It carries no provenance and no
+attestation: npm provenance needs a public source repository, and GitHub attestations need GitHub
+Enterprise Cloud and are not built (decided 2026-09-24).
+
+- GIVEN the canonical repository, or a fork whose `STAMITY_FORK_RELEASE` is unset or names another
+  repository, WHEN a `v*` tag is pushed THEN the probe job ends green with `armed=false`, and no
+  gates or publish job runs.
+- GIVEN an armed fork whose `STAMITY_RELEASE_REGISTRY` is not an https URL, or carries userinfo, a
+  query or a fragment, WHEN the workflow runs THEN the probe fails naming the variable and never
+  prints its value.
+- GIVEN an armed fork with all of the following, WHEN the tag is pushed THEN gates run the canonical
+  ladder holding no secret, and publish verifies every digest before npm, publishes the tarball to
+  the registry, pushes the distribution branch and the `plugins/v<version>` tag, and creates a
+  release carrying the tarball, `release.json` and every `.sha256` file:
+  - a tag `v<package.json version>` reachable from the release branch;
+  - a package name other than the canonical one;
+  - no `private: true`;
+  - `publishConfig.registry` equal to the registry variable.
+- GIVEN any one of those proofs failing WHEN gates run THEN they fail before any publish step, with
+  a remedy naming `scripts/fork-identity.mjs`.
+- GIVEN a publish re-run for a version already published with the same integrity WHEN it runs THEN
+  npm is skipped and no ref moves; a tag that points elsewhere is refused, never moved.
+- GIVEN the fork guide's "Release your fork" section THEN every `STAMITY_` name it prints is read
+  by `.github/workflows/fork-release.yml`, and every `vars.` or `secrets.` name the workflow reads is
+  printed there (added from the `docs-guides` unit's report).
+
+As built (2026-09-26), in `.github/workflows/fork-release.yml`. The **probe** (`:77-163`) ends green
+with `armed=false` and a notice for the canonical repository (`:104-111`) and for a fork whose
+`STAMITY_FORK_RELEASE` is empty or names another repository (`:113-120`); it refuses a registry
+that is not https, or carries userinfo, a query, a fragment or white space, naming the variable and
+never its value (`:122-142`), and a release branch git would not accept as a name (`:144-156`). It
+reads the registry once and hands it on as a job output, so the value gates prove and the value
+publish uses cannot differ (`:86-89`, `:158-162`). **Gates** (`:166-397`) hold `contents: read` and
+no secret (`:172-173`). Their proofs (`:211-289`) require the tag to be `v` plus `package.json`'s
+version and its commit to be reachable from the release branch on every run that can publish
+(`:226-250`); a dispatch rehearsal skips those two and says so. On every run they refuse the
+canonical name, `private: true`, a `publishConfig.registry` other than the variable, and, on GitHub
+Packages, a scope other than the owner (`:252-278`); a failure prints the remedy naming
+`scripts/fork-identity.mjs` (`:280-283`). The ladder copied from `release.yml` follows (`:292-316`),
+then the pack and the plugin build. **Publish** (`:399-795`) runs in the `fork-release`
+environment with `contents: write` and `packages: write` and no `id-token` (`:409-415`). It
+re-checks the destination (`:419-441`), then verifies the tarball digest and every archive digest
+against the gates job's outputs before anything irreversible (`:456-520`). Two checks beyond the
+plan came from review: the tarball's own `package.json` must be the only member at that path, a
+regular file, with every member under `package/`, and must carry the proved name, version and
+registry (`:534-594`, `review/54`), and every `plugins/*.sha256` file must state the digest the
+verified manifest carries, with none missing or extra (`:600-627`, `review/32`). The npm step
+gives the per-run token only to the exact host `npm.pkg.github.com`, and the
+`STAMITY_REGISTRY_TOKEN` secret otherwise (`:644`); it exits 1 before npm with no credential,
+skips a version already published with the same integrity, refuses one published from another
+tarball, and publishes with no `--provenance` (`:648-664`). The distribution push refuses to move a
+tag that names another commit and to force-push over a branch head that has a parent (`:669-749`),
+and the release step uploads only the assets a re-run finds missing (`:755-795`). A dispatch that
+leaves `dry_run` at its default `true` runs `dry-run-summary` instead of publish (`:797-807`).
+Tests: `test/ci/forkReleaseWorkflow.test.ts`, and the closed lists in `test/ci/workflow.test.ts`
+that now admit `fork-release.yml`'s publish job. The guide is `docs/enterprise-forks.md:866-977`;
+the variable pin is `test/docsPages.test.ts:2073`. No fork's real release by this workflow is
+recorded in this tree: what is proved here is proved by those tests.
+
+### REQ-PLUGIN-028 One command sets a fork's identity
+
+Added 2026-09-26 (plan 010 file 1, E2).
+`node scripts/fork-identity.mjs --repository <url> [--scope <scope>] [--registry <url>] [--check]`
+replaces the guide's copy-paste identity block. It does the following:
+
+- sets the package name `@<scope>/stamity`. The unscoped name stays `stamity`, so the plugin id, the
+  marketplace name and the command namespace do not change.
+- sets the repository, homepage, bugs URL and publisher.
+- sets `private: true` without `publishConfig`, or, with `--registry`, sets `publishConfig.registry`
+  and no `private`.
+- moves the two Renovate presets.
+- regenerates the plugin and APM manifests.
+- validates through `scripts/distribution-identity.mjs`.
+
+It imports no history and switches no workflow.
+
+- GIVEN a downstream checkout WHEN the command runs with a github.com repository URL THEN every field
+  and both presets hold the fork's values, and both generators' `--check` exit 0.
+- GIVEN the command run a second time with the same arguments THEN it exits 0, reports every file
+  unchanged, and moves no byte.
+- GIVEN `--check` on a tree that differs from the targets THEN it exits 1, names each drifting file,
+  and writes nothing.
+- GIVEN an invalid identity (a repository URL off github.com, an uppercase scope, an unclean registry
+  URL) THEN it exits 1, writes nothing and echoes no URL. GIVEN a file it would change that has
+  uncommitted edits THEN it exits 1 naming the file. GIVEN bad arguments THEN it exits 2.
+- GIVEN a file already at its target that has uncommitted edits THEN the command proceeds, and GIVEN
+  a generator that fails THEN it exits 1 naming the rerun, and the identity it wrote stays in place
+  (added from the unit's report).
+- GIVEN the fork guide's identity step THEN its command block installs first, runs
+  `node scripts/fork-identity.mjs --repository`, refreshes the lockfile after it, and carries no
+  `node -e` (added from the `docs-guides` unit's report).
+
+As built (2026-09-26), in `scripts/fork-identity.mjs`: the usage and exit codes are its header
+(`:5-19`). `--repository` accepts only `https://github.com/<owner>/<repo>`, with a `git+` prefix and a
+`.git` suffix allowed, and a refusal never echoes the URL (`:106-118`); an unknown argument written
+as `--flag=value`, or a value with no flag, is refused without echoing the value (`:95-103`,
+`review/17`). The scope defaults to the owner in lower case and must be a lowercase npm scope
+(`:318-321`). `--registry` must be https with no userinfo, query or fragment — wider than the
+identity module's own clean-URL rule, which does not refuse a query or a fragment (`:125-147`). The
+target manifest (`:150-171`) sets the homepage to `https://github.com/<owner>/<repo>`, not the
+canonical product site, which has no fork counterpart (plan cell amended 2026-09-24 on
+`review/18`). Every target is computed and validated through `resolveDistributionIdentity` before any
+write (`:218-252`); a target file that would change and has uncommitted edits is refused, and a file
+already at its target is never written (`:325-347`); each write is a temporary file and a rename that
+cleans up after a failed rename (`:268-281`); the two generators run after the writes, with
+`--check` under `--check` (`:283-304`); the output is one `updated`, `unchanged` or `drift` line per
+file, then the identity line (`:327-351`). Tests: `test/ci/forkIdentityScript.test.ts`; the opt-in
+`STAMITY_FORK_SUITE` group of `test/ci/forkIdentity.test.ts` now runs the script; the guide's pin is
+`test/docsPages.test.ts:2050`. One gap is recorded, not closed: with `--registry
+https://npm.pkg.github.com`, a `--scope` other than the owner is accepted here and refused later by
+REQ-PLUGIN-027's gates.
+
+### REQ-PLUGIN-029 A Claude Code managed-settings template for an organization's rollout
+
+Added 2026-09-26 (plan 010 file 1, E4). The distribution builder renders
+`admin/claude-managed-settings.json` from the fork's identity:
+
+- the company marketplace in `extraKnownMarketplaces`;
+- the plugin on for everyone in `enabledPlugins`;
+- only that marketplace admitted by `strictKnownMarketplaces`;
+- `requiredMinimumVersion` at least 2.1.277, the first client where an invalid allowlist fails
+  closed.
+
+The fork guide documents where the file goes on each OS and how managed sources are ordered.
+`docs/plugins.md` carries a short paragraph each on Cursor's "Required" team-marketplace mode and
+Codex's workspace route.
+
+- GIVEN any identity WHEN the template renders THEN it holds exactly the four keys in a fixed order,
+  the marketplace key and plugin id equal the rendered Claude catalog's, and the allowlist entry
+  equals the declared marketplace source field for field. An unequal pair blocks every marketplace
+  for every user.
+- GIVEN a minimum version below 2.1.277, or one that is not a semantic version, THEN the renderer
+  throws naming the field. GIVEN a missing or malformed `ref` THEN it throws naming the field (added
+  from the unit's report).
+- GIVEN a distribution build that includes Claude THEN the file is written, parses, is
+  byte-identical across builds and passes the credential scan; a build without Claude writes none.
+- GIVEN the template installed at the client's documented Linux policy path THEN the walk record
+  shows the marketplace declared, the plugin installed, another marketplace refused, and a client
+  below the minimum refusing to start. (Amended 2026-09-26 from "through the client's
+  managed-settings directory": the plan cell records that `CLAUDE_CODE_MANAGED_SETTINGS_PATH` is a
+  stub in the public builds 2.1.276 to 2.1.281, so the walk ran in a throwaway Linux container at
+  `/etc/claude-code/managed-settings.json`.)
+- GIVEN the fork guide THEN its managed-settings JSON block equals `renderClaudeManagedSettings` for
+  the canonical identity at the block's own ref, key order included (added from the `docs-guides`
+  unit's report).
+
+As built (2026-09-26), in `scripts/plugins/managed-settings.mjs`: `MIN_CLAUDE_VERSION` is `2.1.277`
+(`:21`) and `MANAGED_SETTINGS_KEYS` the four keys in order (`:24`). `renderClaudeManagedSettings`
+(`:100-112`) builds the declared source and the allowlist entry with one function, so the two
+cannot differ in spelling (`:105`). It refuses an identity without a name or an `owner/repo` slug
+(`:54-62`), a ref that fails the ref-name rule, holds `..` or ends in `/` (`:65-73`, with `REF_NAME`
+at `:44` a copy of the identity module's, pinned by a test), and a minimum version that is not plain
+`x.y.z` without leading zeros or is below the floor (`:48`, `:76-93`; `review/5`). The
+builder writes the file only when Claude is built (`scripts/build-plugin-distribution.mjs:565-569`)
+and prints one README line naming it (`:247-249`). Tests: `test/ci/managedSettings.test.ts` and
+`test/ci/pluginDistribution.test.ts:587`; the guide's block pin is `test/docsPages.test.ts:2097`.
+The guide's section is `docs/enterprise-forks.md:978-1112`; the Cursor and Codex paragraphs are
+`docs/plugins.md:202-216` and `:280-285`.
+
+The walk (`.stamity/runs/2026-09-24_enterprise-release/managed-settings-walk.md`), on Claude Code
+2.1.281 on Linux, with no login and no credential in the container, measured the fourth criterion
+with one condition the plan did not foresee. The marketplace is declared only after one interactive
+start past the first-run screens: before it, `marketplace list` shows none and the install fails
+"not found in marketplace", and a headless `claude -p` without a login does not record it (W1).
+The install then succeeds, and the allowlist does not gate the plugin entry's own source, so the
+renderer needed no change (W2); another marketplace is refused as "blocked by enterprise policy"
+(W3); under a floor of 99.0.0 a session, `claude -p` and `claude plugin list` exit 1 naming both
+versions, while `claude --version` still answers (W4); and an allowlist whose `ref` differs from the
+declared source's locks the plugin out for a new user and for one who already has it (W5). Not
+measured: whether a logged-in session installs the enabled plugin without `claude plugin install`,
+`/status`, the macOS and Windows paths, the `managed-settings.d/` folder, the ranking of managed
+sources, and 2.1.277 as the first client that fails closed — those rest on the vendor's pages, as
+the guide says (`docs/enterprise-forks.md:1106-1109`).
+
+### REQ-PLUGIN-030 An enterprise quickstart page
+
+Added 2026-09-26 (plan 010 file 1, E5). `docs/enterprise-quickstart.md` is a hand page that orders the
+enterprise route by day (day 0 the fork, day 1 release and rollout, day 2 updates) and by role
+(admin, platform team, developers). It links into `docs/enterprise-forks.md` and `docs/plugins.md`
+rather than repeating them.
+
+- GIVEN the docs suite WHEN it runs THEN the page passes every hand-page case, and appears in the
+  sidebar's Guides before the fork guide, in `llms.txt` and in the README map.
+- GIVEN the page THEN every step is one sentence with a page-level link, and no command block from
+  the two guides is repeated.
+- GIVEN the page THEN every link into `docs/enterprise-forks.md` or `docs/plugins.md` names, as its
+  link text, a heading that page carries (added from the unit's report: it stands in for the
+  `#fragment` links the hand-page link check does not allow).
+
+As built (2026-09-26): the page is `docs/enterprise-quickstart.md`, 66 lines, with "Who does what"
+(`:20-26`), the three days (`:28-59`) and "Where to go next" (`:61-66`). It sits in the sidebar's
+Guides before `enterprise-forks` (`website/sidebars.ts:81-82`), in the llms index
+(`src/cli/docs/llmsIndex.ts:213`, `llms.txt:31`) and in the README map (`README.md:130`). The
+case "the enterprise quickstart routes into the two guides and repeats none of their commands"
+(`test/docsPages.test.ts:2126`) holds the last two criteria.
+
 ## Non-goals
 
 - A self-contained executable per platform (Node at the engine floor is the declared prerequisite).
@@ -1098,6 +1422,11 @@ byte-stable for every unit that did not.
 ## References
 
 - `docs/plans/008-plugin-lifecycle-01.md`, `-02.md`, `-03.md` — the units and their evidence.
+- `docs/plans/010-enterprise-release-01.md` — REQ-PLUGIN-027 to 030 and the 2026-09-26
+  amendments, with their units and decisions.
+- `.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md` (its Codex section) and
+  `.stamity/runs/2026-09-24_enterprise-release/managed-settings-walk.md` — the two walks of
+  2026-09-24 and 2026-09-26 the amendments cite.
 - `.stamity/runs/2026-09-17_codex-astra-audit/findings.md` — the audit whose fix batch opens the plan.
 - `docs/specs/apm-canonical-distribution.md`, `docs/specs/fork-layer.md`,
   `docs/specs/enterprise-upstream-lane.md` — the routes this spec extends and leaves as shipped.

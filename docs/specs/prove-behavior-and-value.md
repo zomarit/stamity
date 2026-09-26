@@ -9,6 +9,9 @@ obsolete_when: the measurement page, the security mapping and the QA evidence fi
 Package 11's tracks D (delivery and governance), A (the eval set) and C (the public evidence
 surfaces), as shipped in 1.8.0. Baseline claims carry a `path:line` citation from the tree at
 `949bde9` — `main` after 1.7.0; claims amended in the Prove phase (2026-09-15) cite the built tree.
+The amendments dated 2026-09-26 to REQ-PROVE-009 and REQ-PROVE-020 come from the spec delta of
+`docs/plans/010-enterprise-release-02.md` (the 1.10.0 cut) and the deltas its units' reports
+declared; they cite the tree at `e995fe02`, and they are not in a release yet.
 
 ## Intent
 
@@ -139,6 +142,41 @@ the four thresholds and the SET-v6 scoring rule carry over verbatim. GIVEN a sec
 configuration WHEN a run is composed THEN every carried case is named with its prior run, its case-file
 sha256 and the source ranges found identical, the whole set is scored under the unchanged rule, and the
 artifact's per-case table marks each carried case with the run it came from.
+
+Amended 2026-09-26 (plan 010 file 2, decision D4): at 1.10.0 the `claude` profile's scenario model is
+`claude-opus-5-5`; the judge is unchanged. The comparator key carries the model pair.
+
+- GIVEN two runs with an equal profile name, rubric-core hash and harness but different scenario models
+  WHEN a run is composed or its advisory repeats are compared THEN the earlier run is not its prior run.
+- GIVEN the 1.10.0 release run THEN it measures all 102 cases at three samples with calibration first,
+  and its advisory-repeat section reads "first run of this configuration".
+
+Declared by the units' reports (`eval-profile-move`, `eval-effort-high`) and merged with it:
+
+- GIVEN `evals/model-profiles-v1.json` WHEN the `claude` profile is resolved THEN its scenario declares
+  `reasoningEffort: "high"`, which the run's driver sends as the client's explicit `--effort high`, and
+  its judge declares `null`, the harness default with no claimed effort value.
+- GIVEN a prior run summary whose advisory failures are objects `{caseId, failed[]}` WHEN advisory
+  repeats are computed THEN each `caseId:criterion` in `failed` is compared with the runner's string
+  ids.
+- GIVEN a committed run that recorded none of the profile, the rubric-core hash, the harness or the
+  model pair THEN it is no run's prior run; GIVEN one that recorded no model pair THEN it is compared
+  on the fields it did record.
+- GIVEN a model id with a trailing `[1m]` THEN the comparator reads it as the same model without the
+  suffix, and the recorded id stays verbatim.
+
+As built at `e995fe02`: the profile is `evals/model-profiles-v1.json:9-10`, documented at
+`evals/MODEL-PROFILES-v1.md:10`, `:19-21` and `:32-33`. The comparator is `comparatorKey`,
+`COMPARATOR_FIELDS`, `comparedField`, `recordedKey` and `sameConfiguration`
+(`scripts/eval/run.mjs:92-141`); `advisoryRepeats` reads both failure shapes (`:230-238`), and
+`previousRun` keeps only a run of the same key (`:241-254`). `evals/SET-v7.md` carries the dated
+paragraph (`:484-493`) and § 8's comparator sentence (`:540-548`). Tests:
+`test/evals/modelProfiles.test.ts:29`; `test/evals/manualRunner.test.ts:1332`, `:1537`, `:1562`,
+`:1582` and `:1596`. Not yet measured: the 1.10.0 release run (run 33) does not exist at
+`e995fe02`, so the second criterion above is open. Composing runs and the "first run of this
+configuration" line belong to the route of record's driver, which lives outside this repository;
+SET-v7 says the "never composed" half holds once that driver compares the pair too
+(`evals/SET-v7.md:488-490`).
 
 ### REQ-PROVE-010 — Trigger probes for rule-projected skills
 
@@ -301,6 +339,30 @@ README's mission or tagline sentences.
   name, since every cut moves these suites' lines: `test/cli/docs/measurements.test.ts`'s "the run
   of record is carried to the release the tree ships as", and `test/docsPages.test.ts`'s "the eval
   run of record on the hand pages".
+
+Amended 2026-09-26 (plan 010 file 2): the carried-to criterion added at the 1.9.1 cut is retired
+together with the clause: run 33 is 1.10.0's own run, measured in full. The stated-confidence reading
+ignores version numbers.
+
+- GIVEN the tree after the cut THEN `RUN_OF_RECORD_CARRIED_TO`, `RUN_OF_RECORD_CANDIDATE` and
+  `carriedToRelease` are absent, and README, the doctrine and the page name run 33 as the 1.10.0
+  release run, measured in full.
+- GIVEN a verdict line "medium / 0.60 … 1.10.0" THEN the stated confidence reads 0.60. GIVEN "approve
+  for 1.10.0" alone THEN no confidence is read.
+- GIVEN a verdict line naming a two-part version ("on 1.9", "the 1.10 line") or a version ending in
+  `.x` ("1.0.x", "1.10.x") and no confidence THEN no confidence is read (added from the
+  `confidence-version` fixer's report, `review/6` and `review/7`).
+
+As built at `e995fe02`, the confidence half: a stated confidence is a `0.x` number or `1.0`, not part
+of a version number. `CONFIDENCE` refuses a match preceded by a word character or a dot, or followed
+by a word character or by a dot and a word character (`src/cli/docs/measurements.ts:253-262`), and
+`statedConfidence` drops any value above 1 before it takes the last one (`:470-475`). The rows are
+`test/cli/docs/measurements.test.ts:724-738`. Not yet built, the retirement half: the carried-to
+clause and its constants are still in the tree (`src/cli/docs/measurements.ts:134-135`, `:164`,
+`:907-908`,
+with `RUN_OF_RECORD_RELEASE` still `1.9.0` at `:115`), because the unit that deletes them waits on
+run 33, which does not exist yet. Until that unit lands, the carried-to criterion above stays in
+force and tested.
 
 ### REQ-PROVE-021 — QA automation and binding
 

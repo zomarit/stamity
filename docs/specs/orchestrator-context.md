@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23 and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26, and excluded from the site build.
 status: design
 obsolete_when: every supported client hands a parent a sub-agent's full report by reference and restores a running flow's state after a compaction on its own, or a decision row cuts the surface
 ---
@@ -23,6 +23,11 @@ sections. Once a test named under References exists, it is the normative record 
 requirement. Line citations in the requirement statements are to the tree at `fed39ac`, as the
 Context's are, except those an amendment adds (A17, A18); the body reorder (REQ-CTX-014) has
 since moved most `content/commands/st-work.md` lines.
+
+REQ-CTX-016, and the paragraphs and criteria marked "amended 2026-09-26" under REQ-CTX-013 and
+REQ-CTX-015, come from the spec deltas of `docs/plans/010-enterprise-release-01.md` and
+`docs/plans/011-replay-v2.md` and from the deltas their units' reports declared. Their citations
+are to the tree at `e995fe02`.
 
 ## Context
 
@@ -85,6 +90,7 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 | 013 resume card | hook after compaction, and the verb | the verb, run by hand after a compaction summary | the verb, run by hand after a compaction summary | hook after compaction, and the verb |
 | 014 body order | yes | not applicable: no documented body re-attachment | not applicable: no documented body re-attachment | not applicable: no body emitted |
 | 015 replay | measured | `not-run`, with reason | `not-run`, with reason | `not-run`, with reason |
+| 016 hook budgets | yes: the session-start rows and the ConfigChange tamper notice at 30 s; the latency check reads this client's guard | yes: the session-start rows at 30 s | yes: the session-start rows at 30 s | yes: the session-start rows at 30 s |
 
 ## References
 
@@ -97,6 +103,20 @@ from disk: a lost context or a compaction must not lose a finding or change a re
   `src/hooks/scripts.ts`; `src/cli/commands/learn.ts` (the hidden-verb precedent);
   `scripts/replay/compare.mjs` and `scripts/replay/score.mjs` (the comparison's readings, amendment A22).
 - `evals/replay/REPLAY-v1.md`: the replay's protocol and thresholds.
+- `evals/replay/REPLAY-v2.md`: the second protocol, where the seeds reach review, with v1's
+  thresholds (amended 2026-09-26).
+- `docs/plans/010-enterprise-release-01.md` (REQ-CTX-013's read caps, REQ-CTX-016) and
+  `docs/plans/011-replay-v2.md` (REQ-CTX-015's v2 changes).
+- `test` (amended 2026-09-26): `test/hooks/sessionStartCard.test.ts` and
+  `test/runs/resumeCardParity.test.ts` (the card's read caps); `test/emit/hooksInfra.test.ts`,
+  `test/hooks/scriptBudget.test.ts` and `test/ci/hookLatency.test.ts` (the hook budgets);
+  `test/replay/findings.test.ts`, `test/replay/measure.test.ts`, `test/replay/score.test.ts`,
+  `test/replay/compare.test.ts`, `test/replay/seeds-v2.test.ts` and `test/replay/oracle-v2.test.ts`
+  (REPLAY-v2's instrument).
+- `source` (amended 2026-09-26): `src/runs/layout.ts`, `src/runs/cardSource.ts`,
+  `src/runs/resumeCard.ts`; `src/hooks/model.ts`, `src/emit/hooksInfra.ts`, `src/hooks/scripts.ts`,
+  `scripts/hook-latency.mjs`; `scripts/replay/protocols.mjs`, `scripts/replay/findings.mjs`,
+  `scripts/replay/measure.mjs`, `scripts/replay/score.mjs`, `scripts/replay/compare.mjs`.
 
 ## Requirements
 
@@ -109,6 +129,9 @@ proposal, what the 1.10.0 release ships:
 - P4: 009–011
 - P7: 012–013
 - P8: 014
+
+REQ-CTX-016 (the hook budgets, added 2026-09-26 by plan 010 file 1) belongs to none of these
+proposals.
 
 ### REQ-CTX-001 — Execution roles write the full report to disk and return a digest
 
@@ -366,6 +389,28 @@ Ruled out:
   Claude extension row except `ConfigChange` (`src/adapters/claude.ts:245-247`), so a new row
   would also wire the review gate onto it.
 
+Amended 2026-09-26 (plan 010 file 1, `build/32`, `build/40`). The card's reads are bounded by count
+as well as by size:
+
+- The ledger is read only up to 4 MiB. Over that, the card says the ledger is too large to read and
+  prints no open count, never a partial one.
+- At most 256 reports are read. The rest are counted as not checked, never listed as clean. The
+  count is of the report-named files the card checks that no ledger row names; ledgered reports and
+  files whose names are not report names spend none of it.
+- Record heads are read newest first, and the walk stops at the first run in progress.
+
+As built: `LEDGER_READ_MAX_BYTES` is 4,194,304 and `REPORT_READS_MAX` 256 (`src/runs/layout.ts:107`,
+`:113`), and the two card lines' words are `CARD_LEDGER_TOO_LARGE` and `CARD_REPORTS_NOT_CHECKED`
+(`:171`, `:173`). Both twins apply them: the hook body embeds the constants
+(`src/runs/cardSource.ts:102-103`, `:113-114`), refuses a ledger over the bound by its `lstat` size
+before reading it (`:226`), stops checking reports at the bound (`:296`), prints both lines
+(`:434-441`) and walks run names newest first (`:470`); the engine twin, which `stamity ledger
+status` prints, does the same (`src/runs/resumeCard.ts:241-247`, `:282` in `readLedger`, `:363`,
+`:502-505`). With the ledger unread, the set of ledgered reports is unknown, so every report counts
+as unledgered, still under the 256 cap.
+A tail read is ruled out: the ledger is rewritten whole and rows change state in place, so open
+rows can sit anywhere. `SECURITY.md:104` states the two bounds.
+
 Implements C6, C7 (D6).
 
 ### REQ-CTX-014 — The `/st-work` body's order puts what a resumed run needs before the re-attachment cut
@@ -390,8 +435,42 @@ A replay compares the changed shape with the 1.9.1 baseline:
   slash commands, plugins and MCP servers, identical within a shape (amendment A8).
 - **Scoring.** A deterministic matcher: the seed's file, a line within ±3 of the seed's span,
   and one of the seed's accepted terms. No model judge.
-- **Protocol first.** The protocol and thresholds are committed as `evals/replay/REPLAY-v1.md`
-  before the pilot.
+- **Protocol first** (amended 2026-09-26, `build/367`; it read "The protocol and thresholds are
+  committed as `evals/replay/REPLAY-v1.md` before the pilot."): each protocol,
+  `evals/replay/REPLAY-v1.md` and `evals/replay/REPLAY-v2.md`, is committed before its own first
+  result. Each criterion that counts or reads results reads only the results scored under the
+  protocol it names, keyed by the protocol path and sha256 each `run.json` records.
+- **Seeds reach review (v2)** (amended 2026-09-26, the maintainer's decision R1): the units start
+  clean. At the first review dispatch covering a pass, the driver commits that pass's seeds and
+  snapshots the tree in the same hook call. A seed whose anchor is missing is recorded as not
+  injected, and it leaves the recall denominator. The pass snapshot decides that reading: a seed
+  the unit wrote itself reads present and is scored, and one whose file the unit removed reads
+  unknown and stays in the denominator (`build/69`). A dispatch covers the one pass its description
+  names, else the distinct passes its prompt names; a pass is injected once, in one commit
+  `replay: <pass> review fixture` under the fixed replay author; and a hook that runs out of its
+  120 seconds records a partial injection, which makes the run invalid.
+- **Scoring (v2)** (amended 2026-09-26, `build/363`, `build/364`, `build/366`):
+  - A severity word governed by a negation ("no", "zero", "0", "none of the", "without") is no
+    severity. `new`, `remaining`, `open` or `further` may stand between the two, a run of severity
+    words joined by `or`, `and` or `nor` is read as one, the count forms `Critical: 0` and
+    `0 Critical` are no severity either, and the mask never reaches across a line break.
+  - A seed term found only inside the finding's own locator credits nothing, and an all-digit term
+    matches only as a number of its own.
+  - One review round's verdict counts for every pass the round covers, and so do its findings, at
+    the pass stage and as round-1 finds.
+  - One term window serves both shapes: a structured finding's terms are read over its summary
+    plus the matching entry of its report's `stamity-findings` block, a free-text finding's over
+    its own block, and neither reads report prose.
+- **Compaction (v2)** (amended 2026-09-26): the placements stay `u2-p1` and `u3-p1`. v1's trigger
+  is read over the review rounds that cover the placement pass, and a placement fires only when it
+  holds on two polls in a row. Interrupt mode applies when both canaries pass K1–K4, and both
+  shapes run auto-window mode when the two canary records disagree. Under auto-window mode an
+  automatic compaction is a sample only when its boundary falls between a lens delivery and the
+  next ledger write; one outside is named in the notes, beside `compaction-loss`, and is no sample.
+- **Results (v2)** (amended 2026-09-26): v2's runs live in `evals/replay/v2/runs/` and its
+  comparison is `evals/replay/COMPARISON-v2.md`. Every command that reads or writes results takes
+  `--protocol v1|v2`, defaulting to v1, and refuses a result scored under another protocol. Each
+  v2 run's RESULTS and the v2 comparison carry a Clients table with the three `not-run` rows.
 - **Samples.** 1 pilot plus 3 scored runs per shape; a shape whose three scored runs differ by
   more than 2 seeds found (max − min) gets 5, and the pilots are not read for it
   (amendment A8).
@@ -411,12 +490,74 @@ A replay compares the changed shape with the 1.9.1 baseline:
   now gates the release.
 - **Release gate.** Every eval-set floor holds at the 1.10.0 release run.
 
+As built (2026-09-26, at `e995fe02`): `evals/replay/REPLAY-v2.md` states the rules above — the
+injection (§5, `:100-121`), the matcher (§9, `:283-297`), the covered passes and the verdict mapping
+(§8, `:225-228`, `:263-268`), compaction (§7, `:197-213`), the result paths (§11, `:326-334`) and
+the Clients table (§1, `:30-35`) — and its one `replay-thresholds` block holds v1's values
+(`:364-366`). The protocol table is `PROTOCOLS` (`scripts/replay/protocols.mjs:11-14`, default v1 at
+`:17`). The scorer refuses a `run.json` whose recorded protocol sha256 is not the protocol's
+(`scripts/replay/score.mjs:806-807`) and a summary scored under another protocol's sha256 or path
+(`:878-882`). The matcher's rules are `maskNegated` (`scripts/replay/findings.mjs:82`) and
+`matchItems` (`:615`); the covered passes are `passesOf` (`scripts/replay/measure.mjs:349-351`); the
+seeds schema adds `injection` and `present.notMatch`, and a seed is present only when no `notMatch`
+pattern matches (`checkSeeds`, `presentIn`, `:258`, `:285-291`); the Clients table is `clientsTable`
+(`scripts/replay/compare.mjs:379-383`), empty under v1 so v1's files stay byte for byte. A comparison
+given no scored run for a shape reads every row that shape feeds NOT-EVALUATED, and the merge gate
+fails (`compare.mjs:96`, `:339`). The v2 fixture is `evals/replay/v2/`. The injection, the
+snapshots, the placement and the canary checks K11–K14 are the replay driver's, which lives outside
+this repository; REPLAY-v2 is the record of what it must do. Not yet measured: no v2 canary, pilot or
+scored run is committed in this tree, and `evals/replay/COMPARISON-v2.md` does not exist, so every
+criterion below that reads v2 results is open.
+
 Implements C12 (D9, D10).
+
+### REQ-CTX-016 — Declared hook budgets
+
+Added 2026-09-26 (plan 010 file 1, decision D2). Every hook the engine wires declares its budget.
+
+- **Session-start rows** (the resume card and the tamper notice) declare `timeoutMs: 30000` on all
+  four clients, in repository mode and in plugin roots.
+- **Claude's ConfigChange wiring of the tamper notice** declares the same 30 s (amended 2026-09-26
+  on `review/28` and `review/36`). **The pre-tool-use guard and the review gate** declare no
+  timeout, on purpose. A timed-out Claude PreToolUse hook lets the call through, and the review
+  gate's win32 worst case is about 34.6 s.
+- **The emitted scripts** stay under declared byte and line ceilings:
+  - guard: ≤ 24,576 bytes and 600 lines;
+  - session start: ≤ 49,152 bytes and 1,100 lines;
+  - the review gate and the tamper notice: their measured size plus 25%, which is ≤ 51,200 bytes and
+    1,120 lines for the review gate (measured 40,740 / 891) and ≤ 3,072 bytes and 90 lines for the
+    tamper notice (measured 2,383 / 67), bytes rounded up to a multiple of 1,024 and lines to a
+    multiple of 10.
+
+  Lines are counted as `\n` only, so CRLF and LF count alike. Each script is measured as the larger
+  of its generated-layout and plugin-root renders, and a client that does not emit a script is
+  skipped.
+- **Guard latency** over node's own start stays ≤ 15 ms, as the median of 7 warm runs. It is
+  measured locally at each release, not in CI.
+
+As built (2026-09-26): the budget is `HOOK_SESSION_START_TIMEOUT_MS = 30_000`
+(`src/hooks/model.ts:232`, its reasons in the comment at `:210-231`), set only on the core
+`session_start` rows (`src/emit/hooksInfra.ts:448`); the adapters render it as each client's own
+field, and Claude's ConfigChange entry takes the whole tamper row, budget included
+(`src/adapters/claude.ts:896`). The ceilings are `HOOK_SCRIPT_BUDGETS` (`src/hooks/scripts.ts:124-139`),
+each row with the size it was measured at beside it. The latency check is
+`node scripts/hook-latency.mjs [--runs <n>] [--guard <path>] [--budget <ms>]`
+(`scripts/hook-latency.mjs:7-11`): 7 runs after one warm-up by default (`:53`), a budget of 15 ms by
+default (`:51`), exit 1 naming each case over the budget (`:205-208`), and exit 2 when it cannot run,
+including a spawn that does not return within 30 s (`:55`). Its non-Write case is a governed call, a
+verdict role's `Read` that reaches the policy (amended 2026-09-26 on `review/83`); its CI tests run
+under a generous `--budget`, so no timing bound runs in CI (`review/82`). The release checklist runs
+it before the tag (`.github/release-controls-checklist.md:235`). Tests: `test/emit/hooksInfra.test.ts`
+(the 30-second rows at `:572-575` and the pinned absence on the guard and the review gate),
+`test/ci/pluginPackages.claude.test.ts:457` (a built plugin root),
+`test/hooks/scriptBudget.test.ts:124`, and `test/ci/hookLatency.test.ts`. Not measured: the resume
+card's own wall time against the 30-second budget; the 7-run median is recorded at the release, and
+no release has recorded it yet.
 
 ## Acceptance criteria
 
-One set per requirement, plus one for the invariants. There are ninety-nine criteria:
-`grep -c "^- GIVEN" docs/specs/orchestrator-context.md` returns 99. Each is machine-checkable
+One set per requirement, plus one for the invariants. There are one hundred and nine criteria:
+`grep -c "^- GIVEN" docs/specs/orchestrator-context.md` returns 109. Each is machine-checkable
 unless tagged `judgment:`. Run the command again whenever this section grows; do not count by
 eye.
 
@@ -776,6 +917,13 @@ eye.
 - GIVEN `stamity sync` on a manifest selecting all four clients WHEN the emitted hook wiring is
   read THEN no `PreCompact`, `PostCompact` or `preCompact` event is wired, and the Claude
   review gate's events are exactly `TaskCompleted` and `SubagentStop`.
+- GIVEN a ledger over 4,194,304 bytes WHEN the card prints THEN its ledger line reads
+  `ledger: too large to read (over 4 MiB)  ·  the ledger is the recovery point` (amended
+  2026-09-26).
+- GIVEN 257 unledgered reports that carry findings THEN the reports line counts 256 and appends
+  `, not checked: 1` (amended 2026-09-26).
+- GIVEN the hook and `stamity ledger status` on the same fixture THEN they print the same card
+  (amended 2026-09-26).
 
 **REQ-CTX-014**
 
@@ -799,17 +947,19 @@ eye.
 
 **REQ-CTX-015**
 
-- GIVEN `evals/replay/REPLAY-v1.md` WHEN `git log` is read THEN the commit adding its protocol
-  and threshold table is an ancestor of the commit adding the first replay result, and no later
-  commit changes a threshold value.
+- GIVEN each protocol WHEN `git log` is read THEN the commit adding it is an ancestor of the commit
+  adding its first result, and no later commit changes a threshold value (amended 2026-09-26; it
+  read "GIVEN `evals/replay/REPLAY-v1.md` … the commit adding its protocol and threshold table is an
+  ancestor of the commit adding the first replay result").
 - GIVEN the replay's matcher WHEN it scores a finding THEN it counts a match only when all
   three hold, and the scoring code makes no model call:
   - the finding names the seed's file;
   - the line is within the seed's span ±3;
   - the text contains one of the seed's accepted terms.
-- GIVEN the committed replay results WHEN counted THEN each shape (the 1.9.1 baseline and the
-  changed shape) has 1 pilot and 3 scored runs on Claude Code, or 5 scored runs where its three
-  scored runs differ by more than 2 seeds found (amendment A8).
+- GIVEN the results scored under `REPLAY-v2.md` WHEN counted THEN each shape (the 1.9.1 baseline
+  and the changed shape) has 1 pilot and 3 scored runs on Claude Code, or 5 scored runs where its
+  three scored runs differ by more than 2 seeds found (amendment A8). v1's two pilots are not
+  counted (amended 2026-09-26; it read "GIVEN the committed replay results").
 - GIVEN the scored changed-shape runs WHEN security seeds are scored THEN every security seed
   is found in every run, except a seed that at least one baseline scored run missed
   (amendment A8).
@@ -844,11 +994,39 @@ eye.
   init event's skills, agents, slash commands, plugins and MCP servers; every result of both
   shapes records the same version, and each scored run's lists equal those of its own shape's
   pilot (amendment A8).
-- GIVEN the committed replay results WHEN read THEN they carry one `not-run` row each for
-  Cursor, GitHub Copilot CLI and Codex, each with its reason.
-- GIVEN the 1.10.0 release WHEN the `v1.10.0` tag is created THEN the tagged commit descends
-  from a committed REPLAY-v2 comparison that shows the floor criteria above (the fourth to the
-  tenth) holding for every proposal kept, and every dropped proposal's ids read retired in this
-  spec with a pointer to the failing result (D10, amended 2026-09-24).
+- GIVEN every committed v2 result WHEN read THEN it records the Claude Code version and the init
+  event's lists, as the v1 criteria require. The committed v2 results carry the three not-run rows:
+  one `not-run` row each for Cursor, GitHub Copilot CLI and Codex, each with its reason (amended
+  2026-09-26; it read "GIVEN the committed replay results WHEN read THEN they carry one `not-run`
+  row each …", which v1's two pilots do not carry: the Clients table is rendered under v2 only,
+  `scripts/replay/compare.mjs:380`).
+- GIVEN a v2 run WHEN the first review dispatch covering a pass starts THEN that pass's injected
+  seeds are committed and its snapshot exists before the reviewer's first tool call. The run
+  records each seed as injected or not (amended 2026-09-26).
+- GIVEN the finding line `src/config/load.ts:15 — fix held. No Critical findings.` WHEN the matcher
+  reads it THEN it yields no finding (amended 2026-09-26).
+- GIVEN a Warning whose only matching term sits inside its own locator WHEN it is scored THEN it
+  credits no seed and goes to adjudication (amended 2026-09-26).
+- GIVEN a reviewer dispatch whose prompt names `u1-p1 u1-p2`, and a finding matching `sec-sql-sort`,
+  WHEN the run is measured THEN the seed reads `foundRound1: true` and `stage: "pass"`, and both
+  passes record that round's verdict class and round count (amended 2026-09-26, from the
+  `v2-multipass` unit's report).
+- GIVEN the 1.10.0 tag THEN the tagged commit descends from a committed
+  `evals/replay/COMPARISON-v2.md` whose `Merge gate:` line reads PASS: the floor criteria (the
+  fourth to the tenth) holding for every proposal kept, as the release-gate criterion states
+  (amended 2026-09-26; it read "GIVEN the 1.10.0 release WHEN the `v1.10.0` tag is created THEN the
+  tagged commit descends from a committed REPLAY-v2 comparison that shows the floor criteria above
+  (the fourth to the tenth) holding for every proposal kept, and every dropped proposal's ids read
+  retired in this spec with a pointer to the failing result (D10, amended 2026-09-24)"). A dropped
+  proposal's ids still read retired here with a pointer to the failing result (Invariant 1).
 - GIVEN the 1.10.0 eval-set run WHEN it is scored THEN every eval-set floor holds before the
   `v1.10.0` tag is created.
+
+**REQ-CTX-016**
+
+- GIVEN an emitted configuration on any client THEN its session-start entries carry a 30-second
+  timeout, and its guard and review-gate entries carry none.
+- GIVEN any core hook script over its ceiling THEN the budget test fails naming the script, its size
+  and the budget.
+- GIVEN `node scripts/hook-latency.mjs` at a release THEN it prints the median table, and exits 0
+  when both overheads are ≤ 15 ms, 1 when either is over, and 2 when it cannot run.
