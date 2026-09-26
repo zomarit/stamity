@@ -2,10 +2,11 @@
 title: Enterprise quickstart
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6bf8725b. Re-attested 2026-09-26 against the section headings of the fork guide and the plugins guide. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit a2fb017a. Re-attested 2026-09-26 against the section headings and the rollout steps of the fork guide and the plugins guide. -->
 <!-- Re-open when: a section this page links is renamed, moved or removed in `docs/enterprise-forks.md` or
      `docs/plugins.md`. `test/docsPages.test.ts` holds this page to the hand-page contract and holds
-     every link text here to a heading in the guide it names. Re-open it too when a job moves between
+     every link text here to a heading in the guide it names. Re-open it too when either guide gains a
+     step between two sections this page names, which no check catches, or when a job moves between
      the admin, the platform team and the developers. -->
 
 # Enterprise quickstart
@@ -40,8 +41,9 @@ The platform team releases first, then the admin rolls out, then every developer
 
 - Arm the release workflow and push your first version tag, as [Release your fork](enterprise-forks.md) shows.
 - Publish your customized content as a package your other repositories install, through [Ship your fork through APM](enterprise-forks.md).
-- Turn the plugin on in every developer's Claude Code at once with the managed-settings file from [Roll the plugin out to your organization](enterprise-forks.md).
-- Install the plugin in each client, or find that client's organization route, under [Install](plugins.md).
+- Declare the marketplace, allow only that one, and mark the plugin on in every developer's Claude Code with the managed-settings file from [Roll the plugin out to your organization](enterprise-forks.md).
+- Open Claude Code once on each machine, finish its first-run screens, and then install the plugin, as [Start Claude Code once on each machine](enterprise-forks.md) explains.
+- Install the plugin in every other client, or find that client's organization route, under [Install](plugins.md).
 - Give each repository its charter and manifest with the one setup command in [Set the repository up](plugins.md).
 
 ## Day 2: take updates

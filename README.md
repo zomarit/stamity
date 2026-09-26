@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6bf8725b. Re-attested 2026-09-26 against the enterprise quickstart's map row and the twelve-guide count. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit a2fb017a. Re-attested 2026-09-26 against the enterprise quickstart's map row, the enterprise-forks row's release and rollout sections, and the twelve-guide count. -->
 <!-- Re-open when: the corpus counts, the ten-verb surface or a client capability changes, or a
      newer measurement supersedes the proof figures. `test/docsPages.test.ts` catches the first
      three; the figures are re-read against `docs/measurements.md` and the run record they cite. -->
@@ -128,7 +128,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/workspaces.md`](docs/workspaces.md) | One policy across several repositories — what a workspace is, how to create one, and what the cascade pushes down. |
 | [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | Installing content on top of the corpus — the trust tier it lands on, signing one of your own, and what `add` refuses. |
 | [`docs/enterprise-quickstart.md`](docs/enterprise-quickstart.md) | The enterprise route in order — who does what, then day 0 the fork, day 1 the release and rollout, day 2 the updates — each step linked to its guide. |
-| [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, landing, and the fork layer. |
+| [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, landing, the fork layer, releasing the fork through its own workflow, and rolling the plugin out with managed settings. |
 | [`docs/security-mapping.md`](docs/security-mapping.md) | The version-pinned crosswalk from this repository's controls to the OWASP, joint-guidance and NIST AI RMF catalogues — seven surfaces, their residuals, and the gaps. |
 
 Hook scripts are not in that corpus row, because they are not corpus content. The three portable
