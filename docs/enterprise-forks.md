@@ -1049,12 +1049,15 @@ sources** to see which source won.
 
 ### Start Claude Code once on each machine
 
-After the file lands on a machine, each developer starts Claude Code once as an interactive
-session in a terminal. Until then the client does not know the managed marketplace.
+After the file lands on a machine, each developer opens Claude Code once in a terminal and
+finishes its first-run screens, such as the theme choice and the folder trust question. Until then
+the client does not know the managed marketplace.
 `claude plugin marketplace list` says "No marketplaces configured", and
 `claude plugin install stamity@stamity` fails with "Plugin "stamity" not found in marketplace
-"stamity"". A headless `claude -p` without a login does not fix that. The interactive session
-records the marketplace within seconds, even before a login. Then the developer runs this once:
+"stamity"". A headless `claude -p` without a login does not fix that, and in the walk a first
+start that stopped at the theme choice recorded nothing either. A session past the first-run
+screens records the marketplace within seconds, even before a login. Then the developer runs this
+once:
 
 ```sh
 claude plugin install stamity@stamity
@@ -1101,8 +1104,9 @@ with no login. The record is `.stamity/runs/2026-09-24_enterprise-release/manage
   warnings above happened, for a new developer and for one who already had the plugin.
 
 Not measured: a logged-in session, the macOS and Windows paths, the `managed-settings.d/` folder,
-the ranking of managed sources, `/status`, and the failures for invalid JSON and an empty
-allowlist. Those come from Claude Code's documentation, its managed-settings, plugin-marketplaces
+the ranking of managed sources, `/status`, the failures for invalid JSON and an empty or invalid
+allowlist, 2.1.277 as the first release that enforces an invalid allowlist as an empty one, and
+the dropping of an invalid `requiredMinimumVersion`. Those come from Claude Code's documentation, its managed-settings, plugin-marketplaces
 and setup pages, accessed 2026-09-24. The template's shape is derived and tested: the renderer by
 `test/ci/managedSettings.test.ts`, and the block above against the renderer by
 `test/docsPages.test.ts`.
