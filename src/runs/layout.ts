@@ -98,6 +98,20 @@ export const RECORD_HEAD_READ_BYTES = 65_536;
  */
 export const REPORT_READ_MAX_BYTES = 1_048_576;
 /**
+ * Past this size, by `lstat`, the ledger is not read at all: the card prints
+ * {@link CARD_LEDGER_TOO_LARGE} and no open count, never a partial one. A tail
+ * read would not do, because the ledger is rewritten whole and a row changes
+ * state in place, so an open row can sit anywhere in it (ledger rows build/32
+ * and build/40; plan 010, card-read-caps).
+ */
+export const LEDGER_READ_MAX_BYTES = 4_194_304;
+/**
+ * How many reports the card checks: each report-named file no ledger row names
+ * is `lstat`ed and, within {@link REPORT_READ_MAX_BYTES}, read. The rest, in the
+ * same code-unit order, are counted as not checked and never listed as clean.
+ */
+export const REPORT_READS_MAX = 256;
+/**
  * Past this size a git metadata file the card reads (the `.git` pointer, a
  * worktree's `commondir`, `gitdir` and `HEAD`) is not read: git writes each as
  * one path or one ref, and a path longer than this is not one any platform opens.
@@ -149,6 +163,14 @@ export const CARD_NOT_RECORDED = "(not recorded)";
  * a resumed session is never told a run it cannot see has nothing open.
  */
 export const CARD_LEDGER_UNREADABLE = "could not be read";
+/**
+ * What the ledger line says instead of a count when the ledger is over
+ * {@link LEDGER_READ_MAX_BYTES}. The size is derived from the bound, so the
+ * words and the number cannot drift apart.
+ */
+export const CARD_LEDGER_TOO_LARGE = `too large to read (over ${LEDGER_READ_MAX_BYTES / 1_048_576} MiB)`;
+/** The label of the count of reports past {@link REPORT_READS_MAX}, appended after the reports list. */
+export const CARD_REPORTS_NOT_CHECKED = "not checked";
 /**
  * The label of the count of `.md` files in `reports/` whose names are not
  * report names. Only a report name is ever listed: any other name is

@@ -1238,10 +1238,14 @@ const disposedNote = `Disposition 2026-09-15: A2 deleted (sha256:${disposedHash}
 const recycledNote = `Disposition 2026-09-15: A1 promoted to B5 (sha256:${recycledHash}) — reason.\n\n1. The row that survives and gets renumbered.`;
 /**
  * The comparator key the fixture runs share — the driver's notion of one configuration: profile,
- * rubric core, harness. Case and content bytes are outside it on purpose, so a later candidate
- * still compares against its predecessor.
+ * rubric core, harness and, from 1.10.0, the model pair. Case and content bytes are outside it on
+ * purpose, so a later candidate still compares against its predecessor.
  */
-const FIXTURE_KEY = { profile: "codex-astra", rubricCoreHash: "rubric-core-fixture", harness: "codex" };
+// Fixture moved, not weakened: the key gained `models` at 1.10.0 (plan 010 D4, REQ-PROVE-009), so
+// the shared fixture carries the codex-astra pair the way a real configuration records it; every
+// assertion that reads this constant keeps its meaning with the pair held equal.
+const FIXTURE_KEY = { profile: "codex-astra", rubricCoreHash: "rubric-core-fixture", harness: "codex",
+  models: { scenario: "gpt-6-astra", judge: "gpt-5.6-sol" } };
 const priorRun = (root: string, repeats: unknown[], candidate: string, runId = "2026-09-14-run-1",
   // Recorded on the prior summary because that is where a real run records it; `configurationHash`
   // stays beside it as the exact-input receipt, and is no longer what the comparator reads.
@@ -1250,6 +1254,17 @@ const priorRun = (root: string, repeats: unknown[], candidate: string, runId = "
   writeFileSync(join(root, "evals", "runs", runId, "summary.json"), JSON.stringify({
     runId, startedAt: "2026-09-14T00:00:00.000Z", status: "FAIL", candidate, comparatorKey: key,
     configurationHash, advisory: { failures: [], repeats } }));
+};
+/** The claude profile's key fields, held equal across the 1.10.0 model move, and the two pairs. */
+const CLAUDE_BASE = { profile: "claude", rubricCoreHash: "rubric-core-claude", harness: "claude-code-cli 2.1.280" };
+const OPUS_5 = { scenario: "claude-opus-5", judge: "claude-fable-5-1" };
+const OPUS_5_5 = { scenario: "claude-opus-5-5", judge: "claude-fable-5-1" };
+/** A committed run directory: its summary and, when given, its `inputs.json`. */
+const writeRun = (root: string, runId: string, summary: object, inputs?: object) => {
+  mkdirSync(join(root, "evals", "runs", runId), { recursive: true });
+  writeFileSync(join(root, "evals", "runs", runId, "summary.json"), JSON.stringify({
+    runId, startedAt: `2026-09-1${runId.at(-1)}T00:00:00.000Z`, status: "PASS", ...summary }));
+  if (inputs) writeFileSync(join(root, "evals", "runs", runId, "inputs.json"), JSON.stringify(inputs));
 };
 // The `.expected` slice alone (no frontmatter/Brief), for overriding a scenario object in place
 // rather than parsing a committed file — the two remaining tests exercise both shapes.
@@ -1309,6 +1324,25 @@ describe("full run admission and strict aggregation", () => {
     const result = { rows: [{ caseId: "case-1", samples: [{ grade: { advisory: [{ id: "A1", verdict: "fail" }] } }] }] };
     expect(advisoryRepeats(result, null)).toEqual({ failures: ["case-1:A1"], repeats: [] });
     expect(advisoryRepeats(result, { advisory: { failures: ["case-1:A1"] } }).repeats).toEqual(["case-1:A1"]);
+  });
+  // Inbox row 33: the driver's export records `advisory.failures` as objects
+  // (`{ caseId, sample, failed: [...] }`, as every committed claude-profile summary does), while this
+  // runner writes `caseId:criterion` strings. Compared as-is, no object ever equals a string, so a
+  // repeat against a driver-produced prior run was never found.
+  it("finds advisory repeats against a driver-shaped prior summary whose failures are objects", () => {
+    const result = { rows: [
+      { caseId: "case-1", samples: [{ grade: { advisory: [{ id: "A1", verdict: "fail" }, { id: "A2", verdict: "fail" }] } }] },
+      { caseId: "case-2", samples: [{ grade: { advisory: [{ id: "A1", verdict: "fail" }] } }] },
+    ] };
+    const driverShaped = { advisory: { failures: [
+      { caseId: "case-1", sample: 2, failed: ["A2", "A3"], citations: [] },
+      { caseId: "case-3", sample: 1, failed: ["A1"], citations: [] },
+    ] } };
+    expect(advisoryRepeats(result, driverShaped)).toEqual({
+      failures: ["case-1:A1", "case-1:A2", "case-2:A1"], repeats: ["case-1:A2"] });
+    // A string-shaped prior still reads as before, and the two shapes agree on the same repeat.
+    expect(advisoryRepeats(result, { advisory: { failures: ["case-1:A2", "case-3:A1"] } }).repeats)
+      .toEqual(["case-1:A2"]);
   });
   // The configuration carries the three comparator fields a real `loadInputs` puts in it, so the
   // runs these fixtures write are keyed the way a committed run is rather than by an empty key.
@@ -1494,6 +1528,80 @@ describe("full run admission and strict aggregation", () => {
     write("2026-09-13-run-3", { profile: "codex-astra" });
     expect(previousRun(root, FIXTURE_KEY)?.runId).toBe("2026-09-13-run-3");
     expect(previousRun(root, { ...FIXTURE_KEY, profile: "claude" })?.runId).toBeUndefined();
+  });
+
+  // REQ-PROVE-009 at 1.10.0: the model pair joins the comparator key, so a run on another pair is
+  // never a prior run — neither for composition nor for advisory repeats. Before it, the profile
+  // name, the rubric core and the harness were all equal across the claude-opus-5 → claude-opus-5-5
+  // move, and only the CLI version string inside `harness` kept the two baselines apart.
+  it("never takes a run on another model pair as the prior run, and still finds one on the same pair", () => {
+    const root = temp();
+    // The driver's shape, as runs 15–32 recorded it: no `comparatorKey` on the summary, the pair
+    // nested in `inputs.json` under `configuration.models`.
+    writeRun(root, "2026-09-11-run-1", { profile: "claude" }, { configuration: { ...CLAUDE_BASE, models: OPUS_5 } });
+    expect(previousRun(root, { ...CLAUDE_BASE, models: OPUS_5_5 })).toBeUndefined();
+    expect(previousRun(root, { ...CLAUDE_BASE, models: OPUS_5 })?.runId).toBe("2026-09-11-run-1");
+    // The judge half of the pair is compared as well.
+    expect(previousRun(root, { ...CLAUDE_BASE, models: { ...OPUS_5, judge: "claude-fable-5" } })).toBeUndefined();
+    // A later run on the new pair, recorded the way this runner records it: each pair finds its own
+    // latest run, and the later run is never the old pair's predecessor.
+    writeRun(root, "2026-09-12-run-2", { profile: "claude", comparatorKey: { ...CLAUDE_BASE, models: OPUS_5_5 } });
+    expect(previousRun(root, { ...CLAUDE_BASE, models: OPUS_5_5 })?.runId).toBe("2026-09-12-run-2");
+    expect(previousRun(root, { ...CLAUDE_BASE, models: OPUS_5 })?.runId).toBe("2026-09-11-run-1");
+  });
+  it("derives the pair from this runner's own roles as well as from a recorded models field", () => {
+    const roles = { scenario: { model: "gpt-6-astra", reasoningEffort: "high" }, judge: { model: "gpt-5.6-sol", reasoningEffort: "high" } };
+    expect(comparatorKey({ profile: "codex-astra", rubricCoreHash: "rubric-core-fixture", harness: "codex", roles, node: "v22" }))
+      .toEqual(FIXTURE_KEY);
+    expect(comparatorKey({ ...FIXTURE_KEY, node: "v22" })).toEqual(FIXTURE_KEY);
+    // Nothing recorded: the pair is null on both halves, never a guessed default.
+    expect(comparatorKey({ profile: "claude" }).models).toEqual({ scenario: null, judge: null });
+  });
+  // MODEL-PROFILES-v1.md accepts `claude-opus-5-5[1m]` as the reported variant of `claude-opus-5-5`;
+  // compared verbatim, one recorded suffix would split one pair into two baselines.
+  it("reads the accepted [1m] reporting variant as the same model, and no other model as it", () => {
+    const root = temp();
+    writeRun(root, "2026-09-11-run-1", { profile: "claude" },
+      { configuration: { ...CLAUDE_BASE, models: { ...OPUS_5_5, scenario: "claude-opus-5-5[1m]" } } });
+    expect(previousRun(root, { ...CLAUDE_BASE, models: OPUS_5_5 })?.runId).toBe("2026-09-11-run-1");
+    expect(previousRun(root, { ...CLAUDE_BASE, models: OPUS_5 })).toBeUndefined();
+    writeRun(root, "2026-09-12-run-2", { profile: "claude", comparatorKey: { ...CLAUDE_BASE, models: OPUS_5_5 } });
+    expect(previousRun(root, { ...CLAUDE_BASE, models: { ...OPUS_5_5, scenario: "claude-opus-5-5[1m]" } })?.runId)
+      .toBe("2026-09-12-run-2");
+    expect(previousRun(root, { ...CLAUDE_BASE, models: { ...OPUS_5, scenario: "claude-opus-5[1m]" } })).toBeUndefined();
+  });
+  // The end-to-end fixture above carries the driver's `models` shape; this case sends this runner's
+  // own `roles` shape through runEvaluation, so the pair it records is the one `loadInputs` builds.
+  it("records the pair from this runner's own roles on the summary a run writes", async () => {
+    const roles = { scenario: { model: "gpt-6-astra", reasoningEffort: "high" }, judge: { model: "gpt-5.6-sol", reasoningEffort: "high" } };
+    const { models: _models, ...fieldsWithoutPair } = FIXTURE_KEY;
+    const load = () => Object.assign(loaded(), { configuration: { testOnly: true, ...fieldsWithoutPair, roles } });
+    const result = await runEvaluation({ root: temp(), runId: "2026-09-10-run-1", profileName: "codex-astra", trigger: "release", load });
+    expect(result.summary.comparatorKey).toEqual(FIXTURE_KEY);
+  });
+  it("compares a historical run that recorded no model pair on the fields it did record", () => {
+    const root = temp();
+    writeRun(root, "2026-09-11-run-1", { profile: "claude" }, { configuration: { ...CLAUDE_BASE } });
+    expect(previousRun(root, { ...CLAUDE_BASE, models: OPUS_5_5 })?.runId).toBe("2026-09-11-run-1");
+    expect(previousRun(root, { ...CLAUDE_BASE, harness: "claude-code-cli 2.1.268", models: OPUS_5_5 })).toBeUndefined();
+    // A summary whose stored key predates `models` reads the pair from its own inputs.json.
+    writeRun(root, "2026-09-12-run-2", { profile: "claude", comparatorKey: { ...CLAUDE_BASE } },
+      { configuration: { ...CLAUDE_BASE, models: OPUS_5 } });
+    expect(previousRun(root, { ...CLAUDE_BASE, models: OPUS_5_5 })?.runId).toBe("2026-09-11-run-1");
+    expect(previousRun(root, { ...CLAUDE_BASE, models: OPUS_5 })?.runId).toBe("2026-09-12-run-2");
+  });
+  // Inbox row 42: a summary recording none of the key's fields used to match every key, because each
+  // null field is skipped. It now matches none: a run that says nothing about its configuration is
+  // not evidence of the same one.
+  it("matches no key when a run recorded none of the comparator fields", () => {
+    const root = temp();
+    writeRun(root, "2026-09-11-run-1", {});
+    writeRun(root, "2026-09-12-run-2", {}, {});
+    expect(previousRun(root, FIXTURE_KEY)).toBeUndefined();
+    expect(previousRun(root, { ...CLAUDE_BASE, models: OPUS_5_5 })).toBeUndefined();
+    // One recorded field is enough to be compared on it.
+    writeRun(root, "2026-09-13-run-3", { profile: "codex-astra" });
+    expect(previousRun(root, FIXTURE_KEY)?.runId).toBe("2026-09-13-run-3");
   });
 });
 

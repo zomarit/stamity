@@ -60,7 +60,12 @@ function workspace(prefix: string): string {
   return dir;
 }
 
-/** The identity edits `docs/enterprise-forks.md` prescribes, applied to one manifest. */
+/**
+ * The `package.json` half of the identity `scripts/fork-identity.mjs` sets, applied by hand to one
+ * manifest. The always-on group below keeps this hand copy because it flips `private` both ways on
+ * one tree in under a second; the opt-in group runs the script itself, which is the route
+ * `docs/enterprise-forks.md` prints.
+ */
 function renameToPrivateFork(root: string, options: { private: boolean }): void {
   const path = join(root, "package.json");
   const pkg = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
@@ -74,28 +79,6 @@ function renameToPrivateFork(root: string, options: { private: boolean }): void 
   if (options.private) pkg["private"] = true;
   else delete pkg["private"];
   writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
-}
-
-/**
- * The other two files that carry the identity as DATA rather than deriving it: the
- * Renovate presets. `docs/enterprise-forks.md` names them in the same identity step, and
- * `test/ci/releaseManifest.test.ts` derives its expectation from `package.json`, so this
- * mirrors the guide rather than working around the test.
- */
-function repointPresets(root: string): void {
-  const rewrite = (relPath: string, from: string, to: string): void => {
-    const path = join(root, relPath);
-    const text = readFileSync(path, "utf8");
-    expect(text, `${relPath} no longer carries ${from}`).toContain(from);
-    writeFileSync(path, text.replaceAll(from, to));
-  };
-  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
-    name: string;
-    repository: { url: string };
-  };
-  const slug = /github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/.exec(pkg.repository.url)?.[1] ?? "";
-  rewrite("renovate/plugins.json", "zomarit/stamity", slug);
-  rewrite("renovate/companion.json", "@zomarit/stamity", pkg.name);
 }
 
 /** Every `.ts` file under one directory, as repository-relative POSIX paths. */
@@ -219,15 +202,23 @@ describe("the identity the CLI and CI suites assert against", () => {
       // customization, and the tests that pin it, to the fork.
       "test/ci/workflow.test.ts": { route: 13, why: "the workflows' canonical repository guard and the contexts evaluated against it" },
       "test/ci/packSigningRehearsal.test.ts": { route: 4, why: "the rehearsal workflow's repository guard and its Actions environment fixture" },
+      // ADDED by plan 010, unit e1-fork-release-workflow: the fork release workflow refuses the
+      // canonical repository and the canonical package name, and its suite runs those guards
+      // with the two values they refuse. Committed workflow text, which a fork's rename leaves
+      // alone, so the suite passes unedited on a renamed checkout.
+      "test/ci/forkReleaseWorkflow.test.ts": { name: 1, route: 1, why: "the fork release workflow's canonical repository and package refusals" },
       // ── test/ci: synthetic records ──
       "test/ci/apmInstall.test.ts": { route: 1, why: "a synthetic apm.lock.yaml written into the suite's own consumer" },
       "test/ci/evidenceSummary.test.ts": { route: 2, why: "a synthetic evidence pointer's source and archive URL" },
       "test/ci/repoHygiene.test.ts": { route: 2, why: "a synthetic evidence manifest's source and archive URL" },
       // ── this file ──
-      // The Renovate presets carry the canonical route and name as DATA the guide tells a fork
-      // to rewrite, so the rewrite names what it replaces; the rest is the canonical-gated case
-      // below, which asserts the canonical identity itself.
-      "test/ci/forkIdentity.test.ts": { name: 2, route: 1, owner: 1, why: "the preset rewrite's source values and the canonical-gated self-check" },
+      // The canonical-gated case below, which asserts the canonical identity itself.
+      // TEST CHANGE, justified (plan 010, unit docs-guides): this entry was `name: 2, route: 1,
+      // owner: 1`. The two dropped literals were the source values of this file's own hand-kept
+      // preset rewrite, which the opt-in group no longer carries: it runs
+      // `scripts/fork-identity.mjs`, which reads the preset's current value instead of naming it.
+      // The count moved because the literals left the file, not because the check was relaxed.
+      "test/ci/forkIdentity.test.ts": { name: 1, owner: 1, why: "the canonical-gated self-check" },
     };
     for (const [relPath, entry] of Object.entries(deliberate)) {
       expect(entry.why.trim(), `${relPath} carries no written reason`).not.toBe("");
@@ -365,17 +356,36 @@ describe.skipIf(!FORK_SUITE)(
       // downstream fixture does.
       symlinkSync(join(REPO_ROOT, "node_modules"), join(root, "node_modules"), "junction");
 
-      renameToPrivateFork(root, { private: true });
-      repointPresets(root);
-      // The guide's own regenerate step. A downstream that skips it commits a tree whose
-      // generated files still name the upstream owner, and its gate says so.
-      for (const script of ["generate-plugin-manifests.mjs", "generate-apm-package.mjs"]) {
-        const generated = spawnSync(process.execPath, [join(root, "scripts", script)], {
-          cwd: root,
-          encoding: "utf-8",
-        });
-        expect(generated.status, `${script}\n${generated.stderr}`).toBe(0);
+      // The guide's identity step, run as the guide prints it: `scripts/fork-identity.mjs`
+      // renames the manifest, moves both Renovate presets and regenerates the plugin and APM
+      // manifests. TEST CHANGE, justified (plan 010, unit docs-guides): this group applied its own
+      // copies of those edits (a hand rename, a preset `replaceAll` and the two generators), so it
+      // proved the tree the guide USED to describe. It now proves the command the guide prints.
+      // The script refuses to rewrite a file with uncommitted edits and reads that from
+      // `git status`, so the copy becomes a repository with the three target files committed,
+      // the state a fork is in right after its import; identity and signing are forced on the
+      // command line so the machine's own git configuration cannot change the run.
+      const targets = ["package.json", "renovate/plugins.json", "renovate/companion.json"];
+      for (const args of [
+        ["init", "--quiet"],
+        ["add", "--", ...targets],
+        ["-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false",
+          "commit", "--quiet", "--no-verify", "--message", "fixture: the imported fork"],
+      ]) {
+        const step = spawnSync("git", args, { cwd: root, encoding: "utf-8" });
+        expect(step.status, `git ${args.join(" ")}\n${step.stderr}`).toBe(0);
       }
+      const renamed = spawnSync(
+        process.execPath,
+        [join(root, "scripts/fork-identity.mjs"), "--repository", `https://github.com/${FORK_OWNER}/${FORK_REPO}`],
+        { cwd: root, encoding: "utf-8" },
+      );
+      expect(renamed.status, `fork-identity.mjs\n${renamed.stdout}\n${renamed.stderr}`).toBe(0);
+      // Non-degenerate: the script moved every identity file, rather than finding them current.
+      for (const relPath of targets) expect(renamed.stdout, `${relPath} was not rewritten`).toContain(`updated ${relPath}`);
+      const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as Record<string, unknown>;
+      expect(pkg["name"]).toBe(`@${FORK_OWNER}/stamity`);
+      expect(pkg["private"]).toBe(true);
 
       const result = spawnSync(
         process.execPath,

@@ -78,6 +78,7 @@ const categories = [
       'troubleshooting',
       'workspaces',
       'packs-and-trust',
+      'enterprise-quickstart',
       'enterprise-forks',
       'security-mapping',
     ]),

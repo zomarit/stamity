@@ -21,6 +21,10 @@
 //   <out>/…zip.sha256               `<hex>  <name>`, the line `sha256sum -c` reads.
 //   <out>/release.json              the machine-readable manifest, validated before it is
 //                                   written (`scripts/plugins/releaseManifest.mjs`).
+//   <out>/admin/claude-managed-settings.json   the Claude Code managed-settings template an
+//                                   organization's admin installs, rendered from the same
+//                                   identity at the release tag (`scripts/plugins/managed-settings.mjs`);
+//                                   written only when Claude is among the built clients.
 //   <out>/README.md                 install, pin, update and rollback per client, the APM
 //                                   install spec, and the two bounds a mirror has to know.
 //
@@ -52,6 +56,7 @@ import { fileURLToPath } from 'node:url'
 import { DISTRIBUTION_CLIENTS, resolveDistributionIdentity } from './distribution-identity.mjs'
 import { isMain } from './native-typescript.mjs'
 import { buildCatalogIdentity, CATALOG_PATHS, releaseTag, renderCatalog } from './plugins/catalogs.mjs'
+import { renderClaudeManagedSettings } from './plugins/managed-settings.mjs'
 import { buildReleaseManifest, validateReleaseManifest } from './plugins/releaseManifest.mjs'
 import { PLUGIN_VERSION } from './plugins/version.mjs'
 import { buildZip } from './plugins/zip.mjs'
@@ -68,6 +73,8 @@ const COMMIT_SHA = /^[0-9a-f]{40}$/
 const RELEASE_MANIFEST = 'release.json'
 const APM_MANIFEST = 'apm.yml'
 const APM_PRIMITIVES = '.apm'
+/** The admin template's place in the tree, beside the catalogs rather than inside a client root. */
+const CLAUDE_MANAGED_SETTINGS = 'admin/claude-managed-settings.json'
 
 function usage(problem) {
   console.error(`${problem}\n${USAGE}`)
@@ -230,11 +237,16 @@ function writeDocument(path, contents) {
  * plugin install, update or rollback subcommand at all, so its section is the dashboard route
  * and the mirror branch, which is what an operator actually does there.
  */
-function clientRoutes(slug, tag, branch) {
+function clientRoutes(slug, tag, branch, previous) {
   return {
     claude: {
       title: 'Claude Code',
       install: [`claude plugin marketplace add ${slug}#${branch}`, 'claude plugin install stamity@stamity --scope project'],
+      // Printed only in this section, and the section exists only when Claude was built — the
+      // same condition under which `build` writes the file this line names.
+      installNote:
+        "An organization can roll this plugin out through Claude Code's managed settings: " +
+        `${CLAUDE_MANAGED_SETTINGS} (see the fork guide, "Roll the plugin out to your organization").`,
       pin: [`claude plugin marketplace add ${slug}#${tag}`],
       // `@stamity --scope project` is not decoration: `plugin update` defaults to user scope, and
       // MEASURED on Claude Code 2.1.278 the bare form refuses a project-scope install with
@@ -248,7 +260,7 @@ function clientRoutes(slug, tag, branch) {
       // documented commands leave the recorded version where it was, and the third — the command
       // the CLI's own message names — is what re-records it (`updateOutcome: "updated"`).
       rollback: [
-        `claude plugin marketplace add ${slug}#plugins/v<previous>`,
+        `claude plugin marketplace add ${slug}#${previous}`,
         'claude plugin install stamity@stamity --scope project',
         'claude plugin update stamity@stamity --scope project',
       ],
@@ -268,7 +280,7 @@ function clientRoutes(slug, tag, branch) {
       ],
       pin: [`git push <mirror> ${tag}^{commit}:refs/heads/${branch}`],
       update: ['# the re-index runs at most once every 10 minutes, batching rapid pushes'],
-      rollback: [`git push --force <mirror> plugins/v<previous>^{commit}:refs/heads/${branch}`],
+      rollback: [`git push --force <mirror> ${previous}^{commit}:refs/heads/${branch}`],
       note:
         'Cursor documents no plugin install, update, rollback or uninstall subcommand. A team ' +
         'marketplace is added through Dashboard → Plugins & MCPs → Team Marketplaces → Add ' +
@@ -285,7 +297,7 @@ function clientRoutes(slug, tag, branch) {
       ],
       pin: [`copilot plugin marketplace add ${slug}#${tag}`],
       update: ['copilot plugin update stamity'],
-      rollback: ['copilot plugin uninstall stamity', `copilot plugin marketplace add ${slug}#plugins/v<previous>`, 'copilot plugin install stamity@stamity'],
+      rollback: ['copilot plugin uninstall stamity', `copilot plugin marketplace add ${slug}#${previous}`, 'copilot plugin install stamity@stamity'],
       note:
         'Installed plugins are cached: a local plugin has to be reinstalled to pick up a change, and ' +
         '`COPILOT_AUTO_UPDATE=false` turns off the CLI\'s own updates.',
@@ -299,23 +311,22 @@ function clientRoutes(slug, tag, branch) {
       // with "plugin requires --marketplace unless passed as <plugin>@<marketplace>" (the lifecycle
       // walk, 2026-09-20) — and purges that version's local cache, so the marketplace re-added at
       // the previous tag installs nothing until `plugin add` runs again. The marketplace itself is
-      // removed before the re-add: the walk re-added a LOCAL directory and the client answered
-      // "already added", and for a git marketplace already on record that answer may leave the ref
-      // where it was; `codex plugin marketplace --help` on 0.155.1 (read 2026-09-22) lists `remove`.
+      // removed before the re-add: a git marketplace already on record is not re-pointed in place —
+      // the E3 walk's C7g (`.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md`, 0.155.1,
+      // 2026-09-24) re-added it at another tag and was refused, the recorded ref unchanged.
       rollback: [
         'codex plugin remove stamity@stamity',
         'codex plugin marketplace remove stamity',
-        `codex plugin marketplace add ${slug} --ref plugins/v<previous>`,
+        `codex plugin marketplace add ${slug} --ref ${previous}`,
         'codex plugin add stamity@stamity',
       ],
       note:
         'An entry in a marketplace file installs nothing on its own — the two install commands above ' +
         'are both needed, and the same `plugin add` closes the rollback because `plugin remove` purges ' +
-        'the local cache. The marketplace is removed before it is re-added at the previous tag: ' +
-        '`codex plugin marketplace --help` on 0.155.1 (read 2026-09-22) lists `remove`, and the walk ' +
-        'measured only a local marketplace re-added in place ("already added"), so the re-point of a ' +
-        'git marketplace already on record is unmeasured and removing it first is the route this page ' +
-        'can stand behind. Plugin hooks additionally need `features.hooks = true`, project trust, and a ' +
+        'the local cache. The marketplace is removed before it is re-added at the previous tag because a ' +
+        'git marketplace already on record is not re-pointed in place: the re-add at another ref answers ' +
+        '"already added from a different source" and leaves the recorded ref where it was (codex-cli ' +
+        '0.155.1, measured 2026-09-24). Plugin hooks additionally need `features.hooks = true`, project trust, and a ' +
         'per-hook trust review before any of them runs.',
     },
   }
@@ -328,7 +339,12 @@ function block(lines) {
 
 /** `<out>/README.md` — what a person who just mirrored this tree needs to read. */
 function renderReadme({ identity, version, sourceCommit, sourceCommitDate, tag, clients, packages }) {
-  const routes = clientRoutes(identity.slug, tag, identity.distribution.branch)
+  const routes = clientRoutes(
+    identity.slug,
+    tag,
+    identity.distribution.branch,
+    identity.distribution.tagPattern.replaceAll('<version>', '<previous>'),
+  )
   const sections = clients.map((client) => {
     const route = routes[client]
     return [
@@ -339,6 +355,7 @@ function renderReadme({ identity, version, sourceCommit, sourceCommitDate, tag, 
       '### Install',
       '',
       block(route.install),
+      ...(route.installNote === undefined ? [] : ['', route.installNote]),
       '',
       '### Pin',
       '',
@@ -403,10 +420,10 @@ An organization that cannot fetch from the public repository mirrors this tree i
 re-deriving it:
 
 \`\`\`sh
-git init dist && cd dist && git switch --orphan plugin-dist
+git init dist && cd dist && git switch --orphan ${identity.distribution.branch}
 cp -R <this tree>/. . && git add -A -f && git commit -m 'plugins: v${version}'
 git tag ${tag}
-git push <your remote> plugin-dist ${tag}
+git push <your remote> ${identity.distribution.branch} ${tag}
 \`\`\`
 
 \`-f\` is load-bearing, not tidiness: a dependency inside the bundled runtime may ship a
@@ -539,6 +556,17 @@ function build(parsed) {
     })
     writeDocument(join(outDir, ...CATALOG_PATHS[client].split('/')), jsonDocument(catalog))
     catalogs[client] = CATALOG_PATHS[client]
+  }
+
+  // ── the admin template ───────────────────────────────────────────
+  // Pinned to the release TAG, the ref an admin rolls out and the one the allowlist must match
+  // exactly; an admin who prefers the branch edits the declared source and the allowlist entry
+  // together, or the client admits neither.
+  if (clients.includes('claude')) {
+    writeDocument(
+      join(outDir, ...CLAUDE_MANAGED_SETTINGS.split('/')),
+      jsonDocument(renderClaudeManagedSettings(identity, { ref: tag })),
+    )
   }
 
   // ── the manifest ─────────────────────────────────────────────────

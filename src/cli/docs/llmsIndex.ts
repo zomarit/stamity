@@ -12,7 +12,7 @@
  * constants their renderers export, so a page cannot be generated without
  * being listed here, or listed here without something generating it. Only the
  * hand-written pages — the five root pages (README, CONTRIBUTING, SECURITY,
- * GOVERNANCE, CODE_OF_CONDUCT) and the eleven guides under `docs/` — and the
+ * GOVERNANCE, CODE_OF_CONDUCT) and the twelve guides under `docs/` — and the
  * charter are named literally, because nothing generates them to be read from.
  * The guides are held to the same dated hand-page contract as three of those
  * root pages — README, SECURITY, CONTRIBUTING — by `test/docsPages.test.ts`,
@@ -209,10 +209,18 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         regenerateCommand: null,
       },
       {
+        // Directly before the fork guide it routes into, as the sidebar and README's map put it.
+        path: "docs/enterprise-quickstart.md",
+        title: "Enterprise quickstart",
+        description:
+          "the enterprise route in order — who does what, day 0 the fork, day 1 the release and the rollout, day 2 the updates — with each step linked to the guide section that has its commands.",
+        regenerateCommand: null,
+      },
+      {
         path: "docs/enterprise-forks.md",
         title: "Enterprise forks",
         description:
-          "taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, the gates that decide, landing, the fork layer, and the opt-in workflow.",
+          "taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, the gates that decide, landing, the fork layer, releasing the fork through its own workflow, rolling the plugin out to an organization with managed settings, and the opt-in update workflow.",
         regenerateCommand: null,
       },
       {

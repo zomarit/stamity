@@ -139,7 +139,7 @@ describe("the oracle patches", () => {
     const fixed = seededTree();
     applyPatch(fixed, FIXES_PATCH);
     expect(statuses(runOracles(fixed, { seeds: STATIC }) as Run)).toEqual(Object.fromEntries(STATIC.map((seed) => [seed.id, "pass"])));
-  });
+  }, 60_000); // 21.1 s on main's Windows leg (run 35981189856, attempt 1) against the 20 s default; 9.2-14.5 s on the nine rounds before
 });
 
 // ---------------------------------------------------------------------------------------------

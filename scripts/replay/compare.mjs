@@ -1,7 +1,10 @@
 // The replay's comparison (REPLAY-v1 §10, §12, §14; C12): the baseline shape's scored summaries
 // against the changed shape's, one verdict per §12 row and the merge gate. `score.mjs compare`
 // reads the summaries and the protocol, calls `compare`, and writes `renderComparison`'s text to
-// `evals/replay/COMPARISON-v1.md` — the verdict of record each run's RESULTS.md defers to.
+// the protocol's comparison (`evals/replay/COMPARISON-v1.md` or `-v2.md`, `PROTOCOLS`) — the
+// verdict of record each run's RESULTS.md defers to. The header names the protocol the summaries
+// record. This file imports nothing from `score.mjs` (`build/273`): the summary check comes from
+// `summary.mjs` and the shared rules from `protocols.mjs`.
 //
 // Every summary is held to r8a's `validateSummary` before a row is computed, and the thresholds
 // are the ones `parseThresholds` read from the protocol's one `replay-thresholds` block; nothing
@@ -17,14 +20,17 @@
 //   - a security seed the implementer removed counts as found (r8a's `securityHeld`);
 //   - the ambient lists (§3, build/250): a scored run whose lists differ from its shape's pilot is
 //     an invalid run, counted and replaced like any other; a shape given no pilot cannot be
-//     checked, so every row it feeds is NOT-EVALUATED and the merge gate fails.
+//     checked, so every row it feeds is NOT-EVALUATED and the merge gate fails;
+//   - a shape given no scored run at all (a runs folder before its first scored run) has no sample
+//     to refuse: every row it feeds is NOT-EVALUATED and the merge gate fails.
 
 import { PASS_IDS } from './fixture.mjs'
-import { MAX_REPLACEMENTS_PER_SHAPE, ROW_IDS, median, securityHeld, validateSummary } from './score.mjs'
+import { MAX_REPLACEMENTS_PER_SHAPE, PROTOCOLS, ROW_IDS, median, protocolNames, securityHeld } from './protocols.mjs'
+import { validateSummary } from './summary.mjs'
 
-export const COMPARISON_FILE = 'COMPARISON-v1.md'
-/** Where §11 places the comparison, the path the leak gate reads it under once committed. */
-export const COMPARISON_PATH = `evals/replay/${COMPARISON_FILE}`
+/** v1's comparison path, kept for importers; the commands read each version's from `PROTOCOLS`. */
+export const COMPARISON_PATH = PROTOCOLS.v1.comparison
+export const COMPARISON_FILE = COMPARISON_PATH.slice(COMPARISON_PATH.lastIndexOf('/') + 1)
 const SHAPES = ['baseline', 'changed']
 
 /** The shapes whose runs feed each row: the loss rule reads the changed shape's samples only. */
@@ -87,6 +93,7 @@ function checkInputs(lists, pilots) {
  * past them the shape is `exhausted` and the rows it feeds are not evaluated.
  */
 function sampleOf(shape, runs, t) {
+  if (runs.length === 0) return { shape, runs: [], invalid: [], required: t.scoredRunsPerShape, spread: null, variance: false, exhausted: false, empty: true }
   const ordered = runs.toSorted(byRunId)
   const valid = ordered.filter((s) => s.invalid.length === 0)
   const invalid = ordered.filter((s) => s.invalid.length > 0)
@@ -104,7 +111,7 @@ function sampleOf(shape, runs, t) {
     }
     throw new Error(`${shape}: ${valid.length} valid scored runs, the sample is ${required} (§10): a scored run beyond the sample is not read, so none is chosen`)
   }
-  return { shape, runs: valid, invalid, required, spread, variance, exhausted }
+  return { shape, runs: valid, invalid, required, spread, variance, exhausted, empty: false }
 }
 
 /** The five ambient lists of a summary, one comparable string each (`measure.mjs` sorts every list). */
@@ -304,10 +311,11 @@ const COMPUTE = {
 /**
  * The comparison of the baseline shape's scored summaries with the changed shape's, under the
  * thresholds `parseThresholds` read. `pilots` (`{ baseline?, changed? }`) are validated and named
- * in the head, never scored. Returns `{ rows, mergeGate, sampleCount, head }`; throws on any input
- * §10 or the protocol refuses.
+ * in the head, never scored. `options.protocol` (`{ path, sha256 }`) names the protocol in the head
+ * when no summary is given to read it from. Returns `{ rows, mergeGate, sampleCount, head }`;
+ * throws on any input §10 or the protocol refuses.
  */
-export function compare(baseline, changed, thresholds, pilots = {}) {
+export function compare(baseline, changed, thresholds, pilots = {}, options = {}) {
   const t = thresholds
   const p = pilots ?? {}
   const all = checkInputs({ baseline, changed }, p)
@@ -319,10 +327,12 @@ export function compare(baseline, changed, thresholds, pilots = {}) {
   const rows = ROW_IDS.map((id) => {
     const rule = ruleOf[id]
     if (id === 'eval-set-floors') return { id, rule, baseline: 'not measured by the replay', changed: 'not measured by the replay', verdict: 'CARRIED', reason: 'carried to session 2' }
+    const empty = FED_BY[id].map((shape) => samples[shape]).filter((x) => x.empty)
     const spent = FED_BY[id].map((shape) => samples[shape]).filter((x) => x.exhausted)
     const unchecked = FED_BY[id].filter((shape) => p[shape] == null)
-    if (spent.length > 0 || unchecked.length > 0) {
+    if (empty.length > 0 || spent.length > 0 || unchecked.length > 0) {
       const reason = [
+        ...empty.map((x) => `no ${x.shape} scored run given`),
         ...spent.map((x) => `${x.shape}: ${x.invalid.length} invalid runs, over the ${MAX_REPLACEMENTS_PER_SHAPE} replacements §10 allows per shape`),
         ...unchecked.map((shape) => `no ${shape} pilot supplied: its scored runs' ambient lists (§3) cannot be checked`),
       ].join('; ')
@@ -333,13 +343,14 @@ export function compare(baseline, changed, thresholds, pilots = {}) {
   const mergeGate = rows.every((r) => r.verdict === 'PASS' || r.verdict === 'CARRIED') ? 'PASS' : 'FAIL'
   const perShape = (f) => Object.fromEntries(SHAPES.map((shape) => [shape, f(samples[shape])]))
   const first = all[0]
+  const protocol = first ? { path: first.protocol.path, sha256: first.protocol.sha256 } : options?.protocol ?? null
   return {
     rows,
     mergeGate,
     sampleCount: { required: perShape((x) => x.required), got: perShape((x) => x.runs.length), invalid: perShape((x) => x.invalid.length) },
     head: {
-      protocol: { path: first.protocol.path, sha256: first.protocol.sha256 },
-      instrumentCommit: first.instrument.commit,
+      protocol: protocol === null ? null : { path: protocol.path, sha256: protocol.sha256 },
+      instrumentCommit: first?.instrument.commit ?? null,
       mechanisms: perShape((x) => [...new Set(x.runs.map((s) => s.mechanism))].toSorted()),
       pilots: Object.fromEntries(SHAPES.map((shape) => [shape, p[shape]?.runId ?? null])),
       runs: perShape((x) => x.runs.map((s) => ({ runId: s.runId, found: s.totals.recall.found, denominator: s.totals.recall.denominator }))),
@@ -349,23 +360,26 @@ export function compare(baseline, changed, thresholds, pilots = {}) {
   }
 }
 
-// ---------- COMPARISON-v1.md ----------
+// ---------- COMPARISON-v1.md, COMPARISON-v2.md ----------
 
 /**
- * COMPARISON-v1.md: the head (protocol sha, instrument commit, mechanism, pilots, samples), the
- * ten §12 rows, `Merge gate: PASS|FAIL`, "No threshold moved." and `Not done:`.
+ * The comparison file: the head (protocol sha, instrument commit, mechanism, pilots, samples), the
+ * ten §12 rows, `Merge gate: PASS|FAIL`, "No threshold moved." and `Not done:`. Its title and
+ * protocol line name the protocol the head records (`protocolNames`: v1's for a path no version
+ * commits).
  */
 export function renderComparison(result, thresholds) {
   const t = thresholds
   const h = result.head
   const lines = []
   const push = (...xs) => lines.push(...xs)
-  push('# Replay comparison — `COMPARISON-v1`', '')
-  push('The changed shape against the 1.9.1 baseline under REPLAY-v1, one verdict per §12 row. This file is the verdict of record; each run\'s RESULTS.md defers to it.', '')
+  const names = protocolNames(h.protocol?.path)
+  push(`# Replay comparison — \`${names.comparison}\``, '')
+  push(`The changed shape against the 1.9.1 baseline under ${names.protocol}, one verdict per §12 row. This file is the verdict of record; each run's RESULTS.md defers to it.`, '')
   const pilots = SHAPES.filter((shape) => h.pilots[shape] !== null).map((shape) => `${shape} \`${h.pilots[shape]}\``)
   push(
-    `- Protocol: REPLAY-v1 (\`${h.protocol.path}\`), sha256 \`${h.protocol.sha256}\`.`,
-    `- Instrument: commit \`${h.instrumentCommit}\`.`,
+    h.protocol === null ? `- Protocol: ${names.protocol}, none read.` : `- Protocol: ${names.protocol} (\`${h.protocol.path}\`), sha256 \`${h.protocol.sha256}\`.`,
+    h.instrumentCommit === null ? '- Instrument: no run read.' : `- Instrument: commit \`${h.instrumentCommit}\`.`,
     `- Compaction mechanism (§7): ${SHAPES.map((shape) => `${shape} ${h.mechanisms[shape].map((m) => `\`${m}\``).join(', ') || 'none read'}`).join('; ')}.`,
     `- Pilots (not scored): ${pilots.length > 0 ? pilots.join(', ') : 'none supplied'}.`,
   )

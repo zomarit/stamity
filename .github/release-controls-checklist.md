@@ -231,3 +231,5 @@ records into `evals/measurements/merge-ready-<date>.json`, then `node scripts/ge
 measurements` re-renders `docs/measurements.md` from it; both are committed before the tag. A run record
 written after the snapshot is not on the page until the next refresh, which is the page's own contract.
 (Added 2026-09-15, with the page.)
+
+A sixth line rides the cut, before the tag: `node scripts/hook-latency.mjs` exits 0 on a quiet machine, and its table goes into the release record (REQ-CTX-016; local only, never in CI; added 2026-09-26).

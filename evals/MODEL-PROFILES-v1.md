@@ -7,7 +7,7 @@ No profile starts a model call or changes Stamity's product-level `models.pins` 
 
 | Profile | Model under test | Judge | Rubric |
 |---|---|---|---|
-| `claude` (default) | `claude-opus-5` | `claude-fable-5-1` | `rubric-v7.md` |
+| `claude` (default) | `claude-opus-5-5` | `claude-fable-5-1` | `rubric-v7.md` |
 | `codex-astra` | `gpt-6-astra` | `gpt-5.6-sol` | `rubric-v7.md` |
 | `codex-astra-judge` | `gpt-5.6-sol` | `gpt-6-astra` | `rubric-v7.md` |
 
@@ -16,7 +16,10 @@ or select `codex-astra-judge` to have Astra grade Sol. With no profile named, `c
 remains the default, and it selects `rubric-v7.md`, the rubric the maintainer's recorded
 decision moved that default to. A Codex session does not silently select a Codex profile:
 the harness checks the selected profile's availability before spending calls. Both Codex
-roles declare `high` reasoning effort. A null effort on the Claude profile means the harness default;
+roles declare `high` reasoning effort. The Claude scenario declares `high` as well, which the run's
+driver sends as the client's explicit `--effort high`, because runs 15-32 measured the scenario at
+high (`claude-opus-5`'s client default) and `claude-opus-5-5`'s client default is medium (the
+maintainer's answer of 2026-09-26). The Claude judge's null effort means the harness default;
 it does not claim a controllable or known effort value.
 
 ## Selection and isolation
@@ -26,8 +29,8 @@ unknown profile, unavailable exact model or effort setting, or identical scenari
 model blocks the run with the unmet requirement named. A context-window suffix does not
 make one model two different models. Never use a tier alias, change one role ad hoc, or fall
 back to another profile. New pairs are declared in a reviewed profile document before a run.
-The legacy scenario's reported `claude-opus-5[1m]` is the one accepted reporting variant of
-`claude-opus-5`, preserving the existing run contract; record the suffix verbatim. No other
+The scenario's reported `claude-opus-5-5[1m]` is the one accepted reporting variant of
+`claude-opus-5-5`, preserving the existing run contract; record the suffix verbatim. No other
 suffix or substitution is implicitly accepted. Codex model reports must match the selected
 exact ID, including `gpt-6-astra` or `gpt-5.6-sol`, without normalization.
 

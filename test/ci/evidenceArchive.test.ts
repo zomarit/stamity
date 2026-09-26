@@ -157,7 +157,7 @@ describe("retained evidence archives", () => {
     ok(runWithWindowsStat("stable", "restore", "--archive", f.archive, "--manifest", f.manifest, "--destination", destination));
     expect(readFileSync(join(destination, "runs/closed/input.txt"), "utf8")).toBe("Original prompt.\n");
     expect(readFileSync(join(destination, "runs/closed/nested/output.bin"))).toEqual(Buffer.from([0, 255, 4, 128, 10]));
-  });
+  }, 60_000); // 23.7 s on the same Windows leg; pre-existing
 
   it.each(["different-file", "ctime-change"])("still rejects %s with Windows stat API differences", (behavior) => {
     const f = fixture();

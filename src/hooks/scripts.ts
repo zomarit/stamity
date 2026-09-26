@@ -105,6 +105,39 @@ const TAMPER_NOTICE_FILE = "stamity-config-tamper-notice.mjs";
  */
 export const REVIEW_GATE_FILE = "stamity-review-gate.mjs";
 
+/**
+ * Byte and line ceilings on each emitted core script, keyed by file name
+ * (REQ-CTX-016). A client parses the whole script on every session start or
+ * every tool call, so growth here is paid per call; the ceiling turns that
+ * growth into a reviewed edit of this table rather than drift nobody saw.
+ *
+ * `test/hooks/scriptBudget.test.ts` renders every script for every client in
+ * both the generated layout and a plugin root, and holds the larger render to
+ * its row. Lines count `\n` only, so CRLF and LF count alike. A row moves with
+ * the reason it moved, stated beside it; raising a ceiling because a script
+ * grew into it is how the ceiling stops meaning anything.
+ *
+ * The guard and session-start rows are the plan's fixed ceilings. The review
+ * gate and the tamper notice are their measured size times 1.25, bytes rounded
+ * up to a multiple of 1,024 and lines to a multiple of 10.
+ */
+export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: number; readonly lines: number }>> = {
+  // Fixed ceiling. Measured 2026-09-26 at 8c08660e: 19,125 bytes / 475 lines
+  // (the identity-bearing claude guard, generated layout).
+  [GUARD_FILE]: { bytes: 24_576, lines: 600 },
+  // Fixed ceiling. Measured 2026-09-26 at 8c08660e: 40,914 bytes / 917 lines
+  // (generated layout; a plugin root renders 40,195 / 896).
+  [SESSION_START_FILE]: { bytes: 49_152, lines: 1_100 },
+  // Measured 2026-09-24 and again 2026-09-26 at 8c08660e: 40,740 bytes / 891
+  // lines (claude, generated layout, the default cap of 4; the cap of 10 adds
+  // 2 bytes). × 1.25 = 50,925 / 1,113.75, rounded up to 51,200 / 1,120.
+  [REVIEW_GATE_FILE]: { bytes: 51_200, lines: 1_120 },
+  // Measured 2026-09-24 and again 2026-09-26 at 8c08660e: 2,383 bytes / 67
+  // lines, the same in both layouts. × 1.25 = 2,978.75 / 83.75, rounded up to
+  // 3,072 / 90.
+  [TAMPER_NOTICE_FILE]: { bytes: 3_072, lines: 90 },
+};
+
 /** One generated script, ready for an adapter to place and register. */
 export interface GeneratedHookScript {
   /** Bare file name; the directory is emission's choice. */

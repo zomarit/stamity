@@ -1,0 +1,109 @@
+diff --git a/src/orders/handlers.ts b/src/orders/handlers.ts
+index cd9c0e4a77b954c7b7791a4376b9c63ae45185a4..3bf9b959e6b0271ab8fa2dd462ad9fa0aa4307d3 100644
+--- a/src/orders/handlers.ts
++++ b/src/orders/handlers.ts
+@@ -1,5 +1,6 @@
+ import type { Handler, Reply } from "../http/router.ts";
+ import type { OrderRow } from "../store/db.ts";
++import { pageOffset } from "../store/paging.ts";
+ import { getOrder, listOrders } from "../store/query.ts";
+ 
+ /** An order on the wire: exactly the five documented keys (docs/api.md, Orders). */
+@@ -24,7 +25,7 @@ function parsePositive(raw: string): number | null {
+   return Number.isSafeInteger(value) ? value : null;
+ }
+ 
+-/** `GET /orders`: the newest orders first, `size` of them. */
++/** `GET /orders`: the orders by `sort` (newest first by default), `size` of them, from `page` on. */
+ export const listHandler: Handler = (ctx, deps) => {
+   const { pageSizeDefault, maxPageSize } = deps.config;
+   const rawSize = ctx.query.get("size");
+@@ -36,7 +37,15 @@ export const listHandler: Handler = (ctx, deps) => {
+     }
+     size = parsed;
+   }
+-  const rows = listOrders(deps.db, { size });
++  const rawPage = ctx.query.get("page");
++  let offset = 0;
++  if (rawPage !== null) {
++    const page = parsePositive(rawPage);
++    if (page === null) return badRequest("page must be a positive integer");
++    offset = pageOffset(page, size);
++  }
++  const sort = ctx.query.get("sort") ?? "created_at";
++  const rows = listOrders(deps.db, { size, sort, offset });
+   return { status: 200, body: { orders: rows.map(toWire) } };
+ };
+ 
+diff --git a/src/store/paging.ts b/src/store/paging.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..59c112198ba5ed7f9d53c1562e174798cdb58c57
+--- /dev/null
++++ b/src/store/paging.ts
+@@ -0,0 +1,7 @@
++/**
++ * How many rows come before page `page` when every page holds `size` rows; pages are 1-based
++ * (docs/api.md, Paging).
++ */
++export function pageOffset(page: number, size: number): number {
++  return (page - 1) * size;
++}
+diff --git a/src/store/query.ts b/src/store/query.ts
+index 0fe57127c679cee1218d5210f33376927d238751..d6c04b4f7224360f0d18ab1b9fc8fae2d7fad810 100644
+--- a/src/store/query.ts
++++ b/src/store/query.ts
+@@ -4,12 +4,17 @@ import type { OrderRow } from "./db.ts";
+ export interface ListOptions {
+   /** How many orders to return, already validated against the configured maximum. */
+   size: number;
++  /** The column to order by, largest first; `created_at` (newest first) when absent. */
++  sort?: string;
++  /** How many rows to skip before the first one returned. */
++  offset?: number;
+ }
+ 
+-/** The newest orders first, at most `size` of them. */
+-export function listOrders(db: DatabaseSync, { size }: ListOptions): OrderRow[] {
+-  const sql = "SELECT id, customer, total_cents, status, created_at FROM orders ORDER BY created_at DESC LIMIT ?";
+-  return db.prepare(sql).all(size) as OrderRow[];
++/** The orders by `sort`, largest first, at most `size` of them after the first `offset`. */
++export function listOrders(db: DatabaseSync, { size, sort = "created_at", offset = 0 }: ListOptions): OrderRow[] {
++  const column = ["id", "customer", "total_cents", "status", "created_at"].includes(sort) ? sort : "created_at";
++  const sql = `SELECT id, customer, total_cents, status, created_at FROM orders ORDER BY ${column} DESC LIMIT ? OFFSET ?`;
++  return db.prepare(sql).all(size, offset) as OrderRow[];
+ }
+ 
+ /** One order by id, or `undefined` when there is none. */
+diff --git a/test/paging.test.ts b/test/paging.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..1eabade96e09d595b6036d62b1bc54bd26c55e91
+--- /dev/null
++++ b/test/paging.test.ts
+@@ -0,0 +1,8 @@
++import { describe, expect, it } from "vitest";
++import { pageOffset } from "../src/store/paging.ts";
++
++describe("pageOffset", () => {
++  it("moves forward one page at a time", () => {
++    expect(pageOffset(2, 10)).toBeGreaterThan(pageOffset(1, 10));
++  });
++});
+diff --git a/test/query.test.ts b/test/query.test.ts
+index 6f54e9592600ec753342506e3202b2eca0743e9d..94cefa655794ce3bcaa95af14481098dabd99413 100644
+--- a/test/query.test.ts
++++ b/test/query.test.ts
+@@ -17,6 +17,14 @@ describe("listOrders", () => {
+     expect(listOrders(db, { size: 2 }).map((row) => row.customer)).toEqual(["Bo", "Cy"]);
+     expect(listOrders(db, { size: 10 })).toHaveLength(3);
+   });
++
++  it("orders by another column on request", () => {
++    expect(listOrders(db, { size: 3, sort: "total_cents" }).map((row) => row.customer)).toEqual(["Ada", "Bo", "Cy"]);
++  });
++
++  it("skips the first offset rows", () => {
++    expect(listOrders(db, { size: 2, offset: 1 }).map((row) => row.customer)).toEqual(["Cy", "Ada"]);
++  });
+ });
+ 
+ describe("getOrder", () => {

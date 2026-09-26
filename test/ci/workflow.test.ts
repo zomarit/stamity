@@ -3753,7 +3753,15 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
     // The property, now actually stated over the whole directory: if the string can only appear
     // in a job that a dry run cannot reach, a dry run cannot publish.
     const publishing = ALL_STEPS.filter(([, , step]) => /\bnpm publish\b/.test(step.run ?? ""));
-    expect(publishing.map(([file, job]) => `${file}:${job}`)).toEqual(["release.yml:publish"]);
+    // TEST CHANGE, justified (plan 010, unit e1-fork-release-workflow): a fork's own release path
+    // publishes its CLI from `fork-release.yml:publish`. That job's condition denies a dry run in
+    // release.yml's `format()` spelling and requires the probe's `armed` answer, which the
+    // canonical repository never gives; both are evaluated over every trigger shape in
+    // test/ci/forkReleaseWorkflow.test.ts. Any third job still fails this closed list.
+    expect(publishing.map(([file, job]) => `${file}:${job}`)).toEqual([
+      "fork-release.yml:publish",
+      "release.yml:publish",
+    ]);
   });
 
   it("hands OIDC only to the named deployment and nonpublishing signing jobs", () => {
@@ -3796,14 +3804,40 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
         ([file, id, step]) => [`${file}:${id} (step env)`, step.env] as const,
       ),
     ];
+    // TEST CHANGE, justified (plan 010, unit e1-fork-release-workflow): a fork publishes to its
+    // own registry, where no OIDC trusted publisher exists, so its publish step authenticates
+    // through `NODE_AUTH_TOKEN` — the per-run token for GitHub Packages, the fork's
+    // STAMITY_REGISTRY_TOKEN secret otherwise. Exactly one scope is admitted: that step's env, in
+    // `fork-release.yml`'s publish job, which checks nothing out. Every other scope, and every
+    // other forbidden name everywhere, still fails.
+    const FORK_PUBLISH_STEP = "fork-release.yml:publish (step env)";
+    let admitted = 0;
     for (const [where, env] of scopes) {
       for (const key of Object.keys(env ?? {})) {
+        if (where === FORK_PUBLISH_STEP && key === "NODE_AUTH_TOKEN") {
+          admitted += 1;
+          continue;
+        }
         expect(FORBIDDEN.has(key), `${where} declares ${key}`).toBe(false);
       }
     }
+    expect(admitted, "the fork publish step's credential, and no second copy of it").toBe(1);
     // And the bytes, because a credential can also arrive as a `with:` input or a `run:` line.
     for (const { file, source } of ALL_WORKFLOWS) {
-      expect(source, file).not.toMatch(/NODE_AUTH_TOKEN|NPM_TOKEN|secrets\.NPM/);
+      expect(source, file).not.toMatch(/NPM_TOKEN|secrets\.NPM/);
+      if (file !== "fork-release.yml") {
+        expect(source, file).not.toMatch(/NODE_AUTH_TOKEN/);
+        continue;
+      }
+      // In the fork file the name appears only in the admitted step: its env key and the one
+      // emptiness check its script makes.
+      const holder = ALL_STEPS.find(
+        ([stepFile, job, step]) =>
+          stepFile === file && job === "publish" && step.env?.["NODE_AUTH_TOKEN"] !== undefined,
+      )?.[2];
+      expect(holder, "the fork publish step must hold the credential it is admitted for").toBeDefined();
+      const inStep = 1 + ((holder?.run ?? "").match(/NODE_AUTH_TOKEN/g)?.length ?? 0);
+      expect(source.match(/NODE_AUTH_TOKEN/g)?.length ?? 0, file).toBe(inStep);
     }
   });
 
@@ -3823,6 +3857,10 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
     // let the pull request's own CI start without the approval prompt — both limits of the
     // per-run token, which `upstream-update.yml`'s header states. Its holder is the one job
     // `test/ci/upstreamWorkflow.test.ts` pins.
+    // ADDED by plan 010, unit e1-fork-release-workflow: STAMITY_REGISTRY_TOKEN is a fork's
+    // credential for a registry other than GitHub Packages, read by `fork-release.yml`'s publish
+    // job alone and absent here by design (this repository publishes through OIDC in
+    // release.yml). test/ci/forkReleaseWorkflow.test.ts pins its one holder.
     const referenced = new Set(
       ALL_WORKFLOWS.flatMap(({ source }) =>
         [...source.matchAll(/secrets\.([A-Z_][A-Z0-9_]*)/g)].map((match) => match[1] ?? ""),
@@ -3834,6 +3872,7 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
       "COPILOT_GITHUB_TOKEN",
       "CURSOR_API_KEY",
       "GITHUB_TOKEN",
+      "STAMITY_REGISTRY_TOKEN",
       "STAMITY_UPSTREAM_TOKEN",
     ]);
   });
@@ -3879,11 +3918,17 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
     // The reviewed signing rehearsal adds only an OIDC write grant for a nonpublishing witness
     // on the named public candidate branch. packSigningRehearsal.test.ts pins that job's exact
     // read-plus-OIDC permissions and keeps its prepare/verify siblings at read only.
+    // ADDED by plan 010, unit e1-fork-release-workflow: `fork-release.yml:publish` holds
+    // `contents: write` (the distribution branch, its tag and the GitHub release) and
+    // `packages: write` (GitHub Packages), behind the probe's `armed` answer — never given in
+    // this repository — and a `fork-release` environment. Its condition is evaluated over every
+    // trigger shape in test/ci/forkReleaseWorkflow.test.ts.
     const writers = ALL_JOBS.filter(([, , job]) =>
       Object.values(job.permissions ?? {}).includes("write"),
     ).map(([file, id]) => `${file}:${id}`);
     expect(writers).toEqual([
       "docs-site.yml:deploy",
+      "fork-release.yml:publish",
       "pack-signing-rehearsal.yml:sign",
       "release.yml:publish",
       "upstream-update.yml:publish",

@@ -250,8 +250,16 @@ const APPROVAL = /\bapprove[ds]?\b/i;
 /** The change-requesting half of {@link VERDICT}. */
 const CHANGES_REQUESTED = /\b(?:request-changes|needs-fixes)\b/i;
 
-/** A stated confidence, as a review line writes it: `0.86`, `0.9`, `1.0`. */
-const CONFIDENCE = /\b([01]\.\d+)\b/g;
+/**
+ * A stated confidence, as a review line writes it: `0.86`, `0.9`, `1.0`, and a
+ * sentence-final `0.85.`. A version number is not one (build/369): a match
+ * preceded by a word character or a dot (`v1.0`, `x1.5`) is refused, and so is
+ * one followed by a word character or by a dot and a word character (`1.10.0`,
+ * `1.9.0`, `1.0.x`). The trailing guard refuses a digit too, so `1.10.0` cannot
+ * backtrack to `1.1`. A two-part version (`1.9`, `1.10`) reads above 1, which no
+ * confidence is, so {@link statedConfidence} skips it.
+ */
+const CONFIDENCE = /(?<![\w.])([01]\.\d+)(?!\w|\.\w)/g;
 
 /** The confidence gate a record declares for its own approvals. */
 const STATED_GATE = /confidence gate[^\n\d]*([01]\.\d+)/i;
@@ -460,7 +468,9 @@ function verdictLines(block: string): readonly string[] {
 
 /** The confidence a verdict line states, or null when it states none. */
 function statedConfidence(line: string): number | null {
-  const found = [...line.matchAll(CONFIDENCE)].map((match) => Number(match[1]));
+  const found = [...line.matchAll(CONFIDENCE)]
+    .map((match) => Number(match[1]))
+    .filter((value) => value <= 1);
   return found.at(-1) ?? null;
 }
 

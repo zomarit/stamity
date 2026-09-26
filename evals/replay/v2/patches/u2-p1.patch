@@ -1,0 +1,134 @@
+diff --git a/docs/api.md b/docs/api.md
+index 13a21fbedb1b1d309cc5dbdfdf7f5153dfeac007..6c32b88a0a5a1939be9dd36459f2caa0cfcdd7e0 100644
+--- a/docs/api.md
++++ b/docs/api.md
+@@ -39,6 +39,11 @@ Lists orders, newest first (by `created_at`), as `{"orders":[<order>, …]}`.
+ Returns one order, or `404` when no order has that id. An id that is not a positive integer is
+ a `400`.
+ 
++### `POST /orders/:id/cancel`
++
++Cancels an order: its status becomes `cancelled`, an `order.cancelled` event is published
++(Events), and the response is the updated order. `404` when no order has that id.
++
+ ## Paging
+ 
+ Paged collections number their pages from 1: `page=1` is the first page, `page=2` the next
+diff --git a/src/http/routes.ts b/src/http/routes.ts
+index 592ae65e54990f02b74027ed17e4c27a3dc6b77e..bd33e7182c56a1ba845a2e890fa4f6f07b9abce3 100644
+--- a/src/http/routes.ts
++++ b/src/http/routes.ts
+@@ -1,5 +1,5 @@
+ import { requireAuth } from "../auth/guard.ts";
+-import { getHandler, listHandler } from "../orders/handlers.ts";
++import { cancelHandler, getHandler, listHandler } from "../orders/handlers.ts";
+ import { Router } from "./router.ts";
+ 
+ /** The route table. Every order route sits behind the bearer guard (docs/api.md, Authentication). */
+@@ -7,5 +7,6 @@ export function routes(): Router {
+   const router = new Router();
+   router.get("/orders", requireAuth(listHandler));
+   router.get("/orders/:id", requireAuth(getHandler));
++  router.post("/orders/:id/cancel", requireAuth(cancelHandler));
+   return router;
+ }
+diff --git a/src/orders/format.ts b/src/orders/format.ts
+index b6a4de7830b75257589bb129fd794b9e6556bf3c..54592b84efbe9d5dc9d0891e8f2087d890c4e69e 100644
+--- a/src/orders/format.ts
++++ b/src/orders/format.ts
+@@ -1,7 +1,7 @@
+ import type { OrderRow } from "../store/db.ts";
+ 
+ /** Cents as a dollar amount with two decimals: 1250 → "$12.50". */
+-function fmt(cents: number): string {
++function formatCents(cents: number): string {
+   const sign = cents < 0 ? "-" : "";
+   const abs = Math.abs(cents);
+   return `${sign}$${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
+@@ -9,11 +9,11 @@ function fmt(cents: number): string {
+ 
+ /** One line describing an order, for logs and the audit trail. */
+ export function describeOrder(order: OrderRow): string {
+-  return `order ${order.id} for ${order.customer}: ${fmt(order.total_cents)} (${order.status})`;
++  return `order ${order.id} for ${order.customer}: ${formatCents(order.total_cents)} (${order.status})`;
+ }
+ 
+ /** The sum of several orders' totals, formatted, for summary lines. */
+ export function describeTotal(orders: readonly OrderRow[]): string {
+   const cents = orders.reduce((sum, order) => sum + order.total_cents, 0);
+-  return `${orders.length} orders, ${fmt(cents)}`;
++  return `${orders.length} orders, ${formatCents(cents)}`;
+ }
+diff --git a/src/orders/handlers.ts b/src/orders/handlers.ts
+index 3bf9b959e6b0271ab8fa2dd462ad9fa0aa4307d3..6f2e53c250744cab16873e51fab73deb948f094f 100644
+--- a/src/orders/handlers.ts
++++ b/src/orders/handlers.ts
+@@ -1,7 +1,8 @@
+ import type { Handler, Reply } from "../http/router.ts";
+ import type { OrderRow } from "../store/db.ts";
++import { orderEvent } from "../events/emitter.ts";
+ import { pageOffset } from "../store/paging.ts";
+-import { getOrder, listOrders } from "../store/query.ts";
++import { getOrder, listOrders, setStatus } from "../store/query.ts";
+ 
+ /** An order on the wire: exactly the five documented keys (docs/api.md, Orders). */
+ export function toWire(row: OrderRow) {
+@@ -57,3 +58,14 @@ export const getHandler: Handler = (ctx, deps) => {
+   if (row === undefined) return { status: 404, body: { error: "not found" } };
+   return { status: 200, body: toWire(row) };
+ };
++
++/** `POST /orders/:id/cancel`: mark the order cancelled, publish `order.cancelled`, return the order. */
++export const cancelHandler: Handler = (ctx, deps) => {
++  const id = parsePositive(ctx.params["id"] ?? "");
++  if (id === null) return badRequest("id must be a positive integer");
++  const row = getOrder(deps.db, id);
++  if (row === undefined) return { status: 404, body: { error: "not found" } };
++  setStatus(deps.db, id, "cancelled");
++  deps.bus.publish(orderEvent("order.cancelled", row, new Date().toISOString()));
++  return { status: 200, body: toWire({ ...row, status: "cancelled" }) };
++};
+diff --git a/test/handlers.test.ts b/test/handlers.test.ts
+index fa2d0ff0a18f41b0997f4b179d03deb05b3b5b99..22c6c65e7d947642ce3f72d6aceb99df3f5cd4f3 100644
+--- a/test/handlers.test.ts
++++ b/test/handlers.test.ts
+@@ -1,6 +1,6 @@
+ import { afterEach, beforeEach, describe, expect, it } from "vitest";
+ import { insertOrder } from "../src/store/db.ts";
+-import { get, startApp, type Started } from "./helpers.ts";
++import { get, post, startApp, type Started } from "./helpers.ts";
+ 
+ let app: Started;
+ 
+@@ -73,6 +73,17 @@ describe("GET /orders/:id", () => {
+   });
+ });
+ 
++describe("POST /orders/:id/cancel", () => {
++  it("cancels an open order and publishes the event", async () => {
++    const { id } = insertOrder(app.db, { customer: "Ada", total_cents: 500, status: "open", created_at: "2026-09-03T08:30:00Z" });
++    const res = await post(app, `/orders/${id}/cancel`);
++    expect(res.status).toBe(200);
++    expect(((await res.json()) as Record<string, unknown>)["status"]).toBe("cancelled");
++    expect(app.lines).toHaveLength(1);
++    expect((JSON.parse(app.lines[0]) as Record<string, unknown>)["type"]).toBe("order.cancelled");
++  });
++});
++
+ describe("the app", () => {
+   it("answers 404 for an unknown route", async () => {
+     const res = await get(app, "/nowhere");
+diff --git a/test/helpers.ts b/test/helpers.ts
+index e34ca6d62428bc4de8cc78251f0d1af7511c95a3..00dfb1bf1a65d50848bfcfb155a2008cb4824ef1 100644
+--- a/test/helpers.ts
++++ b/test/helpers.ts
+@@ -60,3 +60,9 @@ export async function get(app: Started, path: string, token: string | null = TOK
+   const headers: Record<string, string> = token === null ? {} : { authorization: `Bearer ${token}` };
+   return await fetch(`${app.url}${path}`, { headers });
+ }
++
++/** POST `path` with no body, with the test token (or `token`, or none when null). */
++export async function post(app: Started, path: string, token: string | null = TOKEN): Promise<Response> {
++  const headers: Record<string, string> = token === null ? {} : { authorization: `Bearer ${token}` };
++  return await fetch(`${app.url}${path}`, { method: "POST", headers });
++}

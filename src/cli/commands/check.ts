@@ -16,7 +16,6 @@ import {
   describePackIntegrityFinding,
   verifyInstalledPacks,
 } from "../../pack/verifyInstalled.ts";
-import { PLUGIN_ROOT_VARIABLES } from "../../plugins/capabilityFile.ts";
 import { TOOLS } from "../../types/core.ts";
 import { EngineError, type ErrorCode } from "../../types/errors.ts";
 import { MANIFEST_FILE, type SetupManifest } from "../../types/manifest.ts";
@@ -923,8 +922,8 @@ async function checkPluginRuntime(
       id,
       status: "warn",
       detail:
-        `no plugin root in the environment; run this check through the plugin's st-setup or ` +
-        `set ${PLUGIN_ROOT_VARIABLES[0]}`,
+        `no plugin root in the environment; run check through the installed root's locator ` +
+        `(node <root>/runtime/locate.mjs -- check) or set PLUGIN_ROOT to that root`,
     };
   }
   const root = (env[variable] ?? "").trim();

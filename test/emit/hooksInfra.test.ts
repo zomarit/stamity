@@ -11,7 +11,7 @@ import {
   type HooksPlanContext,
   type PackAgentDeclaration,
 } from "../../src/emit/hooksInfra.ts";
-import { CANONICAL_HOOK_EVENTS } from "../../src/hooks/model.ts";
+import { CANONICAL_HOOK_EVENTS, HOOK_SESSION_START_TIMEOUT_MS } from "../../src/hooks/model.ts";
 import { MAX_POLICY_FILE_BYTES } from "../../src/hooks/scripts.ts";
 import { AGENT_POLICY_ROSTER } from "../../src/roster/agentPolicies.ts";
 import { AGENT_TOOL_POLICIES_SCHEMA } from "../../src/tools/allowlist.ts";
@@ -560,8 +560,19 @@ describe("interchange rows", () => {
         expect(part).not.toMatch(/[;|&`<>]|\$\(|\s{2}/);
       }
       expect(Object.hasOwn(row, "matcher")).toBe(false);
-      expect(Object.hasOwn(row, "timeoutMs")).toBe(false);
+      // TEST CHANGE 2026-09-24 (REQ-CTX-016, declared hook budgets), justified:
+      // narrowed, not dropped. The two session-start rows now declare the
+      // 30-second budget, so "no core row carries timeoutMs" is no longer the
+      // behavior. The guard keeps the absence pin, on purpose: a timed-out
+      // Claude PreToolUse hook lets the call through, so a budget on the guard
+      // is a way to open it. Both halves are pinned exactly, per row.
+      if (row.event === "pre_tool_use") {
+        expect(Object.hasOwn(row, "timeoutMs")).toBe(false);
+      } else {
+        expect(row.timeoutMs).toBe(HOOK_SESSION_START_TIMEOUT_MS);
+      }
     }
+    expect(HOOK_SESSION_START_TIMEOUT_MS).toBe(30_000);
   });
 
   it("carries a user hook into every selected tool's rows, after the core set", async () => {
@@ -1080,5 +1091,156 @@ describe("hookScriptsRoot: the client-visible root the plugin emission needs", (
       `${HOOKS_ROOT}/codex/${GUARD}`,
       `${HOOKS_ROOT}/codex/${TAMPER}`,
     ]);
+  });
+});
+
+/**
+ * REQ-CTX-016, declared hook budgets. The two session-start rows (the resume
+ * card and the tamper notice) ask for 30 seconds on every client; the guard and
+ * the review gate ask for nothing, on purpose — a timed-out Claude PreToolUse
+ * hook lets the call through, and the review gate's win32 worst case is about
+ * 34.6 s. Asserted on the interchange AND on each client's rendered config,
+ * because the number an operator meets is the adapter's native key, not the row.
+ */
+/** A hook config entry as any of the four dialects renders it, read structurally. */
+interface RenderedHook {
+  command?: string;
+  timeout?: number;
+  timeoutSec?: number;
+  hooks?: RenderedHook[];
+}
+type RenderedHooks = Record<string, RenderedHook[]>;
+
+/** Every leaf hook entry under one event, flattening Claude's and Codex's matcher groups. */
+const leaves = (entries: readonly RenderedHook[] | undefined): RenderedHook[] =>
+  (entries ?? []).flatMap((entry) => entry.hooks ?? [entry]);
+
+describe("hook budgets: session start carries 30 s, the guard and the review gate carry none", () => {
+
+  /**
+   * One client's residue, planned end to end through the real core planner and
+   * the real adapter, and its hook config document parsed back out. No
+   * selection: the hook wiring does not depend on the corpus, and an empty one
+   * keeps the plan to the infra rows this block reads.
+   */
+  async function renderedHooks(tool: Tool, hookScriptsRoot?: string): Promise<RenderedHooks> {
+    const { buildCoreEmissionPlan } = await import("../../src/emit/planner.ts");
+    const { createManifest } = await import("../../src/manifest/manifest.ts");
+    const claude = await import("../../src/adapters/claude.ts");
+    const cursor = await import("../../src/adapters/cursor.ts");
+    const copilot = await import("../../src/adapters/copilot.ts");
+    const codex = await import("../../src/adapters/codex.ts");
+    const adapters = {
+      claude: [claude.claudeResiduePlanner, claude.CLAUDE_SETTINGS_PATH],
+      cursor: [cursor.cursorResiduePlanner, cursor.CURSOR_HOOKS_CONFIG_PATH],
+      copilot: [copilot.copilotResiduePlanner, copilot.COPILOT_HOOKS_PATH],
+      codex: [codex.codexResiduePlanner, codex.CODEX_HOOKS_FILE],
+    } as const;
+    const [planner, configPath] = adapters[tool];
+    const ctx = {
+      rootDir: getRepo().dir,
+      manifest: createManifest({
+        tools: [tool],
+        selection: { items: { agent: [], skill: [], rule: [], command: [] } },
+        generatorVersion: "0.0.0-test",
+        now: new Date("2026-09-24T00:00:00.000Z"),
+      }),
+      engineVersion: "0.0.0-test",
+      facts: {
+        monorepoPackages: [],
+        ...(hookScriptsRoot === undefined ? {} : { hookScriptsRoot }),
+      },
+      contentRoot: `${REPO_ROOT}content`,
+    };
+    const core = await buildCoreEmissionPlan(ctx);
+    const { outputs } = await planner.planResidue(core, ctx);
+    const config = outputs.find((row) => row.path === configPath);
+    expect(config, `${tool}: ${configPath}`).toBeDefined();
+    return (JSON.parse(config!.content) as { hooks: RenderedHooks }).hooks;
+  }
+
+  it("puts 30 000 ms on both core session-start rows and nothing on the guard, for every client and both layouts", async () => {
+    const layouts = [undefined, "${PLUGIN_ROOT}/hooks"] as const;
+    const plans = await Promise.all(
+      layouts.map((hookScriptsRoot) =>
+        planHooksInfra({
+          ...ctxFor(getRepo().dir, ["claude", "cursor", "copilot", "codex"]),
+          ...(hookScriptsRoot === undefined ? {} : { hookScriptsRoot }),
+        }),
+      ),
+    );
+    for (const [i, p] of plans.entries()) {
+      const hookScriptsRoot = layouts[i];
+      for (const tool of ["claude", "cursor", "copilot", "codex"] as const) {
+        const rows = p.interchangeFor(tool);
+        const label = `${tool} ${hookScriptsRoot ?? "repository"}`;
+        expect(rows.map((row) => [row.event, row.command[1]?.split("/").at(-1), row.timeoutMs]), label).toEqual([
+          ["session_start", SESSION_START, 30_000],
+          ["pre_tool_use", GUARD, undefined],
+          ["session_start", TAMPER, 30_000],
+        ]);
+        // Absent, not present-and-undefined: an adapter tests `!== undefined`,
+        // and a serialized row must not grow the key.
+        expect(Object.hasOwn(rows[1]!, "timeoutMs"), label).toBe(false);
+      }
+    }
+  });
+
+  it("leaves a user session-start row's own budget alone, and gives none to a row that asked for none", async () => {
+    const repo = getRepo();
+    await repo.seedFiles({
+      [`${USER_HOOKS_DIR}/start.json`]: hookDoc(
+        { event: "session_start", command: ["node", NOTIFY_SCRIPT] },
+        { event: "session_start", command: ["node", NOTIFY_SCRIPT, "--budgeted"], timeoutMs: 4500 },
+      ),
+      [NOTIFY_SCRIPT]: "process.exit(0)\n",
+    });
+
+    const p = await plan(["claude"]);
+    expect(p.warnings).toEqual([]);
+    const user = p.interchangeFor("claude").slice(3);
+    expect(user).toEqual([
+      { event: "session_start", command: ["node", NOTIFY_SCRIPT] },
+      { event: "session_start", command: ["node", NOTIFY_SCRIPT, "--budgeted"], timeoutMs: 4500 },
+    ]);
+  });
+
+  it("renders Claude's SessionStart and the tamper notice's ConfigChange at 30 s, and its guard and review gate with no timeout, in a repository and in a plugin root", async () => {
+    const layouts = [undefined, "${CLAUDE_PLUGIN_ROOT}/hooks"] as const;
+    const rendered = await Promise.all(layouts.map((hookScriptsRoot) => renderedHooks("claude", hookScriptsRoot)));
+    for (const [i, hooks] of rendered.entries()) {
+      const hookScriptsRoot = layouts[i];
+      const label = hookScriptsRoot ?? "repository";
+      expect(leaves(hooks["SessionStart"]).map((hook) => hook.timeout), label).toEqual([30, 30]);
+      // TEST CHANGE, justified — review/28 and review/36, signed off 2026-09-26. ConfigChange
+      // was pinned here with the guard and the gate as "none may time out", with no source.
+      // REQ-CTX-016 opens with "every wired hook declares its budget" and exempts only the
+      // guard (a timed-out PreToolUse opens it) and the gate (its win32 worst case exceeds
+      // 30 s). The tamper notice is the same script SessionStart budgets and blocks nothing,
+      // so its ConfigChange wiring now carries the same 30 s, and the pin moved with it.
+      expect(leaves(hooks["ConfigChange"]).map((hook) => hook.timeout), label).toEqual([30]);
+      // The guard, and the review gate on TaskCompleted and SubagentStop: none may time out.
+      const others = Object.keys(hooks)
+        .filter((event) => event !== "SessionStart" && event !== "ConfigChange")
+        .toSorted();
+      expect(others, label).toEqual(["PreToolUse", "SubagentStop", "TaskCompleted"]);
+      for (const event of others) {
+        for (const hook of leaves(hooks[event])) expect(Object.hasOwn(hook, "timeout"), `${label} ${event}`).toBe(false);
+      }
+    }
+  });
+
+  it("renders Cursor's sessionStart as timeout 30, Copilot's as timeoutSec 30 and Codex's as timeout 30, with no budget on the guard", async () => {
+    const cursor = await renderedHooks("cursor");
+    expect(leaves(cursor["sessionStart"]).map((hook) => hook.timeout)).toEqual([30, 30]);
+    expect(leaves(cursor["preToolUse"]).map((hook) => Object.hasOwn(hook, "timeout"))).toEqual([false]);
+
+    const copilot = await renderedHooks("copilot");
+    expect(leaves(copilot["SessionStart"]).map((hook) => hook.timeoutSec)).toEqual([30, 30]);
+    expect(leaves(copilot["PreToolUse"]).map((hook) => Object.hasOwn(hook, "timeoutSec"))).toEqual([false]);
+
+    const codex = await renderedHooks("codex");
+    expect(leaves(codex["SessionStart"]).map((hook) => hook.timeout)).toEqual([30, 30]);
+    expect(leaves(codex["PreToolUse"]).map((hook) => Object.hasOwn(hook, "timeout"))).toEqual([false]);
   });
 });

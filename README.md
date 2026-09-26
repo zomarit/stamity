@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 0af76dbb. Re-attested 2026-09-23 against the ledger verb, the third plumbing verb. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit a2fb017a. Re-attested 2026-09-26 against the enterprise quickstart's map row, the enterprise-forks row's release and rollout sections, and the twelve-guide count. -->
 <!-- Re-open when: the corpus counts, the ten-verb surface or a client capability changes, or a
      newer measurement supersedes the proof figures. `test/docsPages.test.ts` catches the first
      three; the figures are re-read against `docs/measurements.md` and the run record they cite. -->
@@ -111,7 +111,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/configuration.md`](docs/configuration.md) | Generated: the addressable config surface, rendered from the `config` command's key registry, each row's unset value measured against a probe manifest. |
 | [`docs/measurements.md`](docs/measurements.md) | Generated: the verified merge-ready rate over this repository's own run records, the npm reach proxy, the eval run of record, and the first-run proof lanes. |
 | [`docs/reference/`](docs/reference/) | Generated: one page per content class projected from artifact frontmatter, plus the pack inventory and the MCP server reference. |
-| [`llms.txt`](llms.txt) | Generated: the agent-native index of the published pages — the five root pages, the eleven guides, the charter and every generated reference page. |
+| [`llms.txt`](llms.txt) | Generated: the agent-native index of the published pages — the five root pages, the twelve guides, the charter and every generated reference page. |
 | [`plugin.json`](plugin.json) | Generated: the plugin surfaces — this Agent Plugins manifest, [`.claude-plugin/`](.claude-plugin/) and [`.cursor-plugin/`](.cursor-plugin/). |
 | [`apm.yml`](apm.yml) | Generated: the APM package manifest, over the [`.apm/`](.apm/) projection of the corpus, served from this repository. |
 | [`website/`](website/) | The Docusaurus site that renders the `docs/` pages from the tree. Its one page of its own is the landing page at `website/src/pages/index.tsx`. |
@@ -127,7 +127,8 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | The exit model, every `check` row and its remedy, and where to report a problem. |
 | [`docs/workspaces.md`](docs/workspaces.md) | One policy across several repositories — what a workspace is, how to create one, and what the cascade pushes down. |
 | [`docs/packs-and-trust.md`](docs/packs-and-trust.md) | Installing content on top of the corpus — the trust tier it lands on, signing one of your own, and what `add` refuses. |
-| [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, landing, and the fork layer. |
+| [`docs/enterprise-quickstart.md`](docs/enterprise-quickstart.md) | The enterprise route in order — who does what, then day 0 the fork, day 1 the release and rollout, day 2 the updates — each step linked to its guide. |
+| [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, landing, the fork layer, releasing the fork through its own workflow, and rolling the plugin out with managed settings. |
 | [`docs/security-mapping.md`](docs/security-mapping.md) | The version-pinned crosswalk from this repository's controls to the OWASP, joint-guidance and NIST AI RMF catalogues — seven surfaces, their residuals, and the gaps. |
 
 Hook scripts are not in that corpus row, because they are not corpus content. The three portable

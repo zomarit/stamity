@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.9.1 release cut (2026-09-23). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 99317fff. Re-attested 2026-09-26 against the fork identity script, the fork release workflow, the managed-settings template and its live walk. -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes in `src/content/catalog.ts`,
      or the jobs or the permissions in `.github/workflows/upstream-update.yml` change. `test/docsPages.test.ts`
@@ -12,7 +12,13 @@ title: Enterprise forks
      Re-open the plugin-distribution section when the jobs, the build steps or the distribution branch
      and tag push in `.github/workflows/release.yml` change, or when a key joins or leaves the
      `stamity.distribution` block in `scripts/distribution-identity.mjs`; `test/ci/workflow.test.ts`
-     pins those steps and `test/ci/pluginDistribution.test.ts` the builder they run. -->
+     pins those steps and `test/ci/pluginDistribution.test.ts` the builder they run.
+     Re-open the identity, release and rollout sections when a flag joins or leaves
+     `scripts/fork-identity.mjs`, a variable, secret, job or proof moves in
+     `.github/workflows/fork-release.yml`, or a key or the client floor moves in
+     `scripts/plugins/managed-settings.mjs`; the rollout section's vendor facts were read
+     2026-09-24, and its client facts were measured 2026-09-26 in the managed-settings walk, so
+     re-open it too when a later walk of that template records a different outcome. -->
 
 # Enterprise forks
 
@@ -120,33 +126,40 @@ upstream lane instead.
 
 ### Set the private package's identity
 
-Configure the publisher and the repository through package metadata:
+One command sets the publisher, the repository and the package name, from the checkout's root:
 
 ```sh
-STAMITY_PUBLISHER="${STAMITY_DOWNSTREAM%%/*}"
-npm pkg set "name=@$STAMITY_PUBLISHER/stamity" "stamity.publisher=$STAMITY_PUBLISHER"
-npm pkg set "repository.url=git+$STAMITY_PRIVATE_URL.git" "homepage=$STAMITY_PRIVATE_URL"
-npm pkg set "bugs.url=$STAMITY_PRIVATE_URL/issues"
-npm pkg set private=true --json
-npm pkg delete publishConfig
-node -e 'const fs=require("fs"),p=require("./package.json");
-const slug=p.repository.url.replace(/^git\+|\.git$/g,"").split("/").slice(-2).join("/");
-const swap=(f,a,b)=>fs.writeFileSync(f,fs.readFileSync(f,"utf8").replaceAll(a,b));
-swap("renovate/plugins.json","zomarit/stamity",slug);
-swap("renovate/companion.json","@zomarit/stamity",p.name);'
-npm install --package-lock-only --ignore-scripts
 npm ci --ignore-scripts
-node scripts/generate-plugin-manifests.mjs
-node scripts/generate-apm-package.mjs
+node scripts/fork-identity.mjs --repository "$STAMITY_PRIVATE_URL"
+npm install --package-lock-only --ignore-scripts
 ```
 
-`stamity.publisher` defaults to `zomarit` when it is absent. When you set it, it must be a valid
-owner slug that matches `repository.url`. An unsupported key or a mismatched or invalid identity
-fails before generation writes anything, and both generators share that validator. Name, version,
-description and license keep their existing package fields. `private: true` blocks npm publishing
-for this APM-only setup. Deleting the public `publishConfig` makes the destination review explicit.
+`scripts/fork-identity.mjs` sets `name` to `@<scope>/stamity`, `stamity.publisher` to the owner,
+and `repository.url`, `homepage` and `bugs.url` to the repository you name; version, description
+and license keep their values. It sets `private: true`, removes `publishConfig`, moves the two
+Renovate presets and runs both generators. The install comes first because those generators import
+the dependencies. The lockfile refresh comes last because the script stays offline and leaves
+`package-lock.json`, whose root entry carries the old name, alone.
 
-The `node -e` line moves the two Renovate presets, which carry the identity as data rather than
+Two flags change what it writes:
+
+- `--registry <url>` makes a fork that publishes its own CLI. It removes `private` and sets
+  `publishConfig.registry` to that https URL, which is what the release workflow in
+  **Release your fork** below requires. Without it the package stays private, which is right for
+  a fork that ships through APM or a plugin distribution only.
+- `--scope <scope>` names the npm scope when it differs from the owner. The default is the owner
+  in lowercase. The package is always `@<scope>/stamity`, and the unscoped `stamity` is what the
+  plugin id, the marketplace name and the `/stamity:` command namespace derive from, so those stay
+  the same in every fork.
+
+It validates through the same `scripts/distribution-identity.mjs` both generators run, and it
+refuses before writing anything on an invalid identity: a repository off the public GitHub host, a
+scope npm would refuse, or a registry URL carrying credentials, a query or a fragment. It never
+echoes the URL it refused. It also refuses, naming the file, to rewrite a file with uncommitted
+edits. A rerun with the same arguments moves no byte, and `--check` writes nothing and exits 1
+naming each file that differs from its target.
+
+The script moves the two Renovate presets because they carry the identity as data rather than
 deriving it: `renovate/plugins.json` names the repository its tag manager watches, and
 `renovate/companion.json` names the npm package it pins. Everything else follows your manifest on
 its own. The runtime's own remedies (`run: npx <your package> init`) and `scripts/tarball-smoke.mjs`
@@ -157,8 +170,10 @@ your repository instead of an npm package you never publish.
 The release and docs-deployment workflows you inherit also check the running repository's identity
 and visibility. Their public publication jobs run only in the public canonical repository. Preserve
 those guards when you review an upstream release. Private APM needs its generated tree and a
-private git ref. Enterprise npm publishing or docs deployment needs a separate reviewed workflow
-and an explicit private destination before you enable it.
+private git ref. A fork's own npm publishing goes through `.github/workflows/fork-release.yml`
+(**Release your fork** below), which does nothing until you name your destination. Docs
+deployment needs a separate reviewed workflow and an explicit private destination before you
+enable it.
 
 ### Turn the workflows on last
 
@@ -822,7 +837,11 @@ validates the block and refuses an `ssh://` or `git@` remote and a URL carrying 
 authentication belongs to the fetching client, never to a published catalog. Rebuild after
 editing the block and every catalog in the tree changes with it; nothing else has to.
 
-Then push the tree to your own branch, which is what a marketplace fetches:
+A fork that publishes its CLI does not run the rest of this by hand: the release workflow in the
+next section builds this tree, pushes it and tags it from one `v*` tag. That workflow refuses a
+package that is still `private: true`, because it publishes the CLI in the same run. So a fork
+that ships only through APM or a plugin distribution pushes the tree to its own branch itself.
+The branch is what a marketplace fetches:
 
 ```sh
 cd dist/plugins
@@ -843,6 +862,254 @@ tag, so a consumer of your mirror reads the routes from the tree rather than fro
 on cannot be known while it is being built. The canonical release re-stamps that one field into
 the copy it attaches to its GitHub release; a fork that wants the same can pass
 `--distribution-commit <sha>` to a rebuild, or leave it null and let the tag be the pin.
+
+## Release your fork
+
+`.github/workflows/fork-release.yml` releases a fork's CLI, its plugin distribution and its APM
+refs from one tag. It ships in every copy of this repository and does nothing until you name your
+destination. In this repository it ends green with a notice on every run, because the canonical
+release goes through `release.yml` and nowhere else.
+
+### Arm the workflow
+
+Set the identity with `--registry` first, as **Set the private package's identity** above
+describes. The workflow publishes the CLI in the same run as the distribution, so it refuses a
+package that is still `private: true`, one that still carries the canonical name, and one whose
+`publishConfig.registry` differs from the registry you name below.
+
+Then set these in the repository's Actions settings:
+
+| Name | Kind | Value |
+|---|---|---|
+| `STAMITY_FORK_RELEASE` | variable | This repository's own `<owner>/<repo>`. Until it names this repository, every run ends green with a notice and nothing else runs, which is what keeps a copy of the file inert. |
+| `STAMITY_RELEASE_REGISTRY` | variable | The registry's https URL, the one you passed to `--registry`. A value with credentials, a query or a fragment fails the run, which names the variable and never prints the value. |
+| `STAMITY_RELEASE_BRANCH` | variable, optional | The branch a release tag must be reachable from. The default is `main`. |
+| `STAMITY_REGISTRY_TOKEN` | secret | The registry's publish token. GitHub Packages does not need it. |
+
+GitHub Packages takes scoped names only, and it authenticates the per-run `GITHUB_TOKEN`, which
+the publish job holds with `packages: write`. The workflow hands that token only to a registry
+whose host is exactly GitHub Packages' npm host. Every other host, including one whose name only
+starts with it, gets `STAMITY_REGISTRY_TOKEN` instead. On GitHub Packages the scope must also be
+this repository's owner, and the gates refuse any other. GitHub's *Working with the npm registry*
+page gives that registry's URL.
+
+Last, create the `fork-release` environment in the repository's settings, with required
+reviewers. It is the run's one approval point: the publish job waits there, and it holds the only
+credential the run has. Create it before the first tag, because GitHub creates an environment that
+a job names and nobody created, with no protection rules.
+
+### Tag a release
+
+Set `version` in `package.json`, commit it on the release branch, and push the tag
+`v<version>`. A suffix keeps a fork's releases apart from upstream's, and the tag carries it too:
+
+```sh
+git tag v1.10.0-acme.1
+git push origin v1.10.0-acme.1
+```
+
+A dispatch of the workflow is a rehearsal unless you say otherwise. Its `dry_run` input starts at
+true, and a rehearsal runs every gate, builds every artifact, publishes nothing and writes what a
+real run would ship into the run summary. It can run from a branch. A real run is a tag push, or a
+dispatch from the tag with `dry_run` set to false.
+
+A run has four jobs, split by trust. A real run uses the first three; a rehearsal runs the last
+one in place of `publish`:
+
+- **`probe`** reads the three variables. The canonical repository, or a fork that has not named
+  itself, ends here, green, with a notice.
+- **`gates`** holds no secret and only `contents: read`. It proves the release first: the tag is
+  `v` plus `package.json`'s version and is reachable from the release branch (a rehearsal skips
+  these two and says so), and the package is not the canonical one, not private, and names the
+  variable's registry. A failed proof stops the run with a remedy naming
+  `scripts/fork-identity.mjs`. Then it runs the canonical release's ladder, from `npm ci` to the
+  tarball smoke, checks the generated manifests are current, packs the tarball, builds the plugin
+  distribution and uploads both, kept for seven days, which is how long the approval can wait.
+- **`publish`** runs in the `fork-release` environment and checks nothing out. It verifies
+  everything `gates` uploaded before it acts: every digest, the tarball's own name, version and
+  registry, and every `.sha256` file. Then it publishes the tarball to your registry, pushes the
+  distribution branch and the `plugins/v<version>` tag, and creates the GitHub release
+  `v<version>` carrying the tarball, every plugin archive, a `.sha256` file for each, and
+  `release.json`.
+- **`dry-run-summary`** holds no permission. It writes what a real run would have published into
+  the run summary.
+
+A fork that imported this repository's history also imported its `v*` tags. A push of one of
+those runs the workflow, and the name proof refuses it, because that commit carries the canonical
+package name.
+
+### Run it again safely
+
+A rerun of the same release publishes nothing twice. The registry step skips a version already
+published with this tarball's integrity, and it refuses one published from another tarball; a
+published version is never replaced. The distribution commit takes its dates from `release.json`,
+so a rerun builds the same commit. A `plugins/v<version>` tag that already points at another
+commit is refused, never moved. The branch push replaces only a distribution head, one commit with
+no parent. An existing GitHub release receives only the assets it is missing.
+
+### Know what proves a release
+
+Checksums and your registry's own authentication. A consumer checks each asset with
+`sha256sum -c <asset>.sha256`, and `release.json` carries the digest of every archive and of the
+runtime tarball. A fork release carries no npm provenance, because npm provenance needs a public
+source repository. It carries no build attestation either. GitHub's attestations for a private
+repository need GitHub Enterprise Cloud, and the maintainer's decision of 2026-09-24 leaves them
+unbuilt until a company asks for them.
+
+### Consume the release
+
+APM consumers can pin either ref the run creates: the source tag `v<version>`, or the
+distribution tag `plugins/v<version>`, whose tree carries a complete APM package at its root. A
+developer who installs the CLI from your registry maps your scope to it once, in their own
+`.npmrc`, and signs in with the registry's own credential through `npm login` with the same
+`--scope` and `--registry`:
+
+```ini
+@<scope>:registry=<url>
+```
+
+### Know how the workflow reaches your fork
+
+The workflow ships with the 1.10.0 upstream release. The upstream lane never pushes a release that
+touches `.github/workflows/`, so that update arrives as the `Upstream <tag> needs a reviewed push`
+issue. A person reads the workflow diff and pushes it, as **Turn on the GitHub workflow** below
+describes. A fork on an earlier release has no release workflow until that push lands.
+
+## Roll the plugin out to your organization
+
+This section is for the administrator who sets up the plugin in every developer's Claude Code at
+once: one file declares the marketplace, allows only that one, and turns the plugin on, so that
+nobody runs `marketplace add` by hand. Each developer still starts Claude Code once and installs
+the plugin once, as **Start Claude Code once on each machine** below describes. Cursor's team marketplace and
+Codex's workspace route are the other two organization routes, and
+[the plugins guide](plugins.md) describes them under each client's install.
+
+Every distribution tree a release builds carries `admin/claude-managed-settings.json`.
+`scripts/build-plugin-distribution.mjs` renders it through `scripts/plugins/managed-settings.mjs`
+from the identity the catalogs come from, so it names your repository and the tag the tree was
+built at. Take it from the tree at the tag you roll out. This is the file the renderer writes for
+this repository at the tag its `ref` names:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "stamity": {
+      "source": {
+        "source": "github",
+        "repo": "zomarit/stamity",
+        "ref": "plugins/v1.10.0"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "stamity@stamity": true
+  },
+  "strictKnownMarketplaces": [
+    {
+      "source": "github",
+      "repo": "zomarit/stamity",
+      "ref": "plugins/v1.10.0"
+    }
+  ],
+  "requiredMinimumVersion": "2.1.277"
+}
+```
+
+The four keys do four jobs:
+
+- `extraKnownMarketplaces` declares the marketplace for every user. The client records it when a
+  developer first starts an interactive session.
+- `enabledPlugins` marks the plugin as turned on for every user. In the walk it did not install
+  the plugin by itself.
+- `strictKnownMarketplaces` admits only that marketplace. A user's `marketplace add` of any other
+  source is refused. It checks marketplace sources only, so the plugin's own source inside the
+  marketplace needs no entry of its own.
+- `requiredMinimumVersion` refuses to start a client older than 2.1.277. That is the first release
+  that treats an invalid allowlist as an empty one instead of ignoring it.
+
+The template pins the release tag. To follow the distribution branch instead, change the `ref` in
+the declared source and in the allowlist entry together, as described under the warnings below.
+
+### Put the file where the client reads it
+
+| System | Path |
+|---|---|
+| macOS | `/Library/Application Support/ClaudeCode/managed-settings.json` |
+| Linux and WSL | `/etc/claude-code/managed-settings.json` |
+| Windows | `C:\Program Files\ClaudeCode\managed-settings.json` |
+
+Beside the file, a `managed-settings.d/` folder takes drop-in files.
+
+Managed settings can come from four sources, and the client ranks them. First comes the
+server-managed policy of the Claude console, then an MDM profile or the machine-wide registry key,
+then this file, then the per-user registry key. The first source that carries managed settings
+wins, and the client ignores the rest without saying so. So on a machine that is already under a
+console or MDM policy, this file does nothing. Run `/status` in a session and read **Setting
+sources** to see which source won.
+
+### Start Claude Code once on each machine
+
+After the file lands on a machine, each developer opens Claude Code once in a terminal and
+finishes its first-run screens, such as the theme choice and the folder trust question. Until then
+the client does not know the managed marketplace.
+`claude plugin marketplace list` says "No marketplaces configured", and
+`claude plugin install stamity@stamity` fails with "Plugin "stamity" not found in marketplace
+"stamity"". A headless `claude -p` without a login does not fix that, and in the walk a first
+start that stopped at the theme choice recorded nothing either. A session past the first-run
+screens records the marketplace within seconds, even before a login. Then the developer runs this
+once:
+
+```sh
+claude plugin install stamity@stamity
+```
+
+In the walk, the session did not install the plugin on its own, although `enabledPlugins` names
+it. That session was not logged in. Whether a logged-in session installs the plugin without this
+command was not measured.
+
+### Know how the file fails closed
+
+- A file that is not valid JSON stops Claude Code from starting. Parse it before you ship it.
+- An allowlist that is empty or invalid blocks every marketplace for every user. From 2.1.277 an
+  invalid value is enforced as an empty allowlist.
+- The client matches the allowlist exactly. An entry whose `ref`, or `repo`, differs from the
+  declared source by one character matches nothing, and the declared marketplace is blocked with
+  the rest. A developer who already has the plugin sees it fail to load with "Marketplace
+  'stamity' is not in the allowed marketplace list", and `marketplace update` is refused. A new
+  developer gets no marketplace, and the install fails with "not found in marketplace", an error
+  that names no policy. The renderer writes both from one value, and
+  `test/ci/managedSettings.test.ts` holds them equal. Edit both or neither.
+- An invalid `requiredMinimumVersion` is dropped, so any client version then starts.
+
+A private repository is fetched with each machine's own git credentials. The managed file carries
+none, and it must not carry any. A developer whose git cannot read your repository gets no plugin.
+
+### Know what was measured
+
+The template was walked on 2026-09-26 on Claude Code 2.1.281 on Linux, with the file at
+`/etc/claude-code/managed-settings.json`, rendered for this repository at `plugins/v1.9.1`, and
+with no login. The record is `.stamity/runs/2026-09-24_enterprise-release/managed-settings-walk.md`.
+
+- The client obeyed the file at the Linux path.
+- After one interactive start the marketplace was listed, and the install put the plugin at the
+  tag's commit. The allowlist did not block the plugin's own source.
+- `claude plugin marketplace add anthropics/claude-code` was refused: "blocked by enterprise
+  policy", followed by the one allowed source.
+- With `requiredMinimumVersion` set above the client's version, a session, `claude -p` and
+  `claude plugin list` each exited 1 with a message naming both versions. `claude --version`
+  still answered. The client's own code leaves `claude update`, `claude install` and
+  `claude doctor` out of that check, so an old client can still update itself; that was read from
+  the client, not run.
+- With the allowlist's `ref` one release away from the declared source's, the lock-out under the
+  warnings above happened, for a new developer and for one who already had the plugin.
+
+Not measured: a logged-in session, the macOS and Windows paths, the `managed-settings.d/` folder,
+the ranking of managed sources, `/status`, the failures for invalid JSON and an empty or invalid
+allowlist, 2.1.277 as the first release that enforces an invalid allowlist as an empty one, and
+the dropping of an invalid `requiredMinimumVersion`. Those come from Claude Code's documentation, its managed-settings, plugin-marketplaces
+and setup pages, accessed 2026-09-24. The template's shape is derived and tested: the renderer by
+`test/ci/managedSettings.test.ts`, and the block above against the renderer by
+`test/docsPages.test.ts`.
 
 ## Turn on the GitHub workflow
 

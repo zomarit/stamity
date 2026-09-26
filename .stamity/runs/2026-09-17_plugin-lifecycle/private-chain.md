@@ -269,6 +269,98 @@ The APM consumer's `renovate.json` as executed (the placeholder owner):
 }
 ```
 
+## The Codex half (E3), 2026-09-24
+
+Run by an implementer agent of the Package 16 session-2 orchestrator (plan 010, unit `e3-codex-remote-walk`) on
+this machine, with the maintainer's own GitHub login through the `gh` credential helper that `gh auth setup-git`
+installs: git over a plain `https://github.com/…` url authenticated through it, no token was passed in any argv or
+environment variable, and Codex itself was never logged in — no `auth.json` exists in either scratch home, and both
+homes were deleted at the end. The real `HOME` was kept, because git reads its credential helper from
+`$HOME/.gitconfig`. Placeholders, local to this section: `<owner>` as above; `<work>` the scratch directory outside
+every checkout; `<home1>` and `<home2>` the two scratch `CODEX_HOME` directories under it; `<root>` the installed
+root `<home1>/plugins/cache/stamity/stamity/<version>`; `<consumer>` a consumer repository under `<work>`. Nothing
+was pushed to the mirror or to either consumer. Each step carries its UTC time in the facts, its exit code and the
+sha-256 of its raw capture (stdout and stderr together; the first twelve hex digits here, the full digests at the
+end); only placeholder-rewritten fragments are quoted.
+
+The mirror at the walk: private, default branch `main` = `c3c8a37` (11a's commit), `plugin-dist` = `plugins/v1.9.1` =
+`b567f3a9…`, `plugins/v1.9.0` = `bbd0c962…` — the distribution refs of step 1, unchanged, so nothing was rebuilt.
+
+| Step | Command | Exit | Output sha-256 | Facts |
+|---|---|---|---|---|
+| E3-P1 | `gh auth status` | 0 | `cf47ae67b35d…` | `2026-09-24T11:11:42Z` · logged in (keyring), git protocol https; the credential helper `gh auth git-credential` is configured for `https://github.com` (the prerequisite was already in place and was checked before C1; this capture is the recorded re-run) |
+| E3-P2 | `gh repo view <owner>/stamity-plugins-mirror --json visibility,defaultBranchRef` | 0 | `e40fa2a15938…` | `2026-09-24T11:11:42Z` · `PRIVATE`, default branch `main` |
+| E3-P3 | `git ls-remote https://github.com/<owner>/stamity-plugins-mirror.git …` | 0 | `07e7da81e98e…` | `2026-09-24T11:11:43Z` · the four refs above |
+| E3-C1 | `codex --version` | 0 | `556478dd38e6…` | `2026-09-24T11:08:37Z` · `codex-cli 0.155.1` |
+| E3-C2 | `CODEX_HOME=<home1> codex plugin marketplace add <owner>/stamity-plugins-mirror --ref plugins/v1.9.0` | 0 | `bf5c416d958c…` | `2026-09-24T11:08:38Z` · `` Added marketplace `stamity` from https://github.com/<owner>/stamity-plugins-mirror.git#plugins/v1.9.0. ``; the root is a git checkout at `<home1>/.tmp/marketplaces/stamity`, HEAD `bbd0c962…`, carrying `.agents/plugins/marketplace.json` (one `local` entry, `./codex`); `config.toml` gained `[marketplaces.stamity]` with `source_type = "git"`, the https source and `ref = "plugins/v1.9.0"`. The shorthand was not refused for authentication, so C2b (the url form) was not needed and did not run |
+| E3-C3 | `codex plugin add stamity@stamity` | 0 | `b5253d537bb8…` | `2026-09-24T11:08:51Z` · `Installed plugin root: <home1>/plugins/cache/stamity/stamity/1.9.0`; no login asked |
+| E3-C4 | `codex plugin list --json` | 0 | `0423ddf5399d…` | `2026-09-24T11:08:51Z` · `stamity@stamity`, `version` `1.9.0`, installed and enabled, `source` local at the marketplace root's `codex`; `marketplaceSource` names the https url and **no ref** |
+| E3-C5a | `ls -1 <home1>/plugins/cache/stamity/stamity/` | 0 | `30f4611383aa…` | `2026-09-24T11:09:10Z` · exactly one directory, `1.9.0` |
+| E3-C5b | `node <work>/compare.mjs <root> <archive>/codex`, the archive being `git archive plugins/v1.9.0 codex` from a bare clone of the mirror | 0 | `9cfa95549596…` | `2026-09-24T11:09:10Z` · `runtime: 636 files compared, equal` · `rest: 45 files compared, equal` · `codex/ tree (681 cache files, 681 archive files): equal`. The comparison script (sha-256 `3cb44d3b8b01…`) walks both trees, hashes every file (a symlink by its target), and reports files only in one tree and files that differ, `runtime/` separately; its control is E3-C7f-control |
+| E3-C6a | `git clone https://github.com/<owner>/stamity-consumer-plugin.git <consumer>` · `node <root>/runtime/locate.mjs --project <consumer> -- plugin setup --client codex -y` | 0 · 1 | `e3b0c44298fc…` · `b6ee3a3a0099…` | `2026-09-24T11:09:15Z` · the fresh clone at `b85c9eb`; `2026-09-24T11:09:20Z` · **exit 1**: `error: a generated setup exists; run npx @zomarit/stamity clean -y, then npx @zomarit/stamity plugin setup --client codex` — the plugin consumer already carries the Claude setup of step 3b, and a plugin-backed setup refuses a repository that has one (fact E3-6) |
+| E3-C6b | `node <root>/runtime/locate.mjs --project <consumer> -- plugin setup --client codex -y`, `<consumer>` now a fresh repository (`git init`, one commit) | 0 | `9a180a8e80e0…` | `2026-09-24T11:09:38Z` · `wrote 13 file(s): 13 created`, plugin-owned `codex: skill, hooks`; `.codex/config.toml` holds `[features]` `hooks = true` |
+| E3-C6c | `node <root>/runtime/locate.mjs --project <consumer> -- check` | 0 | `9a36476f50ae…` | `2026-09-24T11:09:43Z` · drift clean, manifest tools `codex`, 13 ledger rows; `warn plugin-runtime  no plugin root in the environment; run this check through the plugin's st-setup or set CLAUDE_PLUGIN_ROOT` — `prove/337` reproduced on a 1.9.0 root (not a blocker; the warning names the Claude variable on a Codex-only consumer) |
+| E3-C7a | `codex plugin remove stamity@stamity` | 0 | `a9ef13897829…` | `2026-09-24T11:09:50Z` · `` Removed plugin `stamity` from marketplace `stamity`. ``; the `1.9.0` cache directory is gone (the empty `cache/stamity/` parent stays) |
+| E3-C7b | `codex plugin marketplace remove stamity` | 0 | `f77c5d85fcf4…` | `2026-09-24T11:09:51Z` · `` Removed marketplace `stamity`. `` and `Removed installed marketplace root`; `config.toml` left at 0 bytes |
+| E3-C7c | `codex plugin marketplace add <owner>/stamity-plugins-mirror --ref plugins/v1.9.1` | 0 | `8e176a351e5b…` | `2026-09-24T11:09:57Z` · added from `…stamity-plugins-mirror.git#plugins/v1.9.1` |
+| E3-C7d | `codex plugin add stamity@stamity` | 0 | `1b403718e1c8…` | `2026-09-24T11:10:01Z` · `Installed plugin root: <home1>/plugins/cache/stamity/stamity/1.9.1`; the one version directory `1.9.1`, `skills/fixture-marker/` present |
+| E3-C7e | `codex plugin list --json` | 0 | `c96d6f8a0b53…` | `2026-09-24T11:10:01Z` · `stamity@stamity` at `1.9.1` |
+| E3-C7f | `node <work>/compare.mjs <root at 1.9.1> <archive of plugins/v1.9.1>/codex` | 0 | `6037a0e7e8b1…` | `2026-09-24T11:10:08Z` · `runtime: 636 … equal` · `rest: 46 … equal` · `(682 cache files, 682 archive files): equal` |
+| E3-C7f-control | `node <work>/compare.mjs <root at 1.9.1> <archive of plugins/v1.9.0>/codex` | 1 | `8bfa0b370411…` | `2026-09-24T11:10:08Z` · `DIFFERENT`: only in the cache `skills/fixture-marker/SKILL.md`; differing `README.md`, `plugin.json`, `stamity-plugin.json`; `runtime/` equal (the bundled runtime is 1.9.0 at both tags, fact 6) — the comparison distinguishes the two versions |
+| E3-C7g | `codex plugin marketplace add <owner>/stamity-plugins-mirror --ref plugins/v1.9.0` over the recorded marketplace | 1 | `6e9e5ff82f7e…` | `2026-09-24T11:10:09Z` · **refused**: `Error: marketplace 'stamity' is already added from a different source; remove it before adding this source`; the recorded `ref` stays `plugins/v1.9.1`, the root's HEAD stays `b567f3a9…`, the installed version stays `1.9.1` (fact E3-4) |
+| E3-C8a | `CODEX_HOME=<home2> codex plugin marketplace add <owner>/stamity-plugins-mirror` (no `--ref`) | 0 | `649e13d11d5e…` | `2026-09-24T11:10:19Z` · `` Added marketplace `stamity` from https://github.com/<owner>/stamity-plugins-mirror.git. ``; the root is a checkout of the default branch `main` at `c3c8a37` — the fork's source tree, which carries **no** `.agents/plugins/marketplace.json` and does carry `.claude-plugin/marketplace.json`; `config.toml` records no `ref` |
+| E3-C8b | `codex plugin list --json --available` | 0 | `9ed45dc8f22b…` | `2026-09-24T11:10:32Z` · one available entry, `stamity@stamity` `1.9.0`, **`source` `npm`, `package` `@zomarit/stamity`, `version` `1.9.0`** — the entry of the default branch's Claude catalog |
+| E3-C8c | `codex plugin add stamity@stamity` | 0 | `b3b6e24b3f47…` | `2026-09-24T11:10:33Z` · `Installed plugin root: <home2>/plugins/cache/stamity/stamity/1.9.0` |
+| E3-C8d | `codex plugin marketplace list` | 0 | `c6180ce3e924…` | `2026-09-24T11:10:34Z` · `stamity` at `<home2>/.tmp/marketplaces/stamity` |
+| E3-C8e | `node <work>/compare.mjs <home2 root> <npm pack @zomarit/stamity@1.9.0>/package` | 1 | `680a28ed6d31…` | `2026-09-24T11:10:55Z` · 228 files compared, all equal; only in the cache `.codex-plugin/plugin.json` (the client's own manifest, synthesized from the Claude catalog entry) — the cache is the **public npm tarball** (registry `https://registry.npmjs.org/`, tarball sha-256 `e7f6b2dfa48a…`) plus one client file |
+| E3-C8f | `node <work>/compare.mjs <home2 root> <archive of plugins/v1.9.0>/codex` | 1 | `8d1dd5498134…` | `2026-09-24T11:10:55Z` · `DIFFERENT`: 229 cache files against the distribution root's 681; none of the root's `runtime/` |
+| E3-C8g | `ls <home2 root>/runtime/locate.mjs <home2 root>/hooks` | 1 | `08eb2ae04729…` | `2026-09-24T11:11:11Z` · both absent — the Codex root README's setup line (`node <root>/runtime/locate.mjs …`) has nothing to run in this install. **C8's outcome: no catalog** — the documented no-`--ref` line finds no Codex catalog on the default branch, and what it installs is not the distribution's Codex root (fact E3-3) |
+| E3-C8h | `codex plugin remove stamity@stamity` · `codex plugin marketplace remove stamity` · `codex plugin marketplace add <owner>/stamity-plugins-mirror --ref plugin-dist` · `codex plugin add stamity@stamity` · `node <work>/compare.mjs <home2 root at 1.9.1> <archive of plugins/v1.9.1>/codex` (beyond the cell: the branch form `e3-codex-install-ref` would print) | 0 · 0 · 0 · 0 · 0 | `a9ef13897829…` · `f454cac01a59…` · `ad72218880d7…` · `00331afa3e8e…` · `6037a0e7e8b1…` | `2026-09-24T11:11:25Z`–`11:11:32Z` · added from `…#plugin-dist`, `ref = "plugin-dist"` recorded; installed `1.9.1`; the comparison `equal` over 682 files (the same output digest as E3-C7f) — the distribution-branch form works |
+| E3-C9 | Skill discovery in a Codex session | — | — | **not-run**: it needs a Codex login in a scratch home, which this walk does not create (`auth.json` is never persisted), and a headless `codex exec` is not evidence for a session's view (the learning `codex-hooks-need-the-features-flag-and-exec-runs-none`) |
+| E3-C10 | `node scripts/leak-gate.mjs` (the checkout with this section present) | 0 | `61457603d0e0…` | `2026-09-24T11:13:51Z` · `leak-gate: PASS - 0 hits for 18 rule(s) across 1638 file(s)`, with this section and its digests present (the run before this row and its digest line were filled in); a hand sweep of every added line for the shapes the gate does not catch — the real owner, the maintainer's name, e-mail, absolute paths, token prefixes, the private layer's name — found 0 hits |
+
+### Facts the Codex walk measured that differ from the docs (handed to `e3-codex-install-ref` and `docs-guides`)
+
+- **E3-1. Codex's remote form runs against a private mirror.** `docs/plugins.md` says "Codex's remote form has not run
+  at all". On codex-cli 0.155.1 the `<owner>/<repo> --ref <ref>` shorthand cloned the private mirror through the git
+  credential helper, with Codex not logged in and no token in any argv, and installed a root whose per-file sha-256
+  map equals the tag's `codex/` tree (681 files at `plugins/v1.9.0`, 682 at `plugins/v1.9.1`).
+- **E3-2. Where Codex keeps a git marketplace.** The checkout lands at `$CODEX_HOME/.tmp/marketplaces/<name>`, and
+  `config.toml` records `[marketplaces.<name>]` with `source_type`, the https `source` and the `ref`; installs land
+  under `$CODEX_HOME/plugins/cache/<marketplace>/<plugin>/<version>/`, as the docs say for `~/.codex`. `plugin list
+  --json` names the marketplace's source without its ref, so the ref is read from `config.toml`.
+- **E3-3. The documented install line without `--ref` installs the public npm package, not the distribution.** The
+  Codex root README (`scripts/plugins/clients/codex.mjs:158`) and `docs/plugins.md:232` print `codex plugin
+  marketplace add <owner>/<repo>` with no `--ref`. Against the mirror that form exits 0 and checks out the default
+  branch, which carries no Codex catalog; codex-cli 0.155.1 then reads the branch's Claude catalog
+  (`.claude-plugin/marketplace.json`), whose entry is sourced from npm, and `plugin add` exits 0 with a root that is
+  the public registry's `@zomarit/stamity@1.9.0` tarball plus a synthesized `.codex-plugin/plugin.json` — no
+  `runtime/`, no `hooks/`, no locator. Nothing in the output says the catalog was not the Codex one. For a private
+  fork this silently swaps the private source for the public registry. The distribution README's form
+  (`scripts/build-plugin-distribution.mjs:295`, `--ref <distribution branch>`) works (E3-C8h), and so does a tag.
+- **E3-4. Re-pointing a recorded git marketplace is refused, not answered "already added".** `docs/plugins.md`
+  (`:411-416`) calls the re-point unmeasured and guesses that "already added" may leave the ref where it was. On
+  0.155.1 `marketplace add … --ref plugins/v1.9.0` over a marketplace recorded at `plugins/v1.9.1` exits 1 with
+  `marketplace 'stamity' is already added from a different source; remove it before adding this source`, and the
+  ref, the checkout and the installed version stay where they were. The four-command route back with
+  `marketplace remove` first is therefore required, and it works: remove, remove, add at the other ref, add.
+- **E3-5. `plugin remove` and `marketplace remove` clean up after themselves.** The first deletes that version's
+  cache directory (leaving the empty `cache/<marketplace>/` parent), the second deletes the marketplace checkout and
+  its `config.toml` table — measured on 0.155.1, where the docs' route-back walk measured only 0.154.0's `plugin
+  remove`.
+- **E3-6. A consumer that already has a generated setup refuses a second client's plugin setup.** `plugin setup
+  --client codex` on the Claude plugin consumer exits 1 and names `clean -y`, then a setup with the client list; a
+  repository that wants both clients runs one `plugin setup --client claude,codex` (`docs/plugins.md:450`), which
+  this walk did not run. The Codex setup here ran in a fresh repository instead.
+
+### Deviations from the plan cell
+
+- The cell names "a fresh consumer clone". The fresh clone of `stamity-consumer-plugin` refused the Codex setup
+  (E3-C6a, fact E3-6), so C6 ran in a fresh empty repository; the refusal is recorded as its own row.
+- Beyond the cell: the control comparison (E3-C7f-control), the npm and root comparisons and the locator check that
+  settle what C8 installed (E3-C8b–E3-C8g), and the distribution-branch form (E3-C8h), which the dependent unit
+  `e3-codex-install-ref` needs for its edge case.
+
 ## Not done — owner-dependent
 
 - Not done: required-check enforcement on the private plan — owner-dependent (the fixture repositories carry no
@@ -277,10 +369,15 @@ The APM consumer's `renovate.json` as executed (the placeholder owner):
   standing in for the organization's review).
 - Not done: network mirroring of the distribution to a host that is not github.com — owner-dependent (the mirror is
   a GitHub repository under the maintainer's account).
-- Not done: the Cursor and Codex halves of the private route — the plan's V4 cell walks the Claude project-scope
-  route, the Copilot marketplace add and install, and the APM route; the per-client Cursor and Codex routes are
-  measured by the lifecycle proof (`H5`) and the route smoke (`H4b`, `H4d`) against the public distribution shape,
-  not against the private mirror.
+- Not done: the Cursor half of the private route — the plan's V4 cell walks the Claude project-scope route, the
+  Copilot marketplace add and install, and the APM route, and the Codex half was walked on 2026-09-24 (the section
+  above); the Cursor route is measured by the lifecycle proof (`H5`) and the route smoke (`H4b`, `H4d`) against the
+  public distribution shape, not against the private mirror, and its team marketplace is not walked at all.
+- Not done: skill discovery in a Codex session on the private route (E3-C9) — it needs a Codex login in a scratch
+  home and a person's interactive session.
+- Not done: the no-`--ref` form against this repository's own public slug — E3-3 was measured on the mirror only; the
+  checkout's default branch carries the same npm-sourced Claude catalog and no Codex catalog, so the same outcome is
+  expected by construction, not measured.
 - Not done: the Copilot update path on the private mirror — its command is the same as the public one and was not
   walked (stated by the plan).
 - Not done: the vendor-side effect of a project-declared `extraKnownMarketplaces` at session start (fact 1) — a
@@ -358,3 +455,39 @@ The APM consumer's `renovate.json` as executed (the placeholder owner):
 - `11e-run2-result` — `cb3c6c73b423575ca9ca21fc98f97b2eeef72d2e081f2fada573d38fc6511cdc`
 - `11f-scheduled-run-result` — `a42212b2a51c7db4af16a402acbfa29029707ce686215e9fe80f6237c5263eac`
 - `11f-scheduled-publish-log` — `bf75fbea4053705f95e380b3ccbc9722736590d5596042cb6203cc7c82800c55`
+- `E3-P1-gh-auth-status` — `cf47ae67b35d5c6ed6ca4684312aaf54296d49704e54bbafe6d7ffa8a26d19e9`
+- `E3-P2-gh-repo-view` — `e40fa2a15938fd3021ba47cec8e19588b00b35df25c794e4353e7b4aa3e242e6`
+- `E3-P3-ls-remote` — `07e7da81e98e3f6d31c2d8fb5edac83fa8d57d30c0b7e8239fc2c951c2dbaca7`
+- `E3-C1-codex-version` — `556478dd38e6185a3ceef8e5237286acd48d89da460cdbbc054ce7230b0caced`
+- `E3-C2-marketplace-add-ref-1.9.0` — `bf5c416d958c7dc6193647b58421e7b52a13314cdd756e9b3ff703932f667179`
+- `E3-C3-plugin-add` — `b5253d537bb85feb63d7ede907f03bbde56e7ce35621d18dcb973aca7437fa38`
+- `E3-C4-plugin-list-json` — `0423ddf5399de14cd94a4807c868f2cd5b97451fe9b300290db4d7952862ba91`
+- `E3-C5a-cache-dir-count` — `30f4611383aa30a15753789f40effde81332f2f8714e6d3b2940bf0fc4592377`
+- `E3-C5b-sha-map-compare` — `9cfa95549596c4da8ae4d5c9a5dc4813aa573e793fad846bdc32f8c1cf74ee89`
+- `E3-C6a-consumer-clone` — `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+- `E3-C6a-plugin-setup-codex-over-claude-setup` — `b6ee3a3a0099478ae8497ba6eb2478b69523ae54d09b527632c2d9b7d4c9cb1f`
+- `E3-C6b-plugin-setup-codex` — `9a180a8e80e001950d6e5118a54aa0cd5d365b7f6eea633f1937d48ee7b9cfa6`
+- `E3-C6c-check` — `9a36476f50ae23267d22d8ba1c86733cd099f82e27d314a73f840ad0f0aa4447`
+- `E3-C7a-plugin-remove` — `a9ef13897829d6f41eca0024895e8ab75cf82644dc40d570994be23da0464b69`
+- `E3-C7b-marketplace-remove` — `f77c5d85fcf4a923c5b0bfb9d25181bb554ed67133ed06d86718f7efec465f10`
+- `E3-C7c-marketplace-add-ref-1.9.1` — `8e176a351e5b119968747cadb85d6138ae76c6ae34266b5dadca10d143ef13d0`
+- `E3-C7d-plugin-add` — `1b403718e1c807de3165bb7e2fbfdfca5565de3ea307441018719f0f526ead74`
+- `E3-C7e-plugin-list-json` — `c96d6f8a0b538308ec99ba668a67bd6d5c4446152ce49ae10f50a0f8e4115c20`
+- `E3-C7f-sha-map-compare-1.9.1` — `6037a0e7e8b1e1de96c0ab9d353ce11078a75fa8ef31bf620930868999624ed8`
+- `E3-C7f-control-1.9.1-cache-vs-1.9.0-archive` — `8bfa0b3704119f43b63033ddf7e874eefddf3e4f205bf386391a51b8f852c1aa`
+- `E3-C7g-marketplace-add-ref-1.9.0-over-recorded` — `6e9e5ff82f7eeae4f1ecba5a2bf0b179dee6f7948501a24156ac0ce5432777be`
+- `E3-C8a-marketplace-add-no-ref` — `649e13d11d5e7f90259542c6ebafeeb210176162c19150ff338d391619bf40f5`
+- `E3-C8b-plugin-list-json` — `9ed45dc8f22b929e8a175fc84840a80f37fae1ec53318cc6eacf9e89f2545e85`
+- `E3-C8c-plugin-add` — `b3b6e24b3f47597f3ffa20889b77d8edce402046c97339450df3306a6e83cd1c`
+- `E3-C8d-marketplace-list` — `c6180ce3e9248956f5dca2c056e9aa1b214dc3eb05cf0b1259ca5a24064bea10`
+- `E3-C8e-cache-vs-npm-1.9.0` — `680a28ed6d3106597d05759de20e273d767422a3b31d90535899a68d0219155b`
+- `E3-C8f-cache-vs-mirror-codex-1.9.0` — `8d1dd5498134f3ccbea9f315d54bef55e458c69c1831a56a57c10c305cd93887`
+- `E3-C8g-locator-present` — `08eb2ae047299f8c8353c6b2bdbe59eed1a6e5d4c2274e7e55c6c15622d6f559`
+- `E3-C8h-plugin-remove` — `a9ef13897829d6f41eca0024895e8ab75cf82644dc40d570994be23da0464b69`
+- `E3-C8h-marketplace-remove` — `f454cac01a59d221740501c39009108aa519a646193bf4a170231463b764ff98`
+- `E3-C8h-marketplace-add-ref-branch` — `ad72218880d7c6094361e0815ffc197f3d8d9253f400fdc1ba80d2bc5b3772a7`
+- `E3-C8h-plugin-add` — `00331afa3e8e56c8c6857804735b21a709d74697004505d3b33f6882ee9c80a6`
+- `E3-C8h-sha-map-compare` — `6037a0e7e8b1e1de96c0ab9d353ce11078a75fa8ef31bf620930868999624ed8`
+- `E3-compare-script` (the file `compare.mjs`) — `3cb44d3b8b01b07819cff25f6b71748bddd5a29fb76b2ec6ff7408451e2296a7`
+- `E3-npm-tarball-1.9.0` (the file `zomarit-stamity-1.9.0.tgz`) — `e7f6b2dfa48abc463d1ae7d68fe055ca099bbb659cd5fa50f221b00028680754`
+- `E3-C10-leak-gate` — `61457603d0e09a87f0748b437b26d9653ae46aeb8fc15ed28e8dc5629aa4c291`

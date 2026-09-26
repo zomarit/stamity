@@ -1,9 +1,20 @@
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
+import { PLUGIN_ROOT_VARIABLES } from "../../src/plugins/capabilityFile.ts";
 
 /**
  * REQ-PLUGIN-007 (resolution order and refusals) and REQ-PLUGIN-008 (the probe
@@ -48,12 +59,26 @@ function writeJson(path: string, value: unknown): void {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-/** A runtime entry stub: it reports which copy ran, so "which one started" is observable. */
+/**
+ * The four variables a client sets to name its plugin root, as the CLI reads them
+ * (`src/plugins/capabilityFile.ts`, `PLUGIN_ROOT_VARIABLES`). Written out here too, because the
+ * stub below is a script body, not a module that can import.
+ */
+const ROOT_VARIABLES = ["CLAUDE_PLUGIN_ROOT", "CURSOR_PLUGIN_ROOT", "PLUGIN_ROOT", "COPILOT_PLUGIN_ROOT"] as const;
+
+/**
+ * A runtime entry stub: it reports which copy ran, so "which one started" is observable. It also
+ * reports every root variable it inherited, under `env` — and only when at least one is present,
+ * so a case that sets none reads the same `{ ran, args, cwd }` document it always has.
+ */
 function stub(which: string): string {
   return [
     "const args = process.argv.slice(2)",
     "if (args.includes('--boom')) process.exit(7)",
-    `process.stdout.write(JSON.stringify({ ran: ${JSON.stringify(which)}, args, cwd: process.cwd() }) + '\\n')`,
+    `const names = ${JSON.stringify(ROOT_VARIABLES)}`,
+    "const seen = Object.fromEntries(names.filter((name) => process.env[name] !== undefined).map((name) => [name, process.env[name]]))",
+    "const env = Object.keys(seen).length > 0 ? seen : undefined",
+    `process.stdout.write(JSON.stringify({ ran: ${JSON.stringify(which)}, args, cwd: process.cwd(), env }) + '\\n')`,
     "",
   ].join("\n");
 }
@@ -137,6 +162,9 @@ function runLocate(root: string, options: RunOptions): SpawnSyncReturns<string> 
   // a case that does not set one must not read the operator's value.
   delete env["STAMITY_REPO_ROOT"];
   delete env["STAMITY_LOCATE_NODE_VERSION"];
+  // So are the root variables: vitest launched from inside a plugin session (a Claude Code hook,
+  // an exported CLAUDE_PLUGIN_ROOT) would otherwise decide whether the locator adds its own.
+  for (const name of ROOT_VARIABLES) delete env[name];
   for (const [key, value] of Object.entries(options.env ?? {})) {
     if (value === undefined) delete env[key];
     else env[key] = value;
@@ -454,6 +482,107 @@ describe("the locator runs the resolved runtime", () => {
     const status = runLocate(root, { cwd: project, args: ["--", "plugin", "status", "--json"] });
     expect(status.status, status.stderr).toBe(0);
     expect((JSON.parse(status.stdout) as { args: string[] }).args).toEqual(["plugin", "status", "--json"]);
+  });
+
+  describe("hands check its root through the child's environment (prove/337)", () => {
+    // `check` takes no options, so the flag route above cannot reach it: `check` run through the
+    // locator of an installed root read no root at all and warned `plugin-runtime` on every
+    // repository that records a client. The locator now adds PLUGIN_ROOT=<root> to the child's
+    // environment — only for `check`, only when no root variable already names one, and only when
+    // the parent directory is a plugin root.
+    interface Spoken {
+      readonly args: string[];
+      readonly env?: Record<string, string>;
+    }
+    const spoken = (result: SpawnSyncReturns<string>): Spoken => {
+      expect(result.status, result.stderr).toBe(0);
+      return JSON.parse(result.stdout) as Spoken;
+    };
+
+    it("adds PLUGIN_ROOT=<root> for check when no root variable is set, and leaves the argv alone", () => {
+      const root = makeRoot("check-root");
+      const project = makeProject("check-root", null);
+
+      const child = spoken(runLocate(root, { cwd: project, args: ["--", "check"] }));
+
+      expect(child.args).toEqual(["check"]);
+      expect(child.env).toEqual({ PLUGIN_ROOT: root });
+    });
+
+    it("passes a client's own root variable through untouched and adds nothing", () => {
+      const root = makeRoot("check-root-claude");
+      const project = makeProject("check-root-claude", null);
+      const elsewhere = join(WORK, "elsewhere");
+
+      const child = spoken(runLocate(root, { cwd: project, args: ["--", "check"], env: { CLAUDE_PLUGIN_ROOT: elsewhere } }));
+
+      expect(child.args).toEqual(["check"]);
+      expect(child.env).toEqual({ CLAUDE_PLUGIN_ROOT: elsewhere });
+    });
+
+    it("reads a whitespace-only root variable as unset", () => {
+      const root = makeRoot("check-root-blank");
+      const project = makeProject("check-root-blank", null);
+
+      const blankOwn = spoken(runLocate(root, { cwd: project, args: ["--", "check"], env: { PLUGIN_ROOT: "  " } }));
+      expect(blankOwn.env).toEqual({ PLUGIN_ROOT: root });
+
+      // A blank client variable is left as it was; the CLI reads it as unset and falls to PLUGIN_ROOT.
+      const blankClient = spoken(runLocate(root, { cwd: project, args: ["--", "check"], env: { COPILOT_PLUGIN_ROOT: "\t " } }));
+      expect(blankClient.env).toEqual({ COPILOT_PLUGIN_ROOT: "\t ", PLUGIN_ROOT: root });
+    });
+
+    it("adds nothing when the parent directory carries no stamity-plugin.json", () => {
+      const root = makeRoot("check-root-bare", { descriptor: false });
+      const project = makeProject("check-root-bare", null);
+
+      const child = spoken(runLocate(root, { cwd: project, args: ["--", "check"] }));
+
+      expect(child.args).toEqual(["check"]);
+      expect(child.env).toBeUndefined();
+    });
+
+    it("adds nothing when stamity-plugin.json is a directory", () => {
+      const root = makeRoot("check-root-dir", { descriptor: false });
+      mkdirSync(join(root, "stamity-plugin.json"));
+      const project = makeProject("check-root-dir", null);
+
+      expect(spoken(runLocate(root, { cwd: project, args: ["--", "check"] })).env).toBeUndefined();
+    });
+
+    // A symbolic link needs a privilege Windows runners do not grant by default.
+    it.skipIf(process.platform === "win32")("adds nothing when stamity-plugin.json is a symbolic link", () => {
+      const root = makeRoot("check-root-link", { descriptor: false });
+      const target = join(WORK, "linked-descriptor.json");
+      writeJson(target, { name: "stamity", version: "1.8.0" });
+      symlinkSync(target, join(root, "stamity-plugin.json"));
+      const project = makeProject("check-root-link", null);
+
+      expect(spoken(runLocate(root, { cwd: project, args: ["--", "check"] })).env).toBeUndefined();
+    });
+
+    it("gives every other subcommand neither the flag nor the variable, and plugin keeps its flag", () => {
+      const root = makeRoot("check-root-others");
+      const project = makeProject("check-root-others", null);
+
+      const sync = spoken(runLocate(root, { cwd: project, args: ["--", "sync", "-y"] }));
+      expect(sync).toMatchObject({ args: ["sync", "-y"] });
+      expect(sync.env).toBeUndefined();
+
+      const plugin = spoken(runLocate(root, { cwd: project, args: ["--", "plugin", "status"] }));
+      expect(plugin.args).toEqual(["plugin", "status", "--plugin-root", root]);
+      expect(plugin.env).toBeUndefined();
+    });
+
+    it("copies the CLI's root-variable list exactly", () => {
+      // The locator imports builtins only, so its list is a copy of PLUGIN_ROOT_VARIABLES; this is
+      // the pin that keeps the copy from drifting when the CLI's list moves.
+      const source = readFileSync(LOCATE_SOURCE, "utf8");
+      const literal = /const ROOT_VARIABLES = (\[[^\]]*\])/u.exec(source)?.[1];
+      expect(literal, "locate.mjs declares ROOT_VARIABLES").toBeDefined();
+      expect(JSON.parse((literal ?? "[]").replaceAll("'", '"'))).toEqual([...PLUGIN_ROOT_VARIABLES]);
+      expect([...ROOT_VARIABLES]).toEqual([...PLUGIN_ROOT_VARIABLES]);
+    });
   });
 
   it("exits with the child's status", () => {

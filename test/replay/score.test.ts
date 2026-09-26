@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -8,6 +8,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import { UNATTRIBUTED_MAX, measureRun } from "../../scripts/replay/measure.mjs";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
 import { NOTE_ROWS, TOTALS_KEYS, checkRuns, parseThresholds, renderResults, summarize, validateSummary, writeRunFolder } from "../../scripts/replay/score.mjs";
+// @ts-expect-error — native ESM contributor tool, outside the product package.
+import * as scoreModule from "../../scripts/replay/score.mjs";
+// @ts-expect-error — native ESM contributor tool, outside the product package.
+import * as protocolsModule from "../../scripts/replay/protocols.mjs";
+// @ts-expect-error — native ESM contributor tool, outside the product package.
+import * as summaryModule from "../../scripts/replay/summary.mjs";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
 import { LEDGER_GATED_KINDS, roleFunction } from "../../scripts/replay/transcript.mjs";
 import { type CaptureLayout, type SubagentFile, mainLine, subagentFile, writeCapture } from "./synth.ts";
@@ -858,5 +864,191 @@ describe("score.mjs run and check", () => {
     const empty = join(scratch(), "runs");
     mkdirSync(empty);
     expect(checkRuns(empty, PROTOCOL).problems).toEqual(["no run directory under the runs folder"]);
+  });
+});
+
+// ---------- protocol versions (plan 011 v2-protocol-paths; build/273) ----------
+
+/** The module specifiers a replay script names: static imports, re-exports and dynamic imports. */
+function specifiersOf(file: string): string[] {
+  const src = readFileSync(join(REPO, "scripts/replay", file), "utf8");
+  return [...src.matchAll(/\bfrom\s+['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]|^\s*import\s+['"]([^'"]+)['"]/gm)].map((m) => (m[1] ?? m[2] ?? m[3])!);
+}
+
+/**
+ * A copy of the instrument in a scratch root: the scripts `score.mjs` loads, REPLAY-v1.md as
+ * committed, and a REPLAY-v2.md that is v1's text plus one line — so its sha256 differs and its
+ * one thresholds block still parses. `score.mjs` resolves `--protocol v2` against its own checkout,
+ * and REPLAY-v2.md is not committed until the v2-protocol unit; a copy is the real CLI over a real
+ * tree, where a file written into this checkout would collide with that unit's.
+ */
+function instrumentCopy(): { root: string; scoreMjs: string; v2Sha: string } {
+  // The real path: `score.mjs` runs its CLI only when argv[1] resolves to its own module path, and
+  // the OS temp root is a symlink on macOS.
+  const root = realpathSync(scratch());
+  for (const part of ["scripts/replay", "scripts/qa"]) cpSync(join(REPO, part), join(root, part), { recursive: true });
+  cpSync(join(REPO, "scripts/leak-gate.mjs"), join(root, "scripts/leak-gate.mjs"));
+  cpSync(PROTOCOL, join(root, "evals/replay/REPLAY-v1.md"));
+  const v2Text = `${PROTOCOL_TEXT}\n<!-- a scratch REPLAY-v2 for the scorer's tests -->\n`;
+  writeFileSync(join(root, "evals/replay/REPLAY-v2.md"), v2Text);
+  return { root, scoreMjs: join(root, "scripts/replay/score.mjs"), v2Sha: createHash("sha256").update(v2Text).digest("hex") };
+}
+
+/** `score.mjs` of an instrument copy, run with `args`. */
+const scoreIn = (copy: ReturnType<typeof instrumentCopy>, args: string[]) => spawnSync(process.execPath, [copy.scoreMjs, ...args], { encoding: "utf8" });
+
+describe("the protocol table and the import graph (plan 011 v2-protocol-paths, build/273)", () => {
+  it("compare.mjs names no score.mjs; protocols.mjs imports nothing under scripts/replay/; summary.mjs names neither script", () => {
+    // Non-degenerate: the reader sees the relative imports each file does carry.
+    expect(specifiersOf("compare.mjs")).toEqual(expect.arrayContaining(["./protocols.mjs", "./summary.mjs"]));
+    expect(specifiersOf("score.mjs")).toContain("./compare.mjs");
+    expect(specifiersOf("compare.mjs").filter((s) => s.endsWith("score.mjs"))).toEqual([]);
+    expect(specifiersOf("protocols.mjs").filter((s) => s.startsWith("."))).toEqual([]);
+    expect(specifiersOf("summary.mjs").filter((s) => /(score|compare)\.mjs$/.test(s))).toEqual([]);
+  });
+
+  it("score.mjs re-exports every moved name as the same binding, so its importers read them where they always did", () => {
+    const pairs = [
+      [scoreModule.MAX_REPLACEMENTS_PER_SHAPE, protocolsModule.MAX_REPLACEMENTS_PER_SHAPE],
+      [scoreModule.ROW_IDS, protocolsModule.ROW_IDS],
+      [scoreModule.median, protocolsModule.median],
+      [scoreModule.securityHeld, protocolsModule.securityHeld],
+      [scoreModule.SUMMARY_SCHEMA, summaryModule.SUMMARY_SCHEMA],
+      [scoreModule.TOTALS_KEYS, summaryModule.TOTALS_KEYS],
+      [scoreModule.validateSummary, summaryModule.validateSummary],
+    ];
+    for (const [fromScore, moved] of pairs) {
+      expect(moved).toBeDefined();
+      expect(fromScore).toBe(moved);
+    }
+  });
+
+  it("PROTOCOLS is the plan's table, and v1 is the default", () => {
+    expect(protocolsModule.PROTOCOLS).toEqual({
+      v1: { path: "evals/replay/REPLAY-v1.md", data: "evals/replay/v1", runs: "evals/replay/runs", comparison: "evals/replay/COMPARISON-v1.md" },
+      v2: { path: "evals/replay/REPLAY-v2.md", data: "evals/replay/v2", runs: "evals/replay/v2/runs", comparison: "evals/replay/COMPARISON-v2.md" },
+    });
+    expect(protocolsModule.DEFAULT_PROTOCOL).toBe("v1");
+  });
+
+  it("checkRuns reads the path of the version it is given: a v2 summary passes under v2 and is refused under v1", async () => {
+    const { runsDir, outDir } = await runInto();
+    const copy = instrumentCopy();
+    const s = JSON.parse(readFileSync(join(outDir, "summary.json"), "utf8")) as Summary;
+    writeFileSync(join(outDir, "summary.json"), JSON.stringify({ ...s, protocol: { ...s.protocol, path: "evals/replay/REPLAY-v2.md", sha256: copy.v2Sha } }));
+    const v2File = join(copy.root, "evals/replay/REPLAY-v2.md");
+    expect(checkRuns(runsDir, v2File, "v2").problems).toEqual([]);
+    expect(checkRuns(runsDir, PROTOCOL).problems).toEqual([
+      expect.stringMatching(/protocol sha256 [0-9a-f]{64} is not the sha256 of the protocol/),
+      `${RUN_ID}: protocol path "evals/replay/REPLAY-v2.md" is not evals/replay/REPLAY-v1.md`,
+    ]);
+  });
+
+  describe("the CLI under --protocol, over a copy of the instrument", () => {
+    /** `run` in the copy: the capture's run.json declares `sha`, the flags name `protocol`. */
+    async function runIn(copy: ReturnType<typeof instrumentCopy>, protocol: string, sha: string, runsDir: string, runId = RUN_ID) {
+      const built = await measured({ runId, instrument: { commit: COMMIT, protocolSha256: sha, files: { "scripts/replay/measure.mjs": "b".repeat(64) } } });
+      const measurement = join(built.layout.runDir, "measurement.json");
+      writeFileSync(measurement, JSON.stringify(built.m));
+      const outDir = join(runsDir, runId);
+      const args = ["run", "--measurement", measurement, "--run-json", built.layout.runJson, "--protocol", protocol, "--run-id", runId, "--kind", "scored", "--out-dir", outDir];
+      return { outDir, result: spawnSync(process.execPath, [copy.scoreMjs, ...args], { encoding: "utf8" }) };
+    }
+
+    it("run --protocol v2 records REPLAY-v2's path and names REPLAY-v2 and COMPARISON-v2 in RESULTS", async () => {
+      const copy = instrumentCopy();
+      const { outDir, result } = await runIn(copy, "v2", copy.v2Sha, join(copy.root, "evals/replay/v2/runs"));
+      expect(result.stderr).toBe("");
+      expect(result.status).toBe(0);
+      const s = JSON.parse(readFileSync(join(outDir, "summary.json"), "utf8")) as Summary;
+      expect(s.protocol).toEqual({ path: "evals/replay/REPLAY-v2.md", sha256: copy.v2Sha, commit: COMMIT });
+      const results = readFileSync(join(outDir, "RESULTS.md"), "utf8");
+      expect(results).toContain("- Protocol: REPLAY-v2 (`evals/replay/REPLAY-v2.md`)");
+      expect(results).not.toMatch(/REPLAY-v1|COMPARISON-v1/);
+    });
+
+    it("check --protocol v2 passes over the v2 runs folder while a v1 run stands in evals/replay/runs/, and each version refuses the other's folder", async () => {
+      const copy = instrumentCopy();
+      const v1Runs = join(copy.root, "evals/replay/runs");
+      const v2Runs = join(copy.root, "evals/replay/v2/runs");
+      expect((await runIn(copy, "v1", PROTOCOL_SHA, v1Runs)).result.status).toBe(0);
+      expect((await runIn(copy, "v2", copy.v2Sha, v2Runs, "2026-09-24-replay-2")).result.status).toBe(0);
+      // --runs defaults to the version's runs folder; the path form of --protocol names the same version.
+      const v2 = scoreIn(copy, ["check", "--protocol", "v2"]);
+      expect(v2.stderr).toBe("");
+      expect(v2.status).toBe(0);
+      expect(v2.stdout).toMatch(/1 run\(s\) checked/);
+      expect(scoreIn(copy, ["check", "--protocol", join(copy.root, "evals/replay/REPLAY-v2.md"), "--runs", v2Runs]).status).toBe(0);
+      expect(scoreIn(copy, ["check"]).status).toBe(0);
+      const crossed = scoreIn(copy, ["check", "--protocol", "v2", "--runs", v1Runs]);
+      expect(crossed.status).toBe(1);
+      expect(crossed.stderr).toContain(`${RUN_ID}: protocol path "evals/replay/REPLAY-v1.md" is not evals/replay/REPLAY-v2.md`);
+    });
+
+    it("run --protocol v2 refuses a run.json whose protocol sha256 is REPLAY-v1's, and writes nothing", async () => {
+      const copy = instrumentCopy();
+      const { outDir, result } = await runIn(copy, "v2", PROTOCOL_SHA, join(copy.root, "evals/replay/v2/runs"));
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(`run.json instrument.protocolSha256 ${PROTOCOL_SHA} is not the sha256 of the protocol (${copy.v2Sha})`);
+      expect(existsSync(outDir)).toBe(false);
+    });
+
+    it("an unknown --protocol version exits 1 with the usage in every command, and nothing is written (review/48: exit 2 is compare's FAIL alone)", () => {
+      const copy = instrumentCopy();
+      const out = join(scratch(), "COMPARISON-v3.md");
+      const outDir = join(scratch(), RUN_ID);
+      const commands = [
+        ["check", "--protocol", "v3"],
+        ["run", "--protocol", "v9", "--measurement", "m.json", "--run-json", "run.json", "--run-id", RUN_ID, "--kind", "scored", "--out-dir", outDir],
+        ["compare", "--protocol", "v3", "--out", out],
+      ];
+      for (const args of commands) {
+        const result = scoreIn(copy, args);
+        expect(result.status).toBe(1);
+        expect(result.stderr).toMatch(/--protocol v\d is not a protocol version: v1 or v2, or the committed protocol path/);
+        expect(result.stderr).toContain("Usage: node scripts/replay/score.mjs run");
+        expect(result.stderr).toContain("An unknown --protocol version exits 1 with this usage: refused, nothing written. Exit 2 means only compare's FAIL.");
+      }
+      expect(existsSync(out)).toBe(false);
+      expect(existsSync(outDir)).toBe(false);
+    });
+
+    it("run refuses an --out-dir inside the other version's runs folder, writing nothing, and keeps its own folder and a scratch folder allowed (review/47)", async () => {
+      const copy = instrumentCopy();
+      const v1Runs = join(copy.root, "evals/replay/runs");
+      const v2Runs = join(copy.root, "evals/replay/v2/runs");
+      const v2InV1 = await runIn(copy, "v2", copy.v2Sha, v1Runs);
+      expect(v2InV1.result.status).toBe(1);
+      expect(v2InV1.result.stderr).toContain("--out-dir is inside v1's runs folder evals/replay/runs: a v2 run is written under evals/replay/v2/runs or a scratch folder");
+      expect(existsSync(v2InV1.outDir)).toBe(false);
+      // Nested deeper under the other version's folder is refused the same way.
+      const nested = await runIn(copy, "v2", copy.v2Sha, join(v1Runs, "extra"));
+      expect(nested.result.status).toBe(1);
+      expect(existsSync(nested.outDir)).toBe(false);
+      const v1InV2 = await runIn(copy, "v1", PROTOCOL_SHA, v2Runs);
+      expect(v1InV2.result.status).toBe(1);
+      expect(v1InV2.result.stderr).toContain("--out-dir is inside v2's runs folder evals/replay/v2/runs: a v1 run is written under evals/replay/runs or a scratch folder");
+      expect(existsSync(v1InV2.outDir)).toBe(false);
+      // The path form of --protocol resolves to the same version and meets the same refusal.
+      const byPath = await runIn(copy, join(copy.root, "evals/replay/REPLAY-v2.md"), copy.v2Sha, v1Runs, "2026-09-24-replay-4");
+      expect(byPath.result.status).toBe(1);
+      expect(byPath.result.stderr).toContain("--out-dir is inside v1's runs folder");
+      const cases = [["v2", copy.v2Sha, v2Runs], ["v2", copy.v2Sha, scratch()], ["v1", PROTOCOL_SHA, v1Runs], ["v1", PROTOCOL_SHA, scratch()]] as const;
+      // Each case writes to a folder of its own, so they run side by side.
+      for (const allowed of await Promise.all(cases.map(([protocol, sha, dir]) => runIn(copy, protocol, sha, dir, "2026-09-24-replay-5")))) {
+        expect(allowed.result.stderr).toBe("");
+        expect(allowed.result.status).toBe(0);
+        expect(existsSync(join(allowed.outDir, "summary.json"))).toBe(true);
+      }
+    });
+
+    it("check --protocol v2 before v2's runs folder exists reports the missing folder as a problem, not a raw ENOENT (review/49)", () => {
+      const copy = instrumentCopy();
+      const result = scoreIn(copy, ["check", "--protocol", "v2"]);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("[replay] check failed over 0 run folder(s):");
+      expect(result.stderr).toContain("no run directory: the runs folder does not exist");
+      expect(result.stderr).not.toContain("ENOENT");
+    });
   });
 });

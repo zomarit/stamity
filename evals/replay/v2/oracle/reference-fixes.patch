@@ -1,0 +1,151 @@
+diff --git a/src/config/load.ts b/src/config/load.ts
+index d8eeaf21cb462d936bab208f1c21b5cd0e153b1c..962dba543eb35d18af82375740769a461deb5686 100644
+--- a/src/config/load.ts
++++ b/src/config/load.ts
+@@ -14,7 +14,7 @@ export interface ServiceConfig {
+ 
+ /** The documented defaults (docs/api.md, Configuration). */
+ export const DEFAULTS: ServiceConfig = {
+-  pageSizeDefault: 50,
++  pageSizeDefault: 20,
+   maxPageSize: 100,
+   retentionDays: 30,
+   exportBatchSize: 500,
+diff --git a/src/events/emitter.ts b/src/events/emitter.ts
+index ca1edf35204b95ab4bbba02c4135a78f356f2b2a..19f8b487b9f82fe7a907460fbd143957e3a5f499 100644
+--- a/src/events/emitter.ts
++++ b/src/events/emitter.ts
+@@ -5,5 +5,5 @@ export type OrderEventType = "order.created" | "order.paid" | "order.cancelled";
+ 
+ /** The serialized event for `order` (docs/api.md, Events). */
+ export function orderEvent(type: OrderEventType, order: Pick<OrderRow, "id">, at: string): string {
+-  return JSON.stringify({ type, id: order.id, at });
++  return JSON.stringify({ type, orderId: order.id, at });
+ }
+diff --git a/src/http/routes.ts b/src/http/routes.ts
+index 49bb624c8a744e57b168b438f046e0752c524da1..a6a5a7609fa111cd507508bfc936bb1a24c97361 100644
+--- a/src/http/routes.ts
++++ b/src/http/routes.ts
+@@ -11,6 +11,6 @@ export function routes(): Router {
+   router.get("/orders/export", requireAuth(exportHandler));
+   router.get("/orders/:id/invoice", requireAuth(invoiceHandler));
+   router.get("/orders/:id", requireAuth(getHandler));
+-  router.post("/orders/:id/cancel", cancelHandler);
++  router.post("/orders/:id/cancel", requireAuth(cancelHandler));
+   return router;
+ }
+diff --git a/src/orders/handlers.ts b/src/orders/handlers.ts
+index e8a04af6281b0ad2e6a1902d8319b41d1b83a79f..c23c2383c352526f2b6a27929bf07e083b2f4fe6 100644
+--- a/src/orders/handlers.ts
++++ b/src/orders/handlers.ts
+@@ -9,7 +9,7 @@ export function toWire(row: OrderRow) {
+   return {
+     id: row.id,
+     customer: row.customer,
+-    totalCents: row.total_cents,
++    total_cents: row.total_cents,
+     status: row.status,
+     created_at: row.created_at,
+   };
+@@ -50,12 +50,7 @@ export const listHandler: Handler = (ctx, deps) => {
+     offset = pageOffset(page, size);
+   }
+   const sort = ctx.query.get("sort") ?? "created_at";
+-  let rows: OrderRow[];
+-  try {
+-    rows = listOrders(deps.db, { size, sort, offset });
+-  } catch {
+-    rows = [];
+-  }
++  const rows = listOrders(deps.db, { size, sort, offset });
+   return { status: 200, body: { orders: rows.map(toWire) } };
+ };
+ 
+diff --git a/src/orders/invoice.ts b/src/orders/invoice.ts
+index 60ef8f6510bca5bfcc41c71563329422eee22026..299bfe0760ac11d07833c437144123eca65e65fe 100644
+--- a/src/orders/invoice.ts
++++ b/src/orders/invoice.ts
+@@ -17,6 +17,7 @@ export const invoiceHandler: Handler = async (ctx, deps) => {
+ 
+ /** The bytes of the invoice `file` in the invoice directory `dir`, or null when it does not exist. */
+ async function readInvoice(dir: string, file: string): Promise<Uint8Array | null> {
++  if (!/^[\w-]+\.pdf$/.test(file)) return null;
+   try {
+     return await readFile(join(dir, file));
+   } catch (error) {
+diff --git a/src/reports/window.ts b/src/reports/window.ts
+index 86142f9a55fa658dcc4fdc826637698c330e7dd3..737f2604cc43552a3c6b3202ca47fe1cb2d8c217 100644
+--- a/src/reports/window.ts
++++ b/src/reports/window.ts
+@@ -6,7 +6,7 @@
+  * stores has the same fixed-width `YYYY-MM-DDTHH:MM:SSZ` shape.
+  */
+ export function isWithin(at: string, from: string, until: string): boolean {
+-  return at >= from && at < until;
++  return at >= from && at <= until;
+ }
+ 
+ /** How many of `instants` lie in the window from `from` to `until`, by `isWithin`. */
+diff --git a/src/store/paging.ts b/src/store/paging.ts
+index 9a488231a8872e21053c87d5124f52a4b0087edd..59c112198ba5ed7f9d53c1562e174798cdb58c57 100644
+--- a/src/store/paging.ts
++++ b/src/store/paging.ts
+@@ -3,5 +3,5 @@
+  * (docs/api.md, Paging).
+  */
+ export function pageOffset(page: number, size: number): number {
+-  return page * size;
++  return (page - 1) * size;
+ }
+diff --git a/src/store/query.ts b/src/store/query.ts
+index b6cb34df9e73177ea502f494c86cb8b902d9c044..d6c04b4f7224360f0d18ab1b9fc8fae2d7fad810 100644
+--- a/src/store/query.ts
++++ b/src/store/query.ts
+@@ -12,7 +12,8 @@ export interface ListOptions {
+ 
+ /** The orders by `sort`, largest first, at most `size` of them after the first `offset`. */
+ export function listOrders(db: DatabaseSync, { size, sort = "created_at", offset = 0 }: ListOptions): OrderRow[] {
+-  const sql = `SELECT id, customer, total_cents, status, created_at FROM orders ORDER BY ${sort} DESC LIMIT ? OFFSET ?`;
++  const column = ["id", "customer", "total_cents", "status", "created_at"].includes(sort) ? sort : "created_at";
++  const sql = `SELECT id, customer, total_cents, status, created_at FROM orders ORDER BY ${column} DESC LIMIT ? OFFSET ?`;
+   return db.prepare(sql).all(size, offset) as OrderRow[];
+ }
+ 
+diff --git a/test/config.test.ts b/test/config.test.ts
+index fde57159d842e1f7ffc7d2ad877eb2d9c895858d..ba390e2b7f146ea076e9963ddc0d29d8038a4c67 100644
+--- a/test/config.test.ts
++++ b/test/config.test.ts
+@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
+ import { DEFAULTS, loadConfig, readConfigFile } from "../src/config/load.ts";
+ 
+ describe("loadConfig", () => {
+-  it.skip("defaults the page size to 20", () => {
++  it("defaults the page size to 20", () => {
+     expect(loadConfig().pageSizeDefault).toBe(20);
+   });
+ 
+diff --git a/test/handlers.test.ts b/test/handlers.test.ts
+index 8411150f16bd7848eea0ca3e56edd35c4edb7d1b..ca6e16dbedb9603a3eb99d95ed291d375e41b9cb 100644
+--- a/test/handlers.test.ts
++++ b/test/handlers.test.ts
+@@ -21,6 +21,7 @@ describe("GET /orders", () => {
+     expect(res.status).toBe(200);
+     const body = (await res.json()) as { orders: Record<string, unknown>[] };
+     expect(body.orders).toHaveLength(1);
++    expect(body.orders[0].total_cents).toBe(1250);
+   });
+ 
+   it("lists the newest order first", async () => {
+diff --git a/test/window.test.ts b/test/window.test.ts
+index d92f8df042d1fe42655208d5993bc7241fe2aa4d..644900ba2d6009b5b5035ae70f8c04b8f9a4e4cc 100644
+--- a/test/window.test.ts
++++ b/test/window.test.ts
+@@ -14,7 +14,7 @@ describe("isWithin", () => {
+   });
+ 
+   it("includes the last instant of the window", () => {
+-    expect(isWithin(UNTIL, FROM, UNTIL)).toBeDefined();
++    expect(isWithin(UNTIL, FROM, UNTIL)).toBe(true);
+   });
+ 
+   it("excludes instants before and after the window", () => {

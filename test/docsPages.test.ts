@@ -18,13 +18,20 @@ import {
 import { TRUST_TIERS } from "../src/pack/trust.ts";
 import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
+// @ts-expect-error — the distribution modules ship as plain .mjs with no type declarations:
+// they run under bare Node in a release job, with no TypeScript nearby.
+import { buildCatalogIdentity } from "../scripts/plugins/catalogs.mjs";
+// @ts-expect-error — see above.
+import { resolveDistributionIdentity } from "../scripts/distribution-identity.mjs";
+// @ts-expect-error — see above.
+import { renderClaudeManagedSettings } from "../scripts/plugins/managed-settings.mjs";
 
 /**
- * The gate on the fourteen hand-written pages: three at the root, eleven guides
+ * The gate on the fifteen hand-written pages: three at the root, twelve guides
  * under `docs/`.
  *
  * The rest of `docs/` is generated and drift-tested against its renderer; these
- * thirteen are typed by a human, so the only guard is this file.
+ * fifteen are typed by a human, so the only guard is this file.
  * It asserts the properties a rewrite could silently break — the public
  * opening surviving a reflow, the ≤150-line budget, links that stay inside the
  * tree or inside this repository's own GitHub home, no bare domain, no contact
@@ -56,7 +63,7 @@ import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
  * of about nine targets; all four have shipped, and an exemption kept past its
  * reason means renaming one of them breaks README and passes both suites.
  *
- * Two properties are asserted on all thirteen pages because the hand bucket is
+ * Two properties are asserted on all fifteen pages because the hand bucket is
  * DEFINED by them: a currency header naming what the page was verified against,
  * and a published re-open trigger — a falsifiable condition under which the page
  * must be rewritten. A hand page without them is a page nobody can tell is
@@ -117,6 +124,7 @@ const PAGES: readonly string[] = [README, SECURITY, CONTRIBUTING];
 const CUSTOMIZATION = "docs/customization.md";
 const DOCTRINE = "docs/doctrine.md";
 const ENTERPRISE_FORKS = "docs/enterprise-forks.md";
+const ENTERPRISE_QUICKSTART = "docs/enterprise-quickstart.md";
 const GETTING_STARTED = "docs/getting-started.md";
 const MIGRATION = "docs/migration.md";
 const PACKS_AND_TRUST = "docs/packs-and-trust.md";
@@ -127,10 +135,10 @@ const WORKING_WITH_STAMITY = "docs/working-with-stamity.md";
 const WORKSPACES = "docs/workspaces.md";
 
 /**
- * The eleven hand-written guides under `docs/`.
+ * The twelve hand-written guides under `docs/`.
  *
  * Everything else in that directory is rendered from code and carries a
- * "GENERATED FILE, rewrite it with X" header; these eleven are the only pages
+ * "GENERATED FILE, rewrite it with X" header; these twelve are the only pages
  * there a human types, which is exactly the line the hand bucket is drawn on.
  *
  * `docs/specs/` is outside the bucket and outside the site: five engineering
@@ -148,6 +156,11 @@ const GUIDES: readonly string[] = [
   MIGRATION,
   CUSTOMIZATION,
   WORKSPACES,
+  // Eighth, directly before the fork guide it routes into, as the sidebar and the README map put
+  // it. Inserted after WORKSPACES on purpose: the ordinals the comment above the path constants
+  // names (the customization guide SIXTH, the workspaces guide SEVENTH) sit before it and do not
+  // move.
+  ENTERPRISE_QUICKSTART,
   ENTERPRISE_FORKS,
   PACKS_AND_TRUST,
   TROUBLESHOOTING,
@@ -302,8 +315,13 @@ const MAX_LINES = 150;
  * gained `plugin` and re-wrapped inside its own five lines, the count word moved from nine to
  * ten, and the `llms.txt` row's guide count from ten to eleven. So the budget moves by exactly
  * the row, and by nothing else.
+ *
+ * TEST CHANGE, justified: 158 to 159, the cost of ONE more map row, on the same reasoning a
+ * fourth time. `docs/enterprise-quickstart.md` is a new hand page (plan 010, unit
+ * docs-quickstart), so the map owes it a row. The `llms.txt` row's guide count moved from eleven
+ * to twelve IN PLACE and paid for nothing. So the budget moves by exactly the row.
  */
-const README_MAX_LINES = 158;
+const README_MAX_LINES = 159;
 
 /**
  * The product, its installable package, and the owner the pages name.
@@ -499,8 +517,16 @@ const RELEASE_CUT_DATE = "2026-09-23";
  * table's runs row with its uncommitted `reports/` folder, and what to commit), and moved both onto
  * the commit form naming that pass's base commit plus `Re-attested 2026-09-23`. The pass ran on
  * the constant's own date, so the constant already names it.
+ *
+ * TEST CHANGE, justified: MOVED 2026-09-26, from 2026-09-23, by plan 010's docs-guides pass. That
+ * pass re-read `docs/enterprise-forks.md` (the identity script, the fork release workflow and the
+ * managed-settings template) and `docs/plugins.md` (the Codex remote walk of 2026-09-24 and the
+ * Cursor and Codex organization routes) against the package head fcc4f59e, and moved both onto the
+ * commit form with `Re-attested 2026-09-26`. A page re-read today can honestly carry only today's
+ * date, which the 2026-09-23 pin refused as later than the pass it ships in. Every other page
+ * keeps the date it was actually verified on.
  */
-const REATTESTATION_DATE = "2026-09-23";
+const REATTESTATION_DATE = "2026-09-26";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");
@@ -582,6 +608,31 @@ const afterFrontmatter = (text: string): string =>
 const linkTargets = (text: string): string[] =>
   [...text.matchAll(MARKDOWN_LINK)].map((match) => match[1] ?? "");
 
+/**
+ * One heading's section of a page: from the heading line to the next heading of the same or a
+ * higher level, or the page's end. Lines inside a fenced block are never read as headings, so a
+ * shell comment in a command block cannot end a section early. Empty when the heading is absent,
+ * so a pin reading it fails on its own non-empty assertion rather than on a thrown index.
+ */
+function sectionOf(text: string, heading: string): string {
+  const all = lines(text);
+  const start = all.indexOf(heading);
+  if (start === -1) return "";
+  const level = (/^#+/.exec(heading)?.[0] ?? "").length;
+  let fenced = false;
+  for (let at = start + 1; at < all.length; at += 1) {
+    const line = all[at] ?? "";
+    if (line.startsWith("```")) fenced = !fenced;
+    const depth = fenced ? 0 : (/^(#+) /.exec(line)?.[1] ?? "").length;
+    if (depth > 0 && depth <= level) return all.slice(start, at).join("\n");
+  }
+  return all.slice(start).join("\n");
+}
+
+/** The bodies of a text's fenced blocks carrying one info string, in page order. */
+const fencedBlocksOf = (text: string, info: string): string[] =>
+  [...text.matchAll(new RegExp(`^\`\`\`${info}\\n([\\s\\S]*?)^\`\`\`$`, "gm"))].map((match) => match[1] ?? "");
+
 /** A relative target resolved from the linking page's own directory. */
 const resolveTarget = (page: string, target: string): string =>
   join(REPO_ROOT, dirname(page), target);
@@ -659,9 +710,10 @@ async function corpusCounts(): Promise<Map<string, number>> {
 describe("hand pages", () => {
   // Renamed on each growth of the bucket — "all seven" when the workflow guide joined, "all
   // eight" when the customization guide did, "all nine" when the workspaces guide did, "all
-  // twelve" when the enterprise-forks guide did: the name states the membership count, and the
-  // loop below is unchanged through all of them and still runs over every member.
-  it("all fourteen exist and carry real content", () => {
+  // twelve" when the enterprise-forks guide did, "all fifteen" when the enterprise quickstart did:
+  // the name states the membership count, and the loop below is unchanged through all of them and
+  // still runs over every member.
+  it("all fifteen exist and carry real content", () => {
     for (const page of HAND_PAGES) {
       expect(existsSync(join(REPO_ROOT, page)), `${page} is missing`).toBe(true);
       expect(read(page).trim().length, `${page} is empty`).toBeGreaterThan(500);
@@ -1993,6 +2045,141 @@ describe("the guides", () => {
     expect(guide, "the fork guide never says the tag is what keeps history").toMatch(
       /tag\*{0,2} is what keeps history/,
     );
+  });
+
+  it("the enterprise-forks guide sets a fork's identity with the one command, not a copy-paste block", () => {
+    // Plan 010, unit docs-guides (REQ-PLUGIN-028). The identity step was a hand-typed block whose
+    // `node -e` rewrote the two presets with a plain `replaceAll`, which a rerun applied twice to a
+    // slug carrying the canonical route as a prefix. `scripts/fork-identity.mjs` replaced it. The
+    // pin reads the fenced block of that one subsection, so the copy-paste coming back fails here
+    // instead of passing on a mention of the script somewhere else on the page.
+    const script = "scripts/fork-identity.mjs";
+    expect(existsSync(join(REPO_ROOT, script)), `the fork guide names missing ${script}`).toBe(true);
+    const section = sectionOf(read(ENTERPRISE_FORKS), "### Set the private package's identity");
+    const block = fencedBlocksOf(section, "sh")[0] ?? "";
+    expect(block, "the identity step carries no sh block").not.toBe("");
+    expect(block, "the identity block does not run the identity script").toContain(`node ${script} --repository`);
+    expect(block, "the identity block still carries a hand-typed node -e rewrite").not.toContain("node -e");
+    // The lockfile is the one identity-bearing file the script leaves alone, to stay offline.
+    expect(block, "the identity block no longer refreshes the lockfile's name").toContain(
+      "npm install --package-lock-only",
+    );
+    // Both flags the script takes beyond the repository, named where a reader chooses them.
+    for (const flag of ["--registry", "--scope"]) {
+      expect(section, `the identity step never says when to pass ${flag}`).toContain(`\`${flag}`);
+    }
+  });
+
+  it("the enterprise-forks guide names every variable and secret the fork release workflow reads, and no other", () => {
+    // Plan 010, unit docs-guides (REQ-PLUGIN-027). A fork arms `.github/workflows/fork-release.yml`
+    // by setting exactly the names the workflow reads, so the pin runs both ways: a name the
+    // workflow gains that the guide never tells a fork to set leaves the release inert or
+    // credential-less, and a name the guide prints that the workflow never reads is a setting
+    // that does nothing. Read off the workflow's own `vars.`/`secrets.` expressions, never typed.
+    const workflow = read(".github/workflows/fork-release.yml");
+    const reads = new Set(
+      [...workflow.matchAll(/\b(?:vars|secrets)\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((match) => match[1] ?? ""),
+    );
+    // Non-degenerate: the three variables, the registry secret and the per-run token.
+    expect(reads.size, "the workflow read as naming almost nothing").toBeGreaterThanOrEqual(5);
+    const section = sectionOf(read(ENTERPRISE_FORKS), "## Release your fork");
+    expect(section, "the fork guide has no release section").not.toBe("");
+    for (const name of reads) {
+      expect(section, `the release section never names \`${name}\``).toContain(`\`${name}\``);
+    }
+    const printed = new Set([...section.matchAll(/`(STAMITY_[A-Z0-9_]+)`/g)].map((match) => match[1] ?? ""));
+    expect(printed.size, "the release section names no STAMITY_ setting").toBeGreaterThan(0);
+    for (const name of printed) {
+      expect(reads.has(name), `the release section names \`${name}\`, which the workflow never reads`).toBe(true);
+    }
+  });
+
+  it("the enterprise-forks guide's managed-settings block is the renderer's own output", () => {
+    // Plan 010, unit docs-guides (REQ-PLUGIN-029). The template's allowlist entry must equal the
+    // declared source field for field, or the client admits no marketplace at all, so a block an
+    // admin copies from the page is held to `renderClaudeManagedSettings` for the canonical
+    // identity. The ref is read from the block itself, so a version bump moves the page without
+    // breaking the pin — and a block whose two refs disagree still fails, because the renderer
+    // writes one ref into both places.
+    const section = sectionOf(read(ENTERPRISE_FORKS), "## Roll the plugin out to your organization");
+    const block = fencedBlocksOf(section, "json")[0];
+    expect(block, "the rollout section carries no json block").toBeDefined();
+    const shown = JSON.parse(block ?? "{}") as {
+      extraKnownMarketplaces?: Record<string, { source?: { ref?: unknown } }>;
+    };
+    const ref = Object.values(shown.extraKnownMarketplaces ?? {})[0]?.source?.ref;
+    expect(typeof ref, "the block's declared marketplace carries no ref").toBe("string");
+    const pkg = {
+      name: SCOPED_PACKAGE,
+      repository: { type: "git", url: `git+https://github.com/${OWNER}/${PRODUCT}.git` },
+    };
+    const identity = buildCatalogIdentity(pkg, resolveDistributionIdentity(pkg)) as Record<string, unknown>;
+    const rendered = JSON.parse(JSON.stringify(renderClaudeManagedSettings(identity, { ref }))) as Record<
+      string,
+      unknown
+    >;
+    expect(Object.keys(rendered).length, "the renderer rendered no keys").toBe(4);
+    expect(shown, "the page's template is not the renderer's output").toEqual(rendered);
+    expect(Object.keys(shown), "the page's template reorders the renderer's keys").toEqual(Object.keys(rendered));
+  });
+
+  it("the enterprise quickstart routes into the two guides and repeats none of their commands", () => {
+    // Plan 010, unit docs-quickstart (REQ-PLUGIN-030). The page is a route map, not a third copy:
+    // it orders the enterprise steps by day and hands each one to the guide that owns it. Three
+    // properties hold it to that. It links both guides; it carries no fenced block longer than one
+    // line, so no command block from either guide is restated here to drift from its owner; and
+    // it stays within its 120-line budget, which the cell declares.
+    const text = read(ENTERPRISE_QUICKSTART);
+    const targets = linkTargets(text);
+    expect(targets, "the quickstart does not link the fork guide").toContain("enterprise-forks.md");
+    expect(targets, "the quickstart does not link the plugins guide").toContain("plugins.md");
+    for (const block of fencedBlocks(text)) {
+      expect(lines(block.trim()).length, "the quickstart carries a multi-line fenced block").toBeLessThanOrEqual(1);
+    }
+    expect(lines(text).length, "the quickstart is over its 120-line budget").toBeLessThanOrEqual(120);
+
+    // A step names the section it hands off to as its link text, because a cross-page `#fragment`
+    // is refused by the link check above. So the heading is the only anchor the page has, and it
+    // is held here: every link into either guide names a heading that guide carries, and a heading
+    // renamed there fails here instead of leaving a step that points at nothing.
+    const headings = new Map<string, Set<string>>();
+    for (const guide of [ENTERPRISE_FORKS, PLUGINS]) {
+      const found = [...read(guide).matchAll(/^#{1,6} (.+)$/gm)].map((match) => match[1] ?? "");
+      headings.set(guide.replace(/^docs\//, ""), new Set(found));
+    }
+    let routed = 0;
+    for (const match of text.matchAll(/\[([^\]]+)\]\(([^)]+)\)/g)) {
+      const known = headings.get(match[2] ?? "");
+      if (known === undefined) continue;
+      expect(known.has(match[1] ?? ""), `the quickstart links "${match[1]}", no heading in ${match[2]}`).toBe(true);
+      routed += 1;
+    }
+    // Every step the cell names, and nothing degenerate: a page that dropped to a bare link per
+    // guide would pass the two containment checks above.
+    expect(routed, "the quickstart routes fewer steps than the day sections name").toBeGreaterThanOrEqual(16);
+
+    // One link per step. A step is a bullet under a day heading; two links in one is two steps,
+    // and none is a step the reader cannot follow.
+    for (const day of ["## Day 0: make the fork", "## Day 1: release and roll out", "## Day 2: take updates"]) {
+      const bullets = lines(sectionOf(text, day)).filter((line) => line.startsWith("- "));
+      expect(bullets.length, `${day} carries no steps`).toBeGreaterThan(0);
+      for (const bullet of bullets) {
+        expect(linkTargets(bullet).length, `a step under ${day} carries other than one link`).toBe(1);
+      }
+    }
+  });
+
+  it("the plugins guide adds a Codex marketplace only at a ref", () => {
+    // Ledger build/18 and review/61 (plan 010). Measured on codex-cli 0.155.1: a Codex marketplace
+    // added with no `--ref` checks out the default branch, which carries no Codex catalog, falls
+    // back to that branch's Claude catalog and installs the PUBLIC npm package it names — on a
+    // private fork, the public registry in place of the private source. Every Codex add line the
+    // page prints carries a ref, as the Codex root README's does.
+    const adds = [...read(PLUGINS).matchAll(/^.*codex plugin marketplace add .*$/gm)].map((match) => match[0]);
+    expect(adds.length, "the plugins guide prints no Codex marketplace add").toBeGreaterThan(1);
+    for (const line of adds) {
+      expect(line, "a Codex marketplace add line carries no --ref").toMatch(/ --ref \S/);
+    }
   });
 
   it("the pages that describe signature verification say the client is optional", () => {

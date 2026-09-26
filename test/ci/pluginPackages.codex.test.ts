@@ -18,6 +18,9 @@ import { MANIFEST_VERSION, type SetupManifest } from "../../src/types/manifest.t
 // @ts-expect-error — the emitter modules ship as plain .mjs with no type declarations: the
 // generator that builds the plugin roots runs them under bare Node, with no TypeScript nearby.
 import { validateCapabilityFile } from "../../scripts/plugins/capability.mjs";
+// @ts-expect-error — see above.
+import { resolveDistributionIdentity } from "../../scripts/distribution-identity.mjs";
+import { canonical, repositoryRoute } from "../support/identity.ts";
 
 /**
  * The CODEX plugin root: `scripts/plugins/clients/codex.mjs` as the generator renders it
@@ -440,8 +443,9 @@ describe("the page an operator reads before installing", () => {
       "codex plugin add stamity@stamity",
       "codex plugin marketplace upgrade",
       // `marketplace remove` is listed by `codex plugin marketplace --help` on 0.155.1 (read
-      // 2026-09-22) and comes before the re-add at the previous tag, because the re-point of a git
-      // marketplace already on record is unmeasured — the page says so beside it.
+      // 2026-09-22) and comes before the re-add at the previous tag, because a git marketplace
+      // already on record is not re-pointed in place: the re-add was refused with "already added
+      // from a different source" (E3 walk C7g, 2026-09-24) — the page says so beside it.
       "codex plugin marketplace remove stamity",
       "codex plugin remove",
       "/plugins",
@@ -466,6 +470,125 @@ describe("the page an operator reads before installing", () => {
     // The two rules an operator loses a morning to otherwise.
     expect(readme, "the fresh-session rule is missing").toMatch(/FRESH session/);
     expect(readme, "the IDE-extension absence is missing").toMatch(/IDE extension reads no plugins/);
+  });
+});
+
+/**
+ * The root README's routes against the distribution README's, for ONE identity (REQ-PLUGIN-020).
+ *
+ * Why every `marketplace add` here carries `--ref`: the E3 walk (the section "The Codex half (E3),
+ * 2026-09-24" of `.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md`, rows E3-C8a..h)
+ * ran the bare `codex plugin marketplace add <owner>/<repo>` on codex-cli 0.155.1. The default
+ * branch carries no Codex catalog, so the client fell back to that branch's Claude catalog and
+ * `plugin add` cached the PUBLIC npm package — no `runtime/`, no `hooks/`, no locator. A private
+ * fork following the bare line gets the public package without a word. `--ref plugin-dist` was
+ * measured installing the distribution root (E3-C8h).
+ *
+ * Derived, not spelled: this case moved here from `test/ci/pluginDistribution.test.ts`, where the
+ * distribution README's lines were pinned to the literals `--ref plugin-dist` and
+ * `--ref plugins/v1.9.0` (inbox row 100). Both READMEs now come out of ONE build, the lines are
+ * extracted from each and compared, and the branch and the tag are read from the identity
+ * `scripts/distribution-identity.mjs` resolves from this checkout's `package.json`.
+ */
+function stubDistributionRuntime(): string {
+  // Justified stub, as {@link stubRuntime}: the distribution builder additionally requires
+  // `RUNTIME.json`, and nothing below reads the runtime — only the two READMEs.
+  const dir = stubRuntime();
+  writeFileSync(
+    join(dir, "RUNTIME.json"),
+    `${JSON.stringify(
+      {
+        package: canonical().name,
+        version: "1.8.0",
+        nodeFloor: ">=22.22.2",
+        tarballSha256: "a".repeat(64),
+        dependencies: [],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  return dir;
+}
+
+/** The body of the first ```sh block after `heading` — the block an operator copies. */
+function shellBlockAfter(text: string, heading: string): string[] {
+  const start = text.indexOf(heading);
+  expect(start, `no \`${heading}\` heading`).toBeGreaterThanOrEqual(0);
+  const body = /```sh\n([\s\S]*?)\n```/.exec(text.slice(start))?.[1];
+  expect(body, `no sh block after \`${heading}\``).toBeDefined();
+  return (body ?? "").split("\n");
+}
+
+/** Every `codex plugin marketplace add` line, in page order. */
+function marketplaceAdds(text: string): string[] {
+  return text.split("\n").filter((line) => line.startsWith("codex plugin marketplace add "));
+}
+
+describe("the root README's routes against the distribution README's, for one identity", () => {
+  const pkg = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as Record<string, unknown>;
+  const { distribution } = resolveDistributionIdentity(pkg) as { distribution: { branch: string; tagPattern: string } };
+  const slug = repositoryRoute().slug;
+
+  let rootReadme: string;
+  let codexSection: string;
+  let tag: string;
+
+  beforeAll(() => {
+    const out = join(tempDir("distribution"), "dist");
+    const result = spawnSync(
+      process.execPath,
+      [
+        join(REPO_ROOT, "scripts", "build-plugin-distribution.mjs"),
+        "--out",
+        out,
+        "--runtime",
+        stubDistributionRuntime(),
+        "--client",
+        "codex",
+        "--source-commit",
+        FIXED_COMMIT,
+        "--source-commit-date",
+        FIXED_COMMIT_DATE,
+      ],
+      { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+    );
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    rootReadme = readFileSync(join(out, "codex", "README.md"), "utf8");
+    const distReadme = readFileSync(join(out, "README.md"), "utf8");
+    codexSection = distReadme.split(/^## /m).find((part) => part.includes("Root: `codex/`")) ?? "";
+    expect(codexSection, "the distribution README has no Codex section").not.toBe("");
+    const release = JSON.parse(readFileSync(join(out, "release.json"), "utf8")) as { version: string };
+    tag = distribution.tagPattern.replaceAll("<version>", release.version);
+  }, 2 * ONE_ROOT_MS);
+
+  it("prints the install block the distribution README prints, at the identity's distribution branch", () => {
+    const install = shellBlockAfter(rootReadme, "## Install");
+    expect(install).toEqual(shellBlockAfter(codexSection, "### Install"));
+    expect(install).toEqual([
+      `codex plugin marketplace add ${slug} --ref ${distribution.branch}`,
+      "codex plugin add stamity@stamity",
+    ]);
+  });
+
+  it("names the same marketplace add lines for the install, the pin and the route back", () => {
+    const rootAdds = marketplaceAdds(rootReadme);
+    // Non-degenerate: three routes, each a `marketplace add`, and the distribution README's
+    // Install, Pin and Roll back blocks name the same three in the same order.
+    expect(rootAdds).toEqual([
+      `codex plugin marketplace add ${slug} --ref ${distribution.branch}`,
+      `codex plugin marketplace add ${slug} --ref ${tag}`,
+      `codex plugin marketplace add ${slug} --ref ${distribution.tagPattern.replaceAll("<version>", "<previous>")}`,
+    ]);
+    expect(rootAdds).toEqual(marketplaceAdds(codexSection));
+    expect(shellBlockAfter(rootReadme, "Roll back by")).toEqual(shellBlockAfter(codexSection, "### Roll back"));
+  });
+
+  it("offers no marketplace add without a --ref, the form that installs an npm package instead of this root", () => {
+    // build/18 (Warning, security): the bare form reads the default branch's Claude catalog.
+    const bare = rootReadme.split("\n").filter((line) => /^codex plugin marketplace add \S+\s*$/.test(line));
+    expect(bare).toEqual([]);
+    expect(rootReadme, "the README does not say why the --ref is needed").toMatch(/Claude catalog and installs the npm\s+package/);
   });
 });
 

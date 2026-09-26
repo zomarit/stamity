@@ -16,7 +16,8 @@ exports[`emitted tree for all-four > matches the residue-document golden byte fo
         "hooks": [
           {
             "type": "command",
-            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-session-start.mjs\\""
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-session-start.mjs\\"",
+            "timeout": 30
           }
         ]
       },
@@ -24,7 +25,8 @@ exports[`emitted tree for all-four > matches the residue-document golden byte fo
         "hooks": [
           {
             "type": "command",
-            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\\""
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\\"",
+            "timeout": 30
           }
         ]
       }
@@ -54,7 +56,8 @@ exports[`emitted tree for all-four > matches the residue-document golden byte fo
         "hooks": [
           {
             "type": "command",
-            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\\""
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\\"",
+            "timeout": 30
           }
         ]
       }
@@ -136,13 +139,15 @@ env_vars = ["GITHUB_PAT"]
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdfQ",
-            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdfQ"
+            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
+            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
+            "timeout": 30
           },
           {
             "type": "command",
-            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXX0",
-            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXX0"
+            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXSwidGltZW91dE1zIjozMDAwMH0",
+            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXSwidGltZW91dE1zIjozMDAwMH0",
+            "timeout": 30
           }
         ]
       }
@@ -177,10 +182,12 @@ env_vars = ["GITHUB_PAT"]
   "hooks": {
     "sessionStart": [
       {
-        "command": "node .stamity/generated/hooks/cursor/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY3Vyc29yL3N0YW1pdHktc2Vzc2lvbi1zdGFydC5tanMiXX0"
+        "command": "node .stamity/generated/hooks/cursor/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY3Vyc29yL3N0YW1pdHktc2Vzc2lvbi1zdGFydC5tanMiXSwidGltZW91dE1zIjozMDAwMH0",
+        "timeout": 30
       },
       {
-        "command": "node .stamity/generated/hooks/cursor/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY3Vyc29yL3N0YW1pdHktY29uZmlnLXRhbXBlci1ub3RpY2UubWpzIl19"
+        "command": "node .stamity/generated/hooks/cursor/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY3Vyc29yL3N0YW1pdHktY29uZmlnLXRhbXBlci1ub3RpY2UubWpzIl0sInRpbWVvdXRNcyI6MzAwMDB9",
+        "timeout": 30
       }
     ],
     "preToolUse": [
@@ -526,13 +533,15 @@ if (agentId === "") {
     "SessionStart": [
       {
         "type": "command",
-        "command": "node .stamity/generated/hooks/copilot/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LXNlc3Npb24tc3RhcnQubWpzIl19",
-        "cwd": "."
+        "command": "node .stamity/generated/hooks/copilot/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LXNlc3Npb24tc3RhcnQubWpzIl0sInRpbWVvdXRNcyI6MzAwMDB9",
+        "cwd": ".",
+        "timeoutSec": 30
       },
       {
         "type": "command",
-        "command": "node .stamity/generated/hooks/copilot/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LWNvbmZpZy10YW1wZXItbm90aWNlLm1qcyJdfQ",
-        "cwd": "."
+        "command": "node .stamity/generated/hooks/copilot/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LWNvbmZpZy10YW1wZXItbm90aWNlLm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
+        "cwd": ".",
+        "timeoutSec": 30
       }
     ],
     "PreToolUse": [
@@ -1260,7 +1269,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/rules/stamity-security-patterns.md": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes",
   ".claude/rules/stamity-testing.md": "7481e2488317f64c22152c4e40011bf01bf2e941ae7d9eb7b28339040093bbe9 4246 bytes",
   ".claude/rules/stamity-ui-states.md": "07974fae66dbff2fff850084ff17447faa1cc3ce0a79fd128fbac77d47e69306 4512 bytes",
-  ".claude/settings.json": "a53d569f07df6f15a5e1d3553403cdd05fecde05500409b540d02344325855f1 1910 bytes",
+  ".claude/settings.json": "2fb40f0d8b8a4628df339be64b8d29dd9c704ded9af9e4463dd4a7569faa6aa0 1991 bytes",
   ".claude/skills/st-browser-evidence/SKILL.md": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes",
   ".claude/skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760 177 bytes",
   ".claude/skills/st-dep-audit/SKILL.md": "ae1f2eb3e77cf1153a27aca1852780a2c4779ba487e9c50db2107000bb3d4836 6461 bytes",
@@ -1301,7 +1310,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".codex/agents/stamity-spec-author.toml": "b44555ffb92c95dc0da5d74fc9a25428c08a8eb8b3edee03627b3a8c48a27e74 11195 bytes",
   ".codex/agents/stamity-test-runner.toml": "48e01ddbe438cb488ff8924072f99ec45fcd969b3424069d9e943ce81c83a000 6881 bytes",
   ".codex/config.toml": "6cc6cda56cb23939367ebe4f5a42c6ef22b844b01b2d3daebe3b05ed70265c80 3285 bytes",
-  ".codex/hooks.json": "adefaad834d6b22f4825a95ff83e97cf2b2b3dbaa93bbb3603c0e164f1607dd9 8262 bytes",
+  ".codex/hooks.json": "da7da3c05b3165754f956376629a84b8ef5384a2ea389b2b326c26cf9a7475ea 8412 bytes",
   ".cursor/agents/stamity-creator.md": "9cb2a22b302f230ad36e5c6b82fc703e2e5d5b510f4ed5771dd700e268391bbd 13732 bytes",
   ".cursor/agents/stamity-design-quality.md": "98618aff526cd4c4c823ec567236596c3d3eac4d50bacb6656148a670e7c838d 9248 bytes",
   ".cursor/agents/stamity-fixer.md": "f9604d9dd0b35f84998681c9f6c90379ce62aa5a2d57940c209d89cf535bf029 7614 bytes",
@@ -1312,7 +1321,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".cursor/agents/stamity-security.md": "e6beb5528b0645f93f7f2e6074b6008d0e6e6f109c86bd19b7fe3c8ed4e76f12 9149 bytes",
   ".cursor/agents/stamity-spec-author.md": "87230ae9a19174898af1da7253b572e4214a0f61dc2e6b981c619159632e9ab6 10465 bytes",
   ".cursor/agents/stamity-test-runner.md": "4b1bc1a585bbfcd965c2a33811d8bc3fdb6a188b048db7e74bc0f91aed02586a 6152 bytes",
-  ".cursor/hooks.json": "3ceba1f2fe379e34feabb81487644b8fa23dee528a6b8ec402e9bbc722dc003f 1411 bytes",
+  ".cursor/hooks.json": "5031f7452e229cdd728ee389a90c9b4d5d084a72294155e08b9f7273a2d13ac0 1505 bytes",
   ".cursor/hooks/mcp-guard.mjs": "5d34f2b831c7a8a5f79dd10ed960b286d23e8eeb09fdae05c0eecbde6a582580 7294 bytes",
   ".cursor/hooks/subagent-guard.mjs": "1edd1ea08f11d773aeeaa155ef24612af25abc7c3a1969c35f7b7e3f252bf4d3 3596 bytes",
   ".cursor/mcp.json": "3bd0d234eb9a7ee4eff8351d4236a3c22a03ef445538c411f68b9d1267bd3a8d 395 bytes",
@@ -1347,7 +1356,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".github/agents/stamity-security.agent.md": "623d1ad0135b188d20e887c0feee4b79f5bf9cdd824b245e2d5501df52c2fced 9208 bytes",
   ".github/agents/stamity-spec-author.agent.md": "aa0d1ec3d369f7e57811c8688985ad4c12abe2ab705611ba7073d8ff94402650 10550 bytes",
   ".github/agents/stamity-test-runner.agent.md": "a3f1ccf47c0efc0b38d4a5bbc7aa3f091605178d3d32314dad5d1810e34ffe54 6240 bytes",
-  ".github/hooks/stamity.json": "8a8165e7d17d86e72418bc9ca47005078c7bf87d30a02e9563f5d8249a3bdd98 1317 bytes",
+  ".github/hooks/stamity.json": "45ed74707011b3ae56bb1316ead61c42e7b10db36a3b6cbf7af8580d63680b16 1417 bytes",
   ".github/instructions/stamity-api-versioning.instructions.md": "52d40b6069b7bc858c69ec3090f3f0d5356fdc910500c55882ab4bff0c59cbb5 5068 bytes",
   ".github/instructions/stamity-contract-census.instructions.md": "65a7f0f58e529ef94b006a273c502369d61c9b83460df27dd6d651a9aa390f3c 3863 bytes",
   ".github/instructions/stamity-injection-screening.instructions.md": "95e6f29e1cd64fbde83eeebf8880e2e46251260c9a4d94f9e6404ffdccf7546a 7617 bytes",
@@ -1375,24 +1384,24 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f 2383 bytes",
   ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs": "2d7566b153de1f1a178b4967e70fb23c36976fc4300d41fcc91d136b4ffe91f4 19125 bytes",
   ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "9e7b9ab9e76c7080cf2322d024caf5a9026f14aeebc9d650b4876a1b86550cc2 40740 bytes",
-  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "489018e239196fa8a0b5c1d02537839ef6dd1c192c7933bbf8b12c0b11f88e21 39677 bytes",
+  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "ac3b2dbb5085bd6c5ec7f08c15329093ef8293a1b83bf4eea9b3fa554219aad7 40914 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f 2383 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "5c6e049eead691b7917f0c27606bb0d4c9ec27debfff076e4bbdf0bf4d5510b9 16958 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "c48c6a3900e17eed4f53b92cdad7e9616b7d0a97c266183b76c49ee9e0009be7 10633 bytes",
-  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "489018e239196fa8a0b5c1d02537839ef6dd1c192c7933bbf8b12c0b11f88e21 39677 bytes",
+  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "ac3b2dbb5085bd6c5ec7f08c15329093ef8293a1b83bf4eea9b3fa554219aad7 40914 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f 2383 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "cc81c04d320308f142b543df7f633ce95c7383abb7a4a1d1c7038ec898af722a 16960 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "c48c6a3900e17eed4f53b92cdad7e9616b7d0a97c266183b76c49ee9e0009be7 10633 bytes",
-  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "489018e239196fa8a0b5c1d02537839ef6dd1c192c7933bbf8b12c0b11f88e21 39677 bytes",
+  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "ac3b2dbb5085bd6c5ec7f08c15329093ef8293a1b83bf4eea9b3fa554219aad7 40914 bytes",
   ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f 2383 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "8575d29c23b3b54d34ddfc2ec1c4afca23040faf16cf0e2f6b8649d3f9d72a2c 16959 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "c48c6a3900e17eed4f53b92cdad7e9616b7d0a97c266183b76c49ee9e0009be7 10633 bytes",
-  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "489018e239196fa8a0b5c1d02537839ef6dd1c192c7933bbf8b12c0b11f88e21 39677 bytes",
+  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "ac3b2dbb5085bd6c5ec7f08c15329093ef8293a1b83bf4eea9b3fa554219aad7 40914 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "35e7f0a5909c898e39f0d0d075d43ef44c6cffde0e49c79213463699e93a012a 71175 bytes",
+  ".stamity/manifest.json": "fe53962bf5cae5b429ff1ddb00231ff24daabd1929637e366ec634a1ee9eb624 71175 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "2bf321e984a1fc56e18e92f3290dd72135c3d63792e946a536e86339f7d1c55a 25190 bytes",
@@ -1428,7 +1437,8 @@ exports[`emitted tree for claude > matches the residue-document golden byte for 
         "hooks": [
           {
             "type": "command",
-            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-session-start.mjs\\""
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-session-start.mjs\\"",
+            "timeout": 30
           }
         ]
       },
@@ -1436,7 +1446,8 @@ exports[`emitted tree for claude > matches the residue-document golden byte for 
         "hooks": [
           {
             "type": "command",
-            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\\""
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\\"",
+            "timeout": 30
           }
         ]
       }
@@ -1466,7 +1477,8 @@ exports[`emitted tree for claude > matches the residue-document golden byte for 
         "hooks": [
           {
             "type": "command",
-            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\\""
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs\\"",
+            "timeout": 30
           }
         ]
       }
@@ -1637,7 +1649,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/rules/stamity-security-patterns.md": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes",
   ".claude/rules/stamity-testing.md": "7481e2488317f64c22152c4e40011bf01bf2e941ae7d9eb7b28339040093bbe9 4246 bytes",
   ".claude/rules/stamity-ui-states.md": "07974fae66dbff2fff850084ff17447faa1cc3ce0a79fd128fbac77d47e69306 4512 bytes",
-  ".claude/settings.json": "a53d569f07df6f15a5e1d3553403cdd05fecde05500409b540d02344325855f1 1910 bytes",
+  ".claude/settings.json": "2fb40f0d8b8a4628df339be64b8d29dd9c704ded9af9e4463dd4a7569faa6aa0 1991 bytes",
   ".claude/skills/st-browser-evidence/SKILL.md": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes",
   ".claude/skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760 177 bytes",
   ".claude/skills/st-dep-audit/SKILL.md": "ae1f2eb3e77cf1153a27aca1852780a2c4779ba487e9c50db2107000bb3d4836 6461 bytes",
@@ -1674,12 +1686,12 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f 2383 bytes",
   ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs": "2d7566b153de1f1a178b4967e70fb23c36976fc4300d41fcc91d136b4ffe91f4 19125 bytes",
   ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "9e7b9ab9e76c7080cf2322d024caf5a9026f14aeebc9d650b4876a1b86550cc2 40740 bytes",
-  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "489018e239196fa8a0b5c1d02537839ef6dd1c192c7933bbf8b12c0b11f88e21 39677 bytes",
+  ".stamity/generated/hooks/claude/stamity-session-start.mjs": "ac3b2dbb5085bd6c5ec7f08c15329093ef8293a1b83bf4eea9b3fa554219aad7 40914 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "a9369b55ded42a70ac883812a665f8cb0af7943a5febc8ead4cb2a805f8cfe7e 18404 bytes",
+  ".stamity/manifest.json": "379f4c25f202f8307e1393572318994091af8de812a1acdb1cf186b946dbd342 18404 bytes",
   "AGENTS.md": "7c00904d40924df922bec5c9147bddbfeac09244d3e1cb65e549e7a9ed24a3a5 5192 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -1751,13 +1763,15 @@ env_vars = ["GITHUB_PAT"]
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdfQ",
-            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdfQ"
+            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
+            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
+            "timeout": 30
           },
           {
             "type": "command",
-            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXX0",
-            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXX0"
+            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXSwidGltZW91dE1zIjozMDAwMH0",
+            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXSwidGltZW91dE1zIjozMDAwMH0",
+            "timeout": 30
           }
         ]
       }
@@ -2385,19 +2399,19 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".codex/agents/stamity-spec-author.toml": "b44555ffb92c95dc0da5d74fc9a25428c08a8eb8b3edee03627b3a8c48a27e74 11195 bytes",
   ".codex/agents/stamity-test-runner.toml": "48e01ddbe438cb488ff8924072f99ec45fcd969b3424069d9e943ce81c83a000 6881 bytes",
   ".codex/config.toml": "6cc6cda56cb23939367ebe4f5a42c6ef22b844b01b2d3daebe3b05ed70265c80 3285 bytes",
-  ".codex/hooks.json": "adefaad834d6b22f4825a95ff83e97cf2b2b3dbaa93bbb3603c0e164f1607dd9 8262 bytes",
+  ".codex/hooks.json": "da7da3c05b3165754f956376629a84b8ef5384a2ea389b2b326c26cf9a7475ea 8412 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".gitignore": "f8fbe8e8b09bc960be56387909425a4db0d79570de16d3fad0629c041839d681 9 bytes",
   ".stamity/generated/agent-tool-policies.json": "d423255807751afda5b131b6c205e538ae966a05a31e51e4e45a40b2c39f908d 4426 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f 2383 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "5c6e049eead691b7917f0c27606bb0d4c9ec27debfff076e4bbdf0bf4d5510b9 16958 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "c48c6a3900e17eed4f53b92cdad7e9616b7d0a97c266183b76c49ee9e0009be7 10633 bytes",
-  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "489018e239196fa8a0b5c1d02537839ef6dd1c192c7933bbf8b12c0b11f88e21 39677 bytes",
+  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "ac3b2dbb5085bd6c5ec7f08c15329093ef8293a1b83bf4eea9b3fa554219aad7 40914 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "49151310d2de6cf1e3d5675e4cd6291883ae521cf2ab116444d4e384299f2970 15677 bytes",
+  ".stamity/manifest.json": "a9d71fd2a40804c41389ad4237b244bea02fba70caa9a138cbd1d01646ae3182 15677 bytes",
   "AGENTS.md": "2bf321e984a1fc56e18e92f3290dd72135c3d63792e946a536e86339f7d1c55a 25190 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
@@ -2422,13 +2436,15 @@ exports[`emitted tree for copilot > matches the residue-document golden byte for
     "SessionStart": [
       {
         "type": "command",
-        "command": "node .stamity/generated/hooks/copilot/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LXNlc3Npb24tc3RhcnQubWpzIl19",
-        "cwd": "."
+        "command": "node .stamity/generated/hooks/copilot/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LXNlc3Npb24tc3RhcnQubWpzIl0sInRpbWVvdXRNcyI6MzAwMDB9",
+        "cwd": ".",
+        "timeoutSec": 30
       },
       {
         "type": "command",
-        "command": "node .stamity/generated/hooks/copilot/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LWNvbmZpZy10YW1wZXItbm90aWNlLm1qcyJdfQ",
-        "cwd": "."
+        "command": "node .stamity/generated/hooks/copilot/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29waWxvdC9zdGFtaXR5LWNvbmZpZy10YW1wZXItbm90aWNlLm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
+        "cwd": ".",
+        "timeoutSec": 30
       }
     ],
     "PreToolUse": [
@@ -2645,7 +2661,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".github/agents/stamity-security.agent.md": "623d1ad0135b188d20e887c0feee4b79f5bf9cdd824b245e2d5501df52c2fced 9208 bytes",
   ".github/agents/stamity-spec-author.agent.md": "aa0d1ec3d369f7e57811c8688985ad4c12abe2ab705611ba7073d8ff94402650 10550 bytes",
   ".github/agents/stamity-test-runner.agent.md": "a3f1ccf47c0efc0b38d4a5bbc7aa3f091605178d3d32314dad5d1810e34ffe54 6240 bytes",
-  ".github/hooks/stamity.json": "8a8165e7d17d86e72418bc9ca47005078c7bf87d30a02e9563f5d8249a3bdd98 1317 bytes",
+  ".github/hooks/stamity.json": "45ed74707011b3ae56bb1316ead61c42e7b10db36a3b6cbf7af8580d63680b16 1417 bytes",
   ".github/instructions/stamity-api-versioning.instructions.md": "52d40b6069b7bc858c69ec3090f3f0d5356fdc910500c55882ab4bff0c59cbb5 5068 bytes",
   ".github/instructions/stamity-contract-census.instructions.md": "65a7f0f58e529ef94b006a273c502369d61c9b83460df27dd6d651a9aa390f3c 3863 bytes",
   ".github/instructions/stamity-injection-screening.instructions.md": "95e6f29e1cd64fbde83eeebf8880e2e46251260c9a4d94f9e6404ffdccf7546a 7617 bytes",
@@ -2672,12 +2688,12 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f 2383 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "cc81c04d320308f142b543df7f633ce95c7383abb7a4a1d1c7038ec898af722a 16960 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "c48c6a3900e17eed4f53b92cdad7e9616b7d0a97c266183b76c49ee9e0009be7 10633 bytes",
-  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "489018e239196fa8a0b5c1d02537839ef6dd1c192c7933bbf8b12c0b11f88e21 39677 bytes",
+  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "ac3b2dbb5085bd6c5ec7f08c15329093ef8293a1b83bf4eea9b3fa554219aad7 40914 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "6501768f60055edafe0523f13407db75444da6f9111fa59ace4f8dd965b13443 19055 bytes",
+  ".stamity/manifest.json": "29b1ee50b2f6455d9bccf1fbd6ef243c8a2077fad46bed830b92c708328f42a5 19055 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "7c00904d40924df922bec5c9147bddbfeac09244d3e1cb65e549e7a9ed24a3a5 5192 bytes",
@@ -2701,10 +2717,12 @@ exports[`emitted tree for cursor > matches the residue-document golden byte for 
   "hooks": {
     "sessionStart": [
       {
-        "command": "node .stamity/generated/hooks/cursor/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY3Vyc29yL3N0YW1pdHktc2Vzc2lvbi1zdGFydC5tanMiXX0"
+        "command": "node .stamity/generated/hooks/cursor/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY3Vyc29yL3N0YW1pdHktc2Vzc2lvbi1zdGFydC5tanMiXSwidGltZW91dE1zIjozMDAwMH0",
+        "timeout": 30
       },
       {
-        "command": "node .stamity/generated/hooks/cursor/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY3Vyc29yL3N0YW1pdHktY29uZmlnLXRhbXBlci1ub3RpY2UubWpzIl19"
+        "command": "node .stamity/generated/hooks/cursor/stamity-portable-hook.mjs eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY3Vyc29yL3N0YW1pdHktY29uZmlnLXRhbXBlci1ub3RpY2UubWpzIl0sInRpbWVvdXRNcyI6MzAwMDB9",
+        "timeout": 30
       }
     ],
     "preToolUse": [
@@ -3171,7 +3189,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".cursor/agents/stamity-security.md": "e6beb5528b0645f93f7f2e6074b6008d0e6e6f109c86bd19b7fe3c8ed4e76f12 9149 bytes",
   ".cursor/agents/stamity-spec-author.md": "87230ae9a19174898af1da7253b572e4214a0f61dc2e6b981c619159632e9ab6 10465 bytes",
   ".cursor/agents/stamity-test-runner.md": "4b1bc1a585bbfcd965c2a33811d8bc3fdb6a188b048db7e74bc0f91aed02586a 6152 bytes",
-  ".cursor/hooks.json": "3ceba1f2fe379e34feabb81487644b8fa23dee528a6b8ec402e9bbc722dc003f 1411 bytes",
+  ".cursor/hooks.json": "5031f7452e229cdd728ee389a90c9b4d5d084a72294155e08b9f7273a2d13ac0 1505 bytes",
   ".cursor/hooks/mcp-guard.mjs": "5d34f2b831c7a8a5f79dd10ed960b286d23e8eeb09fdae05c0eecbde6a582580 7294 bytes",
   ".cursor/hooks/subagent-guard.mjs": "1edd1ea08f11d773aeeaa155ef24612af25abc7c3a1969c35f7b7e3f252bf4d3 3596 bytes",
   ".cursor/mcp.json": "3bd0d234eb9a7ee4eff8351d4236a3c22a03ef445538c411f68b9d1267bd3a8d 395 bytes",
@@ -3202,12 +3220,12 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "f09dac357bf5036a37e0f03a328d2c7a31cfc33f6300dd9c6cf4da02f740e67f 2383 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "8575d29c23b3b54d34ddfc2ec1c4afca23040faf16cf0e2f6b8649d3f9d72a2c 16959 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "c48c6a3900e17eed4f53b92cdad7e9616b7d0a97c266183b76c49ee9e0009be7 10633 bytes",
-  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "489018e239196fa8a0b5c1d02537839ef6dd1c192c7933bbf8b12c0b11f88e21 39677 bytes",
+  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "ac3b2dbb5085bd6c5ec7f08c15329093ef8293a1b83bf4eea9b3fa554219aad7 40914 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "f3236beb878a4d7c33b6a7dc9fe42497a82d04b6bb7846b985f7814dcba49ec8 18677 bytes",
+  ".stamity/manifest.json": "94ecf11ac9ca6fe876f661ad8d3803d0171869b3fc81d37410ff8cea56c028f6 18677 bytes",
   "AGENTS.md": "7c00904d40924df922bec5c9147bddbfeac09244d3e1cb65e549e7a9ed24a3a5 5192 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

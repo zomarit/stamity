@@ -1,0 +1,86 @@
+diff --git a/docs/api.md b/docs/api.md
+index bfd0246389d72109dc775e8115a75b0dba7a9b09..eb4405c1f13fe1c1aa4f41b2812c1fd80915a23c 100644
+--- a/docs/api.md
++++ b/docs/api.md
+@@ -34,6 +34,12 @@ Lists orders, newest first (by `created_at`), as `{"orders":[<order>, …]}`.
+ |---|---|---|
+ | `size` | `pageSizeDefault` (20) | integer from 1 to `maxPageSize` (100) |
+ 
++### `GET /orders/export`
++
++Every order as CSV (`text/csv`): the header row `id,customer,total_cents,status,created_at`
++first, then one row per order, ascending by the `order` query — `created` (the default), `total`
++or `customer`; any other value sorts by `created`.
++
+ ### `GET /orders/:id`
+ 
+ Returns one order, or `404` naming the id when no order has it. An id that is not a positive integer is
+diff --git a/src/http/routes.ts b/src/http/routes.ts
+index 506b521caea4041497cd4a709a9b050f873526f4..a6a5a7609fa111cd507508bfc936bb1a24c97361 100644
+--- a/src/http/routes.ts
++++ b/src/http/routes.ts
+@@ -1,4 +1,5 @@
+ import { requireAuth } from "../auth/guard.ts";
++import { exportHandler } from "../orders/export.ts";
+ import { cancelHandler, getHandler, listHandler } from "../orders/handlers.ts";
+ import { invoiceHandler } from "../orders/invoice.ts";
+ import { Router } from "./router.ts";
+@@ -7,6 +8,7 @@ import { Router } from "./router.ts";
+ export function routes(): Router {
+   const router = new Router();
+   router.get("/orders", requireAuth(listHandler));
++  router.get("/orders/export", requireAuth(exportHandler));
+   router.get("/orders/:id/invoice", requireAuth(invoiceHandler));
+   router.get("/orders/:id", requireAuth(getHandler));
+   router.post("/orders/:id/cancel", requireAuth(cancelHandler));
+diff --git a/src/orders/export.ts b/src/orders/export.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..133a42a13baedc87c83ffdfc84c99741905b2e60
+--- /dev/null
++++ b/src/orders/export.ts
+@@ -0,0 +1,45 @@
++import type { Handler } from "../http/router.ts";
++import type { OrderRow } from "../store/db.ts";
++
++/** The `order` values the export accepts, and the column each one sorts by. */
++const EXPORT_COLUMNS = { created: "created_at", total: "total_cents", customer: "customer" } as const;
++
++type ExportColumn = (typeof EXPORT_COLUMNS)[keyof typeof EXPORT_COLUMNS];
++
++/** The column an `order` value sorts by; `created_at` for an absent or unknown value. */
++function exportColumn(key: string | null): ExportColumn {
++  if (key === null || !Object.hasOwn(EXPORT_COLUMNS, key)) return "created_at";
++  return EXPORT_COLUMNS[key as keyof typeof EXPORT_COLUMNS];
++}
++
++/** Every order, ascending by `column` then id, one `LIMIT ? OFFSET ?` batch at a time. */
++function exportSql(column: ExportColumn): string {
++  return `SELECT id, customer, total_cents, status, created_at FROM orders ORDER BY ${column} ASC, id ASC LIMIT ? OFFSET ?`;
++}
++
++const HEADER = "id,customer,total_cents,status,created_at";
++
++/**
++ * One CSV field. Text is quoted when it holds a comma, a quote or a line break, and text that
++ * starts like a spreadsheet formula gets a leading apostrophe so it opens as text.
++ */
++function csvField(value: string | number): string {
++  if (typeof value === "number") return String(value);
++  const text = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
++  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
++}
++
++/** `GET /orders/export`: every order as CSV, the header row first, ascending by `order`. */
++export const exportHandler: Handler = (ctx, deps) => {
++  const statement = deps.db.prepare(exportSql(exportColumn(ctx.query.get("order"))));
++  const batch = deps.config.exportBatchSize;
++  const lines = [HEADER];
++  for (let offset = 0; ; offset += batch) {
++    const rows = statement.all(batch, offset) as OrderRow[];
++    for (const row of rows) {
++      lines.push([row.id, row.customer, row.total_cents, row.status, row.created_at].map(csvField).join(","));
++    }
++    if (rows.length < batch) break;
++  }
++  return { status: 200, body: `${lines.join("\r\n")}\r\n`, type: "text/csv; charset=utf-8" };
++};

@@ -206,3 +206,27 @@ export interface HookInterchange {
   command: readonly string[];
   timeoutMs?: number;
 }
+
+/**
+ * The budget every core session-start row declares: the resume card and the
+ * config-tamper notice, on all four clients, in a repository and in a plugin root.
+ *
+ * Thirty seconds is Copilot's documented default (docs.github.com/en/copilot/
+ * reference/hooks-reference, accessed 2026-09-24), declared here so the other
+ * clients stop inheriting their own: Claude Code's default is 600 s
+ * (code.claude.com/docs/en/hooks-guide, Limitations, accessed 2026-09-01) and
+ * Codex's is 600 s for most hooks (learn.chatgpt.com/docs/hooks, accessed
+ * 2026-09-26), long enough for a hung disk read to hold a session's start for
+ * ten minutes. Claude also wires the tamper notice on ConfigChange, from the
+ * same row, so that entry carries the same budget.
+ * Every client fails open on a timeout, so the budget bounds a wait and never
+ * blocks a session.
+ *
+ * The pre-tool-use guard and the review gate declare NO timeout, on purpose. A
+ * timed-out Claude Code PreToolUse hook does not block the call
+ * (code.claude.com/docs/en/hooks, accessed 2026-09-24), so a budget on the guard
+ * is a way to open it. The review gate's win32 worst case is about 34.6 s (the
+ * `LOCK_CEILING_MS` derivation in `./scripts.ts`), over this budget, and a gate
+ * that times out lets the completion through.
+ */
+export const HOOK_SESSION_START_TIMEOUT_MS = 30_000;
