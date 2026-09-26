@@ -75,7 +75,9 @@ the replay could not score review. v2 keeps v1's shapes, pins, messages, samples
 - **Environment.** Built from scratch after the private layer's dispatch pattern: `PATH HOME USER LOGNAME SHELL TMPDIR
   LANG`, `TERM=dumb`, `CLAUDE_CONFIG_DIR`, `DISABLE_TELEMETRY=1`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`,
   `DISABLE_AUTOUPDATER=1`, plus `STAMITY_NO_UPDATE_CHECK=1`. Every other `CLAUDE*`, `ANTHROPIC*` and `AI_AGENT*`
-  variable is dropped.
+  variable is dropped. Right after the fixture's `node_modules/.bin` on `PATH` comes a fallback shim for `stamity`,
+  outside every worktree and pinned by sha256 in the shape record, because an agent's own `npm install` may prune
+  the CLI the fixture installed with `--no-save`.
 
 ## §4 Install
 
@@ -105,21 +107,22 @@ same hook call and before the reviewer's first tool call:
 
 1. For each seed of the pass, replace the seed's `injection.find` with its `injection.replace`, once, in every
    worktree of the run. The `find` text occurs exactly once in its file on the clean chain.
-2. Put the change in the shape's own form, read per worktree at the injection. While the worktree's HEAD is still the
-   fixture's base commit (the shape has committed nothing), leave the change in the working tree and commit nothing,
-   so the seeds sit in the uncommitted change set beside the units' own work. Otherwise commit the change with the
-   session's own git identity and clock, and the neutral message `chore(<pass>): save work in progress`, so no
-   author, date or subject marks the commit that holds the seeds. The driver records each injection commit's sha and
-   finds its commits by those shas, never by author or subject.
+2. Put the change in one of two forms, read per changed worktree at the injection. While the worktree's HEAD is still
+   the fixture's base, its HEAD at the session's start (the setup commit), the seeds go into the working tree and
+   nothing is committed: the shape has committed nothing, and the seeds sit in its uncommitted change set beside the
+   units' own work. Otherwise they go in as one commit of exactly the seeded files, with the session's own git
+   identity and clock and the subject `chore(<pass>): save work in progress`, so no author, date or subject marks the
+   commit that holds the seeds. The driver records each injection commit's sha and finds its commits by those shas,
+   never by author or subject.
 3. Record each seed in the run journal as `injected` or `not injected (anchor missing)`; `run.json` carries the
-   record as `injection`.
+   record as `injection`, whose `forms` names each changed worktree's form (`working-tree` or `commit`), its files,
+   and its commit sha (null for `working-tree`).
 4. Snapshot the pass (`captures/snapshots/<pass>/`).
 
 The seeds take the form of the work around them because a reviewer reads what the shape hands it: a shape that has
 committed nothing reviews its uncommitted change set, and a shape that commits reviews the branch diff. A commit in a
-shape that never commits is foreign to its orchestrator (§15). A pass is injected once. The hook
-has 120 seconds; a hook that runs out records a partial injection, and the driver marks the run invalid, to be
-replaced (§10).
+shape that never commits is foreign to its orchestrator (§15). A pass is injected once. The hook has 120 seconds; a
+hook that runs out records a partial injection, and the driver marks the run invalid, to be replaced (§10).
 
 **A seed that is not injected.** A seed whose anchor is missing is recorded as not injected, and it leaves the pooled
 recall denominator: pooled recall never scores it as found or missed. The `security-seeds` row reads it as §12 reads a
@@ -130,12 +133,16 @@ name guard in another form, or writes `tw-expectation-deleted`'s assertion anoth
 reads present. A seed recorded as injected is read from its pass's snapshot (§8, Recall). A v2 run without the
 injection record is invalid (§8).
 
-**Canary.** Before any pilot, one canary run per shape (`K-inject-baseline`, `K-inject-changed`) proves the
-mechanics on the pinned client. Its new checks: at least 10 of 12 seeds injected in each shape (K11); each covered
-pass's snapshot exists, and each injected seed reads present in it (K12); at least one verdict-role finding cites an
-injected file (K13); the orchestrator does not end blocked over the injection (K14). K11's record also names,
-per injected pass, every unit test the injection turned red (§15). If K11 falls below 10 of 12 in either shape, the
-fallback, where the seeds arrive as a prepared change set, is written as a revised protocol before any pilot.
+**Canary.** Before any pilot, one canary run per shape (`K-inject-baseline`, `K-inject-changed`) proves the mechanics
+on the pinned client. Its new checks: at least 10 of 12 seeds injected in each shape (K11); each covered pass's
+snapshot exists, and each injected seed reads present in it (K12); at least one verdict-role finding cites an injected
+file (K13); no text the run wrote says `BLOCKED` or `BLOCKED_<WORD>` and names the injection (K14). A text names the
+injection by the first 7 characters of a recorded injection commit's sha, by the subject
+`chore(<pass>): save work in progress`, or by an injected seed's repository-relative path as a whole path token:
+`src/store/query.ts`, `src/store/query.ts:<line>` and an absolute path ending in it match, while `src/store/query.tsx`
+and `my-src/store/query.ts` do not. K11's record also names, per injected pass, every unit test the injection turned
+red (§15). If K11 falls below 10 of 12 in either shape, the fallback, where the seeds arrive as a prepared change set,
+is written as a revised protocol before any pilot.
 
 ### Fixture notes
 
