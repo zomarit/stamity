@@ -476,7 +476,10 @@ describe("renderComparison", () => {
   });
 
   it("(build/70) carries a clients table between the rows and the merge gate: Claude Code measured, and one not-run row with its reason each for Cursor, GitHub Copilot CLI and Codex", () => {
-    const md = renderComparison(run(base3(), changed3()), T) as string;
+    // Edited on review/119: the table now renders under v2 only, so this case scores the same
+    // summaries under REPLAY-v2; v1's comparison is pinned table-free by the case below.
+    const sha = "7".repeat(64);
+    const md = renderComparison(run(base3().map((s) => underV2(s, sha)), changed3().map((s) => underV2(s, sha)), v2Pilots(sha)), T) as string;
     const at = md.indexOf("## Clients");
     expect(at).toBeGreaterThan(md.indexOf("## Rows (§12)"));
     expect(at).toBeLessThan(md.indexOf("\nMerge gate: "));
@@ -490,6 +493,16 @@ describe("renderComparison", () => {
     ]);
     // The table gates nothing: the same inputs still read PASS.
     expect(md).toContain("\nMerge gate: PASS\n");
+  });
+
+  it("(review/119) renders no clients table under v1: v1's comparison is the v2 one without the table, byte for byte, names aside", () => {
+    const v1 = renderComparison(run(base3(), changed3()), T) as string;
+    expect(v1).not.toContain("## Clients");
+    expect(v1).not.toContain("not-run");
+    const v2 = renderComparison(run(base3().map((s) => underV2(s, PROTOCOL_SHA)), changed3().map((s) => underV2(s, PROTOCOL_SHA)), v2Pilots(PROTOCOL_SHA)), T) as string;
+    const table = v2.slice(v2.indexOf("\n## Clients"), v2.indexOf("\n\nMerge gate: ") + 1);
+    expect(table).toContain("| Codex | `not-run` |");
+    expect(v2.replace(table, "").replaceAll("REPLAY-v2", "REPLAY-v1").replaceAll("COMPARISON-v2", "COMPARISON-v1")).toBe(v1);
   });
 });
 

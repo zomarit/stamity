@@ -611,6 +611,33 @@ describe("renderResults — RESULTS.md", () => {
     expect(section("#### Other measurement notes")).toContain(notes[3]);
   });
 
+  it("(review/118) a v2 run's RESULTS carries the clients table before the closing line: Claude Code measured, the other three not-run with their reason", async () => {
+    const { m, runJson } = await measured();
+    const md = renderResults(summarize(m, runJson, PROTOCOL_SHA, { protocolPath: "evals/replay/REPLAY-v2.md" }), parseThresholds(PROTOCOL_TEXT)) as string;
+    const at = md.indexOf("## Clients");
+    expect(at).toBeGreaterThan(md.indexOf("## Adjudication"));
+    expect(at).toBeLessThan(md.indexOf("No threshold moved."));
+    const cells = md.slice(at, md.indexOf("No threshold moved.")).split("\n").filter((l) => l.startsWith("| ") && !l.startsWith("| Client ")).map((l) => l.slice(2, -2).split(" | "));
+    const notRun = "not replayed: the instrument drives only the pinned Claude Code CLI (§3)";
+    expect(cells).toEqual([
+      ["Claude Code", "measured", "this run"],
+      ["Cursor", "`not-run`", notRun],
+      ["GitHub Copilot CLI", "`not-run`", notRun],
+      ["Codex", "`not-run`", notRun],
+    ]);
+  });
+
+  it("(review/119) a v1 run's RESULTS carries no clients table: it is the v2 one without the table, byte for byte, names aside", async () => {
+    const { m, runJson } = await measured();
+    const v1 = renderResults(summarize(m, runJson, PROTOCOL_SHA), parseThresholds(PROTOCOL_TEXT)) as string;
+    expect(v1).not.toContain("## Clients");
+    expect(v1).not.toContain("not-run");
+    const v2 = renderResults(summarize(m, runJson, PROTOCOL_SHA, { protocolPath: "evals/replay/REPLAY-v2.md" }), parseThresholds(PROTOCOL_TEXT)) as string;
+    const table = v2.slice(v2.indexOf("## Clients"), v2.indexOf("No threshold moved."));
+    expect(table).toContain("| Codex | `not-run` |");
+    expect(v2.replace(table, "").replaceAll("REPLAY-v2", "REPLAY-v1").replaceAll("COMPARISON-v2", "COMPARISON-v1")).toBe(v1);
+  });
+
   it("(build/73) states one term window in both shapes beside pooled-recall, not the old asymmetry", async () => {
     const { m, runJson } = await measured();
     const md = renderResults(summarize(m, runJson, PROTOCOL_SHA), parseThresholds(PROTOCOL_TEXT)) as string;

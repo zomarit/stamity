@@ -25,7 +25,7 @@
 //     to refuse: every row it feeds is NOT-EVALUATED and the merge gate fails.
 
 import { PASS_IDS } from './fixture.mjs'
-import { MAX_REPLACEMENTS_PER_SHAPE, PROTOCOLS, ROW_IDS, median, protocolNames, securityHeld } from './protocols.mjs'
+import { MAX_REPLACEMENTS_PER_SHAPE, PROTOCOLS, ROW_IDS, median, protocolNames, securityHeld, versionOfPath } from './protocols.mjs'
 import { validateSummary } from './summary.mjs'
 
 /** v1's comparison path, kept for importers; the commands read each version's from `PROTOCOLS`. */
@@ -368,16 +368,23 @@ export function compare(baseline, changed, thresholds, pilots = {}, options = {}
  * CLI, run from a pinned binary). The table gates nothing.
  */
 const NOT_RUN_REASON = 'not replayed: the instrument drives only the pinned Claude Code CLI (§3)'
-const CLIENT_ROWS = [
-  ['Claude Code', 'measured', 'the rows above'],
-  ['Cursor', '`not-run`', NOT_RUN_REASON],
-  ['GitHub Copilot CLI', '`not-run`', NOT_RUN_REASON],
-  ['Codex', '`not-run`', NOT_RUN_REASON],
-]
+const NOT_RUN_CLIENTS = ['Cursor', 'GitHub Copilot CLI', 'Codex']
+
+/**
+ * The clients table's lines, ending in a blank line, for a file scored under `protocolPath`: the
+ * one table each v2 run's RESULTS and the v2 comparison carry (review/118), with Claude Code's row
+ * saying where it is measured. Under v1, and under a path no version commits (read as v1's), it is
+ * no line at all, so v1's RESULTS and comparison stay byte for byte as they were (review/119).
+ */
+export function clientsTable(protocolPath, measuredIn) {
+  if ((versionOfPath(protocolPath) ?? 'v1') === 'v1') return []
+  const rows = [['Claude Code', 'measured', measuredIn], ...NOT_RUN_CLIENTS.map((client) => [client, '`not-run`', NOT_RUN_REASON])]
+  return ['## Clients', '', '| Client | Status | Reason |', '|---|---|---|', ...rows.map((row) => `| ${row.join(' | ')} |`), '']
+}
 
 /**
  * The comparison file: the head (protocol sha, instrument commit, mechanism, pilots, samples), the
- * ten §12 rows, the clients table, `Merge gate: PASS|FAIL`, "No threshold moved." and `Not done:`. Its title and
+ * ten §12 rows, the clients table under v2, `Merge gate: PASS|FAIL`, "No threshold moved." and `Not done:`. Its title and
  * protocol line name the protocol the head records (`protocolNames`: v1's for a path no version
  * commits).
  */
@@ -404,7 +411,8 @@ export function renderComparison(result, thresholds) {
   }
   push('', '## Rows (§12)', '', '| Row | Rule | Baseline | Changed | Verdict |', '|---|---|---|---|---|')
   for (const r of result.rows) push(`| \`${r.id}\` | ${cell(r.rule)} | ${cell(r.baseline)} | ${cell(r.changed)} | ${r.verdict}${r.reason ? ` — ${cell(r.reason)}` : ''} |`)
-  push('', '## Clients', '', '| Client | Status | Reason |', '|---|---|---|', ...CLIENT_ROWS.map((row) => `| ${row.join(' | ')} |`))
+  const clients = clientsTable(h.protocol?.path, 'the rows above')
+  if (clients.length > 0) push('', ...clients.slice(0, -1))
   push('', `Merge gate: ${result.mergeGate}`, '', 'No threshold moved.', '', 'Not done:', '')
   const open = result.rows.filter((r) => r.verdict === 'CARRIED' || r.verdict === 'NOT-EVALUATED')
   push(...(open.length === 0 ? ['- none'] : open.map((r) => `- \`${r.id}\`: ${r.verdict} — ${r.reason}`)))

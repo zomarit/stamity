@@ -29,9 +29,10 @@ the replay could not score review. v2 keeps v1's shapes, pins, messages, samples
   floors are not the replay's to measure, so the `eval-set-floors` row is carried, not measured (§12).
 - The replay runs `/st-work` at the deep tier over a three-unit, six-pass plan on a disposable fixture, with twelve
   seeds injected at review and three decoys, on Claude Code only, one run at a time. Cursor, GitHub Copilot CLI and
-  Codex are not replayed, because the instrument drives only the pinned Claude Code CLI (§3). The comparison's
-  Clients table, between its rows and its `Merge gate:` line, carries Claude Code as `measured` and one `not-run` row
-  for each of the other three, with that reason. The table gates nothing.
+  Codex are not replayed, because the instrument drives only the pinned Claude Code CLI (§3). Each run's RESULTS
+  and the comparison carry the same Clients table: Claude Code as `measured`, and one `not-run` row for each of the
+  other three, with that reason. In RESULTS it stands before the closing line; in the comparison, between its rows and
+  its `Merge gate:` line. The table gates nothing.
 
 ## §2 Shapes
 
@@ -111,8 +112,9 @@ A commit is used, not a working-tree edit, because reviewers read the branch dif
 has 120 seconds; a hook that runs out records a partial injection, and the driver marks the run invalid, to be
 replaced (§10).
 
-**A seed that is not injected.** A seed whose anchor is missing is recorded as not injected, and it leaves the recall
-denominator: it is never scored as found or missed. The measurement reads this from the snapshot, which the hook takes
+**A seed that is not injected.** A seed whose anchor is missing is recorded as not injected, and it leaves the pooled
+recall denominator: pooled recall never scores it as found or missed. The `security-seeds` row reads it as §12 reads a
+security seed absent at the pass: it counts as found. The measurement reads this from the snapshot, which the hook takes
 after the injection. The seed's defect is absent there, so §8 files it as absent at the pass. Two cases read
 otherwise, and the snapshot's reading stands: a unit that wrote the seeded text itself leaves the seed present, and it
 is scored like any other; a unit that removed or renamed the seed's file leaves its presence unknown, and it stays in

@@ -24,7 +24,7 @@ import { RULES as LEAK_RULES, decodeCandidates, normalizeViews } from '../leak-g
 import { sha256 } from '../qa/bind.mjs'
 import { redactPaths, spellingsOf } from '../qa/redact.mjs'
 import { PASS_IDS } from './fixture.mjs'
-import { compare, loopCharsHeld, renderComparison } from './compare.mjs'
+import { clientsTable, compare, loopCharsHeld, renderComparison } from './compare.mjs'
 import { AMBIENT_LISTS, MEASUREMENT_SCHEMA, UNATTRIBUTED_MAX } from './measure.mjs'
 import { DEFAULT_PROTOCOL, MAX_REPLACEMENTS_PER_SHAPE, PROTOCOLS, ROW_IDS, isProtocolVersion, median, protocolNames, securityHeld, versionOfPath } from './protocols.mjs'
 import { BREAKDOWN_KEYS, EXCERPT_MAX, RUN_ID, SUMMARY_SCHEMA, TOTALS_KEYS, isAmbient, isObject, numOrNull, validateSummary } from './summary.mjs'
@@ -616,6 +616,8 @@ export function renderResults(summary, thresholds, reference = []) {
     for (const a of s.adjudication) push(`| ${cell(a.item)} | ${cell(a.pass ?? '—')} | ${cell(a.role ?? '—')} | ${cell(a.locator)} | ${cell(a.excerpt)} |`)
   }
   push('')
+  // review/118: under v2 the run carries the clients table the comparison carries; under v1, nothing.
+  push(...clientsTable(s.protocol.path, 'this run'))
 
   push('No threshold moved.', '', 'Not done:', '', ...(s.notDone.length === 0 ? ['- none'] : s.notDone.map((x) => `- ${x}`)))
   return `${lines.join('\n')}\n`
