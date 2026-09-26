@@ -350,7 +350,7 @@ describe("fork-release.yml — the trust split", () => {
     expect(secretsReadBy("publish")).toEqual(["GITHUB_TOKEN", "STAMITY_REGISTRY_TOKEN"]);
   });
 
-  it("checks nothing out in publish, and verifies both digests before the registry publish", () => {
+  it("checks nothing out in publish, and verifies both digests, the tarball's identity and the checksum files before the registry publish", () => {
     const steps = jobOf(WORKFLOW, "publish").steps;
     expect(steps.some((step) => (step.uses ?? "").startsWith("actions/checkout@"))).toBe(false);
     const names = steps.map((step) => step.name);
@@ -360,32 +360,60 @@ describe("fork-release.yml — the trust split", () => {
       "Download plugin distribution",
       "Verify tarball digest",
       "Verify plugin distribution digest",
+      "Verify the tarball's identity",
+      "Verify plugin checksum files",
       "Set up Node",
       "Publish to the registry",
       "Push plugin distribution",
       "Create GitHub release",
     ]);
     const setupNode = stepOf(WORKFLOW, "publish", "Set up Node");
-    expect(setupNode.with?.["registry-url"]).toBe("${{ vars.STAMITY_RELEASE_REGISTRY }}");
+    expect(setupNode.with?.["registry-url"]).toBe("${{ needs.probe.outputs.registry }}");
+  });
+
+  it("reads the registry variable once, in probe, and hands every later reader the validated value", () => {
+    expect(SOURCE.match(/vars\.STAMITY_RELEASE_REGISTRY/g)).toHaveLength(1);
+    expect(stepOf(WORKFLOW, "probe", "Read the release destination").env?.["REGISTRY"]).toBe(
+      "${{ vars.STAMITY_RELEASE_REGISTRY }}",
+    );
+    expect(jobOf(WORKFLOW, "probe").outputs?.["registry"]).toBe("${{ steps.arm.outputs.registry }}");
+    const fromProbe = "${{ needs.probe.outputs.registry }}";
+    expect(stepOf(WORKFLOW, "gates", "Prove the fork release").env?.["REGISTRY"]).toBe(fromProbe);
+    expect(stepOf(WORKFLOW, "publish", "Verify the tarball's identity").env?.["EXPECTED_REGISTRY"]).toBe(fromProbe);
+    expect(stepOf(WORKFLOW, "publish", "Publish to the registry").env?.["REGISTRY"]).toBe(fromProbe);
   });
 
   it("hands the per-run token only to GitHub Packages itself, never to a lookalike host", () => {
     const token = stepOf(WORKFLOW, "publish", "Publish to the registry").env?.["NODE_AUTH_TOKEN"] ?? "";
-    const reaches = (registry: string, secrets: Readonly<Record<string, string>>): boolean =>
-      evaluateWorkflowExpression(token, { vars: { STAMITY_RELEASE_REGISTRY: registry }, secrets });
+    const body = token.trim().replace(/^\$\{\{/, "").replace(/\}\}$/, "");
+    // The evaluator answers a condition, so the credential is resolved by asking which candidate
+    // the expression's value equals: the per-run token, the company secret, or nothing at all.
+    const CANDIDATES = { "per-run": "GITHUB_TOKEN", company: "STAMITY_REGISTRY_TOKEN", "": "none" } as const;
+    const chosen = (registry: string, secrets: Readonly<Record<string, string>>): string => {
+      const context = { needs: { probe: { outputs: { registry } } }, secrets };
+      const hits = Object.entries(CANDIDATES).filter(([value]) =>
+        evaluateWorkflowExpression(`(${body}) == '${value}'`, context),
+      );
+      expect(hits, registry).toHaveLength(1);
+      return hits[0]?.[1] ?? "";
+    };
+    const both = { GITHUB_TOKEN: "per-run", STAMITY_REGISTRY_TOKEN: "company" };
     const perRunOnly = { GITHUB_TOKEN: "per-run" };
-    // GitHub Packages, with or without its trailing slash, gets the per-run token.
-    expect(reaches(GITHUB_PACKAGES, perRunOnly)).toBe(true);
-    expect(reaches(`${GITHUB_PACKAGES}/`, perRunOnly)).toBe(true);
-    // Any other registry does not: with no STAMITY_REGISTRY_TOKEN the credential is empty, which
-    // is what makes the npm step stop with its remedy rather than send the per-run token away.
+    // GitHub Packages, with or without its trailing slash, gets the per-run token — even when
+    // the company secret is also set.
+    for (const registry of [GITHUB_PACKAGES, `${GITHUB_PACKAGES}/`, `${GITHUB_PACKAGES}/acme-corp`]) {
+      expect(chosen(registry, both), registry).toBe("GITHUB_TOKEN");
+      expect(chosen(registry, perRunOnly), registry).toBe("GITHUB_TOKEN");
+    }
+    // Any other registry gets the company secret, and with none set the credential is empty,
+    // which is what makes the npm step stop with its remedy rather than send the per-run token away.
     for (const registry of [
       "https://npm.pkg.github.com.example",
       "https://npm.pkg.github.com-proxy.example/",
       "https://registry.example/api/npm/acme/",
     ]) {
-      expect(reaches(registry, perRunOnly), registry).toBe(false);
-      expect(reaches(registry, { ...perRunOnly, STAMITY_REGISTRY_TOKEN: "company" }), registry).toBe(true);
+      expect(chosen(registry, both), registry).toBe("STAMITY_REGISTRY_TOKEN");
+      expect(chosen(registry, perRunOnly), registry).toBe("none");
     }
   });
 });
@@ -503,10 +531,11 @@ describe.skipIf(WINDOWS)("fork-release.yml — the probe, executed", () => {
   it("arms a fork whose variable names itself, case-insensitively, on main by default", () => {
     const run = probe({ ARM: FORK_REPOSITORY.toLowerCase(), REGISTRY: GITHUB_PACKAGES });
     expect(run.status, run.out).toBe(0);
-    expect(run.outputs).toEqual({ armed: "true", branch: "main" });
-    const onBranch = probe({ ARM: FORK_REPOSITORY, REGISTRY: "https://registry.example:8443/api/npm/acme/", BRANCH: "release/1.x" });
+    expect(run.outputs).toEqual({ armed: "true", branch: "main", registry: GITHUB_PACKAGES });
+    const custom = "https://registry.example:8443/api/npm/acme/";
+    const onBranch = probe({ ARM: FORK_REPOSITORY, REGISTRY: custom, BRANCH: "release/1.x" });
     expect(onBranch.status, onBranch.out).toBe(0);
-    expect(onBranch.outputs).toEqual({ armed: "true", branch: "release/1.x" });
+    expect(onBranch.outputs).toEqual({ armed: "true", branch: "release/1.x", registry: custom });
   });
 
   it("fails an armed fork whose registry is not a clean https URL, and never prints the value", () => {
@@ -523,6 +552,7 @@ describe.skipIf(WINDOWS)("fork-release.yml — the probe, executed", () => {
       expect(run.out, registry).toContain("::error");
       expect(run.out, registry).toContain("STAMITY_RELEASE_REGISTRY");
       expect(run.outputs["armed"], registry).toBeUndefined();
+      expect(run.outputs["registry"], registry).toBeUndefined();
       for (const fragment of ["registry.example", "secret-pass", "secret-query", "secret-fragment"]) {
         expect(run.out, registry).not.toContain(fragment);
       }
@@ -737,6 +767,124 @@ function stubCommand(dir: string, name: string, body: string): void {
 function logOf(path: string): readonly string[] {
   return existsSync(path) ? readFileSync(path, "utf8").split("\n").filter((line) => line !== "") : [];
 }
+
+describe.skipIf(WINDOWS)("fork-release.yml — the tarball's identity, executed against a packed tarball", () => {
+  const IDENTITY = runOf(WORKFLOW, "publish", "Verify the tarball's identity");
+  const TARBALL = `acme-corp-stamity-${FORK_VERSION}.tgz`;
+  const PACKED = { name: FORK_PACKAGE, version: FORK_VERSION, publishConfig: { registry: GITHUB_PACKAGES } };
+
+  /** A tarball in npm pack's layout, its manifest at package/package.json, checked by the step. */
+  function identity(
+    packed: Readonly<Record<string, unknown>> | null,
+    env: Readonly<Record<string, string>> = {},
+  ): { status: number | null; out: string } {
+    const dir = scratchDir("identity");
+    mkdirSync(join(dir, "package"));
+    if (packed === null) writeFileSync(join(dir, "package", "README.md"), "no manifest\n");
+    else writeFileSync(join(dir, "package", "package.json"), `${JSON.stringify(packed, null, 2)}\n`);
+    execFileSync("tar", ["-czf", TARBALL, "package"], { cwd: dir, stdio: "pipe" });
+    const result = spawnSync("bash", ["-c", IDENTITY], {
+      cwd: dir,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: childPath(),
+        TARBALL,
+        EXPECTED_NAME: FORK_PACKAGE,
+        EXPECTED_VERSION: FORK_VERSION,
+        EXPECTED_REGISTRY: GITHUB_PACKAGES,
+        ...env,
+      },
+    });
+    return { status: result.status, out: `${result.stdout}${result.stderr}` };
+  }
+
+  it("passes a tarball that declares the proved name, version and registry, trailing slashes aside", () => {
+    expect(identity(PACKED).status).toBe(0);
+    const slashed = identity({ ...PACKED, publishConfig: { registry: `${GITHUB_PACKAGES}/` } });
+    expect(slashed.status, slashed.out).toBe(0);
+  });
+
+  it("refuses a tarball whose own package.json names another package", () => {
+    const run = identity({ ...PACKED, name: CANONICAL_PACKAGE });
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("declares name");
+    expect(run.out).toContain("Refusing to publish");
+  });
+
+  it("refuses a tarball whose own package.json declares another version", () => {
+    const run = identity({ ...PACKED, version: "1.10.0" });
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("declares version");
+  });
+
+  it("refuses a tarball whose publishConfig.registry is another registry, or absent", () => {
+    const other = identity({ ...PACKED, publishConfig: { registry: "https://registry.example/" } });
+    expect(other.status).toBe(1);
+    expect(other.out).toContain("declares publishConfig.registry");
+    const { publishConfig: _dropped, ...withoutRegistry } = PACKED;
+    expect(identity(withoutRegistry).status).toBe(1);
+  });
+
+  it("refuses when a proved value is missing, and when the tarball carries no manifest", () => {
+    expect(identity(PACKED, { EXPECTED_NAME: "" }).status).toBe(1);
+    const bare = identity(null);
+    expect(bare.status).toBe(1);
+    expect(bare.out).toContain("carries no readable package/package.json");
+  });
+});
+
+/** A stand-in digest per archive name, and the `sha256sum -c` line the builder writes for it. */
+function digestOf(archive: string): string {
+  return createHash("sha256").update(archive).digest("hex");
+}
+function lineOf(archive: string): string {
+  return `${digestOf(archive)}  ${archive}\n`;
+}
+
+describe.skipIf(WINDOWS)("fork-release.yml — the plugin checksum files, executed", () => {
+  const CHECKSUMS = runOf(WORKFLOW, "publish", "Verify plugin checksum files");
+  const ARCHIVES = [`stamity-plugin-claude-${FORK_VERSION}.zip`, `stamity-plugin-codex-${FORK_VERSION}.zip`];
+
+  /** A downloaded distribution: release.json naming both archives, and the given checksum files. */
+  function checksums(files: Readonly<Record<string, string>>): { status: number | null; out: string } {
+    const dir = scratchDir("checksums");
+    mkdirSync(join(dir, "plugins"));
+    const packages = ARCHIVES.map((archive) => ({ archive, sha256: digestOf(archive) }));
+    writeFileSync(join(dir, "plugins", "release.json"), `${JSON.stringify({ packages })}\n`);
+    for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, "plugins", name), body);
+    const result = spawnSync("bash", ["-c", CHECKSUMS], {
+      cwd: dir,
+      encoding: "utf8",
+      env: { ...process.env, PATH: childPath() },
+    });
+    return { status: result.status, out: `${result.stdout}${result.stderr}` };
+  }
+
+  const MATCHING = Object.fromEntries(ARCHIVES.map((archive) => [`${archive}.sha256`, lineOf(archive)]));
+
+  it("passes checksum files that state exactly the manifest's digests", () => {
+    const run = checksums(MATCHING);
+    expect(run.status, run.out).toBe(0);
+  });
+
+  it("refuses a checksum file whose digest is not the manifest's", () => {
+    const [first = ""] = ARCHIVES;
+    const run = checksums({ ...MATCHING, [`${first}.sha256`]: `${"0".repeat(64)}  ${first}\n` });
+    expect(run.status).toBe(1);
+    expect(run.out).toContain(`plugins/${first}.sha256 does not state the digest`);
+  });
+
+  it("refuses a checksum file the manifest does not name, and a missing one", () => {
+    const stray = checksums({ ...MATCHING, "extra.zip.sha256": lineOf("extra.zip") });
+    expect(stray.status).toBe(1);
+    expect(stray.out).toContain("plugins/extra.zip.sha256 is not named by the verified manifest");
+    const [first = "", second = ""] = ARCHIVES;
+    const missing = checksums({ [`${first}.sha256`]: lineOf(first) });
+    expect(missing.status).toBe(1);
+    expect(missing.out).toContain(`plugins/${second}.sha256 is missing`);
+  });
+});
 
 describe.skipIf(WINDOWS)("fork-release.yml — the registry publish, executed with npm stubbed", () => {
   const PUBLISH = runOf(WORKFLOW, "publish", "Publish to the registry");
