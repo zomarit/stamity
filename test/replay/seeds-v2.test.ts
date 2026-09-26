@@ -215,6 +215,10 @@ describe("the v2 fixture data", () => {
     expect(readdirSync(PATCHES).toSorted()).toEqual(["base.patch", ...PASSES.map((id) => `${id}.patch`)].toSorted());
   });
 
+  it("(review/120) base.patch and oracle/oracles.patch are v1's, byte for byte", () => {
+    for (const file of ["patches/base.patch", "oracle/oracles.patch"]) expect(readFileSync(join(V2, file)).equals(readFileSync(join(V1, file))), file).toBe(true);
+  });
+
   it("applies as a chain over the base with git apply --3way, every pass moving the tree", () => {
     expect(chain.trees).toHaveLength(PASSES.length + 1);
     expect(new Set(chain.trees).size).toBe(chain.trees.length);
