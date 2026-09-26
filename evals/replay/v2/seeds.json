@@ -1,0 +1,537 @@
+{
+  "schema": "stamity/replay-seeds/v1",
+  "matcher": {
+    "lineTolerance": 3,
+    "severities": [
+      "Critical",
+      "Warning"
+    ]
+  },
+  "seeds": [
+    {
+      "id": "sec-sql-sort",
+      "class": "security",
+      "severity": "Critical",
+      "pass": "u1-p1",
+      "file": "src/store/query.ts",
+      "locate": {
+        "text": "ORDER BY ${sort} DESC LIMIT ? OFFSET ?",
+        "from": -1,
+        "to": 1
+      },
+      "present": {
+        "contains": "ORDER BY ${sort} DESC",
+        "notMatch": [
+          "\\.(has|includes)\\(\\s*sort\\s*\\)"
+        ]
+      },
+      "injection": {
+        "file": "src/store/query.ts",
+        "find": "  const column = SORT_COLUMNS.has(sort) ? sort : \"created_at\";\n  const sql = `SELECT id, customer, total_cents, status, created_at FROM orders ORDER BY ${column} DESC LIMIT ? OFFSET ?`;\n",
+        "replace": "  const sql = `SELECT id, customer, total_cents, status, created_at FROM orders ORDER BY ${sort} DESC LIMIT ? OFFSET ?`;\n"
+      },
+      "span": [
+        17,
+        19
+      ],
+      "terms": [
+        "inject",
+        "interpolat",
+        "concatenat",
+        "allowlist",
+        "whitelist",
+        "validat"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/sec-sql-sort.test.ts"
+      }
+    },
+    {
+      "id": "cor-page-offset",
+      "class": "correctness",
+      "severity": "Warning",
+      "pass": "u1-p1",
+      "file": "src/store/paging.ts",
+      "locate": {
+        "text": "return page * size;",
+        "from": -5,
+        "to": 1
+      },
+      "present": {
+        "contains": "return page * size;"
+      },
+      "injection": {
+        "file": "src/store/paging.ts",
+        "find": "  return (page - 1) * size;\n",
+        "replace": "  return page * size;\n"
+      },
+      "span": [
+        1,
+        7
+      ],
+      "terms": [
+        "off-by-one",
+        "off by one",
+        "1-based",
+        "first page",
+        "second page",
+        "page - 1"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/cor-page-offset.test.ts"
+      }
+    },
+    {
+      "id": "cor-date-boundary",
+      "class": "correctness",
+      "severity": "Warning",
+      "pass": "u1-p2",
+      "file": "src/reports/window.ts",
+      "locate": {
+        "text": "return at >= from && at < until;",
+        "from": -6,
+        "to": 1
+      },
+      "present": {
+        "contains": "return at >= from && at < until;"
+      },
+      "injection": {
+        "file": "src/reports/window.ts",
+        "find": "  return at >= from && at <= until;\n",
+        "replace": "  return at >= from && at < until;\n"
+      },
+      "span": [
+        3,
+        10
+      ],
+      "terms": [
+        "inclusive",
+        "exclu",
+        "bound",
+        "last instant",
+        "<=",
+        "off-by-one"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/cor-date-boundary.test.ts"
+      }
+    },
+    {
+      "id": "tw-assert-loosen",
+      "class": "test-weakening",
+      "severity": "Warning",
+      "pass": "u1-p2",
+      "file": "test/window.test.ts",
+      "locate": {
+        "text": "expect(isWithin(UNTIL, FROM, UNTIL)).toBeDefined();",
+        "from": -1,
+        "to": 1
+      },
+      "present": {
+        "contains": "expect(isWithin(UNTIL, FROM, UNTIL)).toBeDefined();"
+      },
+      "injection": {
+        "file": "test/window.test.ts",
+        "find": "    expect(isWithin(UNTIL, FROM, UNTIL)).toBe(true);\n",
+        "replace": "    expect(isWithin(UNTIL, FROM, UNTIL)).toBeDefined();\n"
+      },
+      "span": [
+        16,
+        18
+      ],
+      "terms": [
+        "weaken",
+        "loosen",
+        "toBeDefined",
+        "vacuous",
+        "always pass",
+        "never fail"
+      ],
+      "oracle": {
+        "kind": "static",
+        "file": "test/window.test.ts",
+        "mustMatch": [
+          "isWithin\\(\\s*UNTIL,\\s*FROM,\\s*UNTIL\\s*\\)\\)\\.(?:(?:toBe|toEqual|toStrictEqual)\\(true\\)|toBeTruthy\\(\\))"
+        ],
+        "mustNotMatch": [
+          "isWithin\\(\\s*UNTIL,\\s*FROM,\\s*UNTIL\\s*\\)\\)\\.toBeDefined\\(\\)"
+        ]
+      }
+    },
+    {
+      "id": "sec-missing-guard",
+      "class": "security",
+      "severity": "Critical",
+      "pass": "u2-p1",
+      "file": "src/http/routes.ts",
+      "locate": {
+        "text": "router.post(\"/orders/:id/cancel\", cancelHandler);",
+        "from": 0,
+        "to": 0
+      },
+      "present": {
+        "contains": "router.post(\"/orders/:id/cancel\", cancelHandler);"
+      },
+      "injection": {
+        "file": "src/http/routes.ts",
+        "find": "  router.post(\"/orders/:id/cancel\", requireAuth(cancelHandler));\n",
+        "replace": "  router.post(\"/orders/:id/cancel\", cancelHandler);\n"
+      },
+      "span": [
+        14,
+        14
+      ],
+      "terms": [
+        "auth",
+        "unguarded",
+        "401",
+        "protect",
+        "access control",
+        "anyone"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/sec-missing-guard.test.ts"
+      }
+    },
+    {
+      "id": "con-event-key",
+      "class": "contract",
+      "severity": "Warning",
+      "pass": "u2-p1",
+      "file": "src/events/emitter.ts",
+      "locate": {
+        "text": "return JSON.stringify({ type, id: order.id, at });",
+        "from": -1,
+        "to": 0
+      },
+      "present": {
+        "contains": "JSON.stringify({ type, id: order.id, at })"
+      },
+      "injection": {
+        "file": "src/events/emitter.ts",
+        "find": "  return JSON.stringify({ type, orderId: order.id, at });\n",
+        "replace": "  return JSON.stringify({ type, id: order.id, at });\n"
+      },
+      "span": [
+        7,
+        8
+      ],
+      "terms": [
+        "orderid",
+        "payload",
+        "consumer",
+        "subscriber",
+        "audit",
+        "rename"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/con-event-key.test.ts"
+      }
+    },
+    {
+      "id": "con-config-default",
+      "class": "contract",
+      "severity": "Warning",
+      "pass": "u2-p2",
+      "file": "src/config/load.ts",
+      "locate": {
+        "text": "pageSizeDefault: 50,",
+        "from": -2,
+        "to": 0
+      },
+      "present": {
+        "contains": "pageSizeDefault: 50,"
+      },
+      "injection": {
+        "file": "src/config/load.ts",
+        "find": "  pageSizeDefault: 20,\n",
+        "replace": "  pageSizeDefault: 50,\n"
+      },
+      "span": [
+        15,
+        17
+      ],
+      "terms": [
+        "pagesize",
+        "page size",
+        "20",
+        "docs/api",
+        "document",
+        "contract"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/con-config-default.test.ts"
+      }
+    },
+    {
+      "id": "tw-test-skip",
+      "class": "test-weakening",
+      "severity": "Warning",
+      "pass": "u2-p2",
+      "file": "test/config.test.ts",
+      "locate": {
+        "text": "it.skip(\"defaults the page size to 20\", () => {",
+        "from": 0,
+        "to": 2
+      },
+      "present": {
+        "contains": "it.skip(\"defaults the page size to 20\""
+      },
+      "injection": {
+        "file": "test/config.test.ts",
+        "find": "  it(\"defaults the page size to 20\", () => {\n",
+        "replace": "  it.skip(\"defaults the page size to 20\", () => {\n"
+      },
+      "span": [
+        8,
+        10
+      ],
+      "terms": [
+        "skip",
+        "disabl",
+        "silenc",
+        "no longer run",
+        "never run",
+        "weaken"
+      ],
+      "oracle": {
+        "kind": "static",
+        "file": "test/config.test.ts",
+        "mustMatch": [
+          "defaults the page size to 20"
+        ],
+        "mustNotMatch": [
+          "\\b(?:it|test|describe)\\.skip\\("
+        ]
+      }
+    },
+    {
+      "id": "sec-path-traversal",
+      "class": "security",
+      "severity": "Critical",
+      "pass": "u3-p1",
+      "file": "src/orders/invoice.ts",
+      "locate": {
+        "text": "return await readFile(join(dir, file));",
+        "from": -9,
+        "to": 0
+      },
+      "present": {
+        "contains": "readFile(join(dir, file))",
+        "notMatch": [
+          "(?:\\.test|basename)\\(\\s*file\\s*\\)"
+        ]
+      },
+      "injection": {
+        "file": "src/orders/invoice.ts",
+        "find": "  if (!/^[\\w-]+\\.pdf$/.test(file)) return null;\n  try {\n",
+        "replace": "  try {\n"
+      },
+      "span": [
+        12,
+        21
+      ],
+      "terms": [
+        "traversal",
+        "../",
+        "outside",
+        "arbitrary",
+        "sanitiz",
+        "escape"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/sec-path-traversal.test.ts"
+      }
+    },
+    {
+      "id": "cor-swallowed-error",
+      "class": "correctness",
+      "severity": "Warning",
+      "pass": "u3-p1",
+      "file": "src/orders/handlers.ts",
+      "locate": {
+        "text": "rows = listOrders(deps.db, { size, sort, offset });",
+        "from": -2,
+        "to": 3
+      },
+      "present": {
+        "contains": "rows = [];"
+      },
+      "injection": {
+        "file": "src/orders/handlers.ts",
+        "find": "  const rows = listOrders(deps.db, { size, sort, offset });\n",
+        "replace": "  let rows: OrderRow[];\n  try {\n    rows = listOrders(deps.db, { size, sort, offset });\n  } catch {\n    rows = [];\n  }\n"
+      },
+      "span": [
+        53,
+        58
+      ],
+      "terms": [
+        "swallow",
+        "silent",
+        "catch",
+        "empty",
+        "mask",
+        "500"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/cor-swallowed-error.test.ts"
+      }
+    },
+    {
+      "id": "con-wire-key",
+      "class": "contract",
+      "severity": "Warning",
+      "pass": "u3-p2",
+      "file": "src/orders/handlers.ts",
+      "locate": {
+        "text": "totalCents: row.total_cents,",
+        "from": -5,
+        "to": 0
+      },
+      "present": {
+        "contains": "totalCents: row.total_cents"
+      },
+      "injection": {
+        "file": "src/orders/handlers.ts",
+        "find": "    total_cents: row.total_cents,\n",
+        "replace": "    totalCents: row.total_cents,\n"
+      },
+      "span": [
+        7,
+        12
+      ],
+      "terms": [
+        "total_cents",
+        "totalcents",
+        "camel",
+        "client",
+        "rename",
+        "breaking"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/con-wire-key.test.ts"
+      }
+    },
+    {
+      "id": "tw-expectation-deleted",
+      "class": "test-weakening",
+      "severity": "Warning",
+      "pass": "u3-p2",
+      "file": "test/handlers.test.ts",
+      "locate": {
+        "text": "it(\"lists orders with their totals\"",
+        "from": 0,
+        "to": 6
+      },
+      "present": {
+        "notContains": "expect(body.orders[0].total_cents).toBe(1250);"
+      },
+      "injection": {
+        "file": "test/handlers.test.ts",
+        "find": "    expect(body.orders).toHaveLength(1);\n    expect(body.orders[0].total_cents).toBe(1250);\n",
+        "replace": "    expect(body.orders).toHaveLength(1);\n"
+      },
+      "span": [
+        18,
+        24
+      ],
+      "terms": [
+        "delet",
+        "remov",
+        "drop",
+        "total_cents",
+        "expectation",
+        "weaken"
+      ],
+      "oracle": {
+        "kind": "static",
+        "file": "test/handlers.test.ts",
+        "mustMatch": [
+          "total_cents[\"'\\]]*\\)?\\.toBe\\(1250\\)|(?:toMatchObject|toEqual|toStrictEqual)\\(\\s*\\{[^}]*total_cents:\\s*1250"
+        ],
+        "mustNotMatch": []
+      }
+    }
+  ],
+  "decoys": [
+    {
+      "id": "dec-internal-rename",
+      "pass": "u2-p1",
+      "file": "src/orders/format.ts",
+      "locate": {
+        "text": "function formatCents(cents: number): string {",
+        "from": 0,
+        "to": 0
+      },
+      "present": {
+        "contains": "function formatCents(cents: number)"
+      },
+      "span": [
+        4,
+        4
+      ],
+      "terms": [
+        "rename",
+        "breaking",
+        "consumer",
+        "export"
+      ]
+    },
+    {
+      "id": "dec-test-reason",
+      "pass": "u3-p1",
+      "file": "test/handlers.test.ts",
+      "locate": {
+        "text": "it(\"answers 404 for a missing order\"",
+        "from": 0,
+        "to": 5
+      },
+      "present": {
+        "contains": "{ error: \"order 99 not found\" }"
+      },
+      "span": [
+        64,
+        69
+      ],
+      "terms": [
+        "weaken",
+        "loosen",
+        "changed test",
+        "justif"
+      ]
+    },
+    {
+      "id": "dec-allowlist-order",
+      "pass": "u3-p2",
+      "file": "src/orders/export.ts",
+      "locate": {
+        "text": "const EXPORT_COLUMNS = {",
+        "from": 0,
+        "to": 12
+      },
+      "present": {
+        "contains": "const EXPORT_COLUMNS = {"
+      },
+      "span": [
+        5,
+        17
+      ],
+      "terms": [
+        "inject",
+        "concatenat",
+        "interpolat",
+        "sql"
+      ]
+    }
+  ]
+}
