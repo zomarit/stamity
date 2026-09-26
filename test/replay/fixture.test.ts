@@ -680,10 +680,17 @@ describe("--protocol (plan 011 v2-protocol-paths)", () => {
     expect(explicit.baseCommit).toBe(buildCli([]).baseCommit);
   });
 
-  it("exits 2 with the usage on an unknown version", () => {
-    const result = spawnSync(process.execPath, [FIXTURE_MJS, "--protocol", "v3", "--no-setup", "--no-install"], { encoding: "utf8", env: gitEnv() });
-    expect(result.status).toBe(2);
-    expect(result.stderr).toMatch(/--protocol v3 is not a protocol version: v1 or v2/);
-    expect(result.stderr).toContain("Usage: node scripts/replay/fixture.mjs");
+  it("exits 1 with the usage on an unknown version, and builds nothing (review/48)", () => {
+    const out = mkdtempSync(join(tmpdir(), "stamity-replay-protocol-"));
+    try {
+      const result = spawnSync(process.execPath, [FIXTURE_MJS, "--out", out, "--protocol", "v3", "--no-setup", "--no-install"], { encoding: "utf8", env: gitEnv() });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toMatch(/--protocol v3 is not a protocol version: v1 or v2/);
+      expect(result.stderr).toContain("Usage: node scripts/replay/fixture.mjs");
+      expect(result.stderr).toContain("an unknown version exits 1 with this usage, and nothing is built");
+      expect(readdirSync(out)).toEqual([]);
+    } finally {
+      rmSync(out, { recursive: true, force: true });
+    }
   });
 });

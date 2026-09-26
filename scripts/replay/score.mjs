@@ -635,7 +635,15 @@ export function checkRuns(runsDir, protocolPath, version = versionOfPath(protoco
   const protocolSha = sha256(readFileSync(protocolPath))
   const problems = []
   const invalid = Object.fromEntries(SHAPES.map((shape) => [shape, []]))
-  const dirs = readdirSync(runsDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).toSorted()
+  let entries
+  try {
+    entries = readdirSync(runsDir, { withFileTypes: true })
+  } catch (error) {
+    // `check --protocol v2` before v2's first run: the folder is absent, which is the no-run case.
+    if (error?.code === 'ENOENT') return { runs: 0, problems: [`no run directory: the runs folder does not exist (${runsDir})`], invalid }
+    throw error
+  }
+  const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name).toSorted()
   if (dirs.length === 0) return { runs: 0, problems: ['no run directory under the runs folder'], invalid }
   const commits = new Set()
   for (const name of dirs) {
@@ -722,8 +730,12 @@ function protocolPathOf(path) {
   return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel) ? rel.split(/[\\/]/).join('/') : basename(path)
 }
 
-/** An error the CLI reports with exit 2, the usage appended: the command line itself is wrong. */
-const usageError = (message) => Object.assign(new Error(`${message}\n${USAGE}`), { exitCode: 2 })
+/**
+ * An error the CLI reports with the usage appended: the command line itself is wrong. It exits 1,
+ * refused with nothing written, like every other refusal, so `compare`'s exit 2 keeps its one
+ * meaning — the merge gate FAILed and the file is written (review/48).
+ */
+const usageError = (message) => new Error(`${message}\n${USAGE}`)
 
 /**
  * `--protocol` as given: a version of `PROTOCOLS` (read from this checkout), or a protocol file
@@ -757,6 +769,27 @@ function readJson(path, what) {
   }
 }
 
+/** True when `path` is `folder` or lies under it. */
+function isWithin(path, folder) {
+  const rel = relative(folder, path)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+}
+
+/**
+ * Refuses an `--out-dir` inside another version's committed runs folder (review/47): a v2 summary
+ * in `evals/replay/runs/` would be read by v1's `check` and leak-checked under the wrong path. The
+ * chosen version's own folder and any scratch folder stay allowed.
+ */
+function refuseOtherRunsFolder(outDir, version) {
+  const target = resolve(outDir)
+  if (isWithin(target, join(REPO_ROOT, PROTOCOLS[version].runs))) return
+  for (const [other, entry] of Object.entries(PROTOCOLS)) {
+    if (other !== version && isWithin(target, join(REPO_ROOT, entry.runs))) {
+      throw new Error(`--out-dir is inside ${other}'s runs folder ${entry.runs}: a ${version} run is written under ${PROTOCOLS[version].runs} or a scratch folder`)
+    }
+  }
+}
+
 function runCommand(o) {
   const protocol = protocolOption(o.protocol)
   for (const key of ['measurement', 'runJson', 'runId', 'kind', 'outDir']) if (!o[key]) throw new Error(`--${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)} is required.\n${USAGE}`)
@@ -781,6 +814,7 @@ function runCommand(o) {
   if (references.length > 0 && o.kind === 'pilot') throw new Error('a pilot is not scored: it takes no --reference')
 
   const version = committedVersion(protocol)
+  refuseOtherRunsFolder(o.outDir, version)
   const protocolPath = PROTOCOLS[version].path
   const summary = summarize(measurement, runJson, protocolSha, { protocolPath, runId: o.runId, kind: o.kind })
   const problems = validateSummary(summary)
@@ -868,7 +902,7 @@ export const USAGE = [
   '         (exit 0: merge gate PASS; 2: FAIL, the file written; 1: refused, nothing written)',
   `  --protocol defaults to ${DEFAULT_PROTOCOL}; each version's paths (scripts/replay/protocols.mjs):`,
   ...Object.entries(PROTOCOLS).map(([v, e]) => `    ${v}: ${e.path}, runs ${e.runs}, comparison ${e.comparison}`),
-  '  An unknown --protocol version exits 2 with this usage, and nothing is written.',
+  '  An unknown --protocol version exits 1 with this usage: refused, nothing written. Exit 2 means only compare\'s FAIL.',
 ].join('\n')
 
 /** The flags that repeat, each collected into a list. */
@@ -914,6 +948,6 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === SELF) {
     main(process.argv.slice(2))
   } catch (error) {
     process.stderr.write(`[replay] ${error.message}\n`)
-    process.exitCode = error.exitCode ?? 1
+    process.exitCode = 1
   }
 }

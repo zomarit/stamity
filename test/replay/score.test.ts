@@ -993,14 +993,62 @@ describe("the protocol table and the import graph (plan 011 v2-protocol-paths, b
       expect(existsSync(outDir)).toBe(false);
     });
 
-    it("an unknown --protocol version exits 2 with the usage", () => {
+    it("an unknown --protocol version exits 1 with the usage in every command, and nothing is written (review/48: exit 2 is compare's FAIL alone)", () => {
       const copy = instrumentCopy();
-      for (const args of [["check", "--protocol", "v3"], ["run", "--protocol", "v9"], ["compare", "--protocol", "v3", "--out", join(scratch(), "COMPARISON-v3.md")]]) {
+      const out = join(scratch(), "COMPARISON-v3.md");
+      const outDir = join(scratch(), RUN_ID);
+      const commands = [
+        ["check", "--protocol", "v3"],
+        ["run", "--protocol", "v9", "--measurement", "m.json", "--run-json", "run.json", "--run-id", RUN_ID, "--kind", "scored", "--out-dir", outDir],
+        ["compare", "--protocol", "v3", "--out", out],
+      ];
+      for (const args of commands) {
         const result = scoreIn(copy, args);
-        expect(result.status).toBe(2);
+        expect(result.status).toBe(1);
         expect(result.stderr).toMatch(/--protocol v\d is not a protocol version: v1 or v2, or the committed protocol path/);
         expect(result.stderr).toContain("Usage: node scripts/replay/score.mjs run");
+        expect(result.stderr).toContain("An unknown --protocol version exits 1 with this usage: refused, nothing written. Exit 2 means only compare's FAIL.");
       }
+      expect(existsSync(out)).toBe(false);
+      expect(existsSync(outDir)).toBe(false);
+    });
+
+    it("run refuses an --out-dir inside the other version's runs folder, writing nothing, and keeps its own folder and a scratch folder allowed (review/47)", async () => {
+      const copy = instrumentCopy();
+      const v1Runs = join(copy.root, "evals/replay/runs");
+      const v2Runs = join(copy.root, "evals/replay/v2/runs");
+      const v2InV1 = await runIn(copy, "v2", copy.v2Sha, v1Runs);
+      expect(v2InV1.result.status).toBe(1);
+      expect(v2InV1.result.stderr).toContain("--out-dir is inside v1's runs folder evals/replay/runs: a v2 run is written under evals/replay/v2/runs or a scratch folder");
+      expect(existsSync(v2InV1.outDir)).toBe(false);
+      // Nested deeper under the other version's folder is refused the same way.
+      const nested = await runIn(copy, "v2", copy.v2Sha, join(v1Runs, "extra"));
+      expect(nested.result.status).toBe(1);
+      expect(existsSync(nested.outDir)).toBe(false);
+      const v1InV2 = await runIn(copy, "v1", PROTOCOL_SHA, v2Runs);
+      expect(v1InV2.result.status).toBe(1);
+      expect(v1InV2.result.stderr).toContain("--out-dir is inside v2's runs folder evals/replay/v2/runs: a v1 run is written under evals/replay/runs or a scratch folder");
+      expect(existsSync(v1InV2.outDir)).toBe(false);
+      // The path form of --protocol resolves to the same version and meets the same refusal.
+      const byPath = await runIn(copy, join(copy.root, "evals/replay/REPLAY-v2.md"), copy.v2Sha, v1Runs, "2026-09-24-replay-4");
+      expect(byPath.result.status).toBe(1);
+      expect(byPath.result.stderr).toContain("--out-dir is inside v1's runs folder");
+      const cases = [["v2", copy.v2Sha, v2Runs], ["v2", copy.v2Sha, scratch()], ["v1", PROTOCOL_SHA, v1Runs], ["v1", PROTOCOL_SHA, scratch()]] as const;
+      // Each case writes to a folder of its own, so they run side by side.
+      for (const allowed of await Promise.all(cases.map(([protocol, sha, dir]) => runIn(copy, protocol, sha, dir, "2026-09-24-replay-5")))) {
+        expect(allowed.result.stderr).toBe("");
+        expect(allowed.result.status).toBe(0);
+        expect(existsSync(join(allowed.outDir, "summary.json"))).toBe(true);
+      }
+    });
+
+    it("check --protocol v2 before v2's runs folder exists reports the missing folder as a problem, not a raw ENOENT (review/49)", () => {
+      const copy = instrumentCopy();
+      const result = scoreIn(copy, ["check", "--protocol", "v2"]);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("[replay] check failed over 0 run folder(s):");
+      expect(result.stderr).toContain("no run directory: the runs folder does not exist");
+      expect(result.stderr).not.toContain("ENOENT");
     });
   });
 });

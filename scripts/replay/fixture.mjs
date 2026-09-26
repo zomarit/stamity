@@ -54,7 +54,7 @@ const REPO_ROOT = resolve(SELF, '..', '..', '..')
 /** The replay data directory of a protocol version (`PROTOCOLS[version].data`), absolute. */
 export const dataDirOf = (version) => join(REPO_ROOT, ...PROTOCOLS[version].data.split('/'))
 
-/** The six passes of the replay plan, in chain order. Each names one `v1/patches/<id>.patch`. */
+/** The six passes of the replay plan, in chain order. Each names one `<data>/patches/<id>.patch` of the chosen protocol's data directory. */
 export const PASS_IDS = ['u1-p1', 'u1-p2', 'u2-p1', 'u2-p2', 'u3-p1', 'u3-p2']
 
 /** The date every fixture commit carries, and the date half of the plan's `stamp:` line. */
@@ -596,7 +596,7 @@ export const USAGE =
   'Usage: node scripts/replay/fixture.mjs [--out <parentDir>] [--cli-tarball <tgz>]\n' +
   '                                       [--deps <dir> | --deps-link <dir>] [--units <id,…|none>]\n' +
   `                                       [--protocol ${Object.keys(PROTOCOLS).join('|')}] [--no-setup] [--no-install] [--run-gates] [--json]\n` +
-  `  --protocol defaults to ${DEFAULT_PROTOCOL}; an unknown version exits 2.`
+  `  --protocol defaults to ${DEFAULT_PROTOCOL}; an unknown version exits 1 with this usage, and nothing is built.`
 
 /** `--flag value` and `--flag` over argv, the shape `scripts/qa/run.mjs` uses. */
 function parseArgs(argv) {
@@ -626,7 +626,7 @@ function main(argv) {
     return
   }
   if (protocol !== undefined && !isProtocolVersion(protocol)) {
-    throw Object.assign(new Error(`--protocol ${protocol} is not a protocol version: ${Object.keys(PROTOCOLS).join(' or ')}.\n${USAGE}`), { exitCode: 2 })
+    throw new Error(`--protocol ${protocol} is not a protocol version: ${Object.keys(PROTOCOLS).join(' or ')}.\n${USAGE}`)
   }
   const result = createReplayFixture({ ...options, v1Dir: dataDirOf(protocol ?? DEFAULT_PROTOCOL) })
   if (json) {
@@ -645,6 +645,6 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === SELF) {
     main(process.argv.slice(2))
   } catch (error) {
     process.stderr.write(`[replay] the fixture could not be built: ${error.message}\n`)
-    process.exitCode = error.exitCode ?? 1
+    process.exitCode = 1
   }
 }
