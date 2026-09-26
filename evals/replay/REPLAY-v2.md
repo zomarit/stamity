@@ -15,7 +15,7 @@ the replay could not score review. v2 keeps v1's shapes, pins, messages, samples
 - **The fixture** is `evals/replay/v2/` (§5, Fixture notes).
 - **Scoring.** A negated severity word is no severity, a term inside the finding's own locator credits nothing, one
   term window serves both shapes, and one review round's verdict counts for every pass the round covers (§8, §9).
-- **Compaction** is placed per review round (§7).
+- **Compaction** keeps v1's placement passes, and each fires at the first review round that covers its pass (§7).
 - **§8's invalid-run sentence** names all three forbidden terms.
 - **Runs and the comparison** live under v2's own paths (§11).
 - **Threats to validity** are written down (§15).
@@ -192,16 +192,17 @@ The usage limit has reset. Continue the /st-work run from where it stopped.
 
 ## §7 Compaction
 
-- **Placement.** Per review round, not per pass: the run's first review round, whichever passes it covers. One round
-  gives one sample.
-- **Trigger.** v1's trigger, read per round: it fires when every verdict-role agent dispatched for that round has
-  stopped, at least two of them have returned, and no fixer has been dispatched for a pass the round covers.
+- **Placements.** `u2-p1` and `u3-p1`, as in v1.
+- **Trigger.** A placement fires when the first review round that covers its pass has returned: every verdict-role
+  agent of that round has stopped. The round may cover that pass alone or several passes. The driver checks the
+  condition on each poll, and the placement fires only when it holds on two polls in a row.
 - **Sequence.** Interrupt; wait for `result`; snapshot the fixture's `.stamity/runs/`; send `/compact`; wait for
   `compact_boundary` with `trigger:"manual"`; send the resume message (§6).
-- **Decision rule.** Interrupt mode if the canary (`K-inject-baseline` and `K-inject-changed`) passes K1–K4.
-  Otherwise the auto-window mode: `CLAUDE_CODE_AUTO_COMPACT_WINDOW=100000`, where an automatic compaction is a sample
-  only when its boundary falls inside the window, after a lens delivery and before the next ledger write. One outside
-  the window is named in the notes, beside `compaction-loss`, and is no sample. The canary record states which branch
+- **Decision rule.** Interrupt mode if the canary (`K-inject-baseline` and `K-inject-changed`) passes K1–K4, and
+  auto-window mode otherwise. When the two canary records disagree on the mechanism, both shapes run auto-window
+  mode. Auto-window mode sets `CLAUDE_CODE_AUTO_COMPACT_WINDOW=100000`, and an automatic compaction is a sample only
+  when its boundary falls inside the window, after a lens delivery and before the next ledger write. One outside the
+  window is named in the notes, beside `compaction-loss`, and is no sample. The canary record states which branch
   applied, and every run's RESULTS names it. Choosing the fallback is not an edit of this file.
 - **Validity.** A sample with at-risk = 0 (§8, loss) is recorded and is not valid. With the seeds now reaching review,
   findings sit at risk at the boundary, which is what makes a sample valid.
