@@ -20,7 +20,7 @@ import { MANIFEST_VERSION, type SetupManifest } from "../../src/types/manifest.t
 import { validateCapabilityFile } from "../../scripts/plugins/capability.mjs";
 // @ts-expect-error — see above.
 import { resolveDistributionIdentity } from "../../scripts/distribution-identity.mjs";
-import { repositoryRoute } from "../support/identity.ts";
+import { canonical, repositoryRoute } from "../support/identity.ts";
 
 /**
  * The CODEX plugin root: `scripts/plugins/clients/codex.mjs` as the generator renders it
@@ -498,7 +498,7 @@ function stubDistributionRuntime(): string {
     join(dir, "RUNTIME.json"),
     `${JSON.stringify(
       {
-        package: "@zomarit/stamity",
+        package: canonical().name,
         version: "1.8.0",
         nodeFloor: ">=22.22.2",
         tarballSha256: "a".repeat(64),
