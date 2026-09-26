@@ -1557,6 +1557,28 @@ describe("full run admission and strict aggregation", () => {
     // Nothing recorded: the pair is null on both halves, never a guessed default.
     expect(comparatorKey({ profile: "claude" }).models).toEqual({ scenario: null, judge: null });
   });
+  // MODEL-PROFILES-v1.md accepts `claude-opus-5-5[1m]` as the reported variant of `claude-opus-5-5`;
+  // compared verbatim, one recorded suffix would split one pair into two baselines.
+  it("reads the accepted [1m] reporting variant as the same model, and no other model as it", () => {
+    const root = temp();
+    writeRun(root, "2026-09-11-run-1", { profile: "claude" },
+      { configuration: { ...CLAUDE_BASE, models: { ...OPUS_5_5, scenario: "claude-opus-5-5[1m]" } } });
+    expect(previousRun(root, { ...CLAUDE_BASE, models: OPUS_5_5 })?.runId).toBe("2026-09-11-run-1");
+    expect(previousRun(root, { ...CLAUDE_BASE, models: OPUS_5 })).toBeUndefined();
+    writeRun(root, "2026-09-12-run-2", { profile: "claude", comparatorKey: { ...CLAUDE_BASE, models: OPUS_5_5 } });
+    expect(previousRun(root, { ...CLAUDE_BASE, models: { ...OPUS_5_5, scenario: "claude-opus-5-5[1m]" } })?.runId)
+      .toBe("2026-09-12-run-2");
+    expect(previousRun(root, { ...CLAUDE_BASE, models: { ...OPUS_5, scenario: "claude-opus-5[1m]" } })).toBeUndefined();
+  });
+  // The end-to-end fixture above carries the driver's `models` shape; this case sends this runner's
+  // own `roles` shape through runEvaluation, so the pair it records is the one `loadInputs` builds.
+  it("records the pair from this runner's own roles on the summary a run writes", async () => {
+    const roles = { scenario: { model: "gpt-6-astra", reasoningEffort: "high" }, judge: { model: "gpt-5.6-sol", reasoningEffort: "high" } };
+    const { models: _models, ...fieldsWithoutPair } = FIXTURE_KEY;
+    const load = () => Object.assign(loaded(), { configuration: { testOnly: true, ...fieldsWithoutPair, roles } });
+    const result = await runEvaluation({ root: temp(), runId: "2026-09-10-run-1", profileName: "codex-astra", trigger: "release", load });
+    expect(result.summary.comparatorKey).toEqual(FIXTURE_KEY);
+  });
   it("compares a historical run that recorded no model pair on the fields it did record", () => {
     const root = temp();
     writeRun(root, "2026-09-11-run-1", { profile: "claude" }, { configuration: { ...CLAUDE_BASE } });

@@ -101,7 +101,7 @@ describe("prospective calibration keys", () => {
     expect(() => parse(mutate())).toThrow();
   });
 
-  it("keeps profile roles, effort, default, set and unselected instruments unchanged", () => {
+  it("pins v2 apart from v1 on its set, its three rubrics and its claude scenario model only", () => {
     const legacy = JSON.parse(read("evals/model-profiles-v1.json"));
     const current = JSON.parse(read("evals/model-profiles-v2.json"));
     // Behaviour moved, not weakened: v1 moved to SET-v7 and to rubric v7 for the default

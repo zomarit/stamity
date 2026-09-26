@@ -485,9 +485,11 @@ record and stays as it was.
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
 comparator key carries the model pair from this release on, so a run on another pair is never
-composed with this one. § 8 names the pair among the comparator's fields, and its sentence on
-unrecorded fields now ends in one more rule: a run that recorded none of the fields matches no
-key, where before it matched every key. The judge, `claude-fable-5-1`, does not move. No case, no
+composed with this one. Composition is the route of record's (a runner without composition runs
+the full set), so that half holds once its driver compares the pair too, which plan 010 lands
+before run 33. § 8 names the pair among the comparator's fields, reads a model id without the
+`[1m]` context-window suffix, and its sentence on unrecorded fields now ends in one more rule: a
+run that recorded none of the fields matches no key, where before it matched every key. The judge, `claude-fable-5-1`, does not move. No case, no
 Expected block and no roster count moves.
 
 **Incremental runs, declared 2026-09-15.** The maintainer decision under "Incremental runs —
@@ -540,7 +542,7 @@ run. Results are artifacts, not chat. The file records, at minimum:
    full model/rubric/harness configuration; a profile change starts a separate baseline.
    The comparator keys on exactly those fields — `{ profile, rubricCoreHash, harness, models }`,
    `models` being the `{ scenario, judge }` pair, recorded as `comparatorKey` on each run
-   summary — and never on the candidate or the case and content bytes: a rule that tracks one
+   summary, each id compared without a trailing `[1m]` context-window suffix — and never on the candidate or the case and content bytes: a rule that tracks one
    criterion across candidates cannot key on what every candidate moves. (A summary written
    before that field existed is keyed from its own `inputs.json`, and a field neither file
    recorded is not compared; a run that recorded none of the fields matches no key.)

@@ -100,6 +100,15 @@ export function comparatorKey(configuration = {}) {
 const COMPARATOR_FIELDS = ['profile', 'rubricCoreHash', 'harness', 'models.scenario', 'models.judge']
 const keyField = (key, field) => field.split('.').reduce((value, part) => value?.[part], key) ?? null
 const pairRecorded = key => keyField(key, 'models.scenario') != null || keyField(key, 'models.judge') != null
+/**
+ * A model id as the comparator reads it: the context-window suffix `[1m]` is stripped, because
+ * `MODEL-PROFILES-v1.md` accepts `claude-opus-5-5[1m]` as the reported variant of `claude-opus-5-5`
+ * and one model must not split into two baselines. The recorded id itself stays verbatim.
+ */
+const comparedField = (key, field) => {
+  const value = keyField(key, field)
+  return field.startsWith('models.') && typeof value === 'string' ? value.replace(/\[1m\]$/, '') : value
+}
 
 /**
  * The comparator key a committed run recorded. Summaries written before `comparatorKey` existed
@@ -128,7 +137,7 @@ function recordedKey(directory, summary) {
  */
 function sameConfiguration(recorded, key) {
   if (COMPARATOR_FIELDS.every(field => keyField(recorded, field) == null)) return false
-  return COMPARATOR_FIELDS.every(field => keyField(recorded, field) == null || keyField(recorded, field) === keyField(key, field))
+  return COMPARATOR_FIELDS.every(field => keyField(recorded, field) == null || comparedField(recorded, field) === comparedField(key, field))
 }
 
 /** New directories and exclusive writes only; no historical artifact can be replaced. */

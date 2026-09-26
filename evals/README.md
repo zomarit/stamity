@@ -87,10 +87,12 @@ judging, or `codex-astra-judge` to reverse them. Both roles use `high` reasoning
 13 and 14 ended terminal before scoring, and the control they need — a supported,
 independently proved native task-transfer control — has not been established; selecting a
 profile establishes no measurement.
-The v1 profile JSON names `rubric-v7.md` for both Codex profiles. The prospective
-[v2 profile document](MODEL-PROFILES-v2.md) selects `rubric-v6.md` for `codex-astra` alone;
-unselected profiles and all model/effort controls remain unchanged. Both configurations
-require fresh contexts and calibration before scoring. Sealed input isolation is the
+The v1 profile JSON names `rubric-v7.md` for all three profiles. The prospective
+[v2 profile document](MODEL-PROFILES-v2.md) keeps what it was written against: `SET-v5`,
+`rubric-v4.md` for `claude`, `rubric-v6.md` for `codex-astra`, `rubric-v5.md` for
+`codex-astra-judge`, and `claude-opus-5` as the `claude` scenario model, which v1 moved to
+`claude-opus-5-5` at 1.10.0. Every judge, both Codex pairs and every effort control match v1.
+Both configurations require fresh contexts and calibration before scoring. Sealed input isolation is the
 default; an operator may prospectively select [session-native v2](session-native-v2.md)
 to retain the disclosed ambient baseline with the new rubric configuration.
 Availability of a profile does not
