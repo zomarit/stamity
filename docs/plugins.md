@@ -260,7 +260,8 @@ result was the PUBLIC package from the public registry, with no `runtime/`, no h
 locator — for a private fork, the public source in place of its own. The same line against this
 repository's own slug is expected to behave the same way, because its default branch carries the
 same npm-sourced Claude catalog, but that was not measured. Pin with `--ref plugins/v<version>`
-in place of the branch. This is the line the Codex root's own `README.md` prints.
+in place of the branch. The Codex root's own `README.md` prints both lines: the branch form under
+its install heading, and the tag form under its pin heading.
 
 Codex keeps a git marketplace's checkout at `$CODEX_HOME/.tmp/marketplaces/<name>` and records its
 source and `ref` in `config.toml` under `[marketplaces.<name>]`. `codex plugin list --json` names
@@ -422,7 +423,8 @@ plugins — the built-in marketplaces — which is skipped in CI by default anyw
 marketplace like this one is not auto-updated at all. *From the vendor's CLI plugin reference,
 accessed 2026-09-21.*
 
-**Cursor and Codex: no vendor-documented pin, update or rollback command on 2026-09-21.** For
+**Cursor: no vendor-documented pin, update or rollback command on 2026-09-21. Codex: a pin is
+the marketplace's `--ref`, and there is no rollback command.** For
 Cursor the served version is whichever commit the marketplace branch points at, so pinning and
 rolling back are branch moves on your mirror, and the re-index above is the delay you plan
 around; a root passed with `--plugin-dir` is replaced in place. For Codex,

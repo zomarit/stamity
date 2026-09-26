@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit fcc4f59e. Re-attested 2026-09-26 against the fork identity script, the fork release workflow and the managed-settings template. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 99317fff. Re-attested 2026-09-26 against the fork identity script, the fork release workflow, the managed-settings template and its live walk. -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes in `src/content/catalog.ts`,
      or the jobs or the permissions in `.github/workflows/upstream-update.yml` change. `test/docsPages.test.ts`
@@ -17,7 +17,8 @@ title: Enterprise forks
      `scripts/fork-identity.mjs`, a variable, secret, job or proof moves in
      `.github/workflows/fork-release.yml`, or a key or the client floor moves in
      `scripts/plugins/managed-settings.mjs`; the rollout section's vendor facts were read
-     2026-09-24. -->
+     2026-09-24, and its client facts were measured 2026-09-26 in the managed-settings walk, so
+     re-open it too when a later walk of that template records a different outcome. -->
 
 # Enterprise forks
 
@@ -912,7 +913,8 @@ true, and a rehearsal runs every gate, builds every artifact, publishes nothing 
 real run would ship into the run summary. It can run from a branch. A real run is a tag push, or a
 dispatch from the tag with `dry_run` set to false.
 
-A run has three jobs, split by trust:
+A run has four jobs, split by trust. A real run uses the first three; a rehearsal runs the last
+one in place of `publish`:
 
 - **`probe`** reads the three variables. The canonical repository, or a fork that has not named
   itself, ends here, green, with a notice.
@@ -929,6 +931,8 @@ A run has three jobs, split by trust:
   distribution branch and the `plugins/v<version>` tag, and creates the GitHub release
   `v<version>` carrying the tarball, every plugin archive, a `.sha256` file for each, and
   `release.json`.
+- **`dry-run-summary`** holds no permission. It writes what a real run would have published into
+  the run summary.
 
 A fork that imported this repository's history also imported its `v*` tags. A push of one of
 those runs the workflow, and the name proof refuses it, because that commit carries the canonical
@@ -973,16 +977,18 @@ describes. A fork on an earlier release has no release workflow until that push 
 
 ## Roll the plugin out to your organization
 
-This section is for the administrator who turns the plugin on in every developer's Claude Code at
-once, so that nobody runs `marketplace add` and `install` by hand. Cursor's team marketplace and
+This section is for the administrator who sets up the plugin in every developer's Claude Code at
+once: one file declares the marketplace, allows only that one, and turns the plugin on, so that
+nobody runs `marketplace add` by hand. Each developer still starts Claude Code once and installs
+the plugin once, as **Start Claude Code once on each machine** below describes. Cursor's team marketplace and
 Codex's workspace route are the other two organization routes, and
 [the plugins guide](plugins.md) describes them under each client's install.
 
 Every distribution tree a release builds carries `admin/claude-managed-settings.json`.
 `scripts/build-plugin-distribution.mjs` renders it through `scripts/plugins/managed-settings.mjs`
 from the identity the catalogs come from, so it names your repository and the tag the tree was
-built at. Take it from the tree at the tag you roll out. This is the file this repository's 1.10.0
-release renders:
+built at. Take it from the tree at the tag you roll out. This is the file the renderer writes for
+this repository at the tag its `ref` names:
 
 ```json
 {
@@ -1011,10 +1017,13 @@ release renders:
 
 The four keys do four jobs:
 
-- `extraKnownMarketplaces` declares the marketplace for every user.
-- `enabledPlugins` turns the plugin on for every user.
+- `extraKnownMarketplaces` declares the marketplace for every user. The client records it when a
+  developer first starts an interactive session.
+- `enabledPlugins` marks the plugin as turned on for every user. In the walk it did not install
+  the plugin by itself.
 - `strictKnownMarketplaces` admits only that marketplace. A user's `marketplace add` of any other
-  source is refused.
+  source is refused. It checks marketplace sources only, so the plugin's own source inside the
+  marketplace needs no entry of its own.
 - `requiredMinimumVersion` refuses to start a client older than 2.1.277. That is the first release
   that treats an invalid allowlist as an empty one instead of ignoring it.
 
@@ -1038,6 +1047,23 @@ wins, and the client ignores the rest without saying so. So on a machine that is
 console or MDM policy, this file does nothing. Run `/status` in a session and read **Setting
 sources** to see which source won.
 
+### Start Claude Code once on each machine
+
+After the file lands on a machine, each developer starts Claude Code once as an interactive
+session in a terminal. Until then the client does not know the managed marketplace.
+`claude plugin marketplace list` says "No marketplaces configured", and
+`claude plugin install stamity@stamity` fails with "Plugin "stamity" not found in marketplace
+"stamity"". A headless `claude -p` without a login does not fix that. The interactive session
+records the marketplace within seconds, even before a login. Then the developer runs this once:
+
+```sh
+claude plugin install stamity@stamity
+```
+
+In the walk, the session did not install the plugin on its own, although `enabledPlugins` names
+it. That session was not logged in. Whether a logged-in session installs the plugin without this
+command was not measured.
+
 ### Know how the file fails closed
 
 - A file that is not valid JSON stops Claude Code from starting. Parse it before you ship it.
@@ -1045,17 +1071,41 @@ sources** to see which source won.
   invalid value is enforced as an empty allowlist.
 - The client matches the allowlist exactly. An entry whose `ref`, or `repo`, differs from the
   declared source by one character matches nothing, and the declared marketplace is blocked with
-  the rest. The renderer writes both from one value, and `test/ci/managedSettings.test.ts` holds
-  them equal. Edit both or neither.
+  the rest. A developer who already has the plugin sees it fail to load with "Marketplace
+  'stamity' is not in the allowed marketplace list", and `marketplace update` is refused. A new
+  developer gets no marketplace, and the install fails with "not found in marketplace", an error
+  that names no policy. The renderer writes both from one value, and
+  `test/ci/managedSettings.test.ts` holds them equal. Edit both or neither.
 - An invalid `requiredMinimumVersion` is dropped, so any client version then starts.
 
 A private repository is fetched with each machine's own git credentials. The managed file carries
 none, and it must not carry any. A developer whose git cannot read your repository gets no plugin.
 
-*From Claude Code's documentation, its managed-settings, plugin-marketplaces and setup pages,
-accessed 2026-09-24, and not executed here. The template's shape is derived and tested: the
-renderer by `test/ci/managedSettings.test.ts`, and the block above against the renderer by
-`test/docsPages.test.ts`. What the client does with it is the vendor's statement.*
+### Know what was measured
+
+The template was walked on 2026-09-26 on Claude Code 2.1.281 on Linux, with the file at
+`/etc/claude-code/managed-settings.json`, rendered for this repository at `plugins/v1.9.1`, and
+with no login. The record is `.stamity/runs/2026-09-24_enterprise-release/managed-settings-walk.md`.
+
+- The client obeyed the file at the Linux path.
+- After one interactive start the marketplace was listed, and the install put the plugin at the
+  tag's commit. The allowlist did not block the plugin's own source.
+- `claude plugin marketplace add anthropics/claude-code` was refused: "blocked by enterprise
+  policy", followed by the one allowed source.
+- With `requiredMinimumVersion` set above the client's version, a session, `claude -p` and
+  `claude plugin list` each exited 1 with a message naming both versions. `claude --version`
+  still answered. The client's own code leaves `claude update`, `claude install` and
+  `claude doctor` out of that check, so an old client can still update itself; that was read from
+  the client, not run.
+- With the allowlist's `ref` one release away from the declared source's, the lock-out under the
+  warnings above happened, for a new developer and for one who already had the plugin.
+
+Not measured: a logged-in session, the macOS and Windows paths, the `managed-settings.d/` folder,
+the ranking of managed sources, `/status`, and the failures for invalid JSON and an empty
+allowlist. Those come from Claude Code's documentation, its managed-settings, plugin-marketplaces
+and setup pages, accessed 2026-09-24. The template's shape is derived and tested: the renderer by
+`test/ci/managedSettings.test.ts`, and the block above against the renderer by
+`test/docsPages.test.ts`.
 
 ## Turn on the GitHub workflow
 
