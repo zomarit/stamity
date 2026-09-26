@@ -428,6 +428,22 @@ describe("REPLAY-v2 as committed (plan 011 v2-protocol)", () => {
   });
 });
 
+// ---------- REPLAY-v1 frozen (review/137) ----------
+
+/** The sha256 both committed v1 pilots were scored under; REPLAY-v1.md never changes after its first result (§14). */
+const V1_SHA256 = "fdee42b110b189de40318960a85baa20b43a25e933313eb42d1f0aba61fdaa11";
+
+describe("REPLAY-v1 frozen (review/137)", () => {
+  it("REPLAY-v1.md's bytes hash to the sha256 its committed runs record", () => {
+    expect(PROTOCOL_SHA).toBe(V1_SHA256);
+    const runs = join(REPO, "evals/replay/runs");
+    const recorded = readdirSync(runs).filter((name) => existsSync(join(runs, name, "summary.json")))
+      .map((name) => (JSON.parse(readFileSync(join(runs, name, "summary.json"), "utf8")) as { protocol: { path: string; sha256: string } }).protocol);
+    expect(recorded.length).toBeGreaterThanOrEqual(2);
+    for (const p of recorded) expect(p).toEqual(expect.objectContaining({ path: "evals/replay/REPLAY-v1.md", sha256: V1_SHA256 }));
+  });
+});
+
 // ---------- summarize ----------
 
 describe("summarize — the measurement into stamity/replay-summary/v1", () => {

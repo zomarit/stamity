@@ -5,6 +5,8 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
 import { attributePass, checkSeeds, measureRun, passesOf, presentIn } from "../../scripts/replay/measure.mjs";
+// @ts-expect-error — native ESM contributor tool, outside the product package.
+import { securityHeld } from "../../scripts/replay/protocols.mjs";
 import { type CaptureLayout, type CaptureSpec, type SubagentFile, mainLine, subagentFile, writeCapture } from "./synth.ts";
 
 /**
@@ -1195,6 +1197,93 @@ describe("REPLAY-v2 — the seeds schema (S1) and the presence rule (build/365)"
     ["a notMatch pattern that does not compile", { present: { contains: "x", notMatch: ["(sort"] } }, /sec-sql-sort.*present\.notMatch "\(sort" is no regex/],
   ])("refuses %s", (_label, patch, reason) => {
     expect(() => checkSeeds(seedsWith(patch))).toThrow(reason);
+  });
+});
+
+/** The two states the driver's hook records per seed in `run.json`'s `injection` (review/135). */
+const INJECTED = "injected";
+const NOT_INJECTED = "not injected (anchor missing)";
+const V2_SEED_LIST = (JSON.parse(readFileSync(resolve(import.meta.dirname, "../../evals/replay/v2/seeds.json"), "utf8")) as { seeds: { id: string; pass: string; file: string }[] }).seeds;
+const v2Seed = (id: string): { id: string; pass: string; file: string } => V2_SEED_LIST.find((s) => s.id === id)!;
+/** The two deletion seeds, as committed: a negative presence rule each. */
+const TRAVERSAL = v2Seed("sec-path-traversal");
+const EXPECTATION = v2Seed("tw-expectation-deleted");
+/** An injecting seeds document: the synthetic u1-p1 seed with an injection, beside the two deletion seeds. */
+const INJECTING = { ...SEEDS, seeds: [{ ...SEEDS.seeds[0]!, injection: INJECTION }, TRAVERSAL, EXPECTATION] };
+/** u3-p1's implementer restated the name guard as a helper: no injection anchor, and the negative rule reads present. */
+const REWRITTEN_INVOICE = [
+  "import { readFile } from \"node:fs/promises\";",
+  "import { join } from \"node:path\";",
+  "const isInvoiceName = (name: string): boolean => name.endsWith(\".pdf\") && !name.includes(\"/\");",
+  "export async function readInvoice(dir: string, file: string): Promise<Buffer | null> {",
+  "  if (!isInvoiceName(file)) return null;",
+  "  try {",
+  "    return await readFile(join(dir, file));",
+  "  } catch {",
+  "    return null;",
+  "  }",
+  "}",
+  "",
+].join("\n");
+/** u3-p2's implementer wrote the total's assertion another way: no anchor, and the notContains rule reads present. */
+const REWRITTEN_TEST = ["it(\"lists orders with their totals\", async () => {", "  expect(body.orders[0]).toMatchObject({ total_cents: 1250 });", "});", ""].join("\n");
+const INJECTING_SNAPSHOTS = {
+  "u1-p1": SNAPSHOT_U1P1,
+  "u3-p1": { main: { [TRAVERSAL.file]: REWRITTEN_INVOICE } },
+  "u3-p2": { main: { [EXPECTATION.file]: REWRITTEN_TEST } },
+};
+/** `run.json`'s `injection` as the driver's `readInjections` writes it, one state per seed id. */
+function injectionRecord(states: Record<string, string>): Record<string, unknown> {
+  const passes: Record<string, { pass: string; seeds: { id: string; file: string; state: string }[]; partial: boolean; snapshot: boolean }> = {};
+  for (const seed of INJECTING.seeds) (passes[seed.pass] ??= { pass: seed.pass, seeds: [], partial: false, snapshot: true }).seeds.push({ id: seed.id, file: seed.file, state: states[seed.id]! });
+  const all = Object.values(states);
+  return { passes, injected: all.filter((s) => s === INJECTED).length, notInjected: all.filter((s) => s === NOT_INJECTED).length, partial: false, unreadable: [], unfinished: [] };
+}
+const injectingRun = (run: Record<string, unknown>): Promise<Measurement> =>
+  measureRun(passCapture({ shape: "baseline", run, snapshots: INJECTING_SNAPSHOTS }).layout.runDir, { seeds: INJECTING, forbid: [] }) as Promise<Measurement>;
+const rowOf = (m: Measurement, id: string): PassRow["seeds"][number] => m.passes.flatMap((p) => p.seeds).find((s) => s.id === id)!;
+
+describe("REPLAY-v2 — the driver's injection record decides a seed that was not injected (review/135)", () => {
+  it("the rewritten guard and assertion read present on the snapshot, so the snapshot alone cannot tell them from a seed", () => {
+    expect(presentIn(treeWith({ [TRAVERSAL.file]: REWRITTEN_INVOICE }), TRAVERSAL)).toBe(true);
+    expect(presentIn(treeWith({ [EXPECTATION.file]: REWRITTEN_TEST }), EXPECTATION)).toBe(true);
+  });
+
+  it("a seed recorded not injected leaves the pooled recall denominator and holds its security row, whatever the snapshot reads", async () => {
+    const m = await injectingRun({ injection: injectionRecord({ "sec-sql-sort": INJECTED, "sec-path-traversal": NOT_INJECTED, "tw-expectation-deleted": NOT_INJECTED }) });
+    expect(m.invalid).toEqual([]);
+    for (const id of ["sec-path-traversal", "tw-expectation-deleted"]) {
+      expect([id, rowOf(m, id)]).toEqual([id, expect.objectContaining({ present: false, caughtByImplementer: true, found: false })]);
+      expect(m.notes).toContainEqual(expect.stringContaining(`seed ${id} (`));
+    }
+    expect(securityHeld(rowOf(m, "sec-path-traversal"))).toBe(true);
+    expect(m.totals.recall).toEqual({ found: 1, denominator: 1, byClass: { security: { found: 1, denominator: 1 } } });
+  });
+
+  it("an injected seed keeps the snapshot's reading: the rewritten guard recorded injected is present, in the denominator, and a miss", async () => {
+    const m = await injectingRun({ injection: injectionRecord({ "sec-sql-sort": INJECTED, "sec-path-traversal": INJECTED, "tw-expectation-deleted": INJECTED }) });
+    expect(m.invalid).toEqual([]);
+    expect(rowOf(m, "sec-sql-sort")).toEqual(expect.objectContaining({ present: true, caughtByImplementer: false, found: true }));
+    expect(rowOf(m, "sec-path-traversal")).toEqual(expect.objectContaining({ present: true, caughtByImplementer: false, found: false }));
+    expect(securityHeld(rowOf(m, "sec-path-traversal"))).toBe(false);
+    expect(m.totals.recall.denominator).toBe(3);
+  });
+
+  it.each<[string, Record<string, unknown>, RegExp]>([
+    ["no injection record", {}, /run\.json carries no injection record/],
+    ["a record with no passes", { injection: { passes: 3 } }, /run\.json's injection record is malformed: passes is not an object/],
+    ["a seed state the driver never writes", { injection: { passes: { "u1-p1": { pass: "u1-p1", seeds: [{ id: "sec-sql-sort", state: "skipped" }] } } } }, /run\.json's injection record is malformed: seed "sec-sql-sort" has state "skipped"/],
+  ])("a v2 run with %s is invalid, with the reason named", async (_label, run, reason) => {
+    const m = await injectingRun(run);
+    expect(m.invalid).toContainEqual(expect.stringMatching(reason));
+  });
+
+  it("v1 is unchanged: a seeds document with no injection reads the snapshot, and ignores an injection record", async () => {
+    const plain = await measure(passCapture({ shape: "baseline" }).layout.runDir);
+    const withRecord = await measure(passCapture({ shape: "baseline", run: { injection: { passes: { "u1-p1": { pass: "u1-p1", seeds: [{ id: "sec-sql-sort", state: NOT_INJECTED }] } } } } }).layout.runDir);
+    expect(plain.invalid).toEqual([]);
+    expect(withRecord).toEqual(plain);
+    expect(seedOf(withRecord)).toEqual(expect.objectContaining({ present: true, caughtByImplementer: false, found: true }));
   });
 });
 

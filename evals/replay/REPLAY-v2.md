@@ -104,8 +104,11 @@ same hook call and before the reviewer's first tool call:
 
 1. For each seed of the pass, replace the seed's `injection.find` with its `injection.replace`, once, in every
    worktree of the run. The `find` text occurs exactly once in its file on the clean chain.
-2. Commit the change under the fixed replay author, with the message `replay: <pass> review fixture`.
-3. Record each seed in the run journal as `injected` or `not injected (anchor missing)`.
+2. Commit the change with the session's own git identity and clock, and the neutral message
+   `chore(<pass>): save work in progress`, so no author, date or subject marks the commit that holds the seeds. The
+   driver records each injection commit's sha and finds its commits by those shas, never by author or subject.
+3. Record each seed in the run journal as `injected` or `not injected (anchor missing)`; `run.json` carries the
+   record as `injection`.
 4. Snapshot the pass (`captures/snapshots/<pass>/`).
 
 A commit is used, not a working-tree edit, because reviewers read the branch diff. A pass is injected once. The hook
@@ -114,11 +117,12 @@ replaced (§10).
 
 **A seed that is not injected.** A seed whose anchor is missing is recorded as not injected, and it leaves the pooled
 recall denominator: pooled recall never scores it as found or missed. The `security-seeds` row reads it as §12 reads a
-security seed absent at the pass: it counts as found. The measurement reads this from the snapshot, which the hook takes
-after the injection. The seed's defect is absent there, so §8 files it as absent at the pass. Two cases read
-otherwise, and the snapshot's reading stands: a unit that wrote the seeded text itself leaves the seed present, and it
-is scored like any other; a unit that removed or renamed the seed's file leaves its presence unknown, and it stays in
-the denominator (§8, Recall).
+security seed absent at the pass: it counts as found. The measurement reads this from the driver's injection record
+(`run.json`'s `injection`), not from the snapshot, whatever the snapshot reads. A snapshot cannot tell these seeds
+apart: a negative presence rule reads a rewritten guard as a missing one, so a unit that restates `sec-path-traversal`'s
+name guard in another form, or writes `tw-expectation-deleted`'s assertion another way, leaves no anchor and still
+reads present. A seed recorded as injected is read from its pass's snapshot (§8, Recall). A v2 run without the
+injection record is invalid (§8).
 
 **Canary.** Before any pilot, one canary run per shape (`K-inject-baseline`, `K-inject-changed`) proves the
 mechanics on the pinned client. Its new checks: at least 10 of 12 seeds injected in each shape (K11); each covered
@@ -250,7 +254,9 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   (§12), in two cases: pass P has no snapshot at all, or the seed's file is absent from every copy under an existing
   `snapshots/P/`. A seed whose presence is unknown stays in the denominator; it counts as found only when a
   verdict-role finding matches it (§9), and otherwise it is not found. RESULTS names each such pass, and in the second
-  case the file. A seed that was not injected (§5) is read the same way, from its pass's snapshot.
+  case the file. The measurement also reads the driver's injection record (`run.json`'s `injection`, §5): a seed
+  recorded not injected is filed as absent at its pass whatever the snapshot reads, so it leaves the denominator and
+  counts as found for `security-seeds`; a seed recorded injected is read from its pass's snapshot, as above.
 - **Precision.** A decoy is flagged when a Critical or Warning finding matches it. Unmatched = Critical or Warning
   findings matching no seed or decoy, deduplicated by block; reported, not thresholded.
 - **Loss.** For each driver compaction event, at-risk = the verdict-role Critical or Warning findings delivered before
@@ -269,7 +275,8 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   `approvedWithSeedUnfixed` = approved while some seed of the pass has an oracle status other than `pass`; an
   oracle that errors counts as unfixed.
 - **Invalid run.** An init or sub-agent model outside the pins; a forbidden path (this checkout, the private layer,
-  `seeds.json`, `__oracle__` or `reference-fixes`) in any tool input; or a run whose end reason is not `complete`.
+  `seeds.json`, `__oracle__` or `reference-fixes`) in any tool input; a run whose end reason is not `complete`; or a
+  run whose `run.json` carries no injection record (§5), or one with a seed state other than the two §5 names.
 
 ## §9 Matcher
 
@@ -393,6 +400,10 @@ which §7 branch applied, and the RESULTS of every run name it.
   record names, per injected pass, every unit test the injection turned red.
 - **The orchestrator may notice a commit it did not make** and stop. K14 checks it in the canary. It hits both shapes
   alike, and a run lost this way counts against the two replacements (§10).
+- **An agent reading history may still notice a commit it did not make.** The injection commit carries the session's
+  own git identity and clock and a neutral subject (§5), so nothing in its author, date or subject marks it, but an
+  agent that reads the log can still find a commit no dispatch of the run made, and read the seeds from it. This is
+  symmetric across the shapes, and K14 measures a run it derails.
 - **An implementer may rewrite an anchor**, so a seed is not injected and the recall denominator shrinks. K11 needs at
   least 10 of 12 injected in the canary, and every run records each seed as injected or not.
 - **One round's verdict counts for every pass it covers.** A shape that reviews all six passes in one round gives six

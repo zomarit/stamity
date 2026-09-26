@@ -1025,28 +1025,69 @@ const STAGE_ORDER = ['pass', 'other-pass', 'branch', 'unknown']
 // build/366: a finding of a multi round is at the pass stage for every pass the round covers.
 const stageOf = (f, seed) => (f.branch ? 'branch' : covers(f, seed.pass) ? 'pass' : isPass(f.pass) ? 'other-pass' : 'unknown')
 
+/** The two per-seed states the driver's hook records in `run.json`'s `injection` (REPLAY-v2 §5). */
+const INJECTED = 'injected'
+const NOT_INJECTED = 'not injected (anchor missing)'
+
+/**
+ * review/135 (REPLAY-v2 §5, §8): an injecting seeds document (a seed carries `injection`) is read
+ * beside the driver's injection record, `run.json`'s `injection.passes[<pass>].seeds[]` — a map of
+ * seed id to state. A v1 document returns null and reads no record. A v2 run with no record, or a
+ * record the driver would not write, is invalid, naming why.
+ */
+function injectionStatesOf(seeds, run, invalid) {
+  if (!seeds.seeds.some((seed) => seed.injection !== undefined)) return null
+  const states = new Map()
+  const record = run?.injection
+  if (record === undefined || record === null) {
+    invalid.push('run.json carries no injection record (injection), so no seed can be read as injected or not: a REPLAY-v2 run is invalid without it')
+    return states
+  }
+  const malformed = (why) => invalid.push(`run.json's injection record is malformed: ${why}`)
+  if (typeof record !== 'object' || record.passes === null || typeof record.passes !== 'object' || Array.isArray(record.passes)) {
+    malformed('passes is not an object')
+    return states
+  }
+  for (const [pass, entry] of Object.entries(record.passes)) {
+    if (!Array.isArray(entry?.seeds)) {
+      malformed(`pass ${pass} has no seeds list`)
+      continue
+    }
+    for (const s of entry.seeds) {
+      if (typeof s?.id !== 'string' || (s.state !== INJECTED && s.state !== NOT_INJECTED)) malformed(`seed ${JSON.stringify(s?.id ?? null)} has state ${JSON.stringify(s?.state ?? null)}`)
+      else states.set(s.id, s.state)
+    }
+  }
+  return states
+}
+
 /**
  * One row per seed: presence at its pass from the snapshot copies, found, the earliest stage and
  * round-1 find, and the oracle status. A pass with no snapshot at all (no verdict agent ever
  * started it) leaves presence unknown and keeps the seed in the denominator rather than read it as
  * "caught by implementer", which would ease the recall row; `notes` names each such pass.
+ * review/135: a seed the injection record (`injected`, REPLAY-v2 only) names not injected is filed
+ * absent at its pass whatever the snapshot reads, since a negative presence rule cannot tell a
+ * rewritten guard from a missing one: it leaves the denominator and holds its security row.
  */
-function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, invalid) {
+function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, invalid, injected = null) {
   const missing = new Set()
   const absent = []
   const rows = seeds.seeds.map((seed) => {
+    const hits = seedMatch.matched[seed.id].map((i) => all[i])
+    const stages = hits.map((f) => stageOf(f, seed)).toSorted((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b))
+    const found = { found: hits.length > 0, foundRound1: hits.some((f) => !f.branch && covers(f, seed.pass) && f.round === 1), stage: stages[0] ?? null, oracle: oracleStatus.get(seed.id) ?? null }
+    if (injected?.get(seed.id) === NOT_INJECTED) {
+      notes.push(`seed ${seed.id} (${seed.pass}): recorded ${NOT_INJECTED} in run.json's injection record, so it is filed absent at the pass and leaves the recall denominator, whatever the snapshot reads`)
+      return { id: seed.id, class: seed.class ?? null, pass: seed.pass, present: false, caughtByImplementer: true, ...found }
+    }
     const copies = copiesOf(snapshots, seed.pass)
     if (copies.length === 0) missing.add(seed.pass)
     // build/167: a file absent from every copy says nothing of the rule, so presence is unknown.
     const held = new Set(copies.map((copy) => presentIn(copy, seed)))
     const present = held.has(true) ? true : held.has(false) ? false : null
     if (copies.length > 0 && present === null) absent.push(seed)
-    const hits = seedMatch.matched[seed.id].map((i) => all[i])
-    const stages = hits.map((f) => stageOf(f, seed)).toSorted((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b))
-    return {
-      id: seed.id, class: seed.class ?? null, pass: seed.pass, present, caughtByImplementer: present === false, found: hits.length > 0,
-      foundRound1: hits.some((f) => !f.branch && covers(f, seed.pass) && f.round === 1), stage: stages[0] ?? null, oracle: oracleStatus.get(seed.id) ?? null,
-    }
+    return { id: seed.id, class: seed.class ?? null, pass: seed.pass, present, caughtByImplementer: present === false, ...found }
   })
   for (const pass of missing) notes.push(`no snapshot under captures/snapshots/${pass}/: its seeds stay in the recall denominator with presence unknown`)
   for (const r of rows) {
@@ -1162,7 +1203,7 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
       invalid.push(`capture defect: a verdict agent was dispatched for ${id}, but captures/snapshots/${id}/ holds no copy`)
     }
   }
-  const seedRows = seedRowsOf(seeds, all, seedMatch, L.snapshots, oracleStatus, notes, invalid)
+  const seedRows = seedRowsOf(seeds, all, seedMatch, L.snapshots, oracleStatus, notes, invalid, injectionStatesOf(seeds, run, invalid))
   const mechanism = run?.mechanism ?? 'interrupt'
   const compactionSamples = compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, oracleStatus, roots, tolerance, notes })
 
