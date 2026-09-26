@@ -1931,7 +1931,7 @@ describe("check — plugin-runtime", () => {
     await handle.seedFiles({
       "plugin-real/stamity-plugin.json": JSON.stringify({ name: "stamity", version }),
       "plugin-real/runtime/package.json": JSON.stringify({
-        name: "@zomarit/stamity",
+        name: canonical().name,
         version,
         engines: { node: ">=22.0.0" },
       }),
