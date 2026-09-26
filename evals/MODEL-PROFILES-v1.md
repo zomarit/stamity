@@ -16,7 +16,10 @@ or select `codex-astra-judge` to have Astra grade Sol. With no profile named, `c
 remains the default, and it selects `rubric-v7.md`, the rubric the maintainer's recorded
 decision moved that default to. A Codex session does not silently select a Codex profile:
 the harness checks the selected profile's availability before spending calls. Both Codex
-roles declare `high` reasoning effort. A null effort on the Claude profile means the harness default;
+roles declare `high` reasoning effort. The Claude scenario declares `high` as well, which the run's
+driver sends as the client's explicit `--effort high`, because runs 15-32 measured the scenario at
+high (`claude-opus-5`'s client default) and `claude-opus-5-5`'s client default is medium (the
+maintainer's answer of 2026-09-26). The Claude judge's null effort means the harness default;
 it does not claim a controllable or known effort value.
 
 ## Selection and isolation
