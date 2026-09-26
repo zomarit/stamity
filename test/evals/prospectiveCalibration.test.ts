@@ -101,7 +101,7 @@ describe("prospective calibration keys", () => {
     expect(() => parse(mutate())).toThrow();
   });
 
-  it("pins v2 apart from v1 on its set, its three rubrics and its claude scenario model only", () => {
+  it("pins v2 apart from v1 on its set, its three rubrics and its claude scenario model and effort only", () => {
     const legacy = JSON.parse(read("evals/model-profiles-v1.json"));
     const current = JSON.parse(read("evals/model-profiles-v2.json"));
     // Behaviour moved, not weakened: v1 moved to SET-v7 and to rubric v7 for the default
@@ -112,6 +112,9 @@ describe("prospective calibration keys", () => {
     // `claude-opus-5` to `claude-opus-5-5` (plan 010 D4, REQ-PROVE-009). v2 is the retained
     // prospective document and keeps the pair it was written against, so its claude scenario is
     // named here too; `evals/model-profiles-v2.json` itself does not change.
+    // Behaviour moved, not weakened: on 2026-09-26 v1's `claude` scenario effort also moved from
+    // null to "high" (build/36). v2 keeps null, which the whole-scenario override below carries,
+    // so the case name now names the effort as well as the model.
     expect(current).toEqual({ ...legacy, set: "evals/SET-v5.md", profiles: { ...legacy.profiles,
       claude: { ...legacy.profiles["claude"], rubric: "evals/rubric-v4.md",
         scenario: { model: "claude-opus-5", reasoningEffort: null } },

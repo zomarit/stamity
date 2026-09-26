@@ -26,7 +26,7 @@ const baseId = (id: string): string => id.replace(/\[[^\]]+\]$/, "");
 const grading = (text: string): string => text.slice(text.indexOf("## Verdict vocabulary\n"));
 
 describe("eval model profiles", () => {
-  it("keeps the Claude instrument as the default, its scenario model on Opus 5.5 from 1.10.0", () => {
+  it("keeps the Claude instrument as the default, its scenario on Opus 5.5 at high effort and its judge at the harness default", () => {
     // Behaviour moved, not weakened: at 1.10.0 the `claude` profile's scenario model moved
     // from `claude-opus-5` to `claude-opus-5-5` (the model mix of 2026-09-23, plan 010 D4,
     // REQ-PROVE-009); the judge pin does not move. The move is in place in the v1 document,

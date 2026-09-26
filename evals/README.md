@@ -22,7 +22,7 @@ carried Briefs and `source:` ranges moved with the corpus on the same night, nam
 | `MODEL-PROFILES-v1.md`, `model-profiles-v1.json` | Explicit model/rubric profiles: the original Claude default, Astra scenarios with Sol judging, or Sol scenarios with Astra judging. |
 | `session-native-v1.md` | Opt-in session protocol accepting recorded ambient client/repository instructions, with fresh native agents and unchanged calibration and scoring bars. |
 | `rubric-v5.md` | **Retained: the alternate profiles' model-neutral rubric until the maintainer's recorded rubric decision moved all three profiles to `rubric-v7.md`**; grading rules and calibration fixtures are v4's verbatim. |
-| `MODEL-PROFILES-v2.md`, `model-profiles-v2.json`, `session-native-v2.md` | Prospective native configuration retaining the same models, effort, default and ambient baseline; `codex-astra` selects v6, with mechanically checked staged task transfer and the final manual-transfer limit disclosed. |
+| `MODEL-PROFILES-v2.md`, `model-profiles-v2.json`, `session-native-v2.md` | Prospective native configuration retaining the models, efforts, default and ambient baseline it was written against (its `claude` scenario is `claude-opus-5` at the harness-default effort, where v1 now declares `claude-opus-5-5` at `high`); `codex-astra` selects v6, with mechanically checked staged task transfer and the final manual-transfer limit disclosed. |
 | `rubric-v7.md` | **The current rubric — selected by the default `claude` profile**: rubric v6 with the closed **Citation form** under the grading procedure; the verdict vocabulary, emission shape, calibration protocol, five fixtures and every `calibration-labels-v1` key are v6's, byte-for-byte. |
 | `rubric-v6.md` | Explicit complete calibration keys and the independently assessed C3 B1 correction; all fixture transcripts, case criteria, grading rules, floors and thresholds remain. Historical keys and blocked runs are preserved. |
 | `cases-v6/golden/` | Cases pinning the behaviour the corpus promises. |
@@ -91,7 +91,9 @@ The v1 profile JSON names `rubric-v7.md` for all three profiles. The prospective
 [v2 profile document](MODEL-PROFILES-v2.md) keeps what it was written against: `SET-v5`,
 `rubric-v4.md` for `claude`, `rubric-v6.md` for `codex-astra`, `rubric-v5.md` for
 `codex-astra-judge`, and `claude-opus-5` as the `claude` scenario model, which v1 moved to
-`claude-opus-5-5` at 1.10.0. Every judge, both Codex pairs and every effort control match v1.
+`claude-opus-5-5` at 1.10.0. v2 also keeps a null effort (the harness default) on the `claude`
+scenario, which v1 set to `high` on 2026-09-26. Every judge, both Codex pairs and every other
+effort setting match v1.
 Both configurations require fresh contexts and calibration before scoring. Sealed input isolation is the
 default; an operator may prospectively select [session-native v2](session-native-v2.md)
 to retain the disclosed ambient baseline with the new rubric configuration.
