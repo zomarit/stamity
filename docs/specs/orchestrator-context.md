@@ -34,16 +34,18 @@ again, with the same text, at `d227ca57`. Those trees are `fed39ac` for the plan
 statements; the spec merges of 2026-09-24 for amendments A17 and A18 (`12d8f20e`), for
 REQ-CTX-005's ledger code and the replay's rate rows (`1ae8a318`) and for the `Merge gate:` line
 (`1ba8dcee`); and `0a251039` for the 2026-09-26 amendments. Where the text had been reworded
-since, the citation names the bullet, section or function instead of a line:
+since, the old line range could not be carried over. Such a citation either names the bullet,
+section or function, or, where the statement was rewritten on 2026-09-27 to match the new text,
+cites that text's current line at `d227ca57`:
 
 - the Plan-artifact intake bullet of `content/commands/st-work.md` and the consumer-job bullets
   of `content/agents/stamity-spec-author.md`, which REQ-CTX-009 and REQ-CTX-010 themselves
-  reworded;
+  reworded, are cited by name;
 - REPLAY-v2's §5, §7 and §8 and `passesOf` and `injectionStatesOf` in `scripts/replay/measure.mjs`,
   which plan 011's R3 and R4 reworded after the 2026-09-26 merge: the seeds now take each
   worktree's own form, a named pass range covers every pass in it, and an injected seed is read at
-  review time. REQ-CTX-015 was amended for R3 and R4 on 2026-09-27, and those bullets cite the
-  current lines at `d227ca57` directly.
+  review time. REQ-CTX-015 was rewritten for R3 and R4 on 2026-09-27, so it cites their current
+  lines at `d227ca57`.
 
 ## Context
 
@@ -462,7 +464,8 @@ A replay compares the changed shape with the 1.9.1 baseline:
   result. Each criterion that counts or reads results reads only the results scored under the
   protocol it names, keyed by the protocol path and sha256 each `run.json` records.
 - **Seeds reach review (v2)** (amended 2026-09-26, the maintainer's decision R1; amended again
-  2026-09-27 for plan 011's R3 and R4, which the instrument 1.10.0 ships carries; it read "the driver
+  2026-09-27 for plan 011's R3 and R4, which the instrument shipping in 1.10.0 already carries; it
+  read "the driver
   commits that pass's seeds … A dispatch covers the one pass its description names, else the distinct
   passes its prompt names; a pass is injected once, in one commit that carries the session's own git
   identity and clock …"). Citations here are to `evals/replay/REPLAY-v2.md` and
@@ -483,7 +486,8 @@ A replay compares the changed shape with the 1.9.1 baseline:
   - **The form per worktree.** Each worktree takes the seeds in the form its own state calls for, read
     at the injection (`REPLAY-v2.md:111-124`):
     - `skipped-pristine`: HEAD is still the setup commit and nothing has changed, not even an
-      untracked file. The worktree takes nothing.
+      untracked file. The worktree takes nothing, and it is recorded under this form only when it
+      holds a seed's anchor.
     - `commit`: HEAD has moved past the setup commit and no tracked file has a change. The seeds go
       in as one commit of exactly the seeded files, with the session's own git identity and clock
       and the subject `chore(<pass>): save work in progress`, so no author, date or subject marks
@@ -496,7 +500,7 @@ A replay compares the changed shape with the 1.9.1 baseline:
     A seed whose anchor only pristine worktrees hold is recorded as not injected (`:126-128`).
     `run.json`'s `injection` record names each seed `injected` or `not injected (anchor missing)`,
     and its `forms` list holds one entry, with the form, the files and the commit sha, per worktree
-    that took the seeds or was skipped as pristine (`:129-134`).
+    that took the seeds, or that is pristine and holds a seed's anchor (`:129-134`).
   - **Snapshots.** The hook snapshots each injected pass to `captures/snapshots/<pass>/` right after
     the seeds go in (`REPLAY-v2.md:135-136`). When the first review round covering a pass completes,
     the driver copies the pass's trees again to `captures/review-snapshots/<pass>/`, the tree the
@@ -1093,7 +1097,8 @@ eye.
 - GIVEN a v2 run WHEN the first review dispatch covering a pass starts THEN, before the reviewer's
   first tool call, every worktree of the run that is not pristine and holds a seed's anchor carries
   that pass's seeds in the form its own state calls for (`commit`, `staged` or `working-tree`), a
-  pristine worktree takes nothing and is recorded `skipped-pristine`, the pass's injection snapshot
+  pristine worktree takes nothing and, when it holds a seed's anchor, is recorded
+  `skipped-pristine`, the pass's injection snapshot
   exists, and `run.json`'s `injection` record names each seed `injected` or
   `not injected (anchor missing)` and each worktree's form (amended 2026-09-27 for R3 and R4; it
   read "… THEN that pass's injected seeds are committed and its snapshot exists before the
