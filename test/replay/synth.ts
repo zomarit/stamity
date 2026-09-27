@@ -279,6 +279,8 @@ export interface CaptureSpec {
   markers?: Json[];
   /** pass → worktree basename → repo-relative POSIX path → file content. */
   snapshots?: Record<string, Record<string, Record<string, string>>>;
+  /** REPLAY-v2 R4: the copies taken when the first review round covering a pass completed, in `snapshots`' shape. */
+  reviewSnapshots?: Record<string, Record<string, Record<string, string>>>;
   /** `compaction-<n>-pre` or `end` → the fixture's run folder at that moment. */
   state?: Record<string, RunStateSpec>;
   finalDiff?: string;
@@ -293,6 +295,7 @@ export interface CaptureLayout {
   subagentsDir: string;
   markers: string;
   snapshots: string;
+  reviewSnapshots: string;
   state: string;
   finalDiff: string;
   oracle: string;
@@ -322,6 +325,7 @@ export function writeCapture(dir: string, spec: CaptureSpec): CaptureLayout {
     subagentsDir: join(captures, "transcript", session, "subagents"),
     markers: join(captures, "markers.jsonl"),
     snapshots: join(captures, "snapshots"),
+    reviewSnapshots: join(captures, "review-snapshots"),
     state: join(captures, "state"),
     finalDiff: join(captures, "final", "tree.diff"),
     oracle: join(captures, "oracle.json"),
@@ -341,6 +345,12 @@ export function writeCapture(dir: string, spec: CaptureSpec): CaptureLayout {
   for (const [pass, worktrees] of Object.entries(spec.snapshots ?? {})) {
     for (const [worktree, files] of Object.entries(worktrees)) {
       for (const [relPath, content] of Object.entries(files)) put(join(layout.snapshots, pass, worktree, relPath), content);
+    }
+  }
+  // The driver writes review-snapshots/ only once a review round has completed, so none is written unless the spec names one.
+  for (const [pass, worktrees] of Object.entries(spec.reviewSnapshots ?? {})) {
+    for (const [worktree, files] of Object.entries(worktrees)) {
+      for (const [relPath, content] of Object.entries(files)) put(join(layout.reviewSnapshots, pass, worktree, relPath), content);
     }
   }
   mkdirSync(layout.state, { recursive: true });

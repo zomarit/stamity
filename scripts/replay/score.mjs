@@ -90,6 +90,8 @@ export const NOTE_ROWS = [
   // review/135: a seed the injection record names not injected; the security suffix comes first, since the first match wins.
   { includes: '; a security seed, so it holds its security-seeds row', rows: ['pooled-recall', 'security-seeds'] },
   { includes: "in run.json's injection record, so it is filed absent at the pass", rows: ['pooled-recall'] },
+  // R4 (review/162): an injected seed absent from its pass's review snapshot; a security one matches the suffix above first.
+  { includes: 'so it was reverted before review: it is filed absent at the pass', rows: ['pooled-recall'] },
 ]
 
 // ---------- small helpers ----------

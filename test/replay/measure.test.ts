@@ -235,6 +235,7 @@ interface PassCaptureOptions {
   digestRows?: Row[];
   run?: Record<string, unknown>;
   snapshots?: CaptureSpec["snapshots"];
+  reviewSnapshots?: CaptureSpec["reviewSnapshots"];
   oracle?: "pass" | "fail";
   init?: Record<string, unknown> | null;
   /** Agents dispatched after the second review. */
@@ -318,6 +319,7 @@ function passCapture(options: PassCaptureOptions): Built {
     transcript,
     subagents: [...agents.filter((a) => !(options.noTranscript ?? []).includes(a.agentId)).map(subagentOf), ...(options.extraSubagents ?? [])],
     snapshots: options.snapshots ?? { "u1-p1": SNAPSHOT_U1P1 },
+    ...(options.reviewSnapshots ? { reviewSnapshots: options.reviewSnapshots } : {}),
     state: {
       "compaction-1-pre": { runId: RUN, ledger: options.preLedger ?? filed, ...(reports ? { reports } : {}) },
       end: { runId: RUN, ledger: options.endLedger ?? filed, ...(reports ? { reports } : {}) },
@@ -1288,6 +1290,80 @@ describe("REPLAY-v2 — the driver's injection record decides a seed that was no
     expect(plain.invalid).toEqual([]);
     expect(withRecord).toEqual(plain);
     expect(seedOf(withRecord)).toEqual(expect.objectContaining({ present: true, caughtByImplementer: false, found: true }));
+  });
+});
+
+/** R4: u1-p1's tree with the seeded line reverted to the base's, so the contains rule reads absent. */
+const REVERTED_QUERY = fileWith(11, "  const sql = `SELECT id FROM orders ORDER BY ${column} DESC LIMIT ? OFFSET ?`;");
+/** R4: u3-p2's test with the deleted expectation restored, so the notContains rule reads absent. */
+const RESTORED_TEST = ["it(\"lists orders with their totals\", async () => {", "    expect(body.orders).toHaveLength(1);", "    expect(body.orders[0].total_cents).toBe(1250);", "});", ""].join("\n");
+const ALL_INJECTED = { "sec-sql-sort": INJECTED, "sec-path-traversal": INJECTED, "tw-expectation-deleted": INJECTED };
+const reviewedRun = (reviewSnapshots: CaptureSpec["reviewSnapshots"], snapshots: CaptureSpec["snapshots"] = INJECTING_SNAPSHOTS): Promise<Measurement> =>
+  measureRun(passCapture({ shape: "baseline", run: { injection: injectionRecord(ALL_INJECTED) }, snapshots, reviewSnapshots }).layout.runDir, { seeds: INJECTING, forbid: [] }) as Promise<Measurement>;
+const noteOf = (m: Measurement, id: string): string | undefined => m.notes.find((n) => n.startsWith(`seed ${id} (`));
+
+describe("REPLAY-v2 R4 — an injected seed's presence is read at review time (review/162)", () => {
+  it("a seed injected but absent from its pass's review snapshot was reverted before review: it leaves the denominator and holds its security row", async () => {
+    const m = await reviewedRun({
+      "u1-p1": { main: { "src/store/query.ts": REVERTED_QUERY, "src/orders/format.ts": FORMAT } },
+      "u3-p2": { main: { [EXPECTATION.file]: RESTORED_TEST } },
+    });
+    expect(m.invalid).toEqual([]);
+    for (const id of ["sec-sql-sort", "tw-expectation-deleted"]) {
+      expect([id, rowOf(m, id)]).toEqual([id, expect.objectContaining({ present: false, caughtByImplementer: true })]);
+      expect([id, noteOf(m, id)]).toEqual([id, expect.stringContaining("reverted before review")]);
+    }
+    expect(securityHeld(rowOf(m, "sec-sql-sort"))).toBe(true);
+    expect(noteOf(m, "sec-sql-sort")).toContain("; a security seed, so it holds its security-seeds row");
+    expect(noteOf(m, "tw-expectation-deleted")).not.toContain("a security seed");
+    // u3-p1 has no review snapshot: its seed keeps the injection snapshot's reading, present and in the denominator.
+    expect(rowOf(m, "sec-path-traversal")).toEqual(expect.objectContaining({ present: true, caughtByImplementer: false }));
+    expect(noteOf(m, "sec-path-traversal")).toBeUndefined();
+    expect(m.totals.recall).toEqual({ found: 0, denominator: 1, byClass: { security: { found: 0, denominator: 1 } } });
+  });
+
+  it("a seed present in the review snapshot is scored from the review copy, whatever the injection snapshot reads", async () => {
+    const injectionTime = { ...INJECTING_SNAPSHOTS, "u1-p1": { main: { "src/store/query.ts": REVERTED_QUERY, "src/orders/format.ts": FORMAT } } };
+    const m = await reviewedRun({ "u1-p1": SNAPSHOT_U1P1 }, injectionTime);
+    expect(m.invalid).toEqual([]);
+    expect(rowOf(m, "sec-sql-sort")).toEqual(expect.objectContaining({ present: true, caughtByImplementer: false, found: true }));
+    expect(noteOf(m, "sec-sql-sort")).toBeUndefined();
+    expect(m.totals.recall.denominator).toBe(3);
+  });
+
+  it("with no review snapshot for any pass, every seed falls back to the injection snapshot, as before R4", async () => {
+    const without = await reviewedRun(undefined);
+    const injected = await injectingRun({ injection: injectionRecord(ALL_INJECTED) });
+    expect(without).toEqual(injected);
+    expect(without.passes.flatMap((p) => p.seeds).map((r) => r.present)).toEqual([true, true, true]);
+  });
+
+  it("v1 is unchanged: a seeds document with no injection ignores a review snapshot that reverts the seed", async () => {
+    const plain = await measure(passCapture({ shape: "baseline" }).layout.runDir);
+    const reverted = await measure(passCapture({ shape: "baseline", reviewSnapshots: { "u1-p1": { main: { "src/store/query.ts": REVERTED_QUERY, "src/orders/format.ts": FORMAT } } } }).layout.runDir);
+    expect(reverted).toEqual(plain);
+    expect(seedOf(reverted)).toEqual(expect.objectContaining({ present: true, caughtByImplementer: false, found: true }));
+  });
+});
+
+describe("REPLAY-v2 R4 — a compaction sample's placement falls back to the driver's record (review/164)", () => {
+  /** A lens delivered after the ledger write, before the boundary, whose description and prompt name no pass. */
+  const passless: AgentSpec = { id: "tu_lens", agentId: "alens", type: "stamity-security", description: "Security lens", prompt: "Review the diff for security.", result: "No findings.", tokens: 10 };
+  const recorded = { compactions: [{ n: 1, placement: "u2-p1" }] };
+
+  it("v2: the last lens delivery before the boundary names no pass, so the placement is the one run.json records", async () => {
+    const m = (await measureRun(passCapture({ shape: "baseline", extra: dispatch(passless), run: { injection: injectionRecord(ALL_INJECTED), ...recorded }, snapshots: INJECTING_SNAPSHOTS }).layout.runDir, { seeds: INJECTING, forbid: [] })) as Measurement;
+    expect(m.compactionSamples[0]).toEqual(expect.objectContaining({ n: 1, placement: "u2-p1" }));
+  });
+
+  it("v2: a lens delivery that names its pass keeps that pass over the record", async () => {
+    const m = (await measureRun(passCapture({ shape: "baseline", run: { injection: injectionRecord(ALL_INJECTED), ...recorded }, snapshots: INJECTING_SNAPSHOTS }).layout.runDir, { seeds: INJECTING, forbid: [] })) as Measurement;
+    expect(m.compactionSamples[0]).toEqual(expect.objectContaining({ n: 1, placement: "u1-p1" }));
+  });
+
+  it("v1 is unchanged: the placement stays null and run.json's record is not read", async () => {
+    const m = await measure(passCapture({ shape: "baseline", extra: dispatch(passless), run: recorded }).layout.runDir);
+    expect(m.compactionSamples[0]).toEqual(expect.objectContaining({ n: 1, placement: null }));
   });
 });
 

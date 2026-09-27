@@ -164,6 +164,8 @@ function layoutOf(runDir) {
     stdout: join(captures, 'stdout.jsonl'),
     transcriptDir: join(captures, 'transcript'),
     snapshots: join(captures, 'snapshots'),
+    // REPLAY-v2 R4: each pass's tree as the first review round covering it completed.
+    reviewSnapshots: join(captures, 'review-snapshots'),
     state: join(captures, 'state'),
     oracle: join(captures, 'oracle.json'),
   }
@@ -1100,8 +1102,12 @@ function injectionStatesOf(seeds, run, invalid) {
  * review/135: a seed the injection record (`injected`, REPLAY-v2 only) names not injected is filed
  * absent at its pass whatever the snapshot reads, since a negative presence rule cannot tell a
  * rewritten guard from a missing one: it leaves the denominator and holds its security row.
+ * review/162 (REPLAY-v2 R4 only): an injected seed's presence is read from its pass's review snapshot
+ * (`reviewSnapshots`) when one exists. An injected seed absent there was reverted before review: filed
+ * absent at the pass, it leaves the denominator and holds its security row, as a not-injected seed
+ * does. With no review snapshot for the pass, the injection snapshot is read, as before R4.
  */
-function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, invalid, injected = null) {
+function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, invalid, injected = null, reviewSnapshots = null) {
   const missing = new Set()
   const absent = []
   const rows = seeds.seeds.map((seed) => {
@@ -1112,7 +1118,15 @@ function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, inval
       notes.push(`seed ${seed.id} (${seed.pass}): recorded ${NOT_INJECTED} in run.json's injection record, so it is filed absent at the pass and leaves the recall denominator, whatever the snapshot reads${seed.class === 'security' ? '; a security seed, so it holds its security-seeds row' : ''}`)
       return { id: seed.id, class: seed.class ?? null, pass: seed.pass, present: false, caughtByImplementer: true, ...found }
     }
-    const copies = copiesOf(snapshots, seed.pass)
+    const reviewed = injected !== null && reviewSnapshots !== null ? copiesOf(reviewSnapshots, seed.pass) : []
+    if (reviewed.length > 0) {
+      const heldAtReview = new Set(reviewed.map((copy) => presentIn(copy, seed)))
+      if (!heldAtReview.has(true) && heldAtReview.has(false)) {
+        notes.push(`seed ${seed.id} (${seed.pass}): injected, and absent from every copy under captures/review-snapshots/${seed.pass}/, so it was reverted before review: it is filed absent at the pass and leaves the recall denominator${seed.class === 'security' ? '; a security seed, so it holds its security-seeds row' : ''}`)
+        return { id: seed.id, class: seed.class ?? null, pass: seed.pass, present: false, caughtByImplementer: true, ...found }
+      }
+    }
+    const copies = reviewed.length > 0 ? reviewed : copiesOf(snapshots, seed.pass)
     if (copies.length === 0) missing.add(seed.pass)
     // build/167: a file absent from every copy says nothing of the rule, so presence is unknown.
     const held = new Set(copies.map((copy) => presentIn(copy, seed)))
@@ -1143,7 +1157,7 @@ function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, inval
  * delivery, with no ledger write between that delivery and the boundary. One outside it keeps its
  * `n`, so the pre-compaction copies stay aligned, and is named in `notes`, never sampled.
  */
-function compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, oracleStatus, roots, tolerance, notes }) {
+function compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, oracleStatus, roots, tolerance, notes, recorded = [] }) {
   const driverCompactions = walk.compactions.filter((c) => c.trigger === 'manual' || (mechanism === 'auto-window' && c.trigger === 'auto'))
   const endRows = ledgerFindings(states.end?.ledger ?? [], { roots })
   const seedsOfFinding = new Map()
@@ -1159,7 +1173,9 @@ function compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMat
       notes.push(`auto compaction ${n} at main transcript line ${c.line} falls outside §7's window (no lens delivery before it without a ledger write since): no sample`)
       return []
     }
-    const placement = deliveries.findLast((d) => d.line < c.line && d.agent?.fn === 'verdict')?.agent.pass ?? null
+    // review/164: a last lens delivery naming no pass takes the placement the driver recorded for compaction n, if it names one.
+    const fromDriver = recorded.find((r) => r?.n === n)?.placement
+    const placement = deliveries.findLast((d) => d.line < c.line && d.agent?.fn === 'verdict')?.agent.pass ?? (isPass(fromDriver) ? fromDriver : null)
     const sample = { n, placement, trigger: c.trigger ?? null, preTokens: c.preTokens ?? null, postTokens: c.postTokens ?? null, atRisk: 0, lost: 0, valid: false }
     const pre = states[`compaction-${n}-pre`]
     if (!pre?.present) return [Object.assign(sample, { reason: `no captures/state/compaction-${n}-pre/ copy` })]
@@ -1235,9 +1251,11 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
       invalid.push(`capture defect: a verdict agent was dispatched for ${id}, but captures/snapshots/${id}/ holds no copy`)
     }
   }
-  const seedRows = seedRowsOf(seeds, all, seedMatch, L.snapshots, oracleStatus, notes, invalid, injectionStatesOf(seeds, run, invalid))
+  const seedRows = seedRowsOf(seeds, all, seedMatch, L.snapshots, oracleStatus, notes, invalid, injectionStatesOf(seeds, run, invalid), L.reviewSnapshots)
   const mechanism = run?.mechanism ?? 'interrupt'
-  const compactionSamples = compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, oracleStatus, roots, tolerance, notes })
+  // review/164 (REPLAY-v2 only): the driver's recorded placements, read when no lens delivery names the pass.
+  const recorded = injecting(seeds) && Array.isArray(run?.compactions) ? run.compactions : []
+  const compactionSamples = compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, oracleStatus, roots, tolerance, notes, recorded })
 
   const loopChars = sum(Object.values(perPass), loopOf)
   const unattributedShare = loopChars === 0 ? 0 : loopOf(perPass.unattributed) / loopChars

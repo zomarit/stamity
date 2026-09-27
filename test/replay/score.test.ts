@@ -692,6 +692,24 @@ describe("renderResults — RESULTS.md", () => {
     expect(section("#### Other measurement notes")).toContain("- no notes line");
   });
 
+  it("files a reverted-before-review seed's note beside pooled-recall, and beside security-seeds too for a security seed, not under the other notes (R4, review/162)", async () => {
+    const { m, runJson } = await measured();
+    // The lines measure.mjs writes for an injected seed absent from its pass's review snapshot, filled in.
+    const reverted = "so it was reverted before review: it is filed absent at the pass and leaves the recall denominator";
+    const held = "; a security seed, so it holds its security-seeds row";
+    for (const literal of [reverted, held]) expect(MEASURE_SRC).toContain(literal);
+    const security = `seed sec-sql-sort (u1-p1): injected, and absent from every copy under captures/review-snapshots/u1-p1/, ${reverted}${held}`;
+    const other = `seed tw-expectation-deleted (u3-p2): injected, and absent from every copy under captures/review-snapshots/u3-p2/, ${reverted}`;
+    const md = renderResults(summarize({ ...m, notes: [security, other] }, runJson, PROTOCOL_SHA, { protocolPath: "evals/replay/REPLAY-v2.md" }), parseThresholds(PROTOCOL_TEXT)) as string;
+    const section = (head: string): string => md.slice(md.indexOf(head), md.indexOf("####", md.indexOf(head) + 4));
+    expect(section("#### Beside `pooled-recall`")).toContain(security);
+    expect(section("#### Beside `pooled-recall`")).toContain(other);
+    expect(section("#### Beside `security-seeds`")).toContain(security);
+    expect(section("#### Beside `security-seeds`")).not.toContain(other);
+    expect(section("#### Other measurement notes")).not.toContain("reverted before review");
+    expect(section("#### Other measurement notes")).toContain("- no notes line");
+  });
+
   it("words the unreliable split from measure.mjs's UNATTRIBUTED_MAX and eval-set-floors from the fence's reading (build/231)", async () => {
     const { m, runJson } = await measured();
     const s = summarize(m, runJson, PROTOCOL_SHA) as Summary;

@@ -108,23 +108,38 @@ same hook call and before the reviewer's first tool call:
 1. For each seed of the pass, replace the seed's `injection.find` with its `injection.replace`, once, in every
    worktree of the run that is not pristine (step 2). The `find` text occurs exactly once in its file on the clean
    chain.
-2. Put the change in one of two forms, read per changed worktree at the injection. While the worktree's HEAD is still
-   the fixture's base, its HEAD at the session's start (the setup commit), the seeds go into the working tree and
-   nothing is committed: the shape has committed nothing, and the seeds sit in its uncommitted change set beside the
-   units' own work. Otherwise they go in as one commit of exactly the seeded files, with the session's own git
-   identity and clock and the subject `chore(<pass>): save work in progress`, so no author, date or subject marks the
-   commit that holds the seeds. The driver records each injection commit's sha and finds its commits by those shas,
-   never by author or subject. A pristine worktree takes no injection: pristine means its HEAD is still the setup
-   commit and its tree is clean, like an unstarted lane or the orchestrator's untouched checkout. Every other worktree
-   that holds a seed's anchor takes the seed in one of the two forms above. When every worktree holding the anchor is
-   pristine, the seed is recorded as not injected and counts as a seed that is not injected (below).
+2. Put the change in the form that matches the worktree's own state, read per worktree at the injection, so the seeds
+   look like the work around them. The setup commit is the worktree's HEAD at the session's start, the fixture's base.
+   - **Pristine:** HEAD is still the setup commit and the tree is clean, like an unstarted lane or the orchestrator's
+     untouched checkout. The worktree takes no injection.
+   - **Committed and clean:** HEAD has moved past the setup commit and the tree is clean. The seeds go in as one
+     commit of exactly the seeded files, with the session's own git identity and clock and the subject
+     `chore(<pass>): save work in progress`, so no author, date or subject marks the commit that holds the seeds. The
+     driver records each injection commit's sha and finds its commits by those shas, never by author or subject.
+   - **Staged work present:** the index holds changes. The seeds are staged too: the seed hunk alone goes into both the
+     index and the working tree, so the seeds sit in the staged change set beside the units' own staged work, and no
+     other change in the seeded file is staged by the injection.
+   - **Otherwise** (unstaged changes only, or HEAD past the setup commit with unstaged changes): the seeds go into the
+     working tree and nothing is staged or committed, beside the units' own uncommitted work.
+
+   Every worktree that is not pristine and holds a seed's anchor takes the seed in its form. When every worktree
+   holding the anchor is pristine, the seed is recorded as not injected and counts as a seed that is not injected
+   (below).
 3. Record each seed in the run journal as `injected` or `not injected (anchor missing)`; `run.json` carries the record
    as `injection`, whose `forms` holds one entry, with its form, files and commit sha, per worktree that took the
-   seeds or was skipped as pristine. The form is one of three values: `working-tree` for a worktree that took the
-   seeds as working-tree edits (sha null), `commit` for one that took them as a commit, and `skipped-pristine` for a
-   pristine worktree that holds a seed's anchor and took nothing (its files are the seeded files whose anchor it
-   holds, sha null).
-4. Snapshot the pass (`captures/snapshots/<pass>/`).
+   seeds or was skipped as pristine. The form is one of four values: `working-tree` for a worktree that took the
+   seeds as working-tree edits (sha null), `staged` for one that took them staged in both the index and the working
+   tree (sha null), `commit` for one that took them as a commit, and `skipped-pristine` for a pristine worktree that
+   holds a seed's anchor and took nothing (its files are the seeded files whose anchor it holds, sha null).
+4. Snapshot the pass (`captures/snapshots/<pass>/`). This is the injection snapshot: the tree right after the seeds
+   went in.
+
+**The review snapshot.** When the first review round that covers a pass completes, meaning every verdict-role agent
+dispatched for that round has returned, the driver copies the pass's trees again, in the same shape, to
+`captures/review-snapshots/<pass>/`. This is the tree the review actually saw. A seed that was injected but is absent
+from every copy of its pass's review snapshot was **reverted before review**: someone in the run took it out between
+the injection and the end of the first review round, so no review had a chance to find it. Such a seed is scored like
+a seed that is not injected (below and §8, Recall). A pass whose review never completed has no review snapshot.
 
 The seeds take the form of the work around them because a reviewer reads what the shape hands it: a shape that has
 committed nothing reviews its uncommitted change set, and a shape that commits reviews the branch diff. A commit in a
@@ -137,13 +152,15 @@ security seed absent at the pass: it counts as found. The measurement reads this
 (`run.json`'s `injection`), not from the snapshot, whatever the snapshot reads. A snapshot cannot tell these seeds
 apart: a negative presence rule reads a rewritten guard as a missing one, so a unit that restates `sec-path-traversal`'s
 name guard in another form, or writes `tw-expectation-deleted`'s assertion another way, leaves no anchor and still
-reads present. A seed recorded as injected is read from its pass's snapshot (§8, Recall). A v2 run without the
-injection record is invalid (§8).
+reads present. A seed recorded as injected is read from its pass's review snapshot, or from the injection snapshot
+when the pass has no review snapshot (§8, Recall). A v2 run without the injection record is invalid (§8).
 
 **Canary.** Before any pilot, one canary run per shape (`K-inject-baseline`, `K-inject-changed`) proves the mechanics
 on the pinned client. Its new checks: at least 10 of 12 seeds injected in each shape (K11); each covered pass's
 snapshot exists, and each injected seed reads present in it (K12); at least one verdict-role finding cites an injected
-file (K13); no text the run wrote says `BLOCKED` or `BLOCKED_<WORD>` and names the injection (K14). A text names the
+file (K13); no text the run wrote says `BLOCKED` or `BLOCKED_<WORD>` and names the injection (K14); at least 10 of 12
+seeds survive to review in each shape, where a seed survives when it was injected and reads present in its pass's
+review snapshot (K15). The canary passes when K5 to K15 all pass. A text names the
 injection by the first 7 characters of a recorded injection commit's sha, by the subject
 `chore(<pass>): save work in progress`, or by an injected seed's repository-relative path as a whole path token:
 `src/store/query.ts`, `src/store/query.ts:<line>` and an absolute path ending in it match, while `src/store/query.tsx`
@@ -285,7 +302,11 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   verdict-role finding matches it (§9), and otherwise it is not found. RESULTS names each such pass, and in the second
   case the file. The measurement also reads the driver's injection record (`run.json`'s `injection`, §5): a seed
   recorded not injected is filed as absent at its pass whatever the snapshot reads, so it leaves the denominator and
-  counts as found for `security-seeds`; a seed recorded injected is read from its pass's snapshot, as above.
+  counts as found for `security-seeds`. A seed recorded injected is read at review time: from the copies under
+  `review-snapshots/P/` when that directory exists, and otherwise from `snapshots/P/`, as above. A seed injected and
+  absent from every copy under `review-snapshots/P/` was reverted before review (§5): like a seed that is not
+  injected, it leaves the denominator and counts as found for `security-seeds`, and RESULTS names it beside
+  `pooled-recall`.
 - **Precision.** A decoy is flagged when a Critical or Warning finding matches it. Unmatched = Critical or Warning
   findings matching no seed or decoy, deduplicated by block; reported, not thresholded.
 - **Loss.** For each driver compaction event, at-risk = the verdict-role Critical or Warning findings delivered before
@@ -429,10 +450,16 @@ which §7 branch applied, and the RESULTS of every run name it.
   record names, per injected pass, every unit test the injection turned red.
 - **The orchestrator may notice a commit it did not make** and stop. In a shape that never commits, any commit is
   foreign to its orchestrator: `K-inject-baseline`'s first record ended blocked, naming the injection commits as a
-  Critical. So a shape whose worktree has committed nothing takes the seeds as working-tree edits, which carry no
-  author and read as the units' own work, and only a shape that has committed takes an injection commit (§5). K14
-  checks it in the canary. It hits both shapes alike, and a run lost this way counts against the two replacements
-  (§10).
+  Critical. So a shape whose worktree has committed nothing takes the seeds as working-tree edits, or staged beside
+  its staged work, which carry no author and read as the units' own work, and only a shape that has committed takes
+  an injection commit (§5). K14 checks it in the canary. It hits both shapes alike, and a run lost this way counts
+  against the two replacements (§10).
+- **An attentive orchestrator may revert drift it cannot explain.** In `K-inject-baseline`'s second record, the
+  baseline had staged its work, so seeds put in the working tree showed up as unstaged changes the units never made.
+  The orchestrator stopped the first review round and restored the tree, and the reviewed round held no seeds. So the
+  seeds now follow each worktree's state, staged beside staged work (§5). A revert can still happen, so recall reads
+  each seed at review time: a seed reverted before review leaves the denominator rather than scoring as a miss (§8),
+  and K15 needs at least 10 of 12 seeds to survive to review in the canary.
 - **An agent reading history may still notice a commit it did not make**, in a shape that takes an injection commit
   (§5). The injection commit carries the session's own git identity and clock and a neutral subject (§5), so nothing
   in its author, date or subject marks it, but an agent that reads the log can still find a commit no dispatch of the
