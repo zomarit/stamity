@@ -42,6 +42,12 @@ Assumed defaults, recorded here for the maintainer's review:
   under the current driver hashes.
 - The measure's confidence fix (`build/369`) rides the cut, because the close regenerates the measurements page.
 
+### Decisions added during the run
+
+| # | Decision |
+|---|---|
+| D5 | **Tighten Invariant 2, then re-measure** (the maintainer, 2026-09-27, through the question tool). Run 34, the full baseline on claude-opus-5-5 at high effort (run 33 ended terminal on a mid-run account switch), passed every metric but one floor: `question-shape-and-default-charter-only` passed 2 of 3, its sample 2 adding a second request for a decision after the numbered question (B1, B4; a floor must-NOT, all-or-nothing). Invariant 2 in `content/charter/stamity-charter.md` is amended to say exactly one question and no second request in the same turn, with the invariants version and a doctrine amendment row; the two cases that quote it move with it; an incremental run 35 against run 34 re-measures the cases whose case file or cited text moved and carries the rest; runs 34 and 35 together are the 1.10.0 run of record if every floor holds. |
+
 ## Research (2026-09-24; accessed and read on that date)
 
 **The profile and the comparator**
