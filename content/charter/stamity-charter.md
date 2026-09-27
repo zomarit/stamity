@@ -5,9 +5,9 @@ description: "Always-on repo charter: curated repo facts, floor invariants, touc
 tags: [orchestration]
 load: always
 obsolete_when: every target client natively injects equivalent repo facts and floor invariants at session start
-invariants_version: 1.0.0
+invariants_version: 1.1.0
 invariants_ratified: 2026-08-31
-invariants_amended: 2026-09-13
+invariants_amended: 2026-09-27
 ---
 
 # Charter
@@ -45,9 +45,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
-2. **Ambiguity (B1).** Two or more materially different readings of a request:
-   ask one question with numbered options and a declared default-if-no-response.
-   Sub-agents do not ask — they return `BLOCKED_AMBIGUITY` naming the readings.
+2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
+   exactly one, with numbered options and a declared default-if-no-response. Make no second request
+   in the same turn. Sub-agents do not ask — they return `BLOCKED_AMBIGUITY` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the verification gates above exit 0.

@@ -178,6 +178,26 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-27, plan 010 D5, unit invariant-2-tighten (run
+  //     2026-09-24_enterprise-release). The charter moved, plus the manifest
+  //     rows that record it. No emitted path was added or removed.
+  //
+  //     CHANGED every emitted charter (`AGENTS.md`, and the monorepo
+  //       `packages/alpha/AGENTS.md` and `packages/beta/AGENTS.md`) by +55
+  //       bytes at an unchanged line count: 5192 -> 5247 for the charter
+  //       alone, 25190 -> 25245 where codex's appendix rides beside it.
+  //       Invariant 2 now says ask one question, exactly one, and make no
+  //       second request in the same turn, rewrapped inside its three lines,
+  //       and the version line reads 1.1.0 · last amended 2026-09-27.
+  //       `ALWAYS_ON_SHARED_BYTES_WITH_CODEX`, `..._WITHOUT_CODEX` and
+  //       `docs/capability-matrix.md` moved with the figures (≈4.8x).
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 row of the charter.
+  //
+  //     What did NOT move: every agent, command, rule, skill, hook script,
+  //       guard, policy document and generated page other than the charter.
+  //       `stamity check` reported `drift: clean` after the sync.
+  //
   //   - 2026-09-24, Package 16 session 1's sixth batch sync (run
   //     2026-09-23_orchestrator-context). ONE command body moved, plus the
   //     manifest rows that record it. No emitted path was added or removed,

@@ -42,6 +42,9 @@ const DOCTRINE = resolve(REPO_ROOT, "docs", "doctrine.md");
  */
 const INVARIANTS_HASHES: Record<string, string> = {
   "1.0.0": "d762083b862050223660b80daa0342bcc4969b0612a2071e3947cd717159e6c7",
+  // Appended 2026-09-27 (plan 010 D5): invariant 2 now says exactly one question and no second
+  // request in the same turn. The 1.0.0 row above stays as the record of the ratified text.
+  "1.1.0": "d1662371a3ae872c70a3896bad89584edb25d409944905b376da47162bfce009",
 };
 
 /** The rendered version line, template form and emitted form alike. */

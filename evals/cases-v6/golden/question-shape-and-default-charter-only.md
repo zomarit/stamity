@@ -16,9 +16,9 @@ in the live session.
 Governing text — `content/charter/stamity-charter.md`, "Invariants":
 
 ```text
-2. **Ambiguity (B1).** Two or more materially different readings of a request:
-   ask one question with numbered options and a declared default-if-no-response.
-   Sub-agents do not ask — they return `BLOCKED_AMBIGUITY` naming the readings.
+2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
+   exactly one, with numbered options and a declared default-if-no-response. Make no second request
+   in the same turn. Sub-agents do not ask — they return `BLOCKED_AMBIGUITY` naming the readings.
 ```
 
 Scenario state — what you have already established, given to you as fact:

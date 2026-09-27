@@ -212,8 +212,10 @@ describe("corpus charter", () => {
     expect(rendered).toContain("`npm test`");
     expect(rendered).toContain("Linter: eslint");
     // The version line renders as one line under the heading it versions.
+    // 1.0.0 -> 1.1.0, amended 2026-09-13 -> 2026-09-27 (plan 010 D5): the shipped charter's
+    // invariants version moved with invariant 2's amendment, and this pins the shipped values.
     expect(rendered).toContain(
-      "## Invariants\nInvariants version 1.0.0 · ratified 2026-08-31 · last amended 2026-09-13\n",
+      "## Invariants\nInvariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27\n",
     );
   });
 
@@ -239,10 +241,12 @@ describe("corpus charter", () => {
     const charter = await readCharterTemplate(CORPUS_ROOT);
     const invariants = shippedInvariants(charter);
 
+    // 1.0.0 -> 1.1.0, amended 2026-09-13 -> 2026-09-27 (plan 010 D5): invariant 2's amendment
+    // bumped the shipped version; the ratification date does not move.
     expect(invariants).toEqual({
-      version: "1.0.0",
+      version: "1.1.0",
       ratified: "2026-08-31",
-      amended: "2026-09-13",
+      amended: "2026-09-27",
     });
     // The typed read and the raw map agree — no second spelling of the keys.
     expect(charter.frontmatter["invariants_version"]).toBe(invariants.version);

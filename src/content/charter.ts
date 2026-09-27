@@ -270,7 +270,12 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // so its +238 bytes land here and nowhere else — item 1 grew two lines and items
 // 3 to 5 were rewrapped to give them back, so the rule's line count did not move,
 // and the charter-alone figure below did not move either. Ratio ≈4.85x.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 25_190;
+// 25_190 -> 25_245 on 2026-09-27, plan 010 D5: invariant 2 now says ask one
+// question, exactly one, and make no second request in the same turn, with the
+// invariants version line at 1.1.0. +55 bytes of charter, rewrapped inside the
+// three lines the invariant already had, so no line count moved; the same +55
+// lands in the charter-alone figure below. Ratio ≈4.81x.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 25_245;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
@@ -288,7 +293,9 @@ export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 25_190;
 // this file is the charter alone, delivery moves rules and not the charter, so a
 // movement here would have meant the flip reached something it had no business
 // reaching. Re-measured off the refreshed golden, unchanged.
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_192;
+// 5_192 -> 5_247 on 2026-09-27, plan 010 D5: invariant 2's amendment and the
+// 1.1.0 version line, the same +55 as above and the whole of the change here.
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_247;
 
 /**
  * The composite always-on line count one client pays for a plan under a

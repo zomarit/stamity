@@ -85,6 +85,19 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-27, plan 010 D5, unit invariant-2-tighten (run
+ *     2026-09-24_enterprise-release). ONE golden moved:
+ *
+ *     SUBSTITUTION moved on the charter by +55 bytes at an unchanged line
+ *     count: invariant 2 now says ask one question, exactly one, and make no
+ *     second request in the same turn, rewrapped inside its three lines. The
+ *     golden's three removed and three added lines are the corpus diff's
+ *     lines and nothing else.
+ *
+ *     NOTHING else moved here: the one `src/` change is the two shared-bytes
+ *     disclosure constants, which emit nothing, so every command, agent,
+ *     rule, skill, guard and runner is byte-identical.
+ *
  *   - 2026-09-24, Package 16 session 1's sixth batch sync (run
  *     2026-09-23_orchestrator-context). ONE golden moved:
  *

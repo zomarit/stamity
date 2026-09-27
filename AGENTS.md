@@ -24,7 +24,7 @@ Run before declaring any change done.
 - Full gate: `npm run lint && npm run typecheck && npm run test`
 
 ## Invariants
-Invariants version 1.0.0 · ratified 2026-08-31 · last amended 2026-09-13
+Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -34,9 +34,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
-2. **Ambiguity (B1).** Two or more materially different readings of a request:
-   ask one question with numbered options and a declared default-if-no-response.
-   Sub-agents do not ask — they return `BLOCKED_AMBIGUITY` naming the readings.
+2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
+   exactly one, with numbered options and a declared default-if-no-response. Make no second request
+   in the same turn. Sub-agents do not ask — they return `BLOCKED_AMBIGUITY` naming the readings.
 3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
    are. One writer per artifact: parallel reads merge through a single writer.
 4. **No green, no done.** Done means the verification gates above exit 0.
