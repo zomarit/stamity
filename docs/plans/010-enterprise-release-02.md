@@ -254,7 +254,7 @@ Added 2026-09-26 with `eval-effort-high`.
 | `interfaces` | The whole release-controls checklist runs; a patch or minor cut runs all of it. **CHANGELOG.** The 1.10.0 section is written from the two run records: session 1's context economy and session 2's enterprise work, the new fork workflow reaching forks only through a reviewed push, and the eval baseline on Opus 5.5. **Re-attestation.** The hand bucket and `GOVERNANCE.md` are re-attested claim by claim by read-only attestors at the stronger class (Fable 5.1); each stale claim is fixed here or ledgered with a reason. **Other checklist lines.** The eval line names run 33 and the in-place profile move. `node scripts/hook-latency.mjs` exits 0, and its table goes into the run record. `node scripts/merge-ready-rate.mjs --write && node scripts/generate-docs.mjs --page measurements`. The leak gate prints PASS |
 | `testCriteria` | The `test/docsPages.test.ts` currency cases pass with the new dates. The measurements page regenerates byte-identically. `npm run lint && npm run typecheck && npm run test -- --coverage && npm run gate` exits 0. CI is green on every leg, Windows included |
 | `edgeCases` | An attestor finding a stale claim on a page no unit touched fixes it in this unit, or ledgers it with a reason. A second close on the same day finds the snapshot byte-stable; the snapshot is never rewritten |
-| `depends_on` | run-of-record-1-10-0, spec-citations, confidence-version, external evals/replay/COMPARISON-v2.md reading Merge gate PASS owner: plan 011's scored runs, external QA checkpoint signed owner: the maintainer |
+| `depends_on` | run-of-record-1-10-0, spec-citations, confidence-version, external QA checkpoint signed owner: the maintainer (the replay gate was removed by R5, the maintainer's decision of 2026-09-27: the release is decoupled from REPLAY-v2) |
 | `verify` | `npm run lint && npm run typecheck && npm run test -- --coverage && npm run gate && node scripts/leak-gate.mjs; echo exit=$?` |
 
 ### release-handoff — merge, tag, publish, verify, archive, re-sync
@@ -276,7 +276,7 @@ Added 2026-09-26 with `eval-effort-high`.
    the candidate.
 2. CI green on every leg, Windows included; both aggregators read `pass`.
 3. The QA checkpoint is signed by the maintainer.
-4. `evals/replay/COMPARISON-v2.md` reads `Merge gate: PASS` (plan 011).
+4. ~~`evals/replay/COMPARISON-v2.md` reads `Merge gate: PASS` (plan 011).~~ Removed by R5 (the maintainer, 2026-09-27, after three canary attempts each failed on a different orchestrator behavior): 1.10.0 is decoupled from the replay, REPLAY-v2 continues as its own package, and the CHANGELOG says the context-economy proposals ship without the replay's measurement.
 5. Run 33 holds every SET-v7 threshold, and calibration is 5 of 5.
 6. The leak gate prints PASS, read by its exit code, never through `| tail`.
 
