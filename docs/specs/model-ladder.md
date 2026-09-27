@@ -18,8 +18,9 @@ because a model is out of capacity, not because its work failed. The failure lad
 (`content/commands/st-work.md:143-147`) reads any stop as a failed sub-agent: its first rung
 re-briefs the agent, and its second reassigns the work to a stronger class. Under a limit on
 one model, that stronger class is the one already out of capacity. REQ-LADDER-001 shipped with
-1.9.0. REQ-LADDER-002 and REQ-LADDER-003 are merged for 1.10.0 and not released; the 1.10.0
-close moves `status` to `shipped-with-1.10.0`.
+1.9.0. REQ-LADDER-002 and REQ-LADDER-003 ship with 1.10.0. `status` stays
+`shipped-with-1.9.0`, the release that first shipped this spec, and the 1.10.0 release does not
+move it (the `spec-citations` unit of `docs/plans/010-enterprise-release-02.md`, 2026-09-27).
 
 ## Intent
 
