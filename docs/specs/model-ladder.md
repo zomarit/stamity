@@ -15,7 +15,7 @@ three of four clients accept. `/st-work` moves `status` to `shipped-with-1.9.0` 
 The second axis is capacity, added on 2026-09-23 from `docs/plans/009-orchestrator-context-economy-01.md`
 (REQ-LADDER-002, REQ-LADDER-003). It covers what the flow does when a sub-agent stops
 because a model is out of capacity, not because its work failed. The failure ladder
-(`content/commands/st-work.md:331-335`) reads any stop as a failed sub-agent: its first rung
+(`content/commands/st-work.md:143-147`) reads any stop as a failed sub-agent: its first rung
 re-briefs the agent, and its second reassigns the work to a stronger class. Under a limit on
 one model, that stronger class is the one already out of capacity. REQ-LADDER-001 shipped with
 1.9.0. REQ-LADDER-002 and REQ-LADDER-003 are merged for 1.10.0 and not released; the 1.10.0
@@ -72,7 +72,7 @@ matrix are regenerated from them.
 ### REQ-LADDER-002 — A capacity stop resumes or waits; it is not a failed sub-agent
 
 Given the `/st-work` Dispatch contract carrying, directly after its "Findings ledger" bullet
-(`content/commands/st-work.md:340-342`), a capacity bullet that sorts a stopped sub-agent by its
+(cited by name in `content/commands/st-work.md`), a capacity bullet that sorts a stopped sub-agent by its
 stop notice into `stall` (a watchdog, no progress), `connection` (a dropped transport),
 `limit-reset` (a limit naming its reset time) and `limit-no-reset` (credits, or a model limit
 naming no reset), When a sub-agent stops as `stall` or `connection`, Then the orchestrator
@@ -86,8 +86,8 @@ is more than 12 hours away, Then it returns `BLOCKED_DEPENDENCY` naming the rese
 When any of these events occurs, Then the run record gains exactly one line
 `- <UTC> capacity: <role> <stop class> → <resumed | waited until <UTC> | BLOCKED_DEPENDENCY>`, the
 event counts as neither a failure-ladder rung nor a review round, and the failure-ladder bullet
-(`content/commands/st-work.md:331-335`) and its pinned phrases
-(`test/corpus/commands/work.test.ts:850-853`) are unchanged.
+(`content/commands/st-work.md:143-147`) and its pinned phrases
+(`test/corpus/commands/work.test.ts:1000-1003`) are unchanged.
 
 The capacity rule is carried in the bullet's prose, with no table. A second pipe table under
 `### Model ladder` would be read as ladder rows, because `shippedLadderRows` takes every pipe
@@ -102,13 +102,13 @@ bodies (`docs/capability-matrix.md:240`), so the bullet has no carrier there.
 Given the capacity bullet of REQ-LADDER-002, When a verdict role stops for capacity — the
 reviewer on any round or on the whole-branch pass, the `security`, `design-quality` or
 `performance` lens, or the fresh fixer spawned on a stronger class
-(`content/commands/st-work.md:140-142`) — or the spec-author does, Then it is resumed, waited
+(`content/commands/st-work.md:260-262`) — or the spec-author does, Then it is resumed, waited
 for, or returned as `BLOCKED_DEPENDENCY` at the class the ladder assigns it, and it is never
 re-dispatched on a weaker class: the spec-author holds its class like the verdict roles, because
 later units are planned against its text (amendment A9); When a build role — the implementer,
 the fixer on rounds 1–3, the researcher, the creator or the test-runner (amendment A9) — stops
 as `limit-no-reset`, Then it may be re-dispatched one class below its assigned class and no
-further, and the proof block's per-action attribution (`content/commands/st-work.md:230`) names
+further, and the proof block's per-action attribution (`content/commands/st-work.md:356`) names
 that role, the class it was assigned and the class it ran at; When a build role stops as
 `stall`, `connection` or `limit-reset`, Then it keeps its assigned class; and When
 `test/roster/modelLadder.test.ts` runs after the change, Then it passes with no change to the
@@ -118,7 +118,7 @@ one-class drop as a second flow placement no row records (`src/roster/modelLadde
 `:48-56`).
 
 Work run at a lower class is still reviewed at the verdict roles' declared classes, and the
-effective-identity check (`content/commands/st-work.md:368-371`) still applies. The same
+effective-identity check (`content/commands/st-work.md:466-469`) still applies. The same
 `work.test.ts` case pins the no-fallback sentence. The class a build role actually ran at is
 checked against the proof block: `judgment: reviewer`.
 
@@ -126,5 +126,5 @@ checked against the proof block: `judgment: reviewer`.
 
 - `docs/plans/008-plugin-lifecycle-02.md` — unit C9.
 - `docs/configuration.md` — the `effort.*` keys as rendered.
-- `docs/plans/009-orchestrator-context-economy-01.md` — the capacity rung and the no-downgrade rule (REQ-LADDER-002, REQ-LADDER-003). The `content/commands/st-work.md` and `test/corpus/commands/work.test.ts` line citations in those two requirements are to the tree at `fed39ac`, before the body reorder and its tests moved them.
+- `docs/plans/009-orchestrator-context-economy-01.md` — the capacity rung and the no-downgrade rule (REQ-LADDER-002, REQ-LADDER-003). The line citations in those two requirements and in the capacity paragraph above are to the tree at `d227ca57`, the 1.10.0 release candidate. On 2026-09-27 each was read at the tree it was first written against (`fed39ac` for the `content/commands/st-work.md` and `test/corpus/commands/work.test.ts` ones, before the body reorder and its tests moved them; the spec merge `12d8f20e` for the rest) and found again, with the same text, at `d227ca57`. The "Findings ledger" bullet is cited by name, because its text changed after `fed39ac`: it now says each event is appended as a one-row findings block on `--stdin`.
 - `content/commands/st-work.md` — the Dispatch contract's capacity bullet, after "Findings ledger".

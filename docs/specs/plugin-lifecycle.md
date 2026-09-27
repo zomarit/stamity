@@ -1095,7 +1095,7 @@ available. The clause is amended to what shipped: EVERY command block on `docs/p
 a provenance line stating either the client and version it was executed on or the vendor page and
 the access date it was transcribed from together with the proof that will execute it, and no block
 is presented as executed when it was not — the contract is stated at the head of the install
-section (`docs/plugins.md:84-92`) rather than left to the reader to infer per block. Executed:
+section (the opening paragraph of `## Install` in `docs/plugins.md`) rather than left to the reader to infer per block. Executed:
 `claude plugin validate --strict` on Claude Code 2.1.278; `agent --plugin-dir ./cursor --trust` on
 the Cursor agent CLI 2026.09.15; GitHub Copilot CLI 1.0.85's `plugin install`, `plugin list --json`
 and `skill list` in a scratch `HOME`/`COPILOT_HOME`; codex-cli 0.154.0's `plugin marketplace add`
@@ -1123,6 +1123,12 @@ recorded under REQ-PLUGIN-019). The pinned surfaces moved in the same change: RE
 the llms index entry with `regenerateCommand: null` because the page is hand-written
 (`src/cli/docs/llmsIndex.ts:170-174`) and `llms.txt`, the sidebar entry, and `test/docsPages.test.ts`'s
 arrays, count words, guide counts and `REATTESTATION_DATE` 2026-09-20 with three pages re-stamped.
+
+The two `docs/plugins.md` citations above were re-pointed on 2026-09-27 to the tree at
+`d227ca57`. Each was read at `558bca5a`, where it was last set. The co-ownership passage is at the
+same lines, `docs/plugins.md:69-77`, with the same text. The install section's opening paragraph
+is cited by name, because it was reworded after `558bca5a`: it now dates each block by its own
+provenance line and records the remote walks against a private mirror.
 
 ### REQ-PLUGIN-025 Eval coverage for the generated command and plugin-mode invocation
 

@@ -1,7 +1,7 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26, and excluded from the site build.
-status: design
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27, and excluded from the site build.
+status: shipped-with-1.10.0
 obsolete_when: every supported client hands a parent a sub-agent's full report by reference and restores a running flow's state after a compaction on its own, or a decision row cuts the surface
 ---
 # Orchestrator context economy
@@ -9,26 +9,41 @@ obsolete_when: every supported client hands a parent a sub-agent's full report b
 This spec covers what enters the `/st-work` orchestrator's context and what stays on disk.
 Full reports stay on disk and the orchestrator gets a digest. A CLI verb writes the findings
 ledger. A dispatch points at a plan unit instead of restating it. After a compaction, a card
-recomputed from disk re-grounds the run. The requirements are merged to `main` for 1.10.0 and
-are not released: `status: design` records that state, because the spec-status gate admits only
-`design`, `shipped` and `shipped-with-<x.y.z>` (amendment A15), and the 1.10.0 release close
-moves it to `shipped-with-1.10.0`. The requirements merge on the QA sign-off, the gate of record
-and CI; none ships before the replay's quality floor holds (REQ-CTX-015; D10, amended
-2026-09-24).
+recomputed from disk re-grounds the run. The requirements ship with 1.10.0, and
+`status: shipped-with-1.10.0` records that; the spec-status gate admits only `design`, `shipped`
+and `shipped-with-<x.y.z>` (amendment A15). They merged on the QA sign-off, the gate of record
+and CI. They ship without the replay's measurement: R5, the maintainer's decision of 2026-09-27
+in `docs/plans/011-replay-v2.md`, took the replay out of the 1.10.0 release, so the replay's
+quality floor binds the first release that ships REPLAY-v2's comparison instead (REQ-CTX-015;
+D10, amended 2026-09-24 and 2026-09-27).
 
 Contract numbers (C1–C12) and decision numbers (D1–D11) refer to the shared-contract and
 decision sections of `docs/plans/009-orchestrator-context-economy-01.md`. That plan carries the byte shapes. Amendment
 numbers (A1–A22) and resolution numbers (R1–R39) refer to its Spec text and Resolved details
 sections. Once a test named under References exists, it is the normative record for its
-requirement. Line citations in the requirement statements are to the tree at `fed39ac`, as the
-Context's are, except those an amendment adds (A17, A18); the body reorder (REQ-CTX-014) has
-since moved most `content/commands/st-work.md` lines.
+requirement.
 
 REQ-CTX-016, and the paragraphs and criteria marked "amended 2026-09-26" under REQ-CTX-013 and
 REQ-CTX-015, come from the spec deltas of `docs/plans/010-enterprise-release-01.md` and
-`docs/plans/011-replay-v2.md` and from the deltas their units' reports declared. Their citations
-are to the tree at `e995fe02`, re-pointed to the package head `0a251039` where the cited file
-changed since.
+`docs/plans/011-replay-v2.md` and from the deltas their units' reports declared. The paragraphs
+and criteria marked "amended 2026-09-27" come from R5 in `docs/plans/011-replay-v2.md`.
+
+Line citations outside the Context section are to the tree at `d227ca57`, the 1.10.0 release
+candidate. On 2026-09-27 each one was read at the tree it was first written against and found
+again, with the same text, at `d227ca57`. Those trees are `fed39ac` for the plan's own
+statements; the spec merges of 2026-09-24 for amendments A17 and A18 (`12d8f20e`), for
+REQ-CTX-005's ledger code and the replay's rate rows (`1ae8a318`) and for the `Merge gate:` line
+(`1ba8dcee`); and `0a251039` for the 2026-09-26 amendments. Where the text had been reworded
+since, the citation names the bullet, section or function instead of a line:
+
+- the Plan-artifact intake bullet of `content/commands/st-work.md` and the consumer-job bullets
+  of `content/agents/stamity-spec-author.md`, which REQ-CTX-009 and REQ-CTX-010 themselves
+  reworded;
+- REPLAY-v2's §5 Injection and "A seed that is not injected" paragraphs, its §7, and its §8
+  Covered passes and Recall bullets, and `passesOf` and `injectionStatesOf` in
+  `scripts/replay/measure.mjs`, which plan 011's R3 and R4 reworded after the 2026-09-26 merge:
+  the seeds now take each worktree's own form, a named pass range covers every pass in it, and
+  an injected seed is read at review time. REQ-CTX-015's statement predates R3 and R4.
 
 ## Context
 
@@ -62,10 +77,13 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 
 ## Invariants
 
-1. **The quality floor binds the release.** No requirement below ships in 1.10.0 unless the
-   replay's committed comparison shows the C12 floor held for its proposal (REQ-CTX-015; D10,
-   amended 2026-09-24). A proposal that fails is reworked and re-measured, or dropped. When
-   dropped, its ids are retired here with a pointer to the failing result.
+1. **The quality floor binds the release that first ships REPLAY-v2's comparison.** The
+   requirements below ship in 1.10.0 without the replay's measurement. The first release that
+   ships REPLAY-v2's comparison ships only when that comparison shows the C12 floor held for
+   each proposal (REQ-CTX-015; D10, amended 2026-09-24). A proposal that fails is reworked and
+   re-measured, or dropped. When dropped, its ids are retired here with a pointer to the failing
+   result. (Amended 2026-09-27 by R5; it read "No requirement below ships in 1.10.0 unless the
+   replay's committed comparison shows the C12 floor held for its proposal".)
 2. **Four-client parity, or a declared degradation per client.** The table below is the
    declaration. A cell that is not `yes` is a degradation, stated here rather than discovered.
 3. **Never digested, never cut (C4).** The following are returned in full:
@@ -121,8 +139,10 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 
 ## Requirements
 
-Each requirement is listed with the proposal it belongs to. REQ-CTX-015 decides, per
-proposal, what the 1.10.0 release ships:
+Each requirement is listed with the proposal it belongs to. Every proposal ships in 1.10.0
+without the replay's measurement (R5, amended 2026-09-27; it read "REQ-CTX-015 decides, per
+proposal, what the 1.10.0 release ships"). REQ-CTX-015 decides, per proposal, what is kept once
+REPLAY-v2's comparison is measured:
 
 - P1: 001–004
 - P2: 005–007
@@ -167,8 +187,8 @@ Only the reviewer's digest also carries the labelled `verdict:` and `confidence:
 lens's digest carries `mode:` (posted or advisory) with its posted count, and performance's also
 names whether a declared budget was breached (amendment A4).
 
-A red test-runner's excerpts are ledger evidence (`content/commands/st-work.md:250`). The
-security exemption restates the existing rule (`content/commands/st-work.md:336-339`) for the
+A red test-runner's excerpts are ledger evidence (`content/commands/st-work.md:376`). The
+security exemption restates the existing rule (`content/commands/st-work.md:148-151`) for the
 new return shape.
 
 Implements C4.
@@ -183,10 +203,10 @@ write their report through a `Write` limited to their own role's reports under
   own role's reports: `.stamity/runs/*/reports/*-reviewer-r*.md`, `*-security-r*.md`,
   `*-performance-r*.md` and `*-design-quality-r*.md`, so no verdict role can overwrite
   another's (amendment A1). `allow` is unchanged and the schema stays
-  `stamity/agent-tool-policies/v1` (`src/tools/allowlist.ts:144`).
+  `stamity/agent-tool-policies/v1` (`src/tools/allowlist.ts:163`).
 - **Enforcement.** The pre-tool-use guard enforces the path list by resolving
   `tool_input.file_path`:
-  - it must fall inside the project root the guard anchors on (`.claude/settings.json:33`);
+  - it must fall inside the project root the guard anchors on (`.claude/settings.json:35`);
   - no symlink is allowed on the path and no `..` segment;
   - it must match the pattern. The guard reads the last `*` of a pattern's final segment (the
     round number before `.md`) as one or more ASCII digits only, so a pass slug holding another
@@ -273,7 +293,7 @@ The state set stays `open | fixed | deferred | rejected`. A row carrying
 Ruled out:
 
 - A fifth state. It widens the closed set that `test/records/ledgers.test.ts` asserts and that
-  the close gate reads (`content/commands/st-work.md:275-278`).
+  the close gate reads (`content/commands/st-work.md:401-404`).
 
 Implements C3 (D2).
 
@@ -281,12 +301,12 @@ Implements C3 (D2).
 
 A fixer's dispatch names the report path and the ledger ids it answers. Its scope is those
 ids, and it returns one disposition per id, using the existing vocabulary
-(`content/agents/stamity-fixer.md:97-107`).
+(`content/agents/stamity-fixer.md:104-114`).
 
 The dispatch also carries the orchestrator's sign-off beside each `decision_needed` id it
 names, and REQ-CTX-006's run-record sign-off line stays too. The fixer fixes such a row only
 then, and otherwise returns it `unresolved` (`content/agents/stamity-fixer.md:27-29`,
-`content/commands/st-work.md:176-183`; amendment A18).
+`content/commands/st-work.md:177-184`; amendment A18).
 
 Implements D2 and C10's dispatch form.
 
@@ -302,7 +322,7 @@ A re-review returns:
 `stamity ledger close --report` requires `--ids <comma list>`, the ledger ids handed to that
 re-review; a `--report` close without `--ids` is refused, and a closure naming an id outside the
 list refuses the whole close, as an unknown id does (amendment A17). `content/commands/st-work.md`
-tells the orchestrator to pass the handed ids (`content/commands/st-work.md:272-277`). It
+tells the orchestrator to pass the handed ids (`content/commands/st-work.md:273-278`). It
 applies the closures:
 
 - `fixed` → `fixed`;
@@ -319,17 +339,17 @@ Implements C9, C7 (D3).
 A dispatch names the persisted plan unit by path and unit id, never by line number, plus
 run-specific parameters, in at most 15 lines. An in-flow plan is persisted once, as
 `.stamity/runs/<run-id>/plan.md`, in `/st-plan`'s unit shape
-(`content/commands/st-plan.md:341-350`). That replaces "persisted nowhere"
-(`content/commands/st-work.md:52-54`).
+(`content/commands/st-plan.md:341-350`). That replaces "persisted nowhere" in the
+Plan-artifact intake bullet of `content/commands/st-work.md`.
 
 Implements C10 (D4).
 
 ### REQ-CTX-010 — Plan-cell amendment, and `BLOCKED_DEPENDENCY` on a cell that no longer resolves
 
 - **Amendment.** The spec-author gains a third consumer job, beside spec-delta merge and
-  plan-artifact draft (`content/agents/stamity-spec-author.md:35-48`). When an implementer's
-  contract delta moves a seam a later unit relies on, the spec-author amends that later cell in
-  place with the line `amended <UTC date>: <what moved> (<commit>)`.
+  plan-artifact draft (the consumer-job bullets of `content/agents/stamity-spec-author.md`).
+  When an implementer's contract delta moves a seam a later unit relies on, the spec-author
+  amends that later cell in place with the line `amended <UTC date>: <what moved> (<commit>)`.
 - **Reviewer pass.** When the spec-author amends the cell of a unit that touches a security
   trigger path or a shared contract, the reviewer reads the amended cell before that unit is
   dispatched (amendment A10).
@@ -340,7 +360,7 @@ Implements C10 (D4).
 
 ### REQ-CTX-011 — The implementer's return carries its census closure and its report path
 
-The implementer's return contract (`content/agents/stamity-implementer.md:86`) gains:
+The implementer's return contract (`content/agents/stamity-implementer.md:92`) gains:
 
 - the `report:` line;
 - the `contract delta:` rows in census grammar, each closing `clean`, `reconciled(N)` or
@@ -387,7 +407,7 @@ prints one withheld line naming the run and the pattern id, never the screened v
 Ruled out:
 
 - A pre-compaction hook or a new hook event. The review gate's events are derived from every
-  Claude extension row except `ConfigChange` (`src/adapters/claude.ts:245-247`), so a new row
+  Claude extension row except `ConfigChange` (`src/adapters/claude.ts:246-248`), so a new row
   would also wire the review gate onto it.
 
 Amended 2026-09-26 (plan 010 file 1, `build/32`, `build/40`). The card's reads are bounded by count
@@ -483,40 +503,45 @@ A replay compares the changed shape with the 1.9.1 baseline:
   sub-agent-token bar compares the changed shape's mean per pass over its scored runs with the
   baseline shape's mean (amendment A8). Decoy flags and passes approved with a seed unfixed
   compare per-scored-run rates, because the shapes may run 3 or 5 scored runs
-  (`scripts/replay/compare.mjs:170-175`).
+  (`scripts/replay/compare.mjs:177-182`).
 - **Merge.** The package merges on the QA sign-off, the gate of record and CI (D10, amended
   2026-09-24; it read "the package merges only after the floor holds").
-- **Replay gate.** The 1.10.0 release proceeds only after the floor holds on a fixture where
-  seeds reach review (REPLAY-v2, session 2). v1's fixture lets the orchestrator's pre-read catch
-  every seed before review, so its two pilots stay in `evals/replay/runs/` as unscored evidence
-  and `evals/replay/REPLAY-v1.md` stays frozen. The COMPARISON's literal `Merge gate:` line keeps
-  its name, because the frozen instrument renders it (`scripts/replay/compare.mjs:380`), and it
-  now gates the release.
+- **Replay gate** (amended 2026-09-27 by R5; it read "The 1.10.0 release proceeds only after the
+  floor holds on a fixture where seeds reach review (REPLAY-v2, session 2)."). 1.10.0 does not
+  wait for the replay, and the context-economy proposals ship in it without the replay's
+  measurement. The floor binds the first release that ships REPLAY-v2's comparison, measured on a
+  fixture where seeds reach review. v1's fixture lets the orchestrator's pre-read catch every seed
+  before review, so its two pilots stay in `evals/replay/runs/` as unscored evidence and
+  `evals/replay/REPLAY-v1.md` stays frozen. The COMPARISON's literal `Merge gate:` line keeps its
+  name, because the frozen instrument renders it (`scripts/replay/compare.mjs:416`), and it gates
+  that release.
 - **Release gate.** Every eval-set floor holds at the 1.10.0 release run.
 
-As built (2026-09-26; citations re-pointed to the package head `0a251039`):
+As built (2026-09-26; citations re-pointed to `d227ca57` on 2026-09-27):
 `evals/replay/REPLAY-v2.md` states the rules above — the injection and the not-injected reading
-(§5, `:100-125`), the matcher (§9, `:290-304`), the covered passes and the verdict mapping (§8,
-`:229-232`, `:273-274`), the injection record in the recall reading and the invalid run (§8,
-`:257-259`, `:277-279`), compaction (§7, `:201-217`), the result paths (§11, `:333-341`) and the
-Clients table (§1, `:30-35`) — and its one `replay-thresholds` block holds v1's values
-(`:371-373`). The protocol table is `PROTOCOLS` (`scripts/replay/protocols.mjs:11-14`, default v1 at
-`:17`). The scorer refuses a `run.json` whose recorded protocol sha256 is not the protocol's
-(`scripts/replay/score.mjs:809-810`) and a summary scored under another protocol's sha256 or path
-(`:882-884`). The matcher's rules are `maskNegated` (`scripts/replay/findings.mjs:82`) and
-`matchItems` (`:615`); the covered passes are `passesOf` (`scripts/replay/measure.mjs:349-351`); the
+(§5, its Injection and "A seed that is not injected" paragraphs), the matcher (§9, `:352-366`),
+the covered passes and the verdict mapping (§8, its Covered passes bullet and `:335-336`), the
+injection record in the recall reading and the invalid run (§8, its Recall bullet and
+`:339-341`), compaction (§7), the result paths (§11, `:395-403`) and the Clients table (§1,
+`:30-35`) — and its one `replay-thresholds` block holds v1's values (`:433-435`). The protocol
+table is `PROTOCOLS` (`scripts/replay/protocols.mjs:11-14`, default v1 at `:17`). The scorer
+refuses a `run.json` whose recorded protocol sha256 is not the protocol's
+(`scripts/replay/score.mjs:811-812`) and a summary scored under another protocol's sha256 or path
+(`:884-886`). The matcher's rules are `maskNegated` (`scripts/replay/findings.mjs:82`) and
+`matchItems` (`:615`); the covered passes are `passesOf` in `scripts/replay/measure.mjs`; the
 measurement reads the driver's injection record, files a seed recorded not injected as absent at
 its pass whatever the snapshot reads, and marks a v2 run with no record invalid
-(`injectionStatesOf`, `:1038-1062`; `seedRowsOf`, `:1080-1083`); the seeds schema adds `injection`
-and `present.notMatch`, and a seed is present only when no `notMatch` pattern matches (`checkSeeds`,
-`presentIn`, `:258`, `:285-292`); the Clients table is `clientsTable`
+(`injectionStatesOf`; `seedRowsOf`, `scripts/replay/measure.mjs:1117-1120`); the seeds schema adds
+`injection` and `present.notMatch`, and a seed is present only when no `notMatch` pattern matches
+(`checkSeeds`, `presentIn`, `:260`, `:287-294`); the Clients table is `clientsTable`
 (`scripts/replay/compare.mjs:379-383`), empty under v1 so v1's files stay byte for byte. A comparison
 given no scored run for a shape reads every row that shape feeds NOT-EVALUATED, and the merge gate
 fails (`compare.mjs:96`, `:339`). The v2 fixture is `evals/replay/v2/`. The injection, the
 snapshots, the placement and the canary checks K11–K14 are the replay driver's, which lives outside
 this repository; REPLAY-v2 is the record of what it must do. Not yet measured: no v2 canary, pilot or
 scored run is committed in this tree, and `evals/replay/COMPARISON-v2.md` does not exist, so every
-criterion below that reads v2 results is open.
+criterion below that reads v2 results is open. Since R5 they stay open through 1.10.0 and bind the
+first release that ships REPLAY-v2's comparison (amended 2026-09-27).
 
 Implements C12 (D9, D10).
 
@@ -1008,7 +1033,7 @@ eye.
   one `not-run` row each for Cursor, GitHub Copilot CLI and Codex, each with its reason (amended
   2026-09-26; it read "GIVEN the committed replay results WHEN read THEN they carry one `not-run`
   row each …", which v1's two pilots do not carry: the Clients table is rendered under v2 only,
-  `scripts/replay/compare.mjs:380`).
+  because `clientsTable` returns no line under v1, `scripts/replay/compare.mjs:380`).
 - GIVEN a v2 run WHEN the first review dispatch covering a pass starts THEN that pass's injected
   seeds are committed and its snapshot exists before the reviewer's first tool call. The run
   records each seed as injected or not (amended 2026-09-26).
@@ -1020,14 +1045,17 @@ eye.
   WHEN the run is measured THEN the seed reads `foundRound1: true` and `stage: "pass"`, and both
   passes record that round's verdict class and round count (amended 2026-09-26, from the
   `v2-multipass` unit's report).
-- GIVEN the 1.10.0 tag THEN the tagged commit descends from a committed
-  `evals/replay/COMPARISON-v2.md` whose `Merge gate:` line reads PASS: the floor criteria (the
-  fourth to the tenth) holding for every proposal kept, as the release-gate criterion states
-  (amended 2026-09-26; it read "GIVEN the 1.10.0 release WHEN the `v1.10.0` tag is created THEN the
-  tagged commit descends from a committed REPLAY-v2 comparison that shows the floor criteria above
-  (the fourth to the tenth) holding for every proposal kept, and every dropped proposal's ids read
-  retired in this spec with a pointer to the failing result (D10, amended 2026-09-24)"). A dropped
-  proposal's ids still read retired here with a pointer to the failing result (Invariant 1).
+- GIVEN the first release that ships REPLAY-v2's comparison WHEN its tag is created THEN the
+  tagged commit descends from a committed `evals/replay/COMPARISON-v2.md` whose `Merge gate:` line
+  reads PASS: the floor criteria (the fourth to the tenth) holding for every proposal kept, as the
+  Replay gate bullet states. 1.10.0 is not that release: it is decoupled from the replay, and the
+  context-economy proposals ship in it without the replay's measurement. Open: no v2 comparison is
+  committed. A dropped proposal's ids still read retired here with a pointer to the failing result
+  (Invariant 1). (Amended 2026-09-27 by R5, the maintainer's decision of that day; it read "GIVEN
+  the 1.10.0 tag THEN the tagged commit descends from a committed `evals/replay/COMPARISON-v2.md`
+  whose `Merge gate:` line reads PASS: the floor criteria (the fourth to the tenth) holding for
+  every proposal kept, as the release-gate criterion states", itself amended 2026-09-26 from a
+  criterion on the `v1.10.0` tag and a REPLAY-v2 comparison (D10, amended 2026-09-24).)
 - GIVEN the 1.10.0 eval-set run WHEN it is scored THEN every eval-set floor holds before the
   `v1.10.0` tag is created.
 
