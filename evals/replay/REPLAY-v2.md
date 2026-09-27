@@ -110,9 +110,10 @@ same hook call and before the reviewer's first tool call:
    chain.
 2. Put the change in the form that matches the worktree's own state, read per worktree at the injection, so the seeds
    look like the work around them. The setup commit is the worktree's HEAD at the session's start, the fixture's base.
-   - **Pristine:** HEAD is still the setup commit and the tree is clean, like an unstarted lane or the orchestrator's
-     untouched checkout. The worktree takes no injection.
-   - **Committed and clean:** HEAD has moved past the setup commit and the tree is clean. The seeds go in as one
+   - **Pristine:** HEAD is still the setup commit and there is no change at all, not even an untracked file, like an
+     unstarted lane or the orchestrator's untouched checkout. The worktree takes no injection.
+   - **Committed and clean:** HEAD has moved past the setup commit and no tracked file has a change, staged or not.
+     Untracked files do not count here, so they do not stop this form. The seeds go in as one
      commit of exactly the seeded files, with the session's own git identity and clock and the subject
      `chore(<pass>): save work in progress`, so no author, date or subject marks the commit that holds the seeds. The
      driver records each injection commit's sha and finds its commits by those shas, never by author or subject.
