@@ -93,21 +93,21 @@ exports[`emitted tree for all-four > matches the residue-document golden byte fo
 #
 # Hooks: .codex/hooks.json · subagents: .codex/agents/ · standards: AGENTS.md.
 
-# Lifecycle hooks: OFF by default in the client, so an emitted hooks.json does nothing
-# until this key turns it on. Enabling it here is step 1 of 3.
+# Lifecycle hooks: an emitted hooks.json is read only while this key is on. It is written
+# explicitly, so the client's default does not decide it. Enabling it here is step 1 of 3.
 #
 # Three steps stand between this file and a hook the client runs.
-# 1. Feature flag: \`features.hooks = true\`. The client defaults it OFF (deprecated alias
-#    \`features.codex_hooks\`), so this file is not read until it is on. .codex/config.toml
-#    carries it; the per-invocation equivalent is \`codex exec --enable hooks\`, which is
-#    shorthand for \`-c features.hooks=true\`.
+# 1. Feature flag: \`features.hooks = true\` (deprecated alias \`features.codex_hooks\`); this file
+#    is not read while it is off. .codex/config.toml writes it explicitly, so the client's
+#    default does not decide it. The per-invocation equivalent is \`codex exec --enable hooks\`,
+#    which is shorthand for \`-c features.hooks=true\`.
 # 2. Project trust: a project \`.codex/\` layer loads only when it is trusted. Record
 #    \`projects.<path>.trust_level = "trusted"\` in the Codex home config (\`~/.codex/config.toml\`),
 #    which is the operator's file and not one this engine writes.
 # 3. Per-hook review: each hook is trusted by hash through the interactive \`/hooks\` command.
 #    Automation that cannot take that step runs \`--dangerously-bypass-hook-trust\`, which runs
 #    enabled hooks with no persisted trust.
-# Key set and default: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15).
+# Key set: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15).
 #
 # One writer: this whole file is generated, so a \`[features]\` table of your own does not
 # belong in it — TOML reads a second [features] header as a redefinition, not a merge, and
@@ -132,7 +132,7 @@ args = ["-y", "mcp-remote@0.1.16", "https://api.githubcopilot.com/mcp/", "--head
 env_vars = ["GITHUB_PAT"]
 ",
   ".codex/hooks.json": "{
-  "description": "Stamity hooks. Three steps stand between this file and a hook the client runs. 1. Feature flag: \`features.hooks = true\`. The client defaults it OFF (deprecated alias \`features.codex_hooks\`), so this file is not read until it is on. .codex/config.toml carries it; the per-invocation equivalent is \`codex exec --enable hooks\`, which is shorthand for \`-c features.hooks=true\`. 2. Project trust: a project \`.codex/\` layer loads only when it is trusted. Record \`projects.<path>.trust_level = \\"trusted\\"\` in the Codex home config (\`~/.codex/config.toml\`), which is the operator's file and not one this engine writes. 3. Per-hook review: each hook is trusted by hash through the interactive \`/hooks\` command. Automation that cannot take that step runs \`--dangerously-bypass-hook-trust\`, which runs enabled hooks with no persisted trust. Key set and default: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15). Trust is recorded against this file's hash only: the hook script bytes under .stamity/generated/hooks/codex/ are outside it and can change without re-review, so stamity check is the control for them and for emitted-file drift generally. The role guard is telemetry because PreToolUse carries no agent identity.",
+  "description": "Stamity hooks. Three steps stand between this file and a hook the client runs. 1. Feature flag: \`features.hooks = true\` (deprecated alias \`features.codex_hooks\`); this file is not read while it is off. .codex/config.toml writes it explicitly, so the client's default does not decide it. The per-invocation equivalent is \`codex exec --enable hooks\`, which is shorthand for \`-c features.hooks=true\`. 2. Project trust: a project \`.codex/\` layer loads only when it is trusted. Record \`projects.<path>.trust_level = \\"trusted\\"\` in the Codex home config (\`~/.codex/config.toml\`), which is the operator's file and not one this engine writes. 3. Per-hook review: each hook is trusted by hash through the interactive \`/hooks\` command. Automation that cannot take that step runs \`--dangerously-bypass-hook-trust\`, which runs enabled hooks with no persisted trust. Key set: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15). Trust is recorded against this file's hash only: the hook script bytes under .stamity/generated/hooks/codex/ are outside it and can change without re-review, so stamity check is the control for them and for emitted-file drift generally. The role guard is telemetry because PreToolUse carries no agent identity.",
   "hooks": {
     "SessionStart": [
       {
@@ -1309,8 +1309,8 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".codex/agents/stamity-security.toml": "ae2ad071e681381a6dc4480207af99a8f452e43f735f800e5540240613d87057 9819 bytes",
   ".codex/agents/stamity-spec-author.toml": "b44555ffb92c95dc0da5d74fc9a25428c08a8eb8b3edee03627b3a8c48a27e74 11195 bytes",
   ".codex/agents/stamity-test-runner.toml": "48e01ddbe438cb488ff8924072f99ec45fcd969b3424069d9e943ce81c83a000 6881 bytes",
-  ".codex/config.toml": "6cc6cda56cb23939367ebe4f5a42c6ef22b844b01b2d3daebe3b05ed70265c80 3285 bytes",
-  ".codex/hooks.json": "da7da3c05b3165754f956376629a84b8ef5384a2ea389b2b326c26cf9a7475ea 8412 bytes",
+  ".codex/config.toml": "1599271aa6c95c63e3aaa3766ff1cf69c524432b2facf8eaab5dfc44287f2050 3328 bytes",
+  ".codex/hooks.json": "f4e70bf9c8fc6dc22e1897d2e27decc170e10dcbd5529f87469441abe98b8080 8424 bytes",
   ".cursor/agents/stamity-creator.md": "9cb2a22b302f230ad36e5c6b82fc703e2e5d5b510f4ed5771dd700e268391bbd 13732 bytes",
   ".cursor/agents/stamity-design-quality.md": "98618aff526cd4c4c823ec567236596c3d3eac4d50bacb6656148a670e7c838d 9248 bytes",
   ".cursor/agents/stamity-fixer.md": "f9604d9dd0b35f84998681c9f6c90379ce62aa5a2d57940c209d89cf535bf029 7614 bytes",
@@ -1401,7 +1401,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "71e6730b601132a91308ec3843c00645f64373aa87d2a9982cd6ff9a04e25119 71175 bytes",
+  ".stamity/manifest.json": "1444163784551bbf4f5108d20014693e8e2077ad16aa9998ce82f444f94ce024 71175 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "8ff1909d88fe0cc1f01e4aabc1fd49fa004f15cb59a23f6521e2a9e24885a0c8 25245 bytes",
@@ -1717,21 +1717,21 @@ exports[`emitted tree for codex > matches the residue-document golden byte for b
 #
 # Hooks: .codex/hooks.json · subagents: .codex/agents/ · standards: AGENTS.md.
 
-# Lifecycle hooks: OFF by default in the client, so an emitted hooks.json does nothing
-# until this key turns it on. Enabling it here is step 1 of 3.
+# Lifecycle hooks: an emitted hooks.json is read only while this key is on. It is written
+# explicitly, so the client's default does not decide it. Enabling it here is step 1 of 3.
 #
 # Three steps stand between this file and a hook the client runs.
-# 1. Feature flag: \`features.hooks = true\`. The client defaults it OFF (deprecated alias
-#    \`features.codex_hooks\`), so this file is not read until it is on. .codex/config.toml
-#    carries it; the per-invocation equivalent is \`codex exec --enable hooks\`, which is
-#    shorthand for \`-c features.hooks=true\`.
+# 1. Feature flag: \`features.hooks = true\` (deprecated alias \`features.codex_hooks\`); this file
+#    is not read while it is off. .codex/config.toml writes it explicitly, so the client's
+#    default does not decide it. The per-invocation equivalent is \`codex exec --enable hooks\`,
+#    which is shorthand for \`-c features.hooks=true\`.
 # 2. Project trust: a project \`.codex/\` layer loads only when it is trusted. Record
 #    \`projects.<path>.trust_level = "trusted"\` in the Codex home config (\`~/.codex/config.toml\`),
 #    which is the operator's file and not one this engine writes.
 # 3. Per-hook review: each hook is trusted by hash through the interactive \`/hooks\` command.
 #    Automation that cannot take that step runs \`--dangerously-bypass-hook-trust\`, which runs
 #    enabled hooks with no persisted trust.
-# Key set and default: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15).
+# Key set: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15).
 #
 # One writer: this whole file is generated, so a \`[features]\` table of your own does not
 # belong in it — TOML reads a second [features] header as a redefinition, not a merge, and
@@ -1756,7 +1756,7 @@ args = ["-y", "mcp-remote@0.1.16", "https://api.githubcopilot.com/mcp/", "--head
 env_vars = ["GITHUB_PAT"]
 ",
   ".codex/hooks.json": "{
-  "description": "Stamity hooks. Three steps stand between this file and a hook the client runs. 1. Feature flag: \`features.hooks = true\`. The client defaults it OFF (deprecated alias \`features.codex_hooks\`), so this file is not read until it is on. .codex/config.toml carries it; the per-invocation equivalent is \`codex exec --enable hooks\`, which is shorthand for \`-c features.hooks=true\`. 2. Project trust: a project \`.codex/\` layer loads only when it is trusted. Record \`projects.<path>.trust_level = \\"trusted\\"\` in the Codex home config (\`~/.codex/config.toml\`), which is the operator's file and not one this engine writes. 3. Per-hook review: each hook is trusted by hash through the interactive \`/hooks\` command. Automation that cannot take that step runs \`--dangerously-bypass-hook-trust\`, which runs enabled hooks with no persisted trust. Key set and default: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15). Trust is recorded against this file's hash only: the hook script bytes under .stamity/generated/hooks/codex/ are outside it and can change without re-review, so stamity check is the control for them and for emitted-file drift generally. The role guard is telemetry because PreToolUse carries no agent identity.",
+  "description": "Stamity hooks. Three steps stand between this file and a hook the client runs. 1. Feature flag: \`features.hooks = true\` (deprecated alias \`features.codex_hooks\`); this file is not read while it is off. .codex/config.toml writes it explicitly, so the client's default does not decide it. The per-invocation equivalent is \`codex exec --enable hooks\`, which is shorthand for \`-c features.hooks=true\`. 2. Project trust: a project \`.codex/\` layer loads only when it is trusted. Record \`projects.<path>.trust_level = \\"trusted\\"\` in the Codex home config (\`~/.codex/config.toml\`), which is the operator's file and not one this engine writes. 3. Per-hook review: each hook is trusted by hash through the interactive \`/hooks\` command. Automation that cannot take that step runs \`--dangerously-bypass-hook-trust\`, which runs enabled hooks with no persisted trust. Key set: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15). Trust is recorded against this file's hash only: the hook script bytes under .stamity/generated/hooks/codex/ are outside it and can change without re-review, so stamity check is the control for them and for emitted-file drift generally. The role guard is telemetry because PreToolUse carries no agent identity.",
   "hooks": {
     "SessionStart": [
       {
@@ -2398,8 +2398,8 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".codex/agents/stamity-security.toml": "ae2ad071e681381a6dc4480207af99a8f452e43f735f800e5540240613d87057 9819 bytes",
   ".codex/agents/stamity-spec-author.toml": "b44555ffb92c95dc0da5d74fc9a25428c08a8eb8b3edee03627b3a8c48a27e74 11195 bytes",
   ".codex/agents/stamity-test-runner.toml": "48e01ddbe438cb488ff8924072f99ec45fcd969b3424069d9e943ce81c83a000 6881 bytes",
-  ".codex/config.toml": "6cc6cda56cb23939367ebe4f5a42c6ef22b844b01b2d3daebe3b05ed70265c80 3285 bytes",
-  ".codex/hooks.json": "da7da3c05b3165754f956376629a84b8ef5384a2ea389b2b326c26cf9a7475ea 8412 bytes",
+  ".codex/config.toml": "1599271aa6c95c63e3aaa3766ff1cf69c524432b2facf8eaab5dfc44287f2050 3328 bytes",
+  ".codex/hooks.json": "f4e70bf9c8fc6dc22e1897d2e27decc170e10dcbd5529f87469441abe98b8080 8424 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".gitignore": "f8fbe8e8b09bc960be56387909425a4db0d79570de16d3fad0629c041839d681 9 bytes",
   ".stamity/generated/agent-tool-policies.json": "d423255807751afda5b131b6c205e538ae966a05a31e51e4e45a40b2c39f908d 4426 bytes",
@@ -2411,7 +2411,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "efbd318216f717ad551b3dc21791ead1eeb42fc5e522cce737632ef0d71edc0a 15677 bytes",
+  ".stamity/manifest.json": "0799975fc8c8d80427fde583e290d1cffb03103be949e4dbb7b1828f151700e2 15677 bytes",
   "AGENTS.md": "8ff1909d88fe0cc1f01e4aabc1fd49fa004f15cb59a23f6521e2a9e24885a0c8 25245 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

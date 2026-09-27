@@ -60,7 +60,7 @@ everything it would write:
   scope
     declared tools  claude, cursor, copilot, codex
     tool footprint  read, edit, execute, spawn
-    touched paths   CHANGELOG.md, package.json, .github/workflows/**, …
+    touched paths   CHANGELOG.md, package.json, package-lock.json, pnpm-lock.yaml, yarn.lock, dist/**, .github/workflows/**, .gitlab-ci.yml, azure-pipelines.yml, Dockerfile, .dockerignore, docker-compose.yml, compose.yaml, k8s/**, docs/incidents/**, docs/runbooks/**, .stamity/inbox.md
 
   runs on this machine
     no hook or MCP server definitions — this pack wires no commands

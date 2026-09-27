@@ -348,7 +348,9 @@ describe("hooks.json — native command strings and trust controls", () => {
     // and stopping there was the gap: it left the feature flag — the step that
     // makes every other byte here inert — unmentioned.
     expect(document.description).toContain("`features.hooks = true`");
-    expect(document.description).toContain("defaults it OFF");
+    // review/189: the key is written explicitly, so no vendor default is claimed.
+    expect(document.description).toContain("the client's default does not decide it");
+    expect(document.description).not.toMatch(/defaults? (it|the flag )?OFF|OFF by default/u);
     expect(document.description).toContain('`projects.<path>.trust_level = "trusted"`');
     expect(document.description).toContain("`/hooks`");
     expect(document.description).toContain("`--dangerously-bypass-hook-trust`");
@@ -965,8 +967,10 @@ describe("config.toml — one composed document, one writer", () => {
     // The flag sits ahead of the MCP tables, and both survive composition.
     expect(content.indexOf("[features]")).toBeLessThan(content.indexOf("[mcp_servers."));
     expect(content).toContain("[mcp_servers.github]");
-    // Why the key is here at all: the vendor default, on the page that states it.
-    expect(content).toContain("OFF by default in the client");
+    // Why the key is here at all: written explicitly, so the client's default does not decide it
+    // (review/189: no vendor default is claimed; the page read states none).
+    expect(content).toContain("the client's default does not decide it");
+    expect(content).not.toMatch(/OFF by default|defaults? (it|the flag )?OFF/u);
     expect(content).toContain("learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15)");
     expect(content).toContain("`features.codex_hooks`");
     expect(content).toContain("`codex exec --enable hooks`");

@@ -88,13 +88,19 @@ not been run here. Two proofs have since run — the release's route proof, and 
 walk — and between them they executed the LOCAL form of every client's route, a marketplace or a
 plugin directory on disk. They did not execute the same commands as each other, so each block below
 names which one ran what. Neither executed the remote `<owner>/stamity#plugin-dist` source against
-this repository's own distribution, and nothing has since. The branch exists — the 1.9.0 release
-published `plugin-dist`, one orphan commit, tagged `plugins/v1.9.0` — and the walks of a remote
-source ran against a private mirror of it instead. The private-chain rehearsal of 2026-09-22
+this repository's own distribution. The branch exists — the 1.9.0 release first published
+`plugin-dist`, and each release points it at a new orphan commit tagged `plugins/v<version>` — and
+the first walks of a remote source ran against a private mirror of it instead. The private-chain
+rehearsal of 2026-09-22
 pointed Claude Code and Copilot CLI at that mirror pinned at the tag. The Codex walk of 2026-09-24
 added it to codex-cli 0.155.1 at both release tags and at the distribution branch. Both are
 recorded in `.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md`, the Codex walk under its
-"The Codex half (E3)" section. No block on this page is presented as executed when it was not.
+"The Codex half (E3)" section. One walk has since installed from this repository's own public
+distribution: the managed-settings walk of 2026-09-26 declared `zomarit/stamity` at `plugins/v1.9.1`
+through Claude Code's managed settings and installed the plugin at user scope, recorded in
+`.stamity/runs/2026-09-24_enterprise-release/managed-settings-walk.md`. The branch form through
+`marketplace add` at project scope is still unexecuted against it. No block on this page is
+presented as executed when it was not.
 
 `<owner>/stamity` below is your own mirror or this repository, whichever your organization serves
 from. The branch a release publishes the distribution to is `plugin-dist`, and each release also
@@ -107,12 +113,15 @@ claude plugin marketplace add <owner>/stamity#plugin-dist
 claude plugin install stamity@stamity --scope project
 ```
 
-*From the vendor's plugin-marketplaces and CLI reference pages, accessed 2026-09-21; the remote
-source above is unexecuted against this repository's distribution. Its GitHub-source form ran once,
-in the private-chain rehearsal of 2026-09-22: `plugin marketplace add` on a private catalog
-repository whose Claude entry is a `git-subdir` source pinning a private mirror at
-`plugins/v1.9.0`, then the project-scope install from it, both exit 0 on Claude Code 2.1.278. Two
-proofs executed different halves of this route,
+*From the vendor's plugin-marketplaces and CLI reference pages, accessed 2026-09-21; the branch
+form above, added through `marketplace add` and installed at project scope, is unexecuted against
+this repository's distribution. Its GitHub-source form ran twice. The private-chain rehearsal of
+2026-09-22 ran `plugin marketplace add` on a private catalog repository whose Claude entry is a
+`git-subdir` source pinning a private mirror at `plugins/v1.9.0`, then the project-scope install
+from it, both exit 0 on Claude Code 2.1.278. The managed-settings walk of 2026-09-26 declared this
+repository's public distribution, `zomarit/stamity` at `plugins/v1.9.1`, through managed settings
+rather than `marketplace add`, and `claude plugin install stamity@stamity` installed 1.9.1 at user
+scope on Claude Code 2.1.281, exit 0. Two proofs executed different halves of this route,
 both on Claude Code 2.1.278 on 2026-09-20. The route proof took the root's own side and never ran
 these two commands: `claude plugin validate --strict <root>/claude` printed `✔ Validation passed`
 and exited 0, and a `--plugin-dir` run listed the plugin's ids and then ran the setup command. The
@@ -249,7 +258,8 @@ same walk added the mirror at `--ref plugin-dist`, the branch form above, and in
 equal to the `plugins/v1.9.1` tree over 682 files. The local form ran first, on 2026-09-20 on
 codex-cli 0.154.0, against a marketplace on a local path in a scratch `CODEX_HOME`: both commands
 exited 0 with no login, and the installed cache tree was byte-identical to the built root over all
-45 files outside its bundled `runtime/`, which the route proof compared again at the 1.9.1 cut.*
+45 files outside its bundled `runtime/`, which the route proof compared again on 2026-09-26 at
+the 1.10.0 candidate.*
 
 **The `--ref` is not optional, and it matters most for a private fork.** Without it, Codex checks
 out the repository's default branch, which carries no Codex catalog: the distribution's Codex
@@ -417,11 +427,11 @@ vendor-stated, not measured here. Rolling back is uninstall, re-add at the previ
 vendor's reference; the walk did not execute them). For a
 marketplace on a local path there is nothing to update or roll back through the CLI: the plugin
 loads live, so both are a replacement of the tree the marketplace points at *(measured 2026-09-20
-on 1.0.85)*. `COPILOT_AUTO_UPDATE=false`, or
-`autoUpdate: false` in the configuration, turns off the session-start auto-update of FIRST-PARTY
-plugins — the built-in marketplaces — which is skipped in CI by default anyway; a third-party
-marketplace like this one is not auto-updated at all. *From the vendor's CLI plugin reference,
-accessed 2026-09-21.*
+on 1.0.85)*. A third-party marketplace like this one is not auto-updated at all. *From the
+vendor's CLI plugin reference, accessed 2026-09-21.* `COPILOT_AUTO_UPDATE=false`, or
+`autoUpdate: false` in the configuration, stops the CLI downloading newer versions of ITSELF — it
+is off by default in CI — and the CLI's own help names no effect on plugins. *From `copilot help
+environment` and `copilot help config` on Copilot CLI 1.0.88, read 2026-09-27.*
 
 **Cursor: no vendor-documented pin, update or rollback command on 2026-09-21. Codex: a pin is
 the marketplace's `--ref`, and there is no rollback command.** For
@@ -488,13 +498,16 @@ stamity clean -y
 stamity plugin setup --client <csv>
 ```
 
-`clean` removes what the engine wrote: every ledger row and its file, and the generated state.
-It **keeps** your learnings, your handoffs, your overrides under `.stamity/overrides/` and your
-own hooks — none of them is a ledger row, and none of them is the engine's to take. It also
-prints one uninstall command line per client the manifest recorded, so the plugin side can be
-removed the same way it was added.
+`clean` removes what the engine wrote — every ledger row and its file — and then deletes the
+**whole `.stamity/` directory** and everything in it: your learnings, your handoffs, your
+overrides under `.stamity/overrides/`, your run records, your installed packs, and a hooks
+directory of your own if you keep it there. **Save first** whatever of that you want to keep:
+copy it out of `.stamity/` before `clean -y`, and put it back after `plugin setup`.
+`stamity clean --dry-run` writes nothing and names what a real run removes. `clean` also prints
+one uninstall command line per client the manifest recorded, so the plugin side can be removed
+the same way it was added.
 
-There is no migration engine in 1.9.1. Detecting a generated setup, previewing the removals and
+No release through 1.10.0 ships a migration engine. Detecting a generated setup, previewing the removals and
 refusing on a conflict were planned and cut: the clean-then-setup route above is the documented
 one, and it is the one this page will describe until a later minor ships the engine.
 

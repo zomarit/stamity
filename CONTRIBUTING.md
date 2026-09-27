@@ -25,7 +25,7 @@ npm run check
 | Step | Command | What it proves |
 |---|---|---|
 | Leak gate | `npm run gate` | `scripts/leak-gate.mjs` finds no reserved name, credential shape or private-layer reference in any scanned path or file |
-| Typecheck | `npm run typecheck` | TypeScript 7, strict: zero errors across `src/`, `test/` and the root config files |
+| Typecheck | `npm run typecheck` | TypeScript 7, strict: zero errors across `src/`, `test/` and the root `*.config.ts` files |
 | Lint | `npm run lint` | oxlint over the TypeScript surface, ESLint over the JavaScript surface |
 | Test | `npm run test` | The whole suite, all three lanes |
 | Build | `npm run build` | tsdown produces `dist/cli.js` and `dist/index.js` |

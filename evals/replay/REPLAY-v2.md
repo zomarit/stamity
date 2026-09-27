@@ -1,8 +1,9 @@
 # Replay protocol v2 — `REPLAY-v2`
 
-The protocol and the thresholds of the replay that gates the 1.10.0 tag: the changed `/st-work` of Package 16 against
+The protocol and the thresholds of the replay of the changed `/st-work` of Package 16 against
 the 1.9.1 one, on a fixture where the seeds reach review. It implements REQ-CTX-015 as plan
-`docs/plans/011-replay-v2.md` amends it. This file is committed before the first v2 result and is never edited
+`docs/plans/011-replay-v2.md` amends it. That plan's R5 (2026-09-27) took this replay off the 1.10.0 tag and
+moved its canary, pilots and scored runs to REPLAY-v2's own package. This file is committed before the first v2 result and is never edited
 afterwards: a gap a pilot finds is recorded against this file as it stands (§7, §14), or it restarts the pilots under a
 new protocol, `REPLAY-v3`.
 

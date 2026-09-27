@@ -257,9 +257,10 @@ Every gap named in a row above, collected so the list reads without the tables.
 ## What is not applicable, and why
 
 **A07 Identification and Authentication Failures, and A10 Server-Side Request Forgery.** There is
-no authentication surface, and no caller-supplied URL that the engine fetches. It has two network
-paths. One is a signed-metadata fetch at verification time. The other is a `git fetch` against a
-remote the repository already had.
+no authentication surface, and no caller-supplied URL that the engine fetches. It has three network
+paths. One is a signed-metadata fetch at verification time. Another is a `git fetch` against a
+remote the repository already had. The third is the startup update notice, a fixed query to the
+npm registry, at most once a day.
 
 **A09 Security Logging and Monitoring Failures.** There is no logging or monitoring surface, by
 design. No telemetry is collected and nothing is uploaded, so the category's controls have nothing

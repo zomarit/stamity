@@ -371,8 +371,9 @@ the file is kept either way.
 ### In a monorepo, handle each package
 
 Init reports every workspace package that carried its own state directory. The strip reaches
-every one of them. A package's own marked instruction files are stripped in the same pass: its
-`CLAUDE.md`, its `AGENTS.md`, and its `.cursor/rules/`.
+every one of them. A package's own marked instruction files are stripped in the same pass, from
+the same list as the root: its `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` and
+`.github/copilot-instructions.md`, and its `.cursor/rules/`.
 
 What the carry does not read is a package's own state directory. Learnings, manifest and
 overrides come from the root's `.hatch3r/` only. Those packages are named for you rather than

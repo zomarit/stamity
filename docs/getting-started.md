@@ -214,8 +214,11 @@ Four things, because each is about how two parts fit together rather than about 
   manifest, because writing one is what it does. `learn`, `handoff` and `ledger` ask only that
   `.stamity/` exists.
 - **Which verbs need git.** `init`, `sync` and `check` read git where it is, and carry on where
-  it is not. The `worktree` verbs need a `git` binary on PATH and refuse without one. The rest
-  never call git.
+  it is not. So do `handoff`, which records the branch and commit a handoff was made on and
+  checks that branch on resume, and `config detect`, which reads the repository's remote to
+  identify its platform: without git, each records or reports nothing for that part and carries
+  on. The `worktree` verbs need a `git` binary on PATH and refuse without one. The rest never
+  call git.
 - **Run `sync` after any `config` change.** `config` edits state and never regenerates managed
   output, so no client file moves until a sync runs. The one exception is `config mcp add`,
   which provisions `.env.mcp` and its `.gitignore` line on the spot.
@@ -262,7 +265,8 @@ Three things, and no more.
 
 Two of the nine touchpoints reach further. `/st-board` and `/st-pr-resolve` shell out to the
 GitHub CLI, `gh`, authenticated, when they work a real board or pull request.
-[`SECURITY.md`](../SECURITY.md) documents every one of these paths.
+[`SECURITY.md`](../SECURITY.md) documents the three engine paths above; it does not cover the
+two touchpoints' `gh` calls.
 
 ## When something looks wrong
 

@@ -146,7 +146,7 @@ export const CODEX_SKILLS_LIST_BUDGET_CHARS = 8_000;
 /** The upstream gap that makes glob down-conversion necessary, cited in every notice. */
 const LOSSY_GAP = "open codex#34002";
 
-/** The vendor page carrying the `features.hooks` key and its default, with its read date. */
+/** The vendor page carrying the `features.hooks` key, with its read date. */
 const CONFIG_REFERENCE_PAGE =
   "learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15)";
 
@@ -165,17 +165,17 @@ const CONFIG_REFERENCE_PAGE =
  */
 const HOOK_TRUST_STEPS = [
   "Three steps stand between this file and a hook the client runs.",
-  "1. Feature flag: `features.hooks = true`. The client defaults it OFF (deprecated alias",
-  `   \`features.codex_hooks\`), so this file is not read until it is on. ${CODEX_CONFIG_FILE}`,
-  "   carries it; the per-invocation equivalent is `codex exec --enable hooks`, which is",
-  "   shorthand for `-c features.hooks=true`.",
+  "1. Feature flag: `features.hooks = true` (deprecated alias `features.codex_hooks`); this file",
+  `   is not read while it is off. ${CODEX_CONFIG_FILE} writes it explicitly, so the client's`,
+  "   default does not decide it. The per-invocation equivalent is `codex exec --enable hooks`,",
+  "   which is shorthand for `-c features.hooks=true`.",
   "2. Project trust: a project `.codex/` layer loads only when it is trusted. Record",
   '   `projects.<path>.trust_level = "trusted"` in the Codex home config (`~/.codex/config.toml`),',
   "   which is the operator's file and not one this engine writes.",
   "3. Per-hook review: each hook is trusted by hash through the interactive `/hooks` command.",
   "   Automation that cannot take that step runs `--dangerously-bypass-hook-trust`, which runs",
   "   enabled hooks with no persisted trust.",
-  `Key set and default: ${CONFIG_REFERENCE_PAGE}.`,
+  `Key set: ${CONFIG_REFERENCE_PAGE}.`,
 ] as const;
 
 /** The one transformable file in a projected skill directory. */
@@ -254,7 +254,7 @@ const CODEX_FACTS: AdapterDialectFacts = {
       name: "hook enforcement",
       value:
         "exit 2 denies supported tool calls after native /hooks trust; the core role guard is telemetry because PreToolUse has no agent identity. Hosted tools and specialized paths may bypass hooks; use native sandbox/permissions for enforcement. " +
-        "Three steps stand between the emitted hooks.json and a hook that runs — `features.hooks = true`, which this engine writes into .codex/config.toml and the client defaults OFF; `projects.<path>.trust_level = \"trusted\"` in the operator's own Codex home config; and a per-hook hash review through the interactive /hooks command, or --dangerously-bypass-hook-trust for automation that cannot take that step — and with all three in place headless `codex exec` on codex-cli 0.154.0 still loaded no project hook layer at all in this repository's 2026-09-15 measurement, so a hook is enforcement in the interactive client and nothing in that lane.",
+        "Three steps stand between the emitted hooks.json and a hook that runs — `features.hooks = true`, which this engine writes explicitly into .codex/config.toml, so the client's default does not decide it; `projects.<path>.trust_level = \"trusted\"` in the operator's own Codex home config; and a per-hook hash review through the interactive /hooks command, or --dangerously-bypass-hook-trust for automation that cannot take that step — and with all three in place headless `codex exec` on codex-cli 0.154.0 still loaded no project hook layer at all in this repository's 2026-09-15 measurement, so a hook is enforcement in the interactive client and nothing in that lane.",
     },
     {
       name: "per-agent tool allowlist",
@@ -813,8 +813,8 @@ export function buildAgentToml(
  * configuration never point at a file that is not there.
  *
  * `[features] hooks = true` is the adapter-level table. It is not decoration:
- * the client defaults the flag OFF, so every byte of {@link CODEX_HOOKS_FILE}
- * was inert without it — the emission looked complete and enforced nothing.
+ * the client reads no byte of {@link CODEX_HOOKS_FILE} while the flag is off,
+ * and writing it explicitly means the client's default does not decide it.
  * The other two gates ({@link HOOK_TRUST_STEPS}) are the operator's to close,
  * and the comment above the key says so rather than leaving the flag to read
  * as the whole story.
@@ -850,8 +850,8 @@ export function composeConfigToml(core: CoreEmissionPlan, ctx: EmissionContext):
   // at the top of the file behind the MCP prose.
   const features = serializeTomlDocument({
     comments: [
-      "Lifecycle hooks: OFF by default in the client, so an emitted hooks.json does nothing",
-      "until this key turns it on. Enabling it here is step 1 of 3.",
+      "Lifecycle hooks: an emitted hooks.json is read only while this key is on. It is written",
+      "explicitly, so the client's default does not decide it. Enabling it here is step 1 of 3.",
       "",
       ...HOOK_TRUST_STEPS,
       "",

@@ -809,7 +809,7 @@ Build it the way the release does:
 
 ```sh
 npm pack --pack-destination .
-node scripts/build-plugin-runtime.mjs --tarball stamity-<version>.tgz --out dist/plugin-runtime
+node scripts/build-plugin-runtime.mjs --tarball <scope>-stamity-<version>.tgz --out dist/plugin-runtime
 node scripts/build-plugin-distribution.mjs \
   --out dist/plugins \
   --runtime dist/plugin-runtime \
@@ -818,12 +818,15 @@ node scripts/build-plugin-distribution.mjs \
 ```
 
 The runtime is built from the **tarball**, not from the working tree: `npm pack` is the only thing
-that knows what `files` publishes. Both trees go under `dist/` because it is ignored; an untracked
+that knows what `files` publishes. npm names a scoped package's tarball after both halves of its
+name, `<scope>-stamity-<version>.tgz` — `zomarit-stamity-<version>.tgz` in this repository — and
+the release workflow reads that name from `npm pack --json` rather than spelling it. Both trees
+go under `dist/` because it is ignored; an untracked
 tree beside the checkout enters `git ls-files --others` and every tree-cleanliness check that
 reads it. The two provenance flags are inputs rather than clock reads, which is what makes two
-builds of one commit produce byte-identical archives — pass them, or the builder falls back to
-this checkout's `HEAD` and you lose that property the moment the build moves to a machine that
-has no git.
+builds of one commit produce byte-identical archives — pass them, or the builder reads this
+checkout's `HEAD` instead, and on a machine with no git it cannot, so it refuses the build and
+asks for `--source-commit`.
 
 One thing the recipe leaves under `dist/`: `package.json` publishes `files: ["dist"]`, so a local
 `npm pack` or `npm publish` run after it ships `dist/plugins` and `dist/plugin-runtime` inside the
@@ -834,7 +837,9 @@ Everything the built tree names about your fork comes from the `stamity.distribu
 your `package.json`: `branch` (default `plugin-dist`), `tagPattern` (default `plugins/v<version>`),
 the optional `ownerEmail`, and `sources.<client>`, which decides what each catalog's `source`
 object is — a `git-subdir` entry pointing at your https remote, a `github` entry, an `archive`
-entry naming a release asset and its digest, or an `npm` entry. `scripts/distribution-identity.mjs`
+entry whose `url` names a release asset, or an `npm` entry. The block takes `kind`, `url`, `repo`,
+`path` and `registry` only; an archive's digest is not one of them, because the builder computes it
+from the archive it writes and puts it in the catalog. `scripts/distribution-identity.mjs`
 validates the block and refuses an `ssh://` or `git@` remote and a URL carrying a read token:
 authentication belongs to the fetching client, never to a published catalog. Rebuild after
 editing the block and every catalog in the tree changes with it; nothing else has to.

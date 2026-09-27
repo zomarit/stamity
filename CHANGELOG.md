@@ -169,10 +169,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   model pair, so a run on another pair is never composed with a run on this one; it reads a
   reported `claude-opus-5-5[1m]` as `claude-opus-5-5`, and a summary that records none of the
   key's fields now matches no key instead of every key.
-- **Run 33 is the 1.10.0 release run, the first on the new model pair.** A profile change starts
-  a new baseline, so run 33 measured every one of SET-v7's 102 cases in full, with calibration
-  first (5 of 5 matched), and composed nothing with an earlier run. Golden, guardrail hold,
-  benign-twin false refusals and trigger-probe accuracy read RUN-33-RESULT, against thresholds
+- **Run 34 is the 1.10.0 release run, the first on the new model pair.** A profile change starts
+  a new baseline, so run 34 measured every one of SET-v7's 102 cases in full, with calibration
+  first, and composed nothing with an earlier run. It ran on one account throughout: run 33, at
+  the same candidate, ended terminal after a mid-run account switch changed the client's ambient
+  text, and stays as history. Golden, guardrail hold,
+  benign-twin false refusals and trigger-probe accuracy read RUN-34-RESULT, against thresholds
   declared before the run, on the Claude profile and rubric v7.
 - **The plugins guide records the Codex remote walk.** 1.9.1's guide said Codex's remote form had
   not run. It ran on 2026-09-24 on codex-cli 0.155.1 against a private mirror of the distribution:

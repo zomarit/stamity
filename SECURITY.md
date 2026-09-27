@@ -197,13 +197,14 @@ properties of that file, rather than properties of a maintainer's laptop.
   that carries a parent, because a head with history is a source branch whatever the manifest
   called it; and a release tag that already names a different commit.
 
-A second release workflow ships in this package: `.github/workflows/fork-release.yml`, which lets a
+A second release workflow ships in this repository: `.github/workflows/fork-release.yml`, which lets a
 private fork release itself. It does nothing in this repository. Its first job sees the canonical
 repository, ends green with a notice, and every other job is skipped, so it publishes nothing from
 here and reads no secret here. In a fork that arms it, its `publish` job holds `contents: write`
-and `packages: write` and no OIDC token. It waits for a reviewer in the fork's `fork-release`
-environment, and for a registry other than GitHub Packages it reads the fork's own stored token,
-`STAMITY_REGISTRY_TOKEN`. The fork guide, `docs/enterprise-forks.md`, describes that setup.
+and `packages: write` and no OIDC token. It runs in the fork's `fork-release` environment, which
+holds it for a reviewer only once the fork adds a required reviewer there — platform setup, like
+this repository's own half below — and for a registry other than GitHub Packages it reads the
+fork's own stored token, `STAMITY_REGISTRY_TOKEN`. The fork guide, `docs/enterprise-forks.md`, describes that setup.
 
 What no file here can do is the platform half, and that is maintainer setup rather than code. It is
 three things. A required reviewer on the `npm-publish` deployment environment, a `v*` tag ruleset,
@@ -226,10 +227,10 @@ where it depends on it.
   of those: `.claude/settings.json`, `.cursor/hooks.json`, `.github/hooks/stamity.json` and
   `.codex/hooks.json`. A hook a PACK supplies lands in one of them, never under
   `.stamity/generated/`. On Codex, three things decide it rather than one. The first is
-  `features.hooks = true` in `.codex/config.toml`, which this engine emits; the vendor states no
-  default. The second is the project's trust level. The third is the per-hook review through
-  the interactive `/hooks` command, or `--dangerously-bypass-hook-trust` for automation that cannot
-  take that step. With all three in place, headless `codex exec` on codex-cli 0.154.0 loaded no
+  `features.hooks = true` in `.codex/config.toml`, which this engine writes explicitly, so the
+  client's default does not decide it. The second is the project's trust level. The third is the
+  per-hook review through the interactive `/hooks` command, or `--dangerously-bypass-hook-trust`
+  for automation that cannot take that step. With all three in place, headless `codex exec` on codex-cli 0.154.0 loaded no
   project hook layer at all in the 2026-09-15 measurement. So a hook on that client is enforcement
   in the interactive session and nothing in the headless lane (`src/adapters/codex.ts`, the
   `hook enforcement` fact).
