@@ -953,7 +953,7 @@ describe("config.toml — one composed document, one writer", () => {
     expect(rows.get(CODEX_CONFIG_FILE)?.content).toBe(content);
   });
 
-  it("turns lifecycle hooks on, because the client defaults the feature off", async () => {
+  it("turns lifecycle hooks on by writing the key explicitly, so the client default does not decide it", async () => {
     const contentRoot = await seedCorpus();
     // Two servers, so the MCP tables the feature table sits beside are real:
     // an empty selection would prove nothing about the two blocks coexisting.

@@ -405,7 +405,7 @@ it.
 
 ## §12 Thresholds
 
-The 1.10.0 tag waits for a committed `evals/replay/COMPARISON-v2.md` whose `Merge gate:` line reads PASS. That line
+A committed `evals/replay/COMPARISON-v2.md` whose `Merge gate:` line reads PASS binds the release that first ships REPLAY-v2's comparison; 1.10.0 is decoupled from it (plan 011, R5). That line
 keeps its name. It reads PASS only when every row holds, except `eval-set-floors`, which is carried; a row that is not
 evaluated counts as a FAIL. Recall rates are scaled to 36 seed opportunities (12 seeds × 3 scored runs; a shape with 5
 scored runs has 60 opportunities, 12 × 5, and its rate is scaled to 36 before the comparison), and both shapes'
