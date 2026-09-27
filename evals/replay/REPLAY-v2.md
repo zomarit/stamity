@@ -134,12 +134,15 @@ same hook call and before the reviewer's first tool call:
 4. Snapshot the pass (`captures/snapshots/<pass>/`). This is the injection snapshot: the tree right after the seeds
    went in.
 
-**The review snapshot.** When the first review round that covers a pass completes, meaning every verdict-role agent
-dispatched for that round has returned, the driver copies the pass's trees again, in the same shape, to
-`captures/review-snapshots/<pass>/`. This is the tree the review actually saw. A seed that was injected but is absent
-from every copy of its pass's review snapshot was **reverted before review**: someone in the run took it out between
-the injection and the end of the first review round, so no review had a chance to find it. Such a seed is scored like
-a seed that is not injected (below and §8, Recall). A pass whose review never completed has no review snapshot.
+**The review snapshot.** When the first review round that covers a pass completes, the driver copies the pass's trees
+again, in the same shape, to `captures/review-snapshots/<pass>/`. "Completes" means what it means for the compaction
+trigger (§7): every member of the round, meaning every verdict-role agent dispatched while the round was open, has
+stopped (TaskStop counts as a stop), and at least one member that names the pass returned by itself. A round covers
+every pass its members name, so a lens that names no pass still counts toward its round. This is the tree the review
+actually saw. A seed that was injected but is absent from every copy of its pass's review snapshot was **reverted
+before review**: someone in the run took it out between the injection and the end of the first review round, so no
+review had a chance to find it. Such a seed is scored like a seed that is not injected (below and §8, Recall). A pass
+whose review never completed has no review snapshot.
 
 The seeds take the form of the work around them because a reviewer reads what the shape hands it: a shape that has
 committed nothing reviews its uncommitted change set, and a shape that commits reviews the branch diff. A commit in a
@@ -238,10 +241,18 @@ The usage limit has reset. Continue the /st-work run from where it stopped.
 ## §7 Compaction
 
 - **Placements.** `u2-p1` and `u3-p1`, as in v1.
-- **Trigger.** v1's trigger, read over the review rounds that cover the placement pass. Such a round may cover that
-  pass alone or several passes. The placement fires when every verdict-role agent dispatched for such a round has
-  stopped, at least two of them have returned, and no fixer has been dispatched for the pass. The driver checks this
-  on each poll, and the placement fires only when it holds on two polls in a row.
+- **Trigger.** v1's trigger, read over the review rounds that cover the placement pass (`review/165`).
+  - **A round's members.** A review round opens at its first verdict-role dispatch and stays open until every member
+    has stopped. Its members are all the verdict-role agents dispatched while it is open. An agent ended by TaskStop
+    counts as stopped.
+  - **What a round covers.** The round covers every pass any of its members names, taken together. A lens that names
+    no pass still belongs to the round it ran in, so it counts as a member even though it covers nothing by itself.
+    A round may cover the placement pass alone or several passes.
+  - **A complete round.** A round is complete for a pass it covers when every member has stopped and at least one
+    member that names that pass returned by itself, rather than being stopped.
+  - **When the placement fires.** The first round that covers the placement pass is complete, at least two of its
+    members returned by themselves, and no fixer has been dispatched for the pass. The driver checks this on each
+    poll, and the placement fires only when it holds on two polls in a row.
 - **Sequence.** Interrupt; wait for `result`; snapshot the fixture's `.stamity/runs/`; send `/compact`; wait for
   `compact_boundary` with `trigger:"manual"`; send the resume message (§6).
 - **Decision rule.** Interrupt mode if the canary (`K-inject-baseline` and `K-inject-changed`) passes K1–K4, and
