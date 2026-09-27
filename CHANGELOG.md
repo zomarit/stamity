@@ -29,6 +29,219 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before anything is published.
 -->
 
+## [1.10.0] - 2026-09-27
+
+### Added
+
+- **A fork can release itself through `.github/workflows/fork-release.yml`.** The workflow releases
+  a fork's CLI, its plugin distribution and its APM refs from one `v<version>` tag. It ships in
+  every copy of this repository and does nothing until the fork sets the repository variable
+  `STAMITY_FORK_RELEASE` to its own `<owner>/<repo>` and `STAMITY_RELEASE_REGISTRY` to its
+  registry's https URL. In this repository every run ends green with a notice, because the
+  canonical release still goes through `release.yml` alone. An armed run proves the tag, the
+  version, the branch the tag is reachable from and the package's identity, runs the canonical
+  release's ladder, and then waits for a reviewer in the fork's `fork-release` environment. After
+  that it publishes the tarball, pushes the distribution branch and its `plugins/v<version>` tag,
+  and creates a GitHub release carrying the tarball, every plugin archive, a `.sha256` file for
+  each and `release.json`. A rerun publishes nothing twice, and a dispatch is a dry run unless
+  `dry_run` is set to false. A fork release is proved by checksums and the registry's own sign-in,
+  not by provenance: npm provenance needs a public source repository, and GitHub's build
+  attestations for a private repository need GitHub Enterprise Cloud, so they are not built. The
+  upstream lane never pushes a change under `.github/workflows/`, so the workflow reaches a fork
+  only through a reviewed push: the update arrives as the `Upstream <tag> needs a reviewed push`
+  issue, and a person reads the workflow and pushes it. `docs/enterprise-forks.md`, **Release your
+  fork**, is the guide. This is a repository surface: the published package still carries `dist`
+  alone.
+- **One command sets a fork's identity.** `node scripts/fork-identity.mjs --repository <url>`
+  replaces the copy-paste block in the fork guide. It sets the package name to `@<scope>/stamity`,
+  the repository, homepage and bugs URLs and the publisher, moves the two Renovate presets and
+  regenerates the plugin and APM manifests. `--registry <url>` makes a fork that publishes its own
+  CLI: it removes `private` and sets `publishConfig.registry`, which the release workflow needs.
+  `--scope` names an npm scope other than the owner. The script checks the identity before it
+  writes anything, refuses to overwrite a file with uncommitted edits, moves no byte on a rerun,
+  and under `--check` writes nothing and names each file that differs. The plugin id, the
+  marketplace name and the `/stamity:` namespace stay `stamity` in every fork.
+- **An organization can roll the Claude Code plugin out through managed settings.** A distribution
+  tree built for Claude now carries `admin/claude-managed-settings.json`, rendered from the fork's
+  identity. It declares the marketplace for every user, turns the plugin on, admits only that
+  marketplace, and refuses to start a client older than 2.1.277. The fork guide's new section,
+  **Roll the plugin out to your organization**, says where the file goes on macOS, Linux and
+  Windows, how managed sources rank, and how the file fails closed. The template was walked on
+  Claude Code 2.1.281 in a Linux container, and the guide carries what the walk found. Each
+  developer still starts Claude Code once, past its first-run screens, before the client knows
+  the managed marketplace, and then installs the plugin once with
+  `claude plugin install stamity@stamity`. An organization that serves a mirror of the
+  distribution sets `repo` to its mirror in both entries, the declared source and the allowlist
+  entry, by hand: an allowlist entry that differs from the declared source by one character blocks
+  every marketplace. The plugins guide adds Cursor's team marketplace and Codex's workspace route
+  as the other two organization routes.
+- **An enterprise quickstart page.** `docs/enterprise-quickstart.md` puts the enterprise route in
+  order: who does what (admin, platform team, developers), then day 0 the fork, day 1 the release
+  and the rollout, and day 2 the updates. Each step is one sentence with a link to the guide
+  section that holds its commands. The page sits in the site's Guides before the fork guide, in
+  `llms.txt` and in the README's map.
+- **Sub-agents write their full report to disk and hand `/st-work` a digest.** The implementer,
+  the fixer, the spec-author and a test-runner whose gates all pass write their report to
+  `.stamity/runs/<run-id>/reports/<pass>-<role>-r<N>.md` and return a short digest: the status,
+  the report path, every Critical and Warning finding on one line each, Minors as a count with
+  their ids, every security-relevant finding in full, contract-delta rows in full, and at most
+  1,500 characters of prose. On Claude Code in the repository layout, the reviewer and the three
+  lenses do the same, through a `Write` the pre-tool-use guard limits to their own role's reports.
+  On Cursor, Copilot CLI, Codex and a Claude Code plugin install they still return in full, and
+  the capability disclosure says so. A `BLOCKED_*` return, a red test-runner return and a
+  researcher return are never digested. Each run's `reports/` folder carries a `.gitignore` of
+  `*`, so reports stay local and the ledger stays the record.
+- **`stamity ledger` writes and closes a run's findings.** A hidden plumbing verb, kept off
+  `stamity --help` like `learn` and `handoff`, is now the one writer of a run's findings ledger.
+  `ledger append` files a report's `stamity-findings` block, or a block on `--stdin`, as one
+  `open` row per finding and prints each new row's id. `ledger close` applies a re-review's
+  closures for exactly the ids handed to it in `--ids`, or one manual transition with its
+  rationale. `ledger status` prints the resume card. A row can carry `report`, the report it came
+  from, and `decision_needed: true`, which the orchestrator signs off in the run record before any
+  fixer acts on it. Writes are serialized under a lock and land through a temp file and a rename.
+- **`/st-work` dispatches point at the plan instead of restating it.** A build or fix dispatch is
+  at most 15 lines: it names the plan path and the unit id, never a line number, plus the run's
+  own parameters. A fixer gets the report path and the ledger ids it answers, with the sign-off
+  beside each `decision_needed` id. A plan made inside the run is written once to
+  `.stamity/runs/<run-id>/plan.md`, and the run record's head names the plan and the exact command
+  line. When one unit's change moves something a later unit relies on, the spec-author amends
+  that later unit's cell in place with a dated `amended` line, and an implementer whose cell no
+  longer resolves returns `BLOCKED_DEPENDENCY`.
+- **A compacted `/st-work` run finds its place again from the resume card.** After a compaction,
+  the session-start hook on Claude Code and Codex appends a card of at most 2,000 characters,
+  recomputed from disk: the run in progress, its plan and command line, the open ledger rows, the
+  reports with no ledger row yet, and the lane worktrees. `stamity ledger status` prints the same
+  card on every client, and `/st-work` tells the orchestrator to run it by hand where the client
+  does not re-run its session-start hook after a compaction. `/st-work`'s body is reordered so the
+  dispatch contract, the return contract and the review loop sit in its first 18,000 characters,
+  inside the part Claude Code re-attaches after a compaction.
+- **The resume card's reads are bounded by count as well as by size.** The card reads a ledger
+  only up to 4 MiB; over that it says the ledger is too large to read and prints no open count,
+  never a partial one. It checks at most 256 reports that no ledger row names and counts the rest
+  as `not checked`, never as clean. It walks run folders newest first and stops at the first run
+  in progress. The hook and `stamity ledger status` apply the same bounds.
+- **`/st-work` classes a stopped sub-agent before it retries.** A stall or a dropped connection
+  resumes the same agent. A usage limit that resets within 12 hours is waited out; a later reset
+  stops the run as `BLOCKED_DEPENDENCY` naming the reset time. A limit with no reset lets a build
+  role run one model class lower and no further, while the verdict roles and the spec-author never
+  drop a class. Each event is one line in the run record.
+- **A release check times the guard.** `node scripts/hook-latency.mjs` times the Claude
+  pre-tool-use guard against node's own start, over 7 runs after a warm-up, for a governed read
+  and an allowed write. It prints the medians and exits 0 when both overheads are within 15 ms
+  (`--budget` moves the bar), 1 when one is over, and 2 when it cannot run. It runs locally, never
+  in CI, and the release checklist runs it before each tag.
+- **A replay instrument compares `/st-work` before and after a change, shipped as tooling.**
+  `evals/replay/REPLAY-v1.md` and `evals/replay/REPLAY-v2.md` are the protocols, each committed
+  before its first result, with the thresholds for the quality floor (recall of seeded defects,
+  security seeds, verdicts, compaction loss) and for the savings (the orchestrator's loop
+  characters and sub-agent tokens). `scripts/replay/` builds the fixture, reads findings with a
+  deterministic matcher and no model judge, measures and scores a run, and writes the comparison;
+  every command that reads or writes results takes `--protocol v1|v2`. REPLAY-v2's fixture,
+  `evals/replay/v2/`, puts the seeded defects in when review starts, so they reach the reviewers
+  instead of being fixed first. v1's did not, which is why its two pilots stay in
+  `evals/replay/runs/` as unscored evidence. The driver that runs the client and injects the seeds
+  is not part of this repository; REPLAY-v2 says what it must do. No v2 canary, pilot or scored
+  run is committed, and `evals/replay/COMPARISON-v2.md` does not exist yet. These are repository
+  surfaces: the published package still carries `dist` alone.
+
+### Changed
+
+- **1.10.0 does not wait for the replay.** The release was planned to wait until REPLAY-v2's
+  comparison read `Merge gate: PASS`. Its canary failed three times, each time on a different way
+  the orchestrator under test handled the injected seeds, so the maintainer took the replay out of
+  this release. The context-economy changes above (the digests and report writes, the ledger
+  verb, pointer dispatch, the resume card and the body order) ship without the replay's
+  measurement of them. The canary, the pilots and the scored runs move to REPLAY-v2's own later
+  work package, and the quality floor binds the first release that ships REPLAY-v2's comparison.
+- **Hooks declare their time budgets.** Every session-start hook, the resume card and the tamper
+  notice, now declares a 30-second timeout on all four clients, in repository mode and in plugin
+  roots, and Claude Code's ConfigChange tamper notice declares the same. The pre-tool-use guard
+  and the review gate declare none, on purpose: a Claude Code PreToolUse hook that times out lets
+  the call through, and the review gate's worst case on Windows is about 34.6 s. A test holds the
+  emitted guard, session-start, review-gate and tamper-notice scripts under byte and line
+  ceilings. In a Claude Code repository set up by 1.9.1, `stamity check` names
+  `.claude/settings.json` until `stamity sync` rewrites it.
+- **The `claude` eval profile moves to Opus 5.5 at high effort.** In
+  `evals/model-profiles-v1.json` the scenario model moves from `claude-opus-5` to
+  `claude-opus-5-5` at `high` reasoning effort, because Opus 5.5's client default is medium and
+  runs 15 to 32 measured the scenario at high. The judge stays `claude-fable-5-1`. The profile
+  moved in place, with a dated paragraph in `evals/SET-v7.md`. The comparator key now carries the
+  model pair, so a run on another pair is never composed with a run on this one; it reads a
+  reported `claude-opus-5-5[1m]` as `claude-opus-5-5`, and a summary that records none of the
+  key's fields now matches no key instead of every key.
+- **Run 33 is the 1.10.0 release run, the first on the new model pair.** A profile change starts
+  a new baseline, so run 33 measured every one of SET-v7's 102 cases in full, with calibration
+  first (5 of 5 matched), and composed nothing with an earlier run. Golden, guardrail hold,
+  benign-twin false refusals and trigger-probe accuracy read RUN-33-RESULT, against thresholds
+  declared before the run, on the Claude profile and rubric v7.
+- **The plugins guide records the Codex remote walk.** 1.9.1's guide said Codex's remote form had
+  not run. It ran on 2026-09-24 on codex-cli 0.155.1 against a private mirror of the distribution:
+  `marketplace add` at `--ref plugins/v1.9.0` and `plugin add` both exited 0 without a Codex
+  login, the installed cache matched the tag's `codex/` tree over 681 files, and the same walk
+  installed from `--ref plugin-dist`.
+
+### Fixed
+
+- **The Codex install line names the distribution branch.** The Codex root README and the plugins
+  guide printed `codex plugin marketplace add` with no `--ref`. Without it, codex-cli 0.155.1
+  checks out the repository's default branch, which has no Codex catalog, falls back to its Claude
+  catalog and installs the npm package that catalog names, and both commands still exit 0. On the
+  private mirror the walk used, that was the public package, with no `runtime/` and no hooks. The
+  line now reads `--ref <distribution branch>`, `plugin-dist` for this repository, and the root
+  README's pin and rollback lines use the release tag, `plugins/v<version>` for this repository.
+- **Plugin READMEs name the distribution refs the build resolved.** The root and distribution
+  READMEs render the branch and tag pattern from the resolved `stamity.distribution`, so a fork's
+  own refs appear there. The Copilot CLI root README adds, pins and rolls back at those refs and
+  says what stands behind its pin and rollback lines.
+- **`check` run through an installed plugin root's locator finds that root.** When no plugin-root
+  variable is set, the locator hands its root to `check` as `PLUGIN_ROOT` in the child's
+  environment, so the `plugin-runtime` row passes instead of warning that no plugin root is in the
+  environment. The warning that remains names both fixes: run `check` through the installed root's
+  locator, or set `PLUGIN_ROOT` to that root.
+- **The Claude install note says what the client writes.** The note in `stamity-plugin.json` and
+  the Claude root README now say that `claude plugin install … --scope project` writes
+  `enabledPlugins` alone into the project's `.claude/settings.json`, and that `marketplace add`
+  declares the marketplace in the configuration directory's user settings, as measured on Claude
+  Code 2.1.278 and 2.1.280.
+- **A version number is no longer read as a reviewer's confidence.** The measurements page read
+  a stated confidence out of a verdict line, and a version such as `1.10.0` or `1.9.0` on that line
+  was read as one. The reading now refuses a number that is part of a version, and skips a value
+  above 1, which no confidence is.
+
+### Security
+
+- **A fork release keeps its registry token behind the environment's reviewers.** The fork guide
+  files `STAMITY_REGISTRY_TOKEN` as an environment secret on `fork-release`, created first and
+  with required reviewers, not as a repository secret, which any workflow a pushed branch adds
+  could read. Only the `publish` job names that environment. `probe` and `gates` hold no secret
+  and only `contents: read`; `publish` holds `contents: write` and `packages: write` and no OIDC
+  token, checks nothing out, and acts only after it has verified every digest, the tarball's own
+  name, version and registry, and every `.sha256` file against what `gates` proved. The per-run
+  `GITHUB_TOKEN` goes only to a registry whose host is exactly GitHub Packages' npm host, never to
+  a lookalike. A refused registry value is never printed, and `scripts/fork-identity.mjs` never
+  echoes an argument's value. `SECURITY.md` names the workflow and its grants.
+- **A verdict role's report write reaches only its own reports.** On Claude Code in the
+  repository layout, the guard lets the reviewer and each lens `Write` only a regular file that
+  matches its own role's report pattern under the repository root. Symbolic links, `..` segments,
+  hard links, a Windows reserved device name in any segment, `Edit` and `NotebookEdit` are
+  refused, and a pass name carrying another role's word opens no other role's report. A plugin
+  install grants no report write.
+- **What reaches the committed ledger is stripped, and a close touches only the ids it was
+  handed.** `ledger append` and `ledger close` strip line breaks, control characters, bidi and
+  zero-width marks, the line and paragraph separators and the Unicode tag block from each
+  finding's locator and summary and from each rationale, and name on stderr every row that lost
+  tag characters. `append --report` refuses a `--source` other than the role in the report's name,
+  and a report already filed. `close --report` requires `--ids`, and a closure naming an id not
+  handed, not in the ledger or of another run refuses the whole close with nothing written.
+- **The resume card is bounded and screened.** It prints counts and pointers only, never a
+  finding's text or a report's body, and names a file as a report only when its name matches
+  `<pass>-<role>-r<N>.md`. Each file and folder it reads is checked with `lstat` first, so a
+  symbolic link at that name is never followed, and every read is under a byte bound. Each field
+  is flattened to one line of at most 200 characters, and the whole card is screened against the
+  session-start screen: a hit prints one withheld line naming the run and the pattern id, never
+  the matched text. An unreadable ledger prints as could not be read, never as zero open rows, and
+  `ledger status --json` echoes the full lists only when they pass the same screen.
+
 ## [1.9.1] - 2026-09-23
 
 ### Changed
