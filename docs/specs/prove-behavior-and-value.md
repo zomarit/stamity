@@ -172,9 +172,12 @@ As built at `e995fe02`: the profile is `evals/model-profiles-v1.json:9-10`, docu
 `previousRun` keeps only a run of the same key (`:241-254`). `evals/SET-v7.md` carries the dated
 paragraph (`:484-493`) and § 8's comparator sentence (`:540-548`). Tests:
 `test/evals/modelProfiles.test.ts:29`; `test/evals/manualRunner.test.ts:1332`, `:1537`, `:1562`,
-`:1582` and `:1596`. Not yet measured: the 1.10.0 release run (run 33) does not exist at
-`e995fe02`, so the second criterion above is open. Composing runs and the "first run of this
-configuration" line belong to the route of record's driver, which lives outside this repository;
+`:1582` and `:1596`. Measured on 2026-09-27: run 34, the 1.10.0 baseline, measured all 102 cases at
+three samples with calibration first (`evals/runs/2026-09-27-run-34/RESULTS.md:14`, `:42`,
+`:197-201`), and its advisory-repeat section reads "first run of this configuration" (`:191`), so
+the second criterion above holds. Run 35 re-measured two cases and composed with run 34 on the same
+pair (`evals/runs/2026-09-27-run-35/RESULTS.md:12`, `:297`). Composing runs and the "first run of
+this configuration" line belong to the route of record's driver, which lives outside this repository;
 SET-v7 says the "never composed" half holds once that driver compares the pair too
 (`evals/SET-v7.md:488-490`).
 
@@ -341,12 +344,14 @@ README's mission or tagline sentences.
   run of record on the hand pages".
 
 Amended 2026-09-26 (plan 010 file 2): the carried-to criterion added at the 1.9.1 cut is retired
-together with the clause: run 33 is 1.10.0's own run, measured in full. The stated-confidence reading
-ignores version numbers.
+together with the clause: runs 34 and 35 are 1.10.0's own run of record. Run 34 measured every case
+in full on the new model pair, and run 35 re-measured the two cases the Invariant 2 tightening moved,
+composed with run 34. The stated-confidence reading ignores version numbers. (Runs named 2026-09-27:
+run 33 ended terminal, and runs 34 and 35 replace it.)
 
 - GIVEN the tree after the cut THEN `RUN_OF_RECORD_CARRIED_TO`, `RUN_OF_RECORD_CANDIDATE` and
-  `carriedToRelease` are absent, and README, the doctrine and the page name run 33 as the 1.10.0
-  release run, measured in full.
+  `carriedToRelease` are absent, and README, the doctrine and the page name run 35 as the 1.10.0
+  release run, composed with run 34, and run 34 as the run that measured every case in full.
 - GIVEN a verdict line "medium / 0.60 … 1.10.0" THEN the stated confidence reads 0.60. GIVEN "approve
   for 1.10.0" alone THEN no confidence is read.
 - GIVEN a verdict line naming a two-part version ("on 1.9", "the 1.10 line") or a version ending in
@@ -360,9 +365,9 @@ by a word character or by a dot and a word character (`src/cli/docs/measurements
 `test/cli/docs/measurements.test.ts:724-738`. Not yet built, the retirement half: the carried-to
 clause and its constants are still in the tree (`src/cli/docs/measurements.ts:134-135`, `:164`,
 `:907-908`,
-with `RUN_OF_RECORD_RELEASE` still `1.9.0` at `:115`), because the unit that deletes them waits on
-run 33, which does not exist yet. Until that unit lands, the carried-to criterion above stays in
-force and tested.
+with `RUN_OF_RECORD_RELEASE` still `1.9.0` at `:115`), because the unit that deletes them,
+`run-of-record-1-10-0`, has not landed, and its as-built text is written after it lands. Until then,
+the carried-to criterion above stays in force and tested.
 
 ### REQ-PROVE-021 — QA automation and binding
 
