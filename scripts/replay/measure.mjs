@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url'
 import { spellingsOf } from '../qa/redact.mjs'
 import { extractFreeText, ledgerFindings, matchItems, parseDigest, parseFindingsBlock, unreadFreeText, verdictOf } from './findings.mjs'
 import { PASS_IDS } from './fixture.mjs'
+import { UNCOVERED_REASON } from './protocols.mjs'
 import { LEDGER_GATED_KINDS, roleFunction, scanSubagent, walkTranscriptLines } from './transcript.mjs'
 
 const SELF = fileURLToPath(import.meta.url)
@@ -1067,8 +1068,12 @@ const NOT_INJECTED = 'not injected (anchor missing)'
  * beside the driver's injection record, `run.json`'s `injection.passes[<pass>].seeds[]` — a map of
  * seed id to state. A v1 document returns null and reads no record. A v2 run with no record, or a
  * record the driver would not write, is invalid, naming why.
+ * R7 (review/168): every seed of the document is checked against a readable record. A pass with no
+ * entry is uncovered — the injection point never came for it, so its seeds were in no tree — and the
+ * run is invalid, one reason per pass beginning `UNCOVERED_REASON`; a seed its pass's entry omits makes
+ * the run invalid too. A pass with an entry and no injection snapshot (`snapshots`) is a capture defect.
  */
-function injectionStatesOf(seeds, run, invalid) {
+function injectionStatesOf(seeds, run, invalid, snapshots) {
   if (!injecting(seeds)) return null
   const states = new Map()
   const record = run?.injection
@@ -1081,16 +1086,26 @@ function injectionStatesOf(seeds, run, invalid) {
     malformed('passes is not an object')
     return states
   }
+  const listed = new Map()
   for (const [pass, entry] of Object.entries(record.passes)) {
+    // R7: the hook snapshots a pass in the call that injects it, so an entry with no copy is a capture defect.
+    if (copiesOf(snapshots, pass).length === 0) invalid.push(`capture defect: pass ${pass} has an entry in run.json's injection record, but captures/snapshots/${pass}/ holds no copy`)
     if (!Array.isArray(entry?.seeds)) {
       malformed(`pass ${pass} has no seeds list`)
       continue
     }
+    listed.set(pass, new Set(entry.seeds.map((s) => s?.id)))
     for (const s of entry.seeds) {
       if (typeof s?.id !== 'string' || (s.state !== INJECTED && s.state !== NOT_INJECTED)) malformed(`seed ${JSON.stringify(s?.id ?? null)} has state ${JSON.stringify(s?.state ?? null)}`)
       else states.set(s.id, s.state)
     }
   }
+  const uncovered = new Map()
+  for (const seed of seeds.seeds) {
+    if (!Object.hasOwn(record.passes, seed.pass)) uncovered.set(seed.pass, [...(uncovered.get(seed.pass) ?? []), seed.id])
+    else if (listed.get(seed.pass)?.has(seed.id) === false) invalid.push(`injection record: pass ${seed.pass} omits seed ${seed.id}`)
+  }
+  for (const [pass, ids] of uncovered) invalid.push(`${UNCOVERED_REASON} ${pass}: no review dispatch covered it, so its seeds (${ids.join(', ')}) were never injected`)
   return states
 }
 
@@ -1106,6 +1121,12 @@ function injectionStatesOf(seeds, run, invalid) {
  * (`reviewSnapshots`) when one exists. An injected seed absent there was reverted before review: filed
  * absent at the pass, it leaves the denominator and holds its security row, as a not-injected seed
  * does. With no review snapshot for the pass, the injection snapshot is read, as before R4.
+ * R7 (review/168, REPLAY-v2 only): the presence-unknown reading above is REPLAY-v1's, and v2 does
+ * not keep it. A seed with no state in the record is uncovered: it was in no tree, so it is filed
+ * never found, whatever a finding matches, and `injectionStatesOf` voided the run. A seed recorded
+ * injected whose file is absent from every copy of its pass's injection snapshot is a capture defect,
+ * as is a pass with an entry and no injection snapshot (named by `injectionStatesOf`); neither writes a
+ * presence-unknown note, since presence is never unknown in a valid v2 run.
  */
 function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, invalid, injected = null, reviewSnapshots = null) {
   const missing = new Set()
@@ -1118,6 +1139,11 @@ function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, inval
       notes.push(`seed ${seed.id} (${seed.pass}): recorded ${NOT_INJECTED} in run.json's injection record, so it is filed absent at the pass and leaves the recall denominator, whatever the snapshot reads${seed.class === 'security' ? '; a security seed, so it holds its security-seeds row' : ''}`)
       return { id: seed.id, class: seed.class ?? null, pass: seed.pass, present: false, caughtByImplementer: true, ...found }
     }
+    // R7: a finding that meets an uncovered seed's span and a term met the clean line the injection would have replaced.
+    if (injected !== null && !injected.has(seed.id)) {
+      notes.push(`seed ${seed.id} (${seed.pass}): uncovered — no state in run.json's injection record, so it was never injected and no finding can find it; the run is invalid (§8)`)
+      return { id: seed.id, class: seed.class ?? null, pass: seed.pass, present: null, caughtByImplementer: false, ...found, found: false, foundRound1: false, stage: null }
+    }
     const reviewed = injected !== null && reviewSnapshots !== null ? copiesOf(reviewSnapshots, seed.pass) : []
     if (reviewed.length > 0) {
       const heldAtReview = new Set(reviewed.map((copy) => presentIn(copy, seed)))
@@ -1126,12 +1152,22 @@ function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, inval
         return { id: seed.id, class: seed.class ?? null, pass: seed.pass, present: false, caughtByImplementer: true, ...found }
       }
     }
-    const copies = reviewed.length > 0 ? reviewed : copiesOf(snapshots, seed.pass)
-    if (copies.length === 0) missing.add(seed.pass)
+    const atInjection = copiesOf(snapshots, seed.pass)
+    const copies = reviewed.length > 0 ? reviewed : atInjection
     // build/167: a file absent from every copy says nothing of the rule, so presence is unknown.
     const held = new Set(copies.map((copy) => presentIn(copy, seed)))
     const present = held.has(true) ? true : held.has(false) ? false : null
-    if (copies.length > 0 && present === null) absent.push(seed)
+    if (injected !== null) {
+      // R7: v2 reads the injection snapshot for the file; a pass with no copy at all was named by injectionStatesOf.
+      if (atInjection.length > 0 && atInjection.every((copy) => presentIn(copy, seed) === null)) {
+        invalid.push(`capture defect: seed ${seed.id} (${seed.pass}): ${seed.file} is absent from every copy of the pass's injection snapshot (captures/snapshots/${seed.pass}/)`)
+      } else if (copies.length > 0 && present === null) {
+        invalid.push(`capture defect: seed ${seed.id} (${seed.pass}): ${seed.file} is absent from every copy of the pass's review snapshot (captures/review-snapshots/${seed.pass}/)`)
+      }
+    } else {
+      if (copies.length === 0) missing.add(seed.pass)
+      if (copies.length > 0 && present === null) absent.push(seed)
+    }
     return { id: seed.id, class: seed.class ?? null, pass: seed.pass, present, caughtByImplementer: present === false, ...found }
   })
   for (const pass of missing) notes.push(`no snapshot under captures/snapshots/${pass}/: its seeds stay in the recall denominator with presence unknown`)
@@ -1251,7 +1287,7 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
       invalid.push(`capture defect: a verdict agent was dispatched for ${id}, but captures/snapshots/${id}/ holds no copy`)
     }
   }
-  const seedRows = seedRowsOf(seeds, all, seedMatch, L.snapshots, oracleStatus, notes, invalid, injectionStatesOf(seeds, run, invalid), L.reviewSnapshots)
+  const seedRows = seedRowsOf(seeds, all, seedMatch, L.snapshots, oracleStatus, notes, invalid, injectionStatesOf(seeds, run, invalid, L.snapshots), L.reviewSnapshots)
   const mechanism = run?.mechanism ?? 'interrupt'
   // review/164 (REPLAY-v2 only): the driver's recorded placements, read when no lens delivery names the pass.
   const recorded = injecting(seeds) && Array.isArray(run?.compactions) ? run.compactions : []

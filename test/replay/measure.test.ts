@@ -1541,3 +1541,127 @@ describe("R3 — a named pass range covers every pass in it (review/150)", () =>
     expect(roundsOf(v1)).toEqual([1, 0, 1, 0, 0, 0]);
   });
 });
+
+/**
+ * R7 (review/168): the third K-inject-baseline canary's shape. The shape reviewed its whole change set in
+ * one round whose prompt names only u3-p1, so the hook covered u3-p1 alone: u1-p1 got no entry in the
+ * injection record and no snapshot, and its seed was never in any tree. The round's free-text Critical,
+ * about another file, cites the clean allowlist line at sec-sql-sort's span beside "allowlist", one of the
+ * seed's accepted terms, so the static span fallback meets it.
+ */
+const STRAY_REVIEW = [
+  "**Verdict:** request-changes",
+  "",
+  "### F1: Critical. `GET /orders` hides store failures behind a 200 with an empty list",
+  "- **Where:** `src/orders/handlers.ts:54-59`",
+  "- **Why it matters:** `listOrders` can't throw on bad input (the `sort` allowlist is at `src/store/query.ts:11`), so this catch only hides real failures.",
+].join("\n");
+/** `run.json`'s `injection` with an entry only for the passes whose seeds `states` names. */
+function coveredRecord(states: Record<string, string>): Record<string, unknown> {
+  const passes: Record<string, { pass: string; seeds: { id: string; file: string; state: string }[]; partial: boolean; snapshot: boolean }> = {};
+  for (const seed of INJECTING.seeds) {
+    const state = states[seed.id];
+    if (state !== undefined) (passes[seed.pass] ??= { pass: seed.pass, seeds: [], partial: false, snapshot: true }).seeds.push({ id: seed.id, file: seed.file, state });
+  }
+  return { passes, partial: false, unreadable: [], unfinished: [] };
+}
+function uncoveredCapture(injection: Record<string, unknown>): Built {
+  const dir = scratch();
+  const fixture = join(dir, "fx");
+  mkdirSync(fixture);
+  const agents: AgentSpec[] = [
+    implementerOf("u1-p1"),
+    implementerOf("u3-p1"),
+    { id: "tu_round1", agentId: "around1", type: "stamity-reviewer", description: "Review round 1", prompt: "Review the whole staged change set. The 404 body contract change is owned by u3-p1.", result: STRAY_REVIEW, tokens: 100 },
+  ];
+  const layout = writeCapture(dir, {
+    run: { runId: "2026-09-27-replay-1", shape: "baseline", kind: "scored", client: { version: "2.1.280" }, injection },
+    stdout: [JSON.stringify({ type: "system", subtype: "init", ...INIT_PINNED, cwd: fixture })],
+    transcript: [mainLine.userText("/st-work docs/plans/001-replay.md --effort deep"), ...agents.flatMap(dispatch)],
+    subagents: agents.map(subagentOf),
+    snapshots: { "u3-p1": { main: { "src/store/query.ts": REVERTED_QUERY, [TRAVERSAL.file]: REWRITTEN_INVOICE } }, "u3-p2": { main: { [EXPECTATION.file]: REWRITTEN_TEST } } },
+    state: { end: { runId: RUN, ledger: [] } },
+    oracle: { schema: "stamity/replay-oracle/v1", run: { status: "ok", detail: "" }, results: INJECTING.seeds.map((s) => ({ seed: s.id, kind: "vitest", status: "pass", detail: "" })) },
+  });
+  return { layout, fixture, agents };
+}
+const UNCOVERED_ROW = { present: null, caughtByImplementer: false, found: false, foundRound1: false, stage: null };
+
+describe("REPLAY-v2 R7 — an uncovered seed is never credited, and its run is invalid (review/168)", () => {
+  it("(a) the third canary's shape: a stray finding at an uncovered seed's clean line credits nothing, and the one invalid reason names the pass and its seed", async () => {
+    const record = coveredRecord({ "sec-path-traversal": NOT_INJECTED, "tw-expectation-deleted": NOT_INJECTED });
+    const m = (await measureRun(uncoveredCapture(record).layout.runDir, { seeds: INJECTING, forbid: [] })) as Measurement;
+    expect(m.invalid).toEqual(["uncovered pass u1-p1: no review dispatch covered it, so its seeds (sec-sql-sort) were never injected"]);
+    expect(rowOf(m, "sec-sql-sort")).toEqual(expect.objectContaining(UNCOVERED_ROW));
+    expect(securityHeld(rowOf(m, "sec-sql-sort"))).toBe(false);
+    expect(m.totals.recall.found).toBe(0);
+    expect(m.notes).toContainEqual("seed sec-sql-sort (u1-p1): uncovered — no state in run.json's injection record, so it was never injected and no finding can find it; the run is invalid (§8)");
+    expect(m.notes.join("\n")).not.toContain("presence unknown");
+  });
+
+  it("(b) a pass entry that omits one of its seeds makes the run invalid, and the omitted seed is never found", async () => {
+    const record = injectionRecord(ALL_INJECTED) as { passes: Record<string, { seeds: unknown[] }> };
+    record.passes["u1-p1"]!.seeds = [];
+    const m = await injectingRun({ injection: record });
+    expect(m.invalid).toEqual(["injection record: pass u1-p1 omits seed sec-sql-sort"]);
+    // The capture's reviewer cites the seed's line: the find the full record credits is not credited here.
+    expect(rowOf(m, "sec-sql-sort")).toEqual(expect.objectContaining(UNCOVERED_ROW));
+    expect(m.notes).toContainEqual(expect.stringMatching(/^seed sec-sql-sort \(u1-p1\): uncovered — /));
+  });
+
+  it("(e) a record with an entry for every pass of the seeds document leaves no seed uncovered, and the cited seed stays found", async () => {
+    const m = await injectingRun({ injection: injectionRecord(ALL_INJECTED) });
+    expect(m.invalid).toEqual([]);
+    expect(rowOf(m, "sec-sql-sort")).toEqual(expect.objectContaining({ present: true, found: true }));
+    expect(m.notes.join("\n")).not.toContain("uncovered");
+  });
+
+  it("two uncovered passes each get one reason, their seeds listed in document order", async () => {
+    const m = await injectingRun({ injection: coveredRecord({ "sec-sql-sort": INJECTED }) });
+    expect(m.invalid).toEqual([
+      "uncovered pass u3-p1: no review dispatch covered it, so its seeds (sec-path-traversal) were never injected",
+      "uncovered pass u3-p2: no review dispatch covered it, so its seeds (tw-expectation-deleted) were never injected",
+    ]);
+    expect(rowOf(m, "sec-sql-sort")).toEqual(expect.objectContaining({ present: true, found: true }));
+  });
+
+  it("(f) a pass with an injection entry and no injection snapshot is a capture defect, and no seed reads presence unknown", async () => {
+    const { "u3-p2": _dropped, ...snapshots } = INJECTING_SNAPSHOTS;
+    const m = (await measureRun(passCapture({ shape: "baseline", run: { injection: injectionRecord(ALL_INJECTED) }, snapshots }).layout.runDir, { seeds: INJECTING, forbid: [] })) as Measurement;
+    expect(m.invalid).toEqual(["capture defect: pass u3-p2 has an entry in run.json's injection record, but captures/snapshots/u3-p2/ holds no copy"]);
+    expect(m.notes.join("\n")).not.toContain("presence unknown");
+  });
+
+  it("(f) a seed recorded injected whose file is absent from every copy of its pass's injection snapshot is a capture defect, whatever the review snapshot holds", async () => {
+    const without = { "src/orders/format.ts": FORMAT };
+    const snapshots = { ...INJECTING_SNAPSHOTS, "u1-p1": { main: without, "lane-u1-p1": without } };
+    const m = (await measureRun(passCapture({ shape: "baseline", run: { injection: injectionRecord(ALL_INJECTED) }, snapshots, reviewSnapshots: { "u1-p1": SNAPSHOT_U1P1 } }).layout.runDir, { seeds: INJECTING, forbid: [] })) as Measurement;
+    expect(m.invalid).toEqual(["capture defect: seed sec-sql-sort (u1-p1): src/store/query.ts is absent from every copy of the pass's injection snapshot (captures/snapshots/u1-p1/)"]);
+    expect(m.notes.join("\n")).not.toContain("presence unknown");
+    // Without a review snapshot the same capture reads the same defect, still with no presence-unknown note.
+    const plain = (await measureRun(passCapture({ shape: "baseline", run: { injection: injectionRecord(ALL_INJECTED) }, snapshots }).layout.runDir, { seeds: INJECTING, forbid: [] })) as Measurement;
+    expect(plain.invalid).toEqual(m.invalid);
+    expect(plain.notes.join("\n")).not.toContain("presence unknown");
+  });
+
+  it("(f) a seed whose file every review copy lacks, while the injection snapshot holds it, stays a capture defect and reads no presence unknown", async () => {
+    const without = { "src/orders/format.ts": FORMAT };
+    const m = await reviewedRun({ "u1-p1": { main: without } });
+    expect(m.invalid).toEqual(["capture defect: seed sec-sql-sort (u1-p1): src/store/query.ts is absent from every copy of the pass's review snapshot (captures/review-snapshots/u1-p1/)"]);
+    expect(m.notes.join("\n")).not.toContain("presence unknown");
+  });
+
+  it("a seed recorded not injected keeps its reading beside an uncovered pass: out of the denominator, its security row held", async () => {
+    const m = (await measureRun(uncoveredCapture(coveredRecord({ "sec-path-traversal": NOT_INJECTED, "tw-expectation-deleted": NOT_INJECTED })).layout.runDir, { seeds: INJECTING, forbid: [] })) as Measurement;
+    expect(rowOf(m, "sec-path-traversal")).toEqual(expect.objectContaining({ present: false, caughtByImplementer: true }));
+    expect(securityHeld(rowOf(m, "sec-path-traversal"))).toBe(true);
+    expect(m.totals.recall.denominator).toBe(1);
+  });
+
+  it("a v1 seeds document never takes the rule: a pass with no snapshot and no record keeps presence unknown, and no reason names an uncovered pass", async () => {
+    const m = await measure(passCapture({ shape: "baseline", snapshots: {} }).layout.runDir);
+    expect(m.invalid.filter((r) => r.startsWith("uncovered pass"))).toEqual([]);
+    expect(m.notes.join("\n")).toContain("presence unknown");
+    expect(m.notes.join("\n")).not.toContain("uncovered");
+  });
+});

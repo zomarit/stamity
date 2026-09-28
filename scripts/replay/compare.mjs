@@ -13,7 +13,8 @@
 //     order, decide its size — more than `scoredSpreadSeeds` seeds found apart (max − min) and
 //     the shape takes `scoredRunsIfVariance` (R28; the pilots are not read for it). An invalid
 //     run is counted and never scored; past the replacements §10 allows, every row the shape
-//     feeds is NOT-EVALUATED and the merge gate fails;
+//     feeds is NOT-EVALUATED and the merge gate fails. A changed scored run invalid only for an
+//     uncovered pass (R7) is never replaced: it spends the changed shape's replacements at once;
 //   - decoy-flags and approved-unfixed compare per-scored-run rates, so a shape at 5 runs meets
 //     one at 3 on equal terms; recall rates are scaled to `recallOpportunities` with both
 //     denominators printed; verdict-rounds compares median rounds per pass;
@@ -25,7 +26,7 @@
 //     to refuse: every row it feeds is NOT-EVALUATED and the merge gate fails.
 
 import { PASS_IDS } from './fixture.mjs'
-import { MAX_REPLACEMENTS_PER_SHAPE, PROTOCOLS, ROW_IDS, median, protocolNames, securityHeld, versionOfPath } from './protocols.mjs'
+import { MAX_REPLACEMENTS_PER_SHAPE, PROTOCOLS, ROW_IDS, UNCOVERED_REASON, median, protocolNames, securityHeld, versionOfPath } from './protocols.mjs'
 import { validateSummary } from './summary.mjs'
 
 /** v1's comparison path, kept for importers; the commands read each version's from `PROTOCOLS`. */
@@ -93,15 +94,17 @@ function checkInputs(lists, pilots) {
  * past them the shape is `exhausted` and the rows it feeds are not evaluated.
  */
 function sampleOf(shape, runs, t) {
-  if (runs.length === 0) return { shape, runs: [], invalid: [], required: t.scoredRunsPerShape, spread: null, variance: false, exhausted: false, empty: true }
+  if (runs.length === 0) return { shape, runs: [], invalid: [], uncovered: [], required: t.scoredRunsPerShape, spread: null, variance: false, exhausted: false, empty: true }
   const ordered = runs.toSorted(byRunId)
   const valid = ordered.filter((s) => s.invalid.length === 0)
   const invalid = ordered.filter((s) => s.invalid.length > 0)
+  // R7 (review/168): a changed shape that reviews less is what the replay measures, so its run is not replaced.
+  const uncovered = shape === 'changed' ? invalid.filter((s) => s.invalid.every((reason) => reason.startsWith(UNCOVERED_REASON))) : []
   const first = valid.slice(0, t.scoredRunsPerShape).map((s) => s.totals.recall.found)
   const spread = first.length === t.scoredRunsPerShape && first.length > 0 ? Math.max(...first) - Math.min(...first) : null
   const variance = spread !== null && spread > t.scoredSpreadSeeds
   const required = variance ? t.scoredRunsIfVariance : t.scoredRunsPerShape
-  const exhausted = invalid.length > MAX_REPLACEMENTS_PER_SHAPE
+  const exhausted = invalid.length > MAX_REPLACEMENTS_PER_SHAPE || uncovered.length > 0
   if (!exhausted && valid.length !== required) {
     if (variance && valid.length < required) {
       throw new Error(`${shape}: its first ${t.scoredRunsPerShape} scored runs differ by ${spread} seeds found (max − min, over scoredSpreadSeeds ${t.scoredSpreadSeeds}), so the shape takes ${required} scored runs (scoredRunsIfVariance, §10, R28); ${valid.length} given`)
@@ -111,7 +114,7 @@ function sampleOf(shape, runs, t) {
     }
     throw new Error(`${shape}: ${valid.length} valid scored runs, the sample is ${required} (§10): a scored run beyond the sample is not read, so none is chosen`)
   }
-  return { shape, runs: valid, invalid, required, spread, variance, exhausted, empty: false }
+  return { shape, runs: valid, invalid, uncovered, required, spread, variance, exhausted, empty: false }
 }
 
 /** The five ambient lists of a summary, one comparable string each (`measure.mjs` sorts every list). */
@@ -309,6 +312,17 @@ const COMPUTE = {
 // ---------- compare ----------
 
 /**
+ * Why a spent sample's rows are not evaluated (§10): a changed scored run invalid only for an
+ * uncovered pass, which is never replaced (R7, review/168), or more invalid runs than the replacements.
+ */
+function spentReasons(x) {
+  const reasons = []
+  if (x.uncovered.length > 0) reasons.push(`${x.shape}: ${x.uncovered.map((s) => s.runId).join(', ')} ${x.uncovered.length === 1 ? 'has' : 'have'} an uncovered pass, and §10 does not replace a changed scored run invalid only for one`)
+  if (x.invalid.length > MAX_REPLACEMENTS_PER_SHAPE) reasons.push(`${x.shape}: ${x.invalid.length} invalid runs, over the ${MAX_REPLACEMENTS_PER_SHAPE} replacements §10 allows per shape`)
+  return reasons
+}
+
+/**
  * The comparison of the baseline shape's scored summaries with the changed shape's, under the
  * thresholds `parseThresholds` read. `pilots` (`{ baseline?, changed? }`) are validated and named
  * in the head, never scored. `options.protocol` (`{ path, sha256 }`) names the protocol in the head
@@ -333,7 +347,7 @@ export function compare(baseline, changed, thresholds, pilots = {}, options = {}
     if (empty.length > 0 || spent.length > 0 || unchecked.length > 0) {
       const reason = [
         ...empty.map((x) => `no ${x.shape} scored run given`),
-        ...spent.map((x) => `${x.shape}: ${x.invalid.length} invalid runs, over the ${MAX_REPLACEMENTS_PER_SHAPE} replacements §10 allows per shape`),
+        ...spent.flatMap(spentReasons),
         ...unchecked.map((shape) => `no ${shape} pilot supplied: its scored runs' ambient lists (§3) cannot be checked`),
       ].join('; ')
       return { id, rule, baseline: '—', changed: '—', verdict: 'NOT-EVALUATED', reason }

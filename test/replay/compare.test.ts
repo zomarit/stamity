@@ -728,3 +728,39 @@ describe("score.mjs compare --protocol v2", () => {
     expect(md).toContain("- Protocol: REPLAY-v2 (`evals/replay/REPLAY-v2.md`)");
   });
 });
+
+describe("compare — an uncovered pass (R7, review/168)", () => {
+  /** The invalid reason measure.mjs writes for a pass no review dispatch covered, filled in. */
+  const UNCOVERED = "uncovered pass u2-p2: no review dispatch covered it, so its seeds (con-config-default, tw-test-skip) were never injected";
+  const uncovered = (s: Summary): Summary => ({ ...s, invalid: [UNCOVERED] });
+
+  it("(c) does not replace a changed scored run invalid only for an uncovered pass: the nine rows the changed shape feeds are NOT-EVALUATED and the merge gate FAILs", () => {
+    const r = run(base3(), [uncovered(summary("changed", 9)), ...changed3()]);
+    const notEvaluated = r.rows.filter((x) => x.verdict === "NOT-EVALUATED").map((x) => x.id);
+    expect(notEvaluated).toEqual(["security-seeds", "pooled-recall", "decoy-flags", "compaction-loss", "verdict-class", "verdict-rounds", "approved-unfixed", "loop-chars", "subagent-tokens"]);
+    expect(row(r, "pooled-recall").reason).toBe("changed: 2026-09-26-replay-9 has an uncovered pass, and §10 does not replace a changed scored run invalid only for one");
+    expect(r.mergeGate).toBe("FAIL");
+    const md = renderComparison(r, T) as string;
+    expect(md).toContain("- `pooled-recall`: NOT-EVALUATED — changed: 2026-09-26-replay-9 has an uncovered pass, and §10 does not replace a changed scored run invalid only for one");
+  });
+
+  it("(c) names every such changed run, two of them in run-id order", () => {
+    const r = run(base3(), [uncovered(summary("changed", 10)), uncovered(summary("changed", 9)), ...changed3()]);
+    expect(row(r, "loop-chars").reason).toBe("changed: 2026-09-26-replay-9, 2026-09-26-replay-10 have an uncovered pass, and §10 does not replace a changed scored run invalid only for one");
+    expect(r.mergeGate).toBe("FAIL");
+  });
+
+  it("(e) replaces a baseline run with an uncovered pass like any invalid run, within the two replacements", () => {
+    const r = run([uncovered(summary("baseline", 9)), ...base3()], changed3());
+    expect(r.sampleCount.invalid.baseline).toBe(1);
+    expect(verdicts(r)).toEqual(ALL_PASS);
+    expect(r.mergeGate).toBe("PASS");
+  });
+
+  it("(e) replaces a changed run invalid for another reason too, as before", () => {
+    const r = run(base3(), [{ ...summary("changed", 9), invalid: ['run.json end.reason is "stalled", not "complete"', UNCOVERED] }, ...changed3()]);
+    expect(r.sampleCount.invalid.changed).toBe(1);
+    expect(verdicts(r)).toEqual(ALL_PASS);
+    expect(r.mergeGate).toBe("PASS");
+  });
+});
