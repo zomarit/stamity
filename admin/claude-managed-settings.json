@@ -1,0 +1,22 @@
+{
+  "extraKnownMarketplaces": {
+    "stamity": {
+      "source": {
+        "source": "github",
+        "repo": "zomarit/stamity",
+        "ref": "plugins/v1.10.0"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "stamity@stamity": true
+  },
+  "strictKnownMarketplaces": [
+    {
+      "source": "github",
+      "repo": "zomarit/stamity",
+      "ref": "plugins/v1.10.0"
+    }
+  ],
+  "requiredMinimumVersion": "2.1.277"
+}

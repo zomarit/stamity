@@ -1,0 +1,26 @@
+import { type CatalogItem } from "../content/catalog.ts";
+import type { AdapterDialectFacts, ResiduePlanner } from "../emit/planner.ts";
+import { type CanonicalHookEvent, type HookInterchange } from "../hooks/model.ts";
+import { type ResolvedAgentGrant } from "../roster/agentGrants.ts";
+import { type EffortMap, type ModelPinMap } from "../roster/modelLadder.ts";
+export declare const CURSOR_RULES_DIR = ".cursor/rules";
+export declare const CURSOR_AGENTS_DIR = ".cursor/agents";
+export declare const CURSOR_COMMANDS_DIR: string | null;
+export declare const CURSOR_HOOKS_CONFIG_PATH = ".cursor/hooks.json";
+export declare const CURSOR_GUARD_DIR = ".cursor/hooks";
+export declare const SUBAGENT_GUARD_PATH = ".cursor/hooks/subagent-guard.mjs";
+export declare const MCP_GUARD_PATH = ".cursor/hooks/mcp-guard.mjs";
+export declare const CURSOR_RULE_LINE_CAP = 500;
+export declare const EVENT_RENAME: Readonly<Record<CanonicalHookEvent, string>>;
+export declare const CURSOR_GUARD_EVENTS: {
+    readonly subagentSpawn: "subagentStart";
+    readonly mcpExecution: "beforeMCPExecution";
+};
+export declare const cursorDialectFacts: AdapterDialectFacts;
+export declare const cursorResiduePlanner: ResiduePlanner;
+export declare function buildMdcRule(item: CatalogItem, body: string): string;
+export declare function buildCursorAgent(item: CatalogItem, grant: ResolvedAgentGrant, body: string, pins?: ModelPinMap, efforts?: EffortMap): string;
+export declare function buildCursorCommand(item: CatalogItem, name: string, body: string): string;
+export declare function buildHooksJson(rows: readonly HookInterchange[], hookScriptsRoot?: string): string;
+export declare function buildSubagentGuardScript(roster: readonly string[]): string;
+export declare function buildMcpGuardScript(): string;

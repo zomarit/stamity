@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "version": "1.10.0",
+  "sourceCommit": "0ea1a931c3d74ac97476d15261f9387565b83d10",
+  "sourceCommitDate": "2026-09-28T10:20:07+02:00",
+  "distribution": {
+    "branch": "plugin-dist",
+    "tag": "plugins/v1.10.0",
+    "commit": null
+  },
+  "runtime": {
+    "package": "@zomarit/stamity",
+    "version": "1.10.0",
+    "nodeFloor": ">=22.22.2",
+    "tarballSha256": "19a1a9eddc790aaee90e05aa83bbdbeef9d74194388f56102b8643488f401d9d"
+  },
+  "packages": [
+    {
+      "client": "claude",
+      "path": "claude",
+      "archive": "stamity-plugin-claude-1.10.0.zip",
+      "sha256": "f1c9af31dd93df19cc4336cb3ec98ef4459fe4bb0fbcc13c920c633ef07edcfc",
+      "bytes": 1398071,
+      "clientFloor": "2.1.224"
+    },
+    {
+      "client": "cursor",
+      "path": "cursor",
+      "archive": "stamity-plugin-cursor-1.10.0.zip",
+      "sha256": "b03a183c865a9421e85adc2bd8625fd8e66030207be7b26cc69cb702a5339e8f",
+      "bytes": 1417501,
+      "clientFloor": "unknown"
+    },
+    {
+      "client": "copilot",
+      "path": "copilot",
+      "archive": "stamity-plugin-copilot-1.10.0.zip",
+      "sha256": "13d0be208f5f64956f66a03239973ac3b0cedae4d3afde385878690a1567a788",
+      "bytes": 1392343,
+      "clientFloor": "unknown"
+    },
+    {
+      "client": "codex",
+      "path": "codex",
+      "archive": "stamity-plugin-codex-1.10.0.zip",
+      "sha256": "5982222a426dd6ce44cd51da756910f86ad48ef26cdac2431bd22c89471e3e26",
+      "bytes": 1293414,
+      "clientFloor": "unknown"
+    }
+  ],
+  "catalogs": {
+    "claude": ".claude-plugin/marketplace.json",
+    "cursor": ".cursor-plugin/marketplace.json",
+    "copilot": ".github/plugin/marketplace.json",
+    "codex": ".agents/plugins/marketplace.json"
+  },
+  "apm": {
+    "manifest": "apm.yml",
+    "primitives": ".apm",
+    "installSpec": "zomarit/stamity#plugins/v1.10.0"
+  }
+}

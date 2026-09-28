@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verify"
+  short_description: "Use the Stamity verify workflow"
+  default_prompt: "Use $st-verify for this repository."

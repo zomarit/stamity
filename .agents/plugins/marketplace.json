@@ -1,0 +1,20 @@
+{
+  "name": "stamity",
+  "interface": {
+    "displayName": "stamity"
+  },
+  "plugins": [
+    {
+      "name": "stamity",
+      "source": {
+        "source": "local",
+        "path": "./codex"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
