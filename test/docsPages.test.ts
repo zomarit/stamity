@@ -1227,6 +1227,43 @@ describe("the eval run of record on the hand pages", () => {
       /release run,? carried to \d+\.\d+\.\d+/,
     );
   });
+
+  // ADDED for review/200: the run of record composes with a prior full run, and when that run
+  // was FAIL on its own the three surfaces that state the composed PASS say so, naming the failing
+  // floor cases, the Invariant 2 tightening between the two, and the re-measure. The run numbers
+  // and case ids are read off both RESULTS.md files, so the sentence cannot drift from them.
+  it.each([README, DOCTRINE, "docs/measurements.md"])(
+    "%s discloses a FAIL baseline behind the composed run of record",
+    (page) => {
+      const record = read(RUN_OF_RECORD_PATH);
+      const baseline = /prior complete run is `([^`]+)`/.exec(record)?.[1] ?? "";
+      const baselineResults = read(`evals/runs/${baseline}/RESULTS.md`);
+      const failingList = /failing: ((?:`[^`]+`(?:, )?)+)/.exec(baselineResults)?.[1] ?? "";
+      const failing = [...failingList.matchAll(/`([^`]+)`/g)].map((match) => match[1]);
+      const failed = /^Status: \*\*FAIL\*\*/m.test(baselineResults);
+      const [base, run] = [baseline, RUN_OF_RECORD_PATH].map((id) => /-run-(\d+)/.exec(id)?.[1]);
+      const count = ["one", "two", "three"][failing.length - 1] ?? String(failing.length);
+      const disclosure = new RegExp(
+        `\\[?Run ${base}\\]?(?:\\((?:\\.\\./)?evals/runs/${baseline}/RESULTS\\.md\\))? alone was ` +
+          `FAIL on ${count} floor cases?, ${failing.map((id) => `\`${id}\``).join(", ")}; ` +
+          `Invariant 2 was then tightened \\(invariants 1\\.1\\.0\\), and run ${run} re-measured ` +
+          `the two cases whose files moved, composed with run ${base}`,
+      );
+      expect(baseline, `${RUN_OF_RECORD_PATH} names no prior complete run`).not.toBe("");
+      expect(!failed || failing.length > 0, `${baseline} is FAIL but names no failing floor`).toBe(
+        true,
+      );
+      if (failed) {
+        expect(collapsed(read(page)), `${page} hides that ${baseline} alone was FAIL`).toMatch(
+          disclosure,
+        );
+      } else {
+        expect(collapsed(read(page)), `${page} calls a passing baseline FAIL`).not.toMatch(
+          /alone was FAIL/,
+        );
+      }
+    },
+  );
 });
 
 describe("README corpus claims", () => {

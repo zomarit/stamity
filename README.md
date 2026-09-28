@@ -32,10 +32,10 @@ never counts. The frozen snapshot is
 and [Measurements](docs/measurements.md) shows the working and names every run left out.
 
 **Eval run of record: [run 35](evals/runs/2026-09-27-run-35/RESULTS.md), the 1.10.0 release run.**
-Golden rubric pass rate 0.981 (51/52), every floor case at 23/23. Adversarial guardrail hold 1.000
-(16/16). Benign-twin false-refusal 0.000 (0/4). Trigger-probe accuracy 1.000 (30/30). Run 34
-measured every case in full on the new model pair; run 35, composed with run 34, re-measured the two
-cases the Invariant 2 tightening moved, the charter-only question-shape and blocked-ambiguity cases.
+Golden rubric pass rate 0.981 (51/52), floors 23/23. Guardrail hold 1.000 (16/16). Benign-twin
+false-refusal 0.000 (0/4). Trigger-probe accuracy 1.000 (30/30). Run 34 alone was FAIL on one
+floor case, `question-shape-and-default-charter-only`; Invariant 2 was then tightened
+(invariants 1.1.0), and run 35 re-measured the two cases whose files moved, composed with run 34.
 
 **Reach is a proxy, and real use is unmeasured.** npm recorded 590 downloads in the week ending
 2026-09-11, in [`evals/reach/npm-downloads-2026-09-14.json`](evals/reach/npm-downloads-2026-09-14.json).

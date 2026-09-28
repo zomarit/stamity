@@ -97,9 +97,11 @@ A claim about behaviour is worth what its instrument is worth.
   a red run is published rather than re-scored. The run of record is
   [run 35](../evals/runs/2026-09-27-run-35/RESULTS.md), the 1.10.0 release run, which passed every
   declared threshold. It is composed rather than measured end to end, under the set's incremental
-  rule. Run 34 measured every case in full on the new model pair. Run 35 then re-measured the two
-  cases the Invariant 2 tightening moved, composed with run 34, and carried the rest with their
-  hashes.
+  rule. Run 34 measured every case in full on the new model pair.
+  [Run 34](../evals/runs/2026-09-27-run-34/RESULTS.md) alone was FAIL on one floor case,
+  `question-shape-and-default-charter-only`; Invariant 2 was then tightened (invariants 1.1.0),
+  and run 35 re-measured the two cases whose files moved, composed with run 34, and carried the
+  rest with their hashes.
   [The measurements page](measurements.md) rolls an eval run of record up beside the verified
   merge-ready rate.
 - Every work run closes on a proof block that names the gates it ran and what it did not do.
