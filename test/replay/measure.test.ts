@@ -2018,6 +2018,20 @@ describe("R8 — branch level follows an approval (review/167)", () => {
     expect(v2.totals.loopChars - v1.totals.loopChars).toBeGreaterThan(whole.prompt.length + APPROVE.length);
   });
 
+  it("(review/30) after an approval, a re-review whose prompt alone mentions the whole-branch review stays pass-level; one whose description names it is branch-level", async () => {
+    const rereview = agentOf("r2", "stamity-reviewer", "Review round 2", "Re-review the round-1 fixes; the whole-branch review follows this round.", APPROVE);
+    const without = await featureRun([...BUILDERS, APPROVING_1]);
+    const m = await featureRun([...BUILDERS, APPROVING_1, rereview]);
+    expect(verdictsOf(m)).toEqual(everyPass({ finalClass: "approve-after-fixes", rounds: 2, approvedWithSeedUnfixed: false }));
+    expect(m.wholeBranch).toEqual({ finalClass: null, rounds: 0 });
+    expect(m.totals.loopChars - without.totals.loopChars).toBeGreaterThanOrEqual(rereview.prompt.length + APPROVE.length);
+    const deep = agentOf("deep", "stamity-reviewer", "Whole-branch deep review", "Review the branch as one change set.", APPROVE);
+    const n = await featureRun([...BUILDERS, APPROVING_1, deep]);
+    expect(verdictsOf(n)).toEqual(everyPass({ finalClass: "approve", rounds: 1, approvedWithSeedUnfixed: false }));
+    expect(n.wholeBranch).toEqual({ finalClass: "approve", rounds: 1 });
+    expect(n.totals.loopChars).toBe(without.totals.loopChars);
+  });
+
   it("(f) a whole-branch review after an approving round is branch-level, and so is every verdict agent dispatched after it", async () => {
     const deep = agentOf("deep", "stamity-reviewer", "Whole-branch deep review", "Review the whole branch.", freeTextReturn([LOOSE_FINDING], "request-changes"));
     const late = { ...LENS, id: "tu_late", agentId: "alate", description: "Security lens" };
