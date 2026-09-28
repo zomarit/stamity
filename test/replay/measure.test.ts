@@ -1556,6 +1556,13 @@ describe("R3 — a named pass range covers every pass in it (review/150)", () =>
     // v1 reads the description's first id only (review/38), and no range.
     expect(roundsOf(v1)).toEqual([1, 0, 0, 0, 0, 0]);
   });
+
+  it("(review/12) v1's measureRun reads no range from a round's prompt: its ends only", async () => {
+    // The pre-R6 capture, kept as v1's own case: the range sits in the prompt, where v1's joinAgents reads passesOf
+    // with no range, so u1-p2 between the two ends takes no round.
+    const v1 = await measure(multiCapture({ rounds: [{ result: APPROVE, prompt: "Review u1-p1..u2-p1." }] }).layout.runDir);
+    expect(roundsOf(v1)).toEqual([1, 0, 1, 0, 0, 0]);
+  });
 });
 
 /**
@@ -1844,15 +1851,15 @@ const sixSnapshots = (u1p1: Record<string, string> = SNAPSHOT_U1P1.main): NonNul
 const SEC_REPORT = `.stamity/runs/${RUN}/reports/u1-p1-security-r1.md`;
 
 /** A v2 run built from `agents` in dispatch order, each delivered before the next is dispatched. */
-function featureCapture(agents: AgentSpec[], options: { snapshots?: CaptureSpec["snapshots"]; ledger?: Record<string, unknown>[]; reports?: Record<string, string> } = {}): Built {
+function featureCapture(agents: AgentSpec[], options: { snapshots?: CaptureSpec["snapshots"]; ledger?: Record<string, unknown>[]; reports?: Record<string, string>; tail?: string[]; extraSubagents?: SubagentFile[] } = {}): Built {
   const dir = scratch();
   const fixture = join(dir, "fx");
   mkdirSync(fixture);
   const layout = writeCapture(dir, {
     run: { runId: "2026-09-28-replay-v2-1", shape: "baseline", kind: "scored", client: { version: "2.1.280" }, injection: ONE_RECORD },
     stdout: [JSON.stringify({ type: "system", subtype: "init", ...INIT_PINNED, cwd: fixture })],
-    transcript: [mainLine.userText("/st-work docs/plans/001-replay.md --effort deep"), ...agents.flatMap(dispatch)],
-    subagents: agents.map(subagentOf),
+    transcript: [mainLine.userText("/st-work docs/plans/001-replay.md --effort deep"), ...agents.flatMap(dispatch), ...(options.tail ?? [])],
+    subagents: [...agents.map(subagentOf), ...(options.extraSubagents ?? [])],
     snapshots: options.snapshots ?? sixSnapshots(),
     state: { end: { runId: RUN, ledger: options.ledger ?? [], ...(options.reports ? { reports: options.reports } : {}) } },
     oracle: { schema: "stamity/replay-oracle/v1", run: { status: "ok", detail: "" }, results: [{ seed: "sec-sql-sort", kind: "vitest", status: "pass", detail: "" }] },
@@ -1901,6 +1908,16 @@ describe("R6 — the measurement reads coverageOf under v2 (review/167)", () => 
     expect(seedOf(await featureRun([...BUILDERS, quiet, APPROVING_1], orphan)).found).toBe(true);
   });
 
+  it("(review/15) a verdict agent built from its sub-agent file has no known dispatch line, so its finding credits nothing, even delivered after the injection point", async () => {
+    const lost = { ...LENS, id: "tu_lost", agentId: "alost" };
+    const tail = [mainLine.taskNotification({ taskId: "alost", toolUseId: "tu_lost", result: LENS.result })];
+    const m = await featureRun([...BUILDERS, APPROVING_1], { tail, extraSubagents: [subagentOf(lost)] });
+    expect(m.notes.join("\n")).toContain("agent alost built from its sub-agent file");
+    expect(seedOf(m)).toEqual(expect.objectContaining({ present: true, found: false, stage: null }));
+    // The same lens dispatched in the main transcript after the point credits the seed.
+    expect(seedOf(await featureRun([...BUILDERS, APPROVING_1, LENS])).found).toBe(true);
+  });
+
   it("a BLOCKED implementer still counts as built: the review after it is the injection point and credits the lens's find", async () => {
     const blocked = { ...BUILDERS[5]!, result: "status: BLOCKED_DEPENDENCY" };
     const m = await featureRun([...BUILDERS.slice(0, 5), blocked, APPROVING_1, LENS]);
@@ -1930,7 +1947,34 @@ describe("R6 — the measurement reads coverageOf under v2 (review/167)", () => 
   });
 });
 
+describe("R6 — the credit guard reaches compaction loss and precision (review/14, review/16)", () => {
+  /** passCapture under v2: its first review cites the seed; `builds` decides whether the injection point comes before it. */
+  const guarded = (builds?: string): Promise<Measurement> =>
+    measureRun(
+      passCapture({ shape: "baseline", rows: [SEED_FINDING], preLedger: [], endLedger: [], oracle: "pass", run: { injection: injectionRecord(ALL_INJECTED) }, snapshots: INJECTING_SNAPSHOTS, ...(builds ? { builds } : {}) }).layout.runDir,
+      { seeds: INJECTING, forbid: [] },
+    ) as Promise<Measurement>;
+
+  it("(review/14) an at-risk finding by an agent dispatched before the injection point never reads its seed as fixed, so with no row it is lost", async () => {
+    expect((await guarded()).compactionSamples[0]).toEqual(expect.objectContaining({ atRisk: 1, lost: 1 }));
+    expect((await guarded(ALL_BUILT)).compactionSamples[0]).toEqual(expect.objectContaining({ atRisk: 1, lost: 0 }));
+  });
+
+  it("(review/16) a finding before the injection point that meets only a seed's clean line counts unmatched for precision", async () => {
+    expect((await guarded()).totals.unmatched).toBe(1);
+    expect((await guarded(ALL_BUILT)).totals.unmatched).toBe(0);
+  });
+});
+
 describe("R8 — branch level follows an approval (review/167)", () => {
+  it("(review/13) an approving review before the injection point (a plan review) does not make a later \"Whole-branch review round 1\" branch-level", async () => {
+    const planReview = agentOf("plan", "stamity-reviewer", "Plan review", "Review docs/plans/001-replay.md before the build.", APPROVE);
+    const whole = agentOf("wb", "stamity-reviewer", "Whole-branch review round 1", "Review all six units.", APPROVE);
+    const m = await featureRun([planReview, ...BUILDERS, whole]);
+    expect(verdictsOf(m)).toEqual(everyPass({ finalClass: "approve", rounds: 1, approvedWithSeedUnfixed: false }));
+    expect(m.wholeBranch).toEqual({ finalClass: null, rounds: 0 });
+  });
+
   it("(f) \"Whole-branch review round 1\" with no earlier approving round is pass-level: its verdict counts for six passes and its characters count in the loop", async () => {
     const whole = agentOf("wb", "stamity-reviewer", "Whole-branch review round 1", "Review all six units. D8 removes u3-p1's `file` query; u3-p2 answers 400.", APPROVE);
     const v2 = await featureRun([...BUILDERS, whole]);
