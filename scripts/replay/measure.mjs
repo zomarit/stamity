@@ -809,7 +809,9 @@ function joinAgents(walk, index, subs, roots, v2) {
     const approvals = deliveries.filter((d) => d.round && d.agent?.role === 'reviewer' && d.verdict === 'approve' && d.agent.line >= point && !d.agent.fromFile).map((d) => d.line)
     const namedAfterApproval = (a) => (WHOLE_BRANCH.test(a.desc) || WHOLE_BRANCH.test(a.prompt)) && approvals.some((line) => line < a.line)
     let from = Infinity
-    for (const a of agents.filter((x) => x.fn === 'verdict').toSorted((x, y) => x.line - y.line)) {
+    // review/21: an agent built from its sub-agent file has no known dispatch time, so no position makes it
+    // branch-level, and its characters stay in the loop figure.
+    for (const a of agents.filter((x) => x.fn === 'verdict' && !x.fromFile).toSorted((x, y) => x.line - y.line)) {
       if (a.line <= from && !namedAfterApproval(a)) continue
       a.branch = true
       from = Math.min(from, a.line)
@@ -826,7 +828,9 @@ function joinAgents(walk, index, subs, roots, v2) {
   // A verdict agent's round: one more than the fixers of its pass dispatched before it (build/366:
   // of any pass it covers, so a u1-p1 fixer counts toward a round covering u1-p1 and u1-p2).
   const fixers = agents.filter((a) => a.fn === 'fix')
-  for (const a of agents) a.round = 1 + fixers.filter((f) => sharePass(f, a, v2) && f.line < a.line).length
+  // Sweep (review/21, v2): a fixer built from its sub-agent file counts as dispatched before every agent sharing its
+  // passes, so its unknown dispatch time can only raise a round, never leave a later find in round 1.
+  for (const a of agents) a.round = 1 + fixers.filter((f) => sharePass(f, a, v2) && ((v2 && f.fromFile) || f.line < a.line)).length
   return { agents, byAgentId, sends, deliveries, notes, injectionLine }
 }
 
