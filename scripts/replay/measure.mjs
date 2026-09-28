@@ -800,14 +800,16 @@ function joinAgents(walk, index, subs, roots, v2) {
       a.passes = row.passes
       if (row.injectionPoint) injectionLine = a.line
     }
-    // R8 (v2): a verdict dispatch naming the whole branch (description or prompt) after an approving
-    // reviewer delivery is branch-level, and so is every verdict agent dispatched after it. One named so
-    // before any approval is a loop round (the residual REPLAY-v2 §15 names). review/13: only a reviewer
-    // dispatched at or after the injection point approves here; a plan or cell review before it covers nothing.
-    // review/20: a reviewer built from its sub-agent file has no known dispatch line, so its approval counts for nothing.
+    // R8 (v2): a verdict dispatch whose description names the whole branch after an approving reviewer
+    // delivery is branch-level, and so is every verdict agent dispatched after it. One named so before any
+    // approval is a loop round (the residual REPLAY-v2 §15 names). review/30: the prompt is never read here,
+    // since a re-review's brief may mention the whole-branch review that follows it, and that re-review is a
+    // loop round. review/13: only a reviewer dispatched at or after the injection point approves here; a plan
+    // or cell review before it covers nothing. review/20: a reviewer built from its sub-agent file has no known
+    // dispatch line, so its approval counts for nothing.
     const point = injectionLine ?? Infinity
     const approvals = deliveries.filter((d) => d.round && d.agent?.role === 'reviewer' && d.verdict === 'approve' && d.agent.line >= point && !d.agent.fromFile).map((d) => d.line)
-    const namedAfterApproval = (a) => (WHOLE_BRANCH.test(a.desc) || WHOLE_BRANCH.test(a.prompt)) && approvals.some((line) => line < a.line)
+    const namedAfterApproval = (a) => WHOLE_BRANCH.test(a.desc) && approvals.some((line) => line < a.line)
     let from = Infinity
     // review/21: an agent built from its sub-agent file has no known dispatch time, so no position makes it
     // branch-level, and its characters stay in the loop figure.

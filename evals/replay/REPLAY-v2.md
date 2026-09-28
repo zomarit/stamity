@@ -294,12 +294,15 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   gate.
 - **Pass attribution.** The first `\bu[1-3]-p[12]\b` in the dispatch description, else a single distinct pass id in
   the prompt; several distinct ids attribute to `multi`. **Branch-level** dispatches: a verdict dispatch whose
-  description or prompt matches `/whole[- ]branch/i` and that was dispatched after an approving delivery by a
-  reviewer dispatched at or after the injection point (§5) is branch-level, and so is every verdict agent dispatched
-  after it. An approval before the injection point (a plan review), or by a reviewer built from its sub-agent file
-  (Recall, below), counts for nothing here, and a whole-branch review
-  dispatched before any approval is a loop round like any other (§15). REPLAY-v1 keeps its own reading: verdict
-  dispatches after `u3-p2`'s last reviewer approval that carry no single id, or that match `/whole[- ]branch/i`.
+  description matches `/whole[- ]branch/i` and that was dispatched after an approving delivery by a reviewer
+  dispatched at or after the injection point (§5) is branch-level, and so is every verdict agent dispatched after
+  it, except one built from its sub-agent file (Recall, below). The approval is any such reviewer's approving
+  delivery that came before the dispatch, its own round included. The dispatch's prompt is not read for the name:
+  a re-review's brief may mention the whole-branch review that follows it, and that re-review is a loop round. An
+  approval before the injection point (a plan review), or by a reviewer built from its sub-agent file, counts for
+  nothing here, and a whole-branch review dispatched before any approval is a loop round like any other (§15).
+  REPLAY-v1 keeps its own reading: verdict dispatches after `u3-p2`'s last reviewer approval that carry no single
+  id, or that match `/whole[- ]branch/i`.
   Attribution places an agent's loop characters and sub-agent tokens in the per-pass split, and names a compaction
   sample's pass, in both versions; what a dispatch builds, reviews or fixes is its coverage (below), not its
   attribution.
@@ -387,7 +390,9 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   return). One review round's final verdict and round count are recorded for every pass the round covers (Covered
   passes, above), so a round of reviewers dispatched at or after the injection point whose descriptions name no pass
   counts for all six passes, and "the same class on 5 of 6 passes" (§12) still counts six passes when a shape reviews
-  them together.
+  them together. A pass whose only reviews came before the injection point has no covering review: its final class
+  is null and its rounds 0, so `verdict-class` reads `none` for it and fails the gate (§10), and `approved-unfixed`
+  counts nothing for it.
   `approvedWithSeedUnfixed` = approved while some seed of the pass has an oracle status other than `pass`; an
   oracle that errors counts as unfixed.
 - **Invalid run.** An init or sub-agent model outside the pins; a forbidden path (this checkout, the private layer,
@@ -556,7 +561,12 @@ which §7 branch applied, and the RESULTS of every run name it.
 - **The seeds appear at the first review after the build phase**, in both shapes. A review between builds, or a plan
   review, sees clean code and can credit no seed (§8, Recall). A shape that reviews each pass as it is built reviews
   those passes clean and meets the seeds only in its first review after the last build; that is part of what the
-  replay compares.
+  replay compares, and a pass no review covers at or after the injection point reads a null verdict class and 0
+  rounds (§8, Verdicts).
+- **A pass is built when its build dispatch is made, not when it returns** (§5), so a review dispatched beside the
+  last build is the injection point while that implementer may still edit: it can meet the seeds, or overwrite one.
+  The rule is symmetric across the shapes, and a seed so reverted reads as reverted before review and leaves the
+  denominator (§8, Recall).
 - **A whole-branch review before any approval counts as a loop round** (§8, Pass attribution). v1's baseline pilot
   dispatched one beside its third round. Its characters count in the loop and its verdict counts for the passes it
   covers, where a reader might call it branch-level.
