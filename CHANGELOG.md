@@ -159,8 +159,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the review gate declare none, on purpose: a Claude Code PreToolUse hook that times out lets
   the call through, and the review gate's worst case on Windows is about 34.6 s. A test holds the
   emitted guard, session-start, review-gate and tamper-notice scripts under byte and line
-  ceilings. In a Claude Code repository set up by 1.9.1, `stamity check` names
-  `.claude/settings.json` until `stamity sync` rewrites it.
+  ceilings. Each client's hook file moves, so in a repository set up by 1.9.1 `stamity check`
+  names it until `stamity sync` rewrites it: `.claude/settings.json` on Claude Code,
+  `.cursor/hooks.json` on Cursor, `.github/hooks/stamity.json` on Copilot (as `timeoutSec`) and
+  `.codex/hooks.json` on Codex.
 - **The `claude` eval profile moves to Opus 5.5 at high effort.** In
   `evals/model-profiles-v1.json` the scenario model moves from `claude-opus-5` to
   `claude-opus-5-5` at `high` reasoning effort, because Opus 5.5's client default is medium and
@@ -173,9 +175,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   change starts a new baseline, so run 34 measured every one of SET-v7's 102 cases in full, with
   calibration first, and composed nothing with an earlier run. It ran on one account throughout:
   run 33, at the same candidate, ended terminal after a mid-run account switch changed the
-  client's ambient text, and stays as history. Run 34 alone failed one floor case,
-  `question-shape-and-default-charter-only`, so its own result is FAIL, and it is published as
-  it ran. Invariant 2 was then tightened (invariants 1.1.0, below), and run 35 re-measured the two
+  client's ambient text. Run 33 was not exported, so nothing of it is under `evals/runs/`; it is
+  recorded only in the run record, `.stamity/runs/2026-09-24_enterprise-release/record.md`.
+  Run 34 alone failed one floor case, `question-shape-and-default-charter-only`, so its own
+  result is FAIL, and it is published as it ran. Invariant 2 was then tightened (invariants 1.1.0, below), and run 35 re-measured the two
   cases whose files moved and carried the other 100 from run 34. Composed, the two hold every
   threshold declared before the runs, on the Claude profile and rubric v7: golden 0.981 (51 of
   52) with floors 23 of 23, guardrail hold 1.000 (16 of 16), benign-twin false refusals 0.000
