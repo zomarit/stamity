@@ -427,6 +427,16 @@ const CURRENCY_HEADER =
  * so the constant has to move on the next cut or the assertion fails, and no page claims a
  * verification later than the cut it shipped in.
  */
+// TEST CHANGE, justified: MOVED 2026-09-28, from "2026-09-23" (the 1.9.1 cut) to the 1.10.0 cut.
+// Read-only attestors at the stronger class re-read the bucket claim by claim against the 1.10.0
+// candidate: fourteen pages on 2026-09-27, and README and the doctrine on 2026-09-28 once the run
+// of record had merged. Every finding was fixed or ledgered, and the whole bucket, GOVERNANCE.md
+// with it, was restamped onto the cut form. The claims that moved at the cut itself: README's
+// merge-ready figure, run count and link now name the snapshot this cut froze
+// (`evals/measurements/merge-ready-2026-09-28.json`); the doctrine's 1.0.0 row is dated at the
+// charter's ratification, 2026-08-31, and says versioning began 2026-09-15; and troubleshooting's
+// sample `check` transcript is a real 1.10.0 run, printing invariants 1.1.0.
+//
 // MOVED 2026-09-23, from "2026-09-21" (the 1.9.0 cut) to the 1.9.1 cut. Four read-only attestors
 // at the stronger class re-read every claim of the bucket against the 1.9.1 candidate, and the
 // whole bucket was restamped onto the cut form; the claims that moved with it: the frozen
@@ -459,7 +469,7 @@ const CURRENCY_HEADER =
 // REATTESTATION_DATE below, and each form's newest date is pinned to its own constant. The
 // direction the pin is written for is unchanged — it fails a re-cut that restamps nothing, never
 // one that restamps honestly.
-const RELEASE_CUT_DATE = "2026-09-23";
+const RELEASE_CUT_DATE = "2026-09-28";
 
 /**
  * The date the current re-verification pass re-read the hand bucket on.
@@ -520,8 +530,15 @@ const RELEASE_CUT_DATE = "2026-09-23";
  * commit form with `Re-attested 2026-09-26`. A page re-read today can honestly carry only today's
  * date, which the 2026-09-23 pin refused as later than the pass it ships in. Every other page
  * keeps the date it was actually verified on.
+ *
+ * TEST CHANGE, justified: MOVED 2026-09-28, from 2026-09-26, to the 1.10.0 cut date. The cut
+ * restamped all fifteen pages onto the cut form, so the commit form has no members and the
+ * assertion's else branch requires this constant to equal RELEASE_CUT_DATE. The re-attestation
+ * itself ran on two days, 2026-09-27 for fourteen pages and 2026-09-28 for README and the
+ * doctrine; neither date is carried as a commit-form clause, because every page now says it was
+ * verified at the cut, and the cut is the later of the two passes.
  */
-const REATTESTATION_DATE = "2026-09-26";
+const REATTESTATION_DATE = "2026-09-28";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");

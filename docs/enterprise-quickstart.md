@@ -2,7 +2,7 @@
 title: Enterprise quickstart
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit a2fb017a. Re-attested 2026-09-26 against the section headings and the rollout steps of the fork guide and the plugins guide. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.10.0 release cut (2026-09-28). -->
 <!-- Re-open when: a section this page links is renamed, moved or removed in `docs/enterprise-forks.md` or
      `docs/plugins.md`. `test/docsPages.test.ts` holds this page to the hand-page contract and holds
      every link text here to a heading in the guide it names. Re-open it too when either guide gains a
