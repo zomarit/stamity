@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28, and excluded from the site build.
 status: shipped-with-1.8.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
@@ -11,7 +11,10 @@ surfaces), as shipped in 1.8.0. Baseline claims carry a `path:line` citation fro
 `949bde9` — `main` after 1.7.0; claims amended in the Prove phase (2026-09-15) cite the built tree.
 The amendments dated 2026-09-26 to REQ-PROVE-009 and REQ-PROVE-020 come from the spec delta of
 `docs/plans/010-enterprise-release-02.md` (the 1.10.0 cut) and the deltas its units' reports
-declared; they cite the tree at `e995fe02`, and they are not in a release yet.
+declared; they cite the tree at `e995fe02`, and they are not in a release yet. REQ-PROVE-020's
+as-built text, and the criterion added with it, were merged on 2026-09-28 from the unit
+`run-of-record-1-10-0`; they cite the tree at `0f018460`, as do the refreshed citations in that
+requirement's first paragraph.
 
 ## Intent
 
@@ -323,25 +326,17 @@ read date, no URL, the hand-page link policy admitting only this repository's Gi
 
 `scripts/merge-ready-rate.mjs` computes the verified merge-ready rate from committed run records —
 denominator, numerator, exclusions by run id (a record reading in progress among them), merge evidence
-reported per run and never scored (`src/cli/docs/measurements.ts:195`, `:442-528`). `docs/measurements.md`
+reported per run and never scored (`src/cli/docs/measurements.ts:258`, `:485-607`). `docs/measurements.md`
 (absent at `949bde9`) renders from the committed snapshot `evals/measurements/merge-ready-<date>.json` —
 5 of 7 at the first — refreshed per release by `node scripts/merge-ready-rate.mjs --write`
-(`.github/release-controls-checklist.md:204-209`), beside a committed npm-download snapshot labelled a
-reach proxy; it enters roster, sidebar, `llms.txt` and the README map (`test/docsPages.test.ts:318-327`),
+(`.github/release-controls-checklist.md:228-233`), beside a committed npm-download snapshot labelled a
+reach proxy; it enters roster, sidebar, `llms.txt` and the README map (`src/cli/docs/llmsIndex.ts:263-271`,
+`website/sidebars.ts:57`, `llms.txt:40`, `test/docsPages.test.ts:539-542`),
 and doctrine and getting-started link the run of record and the first-run proof lanes without touching
 README's mission or tagline sentences.
 
 - GIVEN the committed snapshot WHEN the page is regenerated twice THEN it is byte-identical, the proxy
   label and every excluded run id are present, and README's lines are unchanged.
-- GIVEN a run of record carried to a later release (added at the 1.9.1 cut's review, prove/333) WHEN
-  its release `RUN_OF_RECORD_RELEASE` (`src/cli/docs/measurements.ts:115`) equals the carried-to
-  `RUN_OF_RECORD_CARRIED_TO` (`:134`) THEN the page refuses to render — the template's carried-to
-  release goes through `carriedToRelease` (`:164`, `:897`), which fails naming what the release that
-  runs the set deletes — and the same clause typed by hand on README and the doctrine is read off
-  both pages, passed through that guard and held to the same constants. Test evidence by describe
-  name, since every cut moves these suites' lines: `test/cli/docs/measurements.test.ts`'s "the run
-  of record is carried to the release the tree ships as", and `test/docsPages.test.ts`'s "the eval
-  run of record on the hand pages".
 
 Amended 2026-09-26 (plan 010 file 2): the carried-to criterion added at the 1.9.1 cut is retired
 together with the clause: runs 34 and 35 are 1.10.0's own run of record. Run 34 measured every case
@@ -352,22 +347,40 @@ run 33 ended terminal, and runs 34 and 35 replace it.)
 - GIVEN the tree after the cut THEN `RUN_OF_RECORD_CARRIED_TO`, `RUN_OF_RECORD_CANDIDATE` and
   `carriedToRelease` are absent, and README, the doctrine and the page name run 35 as the 1.10.0
   release run, composed with run 34, and run 34 as the run that measured every case in full.
+- GIVEN a composed run of record whose full baseline alone failed a floor case (run 34 is
+  `Status: **FAIL**`, `evals/runs/2026-09-27-run-34/RESULTS.md:3`, with
+  `question-shape-and-default-charter-only` failing at `:48`) THEN the page, README and the doctrine
+  each say that the baseline alone was FAIL and name the failing floor case, the Invariant 2
+  tightening (invariants 1.1.0), and the run that re-measured the two moved cases, composed with the
+  baseline (`docs/measurements.md:145-148`, `README.md:36-38`, `docs/doctrine.md:101-104`); when the
+  baseline passed, no surface calls it FAIL. Added from the `run-of-record-1-10-0` fixer's report,
+  `review/200`. Test evidence by describe name, since every cut moves this suite's lines:
+  `test/docsPages.test.ts`'s "the eval run of record on the hand pages", its case "%s discloses a
+  FAIL baseline behind the composed run of record", which reads the run ids, the status and the
+  failing ids off both results files rather than typing them.
 - GIVEN a verdict line "medium / 0.60 … 1.10.0" THEN the stated confidence reads 0.60. GIVEN "approve
   for 1.10.0" alone THEN no confidence is read.
 - GIVEN a verdict line naming a two-part version ("on 1.9", "the 1.10 line") or a version ending in
   `.x` ("1.0.x", "1.10.x") and no confidence THEN no confidence is read (added from the
   `confidence-version` fixer's report, `review/6` and `review/7`).
 
-As built at `e995fe02`, the confidence half: a stated confidence is a `0.x` number or `1.0`, not part
-of a version number. `CONFIDENCE` refuses a match preceded by a word character or a dot, or followed
-by a word character or by a dot and a word character (`src/cli/docs/measurements.ts:253-262`), and
-`statedConfidence` drops any value above 1 before it takes the last one (`:470-475`). The rows are
-`test/cli/docs/measurements.test.ts:724-738`. Not yet built, the retirement half: the carried-to
-clause and its constants are still in the tree (`src/cli/docs/measurements.ts:134-135`, `:164`,
-`:907-908`,
-with `RUN_OF_RECORD_RELEASE` still `1.9.0` at `:115`), because the unit that deletes them,
-`run-of-record-1-10-0`, has not landed, and its as-built text is written after it lands. Until then,
-the carried-to criterion above stays in force and tested.
+As built at `0f018460` (merged here 2026-09-28 from the unit `run-of-record-1-10-0`,
+`docs/plans/010-enterprise-release-02.md:231`, commits `2701139a` and `0f018460`). The confidence
+half: a stated confidence is a `0.x` number or `1.0`, not part of a version number. `CONFIDENCE`
+refuses a match preceded by a word character or a dot, or followed by a word character or by a dot
+and a word character (`src/cli/docs/measurements.ts:206-215`), and `statedConfidence` drops any value
+above 1 before it takes the last one (`:423-428`). The rows are
+`test/cli/docs/measurements.test.ts:682-696`. The retirement half: `RUN_OF_RECORD_CARRIED_TO`,
+`RUN_OF_RECORD_CANDIDATE` and `carriedToRelease` are gone; a search over `src` and `test` finds none
+of them. `RUN_OF_RECORD_PATH` names run 35's results file (`src/cli/docs/measurements.ts:103`), and
+`RUN_OF_RECORD_RELEASE` is `1.10.0` (`:116`). The template (`:858-870`) links run 35 as the 1.10.0
+release run, names run 34 as the run that measured every case in full, says run 34 alone was FAIL on
+one floor case, and names run 35 as the run that re-measured the two cases whose files moved,
+composed with run 34. The composition case (`test/cli/docs/measurements.test.ts:435-498`) walks the
+chain `2026-09-27-run-35 -> 2026-09-27-run-34`: run 35 names run 34 as its prior complete run
+(`evals/runs/2026-09-27-run-35/RESULTS.md:12`), and run 34 has no composition section, so the walk
+ends there. Its matcher reads `runs?`, so a one-link chain passes (`:487-492`). The page case
+(`:515-525`) and the hand-page case (`test/docsPages.test.ts:1225-1229`) refuse a carried clause.
 
 ### REQ-PROVE-021 — QA automation and binding
 
