@@ -199,11 +199,19 @@ checklist rather than by anyone's memory. (Added 2026-09-01, with the set; repoi
 and to `SET-v7.md` on 2026-09-15; incremental runs declared 2026-09-15.)
 
 Name the model profile from `evals/MODEL-PROFILES-v1.md` before dispatch; the existing
-Claude profile remains the default. The artifact records the selected pair, rubric,
-reasoning/decoding and harness controls, with calibration for that configuration. A Codex
-profile's result starts a separate baseline and cannot be presented as the Claude run.
+Claude profile remains the default. It moved in place at 1.10.0: the scenario model from
+`claude-opus-5` to `claude-opus-5-5` at `high` reasoning effort, the judge `claude-fable-5-1`
+unchanged, recorded as a dated paragraph in `evals/SET-v7.md`. A profile change starts a new
+baseline, so the first release on a moved profile measures every case in full. The artifact
+records the selected pair, rubric, reasoning/decoding and harness controls, with calibration for
+that configuration. A Codex profile's result starts a separate baseline and cannot be presented
+as the Claude run.
 
-The current full release run covers all 102 v6 cases, three admitted samples each.
+The current full release run covers all 102 v6 cases, three admitted samples each. At 1.10.0
+that is run 34 (`evals/runs/2026-09-27-run-34/`), the full baseline on the moved profile; alone
+it is FAIL on one floor case. Run 35 (`evals/runs/2026-09-27-run-35/`) re-measured the two cases
+whose files moved and composed with run 34 under the incremental rule, and the composed run holds
+every threshold with calibration 5 of 5 in each run; run 35 is the run of record.
 For a selected Codex profile, the manual stateless transport is documented in
 `evals/README.md`; fresh provider isolation/model/effort evidence and every retained
 calibration fixture must pass before scores are admitted. A blocked preflight, missing
