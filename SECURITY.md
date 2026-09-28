@@ -296,29 +296,15 @@ so where it says which edition each id belongs to.
 
 ## What is still open
 
-One item here is an **accepted risk** rather than tracked work. It is separated from the table below
-so the difference is visible.
+No accepted risk remains. The one item recorded here as accepted was the documentation site's
+`image-size` dependency, reached through Docusaurus's MDX loader: two high-severity advisories
+described denial of service through infinite loops in its ICNS, JXL and HEIF parsers while no fixed
+version existed. Both advisories now name 2.0.3 as patched, the re-open trigger this page set, and
+the site's lockfile moved to 2.0.4 on 2026-09-28, from the same package and maintainer rather than a
+republish ([dated primary sources](.github/release-egress.md)).
 
-The documentation site under `website/` builds with Docusaurus, which reaches `image-size` through
-its MDX loader. Two high-severity advisories describe denial of service through infinite loops in
-that package's ICNS, JXL and HEIF parsers, and **no fixed version exists**. Both advisories publish
-no patched release, every published version including the newest is in range, the upstream project is
-archived, and no Docusaurus release moves off it. Rechecked 2026-09-10: Docusaurus stable remains
-3.10.2, with v4 GA still unavailable, and both advisories still list no patched version
-([dated primary sources](.github/release-egress.md)).
-
-It is accepted rather than fixed because the exposure does not reach anyone installing this package.
-`image-size` is a build-time dependency of the documentation site, absent from the published npm
-package entirely, and the only images it parses are files committed to this repository. Neither
-advisory has a remote-input path here. A community republish of the package would silence the alert,
-and is deliberately not used. It carries no provenance attestation. That is a bar this package meets
-for its own artifacts, and will not waive for a transitive one. **Re-open when** Docusaurus drops the
-dependency, an advisory publishes a patched version, or the site starts parsing images it did not
-author.
-
-Below is implementation and the proofs that closed it, tracked separately from accepted risk. Both
-rows shipped their proof at 1.7.0. Each names the run that carries it, so you can open the run rather
-than take the sentence.
+Below is implementation and the proofs that closed it. Both rows shipped their proof at 1.7.0. Each
+names the run that carries it, so you can open the run rather than take the sentence.
 
 | Work | Current boundary |
 |---|---|
