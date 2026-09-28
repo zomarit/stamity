@@ -10,28 +10,22 @@ const MAX_FILE_BYTES = 1024 * 1024
 // Exact repository-relative paths only. An exception needs its reviewable reason here,
 // never a broad extension exemption or an automatically raised size ceiling.
 const LARGE_FILE_EXCEPTIONS = new Map([
-  // Empty between release windows: an entry buys one retention window and retires at the release
-  // close that ends it. Run 31's and run 32's public summaries were the last pair — each
-  // load-bearing while the next run's incremental composition read it from its retention commit
-  // (composition.priorSummaryCommit) — and retired at the 1.9.0 close, whose archive step replaced
-  // both with compact summaries beside an ARCHIVE.json pointer into the evidence-archive-2026-09-22
-  // release. Run 30's summary is the worked precedent for that shape: 3418596 bytes in 68b57ef
-  // (2026-09-15), compacted to 112695 bytes at the 1.8.0 close (05cb4ef).
-  // Verify: git cat-file -s 68b57ef:evals/runs/2026-09-15-run-30/summary.json
-  //
-  // The 1.10.0 window holds two entries, retired together at the 1.10.0 close's archive step.
-  // Run 35 is the run of record and composes with run 34, reading run 34's summary from its
-  // retention commit (run 35's composition.priorSummaryCommit is 95addb30); the next release's
-  // incremental run reads run 35's the same way. Both stay until that close compacts them.
-  // Verify: git cat-file -s 95addb30:evals/runs/2026-09-27-run-34/summary.json (3512517 bytes)
+  // Empty, and an empty list is the expected steady state: an entry buys one retention window and
+  // retires at the release close that ends it. The last pair — run 34's and run 35's public
+  // summaries, run 35 the 1.10.0 run of record composing with run 34 and reading its summary from
+  // the retention commit (composition.priorSummaryCommit 95addb30) — retired at the 1.10.0 close,
+  // whose archive step replaced both with compact summaries beside an ARCHIVE.json pointer into the
+  // evidence-archive-2026-09-28 release: run 34 from 3512517 to 65379 bytes, run 35 from 3511337 to
+  // 113795. The pair before it, run 31's and run 32's, retired the same way at the 1.9.0 close
+  // (evidence-archive-2026-09-22), and run 30's summary is the first worked precedent: 3418596 bytes
+  // in 68b57ef (2026-09-15), compacted to 112695 bytes at the 1.8.0 close (05cb4ef).
+  // Verify: git cat-file -s 95addb30:evals/runs/2026-09-27-run-34/summary.json
   //
   // A new entry is one exact repository-relative path with its reviewable reason, a named window,
   // and the close step that ends it — never a broad extension exemption, never a raised ceiling.
   // An entry may precede its artifact: the map is consulted only for paths Git reports as changed
   // (the `has` below), is never iterated and never stat'd, so an entry for a path not yet in the
   // tree is inert rather than a false pass.
-  ['evals/runs/2026-09-27-run-34/summary.json', 'prior complete run summary that run 35 composes with, retained until the 1.10.0 close archive step compacts it'],
-  ['evals/runs/2026-09-27-run-35/summary.json', '1.10.0 release run summary, retained until the release-close archive step compacts it'],
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/

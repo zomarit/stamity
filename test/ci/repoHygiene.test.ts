@@ -164,31 +164,33 @@ describe("repository hygiene over the Git index", () => {
     expect(run(root).status).toBe(0);
   });
 
-  // TEST CHANGE, justified: the case asserted an empty map after the 1.9.0 close retired run 31's
-  // and run 32's entries. The 1.10.0 window opens two entries — run 35, the run of record, composes
-  // with run 34 and reads its summary from the retention commit — so the expected list is those two.
-  // The case keeps proving the retirement too: the two retired paths are still refused over budget,
-  // beside the same-directory neighbours of every exempted path, and the exempted paths pass.
-  it("exempts exactly the paths its map names and refuses their neighbours and the retired summaries", () => {
-    const exempt = exemptedPaths();
-    expect(exempt, "the size-exception map's paths are not the two 1.10.0 run summaries").toEqual([
-      "evals/runs/2026-09-27-run-34/summary.json",
-      "evals/runs/2026-09-27-run-35/summary.json",
-    ]);
+  // TEST CHANGE, justified: the case asserted the map's two 1.10.0 entries; the 1.10.0 close archived
+  // run 34's and run 35's summaries into evidence-archive-2026-09-28 and compacted them, so both
+  // entries retired and the expected list is empty again, as after the 1.9.0 close. An empty list
+  // would make the old exempt-path body vacuous, so the case proves the retirement it asserts: every
+  // retired path — the 1.9.0 pair and the 1.10.0 pair — is staged over budget beside its
+  // same-directory neighbour and all of them must be refused. A map that names any path fails the
+  // first expectation, and exemptedPaths still throws if the declaration moves.
+  it("names no size exception and refuses the retired run summaries like any other file", () => {
+    expect(
+      exemptedPaths(),
+      "the size-exception map names a path; the 1.10.0 close retired both run-summary entries",
+    ).toEqual([]);
 
     const root = fixture();
     const retired = [
       "evals/runs/2026-09-21-run-31/summary.json",
       "evals/runs/2026-09-22-run-32/summary.json",
+      "evals/runs/2026-09-27-run-34/summary.json",
+      "evals/runs/2026-09-27-run-35/summary.json",
     ];
-    const neighbours = exempt.map((path) => path.replace(/[^/]+$/, "inputs.json"));
-    const refused = [...retired, ...neighbours];
-    for (const path of [...exempt, ...refused]) write(root, path, "x".repeat(1024 * 1024 + 1));
+    const neighbours = retired.map((path) => path.replace(/[^/]+$/, "inputs.json"));
+    const staged = [...retired, ...neighbours];
+    for (const path of staged) write(root, path, "x".repeat(1024 * 1024 + 1));
     git(root, "add", ".");
     const result = run(root, "--base", "HEAD");
     expect(result.status, result.stderr).toBe(1);
-    for (const path of refused) expect(result.stderr, `${path} was not refused`).toContain(path);
-    for (const path of exempt) expect(result.stderr, `${path} was refused`).not.toContain(path);
+    for (const path of staged) expect(result.stderr, `${path} was not refused`).toContain(path);
   });
 
   it.each([
