@@ -351,7 +351,9 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   ledger finding belongs to the agent whose digest names its report; one that no agent's digest names credits a seed
   only when no verdict agent was dispatched before the injection point. An agent the measurement builds from its
   sub-agent file, because the main transcript holds no dispatch for it, has no known dispatch time: its findings
-  credit no seed, and a finding no agent's digest names credits none beside it. A finding that credits no seed is no
+  credit no seed, and a finding no agent's digest names credits none beside it. No position makes such an agent
+  branch-level, so its characters stay in the loop figure, and such a fixer counts as dispatched before every agent
+  whose passes it shares, for the round-1 flag. A finding that credits no seed is no
   seed match for precision and never reads a seed as fixed for loss (below).
   The measurement reads the driver's injection record (`run.json`'s `injection`, §5) before any snapshot, and each
   seed has one of three readings there. A seed recorded not injected is filed as absent at its pass whatever the

@@ -1967,6 +1967,27 @@ describe("R6 — the credit guard reaches compaction loss and precision (review/
 });
 
 describe("R8 — branch level follows an approval (review/167)", () => {
+  it("(review/21) a verdict agent built from its sub-agent file is never branch-level by position: delivered after a branch-level review, its characters stay in the loop", async () => {
+    const deep = agentOf("deep", "stamity-reviewer", "Whole-branch deep review", "Review the whole branch.", APPROVE);
+    const lost = { ...LENS, id: "tu_lost", agentId: "alost" };
+    const tail = [mainLine.taskNotification({ taskId: "alost", toolUseId: "tu_lost", result: LENS.result })];
+    const without = await featureRun([...BUILDERS, APPROVING_1, deep]);
+    const m = await featureRun([...BUILDERS, APPROVING_1, deep], { tail, extraSubagents: [subagentOf(lost)] });
+    expect(without.wholeBranch).toEqual({ finalClass: "approve", rounds: 1 });
+    expect(m.notes.join("\n")).toContain("agent alost built from its sub-agent file");
+    expect(m.totals.loopChars - without.totals.loopChars).toBeGreaterThanOrEqual(LENS.prompt.length + LENS.result.length);
+  });
+
+  it("(sweep) a fixer built from its sub-agent file counts as dispatched before every verdict agent sharing its passes, so it can only raise their round", async () => {
+    const lostFixer = { ...FIXER, id: "tu_lostfix", agentId: "alostfix" };
+    const tail = [mainLine.taskNotification({ taskId: "alostfix", toolUseId: "tu_lostfix", result: FIXER.result })];
+    const plain = await featureRun([...BUILDERS, ROUND_1, LENS]);
+    expect(seedOf(plain)).toEqual(expect.objectContaining({ found: true, foundRound1: true }));
+    const m = await featureRun([...BUILDERS, ROUND_1, LENS], { tail, extraSubagents: [subagentOf(lostFixer)] });
+    expect(m.notes.join("\n")).toContain("agent alostfix built from its sub-agent file");
+    expect(seedOf(m)).toEqual(expect.objectContaining({ found: true, foundRound1: false }));
+  });
+
   it("(review/20) an approval by a reviewer built from its sub-agent file does not make a later \"Whole-branch review round 1\" branch-level", async () => {
     // The review/15 fixture: the reviewer's dispatch is missing from the main transcript, so its line is its delivery's,
     // which lands after the injection point (the lens) though it may have been dispatched before it.
