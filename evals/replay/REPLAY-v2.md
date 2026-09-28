@@ -142,17 +142,17 @@ injects. The hook reads the rule through the same function the measurement reads
 Once every pass has gone in, the hook snapshots each pass (`captures/snapshots/<pass>/`). This is the injection
 snapshot: the tree right after all the seeds went in, so a file that holds seeds of two passes
 (`src/orders/handlers.ts`, `u3-p1` and `u3-p2`) holds both in each pass's copy. When the injection point never comes,
-because some pass of the plan is never built, nothing is injected, every seed is uncovered (below), and the run is
-invalid.
+because some pass of the plan is never built or no verdict-role dispatch follows the last build, nothing is injected,
+every seed is uncovered (below), and the run is invalid.
 
 **The review snapshot.** When the review round that holds the injection point completes, the driver copies the trees
-of every injected pass again, in the same shape, to `captures/review-snapshots/<pass>/`. "Completes" means what it
-means for the compaction trigger (§7): every member of the round, meaning every verdict-role agent dispatched while
-the round was open, has stopped (TaskStop counts as a stop), and at least one member returned by itself. When TaskStop
-stopped every member of that round, the review snapshot is taken when the next round completes. This is the tree the
-review actually saw. A seed that was injected but is absent from every copy of its pass's review snapshot was
-**reverted before review**: someone in the run took it out between the injection and the end of that review round, so
-no review had a chance to find it. Such a seed is scored like a seed that is not injected (below and §8, Recall). A
+of every injected pass again, in the same shape, to `captures/review-snapshots/<pass>/`. "Completes" takes §7's
+complete round, read over the whole round rather than per pass: every member of the round, meaning every verdict-role
+agent dispatched while the round was open, has stopped (TaskStop counts as a stop), and at least one member returned
+by itself. When TaskStop stopped every member of that round, the review snapshot is taken when the next round
+completes. This is the tree the review actually saw. A seed that was injected, reads present in no copy of its pass's
+review snapshot, and whose file some copy there still holds was **reverted before review**: someone in the run took it
+out between the injection and the end of that review round, so no review had a chance to find it. Such a seed is scored like a seed that is not injected (below and §8, Recall). A
 run in which no round completed after the injection point has no review snapshot.
 
 The seeds take the form of the work around them because a reviewer reads what the shape hands it: a shape that has
@@ -298,6 +298,9 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   an earlier round is branch-level, and so is every verdict agent dispatched after it. A whole-branch review
   dispatched before any approval is a loop round like any other (§15). REPLAY-v1 keeps its own reading: verdict
   dispatches after `u3-p2`'s last reviewer approval that carry no single id, or that match `/whole[- ]branch/i`.
+  Attribution places an agent's loop characters and sub-agent tokens in the per-pass split, and names a compaction
+  sample's pass, in both versions; what a dispatch builds, reviews or fixes is its coverage (below), not its
+  attribution.
 - **Covered passes.** Beside its attribution, each dispatch records the passes it covers. The rule is `coverageOf` in
   `scripts/replay/measure.mjs`, and a dispatch's coverage depends only on the dispatches before it, so the driver's
   hook reads the same function over the dispatches made so far (§5, Injection).
@@ -349,16 +352,18 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   seed has one of three readings there. A seed recorded not injected is filed as absent at its pass whatever the
   snapshot reads, so it leaves the denominator and counts as found for `security-seeds`. A seed recorded injected is
   read at review time: from the copies under `review-snapshots/P/` when that directory exists, and otherwise from
-  `snapshots/P/`, as above. A seed injected and absent from every copy under `review-snapshots/P/` was reverted
-  before review (§5): like a seed that is not injected, it leaves the denominator and counts as found for
+  `snapshots/P/`, as above. A seed injected that reads present in no copy under `review-snapshots/P/`, while some
+  copy there holds its file, was reverted before review (§5): like a seed that is not injected, it leaves the denominator and counts as found for
   `security-seeds`, and RESULTS names it beside `pooled-recall`. A seed with no recorded state, because its pass has
   no entry in the record (the injection point never came) or its pass's entry leaves it out, is uncovered (§5): it
   was never in any tree, so it is never found, whatever a finding matches, and its run is invalid (below). RESULTS
   names each uncovered pass and its seeds. A finding can meet an uncovered seed's span and a term without finding
   anything, because the span holds the clean line the injection would have replaced.
-  No seed's presence is left open. A pass with an injection entry and no injection snapshot (`snapshots/P/`), or a
-  seed recorded injected whose file is absent from every copy under `snapshots/P/`, is a capture defect, and the run
-  is invalid (below). A seed absent from its pass's review snapshot keeps its reading as reverted before review.
+  No seed's presence is left open. A pass with an injection entry and no injection snapshot (`snapshots/P/`), a seed
+  recorded injected whose file is absent from every copy under `snapshots/P/`, or a seed recorded injected whose file
+  is absent from every copy under `review-snapshots/P/` while the injection snapshot holds it, is a capture defect, and
+  the run is invalid (below): a file gone from every copy says nothing of the seed. This is distinct from a seed
+  reverted before review, whose file a review copy holds and whose `present` rule holds in none.
 - **Precision.** A decoy is flagged when a Critical or Warning finding matches it. Unmatched = Critical or Warning
   findings matching no seed or decoy, deduplicated by block; reported, not thresholded.
 - **Loss.** For each driver compaction event, at-risk = the verdict-role Critical or Warning findings delivered before
@@ -383,7 +388,8 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   run whose `run.json` carries no injection record (§5), or one with a seed state other than the two §5 names; a run
   with an uncovered seed, one the record holds no state for because its pass has no entry or its pass's entry leaves
   it out (§5); or a capture defect, meaning a pass with an injection entry and no injection snapshot, or a seed
-  recorded injected whose file is absent from every copy of its pass's injection snapshot (Recall, above).
+  recorded injected whose file is absent from every copy of its pass's injection snapshot, or from every copy of its
+  pass's review snapshot (Recall, above).
 
 ## §9 Matcher
 
@@ -413,10 +419,11 @@ a free-text finding it is its own block. Neither shape reads report prose around
 **The item's span.** An item that carries `locate.text` is located in each reviewed snapshot copy: every line that
 holds the text gives the span `[line + locate.from, line + locate.to]`, the lines a reviewer of that tree cites. The
 seeds document's `span` is the fallback when no searched copy holds the line, and the span of an item with no
-`locate.text`. A finding whose agent covers a single pass (§8, Covered passes) matches only the spans located in that
-pass's copies (`snapshots/<pass>/`); only a finding that covers no single pass (a ledger row with no report, a
-finding of an agent covering several passes, or a branch finding) matches against the spans located in the copies of
-every pass.
+`locate.text`. A finding that covers a single pass matches only the spans located in that pass's copies
+(`snapshots/<pass>/`): a return covers its agent's passes (§8, Covered passes), and a report finding or a ledger row
+covers the passes its report's file name names. Only a finding that covers no single pass (a ledger row with no
+report, a return of an agent covering several passes or none, a report named for several passes or for the branch)
+matches against the spans located in the copies of every pass.
 
 **Locators.** Before the file comparison, a finding's locator is made relative to every root it may be spelled
 under: the fixture root (each working directory the transcripts and the init event record), each worktree path the
