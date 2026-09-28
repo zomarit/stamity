@@ -537,6 +537,12 @@ const RELEASE_CUT_DATE = "2026-09-28";
  * itself ran on two days, 2026-09-27 for fourteen pages and 2026-09-28 for README and the
  * doctrine; neither date is carried as a commit-form clause, because every page now says it was
  * verified at the cut, and the cut is the later of the two passes.
+ *
+ * NOT MOVED, 2026-09-28, after the 1.10.0 cut: the commit form has one member again. Capturing two
+ * learnings moved the learnings count in `docs/troubleshooting.md`'s sample `check` transcript
+ * from 14 to 16, so that page carries the commit form naming the learnings commit the real `check`
+ * ran on plus `Re-attested 2026-09-28` — the same day as the cut, so this constant already names
+ * the pass and the assertion's first branch now reads it.
  */
 const REATTESTATION_DATE = "2026-09-28";
 

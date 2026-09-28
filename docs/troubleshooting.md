@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.10.0 release cut (2026-09-28). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 8c0d4e01. Re-attested 2026-09-28 against the capture of two learnings, which moves the sample `check` transcript's learnings count from 14 to 16. -->
 <!-- Re-open when: a `check` probe is added or removed, an error code starts or stops being
      thrown, or a remedy below stops working. `test/docsPages.test.ts` holds this page to the
      hand-page contract and reads the probe rows out of `src/cli/commands/check.ts`;
@@ -31,7 +31,7 @@ doctor
   ok    git-available        git reports a clean working tree
   ok    manifest             .stamity/manifest.json is valid — schema 1.0.0, tools claude, 67 ledger row(s)
   ok    state-dirs           .stamity/learnings, .stamity/handoffs are present
-  ok    learnings            14 learning(s), all valid
+  ok    learnings            16 learning(s), all valid
   ok    tmp-hygiene          no writer temp files left behind
   ok    env-mcp              no MCP servers selected, so no credentials are required
   ok    tool-traces          all 1 target tool(s) have emitted files recorded in the ledger
