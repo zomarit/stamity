@@ -427,6 +427,22 @@ function statedConfidence(line: string): number | null {
   return found.at(-1) ?? null;
 }
 
+/**
+ * Order two `major.minor.patch` versions numerically, part by part.
+ *
+ * A string comparison puts "1.9.1" after "1.10.0" (build/96), so the changelog
+ * head is chosen by this order and never by `toSorted()` on the raw strings.
+ */
+function compareVersions(left: string, right: string): number {
+  const a = left.split(".").map(Number);
+  const b = right.split(".").map(Number);
+  for (let index = 0; index < 3; index += 1) {
+    const difference = (a[index] ?? 0) - (b[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
+}
+
 /** The versions the changelog carries as released sections. */
 function releasedVersions(changelog: string): ReadonlySet<string> {
   return new Set([...changelog.matchAll(RELEASE_HEADING)].map((match) => match[1] ?? ""));
@@ -601,7 +617,7 @@ export function computeMergeReadyRate(root: string = repoRoot()): MergeReadyRepo
     computedFrom: {
       records,
       newestRecordDate: generated,
-      changelogHead: [...versions].toSorted().at(-1) ?? "",
+      changelogHead: [...versions].toSorted(compareVersions).at(-1) ?? "",
     },
   };
 }

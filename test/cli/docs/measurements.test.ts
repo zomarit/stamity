@@ -818,6 +818,30 @@ describe("the rule, exercised against fixture trees", () => {
     expect(report.numerator).toHaveLength(1);
   });
 
+  it("reads the changelog head by version order, so 1.10.0 outranks 1.9.1", () => {
+    // build/96: a string sort put "1.9.1" after "1.10.0" and froze the 1.10.0
+    // snapshot with the previous release as its head.
+    const root = fixture({
+      "2026-01-02_release-1.10.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+    });
+    writeFileSync(
+      join(root, "CHANGELOG.md"),
+      [
+        "# Changelog",
+        "",
+        "## [1.10.0] - 2026-01-09",
+        "",
+        "## [1.9.1] - 2026-01-05",
+        "",
+        "## [1.2.0] - 2026-01-01",
+        "",
+      ].join("\n"),
+    );
+    const report = computeMergeReadyRate(root);
+    rmSync(root, { recursive: true, force: true });
+    expect(report.computedFrom.changelogHead).toBe("1.10.0");
+  });
+
   it("refuses a tree with no runs directory and one with no changelog", () => {
     const empty = mkdtempSync(join(tmpdir(), "stamity-measure-empty-"));
     expect(() => computeMergeReadyRate(empty)).toThrow(EngineError);
