@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, and excluded from the site build.
 status: shipped-with-1.10.0
 obsolete_when: every supported client hands a parent a sub-agent's full report by reference and restores a running flow's state after a compaction on its own, or a decision row cuts the surface
 ---
@@ -26,7 +26,11 @@ requirement.
 REQ-CTX-016, and the paragraphs and criteria marked "amended 2026-09-26" under REQ-CTX-013 and
 REQ-CTX-015, come from the spec deltas of `docs/plans/010-enterprise-release-01.md` and
 `docs/plans/011-replay-v2.md` and from the deltas their units' reports declared. The paragraphs
-and criteria marked "amended 2026-09-27" come from R5 in `docs/plans/011-replay-v2.md`.
+and criteria marked "amended 2026-09-27" come from R5 in `docs/plans/011-replay-v2.md`. The
+paragraphs and criteria of REQ-CTX-015 marked "amended 2026-09-28" or "added 2026-09-28" come
+from R6–R10 in `docs/plans/011-replay-v2-02.md`: defaults taken unattended, which wait for the
+maintainer's confirmation. They apply under REPLAY-v2 only; REPLAY-v1 and its measurement stay as
+they are.
 
 Line citations outside the Context section are to the tree at `d227ca57`, the 1.10.0 release
 candidate. On 2026-09-27 each one was read at the tree it was first written against and found
@@ -46,6 +50,13 @@ cites that text's current line at `d227ca57`:
   worktree's own form, a named pass range covers every pass in it, and an injected seed is read at
   review time. REQ-CTX-015 was rewritten for R3 and R4 on 2026-09-27, so it cites their current
   lines at `d227ca57`.
+
+On 2026-09-28 REQ-CTX-015 was amended from `docs/plans/011-replay-v2-02.md`, whose units moved
+`evals/replay/REPLAY-v2.md`, `scripts/replay/measure.mjs`, `scripts/replay/score.mjs` and
+`scripts/replay/compare.mjs`. Every line citation REQ-CTX-015 makes into those four files is
+therefore to the tree at `bb79ee58`, where every public unit of that plan has landed; each one was
+read there with the file open. Its citations into `scripts/replay/protocols.mjs` and
+`scripts/replay/findings.mjs` read the same at `d227ca57` and at `bb79ee58`.
 
 ## Context
 
@@ -126,8 +137,9 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 - `evals/replay/REPLAY-v1.md`: the replay's protocol and thresholds.
 - `evals/replay/REPLAY-v2.md`: the second protocol, where the seeds reach review, with v1's
   thresholds (amended 2026-09-26).
-- `docs/plans/010-enterprise-release-01.md` (REQ-CTX-013's read caps, REQ-CTX-016) and
-  `docs/plans/011-replay-v2.md` (REQ-CTX-015's v2 changes).
+- `docs/plans/010-enterprise-release-01.md` (REQ-CTX-013's read caps, REQ-CTX-016),
+  `docs/plans/011-replay-v2.md` (REQ-CTX-015's v2 changes) and
+  `docs/plans/011-replay-v2-02.md` (REQ-CTX-015's R6–R10, amended 2026-09-28).
 - `test` (amended 2026-09-26): `test/hooks/sessionStartCard.test.ts` and
   `test/runs/resumeCardParity.test.ts` (the card's read caps); `test/emit/hooksInfra.test.ts`,
   `test/hooks/scriptBudget.test.ts` and `test/ci/hookLatency.test.ts` (the hook budgets);
@@ -468,23 +480,46 @@ A replay compares the changed shape with the 1.9.1 baseline:
   read "the driver
   commits that pass's seeds … A dispatch covers the one pass its description names, else the distinct
   passes its prompt names; a pass is injected once, in one commit that carries the session's own git
-  identity and clock …"). Citations here are to `evals/replay/REPLAY-v2.md` and
-  `scripts/replay/measure.mjs` at `d227ca57`. The driver lives outside this repository, so it is
+  identity and clock …"); amended again 2026-09-28 for R6–R10 of `docs/plans/011-replay-v2-02.md`,
+  unattended defaults for the maintainer's confirmation, which apply under v2 only. Citations here
+  are to `evals/replay/REPLAY-v2.md` and `scripts/replay/measure.mjs` at `bb79ee58` (re-pointed
+  2026-09-28; they were at `d227ca57`). The driver lives outside this repository, so it is
   described only by what REPLAY-v2 says it must do.
-  - **Start.** The units start clean (`REPLAY-v2.md:98-99`). When the first verdict-role dispatch
+  - **Start** (amended 2026-09-28, R6, `review/167`; it read "When the first verdict-role dispatch
     that covers a pass starts, the driver's hook injects every covered pass not yet injected, in one
-    hook call and before the reviewer's first tool call (`:102-106`). A pass is injected once, and a
-    hook that runs out of its 120 seconds records a partial injection, which makes the run invalid
-    (`:150-151`).
-  - **Covered passes.** A dispatch covers the one pass its description names, else the distinct
-    passes its prompt names. A named range covers every pass between its two ends, in either
-    direction: `u1-p1..u3-p2` covers all six. A range mark is `..`, `...`, `…`, an en dash, an em
-    dash, or the word `to` or `through`; ranges chain; a list covers its ids alone; and an ASCII
-    hyphen is never a range mark (`REPLAY-v2.md:102-104`, `:278-290`). The code is `passesOf` with
-    `RANGE_GAP` (`scripts/replay/measure.mjs:345`, `:353-366`, `:379-381`); a v1 measurement reads no
-    range (`:1237`).
+    hook call"). The units start clean (`REPLAY-v2.md:102-103`). A pass is *built* once the
+    description of a build-role dispatch names it; every id counts, a range included. A dispatch's
+    prompt is never read for this, and a description that names no pass builds nothing. The
+    *injection point* is the first verdict-role dispatch after every pass of the plan is built. Its
+    hook injects all six passes in one call, before the reviewer's first tool call, in pass order and
+    in each worktree's own form, as before, and then snapshots each pass. No other dispatch injects
+    (`:106-112`, `:142-146`; `coverageOf`, `scripts/replay/measure.mjs:406-435`). When the injection
+    point never comes, nothing is injected and every seed is uncovered (Recall, below;
+    `REPLAY-v2.md:144-146`). A pass is injected once, and a hook that runs out of its 120 seconds
+    records a partial injection, which makes the run invalid (`:160-161`).
+  - **Covered passes** (amended 2026-09-28, R6; it read "A dispatch covers the one pass its
+    description names, else the distinct passes its prompt names").
+    - A verdict-role dispatch before the injection point covers nothing.
+    - A verdict-role dispatch at or after the injection point covers the passes its description
+      names (every id, a range included). If the description names no pass, it covers every pass.
+    - A fixer covers the passes its description names. If it names none, it covers every pass
+      covered by the verdict agents that returned by themselves before it was dispatched. A fixer
+      dispatched before any review has returned covers nothing.
+    - A build-role dispatch covers the passes its description names; any other dispatch covers
+      nothing, and a SendMessage re-review is no dispatch, so it keeps the resumed agent's coverage.
+    - A round covers the union of its members' coverage.
+
+    Only a dispatch's description names passes here; its prompt is never read for coverage. This
+    coverage governs v2's injection, snapshots, rounds, verdict mapping, round-1 flag, stage, fixer
+    round count and capture-defect check (REPLAY-v2 §8, Covered passes, `REPLAY-v2.md:305-328`;
+    `coverageOf`, `scripts/replay/measure.mjs:406-435`, read for every agent at `:787-802`). The range
+    reading stands, now over the description: a named range covers every pass between its two ends,
+    in either direction, so `u1-p1..u3-p2` covers all six; a range mark is `..`, `...`, `…`, an en
+    dash, an em dash, or the word `to` or `through`; ranges chain; a list covers its ids alone; and an
+    ASCII hyphen is never a range mark (`passIdsIn` with `RANGE_GAP`, `:346`, `:354-367`). A v1
+    measurement keeps `passesOf` and reads no range (`:694`; the v2 switch, `:1410`).
   - **The form per worktree.** Each worktree takes the seeds in the form its own state calls for, read
-    at the injection (`REPLAY-v2.md:111-124`):
+    at the injection (`REPLAY-v2.md:117-130`):
     - `skipped-pristine`: HEAD is still the setup commit and nothing has changed, not even an
       untracked file. The worktree takes nothing, and it is recorded under this form only when it
       holds a seed's anchor.
@@ -497,34 +532,97 @@ A replay compares the changed shape with the 1.9.1 baseline:
     - `working-tree`: any other state. The seeds go into the working tree, and nothing is staged or
       committed.
 
-    A seed whose anchor only pristine worktrees hold is recorded as not injected (`:126-128`).
+    A seed whose anchor only pristine worktrees hold is recorded as not injected (`:132-134`).
     `run.json`'s `injection` record names each seed `injected` or `not injected (anchor missing)`,
     and its `forms` list holds one entry, with the form, the files and the commit sha, per worktree
-    that took the seeds, or that is pristine and holds a seed's anchor (`:129-134`).
-  - **Snapshots.** The hook snapshots each injected pass to `captures/snapshots/<pass>/` right after
-    the seeds go in (`REPLAY-v2.md:135-136`). When the first review round covering a pass completes,
-    the driver copies the pass's trees again to `captures/review-snapshots/<pass>/`, the tree the
-    review saw (`:138-146`; the measurement's path, `scripts/replay/measure.mjs:168`).
+    that took the seeds, or that is pristine and holds a seed's anchor (`:135-140`).
+  - **Snapshots** (amended 2026-09-28, R6; it read "When the first review round covering a pass
+    completes, the driver copies the pass's trees again"). Once every pass has gone in, the hook
+    snapshots each pass to `captures/snapshots/<pass>/`, the injection snapshot
+    (`REPLAY-v2.md:142-144`). The review snapshot of every injected pass is taken when the round that
+    holds the injection point completes, meaning every member has stopped and at least one returned
+    by itself. If TaskStop stopped every member of that round, it is taken when the next round
+    completes. The driver copies the pass's trees again to `captures/review-snapshots/<pass>/`, the
+    tree the review saw (`:148-156`; the measurement's path, `scripts/replay/measure.mjs:169`).
+  - **Credit** (added 2026-09-28, R6). A finding credits a seed only if its agent was dispatched at
+    or after the injection point. A report or ledger finding is assigned to the agent whose digest
+    names its report; if no agent's digest names it, it credits a seed only when no verdict agent
+    was dispatched before the injection point. As built, a verdict agent the measurement reads from
+    its sub-agent file, because the main transcript holds no dispatch for it, has no dispatch line:
+    its findings credit no seed, and a finding no agent's digest names credits none beside it. A
+    finding that credits no seed is no seed match for precision and never reads a seed as fixed for
+    loss (REPLAY-v2 §8, Recall, `REPLAY-v2.md:349-354`; `credits`, `scripts/replay/measure.mjs:1240`;
+    the guard, `:1420-1422`; `lineOf`, `:996`).
+  - **Branch level** (added 2026-09-28, R8, coupled to R6; REPLAY-v2 §8, Pass attribution, read
+    "verdict dispatches after `u3-p2`'s last reviewer approval that carry no single id, or that match
+    `/whole[- ]branch/i`"). A verdict dispatch is branch-level when its description or prompt matches
+    `/whole[- ]branch/i` and it was dispatched after an approving delivery of an earlier round by a
+    reviewer dispatched at or after the injection point; an approval before the injection point (a
+    plan review) counts for nothing here. Every verdict agent dispatched after a branch-level one is
+    branch-level too. Residual: a whole-branch review dispatched before any approval counts as a
+    loop round (`REPLAY-v2.md:295-304`, `:557-559`; `joinAgents`, `scripts/replay/measure.mjs:803-815`).
+    REPLAY-v1 keeps its own reading (`:816-824`).
   - **Recall.** The measurement reads the injection record, not the snapshot, for a seed recorded not
     injected: it leaves the pooled recall denominator and counts as found in the `security-seeds`
-    row, whatever the snapshot reads (`review/135`; `REPLAY-v2.md:153-160`). A seed recorded injected
+    row, whatever the snapshot reads (`review/135`; `REPLAY-v2.md:163-170`). A seed recorded injected
     is read at review time: from its pass's review snapshot when there is one, else from the
-    injection snapshot. A seed injected and absent from every copy of its pass's review snapshot was
-    reverted before review; like a seed not injected, it leaves pooled recall and holds its
-    `security-seeds` row, and RESULTS names it beside `pooled-recall` (`REPLAY-v2.md:315-321`;
-    `seedRowsOf`, `scripts/replay/measure.mjs:1117-1129`; the note's rows,
-    `scripts/replay/score.mjs:94`). A v2 run without the injection record is invalid
-    (`injectionStatesOf`, `scripts/replay/measure.mjs:1071-1078`; `REPLAY-v2.md:339-341`).
-  - **Canary.** Before any pilot, one canary run per shape (`K-inject-baseline`,
-    `K-inject-changed`) proves the mechanics. K11: at least 10 of 12 seeds injected in each shape.
-    K12: each covered pass's snapshot exists, and each injected seed reads present in it. K13: at
-    least one verdict-role finding cites an injected file. K14: no text the run wrote says `BLOCKED`
-    or `BLOCKED_<WORD>` and names the injection, by the first 7 characters of an injection commit's
-    sha, by the neutral subject, or by an injected seed's path as a whole path token. K15: at least
-    10 of 12 seeds survive to review in each shape, meaning injected and present in the pass's review
-    snapshot. The canary passes when K5 to K15 all pass (`REPLAY-v2.md:162-173`). R4's third change,
-    that K14 reads only the run's end, after the injection, is plan 011's decision; REPLAY-v2's K14
-    sentence does not state it yet.
+    injection snapshot. A seed injected that reads present in no copy of its pass's review snapshot,
+    while some copy there holds its file, was reverted before review; like a seed not injected, it
+    leaves pooled recall and holds its `security-seeds` row, and RESULTS names it beside
+    `pooled-recall` (`REPLAY-v2.md:355-361`; `seedRowsOf`, `scripts/replay/measure.mjs:1282-1289`; the
+    note's rows, `scripts/replay/score.mjs:94`). (Amended 2026-09-28, R7 as built; it read "A seed
+    injected and absent from every copy of its pass's review snapshot was reverted before review".)
+    A v2 run without the injection record is invalid (`injectionStatesOf`,
+    `scripts/replay/measure.mjs:1199-1202`; `REPLAY-v2.md:390-396`). Added 2026-09-28 (R7,
+    `review/168`, and R9, `review/170`; the text above stands):
+    - *Uncovered seeds.* A seed with no recorded state is *uncovered*: its pass has no entry in
+      `run.json`'s `injection`, or its pass's entry leaves it out. An uncovered seed is never found,
+      whatever a finding matches, and its run is invalid. RESULTS names each uncovered pass and its
+      seeds (`REPLAY-v2.md:172-174`, `:361-365`; `injectionStatesOf`,
+      `scripts/replay/measure.mjs:1222-1228`; `seedRowsOf`, `:1277-1281`; the note's rows,
+      `scripts/replay/score.mjs:96`). As built, both invalid reasons, a pass with no entry and a
+      seed its pass's entry omits, begin with `UNCOVERED_REASON`
+      (`scripts/replay/protocols.mjs:58`; `scripts/replay/measure.mjs:1225`, `:1228`), so the
+      replacement rule below reads both alike. An uncovered seed enters no pooled denominator,
+      because its run is invalid (`REPLAY-v2.md:472`).
+    - *Replacement.* A baseline run invalid this way is replaced within §10's cap of 2. A changed
+      scored run invalid only this way is not replaced: the rows the changed shape feeds read
+      NOT-EVALUATED, and the merge gate FAILs (`REPLAY-v2.md:451-453`; `sampleOf`,
+      `scripts/replay/compare.mjs:101-102`, `:107`; `score.mjs check` names the run, `uncoveredOnly`,
+      `scripts/replay/score.mjs:646-647`, `:723`).
+    - *Capture defect.* The presence-unknown rule is removed for v2. A pass with an injection entry
+      and no injection snapshot (`captures/snapshots/<pass>/`), or a seed recorded injected whose file
+      is absent from every copy of its pass's injection snapshot, is a capture defect, and the run is
+      invalid. As built, so is a seed recorded injected whose file is absent from every copy of its
+      pass's review snapshot while the injection snapshot holds it: a file gone from every copy says
+      nothing of the seed. A seed injected whose file some review copy holds, and whose `present`
+      rule holds in none, keeps its reading as reverted before review (`REPLAY-v2.md:366-370`,
+      `:390-396`; `injectionStatesOf`, `scripts/replay/measure.mjs:1211`; `seedRowsOf`,
+      `:1295-1301`).
+    - *`sec-path-traversal`.* Its fixture does not change. REPLAY-v2 §15 names why its anchor is
+      lost: the clean guard admits any PDF name in the invoice directory, which the contract
+      forbids, so orchestrators have removed the query or narrowed the guard. Such a seed counts as
+      not injected, as the rule already says (`REPLAY-v2.md:539-545`).
+  - **Canary** (amended 2026-09-28, R7 and R10, `build/85`; it read "K14: no text the run wrote says
+    `BLOCKED` … The canary passes when K5 to K15 all pass", followed by the note that REPLAY-v2's K14
+    sentence did not yet state R4's third change; that note is removed). Before any pilot, one canary
+    run per shape (`K-inject-baseline`, `K-inject-changed`) proves the mechanics
+    (`REPLAY-v2.md:176-192`).
+    - *K11:* at least 10 of 12 seeds injected in each shape. *K12* (as built, "covered" reads
+      "injected"): each injected pass's snapshot exists, and each injected seed reads present in it.
+      *K13:* at least one verdict-role finding cites an injected file. *K15:* at least 10 of 12 seeds
+      survive to review in each shape, meaning injected and present in the pass's review snapshot.
+    - *K14.* K14 reads only the end of the run, once a seed has been injected: the session's final
+      `result`; each run record as copied at the end of the run (a `.md` file directly in the
+      fixture's `.stamity/runs/`, or directly inside one of its folders, `reports/` skipped); and the
+      orchestrator's last message that carries text, unless that message is dated before the first
+      injection. It reads no tool input, dispatch prompt, sub-agent transcript or report. It fails
+      when one of those texts says `BLOCKED` or `BLOCKED_<WORD>` and names the injection by one of
+      the three existing names (the 7-character sha prefix, the neutral subject, or the path token).
+      A run with nothing injected passes K14 (`REPLAY-v2.md:182-190`).
+    - *K16.* Every pass of the plan has an entry in the injection record, in each shape
+      (`REPLAY-v2.md:180-181`).
+    - The canary passes when K5 to K16 all pass (REPLAY-v2 §5, Canary, `REPLAY-v2.md:181`).
 - **Scoring (v2)** (amended 2026-09-26, `build/363`, `build/364`, `build/366`):
   - A severity word governed by a negation ("no", "zero", "0", "none of the", "without") is no
     severity. `new`, `remaining`, `open` or `further` may stand between the two, a run of severity
@@ -537,16 +635,18 @@ A replay compares the changed shape with the 1.9.1 baseline:
   - One term window serves both shapes: a structured finding's terms are read over its summary
     plus the matching entry of its report's `stamity-findings` block, a free-text finding's over
     its own block, and neither reads report prose.
-- **Compaction (v2)** (amended 2026-09-26, and 2026-09-27 for the round's members): the placements
-  stay `u2-p1` and `u3-p1`. v1's trigger is read over the review rounds that cover the placement
-  pass. A round opens at its first verdict-role dispatch and stays open until every member has
-  stopped; its members are all the verdict-role agents dispatched while it is open, and an agent
-  ended by TaskStop counts as stopped. A round covers every pass any member names, and a lens that
-  names no pass is still a member. A round is complete for a pass it covers when every member has
-  stopped and at least one member naming that pass returned by itself. The placement fires when the
-  first round covering the placement pass is complete, at least two members returned by themselves,
-  no fixer has been dispatched for the pass, and this holds on two polls in a row
-  (`evals/replay/REPLAY-v2.md:245-256`). Interrupt mode applies when both canaries pass K1–K4, and both
+- **Compaction (v2)** (amended 2026-09-26, and 2026-09-27 for the round's members; amended
+  2026-09-28, R6, where it read "A round covers every pass any member names … at least one member
+  naming that pass returned by itself"): the placements stay `u2-p1` and `u3-p1`. v1's trigger is
+  read over the review rounds that cover the placement pass. A round opens at its first
+  verdict-role dispatch and stays open until every member has stopped; its members are all the
+  verdict-role agents dispatched while it is open, and an agent ended by TaskStop counts as
+  stopped. A round covers the union of its members' coverage (Covered passes, above), and a member
+  that covers nothing by itself is still a member. A round is complete for a pass it covers when
+  every member has stopped and at least one member covering that pass returned by itself. The
+  placement fires when the first round covering the placement pass is complete, at least two
+  members returned by themselves, no fixer has been dispatched for the pass, and this holds on two
+  polls in a row (`evals/replay/REPLAY-v2.md:264-275`). Interrupt mode applies when both canaries pass K1–K4, and both
   shapes run auto-window mode when the two canary records disagree. Under auto-window mode an
   automatic compaction is a sample only when its boundary falls between a lens delivery and the
   next ledger write; one outside is named in the notes, beside `compaction-loss`, and is no sample.
@@ -562,7 +662,7 @@ A replay compares the changed shape with the 1.9.1 baseline:
   sub-agent-token bar compares the changed shape's mean per pass over its scored runs with the
   baseline shape's mean (amendment A8). Decoy flags and passes approved with a seed unfixed
   compare per-scored-run rates, because the shapes may run 3 or 5 scored runs
-  (`scripts/replay/compare.mjs:177-182`).
+  (`scripts/replay/compare.mjs:180-185`).
 - **Merge.** The package merges on the QA sign-off, the gate of record and CI (D10, amended
   2026-09-24; it read "the package merges only after the floor holds").
 - **Replay gate** (amended 2026-09-27 by R5; it read "The 1.10.0 release proceeds only after the
@@ -572,33 +672,41 @@ A replay compares the changed shape with the 1.9.1 baseline:
   fixture where seeds reach review. v1's fixture lets the orchestrator's pre-read catch every seed
   before review, so its two pilots stay in `evals/replay/runs/` as unscored evidence and
   `evals/replay/REPLAY-v1.md` stays frozen. The COMPARISON's literal `Merge gate:` line keeps its
-  name, because the frozen instrument renders it (`scripts/replay/compare.mjs:416`), and it gates
+  name, because the frozen instrument renders it (`scripts/replay/compare.mjs:430`), and it gates
   that release.
 - **Release gate.** Every eval-set floor holds at the 1.10.0 release run.
 
-As built (2026-09-26; amended and its citations re-pointed to `d227ca57` on 2026-09-27):
-`evals/replay/REPLAY-v2.md` states the rules above — the injection, the review snapshot and the
-not-injected reading (§5, `:102-160`), the canary (§5, `:162-173`), the matcher (§9, `:352-366`),
-the covered passes and the verdict mapping (§8, `:278-290`, `:335-336`), the injection record and
-the review-time reading in recall, and the invalid run (§8, `:315-321`, `:339-341`), compaction (§7,
-`:242-266`), the result paths (§11, `:395-403`) and the Clients table (§1,
-`:30-35`) — and its one `replay-thresholds` block holds v1's values (`:433-435`). The protocol
-table is `PROTOCOLS` (`scripts/replay/protocols.mjs:11-14`, default v1 at `:17`). The scorer
-refuses a `run.json` whose recorded protocol sha256 is not the protocol's
-(`scripts/replay/score.mjs:811-812`) and a summary scored under another protocol's sha256 or path
-(`:884-886`). The matcher's rules are `maskNegated` (`scripts/replay/findings.mjs:82`) and
-`matchItems` (`:615`); the covered passes are `passesOf` (`scripts/replay/measure.mjs:379-381`); the
+As built (2026-09-26; amended and its citations re-pointed to `d227ca57` on 2026-09-27; amended
+for R6–R10 and its citations re-pointed to `bb79ee58` on 2026-09-28):
+`evals/replay/REPLAY-v2.md` states the rules above — the injection, the review snapshot, the
+not-injected reading and the uncovered seed (§5, `:106-174`), the canary (§5, `:176-192`), the
+matcher (§9, `:407-421`), branch level, the covered passes and the verdict mapping (§8, `:295-304`,
+`:305-328`, `:384-387`), the injection record, the credit guard, the review-time reading, the
+uncovered seed and the capture defect in recall, and the invalid run (§8, `:343-370`, `:390-396`),
+the replacement rule (§10, `:451-453`), compaction (§7, `:261-286`), the result paths (§11,
+`:455-463`) and the Clients table (§1, `:34-39`) — and its one `replay-thresholds` block holds v1's
+values (`:493-495`). The protocol table is `PROTOCOLS` (`scripts/replay/protocols.mjs:11-14`,
+default v1 at `:17`), and an uncovered pass's invalid reason begins with `UNCOVERED_REASON`
+(`:58`). The scorer refuses a `run.json` whose recorded protocol sha256 is not the protocol's
+(`scripts/replay/score.mjs:830-831`) and a summary scored under another protocol's sha256 or path
+(`:903-905`). The matcher's rules are `maskNegated` (`scripts/replay/findings.mjs:82`) and
+`matchItems` (`:615`); under v2 the covered passes are `coverageOf`
+(`scripts/replay/measure.mjs:406-435`), and v1 keeps `passesOf` with no range (`:380-382`, `:694`);
+branch level is read in `joinAgents` (`:803-815`), and the credit guard is `credits` (`:1240`); the
 measurement reads the driver's injection record, files a seed recorded not injected as absent at
 its pass whatever the snapshot reads, reads an injected seed from its pass's review snapshot when
-there is one and files one reverted before review as absent, and marks a v2 run with no record
-invalid (`injectionStatesOf`, `:1071-1078`; `seedRowsOf`, `:1117-1129`); the seeds schema adds
-`injection` and `present.notMatch`, and a seed is present only when no `notMatch` pattern matches
-(`checkSeeds`, `presentIn`, `:260`, `:287-294`); the Clients table is `clientsTable`
-(`scripts/replay/compare.mjs:379-383`), empty under v1 so v1's files stay byte for byte. A comparison
-given no scored run for a shape reads every row that shape feeds NOT-EVALUATED, and the merge gate
-fails (`compare.mjs:96`, `:339`). The v2 fixture is `evals/replay/v2/`. The injection, the
-snapshots, the placement and the canary checks K11–K15 are the replay driver's, which lives outside
-this repository; REPLAY-v2 is the record of what it must do. Not yet measured: no v2 canary, pilot or
+there is one and files one reverted before review as absent, files an uncovered seed never found,
+and marks invalid a v2 run with no record, with an uncovered seed or with a capture defect
+(`injectionStatesOf`, `:1194-1230`; `seedRowsOf`, `:1261-1318`); the seeds schema adds `injection`
+and `present.notMatch`, and a seed is present only when no `notMatch` pattern matches (`checkSeeds`,
+`presentIn`, `:261`, `:288-295`); the Clients table is `clientsTable`
+(`scripts/replay/compare.mjs:393-397`), empty under v1 so v1's files stay byte for byte. A
+comparison given no scored run for a shape reads every row that shape feeds NOT-EVALUATED, and the
+merge gate fails (`compare.mjs:97`, `:353`); so does a changed shape holding a scored run invalid
+only for an uncovered pass (`sampleOf`, `:101-102`, `:107`; `spentReasons`, `:318-323`). The v2
+fixture is `evals/replay/v2/`. The injection, the snapshots, the placement and the canary checks
+K11–K16 are the replay driver's, which lives outside this repository; REPLAY-v2 is the record of
+what it must do. Not yet measured: no v2 canary, pilot or
 scored run is committed in this tree, and `evals/replay/COMPARISON-v2.md` does not exist, so every
 criterion below that reads v2 results is open. Since R5 they stay open through 1.10.0 and bind the
 first release that ships REPLAY-v2's comparison (amended 2026-09-27).
@@ -1093,23 +1201,61 @@ eye.
   one `not-run` row each for Cursor, GitHub Copilot CLI and Codex, each with its reason (amended
   2026-09-26; it read "GIVEN the committed replay results WHEN read THEN they carry one `not-run`
   row each …", which v1's two pilots do not carry: the Clients table is rendered under v2 only,
-  because `clientsTable` returns no line under v1, `scripts/replay/compare.mjs:380`).
-- GIVEN a v2 run WHEN the first review dispatch covering a pass starts THEN, before the reviewer's
-  first tool call, every worktree of the run that is not pristine and holds a seed's anchor carries
-  that pass's seeds in the form its own state calls for (`commit`, `staged` or `working-tree`), a
+  because `clientsTable` returns no line under v1, `scripts/replay/compare.mjs:394`; re-pointed
+  2026-09-28 from `:380`).
+- GIVEN a v2 run WHEN the injection point's dispatch starts THEN, before the reviewer's first tool
+  call, every worktree of the run that is not pristine and holds a seed's anchor carries every
+  pass's seeds in the form its own state calls for (`commit`, `staged` or `working-tree`), a
   pristine worktree takes nothing and, when it holds a seed's anchor, is recorded
-  `skipped-pristine`, the pass's injection snapshot
+  `skipped-pristine`, each pass's injection snapshot
   exists, and `run.json`'s `injection` record names each seed `injected` or
-  `not injected (anchor missing)` and each worktree's form (amended 2026-09-27 for R3 and R4; it
-  read "… THEN that pass's injected seeds are committed and its snapshot exists before the
-  reviewer's first tool call. The run records each seed as injected or not", amended 2026-09-26).
-- GIVEN a dispatch with no pass in its description whose prompt names `u1-p1..u3-p2` WHEN
-  `passesOf` reads it under v2 THEN it covers all six passes, and a prompt naming the list
-  `u1-p1, u3-p2` covers those two only (amended 2026-09-27, R3; `test/replay/measure.test.ts`).
+  `not injected (anchor missing)` and each worktree's form (amended 2026-09-28, R6; it read "WHEN
+  the first review dispatch covering a pass starts THEN … carries that pass's seeds … the pass's
+  injection snapshot exists"; amended 2026-09-27 for R3 and R4, where it read "… THEN that pass's
+  injected seeds are committed and its snapshot exists before the reviewer's first tool call. The
+  run records each seed as injected or not", amended 2026-09-26).
+- GIVEN a build-role dispatch described `Build units u1-p1..u3-p2` THEN all six passes are built;
+  a description naming the list `u1-p1, u3-p2` builds those two only, and a pass named only in a
+  prompt builds nothing (amended 2026-09-28, R6; it read "GIVEN a dispatch with no pass in its
+  description whose prompt names `u1-p1..u3-p2` WHEN `passesOf` reads it under v2 THEN it covers
+  all six passes, and a prompt naming the list `u1-p1, u3-p2` covers those two only", amended
+  2026-09-27, R3; `test/replay/measure.test.ts`).
 - GIVEN a v2 run whose injection record names a seed `injected` and whose pass's review snapshot
-  holds the seed in no copy WHEN the run is measured THEN the seed leaves the pooled recall
-  denominator, a security seed counts as found in `security-seeds`, and the notes say it was
-  reverted before review (amended 2026-09-27, R4; `test/replay/measure.test.ts`).
+  holds the seed's file in some copy and the seed in none WHEN the run is measured THEN the seed
+  leaves the pooled recall denominator, a security seed counts as found in `security-seeds`, and
+  the notes say it was reverted before review (amended 2026-09-28, R7 as built; it read "whose
+  pass's review snapshot holds the seed in no copy", amended 2026-09-27, R4;
+  `test/replay/measure.test.ts`).
+- GIVEN six dispatches described "Build unit u1-p1" … "Build unit u3-p2", then a verdict round
+  whose descriptions name the feature and no pass, WHEN the run is measured THEN the round's first
+  dispatch is the injection point, the round covers all six passes, and the injection record shows
+  each pass injected once, by that one hook call (added 2026-09-28, R6; `test/replay/measure.test.ts`
+  for the coverage, REPLAY-v2 §5 for the driver's record).
+- GIVEN a reviewer dispatched before the injection point whose finding matches a seed's file, line
+  and term WHEN the finding is scored THEN it credits no seed; the same finding from an agent
+  dispatched at or after the injection point credits the seed (added 2026-09-28, R6;
+  `test/replay/measure.test.ts`).
+- GIVEN a v2 run whose injection record has no entry for `u3-p2` WHEN the run is measured THEN
+  `u3-p2`'s seeds are uncovered and never found, even when a finding matches them; the run is
+  invalid, and RESULTS names `u3-p2` and its seeds (added 2026-09-28, R7;
+  `test/replay/measure.test.ts`, `test/replay/score.test.ts`).
+- GIVEN a changed scored run invalid only because a seed is uncovered WHEN `compare` runs THEN the
+  run is not replaced, the rows the changed shape feeds read NOT-EVALUATED, and `Merge gate:` reads
+  FAIL (added 2026-09-28, R7; `test/replay/compare.test.ts`).
+- GIVEN a seed recorded injected whose file is absent from every copy under
+  `captures/snapshots/<pass>/` WHEN the run is measured THEN the run is invalid as a capture
+  defect, and no seed is read as presence-unknown (added 2026-09-28, R7;
+  `test/replay/measure.test.ts`).
+- GIVEN a verdict dispatch described "Whole-branch review round 1" with no approving reviewer
+  delivery in an earlier round WHEN the run is measured THEN the dispatch is pass-level and counts
+  as a loop round (added 2026-09-28, R8; `test/replay/measure.test.ts`).
+- GIVEN a canary shape whose injection record lacks an entry for one pass WHEN the canary is
+  checked THEN K16 fails and the canary fails, even when K5–K15 pass (added 2026-09-28, R7;
+  REPLAY-v2 §5, Canary).
+- GIVEN a canary where only a dispatch prompt and a report say `BLOCKED` and name
+  `src/store/query.ts` WHEN K14 is checked THEN K14 passes; if the session's final `result` says
+  `BLOCKED_FAILURE` and names an injection commit's 7-character sha prefix, K14 fails (added
+  2026-09-28, R10, `build/85`; REPLAY-v2 §5, Canary).
 - GIVEN the finding line `src/config/load.ts:15 — fix held. No Critical findings.` WHEN the matcher
   reads it THEN it yields no finding (amended 2026-09-26).
 - GIVEN a Warning whose only matching term sits inside its own locator WHEN it is scored THEN it
