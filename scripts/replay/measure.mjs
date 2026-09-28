@@ -436,13 +436,18 @@ export function coverageOf(events, planPasses = PASS_IDS) {
 
 const isPass = (p) => PASS_IDS.includes(p)
 const passKey = (p) => (isPass(p) ? p : 'unattributed')
-/** build/366: whether an agent or a finding covers `pass` — its attributed pass, or one of the passes a multi dispatch names. */
-const covers = (x, pass) => x.pass === pass || (Array.isArray(x.passes) && x.passes.includes(pass))
 /**
- * build/366: whether two agents share a pass, for the fixer round count: any common pass when both
- * name passes, else the attributed pass as before (two agents naming no pass, say).
+ * build/366: whether an agent or a finding covers `pass`, one of its `passes`. Under v1 `passes` always
+ * holds the attributed pass when that is a pass id (`passesOf`, a report slug), so this is v1's reading
+ * unchanged; under v2 it is R6's coverage, which an incidental id in a prompt no longer widens.
  */
-const sharePass = (x, y) => (x.passes.length > 0 && y.passes.length > 0 ? x.passes.some((p) => y.passes.includes(p)) : x.pass === y.pass)
+const covers = (x, pass) => Array.isArray(x.passes) && x.passes.includes(pass)
+/**
+ * build/366: whether two agents share a pass, for the fixer round count: any common pass. v1 keeps its
+ * fallback to the attributed pass when either names none (two agents naming no pass share); R6 drops it
+ * under v2, so a fixer covering nothing raises no round.
+ */
+const sharePass = (x, y, v2) => (x.passes.length > 0 && y.passes.length > 0 ? x.passes.some((p) => y.passes.includes(p)) : !v2 && x.pass === y.pass)
 
 /**
  * One streamed pass over the main transcript for what the walk's rows do not carry: every tool
@@ -672,9 +677,11 @@ function oracleRunOf(oracle) {
 /**
  * The orchestrator's agents, joined across the walk: each Agent dispatch with its role function
  * and pass, the SendMessages that reach it, and every delivery — a notification, or a synchronous
- * Agent, SendMessage or TaskOutput result — with its digest and verdict read once.
+ * Agent, SendMessage or TaskOutput result — with its digest and verdict read once. `v2` (an
+ * injecting seeds document) sets each agent's `passes` from `coverageOf` and reads branch level by
+ * R8; `injectionLine` is the dispatch line of R6's injection point (null under v1, or never reached).
  */
-function joinAgents(walk, index, subs, roots, ranges) {
+function joinAgents(walk, index, subs, roots, v2) {
   const agents = []
   const byUse = new Map()
   for (const d of walk.dispatches.filter((x) => x.kind === 'agent')) {
@@ -683,7 +690,8 @@ function joinAgents(walk, index, subs, roots, ranges) {
     const agent = {
       toolUseId: d.toolUseId, line: d.line, role: roleName(d.role), fn: roleFunction(d.role), desc: d.desc ?? '', prompt, chars: d.chars,
       model: d.model ?? null, name: typeof input.name === 'string' && input.name ? input.name : null, pass: attributePass(d.desc, prompt),
-      passes: passesOf(d.desc, prompt, { ranges }), branch: false, round: 1, resume: RESUME.test(prompt),
+      // v1's reading (REPLAY-v1 §14 reads no range); v2 replaces it with coverageOf once the deliveries are read.
+      passes: passesOf(d.desc, prompt, { ranges: false }), branch: false, round: 1, resume: RESUME.test(prompt),
     }
     agents.push(agent)
     byUse.set(d.toolUseId, agent)
@@ -719,7 +727,7 @@ function joinAgents(walk, index, subs, roots, ranges) {
       const prompt = s.firstPrompt ?? ''
       const agent = {
         toolUseId: s.toolUseId, line, role: roleName(s.agentType), fn: roleFunction(s.agentType), desc: s.description ?? '', prompt, chars: prompt.length,
-        model: null, name: null, pass: attributePass(s.description, s.firstPrompt), passes: passesOf(s.description, s.firstPrompt, { ranges }),
+        model: null, name: null, pass: attributePass(s.description, s.firstPrompt), passes: passesOf(s.description, s.firstPrompt, { ranges: false }),
         branch: false, round: 1, resume: RESUME.test(prompt), fromFile: true, agentId: s.agentId,
       }
       fromFile.set(s.agentId, agent)
@@ -776,18 +784,47 @@ function joinAgents(walk, index, subs, roots, ranges) {
   for (const a of fromFile.values()) notes.push(`agent ${a.agentId} built from its sub-agent file (${a.role ?? 'unknown'}, ${a.pass ?? 'no pass'}): its dispatch prompt of ${a.chars} characters counted in term (b)${a.resume ? ' as a resume' : ''}, read from the file's first prompt`)
   for (const s of sends) if (s.target === null) notes.push(`SendMessage joined to no agent: main transcript line ${s.line}, ${s.chars} characters — kept in term (b) unattributed`)
 
-  // Branch-level verdict dispatches: after u3-p2's last reviewer approval with no single pass id,
-  // or named a whole-branch pass. The prompt is read for the name only when the dispatch carries
-  // no single pass id, so a per-pass brief that mentions the whole-branch review stays per pass.
-  const lastApproval = deliveries.findLast((d) => d.agent?.role === 'reviewer' && d.agent.pass === 'u3-p2' && d.verdict === 'approve')?.line ?? Infinity
-  for (const a of agents) {
-    if (a.fn === 'verdict') a.branch = WHOLE_BRANCH.test(a.desc) || (!isPass(a.pass) && (a.line > lastApproval || WHOLE_BRANCH.test(a.prompt)))
+  // R6 (review/167, v2): every agent's coverage by coverageOf, over its dispatches and the returns
+  // (a TaskStop's failed notification reads not returned) in transcript order; an agent built from its
+  // sub-agent file is dispatched at the line of the delivery that named it.
+  let injectionLine = null
+  if (v2) {
+    const ids = new Map(agents.map((a, k) => [a, k]))
+    const timeline = [
+      ...agents.map((a) => ({ line: a.line, rank: 0, event: { kind: 'dispatch', id: ids.get(a), role: a.fn, description: a.desc, prompt: a.prompt } })),
+      ...deliveries.filter((d) => d.agent !== null && !d.reread).map((d) => ({ line: d.line, rank: 1, event: { kind: 'stop', id: ids.get(d.agent), returned: !d.failed } })),
+    ].toSorted((x, y) => x.line - y.line || x.rank - y.rank)
+    const coverage = coverageOf(timeline.map((t) => t.event))
+    for (const a of agents) {
+      const row = coverage.get(ids.get(a))
+      a.passes = row.passes
+      if (row.injectionPoint) injectionLine = a.line
+    }
+    // R8 (v2): a verdict dispatch naming the whole branch (description or prompt) after an approving
+    // reviewer delivery is branch-level, and so is every verdict agent dispatched after it. One named so
+    // before any approval is a loop round (the residual REPLAY-v2 §15 names).
+    const approvals = deliveries.filter((d) => d.round && d.agent?.role === 'reviewer' && d.verdict === 'approve').map((d) => d.line)
+    const namedAfterApproval = (a) => (WHOLE_BRANCH.test(a.desc) || WHOLE_BRANCH.test(a.prompt)) && approvals.some((line) => line < a.line)
+    let from = Infinity
+    for (const a of agents.filter((x) => x.fn === 'verdict').toSorted((x, y) => x.line - y.line)) {
+      if (a.line <= from && !namedAfterApproval(a)) continue
+      a.branch = true
+      from = Math.min(from, a.line)
+    }
+  } else {
+    // v1: branch-level verdict dispatches: after u3-p2's last reviewer approval with no single pass id,
+    // or named a whole-branch pass. The prompt is read for the name only when the dispatch carries
+    // no single pass id, so a per-pass brief that mentions the whole-branch review stays per pass.
+    const lastApproval = deliveries.findLast((d) => d.agent?.role === 'reviewer' && d.agent.pass === 'u3-p2' && d.verdict === 'approve')?.line ?? Infinity
+    for (const a of agents) {
+      if (a.fn === 'verdict') a.branch = WHOLE_BRANCH.test(a.desc) || (!isPass(a.pass) && (a.line > lastApproval || WHOLE_BRANCH.test(a.prompt)))
+    }
   }
   // A verdict agent's round: one more than the fixers of its pass dispatched before it (build/366:
   // of any pass it covers, so a u1-p1 fixer counts toward a round covering u1-p1 and u1-p2).
   const fixers = agents.filter((a) => a.fn === 'fix')
-  for (const a of agents) a.round = 1 + fixers.filter((f) => sharePass(f, a) && f.line < a.line).length
-  return { agents, byAgentId, sends, deliveries, notes }
+  for (const a of agents) a.round = 1 + fixers.filter((f) => sharePass(f, a, v2) && f.line < a.line).length
+  return { agents, byAgentId, sends, deliveries, notes, injectionLine }
 }
 
 // ---------- the measurement: loop characters and sub-agent tokens ----------
@@ -946,20 +983,32 @@ const slugOf = (reportPath) => {
   return m ? { pass: m[1], role: m[2], round: Number(m[3]) } : null
 }
 
+/** A report path from `.stamity/runs/` on, the one spelling a digest's `report:`, a ledger row and a state copy share. */
+const reportKey = (path) => {
+  const s = String(path ?? '').replaceAll('\\', '/')
+  const at = s.lastIndexOf('.stamity/runs/')
+  return at >= 0 ? s.slice(at) : s
+}
+
 /**
- * Every verdict-role finding, annotated with its pass, branch flag, round and delivery line: every
- * verdict delivery read by all three readers (free text, a C2 block, a digest) in both shapes, the
- * C2 blocks of the verdict reports in the run-state copies, and the run-end ledger rows from a
- * verdict source. `readerSkips` counts what the readers could not read (build/109).
+ * Every verdict-role finding, annotated with its pass, branch flag, round, delivery line and its
+ * agent's dispatch line (`dispatched`, R6's credit guard): every verdict delivery read by all three
+ * readers (free text, a C2 block, a digest) in both shapes, the C2 blocks of the verdict reports in
+ * the run-state copies, and the run-end ledger rows from a verdict source. A report or ledger finding
+ * takes the dispatch line of the agent whose digest names its report, else null. `readerSkips` counts
+ * what the readers could not read (build/109).
  */
-function collectFindings(deliveries, stateNames, states, roots) {
+function collectFindings(deliveries, stateNames, states, roots, v2) {
   const all = []
+  const byReport = new Map()
+  for (const d of deliveries) if (d.agent !== null && d.digest.report !== null && !byReport.has(reportKey(d.digest.report))) byReport.set(reportKey(d.digest.report), d.agent.line)
+  const dispatchedOf = (reportPath) => (reportPath ? byReport.get(reportKey(reportPath)) ?? null : null)
   const readerSkips = {
     unreadFreeText: { 'severity-without-locator': 0, 'locator-without-severity': 0 }, digestErrors: 0, findingsBlockErrors: 0,
     ledgerParseErrors: sum(stateNames, (n) => states[n].ledgerParseErrors ?? 0),
   }
   deliveries.filter((d) => d.agent?.fn === 'verdict').forEach((d, k) => {
-    const where = { pass: d.agent.pass, passes: d.agent.passes, branch: d.agent.branch, round: d.agent.round, delivered: d.line }
+    const where = { pass: d.agent.pass, passes: d.agent.passes, branch: d.agent.branch, round: d.agent.round, delivered: d.line, dispatched: d.agent.line }
     const meta = { role: d.agent.role, roots, source: 'return' }
     const digest = d.digest.status !== null && d.digest.report !== null
     const structured = digest || C2_FENCE.test(d.text)
@@ -988,15 +1037,19 @@ function collectFindings(deliveries, stateNames, states, roots) {
     if (!slug || roleFunction(slug.role) !== 'verdict') continue
     const parsed = parseFindingsBlock(r.text, { source: 'report', role: slug.role, roots, reportPath })
     readerSkips.findingsBlockErrors += parsed.errors.length
-    for (const f of parsed.findings) all.push({ ...f, pass: slug.pass, passes: passesIn(slug.pass), branch: slug.pass === 'branch', round: slug.round, delivered: null, unit: null })
+    for (const f of parsed.findings) all.push({ ...f, pass: slug.pass, passes: passesIn(slug.pass), branch: slug.pass === 'branch', round: slug.round, delivered: null, dispatched: dispatchedOf(reportPath), unit: null })
   }
   const endLedger = states.end?.present ? states.end.ledger : stateNames.flatMap((n) => states[n].ledger)
   for (const f of ledgerFindings(endLedger, { roots })) {
     if (roleFunction(f.role) !== 'verdict') continue
     const slug = slugOf(f.reportPath)
-    all.push({ ...f, pass: slug?.pass ?? null, passes: passesIn(slug?.pass), branch: slug?.pass === 'branch', round: slug?.round ?? null, delivered: null, unit: null })
+    all.push({ ...f, pass: slug?.pass ?? null, passes: passesIn(slug?.pass), branch: slug?.pass === 'branch', round: slug?.round ?? null, delivered: null, dispatched: dispatchedOf(f.reportPath), unit: null })
   }
   widenToEntries(all)
+  // The pass whose copies locate a finding's spans (build/190): v1 its attributed pass id; R6 (review/167, v2)
+  // its one covered pass, so a round covering every pass meets the union whatever id its prompt names in
+  // passing. v1 keeps its key: a report slug with a prefix (`lane-u1-p1`) names one pass and is no pass id.
+  for (const f of all) f.spansPass = v2 ? (f.passes.length === 1 ? f.passes[0] : null) : isPass(f.pass) ? f.pass : null
   return { all, readerSkips }
 }
 
@@ -1038,14 +1091,15 @@ function widenToEntries(all) {
  * not unmatched) and the adjudication list.
  */
 /**
- * build/190: the matcher per pass — a finding attributed to a pass meets the items' spans as that
- * pass's snapshot copies locate them; only a finding with no pass (a ledger row with no report, a
- * multi-pass or branch finding naming none) meets the union over every pass. Indices stay `all`'s.
+ * build/190: the matcher per pass — a finding with a `spansPass` (`collectFindings`) meets the items'
+ * spans as that pass's snapshot copies locate them; any other (a ledger row with no report, a
+ * multi-pass or branch finding naming none, R6's round covering every pass) meets the union over
+ * every pass. Indices stay `all`'s.
  */
 function matchByPass(all, items, snapshots, opts) {
   const groups = new Map()
   all.forEach((f, i) => {
-    const key = isPass(f.pass) ? f.pass : '*'
+    const key = f.spansPass ?? '*'
     if (!groups.has(key)) groups.set(key, [])
     groups.get(key).push(i)
   })
@@ -1163,6 +1217,14 @@ function injectionStatesOf(seeds, run, invalid, snapshots) {
 }
 
 /**
+ * R6's credit guard (review/167, v2 only; `guard` null under v1): a finding credits a seed only if its
+ * agent was dispatched at or after the injection point (`guard.line`, Infinity when never reached). A
+ * report or ledger finding no digest names (no `dispatched`) credits only when no verdict agent was
+ * dispatched before the injection point (`guard.orphans`).
+ */
+const credits = (f, guard) => guard === null || (typeof f.dispatched === 'number' ? f.dispatched >= guard.line : guard.orphans)
+
+/**
  * One row per seed: presence at its pass from the snapshot copies, found, the earliest stage and
  * round-1 find, and the oracle status. A pass with no snapshot at all (no verdict agent ever
  * started it) leaves presence unknown and keeps the seed in the denominator rather than read it as
@@ -1181,11 +1243,11 @@ function injectionStatesOf(seeds, run, invalid, snapshots) {
  * as is a pass with an entry and no injection snapshot (named by `injectionStatesOf`); neither writes a
  * presence-unknown note, since presence is never unknown in a valid v2 run.
  */
-function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, invalid, injected = null, reviewSnapshots = null) {
+function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, invalid, injected = null, reviewSnapshots = null, guard = null) {
   const missing = new Set()
   const absent = []
   const rows = seeds.seeds.map((seed) => {
-    const hits = seedMatch.matched[seed.id].map((i) => all[i])
+    const hits = seedMatch.matched[seed.id].map((i) => all[i]).filter((f) => credits(f, guard))
     const stages = hits.map((f) => stageOf(f, seed)).toSorted((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b))
     const found = { found: hits.length > 0, foundRound1: hits.some((f) => !f.branch && covers(f, seed.pass) && f.round === 1), stage: stages[0] ?? null, oracle: oracleStatus.get(seed.id) ?? null }
     if (injected?.get(seed.id) === NOT_INJECTED) {
@@ -1322,8 +1384,10 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
   checkSeeds(seeds)
   const cap = await loadCapture(runDir, forbid)
   const { L, run, invalid, walk, roots, states, oracleStatus, oracleRun } = cap
-  // R3 (review/150): a named pass range is REPLAY-v2's rule; v1's measurement reads none (REPLAY-v1 §14).
-  const { agents, byAgentId, sends, deliveries, notes } = joinAgents(walk, cap.index, cap.subs, roots, injecting(seeds))
+  // R3, R6 and R8 (review/150, review/167): a named pass range, coverage by coverageOf, branch level after an
+  // approval and the credit guard are REPLAY-v2's; v1's measurement reads none of them (REPLAY-v1 §14).
+  const v2 = injecting(seeds)
+  const { agents, byAgentId, sends, deliveries, notes, injectionLine } = joinAgents(walk, cap.index, cap.subs, roots, v2)
   const { perPass, beside, unresolved } = loopCharacters(walk, cap.index, agents, sends, deliveries)
   const usage = subagentUsage(cap.subs, byAgentId, deliveries, invalid, notes)
   const agentsWithoutTranscript = reconcileAgents(agents, cap.subs, byAgentId, deliveries, notes)
@@ -1331,7 +1395,7 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
   for (const id of PASS_IDS) {
     if (!agents.some((a) => LOOP_FUNCTIONS.has(a.fn) && !a.branch && a.pass === id)) notes.push(`pass ${id} has no loop dispatch: its loop characters and sub-agent tokens are 0 and still count in the ÷ 6`)
   }
-  const { all, readerSkips } = collectFindings(deliveries, cap.stateNames, states, roots)
+  const { all, readerSkips } = collectFindings(deliveries, cap.stateNames, states, roots, v2)
   const { seedMatch, decoysFlagged, unmatched, adjudication, tolerance } = scoreFindings(all, seeds, L.snapshots)
   // build/251: a pass a verdict agent was dispatched for holds a snapshot, by the marker hook's rule; none is a capture defect
   // (build/366: for each pass a multi dispatch covers).
@@ -1340,10 +1404,12 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
       invalid.push(`capture defect: a verdict agent was dispatched for ${id}, but captures/snapshots/${id}/ holds no copy`)
     }
   }
-  const seedRows = seedRowsOf(seeds, all, seedMatch, L.snapshots, oracleStatus, notes, invalid, injectionStatesOf(seeds, run, invalid, L.snapshots), L.reviewSnapshots)
+  const point = injectionLine ?? Infinity
+  const guard = v2 ? { line: point, orphans: !agents.some((a) => a.fn === 'verdict' && a.line < point) } : null
+  const seedRows = seedRowsOf(seeds, all, seedMatch, L.snapshots, oracleStatus, notes, invalid, injectionStatesOf(seeds, run, invalid, L.snapshots), L.reviewSnapshots, guard)
   const mechanism = run?.mechanism ?? 'interrupt'
   // review/164 (REPLAY-v2 only): the driver's recorded placements, read when no lens delivery names the pass.
-  const recorded = injecting(seeds) && Array.isArray(run?.compactions) ? run.compactions : []
+  const recorded = v2 && Array.isArray(run?.compactions) ? run.compactions : []
   const compactionSamples = compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, oracleStatus, roots, tolerance, notes, recorded })
 
   const loopChars = sum(Object.values(perPass), loopOf)

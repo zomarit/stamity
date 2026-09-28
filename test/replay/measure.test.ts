@@ -249,6 +249,8 @@ interface PassCaptureOptions {
   extraSubagents?: SubagentFile[];
   /** Agent ids whose sub-agent file is not written. */
   noTranscript?: string[];
+  /** The implementer's description (defaults to `Implement u1-p1`): a v2 case names every pass so R6's injection point is reached. */
+  builds?: string;
 }
 
 interface Built {
@@ -275,7 +277,7 @@ function passCapture(options: PassCaptureOptions): Built {
   const secondReview =
     shape === "baseline" ? "**Verdict:** approve\n\nNo findings." : digestReturn([], "approve", `.stamity/runs/${RUN}/reports/u1-p1-reviewer-r2.md`);
   const agents: AgentSpec[] = [
-    { id: "tu_impl", agentId: "aimpl", type: "stamity-implementer", description: "Implement u1-p1", prompt: "Build unit u1-p1 of the plan.", result: "status: DONE", tokens: 1100 },
+    { id: "tu_impl", agentId: "aimpl", type: "stamity-implementer", description: options.builds ?? "Implement u1-p1", prompt: "Build unit u1-p1 of the plan.", result: "status: DONE", tokens: 1100 },
     { id: "tu_rsch", agentId: "arsch", type: "stamity-researcher", description: "Research the API", prompt: "Map the order routes.", result: "The routes are in src/http.", tokens: 9900 },
     { id: "tu_rev1", agentId: "arev1", type: "stamity-reviewer", description: "Review u1-p1", prompt: "Review unit u1-p1.", result: firstReview, tokens: 2200 },
     { id: "tu_fix", agentId: "afix", type: "stamity-fixer", description: "Fix u1-p1", prompt: "Fix the findings of u1-p1.", result: "status: DONE", tokens: 1650 },
@@ -1052,11 +1054,11 @@ const implementerOf = (pass: string): AgentSpec => ({
   id: `tu_impl_${pass}`, agentId: `aimpl${pass.replace("-", "")}`, type: "stamity-implementer", description: `Implement ${pass}`, prompt: `Build unit ${pass}.`, result: "status: DONE", tokens: 100,
 });
 
-function multiCapture(options: { rounds: RoundSpec[]; snapshots?: CaptureSpec["snapshots"] }): Built {
+function multiCapture(options: { rounds: RoundSpec[]; snapshots?: CaptureSpec["snapshots"]; implementers?: AgentSpec[] }): Built {
   const dir = scratch();
   const fixture = join(dir, "fx");
   mkdirSync(fixture);
-  const agents: AgentSpec[] = [implementerOf("u1-p1"), implementerOf("u1-p2")];
+  const agents: AgentSpec[] = [...(options.implementers ?? [implementerOf("u1-p1"), implementerOf("u1-p2")])];
   options.rounds.forEach((round, k) => {
     if (k > 0) agents.push({ id: `tu_fix${k}`, agentId: `afix${k}`, type: "stamity-fixer", description: "Fix u1-p1", prompt: "Fix the findings of u1-p1.", result: "status: DONE", tokens: 100 });
     agents.push({
@@ -1241,8 +1243,16 @@ function injectionRecord(states: Record<string, string>): Record<string, unknown
   const all = Object.values(states);
   return { passes, injected: all.filter((s) => s === INJECTED).length, notInjected: all.filter((s) => s === NOT_INJECTED).length, partial: false, unreadable: [], unfinished: [] };
 }
+/**
+ * R6 (review/167) moved v2's coverage: a review credits a seed only at or after the injection point, the first
+ * verdict dispatch once a build description has named every pass. `passCapture`'s implementer names u1-p1 alone,
+ * which under R6 leaves the point unreached and every finding uncredited; these v2 helpers name all six in the
+ * implementer's description (its attributed pass stays u1-p1), so the injection record they read describes a run
+ * whose reviewer reviewed the injected tree, as the driver's record of such a run does.
+ */
+const ALL_BUILT = "Implement u1-p1..u3-p2";
 const injectingRun = (run: Record<string, unknown>): Promise<Measurement> =>
-  measureRun(passCapture({ shape: "baseline", run, snapshots: INJECTING_SNAPSHOTS }).layout.runDir, { seeds: INJECTING, forbid: [] }) as Promise<Measurement>;
+  measureRun(passCapture({ shape: "baseline", run, snapshots: INJECTING_SNAPSHOTS, builds: ALL_BUILT }).layout.runDir, { seeds: INJECTING, forbid: [] }) as Promise<Measurement>;
 const rowOf = (m: Measurement, id: string): PassRow["seeds"][number] => m.passes.flatMap((p) => p.seeds).find((s) => s.id === id)!;
 
 describe("REPLAY-v2 — the driver's injection record decides a seed that was not injected (review/135)", () => {
@@ -1298,8 +1308,9 @@ const REVERTED_QUERY = fileWith(11, "  const sql = `SELECT id FROM orders ORDER 
 /** R4: u3-p2's test with the deleted expectation restored, so the notContains rule reads absent. */
 const RESTORED_TEST = ["it(\"lists orders with their totals\", async () => {", "    expect(body.orders).toHaveLength(1);", "    expect(body.orders[0].total_cents).toBe(1250);", "});", ""].join("\n");
 const ALL_INJECTED = { "sec-sql-sort": INJECTED, "sec-path-traversal": INJECTED, "tw-expectation-deleted": INJECTED };
+// R6 (review/167): the implementer names every pass, as `injectingRun` does and for the same reason.
 const reviewedRun = (reviewSnapshots: CaptureSpec["reviewSnapshots"], snapshots: CaptureSpec["snapshots"] = INJECTING_SNAPSHOTS): Promise<Measurement> =>
-  measureRun(passCapture({ shape: "baseline", run: { injection: injectionRecord(ALL_INJECTED) }, snapshots, reviewSnapshots }).layout.runDir, { seeds: INJECTING, forbid: [] }) as Promise<Measurement>;
+  measureRun(passCapture({ shape: "baseline", run: { injection: injectionRecord(ALL_INJECTED) }, snapshots, reviewSnapshots, builds: ALL_BUILT }).layout.runDir, { seeds: INJECTING, forbid: [] }) as Promise<Measurement>;
 const noteOf = (m: Measurement, id: string): string | undefined => m.notes.find((n) => n.startsWith(`seed ${id} (`));
 
 describe("REPLAY-v2 R4 — an injected seed's presence is read at review time (review/162)", () => {
@@ -1534,11 +1545,16 @@ describe("R3 — a named pass range covers every pass in it (review/150)", () =>
   });
 
   it("measureRun reads ranges under REPLAY-v2 (an injecting seeds document) and not under v1", async () => {
-    const rounds = [{ result: APPROVE, prompt: "Review u1-p1..u2-p1." }];
-    const v2 = (await measureRun(multiCapture({ rounds }).layout.runDir, { seeds: INJECTING, forbid: [] })) as Measurement;
-    const v1 = await measure(multiCapture({ rounds }).layout.runDir);
+    // R6 (review/167) moved v2's coverage off the prompt: a verdict dispatch covers nothing before the injection
+    // point, and after it the passes its description names (a range included), never its prompt's. The range
+    // therefore moves from the round's prompt to its description, and a build naming every pass reaches the point.
+    const rounds = [{ result: APPROVE, description: "Review u1-p1..u2-p1", prompt: "Review the batch." }];
+    const implementers = [{ ...implementerOf("u1-p1"), description: "Implement u1-p1..u3-p2" }];
+    const v2 = (await measureRun(multiCapture({ rounds, implementers }).layout.runDir, { seeds: INJECTING, forbid: [] })) as Measurement;
+    const v1 = await measure(multiCapture({ rounds, implementers }).layout.runDir);
     expect(roundsOf(v2)).toEqual([1, 1, 1, 0, 0, 0]);
-    expect(roundsOf(v1)).toEqual([1, 0, 1, 0, 0, 0]);
+    // v1 reads the description's first id only (review/38), and no range.
+    expect(roundsOf(v1)).toEqual([1, 0, 0, 0, 0, 0]);
   });
 });
 
@@ -1792,5 +1808,129 @@ describe("R6 — coverageOf: all built, then all seeded (review/167)", () => {
     for (let k = 0; k <= CANARY_3.length; k++) {
       for (const [id, row] of coverOf(CANARY_3.slice(0, k))) expect([k, id, row]).toEqual([k, id, whole.get(id)]);
     }
+  });
+});
+
+/** An implementer described by its pass, as 30 of the 32 captured build dispatches are. */
+const builderOf = (pass: string): AgentSpec => ({
+  id: `tu_build_${pass}`, agentId: `abuild${pass.replace("-", "")}`, type: "stamity-implementer", description: `Build unit ${pass}`, prompt: `You are building unit ${pass} of docs/plans/001-replay.md.`, result: "status: DONE", tokens: 100,
+});
+const BUILDERS = ALL_SIX.map(builderOf);
+const agentOf = (id: string, type: string, description: string, prompt: string, result: string): AgentSpec => ({ id: `tu_${id}`, agentId: `a${id}`, type, description, prompt, result, tokens: 100 });
+/** The synthetic u1-p1 seed alone, injecting: a v2 document whose record needs one entry. */
+const ONE_SEED = { ...SEEDS, seeds: [{ ...SEEDS.seeds[0]!, injection: INJECTION }] };
+const ONE_RECORD = { passes: { "u1-p1": { pass: "u1-p1", seeds: [{ id: "sec-sql-sort", file: "src/store/query.ts", state: INJECTED }], partial: false, snapshot: true } }, partial: false, unreadable: [], unfinished: [] };
+/** Every pass holds an injection snapshot (the hook snapshots all six at the injection point); only u1-p1's holds the seed. */
+const sixSnapshots = (u1p1: Record<string, string> = SNAPSHOT_U1P1.main): NonNullable<CaptureSpec["snapshots"]> =>
+  Object.fromEntries(ALL_SIX.map((p) => [p, { main: p === "u1-p1" ? u1p1 : { "src/orders/format.ts": FORMAT } }]));
+const SEC_REPORT = `.stamity/runs/${RUN}/reports/u1-p1-security-r1.md`;
+
+/** A v2 run built from `agents` in dispatch order, each delivered before the next is dispatched. */
+function featureCapture(agents: AgentSpec[], options: { snapshots?: CaptureSpec["snapshots"]; ledger?: Record<string, unknown>[]; reports?: Record<string, string> } = {}): Built {
+  const dir = scratch();
+  const fixture = join(dir, "fx");
+  mkdirSync(fixture);
+  const layout = writeCapture(dir, {
+    run: { runId: "2026-09-28-replay-v2-1", shape: "baseline", kind: "scored", client: { version: "2.1.280" }, injection: ONE_RECORD },
+    stdout: [JSON.stringify({ type: "system", subtype: "init", ...INIT_PINNED, cwd: fixture })],
+    transcript: [mainLine.userText("/st-work docs/plans/001-replay.md --effort deep"), ...agents.flatMap(dispatch)],
+    subagents: agents.map(subagentOf),
+    snapshots: options.snapshots ?? sixSnapshots(),
+    state: { end: { runId: RUN, ledger: options.ledger ?? [], ...(options.reports ? { reports: options.reports } : {}) } },
+    oracle: { schema: "stamity/replay-oracle/v1", run: { status: "ok", detail: "" }, results: [{ seed: "sec-sql-sort", kind: "vitest", status: "pass", detail: "" }] },
+  });
+  return { layout, fixture, agents };
+}
+const featureRun = (agents: AgentSpec[], options?: Parameters<typeof featureCapture>[1]): Promise<Measurement> =>
+  measureRun(featureCapture(agents, options).layout.runDir, { seeds: ONE_SEED, forbid: [] }) as Promise<Measurement>;
+
+/** Round 1 named by feature, its prompt naming u3-p1 in passing (the third canary's shape). */
+const ROUND_1 = agentOf("r1", "stamity-reviewer", "Review round 1", "Review the staged change set of six units. The 404 body contract change is owned by u3-p1.", freeTextReturn([LOOSE_FINDING], "request-changes"));
+const APPROVING_1 = agentOf("r1", "stamity-reviewer", "Review round 1", "Review the staged change set of six units.", APPROVE);
+const LENS = agentOf("lens", "stamity-security", "Security specialist lens", "Review the diff for security.", freeTextReturn([SEED_FINDING], "request-changes"));
+const FIXER = agentOf("fix1", "stamity-fixer", "Fixer round 1", "Fix the round-1 findings.", "status: DONE");
+const ROUND_2 = agentOf("r2", "stamity-reviewer", "Review round 2", "Re-review the round-1 fixes.", APPROVE);
+const verdictsOf = (m: Measurement): Record<string, PassRow["verdict"]> => Object.fromEntries(m.passes.map((p) => [p.id, p.verdict]));
+const everyPass = (verdict: PassRow["verdict"]): Record<string, PassRow["verdict"]> => Object.fromEntries(ALL_SIX.map((p) => [p, verdict]));
+
+describe("R6 — the measurement reads coverageOf under v2 (review/167)", () => {
+  it("(b) a feature-named capture: every pass reads approve-after-fixes over 2 rounds, and the lens's find counts in round 1 at the pass stage", async () => {
+    const m = await featureRun([...BUILDERS, ROUND_1, LENS, FIXER, ROUND_2]);
+    expect(m.invalid).toEqual([]);
+    expect(verdictsOf(m)).toEqual(everyPass({ finalClass: "approve-after-fixes", rounds: 2, approvedWithSeedUnfixed: false }));
+    expect(seedOf(m)).toEqual(expect.objectContaining({ present: true, found: true, foundRound1: true, stage: "pass" }));
+  });
+
+  it("(c) a finding by a verdict agent dispatched before the injection point credits nothing; the same finding at or after it credits the seed", async () => {
+    const early = { ...LENS, description: "Security lens on the first units" };
+    const before = await featureRun([...BUILDERS.slice(0, 5), early, BUILDERS[5]!, APPROVING_1]);
+    expect(before.invalid).toEqual([]);
+    expect(seedOf(before)).toEqual(expect.objectContaining({ present: true, found: false, foundRound1: false, stage: null }));
+    expect(before.totals.recall).toEqual({ found: 0, denominator: 1, byClass: { security: { found: 0, denominator: 1 } } });
+    const after = await featureRun([...BUILDERS, early, APPROVING_1]);
+    expect(seedOf(after)).toEqual(expect.objectContaining({ present: true, found: true, foundRound1: true, stage: "pass" }));
+  });
+
+  it("(c) a report or ledger finding takes the agent whose digest names its report, and one no digest names credits only with no verdict agent before the injection point", async () => {
+    const early = { ...LENS, description: "Security lens on the first units", result: digestReturn([SEED_FINDING], "request-changes", SEC_REPORT) };
+    const reported = { ledger: ledgerRows([SEED_FINDING], SEC_REPORT), reports: { "u1-p1-security-r1.md": reportText([SEED_FINDING]) } };
+    expect(seedOf(await featureRun([...BUILDERS.slice(0, 5), early, BUILDERS[5]!, APPROVING_1], reported)).found).toBe(false);
+    expect(seedOf(await featureRun([...BUILDERS, early, APPROVING_1], reported)).found).toBe(true);
+    // A ledger row naming no report no digest names: the verdict before the point withholds it; none before, and it credits.
+    const quiet = { ...LENS, description: "Security lens on the first units", result: freeTextReturn([LOOSE_FINDING], "request-changes") };
+    const orphan = { ledger: ledgerRows([SEED_FINDING]) };
+    expect(seedOf(await featureRun([...BUILDERS.slice(0, 5), quiet, BUILDERS[5]!, APPROVING_1], orphan)).found).toBe(false);
+    expect(seedOf(await featureRun([...BUILDERS, quiet, APPROVING_1], orphan)).found).toBe(true);
+  });
+
+  it("a BLOCKED implementer still counts as built: the review after it is the injection point and credits the lens's find", async () => {
+    const blocked = { ...BUILDERS[5]!, result: "status: BLOCKED_DEPENDENCY" };
+    const m = await featureRun([...BUILDERS.slice(0, 5), blocked, APPROVING_1, LENS]);
+    expect(seedOf(m)).toEqual(expect.objectContaining({ found: true, foundRound1: true, stage: "pass" }));
+  });
+
+  it("(g) v1 keeps its matcher key: a ledger row from a prefixed slug (lane-u1-p1) meets the union of every pass's copies", async () => {
+    const lane = `.stamity/runs/${RUN}/reports/lane-u1-p1-reviewer-r1.md`;
+    const snapshots = { "u1-p1": { main: { "src/orders/format.ts": FORMAT } }, "u1-p2": { main: { "src/store/query.ts": QUERY_AT(20) } } };
+    const m = await measure(passCapture({ shape: "baseline", rows: [LOOSE_FINDING], endLedger: ledgerRows([{ ...SEED_FINDING, locator: "src/store/query.ts:20" }], lane), snapshots }).layout.runDir);
+    expect(seedOf(m).found).toBe(true);
+  });
+
+  it("(d) a pass-less fixer dispatched before any review does not raise the round of the review or the lens after the builds", async () => {
+    const lint = agentOf("lint", "stamity-fixer", "Scope lint away from generated hooks", "Scope lint away from generated hooks.", "status: DONE");
+    const m = await featureRun([BUILDERS[0]!, lint, ...BUILDERS.slice(1), APPROVING_1, LENS]);
+    expect(verdictsOf(m)).toEqual(everyPass({ finalClass: "approve", rounds: 1, approvedWithSeedUnfixed: false }));
+    expect(seedOf(m)).toEqual(expect.objectContaining({ found: true, foundRound1: true, stage: "pass" }));
+  });
+
+  it("(e) a finding by a round whose prompt names one pass in passing matches the seed as every covered pass's copies locate it", async () => {
+    // u1-p1's copy holds the seed at line 20, far outside the static span [11, 11]; u3-p1's copy holds no query.ts.
+    const moved = { ...ROUND_1, result: freeTextReturn([{ ...SEED_FINDING, locator: "src/store/query.ts:20" }], "request-changes") };
+    const m = await featureRun([...BUILDERS, moved, FIXER, ROUND_2], { snapshots: sixSnapshots({ "src/store/query.ts": QUERY_AT(20), "src/orders/format.ts": FORMAT }) });
+    expect(m.invalid).toEqual([]);
+    expect(seedOf(m)).toEqual(expect.objectContaining({ found: true, foundRound1: true, stage: "pass" }));
+  });
+});
+
+describe("R8 — branch level follows an approval (review/167)", () => {
+  it("(f) \"Whole-branch review round 1\" with no earlier approving round is pass-level: its verdict counts for six passes and its characters count in the loop", async () => {
+    const whole = agentOf("wb", "stamity-reviewer", "Whole-branch review round 1", "Review all six units. D8 removes u3-p1's `file` query; u3-p2 answers 400.", APPROVE);
+    const v2 = await featureRun([...BUILDERS, whole]);
+    expect(verdictsOf(v2)).toEqual(everyPass({ finalClass: "approve", rounds: 1, approvedWithSeedUnfixed: false }));
+    expect(v2.wholeBranch).toEqual({ finalClass: null, rounds: 0 });
+    // v1 keeps its reading of the same capture: branch-level, out of the loop figure.
+    const v1 = await measure(featureCapture([...BUILDERS, whole]).layout.runDir);
+    expect(v1.wholeBranch).toEqual({ finalClass: "approve", rounds: 1 });
+    expect(v2.totals.loopChars - v1.totals.loopChars).toBeGreaterThan(whole.prompt.length + APPROVE.length);
+  });
+
+  it("(f) a whole-branch review after an approving round is branch-level, and so is every verdict agent dispatched after it", async () => {
+    const deep = agentOf("deep", "stamity-reviewer", "Whole-branch deep review", "Review the whole branch.", freeTextReturn([LOOSE_FINDING], "request-changes"));
+    const late = { ...LENS, id: "tu_late", agentId: "alate", description: "Security lens" };
+    const m = await featureRun([...BUILDERS, APPROVING_1, deep, late]);
+    expect(m.invalid).toEqual([]);
+    expect(verdictsOf(m)).toEqual(everyPass({ finalClass: "approve", rounds: 1, approvedWithSeedUnfixed: false }));
+    expect(m.wholeBranch).toEqual({ finalClass: "blocked", rounds: 1 });
+    expect(seedOf(m)).toEqual(expect.objectContaining({ found: true, foundRound1: false, stage: "branch" }));
   });
 });
