@@ -24,11 +24,11 @@ charter, commands, agents, skills, rules, hooks and MCP wiring, shaped for the c
 
 Every figure below comes from a committed artifact, so you can check it instead of believing it.
 
-**Merge-ready rate: 6 of 8 runs, 0.750.** A run is verified merge-ready when three things hold.
+**Merge-ready rate: 6 of 9 runs, 0.667.** A run is verified merge-ready when three things hold.
 Its final gate table is all passes. Its last review verdict is an approval at or above the
 confidence gate that record states. Its findings ledger leaves no row open. Self-declared wording
 never counts. The frozen snapshot is
-[`evals/measurements/merge-ready-2026-09-23.json`](evals/measurements/merge-ready-2026-09-23.json),
+[`evals/measurements/merge-ready-2026-09-28.json`](evals/measurements/merge-ready-2026-09-28.json),
 and [Measurements](docs/measurements.md) shows the working and names every run left out.
 
 **Eval run of record: [run 35](evals/runs/2026-09-27-run-35/RESULTS.md), the 1.10.0 release run.**
