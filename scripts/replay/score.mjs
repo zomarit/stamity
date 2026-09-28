@@ -313,7 +313,13 @@ export function summarize(measurement, runJson, protocolSha, { protocolPath = PR
   const notDone = []
   // build/313: what `compare.mjs` reads a pilot for (`checkInputs`, `heldToPilot`, the head), never the variance (`sampleOf`).
   if (summaryKind === 'pilot') notDone.push("pilot — not scored: the comparison takes it only as --pilot-baseline or --pilot-changed, names it in its head and holds each scored run of its shape to its ambient lists (§3); it is not read for the sample's variance (§10)")
-  for (const reason of m.invalid) notDone.push(`invalid run — ${reason}; replace it (§10: at most 2 replacements per shape)`)
+  // review/2 (R7): §10 does not replace a changed scored run invalid only for an uncovered pass, so its RESULTS does not ask to.
+  const kept = uncoveredOnly({ shape: m.shape ?? run.shape, kind: summaryKind, invalid: m.invalid })
+  for (const reason of m.invalid) {
+    notDone.push(kept
+      ? `invalid run — ${reason}; §10 does not replace a changed scored run invalid only for an uncovered pass: the rows the changed shape feeds are not evaluated and the merge gate fails`
+      : `invalid run — ${reason}; replace it (§10: at most 2 replacements per shape)`)
+  }
   for (const [group, fields] of Object.entries(prov)) for (const [field, value] of Object.entries(fields)) if (value === null) notDone.push(`run.json records no ${group}.${field}`)
   if (Object.keys(files).length === 0) notDone.push('run.json records no instrument.files')
   if (m.models.init == null) notDone.push('the init event names no orchestrator model')

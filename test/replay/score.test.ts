@@ -1198,6 +1198,32 @@ describe("REPLAY-v2 R7 — an uncovered pass (review/168)", () => {
     expect(section("#### Other measurement notes")).toContain("- no notes line");
   });
 
+  it("(review/1) the omitted-seed reason measure.mjs writes begins UNCOVERED_REASON, so check names a changed scored run invalid only for it", async () => {
+    expect(MEASURE_SRC).toContain("invalid.push(`${UNCOVERED_REASON} ${seed.pass}: its entry in run.json's injection record omits seed ${seed.id}, so it was never injected`)");
+    const { outDir } = await runInto();
+    const good = JSON.parse(readFileSync(join(outDir, "summary.json"), "utf8")) as Summary;
+    const dir = join(scratch(), "runs");
+    const id = "2026-09-24-replay-2";
+    mkdirSync(join(dir, id), { recursive: true });
+    writeFileSync(join(dir, id, "summary.json"), JSON.stringify({ ...good, runId: id, shape: "changed", kind: "scored", invalid: ["uncovered pass u1-p1: its entry in run.json's injection record omits seed sec-sql-sort, so it was never injected"] }));
+    writeFileSync(join(dir, id, "RESULTS.md"), "No threshold moved.\n");
+    expect(checkRuns(dir, PROTOCOL).problems).toEqual([`${id}: a changed scored run invalid only for an uncovered pass, which §10 does not replace — the rows the changed shape feeds are not evaluated and the merge gate fails`]);
+  });
+
+  it("(review/2) RESULTS' Not done does not ask to replace a changed scored run invalid only for an uncovered pass; any other invalid run is still told to", async () => {
+    const { m, runJson } = await measured();
+    const reason = "uncovered pass u2-p2: no review dispatch covered it, so its seeds (con-config-default, tw-test-skip) were never injected";
+    const stalled = 'run.json end.reason is "stalled", not "complete"';
+    const notDoneOf = (shape: string, kind: string, invalid: string[]): string[] =>
+      (summarize({ ...m, shape, invalid }, runJson, PROTOCOL_SHA, { protocolPath: "evals/replay/REPLAY-v2.md", kind }) as Summary).notDone.filter((x) => x.startsWith("invalid run"));
+    expect(notDoneOf("changed", "scored", [reason])).toEqual([
+      `invalid run — ${reason}; §10 does not replace a changed scored run invalid only for an uncovered pass: the rows the changed shape feeds are not evaluated and the merge gate fails`,
+    ]);
+    expect(notDoneOf("baseline", "scored", [reason])).toEqual([`invalid run — ${reason}; replace it (§10: at most 2 replacements per shape)`]);
+    expect(notDoneOf("changed", "scored", [stalled, reason])).toEqual([stalled, reason].map((r) => `invalid run — ${r}; replace it (§10: at most 2 replacements per shape)`));
+    expect(notDoneOf("changed", "pilot", [reason])).toEqual([`invalid run — ${reason}; replace it (§10: at most 2 replacements per shape)`]);
+  });
+
   it("(d) check fails on a changed scored run invalid only for an uncovered pass, naming it, and counts a baseline one as a replacement", async () => {
     const { outDir } = await runInto();
     const good = JSON.parse(readFileSync(join(outDir, "summary.json"), "utf8")) as Summary;

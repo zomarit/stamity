@@ -1169,6 +1169,8 @@ const injecting = (seeds) => seeds.seeds.some((seed) => seed.injection !== undef
 /** The two per-seed states the driver's hook records in `run.json`'s `injection` (REPLAY-v2 §5). */
 const INJECTED = 'injected'
 const NOT_INJECTED = 'not injected (anchor missing)'
+/** review/5, build/9: a seed the record cannot give a state for (no record, or a malformed one); never a recorded state. */
+const UNREADABLE = Symbol('unreadable')
 
 /**
  * review/135 (REPLAY-v2 §5, §8): an injecting seeds document (a seed carries `injection`) is read
@@ -1177,21 +1179,24 @@ const NOT_INJECTED = 'not injected (anchor missing)'
  * record the driver would not write, is invalid, naming why.
  * R7 (review/168): every seed of the document is checked against a readable record. A pass with no
  * entry is uncovered — the injection point never came for it, so its seeds were in no tree — and the
- * run is invalid, one reason per pass beginning `UNCOVERED_REASON`; a seed its pass's entry omits makes
- * the run invalid too. A pass with an entry and no injection snapshot (`snapshots`) is a capture defect.
+ * run is invalid, one reason per pass beginning `UNCOVERED_REASON`; a seed its pass's entry omits is
+ * uncovered too, its reason also beginning `UNCOVERED_REASON` (review/1). A pass with an entry and no
+ * injection snapshot (`snapshots`) is a capture defect. A seed a missing or malformed record gives no
+ * readable state is mapped to `UNREADABLE`, so its row is not read as uncovered (review/5, build/9).
  */
 function injectionStatesOf(seeds, run, invalid, snapshots) {
   if (!injecting(seeds)) return null
   const states = new Map()
   const record = run?.injection
+  const unreadable = () => new Map(seeds.seeds.map((seed) => [seed.id, UNREADABLE]))
   if (record === undefined || record === null) {
     invalid.push('run.json carries no injection record (injection), so no seed can be read as injected or not: a REPLAY-v2 run is invalid without it')
-    return states
+    return unreadable()
   }
   const malformed = (why) => invalid.push(`run.json's injection record is malformed: ${why}`)
   if (typeof record !== 'object' || record.passes === null || typeof record.passes !== 'object' || Array.isArray(record.passes)) {
     malformed('passes is not an object')
-    return states
+    return unreadable()
   }
   const listed = new Map()
   for (const [pass, entry] of Object.entries(record.passes)) {
@@ -1210,7 +1215,8 @@ function injectionStatesOf(seeds, run, invalid, snapshots) {
   const uncovered = new Map()
   for (const seed of seeds.seeds) {
     if (!Object.hasOwn(record.passes, seed.pass)) uncovered.set(seed.pass, [...(uncovered.get(seed.pass) ?? []), seed.id])
-    else if (listed.get(seed.pass)?.has(seed.id) === false) invalid.push(`injection record: pass ${seed.pass} omits seed ${seed.id}`)
+    else if (listed.get(seed.pass)?.has(seed.id) === false) invalid.push(`${UNCOVERED_REASON} ${seed.pass}: its entry in run.json's injection record omits seed ${seed.id}, so it was never injected`)
+    else if (!states.has(seed.id)) states.set(seed.id, UNREADABLE)
   }
   for (const [pass, ids] of uncovered) invalid.push(`${UNCOVERED_REASON} ${pass}: no review dispatch covered it, so its seeds (${ids.join(', ')}) were never injected`)
   return states
@@ -1253,6 +1259,11 @@ function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, inval
     if (injected?.get(seed.id) === NOT_INJECTED) {
       notes.push(`seed ${seed.id} (${seed.pass}): recorded ${NOT_INJECTED} in run.json's injection record, so it is filed absent at the pass and leaves the recall denominator, whatever the snapshot reads${seed.class === 'security' ? '; a security seed, so it holds its security-seeds row' : ''}`)
       return { id: seed.id, class: seed.class ?? null, pass: seed.pass, present: false, caughtByImplementer: true, ...found }
+    }
+    // review/5, build/9: the record gives no readable state, and the run's own reason says why; never credited either.
+    if (injected?.get(seed.id) === UNREADABLE) {
+      notes.push(`seed ${seed.id} (${seed.pass}): no readable state in run.json's injection record (the run's invalid reason names why), so it is filed never found, whatever a finding matches; the run is invalid (§8)`)
+      return { id: seed.id, class: seed.class ?? null, pass: seed.pass, present: null, caughtByImplementer: false, ...found, found: false, foundRound1: false, stage: null }
     }
     // R7: a finding that meets an uncovered seed's span and a term met the clean line the injection would have replaced.
     if (injected !== null && !injected.has(seed.id)) {

@@ -750,6 +750,13 @@ describe("compare — an uncovered pass (R7, review/168)", () => {
     expect(r.mergeGate).toBe("FAIL");
   });
 
+  it("(review/1) does not replace a changed scored run invalid only because its pass's entry omits a seed: that seed is uncovered too", () => {
+    const omitted = "uncovered pass u1-p1: its entry in run.json's injection record omits seed sec-sql-sort, so it was never injected";
+    const r = run(base3(), [{ ...summary("changed", 9), invalid: [omitted] }, ...changed3()]);
+    expect(row(r, "pooled-recall").reason).toBe("changed: 2026-09-26-replay-9 has an uncovered pass, and §10 does not replace a changed scored run invalid only for one");
+    expect(r.mergeGate).toBe("FAIL");
+  });
+
   it("(e) replaces a baseline run with an uncovered pass like any invalid run, within the two replacements", () => {
     const r = run([uncovered(summary("baseline", 9)), ...base3()], changed3());
     expect(r.sampleCount.invalid.baseline).toBe(1);

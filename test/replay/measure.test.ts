@@ -1581,13 +1581,12 @@ function coveredRecord(states: Record<string, string>): Record<string, unknown> 
   }
   return { passes, partial: false, unreadable: [], unfinished: [] };
 }
-function uncoveredCapture(injection: Record<string, unknown>): Built {
+function uncoveredCapture(injection: Record<string, unknown>, builds: AgentSpec[] = [implementerOf("u1-p1"), implementerOf("u3-p1")]): Built {
   const dir = scratch();
   const fixture = join(dir, "fx");
   mkdirSync(fixture);
   const agents: AgentSpec[] = [
-    implementerOf("u1-p1"),
-    implementerOf("u3-p1"),
+    ...builds,
     { id: "tu_round1", agentId: "around1", type: "stamity-reviewer", description: "Review round 1", prompt: "Review the whole staged change set. The 404 body contract change is owned by u3-p1.", result: STRAY_REVIEW, tokens: 100 },
   ];
   const layout = writeCapture(dir, {
@@ -1613,13 +1612,20 @@ describe("REPLAY-v2 R7 — an uncovered seed is never credited, and its run is i
     expect(m.totals.recall.found).toBe(0);
     expect(m.notes).toContainEqual("seed sec-sql-sort (u1-p1): uncovered — no state in run.json's injection record, so it was never injected and no finding can find it; the run is invalid (§8)");
     expect(m.notes.join("\n")).not.toContain("presence unknown");
+    // review/4: the stray finding does meet the seed. The same capture with every pass built and u1-p1's seed
+    // recorded injected credits it, so (a)'s row is the rule withholding a match, not a finding that missed.
+    const control = coveredRecord({ "sec-sql-sort": INJECTED, "sec-path-traversal": NOT_INJECTED, "tw-expectation-deleted": NOT_INJECTED });
+    const built = (await measureRun(uncoveredCapture(control, [{ ...implementerOf("u1-p1"), description: ALL_BUILT }]).layout.runDir, { seeds: INJECTING, forbid: [] })) as Measurement;
+    expect(rowOf(built, "sec-sql-sort")).toEqual(expect.objectContaining({ found: true }));
   });
 
-  it("(b) a pass entry that omits one of its seeds makes the run invalid, and the omitted seed is never found", async () => {
+  it("(b) a pass entry that omits one of its seeds makes the run invalid for an uncovered pass, and the omitted seed is never found", async () => {
     const record = injectionRecord(ALL_INJECTED) as { passes: Record<string, { seeds: unknown[] }> };
     record.passes["u1-p1"]!.seeds = [];
     const m = await injectingRun({ injection: record });
-    expect(m.invalid).toEqual(["injection record: pass u1-p1 omits seed sec-sql-sort"]);
+    // review/1, review/6 (R7): an omitted seed is uncovered, so its reason begins UNCOVERED_REASON and §10 does not replace
+    // a changed scored run invalid only this way.
+    expect(m.invalid).toEqual(["uncovered pass u1-p1: its entry in run.json's injection record omits seed sec-sql-sort, so it was never injected"]);
     // The capture's reviewer cites the seed's line: the find the full record credits is not credited here.
     expect(rowOf(m, "sec-sql-sort")).toEqual(expect.objectContaining(UNCOVERED_ROW));
     expect(m.notes).toContainEqual(expect.stringMatching(/^seed sec-sql-sort \(u1-p1\): uncovered — /));
@@ -1672,6 +1678,18 @@ describe("REPLAY-v2 R7 — an uncovered seed is never credited, and its run is i
     expect(rowOf(m, "sec-path-traversal")).toEqual(expect.objectContaining({ present: false, caughtByImplementer: true }));
     expect(securityHeld(rowOf(m, "sec-path-traversal"))).toBe(true);
     expect(m.totals.recall.denominator).toBe(1);
+  });
+
+  it.each<[string, Record<string, unknown>]>([
+    ["a seed state the driver never writes", { injection: { ...coveredRecord(ALL_INJECTED), passes: { ...(coveredRecord(ALL_INJECTED).passes as object), "u1-p1": { pass: "u1-p1", seeds: [{ id: "sec-sql-sort", state: "skipped" }] } } } }],
+    ["a pass entry with no seeds list", { injection: { ...coveredRecord(ALL_INJECTED), passes: { ...(coveredRecord(ALL_INJECTED).passes as object), "u1-p1": { pass: "u1-p1" } } } }],
+    ["no injection record", {}],
+  ])("(review/5, build/9) %s: the seed is never found, and its note names the unreadable record, not an uncovered pass", async (_label, run) => {
+    const m = await injectingRun(run);
+    expect(rowOf(m, "sec-sql-sort")).toEqual(expect.objectContaining(UNCOVERED_ROW));
+    expect(m.notes).toContainEqual("seed sec-sql-sort (u1-p1): no readable state in run.json's injection record (the run's invalid reason names why), so it is filed never found, whatever a finding matches; the run is invalid (§8)");
+    expect(m.notes.join("\n")).not.toContain("sec-sql-sort (u1-p1): uncovered");
+    expect(m.invalid.filter((r) => r.startsWith("uncovered pass"))).toEqual([]);
   });
 
   it("a v1 seeds document never takes the rule: a pass with no snapshot and no record keeps presence unknown, and no reason names an uncovered pass", async () => {
