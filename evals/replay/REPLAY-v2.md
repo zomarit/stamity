@@ -294,8 +294,9 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   gate.
 - **Pass attribution.** The first `\bu[1-3]-p[12]\b` in the dispatch description, else a single distinct pass id in
   the prompt; several distinct ids attribute to `multi`. **Branch-level** dispatches: a verdict dispatch whose
-  description or prompt matches `/whole[- ]branch/i` and that was dispatched after an approving reviewer delivery of
-  an earlier round is branch-level, and so is every verdict agent dispatched after it. A whole-branch review
+  description or prompt matches `/whole[- ]branch/i` and that was dispatched after an approving delivery by a
+  reviewer dispatched at or after the injection point (§5) is branch-level, and so is every verdict agent dispatched
+  after it. An approval before the injection point (a plan review) counts for nothing here, and a whole-branch review
   dispatched before any approval is a loop round like any other (§15). REPLAY-v1 keeps its own reading: verdict
   dispatches after `u3-p2`'s last reviewer approval that carry no single id, or that match `/whole[- ]branch/i`.
   Attribution places an agent's loop characters and sub-agent tokens in the per-pass split, and names a compaction
@@ -347,7 +348,10 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   is at the pass stage, and in round 1, for each pass it covers.
   A finding credits a seed only when its agent was dispatched at or after the injection point (§5). A report or
   ledger finding belongs to the agent whose digest names its report; one that no agent's digest names credits a seed
-  only when no verdict agent was dispatched before the injection point.
+  only when no verdict agent was dispatched before the injection point. An agent the measurement builds from its
+  sub-agent file, because the main transcript holds no dispatch for it, has no known dispatch time: its findings
+  credit no seed, and a finding no agent's digest names credits none beside it. A finding that credits no seed is no
+  seed match for precision and never reads a seed as fixed for loss (below).
   The measurement reads the driver's injection record (`run.json`'s `injection`, §5) before any snapshot, and each
   seed has one of three readings there. A seed recorded not injected is filed as absent at its pass whatever the
   snapshot reads, so it leaves the denominator and counts as found for `security-seeds`. A seed recorded injected is
@@ -365,12 +369,12 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   the run is invalid (below): a file gone from every copy says nothing of the seed. This is distinct from a seed
   reverted before review, whose file a review copy holds and whose `present` rule holds in none.
 - **Precision.** A decoy is flagged when a Critical or Warning finding matches it. Unmatched = Critical or Warning
-  findings matching no seed or decoy, deduplicated by block; reported, not thresholded.
+  findings matching no decoy and crediting no seed (Recall, above), deduplicated by block; reported, not thresholded.
 - **Loss.** For each driver compaction event, at-risk = the verdict-role Critical or Warning findings delivered before
   the boundary (transcript order) with no ledger row in the pre-compaction state snapshot (same file and a line within
   ±3, or `report` equal to the report path; a finding with no file is covered by the report-path match or by a row
   that itself has no file and whose text contains the finding's trimmed text, and a row with a file covers only its
-  own location). Lost = at-risk, no row at run end, and not a seed whose oracle passes. A
+  own location). Lost = at-risk, no row at run end, and crediting no seed whose oracle passes (Recall, above). A
   sample is valid iff at-risk ≥ 1. Automatic compactions (`trigger:"auto"`) are counted; projected compactions per
   10 passes = 10 × context tokens per pass ÷ 947,000, reported only.
 - **Verdicts per pass.** Rounds = the reviewer's completed deliveries: each one is a round, including one whose text
