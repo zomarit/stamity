@@ -78,12 +78,12 @@ when it happens; until then these rows are the documented requirement, not an ob
 
 ## Dependency recheck
 
-On 2026-09-10, [Docusaurus's supported versions](https://docusaurus.io/versions) and
-[latest release](https://github.com/facebook/docusaurus/releases/tag/v3.10.2) still
-identify 3.10.2; no v4 GA migration is available. The
-[image-size upstream](https://github.com/image-size/image-size) remains archived.
-Both [ICNS](https://github.com/advisories/GHSA-w3rx-r6r6-pgpr) and
-[JXL/HEIF](https://github.com/advisories/GHSA-5p2g-fcmc-qvqq) advisories list no patched
-release through current 2.0.2. The website retains its existing accepted dependency
-condition; a supported upstream fix, dependency removal or new unauthored-image input
-path triggers re-evaluation. No third-party replacement was selected to silence alerts.
+On 2026-09-28, both [ICNS](https://github.com/advisories/GHSA-w3rx-r6r6-pgpr) and
+[JXL/HEIF](https://github.com/advisories/GHSA-5p2g-fcmc-qvqq) advisories name 2.0.3 as the
+first patched `image-size` release: the supported upstream fix the 2026-09-10 recheck named
+as its re-evaluation trigger. The project moved from its archived
+[GitHub repository](https://github.com/image-size/image-size) to
+[Codeberg](https://codeberg.org/image-size/image-size), where the fix and the 2.0.3 and 2.0.4
+version commits follow the `v2.0.2` tag, and the npm maintainer who published 2.0.2 published
+both. The website's lockfile moved to 2.0.4 ([#56](https://github.com/zomarit/stamity/pull/56)),
+which closes the accepted dependency condition. No third-party replacement was used.
