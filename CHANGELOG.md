@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before anything is published.
 -->
 
-## [1.10.0] - 2026-09-27
+## [1.10.0] - 2026-09-28
 
 ### Added
 
@@ -169,13 +169,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   model pair, so a run on another pair is never composed with a run on this one; it reads a
   reported `claude-opus-5-5[1m]` as `claude-opus-5-5`, and a summary that records none of the
   key's fields now matches no key instead of every key.
-- **Run 34 is the 1.10.0 release run, the first on the new model pair.** A profile change starts
-  a new baseline, so run 34 measured every one of SET-v7's 102 cases in full, with calibration
-  first, and composed nothing with an earlier run. It ran on one account throughout: run 33, at
-  the same candidate, ended terminal after a mid-run account switch changed the client's ambient
-  text, and stays as history. Golden, guardrail hold,
-  benign-twin false refusals and trigger-probe accuracy read RUN-34-RESULT, against thresholds
-  declared before the run, on the Claude profile and rubric v7.
+- **Runs 34 and 35 are the 1.10.0 release run, the first on the new model pair.** A profile
+  change starts a new baseline, so run 34 measured every one of SET-v7's 102 cases in full, with
+  calibration first, and composed nothing with an earlier run. It ran on one account throughout:
+  run 33, at the same candidate, ended terminal after a mid-run account switch changed the
+  client's ambient text, and stays as history. Run 34 alone failed one floor case,
+  `question-shape-and-default-charter-only`, so its own result is FAIL, and it is published as
+  it ran. Invariant 2 was then tightened (invariants 1.1.0, below), and run 35 re-measured the two
+  cases whose files moved and carried the other 100 from run 34. Composed, the two hold every
+  threshold declared before the runs, on the Claude profile and rubric v7: golden 0.981 (51 of
+  52) with floors 23 of 23, guardrail hold 1.000 (16 of 16), benign-twin false refusals 0.000
+  (0 of 4) and trigger-probe accuracy 1.000 (30 of 30). Calibration matched 5 of 5 in each run.
+- **Invariants 1.1.0: Invariant 2 asks exactly one question.** Invariant 2 (Ambiguity) now says to
+  ask one question, exactly one, and to make no second request in the same turn. The 1.0.0
+  wording left a second request unnamed. The invariants version moves from 1.0.0 to 1.1.0, a
+  MINOR amendment recorded in the doctrine's amendments table, and the charter's head reads
+  `last amended 2026-09-27`. The invariants text is rendered into every generated repository's
+  always-on file, so a repository picks the new wording up on its next `stamity sync`, and one
+  that never re-syncs keeps the 1.0.0 wording.
+- **The Codex adapter no longer states the client's default for `features.hooks`.** The comment
+  above `[features]` in `.codex/config.toml` and the `description` field of
+  `.codex/hooks.json` said the client defaults the key off. They now say the key is written
+  explicitly, so the client's default does not decide it, and the capability matrix says the
+  same. The emitted bytes of both files change, so a Codex repository's `.codex` files move on
+  its next `stamity sync`.
 - **The plugins guide records the Codex remote walk.** 1.9.1's guide said Codex's remote form had
   not run. It ran on 2026-09-24 on codex-cli 0.155.1 against a private mirror of the distribution:
   `marketplace add` at `--ref plugins/v1.9.0` and `plugin add` both exited 0 without a Codex
