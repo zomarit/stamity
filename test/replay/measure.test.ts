@@ -1967,6 +1967,17 @@ describe("R6 — the credit guard reaches compaction loss and precision (review/
 });
 
 describe("R8 — branch level follows an approval (review/167)", () => {
+  it("(review/20) an approval by a reviewer built from its sub-agent file does not make a later \"Whole-branch review round 1\" branch-level", async () => {
+    // The review/15 fixture: the reviewer's dispatch is missing from the main transcript, so its line is its delivery's,
+    // which lands after the injection point (the lens) though it may have been dispatched before it.
+    const lost = agentOf("lost", "stamity-reviewer", "Plan review", "Review docs/plans/001-replay.md before the build.", APPROVE);
+    const whole = agentOf("wb", "stamity-reviewer", "Whole-branch review round 1", "Review all six units.", APPROVE);
+    const tail = [mainLine.taskNotification({ taskId: "alost", toolUseId: "tu_lost", result: APPROVE }), ...dispatch(whole)];
+    const m = await featureRun([...BUILDERS, LENS], { tail, extraSubagents: [subagentOf(lost), subagentOf(whole)] });
+    expect(m.notes.join("\n")).toContain("agent alost built from its sub-agent file");
+    expect(m.wholeBranch).toEqual({ finalClass: null, rounds: 0 });
+  });
+
   it("(review/13) an approving review before the injection point (a plan review) does not make a later \"Whole-branch review round 1\" branch-level", async () => {
     const planReview = agentOf("plan", "stamity-reviewer", "Plan review", "Review docs/plans/001-replay.md before the build.", APPROVE);
     const whole = agentOf("wb", "stamity-reviewer", "Whole-branch review round 1", "Review all six units.", APPROVE);
