@@ -3,16 +3,19 @@
 The protocol and the thresholds of the replay of the changed `/st-work` of Package 16 against
 the 1.9.1 one, on a fixture where the seeds reach review. It implements REQ-CTX-015 as plan
 `docs/plans/011-replay-v2.md` amends it. That plan's R5 (2026-09-27) took this replay off the 1.10.0 tag and
-moved its canary, pilots and scored runs to REPLAY-v2's own package. This file is committed before the first v2 result and is never edited
-afterwards: a gap a pilot finds is recorded against this file as it stands (§7, §14), or it restarts the pilots under a
-new protocol, `REPLAY-v3`.
+moved its canary, pilots and scored runs to REPLAY-v2's own package. Plan `docs/plans/011-replay-v2-02.md` (R6–R10,
+2026-09-28) amended it after the third baseline canary, before any v2 result: when the seeds go in, which passes a
+review covers, and how a seed with no recorded state counts. This file is committed before the first v2 result and
+is never edited afterwards: a gap a pilot finds is recorded against this file as it stands (§7, §14), or it restarts
+the pilots under a new protocol, `REPLAY-v3`.
 
 `REPLAY-v1` stays frozen, and its two pilots stay unscored evidence in `evals/replay/runs/`. Its seeds sat in the
 contrib patches the units applied, so the orchestrator's reading of the plan caught every seed before any review, and
 the replay could not score review. v2 keeps v1's shapes, pins, messages, samples and thresholds. What changes:
 
-- **The seeds arrive at review.** The units start clean. At the first review dispatch that covers a pass, the driver
-  puts that pass's seeds in, in the shape's own form, and snapshots the tree (§5).
+- **The seeds arrive at review.** The units start clean. At the first review dispatch after the build phase, once
+  every pass is built, the driver puts all six passes' seeds in, in the shape's own form, and snapshots each pass (§5).
+  A seed the injection record holds no state for is uncovered, and its run is invalid (§5, §8).
 - **The fixture** is `evals/replay/v2/` (§5, Fixture notes).
 - **Scoring.** A negated severity word is no severity, a term inside the finding's own locator credits nothing, one
   term window serves both shapes, and one review round's verdict counts for every pass the round covers (§8, §9).
@@ -100,11 +103,13 @@ binary stays where it is.
   the plan and no file the plan's `reads:` names holds a seed, because the seeds do not exist until review.
 - The fixture never contains `seeds.json`, the oracles or the reference fixes.
 
-**Injection.** A review dispatch covers the one pass its description names (the first pass id, as §8's attribution
-reads it), else the distinct pass ids its prompt names, where a named range such as `u1-p1..u3-p2` covers every pass
-in it (§8, Covered passes). When the first verdict-role dispatch that covers a pass starts,
-whether it covers one pass or several, the driver's hook does this for each covered pass not yet injected, all in the
-same hook call and before the reviewer's first tool call:
+**Injection.** A pass is *built* once the description of a build-role dispatch (§8, Role functions) names it. Every
+pass id the description names counts, and a named range such as `u1-p1..u3-p2` names every pass in it (§8, Covered
+passes). A dispatch's prompt is never read for this, and a description that names no pass builds nothing. The
+*injection point* is the first verdict-role dispatch after every pass of the plan is built. When it starts, the
+driver's hook injects all six passes in one hook call, before the reviewer's first tool call. No other dispatch
+injects. The hook reads the rule through the same function the measurement reads
+(`coverageOf` in `scripts/replay/measure.mjs`), over the dispatches made so far. For each pass, in pass order:
 
 1. For each seed of the pass, replace the seed's `injection.find` with its `injection.replace`, once, in every
    worktree of the run that is not pristine (step 2). The `find` text occurs exactly once in its file on the clean
@@ -133,18 +138,22 @@ same hook call and before the reviewer's first tool call:
    seeds as working-tree edits (sha null), `staged` for one that took them staged in both the index and the working
    tree (sha null), `commit` for one that took them as a commit, and `skipped-pristine` for a pristine worktree that
    holds a seed's anchor and took nothing (its files are the seeded files whose anchor it holds, sha null).
-4. Snapshot the pass (`captures/snapshots/<pass>/`). This is the injection snapshot: the tree right after the seeds
-   went in.
 
-**The review snapshot.** When the first review round that covers a pass completes, the driver copies the pass's trees
-again, in the same shape, to `captures/review-snapshots/<pass>/`. "Completes" means what it means for the compaction
-trigger (§7): every member of the round, meaning every verdict-role agent dispatched while the round was open, has
-stopped (TaskStop counts as a stop), and at least one member that names the pass returned by itself. A round covers
-every pass its members name, so a lens that names no pass still counts toward its round. This is the tree the review
-actually saw. A seed that was injected but is absent from every copy of its pass's review snapshot was **reverted
-before review**: someone in the run took it out between the injection and the end of the first review round, so no
-review had a chance to find it. Such a seed is scored like a seed that is not injected (below and §8, Recall). A pass
-whose review never completed has no review snapshot.
+Once every pass has gone in, the hook snapshots each pass (`captures/snapshots/<pass>/`). This is the injection
+snapshot: the tree right after all the seeds went in, so a file that holds seeds of two passes
+(`src/orders/handlers.ts`, `u3-p1` and `u3-p2`) holds both in each pass's copy. When the injection point never comes,
+because some pass of the plan is never built, nothing is injected, every seed is uncovered (below), and the run is
+invalid.
+
+**The review snapshot.** When the review round that holds the injection point completes, the driver copies the trees
+of every injected pass again, in the same shape, to `captures/review-snapshots/<pass>/`. "Completes" means what it
+means for the compaction trigger (§7): every member of the round, meaning every verdict-role agent dispatched while
+the round was open, has stopped (TaskStop counts as a stop), and at least one member returned by itself. When TaskStop
+stopped every member of that round, the review snapshot is taken when the next round completes. This is the tree the
+review actually saw. A seed that was injected but is absent from every copy of its pass's review snapshot was
+**reverted before review**: someone in the run took it out between the injection and the end of that review round, so
+no review had a chance to find it. Such a seed is scored like a seed that is not injected (below and §8, Recall). A
+run in which no round completed after the injection point has no review snapshot.
 
 The seeds take the form of the work around them because a reviewer reads what the shape hands it: a shape that has
 committed nothing reviews its uncommitted change set, and a shape that commits reviews the branch diff. A commit in a
@@ -160,18 +169,27 @@ name guard in another form, or writes `tw-expectation-deleted`'s assertion anoth
 reads present. A seed recorded as injected is read from its pass's review snapshot, or from the injection snapshot
 when the pass has no review snapshot (§8, Recall). A v2 run without the injection record is invalid (§8).
 
+**An uncovered seed.** A seed has no recorded state when its pass has no entry in the injection record,
+because the injection point never came, or when its pass's entry leaves it out. Such a seed is uncovered, which is not
+the same as not injected: it was never in any tree, no finding can find it, and its run is invalid (§8, §10).
+
 **Canary.** Before any pilot, one canary run per shape (`K-inject-baseline`, `K-inject-changed`) proves the mechanics
-on the pinned client. Its new checks: at least 10 of 12 seeds injected in each shape (K11); each covered pass's
+on the pinned client. Its new checks: at least 10 of 12 seeds injected in each shape (K11); each injected pass's
 snapshot exists, and each injected seed reads present in it (K12); at least one verdict-role finding cites an injected
-file (K13); no text the run wrote says `BLOCKED` or `BLOCKED_<WORD>` and names the injection (K14); at least 10 of 12
-seeds survive to review in each shape, where a seed survives when it was injected and reads present in its pass's
-review snapshot (K15). The canary passes when K5 to K15 all pass. A text names the
-injection by the first 7 characters of a recorded injection commit's sha, by the subject
-`chore(<pass>): save work in progress`, or by an injected seed's repository-relative path as a whole path token:
-`src/store/query.ts`, `src/store/query.ts:<line>` and an absolute path ending in it match, while `src/store/query.tsx`
-and `my-src/store/query.ts` do not. K11's record also names, per injected pass, every unit test the injection turned
-red (§15). If K11 falls below 10 of 12 in either shape, the fallback, where the seeds arrive as a prepared change set,
-is written as a revised protocol before any pilot.
+file (K13); the run does not end blocked over the injection (K14); at least 10 of 12 seeds survive to review in each
+shape, where a seed survives when it was injected and reads present in its pass's review snapshot (K15); every pass
+of the plan has an entry in the injection record, in each shape (K16). The canary passes when K5 to K16 all pass.
+K14 reads only the run's end, and only once a seed has been injected: the session's final `result`, each run record
+as copied at the run's end (a `.md` file directly in the fixture's `.stamity/runs/` or directly inside one of its
+folders, `reports/` skipped), and the orchestrator's last message that carries text, unless that message is dated
+before the first injection. It reads no tool input, no dispatch prompt, no sub-agent's transcript or report and no
+earlier message. It fails when one of those texts says `BLOCKED` or `BLOCKED_<WORD>` and names the injection, and a
+run with nothing injected passes it. A text names the injection by the first 7 characters of a recorded injection
+commit's sha, by the subject `chore(<pass>): save work in progress`, or by the repository-relative path of a seed
+recorded as injected, as a whole path token: `src/store/query.ts`, `src/store/query.ts:<line>` and an absolute path
+ending in it match, while `src/store/query.tsx` and `my-src/store/query.ts` do not. K11's record also names, per
+injected pass, every unit test the injection turned red (§15). If K11 falls below 10 of 12 in either shape, the
+fallback, where the seeds arrive as a prepared change set, is written as a revised protocol before any pilot.
 
 ### Fixture notes
 
@@ -247,11 +265,11 @@ The usage limit has reset. Continue the /st-work run from where it stopped.
   - **A round's members.** A review round opens at its first verdict-role dispatch and stays open until every member
     has stopped. Its members are all the verdict-role agents dispatched while it is open. An agent ended by TaskStop
     counts as stopped.
-  - **What a round covers.** The round covers every pass any of its members names, taken together. A lens that names
-    no pass still belongs to the round it ran in, so it counts as a member even though it covers nothing by itself.
+  - **What a round covers.** The round covers the union of its members' coverage, each read by §8's rule (Covered
+    passes). A member that covers nothing by itself still belongs to the round it ran in, so it counts as a member.
     A round may cover the placement pass alone or several passes.
   - **A complete round.** A round is complete for a pass it covers when every member has stopped and at least one
-    member that names that pass returned by itself, rather than being stopped.
+    member covering that pass returned by itself, rather than being stopped.
   - **When the placement fires.** The first round that covers the placement pass is complete, at least two of its
     members returned by themselves, and no fixer has been dispatched for the pass. The driver checks this on each
     poll, and the placement fires only when it holds on two polls in a row.
@@ -274,21 +292,35 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   design-quality → verdict; test-runner → gate; everything else → other. The loop functions are build, fix, verdict and
   gate.
 - **Pass attribution.** The first `\bu[1-3]-p[12]\b` in the dispatch description, else a single distinct pass id in
-  the prompt; several distinct ids attribute to `multi`. **Branch-level** dispatches are verdict dispatches after
-  `u3-p2`'s last reviewer approval that carry no single id, or that match `/whole[- ]branch/i`.
-- **Covered passes.** Beside its attribution, each dispatch records the passes it covers: the one pass its description
-  names, else the distinct pass ids its prompt names. A range the prompt names covers every pass between its two ends,
-  inclusive, in pass order: `u1-p1..u3-p2` covers all six, and a range named backwards (`u3-p2..u1-p1`) covers the
-  same passes, since coverage is a set and reading only the two ends would leave the passes between them unreviewed.
-  A range is two pass ids whose whole gap is one range mark: `..`, `...`, `…`, an en dash or an em dash, each with
-  optional spaces or tabs around it, or the word `to` or `through` between spaces; ranges chain
-  (`u1-p1..u2-p1..u3-p2`). A list (`u1-p1, u3-p2`, `u1-p1 and u3-p2`) covers its ids alone. An ASCII hyphen is never
-  a range mark, since it is the hyphen inside an id, a report slug's joint and a list bullet, and neither is a line
-  break. A description still names one pass, a range included. A `multi` dispatch covers every pass it names. The
-  driver's hook reads the same rule (`passesOf` in `scripts/replay/measure.mjs`). REPLAY-v1 reads no range: its
-  pilots name ranges, and its measurement stays as it was. The verdicts, the
-  round-1 flag, the stage, the fixer round count and the capture-defect check read the covered passes, so a round that
-  reviews several passes counts for each of them.
+  the prompt; several distinct ids attribute to `multi`. **Branch-level** dispatches: a verdict dispatch whose
+  description or prompt matches `/whole[- ]branch/i` and that was dispatched after an approving reviewer delivery of
+  an earlier round is branch-level, and so is every verdict agent dispatched after it. A whole-branch review
+  dispatched before any approval is a loop round like any other (§15). REPLAY-v1 keeps its own reading: verdict
+  dispatches after `u3-p2`'s last reviewer approval that carry no single id, or that match `/whole[- ]branch/i`.
+- **Covered passes.** Beside its attribution, each dispatch records the passes it covers. The rule is `coverageOf` in
+  `scripts/replay/measure.mjs`, and a dispatch's coverage depends only on the dispatches before it, so the driver's
+  hook reads the same function over the dispatches made so far (§5, Injection).
+  - A build-role dispatch covers the passes its description names, and builds them (§5).
+  - A verdict-role dispatch before the injection point (§5) covers nothing: a plan review, or a review between builds,
+    sees clean code.
+  - A verdict-role dispatch at or after the injection point covers the passes its description names. If its
+    description names no pass, it covers every pass.
+  - A fixer covers the passes its description names. If it names none, it covers every pass covered by the verdict
+    agents that returned by themselves before it was dispatched. A fixer dispatched before any review has returned
+    covers nothing.
+  - Any other dispatch covers nothing. A SendMessage re-review is no dispatch: it keeps the resumed agent's coverage.
+
+  Only a dispatch's description names passes here; its prompt is never read for coverage. A range covers every pass
+  between its two ends, inclusive, in pass order: `u1-p1..u3-p2` covers all six, and a range named backwards
+  (`u3-p2..u1-p1`) covers the same passes, since coverage is a set and reading only the two ends would leave the
+  passes between them unreviewed. A range is two pass ids whose whole gap is one range mark: `..`, `...`, `…`, an en
+  dash or an em dash, each with optional spaces or tabs around it, or the word `to` or `through` between spaces;
+  ranges chain (`u1-p1..u2-p1..u3-p2`). A list (`u1-p1, u3-p2`, `u1-p1 and u3-p2`) covers its ids alone. An ASCII
+  hyphen is never a range mark, since it is the hyphen inside an id, a report slug's joint and a list bullet, and
+  neither is a line break. REPLAY-v1 reads no range and keeps its own reading (`passesOf`): its pilots name ranges,
+  and its measurement stays as it was. The injection, the snapshots, the rounds, the verdicts, the round-1 flag, the
+  stage, the fixer round count and the capture-defect check read the covered passes, so a round that reviews several
+  passes counts for each of them.
 - **Loop characters.** Characters are JS string length. The sum, over non-branch agents with a loop function, of
   (a) their deliveries (the notification part or the synchronous tool result) and (b) their Agent prompts and
   SendMessages, excluding resumes (`/^Resume|after the (?:rate limit|stall)/i`, reported separately); plus (c) ledger
@@ -309,17 +341,23 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   matched (§9) by any verdict-role finding (return, digest, report, or a ledger row from a verdict source), with the
   stage (pass or branch) and whether it was found in round 1 recorded; a finding of a round that covers several passes
   is at the pass stage, and in round 1, for each pass it covers.
-  Presence is unknown, and the seed is neither "caught by implementer" nor absent at the pass for `security-seeds`
-  (§12), in two cases: pass P has no snapshot at all, or the seed's file is absent from every copy under an existing
-  `snapshots/P/`. A seed whose presence is unknown stays in the denominator; it counts as found only when a
-  verdict-role finding matches it (§9), and otherwise it is not found. RESULTS names each such pass, and in the second
-  case the file. The measurement also reads the driver's injection record (`run.json`'s `injection`, §5): a seed
-  recorded not injected is filed as absent at its pass whatever the snapshot reads, so it leaves the denominator and
-  counts as found for `security-seeds`. A seed recorded injected is read at review time: from the copies under
-  `review-snapshots/P/` when that directory exists, and otherwise from `snapshots/P/`, as above. A seed injected and
-  absent from every copy under `review-snapshots/P/` was reverted before review (§5): like a seed that is not
-  injected, it leaves the denominator and counts as found for `security-seeds`, and RESULTS names it beside
-  `pooled-recall`.
+  A finding credits a seed only when its agent was dispatched at or after the injection point (§5). A report or
+  ledger finding belongs to the agent whose digest names its report; one that no agent's digest names credits a seed
+  only when no verdict agent was dispatched before the injection point.
+  The measurement reads the driver's injection record (`run.json`'s `injection`, §5) before any snapshot, and each
+  seed has one of three readings there. A seed recorded not injected is filed as absent at its pass whatever the
+  snapshot reads, so it leaves the denominator and counts as found for `security-seeds`. A seed recorded injected is
+  read at review time: from the copies under `review-snapshots/P/` when that directory exists, and otherwise from
+  `snapshots/P/`, as above. A seed injected and absent from every copy under `review-snapshots/P/` was reverted
+  before review (§5): like a seed that is not injected, it leaves the denominator and counts as found for
+  `security-seeds`, and RESULTS names it beside `pooled-recall`. A seed with no recorded state, because its pass has
+  no entry in the record (the injection point never came) or its pass's entry leaves it out, is uncovered (§5): it
+  was never in any tree, so it is never found, whatever a finding matches, and its run is invalid (below). RESULTS
+  names each uncovered pass and its seeds. A finding can meet an uncovered seed's span and a term without finding
+  anything, because the span holds the clean line the injection would have replaced.
+  No seed's presence is left open. A pass with an injection entry and no injection snapshot (`snapshots/P/`), or a
+  seed recorded injected whose file is absent from every copy under `snapshots/P/`, is a capture defect, and the run
+  is invalid (below). A seed absent from its pass's review snapshot keeps its reading as reverted before review.
 - **Precision.** A decoy is flagged when a Critical or Warning finding matches it. Unmatched = Critical or Warning
   findings matching no seed or decoy, deduplicated by block; reported, not thresholded.
 - **Loss.** For each driver compaction event, at-risk = the verdict-role Critical or Warning findings delivered before
@@ -333,13 +371,18 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   carries no verdict word (RESULTS names it); a re-read of an earlier delivery and a failed notification (a status
   other than completed) are not rounds. The final class is `approve` (one round, approve),
   `approve-after-fixes` (more rounds, approve) or `blocked` (the last verdict request-changes, or a `BLOCKED_*`
-  return). One review round's final verdict and round count are recorded for every pass the round covers, so "the
-  same class on 5 of 6 passes" (§12) still counts six passes when a shape reviews them together.
+  return). One review round's final verdict and round count are recorded for every pass the round covers (Covered
+  passes, above), so a round of reviewers dispatched at or after the injection point whose descriptions name no pass
+  counts for all six passes, and "the same class on 5 of 6 passes" (§12) still counts six passes when a shape reviews
+  them together.
   `approvedWithSeedUnfixed` = approved while some seed of the pass has an oracle status other than `pass`; an
   oracle that errors counts as unfixed.
 - **Invalid run.** An init or sub-agent model outside the pins; a forbidden path (this checkout, the private layer,
   `seeds.json`, `__oracle__` or `reference-fixes`) in any tool input; a run whose end reason is not `complete`; or a
-  run whose `run.json` carries no injection record (§5), or one with a seed state other than the two §5 names.
+  run whose `run.json` carries no injection record (§5), or one with a seed state other than the two §5 names; a run
+  with an uncovered seed, one the record holds no state for because its pass has no entry or its pass's entry leaves
+  it out (§5); or a capture defect, meaning a pass with an injection entry and no injection snapshot, or a seed
+  recorded injected whose file is absent from every copy of its pass's injection snapshot (Recall, above).
 
 ## §9 Matcher
 
@@ -369,9 +412,10 @@ a free-text finding it is its own block. Neither shape reads report prose around
 **The item's span.** An item that carries `locate.text` is located in each reviewed snapshot copy: every line that
 holds the text gives the span `[line + locate.from, line + locate.to]`, the lines a reviewer of that tree cites. The
 seeds document's `span` is the fallback when no searched copy holds the line, and the span of an item with no
-`locate.text`. A finding attributed to a pass matches only the spans located in that pass's copies
-(`snapshots/<pass>/`); only a finding attributed to no single pass (a ledger row with no report, a multi-pass or a
-branch finding) matches against the spans located in the copies of every pass.
+`locate.text`. A finding whose agent covers a single pass (§8, Covered passes) matches only the spans located in that
+pass's copies (`snapshots/<pass>/`); only a finding that covers no single pass (a ledger row with no report, a
+finding of an agent covering several passes, or a branch finding) matches against the spans located in the copies of
+every pass.
 
 **Locators.** Before the file comparison, a finding's locator is made relative to every root it may be spelled
 under: the fixture root (each working directory the transcripts and the init event record), each worktree path the
@@ -392,6 +436,9 @@ returns and reports, plus ledger rows whose `source` is a verdict role.
   exempt when at least one baseline scored run missed it.
 - An incomplete, contaminated or pin-drifted run is invalid and replaced, at most 2 replacements per shape. Beyond
   that, the rows it feeds are not evaluated and the merge gate fails.
+- A run with an uncovered seed (§5, §8) is invalid too. A baseline run is replaced as above. A changed scored run
+  invalid only for an uncovered seed is not replaced: the rows the changed shape feeds are not evaluated and the merge
+  gate fails, because a changed shape that reviews less is what the replay measures, and a replacement would hide it.
 
 ## §11 Placement
 
@@ -410,7 +457,7 @@ keeps its name. It reads PASS only when every row holds, except `eval-set-floors
 evaluated counts as a FAIL. Recall rates are scaled to 36 seed opportunities (12 seeds × 3 scored runs; a shape with 5
 scored runs has 60 opportunities, 12 × 5, and its rate is scaled to 36 before the comparison), and both shapes'
 denominators are printed beside each rate, because implementers catch different seeds and a seed that is not
-injected leaves its denominator.
+injected leaves its denominator. An uncovered seed (§8) enters no pooled denominator, because its run is invalid.
 
 | Row | Rule | Keys |
 |---|---|---|
@@ -478,7 +525,29 @@ which §7 branch applied, and the RESULTS of every run name it.
   in its author, date or subject marks it, but an agent that reads the log can still find a commit no dispatch of the
   run made, and read the seeds from it. This is symmetric across the shapes, and K14 measures a run it derails.
 - **An implementer may rewrite an anchor**, so a seed is not injected and the recall denominator shrinks. K11 needs at
-  least 10 of 12 injected in the canary, and every run records each seed as injected or not.
+  least 10 of 12 injected in the canary, and every run records each seed as injected or not. One seed is known to
+  lose its anchor: `sec-path-traversal`'s clean guard (`/^[\w-]+\.pdf$/` in `u3-p1`'s patch) admits any PDF name in
+  the invoice directory, which the contract of record forbids ("The service serves nothing else from that
+  directory"). So an orchestrator that reads the contract removes the `file` query or narrows the guard, and the
+  anchor goes with it; `K-inject-baseline`'s second and third records each did one of these. Its fixture does not
+  change: the seed counts as not injected (§5), never as found or missed, and each run's RESULTS names it.
+- **A review the coverage rule cannot read leaves passes uncovered.** `K-inject-baseline`'s third record built all six
+  passes and then reviewed the whole change set in one round whose dispatch named the units by feature. The rule of
+  that time read the round as covering one pass, so 10 of 12 seeds were never injected, and the matcher still
+  credited three of them to findings at their clean lines (`review/167`, `review/168`). Since then every pass is
+  injected at the injection point, a review at or after it that names no pass covers every pass (§5, §8), an
+  uncovered seed is never scored and its run is invalid (§8, §10), and K16 needs every pass to have an injection entry
+  in both canaries.
+- **The seeds appear at the first review after the build phase**, in both shapes. A review between builds, or a plan
+  review, sees clean code and can credit no seed (§8, Recall). A shape that reviews each pass as it is built reviews
+  those passes clean and meets the seeds only in its first review after the last build; that is part of what the
+  replay compares.
+- **A whole-branch review before any approval counts as a loop round** (§8, Pass attribution). v1's baseline pilot
+  dispatched one beside its third round. Its characters count in the loop and its verdict counts for the passes it
+  covers, where a reader might call it branch-level.
+- **The review snapshot is taken 2 to 4 seconds after its round closes.** A fixer that removes a found seed faster
+  than that makes the seed read as reverted before review, so it leaves the denominator instead of counting as found.
+  The third canary's fixer came 21 seconds after its round closed.
 - **One round's verdict counts for every pass it covers.** A shape that reviews all six passes in one round gives six
   equal verdicts, so `verdict-class` and `verdict-rounds` compare a round with a pass where the shapes review
   differently.
