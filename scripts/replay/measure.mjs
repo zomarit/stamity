@@ -381,6 +381,59 @@ export function passesOf(desc, prompt, { ranges = true } = {}) {
   return PASS_ID.test(String(desc ?? '')) ? [attributePass(desc, prompt)] : passIdsIn(prompt, ranges)
 }
 
+/**
+ * S2, R6 (review/167, REPLAY-v2 only): "all built, then all seeded". The private driver imports this
+ * from `--repo` at run time and calls it on its marker log's prefix; the measurement calls it on the
+ * whole run. Pure and causal: a dispatch's row depends only on the events before it.
+ *
+ * `events` is the run's time-ordered list of
+ *   `{ kind: 'dispatch', id, role, description, prompt }` — one Agent dispatch; `id` is any key the
+ *     caller keeps unique per dispatch, `role` is `roleFunction`'s value (`build`, `fix`, `verdict`,
+ *     `gate` or `other`), `description` and `prompt` the Agent input's strings; and
+ *   `{ kind: 'stop', id, returned }` — that dispatch's agent ended: `returned` is true when it
+ *     delivered by itself, false for a TaskStop.
+ * A SendMessage re-review is no dispatch: it keeps the resumed agent's row. Any other event is skipped.
+ *
+ * Returns a Map of dispatch id to `{ built, passes, injectionPoint }`, pass ids in pass order:
+ *   `built` — the passes a build-role description names (every id, a range included); never the prompt;
+ *   `injectionPoint` — true for exactly the first verdict-role dispatch after every pass of
+ *     `planPasses` is built (its hook injects every pass in one call);
+ *   `passes` — its coverage: a verdict before the injection point none, at or after it the passes its
+ *     description names, else every plan pass; a fixer the passes its description names, else every
+ *     pass covered by the verdict agents that returned before it was dispatched; a build the passes its
+ *     description names; any other role none.
+ */
+export function coverageOf(events, planPasses = PASS_IDS) {
+  const plan = PASS_IDS.filter((p) => planPasses.includes(p))
+  const rows = new Map()
+  const verdicts = new Set()
+  const built = new Set()
+  const reviewed = new Set()
+  let reached = false
+  for (const e of events ?? []) {
+    if (e?.kind === 'stop') {
+      if (e.returned === true && verdicts.has(e.id)) for (const p of rows.get(e.id).passes) reviewed.add(p)
+      continue
+    }
+    if (e?.kind !== 'dispatch') continue
+    const named = passIdsIn(e.description, true)
+    const row = { built: [], passes: [], injectionPoint: false }
+    if (e.role === 'build') {
+      for (const p of named) built.add(p)
+      Object.assign(row, { built: named, passes: [...named] })
+    } else if (e.role === 'verdict') {
+      verdicts.add(e.id)
+      if (!reached && plan.every((p) => built.has(p))) {
+        reached = true
+        row.injectionPoint = true
+      }
+      if (reached) row.passes = named.length > 0 ? named : [...plan]
+    } else if (e.role === 'fix') row.passes = named.length > 0 ? named : PASS_IDS.filter((p) => reviewed.has(p))
+    rows.set(e.id, row)
+  }
+  return rows
+}
+
 const isPass = (p) => PASS_IDS.includes(p)
 const passKey = (p) => (isPass(p) ? p : 'unattributed')
 /** build/366: whether an agent or a finding covers `pass` — its attributed pass, or one of the passes a multi dispatch names. */

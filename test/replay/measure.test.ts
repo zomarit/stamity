@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { attributePass, checkSeeds, measureRun, passesOf, presentIn } from "../../scripts/replay/measure.mjs";
+import { attributePass, checkSeeds, coverageOf, measureRun, passesOf, presentIn } from "../../scripts/replay/measure.mjs";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
 import { securityHeld } from "../../scripts/replay/protocols.mjs";
 import { type CaptureLayout, type CaptureSpec, type SubagentFile, mainLine, subagentFile, writeCapture } from "./synth.ts";
@@ -1663,5 +1663,134 @@ describe("REPLAY-v2 R7 — an uncovered seed is never credited, and its run is i
     expect(m.invalid.filter((r) => r.startsWith("uncovered pass"))).toEqual([]);
     expect(m.notes.join("\n")).toContain("presence unknown");
     expect(m.notes.join("\n")).not.toContain("uncovered");
+  });
+});
+
+// ---------- R6 and R8: all built, then all seeded; branch level follows an approval (review/167) ----------
+
+/** S2's event shape (`coverageOf`'s JSDoc), which the private driver mirrors from its marker log. */
+type CoverageEvent = { kind: "dispatch"; id: string; role: string; description: string; prompt: string } | { kind: "stop"; id: string; returned: boolean };
+interface Coverage {
+  built: string[];
+  passes: string[];
+  injectionPoint: boolean;
+}
+const coverOf = (events: CoverageEvent[]): Map<string, Coverage> => coverageOf(events, ALL_SIX) as Map<string, Coverage>;
+const sent = (id: string, role: string, description: string, prompt = ""): CoverageEvent => ({ kind: "dispatch", id, role, description, prompt });
+const back = (id: string, returned = true): CoverageEvent => ({ kind: "stop", id, returned });
+const passesAt = (events: CoverageEvent[]): Record<string, string[]> => Object.fromEntries([...coverOf(events)].map(([id, c]) => [id, c.passes]));
+const pointsOf = (events: CoverageEvent[]): string[] => [...coverOf(events)].filter(([, c]) => c.injectionPoint).map(([id]) => id);
+
+/**
+ * The third K-inject-baseline canary (instrument 1bd6e571), reduced from its dispatch catalogue: every
+ * description as dispatched, each prompt cut to the text around the pass ids it names. The fourth build's
+ * prompt names the later u3-p1 and the last two name earlier units by an ellipsis range; round 1's prompt
+ * names u3-p1 in passing, which `passesOf` read as the round's only pass (review/167).
+ */
+const CANARY_3: CoverageEvent[] = [
+  sent("audit", "other", "Audit patches vs contract", `\`vendor/contrib/u1-p1.patch\` ${ELLIPSIS} \`u3-p2.patch\` (applied in that order)`), back("audit"),
+  sent("gate0", "gate", "Baseline gate run"), back("gate0"),
+  sent("b1", "build", "Build unit u1-p1", "You are building unit u1-p1 of docs/plans/001-replay.md."), back("b1"),
+  sent("b2", "build", "Build unit u1-p2", "You are building unit u1-p2. Unit u1-p1 is already applied."), back("b2"),
+  sent("b3", "build", "Build unit u2-p1", "You are building unit u2-p1. Units u1-p1 and u1-p2 are already applied. A later unit (u3-p1) owns reconciling your test."), back("b3"),
+  sent("b4", "build", "Build unit u2-p2", "You are building unit u2-p2. Units u1-p1, u1-p2, u2-p1 are applied."), back("b4"),
+  sent("b5", "build", "Build unit u3-p1", `You are building unit u3-p1. Units u1-p1 ${ELLIPSIS} u2-p2 are applied.`), back("b5"),
+  sent("b6", "build", "Build unit u3-p2", `You are building unit u3-p2. Units u1-p1 ${ELLIPSIS} u3-p1 are applied.`), back("b6"),
+  sent("gate1", "gate", "Prove pass 1 gates"), back("gate1"),
+  sent("r1", "verdict", "Review round 1", "Review the staged change set: six units (404 body contract change owned by u3-p1; config shape gaining exportBatchSize)."),
+  sent("sec", "verdict", "Security specialist lens"), sent("perf", "verdict", "Performance specialist lens"), sent("dq", "verdict", "Design-quality specialist lens"),
+  back("r1"), back("sec"), back("perf"), back("dq"),
+  sent("f1", "fix", "Fixer round 1", "Fix the round-1 findings."), back("f1"),
+  sent("gate2", "gate", "Prove pass 2 gates"), back("gate2"),
+  sent("r2", "verdict", "Review round 2", "Re-review the round-1 fixes."), back("r2"),
+  sent("deep", "verdict", "Whole-branch deep review", "Review the whole branch."), back("deep"),
+];
+
+/** v1's changed pilot (2026-09-24-replay-2), reduced the same way: its only review round is named for the whole branch. */
+const CHANGED_PILOT: CoverageEvent[] = [
+  sent("census", "other", "Contract census consumers", "plan docs/plans/001-replay.md (units u1-p1..u3-p2) will touch"),
+  sent("patches", "other", "Patches vs api.md contract", "audit each patch in vendor/contrib/ (u1-p1.patch .. u3-p2.patch)"),
+  sent("b1", "build", "Build unit u1-p1", "Plan: docs/plans/001-replay.md, unit u1-p1."),
+  sent("b2", "build", "Build unit u1-p2", "Plan: docs/plans/001-replay.md, unit u1-p2. The index holds u1-p1 staged."),
+  sent("b3", "build", "Build unit u2-p1", "Plan: docs/plans/001-replay.md, unit u2-p1. The index holds u1-p1 and u1-p2 staged."),
+  sent("b4", "build", "Build unit u2-p2", "Plan: docs/plans/001-replay.md, unit u2-p2. The index holds u1-p1, u1-p2 and u2-p1 staged."),
+  sent("b5", "build", "Build unit u3-p1", "Plan: docs/plans/001-replay.md, unit u3-p1. The index holds u1-p1 through u2-p2 staged."),
+  sent("b6", "build", "Build unit u3-p2", "Plan: docs/plans/001-replay.md, unit u3-p2. Reject the rename (u3-p2.patch lines 95-96)."),
+  sent("gates", "gate", "Run full verification gates"),
+  sent("wb", "verdict", "Whole-branch review round 1", "Review all six units. Recorded deviations: D8 removes u3-p1's `file` query; u3-p2 answers 400 on an unknown sort."),
+  sent("sec", "verdict", "Security lens on branch"), sent("perf", "verdict", "Performance lens on branch"), sent("dq", "verdict", "Design-quality lens on branch"),
+];
+
+describe("R6 — coverageOf: all built, then all seeded (review/167)", () => {
+  it("(a) the third canary: six builds build their own pass, round 1 is the one injection point, and every later verdict and the fixer cover all six", () => {
+    const cov = coverOf(CANARY_3);
+    expect(["b1", "b2", "b3", "b4", "b5", "b6"].map((id) => cov.get(id)!.built)).toEqual(ALL_SIX.map((p) => [p]));
+    expect(pointsOf(CANARY_3)).toEqual(["r1"]);
+    const at = passesAt(CANARY_3);
+    for (const id of ["r1", "sec", "perf", "dq", "f1", "r2", "deep"]) expect([id, at[id]]).toEqual([id, ALL_SIX]);
+    for (const id of ["audit", "gate0", "gate1", "gate2"]) expect([id, at[id], cov.get(id)!.built]).toEqual([id, [], []]);
+    // The pass ids a prompt names are never read: today's rule gave round 1 u3-p1 alone.
+    const round1 = CANARY_3.find((e) => e.kind === "dispatch" && e.id === "r1") as { prompt: string };
+    expect(passesOf("Review round 1", round1.prompt)).toEqual(["u3-p1"]);
+  });
+
+  it("(a) v1's changed pilot: \"Whole-branch review round 1\" is the injection point and covers all six, and so does each lens", () => {
+    expect(pointsOf(CHANGED_PILOT)).toEqual(["wb"]);
+    const at = passesAt(CHANGED_PILOT);
+    for (const id of ["wb", "sec", "perf", "dq"]) expect([id, at[id]]).toEqual([id, ALL_SIX]);
+    expect([at["census"], at["patches"]]).toEqual([[], []]);
+  });
+
+  it.each<[string, string, string[]]>([
+    ["Build units u1-p1..u3-p2", "Build every unit.", ALL_SIX],
+    ["Build u1-p1, u3-p2", "Build both.", ["u1-p1", "u3-p2"]],
+    ["Build u1-p1 and u1-p2", "Build both.", ["u1-p1", "u1-p2"]],
+    ["Implement u0 lint scope fix", "Earlier work for unit u1-p1 is already staged.", []],
+    ["Build the invoice route", "Build unit u3-p1 of the plan.", []],
+  ])("(a) a build described %j builds the passes its description names, never its prompt's", (description, prompt, built) => {
+    expect(coverOf([sent("b", "build", description, prompt)]).get("b")).toEqual({ built, passes: built, injectionPoint: false });
+  });
+
+  it("(a) one build naming the whole range reaches the injection point; a list of two leaves it unreached, so a review covers nothing", () => {
+    const review = sent("r", "verdict", "Review the change set");
+    expect(coverOf([sent("b", "build", "Build units u1-p1..u3-p2"), review]).get("r")).toEqual({ built: [], passes: ALL_SIX, injectionPoint: true });
+    expect(coverOf([sent("b", "build", "Build u1-p1, u3-p2"), review]).get("r")).toEqual({ built: [], passes: [], injectionPoint: false });
+  });
+
+  it("a verdict before or between builds covers nothing, and only the first verdict after the sixth build is the injection point", () => {
+    const builds = ALL_SIX.map((p) => sent(`b-${p}`, "build", `Build unit ${p}`));
+    const events = [sent("plan", "verdict", "Plan review", "Review units u1-p1..u3-p2."), ...builds.slice(0, 3), sent("cell", "verdict", "Read the amended cell of u2-p1"), ...builds.slice(3), sent("r1", "verdict", "Review round 1"), sent("r2", "verdict", "Review u2-p1")];
+    const at = passesAt(events);
+    expect([at["plan"], at["cell"]]).toEqual([[], []]);
+    expect(pointsOf(events)).toEqual(["r1"]);
+    // At or after the point, a description naming a pass (a range included) covers what it names.
+    expect(at["r2"]).toEqual(["u2-p1"]);
+    expect(passesAt([...events, sent("r3", "verdict", "Review u1-p2..u2-p2")])["r3"]).toEqual(["u1-p2", "u2-p1", "u2-p2"]);
+  });
+
+  it("a fixer covers its description's passes, else the passes of the verdict agents that returned by themselves before it; before any returned review, nothing", () => {
+    const builds = ALL_SIX.map((p) => sent(`b-${p}`, "build", `Build unit ${p}`));
+    const events = [
+      sent("b0", "build", "Build unit u1-p1"), sent("lint", "fix", "Scope lint away from generated hooks"), ...builds.slice(1),
+      sent("r1", "verdict", "Review round 1"), back("r1", false), sent("early", "fix", "Restore tree to staged index"),
+      sent("r2", "verdict", "Review u2-p1"), back("r2"), sent("f2", "fix", "Fixer round 1"), sent("named", "fix", "Fix u3-p2"),
+      sent("r3", "verdict", "Review round 2"), back("r3"), sent("f3", "fix", "Fixer round 2"),
+    ];
+    const at = passesAt(events);
+    // A TaskStop is no return: the round stopped in full leaves the next fixer covering nothing.
+    expect([at["lint"], at["early"]]).toEqual([[], []]);
+    expect([at["f2"], at["named"], at["f3"]]).toEqual([["u2-p1"], ["u3-p2"], ALL_SIX]);
+  });
+
+  it("a SendMessage re-review is no dispatch: its return adds no row and moves no injection point", () => {
+    const resumed = [...CANARY_3, back("deep"), back("r1")];
+    expect(coverOf(resumed)).toEqual(coverOf(CANARY_3));
+  });
+
+  it("is causal: the row of every dispatch in a prefix of the run equals its row over the whole run", () => {
+    const whole = coverOf(CANARY_3);
+    for (let k = 0; k <= CANARY_3.length; k++) {
+      for (const [id, row] of coverOf(CANARY_3.slice(0, k))) expect([k, id, row]).toEqual([k, id, whole.get(id)]);
+    }
   });
 });
