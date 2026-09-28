@@ -272,7 +272,8 @@ The usage limit has reset. Continue the /st-work run from where it stopped.
     member covering that pass returned by itself, rather than being stopped.
   - **When the placement fires.** The first round that covers the placement pass is complete, at least two of its
     members returned by themselves, and no fixer has been dispatched for the pass. The driver checks this on each
-    poll, and the placement fires only when it holds on two polls in a row.
+    poll, and the placement fires only when it holds on two polls in a row. A round that covers both placement passes
+    fires one forced compaction, whose record names both passes in `covers`; it is one sample, not two.
 - **Sequence.** Interrupt; wait for `result`; snapshot the fixture's `.stamity/runs/`; send `/compact`; wait for
   `compact_boundary` with `trigger:"manual"`; send the resume message (§6).
 - **Decision rule.** Interrupt mode if the canary (`K-inject-baseline` and `K-inject-changed`) passes K1–K4, and
