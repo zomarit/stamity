@@ -86,12 +86,13 @@ export const REACH_SNAPSHOT_PATH = "evals/reach/npm-downloads-2026-09-14.json";
 /**
  * The eval run of record, linked from the page relative to `docs/`.
  *
- * The release run of record, which since 2026-09-22 is the composed 1.9.0 run:
- * run 27 measured every case in full, and runs 29, 30, 31 and 32 re-measured
- * only the cases whose inputs had moved, carrying the rest with provenance
- * under SET-v7's incremental rule. The page restates this run's own figures because a
- * composed run scores the whole set under the unchanged rule and thresholds —
- * it is the artifact that states the set's score, not a partial one.
+ * The release run of record, which since 2026-09-27 is the composed 1.10.0 run:
+ * run 34 measured every case in full on the new model pair, and run 35
+ * re-measured the two cases the Invariant 2 tightening moved, carrying the rest
+ * with provenance under SET-v7's incremental rule. The page restates this run's
+ * own figures because a composed run scores the whole set under the unchanged
+ * rule and thresholds — it is the artifact that states the set's score, not a
+ * partial one.
  *
  * This path is the page's single source of truth for WHICH run is of record:
  * the prose reads the run's number back off it through
@@ -99,7 +100,7 @@ export const REACH_SNAPSHOT_PATH = "evals/reach/npm-downloads-2026-09-14.json";
  * the two spellings that used to sit there were left saying "run 30" by the
  * release that moved this path.
  */
-export const RUN_OF_RECORD_PATH = "evals/runs/2026-09-22-run-32/RESULTS.md";
+export const RUN_OF_RECORD_PATH = "evals/runs/2026-09-27-run-35/RESULTS.md";
 
 /**
  * The release the run of record measured, as the page names it.
@@ -107,32 +108,12 @@ export const RUN_OF_RECORD_PATH = "evals/runs/2026-09-22-run-32/RESULTS.md";
  * A literal, and the only one in this block, because it is not in the artifact:
  * a run states the candidate commit it measured, never the version that
  * candidate ships as — the version is decided at the release, after the run.
- * Verify it against the `## 0. Composition` candidate of
- * {@link RUN_OF_RECORD_PATH} and the release that shipped that commit.
- * Exported so `test/docsPages.test.ts` holds README and the doctrine, which
- * type the same run and release by hand, to this one.
+ * Verify it against the `Candidate:` line of {@link RUN_OF_RECORD_PATH} and the
+ * release that shipped that commit. Exported so `test/docsPages.test.ts` holds
+ * README and the doctrine, which type the same run and release by hand, to this
+ * one.
  */
-export const RUN_OF_RECORD_RELEASE = "1.9.0";
-
-/**
- * The later release the run of record is carried to, and the candidate it is
- * carried from.
- *
- * A release that moves no case input — nothing under `evals/` outside `runs/`
- * and `measurements/`, nothing under `content/`, none of the sources the case
- * set cites — has zero cases to re-measure under SET-v7's incremental rule, so
- * the prior run stands and the page says so beside the release it measured,
- * rather than presenting the run as this release's own. Two literals: the
- * release is the version the tree ships as (`test/cli/docs/measurements.test.ts`
- * holds it to `package.json`, so it cannot outlive the release it names), and
- * the candidate is the run's own, held to the `Candidate:` line of
- * {@link RUN_OF_RECORD_PATH}. A release that runs the set moves
- * {@link RUN_OF_RECORD_RELEASE} and deletes the carried clause with these two;
- * {@link carriedToRelease} refuses the page if it moves the release and keeps
- * the clause. The carried-to release is exported for the same hand-page case.
- */
-export const RUN_OF_RECORD_CARRIED_TO = "1.9.1";
-const RUN_OF_RECORD_CANDIDATE = "e5e54c9";
+export const RUN_OF_RECORD_RELEASE = "1.10.0";
 
 /**
  * The run of record's own number, read off {@link RUN_OF_RECORD_PATH}.
@@ -146,34 +127,6 @@ function runOfRecordNumber(): string {
     fail(`${RUN_OF_RECORD_PATH} names no run number; the page cannot state which run is of record.`);
   }
   return number;
-}
-
-/**
- * The release the run of record is carried to, refused when it is the release
- * the run measured.
- *
- * The carried clause is held to `package.json` by its test, so the release that
- * next RUNS the set — moving {@link RUN_OF_RECORD_RELEASE} to the version it
- * ships — would otherwise be made to move the carried-to release to the same
- * version and render "the X release run, carried to X", every case green. Two
- * parameters rather than the two constants read in place, because TypeScript
- * narrows each literal `const` to its own type, which makes an equality between
- * them a compile error rather than a check; exported so the refusal is tested
- * without editing either literal.
- */
-export function carriedToRelease(runRelease: string, carriedTo: string): string {
-  if (carriedTo === runRelease) {
-    fail(
-      `the run of record is the ${runRelease} release run, so it is not carried to ${carriedTo}. ` +
-        "A release that runs the eval set measures its own run: delete the carried clause and " +
-        "carriedToRelease from src/cli/docs/measurements.ts with RUN_OF_RECORD_CARRIED_TO and " +
-        'RUN_OF_RECORD_CANDIDATE, the "the run of record is carried to the release the tree ' +
-        'ships as" describe from test/cli/docs/measurements.test.ts, and the carried clause of ' +
-        "README.md and docs/doctrine.md with its case in test/docsPages.test.ts; then regenerate " +
-        "the page.",
-    );
-  }
-  return carriedTo;
 }
 
 /** The workflow whose lanes are the first-run proof. */
@@ -903,22 +856,20 @@ export function renderMeasurements(root: string = repoRoot()): string {
     "## Corpus behaviour: run of record",
     "",
     "The corpus is measured by an eval set, not by inspection. The run of record is",
-    `[run ${runOfRecord}](../${RUN_OF_RECORD_PATH}) — the ${RUN_OF_RECORD_RELEASE} release run,`,
-    `carried to ${carriedToRelease(RUN_OF_RECORD_RELEASE, RUN_OF_RECORD_CARRIED_TO)} under the set's incremental rule (no case input moved since its`,
-    `candidate \`${RUN_OF_RECORD_CANDIDATE}\`) — PASS, three samples per case.`,
+    `[run ${runOfRecord}](../${RUN_OF_RECORD_PATH}) — the ${RUN_OF_RECORD_RELEASE} release run —`,
+    "PASS, three samples per case.",
     "",
     "That run is composed rather than measured end to end, under SET-v7's incremental rule: one",
     "full baseline run per release, and a later run on another candidate re-measures only the cases",
-    "whose inputs moved and carries the rest with provenance. Run 27 measured every case in full;",
-    "runs 29, 30, 31 and 32 re-measured only the cases whose case file was new or whose cited source",
-    "had moved, and carried the rest — in run 32 that is two cases a route repair moved the cited",
-    "lines of, their case files re-pointed at the new locators rather than their expectations",
-    "changed. Each carried case is named in the composed artifact with its case-file hash and the",
-    "source ranges found identical at both candidates. The set is SET-v7.",
+    "whose inputs moved and carries the rest with provenance. Run 34 measured every case in full on",
+    "the new model pair; run 35 re-measured the two cases the Invariant 2 tightening moved, their",
+    "case files quoting the tightened charter text, and carried the rest from run 34. Each carried",
+    "case is named in the composed artifact with its case-file hash and the source ranges found",
+    "identical at both candidates. The set is SET-v7.",
     `The scoring rule is SET-v6, which is what run ${runOfRecord}'s own score table is headed with.`,
     "The figures below score that whole set:",
     "",
-    "- Golden rubric pass rate **1.000** (52/52); every floor case passed, 23/23.",
+    "- Golden rubric pass rate **0.981** (51/52); every floor case passed, 23/23.",
     "- Adversarial guardrail hold rate **1.000** (16/16).",
     "- Benign-twin false-refusal rate **0.000** (0/4).",
     "- Trigger-probe accuracy **1.000** (30/30).",

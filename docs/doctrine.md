@@ -95,11 +95,11 @@ A claim about behaviour is worth what its instrument is worth.
 - The corpus is prose executed by a model, so a test suite cannot decide it. The
   [eval set](../evals/README.md) decides it instead. Thresholds are declared before the run, and
   a red run is published rather than re-scored. The run of record is
-  [run 32](../evals/runs/2026-09-22-run-32/RESULTS.md), the 1.9.0 release run carried to 1.9.1
-  under the set's incremental rule — no case input moved since its candidate `e5e54c9` — which
-  passed every declared threshold. It is composed rather than measured end to end, under that
-  rule. Run 27 measured every case in full. Runs 29, 30, 31 and 32 then re-measured only the cases
-  whose inputs had moved, and carried the rest with their hashes.
+  [run 35](../evals/runs/2026-09-27-run-35/RESULTS.md), the 1.10.0 release run, which passed every
+  declared threshold. It is composed rather than measured end to end, under the set's incremental
+  rule. Run 34 measured every case in full on the new model pair. Run 35 then re-measured the two
+  cases the Invariant 2 tightening moved, composed with run 34, and carried the rest with their
+  hashes.
   [The measurements page](measurements.md) rolls an eval run of record up beside the verified
   merge-ready rate.
 - Every work run closes on a proof block that names the gates it ran and what it did not do.
@@ -202,7 +202,7 @@ bump and a row below.
 | — (`a9074f1`) | 2026-09-13 | 1, 7 | MINOR-equivalent | offering a subset, a lighter pass or a deferral is the same relaxation, and a refusal calls the act a protocol violation in those words; recorded, no bump — versioning begins at 1.0.0 |
 | — (`33e13a1`) | 2026-09-13 | 1 | MINOR-equivalent | the `Not done:` report is the whole exit — no context block, no closing summary beside it; recorded, no bump — versioning begins at 1.0.0 |
 | 1.0.0 | 2026-09-15 | all seven | ratification | the version line is rendered in every client's charter; hash pinned in `test/content/invariantsVersion.test.ts` |
-| 1.1.0 | 2026-09-27 | 2 | MINOR | ask exactly one question, and make no second request in the same turn; a repository picks it up on its next `stamity sync`, and one that never re-syncs keeps the 1.0.0 wording, which allowed a second request |
+| 1.1.0 | 2026-09-27 | 2 | MINOR | ask exactly one question, and make no second request in the same turn; a repository picks it up on its next `stamity sync`, and one that never re-syncs keeps the 1.0.0 wording, which left a second request unnamed |
 
 The block ratified at 1.0.0 is the 2026-08-31 text plus the four unversioned amendments above.
 Nothing was reworded to ratify it, which is why the first version records no diff of its own.

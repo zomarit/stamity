@@ -30,9 +30,9 @@ import {
   REACH_SNAPSHOT_PATH,
   RUNS_DIR,
   RUN_OF_RECORD_PATH,
+  RUN_OF_RECORD_RELEASE,
   SNAPSHOT_DIR,
   SNAPSHOT_REFRESH_COMMAND,
-  carriedToRelease,
   computeMergeReadyRate,
   readMeasurementSnapshot,
   readReachSnapshot,
@@ -483,8 +483,13 @@ describe("the restated figures are held to the artifacts they come from", () => 
     // names them all, oldest first. The numbers are compared as a list while the sentence's
     // punctuation is matched loosely: which runs are named is this test's business, the comma and
     // the conjunction are the page's.
+    //
+    // TEST CHANGE, justified: the matcher read `runs ` and so demanded two or more incremental
+    // links. The 1.10.0 run of record is run 35 composed with run 34, one incremental link, and
+    // the page says "run 35 re-measured"; `runs?` admits the one-link sentence while the numbers
+    // are still compared as a list, so a missing or extra link fails exactly as before.
     const incremental = chain.slice(0, -1).map(runNumber).toReversed();
-    const sentence = /runs ([\d, and]+) re-measured/.exec(page)?.[1];
+    const sentence = /runs? ([\d, and]+) re-measured/.exec(page)?.[1];
     expect(sentence, `the page names no re-measuring runs for the chain ${found}`).toBeDefined();
     expect(
       (sentence ?? "").match(/\d+/g),
@@ -502,68 +507,21 @@ describe("the restated figures are held to the artifacts they come from", () => 
     expect(page).toContain(`(../${CI_WORKFLOW_PATH})`);
     expect(page).toContain(`(../${RUN_OF_RECORD_PATH})`);
   });
-});
 
-describe("the run of record is carried to the release the tree ships as", () => {
-  // ADDED at the 1.9.1 cut: the release moved no case input since run 32's candidate, so the run
-  // stands under SET-v7's incremental rule and the page says which release it is carried to and
-  // from which candidate. Each half is held to its own source rather than to the other: the
-  // candidate to the results file's `Candidate:` line, the release to package.json — so the
-  // clause cannot outlive the release it names, and the next cut either runs the set or moves it.
-  it("names the shipped version as the carried-to release, and the run's own candidate", () => {
-    const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
-    const candidate = /^Candidate: `([0-9a-f]{40})`/m.exec(results)?.[1];
-    expect(candidate, `${RUN_OF_RECORD_PATH} states no candidate`).toBeDefined();
-    const manifest = readFileSync(join(REPO_ROOT, "package.json"), "utf-8");
-    const shipped = (JSON.parse(manifest) as { version: string }).version;
-
+  // ADDED at the 1.10.0 cut, which runs the set and so retires the carried clause the 1.9.1 cut
+  // added: the run of record is the release's own run, and the page says so with nothing carried.
+  // The clause is refused by its shape rather than by the old constants' names, so a clause typed
+  // back into the template by hand fails here too.
+  it("links the run of record as its release's own run, and carries it to no later release", () => {
     const page = renderMeasurements();
-    const release = /release run,\ncarried to (\d+\.\d+\.\d+) under the set's/.exec(page)?.[1];
-    expect(release, "the page states no carried-to release beside the run of record").toBe(shipped);
-    const named = /no case input moved since its\ncandidate `([0-9a-f]{7,40})`\)/.exec(page)?.[1];
-    expect(named, "the page names no candidate the run is carried from").toBeDefined();
-    expect(candidate?.startsWith(named ?? "\u0000"), `${named} is not ${candidate}`).toBe(true);
-  });
-
-  // The hazard the case above cannot see: the next release that RUNS the set moves the run's
-  // release to the shipped version, and the case above then demands the carried-to release be
-  // that same version — "the X release run, carried to X", every other case green. The run's own
-  // release is read off the rendered page rather than compared as two module constants, because
-  // TypeScript narrows each literal `const` to its own type and an equality between two different
-  // literals is a compile error, not a check.
-  it("never carries the run to the release it measured", () => {
-    const page = renderMeasurements();
-    const clause = /the (\d+\.\d+\.\d+) release run,\ncarried to (\d+\.\d+\.\d+) under/.exec(page);
-    expect(clause, "the page states no release run beside the carried-to release").not.toBeNull();
-    const [, runRelease, carried] = clause ?? [];
-    expect(
-      carried,
-      `the run is carried to ${carried}, the release it measured: delete the carried clause and this describe`,
-    ).not.toBe(runRelease);
-  });
-
-  it("renders the carried-to release through the guard, not the bare constant", () => {
-    // The guard is only a guard if the template calls it: interpolating RUN_OF_RECORD_CARRIED_TO
-    // directly renders the same page today and leaves every other case green.
-    const source = readFileSync(MODULE_SOURCE_PATH, "utf-8");
-    expect(source).toMatch(
-      /carried to \$\{carriedToRelease\(RUN_OF_RECORD_RELEASE, RUN_OF_RECORD_CARRIED_TO\)\}/,
+    const run = runNumber(runId(RUN_OF_RECORD_PATH));
+    expect(run, `${RUN_OF_RECORD_PATH} names no run number`).not.toBe("");
+    expect(page).toContain(
+      `[run ${run}](../${RUN_OF_RECORD_PATH}) — the ${RUN_OF_RECORD_RELEASE} release run`,
     );
-    expect(source).not.toMatch(/carried to \$\{RUN_OF_RECORD_CARRIED_TO\}/);
-  });
-
-  it("refuses to render a carried-to release equal to the run's own, naming what to delete", () => {
-    // Non-degenerate on both sides: two distinct releases pass through untouched, and the equal
-    // pair is refused with the instruction rather than rendered.
-    expect(carriedToRelease("1.9.0", "1.9.1")).toBe("1.9.1");
-    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(EngineError);
-    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/is the 1\.9\.2 release run/);
-    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/delete the carried clause/);
-    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/carriedToRelease from src\/cli\/docs\/measurements\.ts/);
-    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/RUN_OF_RECORD_CARRIED_TO and\s+RUN_OF_RECORD_CANDIDATE/);
-    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/test\/cli\/docs\/measurements\.test\.ts/);
-    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/README\.md and docs\/doctrine\.md/);
-    expect(() => carriedToRelease("1.9.2", "1.9.2")).toThrow(/test\/docsPages\.test\.ts/);
+    expect(page, "the page still carries the run of record to a later release").not.toMatch(
+      /carried to \d+\.\d+\.\d+/,
+    );
   });
 });
 

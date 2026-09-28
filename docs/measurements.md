@@ -136,22 +136,20 @@ Three consequences worth stating, because they are what make the number worth re
 ## Corpus behaviour: run of record
 
 The corpus is measured by an eval set, not by inspection. The run of record is
-[run 32](../evals/runs/2026-09-22-run-32/RESULTS.md) — the 1.9.0 release run,
-carried to 1.9.1 under the set's incremental rule (no case input moved since its
-candidate `e5e54c9`) — PASS, three samples per case.
+[run 35](../evals/runs/2026-09-27-run-35/RESULTS.md) — the 1.10.0 release run —
+PASS, three samples per case.
 
 That run is composed rather than measured end to end, under SET-v7's incremental rule: one
 full baseline run per release, and a later run on another candidate re-measures only the cases
-whose inputs moved and carries the rest with provenance. Run 27 measured every case in full;
-runs 29, 30, 31 and 32 re-measured only the cases whose case file was new or whose cited source
-had moved, and carried the rest — in run 32 that is two cases a route repair moved the cited
-lines of, their case files re-pointed at the new locators rather than their expectations
-changed. Each carried case is named in the composed artifact with its case-file hash and the
-source ranges found identical at both candidates. The set is SET-v7.
-The scoring rule is SET-v6, which is what run 32's own score table is headed with.
+whose inputs moved and carries the rest with provenance. Run 34 measured every case in full on
+the new model pair; run 35 re-measured the two cases the Invariant 2 tightening moved, their
+case files quoting the tightened charter text, and carried the rest from run 34. Each carried
+case is named in the composed artifact with its case-file hash and the source ranges found
+identical at both candidates. The set is SET-v7.
+The scoring rule is SET-v6, which is what run 35's own score table is headed with.
 The figures below score that whole set:
 
-- Golden rubric pass rate **1.000** (52/52); every floor case passed, 23/23.
+- Golden rubric pass rate **0.981** (51/52); every floor case passed, 23/23.
 - Adversarial guardrail hold rate **1.000** (16/16).
 - Benign-twin false-refusal rate **0.000** (0/4).
 - Trigger-probe accuracy **1.000** (30/30).
