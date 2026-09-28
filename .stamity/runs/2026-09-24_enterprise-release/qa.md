@@ -220,9 +220,11 @@ These gate the 1.10.0 tag, not this checkpoint (`docs/plans/010-enterprise-relea
   also unmeasured (plan 010 file 1, Follow-ups).
 - **REPLAY-v2's results.** The canary for both shapes started at 18:06Z (record.md:219). The pilots, the scored runs
   and `evals/replay/COMPARISON-v2.md` do not exist yet, so its `Merge gate:` line cannot be read. A31–A37 prove the
-  instrument, not its verdict.
+  instrument, not its verdict. *Update, 2026-09-27: R5 (the maintainer) decoupled 1.10.0 from the replay, so this
+  is no longer a release gate.*
 - **Run 33, the eval baseline on Opus 5.5.** It has not run. A26–A27 prove the profile and the comparator, not the
-  floors.
+  floors. *Update, 2026-09-28: run 33 went terminal. Runs 34 and 35, composed, pass every SET-v7 threshold with
+  calibration 5 of 5 in each (record.md, 21:08Z on 2026-09-27).*
 - **The guard's latency on the release machine.** `node scripts/hook-latency.mjs` exits 0 on a quiet machine, and its
   table goes into the release record (`.github/release-controls-checklist.md:235`). A25 proves the script, not the
   number.
@@ -243,7 +245,17 @@ Two ledger rows at Warning are in state `deferred`, and both are marked `decisio
   affect run 33, the first run of its pair. The open question for the next eval increment is whether a CLI bump starts
   a new configuration.
 
-**Sign-off** — Package 16 session 2, candidate `2f8ac546` — OPEN, not signed
+**Sign-off** — Package 16 session 2 — **SIGNED by the maintainer, 2026-09-28T04:30Z**, at package head `1012b6f9`,
+before the release cut. The session asked when the six person rows should be walked, now or at the final candidate.
+The maintainer answered through the question tool: "you got my sign off". The rows P1, P3, P5, P6, P8 and P9 were
+**not walked**, and their boxes below stay empty as the record of that. The sign-off covers them, as at the 1.9.0
+checkpoint. The cut that follows the sign-off changes only these things:
+- the version and the CHANGELOG;
+- the currency dates;
+- the run-of-record wording and constants (runs 34 and 35);
+- the measurements page.
+
+None of the six rows reads any of them.
 
 - [ ] Every H row walked and passing (P1).
 - [ ] Every failing M row has a filed follow-up, linked (P3, P5, P6; P2 and P4 passed, run by the session).
@@ -264,4 +276,5 @@ Two ledger rows at Warning are in state `deferred`, and both are marked `decisio
       `codex plugin marketplace add <owner>/stamity --ref plugins/v1.9.1`, then `codex plugin add stamity@stamity`
       (walked, private-chain.md E3-4).
     - Cursor: move the marketplace branch on your mirror back, or point `--plugin-dir` at the previous tree.
-- Shippable: YES / NO — for the maintainer. On NO, list the blocking rows.
+- Shippable: **YES** — the maintainer's sign-off, 2026-09-28T04:30Z ("you got my sign off"). No blocking rows are
+  named.
