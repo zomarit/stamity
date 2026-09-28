@@ -296,7 +296,8 @@ The exact definitions `scripts/replay/measure.mjs` implements.
   the prompt; several distinct ids attribute to `multi`. **Branch-level** dispatches: a verdict dispatch whose
   description or prompt matches `/whole[- ]branch/i` and that was dispatched after an approving delivery by a
   reviewer dispatched at or after the injection point (§5) is branch-level, and so is every verdict agent dispatched
-  after it. An approval before the injection point (a plan review) counts for nothing here, and a whole-branch review
+  after it. An approval before the injection point (a plan review), or by a reviewer built from its sub-agent file
+  (Recall, below), counts for nothing here, and a whole-branch review
   dispatched before any approval is a loop round like any other (§15). REPLAY-v1 keeps its own reading: verdict
   dispatches after `u3-p2`'s last reviewer approval that carry no single id, or that match `/whole[- ]branch/i`.
   Attribution places an agent's loop characters and sub-agent tokens in the per-pass split, and names a compaction

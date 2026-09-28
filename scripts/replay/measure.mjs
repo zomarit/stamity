@@ -804,8 +804,9 @@ function joinAgents(walk, index, subs, roots, v2) {
     // reviewer delivery is branch-level, and so is every verdict agent dispatched after it. One named so
     // before any approval is a loop round (the residual REPLAY-v2 §15 names). review/13: only a reviewer
     // dispatched at or after the injection point approves here; a plan or cell review before it covers nothing.
+    // review/20: a reviewer built from its sub-agent file has no known dispatch line, so its approval counts for nothing.
     const point = injectionLine ?? Infinity
-    const approvals = deliveries.filter((d) => d.round && d.agent?.role === 'reviewer' && d.verdict === 'approve' && d.agent.line >= point).map((d) => d.line)
+    const approvals = deliveries.filter((d) => d.round && d.agent?.role === 'reviewer' && d.verdict === 'approve' && d.agent.line >= point && !d.agent.fromFile).map((d) => d.line)
     const namedAfterApproval = (a) => (WHOLE_BRANCH.test(a.desc) || WHOLE_BRANCH.test(a.prompt)) && approvals.some((line) => line < a.line)
     let from = Infinity
     for (const a of agents.filter((x) => x.fn === 'verdict').toSorted((x, y) => x.line - y.line)) {
