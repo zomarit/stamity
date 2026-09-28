@@ -26,7 +26,7 @@ import { redactPaths, spellingsOf } from '../qa/redact.mjs'
 import { PASS_IDS } from './fixture.mjs'
 import { clientsTable, compare, loopCharsHeld, renderComparison } from './compare.mjs'
 import { AMBIENT_LISTS, MEASUREMENT_SCHEMA, UNATTRIBUTED_MAX } from './measure.mjs'
-import { DEFAULT_PROTOCOL, MAX_REPLACEMENTS_PER_SHAPE, PROTOCOLS, ROW_IDS, isProtocolVersion, median, protocolNames, securityHeld, versionOfPath } from './protocols.mjs'
+import { DEFAULT_PROTOCOL, MAX_REPLACEMENTS_PER_SHAPE, PROTOCOLS, ROW_IDS, UNCOVERED_REASON, isProtocolVersion, median, protocolNames, securityHeld, versionOfPath } from './protocols.mjs'
 import { BREAKDOWN_KEYS, EXCERPT_MAX, RUN_ID, SUMMARY_SCHEMA, TOTALS_KEYS, isAmbient, isObject, numOrNull, validateSummary } from './summary.mjs'
 
 export { MAX_REPLACEMENTS_PER_SHAPE, ROW_IDS, median, securityHeld } from './protocols.mjs'
@@ -92,6 +92,8 @@ export const NOTE_ROWS = [
   { includes: "in run.json's injection record, so it is filed absent at the pass", rows: ['pooled-recall'] },
   // R4 (review/162): an injected seed absent from its pass's review snapshot; a security one matches the suffix above first.
   { includes: 'so it was reverted before review: it is filed absent at the pass', rows: ['pooled-recall'] },
+  // R7 (review/168): a seed with no state in the injection record, never found; its run is invalid.
+  { includes: ": uncovered — no state in run.json's injection record", rows: ['pooled-recall', 'security-seeds'] },
 ]
 
 // ---------- small helpers ----------
@@ -631,6 +633,14 @@ export function renderResults(summary, thresholds, reference = []) {
 // ---------- check ----------
 
 /**
+ * R7 (review/168, REPLAY-v2 §10): a changed scored run whose every invalid reason is an uncovered pass
+ * (`UNCOVERED_REASON`), the one invalid run §10 does not replace. A run invalid for another reason too
+ * is replaced as before.
+ */
+const uncoveredOnly = (s) =>
+  s?.shape === 'changed' && s?.kind === 'scored' && Array.isArray(s?.invalid) && s.invalid.length > 0 && s.invalid.every((r) => typeof r === 'string' && r.startsWith(UNCOVERED_REASON))
+
+/**
  * Every problem of a runs folder: each `<date>-replay-<n>/` holds a `summary.json` that conforms,
  * names its own folder, was scored under the given protocol's sha256 at the committed protocol
  * path of `version`, and a `RESULTS.md`; neither file carries a home or temp path shape or a
@@ -654,6 +664,7 @@ export function checkRuns(runsDir, protocolPath, version = versionOfPath(protoco
   const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name).toSorted()
   if (dirs.length === 0) return { runs: 0, problems: ['no run directory under the runs folder'], invalid }
   const commits = new Set()
+  const notReplaced = []
   for (const name of dirs) {
     const staging = name.match(STAGING)
     if (staging) {
@@ -692,6 +703,7 @@ export function checkRuns(runsDir, protocolPath, version = versionOfPath(protoco
     if (s?.protocol?.path !== expectedPath) problems.push(`${name}: protocol path ${JSON.stringify(s?.protocol?.path ?? null)} is not ${expectedPath}`)
     if (typeof s?.instrument?.commit === 'string') commits.add(s.instrument.commit)
     if (Array.isArray(s?.invalid) && s.invalid.length > 0 && SHAPES.includes(s.shape)) invalid[s.shape].push(`${name} (${s.kind})`)
+    if (uncoveredOnly(s)) notReplaced.push(name)
     for (const shape of forbiddenIn(summaryText)) problems.push(`${name}/summary.json carries "${shape}"`)
     for (const shape of forbiddenIn(results ?? '')) problems.push(`${name}/RESULTS.md carries "${shape}"`)
     for (const rule of leakRulesIn(summaryText, committedPath(version, name, 'summary.json'))) problems.push(`${name}/summary.json matches the leak gate's rule ${rule}`)
@@ -702,6 +714,7 @@ export function checkRuns(runsDir, protocolPath, version = versionOfPath(protoco
     const n = invalid[shape].length
     if (n > MAX_REPLACEMENTS_PER_SHAPE) problems.push(`${shape}: ${n} invalid runs, over the ${MAX_REPLACEMENTS_PER_SHAPE} replacements §10 allows per shape — the rows they feed are not evaluated and the merge gate fails`)
   }
+  for (const name of notReplaced) problems.push(`${name}: a changed scored run invalid only for an uncovered pass, which §10 does not replace — the rows the changed shape feeds are not evaluated and the merge gate fails`)
   return { runs: dirs.length, problems, invalid }
 }
 

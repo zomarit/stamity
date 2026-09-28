@@ -48,3 +48,11 @@ export function median(values) {
 
 /** §12: a security seed the implementer removed before the lens started counts as found. */
 export const securityHeld = (x) => x.found || x.caughtByImplementer
+
+/**
+ * R7 (review/168; REPLAY-v2 §8, §10): the leading text of the invalid reason `measure.mjs` writes for a
+ * pass with no entry in `run.json`'s injection record. A changed scored run whose every invalid reason
+ * begins with it is not replaced: `compare.mjs` reads the rows the changed shape feeds as not evaluated,
+ * and `score.mjs check` names the run. A baseline run invalid this way is replaced as any other.
+ */
+export const UNCOVERED_REASON = 'uncovered pass'

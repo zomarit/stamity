@@ -1182,3 +1182,42 @@ describe("the protocol table and the import graph (plan 011 v2-protocol-paths, b
     });
   });
 });
+
+describe("REPLAY-v2 R7 — an uncovered pass (review/168)", () => {
+  it("(d) files an uncovered seed's note beside pooled-recall and security-seeds, not under the other notes", async () => {
+    const { m, runJson } = await measured();
+    // The line measure.mjs writes for a seed with no state in the injection record, filled in.
+    const literal = ": uncovered — no state in run.json's injection record, so it was never injected and no finding can find it; the run is invalid (§8)";
+    expect(MEASURE_SRC).toContain(literal);
+    const note = `seed sec-missing-guard (u2-p1)${literal}`;
+    const md = renderResults(summarize({ ...m, notes: [note] }, runJson, PROTOCOL_SHA, { protocolPath: "evals/replay/REPLAY-v2.md" }), parseThresholds(PROTOCOL_TEXT)) as string;
+    const section = (head: string): string => md.slice(md.indexOf(head), md.indexOf("####", md.indexOf(head) + 4));
+    expect(section("#### Beside `pooled-recall`")).toContain(note);
+    expect(section("#### Beside `security-seeds`")).toContain(note);
+    expect(section("#### Other measurement notes")).not.toContain("uncovered");
+    expect(section("#### Other measurement notes")).toContain("- no notes line");
+  });
+
+  it("(d) check fails on a changed scored run invalid only for an uncovered pass, naming it, and counts a baseline one as a replacement", async () => {
+    const { outDir } = await runInto();
+    const good = JSON.parse(readFileSync(join(outDir, "summary.json"), "utf8")) as Summary;
+    const dir = join(scratch(), "runs");
+    const reason = "uncovered pass u2-p2: no review dispatch covered it, so its seeds (con-config-default, tw-test-skip) were never injected";
+    const runs = [
+      ["2026-09-24-replay-1", "baseline", [reason]],
+      ["2026-09-24-replay-2", "changed", [reason]],
+      ["2026-09-24-replay-3", "changed", ['run.json end.reason is "stalled", not "complete"', reason]],
+    ] as const;
+    for (const [id, shape, invalid] of runs) {
+      mkdirSync(join(dir, id), { recursive: true });
+      writeFileSync(join(dir, id, "summary.json"), JSON.stringify({ ...good, runId: id, shape, kind: "scored", invalid }));
+      writeFileSync(join(dir, id, "RESULTS.md"), "No threshold moved.\n");
+    }
+    const r = checkRuns(dir, PROTOCOL);
+    expect(r.problems).toEqual(["2026-09-24-replay-2: a changed scored run invalid only for an uncovered pass, which §10 does not replace — the rows the changed shape feeds are not evaluated and the merge gate fails"]);
+    expect(r.invalid).toEqual({ baseline: ["2026-09-24-replay-1 (scored)"], changed: ["2026-09-24-replay-2 (scored)", "2026-09-24-replay-3 (scored)"] });
+    const cli = score(["check", "--runs", dir, "--protocol", PROTOCOL]);
+    expect(cli.status).toBe(1);
+    expect(cli.stderr).toContain("2026-09-24-replay-2: a changed scored run invalid only for an uncovered pass");
+  });
+});
