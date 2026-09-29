@@ -1413,11 +1413,10 @@ function injectionStatesOf(seeds, run, invalid, snapshots) {
  * file has no known dispatch line (`dispatched` null) and makes `guard.orphans` false, so it never credits.
  * review/14, review/16: the compaction samples and precision read seed matches through the same guard.
  * REPLAY-v3 (plan 012, amendments 2 and 3), per pass: the guard is `{ lines, orphans }`, keyed by pass. A finding
- * whose agent is known credits a seed of pass P only when that agent covers P (`covers`: a return by its agent's
- * coverage, a report or ledger finding by the agent whose digest names its report); `lines` serves only `orphans`.
- * The earlier reading follows. A finding credits a seed
- * of `pass` only when its agent was dispatched at or after that pass's swap (`lines[pass]`, Infinity when
- * none), and one no digest places only when no verdict agent was dispatched before it (`orphans[pass]`).
+ * whose agent is known (`dispatched`) credits a seed of pass P only when that agent covers P (`covers`: a return by
+ * its agent's coverage, a report or ledger finding by the coverage of the agent whose digest names its report). A
+ * finding no digest places credits a seed of P only when no verdict agent was dispatched before P's swap
+ * (`orphans[P]`); `lines[P]`, the swap line, serves only that.
  */
 const credits = (f, guard, pass) => {
   if (guard === null) return true
@@ -1538,19 +1537,21 @@ function swapStatesOf(seeds, run, invalid) {
 }
 
 /**
- * Each pass's swap line, the credit guard's `lines`: the main-transcript line of the dispatch whose tool_use
- * id the swap record names (S2, else `captures/swaps/<pass>.json`), else the first build dispatch whose
- * description names the pass; Infinity when there is none, so nothing credits that pass's seeds.
+ * Each pass's swapping agent: the dispatch whose tool_use id the swap record names (S2, else
+ * `captures/swaps/<pass>.json`), else the first build dispatch whose description names the pass; none when
+ * there is neither.
  */
-function swapLinesOf(agents, swapped, L) {
+function swappersOf(agents, swapped, L) {
   const dispatched = agents.filter((a) => !a.fromFile)
   return Object.fromEntries(PASS_IDS.map((pass) => {
     const recorded = swapped.get(pass)?.toolUseId
     const id = typeof recorded === 'string' && recorded !== '' ? recorded : readJsonIfPresent(join(L.swaps, `${pass}.json`))?.toolUseId
-    const agent = dispatched.find((a) => a.toolUseId === id) ?? dispatched.find((a) => a.fn === 'build' && passIdsIn(a.desc, true).includes(pass))
-    return [pass, agent ? agent.line : Infinity]
+    return [pass, dispatched.find((a) => a.toolUseId === id) ?? dispatched.find((a) => a.fn === 'build' && passIdsIn(a.desc, true).includes(pass))]
   }))
 }
+
+/** Each pass's swap line, the credit guard's `lines`: its swapping agent's dispatch line; Infinity when there is none, so nothing credits that pass's seeds. */
+const swapLinesOf = (swappers) => Object.fromEntries(PASS_IDS.map((pass) => [pass, swappers[pass] ? swappers[pass].line : Infinity]))
 
 /** Whether an item holds in some copy (true), in none of those holding its file (false), or no copy holds the file (null). */
 function heldIn(copies, item) {
@@ -1563,12 +1564,15 @@ function heldIn(copies, item) {
  * matcher item (build/7): `{ present, caught, item }`. A seed of a pass with no swap record is uncovered and
  * never found. Presence is its `present` rule over the pass's review-start copies (`captures/snapshots/<P>/`);
  * a pass no review covered reads it from the last build-end copy, of any agent, taken after the pass was built
- * (the copy at the stop that built it included; review/11, REPLAY-v3 §8). A seed absent there was not delivered
+ * (the copy at the stop that built it included; review/11, REPLAY-v3 §8). The pass was built at the stop of the
+ * build agent whose dispatch swapped it (`swappers`, amendment 1): a repeat dispatch's build end builds nothing
+ * (review/18). A last copy lacking the seed's file reads back to the last copy after the swap that holds it, and
+ * none holding it is a capture defect, so no presence is left open (review/17). A seed absent there was not delivered
  * when no build-end copy after the pass's swap held it, and was caught before review otherwise, the note naming
  * the build ends it went between (a copy lacking the seed's file names nothing, review/13); either way it leaves
  * the denominator and holds its security row. A seed file absent from every review-start copy is a capture defect.
  */
-function arrivalsOf(seeds, swapped, L, byAgentId, notes, invalid) {
+function arrivalsOf(seeds, swapped, swappers, L, byAgentId, notes, invalid) {
   const who = (row) => (byAgentId.has(row.agentId) ? `${row.agentId} (${JSON.stringify(byAgentId.get(row.agentId).desc)})` : String(row.agentId))
   const { rows } = jsonlCounted(readTextIfPresent(join(L.buildEnd, 'index.jsonl')))
   const arrivals = new Map()
@@ -1584,8 +1588,11 @@ function arrivalsOf(seeds, swapped, L, byAgentId, notes, invalid) {
     const swappedAt = Date.parse(swapped.get(seed.pass)?.at)
     const ends = rows.filter((r) => typeof r.dir === 'string' && !(Date.parse(r.at) < swappedAt)).map((r) => Object.assign({}, r, { held: heldIn(copiesOf(L.buildEnd, r.dir.split(/[\\/]/).pop()), seed) }))
     const reviewStart = copiesOf(L.snapshots, seed.pass)
-    // The pass was built at a stop whose build-end row names it; the last copy from there on is the last one taken.
-    const lastBuild = ends.some((r) => Array.isArray(r.passes) && r.passes.includes(seed.pass)) ? ends.at(-1) : undefined
+    // The pass was built at its swapping agent's build end; the last copy from there on that holds the seed's file is read.
+    const swapper = swappers[seed.pass]
+    const built = swapper !== undefined && ends.some((r) => r.dispatch === swapper.toolUseId || byAgentId.get(r.agentId) === swapper)
+    const lastBuild = built ? ends.findLast((r) => r.held !== null) : undefined
+    if (reviewStart.length === 0 && built && lastBuild === undefined) invalid.push(`capture defect: seed ${seed.id} (${seed.pass}): ${seed.file} is absent from every build-end copy after the pass's swap, and no review covered the pass`)
     const present = reviewStart.length > 0 ? heldIn(reviewStart, seed) : lastBuild?.held ?? null
     if (present === false) {
       // False from the build ends only when the last build-end copy after the pass was built lacks the seed.
@@ -1596,7 +1603,7 @@ function arrivalsOf(seeds, swapped, L, byAgentId, notes, invalid) {
       else notes.push(`${tag}: caught before review — absent from ${at}; it went between the build end of ${who(ends[last])} and ${gone ? `the build end of ${who(gone)}` : 'the review start'}, so it leaves the recall denominator${held}`)
       arrivals.set(seed.id, { present: false, caught: true, item: false })
     } else if (reviewStart.length === 0) {
-      notes.push(`${tag}: was never reviewed — its pass was swapped and no review covered it, so its presence is read from ${lastBuild ? `the last build-end copy taken after the pass was built, ${who(lastBuild)}'s` : 'no build-end copy (none holds the pass), so it is unknown'}; it stays in the recall denominator as a miss`)
+      notes.push(`${tag}: was never reviewed — its pass was swapped and no review covered it, so its presence is read from ${lastBuild ? `the last build-end copy taken after the pass was built, ${who(lastBuild)}'s` : built ? 'no build-end copy that holds its file, a capture defect' : 'no build-end copy of the build agent whose dispatch swapped it, so it is unknown'}; it stays in the recall denominator as a miss`)
       arrivals.set(seed.id, { present, caught: false, item: false })
     } else {
       if (present === null) invalid.push(`capture defect: seed ${seed.id} (${seed.pass}): ${seed.file} is absent from every copy of the pass's review-start snapshot (captures/snapshots/${seed.pass}/)`)
@@ -1761,10 +1768,11 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
   // review/15: a verdict agent built from its sub-agent file may have been dispatched before the point, so orphans do not credit beside it.
   const orphansBefore = (line) => !agents.some((a) => a.fn === 'verdict' && (a.fromFile || a.line < line))
   const swapped = version === 'v3' ? swapStatesOf(seeds, run, invalid) : null
-  const lines = swapped ? swapLinesOf(agents, swapped, L) : null
+  const swappers = swapped ? swappersOf(agents, swapped, L) : null
+  const lines = swappers ? swapLinesOf(swappers) : null
   const guard = lines ? { lines, orphans: Object.fromEntries(PASS_IDS.map((p) => [p, orphansBefore(lines[p])])) } : version === 'v2' ? { line: point, orphans: orphansBefore(point) } : null
   // build/7 (v3): a seed in no reviewed tree, or known absent from it, is no matcher item: no credit, no adjudication row.
-  const arrivals = swapped ? arrivalsOf(seeds, swapped, L, byAgentId, notes, invalid) : null
+  const arrivals = swapped ? arrivalsOf(seeds, swapped, swappers, L, byAgentId, notes, invalid) : null
   const items = arrivals ? { ...seeds, seeds: seeds.seeds.filter((seed) => arrivals.get(seed.id).item) } : seeds
   const { seedMatch, decoysFlagged, unmatched, adjudication, tolerance } = scoreFindings(all, items, L.snapshots, guard, version)
   // build/251: a pass a verdict agent was dispatched for holds a snapshot, by the marker hook's rule; none is a capture defect

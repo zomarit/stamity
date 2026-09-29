@@ -400,7 +400,7 @@ function createWalker(forbid = [], version = null) {
           minorWords: p.result ? (p.result.match(/\bMinor\b/g) || []).length : 0,
           ledgerIds: p.result ? new Set(p.result.match(/\b(?:prove|build|review|plan|qa)\/\d+\b/g) || []).size : 0,
           shortIds: p.result ? new Set(p.result.match(/\b(?:[A-Z]{1,3}-)?[CWM]\d{1,2}\b/g) || []).size : 0,
-          verdict: p.result ? ((p.result.match(/verdict[:*\s]*\**\s*(approve|request-changes|reject|block)/i) || [])[1] || null) : null,
+          verdict: p.result ? (version === 'v3' ? verdictOf(p.result, { version }) : (p.result.match(/verdict[:*\s]*\**\s*(approve|request-changes|reject|block)/i) || [])[1] || null) : null,
           noNewFindings: p.result ? /new findings[^\n]{0,40}none|no new (critical|warning|findings)/i.test(p.result) : null })
       }
     }
@@ -571,7 +571,8 @@ function createWalker(forbid = [], version = null) {
  * on Bash command rows, which also carry the `command` text. `forbidHits` holds one row
  * `{ line, seg, turn, toolUseId, tool, forbid }` per main-context tool_use and per `opts.forbid`
  * string that one of its input's leaf strings contains; it is empty without the option. `opts.version`
- * `'v3'` reads a SendMessage result's verdict word by REPLAY-v3's grammar (`isReportText`).
+ * `'v3'` reads a SendMessage result's verdict word, and a delivery's `verdict` field, by REPLAY-v3's
+ * grammar (`isReportText`, `verdictOf`).
  */
 export function walkTranscriptLines(lines, { forbid = [], version = null } = {}) {
   const walker = createWalker(forbid, version)

@@ -547,6 +547,14 @@ describe("REPLAY-v3 — a SendMessage result's verdict is read by the one verdic
     expect([sendResult(done, { version: "v3" }), sendResult(queued, { version: "v3" })]).toEqual(["returns.report", "returns.sendAck"]);
     expect([sendResult(done), sendResult(queued)]).toEqual(["returns.sendAck", "returns.report"]);
   });
+
+  it("(review/22) a delivery's verdict field reads the one grammar under v3 and v2's pattern otherwise", () => {
+    const verdicts = (opts: Record<string, unknown> = {}): unknown[] =>
+      (walkTranscriptLines(["**Verdict: REQUEST_CHANGES.** One Warning left.", "Verdict: APPROVE | REQUEST_CHANGES"].map((result, k) => mainLine.taskNotification({ taskId: `a${k}`, toolUseId: `tu-${k}`, result })), opts) as Walk)
+        .deliveries.map((delivery) => delivery["verdict"]);
+    expect(verdicts({ version: "v3" })).toEqual(["request-changes", null]);
+    expect(verdicts()).toEqual([null, "APPROVE"]);
+  });
 });
 
 describe("REPLAY-v3 — the verdict role a ledger source names (prove/9)", () => {

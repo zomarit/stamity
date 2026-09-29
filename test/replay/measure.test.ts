@@ -2293,6 +2293,37 @@ describe("REPLAY-v3 — every arrival state (criterion 39)", () => {
     expect(noteOf(own, "cor-invoice-eacces")).toMatch(/: was not delivered — absent from the last build-end copy taken after the pass was built, abuildu3p1 \("Build unit u3-p1"\)'s, as the pass was never reviewed/);
   });
 
+  it("(e, review/17) a pass no review covered whose last build-end copy lacks the seed's file reads back to the last copy after its swap that holds the file; with none, a capture defect", async () => {
+    const late = agentOf("late", "stamity-reviewer", "Review u1-p1", "Review unit u1-p1.", APPROVE);
+    const noInvoice = { "src/orders/format.ts": FORMAT };
+    const m = await v3Run(...inOrder(B11, B31, B12, late), {
+      snapshots: { "u1-p1": SNAPSHOT_U1P1 },
+      buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main], [B31, ["u3-p1"], REVIEW_START["u3-p1"].main], [B12, ["u1-p2"], noInvoice]),
+    });
+    expect(m.invalid).toEqual([]);
+    expect(rowOf(m, "cor-invoice-eacces")).toEqual(expect.objectContaining({ present: true, caughtByImplementer: false, found: false }));
+    expect(noteOf(m, "cor-invoice-eacces")).toMatch(/: was never reviewed — .*abuildu3p1 \("Build unit u3-p1"\)'s; it stays/);
+    const none = await v3Run(...inOrder(B11, B31, late), { snapshots: { "u1-p1": SNAPSHOT_U1P1 }, buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main], [B31, ["u3-p1"], noInvoice]) });
+    expect(none.invalid).toEqual(["capture defect: seed cor-invoice-eacces (u3-p1): src/orders/invoice.ts is absent from every build-end copy after the pass's swap, and no review covered the pass"]);
+  });
+
+  it("(e, review/18) a pass is built at the stop of the build agent whose dispatch swapped it: a repeat dispatch's build end does not build it", async () => {
+    const late = agentOf("late", "stamity-reviewer", "Review u1-p1", "Review unit u1-p1.", APPROVE);
+    const again = { ...B31, id: "tu_again", agentId: "aagain" };
+    const m = await v3Run(...inOrder(B11, B31, again, late), {
+      snapshots: { "u1-p1": SNAPSHOT_U1P1 },
+      buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main], [again, ["u3-p1"], REVIEW_START["u3-p1"].main]),
+    });
+    expect(rowOf(m, "cor-invoice-eacces")).toEqual(expect.objectContaining({ present: null, caughtByImplementer: false, found: false }));
+    expect(noteOf(m, "cor-invoice-eacces")).toMatch(/: was never reviewed — .*no build-end copy of the build agent whose dispatch swapped it, so it is unknown/);
+    // The swapping build's own stop builds it, whichever build end comes first.
+    const built = await v3Run(...inOrder(B11, B31, again, late), {
+      snapshots: { "u1-p1": SNAPSHOT_U1P1 },
+      buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main], [again, ["u3-p1"], REVIEW_START["u3-p1"].main], [B31, ["u3-p1"], REVIEW_START["u3-p1"].main]),
+    });
+    expect(rowOf(built, "cor-invoice-eacces")).toEqual(expect.objectContaining({ present: true, caughtByImplementer: false }));
+  });
+
   it("(f) a seed file absent from every review-start copy is a capture defect", async () => {
     const m = await v3Run(...inOrder(B11, REVIEW), { seeds: ONE, record: ONE_SWAP, snapshots: { "u1-p1": { main: { "src/orders/format.ts": FORMAT } } } });
     expect(m.invalid).toEqual(["capture defect: seed sec-sql-sort (u1-p1): src/store/query.ts is absent from every copy of the pass's review-start snapshot (captures/snapshots/u1-p1/)"]);
