@@ -1057,6 +1057,8 @@ describe("the protocol table and the import graph (plan 011 v2-protocol-paths, b
     expect(protocolsModule.PROTOCOLS).toEqual({
       v1: { path: "evals/replay/REPLAY-v1.md", data: "evals/replay/v1", runs: "evals/replay/runs", comparison: "evals/replay/COMPARISON-v1.md" },
       v2: { path: "evals/replay/REPLAY-v2.md", data: "evals/replay/v2", runs: "evals/replay/v2/runs", comparison: "evals/replay/COMPARISON-v2.md" },
+      // Modified by plan 012 (v3-fixture, contract S5): the table gains v3's four paths; v1, v2 and the default are unchanged.
+      v3: { path: "evals/replay/REPLAY-v3.md", data: "evals/replay/v3", runs: "evals/replay/v3/runs", comparison: "evals/replay/COMPARISON-v3.md" },
     });
     expect(protocolsModule.DEFAULT_PROTOCOL).toBe("v1");
   });
@@ -1127,15 +1129,17 @@ describe("the protocol table and the import graph (plan 011 v2-protocol-paths, b
       const copy = instrumentCopy();
       const out = join(scratch(), "COMPARISON-v3.md");
       const outDir = join(scratch(), RUN_ID);
+      // Modified by plan 012 (v3-fixture): v3 became a protocol version, so `check` and `compare` feed
+      // the unknown `v4`, and the listed versions gain v3. Exit 1, the usage and nothing written are unchanged.
       const commands = [
-        ["check", "--protocol", "v3"],
+        ["check", "--protocol", "v4"],
         ["run", "--protocol", "v9", "--measurement", "m.json", "--run-json", "run.json", "--run-id", RUN_ID, "--kind", "scored", "--out-dir", outDir],
-        ["compare", "--protocol", "v3", "--out", out],
+        ["compare", "--protocol", "v4", "--out", out],
       ];
       for (const args of commands) {
         const result = scoreIn(copy, args);
         expect(result.status).toBe(1);
-        expect(result.stderr).toMatch(/--protocol v\d is not a protocol version: v1 or v2, or the committed protocol path/);
+        expect(result.stderr).toMatch(/--protocol v\d is not a protocol version: v1 or v2 or v3, or the committed protocol path/);
         expect(result.stderr).toContain("Usage: node scripts/replay/score.mjs run");
         expect(result.stderr).toContain("An unknown --protocol version exits 1 with this usage: refused, nothing written. Exit 2 means only compare's FAIL.");
       }
