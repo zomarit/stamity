@@ -2305,3 +2305,331 @@ describe("REPLAY-v3 — contamination (C5, C6)", () => {
     expect((await featureRun([...BUILDERS, APPROVING_1], { tail })).invalid).toEqual([]);
   });
 });
+
+// ---------- REPLAY-v3: the reader treats both shapes' findings alike (plan 012 v3-reader) ----------
+
+/** One `run.json` injection record both versions read: v2's per-seed states beside v3's swap fields, one entry per pass. */
+function twinRecord(passes: Record<string, string[]>): Record<string, unknown> {
+  return {
+    arrival: "patch", partial: false, unreadable: [], unfinished: [],
+    passes: Object.fromEntries(Object.entries(passes).map(([pass, ids]) => [pass, {
+      pass, at: "2026-09-29T10:00:00.000Z", toolUseId: `tu_build_${pass}`, state: "swapped", clean: HEX("a"), seeded: HEX("b"), mtimeKept: true, partial: false, snapshot: true,
+      seeds: ids.map((id) => ({ id, file: "src/store/query.ts", state: INJECTED })),
+    }])),
+  };
+}
+
+type TwinSeed = Record<string, unknown> & { id: string };
+interface TwinOptions {
+  seeds?: TwinSeed[];
+  record?: Record<string, string[]>;
+  snapshots?: CaptureSpec["snapshots"];
+  /** Dispatched and delivered before the six builds. */
+  before?: AgentSpec[];
+  /** The main transcript after the six builds; defaults to each agent dispatched and delivered in turn. */
+  lines?: string[];
+  ledger?: Record<string, unknown>[];
+  flatLedger?: Record<string, unknown>[];
+  reports?: Record<string, string>;
+  /** A `compaction-1-pre` state copy, under its own run id when one is given. */
+  pre?: { ledger?: Record<string, unknown>[]; reports?: Record<string, string>; runId?: string };
+}
+
+/**
+ * One capture measured twice: under REPLAY-v2 (an injecting seeds document) and under REPLAY-v3 (the same seeds with
+ * `arrival: "patch"`), so every case reads v2's reading and v3's side by side from the same inputs. Six builds come first,
+ * then `agents`; every pass holds a review-start copy, and every seed's oracle fails unless a case says otherwise.
+ */
+async function twin(agents: AgentSpec[], o: TwinOptions = {}): Promise<[Measurement, Measurement]> {
+  const seeds = o.seeds ?? [U1P1_SEED];
+  const before = o.before ?? [];
+  const layout = writeCapture(scratch(), {
+    run: { runId: "2026-09-29-replay-1", shape: "baseline", kind: "scored", client: { version: "2.1.280" }, injection: twinRecord(o.record ?? { "u1-p1": seeds.map((s) => s.id) }) },
+    stdout: [JSON.stringify({ type: "system", subtype: "init", ...INIT_PINNED, cwd: "/fixture" })],
+    transcript: [mainLine.userText("/st-work docs/plans/001-replay.md --effort deep"), ...before.flatMap(dispatch), ...BUILDERS.flatMap(dispatch), ...(o.lines ?? agents.flatMap(dispatch))],
+    subagents: [...before, ...BUILDERS, ...agents].map(subagentOf),
+    snapshots: o.snapshots ?? sixSnapshots(),
+    state: {
+      ...(o.pre ? { "compaction-1-pre": { runId: o.pre.runId ?? RUN, ledger: o.pre.ledger ?? [], ...(o.pre.reports ? { reports: o.pre.reports } : {}) } } : {}),
+      end: { runId: RUN, ledger: o.ledger ?? [], ...(o.flatLedger ? { flatLedger: o.flatLedger } : {}), ...(o.reports ? { reports: o.reports } : {}) },
+    },
+    oracle: { schema: "stamity/replay-oracle/v1", run: { status: "ok", detail: "" }, results: seeds.map((s) => ({ seed: s.id, kind: "vitest", status: "fail", detail: "" })) },
+  });
+  const read = (doc: Record<string, unknown>): Promise<Measurement> => measureRun(layout.runDir, { seeds: doc, forbid: [] }) as Promise<Measurement>;
+  const [v2, v3] = [await read({ ...SEEDS, seeds }), await read(seedsV3(seeds))];
+  expect([v2.invalid, v3.invalid, "version" in v2, v3.version]).toEqual([[], [], false, "v3"]);
+  return [v2, v3];
+}
+
+const launchOf = (a: AgentSpec): string[] => dispatch(a).slice(0, 2);
+const deliverOf = (a: AgentSpec): string[] => dispatch(a).slice(2);
+/** A digest return (C4) whose `findings:` value holds `entries` verbatim. */
+const digestOf = (entries: string[], report: string, verdict = "request-changes"): string =>
+  ["status: DONE", `verdict: ${verdict}`, "confidence: high — read the diff", `report: ${report}`, "findings:", ...entries, "security: none", "contract delta: none"].join("\n");
+const reviewerOf = (result: string, description = "Review round 1"): AgentSpec => agentOf("r1", "stamity-reviewer", description, "Review the change set.", result);
+const found = (m: Measurement, id = "sec-sql-sort"): Pick<PassRow["seeds"][number], "found" | "stage" | "foundRound1"> => {
+  const { found: f, stage, foundRound1 } = rowOf(m, id);
+  return { found: f, stage, foundRound1 };
+};
+/** Each pass's final class and round count, in pass order. */
+const classesOf = (m: Measurement): [string | null, number][] => m.passes.map((p) => [p.verdict.finalClass, p.verdict.rounds]);
+const sixOf = (finalClass: string | null, rounds: number): [string | null, number][] => ALL_SIX.map(() => [finalClass, rounds]);
+/** The no-verdict notes of a measurement's reviewer rounds. */
+const noVerdict = (m: Measurement): number => m.notes.filter((n) => n.startsWith("reviewer round with no readable verdict")).length;
+/** The first compaction sample's at-risk and lost counts and validity. */
+const sample = (m: Measurement): [number, number, boolean] => [m.compactionSamples[0]!.atRisk, m.compactionSamples[0]!.lost, m.compactionSamples[0]!.valid];
+const NOT_FOUND = { found: false, stage: null, foundRound1: false };
+const AT_PASS = { found: true, stage: "pass", foundRound1: true };
+const AT_BRANCH = { found: true, stage: "branch", foundRound1: false };
+const BRANCH_REPORT = "branch-reviewer-r1.md";
+const BRANCH_ROW: Row = { id: "C-1", severity: "Critical", locator: "src/store/query.ts:11", summary: "sort reaches ORDER BY by string concatenation" };
+
+describe("REPLAY-v3 — a structured finding's secondary locators (prove/6)", () => {
+  it("(p6-a) a digest entry at app.ts:30 whose summary names src/store/query.ts:11 credits the seed at the pass stage in round 1, and unmatched goes 1 → 0; v2 reads neither", async () => {
+    const [v2, v3] = await twin([reviewerOf(digestOf(["C-1 src/http/app.ts:30 — sort flows into the query: src/store/query.ts:11 concatenates it into SQL"], REPORT_REL))]);
+    expect([found(v2), v2.totals.unmatched]).toEqual([NOT_FOUND, 1]);
+    expect([found(v3), v3.totals.unmatched]).toEqual([AT_PASS, 0]);
+  });
+
+  it("(p6-b) the same seed named by a bare file name only credits nothing in either reading", async () => {
+    const [v2, v3] = await twin([reviewerOf(digestOf(["C-1 src/http/app.ts:30 — sort flows into the query: query.ts:11 concatenates it into SQL"], REPORT_REL))]);
+    expect([found(v2), v2.totals.unmatched, found(v3), v3.totals.unmatched]).toEqual([NOT_FOUND, 1, NOT_FOUND, 1]);
+  });
+
+  it("(p6-c) a bare name in the digest and the full path in its report row credit, once the relative report path joins its report (J)", async () => {
+    const reports = { [BRANCH_REPORT]: reportText([{ id: "C-1", severity: "Critical", locator: "src/http/app.ts:30", summary: "sort flows into the query: src/store/query.ts:11 concatenates it into SQL" }]) };
+    const [v2, v3] = await twin([reviewerOf(digestOf(["C-1 src/http/app.ts:30 — sort flows into the query: query.ts:11 concatenates it into SQL"], `reports/${BRANCH_REPORT}`))], { reports });
+    expect([found(v2), v2.totals.unmatched]).toEqual([NOT_FOUND, 1]);
+    expect([found(v3), v3.totals.unmatched]).toEqual([AT_PASS, 0]);
+  });
+
+  it("(p6-d) an unmatched entry with two secondaries counts once, and a secondary on a decoy's line goes to adjudication as a free-text locator does", async () => {
+    const [v2, v3] = await twin([reviewerOf(digestOf(["W-1 src/http/app.ts:30 — the handler logs the body; see src/orders/format.ts:5 and src/http/router.ts:9"], REPORT_REL))]);
+    expect([v2.totals.unmatched, v2.adjudication]).toEqual([1, []]);
+    expect([v3.totals.unmatched, v3.adjudication.map((a) => [a.item, a.locator])]).toEqual([1, [["dec-internal-rename", "src/orders/format.ts:5"]]]);
+  });
+
+  it("(p6-e, p6-f) a secondary on a decoy's line with a decoy term flags it as its free-text twin does, and the flagged entry is not unmatched", async () => {
+    const summary = "the logger import from src/orders/format.ts:5 is a breaking rename for a consumer";
+    const [v2, v3] = await twin([reviewerOf(digestOf([`W-1 src/http/app.ts:30 — ${summary}`], REPORT_REL))]);
+    expect([v2.totals.decoyFalseFlags, v2.totals.unmatched]).toEqual([0, 1]);
+    expect([v3.totals.decoyFalseFlags, v3.totals.unmatched]).toEqual([1, 0]);
+    const [f2, f3] = await twin([reviewerOf(freeTextReturn([{ id: "W-1", severity: "Warning", locator: "src/http/app.ts:30", summary }], "request-changes"))]);
+    expect([f2.totals.decoyFalseFlags, f2.totals.unmatched]).toEqual([1, 1]);
+    expect([f3.totals.decoyFalseFlags, f3.totals.unmatched]).toEqual([1, 0]);
+  });
+
+  it("(p6-g) a free-text block that credits a seed through one locator and cites another is one entry, not unmatched", async () => {
+    const [v2, v3] = await twin([reviewerOf(freeTextReturn([{ ...SEED_FINDING, summary: "sort concatenated into SQL; the route at src/http/app.ts:30 passes it through" }], "request-changes"))]);
+    expect([found(v2), v2.totals.unmatched]).toEqual([AT_PASS, 1]);
+    expect([found(v3), v3.totals.unmatched]).toEqual([AT_PASS, 0]);
+  });
+
+  it("an inline stamity-findings block in a return that names no report is one entry per row: its secondary credits, and the row is not unmatched", async () => {
+    const inline = ["**Verdict:** request-changes", "", reportText([{ id: "C-1", severity: "Critical", locator: "src/http/app.ts:30", summary: "sort flows into src/store/query.ts:11 by concatenation" }])].join("\n");
+    const [v2, v3] = await twin([reviewerOf(inline)]);
+    expect([found(v2), v2.totals.unmatched]).toEqual([NOT_FOUND, 1]);
+    expect([found(v3), v3.totals.unmatched]).toEqual([AT_PASS, 0]);
+  });
+
+  it("(p6-h) a summary repeating its own locator, or its path:line:col spelling, adds no finding in either reading", async () => {
+    const [v2, v3] = await twin([reviewerOf(digestOf(["C-1 src/store/query.ts:11 — src/store/query.ts:11 concatenates sort; src/store/query.ts:11:5 too"], REPORT_REL))]);
+    for (const m of [v2, v3]) expect([found(m), m.totals.unmatched, m.adjudication]).toEqual([AT_PASS, 0, []]);
+  });
+
+  it("(41a) `W-1 src/x.ts:40 — the assertion at test/x.test.ts:22 was loosened` credits the test-weakening seed once, is never at risk by its secondary, and a bare x.test.ts is no locator", async () => {
+    const tw = {
+      id: "tw-assert-loosen", class: "test-weakening", severity: "Warning", pass: "u1-p1", file: "test/x.test.ts", locate: { text: "toBeGreaterThan(0)", from: 0, to: 0 },
+      present: { contains: "toBeGreaterThan(0)" }, span: [22, 22], terms: ["loosen", "weaken"], oracle: { kind: "static" },
+      injection: { file: "test/x.test.ts", find: "toBe(3)", replace: "toBeGreaterThan(0)" },
+    };
+    const snapshots = sixSnapshots({ ...SNAPSHOT_U1P1.main, "test/x.test.ts": fileWith(22, "  expect(count).toBeGreaterThan(0);") });
+    const loosened = reviewerOf(digestOf(["W-1 src/x.ts:40 — the assertion at test/x.test.ts:22 was loosened"], REPORT_REL));
+    const compacted = { lines: [...dispatch(loosened), mainLine.compactBoundary({ trigger: "manual", preTokens: 120_000 })], pre: {} };
+    const [v2, v3] = await twin([loosened], { seeds: [tw], snapshots, ...compacted });
+    expect([found(v2, tw.id), v2.totals.unmatched, v2.compactionSamples[0]?.atRisk]).toEqual([NOT_FOUND, 1, 1]);
+    expect([found(v3, tw.id), v3.totals.unmatched, v3.compactionSamples[0]?.atRisk]).toEqual([AT_PASS, 0, 1]);
+    // A pre-compaction row on the entry's own locator leaves nothing at risk: its secondary is never at risk on its own.
+    const [, covered] = await twin([loosened], { seeds: [tw], snapshots, ...compacted, pre: { ledger: [{ id: `${RUN}/prove/1`, phase: "prove", source: "reviewer", severity: "Warning", evidence: "src/x.ts:40 — the assertion was loosened", state: "open", rationale: "" }] } });
+    expect(covered.compactionSamples[0]).toEqual(expect.objectContaining({ atRisk: 0, valid: false }));
+    const [, bare] = await twin([reviewerOf(digestOf(["W-1 src/x.ts:40 — the assertion at x.test.ts:22 was loosened"], REPORT_REL))], { seeds: [tw], snapshots });
+    expect([found(bare, tw.id), bare.totals.unmatched]).toEqual([NOT_FOUND, 1]);
+  });
+});
+
+describe("REPLAY-v3 — branch level (prove/7)", () => {
+  const whole = (result = freeTextReturn([LOOSE_FINDING], "request-changes"), description = "Whole-branch review"): AgentSpec => agentOf("wb", "stamity-reviewer", description, "Review the whole branch.", result);
+  const delta = agentOf("r3", "stamity-reviewer", "Review round 3 delta", "Re-review the fixes for the whole-branch review.", APPROVE);
+
+  it("(p7-a) a re-review dispatched after the whole-branch review stopped is a loop round under v3, and branch-level under v2", async () => {
+    const [v2, v3] = await twin([APPROVING_1, whole(undefined, "Whole-branch deep review"), FIXER, delta]);
+    expect([classesOf(v2), v2.wholeBranch]).toEqual([sixOf("approve", 1), { finalClass: "approve-after-fixes", rounds: 2 }]);
+    expect([classesOf(v3), v3.wholeBranch]).toEqual([sixOf("approve-after-fixes", 2), { finalClass: "blocked", rounds: 1 }]);
+    expect(v3.totals.loopChars - v2.totals.loopChars).toBeGreaterThanOrEqual(delta.prompt.length + APPROVE.length);
+  });
+
+  it("(41b) after an approval, \"Whole-branch review\" and a lens dispatched while it runs are branch-level, and \"Review round 3 delta\" after it stops is a loop round", async () => {
+    const lens = { ...LENS, id: "tu_wlens", agentId: "awlens", description: "Security lens" };
+    const wb = whole();
+    const lines = [...dispatch(APPROVING_1), ...launchOf(wb), ...launchOf(lens), ...deliverOf(wb), ...deliverOf(lens), ...dispatch(delta)];
+    const [v2, v3] = await twin([APPROVING_1, wb, lens, delta], { lines });
+    expect([classesOf(v2), v2.wholeBranch, found(v2)]).toEqual([sixOf("approve", 1), { finalClass: "approve-after-fixes", rounds: 2 }, AT_BRANCH]);
+    expect([classesOf(v3), v3.wholeBranch, found(v3)]).toEqual([sixOf("approve-after-fixes", 2), { finalClass: "blocked", rounds: 1 }, AT_BRANCH]);
+  });
+
+  it("(p7-c) a whole-branch review before any approval stays a loop round in both readings", async () => {
+    const [v2, v3] = await twin([whole(APPROVE, "Whole-branch review round 1")]);
+    for (const m of [v2, v3]) expect([classesOf(m), m.wholeBranch]).toEqual([sixOf("approve", 1), { finalClass: null, rounds: 0 }]);
+  });
+
+  it("the v3 twin of R8 (f): a lens dispatched after the whole-branch review stopped is a loop round, so its find is at the pass stage in round 1", async () => {
+    const late = { ...LENS, id: "tu_late", agentId: "alate", description: "Security lens" };
+    const [v2, v3] = await twin([APPROVING_1, whole(undefined, "Whole-branch deep review"), late]);
+    expect([v2.wholeBranch, found(v2)]).toEqual([{ finalClass: "blocked", rounds: 1 }, AT_BRANCH]);
+    expect([v3.wholeBranch, found(v3)]).toEqual([{ finalClass: "blocked", rounds: 1 }, AT_PASS]);
+  });
+});
+
+describe("REPLAY-v3 — the verdict grammar reaches the per-pass class (prove/8)", () => {
+  it("(p8-a) rounds that say REQUEST_CHANGES read request-changes and need no no-verdict note; v2 reads no verdict", async () => {
+    const r2 = agentOf("r2", "stamity-reviewer", "Review round 2", "Re-review the fixes.", `**Verdict: REQUEST_CHANGES.** The fix is incomplete.\n\n| Warning | ${LOOSE_FINDING.locator} | ${LOOSE_FINDING.summary} |`);
+    const [v2, v3] = await twin([reviewerOf(freeTextReturn([LOOSE_FINDING], "REQUEST_CHANGES")), FIXER, r2]);
+    expect([passOf(v2, "u1-p1").verdict.finalClass, passOf(v2, "u1-p1").verdict.rounds, noVerdict(v2)]).toEqual([null, 2, 2]);
+    expect([passOf(v3, "u1-p1").verdict.finalClass, passOf(v3, "u1-p1").verdict.rounds, noVerdict(v3)]).toEqual(["blocked", 2, 0]);
+  });
+
+  it("a return quoting the brief's choice list before its own verdict reads its own verdict under v3, and the list's first word under v2", async () => {
+    const r2 = agentOf("r2", "stamity-reviewer", "Review round 2", "Reply with Verdict: APPROVE | REQUEST_CHANGES.", `The brief asked for Verdict: APPROVE | REQUEST_CHANGES\n\n${freeTextReturn([LOOSE_FINDING], "REQUEST_CHANGES")}`);
+    const [v2, v3] = await twin([reviewerOf(freeTextReturn([LOOSE_FINDING], "request-changes")), FIXER, r2]);
+    expect([passOf(v2, "u1-p1").verdict.finalClass, passOf(v3, "u1-p1").verdict.finalClass]).toEqual(["approve-after-fixes", "blocked"]);
+  });
+});
+
+describe("REPLAY-v3 — a ledger source names its verdict role by any token (prove/9)", () => {
+  const onlyInLedger = (source: string): Record<string, unknown>[] => [{ id: `${RUN}/prove/1`, phase: "prove", source, severity: "Critical", evidence: "src/store/query.ts:11 — sort value concatenated into the ORDER BY", state: "fixed", rationale: "" }];
+  it.each<[string, boolean]>([
+    ["reviewer:r1", true],
+    ["reviewer(frontier whole-branch)", true],
+    ["stamity-reviewer(frontier)", true],
+    ["fixer+reviewer(C7)+security(3)", true],
+    ["test-runner+orchestrator-forensics", false],
+    ["implementer:u1-p1", false],
+  ])("a find that reached only a ledger row with source %j is a verdict source under v3: %s; under v2 never", async (source, verdict) => {
+    const [v2, v3] = await twin([reviewerOf(freeTextReturn([LOOSE_FINDING], "request-changes"))], { ledger: onlyInLedger(source) });
+    expect(found(v2)).toEqual(NOT_FOUND);
+    expect(found(v3)).toEqual(verdict ? { found: true, stage: "unknown", foundRound1: false } : NOT_FOUND);
+  });
+});
+
+describe("REPLAY-v3 — compaction loss counts entries, not locators (prove/10)", () => {
+  const block = reviewerOf(freeTextReturn([{ ...LOOSE_FINDING, summary: "the handler logs the body; see src/http/app.ts:44 and src/http/router.ts:9" }], "request-changes"));
+  const entry = reviewerOf(digestOf(["W-1 src/http/app.ts:30 — the handler logs the body; see src/http/app.ts:44"], REPORT_REL));
+  const row = (loc: string): Record<string, unknown> => ({ id: `${RUN}/prove/1`, phase: "prove", source: "reviewer", severity: "Warning", evidence: `${loc} — the handler logs the body`, state: "open", rationale: "" });
+  const sampled = (a: AgentSpec, pre: Record<string, unknown>[], end: Record<string, unknown>[]): Promise<[Measurement, Measurement]> =>
+    twin([a], { lines: [...dispatch(a), mainLine.compactBoundary({ trigger: "manual", preTokens: 120_000 })], pre: { ledger: pre }, ledger: end });
+
+  it("(41e) one free-text block with one finding at three locators and no ledger row puts 1 finding at risk, not 3", async () => {
+    const [v2, v3] = await sampled(block, [], []);
+    expect([sample(v2), sample(v3)]).toEqual([[3, 3, true], [1, 1, true]]);
+  });
+
+  it("(p10-a) the block with a pre-compaction row on one of its locators is not at risk", async () => {
+    const [v2, v3] = await sampled(block, [row("src/http/app.ts:30")], [row("src/http/app.ts:30")]);
+    expect([sample(v2), sample(v3)]).toEqual([[2, 2, true], [0, 0, false]]);
+  });
+
+  it("(p10-b) the block with no pre row and an end row on one cited locator is at risk once and not lost", async () => {
+    const [v2, v3] = await sampled(block, [], [row("src/http/router.ts:9")]);
+    expect([sample(v2), sample(v3)]).toEqual([[3, 2, true], [1, 0, true]]);
+  });
+
+  it("(p10-c) a digest entry whose pre and end rows sit only on its secondary stays at risk and lost: a secondary never covers", async () => {
+    const [v2, v3] = await sampled(entry, [row("src/http/app.ts:44")], [row("src/http/app.ts:44")]);
+    expect([sample(v2), sample(v3)]).toEqual([[1, 1, true], [1, 1, true]]);
+  });
+
+  it("(p10-d) a digest entry with a pre row on its own locator is not at risk", async () => {
+    const [v2, v3] = await sampled(entry, [row("src/http/app.ts:30")], [row("src/http/app.ts:30")]);
+    expect([sample(v2), sample(v3)]).toEqual([[0, 0, false], [0, 0, false]]);
+  });
+});
+
+describe("REPLAY-v3 — report placement and the report key (prove/11, J)", () => {
+  const namer = (report: string, description = "Review round 1"): AgentSpec => reviewerOf(digestOf(["C-1 src/store/query.ts:11 — sort reaches the query"], report), description);
+  const reports = { [BRANCH_REPORT]: reportText([BRANCH_ROW]) };
+
+  it("(p11-a) a round-1 find carried only by the report its digest names takes that agent's pass and round, not the report's file name", async () => {
+    const [v2, v3] = await twin([namer(`reports/${BRANCH_REPORT}`)], { reports });
+    expect([found(v2), found(v3)]).toEqual([AT_BRANCH, AT_PASS]);
+  });
+
+  it("(p11-b) after a plan review before the builds, the credit guard reads the naming agent's dispatch, so the find credits", async () => {
+    const plan = agentOf("plan", "stamity-reviewer", "Plan review", "Review docs/plans/001-replay.md before the build.", APPROVE);
+    const [v2, v3] = await twin([namer(`reports/${BRANCH_REPORT}`)], { reports, before: [plan] });
+    expect([found(v2), found(v3)]).toEqual([NOT_FOUND, AT_PASS]);
+  });
+
+  it("(p11-c) a report no digest names keeps its file-name placement in both readings", async () => {
+    const [v2, v3] = await twin([reviewerOf(APPROVE)], { reports });
+    expect([found(v2), found(v3)]).toEqual([AT_BRANCH, AT_BRANCH]);
+  });
+
+  it("(41f) a report named by the digest of a u2-p1-only loop reviewer places its findings at u2-p1, pass stage, that agent's round", async () => {
+    const u2 = { ...U1P1_SEED, pass: "u2-p1" };
+    const snapshots = { ...sixSnapshots({ "src/orders/format.ts": FORMAT }), "u2-p1": SNAPSHOT_U1P1 };
+    const [v2, v3] = await twin([namer(`reports/${BRANCH_REPORT}`, "Review u2-p1")], { seeds: [u2], record: { "u2-p1": [u2.id] }, snapshots, reports });
+    expect([found(v2), found(v3)]).toEqual([AT_BRANCH, AT_PASS]);
+    expect(v3.adjudication).toEqual([]);
+  });
+
+  it.each<[string, string, TwinOptions, typeof AT_PASS, typeof AT_PASS]>([
+    ["reports/<f>", `reports/${BRANCH_REPORT}`, {}, AT_BRANCH, AT_PASS],
+    ["./reports/<f>", `./reports/${BRANCH_REPORT}`, {}, AT_BRANCH, AT_PASS],
+    [".stamity/runs/<run>/reports/<f>", `.stamity/runs/${RUN}/reports/${BRANCH_REPORT}`, {}, AT_PASS, AT_PASS],
+    ["an absolute path", `/work/elsewhere/.stamity/runs/${RUN}/reports/${BRANCH_REPORT}`, {}, AT_BRANCH, AT_PASS],
+    ["reports/<f> held by two run folders", `reports/${BRANCH_REPORT}`, { pre: { runId: "2026-09-24_other", reports } }, AT_BRANCH, AT_BRANCH],
+    ["a refused write", `write refused — reports/${BRANCH_REPORT}`, {}, AT_BRANCH, AT_BRANCH],
+  ])("(J) a digest's report: %s — joins its state report under v3 only when it names exactly one", async (_label, report, o, v2Reading, v3Reading) => {
+    const [v2, v3] = await twin([namer(report)], { reports, ...o });
+    expect([found(v2), found(v3)]).toEqual([v2Reading, v3Reading]);
+  });
+});
+
+describe("REPLAY-v3 — the flat ledger (L) and a seed in no reviewed tree (build/7)", () => {
+  it("(41g) a state copy's runs/<id>.ledger.jsonl is read like runs/<id>/ledger.jsonl", async () => {
+    const flatLedger = [{ id: `${RUN}/prove/1`, phase: "prove", source: "reviewer", severity: "Critical", evidence: "src/store/query.ts:11 — sort value concatenated into the ORDER BY", state: "open", rationale: "" }];
+    const [v2, v3] = await twin([reviewerOf(freeTextReturn([LOOSE_FINDING], "request-changes"))], { flatLedger });
+    expect([found(v2), found(v3)]).toEqual([NOT_FOUND, { found: true, stage: "unknown", foundRound1: false }]);
+  });
+
+  it("(build/7) a seed not delivered is no matcher item: no credit, no adjudication row, no found", async () => {
+    const ordered: Row = { id: "W-1", severity: "Warning", locator: "src/store/query.ts:11", summary: "the ORDER BY clause reads the column" };
+    const agents = [reviewerOf(freeTextReturn([SEED_FINDING, ordered], "request-changes"))];
+    const [v2, v3] = await twin(agents, { snapshots: sixSnapshots(REVERTED_U1P1) });
+    expect([rowOf(v2, "sec-sql-sort").found, v2.adjudication.map((a) => a.item)]).toEqual([true, ["sec-sql-sort"]]);
+    expect([rowOf(v3, "sec-sql-sort"), v3.adjudication]).toEqual([expect.objectContaining({ present: false, caughtByImplementer: true, found: false, stage: null }), []]);
+  });
+
+  // REPLAY-v3 §8 ("No matcher item"): four states keep a seed out of the matcher, through the one item filter
+  // `arrivalsOf` feeds. Each case cites the seed with a term (a credit if it were an item) and without one (an
+  // adjudication row if it were an item), by a lens dispatched after every swap.
+  const ORDERED: Row = { id: "W-1", severity: "Warning", locator: "src/store/query.ts:11", summary: "the ORDER BY clause reads the column" };
+  const INVOICE_READ: Row = { id: "W-4", severity: "Warning", locator: "src/orders/invoice.ts:7", summary: "the invoice read returns early" };
+  const CITING = agentOf("cite", "stamity-security", "Security lens", "Review the diff for security.", freeTextReturn([SEED_FINDING, ORDERED, INVOICE_FINDING, INVOICE_READ], "request-changes"));
+  const U1P1_ONLY = agentOf("u11", "stamity-reviewer", "Review u1-p1", "Review unit u1-p1.", APPROVE);
+  it.each<[string, string, string, () => Promise<Measurement>]>([
+    ["uncovered (no swap record for its pass)", "sec-sql-sort", ": uncovered — ", () => v3Run(...inOrder(B11, B31, CITING), { record: swapRecord({ "u3-p1": B31.id }) })],
+    ["not delivered (absent at review start and from every build end)", "sec-sql-sort", ": was not delivered — ", () =>
+      v3Run(...inOrder(B11, B31, CITING), { snapshots: { ...REVIEW_START, "u1-p1": { main: REVERTED_U1P1 } }, buildEnd: buildEnds([B11, ["u1-p1"], REVERTED_U1P1]) })],
+    ["caught before review (a build end held it, the review start does not)", "sec-sql-sort", ": caught before review — ", () =>
+      v3Run(...inOrder(B11, B31, CITING), { snapshots: { ...REVIEW_START, "u1-p1": { main: REVERTED_U1P1 } }, buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main], [B31, ["u3-p1"], REVERTED_U1P1]) })],
+    ["of a pass no review covered", "cor-invoice-eacces", ": was never reviewed — ", () =>
+      v3Run(...inOrder(B11, B31, U1P1_ONLY, { ...CITING, description: "Security lens on u1-p1" }), { snapshots: { "u1-p1": SNAPSHOT_U1P1 }, buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main], [B31, ["u3-p1"], REVIEW_START["u3-p1"].main]) })],
+  ])("(build/7) a seed %s is no matcher item: no credit and no adjudication row", async (_label, id, state, run) => {
+    const m = await run();
+    expect(noteOf(m, id)).toContain(state);
+    expect(rowOf(m, id)).toEqual(expect.objectContaining({ found: false, stage: null, foundRound1: false }));
+    expect(m.adjudication.filter((a) => a.item === id)).toEqual([]);
+    expect(m.passes.flatMap((p) => p.seeds).filter((s) => s.found).map((s) => s.id)).not.toContain(id);
+  });
+});

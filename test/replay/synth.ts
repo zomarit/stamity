@@ -264,6 +264,8 @@ interface RunStateSpec {
   runId: string;
   record?: string;
   ledger?: Json[];
+  /** REPLAY-v3 (plan 012, L): rows of a ledger kept beside the run folder, `runs/<runId>.ledger.jsonl`. Written only when named. */
+  flatLedger?: Json[];
   reports?: Record<string, string>;
 }
 
@@ -378,6 +380,7 @@ export function writeCapture(dir: string, spec: CaptureSpec): CaptureLayout {
     const runFolder = join(layout.state, name, "runs", runState.runId);
     put(join(runFolder, "record.md"), runState.record ?? "");
     put(join(runFolder, "ledger.jsonl"), jsonl((runState.ledger ?? []).map((row) => JSON.stringify(row))));
+    if (runState.flatLedger) put(join(layout.state, name, "runs", `${runState.runId}.ledger.jsonl`), jsonl(runState.flatLedger.map((row) => JSON.stringify(row))));
     mkdirSync(join(runFolder, "reports"), { recursive: true });
     for (const [file, content] of Object.entries(runState.reports ?? {})) put(join(runFolder, "reports", file), content);
   }

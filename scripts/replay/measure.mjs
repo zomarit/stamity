@@ -29,10 +29,10 @@ import { join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { spellingsOf } from '../qa/redact.mjs'
-import { extractFreeText, ledgerFindings, matchItems, parseDigest, parseFindingsBlock, unreadFreeText, verdictOf } from './findings.mjs'
+import { extractFreeText, ledgerFindings, matchItems, parseDigest, parseFindingsBlock, secondaryLocators, unreadFreeText, verdictOf } from './findings.mjs'
 import { PASS_IDS } from './fixture.mjs'
 import { UNCOVERED_REASON } from './protocols.mjs'
-import { LEDGER_GATED_KINDS, roleFunction, scanSubagent, walkTranscriptLines } from './transcript.mjs'
+import { LEDGER_GATED_KINDS, ledgerSourceRole, roleFunction, scanSubagent, walkTranscriptLines } from './transcript.mjs'
 
 const SELF = fileURLToPath(import.meta.url)
 
@@ -586,10 +586,10 @@ function ambientOf(init) {
 
 // ---------- findings ----------
 
-/** A delivery's verdict: `blocked` on a `BLOCKED_*` return, else the digest's label, else the free-text word. */
-function verdictOfDelivery(text, digest) {
+/** A delivery's verdict: `blocked` on a `BLOCKED_*` return, else the digest's label, else the free-text word (v3: prove/8's grammar). */
+function verdictOfDelivery(text, digest, version) {
   if (BLOCKED.test(text)) return 'blocked'
-  return digest.verdict ?? verdictOf(text)
+  return digest.verdict ?? verdictOf(text, { version })
 }
 
 const locKey = (f) => (f.file == null ? null : `${f.file}:${f.line}-${f.lineEnd ?? f.line}`)
@@ -611,12 +611,20 @@ function hasRow(f, rows, tolerance) {
     || (text !== '' && r.file == null && String(r.text ?? '').includes(text)))
 }
 
-/** The fixture run folders of one state copy (`compaction-<n>-pre` or `end`): ledger rows and report files. */
-function readState(stateDir) {
+/**
+ * The fixture run folders of one state copy (`compaction-<n>-pre` or `end`): ledger rows and report files.
+ * REPLAY-v3 (plan 012, L): a ledger kept beside its run folder, `runs/<run-id>.ledger.jsonl`, is read too.
+ */
+function readState(stateDir, version) {
   const runsDir = join(stateDir, 'runs')
   const ledger = []
   const reports = []
   let ledgerParseErrors = 0
+  if (version === 'v3') for (const flat of entriesOf(runsDir).filter((e) => e.isFile() && /^.+\.ledger\.jsonl$/.test(e.name))) {
+    const { rows, errors } = jsonlCounted(readTextIfPresent(join(runsDir, flat.name)))
+    ledger.push(...rows)
+    ledgerParseErrors += errors
+  }
   for (const run of entriesOf(runsDir).filter((e) => e.isDirectory())) {
     const { rows, errors } = jsonlCounted(readTextIfPresent(join(runsDir, run.name, 'ledger.jsonl')))
     ledger.push(...rows)
@@ -687,7 +695,7 @@ async function loadCapture(runDir, forbid, version) {
   const session = newest.slice(0, -'.jsonl'.length)
   if (sessions.length > 1) invalid.push(`${sessions.length} main transcripts under captures/transcript/ (a restart or a stray file): measured on the newest, ${session}`)
   const lines = await readLines(join(L.transcriptDir, newest))
-  const walk = walkTranscriptLines(lines, { forbid: forbidList })
+  const walk = walkTranscriptLines(lines, { forbid: forbidList, version })
   const index = indexTranscript(lines)
   const subDir = join(L.transcriptDir, session, 'subagents')
   const subFiles = entriesOf(subDir).filter((e) => e.isFile() && /^agent-.+\.jsonl$/.test(e.name)).map((e) => e.name)
@@ -721,7 +729,7 @@ async function loadCapture(runDir, forbid, version) {
   for (const s of subs) for (const hit of s.forbidHits) invalid.push(`forbidden ${forbidLabels.get(hit.forbid)} in a ${hit.tool} input (sub-agent ${s.agentId} line ${hit.line})`)
 
   const stateNames = entriesOf(L.state).filter((e) => e.isDirectory()).map((e) => e.name)
-  const states = Object.fromEntries(stateNames.map((name) => [name, readState(join(L.state, name))]))
+  const states = Object.fromEntries(stateNames.map((name) => [name, readState(join(L.state, name), version)]))
   // build/182: every root a locator may be spelled under — the transcripts' cwds, the init cwd, the
   // worktrees run.json records, and every absolute path that ends in a snapshot copy's worktree name.
   const texts = [
@@ -849,8 +857,8 @@ function joinAgents(walk, index, subs, roots, version) {
   if (longAcks.length > 0) notes.push(`${longAcks.length} SendMessage result(s) over ${LONG_SEND_RESULT} characters read as acknowledgements (no digest label, BLOCKED_ status or verdict word), outside term (a) and the rounds: main transcript line(s) ${longAcks.join(', ')}`)
   deliveries.sort((a, b) => a.line - b.line)
   for (const d of deliveries) {
-    d.digest = parseDigest(d.text, { source: 'digest', role: d.agent?.role ?? null, roots })
-    d.verdict = verdictOfDelivery(d.text, d.digest)
+    d.digest = parseDigest(d.text, { source: 'digest', role: d.agent?.role ?? null, roots, version })
+    d.verdict = verdictOfDelivery(d.text, d.digest, version)
     // build/201: every completed delivery that is no re-read is a round, as §8 words it; a
     // reviewer's round with no readable verdict is named below.
     d.round = !d.failed && !d.reread
@@ -890,13 +898,23 @@ function joinAgents(walk, index, subs, roots, version) {
     const reviewedBuilt = (a) => (version === 'v3' ? a.passes.length > 0 : a.line >= point)
     const approvals = deliveries.filter((d) => d.round && d.agent?.role === 'reviewer' && d.verdict === 'approve' && reviewedBuilt(d.agent) && !d.agent.fromFile).map((d) => d.line)
     const namedAfterApproval = (a) => WHOLE_BRANCH.test(a.desc) && approvals.some((line) => line < a.line)
-    let from = Infinity
     // review/21: an agent built from its sub-agent file has no known dispatch time, so no position makes it
     // branch-level, and its characters stay in the loop figure.
-    for (const a of agents.filter((x) => x.fn === 'verdict' && !x.fromFile).toSorted((x, y) => x.line - y.line)) {
-      if (a.line <= from && !namedAfterApproval(a)) continue
-      a.branch = true
-      from = Math.min(from, a.line)
+    const verdictAgents = agents.filter((x) => x.fn === 'verdict' && !x.fromFile)
+    if (version === 'v3') {
+      // prove/7 (REPLAY-v3): a dispatch named for the whole branch after such an approval is branch-level, and so is a
+      // verdict dispatch made while one of those runs (after its dispatch, before its first stop that is no re-read).
+      // Every other verdict dispatch is a loop round, so a re-review after the whole-branch review stays in the loop.
+      const named = verdictAgents.filter(namedAfterApproval)
+      const stopOf = (a) => deliveries.find((d) => d.agent === a && !d.reread)?.line ?? Infinity
+      for (const a of verdictAgents) a.branch = named.includes(a) || named.some((n) => a.line > n.line && a.line < stopOf(n))
+    } else {
+      let from = Infinity
+      for (const a of verdictAgents.toSorted((x, y) => x.line - y.line)) {
+        if (a.line <= from && !namedAfterApproval(a)) continue
+        a.branch = true
+        from = Math.min(from, a.line)
+      }
     }
   } else {
     // v1: branch-level verdict dispatches: after u3-p2's last reviewer approval with no single pass id,
@@ -1080,6 +1098,36 @@ const reportKey = (path) => {
   return at >= 0 ? s.slice(at) : s
 }
 
+/**
+ * REPLAY-v3 (plan 012, J): the report key. A path from `.stamity/runs/` on keys as `reportKey` keys it; a path
+ * relative to its run folder (`reports/<f>` or `./reports/<f>`, one path token ending `.md`) keys as the one state
+ * report of that file name, and joins nothing (null) when no run folder, or several, holds it. Any other value keys
+ * as `reportKey` keys it, and so joins no state report. The digest-to-report join, the term window, the credit
+ * guard and §8's report-path coverage all read this key under v3.
+ */
+function reportKeyerOf(stateNames, states) {
+  const runsOf = new Map()
+  for (const n of stateNames) for (const r of states[n].reports) runsOf.set(r.file, new Set([...(runsOf.get(r.file) ?? []), r.runId]))
+  return (path) => {
+    if (path === null || path === undefined) return null
+    const key = reportKey(path)
+    if (key.startsWith('.stamity/runs/')) return key
+    const m = key.trim().match(/^(?:\.\/)?reports\/([^/\s]+\.md)$/)
+    if (!m) return key
+    const runs = runsOf.get(m[1])
+    return runs?.size === 1 ? `.stamity/runs/${[...runs][0]}/reports/${m[1]}` : null
+  }
+}
+
+/**
+ * REPLAY-v3 (prove/6, prove/10): the entry a finding belongs to — its free-text block, its structured entry (a
+ * digest entry, its report row and an inline block's row share the report key and the local id), or its ledger row.
+ */
+const entryOf = (f) => f.unit ?? (f.source === 'ledger' ? `ledger:${f.ledgerId ?? f.text}`
+  : f.localId !== null ? (f.reportPath ? `entry:${f.reportPath}#${f.localId}` : `entry:d${f.delivered}#${f.localId}`) : `loc:${locKey(f) ?? `${f.reportPath}#${f.text}`}`)
+/** REPLAY-v3 (prove/6): a structured finding, whose term window may name secondary locators; a free-text block's locators are all its own. */
+const isStructured = (f) => f.source === 'digest' || f.source === 'report' || (f.source === 'return' && f.localId !== null) || (f.source === 'ledger' && f.head === true)
+
 /** review/15: an agent's dispatch line; an agent built from its sub-agent file has no known one, so its findings carry none. */
 const lineOf = (agent) => (agent.fromFile ? null : agent.line)
 
@@ -1090,12 +1138,31 @@ const lineOf = (agent) => (agent.fromFile ? null : agent.line)
  * the run-state copies, and the run-end ledger rows from a verdict source. A report or ledger finding
  * takes the dispatch line of the agent whose digest names its report, else null. `readerSkips` counts
  * what the readers could not read (build/109).
+ *
+ * REPLAY-v3 (plan 012, v3-reader), with `rk` its report key (J): every report path is keyed by `rk`; a report or
+ * ledger finding takes its passes, level, round and dispatch line from the agent whose digest names its report,
+ * and reads the report's file name only when no digest names it (prove/11); a ledger row's role is the verdict role
+ * its source names (prove/9); every finding carries its `entry`, and each structured finding is followed by one
+ * finding per secondary locator (prove/6), marked `secondary`, copying everything but the locator.
  */
-function collectFindings(deliveries, stateNames, states, roots, version) {
+function collectFindings(deliveries, stateNames, states, roots, version, rk = null) {
+  const v3 = version === 'v3'
+  const keyOf = v3 ? rk : reportKey
   const all = []
   const byReport = new Map()
-  for (const d of deliveries) if (d.agent !== null && d.digest.report !== null && !byReport.has(reportKey(d.digest.report))) byReport.set(reportKey(d.digest.report), lineOf(d.agent))
-  const dispatchedOf = (reportPath) => (reportPath ? byReport.get(reportKey(reportPath)) ?? null : null)
+  const agentOfReport = new Map()
+  for (const d of deliveries) {
+    const key = d.agent === null || d.digest.report === null ? null : keyOf(d.digest.report)
+    if (key === null || byReport.has(key)) continue
+    byReport.set(key, lineOf(d.agent))
+    agentOfReport.set(key, d.agent)
+  }
+  const dispatchedOf = (reportPath) => (reportPath ? byReport.get(keyOf(reportPath)) ?? null : null)
+  const placeOf = (key, slug) => {
+    const a = v3 && key ? agentOfReport.get(key) : undefined
+    if (a) return { pass: a.pass, passes: a.passes, branch: a.branch, round: a.round, dispatched: lineOf(a) }
+    return { pass: slug?.pass ?? null, passes: passesIn(slug?.pass), branch: slug?.pass === 'branch', round: slug?.round ?? null, dispatched: dispatchedOf(key) }
+  }
   const readerSkips = {
     unreadFreeText: { 'severity-without-locator': 0, 'locator-without-severity': 0 }, digestErrors: 0, findingsBlockErrors: 0,
     ledgerParseErrors: sum(stateNames, (n) => states[n].ledgerParseErrors ?? 0),
@@ -1109,10 +1176,10 @@ function collectFindings(deliveries, stateNames, states, roots, version) {
     // never folded into one free-text block.
     if (!structured) for (const f of extractFreeText(d.text, meta)) all.push({ ...f, ...where, unit: `return:${k}:${f.text}` })
     // build/202: an inline block carries the digest's report path, the key its ledger rows cite.
-    const block = parseFindingsBlock(d.text, { ...meta, reportPath: d.digest.report })
+    const block = parseFindingsBlock(d.text, { ...meta, reportPath: v3 ? rk(d.digest.report) : d.digest.report })
     readerSkips.findingsBlockErrors += block.errors.length
     for (const f of block.findings) all.push({ ...f, ...where, unit: null })
-    for (const f of d.digest.findings) all.push({ ...f, ...where, unit: null })
+    for (const f of d.digest.findings) all.push({ ...f, ...(v3 ? { reportPath: rk(f.reportPath) } : {}), ...where, unit: null })
     // A digest (its `status:` and `report:` pair) and a C2 block are no free text: counting their
     // locators as unread blocks would charge the changed shape for the baseline heuristic's skips.
     // A free-text return's `Findings:` heading is no digest, so it adds no digest error (build/166).
@@ -1130,15 +1197,24 @@ function collectFindings(deliveries, stateNames, states, roots, version) {
     if (!slug || roleFunction(slug.role) !== 'verdict') continue
     const parsed = parseFindingsBlock(r.text, { source: 'report', role: slug.role, roots, reportPath })
     readerSkips.findingsBlockErrors += parsed.errors.length
-    for (const f of parsed.findings) all.push({ ...f, pass: slug.pass, passes: passesIn(slug.pass), branch: slug.pass === 'branch', round: slug.round, delivered: null, dispatched: dispatchedOf(reportPath), unit: null })
+    for (const f of parsed.findings) all.push({ ...f, ...placeOf(reportPath, slug), delivered: null, unit: null })
   }
   const endLedger = states.end?.present ? states.end.ledger : stateNames.flatMap((n) => states[n].ledger)
-  for (const f of ledgerFindings(endLedger, { roots })) {
-    if (roleFunction(f.role) !== 'verdict') continue
-    const slug = slugOf(f.reportPath)
-    all.push({ ...f, pass: slug?.pass ?? null, passes: passesIn(slug?.pass), branch: slug?.pass === 'branch', round: slug?.round ?? null, delivered: null, dispatched: dispatchedOf(f.reportPath), unit: null })
+  for (const f of ledgerFindings(endLedger, { roots, version })) {
+    const role = v3 ? ledgerSourceRole(f.role) : f.role
+    if (roleFunction(role) !== 'verdict') continue
+    const key = v3 ? rk(f.reportPath) : f.reportPath
+    all.push({ ...f, role, reportPath: key, ...placeOf(key, slugOf(key ?? f.reportPath)), delivered: null, unit: null })
   }
   widenToEntries(all)
+  if (v3) {
+    const read = all.splice(0)
+    for (const f of read) {
+      f.entry = entryOf(f)
+      all.push(f)
+      if (isStructured(f)) for (const loc of secondaryLocators(f, roots)) all.push({ ...f, ...loc, secondary: true })
+    }
+  }
   // The pass whose copies locate a finding's spans (build/190): v1 its attributed pass id; R6 (review/167, v2)
   // its one covered pass, so a round covering every pass meets the union whatever id its prompt names in
   // passing. v1 keeps its key: a report slug with a prefix (`lane-u1-p1`) names one pass and is no pass id.
@@ -1209,7 +1285,7 @@ function matchByPass(all, items, snapshots, opts) {
   return { matched, adjudication }
 }
 
-function scoreFindings(all, seeds, snapshots, guard = null) {
+function scoreFindings(all, seeds, snapshots, guard = null, version = null) {
   const items = [...seeds.seeds, ...seeds.decoys]
   const tolerance = seeds.matcher?.lineTolerance ?? 3
   const seedMatch = matchByPass(all, seeds.seeds, snapshots, { tolerance, severities: seeds.matcher?.severities ?? FLAG_SEVERITIES })
@@ -1219,19 +1295,23 @@ function scoreFindings(all, seeds, snapshots, guard = null) {
   const flagged = new Set(Object.entries(flagMatch.matched).flatMap(([id, idxs]) => (seedPass.has(id) ? idxs.filter((i) => credits(all[i], guard, seedPass.get(id))) : idxs)))
 
   // One per free-text block and one per location, so a finding repeated by a digest, a report and
-  // a ledger row counts once.
+  // a ledger row counts once. REPLAY-v3 (prove/6) counts entries: an entry (a free-text block, a structured
+  // entry with its report row and its secondaries, a ledger row) is unmatched when it holds a Critical or
+  // Warning finding with a file and none of its findings is flagged.
+  const v3 = version === 'v3'
   const units = new Map()
   all.forEach((f, i) => {
-    if (!FLAG_SEVERITIES.includes(f.severity) || f.file == null || flagged.has(i)) return
-    const key = f.unit ?? `loc:${locKey(f)}`
-    if (!units.has(key)) units.set(key, [])
-    units.get(key).push(f)
+    if (!FLAG_SEVERITIES.includes(f.severity) || f.file == null || (!v3 && flagged.has(i))) return
+    const key = v3 ? f.entry : f.unit ?? `loc:${locKey(f)}`
+    if (!units.has(key)) units.set(key, { keys: [], flagged: false })
+    units.get(key).keys.push(locKey(f))
+    if (flagged.has(i)) units.get(key).flagged = true
   })
+  // An entry sharing a locator with one already counted is that one again.
   const counted = new Set()
   let unmatched = 0
-  for (const group of units.values()) {
-    const keys = group.map(locKey)
-    if (keys.some((k) => counted.has(k))) continue
+  for (const { keys, flagged: hit } of units.values()) {
+    if (hit || keys.some((k) => counted.has(k))) continue
     unmatched++
     for (const k of keys) counted.add(k)
   }
@@ -1553,9 +1633,11 @@ function seedRowsV3(seeds, all, seedMatch, arrivals, reviewSnapshots, oracleStat
  * delivery, with no ledger write between that delivery and the boundary. One outside it keeps its
  * `n`, so the pre-compaction copies stay aligned, and is named in `notes`, never sampled.
  */
-function compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, seedPass, oracleStatus, roots, tolerance, notes, recorded = [], guard = null }) {
+function compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, seedPass, oracleStatus, roots, tolerance, notes, recorded = [], guard = null, rk = null }) {
   const driverCompactions = walk.compactions.filter((c) => c.trigger === 'manual' || (mechanism === 'auto-window' && c.trigger === 'auto'))
-  const endRows = ledgerFindings(states.end?.ledger ?? [], { roots })
+  // REPLAY-v3 (J): a row's report path is keyed as the findings' are.
+  const rowsOf = (ledger) => (rk ? ledgerFindings(ledger, { roots }).map((r) => Object.assign(r, { reportPath: rk(r.reportPath) })) : ledgerFindings(ledger, { roots }))
+  const endRows = rowsOf(states.end?.ledger ?? [])
   const seedsOfFinding = new Map()
   // review/14: a finding the credit guard withholds never reads a seed as fixed.
   for (const [id, idxs] of Object.entries(seedMatch.matched)) for (const i of idxs.filter((k) => credits(all[k], guard, seedPass.get(id)))) seedsOfFinding.set(i, [...(seedsOfFinding.get(i) ?? []), id])
@@ -1576,11 +1658,33 @@ function compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMat
     const sample = { n, placement, trigger: c.trigger ?? null, preTokens: c.preTokens ?? null, postTokens: c.postTokens ?? null, atRisk: 0, lost: 0, valid: false }
     const pre = states[`compaction-${n}-pre`]
     if (!pre?.present) return [Object.assign(sample, { reason: `no captures/state/compaction-${n}-pre/ copy` })]
-    const preRows = ledgerFindings(pre.ledger, { roots })
+    const preRows = rowsOf(pre.ledger)
     const seen = new Set()
-    all.forEach((f, i) => {
+    const keyOf = (f) => locKey(f) ?? `${f.reportPath}#${f.localId ?? f.text}`
+    if (rk) {
+      // REPLAY-v3 (prove/10): loss counts entries. An entry's own locators are a free-text block's every locator, or a
+      // structured entry's one locator (never a secondary). It is at risk when delivered before the boundary at Critical
+      // or Warning, no pre-compaction row covers any own locator, and not all of them were counted in this sample; lost
+      // when, as well, no end row covers any own locator and no finding of the entry, secondaries included, credits a
+      // seed whose oracle passes.
+      const entries = new Map()
+      all.forEach((f, i) => {
+        if (f.delivered === null || f.delivered >= c.line || !FLAG_SEVERITIES.includes(f.severity)) return
+        if (!entries.has(f.entry)) entries.set(f.entry, { own: [], idx: [] })
+        if (!f.secondary) entries.get(f.entry).own.push(f)
+        entries.get(f.entry).idx.push(i)
+      })
+      for (const { own, idx } of entries.values()) {
+        const keys = own.map(keyOf)
+        if (own.length === 0 || keys.every((key) => seen.has(key)) || own.some((f) => hasRow(f, preRows, tolerance))) continue
+        for (const key of keys) seen.add(key)
+        sample.atRisk++
+        const fixed = idx.some((i) => (seedsOfFinding.get(i) ?? []).some((id) => oracleStatus.get(id) === 'pass'))
+        if (!own.some((f) => hasRow(f, endRows, tolerance)) && !fixed) sample.lost++
+      }
+    } else all.forEach((f, i) => {
       if (f.delivered === null || f.delivered >= c.line || !FLAG_SEVERITIES.includes(f.severity)) return
-      const key = locKey(f) ?? `${f.reportPath}#${f.localId ?? f.text}`
+      const key = keyOf(f)
       if (seen.has(key) || hasRow(f, preRows, tolerance)) return
       seen.add(key)
       sample.atRisk++
@@ -1642,7 +1746,9 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
   for (const id of PASS_IDS) {
     if (!agents.some((a) => LOOP_FUNCTIONS.has(a.fn) && !a.branch && a.pass === id)) notes.push(`pass ${id} has no loop dispatch: its loop characters and sub-agent tokens are 0 and still count in the ÷ 6`)
   }
-  const { all, readerSkips } = collectFindings(deliveries, cap.stateNames, states, roots, version)
+  // REPLAY-v3 (J): one report key for the findings, the credit guard and the compaction rows.
+  const rk = version === 'v3' ? reportKeyerOf(cap.stateNames, states) : null
+  const { all, readerSkips } = collectFindings(deliveries, cap.stateNames, states, roots, version, rk)
   const point = injectionLine ?? Infinity
   // review/15: a verdict agent built from its sub-agent file may have been dispatched before the point, so orphans do not credit beside it.
   const orphansBefore = (line) => !agents.some((a) => a.fn === 'verdict' && (a.fromFile || a.line < line))
@@ -1652,7 +1758,7 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
   // build/7 (v3): a seed in no reviewed tree, or known absent from it, is no matcher item: no credit, no adjudication row.
   const arrivals = swapped ? arrivalsOf(seeds, swapped, L, byAgentId, notes, invalid) : null
   const items = arrivals ? { ...seeds, seeds: seeds.seeds.filter((seed) => arrivals.get(seed.id).item) } : seeds
-  const { seedMatch, decoysFlagged, unmatched, adjudication, tolerance } = scoreFindings(all, items, L.snapshots, guard)
+  const { seedMatch, decoysFlagged, unmatched, adjudication, tolerance } = scoreFindings(all, items, L.snapshots, guard, version)
   // build/251: a pass a verdict agent was dispatched for holds a snapshot, by the marker hook's rule; none is a capture defect
   // (build/366: for each pass a multi dispatch covers).
   for (const id of PASS_IDS) {
@@ -1667,7 +1773,7 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
   // review/164 (REPLAY-v2, and v3 by its placements): the driver's recorded placements, read when no lens delivery names the pass.
   const recorded = version !== 'v1' && Array.isArray(run?.compactions) ? run.compactions : []
   const seedPass = new Map(seeds.seeds.map((seed) => [seed.id, seed.pass]))
-  const compactionSamples = compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, seedPass, oracleStatus, roots, tolerance, notes, recorded, guard })
+  const compactionSamples = compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, seedPass, oracleStatus, roots, tolerance, notes, recorded, guard, rk })
 
   const loopChars = sum(Object.values(perPass), loopOf)
   const unattributedShare = loopChars === 0 ? 0 : loopOf(perPass.unattributed) / loopChars
