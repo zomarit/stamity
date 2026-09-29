@@ -1,0 +1,134 @@
+diff --git a/docs/api.md b/docs/api.md
+index d89ca5669dcf82536e8082203da5e9a140795133..e065d8553a85f2da9c0e3779d3999b32c3c40091 100644
+--- a/docs/api.md
++++ b/docs/api.md
+@@ -74,8 +74,16 @@ audit trail reads `orderId`; renaming a payload key breaks it.
+ 
+ ## Invoices
+ 
+-Invoices are PDF files named `<id>.pdf` inside the configured invoice directory. The service
+-serves nothing else from that directory and nothing outside it.
++Invoices are PDF files inside the configured invoice directory: `<id>.pdf` for an order, and
++`<id>-<n>.pdf` (n = 1, 2, …) for each correction of it. The service serves nothing else from
++that directory and nothing outside it.
++
++### `GET /orders/:id/invoice`
++
++Returns one of the order's invoice files as `application/pdf`. The `file` query names it: `<id>.pdf`
++(the default) or a correction `<id>-<n>.pdf`; any other name answers `404` and reads nothing. `404`
++when the order or the named file does not exist; a missing invoice's body is
++`{"error":"invoice not found"}`. A read error other than a missing file is a `500`.
+ 
+ ## Configuration
+ 
+diff --git a/src/http/routes.ts b/src/http/routes.ts
+index 4f9e78f028d7b3568f5c010a5a1b095fb5c45a50..73fc09de066219f8cb11222295902b6b5a26f126 100644
+--- a/src/http/routes.ts
++++ b/src/http/routes.ts
+@@ -1,12 +1,14 @@
+ import { requireAuth } from "../auth/guard.ts";
+ import { cancelHandler } from "../orders/cancel.ts";
+ import { getHandler, listHandler } from "../orders/handlers.ts";
++import { invoiceHandler } from "../orders/invoice.ts";
+ import { Router } from "./router.ts";
+ 
+ /** The route table. Every order route sits behind the bearer guard (docs/api.md, Authentication). */
+ export function routes(): Router {
+   const router = new Router();
+   router.get("/orders", requireAuth(listHandler));
++  router.get("/orders/:id/invoice", requireAuth(invoiceHandler));
+   router.get("/orders/:id", requireAuth(getHandler));
+   router.post("/orders/:id/cancel", requireAuth(cancelHandler));
+   return router;
+diff --git a/src/orders/invoice.ts b/src/orders/invoice.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..9d27850d1f8f1d844b1333fb2d3e8718026d2ab8
+--- /dev/null
++++ b/src/orders/invoice.ts
+@@ -0,0 +1,29 @@
++import { readFile } from "node:fs/promises";
++import { join } from "node:path";
++import type { Handler } from "../http/router.ts";
++import { getOrder } from "../store/query.ts";
++import { badRequest, orderNotFound, parsePositive } from "./handlers.ts";
++
++/**
++ * `GET /orders/:id/invoice`: one of the order's invoice files as a PDF. `file` names it: `<id>.pdf`, the
++ * default, or a correction `<id>-<n>.pdf` (docs/api.md, Invoices).
++ */
++export const invoiceHandler: Handler = async (ctx, deps) => {
++  const id = parsePositive(ctx.params["id"] ?? "");
++  if (id === null) return badRequest("id must be a positive integer");
++  if (getOrder(deps.db, id) === undefined) return orderNotFound(id);
++  const file = ctx.query.get("file") ?? `${id}.pdf`;
++  const pdf = new RegExp(`^${id}(?:-[1-9][0-9]*)?\\.pdf$`).test(file) ? await readInvoice(deps.invoiceDir, file) : null;
++  if (pdf === null) return { status: 404, body: { error: "invoice not found" } };
++  return { status: 200, body: pdf, type: "application/pdf" };
++};
++
++/** The bytes of the invoice `file` in the invoice directory `dir`, or null when it does not exist. */
++async function readInvoice(dir: string, file: string): Promise<Uint8Array | null> {
++  try {
++    return await readFile(join(dir, file));
++  } catch (error) {
++    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
++    throw error;
++  }
++}
+diff --git a/test/handlers.test.ts b/test/handlers.test.ts
+index 1b69db61d02651030eb7e9c00c8033d18e66b1ec..71ac9dd1f7a10125bcfb88d54a99520de7c72ddd 100644
+--- a/test/handlers.test.ts
++++ b/test/handlers.test.ts
+@@ -1,3 +1,5 @@
++import { writeFileSync } from "node:fs";
++import { join } from "node:path";
+ import { afterEach, beforeEach, describe, expect, it } from "vitest";
+ import { insertOrder } from "../src/store/db.ts";
+ import { get, startApp, type Started } from "./helpers.ts";
+@@ -74,6 +76,25 @@ describe("GET /orders/:id", () => {
+   });
+ });
+ 
++describe("GET /orders/:id/invoice", () => {
++  it("serves the order's invoice as a PDF", async () => {
++    const { id } = insertOrder(app.db, { customer: "Ada", total_cents: 500, status: "paid", created_at: "2026-09-03T08:30:00Z" });
++    writeFileSync(join(app.invoiceDir, `${id}.pdf`), "%PDF-1.7 invoice", "utf8");
++    const res = await get(app, `/orders/${id}/invoice`);
++    expect(res.status).toBe(200);
++    expect(res.headers.get("content-type")).toBe("application/pdf");
++    expect(await res.text()).toBe("%PDF-1.7 invoice");
++  });
++
++  it("serves a correction the file query names", async () => {
++    const { id } = insertOrder(app.db, { customer: "Ada", total_cents: 500, status: "paid", created_at: "2026-09-03T08:30:00Z" });
++    writeFileSync(join(app.invoiceDir, `${id}-1.pdf`), "%PDF-1.7 correction", "utf8");
++    const res = await get(app, `/orders/${id}/invoice?file=${id}-1.pdf`);
++    expect(res.status).toBe(200);
++    expect(await res.text()).toBe("%PDF-1.7 correction");
++  });
++});
++
+ describe("the app", () => {
+   it("answers 404 for an unknown route", async () => {
+     const res = await get(app, "/nowhere");
+diff --git a/test/helpers.ts b/test/helpers.ts
+index 00dfb1bf1a65d50848bfcfb155a2008cb4824ef1..f8cb5c0f621fbaae894d5b69dcaedcc245cd41f1 100644
+--- a/test/helpers.ts
++++ b/test/helpers.ts
+@@ -18,6 +18,8 @@ export interface Started {
+   bus: AppDeps["bus"];
+   /** The serialized events the default bus has received, as published. */
+   lines: string[];
++  /** The invoice directory, a fresh temporary one unless a test passes its own. */
++  invoiceDir: string;
+ }
+ 
+ /** The app on a free port over a fresh database, with any of its dependencies replaced. */
+@@ -44,6 +46,7 @@ export async function startApp(deps: Partial<AppDeps> = {}): Promise<Started> {
+     db: full.db,
+     bus: full.bus,
+     lines,
++    invoiceDir: full.invoiceDir,
+     close: () =>
+       new Promise<void>((resolve, reject) => {
+         server.close((error) => {

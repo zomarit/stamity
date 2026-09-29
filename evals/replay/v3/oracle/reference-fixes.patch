@@ -1,0 +1,146 @@
+diff --git a/config/service.json b/config/service.json
+index 56ef9c2bf4e1c60c988fdc99399d71773711d792..611e5e37611e9600f4d31c80984d76b235d5bccf 100644
+--- a/config/service.json
++++ b/config/service.json
+@@ -2,5 +2,5 @@
+   "pageSizeDefault": 20,
+   "maxPageSize": 100,
+   "retentionDays": 30,
+-  "exportBatchsize": 250
++  "exportBatchSize": 250
+ }
+diff --git a/docs/api.md b/docs/api.md
+index 54629a77fe50cbea88ab6a8fd8a6a4295f636cc7..7a40b8f02bc65696f3c21a52c8b5a3d84c942e92 100644
+--- a/docs/api.md
++++ b/docs/api.md
+@@ -39,7 +39,7 @@ Lists orders, newest first (by `created_at`), as `{"orders":[<order>, …]}`.
+ Every order as CSV (`text/csv; charset=utf-8`, CRLF line ends); `GET /orders/export.csv` serves the
+ same.
+ 
+-The header row `id,customer,total,status,created_at` comes first, then one row per order,
++The header row `id,customer,total_cents,status,created_at` comes first, then one row per order,
+ ascending by the `order` query — `created` (the default), `total` or `customer`; any other value
+ sorts by `created`; ties by `id`. With no orders, the body is the header row alone. A field holding
+ a comma, a quote or a line break is quoted, its quotes doubled; text that starts with `=`, `+`, `-`,
+diff --git a/src/http/routes.ts b/src/http/routes.ts
+index bd3f029d45c440a6ade31a39084aeec83ebdee25..78bc392718ec42370a9838c43911bfd0e06f1562 100644
+--- a/src/http/routes.ts
++++ b/src/http/routes.ts
+@@ -13,6 +13,6 @@ export function routes(): Router {
+   router.get("/orders/:id", requireAuth(getHandler));
+   router.post("/orders/:id/cancel", requireAuth(cancelHandler));
+   router.get("/orders/export", requireAuth(exportHandler));
+-  router.get("/orders/export.csv", exportHandler);
++  router.get("/orders/export.csv", requireAuth(exportHandler));
+   return router;
+ }
+diff --git a/src/orders/cancel.ts b/src/orders/cancel.ts
+index ae4f8effbf960e1c83044678dc396a59fcd25a44..d4fbb813d4c646ce485a90fb017e33c39ceaa8df 100644
+--- a/src/orders/cancel.ts
++++ b/src/orders/cancel.ts
+@@ -10,6 +10,6 @@ export const cancelHandler: Handler = (ctx, deps) => {
+   const row = getOrder(deps.db, id);
+   if (row === undefined) return orderNotFound(id);
+   setStatus(deps.db, id, "cancelled");
+-  deps.bus.publish(orderEvent("order.cancelled", row, new Date().toUTCString()));
++  deps.bus.publish(orderEvent("order.cancelled", row, new Date().toISOString()));
+   return { status: 200, body: toWire({ ...row, status: "cancelled" }) };
+ };
+diff --git a/src/orders/export.ts b/src/orders/export.ts
+index fe62e0e39ae4f85e6249ce526d5ac654a1dcc52b..3e7d15d15bb89b59c35b207cf904676d515c2d94 100644
+--- a/src/orders/export.ts
++++ b/src/orders/export.ts
+@@ -39,8 +39,8 @@ export const exportHandler: Handler = (ctx, deps) => {
+     let rows: OrderRow[];
+     try {
+       rows = statement.all(batch, offset) as OrderRow[];
+-    } catch {
+-      break;
++    } catch (error) {
++      throw new Error(`export: reading orders at offset ${offset} failed`, { cause: error });
+     }
+     for (const row of rows) {
+       lines.push([row.id, row.customer, row.total_cents, row.status, row.created_at].map(csvField).join(","));
+diff --git a/src/orders/invoice.ts b/src/orders/invoice.ts
+index 1bccbbcb6aff3b72d663a0d6d04a3c020dcf0671..9d27850d1f8f1d844b1333fb2d3e8718026d2ab8 100644
+--- a/src/orders/invoice.ts
++++ b/src/orders/invoice.ts
+@@ -13,7 +13,7 @@ export const invoiceHandler: Handler = async (ctx, deps) => {
+   if (id === null) return badRequest("id must be a positive integer");
+   if (getOrder(deps.db, id) === undefined) return orderNotFound(id);
+   const file = ctx.query.get("file") ?? `${id}.pdf`;
+-  const pdf = new RegExp(`^${id}(?:-?[1-9][0-9]*)?\\.pdf$`).test(file) ? await readInvoice(deps.invoiceDir, file) : null;
++  const pdf = new RegExp(`^${id}(?:-[1-9][0-9]*)?\\.pdf$`).test(file) ? await readInvoice(deps.invoiceDir, file) : null;
+   if (pdf === null) return { status: 404, body: { error: "invoice not found" } };
+   return { status: 200, body: pdf, type: "application/pdf" };
+ };
+@@ -23,7 +23,7 @@ async function readInvoice(dir: string, file: string): Promise<Uint8Array | null
+   try {
+     return await readFile(join(dir, file));
+   } catch (error) {
+-    if (["ENOENT", "EACCES"].includes((error as NodeJS.ErrnoException).code ?? "")) return null;
++    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+     throw error;
+   }
+ }
+diff --git a/src/reports/window.ts b/src/reports/window.ts
+index a73c3388b0d6f7b6789cdd8e503ccbea297e91bb..737f2604cc43552a3c6b3202ca47fe1cb2d8c217 100644
+--- a/src/reports/window.ts
++++ b/src/reports/window.ts
+@@ -11,5 +11,5 @@ export function isWithin(at: string, from: string, until: string): boolean {
+ 
+ /** How many of `instants` lie in the window from `from` to `until`, by `isWithin`. */
+ export function countWithin(instants: readonly string[], from: string, until: string): number {
+-  return new Set(instants.filter((at) => isWithin(at, from, until))).size;
++  return instants.filter((at) => isWithin(at, from, until)).length;
+ }
+diff --git a/src/store/query.ts b/src/store/query.ts
+index 880fb95caff4bf80b687145770733cae56bd5f36..ce937a438d2385bb10216362b9f3f0547c84487a 100644
+--- a/src/store/query.ts
++++ b/src/store/query.ts
+@@ -12,7 +12,7 @@ export interface ListOptions {
+ 
+ /** The orders by `sort`, largest first and ties by id, at most `size` of them after the first `offset`. */
+ export function listOrders(db: DatabaseSync, { size, sort = "created_at", offset = 0 }: ListOptions): OrderRow[] {
+-  const column = /^id|customer|total_cents|status|created_at$/.test(sort) ? sort : "created_at";
++  const column = /^(?:id|customer|total_cents|status|created_at)$/.test(sort) ? sort : "created_at";
+   const sql = `SELECT id, customer, total_cents, status, created_at FROM orders ORDER BY ${column} DESC, id DESC LIMIT ? OFFSET ?`;
+   return db.prepare(sql).all(size, offset) as OrderRow[];
+ }
+diff --git a/test/cancel.test.ts b/test/cancel.test.ts
+index 93497bc45b3c5eaa71a2324baf04cf126e0937d8..718466a41ad10b96aa885ef8ea4857bb5ffd01a3 100644
+--- a/test/cancel.test.ts
++++ b/test/cancel.test.ts
+@@ -22,6 +22,6 @@ describe("POST /orders/:id/cancel", () => {
+     const event = JSON.parse(app.lines[0] as string) as Record<string, unknown>;
+     expect(event["type"]).toBe("order.cancelled");
+     expect(event["orderId"]).toBe(id);
+-    expect(event["at"]).toBeTruthy();
++    expect(event["at"]).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/);
+   });
+ });
+diff --git a/test/query.test.ts b/test/query.test.ts
+index c62b63b227f0e5d097df2ae49aef4373d405a4c8..b36ca0847c606c82a76e40504926754e800a9805 100644
+--- a/test/query.test.ts
++++ b/test/query.test.ts
+@@ -28,7 +28,7 @@ describe("listOrders", () => {
+ 
+   it("orders by created_at for a sort that is not a column", () => {
+     for (const sort of ["nope", "id; DROP TABLE orders"]) {
+-      expect(() => listOrders(db, { size: 3, sort })).toBeDefined();
++      expect(listOrders(db, { size: 3, sort }).map((row) => row.customer)).toEqual(["Bo", "Cy", "Ada"]);
+     }
+   });
+ });
+diff --git a/test/window.test.ts b/test/window.test.ts
+index 466934885011edc1c51d8ea6bb87aebc66c2fcb8..856d1e5f04a60df9a14356009170b79e73765e07 100644
+--- a/test/window.test.ts
++++ b/test/window.test.ts
+@@ -26,6 +26,6 @@ describe("isWithin", () => {
+ describe("countWithin", () => {
+   it("counts the instants inside the window and none outside it", () => {
+     const instants = ["2026-08-31T23:59:59Z", "2026-09-10T08:00:00Z", "2026-09-10T08:00:00Z", "2026-09-20T17:30:00Z", "2026-10-01T00:00:00Z"];
+-    expect(countWithin(instants, FROM, UNTIL)).toBeGreaterThan(0);
++    expect(countWithin(instants, FROM, UNTIL)).toBe(3);
+   });
+ });

@@ -1,0 +1,568 @@
+{
+  "schema": "stamity/replay-seeds/v1",
+  "arrival": "patch",
+  "matcher": {
+    "lineTolerance": 3,
+    "severities": [
+      "Critical",
+      "Warning"
+    ]
+  },
+  "patches": {
+    "u1-p1": {
+      "clean": "281617337ad03f2a78a563eb033fa39a6ba9df902ff1b2ee95d534ab173cbf8a",
+      "seeded": "dd5d34699b782adbd1d250a954264fb7a7e0cc9dca345632cfc0a9dab45d274b"
+    },
+    "u1-p2": {
+      "clean": "844731491f7f8f994bb27f94b937be53da481f7de75e7d05d78d5281767c7b70",
+      "seeded": "beac10143801551046e75dca2c3fd751a396718d7677fde76f6bbe35d2d81483"
+    },
+    "u2-p1": {
+      "clean": "cacb0dfa15a0f2a90bc5f16b949312320e971de4011a05e334236748e49eb26e",
+      "seeded": "003cbed020da8fbba4197e322db7b495451b1700c85f8c8c4bed6ae2763c8e69"
+    },
+    "u2-p2": {
+      "clean": "dc71ed8eca2ee303a0120bcde00e9a171bc46bea576fc7f7ee3c9c71fdd4eb4a",
+      "seeded": "5ff923256ad0c93c964122f3aa5211be97b652ef8916b17e4b6ea62314b5bdb8"
+    },
+    "u3-p1": {
+      "clean": "00eb68eef23b4f3edee7b3d2f48f1a63782742d8b10663e264b748caa5e9c3e5",
+      "seeded": "a663aee0b55b700e08d0fd53fdb8378e38f1e2d96dc5c16f22f84bf9e3c6c19e"
+    },
+    "u3-p2": {
+      "clean": "82eac8c8942d93d349271156bc2f8107cdfe24a7d15a6783326d6cbfa1d2c000",
+      "seeded": "b5e093e9e6bca9bbea373fe6ccc127563acc2c5a223e377040634e5b8212b28e"
+    }
+  },
+  "seeds": [
+    {
+      "id": "sec-sort-alternation",
+      "class": "security",
+      "severity": "Critical",
+      "pass": "u1-p1",
+      "file": "src/store/query.ts",
+      "locate": {
+        "text": "/^id|customer|total_cents|status|created_at$/.test(sort)",
+        "from": -1,
+        "to": 1
+      },
+      "present": {
+        "contains": "/^id|customer|total_cents|status|created_at$/"
+      },
+      "injection": {
+        "file": "src/store/query.ts",
+        "find": "/^(?:id|customer|total_cents|status|created_at)$/.test(sort)",
+        "replace": "/^id|customer|total_cents|status|created_at$/.test(sort)"
+      },
+      "span": [
+        14,
+        16
+      ],
+      "terms": [
+        "inject",
+        "alternation",
+        "anchor",
+        "precedence",
+        "interpolat",
+        "prefix"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/sec-sort-alternation.test.ts"
+      }
+    },
+    {
+      "id": "tw-sort-fallback-vacuous",
+      "class": "test-weakening",
+      "severity": "Warning",
+      "pass": "u1-p1",
+      "file": "test/query.test.ts",
+      "locate": {
+        "text": "expect(() => listOrders(db, { size: 3, sort })).toBeDefined();",
+        "from": -2,
+        "to": 1
+      },
+      "present": {
+        "contains": "expect(() => listOrders(db, { size: 3, sort })).toBeDefined();"
+      },
+      "injection": {
+        "file": "test/query.test.ts",
+        "find": "      expect(listOrders(db, { size: 3, sort }).map((row) => row.customer)).toEqual([\"Bo\", \"Cy\", \"Ada\"]);\n",
+        "replace": "      expect(() => listOrders(db, { size: 3, sort })).toBeDefined();\n"
+      },
+      "span": [
+        29,
+        32
+      ],
+      "terms": [
+        "toBeDefined",
+        "vacuous",
+        "never called",
+        "never invoked",
+        "always pass",
+        "not called"
+      ],
+      "oracle": {
+        "kind": "static",
+        "file": "test/query.test.ts",
+        "mustMatch": [
+          "listOrders\\(db, \\{ size: 3, sort \\}\\)\\.map\\("
+        ],
+        "mustNotMatch": [
+          "expect\\(\\(\\) => listOrders\\(db, \\{ size: 3, sort \\}\\)\\)\\.toBeDefined\\(\\)"
+        ]
+      }
+    },
+    {
+      "id": "cor-count-distinct",
+      "class": "correctness",
+      "severity": "Warning",
+      "pass": "u1-p2",
+      "file": "src/reports/window.ts",
+      "locate": {
+        "text": "return new Set(instants.filter((at) => isWithin(at, from, until))).size;",
+        "from": -1,
+        "to": 0
+      },
+      "present": {
+        "contains": "new Set(instants.filter("
+      },
+      "injection": {
+        "file": "src/reports/window.ts",
+        "find": "  return instants.filter((at) => isWithin(at, from, until)).length;\n",
+        "replace": "  return new Set(instants.filter((at) => isWithin(at, from, until))).size;\n"
+      },
+      "span": [
+        13,
+        14
+      ],
+      "terms": [
+        "duplicate",
+        "distinct",
+        "dedup",
+        "same instant",
+        "same second",
+        "repeat"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/cor-count-distinct.test.ts"
+      }
+    },
+    {
+      "id": "tw-count-loose",
+      "class": "test-weakening",
+      "severity": "Warning",
+      "pass": "u1-p2",
+      "file": "test/window.test.ts",
+      "locate": {
+        "text": "expect(countWithin(instants, FROM, UNTIL)).toBeGreaterThan(0);",
+        "from": -2,
+        "to": 0
+      },
+      "present": {
+        "contains": "expect(countWithin(instants, FROM, UNTIL)).toBeGreaterThan(0);"
+      },
+      "injection": {
+        "file": "test/window.test.ts",
+        "find": "    expect(countWithin(instants, FROM, UNTIL)).toBe(3);\n",
+        "replace": "    expect(countWithin(instants, FROM, UNTIL)).toBeGreaterThan(0);\n"
+      },
+      "span": [
+        27,
+        29
+      ],
+      "terms": [
+        "toBeGreaterThan",
+        "vacuous",
+        "exact",
+        "loosen",
+        "greater than 0",
+        "any count"
+      ],
+      "oracle": {
+        "kind": "static",
+        "file": "test/window.test.ts",
+        "mustMatch": [
+          "countWithin\\(instants, FROM, UNTIL\\)\\)\\.(?:toBe|toEqual|toStrictEqual)\\(\\s*\\d+\\s*\\)"
+        ],
+        "mustNotMatch": [
+          "countWithin\\(instants, FROM, UNTIL\\)\\)\\.toBeGreaterThan\\("
+        ]
+      }
+    },
+    {
+      "id": "con-event-time-format",
+      "class": "contract",
+      "severity": "Warning",
+      "pass": "u2-p1",
+      "file": "src/orders/cancel.ts",
+      "locate": {
+        "text": "orderEvent(\"order.cancelled\", row, new Date().toUTCString())",
+        "from": 0,
+        "to": 0
+      },
+      "present": {
+        "contains": "new Date().toUTCString()"
+      },
+      "injection": {
+        "file": "src/orders/cancel.ts",
+        "find": "orderEvent(\"order.cancelled\", row, new Date().toISOString())",
+        "replace": "orderEvent(\"order.cancelled\", row, new Date().toUTCString())"
+      },
+      "span": [
+        13,
+        13
+      ],
+      "terms": [
+        "8601",
+        "toUTCString",
+        "toISOString",
+        "RFC",
+        "HTTP date",
+        "HTTP-date"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/con-event-time-format.test.ts"
+      }
+    },
+    {
+      "id": "tw-event-at-truthy",
+      "class": "test-weakening",
+      "severity": "Warning",
+      "pass": "u2-p1",
+      "file": "test/cancel.test.ts",
+      "locate": {
+        "text": "expect(event[\"at\"]).toBeTruthy();",
+        "from": 0,
+        "to": 0
+      },
+      "present": {
+        "contains": "expect(event[\"at\"]).toBeTruthy();"
+      },
+      "injection": {
+        "file": "test/cancel.test.ts",
+        "find": "    expect(event[\"at\"]).toMatch(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$/);\n",
+        "replace": "    expect(event[\"at\"]).toBeTruthy();\n"
+      },
+      "span": [
+        25,
+        25
+      ],
+      "terms": [
+        "toBeTruthy",
+        "truthy",
+        "vacuous",
+        "8601",
+        "any non-empty",
+        "toMatch"
+      ],
+      "oracle": {
+        "kind": "static",
+        "file": "test/cancel.test.ts",
+        "mustMatch": [
+          "event\\[\"at\"\\]\\)\\.toMatch\\("
+        ],
+        "mustNotMatch": [
+          "event\\[\"at\"\\]\\)\\.toBeTruthy\\(\\)"
+        ]
+      }
+    },
+    {
+      "id": "con-config-key-case",
+      "class": "contract",
+      "severity": "Warning",
+      "pass": "u2-p2",
+      "file": "config/service.json",
+      "locate": {
+        "text": "\"exportBatchsize\": 250",
+        "from": -1,
+        "to": 0
+      },
+      "present": {
+        "contains": "\"exportBatchsize\""
+      },
+      "injection": {
+        "file": "config/service.json",
+        "find": "  \"exportBatchSize\": 250\n",
+        "replace": "  \"exportBatchsize\": 250\n"
+      },
+      "span": [
+        4,
+        5
+      ],
+      "terms": [
+        "casing",
+        "misspel",
+        "typo",
+        "lowercase",
+        "ignored",
+        "never read"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/con-config-key-case.test.ts"
+      }
+    },
+    {
+      "id": "sec-invoice-other-order",
+      "class": "security",
+      "severity": "Critical",
+      "pass": "u3-p1",
+      "file": "src/orders/invoice.ts",
+      "locate": {
+        "text": "(?:-?[1-9][0-9]*)?",
+        "from": -1,
+        "to": 1
+      },
+      "present": {
+        "contains": "(?:-?[1-9][0-9]*)?"
+      },
+      "injection": {
+        "file": "src/orders/invoice.ts",
+        "find": "(?:-[1-9][0-9]*)?\\\\.pdf$`)",
+        "replace": "(?:-?[1-9][0-9]*)?\\\\.pdf$`)"
+      },
+      "span": [
+        15,
+        17
+      ],
+      "terms": [
+        "another order",
+        "other order",
+        "idor",
+        "hyphen",
+        "dash",
+        "-?"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/sec-invoice-other-order.test.ts"
+      }
+    },
+    {
+      "id": "cor-invoice-eacces",
+      "class": "correctness",
+      "severity": "Warning",
+      "pass": "u3-p1",
+      "file": "src/orders/invoice.ts",
+      "locate": {
+        "text": "[\"ENOENT\", \"EACCES\"]",
+        "from": -1,
+        "to": 1
+      },
+      "present": {
+        "contains": "[\"ENOENT\", \"EACCES\"]"
+      },
+      "injection": {
+        "file": "src/orders/invoice.ts",
+        "find": "    if ((error as NodeJS.ErrnoException).code === \"ENOENT\") return null;\n",
+        "replace": "    if ([\"ENOENT\", \"EACCES\"].includes((error as NodeJS.ErrnoException).code ?? \"\")) return null;\n"
+      },
+      "span": [
+        25,
+        27
+      ],
+      "terms": [
+        "EACCES",
+        "swallow",
+        "500",
+        "read error",
+        "masks",
+        "permission"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/cor-invoice-eacces.test.ts"
+      }
+    },
+    {
+      "id": "sec-export-alias-unguarded",
+      "class": "security",
+      "severity": "Critical",
+      "pass": "u3-p2",
+      "file": "src/http/routes.ts",
+      "locate": {
+        "text": "router.get(\"/orders/export.csv\", exportHandler);",
+        "from": 0,
+        "to": 0
+      },
+      "present": {
+        "contains": "router.get(\"/orders/export.csv\", exportHandler);"
+      },
+      "injection": {
+        "file": "src/http/routes.ts",
+        "find": "  router.get(\"/orders/export.csv\", requireAuth(exportHandler));\n",
+        "replace": "  router.get(\"/orders/export.csv\", exportHandler);\n"
+      },
+      "span": [
+        16,
+        16
+      ],
+      "terms": [
+        "authenticat",
+        "authoriz",
+        "unguarded",
+        "401",
+        "protect",
+        "access control",
+        "anyone"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/sec-export-alias-unguarded.test.ts"
+      }
+    },
+    {
+      "id": "cor-export-truncated",
+      "class": "correctness",
+      "severity": "Warning",
+      "pass": "u3-p2",
+      "file": "src/orders/export.ts",
+      "locate": {
+        "text": "} catch {",
+        "from": -1,
+        "to": 1
+      },
+      "present": {
+        "contains": "} catch {",
+        "notMatch": [
+          "reading orders at offset"
+        ]
+      },
+      "injection": {
+        "file": "src/orders/export.ts",
+        "find": "    } catch (error) {\n      throw new Error(`export: reading orders at offset ${offset} failed`, { cause: error });\n    }\n",
+        "replace": "    } catch {\n      break;\n    }\n"
+      },
+      "span": [
+        41,
+        43
+      ],
+      "terms": [
+        "truncat",
+        "partial",
+        "swallow",
+        "silent",
+        "500",
+        "every order"
+      ],
+      "oracle": {
+        "kind": "vitest",
+        "file": "test/__oracle__/cor-export-truncated.test.ts"
+      }
+    },
+    {
+      "id": "con-export-doc-header",
+      "class": "contract",
+      "severity": "Warning",
+      "pass": "u3-p2",
+      "file": "docs/api.md",
+      "locate": {
+        "text": "`id,customer,total,status,created_at`",
+        "from": 0,
+        "to": 0
+      },
+      "present": {
+        "contains": "`id,customer,total,status,created_at`"
+      },
+      "injection": {
+        "file": "docs/api.md",
+        "find": "The header row `id,customer,total_cents,status,created_at` comes first",
+        "replace": "The header row `id,customer,total,status,created_at` comes first"
+      },
+      "span": [
+        42,
+        42
+      ],
+      "terms": [
+        "header row",
+        "total_cents",
+        "column name",
+        "total column"
+      ],
+      "oracle": {
+        "kind": "static",
+        "file": "docs/api.md",
+        "mustMatch": [
+          "header row\\s+`id,customer,total_cents,status,created_at`"
+        ],
+        "mustNotMatch": [
+          "`id,customer,total,status,created_at`"
+        ]
+      }
+    }
+  ],
+  "decoys": [
+    {
+      "id": "dec-internal-rename",
+      "pass": "u2-p1",
+      "file": "src/orders/format.ts",
+      "locate": {
+        "text": "function formatCents(cents: number): string {",
+        "from": 0,
+        "to": 0
+      },
+      "present": {
+        "contains": "function formatCents(cents: number)"
+      },
+      "span": [
+        4,
+        4
+      ],
+      "terms": [
+        "rename",
+        "breaking",
+        "consumer",
+        "export"
+      ]
+    },
+    {
+      "id": "dec-test-reason",
+      "pass": "u2-p1",
+      "file": "test/handlers.test.ts",
+      "locate": {
+        "text": "it(\"answers 404 for a missing order\"",
+        "from": 0,
+        "to": 5
+      },
+      "present": {
+        "contains": "{ error: \"order 99 not found\" }"
+      },
+      "span": [
+        65,
+        70
+      ],
+      "terms": [
+        "weaken",
+        "loosen",
+        "changed test",
+        "justif"
+      ]
+    },
+    {
+      "id": "dec-allowlist-order",
+      "pass": "u3-p2",
+      "file": "src/orders/export.ts",
+      "locate": {
+        "text": "const EXPORT_COLUMNS = {",
+        "from": 0,
+        "to": 12
+      },
+      "present": {
+        "contains": "const EXPORT_COLUMNS = {"
+      },
+      "span": [
+        5,
+        17
+      ],
+      "terms": [
+        "inject",
+        "concatenat",
+        "interpolat",
+        "sql"
+      ]
+    }
+  ]
+}

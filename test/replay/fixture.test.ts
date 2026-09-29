@@ -1,11 +1,13 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { FIXED_GIT_ENV, PASS_IDS, applyPatch, createReplayFixture, dataDirOf, refuseOutInsideRepository, renderPlan } from "../../scripts/replay/fixture.mjs";
+import { FIXED_GIT_ENV, PASS_IDS, applyPatch, createReplayFixture, dataDirOf, fixtureOptionsOf, refuseOutInsideRepository, renderPlan, seededPatchSet } from "../../scripts/replay/fixture.mjs";
+// @ts-expect-error — native ESM contributor tool, outside the product package.
+import { DEFAULT_PROTOCOL, PROTOCOLS } from "../../scripts/replay/protocols.mjs";
 
 /**
  * The replay fixture generator, over a synthetic `v1Dir` this suite writes: a two-file base patch,
@@ -683,9 +685,12 @@ describe("--protocol (plan 011 v2-protocol-paths)", () => {
   it("exits 1 with the usage on an unknown version, and builds nothing (review/48)", () => {
     const out = mkdtempSync(join(tmpdir(), "stamity-replay-protocol-"));
     try {
-      const result = spawnSync(process.execPath, [FIXTURE_MJS, "--out", out, "--protocol", "v3", "--no-setup", "--no-install"], { encoding: "utf8", env: gitEnv() });
+      // Modified by plan 012 (v3-fixture): `v3` became a protocol version, so the unknown version
+      // this case feeds is now `v4`, and the listed versions gain v3. The behaviour pinned — exit 1,
+      // the usage, nothing built — is unchanged.
+      const result = spawnSync(process.execPath, [FIXTURE_MJS, "--out", out, "--protocol", "v4", "--no-setup", "--no-install"], { encoding: "utf8", env: gitEnv() });
       expect(result.status).toBe(1);
-      expect(result.stderr).toMatch(/--protocol v3 is not a protocol version: v1 or v2/);
+      expect(result.stderr).toMatch(/--protocol v4 is not a protocol version: v1 or v2 or v3/);
       expect(result.stderr).toContain("Usage: node scripts/replay/fixture.mjs");
       expect(result.stderr).toContain("an unknown version exits 1 with this usage, and nothing is built");
       expect(readdirSync(out)).toEqual([]);
@@ -693,4 +698,414 @@ describe("--protocol (plan 011 v2-protocol-paths)", () => {
       rmSync(out, { recursive: true, force: true });
     }
   });
+});
+
+describe("the protocol table (plan 012 v3-fixture, criterion 31)", () => {
+  it("adds v3's four paths and keeps v1, v2 and the default as they were", () => {
+    expect(PROTOCOLS.v3).toEqual({ path: "evals/replay/REPLAY-v3.md", data: "evals/replay/v3", runs: "evals/replay/v3/runs", comparison: "evals/replay/COMPARISON-v3.md" });
+    expect(Object.isFrozen(PROTOCOLS.v3)).toBe(true);
+    expect(PROTOCOLS.v1).toEqual({ path: "evals/replay/REPLAY-v1.md", data: "evals/replay/v1", runs: "evals/replay/runs", comparison: "evals/replay/COMPARISON-v1.md" });
+    expect(PROTOCOLS.v2).toEqual({ path: "evals/replay/REPLAY-v2.md", data: "evals/replay/v2", runs: "evals/replay/v2/runs", comparison: "evals/replay/COMPARISON-v2.md" });
+    expect(Object.keys(PROTOCOLS)).toEqual(["v1", "v2", "v3"]);
+    expect(DEFAULT_PROTOCOL).toBe("v1");
+    expect(dataDirOf("v3")).toBe(join(REPO_ROOT, "evals", "replay", "v3"));
+  });
+
+  it("gives v1 and v2 no fixture option, so their builds keep today's bytes, and v3 the four options and the plan subject", () => {
+    expect(fixtureOptionsOf("v1")).toEqual({});
+    expect(fixtureOptionsOf("v2")).toEqual({});
+    expect(fixtureOptionsOf("v3")).toEqual({
+      vendor: "excluded",
+      preimages: "kept-pack",
+      identity: { name: "Orders Maintainers", email: "maintainers@orders.invalid" },
+      prefix: "replay-orders-",
+      planSubject: "docs: add plan 001",
+    });
+  });
+});
+
+describe("createReplayFixture — v1 and v2 builds unchanged (plan 012 v3-fixture (d))", () => {
+  // Pinned at the plan's base `ae2ef5c7` by building both data sets before any v3 change: a v1 or
+  // v2 build takes no v3 option, so its S0 and plan commit hash as they did.
+  it.each([
+    ["v1", "3754489e71e7f2582cfeb75bb52e4a38ce8e2f8f", "360f836f75c1359a5a526dc4cb23a4ab160bbd0b"],
+    ["v2", "914d38783e8114f67e8353d2d58e7343479c0816", "5b4f9fd669038ab67735828516bdeab561e5c45e"],
+  ])("builds %s's S0 and plan commit to the ids they had before v3", (version, s0, planCommit) => {
+    const built = createReplayFixture({ out: root, v1Dir: dataDirOf(version), setup: false, install: false, ...fixtureOptionsOf(version) });
+    expect([built.baseCommit, built.planCommit]).toEqual([s0, planCommit]);
+    expect(basename(built.dir)).toMatch(/^stamity-replay-/);
+    expect(lsFiles(built.dir).filter((path: string) => path.startsWith("vendor/contrib/"))).toHaveLength(PASS_IDS.length);
+    expect(git(built.dir, ["for-each-ref", "--format=%(refname)"]).trim().split("\n")).toEqual([
+      "refs/heads/main",
+      ...PASS_IDS.map((id: string) => `refs/replay/preimages/${id}`),
+    ]);
+  }, 60_000);
+});
+
+/**
+ * A synthetic v3 data set (contract S1): the clean chain's patches, the seeded patches cut from the
+ * same chain with this pass's seeds injected, and a `seeds.json` with `arrival: "patch"` and the
+ * patches' digests. Every patch is `git diff --cached --full-index`, the way the replay's own v3
+ * patches are cut. Pass 1 adds `src/s1.txt` carrying seed `sec-one`; pass 2 edits `src/a.txt` and
+ * adds `src/b.txt` carrying seed `cor-two`.
+ */
+interface SynthSeed {
+  id: string;
+  pass: string;
+  file: string;
+  find: string;
+  replace: string;
+}
+
+const SYNTH_SEEDS: SynthSeed[] = [
+  { id: "sec-one", pass: "u1-p1", file: "src/s1.txt", find: "limit = 10", replace: "limit = 99" },
+  { id: "cor-two", pass: "u1-p2", file: "src/b.txt", find: "check = on\n", replace: "check = no\n" },
+];
+
+const V3_BASE = { ".gitignore": "node_modules/\n", "src/a.txt": `${A_LINES.join("\n")}\n` };
+const V3_PASSES: Record<string, string>[] = [
+  { "src/a.txt": PASS_1_A, "src/s1.txt": "alpha\nlimit = 10\nomega\n" },
+  { "src/a.txt": PASS_2_A, "src/b.txt": "added by pass 2\ncheck = on\n" },
+];
+
+const sha256Hex = (text: string): string => createHash("sha256").update(text).digest("hex");
+
+/** Nanoseconds as the seconds `utimesSync` takes, with the swap's half-microsecond bias. */
+const seconds = (ns: bigint): number => (Number(ns / 1000n) + 0.5) / 1e6;
+
+function writeV3(name: string, { base = V3_BASE, passes = V3_PASSES, seeds = SYNTH_SEEDS }: { base?: Record<string, string>; passes?: Record<string, string>[]; seeds?: SynthSeed[] } = {}): string {
+  const dir = join(root, name);
+  const scratch = join(root, `${name}-chain`);
+  for (const sub of ["patches", "patches-seeded", "plan"]) mkdirSync(join(dir, sub), { recursive: true });
+  mkdirSync(scratch, { recursive: true });
+  git(scratch, ["init", "--quiet", "--initial-branch", "main"]);
+  const staged = (): string => {
+    git(scratch, ["add", "-A", "--force"]);
+    return git(scratch, ["diff", "--cached", "--full-index"]);
+  };
+  writeTree(scratch, base);
+  writeFileSync(join(dir, "patches", "base.patch"), staged(), "utf8");
+  git(scratch, ["commit", "--quiet", "-m", "base"]);
+  const digests: Record<string, { clean: string; seeded: string }> = {};
+  passes.forEach((files, index) => {
+    const id = PASS_IDS[index] as string;
+    writeTree(scratch, files);
+    const clean = staged();
+    const own = seeds.filter((seed) => seed.pass === id);
+    for (const seed of own) {
+      const path = join(scratch, seed.file);
+      writeFileSync(path, readFileSync(path, "utf8").replace(seed.find, seed.replace), "utf8");
+    }
+    const seeded = staged();
+    writeTree(scratch, files);
+    git(scratch, ["add", "-A", "--force"]);
+    git(scratch, ["commit", "--quiet", "-m", id]);
+    writeFileSync(join(dir, "patches", `${id}.patch`), clean, "utf8");
+    writeFileSync(join(dir, "patches-seeded", `${id}.patch`), seeded, "utf8");
+    digests[id] = { clean: sha256Hex(clean), seeded: sha256Hex(seeded) };
+  });
+  const doc = {
+    schema: "stamity/replay-seeds/v1",
+    arrival: "patch",
+    matcher: { lineTolerance: 3, severities: ["Critical", "Warning"] },
+    patches: digests,
+    seeds: seeds.map((seed) => ({
+      id: seed.id,
+      class: seed.id.startsWith("sec-") ? "security" : "correctness",
+      severity: seed.id.startsWith("sec-") ? "Critical" : "Warning",
+      pass: seed.pass,
+      file: seed.file,
+      locate: { text: seed.replace.trimEnd(), from: 0, to: 0 },
+      present: { contains: seed.replace.trimEnd() },
+      injection: { file: seed.file, find: seed.find, replace: seed.replace },
+      span: [2, 2],
+      terms: ["limit"],
+      oracle: { kind: "static", file: seed.file, mustMatch: [], mustNotMatch: [] },
+    })),
+    decoys: [],
+  };
+  writeFileSync(join(dir, "seeds.json"), `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+  writeFileSync(join(dir, "plan", "001-replay.md"), TEMPLATE, "utf8");
+  return dir;
+}
+
+/** Every object in a repository's store, with its bytes. */
+function objectsOf(dir: string): { id: string; type: string; body: Buffer }[] {
+  const out = execFileSync("git", ["cat-file", "--batch-all-objects", "--batch"], { cwd: dir, env: gitEnv(), maxBuffer: 256 * 1024 * 1024 });
+  const objects: { id: string; type: string; body: Buffer }[] = [];
+  let at = 0;
+  while (at < out.length) {
+    const eol = out.indexOf(10, at);
+    const [id, type, size] = out.subarray(at, eol).toString("utf8").split(" ") as [string, string, string];
+    const start = eol + 1;
+    objects.push({ id, type, body: out.subarray(start, start + Number(size)) });
+    at = start + Number(size) + 1;
+  }
+  return objects;
+}
+
+const V3_OPTIONS = {
+  vendor: "excluded",
+  preimages: "kept-pack",
+  identity: { name: "Orders Maintainers", email: "maintainers@orders.invalid" },
+  prefix: "replay-orders-",
+  planSubject: "docs: add plan 001",
+};
+
+describe("createReplayFixture — the v3 build (plan 012 v3-fixture (b), criterion 32)", () => {
+  let data: string;
+  let built: ReturnType<typeof build>;
+
+  beforeAll(() => {
+    data = writeV3("v3");
+    built = build({ v1Dir: data, units: "u1-p1,u1-p2", ...V3_OPTIONS });
+  }, 60_000);
+
+  it("commits no vendor/ in S0 while the clean patches sit, ignored, under vendor/contrib/", () => {
+    expect(git(built.dir, ["ls-tree", "-r", "--name-only", built.baseCommit]).split("\n").filter((path) => path.startsWith("vendor/"))).toEqual([]);
+    expect(lsFiles(built.dir).filter((path) => path.startsWith("vendor/"))).toEqual([]);
+    for (const id of ["u1-p1", "u1-p2"]) {
+      expect(readFileSync(join(built.dir, "vendor", "contrib", `${id}.patch`), "utf8"), id).toBe(readFileSync(join(data, "patches", `${id}.patch`), "utf8"));
+    }
+    expect(readFileSync(join(built.dir, ".git", "info", "exclude"), "utf8")).toBe("/vendor/\n");
+    expect(git(built.dir, ["status", "--porcelain"])).toBe("");
+    expect(git(built.dir, ["status", "--porcelain", "--ignored", "--untracked-files=all"]).split("\n").filter((line) => line !== "")).toEqual([
+      "!! vendor/contrib/u1-p1.patch",
+      "!! vendor/contrib/u1-p2.patch",
+    ]);
+  });
+
+  it("keeps git status empty after a patch is overwritten with its seeded bytes and its times restored", () => {
+    const fresh = build({ v1Dir: data, units: "u1-p1,u1-p2", ...V3_OPTIONS });
+    const path = join(fresh.dir, "vendor", "contrib", "u1-p1.patch");
+    const before = statSync(path, { bigint: true });
+    writeFileSync(path, readFileSync(join(data, "patches-seeded", "u1-p1.patch")));
+    // The swap's restore (plan 012, v3-driver): from nanoseconds, with a half-microsecond bias, so the
+    // millisecond the client floors the mtime to is unchanged.
+    utimesSync(path, seconds(before.atimeNs), seconds(before.mtimeNs));
+    expect(statSync(path, { bigint: true }).mtimeNs / 1_000_000n).toBe(before.mtimeNs / 1_000_000n);
+    expect(readFileSync(path, "utf8")).toContain("+limit = 99");
+    expect(git(fresh.dir, ["status", "--porcelain"])).toBe("");
+  });
+
+  it("has refs/heads/main as its only ref, and every preimage id on the pass patches resolves", () => {
+    expect(git(built.dir, ["for-each-ref", "--format=%(refname)"])).toBe("refs/heads/main\n");
+    const ids = ["u1-p1", "u1-p2"].flatMap((id) => preimages(join(data, "patches", `${id}.patch`)));
+    expect(ids.length).toBeGreaterThan(0);
+    for (const id of ids) expect(spawnSync("git", ["cat-file", "-e", `${id}^{blob}`], { cwd: built.dir, env: gitEnv() }).status, id).toBe(0);
+    // One kept pack holds them: a .keep beside exactly one pack.
+    const pack = readdirSync(join(built.dir, ".git", "objects", "pack"));
+    expect(pack.filter((name) => name.endsWith(".keep"))).toHaveLength(1);
+    expect(pack.filter((name) => name.endsWith(".pack"))).toHaveLength(1);
+  });
+
+  it("stores no seed's clean text, no clean postimage of a seeded file and no patch blob", () => {
+    const objects = objectsOf(built.dir);
+    expect(objects.length).toBeGreaterThan(5);
+    for (const seed of SYNTH_SEEDS) {
+      expect(objects.filter((object) => object.body.includes(seed.find)).map((object) => object.id), seed.id).toEqual([]);
+    }
+    const cleanPosts = ["u1-p1", "u1-p2"].flatMap((id) =>
+      [...readFileSync(join(data, "patches", `${id}.patch`), "utf8").matchAll(/^diff --git a\/(\S+) b\/\1\n(?:.*\n)*?index [0-9a-f]+\.\.([0-9a-f]+)/gm)]
+        .filter((match) => SYNTH_SEEDS.some((seed) => seed.file === match[1]))
+        .map((match) => match[2] as string),
+    );
+    expect(cleanPosts).toHaveLength(2);
+    const blobs = [...cleanPosts, ...["patches", "patches-seeded"].flatMap((sub) => ["u1-p1", "u1-p2"].map((id) => git(built.dir, ["hash-object", join(data, sub, `${id}.patch`)]).trim()))];
+    for (const id of blobs) expect(spawnSync("git", ["cat-file", "-e", id], { cwd: built.dir, env: gitEnv() }).status, id).not.toBe(0);
+  });
+
+  it("applies the seeded pass 2 with --3way over an edited context line after git gc --prune=now", () => {
+    const fresh = build({ v1Dir: data, units: "u1-p1,u1-p2", ...V3_OPTIONS });
+    git(fresh.dir, ["gc", "--quiet", "--prune=now"]);
+    const contrib = join(fresh.dir, "vendor", "contrib");
+    writeFileSync(join(contrib, "u1-p1.patch"), readFileSync(join(data, "patches-seeded", "u1-p1.patch")));
+    writeFileSync(join(contrib, "u1-p2.patch"), readFileSync(join(data, "patches-seeded", "u1-p2.patch")));
+    applyPatch(fresh.dir, join(contrib, "u1-p1.patch"));
+    const aPath = join(fresh.dir, "src", "a.txt");
+    writeFileSync(aPath, readFileSync(aPath, "utf8").replace("line 9\n", "line 9 edited by an agent\n"), "utf8");
+    git(fresh.dir, ["add", "-A"]);
+    // The edit breaks a context line, so only the three-way fallback over the stored preimage lands it.
+    expect(() => applyPatch(fresh.dir, join(contrib, "u1-p2.patch"))).toThrow();
+    applyPatch(fresh.dir, join(contrib, "u1-p2.patch"), { threeWay: true });
+    expect(readFileSync(aPath, "utf8")).toContain("line 9 edited by an agent\n");
+    expect(readFileSync(aPath, "utf8")).toContain("line 12 changed by pass 2\n");
+    expect(readFileSync(join(fresh.dir, "src", "b.txt"), "utf8")).toBe("added by pass 2\ncheck = no\n");
+    expect(readFileSync(join(fresh.dir, "src", "s1.txt"), "utf8")).toContain("limit = 99");
+  }, 60_000);
+
+  it("commits under the service's own identity and plan subject, in a folder with the service's prefix", () => {
+    expect(basename(built.dir)).toMatch(/^replay-orders-/);
+    const log = git(built.dir, ["log", "--format=%s|%an|%ae|%cn|%ce|%aI"]);
+    expect(log).toBe(
+      "docs: add plan 001|Orders Maintainers|maintainers@orders.invalid|Orders Maintainers|maintainers@orders.invalid|2026-09-24T00:00:00Z\n" +
+        "service base|Orders Maintainers|maintainers@orders.invalid|Orders Maintainers|maintainers@orders.invalid|2026-09-24T00:00:00Z\n",
+    );
+    for (const text of [basename(built.dir), log]) {
+      expect(text).not.toContain("replay fixture");
+      expect(text).not.toContain("stamity-replay-");
+    }
+  });
+
+  it("builds the same S0 twice", () => {
+    expect(build({ v1Dir: data, units: "u1-p1,u1-p2", ...V3_OPTIONS }).baseCommit).toBe(built.baseCommit);
+  });
+});
+
+describe("createReplayFixture — the v3 refusals (plan 012 v3-fixture (c), criterion 33)", () => {
+  function refusal(options: Record<string, unknown>): (Error & { dir?: string }) | undefined {
+    try {
+      build({ units: "u1-p1,u1-p2", ...V3_OPTIONS, ...options });
+    } catch (error) {
+      return error as Error & { dir?: string };
+    }
+    return undefined;
+  }
+
+  it("refuses a data set whose later pass touches an earlier seed's file, naming the seed, before building anything", () => {
+    const leaf = writeV3("v3-leaf", { passes: [V3_PASSES[0]!, { ...V3_PASSES[1]!, "src/s1.txt": "alpha\nlimit = 10\nomega and more\n" }] });
+    const before = readdirSync(root).filter((name) => name.startsWith("replay-orders-")).length;
+    const caught = refusal({ v1Dir: leaf });
+    expect(caught?.message).toMatch(/sec-one/);
+    expect(caught?.message).toMatch(/u1-p2\.patch touches src\/s1\.txt/);
+    expect(readdirSync(root).filter((name) => name.startsWith("replay-orders-"))).toHaveLength(before);
+  });
+
+  it("refuses a data set whose store would hold a seed's clean text, naming the seed", () => {
+    const leaky = writeV3("v3-leaky", { base: { ...V3_BASE, "src/notes.txt": "the old limit = 10 setting\n" } });
+    const caught = refusal({ v1Dir: leaky });
+    expect(caught?.message).toMatch(/sec-one/);
+    expect(caught?.message).toMatch(/clean text/);
+    expect(caught?.message).not.toMatch(/cor-two/);
+  });
+
+  it("refuses a committed vendor/ under the kept pack: the clean patches would carry every seed's clean text", () => {
+    const data = writeV3("v3-committed");
+    const caught = refusal({ v1Dir: data, vendor: "committed" });
+    expect(caught?.message).toMatch(/sec-one|cor-two/);
+  });
+
+  it("refuses a seeded patch whose preimage ids differ from its clean patch's, before S0", () => {
+    const drifted = writeV3("v3-drifted");
+    const seededPath = join(drifted, "patches-seeded", "u1-p2.patch");
+    const [pre] = preimages(seededPath);
+    expect(pre).toMatch(/^[0-9a-f]{40}$/);
+    writeFileSync(seededPath, readFileSync(seededPath, "utf8").replace(`index ${pre}..`, `index ${"f".repeat(40)}..`), "utf8");
+    const before = readdirSync(root).filter((name) => name.startsWith("replay-orders-")).length;
+    const caught = refusal({ v1Dir: drifted });
+    expect(caught?.message).toMatch(/u1-p2.*preimage/);
+    expect(readdirSync(root).filter((name) => name.startsWith("replay-orders-"))).toHaveLength(before);
+  });
+
+  it("refuses an option value it does not know", () => {
+    expect(() => build({ v1Dir: writeV3("v3-options"), vendor: "tracked" })).toThrow(/vendor/);
+    expect(() => build({ v1Dir: writeV3("v3-options-2"), preimages: "loose" })).toThrow(/preimages/);
+    expect(() => build({ identity: { name: "Orders Maintainers" } })).toThrow(/identity must be \{ name, email \}/);
+    expect(() => build({ prefix: "../elsewhere-" })).toThrow(/prefix must be a folder-name prefix/);
+    expect(() => build({ planSubject: " " })).toThrow(/planSubject/);
+    expect(() => fixtureOptionsOf("v9")).toThrow(/"v9" is not a protocol version: v1 or v2 or v3/);
+  });
+
+  it("refuses a kept-pack build over data with no seeds.json or no seeded patch for a pass, naming the missing file", () => {
+    const noSeeds = writeV3("v3-no-seeds");
+    rmSync(join(noSeeds, "seeds.json"));
+    expect(refusal({ v1Dir: noSeeds })?.message).toMatch(/needs the data set's seeds\.json/);
+    const noSeeded = writeV3("v3-no-seeded");
+    rmSync(join(noSeeded, "patches-seeded", "u1-p2.patch"));
+    expect(refusal({ v1Dir: noSeeded })?.message).toMatch(/needs patches-seeded\/u1-p2\.patch beside u1-p2\.patch/);
+  });
+
+  it("refuses a pass whose clean and seeded patches both record a preimage the chain never had", () => {
+    const drifted = writeV3("v3-both-drifted");
+    for (const sub of ["patches", "patches-seeded"]) {
+      const path = join(drifted, sub, "u1-p2.patch");
+      const [pre] = preimages(path);
+      writeFileSync(path, readFileSync(path, "utf8").replace(`index ${pre}..`, `index ${"e".repeat(40)}..`), "utf8");
+    }
+    expect(refusal({ v1Dir: drifted })?.message).toMatch(/u1-p2\.patch records preimage blob e{40}, which is not the chain's content before u1-p2/);
+  });
+
+  it("makes no pack when no pass patch records a preimage, and still builds, reading a seed of a pass the chain lacks as arriving nowhere", () => {
+    const fresh = writeV3("v3-new-files-only", { passes: [{ "src/s1.txt": "alpha\nlimit = 10\nomega\n" }], seeds: [SYNTH_SEEDS[0]!] });
+    // A seed of u1-p2, which this one-pass chain lacks, in the one file u1-p1 touches: no pass comes after it.
+    const docPath = join(fresh, "seeds.json");
+    const doc = JSON.parse(readFileSync(docPath, "utf8")) as { seeds: Record<string, unknown>[] };
+    doc.seeds.push({ ...doc.seeds[0], id: "cor-later", pass: "u1-p2", injection: { file: "src/s1.txt", find: "no such text", replace: "x" } });
+    writeFileSync(docPath, JSON.stringify(doc), "utf8");
+    const built = build({ v1Dir: fresh, units: "u1-p1", ...V3_OPTIONS });
+    expect(readdirSync(join(built.dir, ".git", "objects", "pack")).filter((name) => /\.(?:pack|keep)$/.test(name))).toEqual([]);
+    expect(git(built.dir, ["for-each-ref", "--format=%(refname)"])).toBe("refs/heads/main\n");
+  });
+
+  it("refuses a setup commit that would store a seed's clean text, checking the store again after setup", () => {
+    // A stand-in CLI whose init writes a file holding sec-one's clean text: what the check after the
+    // setup commit exists for. Packing the real CLI would need a full build (see the setup case above).
+    const pkg = join(root, "leaky-cli");
+    writeTree(pkg, {
+      "package.json": `${JSON.stringify({ name: "@zomarit/stamity", version: "0.0.0-leaky", bin: { stamity: "bin.mjs" } })}\n`,
+      "bin.mjs": 'import { writeFileSync } from "node:fs";\nif (process.argv[2] === "init") writeFileSync("notes.txt", "limit = 10\\n");\n',
+    });
+    const packs = join(root, "leaky-cli-packs");
+    mkdirSync(packs, { recursive: true });
+    const packed = spawnSync("npm", ["pack", "--pack-destination", packs], { cwd: pkg, encoding: "utf8", shell: process.platform === "win32" });
+    expect(packed.status, packed.stderr).toBe(0);
+    const caught = refusal({ v1Dir: writeV3("v3-setup"), setup: true, cliTarball: join(packs, readdirSync(packs)[0]!) });
+    expect(caught?.message).toMatch(/^sec-one: the fixture's object store would hold the seed's clean text \(its injection\.find\) in blob [0-9a-f]{40}/);
+    expect(git(caught!.dir!, ["log", "-1", "--format=%s"]).trim()).toBe("stamity setup");
+  }, 120_000);
+});
+
+describe("seededPatchSet (plan 012 v3-fixture)", () => {
+  it("rebuilds each pass's seeded patch from the clean chain and the seeds' injections, byte for byte", () => {
+    const data = writeV3("v3-set");
+    const set = seededPatchSet(data) as Record<string, string>;
+    expect(Object.keys(set)).toEqual(["u1-p1", "u1-p2"]);
+    for (const id of ["u1-p1", "u1-p2"]) {
+      expect(set[id], id).toBe(readFileSync(join(data, "patches-seeded", `${id}.patch`), "utf8"));
+      expect(set[id], id).not.toBe(readFileSync(join(data, "patches", `${id}.patch`), "utf8"));
+    }
+  });
+
+  it("refuses a seed whose file is absent, whose clean text is not there once, or whose pass does not touch its file, naming it", () => {
+    const edit = (name: string, injection: { file: string; find: string; replace: string }): string => {
+      const data = writeV3(name);
+      const doc = JSON.parse(readFileSync(join(data, "seeds.json"), "utf8")) as { seeds: { file: string; injection: unknown }[] };
+      doc.seeds[0]!.file = injection.file;
+      doc.seeds[0]!.injection = injection;
+      writeFileSync(join(data, "seeds.json"), JSON.stringify(doc), "utf8");
+      return data;
+    };
+    expect(() => seededPatchSet(edit("v3-set-absent", { file: "src/none.txt", find: "x", replace: "y" }))).toThrow(/^sec-one: src\/none\.txt is not in the chain after u1-p1$/);
+    expect(() => seededPatchSet(edit("v3-set-count", { file: "src/s1.txt", find: "limit = 11", replace: "limit = 12" }))).toThrow(/^sec-one: its injection\.find occurs 0 times in src\/s1\.txt after u1-p1$/);
+    expect(() => seededPatchSet(edit("v3-set-untouched", { file: ".gitignore", find: "node_modules/", replace: "node_modules" }))).toThrow(/^sec-one: u1-p1\.patch does not touch \.gitignore, the seed's own file$/);
+  });
+
+  it("refuses a seed whose clean text is not in a line its own pass's clean patch adds, naming it", () => {
+    const data = writeV3("v3-set-context");
+    const doc = JSON.parse(readFileSync(join(data, "seeds.json"), "utf8")) as { seeds: { id: string; file: string; injection: { file: string; find: string; replace: string } }[] };
+    // `line 4` is in src/a.txt once, and u1-p1 touches src/a.txt, but only as a context line there.
+    doc.seeds[0]!.file = "src/a.txt";
+    doc.seeds[0]!.injection = { file: "src/a.txt", find: "line 4\n", replace: "line four\n" };
+    writeFileSync(join(data, "seeds.json"), JSON.stringify(doc), "utf8");
+    expect(() => seededPatchSet(data)).toThrow(/^sec-one: its injection\.find is not in exactly one run of lines u1-p1\.patch adds to src\/a\.txt \(the own-hunk rule\)$/);
+  });
+});
+
+describe("--protocol v3 from the command line (plan 012 v3-fixture)", () => {
+  it("builds with the v3 options: no vendor/ in S0, the service's identity, prefix and plan subject", () => {
+    const out = mkdtempSync(join(tmpdir(), "stamity-replay-protocol-"));
+    try {
+      const result = spawnSync(process.execPath, [FIXTURE_MJS, "--out", out, "--no-setup", "--no-install", "--units", "u1-p1", "--protocol", "v3", "--json"], { encoding: "utf8", env: gitEnv() });
+      expect(result.stderr).toBe("");
+      expect(result.status).toBe(0);
+      const built = JSON.parse(result.stdout) as { dir: string; baseCommit: string };
+      expect(basename(built.dir)).toMatch(/^replay-orders-/);
+      expect(git(built.dir, ["log", "--format=%s|%an|%ce"])).toBe("docs: add plan 001|Orders Maintainers|maintainers@orders.invalid\nservice base|Orders Maintainers|maintainers@orders.invalid\n");
+      expect(git(built.dir, ["ls-tree", "-r", "--name-only", built.baseCommit]).split("\n").filter((path) => path.startsWith("vendor/"))).toEqual([]);
+      expect(existsSync(join(built.dir, "vendor", "contrib", "u1-p1.patch"))).toBe(true);
+      expect(git(built.dir, ["for-each-ref", "--format=%(refname)"])).toBe("refs/heads/main\n");
+    } finally {
+      rmSync(out, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

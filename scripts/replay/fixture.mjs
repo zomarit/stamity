@@ -19,13 +19,20 @@
 // a hidden answer key. Only the base patch, the pass patches the plan names, and the rendered plan
 // are copied in — and S0 is refused if one of those still carries an answer-key path.
 //
+// REPLAY-v3 (plan 012) goes further: the units apply their own seeds, so the fixture holds no clean
+// copy of a seeded line anywhere review can reach it. Under `--protocol v3` the pass patches are
+// untracked and git-excluded (`vendor: 'excluded'`), the `--3way` preimages sit in one kept pack
+// with no ref (`preimages: 'kept-pack'`), and the build refuses, naming the seed, when a later pass
+// touches a seed's file or when any stored object would hold a seed's clean text.
+//
 // Usage:
 //   node scripts/replay/fixture.mjs [--out <parentDir>] [--cli-tarball <tgz>]
 //                                   [--deps <dir> | --deps-link <dir>] [--units <id,…|none>]
-//                                   [--protocol v1|v2] [--no-setup] [--no-install] [--run-gates] [--json]
+//                                   [--protocol v1|v2|v3] [--no-setup] [--no-install] [--run-gates] [--json]
 //
 // `--protocol` picks the replay data the version's `PROTOCOLS` entry names (`protocols.mjs`),
-// passed as the `v1Dir` override; absent, v1's `evals/replay/v1`.
+// passed as the `v1Dir` override, and the version's build options (`fixtureOptionsOf`); absent,
+// v1's `evals/replay/v1` and today's build.
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -73,6 +80,26 @@ export const FIXED_GIT_ENV = {
   GIT_COMMITTER_DATE: `${FIXTURE_DATE}T00:00:00Z`,
 }
 
+/** The commit identity of a v1 or v2 fixture: `FIXED_GIT_ENV`'s author, who is also its committer. */
+const DEFAULT_IDENTITY = Object.freeze({ name: FIXED_GIT_ENV.GIT_AUTHOR_NAME, email: FIXED_GIT_ENV.GIT_AUTHOR_EMAIL })
+
+/**
+ * A protocol version's fixture options (`createReplayFixture`): none for v1 and v2, whose builds keep
+ * their bytes; for v3 (plan 012, "Names the agents see"), the excluded patches, the kept pack, the
+ * service's own identity, folder prefix and plan subject, so no name in the fixture says "replay".
+ */
+export function fixtureOptionsOf(version) {
+  if (!isProtocolVersion(version)) throw new Error(`${JSON.stringify(version)} is not a protocol version: ${Object.keys(PROTOCOLS).join(' or ')}`)
+  if (version !== 'v3') return {}
+  return {
+    vendor: 'excluded',
+    preimages: 'kept-pack',
+    identity: { name: 'Orders Maintainers', email: 'maintainers@orders.invalid' },
+    prefix: 'replay-orders-',
+    planSubject: 'docs: add plan 001',
+  }
+}
+
 /**
  * How long one child may run before it is killed. Git calls against a fixture finish in well under
  * a second, so a minute means something is stuck (a credential prompt, a lock); an install, a
@@ -94,7 +121,7 @@ const CONTRIB_DIR = 'vendor/contrib'
  * copies none of them, so a hit means a patch itself carries one, and that is a data defect to fix
  * at its source rather than a file to quietly drop.
  */
-const ANSWER_KEY = /seeds\.json|__oracle__|reference-fixes/
+const ANSWER_KEY = /seeds\.json|__oracle__|reference-fixes|patches-seeded/
 
 /**
  * Inherited variables that would point git at a different repository, index or object store than
@@ -166,12 +193,13 @@ function gitConfigArgs(dir) {
  * reports a null exit code, and its output gains a line naming the signal and the elapsed time, so
  * a recorded step says why it stopped.
  */
-function exec(cwd, file, args, { env, shell = false, timeoutMs = COMMAND_TIMEOUT_MS } = {}) {
+function exec(cwd, file, args, { env, input, shell = false, timeoutMs = COMMAND_TIMEOUT_MS } = {}) {
   const started = Date.now()
   const result = spawnSync(file, args, {
     cwd,
     encoding: 'utf8',
     env: env ?? childEnv(),
+    input,
     maxBuffer: 256 * 1024 * 1024,
     shell,
     timeout: timeoutMs,
@@ -190,12 +218,19 @@ function exec(cwd, file, args, { env, shell = false, timeoutMs = COMMAND_TIMEOUT
 }
 
 /** Run git in a fixture with the overrides. Throws with git's own output when git refuses. */
-function git(dir, args, { env, timeoutMs = GIT_TIMEOUT_MS } = {}) {
-  const { exitCode, output } = exec(dir, 'git', [...gitConfigArgs(dir), ...args], { env, timeoutMs })
+function git(dir, args, { env, input, timeoutMs = GIT_TIMEOUT_MS } = {}) {
+  const { exitCode, output } = exec(dir, 'git', [...gitConfigArgs(dir), ...args], { env, input, timeoutMs })
   if (exitCode !== 0) {
     throw new Error(`git ${args.join(' ')} exited ${exitCode} in ${dir}:\n${output.trim()}`)
   }
   return output
+}
+
+/** `git` whose standard output alone is returned, trimmed: an id or a pack name, with no stderr beside it. */
+function gitOut(dir, args, { input, timeoutMs = GIT_TIMEOUT_MS } = {}) {
+  const { exitCode, stdout, output } = exec(dir, 'git', [...gitConfigArgs(dir), ...args], { input, timeoutMs })
+  if (exitCode !== 0) throw new Error(`git ${args.join(' ')} exited ${exitCode} in ${dir}:\n${output.trim()}`)
+  return stdout.trim()
 }
 
 /**
@@ -375,6 +410,250 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex')
 }
 
+// ---------- REPLAY-v3: the seeded patches, the kept pack and the refusal (plan 012) ----------
+
+/** Where a v3 data set keeps each pass's seeded patch, beside `patches/`: the driver's swap source, never the fixture's. */
+const SEEDED_DIR = 'patches-seeded'
+
+/** The `diff --git` blocks of a patch, each with its path and its `index <pre>..<post>` ids (null on a block with no index line). */
+function patchBlocks(patchText) {
+  return patchText
+    .split(/^(?=diff --git )/m)
+    .filter((text) => text.startsWith('diff --git '))
+    .map((text) => {
+      const [, from, to] = /^diff --git a\/(\S+) b\/(\S+)$/m.exec(text) ?? []
+      const ids = /^index ([0-9a-f]+)\.\.([0-9a-f]+)/m.exec(text)
+      return { text, paths: [...new Set([from, to].filter(Boolean))], path: to ?? from, pre: ids?.[1] ?? null, post: ids?.[2] ?? null }
+    })
+}
+
+const isZeroId = (id) => /^0+$/.test(id)
+
+/** A patch's preimage id per path, from its blocks. */
+const preimagesByPath = (blocks) => new Map(blocks.map((block) => [block.path, block.pre]))
+
+/** The git blob id of `bytes`: what `git hash-object` prints for a file holding them, written nowhere. */
+function blobId(bytes) {
+  const body = Buffer.from(bytes)
+  return createHash('sha1').update(`blob ${body.length}\0`).update(body).digest('hex')
+}
+
+/**
+ * What a v3 build needs from its data set before anything is made: `seeds.json`, each chain pass's
+ * seeded patch, and the object ids no fixture may store. Refuses, before S0, a pass whose seeded
+ * patch records other preimage ids than its clean patch (the swap's `--3way` would then need blobs
+ * the fixture never stores), and a seed whose file a later pass touches, clean or seeded (the leaf
+ * rule: that pass's preimage would be the seed's clean postimage, stored for `--3way`).
+ */
+function seededGuard(source, chain) {
+  const seedsPath = join(source, 'seeds.json')
+  if (!existsSync(seedsPath)) throw new Error(`the kept-pack build needs the data set's seeds.json (${seedsPath}) to refuse a store holding a seed's clean text`)
+  const seeds = JSON.parse(readFileSync(seedsPath, 'utf8')).seeds ?? []
+  const passes = chain.map((pass) => {
+    const seededPath = join(source, SEEDED_DIR, `${pass.id}.patch`)
+    if (!existsSync(seededPath)) throw new Error(`the kept-pack build needs ${SEEDED_DIR}/${pass.id}.patch beside ${pass.id}.patch`)
+    const clean = readFileSync(pass.path)
+    const seeded = readFileSync(seededPath)
+    return { id: pass.id, clean, seeded, cleanBlocks: patchBlocks(clean.toString('utf8')), seededBlocks: patchBlocks(seeded.toString('utf8')) }
+  })
+  for (const pass of passes) {
+    const [clean, seeded] = [preimagesByPath(pass.cleanBlocks), preimagesByPath(pass.seededBlocks)]
+    for (const path of new Set([...clean.keys(), ...seeded.keys()])) {
+      if (clean.get(path) !== seeded.get(path)) {
+        throw new Error(
+          `${pass.id}: the seeded patch's preimage ids differ from the clean patch's (${path}: clean ${clean.get(path) ?? 'absent'}, seeded ${seeded.get(path) ?? 'absent'}); ` +
+            'cut both from the same clean chain, so the swapped patch applies over the same stored preimages',
+        )
+      }
+    }
+  }
+  for (const seed of seeds) {
+    const file = seed.injection?.file ?? seed.file
+    const at = passes.findIndex((pass) => pass.id === seed.pass)
+    // A seed of a pass the chain does not carry arrives nowhere, so no pass is later than it.
+    if (at === -1) continue
+    for (const later of passes.slice(at + 1)) {
+      if ([...later.cleanBlocks, ...later.seededBlocks].some((block) => block.paths.includes(file))) {
+        throw new Error(
+          `${seed.id}: ${later.id}.patch touches ${file}, the file of this ${seed.pass} seed; a seed's file is touched by no later pass ` +
+            "(the leaf rule), or that pass's stored preimage would hold the seed's clean text",
+        )
+      }
+    }
+  }
+  const forbidden = []
+  for (const pass of passes) {
+    const own = seeds.filter((seed) => seed.pass === pass.id)
+    const named = own.map((seed) => seed.id).join(', ') || 'none'
+    forbidden.push(
+      { id: blobId(pass.clean), what: `${pass.id}.patch's clean bytes, holding the clean text of seed ${named}` },
+      { id: blobId(pass.seeded), what: `${pass.id}.patch's seeded bytes, holding seed ${named}` },
+    )
+    for (const block of pass.cleanBlocks) {
+      const seeded = pass.seededBlocks.find((other) => other.path === block.path)
+      if (block.post === null || isZeroId(block.post) || seeded?.post === block.post) continue
+      const onFile = own.filter((seed) => (seed.injection?.file ?? seed.file) === block.path).map((seed) => seed.id)
+      forbidden.push({ id: block.post, what: `${pass.id}'s clean postimage of ${block.path}, the file of seed ${onFile.join(', ') || named}` })
+    }
+  }
+  return { seeds, forbidden }
+}
+
+/**
+ * Put into the fixture's object store the preimage blobs `git apply --3way` needs, and nothing else.
+ *
+ * REPLAY-v2's `refs/replay/preimages/<pass>` trees held whole chain states, so an earlier pass's
+ * clean postimage sat one `git show` away from every reviewer. Here the clean chain is replayed in
+ * a scratch repository outside the fixture (`git apply --cached` writes each state's blobs there),
+ * and only the non-zero ids named on the pass patches' `index` lines — each pass's preimage, which
+ * the seeded patch shares with the clean one (`seededGuard`) — are packed into the fixture: one pack
+ * with a `.keep` file, so `git gc --prune=now` never drops it, and no ref, so no ref names it.
+ */
+function storePreimageBlobs(dir, basePatch, chain, timeoutMs) {
+  const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'fixture-chain-')))
+  try {
+    git(scratch, ['init', '--quiet', '--template='], { timeoutMs })
+    git(scratch, ['apply', '--cached', '--whitespace=nowarn', basePatch], { timeoutMs })
+    const ids = new Set()
+    for (const pass of chain) {
+      for (const id of preimageIds(readFileSync(pass.path, 'utf8'))) {
+        const found = exec(scratch, 'git', [...gitConfigArgs(scratch), 'rev-parse', '--verify', '--quiet', `${id}^{blob}`], { timeoutMs })
+        if (found.exitCode !== 0) {
+          throw new Error(`${pass.id}.patch records preimage blob ${id}, which is not the chain's content before ${pass.id}; regenerate the patch from the clean chain`)
+        }
+        ids.add(found.stdout.trim())
+      }
+      git(scratch, ['apply', '--cached', '--whitespace=nowarn', pass.path], { timeoutMs })
+    }
+    if (ids.size === 0) return
+    const packDir = join(dir, '.git', 'objects', 'pack')
+    mkdirSync(packDir, { recursive: true })
+    const name = gitOut(scratch, ['pack-objects', '-q', join(packDir, 'pack')], { input: `${[...ids].join('\n')}\n`, timeoutMs })
+    writeFileSync(join(packDir, `pack-${name}.keep`), '')
+    for (const id of ids) git(dir, ['cat-file', '-e', `${id}^{blob}`], { timeoutMs })
+  } finally {
+    rmSync(scratch, { recursive: true, force: true, maxRetries: 5 })
+  }
+}
+
+/** Every object in the fixture's store, loose or packed, reachable or not, with its bytes. */
+function storedObjects(dir, timeoutMs) {
+  const result = spawnSync('git', [...gitConfigArgs(dir), 'cat-file', '--batch-all-objects', '--batch'], {
+    cwd: dir,
+    env: childEnv(),
+    maxBuffer: 1024 * 1024 * 1024,
+    timeout: timeoutMs,
+  })
+  if (result.status !== 0) throw new Error(`git cat-file --batch-all-objects exited ${result.status} in ${dir}:\n${String(result.stderr ?? result.error?.message ?? '').trim()}`)
+  const out = result.stdout
+  const objects = []
+  let at = 0
+  while (at < out.length) {
+    const eol = out.indexOf(10, at)
+    const [id, type, size] = out.subarray(at, eol).toString('utf8').split(' ')
+    const start = eol + 1
+    objects.push({ id, type, body: out.subarray(start, start + Number(size)) })
+    at = start + Number(size) + 1
+  }
+  return objects
+}
+
+/**
+ * Refuse a v3 fixture whose store could hand a reviewer the clean copy of a seeded line: a ref other
+ * than `refs/heads/main`, a pass patch's own bytes, a clean postimage of a seeded file, or any
+ * object holding a seed's `injection.find` text. Each refusal names the seed.
+ */
+function refuseCleanStore(dir, { seeds, forbidden }, timeoutMs) {
+  const refs = gitOut(dir, ['for-each-ref', '--format=%(refname)'], { timeoutMs }).split('\n').filter((ref) => ref !== '')
+  const extra = refs.filter((ref) => ref !== 'refs/heads/main')
+  if (extra.length > 0) throw new Error(`the fixture holds refs other than refs/heads/main (${extra.join(', ')}); a v3 fixture keeps its preimages in a kept pack with no ref`)
+  for (const { id, what } of forbidden) {
+    if (exec(dir, 'git', [...gitConfigArgs(dir), 'cat-file', '-e', id], { timeoutMs }).exitCode === 0) {
+      throw new Error(`the fixture's object store holds ${what} (object ${id}); no stored object may hold a seed's clean text`)
+    }
+  }
+  const needles = seeds.filter((seed) => typeof seed.injection?.find === 'string' && seed.injection.find !== '').map((seed) => ({ seed, find: Buffer.from(seed.injection.find, 'utf8') }))
+  for (const object of storedObjects(dir, timeoutMs)) {
+    const hit = needles.find(({ find }) => object.body.includes(find))
+    if (hit) {
+      throw new Error(`${hit.seed.id}: the fixture's object store would hold the seed's clean text (its injection.find) in ${object.type} ${object.id}; no stored object may hold a seed's clean text`)
+    }
+  }
+}
+
+/** `text` as it stands in a patch body: every line after the first one gains the `+` of an added line. */
+function asAddedLines(text) {
+  const body = text.replaceAll('\n', '\n+')
+  return text.endsWith('\n') ? body.slice(0, -1) : body
+}
+
+/**
+ * One pass's seeded patch from its clean one: in the block of each seeded file, the clean text of
+ * each seed on it becomes its seeded text, and the `index` line's postimage id becomes the id of
+ * the clean postimage with those seeds injected. Every seed's `find` must stand in exactly one line
+ * run the clean patch adds (the own-hunk rule); a seed that does not is refused by name.
+ */
+function seedPatch(patchText, passId, file, seeds, postimage) {
+  const blocks = patchText.split(/^(?=diff --git )/m)
+  const at = blocks.findIndex((block) => patchBlocks(block)[0]?.path === file)
+  if (at === -1) throw new Error(`${seeds.map((seed) => seed.id).join(', ')}: ${passId}.patch does not touch ${file}, the seed's own file`)
+  const block = blocks[at]
+  const hunks = block.search(/^@@/m)
+  let head = block.slice(0, hunks)
+  let body = block.slice(hunks)
+  head = head.replace(/^(index [0-9a-f]+\.\.)([0-9a-f]+)/m, (_, left, old) => `${left}${blobId(postimage).slice(0, old.length)}`)
+  for (const seed of seeds) {
+    const find = asAddedLines(seed.injection.find)
+    const where = body.indexOf(find)
+    const lineStart = body.lastIndexOf('\n', where - 1) + 1
+    if (hunks === -1 || where === -1 || body.indexOf(find, where + 1) !== -1 || body[lineStart] !== '+') {
+      throw new Error(`${seed.id}: its injection.find is not in exactly one run of lines ${passId}.patch adds to ${file} (the own-hunk rule)`)
+    }
+    body = `${body.slice(0, where)}${asAddedLines(seed.injection.replace)}${body.slice(where + find.length)}`
+  }
+  blocks[at] = `${head}${body}`
+  return blocks.join('')
+}
+
+/**
+ * The seeded patch of every pass of a v3 data set, rebuilt from its clean chain and its seeds'
+ * `injection`: `{ [pass]: text }`, in chain order. The clean chain is replayed in a scratch
+ * repository; at each pass, each seeded file's clean postimage takes its seeds (`find` → `replace`,
+ * once each), and the pass's clean patch is rewritten to match (`seedPatch`). The committed
+ * `patches-seeded/` must equal this byte for byte (`test/replay/seeds-v3.test.ts`).
+ */
+export function seededPatchSet(dataDir) {
+  const source = resolve(dataDir)
+  const seeds = JSON.parse(readFileSync(join(source, 'seeds.json'), 'utf8')).seeds ?? []
+  const chain = chainPatches(join(source, 'patches'))
+  const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'fixture-chain-')))
+  try {
+    git(scratch, ['init', '--quiet', '--template='])
+    git(scratch, ['apply', '--cached', '--whitespace=nowarn', join(source, 'patches', 'base.patch')])
+    const set = {}
+    for (const pass of chain) {
+      git(scratch, ['apply', '--cached', '--whitespace=nowarn', pass.path])
+      let text = readFileSync(pass.path, 'utf8')
+      const own = seeds.filter((seed) => seed.pass === pass.id)
+      for (const [file, group] of Map.groupBy(own, (seed) => seed.injection.file)) {
+        const shown = exec(scratch, 'git', [...gitConfigArgs(scratch), 'cat-file', 'blob', `:${file}`], { timeoutMs: GIT_TIMEOUT_MS })
+        if (shown.exitCode !== 0) throw new Error(`${group.map((seed) => seed.id).join(', ')}: ${file} is not in the chain after ${pass.id}`)
+        let content = shown.stdout
+        for (const seed of group) {
+          const count = content.split(seed.injection.find).length - 1
+          if (count !== 1) throw new Error(`${seed.id}: its injection.find occurs ${count} times in ${file} after ${pass.id}`)
+          content = content.replace(seed.injection.find, () => seed.injection.replace)
+        }
+        text = seedPatch(text, pass.id, file, group, content)
+      }
+      set[pass.id] = text
+    }
+    return set
+  } finally {
+    rmSync(scratch, { recursive: true, force: true, maxRetries: 5 })
+  }
+}
+
 /** The absolute, real git common dir of the repository holding `dir`, or null outside any. */
 function gitCommonDir(dir) {
   const { exitCode, stdout } = exec(dir, 'git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { timeoutMs: GIT_TIMEOUT_MS })
@@ -429,6 +708,15 @@ export function refuseOutInsideRepository(out, repoRoot = REPO_ROOT) {
  * tree can be inspected or removed. A gate that fails (or times out) is a measurement, not a
  * failure: it lands in `gates` and the build still returns. Every child is killed after
  * `timeouts.git` (git) or `timeouts.command` (npm, the CLI, the gates) milliseconds.
+ *
+ * Five options shape what the agents can find, and their defaults give v1's and v2's bytes
+ * (`fixtureOptionsOf` gives v3's): `vendor` — `committed` puts the pass patches in S0, `excluded`
+ * writes `/vendor/` to `.git/info/exclude` first, so they sit in the tree untracked; `preimages` —
+ * `refs` pins each chain state under `refs/replay/preimages/<pass>`, `kept-pack` stores only the
+ * pass patches' preimage blobs in one kept pack with no ref and refuses a store holding any seed's
+ * clean text (`storePreimageBlobs`, `refuseCleanStore`); `identity` — the `{ name, email }` of
+ * every commit's author and committer; `prefix` — the fixture folder's name prefix; `planSubject` —
+ * the plan commit's subject.
  */
 export function createReplayFixture({
   out,
@@ -441,7 +729,19 @@ export function createReplayFixture({
   runGates = false,
   v1Dir,
   timeouts = {},
+  vendor = 'committed',
+  preimages = 'refs',
+  identity = DEFAULT_IDENTITY,
+  prefix = 'stamity-replay-',
+  planSubject = 'replay plan',
 } = {}) {
+  if (!['committed', 'excluded'].includes(vendor)) throw new Error(`vendor must be committed or excluded, not ${JSON.stringify(vendor)}`)
+  if (!['refs', 'kept-pack'].includes(preimages)) throw new Error(`preimages must be refs or kept-pack, not ${JSON.stringify(preimages)}`)
+  if (typeof identity?.name !== 'string' || identity.name === '' || typeof identity.email !== 'string' || identity.email === '') {
+    throw new Error('identity must be { name, email }, both non-empty strings')
+  }
+  if (typeof prefix !== 'string' || !/^[A-Za-z0-9._-]+$/.test(prefix)) throw new Error(`prefix must be a folder-name prefix, not ${JSON.stringify(prefix)}`)
+  if (typeof planSubject !== 'string' || planSubject.trim() === '') throw new Error('planSubject must be a non-empty commit subject')
   const gitTimeoutMs = timeouts.git ?? GIT_TIMEOUT_MS
   const commandTimeoutMs = timeouts.command ?? COMMAND_TIMEOUT_MS
   const parent = resolve(out ?? tmpdir())
@@ -463,12 +763,15 @@ export function createReplayFixture({
   const chain = chainPatches(join(source, 'patches'))
   const absent = selected.filter((id) => !chain.some((pass) => pass.id === id))
   if (absent.length > 0) throw new Error(`no pass patch for ${absent.join(', ')} in ${join(source, 'patches')}`)
+  // Before anything is made: a data set the kept pack cannot keep clean is refused here, by seed.
+  const guard = preimages === 'kept-pack' ? seededGuard(source, chain) : null
 
   mkdirSync(parent, { recursive: true })
   refuseOutInsideRepository(realpathSync(parent))
-  const dir = realpathSync(mkdtempSync(join(parent, 'stamity-replay-')))
+  const dir = realpathSync(mkdtempSync(join(parent, prefix)))
+  const env = childEnv({ GIT_AUTHOR_NAME: identity.name, GIT_AUTHOR_EMAIL: identity.email, GIT_COMMITTER_NAME: identity.name, GIT_COMMITTER_EMAIL: identity.email })
   try {
-    return buildFixture({ dir, source, basePatch, templatePath, chain, selected, deps, depsLink, install, setup, cliTarball, runGates, gitTimeoutMs, commandTimeoutMs })
+    return buildFixture({ dir, source, basePatch, templatePath, chain, selected, deps, depsLink, install, setup, cliTarball, runGates, gitTimeoutMs, commandTimeoutMs, vendor, guard, env, planSubject })
   } catch (error) {
     if (error instanceof Error && error.dir === undefined) {
       error.dir = dir
@@ -479,12 +782,12 @@ export function createReplayFixture({
 }
 
 /** Steps (1) to (6) of `createReplayFixture`, inside the fixture directory it has made. */
-function buildFixture({ dir, source, basePatch, templatePath, chain, selected, deps, depsLink, install, setup, cliTarball, runGates, gitTimeoutMs, commandTimeoutMs }) {
+function buildFixture({ dir, source, basePatch, templatePath, chain, selected, deps, depsLink, install, setup, cliTarball, runGates, gitTimeoutMs, commandTimeoutMs, vendor, guard, env, planSubject }) {
 
   const steps = []
   const step = (name, file, args, options = {}) => {
     const shown = options.shown ?? [file, ...args]
-    const { exitCode, output } = exec(dir, file, args, { timeoutMs: commandTimeoutMs, ...options })
+    const { exitCode, output } = exec(dir, file, args, { timeoutMs: commandTimeoutMs, env, ...options })
     steps.push({ name, command: shown.join(' '), exitCode, output })
     if (exitCode !== 0) {
       const error = new Error(`replay fixture step "${name}" exited ${exitCode}:\n${output.trim()}`)
@@ -504,10 +807,16 @@ function buildFixture({ dir, source, basePatch, templatePath, chain, selected, d
 
   // (1) and (2): the service at S0, with the pass patches and their preimages beside it.
   gitStep('git init', ['init', '--quiet', '--template='])
+  if (vendor === 'excluded') {
+    // Before the first `git add`: the pass patches stay untracked, so no commit and no blob holds them.
+    mkdirSync(join(dir, '.git', 'info'), { recursive: true })
+    writeFileSync(join(dir, '.git', 'info', 'exclude'), '/vendor/\n', 'utf8')
+  }
   gitStep('apply base.patch', ['apply', '--whitespace=nowarn', basePatch])
   mkdirSync(join(dir, CONTRIB_DIR), { recursive: true })
   for (const id of selected) copyFileSync(join(source, 'patches', `${id}.patch`), join(dir, CONTRIB_DIR, `${id}.patch`))
-  storeChainPreimages(dir, basePatch, chain, gitTimeoutMs)
+  if (guard === null) storeChainPreimages(dir, basePatch, chain, gitTimeoutMs)
+  else storePreimageBlobs(dir, basePatch, chain, gitTimeoutMs)
   gitStep('git add', ['add', '-A'])
   // Tracked, untracked and ignored alike: with no exclude option, `--others` lists every file in
   // the working tree, so a patch that ignores its own answer-key file does not hide it here.
@@ -523,7 +832,8 @@ function buildFixture({ dir, source, basePatch, templatePath, chain, selected, d
   const plan = renderPlan(readFileSync(templatePath, 'utf8'), { stamp: baseCommit, units: selected })
   mkdirSync(join(dir, 'docs', 'plans'), { recursive: true })
   writeFileSync(join(dir, PLAN_PATH), plan, 'utf8')
-  const planCommit = commit('commit replay plan', 'replay plan')
+  const planCommit = commit('commit replay plan', planSubject)
+  if (guard !== null) refuseCleanStore(dir, guard, gitTimeoutMs)
 
   // (4): dependencies.
   const nodeModules = join(dir, 'node_modules')
@@ -560,6 +870,7 @@ function buildFixture({ dir, source, basePatch, templatePath, chain, selected, d
     stamity('stamity sync', ['sync', '-y'])
     stamity('stamity check', ['check'])
     setupCommit = commit('commit stamity setup', 'stamity setup')
+    if (guard !== null) refuseCleanStore(dir, guard, gitTimeoutMs)
     cli = { tarballSha256: sha256(readFileSync(tarball)), version: installed.version }
   }
 
@@ -628,7 +939,8 @@ function main(argv) {
   if (protocol !== undefined && !isProtocolVersion(protocol)) {
     throw new Error(`--protocol ${protocol} is not a protocol version: ${Object.keys(PROTOCOLS).join(' or ')}.\n${USAGE}`)
   }
-  const result = createReplayFixture({ ...options, v1Dir: dataDirOf(protocol ?? DEFAULT_PROTOCOL) })
+  const version = protocol ?? DEFAULT_PROTOCOL
+  const result = createReplayFixture({ ...options, ...fixtureOptionsOf(version), v1Dir: dataDirOf(version) })
   if (json) {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
     return

@@ -1,5 +1,5 @@
 // The replay's protocol table and the few scoring rules the scorer and the comparison share
-// (plan 011, contract S2). A leaf: it imports nothing from `scripts/replay/`, so `score.mjs` and
+// (plan 011, contract S2; plan 012 adds v3, contract S5). A leaf: it imports nothing from `scripts/replay/`, so `score.mjs` and
 // `compare.mjs` both read these bindings without `compare.mjs` importing `score.mjs` — the import
 // cycle `build/273` recorded. The private driver's `replay.mjs` mirrors `PROTOCOLS` with a comment
 // naming this file; a change here is a change there.
@@ -11,6 +11,7 @@
 export const PROTOCOLS = Object.freeze({
   v1: Object.freeze({ path: 'evals/replay/REPLAY-v1.md', data: 'evals/replay/v1', runs: 'evals/replay/runs', comparison: 'evals/replay/COMPARISON-v1.md' }),
   v2: Object.freeze({ path: 'evals/replay/REPLAY-v2.md', data: 'evals/replay/v2', runs: 'evals/replay/v2/runs', comparison: 'evals/replay/COMPARISON-v2.md' }),
+  v3: Object.freeze({ path: 'evals/replay/REPLAY-v3.md', data: 'evals/replay/v3', runs: 'evals/replay/v3/runs', comparison: 'evals/replay/COMPARISON-v3.md' }),
 })
 
 /** The version a command reads when it is given no `--protocol`: v1, so v1's recorded commands keep working. */

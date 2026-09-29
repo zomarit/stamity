@@ -1,0 +1,371 @@
+diff --git a/test/__oracle__/con-config-key-case.test.ts b/test/__oracle__/con-config-key-case.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..632fb6a2fd729e8f13970944e812b6f65c297f10
+--- /dev/null
++++ b/test/__oracle__/con-config-key-case.test.ts
+@@ -0,0 +1,16 @@
++import { readFileSync } from "node:fs";
++import { join } from "node:path";
++import { expect, it } from "vitest";
++import * as config from "../../src/config/load.ts";
++import { seam } from "./harness.ts";
++
++const readConfigFile = seam<typeof config.readConfigFile>(config, "readConfigFile", "src/config/load.ts");
++
++it("reads the deployed exportBatchSize from config/service.json under its documented key", () => {
++  const servicePath = join(import.meta.dirname, "..", "..", "config", "service.json");
++  const raw = JSON.parse(readFileSync(servicePath, "utf8")) as Record<string, unknown>;
++  // The documented key (docs/api.md, Configuration) must be the one the file carries.
++  expect(Object.keys(raw)).toContain("exportBatchSize");
++  // And the deployed value must survive into the loaded config, not fall back to the default.
++  expect(readConfigFile(servicePath).exportBatchSize).toBe(250);
++});
+diff --git a/test/__oracle__/con-event-time-format.test.ts b/test/__oracle__/con-event-time-format.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..1dbb0887127ddb07e87d162ca6ecb9a27cb8ab16
+--- /dev/null
++++ b/test/__oracle__/con-event-time-format.test.ts
+@@ -0,0 +1,22 @@
++import { afterEach, beforeEach, expect, it } from "vitest";
++import { loadHttp, order, precondition, type OracleApp } from "./harness.ts";
++
++const http = await loadHttp();
++let o: OracleApp;
++
++beforeEach(async () => {
++  o = await http.start();
++});
++
++afterEach(async () => {
++  await o.close();
++});
++
++it("publishes the cancel event with an ISO 8601 UTC time", async () => {
++  http.insertOrder(o.app.db, order(1, "2026-09-01T00:00:00Z"));
++  const res = await http.post(o.app, "/orders/1/cancel");
++  precondition(res.status === 200, `POST /orders/1/cancel answered ${res.status}, not 200`);
++  precondition(o.app.lines.length === 1, `the cancel published ${o.app.lines.length} events, not 1`);
++  const payload = JSON.parse(o.app.lines[0] as string) as Record<string, unknown>;
++  expect(String(payload["at"])).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/);
++});
+diff --git a/test/__oracle__/cor-count-distinct.test.ts b/test/__oracle__/cor-count-distinct.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..50b2c95db07061456e515254699f24c51052e54d
+--- /dev/null
++++ b/test/__oracle__/cor-count-distinct.test.ts
+@@ -0,0 +1,10 @@
++import { expect, it } from "vitest";
++import * as window from "../../src/reports/window.ts";
++import { seam } from "./harness.ts";
++
++const countWithin = seam<typeof window.countWithin>(window, "countWithin", "src/reports/window.ts");
++
++it("counts two orders created at the same instant as two", () => {
++  const at = "2026-09-10T08:00:00Z";
++  expect(countWithin([at, at, "2026-09-11T08:00:00Z"], "2026-09-01T00:00:00Z", "2026-09-30T23:59:59Z")).toBe(3);
++});
+diff --git a/test/__oracle__/cor-export-truncated.test.ts b/test/__oracle__/cor-export-truncated.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..f4f7a7713bd21f73528d25431c00db59d4bac667
+--- /dev/null
++++ b/test/__oracle__/cor-export-truncated.test.ts
+@@ -0,0 +1,44 @@
++import type { DatabaseSync, StatementSync } from "node:sqlite";
++import { expect, it } from "vitest";
++import * as config from "../../src/config/load.ts";
++import * as db from "../../src/store/db.ts";
++import * as helpers from "../helpers.ts";
++import { order, seam } from "./harness.ts";
++
++const openDb = seam<typeof db.openDb>(db, "openDb", "src/store/db.ts");
++const insertOrder = seam<typeof db.insertOrder>(db, "insertOrder", "src/store/db.ts");
++const loadConfig = seam<typeof config.loadConfig>(config, "loadConfig", "src/config/load.ts");
++const startApp = seam<typeof helpers.startApp>(helpers, "startApp", "test/helpers.ts");
++const get = seam<typeof helpers.get>(helpers, "get", "test/helpers.ts");
++
++it("answers 500, not a shortened CSV, when a batch read fails part way", async () => {
++  const database: DatabaseSync = openDb();
++  for (const id of [1, 2, 3]) insertOrder(database, order(id, `2026-09-0${id}T00:00:00Z`));
++  const prepare = database.prepare.bind(database);
++  // Every statement of the export reads through LIMIT ? OFFSET ?; the second batch read fails the way a lost store does.
++  database.prepare = ((sql: string) => {
++    const statement = prepare(sql);
++    if (!/\bLIMIT \? OFFSET \?/.test(sql)) return statement;
++    let reads = 0;
++    return new Proxy(statement, {
++      get(target, key) {
++        if (key === "all") {
++          return (...args: unknown[]) => {
++            reads += 1;
++            if (reads === 2) throw new Error("database disk image is malformed");
++            return (target.all as (...a: unknown[]) => unknown)(...args);
++          };
++        }
++        const value = Reflect.get(target, key) as unknown;
++        return typeof value === "function" ? (value as (...a: unknown[]) => unknown).bind(target) : value;
++      },
++    }) as StatementSync;
++  }) as DatabaseSync["prepare"];
++  const app = await startApp({ db: database, config: loadConfig({ exportBatchSize: 1 }) });
++  try {
++    const res = await get(app, "/orders/export");
++    expect(res.status).toBe(500);
++  } finally {
++    await app.close();
++  }
++});
+diff --git a/test/__oracle__/cor-invoice-eacces.test.ts b/test/__oracle__/cor-invoice-eacces.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..9bf8cc0049966e5d25a7b57adbf8965bcb64a39b
+--- /dev/null
++++ b/test/__oracle__/cor-invoice-eacces.test.ts
+@@ -0,0 +1,30 @@
++import { chmodSync, writeFileSync } from "node:fs";
++import { join } from "node:path";
++import { afterEach, beforeEach, expect, it } from "vitest";
++import { loadHttp, order, precondition, type OracleApp } from "./harness.ts";
++
++const http = await loadHttp();
++let o: OracleApp;
++
++beforeEach(async () => {
++  o = await http.start();
++});
++
++afterEach(async () => {
++  await o.close();
++});
++
++it("answers 500, not 404, when an existing invoice cannot be read (permission denied)", async () => {
++  precondition(process.platform !== "win32" && process.getuid?.() !== 0, "root or a non-POSIX filesystem cannot enforce an unreadable file");
++  precondition(o.app.invoiceDir === o.invoiceDir, "the app does not serve from the invoice directory the check handed it");
++  http.insertOrder(o.app.db, order(1, "2026-09-01T00:00:00Z"));
++  const path = join(o.invoiceDir, "1.pdf");
++  writeFileSync(path, "%PDF-1.7 unreadable", "utf8");
++  chmodSync(path, 0o000);
++  try {
++    const res = await http.get(o.app, "/orders/1/invoice");
++    expect(res.status).toBe(500);
++  } finally {
++    chmodSync(path, 0o600);
++  }
++});
+diff --git a/test/__oracle__/harness.ts b/test/__oracle__/harness.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..4a33b314699a0c911f244fec8c7e0464296f1dbf
+--- /dev/null
++++ b/test/__oracle__/harness.ts
+@@ -0,0 +1,103 @@
++import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import type { DatabaseSync } from "node:sqlite";
++import type * as Db from "../../src/store/db.ts";
++import type * as Helpers from "../helpers.ts";
++
++/**
++ * The replay's hidden checks, one file per seed, each asking whether that seed's defect is absent.
++ * They reach the service over HTTP or through its exported functions only, so a refactor that keeps
++ * the behaviour keeps them valid.
++ *
++ * A check whose module no longer exports what it reaches the service through must report an
++ * error, never a pass or a fail: vitest turns a missing named import into `undefined`, so a renamed
++ * function would surface as a TypeError inside the test, which reads as a failed assertion. Each
++ * check therefore resolves what it uses through `seam` at load time, and a missing export fails
++ * the file before any test runs.
++ */
++export function seam<T>(mod: object, name: string, where: string): T {
++  const value = (mod as Record<string, unknown>)[name];
++  if (typeof value !== "function") throw new Error(`oracle seam: ${where} no longer exports ${name}()`);
++  return value as T;
++}
++
++/**
++ * Stop a check that cannot say, rather than let it read as a defect found: the app did not answer
++ * the way the check needs before it can ask its question. The runner reads a failure whose message
++ * starts `oracle precondition:` (like `oracle seam:`) as an error, never a fail.
++ */
++export function precondition(ok: boolean, what: string): asserts ok {
++  if (!ok) throw new Error(`oracle precondition: ${what}`);
++}
++
++/** A running app whose database records the text of every statement it prepares. */
++export interface OracleApp {
++  app: Helpers.Started;
++  /** Every SQL text passed to `db.prepare`, in order. */
++  sql: string[];
++  /** The invoice directory handed to the app; its parent holds nothing the app may serve. */
++  invoiceDir: string;
++  close(): Promise<void>;
++}
++
++export interface Http {
++  start(): Promise<OracleApp>;
++  insertOrder: typeof Db.insertOrder;
++  get: typeof Helpers.get;
++  post: typeof Helpers.post;
++}
++
++/**
++ * The HTTP seams, loaded and checked: the test helpers' `startApp`, `get` and `post`, and the
++ * store's `openDb` and `insertOrder`. Imported here rather than at the top of this file so the
++ * pure checks, which import only `seam`, do not depend on the helpers existing.
++ */
++export async function loadHttp(): Promise<Http> {
++  const helpers = await import("../helpers.ts");
++  const db = await import("../../src/store/db.ts");
++  const startApp = seam<typeof Helpers.startApp>(helpers, "startApp", "test/helpers.ts");
++  const openDb = seam<typeof Db.openDb>(db, "openDb", "src/store/db.ts");
++  return {
++    insertOrder: seam<typeof Db.insertOrder>(db, "insertOrder", "src/store/db.ts"),
++    get: seam<typeof Helpers.get>(helpers, "get", "test/helpers.ts"),
++    post: seam<typeof Helpers.post>(helpers, "post", "test/helpers.ts"),
++    async start() {
++      const root = mkdtempSync(join(tmpdir(), "replay-oracle-"));
++      const invoiceDir = join(root, "invoices");
++      const sql: string[] = [];
++      let app: Helpers.Started;
++      try {
++        const database: DatabaseSync = openDb();
++        const prepare = database.prepare.bind(database);
++        database.prepare = ((...args: Parameters<DatabaseSync["prepare"]>) => {
++          sql.push(String(args[0]));
++          return prepare(...args);
++        }) as DatabaseSync["prepare"];
++        mkdirSync(invoiceDir);
++        app = await startApp({ db: database, invoiceDir });
++      } catch (error) {
++        // A check whose app never started cannot say whether its defect is there.
++        rmSync(root, { recursive: true, force: true });
++        throw new Error(`oracle precondition: the app did not start: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
++      }
++      return {
++        app,
++        sql,
++        invoiceDir,
++        async close() {
++          try {
++            await app.close();
++          } finally {
++            rmSync(root, { recursive: true, force: true });
++          }
++        },
++      };
++    },
++  };
++}
++
++/** One order row with the given id and creation time. */
++export function order(id: number, createdAt: string, status = "open") {
++  return { id, customer: `Customer ${id}`, total_cents: 1000 + id, status, created_at: createdAt };
++}
+diff --git a/test/__oracle__/sec-export-alias-unguarded.test.ts b/test/__oracle__/sec-export-alias-unguarded.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..174a978d0e6e620f3740b641e0ab46848c9e8dcf
+--- /dev/null
++++ b/test/__oracle__/sec-export-alias-unguarded.test.ts
+@@ -0,0 +1,22 @@
++import { afterEach, beforeEach, expect, it } from "vitest";
++import { loadHttp, order, type OracleApp } from "./harness.ts";
++
++const http = await loadHttp();
++let o: OracleApp;
++
++beforeEach(async () => {
++  o = await http.start();
++});
++
++afterEach(async () => {
++  await o.close();
++});
++
++it("refuses the CSV export without a token at every path it is served", async () => {
++  http.insertOrder(o.app.db, order(1, "2026-09-01T00:00:00Z"));
++  for (const path of ["/orders/export", "/orders/export.csv"]) {
++    const res = await http.get(o.app, path, null);
++    expect(res.status, path).toBe(401);
++    expect(await res.text(), path).not.toContain("Customer 1");
++  }
++});
+diff --git a/test/__oracle__/sec-invoice-other-order.test.ts b/test/__oracle__/sec-invoice-other-order.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..348b93225ee5bddafa62b31e977693dcd97f95bb
+--- /dev/null
++++ b/test/__oracle__/sec-invoice-other-order.test.ts
+@@ -0,0 +1,30 @@
++import { writeFileSync } from "node:fs";
++import { join } from "node:path";
++import { afterEach, beforeEach, expect, it } from "vitest";
++import { loadHttp, order, precondition, type OracleApp } from "./harness.ts";
++
++const http = await loadHttp();
++let o: OracleApp;
++
++beforeEach(async () => {
++  o = await http.start();
++});
++
++afterEach(async () => {
++  await o.close();
++});
++
++it("serves no other order's invoice through the file query", async () => {
++  precondition(o.app.invoiceDir === o.invoiceDir, "the app does not serve from the invoice directory the check handed it");
++  http.insertOrder(o.app.db, order(1, "2026-09-01T00:00:00Z"));
++  http.insertOrder(o.app.db, order(12, "2026-09-02T00:00:00Z"));
++  http.insertOrder(o.app.db, order(2, "2026-09-03T00:00:00Z"));
++  writeFileSync(join(o.invoiceDir, "12.pdf"), "%PDF-1.7 invoice of order twelve", "utf8");
++  writeFileSync(join(o.invoiceDir, "2.pdf"), "%PDF-1.7 invoice of order two", "utf8");
++  for (const [id, file] of [[1, "12.pdf"], [1, "2.pdf"], [2, "12.pdf"]] as const) {
++    const res = await http.get(o.app, `/orders/${id}/invoice?file=${file}`);
++    const body = await res.text();
++    expect([400, 404], `${id} ${file}`).toContain(res.status);
++    expect(body).not.toContain("invoice of order");
++  }
++});
+diff --git a/test/__oracle__/sec-sort-alternation.test.ts b/test/__oracle__/sec-sort-alternation.test.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..e65513c2cba8ae6c7c17f9e2180a3b5b1351d02a
+--- /dev/null
++++ b/test/__oracle__/sec-sort-alternation.test.ts
+@@ -0,0 +1,24 @@
++import { afterEach, beforeEach, expect, it } from "vitest";
++import { loadHttp, order, precondition, type OracleApp } from "./harness.ts";
++
++const http = await loadHttp();
++let o: OracleApp;
++
++beforeEach(async () => {
++  o = await http.start();
++});
++
++afterEach(async () => {
++  await o.close();
++});
++
++it("keeps a sort value that only starts like a column out of every SQL text", async () => {
++  http.insertOrder(o.app.db, order(1, "2026-09-01T00:00:00Z"));
++  http.insertOrder(o.app.db, order(2, "2026-09-02T00:00:00Z"));
++  await http.get(o.app, "/orders");
++  precondition(o.sql.some((text) => /\bFROM orders\b/.test(text)), "the SQL recorder saw no list query FROM orders");
++  for (const sort of ["id zz_marker_col", "zz_marker_col customer", "zz_marker_col created_at"]) {
++    await http.get(o.app, `/orders?sort=${encodeURIComponent(sort)}`);
++  }
++  expect(o.sql.filter((text) => text.includes("zz_marker_col"))).toEqual([]);
++});
+diff --git a/test/__oracle__/vitest.config.ts b/test/__oracle__/vitest.config.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..aea57c9f35f7ee9aec016041f529a4182f09def3
+--- /dev/null
++++ b/test/__oracle__/vitest.config.ts
+@@ -0,0 +1,10 @@
++/**
++ * The oracle run's own configuration. The runner passes it with `--config`, so a vitest or vite
++ * config in the tree under replay (one an agent added, say, whose `include` leaves this folder out)
++ * cannot decide what the run collects. Plain data, so it needs no import to load.
++ */
++export default {
++  test: {
++    include: ["test/__oracle__/**/*.test.ts"],
++  },
++};
