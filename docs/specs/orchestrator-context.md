@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, and excluded from the site build.
 status: shipped-with-1.10.0
 obsolete_when: every supported client hands a parent a sub-agent's full report by reference and restores a running flow's state after a compaction on its own, or a decision row cuts the surface
 ---
@@ -13,9 +13,10 @@ recomputed from disk re-grounds the run. The requirements ship with 1.10.0, and
 `status: shipped-with-1.10.0` records that; the spec-status gate admits only `design`, `shipped`
 and `shipped-with-<x.y.z>` (amendment A15). They merged on the QA sign-off, the gate of record
 and CI. They ship without the replay's measurement: R5, the maintainer's decision of 2026-09-27
-in `docs/plans/011-replay-v2.md`, took the replay out of the 1.10.0 release, so the replay's
-quality floor binds the first release that ships REPLAY-v2's comparison instead (REQ-CTX-015;
-D10, amended 2026-09-24 and 2026-09-27).
+in `docs/plans/011-replay-v2.md`, took the replay out of the 1.10.0 release. On 2026-09-29 the
+maintainer retired the replay, so no replay floor binds any release (REQ-CTX-015, amended
+2026-09-29; it read "so the replay's quality floor binds the first release that ships REPLAY-v2's
+comparison instead (REQ-CTX-015; D10, amended 2026-09-24 and 2026-09-27)").
 
 Contract numbers (C1–C12) and decision numbers (D1–D11) refer to the shared-contract and
 decision sections of `docs/plans/009-orchestrator-context-economy-01.md`. That plan carries the byte shapes. Amendment
@@ -30,7 +31,8 @@ and criteria marked "amended 2026-09-27" come from R5 in `docs/plans/011-replay-
 paragraphs and criteria of REQ-CTX-015 marked "amended 2026-09-28" or "added 2026-09-28" come
 from R6–R10 in `docs/plans/011-replay-v2-02.md`: defaults taken unattended, which wait for the
 maintainer's confirmation. They apply under REPLAY-v2 only; REPLAY-v1 and its measurement stay as
-they are.
+they are. The paragraphs and criteria marked "amended 2026-09-29" record the maintainer's decision
+of that day to retire the replay; no plan file carries it.
 
 Line citations outside the Context section are to the tree at `d227ca57`, the 1.10.0 release
 candidate. On 2026-09-27 each one was read at the tree it was first written against and found
@@ -91,12 +93,16 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 
 ## Invariants
 
-1. **The quality floor binds the release that first ships REPLAY-v2's comparison.** The
+1. **No replay floor binds a release.** The requirements below ship in 1.10.0 without the
+   replay's measurement, and the replay is retired (REQ-CTX-015, amended 2026-09-29), so no
+   release waits for a replay comparison and no proposal is dropped for a replay result. The
+   eval-set floors still bind every release run. (Amended 2026-09-29, the maintainer's decision;
+   it read "**The quality floor binds the release that first ships REPLAY-v2's comparison.** The
    requirements below ship in 1.10.0 without the replay's measurement. The first release that
    ships REPLAY-v2's comparison ships only when that comparison shows the C12 floor held for
    each proposal (REQ-CTX-015; D10, amended 2026-09-24). A proposal that fails is reworked and
    re-measured, or dropped. When dropped, its ids are retired here with a pointer to the failing
-   result. (Amended 2026-09-27 by R5; it read "No requirement below ships in 1.10.0 unless the
+   result." Amended 2026-09-27 by R5; it read "No requirement below ships in 1.10.0 unless the
    replay's committed comparison shows the C12 floor held for its proposal".)
 2. **Four-client parity, or a declared degradation per client.** The table below is the
    declaration. A cell that is not `yes` is a degradation, stated here rather than discovered.
@@ -122,7 +128,7 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 | 009–012 dispatch, amendment, implementer return, record head | yes | yes | yes | agent-definition parts yes; body-carried parts have no carrier |
 | 013 resume card | hook after compaction, and the verb | the verb, run by hand after a compaction summary | the verb, run by hand after a compaction summary | hook after compaction, and the verb |
 | 014 body order | yes | not applicable: no documented body re-attachment | not applicable: no documented body re-attachment | not applicable: no body emitted |
-| 015 replay | measured | `not-run`, with reason | `not-run`, with reason | `not-run`, with reason |
+| 015 replay | retired 2026-09-29 before any scored run (amended; it read `measured`) | `not-run`, with reason | `not-run`, with reason | `not-run`, with reason |
 | 016 hook budgets | yes: the session-start rows and the ConfigChange tamper notice at 30 s; the latency check reads this client's guard | yes: the session-start rows at 30 s | yes: the session-start rows at 30 s | yes: the session-start rows at 30 s |
 
 ## References
@@ -156,8 +162,10 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 
 Each requirement is listed with the proposal it belongs to. Every proposal ships in 1.10.0
 without the replay's measurement (R5, amended 2026-09-27; it read "REQ-CTX-015 decides, per
-proposal, what the 1.10.0 release ships"). REQ-CTX-015 decides, per proposal, what is kept once
-REPLAY-v2's comparison is measured:
+proposal, what the 1.10.0 release ships"). Each proposal stays as 1.10.0 shipped it: the replay
+that was to decide, per proposal, what is kept is retired (REQ-CTX-015, amended 2026-09-29; it
+read "REQ-CTX-015 decides, per proposal, what is kept once REPLAY-v2's comparison is measured").
+The proposals are:
 
 - P1: 001–004
 - P2: 005–007
@@ -465,6 +473,17 @@ Implements D7.
 
 A replay compares the changed shape with the 1.9.1 baseline:
 
+- **Retired** (amended 2026-09-29, the maintainer's decision). REPLAY-v3 is dropped. It stopped
+  before any canary, pilot or scored run, because the model provider's safety filter stopped its
+  sessions again and again, and its draft pull request #59 closes unmerged. No later replay runs
+  either: not the combined replay once planned for the release after 1.10.0, and none after the
+  next package's changes. The context economy stays as 1.10.0 shipped it, without the replay's
+  measurement. So no replay floor, replay gate or replay comparison binds any release, and no
+  `evals/replay/COMPARISON-v2.md` will be committed. The eval-set floors still bind every release
+  run. The replay's files stay in the repository, frozen, as the record of REPLAY-v1 and
+  REPLAY-v2; whether to delete them is decided later, in the next package's sweep. The bullets
+  below describe that frozen instrument as built. Every criterion in this spec that reads replay
+  runs or results stays unmet and binds no release.
 - **Scope.** It runs `/st-work` on Claude Code only, one run at a time on the account the
   operator's own logged-in client folder carries (D11; no credential is copied), on a
   disposable fixture with seeded defects. Every run records the init event's skills, agents,
@@ -681,16 +700,18 @@ A replay compares the changed shape with the 1.9.1 baseline:
   (`scripts/replay/compare.mjs:180-185`).
 - **Merge.** The package merges on the QA sign-off, the gate of record and CI (D10, amended
   2026-09-24; it read "the package merges only after the floor holds").
-- **Replay gate** (amended 2026-09-27 by R5; it read "The 1.10.0 release proceeds only after the
-  floor holds on a fixture where seeds reach review (REPLAY-v2, session 2)."). 1.10.0 does not
-  wait for the replay, and the context-economy proposals ship in it without the replay's
-  measurement. The floor binds the first release that ships REPLAY-v2's comparison, measured on a
-  fixture where seeds reach review. v1's fixture lets the orchestrator's pre-read catch every seed
-  before review, so its two pilots stay in `evals/replay/runs/` as unscored evidence and
-  `evals/replay/REPLAY-v1.md` stays frozen. The COMPARISON's literal `Merge gate:` line keeps its
-  name, because the frozen instrument renders it (`scripts/replay/compare.mjs:430`), and it gates
-  that release.
-- **Release gate.** Every eval-set floor holds at the 1.10.0 release run.
+- **Replay gate** (amended 2026-09-29, the maintainer's decision: retired with the replay, and it
+  binds no release; amended 2026-09-27 by R5, where it read "The 1.10.0 release proceeds only
+  after the floor holds on a fixture where seeds reach review (REPLAY-v2, session 2)."). 1.10.0
+  does not wait for the replay, and the context-economy proposals ship in it without the replay's
+  measurement. No later release waits for it either (it read "The floor binds the first release
+  that ships REPLAY-v2's comparison, measured on a fixture where seeds reach review."). v1's
+  fixture lets the orchestrator's pre-read catch every seed before review, so its two pilots stay
+  in `evals/replay/runs/` as unscored evidence and `evals/replay/REPLAY-v1.md` stays frozen. The
+  COMPARISON's literal `Merge gate:` line keeps its name, because the frozen instrument renders it
+  (`scripts/replay/compare.mjs:430`); it gates no release (it read "and it gates that release").
+- **Release gate.** Every eval-set floor holds at the 1.10.0 release run and at every later
+  release run (amended 2026-09-29; it read "at the 1.10.0 release run").
 
 As built (2026-09-26; amended and its citations re-pointed to `d227ca57` on 2026-09-27; amended
 for R6–R10 and its citations re-pointed to `97e6b49f` on 2026-09-28):
@@ -723,10 +744,15 @@ merge gate fails (`compare.mjs:97`, `:353`); so does a changed shape holding a s
 only for an uncovered pass (`sampleOf`, `:101-102`, `:107`; `spentReasons`, `:318-323`). The v2
 fixture is `evals/replay/v2/`. The injection, the snapshots, the placement and the canary checks
 K11–K16 are the replay driver's, which lives outside this repository; REPLAY-v2 is the record of
-what it must do. Not yet measured: no v2 canary, pilot or
-scored run is committed in this tree, and `evals/replay/COMPARISON-v2.md` does not exist, so every
-criterion below that reads v2 results is open. Since R5 they stay open through 1.10.0 and bind the
-first release that ships REPLAY-v2's comparison (amended 2026-09-27).
+what it must do. Not measured, and now never to be: one v2
+pilot, the baseline shape's `2026-09-28-replay-1` (`evals/replay/v2/runs/2026-09-28-replay-1/RESULTS.md:1`),
+is committed in this tree, and no v2 canary or scored run is; `evals/replay/COMPARISON-v2.md` does
+not exist and will not be committed. So every criterion below that reads v2 results stays unmet,
+and since the replay's retirement none of them binds a release (amended 2026-09-29; it read "Not
+yet measured: no v2 canary, pilot or scored run is committed in this tree, and
+`evals/replay/COMPARISON-v2.md` does not exist, so every criterion below that reads v2 results is
+open. Since R5 they stay open through 1.10.0 and bind the first release that ships REPLAY-v2's
+comparison", amended 2026-09-27).
 
 Implements C12 (D9, D10).
 
@@ -1166,6 +1192,11 @@ eye.
 
 **REQ-CTX-015**
 
+Amended 2026-09-29: the replay is retired (the Retired bullet of REQ-CTX-015). The criteria that
+read scored results, the third and the floor criteria from the fourth to the tenth, stay unmet,
+and none of them binds a release. The criteria on the instrument's own code stay as they are,
+over the frozen files.
+
 - GIVEN each protocol WHEN `git log` is read THEN the commit adding it is an ancestor of the commit
   adding its first result, and no later commit changes a threshold value (amended 2026-09-26; it
   read "GIVEN `evals/replay/REPLAY-v1.md` … the commit adding its protocol and threshold table is an
@@ -1288,16 +1319,21 @@ eye.
 - GIVEN the first release that ships REPLAY-v2's comparison WHEN its tag is created THEN the
   tagged commit descends from a committed `evals/replay/COMPARISON-v2.md` whose `Merge gate:` line
   reads PASS: the floor criteria (the fourth to the tenth) holding for every proposal kept, as the
-  Replay gate bullet states. 1.10.0 is not that release: it is decoupled from the replay, and the
-  context-economy proposals ship in it without the replay's measurement. Open: no v2 comparison is
-  committed. A dropped proposal's ids still read retired here with a pointer to the failing result
-  (Invariant 1). (Amended 2026-09-27 by R5, the maintainer's decision of that day; it read "GIVEN
+  Replay gate bullet stated. Retired 2026-09-29 with the replay (the maintainer's decision): no
+  release ships that comparison, so this criterion binds no tag, and no proposal's ids are retired
+  for a replay result. (Amended 2026-09-29; after "as the Replay gate bullet states" it read
+  "1.10.0 is not that release: it is decoupled from the replay, and the context-economy proposals
+  ship in it without the replay's measurement. Open: no v2 comparison is committed. A dropped
+  proposal's ids still read retired here with a pointer to the failing result (Invariant 1)".
+  Amended 2026-09-27 by R5, the maintainer's decision of that day; it read "GIVEN
   the 1.10.0 tag THEN the tagged commit descends from a committed `evals/replay/COMPARISON-v2.md`
   whose `Merge gate:` line reads PASS: the floor criteria (the fourth to the tenth) holding for
   every proposal kept, as the release-gate criterion states", itself amended 2026-09-26 from a
   criterion on the `v1.10.0` tag and a REPLAY-v2 comparison (D10, amended 2026-09-24).)
-- GIVEN the 1.10.0 eval-set run WHEN it is scored THEN every eval-set floor holds before the
-  `v1.10.0` tag is created.
+- GIVEN the eval-set run of a release, 1.10.0's and every later one, WHEN it is scored THEN every
+  eval-set floor holds before that release's tag is created (amended 2026-09-29; it read "GIVEN
+  the 1.10.0 eval-set run WHEN it is scored THEN every eval-set floor holds before the `v1.10.0`
+  tag is created").
 
 **REQ-CTX-016**
 
