@@ -32,6 +32,7 @@
 import { createReadStream } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
+import { verdictOf } from './findings.mjs'
 
 // ---------- helpers ----------
 
@@ -280,6 +281,22 @@ export function roleFunction(subagentType) {
   return 'other'
 }
 
+/**
+ * REPLAY-v3 (plan 012, prove/9): the verdict role a ledger row's `source` names, or null. The value is
+ * lower-cased and split at every character outside `[a-z0-9-]`, and each token loses a leading `stamity-`; a
+ * token names a role when it equals `reviewer`, `security`, `performance` or `design-quality`, or begins with one
+ * of them and `-`. The first role named wins (`reviewer:r1`, `stamity-reviewer(frontier)`,
+ * `fixer+reviewer(C7)+security(3)` name `reviewer`); a source naming none is no verdict source.
+ */
+export function ledgerSourceRole(source) {
+  if (typeof source !== 'string') return null
+  for (const token of source.toLowerCase().split(/[^a-z0-9-]+/)) {
+    const t = token.replace(/^stamity-/, '')
+    for (const role of VERDICT_ROLES) if (t === role || t.startsWith(`${role}-`)) return role
+  }
+  return null
+}
+
 // ---------- task notifications ----------
 
 const pick = (t, tag) => {
@@ -317,19 +334,21 @@ function splitNotifications(text) {
 /**
  * Whether a result's text is a sub-agent's delivery, read by its content and never by its length (a
  * short digest is a whole re-review): a C4 digest label at the start of a line, a `BLOCKED_*`
- * status, or a verdict word.
+ * status, or a verdict word. REPLAY-v3 (plan 012, prove/8) reads the verdict word by `verdictOf`'s v3
+ * grammar, so a choice list (`Verdict: APPROVE | REQUEST_CHANGES`) marks no delivery.
  */
 const DELIVERY_LABEL = /^\s*(?:[-*]\s+)?\**\s*(?:status|verdict|mode|report|findings)\s*\**\s*:/im
 const DELIVERY_BLOCKED = /\bBLOCKED_[A-Z]+/
 const DELIVERY_VERDICT = /verdict[:*\s]*\**\s*(?:approve|request-changes|blocked)\b/i
-const isReportText = (text) => DELIVERY_LABEL.test(text) || DELIVERY_BLOCKED.test(text) || DELIVERY_VERDICT.test(text)
+const isReportText = (text, version) => DELIVERY_LABEL.test(text) || DELIVERY_BLOCKED.test(text)
+  || (version === 'v3' ? verdictOf(text, { version }) !== null : DELIVERY_VERDICT.test(text))
 
-function toolResultClass(name, meta, text) {
+function toolResultClass(name, meta, text, version) {
   if (/^PreToolUse:|^PostToolUse:|hook error: Blocked by|^Hook /.test(text)) return ['hook', 'tool-result-hook-message']
   switch (name) {
     case 'Agent': case 'Task':
       return text.startsWith('Async agent launched') ? ['returns.launchAck', 'agent-launch'] : ['returns.report', 'sync-agent-result']
-    case 'SendMessage': return isReportText(text) ? ['returns.report', 'sendmessage-result'] : ['returns.sendAck', 'sendmessage-ack']
+    case 'SendMessage': return isReportText(text, version) ? ['returns.report', 'sendmessage-result'] : ['returns.sendAck', 'sendmessage-ack']
     case 'TaskOutput': return ['returns.report', 'taskoutput']
     case 'Bash': {
       const c = meta ? meta.bashCls : 'other'
@@ -352,7 +371,7 @@ function toolResultClass(name, meta, text) {
 const bump = (o, k, n = 1) => { o[k] = (o[k] || 0) + n }
 
 /** A stateful walker: feed it every line in order, then read `finish()`. */
-function createWalker(forbid = []) {
+function createWalker(forbid = [], version = null) {
   const rows = { events: [], requests: [], deliveries: [], dispatches: [], bash: [], compactions: [], forbidHits: [] }
   const w = (k, o) => rows[k].push(o)
   let lineNo = 0
@@ -416,7 +435,7 @@ function createWalker(forbid = []) {
         const meta = toolMeta.get(b.tool_use_id)
         const { text, images } = blockText(b.content)
         if (images) skipped.images += images
-        const [cls, sub] = toolResultClass(meta?.name, meta, text)
+        const [cls, sub] = toolResultClass(meta?.name, meta, text, version)
         ev({ ts, dir: 'in', cls, sub, chars: text.length, tool: meta?.name || null, toolUseId: b.tool_use_id, isError: !!b.is_error })
         if (meta?.name === 'Bash') w('bash', { kind: 'result', line: lineNo, ts, seg, turn, toolUseId: b.tool_use_id, chars: text.length, cls, persisted: /^<persisted-output>|Output too large/.test(text) })
       } else if (b.type === 'text') {
@@ -551,17 +570,18 @@ function createWalker(forbid = []) {
  * Write, Edit and MultiEdit events; `ledger` (`ledgerWrite`) on Write, Edit and MultiEdit events and
  * on Bash command rows, which also carry the `command` text. `forbidHits` holds one row
  * `{ line, seg, turn, toolUseId, tool, forbid }` per main-context tool_use and per `opts.forbid`
- * string that one of its input's leaf strings contains; it is empty without the option.
+ * string that one of its input's leaf strings contains; it is empty without the option. `opts.version`
+ * `'v3'` reads a SendMessage result's verdict word by REPLAY-v3's grammar (`isReportText`).
  */
-export function walkTranscriptLines(lines, { forbid = [] } = {}) {
-  const walker = createWalker(forbid)
+export function walkTranscriptLines(lines, { forbid = [], version = null } = {}) {
+  const walker = createWalker(forbid, version)
   for (const text of lines) walker.line(text)
   return walker.finish()
 }
 
 /** Walk a transcript file, streamed line by line (a single line can be megabytes); `opts` as for the lines. */
-export async function walkTranscriptFile(path, { forbid = [] } = {}) {
-  const walker = createWalker(forbid)
+export async function walkTranscriptFile(path, { forbid = [], version = null } = {}) {
+  const walker = createWalker(forbid, version)
   const rl = createInterface({ input: createReadStream(path), crlfDelay: Infinity })
   for await (const text of rl) walker.line(text)
   return walker.finish()

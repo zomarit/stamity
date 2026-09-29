@@ -22,6 +22,11 @@
 // found only inside a locator credits nothing. A v1 result stays scored at its pinned instrument
 // commit (REPLAY-v1 §13), so these rules never re-score it.
 //
+// REPLAY-v3 (plan 012, v3-reader) reads both shapes' findings alike, and only where the caller names
+// `version: 'v3'`: one verdict grammar for a return, a digest's `verdict:` value and a delivery
+// (`verdictOf`, prove/8), the secondary locators of a structured finding (`secondaryLocators`, prove/6),
+// and a ledger row's head read marked (`ledgerFindings`). v1's and v2's readings are unchanged.
+//
 // The fence grammar (a backtick fence, at most three spaces of indent, the info string exact) is
 // the product's own (`src/runs/layout.ts`, `fenceOpenPattern`), restated here because a contributor
 // script cannot import the TypeScript engine.
@@ -137,6 +142,19 @@ function locatorsIn(text) {
     }
   }
   return out
+}
+
+/**
+ * REPLAY-v3 (plan 012, prove/6): the secondary locators of a structured finding `f` (a digest entry, a C2 row, a
+ * ledger row read by its head): every free-text locator in its term window (`f.text`), made relative to `roots`,
+ * whose path names at least one directory (a bare `window.test.ts:17` is none), except one inside the finding's
+ * own range, which is its own line. `[{ file, line, lineEnd }]`, in order of first appearance, each once.
+ */
+export function secondaryLocators(f, roots) {
+  const own = (loc) => f.file != null && loc.file === f.file && loc.line >= f.line && loc.lineEnd <= (f.lineEnd ?? f.line)
+  return locatorsIn(relativize(f.text, roots))
+    .filter((loc) => loc.file.includes('/') && !own(loc))
+    .map(({ file, line, lineEnd }) => ({ file, line, lineEnd }))
 }
 
 function finding(meta, loc, fields) {
@@ -451,14 +469,16 @@ function digestEntries(value) {
 /**
  * A C4 digest in either shape: the reviewer's (`verdict:`, `confidence:`) or a lens's (`mode:`
  * posted or advisory, with the posted count). An absent label reads null; `findings: none` reads
- * as no findings. meta: `{ source = "digest", role, roots }`; each finding carries the digest's
+ * as no findings. meta: `{ source = "digest", role, roots, version }`, `version: 'v3'` reading the `verdict:`
+ * value by `verdictOf`'s v3 grammar (prove/8); each finding carries the digest's
  * `report:` path. `errors` (`[{ text, reason }]`) names a `findings:` value other than `none` that
  * yields no entry, and an entry whose locator is refused (`path:line:col`), which is skipped.
  */
 export function parseDigest(text, meta = {}) {
   const m = { ...meta, source: meta.source ?? 'digest' }
   const f = digestFields(relativize(text, meta.roots))
-  const verdict = f.verdict?.match(/\b(approve|request-changes|blocked)\b/i)
+  // REPLAY-v3 (prove/8): the value is read by the one verdict grammar, as the text `verdict: <value>`.
+  const verdict = meta.version === 'v3' ? (f.verdict === undefined ? null : [null, verdictOf(`verdict: ${f.verdict}`, meta)]) : f.verdict?.match(/\b(approve|request-changes|blocked)\b/i)
   const mode = f.mode?.match(/\b(posted|advisory)\b/i)
   const posted = f.mode?.match(/\d+/)
   const report = f.report !== undefined ? stripTicks(f.report) || null : null
@@ -478,7 +498,7 @@ export function parseDigest(text, meta = {}) {
   }
   return {
     status: f.status !== undefined ? stripTicks(f.status) : null,
-    verdict: verdict ? verdict[1].toLowerCase() : null,
+    verdict: verdict?.[1] ? verdict[1].toLowerCase() : null,
     confidence: f.confidence ?? null,
     mode: mode ? mode[1].toLowerCase() : null,
     posted: posted ? Number(posted[0]) : null,
@@ -525,7 +545,8 @@ export function parseClosures(text) {
  * still yields one Finding with a null file, so a `report` comparison can find it. The role is the
  * row's `source`; `report` and `decision_needed` are carried when present, and a severity word is
  * title-cased (`warning` → `Warning`) so the matcher's severities filter reads it.
- * opts: `{ roots }`.
+ * opts: `{ roots, version }`. Under `version: 'v3'` a row read by its head locator carries `head: true`, the mark
+ * of a structured entry whose text after the head is its term window (prove/6); v1 and v2 rows gain no field.
  */
 export function ledgerFindings(rows, opts = {}) {
   const meta = { source: 'ledger' }
@@ -543,7 +564,8 @@ export function ledgerFindings(rows, opts = {}) {
     const cut = evidence.indexOf(' — ')
     const head = cut >= 0 ? parseLocator(evidence.slice(0, cut)) : null
     if (head && head.file !== null) {
-      out.push(finding(rowMeta, head, { ...fields, text: evidence.slice(cut + 3).trim() }))
+      const read = finding(rowMeta, head, { ...fields, text: evidence.slice(cut + 3).trim() })
+      out.push(opts.version === 'v3' ? { ...read, head: true } : read)
       continue
     }
     const locs = locatorsIn(evidence)
@@ -556,10 +578,27 @@ export function ledgerFindings(rows, opts = {}) {
 // ---------- verdicts ----------
 
 /**
+ * REPLAY-v3 (plan 012, prove/8): `verdict`, any run of `:`, `*` and whitespace, an optional backtick or quote,
+ * then one verdict word in any case, ending at a word boundary: `approve`; `request` and `changes` joined by `-`,
+ * `_` or a space; `changes` and `requested` joined the same way; `blocked`. A word followed by `|`, `/` or `or`
+ * and another verdict word opens a choice list (a brief's template), which is no verdict.
+ */
+const V3_VERDICT = /verdict[:*\s]*[`'"]?(approve|request[-_ ]changes|changes[-_ ]requested|blocked)\b(?![`'"*]*[ \t]*(?:[|/]|or\b)[ \t]*[`'"*]*(?:approve|request[-_ ]changes|changes[-_ ]requested|blocked)\b)/gi
+
+/**
  * The verdict word of a return in either shape (`**Verdict:** request-changes`, `verdict: approve`,
  * `**Verdict:** blocked`), or null — the same three words the digest's `verdict:` label reads.
+ * opts: `{ version }`. Under `version: 'v3'` the text's first verdict by `V3_VERDICT` (a choice list is
+ * skipped), every `changes` spelling read as `request-changes`; v1 and v2 read the first hyphenated word.
  */
-export function verdictOf(text) {
+export function verdictOf(text, { version } = {}) {
+  if (version === 'v3') {
+    for (const m of String(text ?? '').matchAll(V3_VERDICT)) {
+      const word = m[1].toLowerCase()
+      return word.startsWith('approve') ? 'approve' : word.startsWith('blocked') ? 'blocked' : 'request-changes'
+    }
+    return null
+  }
   const m = String(text ?? '').match(/verdict[:*\s]*\**\s*(approve|request-changes|blocked)\b/i)
   return m ? m[1].toLowerCase() : null
 }

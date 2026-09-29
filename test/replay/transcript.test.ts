@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { LEDGER_GATED_KINDS, bashClass, heredocs, ledgerWrite, roleFunction, scanSubagent, walkTranscriptFile, walkTranscriptLines } from "../../scripts/replay/transcript.mjs";
+import { LEDGER_GATED_KINDS, bashClass, heredocs, ledgerSourceRole, ledgerWrite, roleFunction, scanSubagent, walkTranscriptFile, walkTranscriptLines } from "../../scripts/replay/transcript.mjs";
 import { mainLine, subagentFile, writeCapture } from "./synth.ts";
 
 /**
@@ -530,5 +530,43 @@ describe("walkTranscriptFile and writeCapture", () => {
 
   it("rejects a missing transcript file", async () => {
     await expect(walkTranscriptFile(join(scratch(), "absent.jsonl"))).rejects.toThrow(/ENOENT/);
+  });
+});
+
+// ---------- REPLAY-v3: the reader treats both shapes' findings alike (plan 012, v3-reader) ----------
+
+describe("REPLAY-v3 — a SendMessage result's verdict is read by the one verdict reader (prove/8)", () => {
+  const sendResult = (text: string, opts: Record<string, unknown> = {}): string | undefined => {
+    const w = walkTranscriptLines([mainLine.sendMessage({ id: "tu-s", to: "a1", message: "Re-review W-1." }), mainLine.toolResult("tu-s", text)], opts) as Walk;
+    return w.events.find((event) => event["toolUseId"] === "tu-s" && event["dir"] === "in")?.["cls"] as string | undefined;
+  };
+
+  it("a request-changes spelled with an underscore is a delivery and a choice list is none, under v3 only", () => {
+    const done = "Round 2 done. Verdict: REQUEST_CHANGES, one Warning left.";
+    const queued = "Queued. Reply with Verdict: APPROVE | REQUEST_CHANGES when done.";
+    expect([sendResult(done, { version: "v3" }), sendResult(queued, { version: "v3" })]).toEqual(["returns.report", "returns.sendAck"]);
+    expect([sendResult(done), sendResult(queued)]).toEqual(["returns.sendAck", "returns.report"]);
+  });
+});
+
+describe("REPLAY-v3 — the verdict role a ledger source names (prove/9)", () => {
+  it.each<[unknown, string | null]>([
+    ["reviewer:r1", "reviewer"],
+    ["reviewer(frontier whole-branch)", "reviewer"],
+    ["stamity-reviewer(frontier)", "reviewer"],
+    ["fixer+reviewer(C7)+security(3)", "reviewer"],
+    ["Security-Lens", "security"],
+    ["performance+reviewer(M3)", "performance"],
+    ["design-quality", "design-quality"],
+    ["test-runner+orchestrator-forensics", null],
+    ["implementer:u1-p1", null],
+    ["reviewers", null],
+    [null, null],
+  ])("%j names %s", (source, role) => {
+    expect(ledgerSourceRole(source)).toBe(role);
+  });
+
+  it("v2 reads the same sources through roleFunction, which names a verdict only for a bare role", () => {
+    expect(["reviewer:r1", "stamity-reviewer(frontier)", "stamity-reviewer"].map((s) => roleFunction(s))).toEqual(["other", "other", "verdict"]);
   });
 });

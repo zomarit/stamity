@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { extractFreeText, ledgerFindings, maskNegated, matchItems, parseClosures, parseDigest, parseFindingsBlock, unreadFreeText, verdictOf } from "../../scripts/replay/findings.mjs";
+import { extractFreeText, ledgerFindings, maskNegated, matchItems, parseClosures, parseDigest, parseFindingsBlock, secondaryLocators, unreadFreeText, verdictOf } from "../../scripts/replay/findings.mjs";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
 import { walkTranscriptLines } from "../../scripts/replay/transcript.mjs";
 import { mainLine, writeCapture } from "./synth.ts";
@@ -797,5 +797,73 @@ describe("(review round 1) the negation mask and the locator blank, narrowed and
     expect(credit("docs/api.md still documents the old default", { ...guard, terms: ["docs/api"] })).toEqual([0]);
     expect(credit("a name like ../secret.txt escapes the directory", { ...guard, terms: ["../"] })).toEqual([0]);
     expect(credit("the try/catch returns 200", { ...guard, terms: ["catch"] })).toEqual([0]);
+  });
+});
+
+// ---------- REPLAY-v3: the reader treats both shapes' findings alike (plan 012, v3-reader) ----------
+
+const V3 = { version: "v3" };
+
+describe("REPLAY-v3 — one verdict reader for a return, a digest value and a delivery (prove/8)", () => {
+  it.each<[string, string | null, string | null]>([
+    ["**Verdict:** REQUEST_CHANGES", "request-changes", null],
+    ["**Verdict: REQUEST_CHANGES.**", "request-changes", null],
+    ["Verdict: `request-changes` (advisory)", "request-changes", null],
+    ["verdict: changes-requested", "request-changes", null],
+    ["verdict: request changes", "request-changes", null],
+    ["Verdict: 'approve'", "approve", null],
+    ["Verdict: APPROVE | REQUEST_CHANGES", null, "approve"],
+    ["Reply with verdict: approve or request-changes", null, "approve"],
+    ["Verdict: approve / blocked", null, "approve"],
+    ["VERDICT — Approve", null, null],
+    ["**Verdict:** blockers remain", null, null],
+    ["Summary.\n**Verdict:** request-changes\n", "request-changes", "request-changes"],
+    ["Verdict: Blocked — the fixture will not build", "blocked", "blocked"],
+    ["Template: Verdict: APPROVE | REQUEST_CHANGES\n\n**Verdict:** REQUEST_CHANGES", "request-changes", "approve"],
+  ])("%j reads %s under v3, and %s under v2", (text, v3, v2) => {
+    expect(verdictOf(text, V3)).toBe(v3);
+    expect(verdictOf(text)).toBe(v2);
+  });
+
+  it("reads a digest's verdict: value by the same reader under v3, and v2's value reading stays", () => {
+    const digest = (value: string): string => ["status: DONE", `verdict: ${value}`, `report: .stamity/runs/${RUN}/reports/u1-p1-reviewer-r1.md`, "findings: none"].join("\n");
+    const read = (value: string, meta: Record<string, unknown> = {}): string | null => (parseDigest(digest(value), meta) as { verdict: string | null }).verdict;
+    const values = ["REQUEST_CHANGES", "changes requested", "`approve`", "APPROVE | REQUEST_CHANGES"];
+    expect(values.map((v) => read(v, V3))).toEqual(["request-changes", "request-changes", "approve", null]);
+    expect(values.map((v) => read(v))).toEqual([null, null, "approve", "approve"]);
+  });
+});
+
+describe("REPLAY-v3 — a structured finding's secondary locators (prove/6)", () => {
+  const own = { file: "src/store/query.ts", line: 11, lineEnd: 11 };
+
+  it("reads every other full-path locator in the window, made relative to the roots, in order and once each", () => {
+    const text = "sort flows from /work/fx/src/http/app.ts:30 into the query; see src/store/paging.ts:4-6 and again src/http/app.ts:30";
+    expect(secondaryLocators({ ...own, text }, ["/work/fx"])).toEqual([
+      { file: "src/http/app.ts", line: 30, lineEnd: 30 },
+      { file: "src/store/paging.ts", line: 4, lineEnd: 6 },
+    ]);
+  });
+
+  it("(p6-b, p6-h) a bare file name is no locator, and a summary repeating the finding's own line, or its path:line:col spelling, adds none", () => {
+    const text = "src/store/query.ts:11 concatenates sort; src/store/query.ts:11:5 too; query.ts:12 and ./app.ts:30 as well; /work/fx/paging.ts:4";
+    expect(secondaryLocators({ ...own, text }, ["/work/fx"])).toEqual([]);
+    // A locator inside the finding's own range is on its own line; one outside it is a secondary.
+    expect(secondaryLocators({ ...own, line: 10, lineEnd: 12, text: "src/store/query.ts:11 and src/store/query.ts:14" }, [])).toEqual([{ file: "src/store/query.ts", line: 14, lineEnd: 14 }]);
+  });
+
+  it("a file-less structured finding (a gate command) has every full-path locator of its window as a secondary", () => {
+    expect(secondaryLocators({ file: null, line: null, lineEnd: null, text: "the suite fails at test/x.test.ts:22" }, [])).toEqual([{ file: "test/x.test.ts", line: 22, lineEnd: 22 }]);
+  });
+});
+
+describe("REPLAY-v3 — ledgerFindings marks a row read by its head locator (prove/6)", () => {
+  it("under v3 only, a head read carries head: true, and a row read from its evidence's locators does not", () => {
+    const rows = [
+      { id: `${RUN}/prove/1`, source: "reviewer", severity: "Warning", evidence: "src/http/routes.ts:9 — no guard; see src/http/app.ts:3", state: "open", rationale: "" },
+      { id: `${RUN}/prove/2`, source: "reviewer", severity: "Warning", evidence: "the handler at src/http/routes.ts:10 is open", state: "open", rationale: "" },
+    ];
+    expect((ledgerFindings(rows, V3) as (Finding & { head?: true })[]).map((f) => f.head ?? false)).toEqual([true, false]);
+    expect((ledgerFindings(rows) as Finding[]).some((f) => "head" in f)).toBe(false);
   });
 });
