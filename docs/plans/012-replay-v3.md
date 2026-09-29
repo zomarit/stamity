@@ -268,8 +268,8 @@ criterion stay as they are (16–28 describe REPLAY-v2, which is frozen; 29 desc
   point covers the same two; a verdict dispatch before any pass is built covers nothing; and a verdict dispatch made
   while u1-p2's build agent still runs covers u1-p1 only.
 - ADDED 38: GIVEN a reviewer dispatched after u1-p1's swap and before u2-p1's, whose finding matches a u2-p1 seed's
-  file, line and term, WHEN scored under v3 THEN it credits no seed; the same finding from a verdict agent dispatched at
-  or after u2-p1's swap credits it.
+  file, line and term, WHEN scored under v3 THEN it credits no seed; the same finding from a verdict agent that covers
+  u2-p1 credits it (amendment 3; it read "dispatched at or after u2-p1's swap").
 - ADDED 39: GIVEN a v3 run whose review-start snapshot of P holds a seed's file and no copy satisfies its presence rule
   WHEN measured THEN the seed leaves the pooled denominator, counts as found for `security-seeds`, is named in RESULTS
   as caught before review, and no finding credits it or enters adjudication for it; GIVEN a v3 run with no swap record
