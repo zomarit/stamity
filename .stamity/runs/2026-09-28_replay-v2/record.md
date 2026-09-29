@@ -368,7 +368,7 @@ the morning. The ledger ids are this run's.
   seeds are cut again under a new instrument commit and restarted pilots — recorded, and the runs stop). No changed
   pilot, no scored run and no comparison: `evals/replay/COMPARISON-v2.md` is not written.
 
-## Stop (unattended, 2026-09-29T00:30Z) — what is done, what waits for the maintainer
+## Stop (unattended, 2026-09-29T00:25Z) — what is done, what waits for the maintainer
 
 **Done tonight.**
 - Section 0: the two held-back learnings and the troubleshooting page (`8c0d4e01`, `9b4ab247`).
