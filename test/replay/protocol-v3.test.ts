@@ -28,8 +28,8 @@ const FROZEN: [string, string][] = [
 /** The raw text of a protocol's `replay-thresholds` fences, every one of them. */
 const thresholdBlocks = (t: string): string[] => [...t.matchAll(/^```replay-thresholds\n([\s\S]*?)\n```$/gm)].map((m) => m[1]!);
 
-/** A protocol's §6 from its first message to the next section: the four fenced messages with their counts and digests. */
-const messages = (t: string): string => t.slice(t.indexOf("**Start message**"), t.indexOf("## §7 "));
+/** A protocol's whole §6, heading and intro included, to the next section: the four fenced messages with their counts and digests. */
+const messages = (t: string): string => t.slice(t.indexOf("## §6 "), t.indexOf("## §7 "));
 
 /** The four messages as v2 prints them: label, bytes, and the sha256 v2 records for them. */
 const MESSAGES: [string, string, string][] = [

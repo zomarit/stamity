@@ -23,7 +23,7 @@ and `COMPARISON-v2.md` was never written. Three things went wrong, and this file
 - **The reader read the two shapes differently.** It read a structured finding one locator per entry and a free-text
   finding one finding per locator, which understated the changed shape (7 of 10 against 10 of 10).
 
-v3 keeps v2's shapes, pins, messages, samples, band and thresholds. What changes:
+v3 keeps v2's shapes, messages, samples, band and thresholds, and v2's pins with the additions §3 names. What changes:
 
 - **The seeds arrive inside the units' own patches** (D1). At the build dispatch of each pass, the driver rewrites
   that pass's contrib patch with its seeded bytes, keeping the file's times, so each implementer applies its own
@@ -34,8 +34,8 @@ v3 keeps v2's shapes, pins, messages, samples, band and thresholds. What changes
 - **A new seed set** (D2): twelve seeds and three decoys, cut so that each sits in a line its own pass adds, and the
   fixture's own defects fixed in the clean patches (§5, Fixture notes).
 - **Coverage, credit and presence are read per pass.** A pass is swapped at its build dispatch and built when that
-  build agent stops; a finding credits a pass's seed only when its agent was dispatched at or after that pass's
-  swap; presence is read at review start (§5, §8).
+  build agent stops; a finding credits a pass's seed only when its agent covers that pass; presence is read at
+  review start (§5, §8).
 - **The canary proves the arrival**, with a floor of 8 of 12 seeds present at review start in each shape (§5).
 - **The session sees no harness.** A fresh run root, the service's own names, and two hook events (§3); a change
   notice for a swapped patch or a harness string in any transcript line makes a run invalid (§8).
@@ -188,9 +188,10 @@ built, mid-build.
 - A worktree made after its pass's swap holds no untracked `vendor/` at all, so no swap can reach it (§15).
 
 **Built.** A pass is *built* once the build agent whose dispatch swapped it has stopped: it returned, or TaskStop ended
-it. So a pass is swapped at its dispatch and built at its stop. Coverage and the review-start snapshot read "built";
-the credit guard reads the swap (§8). A review dispatched beside a running implementer therefore never snapshots that
-pass before its patch is applied, and never reads its seeds as caught before review.
+it. So a pass is swapped at its dispatch and built at its stop. Coverage, the review-start snapshot and the credit guard
+read "built"; the swap decides only the credit of a finding no agent's digest names (§8). A review dispatched beside a
+running implementer therefore never snapshots that pass before its patch is applied, never reads its seeds as caught
+before review, and credits none of them.
 
 **Three snapshots.** Each copies every worktree of the run, the main checkout included.
 
@@ -201,11 +202,12 @@ pass before its patch is applied, and never reads its seeds as caught before rev
   to `captures/snapshots/<P>/` (a partial folder, then a rename) and probes the object store once. Each pass is copied
   once: a later verdict dispatch that covers it copies nothing for it. This is the tree the review of P starts from,
   and presence is read here (§8, Recall).
-- **Round completion.** When the review round that covers P completes, the driver copies P's trees again to
-  `captures/review-snapshots/<P>/`. "Completes" is v2's complete round, read over the whole round (§7): every member
-  has stopped (TaskStop counts as a stop), at least one member returned by itself, and this holds on two polls in a
-  row; when TaskStop stopped every member, the copy is taken when the next round completes. The copy serves the
-  canary's K17 and the note "removed during review" (§8); it decides no seed's presence.
+- **Round completion.** When the first review round that covers P completes, the driver copies P's trees again to
+  `captures/review-snapshots/<P>/`, once per pass, as REPLAY-v2's review snapshot is taken once. "Completes" is v2's
+  complete round, read over the whole round (§7): every member has stopped (TaskStop counts as a stop), at least one
+  member returned by itself, and this holds on two polls in a row; when TaskStop stopped every member, the copy is
+  taken when the next round completes. The copy serves the canary's K17 and the note "removed during review" (§8); it
+  decides no seed's presence.
 
 **The seed states.** The measurement reads each seed of pass P into one state (§8, Recall):
 
@@ -222,9 +224,9 @@ pass before its patch is applied, and never reads its seeds as caught before rev
   agents.
 - **Not delivered.** As caught before review, except that no build-end copy after P's swap ever held it. It leaves the
   denominator, counts as found for `security-seeds`, and RESULTS names it as not delivered.
-- **Never reviewed.** P was swapped and built, and no review covered it, so it has no review-start copy. Presence is
-  read from the last build-end copy taken after P was built; a present seed stays in the denominator as a miss, and
-  P's verdict class reads null.
+- **Never reviewed.** P was swapped and built, and no review covered it, so it has no review-start copy. §8 (Recall)
+  reads its seeds from its build-end copies: present, a miss; absent, caught before review or not delivered. P's
+  verdict class reads null.
 - **A capture defect.** P has a review-start snapshot, and a seed's file is absent from every copy in it. A file gone
   from every copy says nothing of the seed, so the run is invalid (§8).
 
@@ -473,26 +475,32 @@ a v3 rule, and v1's and v2's readings do not change.
   `uncovered pass <P>: no build dispatch named it, so its patch was never swapped and its seeds (<ids>) never arrived`.
   A pass whose state is neither `swapped` nor `already-seeded`, whose `seeded` digest is not the seeds document's, or
   whose `mtimeKept` is not true is a swap defect, and the run is invalid.
-- **Recall.** Each seed takes one state of §5 (The seed states). A seed present at review start, or present at the last
-  build end of a pass no review covered, is in the pooled denominator. Uncovered, caught before review and not
-  delivered seeds are not; the last two count as found for `security-seeds`. A `present` rule holds when every
-  `contains` string occurs, no `notContains` string occurs, and no `notMatch` pattern matches. Found = matched (§9) by
-  any verdict-role finding (return, digest, report, or a ledger row from a verdict source, below), with the stage
-  (pass or branch) and whether it was found in round 1 recorded; a finding of a round that covers several passes is at
-  the pass stage, and in round 1, for each pass it covers.
-  - **The credit guard, per pass.** A finding credits a seed of pass P only when its agent was dispatched at or after
-    P's swap: the main-transcript line of the dispatch whose tool_use id P's swap record names, or, failing that, the
-    first build dispatch whose description names P. So a reviewer dispatched after u1-p1's swap and before u2-p1's
-    credits no u2-p1 seed, whatever it cites, and the same finding from a verdict agent dispatched at or after u2-p1's
-    swap credits it. A report or ledger finding belongs to the agent whose digest names its report (§8, The report
-    key); one that no agent's digest names credits a seed of P only when no verdict agent was dispatched before P's
-    swap. An agent the measurement builds from its sub-agent file, because the main transcript holds no dispatch for
+- **Recall.** Each seed takes one state of §5 (The seed states). A seed present at review start is in the pooled
+  denominator. Uncovered, caught before review and not delivered seeds are not; the last two count as found for
+  `security-seeds`. No seed's presence is left open. A `present` rule holds when every `contains` string occurs, no
+  `notContains` string occurs, and no `notMatch` pattern matches. Found = matched (§9) by any verdict-role finding
+  (return, digest, report, or a ledger row from a verdict source, below) that the credit guard lets credit it, with
+  the stage (pass or branch) and whether it was found in round 1 recorded; a finding of a round that covers several
+  passes is at the pass stage, and in round 1, for each pass it covers.
+  - **A pass no review covered.** Its seeds are read from the last build-end copy taken after P was built (the copy at
+    the stop that built it included). A seed present there is in the pooled denominator as a miss: no agent covers P,
+    so no finding credits it. A seed absent there was caught before review when an earlier build-end copy after P's
+    swap held it, and was not delivered otherwise; either way it leaves the denominator, and a security seed counts as
+    found for `security-seeds`. RESULTS names each such seed as never reviewed.
+  - **The credit guard, per pass.** A finding credits a seed of pass P only when its agent covers P (Covered passes):
+    a return by its agent's coverage, and a report or ledger finding by the coverage of the agent whose digest names
+    its report (§8, The report key). An agent covers P only when P was built at its dispatch, so it was dispatched
+    after P's swap. So a reviewer dispatched while u2-p1's build agent still runs credits no u2-p1 seed, whatever it
+    cites, and the same finding from a verdict agent that covers u2-p1 credits it. A finding that no agent's digest
+    names credits a seed of P only when no verdict agent was dispatched before P's swap: the main-transcript line of
+    the dispatch whose tool_use id P's swap record names, or, failing that, the first build dispatch whose description
+    names P. An agent the measurement builds from its sub-agent file, because the main transcript holds no dispatch for
     it, has no known dispatch time: its findings credit no seed, and a finding no agent's digest names credits none
     beside it. Such a fixer counts as dispatched before every agent whose passes it shares, for the round-1 flag.
-  - **No matcher item.** A seed that was in no reviewed tree (uncovered, not delivered, or caught before review) is no
-    matcher item: no finding credits it, it enters no adjudication row, and it is never read as found by a finding. A
-    finding can meet such a seed's span and a term without finding anything. A finding that credits no seed is no
-    seed match for precision and never reads a seed as fixed for loss (below).
+  - **No matcher item.** A seed that was in no reviewed tree (uncovered, not delivered, caught before review, or of a
+    pass no review covered) is no matcher item: no finding credits it, it enters no adjudication row, and it is never
+    read as found by a finding. A finding can meet such a seed's span and a term without finding anything. A finding
+    that credits no seed is no seed match for precision and never reads a seed as fixed for loss (below).
   - **RESULTS names** each seed caught before review, not delivered, never reviewed or removed during review, and each
     uncovered pass with its seeds, beside `pooled-recall` and `security-seeds`.
 - **Precision.** A decoy is flagged when a Critical or Warning finding matches it. Unmatched counts entries: a
@@ -519,8 +527,8 @@ a v3 rule, and v1's and v2's readings do not change.
   return). One review round's final verdict and round count are recorded for every pass the round covers. A pass that
   no review covered, or that was never built, has no covering review: its final class is null and its rounds 0, so
   `verdict-class` reads `none` for it and fails the gate (§10), and `approved-unfixed` counts nothing for it.
-  `approvedWithSeedUnfixed` = approved while some seed of the pass in the denominator has an oracle status other than
-  `pass`; an oracle that errors counts as unfixed.
+  `approvedWithSeedUnfixed` = approved while some seed of the pass has an oracle status other than `pass`; an
+  oracle that errors counts as unfixed.
 - **The verdict grammar.** One reader serves a delivery's verdict, a digest's `verdict:` value and a report's verdict
   (`verdictOf` in `scripts/replay/findings.mjs` and the delivery reader in `scripts/replay/transcript.mjs`): the word
   `verdict`, then any run of `:`, `*` and whitespace, then an optional backtick or quote, then one verdict word, in any
@@ -606,12 +614,13 @@ test-weakening seed at `test/x.test.ts:22` whose term is in the window, and coun
 **The item's span.** An item that carries `locate.text` is located in each reviewed snapshot copy: every line that
 holds the text gives the span `[line + locate.from, line + locate.to]`, the lines a reviewer of that tree cites. The
 seeds document's `span` is the fallback when no searched copy holds the line, and the span of an item with no
-`locate.text`. A finding that covers a single pass matches only the spans located in that pass's copies
-(`snapshots/<pass>/`): a return covers its agent's passes (§8, Covered passes), and a report finding or a ledger row
-covers the passes of the agent whose digest names its report, or, when no digest names it, the passes its report's
-file name names (§8, Report placement). Only a finding that covers no single pass (a ledger row with no report, a
-return of an agent covering several passes or none, a report placed at several passes or at the branch) matches
-against the spans located in the copies of every pass.
+`locate.text`. A finding matches only the spans located in the copies (`snapshots/<pass>/`) of the passes its agent
+covers (§8, Covered passes, and the credit guard): a return by its agent's coverage, and a report finding or a ledger
+row by the coverage of the agent whose digest names its report. A finding of an agent that covers nothing matches no
+span. A report finding or a ledger row that no agent's digest names matches the spans located in the copies of the
+passes its report's file name names (§8, Report placement); only one that names no single pass that way (a ledger row
+with no report, a report whose name names several passes or none) matches against the spans located in the copies of
+every pass. Either way it credits a seed only as the credit guard allows.
 
 **Locators.** Before the file comparison, a finding's locator is made relative to every root it may be spelled
 under: the fixture root (each working directory the transcripts and the init event record), each worktree path the
@@ -708,10 +717,11 @@ which §7 branch applied, and the RESULTS of every run name it.
 ## §15 Threats to validity
 
 - **An implementer may catch a seed while it builds.** The implementer applies the seeded patch itself, and may read
-  a seeded line and fix it, or write a test of its own that exposes it. Such a seed is caught before review: it
-  leaves the denominator rather than scoring as a miss, and it measures the build, not the review. The seed set was
-  cut on the v2 and v1 runs' own tests so that almost none is exposed that way (§5, Fixture notes), and K15′ needs at
-  least 8 of 12 present at review start in each canary.
+  a seeded line and fix it, or write a test of its own that exposes it. Such a seed is caught before review, or not
+  delivered when no build-end copy after its swap ever held it (§5): either way it leaves the denominator rather than
+  scoring as a miss, a security seed counts as found for `security-seeds` without any review having run, and it
+  measures the build, not the review. The seed set was cut on the v2 and v1 runs' own tests so that almost none is
+  exposed that way (§5, Fixture notes), and K15′ needs at least 8 of 12 present at review start in each canary.
 - **The orchestrator may remember a clean patch.** Research and planning read the clean patches before any swap, and
   an orchestrator can compare an implementer's diff with a hunk it remembers. That memory cannot be removed. The
   canary's C1 and C10 look for it, and it would favour the shape that reads more.
@@ -737,6 +747,12 @@ which §7 branch applied, and the RESULTS of every run name it.
   so a shape that writes its reasons there loses terms the other shape puts in its entry. A whole-branch review that
   is also the last loop re-review reads as branch-level, so its characters leave the loop figure and its verdict is no
   loop round.
+- **A finding credits only the passes its agent covers** (§8, the credit guard; §9, The item's span). A reviewer
+  dispatched beside a running implementer may meet and cite that pass's seeds, and credits none of them, because the
+  pass was not built at its dispatch. The rule is the same in both shapes, and it costs recall to a shape that reviews
+  beside a running build. A pass no review covered keeps its present seeds in the denominator as misses.
+- **A whole-branch review before any approval counts as a loop round** (§8, Branch-level dispatches). Its characters
+  count in the loop and its verdict counts for the passes it covers, where a reader might call it branch-level.
 - **One round's verdict counts for every pass it covers.** A shape that reviews all six passes in one round gives six
   equal verdicts, so `verdict-class` and `verdict-rounds` compare a round with a pass where the shapes review
   differently.
