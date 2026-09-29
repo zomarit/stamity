@@ -21,6 +21,17 @@ website/.docusaurus/
 # Per-session state and scratch; generated hooks and evidence records stay tracked.
 /.claude/worktrees/
 /.claude/settings.local.json
+# Claude Code's local session state. Exact entries only: .claude/ also holds tracked, emitted
+# agents, commands, rules, skills and settings, so no rule here may widen past these names.
+/.claude/scheduled_tasks.lock
+/.claude/scheduled_tasks.json
+/.claude/routines/.state/
+/.claude/checkpoints/
+/.claude/mailbox/
+/.claude/agent-registry.json
+/.claude/agent-memory-local
+/.claude/first-run
+/.claude/assistant-daemon-state.json
 /.stamity/review-gate.json
 /.stamity/review-gate.json.lock
 /.stamity/review-gate.json.tmp-*
@@ -40,6 +51,18 @@ website/.docusaurus/
 /evals/runs/*/sample-*.json
 /evals/runs/*/isolation-*.json
 /evals/runs/*/provider-responses.jsonl
+
+# Python and tool caches and process locks, anywhere in the tree; scripts/repo-hygiene.mjs
+# refuses the same names as tracked runtime files (test/fixtures/ excepted there).
+__pycache__/
+.venv/
+.pytest_cache/
+.cache/
+*.pid
+*.pid.lock
+
+# `npm pack` output at the root; a tarball deeper in the tree is not pack output.
+/*.tgz
 
 # Root-level session scratch. The leak gate walks tracked AND
 # untracked-but-not-ignored files (scripts/leak-gate.mjs, `listFromGit`), so a local

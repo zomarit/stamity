@@ -66,7 +66,7 @@ One commit on a branch `package-14/<page-slug>` (the slug is in your dispatch no
 `docs(<page-slug>): rewrite under the Package 14 style contract`, a body that names the page kind, the
 claims corrected and any pin that must move; end with exactly these two trailer lines:
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
-Signed-off-by: Denis Masatovic <masatovic.denis@gmail.com>
+Signed-off-by: Denis Masatovic <maintainer-email>
 Do not push. Do not touch other branches.
 
 ## Return this report (structured, short)

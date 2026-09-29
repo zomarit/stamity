@@ -130,6 +130,56 @@ describe("repository hygiene over the Git index", () => {
     expect(ignored).toEqual(raw.map(name => `evals/runs/new/${name}`));
   });
 
+  it("refuses new eval transcripts and task inputs while grandfathering tracked calibration captures", () => {
+    const root = fixture();
+    // Run 11's calibration captures are tracked history: they stay, and editing them is not an addition.
+    const historical = ["C1.transcript.txt", "C1.input.md"]
+      .map(name => `evals/runs/2026-09-10-run-11/calibration/${name}`);
+    for (const path of historical) write(root, path);
+    git(root, "add", ".");
+    git(root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+      "-c", "commit.gpgsign=false", "commit", "-qm", "historical calibration evidence");
+    for (const path of historical) write(root, path, "edited\n");
+    const raw = ["evals/runs/new/calibration/C2.transcript.txt", "evals/runs/new/calibration/C2.input.md",
+      "evals/runs/new/case-1.transcript.txt", "evals/runs/new/case-1.input.md"];
+    const kept = ["evals/runs/new/calibration/C2.grade.txt", "evals/runs/new/calibration/C2.metadata.json",
+      "evals/runs/new/calibration/fixtures.json", "evals/runs/new/RESULTS.md",
+      "docs/examples/case.transcript.txt", "docs/examples/case.input.md", "test/fixtures/case.input.md"];
+    for (const path of [...raw, ...kept]) write(root, path);
+    git(root, "add", ".");
+    const result = run(root, "--base", "HEAD");
+    expect(result.status, result.stderr).toBe(1);
+    for (const path of raw) expect(result.stderr, `${path} was not refused`).toContain(JSON.stringify(path));
+    for (const path of [...historical, ...kept]) expect(result.stderr).not.toContain(JSON.stringify(path));
+  });
+
+  it("ignores Claude Code session state, tool caches, process locks and root pack output", () => {
+    const root = fixture();
+    write(root, ".gitignore", readFileSync(join(ROOT, ".gitignore"), "utf8"));
+    const ignored = [".claude/scheduled_tasks.lock", ".claude/scheduled_tasks.json",
+      ".claude/routines/.state/run.json", ".claude/checkpoints/cp-1.json", ".claude/mailbox/inbox.json",
+      ".claude/agent-registry.json", ".claude/agent-memory-local", ".claude/first-run",
+      ".claude/assistant-daemon-state.json", "scripts/__pycache__/tool.cpython-312.pyc",
+      ".venv/bin/python", "tools/.pytest_cache/v/cache/lastfailed", ".cache/tool/entry.json",
+      "worker.pid", "scripts/daemon.pid.lock", "stamity-1.10.0.tgz"];
+    // Emitted client files share .claude/ with the session state, and a nested tarball is not pack output.
+    const kept = [".claude/settings.json", ".claude/agents/reviewer.md", ".claude/rules/testing.md",
+      ".claude/skills/st-qa/SKILL.md", ".claude/routines/weekly.md", "nested/.claude/first-run",
+      "test/fixtures/archive.tgz"];
+    for (const path of [...ignored, ...kept]) write(root, path);
+    const status = (path: string): number =>
+      spawnSync("git", ["-C", root, "check-ignore", "-q", "--no-index", "--", path]).status ?? -1;
+    for (const path of ignored) expect(status(path), `${path} is not ignored`).toBe(0);
+    for (const path of kept) expect(status(path), `${path} is ignored`).toBe(1);
+  });
+
+  it("leaves no tracked file matched by the repository's own ignore rules", () => {
+    // --exclude-per-directory reads only the tree's .gitignore files, so a contributor's global
+    // excludes or .git/info/exclude cannot change the answer.
+    const matched = git(ROOT, "ls-files", "--cached", "--ignored", "--exclude-per-directory=.gitignore");
+    expect(matched).toBe("");
+  });
+
   it("rejects incomplete manifests and renamed payloads", () => {
     const root = fixture();
     write(root, "evals/runs/new/ARCHIVE.json", JSON.stringify({ schemaVersion: 1 }));
