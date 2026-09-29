@@ -1,6 +1,6 @@
 # REPLAY-v2's own package — the covered-pass rule, the fix round, the runs and the comparison (plan 011 file 2)
 
-Status: in progress — opened 2026-09-28T20:29Z on the kickoff "REPLAY-v2: measure the review quality of the context economy that 1.10.0 shipped"; running unattended overnight on the maintainer's instruction.
+Status: **closed** — opened 2026-09-28T20:29Z on the kickoff "REPLAY-v2: measure the review quality of the context economy that 1.10.0 shipped"; ran unattended overnight on the maintainer's instruction and stopped at the baseline pilot's calibration (2026-09-29T00:25Z); merged 2026-09-29T07:24Z as PR #58 (`main` `35e4624f`, a rebase merge) on the maintainer's approval, the gate of record and CI; the rebuilt replay, REPLAY-v3, is the next session (the maintainer's answer).
 Plan: docs/plans/011-replay-v2-02.md
 Invocation: /st-work docs/plans/011-replay-v2-02.md --effort deep — REPLAY-v2's own package, run unattended overnight (the kickoff's "Tonight" section): no question tool; every decision takes its declared default and is recorded below as "Sign-off, unattended"; the conservative option wherever a decision shapes what the comparison can claim; the run stops before the QA sign-off and the merge to `main`.
 
@@ -417,3 +417,75 @@ gate, which binds the release that first ships REPLAY-v2's comparison, stays ope
   the maintainer chose **"Own session next (Recommended)"**: merge #58 now, and the next session rebuilds the replay
   under a new protocol (REPLAY-v3: seeds an orchestrator cannot tell from its own units' work, no clean-patch oracle
   within review's reach, a symmetric reader) and runs it overnight, before Package 17.
+
+## Proof block (2026-09-29T07:26Z — the close: merged; the replay stopped at the pilot's calibration; REPLAY-v3 next)
+
+- **Candidate and merge.** `d5b78d5f` on `replay-v2` (PR #58): 25 commits over `6f04a35c`. It was rebase-merged at
+  2026-09-29T07:24:07Z, on the maintainer's approval and after CI round 4 went green on every leg; `main` =
+  `35e4624f`. A rebase merge re-creates every commit, so the branch shas this record cites resolve through
+  `refs/pull/58/head`. Their copies on `main`, each with the same tree:
+  - the instrument `c6b686df` = `3b1f81a7`;
+  - the pilot export `77f08f93` = `ba4a8250`;
+  - the learnings `8c0d4e01` = `47bf30b5`, and the troubleshooting page `9b4ab247` = `0acea569`;
+  - the plan `c7441d92` = `f14608e9`;
+  - this record `7f39df11` = `11806c3c`.
+
+  The close moves the troubleshooting page's attested commit to `47bf30b5`, and REQ-CTX-015's citation tree to
+  `97e6b49f` (the branch's `5197d8f0`).
+- **The gate of record.** Gate results at `c6b686df` (test-runner at Opus 5.5, class 2):
+
+  | Gate | Command | Result |
+  |---|---|---|
+  | build | `npm run build` | pass |
+  | drift | `node dist/cli.js check` | pass ("drift: clean") |
+  | lint | `npm run lint` | pass |
+  | typecheck | `npm run typecheck` | pass |
+  | tests with coverage | `npm test -- --coverage` | pass (257 files, 10,504 passed, 26 skipped; 96.62 / 90.06 / 98.91 / 97.55) |
+  | the replay suite | `STAMITY_REPLAY_SUITE=1 npx vitest run test/replay` | pass (527 passed, 1 skipped) |
+  | unused code | `npm run knip` | pass |
+  | leak gate | `node scripts/leak-gate.mjs` | pass (0 hits, 1,681 files) |
+  | repo hygiene | `node scripts/repo-hygiene.mjs --base 6f04a35c` | pass |
+  | the private driver | `STAMITY_REPO=<candidate> node --test …/replay.test.mjs` | pass (126 of 126) |
+  | REPLAY-v1 frozen | `shasum -a 256 evals/replay/REPLAY-v1.md` | pass (`fdee42b1…`) |
+
+  CI (class 1, native) was green on every leg, Windows included: round 2 at `c6b686df`, round 3 at `c6618e49` and
+  round 4 at `d5b78d5f`.
+- **Review verdicts.** The last round of each loop (Fable 5.1). This record declares no confidence gate, and its
+  reviewers stated confidence in words, so the measurements rule reads the run's last approval as stating no number:
+
+  | Loop | Last round | Verdict | Confidence |
+  |---|---|---|---|
+  | public units (`v2-uncovered`, `v2-coverage`, `v2-protocol-text`) | 4 | approve | medium |
+  | private driver (`v2-driver-coverage`), with the security and performance lenses | 2 | approve | high |
+  | whole-branch deep review | 1 | request-changes, fixed at the stronger class | medium |
+  | the whole-branch fix | 2 | approve | medium |
+
+- **The runs.** Both canaries pass K1–K16 at the instrument `c6b686df` and decide `interrupt`. The baseline pilot
+  `2026-09-28-replay-1` is valid, but its recall of 2 of 2 is outside the calibration band (8 of 10 injected seeds
+  were restored before review). The runs stopped by the plan's rule, and no comparison was written.
+- **Decisions trace.** Ten decisions were taken unattended (the section above), each a declared default or the
+  conservative option. The maintainer confirmed all ten on 2026-09-29 ("yeah you got my approval") and chose "Own
+  session next" for the rebuilt replay through the question tool.
+- **Artifacts and attribution.** 28 sub-agents, each attested from its transcript's model field:
+  - 15 at `claude-opus-5-5`: section 0's implementer, three researchers, the spec-author (two passes), four unit
+    implementers, the public and driver fixers, the test-runner, and two canary runners;
+  - 13 at `claude-fable-5-1`: every reviewer round, the security and performance lenses, the whole-branch review and
+    its re-review, and the whole-branch fixer.
+
+  The orchestrator wrote the plan, this record and the private layer. It ran the driver's `prepare`, `canary`,
+  `run` and `export` commands itself.
+- **Ledger.** `ledger.jsonl` has 70 rows: 47 fixed, 8 rejected, 15 deferred, 0 open. The 15 deferred rows are in
+  `.stamity/inbox.md`, each with its `Ref:`. Five older rows this run fixed (`review/167`–`review/170`,
+  `build/85`) are retired with dates in their ledger.
+- **QA checkpoint.** `qa.md` is signed by the maintainer (2026-09-29), Shippable YES. All 8 rows are auto-proven by
+  their test assertions and the gate of record; none was walked.
+- **Learnings.** Section 0's two were captured. The run met no new failure that meets the learnings bar. Its lessons
+  (the seeds' visibility, the patch oracle, the reader's asymmetry, stamps written ahead of the clock) are in the
+  inbox rows and the next kickoff.
+- **Next step.** REPLAY-v3 as its own session, before Package 17 (the maintainer's answer). The inbox rows
+  `prove/4`–`prove/11` are its inputs.
+- **Not done:**
+  - REPLAY-v2's changed pilot, scored runs and `COMPARISON-v2.md`: not run, because the baseline pilot's recall was
+    out of band. REPLAY-v3 is scheduled as the next session.
+  - The QA rows were signed without being walked.
+  - 15 deferred rows wait in the inbox.

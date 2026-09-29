@@ -54,10 +54,10 @@ cites that text's current line at `d227ca57`:
 On 2026-09-28 REQ-CTX-015 was amended from `docs/plans/011-replay-v2-02.md`, whose units moved
 `evals/replay/REPLAY-v2.md`, `scripts/replay/measure.mjs`, `scripts/replay/score.mjs` and
 `scripts/replay/compare.mjs`. Every line citation REQ-CTX-015 makes into those four files is
-therefore to the tree at `5197d8f0`, where every public unit of that plan has landed and its review
+therefore to the tree at `97e6b49f` (the rebase merge's copy of the branch's `5197d8f0`; the same tree), where every public unit of that plan has landed and its review
 loop has converged; each one was read there with the file open. Its citations into
 `scripts/replay/protocols.mjs` and `scripts/replay/findings.mjs` read the same at `d227ca57` and at
-`5197d8f0`.
+`97e6b49f`.
 
 ## Context
 
@@ -483,7 +483,7 @@ A replay compares the changed shape with the 1.9.1 baseline:
   passes its prompt names; a pass is injected once, in one commit that carries the session's own git
   identity and clock …"); amended again 2026-09-28 for R6–R10 of `docs/plans/011-replay-v2-02.md`,
   unattended defaults for the maintainer's confirmation, which apply under v2 only. Citations here
-  are to `evals/replay/REPLAY-v2.md` and `scripts/replay/measure.mjs` at `5197d8f0` (re-pointed
+  are to `evals/replay/REPLAY-v2.md` and `scripts/replay/measure.mjs` at `97e6b49f` (re-pointed
   2026-09-28; they were at `d227ca57`). The driver lives outside this repository, so it is
   described only by what REPLAY-v2 says it must do.
   - **Start** (amended 2026-09-28, R6, `review/167`; it read "When the first verdict-role dispatch
@@ -693,7 +693,7 @@ A replay compares the changed shape with the 1.9.1 baseline:
 - **Release gate.** Every eval-set floor holds at the 1.10.0 release run.
 
 As built (2026-09-26; amended and its citations re-pointed to `d227ca57` on 2026-09-27; amended
-for R6–R10 and its citations re-pointed to `5197d8f0` on 2026-09-28):
+for R6–R10 and its citations re-pointed to `97e6b49f` on 2026-09-28):
 `evals/replay/REPLAY-v2.md` states the rules above — the injection, the review snapshot, the
 not-injected reading and the uncovered seed (§5, `:106-174`), the canary (§5, `:176-192`), the
 matcher (§9, `:415-429`), branch level, the covered passes and the verdict mapping (§8, `:295-308`,

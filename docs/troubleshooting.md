@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 8c0d4e01. Re-attested 2026-09-28 against the capture of two learnings, which moves the sample `check` transcript's learnings count from 14 to 16. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 47bf30b5. Re-attested 2026-09-28 against the capture of two learnings, which moves the sample `check` transcript's learnings count from 14 to 16. -->
 <!-- Re-open when: a `check` probe is added or removed, an error code starts or stops being
      thrown, or a remedy below stops working. `test/docsPages.test.ts` holds this page to the
      hand-page contract and reads the probe rows out of `src/cli/commands/check.ts`;
