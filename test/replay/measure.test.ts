@@ -2315,13 +2315,28 @@ describe("REPLAY-v3 — every arrival state (criterion 39)", () => {
       buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main], [again, ["u3-p1"], REVIEW_START["u3-p1"].main]),
     });
     expect(rowOf(m, "cor-invoice-eacces")).toEqual(expect.objectContaining({ present: null, caughtByImplementer: false, found: false }));
-    expect(noteOf(m, "cor-invoice-eacces")).toMatch(/: was never reviewed — .*no build-end copy of the build agent whose dispatch swapped it, so it is unknown/);
+    expect(noteOf(m, "cor-invoice-eacces")).toMatch(/: was never reviewed — .*no build-end copy of the build agent whose dispatch swapped it, a capture defect/);
     // The swapping build's own stop builds it, whichever build end comes first.
     const built = await v3Run(...inOrder(B11, B31, again, late), {
       snapshots: { "u1-p1": SNAPSHOT_U1P1 },
       buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main], [again, ["u3-p1"], REVIEW_START["u3-p1"].main], [B31, ["u3-p1"], REVIEW_START["u3-p1"].main]),
     });
     expect(rowOf(built, "cor-invoice-eacces")).toEqual(expect.objectContaining({ present: true, caughtByImplementer: false }));
+  });
+
+  it("(e, review/26) a swapped pass no review covered whose swapping build never stopped is a capture defect: no seed's presence is left open", async () => {
+    const late = agentOf("late", "stamity-reviewer", "Review u1-p1", "Review unit u1-p1.", APPROVE);
+    const defect = "capture defect: seed cor-invoice-eacces (u3-p1): the build agent whose dispatch swapped the pass left no build-end copy, and no review covered the pass, so its presence would be left open";
+    const m = await v3Run(...inOrder(B11, B31, late), { snapshots: { "u1-p1": SNAPSHOT_U1P1 }, buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main]) });
+    expect(m.invalid).toEqual([defect]);
+    expect(rowOf(m, "cor-invoice-eacces")).toEqual(expect.objectContaining({ present: null, found: false }));
+    // A repeat dispatch's build end does not build the pass (review/18), so the defect stands.
+    const again = { ...B31, id: "tu_again", agentId: "aagain" };
+    const repeat = await v3Run(...inOrder(B11, B31, again, late), { snapshots: { "u1-p1": SNAPSHOT_U1P1 }, buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main], [again, ["u3-p1"], REVIEW_START["u3-p1"].main]) });
+    expect(repeat.invalid).toEqual([defect]);
+    // A reviewed pass reads its review-start copies, so a swapping build that never stopped leaves nothing open there.
+    const reviewed = await v3Run(...inOrder(B11, B31, REVIEW), { buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main]) });
+    expect(reviewed.invalid).toEqual([]);
   });
 
   it("(f) a seed file absent from every review-start copy is a capture defect", async () => {

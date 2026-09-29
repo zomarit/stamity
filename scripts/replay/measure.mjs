@@ -1567,7 +1567,8 @@ function heldIn(copies, item) {
  * (the copy at the stop that built it included; review/11, REPLAY-v3 §8). The pass was built at the stop of the
  * build agent whose dispatch swapped it (`swappers`, amendment 1): a repeat dispatch's build end builds nothing
  * (review/18). A last copy lacking the seed's file reads back to the last copy after the swap that holds it, and
- * none holding it is a capture defect, so no presence is left open (review/17). A seed absent there was not delivered
+ * none holding it is a capture defect (review/17); so is a pass whose swapping build left no build-end copy
+ * (review/26, amendment 6), so no presence is left open. A seed absent there was not delivered
  * when no build-end copy after the pass's swap held it, and was caught before review otherwise, the note naming
  * the build ends it went between (a copy lacking the seed's file names nothing, review/13); either way it leaves
  * the denominator and holds its security row. A seed file absent from every review-start copy is a capture defect.
@@ -1593,6 +1594,8 @@ function arrivalsOf(seeds, swapped, swappers, L, byAgentId, notes, invalid) {
     const built = swapper !== undefined && ends.some((r) => r.dispatch === swapper.toolUseId || byAgentId.get(r.agentId) === swapper)
     const lastBuild = built ? ends.findLast((r) => r.held !== null) : undefined
     if (reviewStart.length === 0 && built && lastBuild === undefined) invalid.push(`capture defect: seed ${seed.id} (${seed.pass}): ${seed.file} is absent from every build-end copy after the pass's swap, and no review covered the pass`)
+    // review/26 (amendment 6): a swapping build that never stopped left no build-end copy, so presence would be open.
+    if (reviewStart.length === 0 && !built) invalid.push(`capture defect: seed ${seed.id} (${seed.pass}): the build agent whose dispatch swapped the pass left no build-end copy, and no review covered the pass, so its presence would be left open`)
     const present = reviewStart.length > 0 ? heldIn(reviewStart, seed) : lastBuild?.held ?? null
     if (present === false) {
       // False from the build ends only when the last build-end copy after the pass was built lacks the seed.
@@ -1603,7 +1606,7 @@ function arrivalsOf(seeds, swapped, swappers, L, byAgentId, notes, invalid) {
       else notes.push(`${tag}: caught before review — absent from ${at}; it went between the build end of ${who(ends[last])} and ${gone ? `the build end of ${who(gone)}` : 'the review start'}, so it leaves the recall denominator${held}`)
       arrivals.set(seed.id, { present: false, caught: true, item: false })
     } else if (reviewStart.length === 0) {
-      notes.push(`${tag}: was never reviewed — its pass was swapped and no review covered it, so its presence is read from ${lastBuild ? `the last build-end copy taken after the pass was built, ${who(lastBuild)}'s` : built ? 'no build-end copy that holds its file, a capture defect' : 'no build-end copy of the build agent whose dispatch swapped it, so it is unknown'}; it stays in the recall denominator as a miss`)
+      notes.push(`${tag}: was never reviewed — its pass was swapped and no review covered it, so its presence is read from ${lastBuild ? `the last build-end copy taken after the pass was built, ${who(lastBuild)}'s` : built ? 'no build-end copy that holds its file, a capture defect' : 'no build-end copy of the build agent whose dispatch swapped it, a capture defect'}; it stays in the recall denominator as a miss`)
       arrivals.set(seed.id, { present, caught: false, item: false })
     } else {
       if (present === null) invalid.push(`capture defect: seed ${seed.id} (${seed.pass}): ${seed.file} is absent from every copy of the pass's review-start snapshot (captures/snapshots/${seed.pass}/)`)
