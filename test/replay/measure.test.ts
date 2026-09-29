@@ -2178,12 +2178,40 @@ describe("REPLAY-v3 — the per-pass credit guard (criterion 38)", () => {
   });
 
   it("the swap line is the dispatch the record names, else the first build dispatch naming the pass; a record entry with no tool_use id reads captures/swaps/", async () => {
+    // Amendment 2: the swap line decides only a finding no digest names, so the finding here is a ledger row.
     const again = { ...B31, id: "tu_again", agentId: "aagain" };
-    const [lines, agents] = inOrder(B11, B31, BOTH_LENS, again, REVIEW);
-    const credited = async (record: Record<string, unknown>, swaps?: CaptureSpec["swaps"]): Promise<boolean> => rowOf(await v3Run(lines, agents, { record, ...(swaps ? { swaps } : {}) }), "cor-invoice-eacces").found;
+    const quiet = agentOf("quiet", "stamity-security", "Security lens", "Review the diff for security.", APPROVE);
+    const [lines, agents] = inOrder(B11, B31, quiet, again, REVIEW);
+    const ledger = ledgerRows([INVOICE_FINDING]);
+    const credited = async (record: Record<string, unknown>, swaps?: CaptureSpec["swaps"]): Promise<boolean> => rowOf(await v3Run(lines, agents, { record, ledger, ...(swaps ? { swaps } : {}) }), "cor-invoice-eacces").found;
     expect(await credited(swapRecord({ "u1-p1": B11.id, "u3-p1": again.id }))).toBe(false);
     expect(await credited(swapRecord({ "u1-p1": B11.id, "u3-p1": "tu_gone" }))).toBe(true);
     expect(await credited(swapRecord({ "u1-p1": B11.id, "u3-p1": "" }, { "u3-p1": { toolUseId: undefined } }), { "u3-p1": { pass: "u3-p1", toolUseId: again.id } })).toBe(false);
+  });
+
+  it("(38, amendment 3) a lens dispatched after u3-p1's swap that covers only u1-p1 credits no u3-p1 seed; the same finding from a lens covering u3-p1 credits it", async () => {
+    const lensOn = (pass: string): AgentSpec => agentOf(`on${pass.replace("-", "")}`, "stamity-security", `Security lens ${pass}`, `Review unit ${pass} for security.`, freeTextReturn([INVOICE_FINDING], "request-changes"));
+    const other = await v3Run(...inOrder(B11, B31, lensOn("u1-p1"), REVIEW));
+    expect(other.invalid).toEqual([]);
+    expect(rowOf(other, "cor-invoice-eacces")).toEqual(expect.objectContaining({ present: true, found: false }));
+    expect(rowOf(await v3Run(...inOrder(B11, B31, lensOn("u3-p1"), REVIEW)), "cor-invoice-eacces").found).toBe(true);
+  });
+
+  it("(§9) a finding matches only the spans located in the copies of the passes its agent covers, and one of an agent covering nothing matches no span", async () => {
+    const at = (line: number): Row => ({ ...INVOICE_FINDING, locator: `src/orders/invoice.ts:${line}` });
+    const pair = (row: Row): AgentSpec => agentOf("pair", "stamity-reviewer", "Review u1-p1 and u3-p1", "Review units u1-p1 and u3-p1.", freeTextReturn([row], "request-changes"));
+    // u1-p2's copy, which the pair does not cover, holds the seeded line at 20; u3-p1's holds it at 7.
+    const snapshots = { ...REVIEW_START, "u1-p2": { main: { "src/orders/format.ts": FORMAT, "src/orders/invoice.ts": fileWith(20, INVOICE_SEEDED) } } };
+    const elsewhere = await v3Run(...inOrder(B11, B31, pair(at(20))), { snapshots });
+    expect(elsewhere.invalid).toEqual([]);
+    expect(rowOf(elsewhere, "cor-invoice-eacces").found).toBe(false);
+    expect(rowOf(await v3Run(...inOrder(B11, B31, pair(at(7))), { snapshots }), "cor-invoice-eacces").found).toBe(true);
+    // A plan review before any build covers nothing: its term-less finding at the seed's line enters no adjudication row.
+    const plan = agentOf("plan", "stamity-reviewer", "Review the plan", "Review the plan.", freeTextReturn([{ ...SEED_FINDING, summary: "this line is long" }], "request-changes"));
+    const early = await v3Run(...inOrder(plan, B11, B31, REVIEW));
+    expect(early.adjudication.map((a) => a.item)).not.toContain("sec-sql-sort");
+    const covering = agentOf("cov", "stamity-reviewer", "Review u1-p1", "Review unit u1-p1.", freeTextReturn([{ ...SEED_FINDING, summary: "this line is long" }], "request-changes"));
+    expect((await v3Run(...inOrder(B11, B31, covering))).adjudication.map((a) => a.item)).toContain("sec-sql-sort");
   });
 
   it("a ledger row no digest names credits a seed of P only when no verdict agent was dispatched before P's swap", async () => {
@@ -2211,6 +2239,13 @@ describe("REPLAY-v3 — every arrival state (criterion 39)", () => {
     expect(went.invalid).toEqual([]);
     expect(rowOf(went, "sec-sql-sort")).toEqual(expect.objectContaining({ present: false, caughtByImplementer: true, found: false }));
     expect(noteOf(went, "sec-sql-sort")).toMatch(/: caught before review — .*abuildu1p1 \("Build unit u1-p1"\).*abuildu1p2 \("Build unit u1-p2"\)/);
+    // A build-end copy that lacks the seed's file says nothing of the seed: the interval ends at the first copy without the seed.
+    const skipped = await v3Run(...inOrder(B11, B12, B31, REVIEW), {
+      seeds: ONE, record: ONE_SWAP, snapshots: { ...REVIEW_START, "u1-p1": { main: REVERTED_U1P1 } },
+      buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main], [B12, ["u1-p2"], { "src/orders/format.ts": FORMAT }], [B31, ["u3-p1"], REVERTED_U1P1]),
+    });
+    expect(skipped.invalid).toEqual([]);
+    expect(noteOf(skipped, "sec-sql-sort")).toMatch(/: caught before review — .*between the build end of abuildu1p1 \("Build unit u1-p1"\) and the build end of abuildu3p1 \("Build unit u3-p1"\)/);
   });
 
   it("(d) a pass with no swap record makes the run invalid under UNCOVERED_REASON; its seed is never found, and a finding at its clean line credits nothing and enters no adjudication", async () => {
@@ -2239,6 +2274,23 @@ describe("REPLAY-v3 — every arrival state (criterion 39)", () => {
     expect(passOf(m, "u3-p1").verdict.finalClass).toBeNull();
     expect(m.totals.recall).toEqual(expect.objectContaining({ found: 0, denominator: 2 }));
     expect(noteOf(m, "cor-invoice-eacces")).toMatch(/: was never reviewed — .*abuildu3p1 \("Build unit u3-p1"\)/);
+  });
+
+  it("(e, review/11) a pass no review covered reads presence from the last build-end copy of any agent taken after it was built: a later builder that removed the seed makes it caught before review", async () => {
+    const late = agentOf("late", "stamity-reviewer", "Review u1-p1", "Review unit u1-p1.", APPROVE);
+    const invoiceClean = { "src/orders/invoice.ts": fileWith(7, "  if (error.code === \"EACCES\") return serverError(res);") };
+    const m = await v3Run(...inOrder(B11, B31, B12, late), {
+      snapshots: { "u1-p1": SNAPSHOT_U1P1 },
+      buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main], [B31, ["u3-p1"], REVIEW_START["u3-p1"].main], [B12, ["u1-p2"], invoiceClean]),
+    });
+    expect(m.invalid).toEqual([]);
+    expect(rowOf(m, "cor-invoice-eacces")).toEqual(expect.objectContaining({ present: false, caughtByImplementer: true, found: false }));
+    expect(passOf(m, "u3-p1").verdict.finalClass).toBeNull();
+    expect(noteOf(m, "cor-invoice-eacces")).toMatch(/: caught before review — absent from the last build-end copy taken after the pass was built, abuildu1p2 \("Build unit u1-p2"\)'s, as the pass was never reviewed; it went between the build end of abuildu3p1 \("Build unit u3-p1"\) and the build end of abuildu1p2/);
+    // A build of the pass alone: the copy at the stop that built it is the one read.
+    const own = await v3Run(...inOrder(B11, B31, late), { snapshots: { "u1-p1": SNAPSHOT_U1P1 }, buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main], [B31, ["u3-p1"], invoiceClean]) });
+    expect(rowOf(own, "cor-invoice-eacces")).toEqual(expect.objectContaining({ present: false, caughtByImplementer: true }));
+    expect(noteOf(own, "cor-invoice-eacces")).toMatch(/: was not delivered — absent from the last build-end copy taken after the pass was built, abuildu3p1 \("Build unit u3-p1"\)'s, as the pass was never reviewed/);
   });
 
   it("(f) a seed file absent from every review-start copy is a capture defect", async () => {

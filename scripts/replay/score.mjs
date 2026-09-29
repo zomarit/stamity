@@ -617,7 +617,8 @@ export function renderResults(summary, thresholds, reference = []) {
   }
   push('')
 
-  const present = s.version === 'v3' ? 'Present at review start' : 'Present'
+  // review/14: a pass no review covered reads presence at its last build end (REPLAY-v3 §8).
+  const present = s.version === 'v3' ? 'Present at review start (never reviewed: at its last build end)' : 'Present'
   push('## Seeds', '', `| Seed | Class | Pass | ${present} | ${caught[0].toUpperCase()}${caught.slice(1)} | Found | Round 1 | Stage | Oracle |`, '|---|---|---|---|---|---|---|---|---|')
   for (const p of s.passes) {
     for (const x of p.seeds) push(`| ${cell(x.id)} | ${cell(x.class ?? '—')} | ${p.id} | ${x.present === null ? 'unknown' : x.present ? 'yes' : 'no'} | ${x.caughtByImplementer ? 'yes' : 'no'} | ${x.found ? 'yes' : 'no'} | ${x.foundRound1 ? 'yes' : 'no'} | ${x.stage ?? '—'} | ${x.oracle ?? 'no result'} |`)

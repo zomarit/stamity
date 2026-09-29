@@ -1270,7 +1270,7 @@ describe("REPLAY-v3 — the arrival notes and the version (plan 012 v3-measure)"
     const [md1, md3] = [v1, v3].map((s) => renderResults(s, parseThresholds(PROTOCOL_TEXT)) as string);
     expect(md3).toContain("a seed caught before review or not delivered counts as found");
     expect(md3).toMatch(/held \(\d+ caught before review or not delivered, \d+ with presence unknown\)/);
-    expect(md3).toContain("| Seed | Class | Pass | Present at review start | Caught before review or not delivered | Found |");
+    expect(md3).toContain("| Seed | Class | Pass | Present at review start (never reviewed: at its last build end) | Caught before review or not delivered | Found |");
     expect(md1).toContain("implementer-removed counts as found");
     expect(md1).toContain("| Seed | Class | Pass | Present | Caught by the implementer | Found |");
     expect(md1).not.toContain("caught before review");
