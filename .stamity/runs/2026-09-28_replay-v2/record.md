@@ -411,3 +411,9 @@ showed:
 
 `evals/replay/COMPARISON-v2.md` is not written: no scored run exists. REQ-CTX-015 is stated as built; its replay
 gate, which binds the release that first ships REPLAY-v2's comparison, stays open.
+- 2026-09-29T07:07Z **The maintainer's answers** (back in the session): "yeah you got my approval" — every "Sign-off,
+  unattended" above is confirmed, and the QA sign-off for PR #58 is given (the person rows not walked, as the
+  maintainer chose before). Asked whether another replay is needed, and shown three paths through the question tool,
+  the maintainer chose **"Own session next (Recommended)"**: merge #58 now, and the next session rebuilds the replay
+  under a new protocol (REPLAY-v3: seeds an orchestrator cannot tell from its own units' work, no clean-patch oracle
+  within review's reach, a symmetric reader) and runs it overnight, before Package 17.
