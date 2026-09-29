@@ -31,6 +31,9 @@ const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/
 const RUNNER_PAYLOAD = /^(?:[^/]*-attempt-[^/]*|sample-[^/]*|isolation-[^/]*)\.json$/
 const PAYLOAD = /(?:^|\/)(?:calls|captures)\/|\.(?:input|output)\.txt$|\.(?:tar(?:\.gz)?|tgz|zip|zst)$/
+// A public run's scenario transcripts and the task inputs beside them (run 11's calibration/ shape).
+// Tracked copies are not additions against --base, so they stay as grandfathered history.
+const PUBLIC_PAYLOAD = /\.(?:transcript\.txt|input\.md)$/
 const PID = /(?:^|\/)[^/]+\.pid(?:\.lock)?(?:\/|$)/
 const paths = output => output.split('\0').filter(Boolean)
 const relative = path => typeof path === 'string' && path.length > 0 &&
@@ -54,6 +57,7 @@ function rawEvidence(path, kind) {
   if (!publicRun && !privateRun) return false
   const name = path.split('/').at(-1)
   if (PAYLOAD.test(path) || RAW_NAME.test(name) || RUNNER_PAYLOAD.test(name)) return true
+  if (publicRun && PUBLIC_PAYLOAD.test(name)) return true
   return privateRun && (
     /\/claude-run\/run[^/]*\/(?:state\.json|(?:stdout|stdin)\.jsonl|(?:task|transcript|ambient|system)\.txt)$/.test(path) ||
     /\/driver\/(?:raw\/|(?:state|input-snapshot)\.json$|(?:[^/]+\/)*[^/]+\.state-before\.json$)/.test(path) ||
