@@ -1247,3 +1247,32 @@ describe("REPLAY-v2 R7 — an uncovered pass (review/168)", () => {
     expect(cli.stderr).toContain("2026-09-24-replay-2: a changed scored run invalid only for an uncovered pass");
   });
 });
+
+describe("REPLAY-v3 — the arrival notes and the version (plan 012 v3-measure)", () => {
+  it("files each v3 arrival note beside pooled-recall and security-seeds, not under the other notes", async () => {
+    const { m, runJson } = await measured();
+    // The phrases measure.mjs writes for a seed caught before review, not delivered, never reviewed, removed during review, or uncovered.
+    const literals = [": caught before review — ", ": was not delivered — ", ": was never reviewed — ", ": removed during review, uncredited — ", ": uncovered — no swap record for its pass"];
+    for (const literal of literals) expect(MEASURE_SRC).toContain(literal);
+    const notes = literals.map((literal, k) => `seed cor-seed-${k} (u2-p1)${literal}filled in`);
+    const md = renderResults(summarize({ ...m, notes }, runJson, PROTOCOL_SHA), parseThresholds(PROTOCOL_TEXT)) as string;
+    const section = (head: string): string => md.slice(md.indexOf(head), md.indexOf("####", md.indexOf(head) + 4));
+    for (const note of notes) for (const head of ["#### Beside `pooled-recall`", "#### Beside `security-seeds`"]) expect([head, section(head)]).toEqual([head, expect.stringContaining(note)]);
+    expect(section("#### Other measurement notes")).toContain("- no notes line");
+  });
+
+  it("a v3 measurement's version rides into the summary, and RESULTS words the security row and the seeds table for arrival; v1's summary and wording do not move", async () => {
+    const { m, runJson } = await measured();
+    const v1 = summarize(m, runJson, PROTOCOL_SHA) as Summary & { version?: string };
+    const v3 = summarize({ ...m, version: "v3" }, runJson, PROTOCOL_SHA) as Summary & { version?: string };
+    expect(["version" in v1, v3.version]).toEqual([false, "v3"]);
+    expect(validateSummary(v3)).toEqual([]);
+    const [md1, md3] = [v1, v3].map((s) => renderResults(s, parseThresholds(PROTOCOL_TEXT)) as string);
+    expect(md3).toContain("a seed caught before review or not delivered counts as found");
+    expect(md3).toMatch(/held \(\d+ caught before review or not delivered, \d+ with presence unknown\)/);
+    expect(md3).toContain("| Seed | Class | Pass | Present at review start | Caught before review or not delivered | Found |");
+    expect(md1).toContain("implementer-removed counts as found");
+    expect(md1).toContain("| Seed | Class | Pass | Present | Caught by the implementer | Found |");
+    expect(md1).not.toContain("caught before review");
+  });
+});

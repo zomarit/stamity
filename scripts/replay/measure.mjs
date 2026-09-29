@@ -59,6 +59,15 @@ export const UNATTRIBUTED_MAX = 0.2
  * §8's two and §5's reference fixes, the answer key `fixture.mjs` also keeps out of the fixture (build/254).
  */
 const ALWAYS_FORBIDDEN = ['seeds.json', '__oracle__', 'reference-fixes']
+/** REPLAY-v3 §8 (plan 012): the seeded patches' folder joins the forbidden terms, under v3 only. */
+const FORBIDDEN_V3 = [...ALWAYS_FORBIDDEN, 'patches-seeded']
+/**
+ * REPLAY-v3 C6 (plan 012): the harness's own strings, whose appearance in any main or sub-agent transcript
+ * line voids the run, beside the `--forbid` paths (the instrument checkout and the private layer's).
+ */
+const HARNESS_STRINGS = ['REPLAY_', 'marker-hook', 'seeds.json', 'stamity-replay', 'replay@invalid', 'evals/replay']
+/** REPLAY-v3 C5: the client's change notice (`edited_text_file`) for a pass's patch, which only the swap rewrites. */
+const PATCH_NOTICE = /(?:^|\/)(vendor\/contrib\/u[1-3]-p[12]\.patch)$/
 
 const LOOP_FUNCTIONS = new Set(['build', 'fix', 'verdict', 'gate'])
 const FLAG_SEVERITIES = ['Critical', 'Warning']
@@ -167,6 +176,9 @@ function layoutOf(runDir) {
     snapshots: join(captures, 'snapshots'),
     // REPLAY-v2 R4: each pass's tree as the first review round covering it completed.
     reviewSnapshots: join(captures, 'review-snapshots'),
+    // REPLAY-v3 (plan 012, S3): each build agent's end-of-build copy with its index, and the hook's swap records.
+    buildEnd: join(captures, 'build-end'),
+    swaps: join(captures, 'swaps'),
     state: join(captures, 'state'),
     oracle: join(captures, 'oracle.json'),
   }
@@ -253,13 +265,33 @@ function checkNotMatch(item, where) {
   for (const source of list) compileNotMatch(source, where)
 }
 
+const SHA256_HEX = /^[0-9a-f]{64}$/
+
+/**
+ * S1 (REPLAY-v3, plan 012): the document's optional `arrival: "patch"` and `patches`, which come
+ * together; `patches` maps a pass id to `{ clean, seeded }`, the sha256 of its clean and seeded patch.
+ */
+function checkArrival(seeds) {
+  if (seeds.arrival === undefined && seeds.patches === undefined) return
+  if (seeds.arrival === undefined || seeds.patches === undefined) throw new Error('seeds: arrival and patches come together (REPLAY-v3)')
+  if (seeds.arrival !== 'patch') throw new Error(`seeds: arrival ${JSON.stringify(seeds.arrival)} is not "patch"`)
+  if (seeds.patches === null || typeof seeds.patches !== 'object' || Array.isArray(seeds.patches)) throw new Error('seeds: patches is not an object')
+  const digest = (v) => typeof v === 'string' && SHA256_HEX.test(v)
+  for (const [pass, d] of Object.entries(seeds.patches)) {
+    if (!PASS_IDS.includes(pass)) throw new Error(`seeds: patches.${pass} names no pass of ${PASS_IDS.join(', ')}`)
+    if (!digest(d?.clean) || !digest(d?.seeded)) throw new Error(`seeds: patches.${pass} is not { clean, seeded } sha256 digests`)
+  }
+}
+
 /**
  * The seeds document's schema check (`stamity/replay-seeds/v1`): each item's id, pass, file, span
- * and terms, and the two optional v2 fields (S1), `injection` and `present.notMatch`. A v1 document,
- * which has neither field, reads exactly as before. Throws on the first refusal, naming the item.
+ * and terms, the two optional v2 fields (S1), `injection` and `present.notMatch`, and v3's `arrival`
+ * with `patches`. A v1 document, which has none of them, reads exactly as before. Throws on the first
+ * refusal, naming the item.
  */
 export function checkSeeds(seeds) {
   if (!seeds || typeof seeds !== 'object' || seeds.schema !== SEEDS_SCHEMA) throw new Error(`seeds: the document is not ${SEEDS_SCHEMA}`)
+  checkArrival(seeds)
   for (const list of ['seeds', 'decoys']) {
     if (!Array.isArray(seeds[list])) throw new Error(`seeds: "${list}" is not a list`)
     for (const item of seeds[list]) {
@@ -402,32 +434,49 @@ export function passesOf(desc, prompt, { ranges = true } = {}) {
  *     description names, else every plan pass; a fixer the passes its description names, else every
  *     pass covered by the verdict agents that returned before it was dispatched; a build the passes its
  *     description names; any other role none.
+ *
+ * `rule: 'v3'` (REPLAY-v3, plan 012, S4): a pass is swapped at the first build dispatch whose description
+ * names it (`built` names every pass a build describes, so the driver's hook records a repeat) and built at
+ * the stop of that swapping agent, returned or ended by TaskStop; a repeat dispatch naming it neither swaps
+ * nor builds it. A verdict covers the passes its description names that
+ * are built, else every plan pass that is built, so one before any pass is built covers nothing. Fixers
+ * and builds read as under v2, and `injectionPoint` is always false. The v2 result is unchanged.
  */
-export function coverageOf(events, planPasses = PASS_IDS) {
+export function coverageOf(events, planPasses = PASS_IDS, { rule = 'v2' } = {}) {
+  const v3 = rule === 'v3'
   const plan = PASS_IDS.filter((p) => planPasses.includes(p))
   const rows = new Map()
   const verdicts = new Set()
+  const builders = new Map()
+  const swappedBy = new Set()
   const built = new Set()
   const reviewed = new Set()
   let reached = false
   for (const e of events ?? []) {
     if (e?.kind === 'stop') {
       if (e.returned === true && verdicts.has(e.id)) for (const p of rows.get(e.id).passes) reviewed.add(p)
+      for (const p of builders.get(e.id) ?? []) built.add(p)
       continue
     }
     if (e?.kind !== 'dispatch') continue
     const named = passIdsIn(e.description, true)
     const row = { built: [], passes: [], injectionPoint: false }
     if (e.role === 'build') {
-      for (const p of named) built.add(p)
+      if (v3) {
+        builders.set(e.id, named.filter((p) => !swappedBy.has(p)))
+        for (const p of named) swappedBy.add(p)
+      } else for (const p of named) built.add(p)
       Object.assign(row, { built: named, passes: [...named] })
     } else if (e.role === 'verdict') {
       verdicts.add(e.id)
-      if (!reached && plan.every((p) => built.has(p))) {
-        reached = true
-        row.injectionPoint = true
+      if (v3) row.passes = (named.length > 0 ? named : plan).filter((p) => built.has(p))
+      else {
+        if (!reached && plan.every((p) => built.has(p))) {
+          reached = true
+          row.injectionPoint = true
+        }
+        if (reached) row.passes = named.length > 0 ? named : [...plan]
       }
-      if (reached) row.passes = named.length > 0 ? named : [...plan]
     } else if (e.role === 'fix') row.passes = named.length > 0 ? named : PASS_IDS.filter((p) => reviewed.has(p))
     rows.set(e.id, row)
   }
@@ -478,9 +527,9 @@ function indexTranscript(lines) {
   return { uses, results, bashNamesReport, cwds }
 }
 
-async function cwdsOf(path) {
+function cwdsIn(lines) {
   const out = new Set()
-  for (const text of await readLines(path)) {
+  for (const text of lines) {
     const o = text.trim() ? parseJson(text) : undefined
     if (o && typeof o.cwd === 'string') out.add(o.cwd)
   }
@@ -592,11 +641,30 @@ function finalClassOf(reviews) {
 // ---------- the measurement: loading ----------
 
 /**
+ * REPLAY-v3 C5 and C6 over one transcript's lines: the first change notice for a pass's patch (by its
+ * filename only) and the first line holding a harness string, each with its 1-based line; null when none.
+ */
+function contaminationIn(lines, harness) {
+  let c5 = null
+  let c6 = null
+  lines.forEach((text, k) => {
+    const hit = c6 === null ? harness.find(([needle]) => text.includes(needle)) : undefined
+    if (hit) c6 = { line: k + 1, label: hit[1] }
+    if (c5 !== null || !text.includes('edited_text_file')) return
+    const a = parseJson(text)?.attachment
+    const m = a?.type === 'edited_text_file' && typeof a.filename === 'string' ? a.filename.replaceAll('\\', '/').match(PATCH_NOTICE) : null
+    if (m) c5 = { line: k + 1, patch: m[1] }
+  })
+  return { c5, c6 }
+}
+
+/**
  * The capture read once: `run.json`, the main transcript (walked, and indexed for what the walk's
  * rows do not carry), every sub-agent scan, the init event, and every spelling of every root the
- * transcripts name. Validity reasons found on the way go to `invalid`.
+ * transcripts name. Validity reasons found on the way go to `invalid`; under v3 (plan 012) they
+ * include contamination, C5 and C6, read over every main and sub-agent line.
  */
-async function loadCapture(runDir, forbid) {
+async function loadCapture(runDir, forbid, version) {
   const L = layoutOf(runDir)
   const invalid = []
   const run = readJsonIfPresent(L.runJson)
@@ -605,7 +673,8 @@ async function loadCapture(runDir, forbid) {
   if (endReason !== 'complete') invalid.push(`run.json end.reason is ${endReason === null ? 'absent' : JSON.stringify(endReason)}, not "complete"`)
 
   // Forbidden inputs, each spelling labelled so no absolute path reaches the document.
-  const forbidLabels = new Map(ALWAYS_FORBIDDEN.map((s) => [s, s]))
+  const terms = version === 'v3' ? FORBIDDEN_V3 : ALWAYS_FORBIDDEN
+  const forbidLabels = new Map(terms.map((s) => [s, s]))
   forbid.forEach((path, k) => {
     for (const spelling of rootSpellings([path])) forbidLabels.set(spelling, `--forbid[${k}]`)
   })
@@ -622,14 +691,22 @@ async function loadCapture(runDir, forbid) {
   const index = indexTranscript(lines)
   const subDir = join(L.transcriptDir, session, 'subagents')
   const subFiles = entriesOf(subDir).filter((e) => e.isFile() && /^agent-.+\.jsonl$/.test(e.name)).map((e) => e.name)
+  const harness = [...HARNESS_STRINGS.map((s) => [s, s]), ...[...forbidLabels].filter(([s]) => !terms.includes(s))]
   const subs = await Promise.all(subFiles.map(async (name) => {
     const agentId = name.slice('agent-'.length, -'.jsonl'.length)
-    const [scan, cwds] = await Promise.all([
+    const [scan, subLines] = await Promise.all([
       scanSubagent(join(subDir, name), join(subDir, `agent-${agentId}.meta.json`), { forbid: forbidList }),
-      cwdsOf(join(subDir, name)),
+      readLines(join(subDir, name)),
     ])
-    return Object.assign(scan, { agentId, cwds })
+    return Object.assign(scan, { agentId, cwds: cwdsIn(subLines), contamination: version === 'v3' ? contaminationIn(subLines, harness) : null })
   }))
+  if (version === 'v3') {
+    const found = [{ where: 'main transcript', ...contaminationIn(lines, harness) }, ...subs.map((s) => ({ where: `sub-agent ${s.agentId}`, ...s.contamination }))]
+    const c5 = found.find((f) => f.c5 !== null)
+    const c6 = found.find((f) => f.c6 !== null)
+    if (c5) invalid.push(`contamination (C5): a change notice for ${c5.c5.patch} (${c5.where} line ${c5.c5.line})`)
+    if (c6) invalid.push(`contamination (C6): a harness string (${c6.c6.label}) in ${c6.where} line ${c6.c6.line}`)
+  }
   const init = await initEvent(L.stdout)
 
   const orchestratorModels = {}
@@ -677,11 +754,12 @@ function oracleRunOf(oracle) {
 /**
  * The orchestrator's agents, joined across the walk: each Agent dispatch with its role function
  * and pass, the SendMessages that reach it, and every delivery — a notification, or a synchronous
- * Agent, SendMessage or TaskOutput result — with its digest and verdict read once. `v2` (an
- * injecting seeds document) sets each agent's `passes` from `coverageOf` and reads branch level by
- * R8; `injectionLine` is the dispatch line of R6's injection point (null under v1, or never reached).
+ * Agent, SendMessage or TaskOutput result — with its digest and verdict read once. Under v2 and v3
+ * (`version`, `measureRun`'s switch) each agent's `passes` come from `coverageOf` by that version's rule
+ * and branch level is read by R8; `injectionLine` is the dispatch line of R6's injection point (null
+ * under v1 and v3, or never reached).
  */
-function joinAgents(walk, index, subs, roots, v2) {
+function joinAgents(walk, index, subs, roots, version) {
   const agents = []
   const byUse = new Map()
   for (const d of walk.dispatches.filter((x) => x.kind === 'agent')) {
@@ -788,13 +866,13 @@ function joinAgents(walk, index, subs, roots, v2) {
   // (a TaskStop's failed notification reads not returned) in transcript order; an agent built from its
   // sub-agent file is placed at the line of the delivery that named it, and credits nothing (review/15, `credits`).
   let injectionLine = null
-  if (v2) {
+  if (version !== 'v1') {
     const ids = new Map(agents.map((a, k) => [a, k]))
     const timeline = [
       ...agents.map((a) => ({ line: a.line, rank: 0, event: { kind: 'dispatch', id: ids.get(a), role: a.fn, description: a.desc, prompt: a.prompt } })),
       ...deliveries.filter((d) => d.agent !== null && !d.reread).map((d) => ({ line: d.line, rank: 1, event: { kind: 'stop', id: ids.get(d.agent), returned: !d.failed } })),
     ].toSorted((x, y) => x.line - y.line || x.rank - y.rank)
-    const coverage = coverageOf(timeline.map((t) => t.event))
+    const coverage = coverageOf(timeline.map((t) => t.event), PASS_IDS, { rule: version })
     for (const a of agents) {
       const row = coverage.get(ids.get(a))
       a.passes = row.passes
@@ -807,8 +885,10 @@ function joinAgents(walk, index, subs, roots, v2) {
     // loop round. review/13: only a reviewer dispatched at or after the injection point approves here; a plan
     // or cell review before it covers nothing. review/20: a reviewer built from its sub-agent file has no known
     // dispatch line, so its approval counts for nothing.
+    // REPLAY-v3 (plan 012) has no injection point: a reviewer whose coverage holds a built pass approves here.
     const point = injectionLine ?? Infinity
-    const approvals = deliveries.filter((d) => d.round && d.agent?.role === 'reviewer' && d.verdict === 'approve' && d.agent.line >= point && !d.agent.fromFile).map((d) => d.line)
+    const reviewedBuilt = (a) => (version === 'v3' ? a.passes.length > 0 : a.line >= point)
+    const approvals = deliveries.filter((d) => d.round && d.agent?.role === 'reviewer' && d.verdict === 'approve' && reviewedBuilt(d.agent) && !d.agent.fromFile).map((d) => d.line)
     const namedAfterApproval = (a) => WHOLE_BRANCH.test(a.desc) && approvals.some((line) => line < a.line)
     let from = Infinity
     // review/21: an agent built from its sub-agent file has no known dispatch time, so no position makes it
@@ -832,6 +912,7 @@ function joinAgents(walk, index, subs, roots, v2) {
   const fixers = agents.filter((a) => a.fn === 'fix')
   // Sweep (review/21, v2): a fixer built from its sub-agent file counts as dispatched before every agent sharing its
   // passes, so its unknown dispatch time can only raise a round, never leave a later find in round 1.
+  const v2 = version !== 'v1'
   for (const a of agents) a.round = 1 + fixers.filter((f) => sharePass(f, a, v2) && ((v2 && f.fromFile) || f.line < a.line)).length
   return { agents, byAgentId, sends, deliveries, notes, injectionLine }
 }
@@ -1010,7 +1091,7 @@ const lineOf = (agent) => (agent.fromFile ? null : agent.line)
  * takes the dispatch line of the agent whose digest names its report, else null. `readerSkips` counts
  * what the readers could not read (build/109).
  */
-function collectFindings(deliveries, stateNames, states, roots, v2) {
+function collectFindings(deliveries, stateNames, states, roots, version) {
   const all = []
   const byReport = new Map()
   for (const d of deliveries) if (d.agent !== null && d.digest.report !== null && !byReport.has(reportKey(d.digest.report))) byReport.set(reportKey(d.digest.report), lineOf(d.agent))
@@ -1061,7 +1142,7 @@ function collectFindings(deliveries, stateNames, states, roots, v2) {
   // The pass whose copies locate a finding's spans (build/190): v1 its attributed pass id; R6 (review/167, v2)
   // its one covered pass, so a round covering every pass meets the union whatever id its prompt names in
   // passing. v1 keeps its key: a report slug with a prefix (`lane-u1-p1`) names one pass and is no pass id.
-  for (const f of all) f.spansPass = v2 ? (f.passes.length === 1 ? f.passes[0] : null) : isPass(f.pass) ? f.pass : null
+  for (const f of all) f.spansPass = version !== 'v1' ? (f.passes.length === 1 ? f.passes[0] : null) : isPass(f.pass) ? f.pass : null
   return { all, readerSkips }
 }
 
@@ -1134,8 +1215,8 @@ function scoreFindings(all, seeds, snapshots, guard = null) {
   const seedMatch = matchByPass(all, seeds.seeds, snapshots, { tolerance, severities: seeds.matcher?.severities ?? FLAG_SEVERITIES })
   const flagMatch = matchByPass(all, items, snapshots, { tolerance, severities: FLAG_SEVERITIES })
   // review/16: a seed match the credit guard withholds is no match for precision either (a decoy is in every tree).
-  const seedIds = new Set(seeds.seeds.map((seed) => seed.id))
-  const flagged = new Set(Object.entries(flagMatch.matched).flatMap(([id, idxs]) => (seedIds.has(id) ? idxs.filter((i) => credits(all[i], guard)) : idxs)))
+  const seedPass = new Map(seeds.seeds.map((seed) => [seed.id, seed.pass]))
+  const flagged = new Set(Object.entries(flagMatch.matched).flatMap(([id, idxs]) => (seedPass.has(id) ? idxs.filter((i) => credits(all[i], guard, seedPass.get(id))) : idxs)))
 
   // One per free-text block and one per location, so a finding repeated by a digest, a report and
   // a ledger row counts once.
@@ -1170,6 +1251,11 @@ function scoreFindings(all, seeds, snapshots, guard = null) {
   }
   const decoysFlagged = seeds.decoys.filter((d) => flagMatch.matched[d.id].length > 0)
   return { seedMatch, decoysFlagged, unmatched, adjudication, tolerance }
+}
+
+/** build/197: a seed present, not found, whose oracle passes at run end, is named. */
+function unfoundWithOracle(r, notes) {
+  if (r.present === true && !r.found && r.oracle === 'pass') notes.push(`seed ${r.id} (${r.pass}): present in the snapshot and not found by a verdict role, while its oracle passes at run end — scored not found (build/197)`)
 }
 
 /** Where a seed was first found: its own pass, another pass, the whole-branch review, or a source naming no pass (a ledger row with no report). */
@@ -1243,8 +1329,15 @@ function injectionStatesOf(seeds, run, invalid, snapshots) {
  * dispatched before the injection point (`guard.orphans`). review/15: an agent built from its sub-agent
  * file has no known dispatch line (`dispatched` null) and makes `guard.orphans` false, so it never credits.
  * review/14, review/16: the compaction samples and precision read seed matches through the same guard.
+ * REPLAY-v3 (plan 012), per pass: the guard is `{ lines, orphans }`, keyed by pass. A finding credits a seed
+ * of `pass` only when its agent was dispatched at or after that pass's swap (`lines[pass]`, Infinity when
+ * none), and one no digest places only when no verdict agent was dispatched before it (`orphans[pass]`).
  */
-const credits = (f, guard) => guard === null || (typeof f.dispatched === 'number' ? f.dispatched >= guard.line : guard.orphans)
+const credits = (f, guard, pass) => {
+  if (guard === null) return true
+  if (guard.lines) return typeof f.dispatched === 'number' ? f.dispatched >= (guard.lines[pass] ?? Infinity) : guard.orphans[pass] === true
+  return typeof f.dispatched === 'number' ? f.dispatched >= guard.line : guard.orphans
+}
 
 /**
  * One row per seed: presence at its pass from the snapshot copies, found, the earliest stage and
@@ -1269,7 +1362,7 @@ function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, inval
   const missing = new Set()
   const absent = []
   const rows = seeds.seeds.map((seed) => {
-    const hits = seedMatch.matched[seed.id].map((i) => all[i]).filter((f) => credits(f, guard))
+    const hits = seedMatch.matched[seed.id].map((i) => all[i]).filter((f) => credits(f, guard, seed.pass))
     const stages = hits.map((f) => stageOf(f, seed)).toSorted((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b))
     const found = { found: hits.length > 0, foundRound1: hits.some((f) => !f.branch && covers(f, seed.pass) && f.round === 1), stage: stages[0] ?? null, oracle: oracleStatus.get(seed.id) ?? null }
     if (injected?.get(seed.id) === NOT_INJECTED) {
@@ -1313,14 +1406,139 @@ function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, inval
     return { id: seed.id, class: seed.class ?? null, pass: seed.pass, present, caughtByImplementer: present === false, ...found }
   })
   for (const pass of missing) notes.push(`no snapshot under captures/snapshots/${pass}/: its seeds stay in the recall denominator with presence unknown`)
-  for (const r of rows) {
-    if (r.present === true && !r.found && r.oracle === 'pass') notes.push(`seed ${r.id} (${r.pass}): present in the snapshot and not found by a verdict role, while its oracle passes at run end — scored not found (build/197)`)
-  }
+  for (const r of rows) unfoundWithOracle(r, notes)
   for (const seed of absent) {
     notes.push(`seed ${seed.id} (${seed.pass}, ${seed.file}): the file is absent from every snapshot copy of the pass, so the seed stays in the recall denominator with presence unknown`)
     // build/251: a seeded file no copy holds is a capture defect, in either shape.
     invalid.push(`capture defect: seed ${seed.id} (${seed.pass}): ${seed.file} is absent from every snapshot copy of the pass`)
   }
+  return rows
+}
+
+// ---------- REPLAY-v3: the seeds arrive in the units' own patches (plan 012) ----------
+
+/** The two pass states of S2 that leave a pass's patch holding its seeded bytes. */
+const SEEDED_STATES = new Set(['swapped', 'already-seeded'])
+
+/**
+ * S2 (REPLAY-v3 §5): `run.json`'s `injection`, the driver's swap record, read as a Map of pass to its
+ * entry. No record, or one whose `passes` is no object, is invalid and swaps nothing. An entry whose
+ * state is not `swapped` or `already-seeded`, whose `seeded` digest is not the seeds document's, or whose
+ * `mtimeKept` is not true is a swap defect. A pass holding a seed with no entry is uncovered, one reason
+ * per pass beginning `UNCOVERED_REASON`, so §10 does not replace a changed scored run invalid only this way.
+ */
+function swapStatesOf(seeds, run, invalid) {
+  const record = run?.injection
+  const swapped = new Map()
+  if (record === undefined || record === null) {
+    invalid.push('run.json carries no swap record (injection), so no pass can be read as swapped: a REPLAY-v3 run is invalid without it')
+    return swapped
+  }
+  if (typeof record !== 'object' || record.passes === null || typeof record.passes !== 'object' || Array.isArray(record.passes)) {
+    invalid.push("run.json's swap record is malformed: passes is not an object")
+    return swapped
+  }
+  for (const [pass, entry] of Object.entries(record.passes)) {
+    swapped.set(pass, entry)
+    if (!SEEDED_STATES.has(entry?.state)) invalid.push(`swap defect: pass ${pass} reads state ${JSON.stringify(entry?.state ?? null)}, not swapped or already-seeded`)
+    if (entry?.seeded !== seeds.patches[pass]?.seeded) invalid.push(`swap defect: pass ${pass}'s seeded digest ${entry?.seeded ?? 'none'} is not seeds.patches["${pass}"].seeded`)
+    if (entry?.mtimeKept !== true) invalid.push(`swap defect: pass ${pass}'s mtime was not kept (mtimeKept is ${JSON.stringify(entry?.mtimeKept ?? null)})`)
+  }
+  for (const pass of PASS_IDS) {
+    const ids = seeds.seeds.filter((seed) => seed.pass === pass).map((seed) => seed.id)
+    if (ids.length > 0 && !swapped.has(pass)) invalid.push(`${UNCOVERED_REASON} ${pass}: no build dispatch named it, so its patch was never swapped and its seeds (${ids.join(', ')}) never arrived`)
+  }
+  return swapped
+}
+
+/**
+ * Each pass's swap line, the credit guard's `lines`: the main-transcript line of the dispatch whose tool_use
+ * id the swap record names (S2, else `captures/swaps/<pass>.json`), else the first build dispatch whose
+ * description names the pass; Infinity when there is none, so nothing credits that pass's seeds.
+ */
+function swapLinesOf(agents, swapped, L) {
+  const dispatched = agents.filter((a) => !a.fromFile)
+  return Object.fromEntries(PASS_IDS.map((pass) => {
+    const recorded = swapped.get(pass)?.toolUseId
+    const id = typeof recorded === 'string' && recorded !== '' ? recorded : readJsonIfPresent(join(L.swaps, `${pass}.json`))?.toolUseId
+    const agent = dispatched.find((a) => a.toolUseId === id) ?? dispatched.find((a) => a.fn === 'build' && passIdsIn(a.desc, true).includes(pass))
+    return [pass, agent ? agent.line : Infinity]
+  }))
+}
+
+/** Whether an item holds in some copy (true), in none of those holding its file (false), or no copy holds the file (null). */
+function heldIn(copies, item) {
+  const held = new Set(copies.map((copy) => presentIn(copy, item)))
+  return held.has(true) ? true : held.has(false) ? false : null
+}
+
+/**
+ * Each seed's arrival (REPLAY-v3 §5, §8), read before the matcher, since a seed in no reviewed tree is no
+ * matcher item (build/7): `{ present, caught, item }`. A seed of a pass with no swap record is uncovered and
+ * never found. Presence is its `present` rule over the pass's review-start copies (`captures/snapshots/<P>/`);
+ * a pass no review covered reads it from the last build-end copy of an agent that built the pass. A seed absent
+ * there was not delivered when no build-end copy after the pass's swap held it, and was caught before review
+ * otherwise, the note naming the build ends it went between; either way it leaves the denominator and holds
+ * its security row. A seed file absent from every review-start copy is a capture defect.
+ */
+function arrivalsOf(seeds, swapped, L, byAgentId, notes, invalid) {
+  const who = (row) => (byAgentId.has(row.agentId) ? `${row.agentId} (${JSON.stringify(byAgentId.get(row.agentId).desc)})` : String(row.agentId))
+  const { rows } = jsonlCounted(readTextIfPresent(join(L.buildEnd, 'index.jsonl')))
+  const arrivals = new Map()
+  for (const seed of seeds.seeds) {
+    const tag = `seed ${seed.id} (${seed.pass})`
+    const held = seed.class === 'security' ? '; a security seed, so it holds its security-seeds row' : ''
+    if (!swapped.has(seed.pass)) {
+      notes.push(`${tag}: uncovered — no swap record for its pass, so its patch was never swapped and no finding can find it; the run is invalid (§8)`)
+      arrivals.set(seed.id, { present: null, caught: false, item: false })
+      continue
+    }
+    // A build-end copy stamped before the swap never counts; an unreadable stamp does.
+    const swappedAt = Date.parse(swapped.get(seed.pass)?.at)
+    const ends = rows.filter((r) => typeof r.dir === 'string' && !(Date.parse(r.at) < swappedAt)).map((r) => Object.assign({}, r, { held: heldIn(copiesOf(L.buildEnd, r.dir.split(/[\\/]/).pop()), seed) }))
+    const reviewStart = copiesOf(L.snapshots, seed.pass)
+    const lastBuild = ends.findLast((r) => Array.isArray(r.passes) && r.passes.includes(seed.pass))
+    const present = reviewStart.length > 0 ? heldIn(reviewStart, seed) : lastBuild?.held ?? null
+    if (present === false) {
+      // False from the build ends only when the pass's last build-end copy lacks the seed.
+      const at = reviewStart.length > 0 ? `every review-start copy under captures/snapshots/${seed.pass}/ that holds ${seed.file}` : `the last build-end copy of the pass, ${who(lastBuild)}'s`
+      const last = ends.findLastIndex((r) => r.held === true)
+      const gone = ends.slice(last + 1).find((r) => r.held !== true)
+      if (last === -1) notes.push(`${tag}: was not delivered — absent from ${at}, and from every build-end copy after the pass's swap (${ends.length === 0 ? 'none was taken' : `the first, ${who(ends[0])}'s, lacks it`}), so it leaves the recall denominator${held}`)
+      else notes.push(`${tag}: caught before review — absent from ${at}; it went between the build end of ${who(ends[last])} and ${gone ? `the build end of ${who(gone)}` : 'the review start'}, so it leaves the recall denominator${held}`)
+      arrivals.set(seed.id, { present: false, caught: true, item: false })
+    } else if (reviewStart.length === 0) {
+      notes.push(`${tag}: was never reviewed — its pass was swapped and no review covered it, so its presence is read from ${lastBuild ? `the last build-end copy of the pass, ${who(lastBuild)}'s` : 'no build-end copy (none holds the pass), so it is unknown'}; it stays in the recall denominator as a miss`)
+      arrivals.set(seed.id, { present, caught: false, item: false })
+    } else {
+      if (present === null) invalid.push(`capture defect: seed ${seed.id} (${seed.pass}): ${seed.file} is absent from every copy of the pass's review-start snapshot (captures/snapshots/${seed.pass}/)`)
+      arrivals.set(seed.id, { present, caught: false, item: true })
+    }
+  }
+  return arrivals
+}
+
+/**
+ * One row per seed under REPLAY-v3 (plan 012), beside `seedRowsOf`: presence from `arrivalsOf`, found by a
+ * finding the per-pass guard credits (a seed that is no matcher item has no match). A seed present at review
+ * start, absent from every round-completion copy holding its file (`captures/review-snapshots/<P>/`) and
+ * credited by no finding is named as removed during review; it stays a miss.
+ */
+function seedRowsV3(seeds, all, seedMatch, arrivals, reviewSnapshots, oracleStatus, notes, guard) {
+  const rows = seeds.seeds.map((seed) => {
+    const arrival = arrivals.get(seed.id)
+    const hits = (seedMatch.matched[seed.id] ?? []).map((i) => all[i]).filter((f) => credits(f, guard, seed.pass))
+    const stages = hits.map((f) => stageOf(f, seed)).toSorted((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b))
+    const atCompletion = copiesOf(reviewSnapshots, seed.pass).map((copy) => presentIn(copy, seed)).filter((h) => h !== null)
+    if (arrival.present === true && hits.length === 0 && atCompletion.length > 0 && !atCompletion.includes(true)) {
+      notes.push(`seed ${seed.id} (${seed.pass}): removed during review, uncredited — present at review start and absent from every copy under captures/review-snapshots/${seed.pass}/ that holds ${seed.file}, and no finding credits it: it stays in the recall denominator as a miss`)
+    }
+    return {
+      id: seed.id, class: seed.class ?? null, pass: seed.pass, present: arrival.present, caughtByImplementer: arrival.caught,
+      found: hits.length > 0, foundRound1: hits.some((f) => !f.branch && covers(f, seed.pass) && f.round === 1), stage: stages[0] ?? null, oracle: oracleStatus.get(seed.id) ?? null,
+    }
+  })
+  for (const r of rows) unfoundWithOracle(r, notes)
   return rows
 }
 
@@ -1335,12 +1553,12 @@ function seedRowsOf(seeds, all, seedMatch, snapshots, oracleStatus, notes, inval
  * delivery, with no ledger write between that delivery and the boundary. One outside it keeps its
  * `n`, so the pre-compaction copies stay aligned, and is named in `notes`, never sampled.
  */
-function compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, oracleStatus, roots, tolerance, notes, recorded = [], guard = null }) {
+function compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, seedPass, oracleStatus, roots, tolerance, notes, recorded = [], guard = null }) {
   const driverCompactions = walk.compactions.filter((c) => c.trigger === 'manual' || (mechanism === 'auto-window' && c.trigger === 'auto'))
   const endRows = ledgerFindings(states.end?.ledger ?? [], { roots })
   const seedsOfFinding = new Map()
   // review/14: a finding the credit guard withholds never reads a seed as fixed.
-  for (const [id, idxs] of Object.entries(seedMatch.matched)) for (const i of idxs.filter((k) => credits(all[k], guard))) seedsOfFinding.set(i, [...(seedsOfFinding.get(i) ?? []), id])
+  for (const [id, idxs] of Object.entries(seedMatch.matched)) for (const i of idxs.filter((k) => credits(all[k], guard, seedPass.get(id)))) seedsOfFinding.set(i, [...(seedsOfFinding.get(i) ?? []), id])
   const writes = ledgerWriteLines(walk)
   const inWindow = (c) => {
     const lens = deliveries.findLast((d) => d.line < c.line && d.agent?.fn === 'verdict')
@@ -1405,17 +1623,18 @@ function contextTokensPerPassOf(walk) {
 /**
  * Measure one replay run. `seeds` is the parsed `stamity/replay-seeds/v1` document; `forbid` the
  * absolute paths whose appearance in any tool input voids the run (each is matched in every
- * spelling, beside `ALWAYS_FORBIDDEN`'s three: `seeds.json`, `__oracle__` and `reference-fixes`). Returns the `stamity/replay-measurement/v1`
+ * spelling, beside `ALWAYS_FORBIDDEN`'s three: `seeds.json`, `__oracle__` and `reference-fixes`, and under v3 `patches-seeded`). Returns the `stamity/replay-measurement/v1`
  * document; a run that breaks a validity rule is measured anyway and names each reason in `invalid`.
  */
 export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
   checkSeeds(seeds)
-  const cap = await loadCapture(runDir, forbid)
-  const { L, run, invalid, walk, roots, states, oracleStatus, oracleRun } = cap
   // R3, R6 and R8 (review/150, review/167): a named pass range, coverage by coverageOf, branch level after an
-  // approval and the credit guard are REPLAY-v2's; v1's measurement reads none of them (REPLAY-v1 §14).
-  const v2 = injecting(seeds)
-  const { agents, byAgentId, sends, deliveries, notes, injectionLine } = joinAgents(walk, cap.index, cap.subs, roots, v2)
+  // approval and the credit guard are REPLAY-v2's and REPLAY-v3's; v1's measurement reads none of them
+  // (REPLAY-v1 §14). REPLAY-v3 (plan 012): per-pass arrival, its coverage rule, guard, presence and contamination.
+  const version = seeds.arrival === 'patch' ? 'v3' : injecting(seeds) ? 'v2' : 'v1'
+  const cap = await loadCapture(runDir, forbid, version)
+  const { L, run, invalid, walk, roots, states, oracleStatus, oracleRun } = cap
+  const { agents, byAgentId, sends, deliveries, notes, injectionLine } = joinAgents(walk, cap.index, cap.subs, roots, version)
   const { perPass, beside, unresolved } = loopCharacters(walk, cap.index, agents, sends, deliveries)
   const usage = subagentUsage(cap.subs, byAgentId, deliveries, invalid, notes)
   const agentsWithoutTranscript = reconcileAgents(agents, cap.subs, byAgentId, deliveries, notes)
@@ -1423,11 +1642,17 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
   for (const id of PASS_IDS) {
     if (!agents.some((a) => LOOP_FUNCTIONS.has(a.fn) && !a.branch && a.pass === id)) notes.push(`pass ${id} has no loop dispatch: its loop characters and sub-agent tokens are 0 and still count in the ÷ 6`)
   }
-  const { all, readerSkips } = collectFindings(deliveries, cap.stateNames, states, roots, v2)
+  const { all, readerSkips } = collectFindings(deliveries, cap.stateNames, states, roots, version)
   const point = injectionLine ?? Infinity
   // review/15: a verdict agent built from its sub-agent file may have been dispatched before the point, so orphans do not credit beside it.
-  const guard = v2 ? { line: point, orphans: !agents.some((a) => a.fn === 'verdict' && (a.fromFile || a.line < point)) } : null
-  const { seedMatch, decoysFlagged, unmatched, adjudication, tolerance } = scoreFindings(all, seeds, L.snapshots, guard)
+  const orphansBefore = (line) => !agents.some((a) => a.fn === 'verdict' && (a.fromFile || a.line < line))
+  const swapped = version === 'v3' ? swapStatesOf(seeds, run, invalid) : null
+  const lines = swapped ? swapLinesOf(agents, swapped, L) : null
+  const guard = lines ? { lines, orphans: Object.fromEntries(PASS_IDS.map((p) => [p, orphansBefore(lines[p])])) } : version === 'v2' ? { line: point, orphans: orphansBefore(point) } : null
+  // build/7 (v3): a seed in no reviewed tree, or known absent from it, is no matcher item: no credit, no adjudication row.
+  const arrivals = swapped ? arrivalsOf(seeds, swapped, L, byAgentId, notes, invalid) : null
+  const items = arrivals ? { ...seeds, seeds: seeds.seeds.filter((seed) => arrivals.get(seed.id).item) } : seeds
+  const { seedMatch, decoysFlagged, unmatched, adjudication, tolerance } = scoreFindings(all, items, L.snapshots, guard)
   // build/251: a pass a verdict agent was dispatched for holds a snapshot, by the marker hook's rule; none is a capture defect
   // (build/366: for each pass a multi dispatch covers).
   for (const id of PASS_IDS) {
@@ -1435,11 +1660,14 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
       invalid.push(`capture defect: a verdict agent was dispatched for ${id}, but captures/snapshots/${id}/ holds no copy`)
     }
   }
-  const seedRows = seedRowsOf(seeds, all, seedMatch, L.snapshots, oracleStatus, notes, invalid, injectionStatesOf(seeds, run, invalid, L.snapshots), L.reviewSnapshots, guard)
+  const seedRows = arrivals
+    ? seedRowsV3(seeds, all, seedMatch, arrivals, L.reviewSnapshots, oracleStatus, notes, guard)
+    : seedRowsOf(seeds, all, seedMatch, L.snapshots, oracleStatus, notes, invalid, injectionStatesOf(seeds, run, invalid, L.snapshots), L.reviewSnapshots, guard)
   const mechanism = run?.mechanism ?? 'interrupt'
-  // review/164 (REPLAY-v2 only): the driver's recorded placements, read when no lens delivery names the pass.
-  const recorded = v2 && Array.isArray(run?.compactions) ? run.compactions : []
-  const compactionSamples = compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, oracleStatus, roots, tolerance, notes, recorded, guard })
+  // review/164 (REPLAY-v2, and v3 by its placements): the driver's recorded placements, read when no lens delivery names the pass.
+  const recorded = version !== 'v1' && Array.isArray(run?.compactions) ? run.compactions : []
+  const seedPass = new Map(seeds.seeds.map((seed) => [seed.id, seed.pass]))
+  const compactionSamples = compactionSamplesOf({ walk, mechanism, states, deliveries, all, seedMatch, seedPass, oracleStatus, roots, tolerance, notes, recorded, guard })
 
   const loopChars = sum(Object.values(perPass), loopOf)
   const unattributedShare = loopChars === 0 ? 0 : loopOf(perPass.unattributed) / loopChars
@@ -1473,6 +1701,8 @@ export async function measureRun(runDir, { seeds, forbid = [] } = {}) {
 
   return {
     schema: MEASUREMENT_SCHEMA,
+    // REPLAY-v3 (plan 012): the measurement names its version under v3 only; v1's and v2's documents gain no field.
+    ...(version === 'v3' ? { version } : {}),
     runId: run?.runId ?? null,
     shape: run?.shape ?? null,
     kind: run?.kind ?? null,

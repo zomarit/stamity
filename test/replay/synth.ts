@@ -281,6 +281,13 @@ export interface CaptureSpec {
   snapshots?: Record<string, Record<string, Record<string, string>>>;
   /** REPLAY-v2 R4: the copies taken when the first review round covering a pass completed, in `snapshots`' shape. */
   reviewSnapshots?: Record<string, Record<string, Record<string, string>>>;
+  /**
+   * REPLAY-v3 (plan 012, S3): `captures/build-end/`, the index rows `{ at, agentId, dispatch, passes, dir }` and
+   * the copies of each row's `dir`, in `snapshots`' worktree shape. Written only when the spec names it.
+   */
+  buildEnd?: { rows: Json[]; copies: Record<string, Record<string, Record<string, string>>> };
+  /** REPLAY-v3 (S3): `captures/swaps/<pass>.json`, the hook's swap record of each pass. Written only when the spec names it. */
+  swaps?: Record<string, Json>;
   /** `compaction-<n>-pre` or `end` → the fixture's run folder at that moment. */
   state?: Record<string, RunStateSpec>;
   finalDiff?: string;
@@ -296,6 +303,8 @@ export interface CaptureLayout {
   markers: string;
   snapshots: string;
   reviewSnapshots: string;
+  buildEnd: string;
+  swaps: string;
   state: string;
   finalDiff: string;
   oracle: string;
@@ -326,6 +335,8 @@ export function writeCapture(dir: string, spec: CaptureSpec): CaptureLayout {
     markers: join(captures, "markers.jsonl"),
     snapshots: join(captures, "snapshots"),
     reviewSnapshots: join(captures, "review-snapshots"),
+    buildEnd: join(captures, "build-end"),
+    swaps: join(captures, "swaps"),
     state: join(captures, "state"),
     finalDiff: join(captures, "final", "tree.diff"),
     oracle: join(captures, "oracle.json"),
@@ -353,6 +364,15 @@ export function writeCapture(dir: string, spec: CaptureSpec): CaptureLayout {
       for (const [relPath, content] of Object.entries(files)) put(join(layout.reviewSnapshots, pass, worktree, relPath), content);
     }
   }
+  if (spec.buildEnd) {
+    put(join(layout.buildEnd, "index.jsonl"), jsonl(spec.buildEnd.rows.map((row) => JSON.stringify(row))));
+    for (const [end, worktrees] of Object.entries(spec.buildEnd.copies)) {
+      for (const [worktree, files] of Object.entries(worktrees)) {
+        for (const [relPath, content] of Object.entries(files)) put(join(layout.buildEnd, end, worktree, relPath), content);
+      }
+    }
+  }
+  for (const [pass, record] of Object.entries(spec.swaps ?? {})) put(join(layout.swaps, `${pass}.json`), `${JSON.stringify(record, null, 2)}\n`);
   mkdirSync(layout.state, { recursive: true });
   for (const [name, runState] of Object.entries(spec.state ?? {})) {
     const runFolder = join(layout.state, name, "runs", runState.runId);

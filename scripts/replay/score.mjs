@@ -94,6 +94,12 @@ export const NOTE_ROWS = [
   { includes: 'so it was reverted before review: it is filed absent at the pass', rows: ['pooled-recall'] },
   // R7 (review/168): a seed with no state in the injection record, never found; its run is invalid.
   { includes: ": uncovered — no state in run.json's injection record", rows: ['pooled-recall', 'security-seeds'] },
+  // REPLAY-v3 (plan 012): each seed's arrival, from a seed caught before its review start to an uncovered pass.
+  { includes: ': caught before review — ', rows: ['pooled-recall', 'security-seeds'] },
+  { includes: ': was not delivered — ', rows: ['pooled-recall', 'security-seeds'] },
+  { includes: ': was never reviewed — ', rows: ['pooled-recall', 'security-seeds'] },
+  { includes: ': removed during review, uncredited — ', rows: ['pooled-recall', 'security-seeds'] },
+  { includes: ': uncovered — no swap record for its pass', rows: ['pooled-recall', 'security-seeds'] },
 ]
 
 // ---------- small helpers ----------
@@ -332,6 +338,8 @@ export function summarize(measurement, runJson, protocolSha, { protocolPath = PR
 
   const summary = {
     schema: SUMMARY_SCHEMA,
+    // REPLAY-v3 (plan 012): a v3 measurement's version rides along; a v1 or v2 summary gains no field.
+    ...(m.version === 'v3' ? { version: 'v3' } : {}),
     runId: runId ?? m.runId ?? run.runId ?? null,
     kind: summaryKind,
     shape: m.shape ?? run.shape ?? null,
@@ -503,10 +511,12 @@ export function renderResults(summary, thresholds, reference = []) {
   const rs = T.readerSkips ?? {}
   const unread = rs.unreadFreeText ?? {}
   const unparseable = sum(s.models?.subagents ?? [], (x) => x.unparseableLines ?? 0)
+  // REPLAY-v3 (plan 012): a seed that is not present at review start was caught before review or never delivered.
+  const caught = s.version === 'v3' ? 'caught before review or not delivered' : 'caught by the implementer'
   const rows = {
     'security-seeds': {
-      threshold: `every security seed in every changed scored run; implementer-removed counts as found (securityAllRuns ${t.securityAllRuns}, securityExemption ${t.securityExemption})`,
-      value: `${security.filter(securityHeld).length} of ${security.length} held (${security.filter((x) => x.caughtByImplementer).length} caught by the implementer, ${security.filter((x) => x.present === null).length} with presence unknown)`,
+      threshold: `every security seed in every changed scored run; ${s.version === 'v3' ? 'a seed caught before review or not delivered' : 'implementer-removed'} counts as found (securityAllRuns ${t.securityAllRuns}, securityExemption ${t.securityExemption})`,
+      value: `${security.filter(securityHeld).length} of ${security.length} held (${security.filter((x) => x.caughtByImplementer).length} ${caught}, ${security.filter((x) => x.present === null).length} with presence unknown)`,
     },
     'pooled-recall': {
       threshold: `changed ≥ baseline − ${t.recallMargin} of ${t.recallOpportunities} (recallMargin ${t.recallMargin}, recallOpportunities ${t.recallOpportunities})`,
@@ -607,7 +617,8 @@ export function renderResults(summary, thresholds, reference = []) {
   }
   push('')
 
-  push('## Seeds', '', '| Seed | Class | Pass | Present | Caught by the implementer | Found | Round 1 | Stage | Oracle |', '|---|---|---|---|---|---|---|---|---|')
+  const present = s.version === 'v3' ? 'Present at review start' : 'Present'
+  push('## Seeds', '', `| Seed | Class | Pass | ${present} | ${caught[0].toUpperCase()}${caught.slice(1)} | Found | Round 1 | Stage | Oracle |`, '|---|---|---|---|---|---|---|---|---|')
   for (const p of s.passes) {
     for (const x of p.seeds) push(`| ${cell(x.id)} | ${cell(x.class ?? '—')} | ${p.id} | ${x.present === null ? 'unknown' : x.present ? 'yes' : 'no'} | ${x.caughtByImplementer ? 'yes' : 'no'} | ${x.found ? 'yes' : 'no'} | ${x.foundRound1 ? 'yes' : 'no'} | ${x.stage ?? '—'} | ${x.oracle ?? 'no result'} |`)
   }

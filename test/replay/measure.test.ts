@@ -42,6 +42,7 @@ interface Sample {
 }
 interface Measurement {
   schema: string;
+  version?: string;
   runId: string | null;
   shape: string | null;
   kind: string | null;
@@ -2040,5 +2041,267 @@ describe("R8 — branch level follows an approval (review/167)", () => {
     expect(verdictsOf(m)).toEqual(everyPass({ finalClass: "approve", rounds: 1, approvedWithSeedUnfixed: false }));
     expect(m.wholeBranch).toEqual({ finalClass: "blocked", rounds: 1 });
     expect(seedOf(m)).toEqual(expect.objectContaining({ found: true, foundRound1: false, stage: "branch" }));
+  });
+});
+
+// ---------- REPLAY-v3: the seeds arrive in the units' own patches, one pass at a time (plan 012 v3-measure) ----------
+
+const cover3 = (events: CoverageEvent[]): Map<string, Coverage> => coverageOf(events, ALL_SIX, { rule: "v3" }) as Map<string, Coverage>;
+const at3 = (events: CoverageEvent[]): Record<string, string[]> => Object.fromEntries([...cover3(events)].map(([id, c]) => [id, c.passes]));
+
+describe("REPLAY-v3 — coverageOf: swapped at the build dispatch, built at the builder's stop", () => {
+  const builds = [sent("b1", "build", "Build unit u1-p1"), sent("b2", "build", "Build unit u1-p2")];
+
+  it("(a) once both builders stop, a verdict naming no pass and one naming the whole range cover exactly those two; before any stop nothing; while u1-p2's builder runs, u1-p1 only", () => {
+    const events = [...builds, back("b1"), sent("mid", "verdict", "Review round 1"), back("b2"), sent("r", "verdict", "Review round 2"), sent("range", "verdict", "Review u1-p1..u3-p2"), sent("u31", "verdict", "Review u3-p1")];
+    expect(at3(events)).toEqual({ b1: ["u1-p1"], b2: ["u1-p2"], mid: ["u1-p1"], r: ["u1-p1", "u1-p2"], range: ["u1-p1", "u1-p2"], u31: [] });
+    expect(at3([...builds, sent("early", "verdict", "Review round 1")])["early"]).toEqual([]);
+    expect([...cover3(events).values()].some((c) => c.injectionPoint)).toBe(false);
+    // v2's table is unchanged, by default and by name.
+    expect(pointsOf(CANARY_3)).toEqual(["r1"]);
+    expect(coverageOf(CANARY_3, ALL_SIX, { rule: "v2" })).toEqual(coverOf(CANARY_3));
+  });
+
+  it("a range builds every pass in it, a TaskStop builds, a second stop builds nothing new, fixers read as under v2, and every row is causal", () => {
+    const events = [
+      sent("all", "build", "Build units u1-p1..u1-p2"), sent("b3", "build", "Build unit u2-p1"), back("b3", false), back("all"), back("all"),
+      sent("r", "verdict", "Review round 1"), back("r"), sent("f", "fix", "Fixer round 1"), sent("f2", "fix", "Fix u2-p1"),
+    ];
+    const whole = at3(events);
+    expect(whole).toEqual({ all: ["u1-p1", "u1-p2"], b3: ["u2-p1"], r: ["u1-p1", "u1-p2", "u2-p1"], f: ["u1-p1", "u1-p2", "u2-p1"], f2: ["u2-p1"] });
+    for (let k = 0; k <= events.length; k++) for (const [id, passes] of Object.entries(at3(events.slice(0, k)))) expect([k, id, passes]).toEqual([k, id, whole[id]]);
+  });
+
+  it("a pass is built at the stop of the builder whose dispatch swapped it: a repeat dispatch naming it neither swaps nor builds it", () => {
+    const events = [sent("b1", "build", "Build unit u1-p1"), sent("again", "build", "Build unit u1-p1"), back("again"), sent("r1", "verdict", "Review round 1"), back("b1"), sent("r2", "verdict", "Review round 2")];
+    expect(at3(events)).toEqual({ b1: ["u1-p1"], again: ["u1-p1"], r1: [], r2: ["u1-p1"] });
+    // Both rows still name the pass in `built`, so the driver's hook records the repeat.
+    expect([cover3(events).get("b1")!.built, cover3(events).get("again")!.built]).toEqual([["u1-p1"], ["u1-p1"]]);
+  });
+});
+
+const HEX = (c: string): string => c.repeat(64);
+const INVOICE_SEEDED = '  if (error.code === "EACCES") return notFound(res);';
+const API_SEEDED = "| id | total | status |";
+const U1P1_SEED = { ...SEEDS.seeds[0]!, injection: INJECTION };
+const U3P1_SEED = {
+  id: "cor-invoice-eacces", class: "correctness", severity: "Warning", pass: "u3-p1", file: "src/orders/invoice.ts", locate: { text: "EACCES", from: 0, to: 0 },
+  present: { contains: '"EACCES") return notFound' }, span: [7, 7], terms: ["EACCES", "unreadable", "500"],
+  injection: { file: "src/orders/invoice.ts", find: "return serverError(res)", replace: "return notFound(res)" }, oracle: { kind: "vitest", file: "test/__oracle__/cor-invoice-eacces.test.ts" },
+};
+const U3P2_SEED = {
+  id: "con-export-doc-header", class: "contract", severity: "Warning", pass: "u3-p2", file: "docs/api.md", locate: { text: API_SEEDED, from: 0, to: 0 },
+  present: { contains: API_SEEDED }, span: [3, 3], terms: ["total_cents", "header"], injection: { file: "docs/api.md", find: "| id | total_cents | status |", replace: API_SEEDED }, oracle: { kind: "static" },
+};
+/** A v3 seeds document (S1): `arrival: "patch"` beside each pass's clean and seeded digests. */
+const seedsV3 = (seeds: unknown[] = [U1P1_SEED, U3P1_SEED]): Record<string, unknown> => ({
+  ...SEEDS, arrival: "patch", patches: Object.fromEntries(ALL_SIX.map((p) => [p, { clean: HEX("a"), seeded: HEX("b") }])), seeds,
+});
+/** `run.json`'s v3 `injection` (S2): one entry per pass, naming the build dispatch whose hook call swapped it. */
+const swapRecord = (swaps: Record<string, string>, over: Record<string, Record<string, unknown>> = {}): Record<string, unknown> => ({
+  arrival: "patch", partial: false,
+  passes: Object.fromEntries(Object.entries(swaps).map(([pass, toolUseId]) => [pass, { pass, at: "2026-09-29T10:00:00.000Z", toolUseId, state: "swapped", clean: HEX("a"), seeded: HEX("b"), mtimeKept: true, seeds: [], ...over[pass] }])),
+});
+const INVOICE_FINDING: Row = { id: "W-3", severity: "Warning", locator: "src/orders/invoice.ts:7", summary: "an unreadable invoice (EACCES) answers 404 where the contract asks for 500" };
+const REVIEW_START = { "u1-p1": SNAPSHOT_U1P1, "u1-p2": { main: { "src/orders/format.ts": FORMAT } }, "u3-p1": { main: { "src/orders/invoice.ts": fileWith(7, INVOICE_SEEDED) } } };
+const [B11, B12, B31, B32] = ["u1-p1", "u1-p2", "u3-p1", "u3-p2"].map(builderOf) as [AgentSpec, AgentSpec, AgentSpec, AgentSpec];
+const REVIEW = agentOf("rv", "stamity-reviewer", "Review round 1", "Review the change set.", APPROVE);
+const BOTH_LENS = agentOf("both", "stamity-security", "Security lens", "Review the diff for security.", freeTextReturn([SEED_FINDING, INVOICE_FINDING], "request-changes"));
+const REVERTED_U1P1 = { "src/store/query.ts": REVERTED_QUERY, "src/orders/format.ts": FORMAT };
+
+/** `captures/build-end/` (S3): one index row and one copy per build end, in order, each stamped after every swap here. */
+function buildEnds(...ends: [AgentSpec, string[], Record<string, string>][]): NonNullable<CaptureSpec["buildEnd"]> {
+  const rows = ends.map(([a, passes], k) => ({ at: `2026-09-29T10:${10 + k}:00.000Z`, agentId: a.agentId, dispatch: a.id, passes, dir: `20260929T10${10 + k}00Z-${a.agentId}` }));
+  return { rows, copies: Object.fromEntries(ends.map(([, , files], k) => [rows[k]!.dir, { main: files }])) };
+}
+
+interface V3Options {
+  seeds?: Record<string, unknown>;
+  /** `null` writes no record at all. */
+  record?: Record<string, unknown> | null;
+  snapshots?: CaptureSpec["snapshots"];
+  reviewSnapshots?: CaptureSpec["reviewSnapshots"];
+  buildEnd?: CaptureSpec["buildEnd"];
+  swaps?: CaptureSpec["swaps"];
+  ledger?: Record<string, unknown>[];
+  subagents?: SubagentFile[];
+  forbid?: string[];
+}
+
+/** A v3 run whose main transcript is `lines`, with `agents`' sub-agent files; no line names a path of the harness. */
+function v3Run(lines: string[], agents: AgentSpec[], o: V3Options = {}): Promise<Measurement> {
+  const layout = writeCapture(scratch(), {
+    run: { runId: "2026-09-29-replay-1", shape: "baseline", kind: "scored", client: { version: "2.1.280" }, ...(o.record === null ? {} : { injection: o.record ?? swapRecord({ "u1-p1": B11.id, "u3-p1": B31.id }) }) },
+    stdout: [JSON.stringify({ type: "system", subtype: "init", ...INIT_PINNED, cwd: "/fixture" })],
+    transcript: [mainLine.userText("/st-work docs/plans/001-replay.md --effort deep"), ...lines],
+    subagents: [...agents.map(subagentOf), ...(o.subagents ?? [])],
+    snapshots: o.snapshots ?? REVIEW_START,
+    ...(o.reviewSnapshots ? { reviewSnapshots: o.reviewSnapshots } : {}),
+    ...(o.buildEnd ? { buildEnd: o.buildEnd } : {}),
+    ...(o.swaps ? { swaps: o.swaps } : {}),
+    state: { end: { runId: RUN, ledger: o.ledger ?? [] } },
+  });
+  return measureRun(layout.runDir, { seeds: o.seeds ?? seedsV3(), forbid: o.forbid ?? [] }) as Promise<Measurement>;
+}
+/** Each agent dispatched and delivered before the next is dispatched. */
+const inOrder = (...agents: AgentSpec[]): [string[], AgentSpec[]] => [agents.flatMap(dispatch), agents];
+
+describe("REPLAY-v3 — the seeds document's arrival (S1) and the version switch", () => {
+  it("accepts arrival \"patch\" with each pass's two digests; only a v3 measurement records a version", async () => {
+    expect(() => checkSeeds(seedsV3())).not.toThrow();
+    const v1 = await measure(passCapture({ shape: "baseline" }).layout.runDir);
+    const v2 = await featureRun([...BUILDERS, APPROVING_1]);
+    expect(["version" in v1, "version" in v2]).toEqual([false, false]);
+    expect((await v3Run(...inOrder(B11, B31, REVIEW))).version).toBe("v3");
+  });
+
+  it.each<[string, Record<string, unknown>, RegExp]>([
+    ["an arrival with no patches", { ...seedsV3(), patches: undefined }, /seeds: arrival and patches come together/],
+    ["patches with no arrival", { ...seedsV3(), arrival: undefined }, /seeds: arrival and patches come together/],
+    ["another arrival", { ...seedsV3(), arrival: "late" }, /seeds: arrival "late" is not "patch"/],
+    ["patches that are no object", { ...seedsV3(), patches: [] }, /seeds: patches is not an object/],
+    ["patches keyed by no pass", { ...seedsV3(), patches: { u9: { clean: HEX("a"), seeded: HEX("b") } } }, /seeds: patches\.u9 names no pass/],
+    ["a digest that is no sha256", { ...seedsV3(), patches: { "u1-p1": { clean: "a", seeded: HEX("b") } } }, /seeds: patches\.u1-p1 is not \{ clean, seeded \} sha256 digests/],
+  ])("refuses %s", (_label, seeds, reason) => {
+    expect(() => checkSeeds(seeds)).toThrow(reason);
+  });
+});
+
+describe("REPLAY-v3 — the per-pass credit guard (criterion 38)", () => {
+  it("(b) a lens dispatched between u1-p1's and u3-p1's swaps, citing both seeds, credits the u1-p1 seed only; the same lens after u3-p1's swap credits both", async () => {
+    const m = await v3Run(...inOrder(B11, BOTH_LENS, B31, REVIEW));
+    expect(m.invalid).toEqual([]);
+    expect([rowOf(m, "sec-sql-sort"), rowOf(m, "cor-invoice-eacces")]).toEqual([expect.objectContaining({ present: true, found: true }), expect.objectContaining({ present: true, found: false })]);
+    expect(m.totals.recall).toEqual({ found: 1, denominator: 2, byClass: { security: { found: 1, denominator: 1 }, correctness: { found: 0, denominator: 1 } } });
+    const after = await v3Run(...inOrder(B11, B31, BOTH_LENS, REVIEW));
+    expect([rowOf(after, "sec-sql-sort").found, rowOf(after, "cor-invoice-eacces").found]).toEqual([true, true]);
+  });
+
+  it("the swap line is the dispatch the record names, else the first build dispatch naming the pass; a record entry with no tool_use id reads captures/swaps/", async () => {
+    const again = { ...B31, id: "tu_again", agentId: "aagain" };
+    const [lines, agents] = inOrder(B11, B31, BOTH_LENS, again, REVIEW);
+    const credited = async (record: Record<string, unknown>, swaps?: CaptureSpec["swaps"]): Promise<boolean> => rowOf(await v3Run(lines, agents, { record, ...(swaps ? { swaps } : {}) }), "cor-invoice-eacces").found;
+    expect(await credited(swapRecord({ "u1-p1": B11.id, "u3-p1": again.id }))).toBe(false);
+    expect(await credited(swapRecord({ "u1-p1": B11.id, "u3-p1": "tu_gone" }))).toBe(true);
+    expect(await credited(swapRecord({ "u1-p1": B11.id, "u3-p1": "" }, { "u3-p1": { toolUseId: undefined } }), { "u3-p1": { pass: "u3-p1", toolUseId: again.id } })).toBe(false);
+  });
+
+  it("a ledger row no digest names credits a seed of P only when no verdict agent was dispatched before P's swap", async () => {
+    const ledger = ledgerRows([INVOICE_FINDING]);
+    const early = agentOf("early", "stamity-reviewer", "Review u1-p1", "Review unit u1-p1.", APPROVE);
+    expect(rowOf(await v3Run(...inOrder(B11, early, B31, REVIEW), { ledger }), "cor-invoice-eacces").found).toBe(false);
+    expect(rowOf(await v3Run(...inOrder(B11, B31, REVIEW), { ledger }), "cor-invoice-eacces").found).toBe(true);
+  });
+});
+
+describe("REPLAY-v3 — every arrival state (criterion 39)", () => {
+  const ONE = seedsV3([U1P1_SEED]);
+  const ONE_SWAP = swapRecord({ "u1-p1": B11.id });
+
+  it("(c) a seed absent from every review-start copy while a copy holds its file leaves the denominator and holds security-seeds; its note names the build end it went at", async () => {
+    const never = await v3Run(...inOrder(B11, REVIEW), { seeds: ONE, record: ONE_SWAP, snapshots: { "u1-p1": { main: REVERTED_U1P1 } }, buildEnd: buildEnds([B11, ["u1-p1"], REVERTED_U1P1]) });
+    expect(never.invalid).toEqual([]);
+    expect(rowOf(never, "sec-sql-sort")).toEqual(expect.objectContaining({ present: false, caughtByImplementer: true, found: false }));
+    expect(securityHeld(rowOf(never, "sec-sql-sort"))).toBe(true);
+    expect(never.totals.recall.denominator).toBe(0);
+    expect(noteOf(never, "sec-sql-sort")).toMatch(/: was not delivered — .*abuildu1p1 \("Build unit u1-p1"\)/);
+    const went = await v3Run(...inOrder(B11, B12, REVIEW), {
+      seeds: ONE, record: ONE_SWAP, snapshots: { ...REVIEW_START, "u1-p1": { main: REVERTED_U1P1 } }, buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main], [B12, ["u1-p2"], REVERTED_U1P1]),
+    });
+    expect(went.invalid).toEqual([]);
+    expect(rowOf(went, "sec-sql-sort")).toEqual(expect.objectContaining({ present: false, caughtByImplementer: true, found: false }));
+    expect(noteOf(went, "sec-sql-sort")).toMatch(/: caught before review — .*abuildu1p1 \("Build unit u1-p1"\).*abuildu1p2 \("Build unit u1-p2"\)/);
+  });
+
+  it("(d) a pass with no swap record makes the run invalid under UNCOVERED_REASON; its seed is never found, and a finding at its clean line credits nothing and enters no adjudication", async () => {
+    const seeds = seedsV3([U1P1_SEED, U3P2_SEED]);
+    const rows: Row[] = [{ id: "W-4", severity: "Warning", locator: "docs/api.md:3", summary: "the header names total where the code writes total_cents" }, { id: "W-5", severity: "Warning", locator: "docs/api.md:5", summary: "the table reads out of order" }];
+    const api = agentOf("api", "stamity-reviewer", "Review round 1", "Review the change set.", freeTextReturn(rows, "request-changes"));
+    const m = await v3Run(...inOrder(B11, api), { seeds, record: ONE_SWAP });
+    expect(m.invalid).toEqual(["uncovered pass u3-p2: no build dispatch named it, so its patch was never swapped and its seeds (con-export-doc-header) never arrived"]);
+    expect(rowOf(m, "con-export-doc-header")).toEqual(expect.objectContaining(UNCOVERED_ROW));
+    expect(m.adjudication.map((a) => a.item)).not.toContain("con-export-doc-header");
+    expect(noteOf(m, "con-export-doc-header")).toContain(": uncovered — no swap record for its pass");
+    // Swapped, built and reviewed, the same review credits the seed and lists its term-less neighbour for adjudication.
+    const covered = await v3Run(...inOrder(B11, B32, api), { seeds, record: swapRecord({ "u1-p1": B11.id, "u3-p2": B32.id }), snapshots: { ...REVIEW_START, "u3-p2": { main: { "docs/api.md": fileWith(3, API_SEEDED) } } } });
+    expect(covered.invalid).toEqual([]);
+    expect(rowOf(covered, "con-export-doc-header")).toEqual(expect.objectContaining({ present: true, found: true }));
+    expect(covered.adjudication.map((a) => a.item)).toContain("con-export-doc-header");
+  });
+
+  it("(e) a swapped pass no review covered reads presence from its last build end: a present seed is a miss even when cited, and the pass's verdict class is null", async () => {
+    const late = agentOf("late", "stamity-reviewer", "Review u1-p1", "Review unit u1-p1.", freeTextReturn([INVOICE_FINDING], "request-changes"));
+    const m = await v3Run(...inOrder(B11, B31, late), {
+      snapshots: { "u1-p1": SNAPSHOT_U1P1 }, buildEnd: buildEnds([B11, ["u1-p1"], SNAPSHOT_U1P1.main], [B31, ["u3-p1"], REVIEW_START["u3-p1"].main]),
+    });
+    expect(m.invalid).toEqual([]);
+    expect(rowOf(m, "cor-invoice-eacces")).toEqual(expect.objectContaining({ present: true, caughtByImplementer: false, found: false }));
+    expect(passOf(m, "u3-p1").verdict.finalClass).toBeNull();
+    expect(m.totals.recall).toEqual(expect.objectContaining({ found: 0, denominator: 2 }));
+    expect(noteOf(m, "cor-invoice-eacces")).toMatch(/: was never reviewed — .*abuildu3p1 \("Build unit u3-p1"\)/);
+  });
+
+  it("(f) a seed file absent from every review-start copy is a capture defect", async () => {
+    const m = await v3Run(...inOrder(B11, REVIEW), { seeds: ONE, record: ONE_SWAP, snapshots: { "u1-p1": { main: { "src/orders/format.ts": FORMAT } } } });
+    expect(m.invalid).toEqual(["capture defect: seed sec-sql-sort (u1-p1): src/store/query.ts is absent from every copy of the pass's review-start snapshot (captures/snapshots/u1-p1/)"]);
+  });
+
+  it.each<[string, Record<string, unknown> | null, string]>([
+    ["no record", null, "run.json carries no swap record (injection), so no pass can be read as swapped: a REPLAY-v3 run is invalid without it"],
+    ["a record whose passes is no object", { arrival: "patch", passes: 3 }, "run.json's swap record is malformed: passes is not an object"],
+    ["a seeded digest other than seeds.patches", swapRecord({ "u1-p1": B11.id }, { "u1-p1": { seeded: HEX("c") } }), `swap defect: pass u1-p1's seeded digest ${HEX("c")} is not seeds.patches["u1-p1"].seeded`],
+    ["mtimeKept false", swapRecord({ "u1-p1": B11.id }, { "u1-p1": { mtimeKept: false } }), "swap defect: pass u1-p1's mtime was not kept (mtimeKept is false)"],
+    ["a patch modified before its swap", swapRecord({ "u1-p1": B11.id }, { "u1-p1": { state: "patch-modified" } }), 'swap defect: pass u1-p1 reads state "patch-modified", not swapped or already-seeded'],
+  ])("(g) %s makes the run invalid, naming why", async (_label, record, reason) => {
+    const m = await v3Run(...inOrder(B11, REVIEW), { seeds: ONE, record });
+    expect(m.invalid).toEqual([reason]);
+  });
+
+  it("(h) a seed present at review start and gone from every round-completion copy, credited by no finding, is noted removed during review and stays a miss", async () => {
+    const removed = { "u1-p1": { main: { "src/store/query.ts": REVERTED_QUERY } } };
+    const m = await v3Run(...inOrder(B11, REVIEW), { seeds: ONE, record: ONE_SWAP, reviewSnapshots: removed });
+    expect(m.invalid).toEqual([]);
+    expect(rowOf(m, "sec-sql-sort")).toEqual(expect.objectContaining({ present: true, found: false }));
+    expect(m.totals.recall).toEqual(expect.objectContaining({ found: 0, denominator: 1 }));
+    expect(m.notes).toContainEqual(expect.stringMatching(/^seed sec-sql-sort \(u1-p1\): removed during review, uncredited — /));
+    // Two lenses credit it: the earliest stage and a round-1 find are read over both.
+    const credited = await v3Run(...inOrder(B11, LENS, BOTH_LENS), { seeds: ONE, record: ONE_SWAP, reviewSnapshots: removed });
+    expect(rowOf(credited, "sec-sql-sort")).toEqual(expect.objectContaining({ found: true, foundRound1: true, stage: "pass" }));
+    expect(credited.notes.join("\n")).not.toContain("removed during review");
+  });
+});
+
+/** The client's change notice for a file whose mtime moved after a read: an `edited_text_file` attachment. */
+function notice(filename: string): string {
+  const o = JSON.parse(mainLine.attachment({ type: "edited_text_file", rendered: null })) as { attachment: Record<string, unknown> };
+  Object.assign(o.attachment, { filename, snippet: "1\t+x" });
+  return JSON.stringify(o);
+}
+
+describe("REPLAY-v3 — contamination (C5, C6)", () => {
+  it("a tool input naming patches-seeded voids a v3 run (REPLAY-v3 §8) and no v1 or v2 run", async () => {
+    const read = [mainLine.readToolUse({ id: "tu_peek", filePath: "/opt/data/patches-seeded/u1-p1.patch" }), mainLine.toolResult("tu_peek", "diff")];
+    const [lines, agents] = inOrder(B11, B31, REVIEW);
+    expect((await v3Run([...lines, ...read], agents)).invalid).toEqual([expect.stringMatching(/^forbidden patches-seeded in a Read input \(main transcript line \d+\)$/)]);
+    expect((await measure(passCapture({ shape: "baseline", tail: read }).layout.runDir)).invalid).toEqual([]);
+    expect((await featureRun([...BUILDERS, APPROVING_1], { tail: read })).invalid).toEqual([]);
+  });
+
+  const [lines, agents] = inOrder(B11, B31, REVIEW);
+  const hook = "PreCompact [REPLAY_SEEDS=/x/seeds.json node hook.mjs] completed successfully";
+
+  it("(i) C5: a notice for vendor/contrib/u2-p1.patch invalidates and one for src/store/query.ts does not; C6: a harness string in any main or sub-agent line invalidates, naming the file and line", async () => {
+    expect((await v3Run([...lines, notice("/fx/vendor/contrib/u2-p1.patch")], agents)).invalid).toEqual([expect.stringMatching(/^contamination \(C5\): a change notice for vendor\/contrib\/u2-p1\.patch \(main transcript line \d+\)$/)]);
+    expect((await v3Run([...lines, notice("/fx/src/store/query.ts")], agents)).invalid).toEqual([]);
+    expect((await v3Run([...lines, mainLine.userText(hook)], agents)).invalid).toEqual([expect.stringMatching(/^contamination \(C6\): a harness string \(REPLAY_\) in main transcript line \d+$/)]);
+    const researcher = subagentFile({ agentId: "aextra", agentType: "stamity-researcher", prompt: "Read the marker-hook log.", requests: [{ id: "msg_aextra", usage: { input: 1, output: 1 } }] });
+    expect((await v3Run(lines, agents, { subagents: [researcher] })).invalid).toEqual(["contamination (C6): a harness string (marker-hook) in sub-agent aextra line 1"]);
+    expect((await v3Run([...lines, mainLine.userText("see /opt/instrument/notes")], agents, { forbid: ["/opt/instrument"] })).invalid).toEqual([expect.stringMatching(/^contamination \(C6\): a harness string \(--forbid\[0\]\) in main transcript line \d+$/)]);
+  });
+
+  it("v1 and v2 never read C5 or C6", async () => {
+    const tail = [notice("/fx/vendor/contrib/u2-p1.patch"), mainLine.userText(hook)];
+    expect((await measure(passCapture({ shape: "baseline", tail }).layout.runDir)).invalid).toEqual([]);
+    expect((await featureRun([...BUILDERS, APPROVING_1], { tail })).invalid).toEqual([]);
   });
 });
