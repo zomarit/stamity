@@ -323,6 +323,16 @@ implementer's gates stay green with both in place. The exact bytes (`injection.f
 | 11 | `cor-export-truncated` | correctness, Warning | u3-p2 | `src/orders/export.ts` | A failing batch read ends the export early and sends the rows so far with 200 | vitest: the answer is 500 |
 | 12 | `con-export-doc-header` | contract, Warning | u3-p2 | `docs/api.md` | The contract's header row names `total` where the code writes `total_cents` | static |
 
+**The final data set** (amendment 4, from the seeds research's final checks, `MANIFEST.txt` complete
+2026-09-29T10:14:04Z): seed 7 ships `exportBatchSize: 250` in `config/service.json` (the default stays 500), so the
+misspelt key changes behaviour; seed 11 is line-neutral: the clean u3-p2 export wraps each batch read in a try/catch
+that rethrows with the offset, and the seed turns the rethrow into `break`; the split across the passes is
+2/2/2/1/2/3 (u2-p2 carries one seed, u3-p2 three), because a third contract seed in u2-p2 would sit in `docs/api.md`,
+which later passes touch; u1-p2's patch supplies `listCreatedAt` in a new `src/store/reporting.ts`; the clean u3-p2
+docs paragraph already states the plan's "no orders" sentence, so its implementer has no reason to rewrite the
+seeded header row; N8 is not needed (no run's tree changed `package.json`). The fixture's stored objects (52: the base
+with `vendor/` excluded, 21 preimage blobs in one kept pack, the plan commit) hold no seed's clean text.
+
 Decoys: `dec-internal-rename` (u2-p1, `src/orders/format.ts`) and `dec-allowlist-order` (u3-p2, `src/orders/export.ts`)
 as in v2, and `dec-test-reason` (now u2-p1, `test/handlers.test.ts`, the reason-commented change of the missing-order
 404's body).
