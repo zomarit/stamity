@@ -16,7 +16,7 @@ expiry screen, the transition table, the archive and the sweep. What is left
 here is the judgment it has no opinion about — when a boundary is worth a
 handoff, what the eight sections say, and how a drift report is read.
 
-**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx stamity <verb>` where the project's `package.json` lists this package, and otherwise as `${STAMITY:CLI} <verb>` — the version this setup was generated with; never `@latest`, and never a bare `stamity` that only a global install provides.
+**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `${STAMITY:CLI} <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
 When neither form runs, no handoff file is written by hand; the eight sections go into the closing message under `Not done: handoff not written — CLI unavailable`, with the exact `prepare` command to run once the CLI resolves.
 
 ## Quick Start
