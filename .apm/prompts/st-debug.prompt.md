@@ -55,8 +55,9 @@ residue count; a stop that waits on the user leaves it in progress.
 2. **Instrumentation.** On the in-process route (step 3) this step runs only when the failing
    test alone cannot separate the hypotheses. Delegate the edit to `implementer` —
    instrumentation is a code mutation and is written where every other mutation is.
-   Observation-only logging at the discriminating points, every line
-   prefixed `[STAMITY-DEBUG]` and naming its site (`[STAMITY-DEBUG] cart/total.ts:41 applyDiscount
+   Observation-only logging at the discriminating points, every line beginning with the tag
+   `[STAMITY-DEBUG]` carrying the run record's id inside its brackets, `[STAMITY-DEBUG <run-id>]`,
+   and naming its site (`[STAMITY-DEBUG <run-id>] cart/total.ts:41 applyDiscount
    entry — subtotal, coupon id`). Use the logging mechanism the project already has; add no
    dependency. Control flow, state, and error handling stay byte-identical in behavior —
    instrumentation that changes behavior invalidates the round.
@@ -143,12 +144,20 @@ valve, user abort, and escalation to another command. No exit path leaves a tagg
 commented-out probe, or a helper that existed only to carry one. Search the repository for
 the tag before the closing report and state the resulting count in it.
 
-**The marker check.** `git grep -n -F '[STAMITY-DEBUG]'` runs at the run's start, at every stop
-that waits on the user, and at the close; its exit code 1 means zero hits, not an error. At the
-start, a hit with no in-progress debug record and no capture-later agreement is residue from an
-earlier run and is stripped before step 1; a hit under a recorded agreement is kept and its count
-stated. At a stop, the count and the sites go into the stop message and the record. At the
-close, the count is the Zero residue gate's number.
+**The marker check.** It runs at the run's start, at every stop that waits on the user, and at
+the close:
+
+```sh
+git grep -n -E '\[STAMITY-DEBUG [0-9]{4}-[0-9]{2}-[0-9]{2}_debug-[^]]*\]'
+```
+
+Its exit code 1 means zero hits, not an error. Only a probe carries a real run id, so only a
+probe matches: this text, its copies and every other document name the format with the
+`<run-id>` placeholder, never with an instance. At the start, a hit whose run id has neither an
+in-progress debug record nor a recorded capture-later agreement is residue from an earlier run
+and is stripped before step 1; a hit under a recorded agreement is kept and its count stated.
+At a stop, the count and the sites go into the stop message and the record. At the close, the
+count of hits carrying this run's own id is the Zero residue gate's number.
 
 One exception, and it is the gate table's own row: a capture-later agreement recorded with the
 user holds the instrumentation in place. That run reports its count rather than zero, and the

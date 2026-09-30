@@ -575,7 +575,13 @@ describe("debug — hard gates before any fix", () => {
     expect(text).not.toMatch(/writes no run record/i);
 
     // The marker check at start, at every stop, and at the close. Edge case: exit 1 is zero hits.
-    expect(text).toMatch(/git grep -n -F '\[STAMITY-DEBUG\]'/);
+    // Probes carry the run id, and the check matches only a real id, so no document holding the
+    // placeholder form (this command, its copies, plans, tests) is ever counted or stripped.
+    expect(text).toContain("`[STAMITY-DEBUG <run-id>]`");
+    expect(text).toContain("git grep -n -E '\\[STAMITY-DEBUG [0-9]{4}-[0-9]{2}-[0-9]{2}_debug-[^]]*\\]'");
+    expect(text).not.toMatch(/\[STAMITY-DEBUG [0-9]{4}-[0-9]{2}-[0-9]{2}_debug-[^\]]*\]/);
+    expect(text).toMatch(/a hit whose run id has neither an in-progress debug record nor a recorded capture-later agreement/);
+    expect(text).toMatch(/the count of hits carrying this run's own id is the Zero residue gate's number/);
     expect(text).toMatch(/at the run's start, at every stop that waits on the user, and at the close/);
     expect(text).toMatch(/exit code 1 means zero hits/i);
 
