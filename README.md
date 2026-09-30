@@ -63,10 +63,10 @@ that needs no npm.
 
 ## How it works
 
-You author the corpus in `content/` once. The emission core plans standards-first output:
-`AGENTS.md`, plus the skills projection under `.agents/skills/`. Cursor, Copilot and Codex read
-that where it lands. Claude Code reaches the charter through the managed block in `CLAUDE.md`, and
-takes the skills as a copy.
+You author the corpus in `content/` once; the core plans standards-first `AGENTS.md` and the skills
+projection under `.agents/skills/`. Cursor, Copilot and Codex read those where they land (Codex reads
+the root `AGENTS.override.md` instead where it has a rules appendix: `AGENTS.md` as sync writes it,
+plus the appendix). Claude Code reads the managed block in `CLAUDE.md` and takes a skills copy.
 
 Four adapters add what a client cannot read without help: agents, rules, MCP documents, hook wiring
 and a command surface. Hook wiring reaches all four clients. A command surface reaches three of

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CODEX_AGENTS_DIR,
   CODEX_AGENTS_MD_BUDGET_BYTES,
+  CODEX_AGENTS_OVERRIDE_FILE,
   CODEX_SKILLS_LIST_BUDGET_CHARS,
   CODEX_COMMANDS_DIR,
   CODEX_CONFIG_FILE,
@@ -1288,8 +1289,10 @@ describe("the shipped Codex emission, rule by rule", () => {
       ruleDelivery: delivery,
     });
     const rows = (await codexResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx)).outputs;
-    const root = rows.find((row) => row.path === "AGENTS.md");
-    expect(root, "the root AGENTS.md replacement row").toBeDefined();
+    // TEST CHANGE (sw18): the root appendix row moved from the shared AGENTS.md to the Codex-only
+    // AGENTS.override.md, which Codex reads instead; the content asserted below is unchanged.
+    const root = rows.find((row) => row.path === CODEX_AGENTS_OVERRIDE_FILE);
+    expect(root, "the root AGENTS.override.md row").toBeDefined();
     return root!.content;
   }
 
@@ -1526,7 +1529,9 @@ describe("the omission notice scopes its claim to the file it shaped", () => {
 
     expect(root).toContain("CONCATENATION a session loads");
     // A gap the reader can close: an executable check, not an advisory.
-    expect(root).toContain("`cat AGENTS.md path/to/dir/AGENTS.md | wc -c`");
+    // TEST CHANGE (sw18): Codex reads the root AGENTS.override.md instead of the root AGENTS.md,
+    // so the concatenation the notice tells the reader to measure starts there.
+    expect(root).toContain("`cat AGENTS.override.md path/to/dir/AGENTS.md | wc -c`");
     expect(root).toContain(String(CODEX_AGENTS_MD_BUDGET_BYTES));
   });
 
@@ -1647,7 +1652,10 @@ describe("budget drops are ordered by risk before alphabet", () => {
 // ── 6. Planner output and composer integration ───────────────────
 
 describe("residue planning", () => {
-  it("owns every row as codex and flags only the root charter as a shared-path replacement", async () => {
+  // TEST CHANGE (sw18): this case pinned the root charter as the one shared-path replacement.
+  // The appendix now ships in the Codex-only AGENTS.override.md, a plain codex row, so the
+  // adapter flags NO row as a replacement and the shared AGENTS.md is not among its rows.
+  it("owns every row as codex, the root appendix in its own override file, and replaces no shared path", async () => {
     const contentRoot = await seedCorpus();
     // MODE PINNED 2026-09-15, explicitly `always-on`. The claim is about
     // OWNERSHIP of the root replacement row, so the fixture has to produce one.
@@ -1666,16 +1674,14 @@ describe("residue planning", () => {
       CODEX_CONFIG_FILE,
       CODEX_HOOKS_FILE,
       ".stamity/generated/hooks/codex/stamity-portable-hook.mjs",
-      "AGENTS.md",
+      CODEX_AGENTS_OVERRIDE_FILE,
       "packages/a/AGENTS.md",
       "src/db/AGENTS.md",
     ]);
     for (const row of rows) {
       expect(outputOwners(row).map((owner) => owner.adapter), row.path).toEqual(["codex"]);
     }
-    expect(rows.filter((row) => row.replacesSharedPath === true).map((row) => row.path)).toEqual([
-      "AGENTS.md",
-    ]);
+    expect(rows.filter((row) => row.replacesSharedPath === true)).toEqual([]);
   });
 
   it("plans byte-identically across runs", async () => {
@@ -1688,10 +1694,14 @@ describe("residue planning", () => {
     expect(JSON.stringify(second)).toBe(JSON.stringify(first));
   });
 
-  it("substitutes the root charter through the composer: one AGENTS.md row, owners unioned", async () => {
+  // TEST CHANGE (sw18): this case asserted the composer SUBSTITUTED the shared AGENTS.md with
+  // charter + appendix. The appendix now lives in the Codex-only AGENTS.override.md, so the shared
+  // row stays the core charter (owners still unioned) and the override is codex's alone. The
+  // "charter first, appendix after" shape is asserted on the override instead.
+  it("leaves the shared AGENTS.md as the core charter and puts charter + appendix in the override", async () => {
     const contentRoot = await seedCorpus();
-    // MODE PINNED 2026-09-15, same reason as the case above: the union of owners
-    // on the root replacement row is only observable while there IS one.
+    // MODE PINNED 2026-09-15, same reason as the case above: the root appendix row
+    // is only observable while there IS one.
     const ctx = ctxOf({ contentRoot, tools: ["claude", "codex"], ruleDelivery: "always-on" });
     const core = await buildCoreEmissionPlan(ctx);
 
@@ -1700,9 +1710,59 @@ describe("residue planning", () => {
     const charterRows = plan.filter((row) => row.path === "AGENTS.md");
     expect(charterRows).toHaveLength(1);
     const charter = charterRows[0]!;
-    expect(charter.content.startsWith(core.agentsMd.root.content)).toBe(true);
-    expect(charter.content).toContain("## Conditional rules (Codex down-conversion)");
+    expect(charter.content).toBe(core.agentsMd.root.content);
+    expect(charter.content).not.toContain("## Conditional rules (Codex down-conversion)");
     expect(outputOwners(charter).map((owner) => owner.adapter)).toEqual(["claude", "codex"]);
+
+    const override = plan.find((row) => row.path === CODEX_AGENTS_OVERRIDE_FILE);
+    expect(override).toBeDefined();
+    expect(override!.content.startsWith(core.agentsMd.root.content.trimEnd())).toBe(true);
+    expect(override!.content).toContain("## Conditional rules (Codex down-conversion)");
+    expect(outputOwners(override!).map((owner) => owner.adapter)).toEqual(["codex"]);
+  });
+
+  it("reads the operator's AGENTS.md only under a decision that keeps their text", async () => {
+    // The override repeats the shared AGENTS.md as the run leaves it (sw18). With no
+    // import decision, or `replace`, the engine writes the charter whole, so nothing on
+    // disk is read; `supplement` keeps the operator's text around the block, and `skip`
+    // leaves their file as the whole shared text.
+    const contentRoot = await seedCorpus();
+    const temp = getTemp();
+    await temp.seedFiles({ "planted/AGENTS.md": "## Team notes\n\nOperator line QX-3310.\n" });
+    const base = ctxOf({
+      contentRoot,
+      tools: ["claude", "codex"],
+      ruleDelivery: "always-on",
+      rootDir: temp.path("planted"),
+    });
+    const core = await buildCoreEmissionPlan(base);
+    const overrideUnder = async (mode?: "replace" | "supplement" | "skip"): Promise<string> => {
+      const ctx: EmissionContext =
+        mode === undefined
+          ? base
+          : { ...base, manifest: { ...base.manifest, importChoice: [{ path: "AGENTS.md", mode }] } };
+      const rows = (await codexResiduePlanner.planResidue(core, ctx)).outputs;
+      return rows.find((row) => row.path === CODEX_AGENTS_OVERRIDE_FILE)!.content;
+    };
+    const appendix = "## Conditional rules (Codex down-conversion)";
+
+    const unread = await Promise.all([overrideUnder(), overrideUnder("replace")]);
+    for (const [index, text] of unread.entries()) {
+      expect(text, String(index)).not.toContain("QX-3310");
+      expect(text.startsWith(core.agentsMd.root.content.trimEnd()), String(index)).toBe(true);
+    }
+
+    // No block on disk yet: the first adoption puts the block on top and the file below it.
+    // The block body is trimmed, as the managed-block writer trims it.
+    const supplemented = await overrideUnder("supplement");
+    expect(supplemented.startsWith(core.agentsMd.root.content.trim())).toBe(true);
+    expect(supplemented.indexOf("QX-3310")).toBeGreaterThan(core.agentsMd.root.content.trim().length);
+    expect(supplemented.indexOf("QX-3310")).toBeLessThan(supplemented.indexOf(appendix));
+
+    const skipped = await overrideUnder("skip");
+    expect(skipped.startsWith("## Team notes\n\nOperator line QX-3310.")).toBe(true);
+    expect(skipped).not.toContain(core.agentsMd.root.content.trim().split("\n")[0]!);
+    expect(skipped).toContain(appendix);
   });
 
   it("emits no root replacement under the default when every rule anchors or demotes", async () => {
@@ -1718,6 +1778,8 @@ describe("residue planning", () => {
     const rows = (await codexResiduePlanner.planResidue(core, ctx)).outputs;
 
     expect(rows.some((row) => row.path === "AGENTS.md")).toBe(false);
+    // ADDED (sw18): nor the Codex-only override, which exists only to carry a root appendix.
+    expect(rows.some((row) => row.path === CODEX_AGENTS_OVERRIDE_FILE)).toBe(false);
     expect(rows.some((row) => row.replacesSharedPath === true)).toBe(false);
     // Non-degenerate: the nested anchors still land, and the two rules that
     // could not anchor are delivered — as skills, not dropped.
@@ -1753,7 +1815,9 @@ describe("residue planning", () => {
     // needs the composer to widen replacement to per-tool rows; until it does,
     // the rule travels to the root with its scope named in-file.
     expect(nested[0]!.content).toBe(core.agentsMd.root.content);
-    const charter = plan.find((row) => row.path === "AGENTS.md")!;
+    // TEST CHANGE (sw18): the rerouted rule lands in the root appendix, which now lives in the
+    // Codex-only AGENTS.override.md rather than the shared AGENTS.md.
+    const charter = plan.find((row) => row.path === CODEX_AGENTS_OVERRIDE_FILE)!;
     expect(charter.content).toContain("### pkg-scoped");
     expect(charter.content).toContain("workspace-package charter copy with its own writer");
   });
@@ -1769,8 +1833,11 @@ describe("residue planning", () => {
     for (const path of [CODEX_HOOKS_FILE, CODEX_CONFIG_FILE, "src/db/AGENTS.md"]) {
       expect(paths).toContain(path);
     }
-    // Every emitted AGENTS.md sits under the client's budget.
-    for (const row of plan.filter((entry) => entry.path.endsWith("AGENTS.md"))) {
+    // Every emitted AGENTS.md sits under the client's budget — and, since sw18, the root
+    // AGENTS.override.md too, which carries the root appendix the budget shapes.
+    for (const row of plan.filter(
+      (entry) => entry.path.endsWith("AGENTS.md") || entry.path === CODEX_AGENTS_OVERRIDE_FILE,
+    )) {
       expect(Buffer.byteLength(row.content, "utf8"), row.path).toBeLessThanOrEqual(
         CODEX_AGENTS_MD_BUDGET_BYTES,
       );
@@ -1842,11 +1909,17 @@ describe("codex honours the tools: restriction", () => {
     });
 
     const plan = await composeEmissionPlanner({ codex: codexResiduePlanner }).plan(ctx);
-    const shared = plan.find((row) => row.path === "AGENTS.md");
+    // TEST CHANGE (sw18): the root appendix moved from the shared AGENTS.md to the Codex-only
+    // AGENTS.override.md — which also means the codex-only rule no longer reaches the file
+    // other clients read, asserted on the shared row below.
+    const override = plan.find((row) => row.path === CODEX_AGENTS_OVERRIDE_FILE);
 
-    expect(shared).toBeDefined();
-    expect(shared!.content).toContain(
+    expect(override).toBeDefined();
+    expect(override!.content).toContain(
       "Guidance only codex should carry, demoted nowhere else it can land.",
+    );
+    expect(plan.find((row) => row.path === "AGENTS.md")!.content).not.toContain(
+      "Guidance only codex should carry",
     );
   });
 });
@@ -1894,8 +1967,9 @@ describe("the shipped Codex emission under ruleDelivery: on-demand", () => {
 
   it("inlines only the floor rules and drops nothing, with every other rule reachable as a skill", async () => {
     const rows = await shipped("on-demand");
-    const root = rows.find((row) => row.path === "AGENTS.md");
-    expect(root, "the root AGENTS.md replacement row").toBeDefined();
+    // TEST CHANGE (sw18): the root appendix row moved to the Codex-only AGENTS.override.md.
+    const root = rows.find((row) => row.path === CODEX_AGENTS_OVERRIDE_FILE);
+    expect(root, "the root AGENTS.override.md row").toBeDefined();
     const { inlined, omitted } = deliveredAndOmitted(root!.content);
 
     // `Verification gates` is an H3 of the charter head, not a rule section.
@@ -1970,7 +2044,8 @@ describe("the shipped Codex emission under ruleDelivery: on-demand", () => {
     const explicit = await shipped("on-demand");
 
     expect(defaulted.map((row) => row.path)).not.toEqual(explicit.map((row) => row.path));
-    const root = defaulted.find((row) => row.path === "AGENTS.md")!;
+    // TEST CHANGE (sw18): the root appendix row moved to the Codex-only AGENTS.override.md.
+    const root = defaulted.find((row) => row.path === CODEX_AGENTS_OVERRIDE_FILE)!;
     const { inlined, omitted } = deliveredAndOmitted(root.content);
     expect(inlined).toEqual([
       "Verification gates",

@@ -44,7 +44,7 @@ delivery leaves in front of it.
 | `claude` | 95 | skill, on demand | the charter alone — a rule with no globs is delivered as a skill instead, and every other rule attaches on paths |
 | `cursor` | 95 | rule, pulled on relevance | the charter alone — a rule with no globs is pulled in when the conversation matches it |
 | `copilot` | 95 | skill, on demand | the charter alone — a rule with no globs is delivered as a skill instead, and every other rule attaches on paths |
-| `codex` | 407 | skill, on demand | the charter plus the rules that must be unconditional — critical, floor-tagged, or anchored to a nested instruction file; the rest are skills |
+| `codex` | 407 | skill, on demand | the charter plus the rules that must be unconditional — critical, floor-tagged, or anchored to a nested instruction file; the rest are skills — 25306 bytes, in its own `AGENTS.override.md` |
 
 Measured under `ruleDelivery: on-demand`, the shipped default. A rule that carries no globs has
 no attach trigger, so under `always-on` claude and copilot load its whole body every session;
@@ -60,11 +60,13 @@ composite differs from its cell in either direction, so a cell that grew is a sl
 authorised and one that shrank is a saving nobody wrote down. They are a bound a reader can
 plan against, not a reading this page took as it rendered.
 
-**What co-selecting codex costs every other client.** Selecting `codex` does not add a
-codex-only file. It rewrites the root `AGENTS.md` that every other selected client already
-reads, so a claude+codex repository hands claude the codex rules appendix too: 25306 bytes of
-shared instruction text against 5276 without it — ≈4.8x the always-on bytes every co-selected
-client pays.
+**What co-selecting codex costs every other client: nothing at the root.** Codex's rules
+appendix goes to a codex-only root `AGENTS.override.md`, which codex reads instead of
+`AGENTS.md` and no other client reads at all, so the shared root `AGENTS.md` is 5276 bytes with
+codex selected and 5276 without it. The override repeats that file — an operator's own text in
+it included — and adds the appendix: 25306 bytes, ≈4.8x the shared file, paid by codex alone.
+It is regenerated from `AGENTS.md` on every sync, so an edit to `AGENTS.md` reaches codex at
+the next sync, and `check` reports the difference as drift until then.
 
 **What codex folds, and what it pulls.** Under the delivery mode above, the appendix carries 3
 rules — `injection-screening`, `secrets`, `security-patterns` — and they are there for the
@@ -223,7 +225,7 @@ Sources:
 
 | Fact | Declared value |
 |---|---|
-| Rule shape | no glob-scoped rule layer; conditional rules down-convert into nested AGENTS.md files (documented lossy — upstream gap: open codex#34002) |
+| Rule shape | no glob-scoped rule layer; conditional rules down-convert into nested AGENTS.md files and a Codex-only root AGENTS.override.md, which this client reads instead of the shared AGENTS.md (documented lossy — upstream gap: open codex#34002) |
 | Agent format | TOML subagent definitions under .codex/agents/ |
 | Hook config | `.codex/hooks.json` |
 | Reads `.agents/skills/` | yes |

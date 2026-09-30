@@ -550,13 +550,15 @@ describe("live-emission wiring: installed packs join the emission corpus", () =>
     const baseline = byPath(
       await planAll(ctxOf(fixture, fixture.manifest, ["codex"], "always-on")),
     );
-    expect(baseline.get("AGENTS.md")!.content).toContain(BASE_RULE_SENTINEL);
+    // TEST CHANGE (sw18): the budget-shaped root appendix moved from the shared AGENTS.md to
+    // the Codex-only AGENTS.override.md, so both lookups in this case read that file.
+    expect(baseline.get("AGENTS.override.md")!.content).toContain(BASE_RULE_SENTINEL);
 
     // With the pack's critical rule installed, the two no longer fit together:
     // the corpus rule is the lower precedence and is the one dropped, by name.
     const manifest = await installPack(fixture.repoRoot, fixture.packDir, fixture.manifest);
     const packed = byPath(await planAll(ctxOf(fixture, manifest, ["codex"], "always-on")));
-    const agentsMd = packed.get("AGENTS.md")!.content;
+    const agentsMd = packed.get("AGENTS.override.md")!.content;
     expect(agentsMd).toContain(GUARD_RULE_SENTINEL);
     expect(agentsMd).not.toContain(BASE_RULE_SENTINEL);
     // Wording tracks the codex notice after M-14: the old "lowest precedence

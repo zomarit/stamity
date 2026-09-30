@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 import { basename } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CLAUDE_MD_PATH, CLAUDE_SETTINGS_PATH } from "../../src/adapters/claude.ts";
-import { CODEX_AGENTS_MD_BUDGET_BYTES, CODEX_HOOKS_FILE } from "../../src/adapters/codex.ts";
+import {
+  CODEX_AGENTS_MD_BUDGET_BYTES,
+  CODEX_AGENTS_OVERRIDE_FILE,
+  CODEX_HOOKS_FILE,
+} from "../../src/adapters/codex.ts";
 import { COPILOT_HOOKS_PATH, COPILOT_SETUP_STEPS_PATH } from "../../src/adapters/copilot.ts";
 import { CURSOR_COMMANDS_DIR, CURSOR_HOOKS_CONFIG_PATH } from "../../src/adapters/cursor.ts";
 import { ADAPTER_REGISTRY } from "../../src/adapters/registry.ts";
@@ -89,7 +93,11 @@ const CLIENT_RESIDUE: Readonly<Record<Tool, (path: string) => boolean>> = {
     [".github/instructions/", ".github/agents/", ".github/prompts/", ".github/hooks/", ".vscode/"].some((prefix) =>
       path.startsWith(prefix),
     ) || path === COPILOT_SETUP_STEPS_PATH,
-  codex: (path) => path.startsWith(".codex/"),
+  // TEST CHANGE (sw18): codex's residue gained the root AGENTS.override.md, which carries its
+  // rules appendix in place of the shared AGENTS.md. Naming it here holds it to codex alone —
+  // single-owner, and absent from every selection without codex — by the same two cases that
+  // already hold `.codex/` to it.
+  codex: (path) => path.startsWith(".codex/") || path === CODEX_AGENTS_OVERRIDE_FILE,
 };
 
 /**
@@ -177,6 +185,24 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // goldens as a file review, so a later reader can attribute every moved line
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
+  //
+  //   - 2026-09-30, plan 013 file 3, unit sw18-codex-rules-leave-shared-charter
+  //     (run 2026-09-30_optimization-sweep). ONE path ADDED in the two
+  //     codex-bearing selections, and the shared charter shrank in them.
+  //
+  //     ADDED `AGENTS.override.md` in the codex and all-four selections, 25306
+  //       bytes — byte-identical (same sha256) to the root `AGENTS.md` those
+  //       selections emitted before: the charter plus the codex rules appendix,
+  //       moved to the file codex reads instead of `AGENTS.md`. It joins the
+  //       residue-document golden as a codex-owned infra row.
+  //     CHANGED `AGENTS.md` 25306 -> 5276 in the codex and all-four selections:
+  //       the charter alone, the same sha256 the claude, cursor and copilot
+  //       selections already carry, so the shared file no longer depends on
+  //       codex being selected (REQ-PROVE-005). Their residue-document golden
+  //       loses the appendix from this path.
+  //     CHANGED `.stamity/manifest.json` in the codex (15677 -> 15916) and
+  //       all-four (71175 -> 71414) selections: the +239 bytes are the one new
+  //       ledger row, `codex-agents-override`.
   //
   //   - 2026-09-30, plan 013 file 3, unit sw08-fresh-re-reviewer (run
   //     2026-09-30_optimization-sweep). ONE command body and ONE agent body
@@ -1570,6 +1596,11 @@ describe("four-tool union", () => {
   it("keeps the root charter inside the codex AGENTS.md budget", () => {
     const charter = tree[AGENTS_MD_FILE] ?? "";
     expect(Buffer.byteLength(charter, "utf8")).toBeLessThanOrEqual(CODEX_AGENTS_MD_BUDGET_BYTES);
+    // ADDED (sw18): the file codex actually reads at the root is now the override, charter
+    // plus appendix, so the budget is held there too — non-empty, and larger than the charter.
+    const override = tree[CODEX_AGENTS_OVERRIDE_FILE] ?? "";
+    expect(Buffer.byteLength(override, "utf8")).toBeGreaterThan(Buffer.byteLength(charter, "utf8"));
+    expect(Buffer.byteLength(override, "utf8")).toBeLessThanOrEqual(CODEX_AGENTS_MD_BUDGET_BYTES);
   });
 
   it("carries the user hook into every client that takes a hook config, and no other", () => {

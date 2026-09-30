@@ -20,6 +20,8 @@ import { MANIFEST_VERSION, type SetupManifest } from "../../src/types/manifest.t
 import { validateCapabilityFile } from "../../scripts/plugins/capability.mjs";
 // @ts-expect-error — see above.
 import { resolveDistributionIdentity } from "../../scripts/distribution-identity.mjs";
+// @ts-expect-error — see above.
+import { place } from "../../scripts/plugins/clients/codex.mjs";
 import { canonical, repositoryRoute } from "../support/identity.ts";
 
 /**
@@ -237,6 +239,18 @@ describe("the root plugin.json against the vendored Agent Plugins 1.0.0 schema",
  * not a table compared with itself.
  */
 async function codexNativeSkillDirs(): Promise<string[]> {
+  const prefix = `${SKILLS_PROJECTION_DIR}/`;
+  return [
+    ...new Set(
+      (await codexNativePlanPaths())
+        .filter((path) => path.startsWith(prefix))
+        .map((path) => path.slice(prefix.length).split("/")[0] ?? ""),
+    ),
+  ].toSorted();
+}
+
+/** Every path the engine plans for codex alone over the real corpus — the rows `place` is handed. */
+async function codexNativePlanPaths(): Promise<string[]> {
   const contentRoot = { root: join(REPO_ROOT, "content"), forkRoot: join(REPO_ROOT, "fork") };
   const index = await buildContentIndex(contentRoot);
   const manifest: SetupManifest = {
@@ -256,14 +270,7 @@ async function codexNativeSkillDirs(): Promise<string[]> {
     facts: { monorepoPackages: [] },
     contentRoot,
   });
-  const prefix = `${SKILLS_PROJECTION_DIR}/`;
-  return [
-    ...new Set(
-      plan.outputs
-        .filter((row) => row.path.startsWith(prefix))
-        .map((row) => row.path.slice(prefix.length).split("/")[0] ?? ""),
-    ),
-  ].toSorted();
+  return plan.outputs.map((row) => row.path);
 }
 
 describe("what the codex root carries", () => {
@@ -297,12 +304,30 @@ describe("what the codex root carries", () => {
     for (const forbidden of ["agents/", "commands/", "rules/", ".codex/"]) {
       expect(files.filter((rel) => rel.startsWith(forbidden)), forbidden).toEqual([]);
     }
-    for (const forbidden of ["AGENTS.md", "config.toml"]) {
+    for (const forbidden of ["AGENTS.md", "AGENTS.override.md", "config.toml"]) {
       expect(files.filter((rel) => rel === forbidden || rel.endsWith(`/${forbidden}`)), forbidden).toEqual([]);
     }
     // And the top level is only what the container declares.
     expect(readdirSync(root).toSorted()).toEqual(["README.md", "hooks", "plugin.json", "runtime", "skills", "stamity-plugin.json"]);
   });
+
+  it(
+    "drops the Codex-only AGENTS.override.md by a stated rule, so the build completes without it",
+    async () => {
+      // The engine emits the root override for codex whenever a rule folds into the root
+      // appendix. An unmapped path is the layout's refusal and fails the whole build, so the
+      // rule is what lets `beforeAll` above succeed at all; `null` is the stated drop.
+      expect((await codexNativePlanPaths()).filter((path) => path === "AGENTS.override.md")).toEqual([
+        "AGENTS.override.md",
+      ]);
+      expect(place({ path: "AGENTS.override.md" })).toBeNull();
+      expect(place({ path: "AGENTS.md" })).toBeNull();
+      expect(treeFiles(root).filter((rel) => rel.endsWith("AGENTS.override.md"))).toEqual([]);
+      // The page names what it leaves to the repository, this file among it.
+      expect(read("README.md")).toContain("(`AGENTS.override.md`, which Codex reads instead of `AGENTS.md`)");
+    },
+    ONE_ROOT_MS,
+  );
 
   it("keeps the hook scripts and the policy document under hooks/, beside the configuration", () => {
     const hooks = treeFiles(join(root, "hooks")).toSorted();

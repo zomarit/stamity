@@ -217,21 +217,26 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 
 /**
  * Bytes of the SHARED root `AGENTS.md` when codex is among the selected tools —
- * the cross-client cost of selecting it.
+ * the cross-client cost of selecting it, which is now none: this figure EQUALS
+ * {@link ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX} (REQ-PROVE-005).
  *
- * Selecting codex does not add a codex file: it rewrites the file every other
- * selected client already reads, so a claude+codex repo hands claude the codex
- * rules appendix too. Against {@link ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX} that
- * is ≈6.0x the always-on bytes every co-selected client pays — a today-measured
- * figure like the ceilings above, not a target.
+ * Selecting codex used to rewrite the file every other selected client already
+ * reads, handing a claude+codex repo the codex rules appendix too (≈4.8x the
+ * charter). The appendix now lives in the Codex-only root
+ * `AGENTS.override.md`, which Codex reads instead of `AGENTS.md` and no other
+ * client reads at all; its size is {@link ALWAYS_ON_CODEX_OVERRIDE_BYTES}. The
+ * pair stays two names so the claim "equal with and without codex" is asserted
+ * against the golden rather than assumed by having one constant.
  *
  * **A tripwire AND a published figure**, which are two different jobs.
  *
- * The tripwire: the corpus suite re-reads both numbers off the cross-client
- * emission golden (`test/emit/__snapshots__/crossClientGoldens.test.ts.snap`)
- * and fails when the two diverge, so the cost cannot move without a maintainer
- * editing this line and meeting the number. A golden refresh that moves the
- * cost is a two-line edit here plus a regeneration of the page below.
+ * The tripwire: the corpus suite re-reads the root `AGENTS.md` figure off the
+ * cross-client emission golden
+ * (`test/emit/__snapshots__/crossClientGoldens.test.ts.snap`) and fails when it
+ * is not one figure equal to both constants, so the shared file cannot start
+ * depending on the selection again without a maintainer meeting the number. A
+ * golden refresh that moves the charter is a two-line edit here plus a
+ * regeneration of the page below.
  *
  * The disclosure: `src/emit/capabilityMatrix.ts` renders both figures under
  * `## Always-on cost by client` on `docs/capability-matrix.md`, the page a
@@ -287,7 +292,13 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // source (open debug run ids), +32 bytes of the codex rules appendix, rewrapped
 // inside the five lines the sentence already had, so no line count moved. The
 // charter-alone figure is unchanged. Ratio ≈4.80x.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 25_306;
+// 25_306 -> 5_276 on 2026-09-30, sw18-codex-rules-leave-shared-charter: the
+// codex rules appendix left the shared file for the Codex-only root
+// `AGENTS.override.md`, so the shared file is the charter alone with or
+// without codex, and this figure met the one below. The 25_306 bytes did not
+// vanish — they are the override's, byte for byte (same sha256 in the golden),
+// and the series continues on ALWAYS_ON_CODEX_OVERRIDE_BYTES.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_276;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
@@ -310,6 +321,25 @@ export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 25_306;
 // 5_247 -> 5_276 on 2026-09-30, sw26-cli-token: the maturity line's pinned CLI
 // call, the same +29 as above and the whole of the change here.
 export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_276;
+
+/**
+ * Bytes of the Codex-only root `AGENTS.override.md` on the golden selection —
+ * the shared charter plus the codex rules appendix, paid by codex alone.
+ *
+ * Codex reads this file INSTEAD of the root `AGENTS.md` (measured on
+ * codex-cli 0.155.1 in run 2026-09-30_optimization-sweep), so the figure is the
+ * whole of what codex loads at the repository root, not an addition to the
+ * shared file. Same tripwire and the same delivered disclosure as the pair
+ * above: the corpus suite holds it to every `AGENTS.override.md` figure in the
+ * cross-client golden, and the capability page publishes it in codex's own
+ * paragraph. Measured with the golden's pinned engine version; a real init
+ * pins a different CLI version string into the charter, so an installed file
+ * differs by those bytes.
+ */
+// 25_306 on 2026-09-30, sw18-codex-rules-leave-shared-charter: the figure
+// ALWAYS_ON_SHARED_BYTES_WITH_CODEX carried until the appendix moved here — the
+// same bytes, now in a file only codex reads.
+export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_306;
 
 /**
  * The composite always-on line count one client pays for a plan under a

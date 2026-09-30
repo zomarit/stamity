@@ -180,7 +180,9 @@ A skill override's directory is projected entire. That means `SKILL.md` plus eve
 beneath it, and the override's own files rather than those of the skill whose id it took.
 
 It lands in `.agents/skills/` whenever a selected client reads that tree. Cursor, Copilot and
-Codex each declare that they do. Claude Code reads `AGENTS.md` only through the bridge import, and
+Codex each declare that they do. (Where Codex has a rules appendix it reads the root
+`AGENTS.override.md` instead of `AGENTS.md`: that file repeats `AGENTS.md` as sync writes it, plus
+the appendix.) Claude Code reads `AGENTS.md` only through the bridge import, and
 never reads that tree (its memory page, accessed 2026-09-30), so it also
 gets one client-native copy at `.claude/skills/`, re-targeted from those same rendered bytes. A
 Claude-only setup carries the native copy alone and no `.agents/skills/` tree at all.

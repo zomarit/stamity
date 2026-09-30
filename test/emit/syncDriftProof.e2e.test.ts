@@ -94,7 +94,7 @@ const ALL_TOOLS: readonly Tool[] = TOOLS;
 const DESELECTED: Tool = "codex";
 const SURVIVING_TOOLS: readonly Tool[] = TOOLS.filter((tool) => tool !== DESELECTED);
 
-/** Heading the codex adapter appends to the shared charter through the replacement contract. */
+/** Heading the codex rules appendix opens with — in the Codex-only root `AGENTS.override.md` since sw18. */
 const CODEX_APPENDIX_HEADING = "## Conditional rules (Codex down-conversion)";
 
 /** Repo-relative manifest path — the one file an idempotent apply is allowed to move. */
@@ -430,9 +430,15 @@ describe("deselection reclaim", () => {
     }
     expect(after[AGENT_TOOL_POLICIES_PATH]).toBe(before[AGENT_TOOL_POLICIES_PATH]);
 
-    expect(before[AGENTS_MD_FILE]).toContain(CODEX_APPENDIX_HEADING);
-    expect(after[AGENTS_MD_FILE]).toBeDefined();
-    expect(after[AGENTS_MD_FILE]).not.toContain(CODEX_APPENDIX_HEADING);
+    // TEST CHANGE (sw18-codex-rules-leave-shared-charter): this asserted the shared AGENTS.md
+    // carried codex's appendix before the deselection and lost it after. The appendix now lives
+    // in the Codex-only root AGENTS.override.md, so the shared file never carries it and is
+    // byte-intact across the deselection, and the override is what the sweep reclaims.
+    expect(before[AGENTS_MD_FILE]).toBeDefined();
+    expect(before[AGENTS_MD_FILE]).not.toContain(CODEX_APPENDIX_HEADING);
+    expect(before["AGENTS.override.md"]).toContain(CODEX_APPENDIX_HEADING);
+    expect(after[AGENTS_MD_FILE]).toBe(before[AGENTS_MD_FILE]);
+    expect(after["AGENTS.override.md"]).toBeUndefined();
 
     const owners = (report.manifest?.ledger ?? [])
       .filter((row) => row.path === AGENTS_MD_FILE)

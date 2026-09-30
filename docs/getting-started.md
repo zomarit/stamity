@@ -160,7 +160,7 @@ Then each client gets what it cannot read without help:
 | Claude Code | managed import block in `CLAUDE.md` | `.claude/commands/` — `/st-<id>` | `.claude/settings.json` | copied to `.claude/skills/` |
 | Cursor | `AGENTS.md`, read natively | `.cursor/skills/` | `.cursor/hooks.json` | read from `.agents/skills/` |
 | Copilot | `AGENTS.md`, read natively | `.github/prompts/` — `/st-<id>` | `.github/hooks/stamity.json` | read from `.agents/skills/` |
-| Codex | `AGENTS.md`, read natively | none — no repo-level command home | `.codex/hooks.json` | read from `.agents/skills/` |
+| Codex | `AGENTS.override.md` where the rules appendix exists (it repeats `AGENTS.md` as sync writes it, plus the appendix, and Codex reads it instead of `AGENTS.md`); otherwise `AGENTS.md`, read natively | none — no repo-level command home | `.codex/hooks.json` | read from `.agents/skills/` |
 
 Agents, rules and MCP documents land per client too, each in that client's own dialect.
 [The capability matrix](capability-matrix.md) is the one home for every cell of that. It renders

@@ -1042,6 +1042,14 @@ describe("always-on cost section", () => {
     expect(page).toContain(`${LIVE_CAPABILITY_INPUTS.alwaysOn.sharedBytesWithCodex} bytes`);
     expect(page).toContain(`${LIVE_CAPABILITY_INPUTS.alwaysOn.sharedBytesWithoutCodex} without it`);
     expect(page).toContain(`${LIVE_CAPABILITY_INPUTS.alwaysOn.codexDroppedRuleCount} rules`);
+    // ADDED with sw18: the codex-only file's bytes count in codex's own row, and in no other.
+    const overrideCell = `${LIVE_CAPABILITY_INPUTS.alwaysOn.codexOverrideBytes} bytes, in its own \`AGENTS.override.md\``;
+    expect(page).toMatch(new RegExp(String.raw`^\| \`codex\` \| \d+ \| .*${overrideCell.replaceAll(".", String.raw`\.`)} \|$`, "m"));
+    expect(page.split("\n").filter((line) => line.includes(overrideCell))).toHaveLength(1);
+    // The paragraph wraps, so its words are compared with the line breaks folded.
+    expect(page.replace(/\s+/g, " ")).toContain(
+      `the shared root \`AGENTS.md\` is ${LIVE_CAPABILITY_INPUTS.alwaysOn.sharedBytesWithCodex} bytes with codex selected`,
+    );
   });
 
   it("names each client's delivery of a description-scoped rule in its own column", () => {
@@ -1198,17 +1206,38 @@ describe("always-on cost section", () => {
     expect(() => renderCapabilityMatrixFrom(unmeasured)).toThrowError(/`cursor`/);
   });
 
-  it("refuses shared-bytes figures the wrong way round", () => {
-    const inverted = {
+  // TEST CHANGE, justified (sw18-codex-rules-leave-shared-charter, REQ-PROVE-005). This
+  // case fed EQUAL shared figures and expected a refusal, because codex's appendix used to
+  // grow the shared file and equal figures meant a stale reading. The appendix now lives in
+  // the codex-only AGENTS.override.md, so equal is the only valid state: the guard refuses
+  // any DIFFERENCE, in either direction, and a second case below refuses an override that
+  // is not larger than the file it repeats.
+  it("refuses shared-bytes figures that differ with and without codex", () => {
+    const { sharedBytesWithoutCodex } = LIVE_CAPABILITY_INPUTS.alwaysOn;
+    for (const sharedBytesWithCodex of [sharedBytesWithoutCodex + 1, sharedBytesWithoutCodex - 1]) {
+      const unequal = {
+        ...LIVE_CAPABILITY_INPUTS,
+        alwaysOn: { ...LIVE_CAPABILITY_INPUTS.alwaysOn, sharedBytesWithCodex },
+      };
+      const call = (): string => renderCapabilityMatrixFrom(unequal);
+      expect(call).toThrowError(EngineError);
+      expect(call).toThrowError(/same with and without it and one of these two is stale/);
+    }
+  });
+
+  it("refuses a codex override no larger than the shared file it repeats", () => {
+    const shrunk = {
       ...LIVE_CAPABILITY_INPUTS,
       alwaysOn: {
         ...LIVE_CAPABILITY_INPUTS.alwaysOn,
-        sharedBytesWithCodex: LIVE_CAPABILITY_INPUTS.alwaysOn.sharedBytesWithoutCodex,
+        codexOverrideBytes: LIVE_CAPABILITY_INPUTS.alwaysOn.sharedBytesWithoutCodex,
       },
     };
-    const call = (): string => renderCapabilityMatrixFrom(inverted);
+    const call = (): string => renderCapabilityMatrixFrom(shrunk);
     expect(call).toThrowError(EngineError);
-    expect(call).toThrowError(/wrong way round or one of them is stale/);
+    expect(call).toThrowError(/cannot be the smaller of the two/);
+    // Non-degenerate: the live figures render.
+    expect(() => renderCapabilityMatrixFrom(LIVE_CAPABILITY_INPUTS)).not.toThrow();
   });
 });
 

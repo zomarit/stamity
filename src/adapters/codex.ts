@@ -5,6 +5,8 @@
  * Current contract: https://learn.chatgpt.com/docs/hooks (2026-09-10).
  */
 
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE } from "../hooks/portableRunner.ts";
 import { buildContentIndex, typeIdKey, type CatalogItem } from "../content/catalog.ts";
 import { parseFrontmatter } from "../content/frontmatter.ts";
@@ -17,7 +19,6 @@ import {
 import { isFloorTag } from "../content/tags.ts";
 import { AGENTS_MD_FILE, verificationGatesFromManifest } from "../emit/agentsMd.ts";
 import {
-  CHARTER_ARTIFACT_ID,
   type AdapterDialectFacts,
   type CoreEmissionPlan,
   type EmissionContext,
@@ -38,6 +39,7 @@ import {
   CLAUDE_EVENT_NAMES,
 } from "../hooks/model.ts";
 import { emitCodexToml } from "../mcp/emit.ts";
+import { splitAtManagedBlock } from "../merge/managedBlocks.ts";
 import {
   grantableFootprint,
   resolveAgentGrant,
@@ -54,7 +56,6 @@ import {
 import { cliCallHint, pinnedCliCall } from "../shared/cliCall.ts";
 import { substituteCanonicalPlatformMarker, toCodexToolsFrontmatter } from "../tools/translator.ts";
 import type { AdapterOutput, EmissionOwner, RulePrecedence } from "../types/content.ts";
-import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX } from "../types/markers.ts";
 import { serializeTomlDocument, type TomlValue } from "./toml.ts";
@@ -96,6 +97,27 @@ export const CODEX_AGENTS_DIR = `${CODEX_DIR}/agents`;
  * below reads it rather than a second decision.
  */
 export const CODEX_COMMANDS_DIR: string | null = null;
+
+/**
+ * The Codex-only root instruction file: the shared root `AGENTS.md` as this run
+ * leaves it, then this client's rules appendix.
+ *
+ * Codex reads this file INSTEAD of `AGENTS.md` in the same directory, and no
+ * other supported client reads it at all. Both halves are measured rather than
+ * read off a page: in a fixture holding both files, codex-cli 0.155.1 quoted a
+ * marker placed only here, and a second run with a different marker in each
+ * file quoted only this one's; Claude Code 2.1.285, cursor-agent 2026.09.28 and
+ * Copilot CLI 1.0.89 each reported neither (live check of run
+ * 2026-09-30_optimization-sweep). So the appendix stops costing the co-selected
+ * clients anything, and the file has to repeat the whole shared charter — the
+ * operator's own text in it included — or Codex would lose it.
+ *
+ * Engine-owned and written whole, with no managed block of its own: an edit
+ * here is drift that the next sync regenerates behind a `.bak`, and an
+ * operator's pre-existing file of this name is an unmanaged collision, refused
+ * without `--force`. The text to change lives in `AGENTS.md`.
+ */
+export const CODEX_AGENTS_OVERRIDE_FILE = "AGENTS.override.md";
 
 /**
  * Byte ceiling Codex reads of a single `AGENTS.md` (32 KiB, recorded as a
@@ -278,6 +300,9 @@ const HOOK_INFRA_ARTIFACT_IDS: ReadonlySet<string> = new Set([
  */
 const RULES_APPENDIX_ARTIFACT_ID = "codex-rules-appendix";
 
+/** The root {@link CODEX_AGENTS_OVERRIDE_FILE}: the shared charter plus the root appendix. */
+const AGENTS_OVERRIDE_ARTIFACT_ID = "codex-agents-override";
+
 // ── Dialect facts ────────────────────────────────────────────────
 
 /**
@@ -303,7 +328,8 @@ const CODEX_FACTS: AdapterDialectFacts = {
   tool: TOOL,
   ruleShape:
     "no glob-scoped rule layer; conditional rules down-convert into nested AGENTS.md files " +
-    `(documented lossy — upstream gap: ${LOSSY_GAP})`,
+    `and a Codex-only root ${CODEX_AGENTS_OVERRIDE_FILE}, which this client reads instead of ` +
+    `the shared AGENTS.md (documented lossy — upstream gap: ${LOSSY_GAP})`,
   hooksConfigPath: CODEX_HOOKS_FILE,
   readsAgentsSkillsDir: true,
   agentsFormat: `TOML subagent definitions under ${CODEX_AGENTS_DIR}/`,
@@ -426,7 +452,7 @@ export const codexResiduePlanner: ResiduePlanner = {
 
     const downConverted = downConvertRules(
       renderedRules,
-      core.agentsMd.root.content,
+      await sharedCharterAsWritten(core, ctx),
       core.agentsMd.nestedFor(TOOL).map((target) => target.outputPath),
       ruleSkillIds(core.skills),
     );
@@ -435,17 +461,14 @@ export const codexResiduePlanner: ResiduePlanner = {
     }
     const warnings: string[] = [commandSurfaceWarning()];
     if (downConverted.rootReplacement !== null) {
-      rows.push({
-        ...emissionRow(AGENTS_MD_FILE, downConverted.rootReplacement, CHARTER_ARTIFACT_ID, "infra"),
-        // The appendix belongs in the file every client already reads; the
-        // composer substitutes the shared row's content and unions owners.
-        replacesSharedPath: true,
-      });
-      warnings.push(
-        sharedCharterWarning(
-          ctx.manifest.tools,
-          Buffer.byteLength(core.agentsMd.root.content, "utf8"),
-          Buffer.byteLength(downConverted.rootReplacement, "utf8"),
+      // A Codex-only row: the shared AGENTS.md stays the core charter, the same
+      // bytes with or without this client selected.
+      rows.push(
+        emissionRow(
+          CODEX_AGENTS_OVERRIDE_FILE,
+          downConverted.rootReplacement,
+          AGENTS_OVERRIDE_ARTIFACT_ID,
+          "infra",
         ),
       );
     }
@@ -480,38 +503,60 @@ function commandSurfaceWarning(): string {
 }
 
 /**
- * The disclosure for replacing the SHARED root `AGENTS.md`.
+ * The shared root `AGENTS.md` as this run leaves it, managed-block markers
+ * aside — the text {@link CODEX_AGENTS_OVERRIDE_FILE} repeats ahead of the
+ * appendix, because Codex reads that file instead of this one.
  *
- * `replacesSharedPath` is deliberate — the appendix belongs in the file every
- * client already reads — but its cost lands on the co-selected clients, not on
- * this one: cursor and copilot read that same root file always-on, and the
- * rules this pass inlines verbatim are rules those two already attach natively
- * by glob. Silent, the operator saw a root charter grow several-fold with no
- * line anywhere connecting it to the client they had just added.
+ * Which bytes that is depends on the import decision the manifest records for
+ * the root charter, read here the way the composer applies it (last one wins):
  *
- * Printed only when another client is actually selected, since a codex-only
- * repo has nobody to pay the cost.
+ * - **None, or `replace`** — the engine writes the charter whole, so the file
+ *   is the core render. Nothing on disk is read: this is every repository that
+ *   had no `AGENTS.md` of its own, and the override is then a pure function of
+ *   the corpus and the manifest.
+ * - **`supplement`** — the engine's block sits in the operator's file and every
+ *   byte outside it survives the write verbatim. The operator's text before and
+ *   after the block is read from disk and kept in place around this run's
+ *   charter; a file with no block yet is the first adoption, where the block
+ *   lands on top and the whole file is preserved below it.
+ * - **`skip`** — the engine writes nothing there, so the operator's file is the
+ *   shared text as it stands (empty when there is none).
+ *
+ * Read at plan time rather than after the charter's write, so `check` — which
+ * is a sync plan — regenerates the same override from the same bytes: an edit
+ * to the operator's text after the last sync shows as drift on the override,
+ * and the next sync carries it across. The engine's own block is never read
+ * back; the core render stands in for it, so an old appendix left in a block
+ * by an earlier version is not carried into the new file.
  */
-function sharedCharterWarning(
-  tools: readonly Tool[],
-  beforeBytes: number,
-  afterBytes: number,
-): string {
-  const others = tools.filter((tool) => tool !== TOOL);
-  if (others.length === 0) {
-    return (
-      `charter [${TOOL}]: the root ${AGENTS_MD_FILE} carries this client's inlined rules ` +
-      `appendix — ${beforeBytes} bytes of charter became ${afterBytes}. That is this client's ` +
-      `own always-on budget being spent; nothing else reads the file in this setup.`
-    );
+async function sharedCharterAsWritten(core: CoreEmissionPlan, ctx: EmissionContext): Promise<string> {
+  const charter = core.agentsMd.root.content;
+  const mode = (ctx.manifest.importChoice ?? []).findLast(
+    (decision) => decision.path === AGENTS_MD_FILE,
+  )?.mode;
+  if (mode !== "supplement" && mode !== "skip") return charter;
+
+  const onDisk = await readTextIfPresent(join(ctx.rootDir, AGENTS_MD_FILE));
+  if (mode === "skip") return onDisk ?? "";
+  if (onDisk === null) return charter;
+  const split = splitAtManagedBlock(onDisk, AGENTS_MD_FILE);
+  return joinedText(split === null ? [charter, onDisk] : [split.before, charter, split.after]);
+}
+
+/** A file's text, or `null` when it does not exist. Any other read failure propagates. */
+async function readTextIfPresent(path: string): Promise<string | null> {
+  try {
+    return await readFile(path, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException | null)?.code === "ENOENT") return null;
+    throw err;
   }
-  return (
-    `charter [${TOOL}]: this client has no glob-scoped rule layer, so its rules are inlined into ` +
-    `the SHARED root ${AGENTS_MD_FILE} — ${beforeBytes} bytes became ${afterBytes}. That file is ` +
-    `read always-on by ${others.join(", ")} too, and those clients already attach the same rules ` +
-    `natively, so they now carry the text twice. Deselecting ${TOOL} restores the shared charter ` +
-    `to its ${beforeBytes}-byte form.`
-  );
+}
+
+/** Non-empty parts, trimmed, one blank line apart, with a final newline. */
+function joinedText(parts: readonly string[]): string {
+  const kept = parts.map((part) => part.trim()).filter((part) => part !== "");
+  return kept.length === 0 ? "" : `${kept.join("\n\n")}\n`;
 }
 
 /**
@@ -529,7 +574,8 @@ function droppedRulesWarning(dropped: readonly string[]): string {
   return (
     `rules budget [${TOOL}]: ${dropped.length} rule(s) did not fit this client's ` +
     `${CODEX_AGENTS_MD_BUDGET_BYTES}-byte instruction budget and were dropped, lowest risk ` +
-    `first: ${dropped.join(", ")}. They are named again in the emitted ${AGENTS_MD_FILE}. ` +
+    `first: ${dropped.join(", ")}. They are named again in the emitted file that dropped them ` +
+    `(the root ${CODEX_AGENTS_OVERRIDE_FILE} or a nested ${AGENTS_MD_FILE}). ` +
     `Narrow the content selection to bring them back.`
   );
 }
@@ -659,8 +705,9 @@ async function selectedItems(
       // adapter. Absent means "every tool"; a list restricts the artifact to
       // the tools it names. Skipping the check did not merely emit a stray
       // `.codex/` file — this adapter also DOWN-CONVERTS agents and rules into
-      // the shared root `AGENTS.md`, so an artifact scoped away from codex
-      // leaked into the document every client reads.
+      // its instruction files (the shared root `AGENTS.md`, before the appendix
+      // moved to the Codex-only override), so an artifact scoped away from codex
+      // leaked into a document other clients read.
       (item.tools === undefined || item.tools.includes(TOOL)),
   );
   return {
@@ -1010,8 +1057,9 @@ export interface DownConvertedRules {
   /** Nested rules files, sorted by path. Each independently under budget. */
   nested: { path: string; content: string }[];
   /**
-   * Replacement content for the shared root `AGENTS.md` (core charter body plus
-   * the appendix), or null when no rule down-converts to the root.
+   * Content for the Codex-only root {@link CODEX_AGENTS_OVERRIDE_FILE} — the
+   * shared charter as written plus the appendix — which Codex reads in place of
+   * the root `AGENTS.md`. Null when no rule down-converts to the root.
    */
   rootReplacement: string | null;
   /** Ids dropped by budget shaping, sorted — every one of them named in-file too. */
@@ -1306,17 +1354,18 @@ function renderDroppedNotice(
   return [
     `${"#".repeat(level)} Omitted for the ${CODEX_AGENTS_MD_BUDGET_BYTES}-byte budget`,
     `Codex reads at most ${CODEX_AGENTS_MD_BUDGET_BYTES} bytes (32 KiB) of instruction text, and ` +
-      `this setup shapes each ${AGENTS_MD_FILE} to that ceiling on its own. These rules did not ` +
+      `this setup shapes each instruction file to that ceiling on its own. These rules did not ` +
       `fit THIS file and were dropped, lowest risk first — rules marked critical are kept ` +
       `longest, then floor-tagged rules, then by declared precedence, then by id: ` +
       `${dropped.map((id) => droppedRuleLabel(id, onDemandIds)).join(", ")}. Narrow the ` +
       `content selection to bring them back.`,
     `**Per-file shaping only — the aggregate is not enforced.** The ceiling applies to the ` +
-      `CONCATENATION a session loads: the root ${AGENTS_MD_FILE} plus every nested one down to ` +
-      `the working directory. Nothing here measures that total, so files that each fit can still ` +
-      `overflow together, and the excess is dropped by the client without a message. Check it ` +
-      `for the directory you work in: \`cat ${AGENTS_MD_FILE} path/to/dir/${AGENTS_MD_FILE} | ` +
-      `wc -c\`, against ${CODEX_AGENTS_MD_BUDGET_BYTES}.`,
+      `CONCATENATION a session loads: the root ${CODEX_AGENTS_OVERRIDE_FILE} (read instead of the ` +
+      `root ${AGENTS_MD_FILE}) plus every nested ${AGENTS_MD_FILE} down to the working directory. ` +
+      `Nothing here measures that total, so files that each fit can still overflow together, and ` +
+      `the excess is dropped by the client without a message. Check it for the directory you ` +
+      `work in: \`cat ${CODEX_AGENTS_OVERRIDE_FILE} path/to/dir/${AGENTS_MD_FILE} | wc -c\`, ` +
+      `against ${CODEX_AGENTS_MD_BUDGET_BYTES}.`,
   ].join("\n\n");
 }
 

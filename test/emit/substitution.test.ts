@@ -580,7 +580,10 @@ describe("the CLI pass runs at every emission call site (REQ-FLOW-002)", () => {
     // Every body-rendering lane, named by the call site that renders it:
     expect(paths.toSorted()).toEqual(
       [
-        "AGENTS.md", // src/emit/agentsMd.ts (codex's appendix re-uses this render)
+        "AGENTS.md", // src/emit/agentsMd.ts
+        // TEST CHANGE (sw18): codex's appendix left the shared AGENTS.md for this Codex-only
+        // file, which re-uses the charter render above as its head — one more rendered path.
+        "AGENTS.override.md", // src/adapters/codex.ts — the root override
         ".agents/skills/stamity-alpha/SKILL.md", // src/emit/skillsProjection.ts
         ".claude/agents/stamity-reviewer.md", // src/adapters/claude.ts — agent lane
         ".claude/commands/st-work.md", // src/adapters/claude.ts — command lane

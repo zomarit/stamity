@@ -746,6 +746,91 @@ so this index is all that ships — ask there for the outcome in plain words and
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
   client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
   description fits the job.
+",
+  "AGENTS.override.md": "
+# Charter
+
+The always-on context for agents working in this repository. Everything else loads on demand:
+rules attach by file path or by description, skills trigger by description, commands run on invocation.
+
+## Repo facts
+
+Detection-derived; regenerate after a stack change instead of hand-editing. The literal value \`unknown\`
+means detection found nothing — treat that item as unconfigured and report it; do not invent a value.
+
+- Linter: eslint
+- Test framework: vitest
+- CI provider: github-actions
+- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
+
+### Verification gates
+
+Run before declaring any change done.
+
+- Tests: \`pnpm run test\`
+- Lint: \`pnpm run lint\`
+- Typecheck: \`pnpm run typecheck\`
+- Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
+
+## Invariants
+Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27
+
+Floors, not defaults: they hold in every flow, at every intensity tier.
+
+1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
+   relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
+   close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
+   Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
+   the request is that same relaxation, and it counts in the closing line as much as in the body.
+   That report is the whole exit — no context block, no summary framed for closing beside it.
+2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
+   exactly one, with numbered options and a declared default-if-no-response. Make no second request
+   in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
+3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
+   are. One writer per artifact: parallel reads merge through a single writer.
+4. **No green, no done.** Done means the verification gates above exit 0.
+   Anything less ships with a \`Not done:\` list naming each open gap.
+5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
+   repeating a recorded failure is a process defect.
+6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
+   shared API shapes, schemas, and events break across file boundaries. Census
+   shared contracts before parallel edits touch them.
+7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
+   orchestrator editing product files inline is a protocol violation, and so is handing the operator
+   the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
+   words rather than by citing this invariant's number. One carve-out, and only this one: the
+   Tier-1 small-change lane applies its own edits inline and still delegates verification.
+
+## Touchpoints
+
+Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command
+surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
+so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
+
+- \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`; greenfield and brownfield auto-detected.
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
+- \`/st-work\` — execute planned work end to end; closes with the QA human checkpoint.
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked platform board.
+- \`/st-ask\` — read-only codebase Q&A; writes nothing.
+- \`/st-debug\` — reproduce, root-cause, and fix a defect.
+- \`/st-quick\` — Tier-1 small-change lane; gates still run.
+- \`/st-rework\` — apply structured feedback to agent-implemented work.
+- \`/st-pr-resolve\` — resolve pull-request review comments.
+
+## Conditional layer
+
+- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather than a count kept
+  here, because selection and installed packs both change what landed.
+- A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
+  client with no glob-rule layer, where it is inlined into the always-on file of the directory those globs anchor
+  to. A description-scoped rule declares no globs, so what it costs depends on the client: one that
+  supports description-pull loads it on relevance, and one that does not loads it every session alongside this file.
+- Neither shape replaces the charter. Content that must bind every turn on every client belongs here, not in a rule
+  that three clients out of four would have to load unconditionally to honour.
+- A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
+- Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
+  client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
+  description fits the job.
 
 ## Conditional rules (Codex down-conversion)
 
@@ -1414,10 +1499,11 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "0da0951ebf3d6351c757503eee1b09f299d1b0f5424cc78227de24bda262130e 71175 bytes",
+  ".stamity/manifest.json": "cea1472545183d8d9f704961c49ac480b8d76147709714818d4c4a4849922db7 71414 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "de316fa2ecd20351ecf1604d8b84a1a80b674b305c60804cb26c867aa11fc87d 25306 bytes",
+  "AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
+  "AGENTS.override.md": "de316fa2ecd20351ecf1604d8b84a1a80b674b305c60804cb26c867aa11fc87d 25306 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
@@ -1815,6 +1901,91 @@ env_vars = ["GITHUB_PAT"]
 }
 ",
   "AGENTS.md": "
+# Charter
+
+The always-on context for agents working in this repository. Everything else loads on demand:
+rules attach by file path or by description, skills trigger by description, commands run on invocation.
+
+## Repo facts
+
+Detection-derived; regenerate after a stack change instead of hand-editing. The literal value \`unknown\`
+means detection found nothing — treat that item as unconfigured and report it; do not invent a value.
+
+- Linter: eslint
+- Test framework: vitest
+- CI provider: github-actions
+- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
+
+### Verification gates
+
+Run before declaring any change done.
+
+- Tests: \`pnpm run test\`
+- Lint: \`pnpm run lint\`
+- Typecheck: \`pnpm run typecheck\`
+- Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
+
+## Invariants
+Invariants version 1.1.0 · ratified 2026-08-31 · last amended 2026-09-27
+
+Floors, not defaults: they hold in every flow, at every intensity tier.
+
+1. **Universal floor.** Security, correctness, accessibility basics, and baseline tests never
+   relax — no tier, deadline, or instruction lowers them, and a hand-off framed so the operator can
+   close without them is itself the relaxation; the honest exit is invariant 4's \`Not done:\` report.
+   Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
+   the request is that same relaxation, and it counts in the closing line as much as in the body.
+   That report is the whole exit — no context block, no summary framed for closing beside it.
+2. **Ambiguity (B1).** Two or more materially different readings of a request: ask one question,
+   exactly one, with numbered options and a declared default-if-no-response. Make no second request
+   in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
+3. **Fan-out (B2).** Token cost is not a reason to serialize independent work; only dependency edges
+   are. One writer per artifact: parallel reads merge through a single writer.
+4. **No green, no done.** Done means the verification gates above exit 0.
+   Anything less ships with a \`Not done:\` list naming each open gap.
+5. **Learnings first.** Read \`.stamity/learnings/\` before project-specific work;
+   repeating a recorded failure is a process defect.
+6. **Contract census** *(brownfield)*. File-disjoint is not contract-disjoint:
+   shared API shapes, schemas, and events break across file boundaries. Census
+   shared contracts before parallel edits touch them.
+7. **Touchpoints delegate.** Orchestrating flows dispatch implementation to sub-agents; an
+   orchestrator editing product files inline is a protocol violation, and so is handing the operator
+   the line, diff, or file body to paste. A refusal calls the act a protocol violation in those
+   words rather than by citing this invariant's number. One carve-out, and only this one: the
+   Tier-1 small-change lane applies its own edits inline and still delegates verification.
+
+## Touchpoints
+
+Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command
+surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
+so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
+
+- \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`; greenfield and brownfield auto-detected.
+- \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
+- \`/st-work\` — execute planned work end to end; closes with the QA human checkpoint.
+- \`/st-board\` — work a task board: chat, a referenced file, or a linked platform board.
+- \`/st-ask\` — read-only codebase Q&A; writes nothing.
+- \`/st-debug\` — reproduce, root-cause, and fix a defect.
+- \`/st-quick\` — Tier-1 small-change lane; gates still run.
+- \`/st-rework\` — apply structured feedback to agent-implemented work.
+- \`/st-pr-resolve\` — resolve pull-request review comments.
+
+## Conditional layer
+
+- Rules ship in two attach shapes, and the emitted rules directory is the roster — read it rather than a count kept
+  here, because selection and installed packs both change what landed.
+- A glob-scoped rule attaches when the agent reads a file matching its globs, except on a
+  client with no glob-rule layer, where it is inlined into the always-on file of the directory those globs anchor
+  to. A description-scoped rule declares no globs, so what it costs depends on the client: one that
+  supports description-pull loads it on relevance, and one that does not loads it every session alongside this file.
+- Neither shape replaces the charter. Content that must bind every turn on every client belongs here, not in a rule
+  that three clients out of four would have to load unconditionally to honour.
+- A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
+- Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
+  client reads its own location. Named invocation beats waiting for a trigger match — call a skill whenever its
+  description fits the job.
+",
+  "AGENTS.override.md": "
 # Charter
 
 The always-on context for agents working in this repository. Everything else loads on demand:
@@ -2424,8 +2595,9 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "ed97f7f36fc1bd0570231afd8851da73f966fa189cbffd675bbfac5d97195c0f 15677 bytes",
-  "AGENTS.md": "de316fa2ecd20351ecf1604d8b84a1a80b674b305c60804cb26c867aa11fc87d 25306 bytes",
+  ".stamity/manifest.json": "0c262e0831f2a3ed1638447df03ea837d8623173d69002285381383f1620b16a 15916 bytes",
+  "AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
+  "AGENTS.override.md": "de316fa2ecd20351ecf1604d8b84a1a80b674b305c60804cb26c867aa11fc87d 25306 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",

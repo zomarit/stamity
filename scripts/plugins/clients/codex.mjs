@@ -87,6 +87,12 @@ export function place(row) {
   if (path.startsWith('.codex/agents/')) return null
   if (path === '.codex/config.toml') return null
   if (path === 'AGENTS.md') return null
+  // The Codex-only root override: the shared charter as one repository writes it, plus this
+  // client's rules appendix. Codex reads it INSTEAD of `AGENTS.md`, so it has to hold that
+  // repository's charter text — a copy shipped in a plugin root installed into many repositories
+  // would describe none of them. Repository-owned like the charter it repeats; `plugin setup`
+  // writes it.
+  if (path === 'AGENTS.override.md') return null
   // `.stamity/generated/` is NOT part of the catch-all below. The two rows this container takes
   // from it — the policy document and this client's hook scripts — are matched by name above;
   // anything else under it is a generated document a hook or an agent is meant to READ, and
@@ -251,8 +257,9 @@ rather than treat the install as the whole story.
 - commands — ${COMMAND_REASON}
 - rules — ${RULE_REASON}
 - MCP servers — ${MCP_REASON}
-- the charter (\`AGENTS.md\`) and every \`.stamity/\` state file: they describe one repository, and
-  this root is installed into many.
+- the charter (\`AGENTS.md\`), its Codex-only copy with the rules appendix
+  (\`AGENTS.override.md\`, which Codex reads instead of \`AGENTS.md\`), and every \`.stamity/\` state
+  file: they describe one repository, and this root is installed into many.
 
 Source: ${identity.homepage} · ${identity.repository}
 `

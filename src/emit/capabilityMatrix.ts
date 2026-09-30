@@ -44,11 +44,16 @@
  */
 
 import { claudeResiduePlanner } from "../adapters/claude.ts";
-import { CODEX_SKILLS_LIST_BUDGET_CHARS, codexResiduePlanner } from "../adapters/codex.ts";
+import {
+  CODEX_AGENTS_OVERRIDE_FILE,
+  CODEX_SKILLS_LIST_BUDGET_CHARS,
+  codexResiduePlanner,
+} from "../adapters/codex.ts";
 import { copilotResiduePlanner } from "../adapters/copilot.ts";
 import { cursorResiduePlanner } from "../adapters/cursor.ts";
 import {
   ALWAYS_ON_BUDGET_LINES,
+  ALWAYS_ON_CODEX_OVERRIDE_BYTES,
   ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX,
   ALWAYS_ON_SHARED_BYTES_WITH_CODEX,
   CHARTER_MAX_LINES,
@@ -189,10 +194,20 @@ export interface AlwaysOnDisclosure {
   readonly ceilings: Readonly<Record<Tool, number>>;
   /** The charter TEMPLATE's own cap, which the composite is read against. */
   readonly charterCap: number;
-  /** Bytes of the shared root instruction file with codex among the selection. */
+  /**
+   * Bytes of the shared root instruction file with codex among the selection —
+   * equal to {@link sharedBytesWithoutCodex}, because codex's appendix lives in
+   * its own file. Kept as its own figure so the equality is checked, not assumed.
+   */
   readonly sharedBytesWithCodex: number;
   /** The same file without it — the charter alone. */
   readonly sharedBytesWithoutCodex: number;
+  /**
+   * Bytes of the Codex-only root `AGENTS.override.md`: the shared charter plus
+   * the codex rules appendix. Codex reads it instead of the shared file, so this
+   * is codex's own root cost and no other client's.
+   */
+  readonly codexOverrideBytes: number;
   /**
    * How many rules the codex budget shaper drops from the appendix on the full
    * selection. A count rather than the ids: the ids are only knowable by
@@ -350,6 +365,7 @@ const LIVE_ALWAYS_ON: AlwaysOnDisclosure = {
   charterCap: CHARTER_MAX_LINES,
   sharedBytesWithCodex: ALWAYS_ON_SHARED_BYTES_WITH_CODEX,
   sharedBytesWithoutCodex: ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX,
+  codexOverrideBytes: ALWAYS_ON_CODEX_OVERRIDE_BYTES,
   // 8 -> 0 on the `on-demand` flip: what reaches the appendix is now three
   // floor-class rules, which fit the 32 KiB ceiling with room to spare, so the
   // shaper has nothing to drop. The nine it used to drop or barely fit are
@@ -503,10 +519,10 @@ function requirePluginContainers(rows: readonly PluginContainerFact[]): void {
 }
 
 /**
- * Every client carries a ceiling, both byte figures are real, and the with-codex
- * figure is the larger of the two. A zero or a missing client would render a
- * cost claim the corpus never measured, which is the one thing this section is
- * for.
+ * Every client carries a ceiling, the shared figure is the same with and without
+ * codex, and the codex-only file is larger than the shared one it repeats. A
+ * zero or a missing client would render a cost claim the corpus never measured,
+ * which is the one thing this section is for.
  */
 function requireAlwaysOnFigures(alwaysOn: AlwaysOnDisclosure): void {
   for (const tool of TOOLS) {
@@ -518,12 +534,21 @@ function requireAlwaysOnFigures(alwaysOn: AlwaysOnDisclosure): void {
       );
     }
   }
-  if (alwaysOn.sharedBytesWithCodex <= alwaysOn.sharedBytesWithoutCodex) {
+  if (alwaysOn.sharedBytesWithCodex !== alwaysOn.sharedBytesWithoutCodex) {
     fail(
       `The always-on disclosure puts the shared instruction file at ` +
         `${alwaysOn.sharedBytesWithCodex} bytes with codex and ` +
-        `${alwaysOn.sharedBytesWithoutCodex} without it. The rules appendix only adds bytes, so ` +
-        `these two are the wrong way round or one of them is stale.`,
+        `${alwaysOn.sharedBytesWithoutCodex} without it. Codex's rules appendix lives in ` +
+        `${CODEX_AGENTS_OVERRIDE_FILE}, so the shared file is the same with and without it and ` +
+        `one of these two is stale.`,
+    );
+  }
+  if (alwaysOn.codexOverrideBytes <= alwaysOn.sharedBytesWithoutCodex) {
+    fail(
+      `The always-on disclosure puts codex's ${CODEX_AGENTS_OVERRIDE_FILE} at ` +
+        `${alwaysOn.codexOverrideBytes} bytes against a shared file of ` +
+        `${alwaysOn.sharedBytesWithoutCodex}. The override repeats the shared file and adds the ` +
+        `appendix, so it cannot be the smaller of the two; one of them is stale.`,
     );
   }
   // A zero here would render "0 of 8000 characters" — a budget claim from a
@@ -926,8 +951,18 @@ function deliveryCell(tool: Tool, mode: RuleDelivery): string {
   return mode === "on-demand" ? "skill, on demand" : "rule, every session";
 }
 
+/**
+ * A client's "what it loads" cell, plus — for the client whose rules fold into
+ * an instruction file — the size of that file, which is its alone.
+ */
+function alwaysOnLoadCell(tool: Tool, alwaysOn: AlwaysOnDisclosure): string {
+  const reason = alwaysOnReasonCell(tool, alwaysOn.ruleDelivery);
+  if (!RULE_APPENDIX_TOOLS.has(tool)) return reason;
+  return `${reason} — ${alwaysOn.codexOverrideBytes} bytes, in its own ${code(CODEX_AGENTS_OVERRIDE_FILE)}`;
+}
+
 function alwaysOnSection(alwaysOn: AlwaysOnDisclosure): string[] {
-  const ratio = (alwaysOn.sharedBytesWithCodex / alwaysOn.sharedBytesWithoutCodex).toFixed(1);
+  const ratio = (alwaysOn.codexOverrideBytes / alwaysOn.sharedBytesWithoutCodex).toFixed(1);
   return [
     "## Always-on cost by client",
     "",
@@ -949,7 +984,7 @@ function alwaysOnSection(alwaysOn: AlwaysOnDisclosure): string[] {
         code(tool),
         String(alwaysOn.ceilings[tool]),
         deliveryCell(tool, alwaysOn.ruleDelivery),
-        alwaysOnReasonCell(tool, alwaysOn.ruleDelivery),
+        alwaysOnLoadCell(tool, alwaysOn),
       ]),
     ),
     "",
@@ -973,12 +1008,15 @@ function alwaysOnSection(alwaysOn: AlwaysOnDisclosure): string[] {
     ),
     "",
     ...paragraph(
-      "**What co-selecting codex costs every other client.** Selecting `codex` does not add a " +
-        "codex-only file. It rewrites the root `AGENTS.md` that every other selected client " +
-        "already reads, so a claude+codex repository hands claude the codex rules appendix too: " +
-        `${alwaysOn.sharedBytesWithCodex} bytes of shared instruction text against ` +
-        `${alwaysOn.sharedBytesWithoutCodex} without it — ≈${ratio}x the always-on bytes every ` +
-        "co-selected client pays.",
+      "**What co-selecting codex costs every other client: nothing at the root.** Codex's rules " +
+        `appendix goes to a codex-only root ${code(CODEX_AGENTS_OVERRIDE_FILE)}, which codex reads ` +
+        "instead of `AGENTS.md` and no other client reads at all, so the shared root " +
+        `\`AGENTS.md\` is ${alwaysOn.sharedBytesWithCodex} bytes with codex selected and ` +
+        `${alwaysOn.sharedBytesWithoutCodex} without it. The override repeats that file — an ` +
+        "operator's own text in it included — and adds the appendix: " +
+        `${alwaysOn.codexOverrideBytes} bytes, ≈${ratio}x the shared file, paid by codex alone. ` +
+        "It is regenerated from `AGENTS.md` on every sync, so an edit to `AGENTS.md` reaches " +
+        "codex at the next sync, and `check` reports the difference as drift until then.",
     ),
     "",
     ...paragraph(

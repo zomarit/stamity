@@ -5,6 +5,7 @@ import { join, relative, resolve, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   ALWAYS_ON_BUDGET_LINES,
+  ALWAYS_ON_CODEX_OVERRIDE_BYTES,
   ALWAYS_ON_SHARED_BYTES_WITH_CODEX,
   ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX,
   CHARTER_MAX_LINES,
@@ -746,32 +747,51 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
   });
 
   it("pins the codex cross-client byte cost against the committed golden", () => {
-    // Selecting codex rewrites the SHARED root AGENTS.md, so every co-selected
-    // client inherits the rules appendix — a 6.0x file for a repo that added
-    // codex beside claude (29_935 / 5_004, measured 2026-09-12 and asserted below).
-    // Those constants are a TRIPWIRE as well as a published figure: this suite
-    // holds them to the golden, so when the golden is refreshed and the number
-    // moves, the constants move with it or this fails. The case below holds the
-    // other half — that the page a reader consults actually carries them.
+    // TEST CHANGE, justified (sw18-codex-rules-leave-shared-charter, REQ-PROVE-005).
+    // This case expected exactly TWO distinct root AGENTS.md figures in the
+    // golden, with codex's the larger, because selecting codex rewrote the SHARED
+    // file with its rules appendix. The appendix now lives in the Codex-only
+    // root AGENTS.override.md, so the shared file is one figure in every
+    // selection and both constants must equal it; the appendix's bytes are held
+    // to the override's own figure instead. The tripwire is the same one — the
+    // constants move with the golden or this fails — over the files the bytes
+    // now live in. The case below holds the page to all three figures.
     const snapshot = readFileSync(
       join(REPO_ROOT, "test", "emit", "__snapshots__", "crossClientGoldens.test.ts.snap"),
       "utf8",
     );
-    const recorded = new Set(
-      [...snapshot.matchAll(/^ {2}"AGENTS\.md": "[0-9a-f]{64} (\d+) bytes",$/gm)].map((match) =>
-        Number(match[1]),
-      ),
-    );
+    const figures = (file: string): number[] =>
+      [
+        ...new Set(
+          [
+            ...snapshot.matchAll(
+              new RegExp(String.raw`^ {2}"${file.replaceAll(".", String.raw`\.`)}": "[0-9a-f]{64} (\d+) bytes",$`, "gm"),
+            ),
+          ].map((match) => Number(match[1])),
+        ),
+      ].toSorted((a, b) => a - b);
 
     expect(
-      [...recorded].toSorted((a, b) => a - b),
-      "the shared root AGENTS.md byte figures in the cross-client golden no longer match the " +
-        "disclosure constants in src/content/charter.ts. Update the two constants there to the " +
-        "measured figures, then regenerate docs/capability-matrix.md — the page publishes both " +
-        "numbers under `## Always-on cost by client`, so the constants alone are no longer the " +
-        "whole of the edit (see the doc comment on ALWAYS_ON_SHARED_BYTES_WITH_CODEX).",
-    ).toEqual([ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX, ALWAYS_ON_SHARED_BYTES_WITH_CODEX]);
-    expect(ALWAYS_ON_SHARED_BYTES_WITH_CODEX).toBeGreaterThan(ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX);
+      figures("AGENTS.md"),
+      "the shared root AGENTS.md byte figure in the cross-client golden no longer matches the " +
+        "disclosure constants in src/content/charter.ts, or it differs between selections. Update " +
+        "the two constants there to the one measured figure, then regenerate " +
+        "docs/capability-matrix.md — the page publishes it under `## Always-on cost by client`, " +
+        "so the constants alone are not the whole of the edit (see the doc comment on " +
+        "ALWAYS_ON_SHARED_BYTES_WITH_CODEX).",
+    ).toEqual([ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX]);
+    expect(ALWAYS_ON_SHARED_BYTES_WITH_CODEX).toBe(ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX);
+
+    // Non-degenerate: the appendix still exists and still costs bytes — in the
+    // file only codex reads, once per codex-bearing selection (codex, all-four).
+    expect(
+      figures("AGENTS.override.md"),
+      "the codex AGENTS.override.md byte figure in the cross-client golden no longer matches " +
+        "ALWAYS_ON_CODEX_OVERRIDE_BYTES in src/content/charter.ts. Update it to the measured " +
+        "figure and regenerate docs/capability-matrix.md.",
+    ).toEqual([ALWAYS_ON_CODEX_OVERRIDE_BYTES]);
+    expect(snapshot.match(/^ {2}"AGENTS\.override\.md": "[0-9a-f]{64} \d+ bytes",$/gm)).toHaveLength(2);
+    expect(ALWAYS_ON_CODEX_OVERRIDE_BYTES).toBeGreaterThan(ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX);
   });
 
   it("the capability matrix publishes both shared-bytes figures, as the charter states", () => {
@@ -802,7 +822,13 @@ describe("invariant 4 — the charter fits its cap, and the composite always-on 
     // form; digit boundaries so a longer number carrying these digits is not a
     // false positive.
     const digits = page.replace(/(?<=\d)[,_](?=\d)/g, "");
-    for (const figure of [ALWAYS_ON_SHARED_BYTES_WITH_CODEX, ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX]) {
+    // CHANGED with sw18: the codex-only override's figure joins the two shared
+    // ones, which are now equal — the page publishes all three.
+    for (const figure of [
+      ALWAYS_ON_SHARED_BYTES_WITH_CODEX,
+      ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX,
+      ALWAYS_ON_CODEX_OVERRIDE_BYTES,
+    ]) {
       expect(
         new RegExp(String.raw`(?<!\d)${figure}(?!\d)`).test(digits),
         `docs/capability-matrix.md does not carry ${figure}. The page is the disclosure half ` +
