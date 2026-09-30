@@ -797,6 +797,46 @@ describe("the review gate's state is ignored on sync", () => {
     expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(first);
   });
 
+  /**
+   * [review/67] The append lands in a file the operator owns, so the report
+   * and the JSON payload name each line added; a sync with nothing to add
+   * names none.
+   */
+  it("names the .gitignore entries a sync adds, and none on a sync that adds nothing", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    await handle.seedFiles({ "repo/.gitignore": "dist/\n.env.mcp\n" });
+    const added = [
+      ".stamity/review-gate.json",
+      ".stamity/review-gate.json.lock",
+      ".stamity/review-gate.json.tmp-*",
+    ];
+
+    const firstPlan = await planSync(root, ENGINE_VERSION);
+    const first = await applySync(root, firstPlan, {
+      engineVersion: ENGINE_VERSION,
+      force: false,
+      dryRun: false,
+      now: T1,
+    });
+    expect(first.gitignoreAdded).toEqual(added);
+    expect(syncJsonPayload(firstPlan, first).gitignoreAdded).toEqual(added);
+    expect(renderSyncReport(firstPlan, first, plainPalette)).toContain(
+      `.gitignore: added ${added.join(", ")}`,
+    );
+
+    const secondPlan = await planSync(root, ENGINE_VERSION);
+    const second = await applySync(root, secondPlan, {
+      engineVersion: ENGINE_VERSION,
+      force: false,
+      dryRun: false,
+      now: T2,
+    });
+    expect(second.gitignoreAdded).toEqual([]);
+    expect(syncJsonPayload(secondPlan, second).gitignoreAdded).toEqual([]);
+    expect(renderSyncReport(secondPlan, second, plainPalette)).not.toContain(".gitignore");
+  });
+
   it("a dry run leaves .gitignore byte-unchanged, and creates none where there was none", async () => {
     const handle = tempDir();
     const root = await seedRepo(handle);

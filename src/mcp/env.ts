@@ -204,6 +204,8 @@ export const REQUIRED_GITIGNORE_ENTRIES: readonly string[] = [
  * `.gitignore` this lane edits is the one at the repository root.
  */
 const REVIEW_GATE_DOMINATORS: readonly string[] = [
+  STATE_DIR,
+  `**/${STATE_DIR}/`,
   `${STATE_DIR}/`,
   `/${STATE_DIR}/`,
   `${STATE_DIR}/*`,
@@ -622,14 +624,19 @@ export async function hardenEnvMcpMode(path: string): Promise<boolean> {
  * land outside the tree they were aimed at. No backup: this lane only ever
  * APPENDS — every existing byte survives verbatim, so a `.bak` beside it would
  * protect nothing and would itself be a new untracked file in the repo.
+ *
+ * Returns the entries this call appended, in {@link REQUIRED_GITIGNORE_ENTRIES}
+ * order — empty when every entry was already covered — so a caller that
+ * discloses the edit (sync's report) can name them. Callers that disclose it
+ * their own way ignore the value.
  */
-export async function ensureGitignoreEntry(rootDir: string): Promise<void> {
+export async function ensureGitignoreEntry(rootDir: string): Promise<string[]> {
   const path = join(rootDir, GITIGNORE_FILE);
   const content = (await readTextOrNull(path)) ?? "";
   const lines = content.split(/\r?\n/).map((line) => line.trim());
 
   const missing = REQUIRED_GITIGNORE_ENTRIES.filter((entry) => !isCovered(entry, lines));
-  if (missing.length === 0) return;
+  if (missing.length === 0) return [];
 
   await refuseRepublish(path, content, { refuseInjectionPatterns: true });
   const eol = detectEol(content);
@@ -637,6 +644,7 @@ export async function ensureGitignoreEntry(rootDir: string): Promise<void> {
   await atomicWriteFile(path, `${content}${separator}${missing.join(eol)}${eol}`, {
     boundaryDir: rootDir,
   });
+  return missing;
 }
 
 /**

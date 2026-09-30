@@ -505,6 +505,8 @@ describe("ensureGitignoreEntry", () => {
   });
 
   it.each([
+    ".stamity",
+    "**/.stamity/",
     ".stamity/",
     "/.stamity/",
     ".stamity/*",

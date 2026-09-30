@@ -1,6 +1,8 @@
+import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { EngineError, type ErrorCode } from "../../src/types/errors.ts";
+import { materializeEntries } from "../../src/worktree/materialize.ts";
 import {
   DEFAULT_WORKTREE_RULES,
   WORKTREE_FARM_DIR_NAME,
@@ -408,6 +410,8 @@ describe("worktree policy — the built-in defaults (REQ-WORKTREE-004)", () => {
 });
 
 describe("worktree policy — admissibility against git facts (REQ-WORKTREE-003)", () => {
+  const getAdmissionRoot = useTempDir("worktree-policy-admission");
+
   it("admits a rule naming an ignored path", () => {
     const policy = parseWorktreePolicy(
       policyText({ version: 1, entries: [{ path: ".env.mcp", strategy: "copy", secret: true }] }),
@@ -512,6 +516,43 @@ describe("worktree policy — admissibility against git facts (REQ-WORKTREE-003)
       POLICY_PATH,
     );
     expect(() => assertRulesAdmissible(policy, classifierFor({}))).not.toThrow();
+  });
+
+  /**
+   * [review/66] A `copy` row on an ignored parent is admitted by name, so the
+   * refusal alone would let its walk carry the state across. The walk is wired
+   * here exactly as `setup.ts` wires it (`isSkipped` = the policy's own `skip`
+   * answer), over real files, and none of the three review-gate names lands.
+   */
+  it("keeps the review-gate state out of a copy row's walk over its ignored parent", async () => {
+    const root = getAdmissionRoot();
+    await root.seedFiles({
+      "src/.stamity/review-gate.json": "{}",
+      "src/.stamity/review-gate.json.lock/owner": "123",
+      "src/.stamity/review-gate.json.tmp-deadbeef": "{}",
+      "src/.stamity/manifest.json": "{}",
+    });
+    const policy = parseWorktreePolicy(
+      policyText({ version: 1, entries: [{ path: ".stamity", strategy: "copy" }] }),
+      POLICY_PATH,
+    );
+    expect(() => assertRulesAdmissible(policy, classifierFor({ ".stamity": "ignored" }))).not.toThrow();
+
+    const results = await materializeEntries(
+      [{ relPath: ".stamity", strategy: "copy", secret: false }],
+      {
+        sourceRoot: root.path("src"),
+        worktreeRoot: root.path("wt"),
+        isSkipped: (relPath) => resolveStrategy(policy, relPath) === "skip",
+      },
+    );
+
+    expect(results.map((result) => [result.relPath, result.outcome])).toEqual([
+      [".stamity/manifest.json", "materialized"],
+    ]);
+    for (const carried of ["review-gate.json", "review-gate.json.lock", "review-gate.json.tmp-deadbeef"]) {
+      expect(existsSync(root.path("wt", ".stamity", carried)), carried).toBe(false);
+    }
   });
 
   /**

@@ -283,6 +283,9 @@ export function renderSyncReport(
     for (const result of report.wrote) {
       if (result.warning !== undefined) lines.push(palette.yellow(`  warning: ${result.warning}`));
     }
+    // An append to a file the operator owns is named, never silent (REQ-FLOW-016).
+    const gitignoreAdded = report.gitignoreAdded ?? [];
+    if (gitignoreAdded.length > 0) lines.push(`  .gitignore: added ${gitignoreAdded.join(", ")}`);
   }
 
   // Outside the branch, on purpose: a planning finding is true of the run
@@ -335,6 +338,8 @@ export function syncJsonPayload(plan: SyncPlan, report: SyncApplyReport): Record
     // collision under `--force` is written, so the two numbers differ exactly
     // where a machine caller cares. Copied, never aliased.
     refused: [...report.refused],
+    // The `.gitignore` lines this run appended; the human report names the same list.
+    gitignoreAdded: [...(report.gitignoreAdded ?? [])],
     wrote: report.wrote.map((result) => ({ ...result })),
     // The same rows the human report prints as its second warning source, so a
     // machine caller gating on a clean sync sees the rejected hook the operator

@@ -518,6 +518,12 @@ export interface SyncApplyReport {
    * whole plan away. The command reads it for its exit code.
    */
   refused: string[];
+  /**
+   * The `.gitignore` lines this run appended (REQ-FLOW-016), so an edit to a
+   * file the operator owns is named rather than silent. Empty when every entry
+   * was already covered, and on a dry run, which does not touch the file.
+   */
+  gitignoreAdded?: string[];
   /** Sweep report; `null` when the plan had no reclaim candidates. */
   reclaimed: ReclaimReport | null;
   manifestPath: string;
@@ -673,6 +679,7 @@ export async function applySync(
       // because it writes nothing, and the collision rows already carry the
       // "would refuse" marker the report reads.
       refused: [],
+      gitignoreAdded: [],
       reclaimed,
       manifestPath: statePath,
       dryRun: true,
@@ -704,7 +711,7 @@ export async function applySync(
   // it, because this lane can REFUSE — and a refusal that landed after the
   // emitted files would leave a half-applied run with no manifest to account
   // for it. `--force` does not reach it: none of its refusals is a collision.
-  await ensureGitignoreEntry(rootDir);
+  const gitignoreAdded = await ensureGitignoreEntry(rootDir);
 
   // Ownership as of BEFORE this run (the ledger apply is about to rebuild), so
   // the write lane judges each path the same way the plan above predicted it.
@@ -856,6 +863,7 @@ export async function applySync(
     unchanged: done("unchanged"),
     skipped: done("skipped"),
     refused: [...refused],
+    gitignoreAdded,
     reclaimed,
     manifestPath: statePath,
     dryRun: false,

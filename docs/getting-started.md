@@ -348,8 +348,10 @@ twice. A file you committed before the line existed stays tracked: setup never t
 
 Because everything else is committed, a second checkout of this repository arrives with the
 whole setup in place and only those files missing. Placing `.env.mcp` is exactly what
-`stamity worktree setup` does when it creates one. It refuses to carry the review gate's state
-across, so a review round counted in one worktree never gates another.
+`stamity worktree setup` does when it creates one. It refuses a row that names the review gate's
+state, and a `copy` row over a parent such as `.stamity` leaves those files behind, so a review
+round counted in one worktree does not gate another. A `symlink` row over that parent is the
+exception: the link shares the directory live, state included, and setup cannot split it.
 
 ## Keeping your setup current
 

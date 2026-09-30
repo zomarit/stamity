@@ -506,8 +506,15 @@ export function matchPolicyRule(policy: WorktreePolicy, relPath: string): Worktr
 /**
  * The strategy in force for `relPath`. A path no rule names resolves to `skip`:
  * the policy is a closed set, and nothing outside it is materialized.
+ *
+ * The review gate's runtime state ({@link isReviewGateStatePath}) resolves to
+ * `skip` whatever row owns it, so a `copy` row on an ignored parent such as
+ * `.stamity` walks past the counter, its lock directory and its `.tmp-` files
+ * (the setup walk's `isSkipped` reads this answer). A `symlink` parent cannot
+ * be carved this way: the link shares the directory live.
  */
 export function resolveStrategy(policy: WorktreePolicy, relPath: string): WorktreeStrategy {
+  if (isReviewGateStatePath(relPath)) return "skip";
   return matchPolicyRule(policy, relPath)?.strategy ?? "skip";
 }
 
