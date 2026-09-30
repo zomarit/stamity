@@ -167,11 +167,16 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
         `/st-<id>; the format's \`agent\` and \`tools\` keys stay unemitted (per-prompt ` +
         `restrictions this engine cannot answer), \`model\` follows an operator pin`,
     },
+    // Dated inline, and ACCESS_DATE is not re-stamped: the 2026-09-30 pass
+    // found this claim changed ("publishes no effort key" was refuted by the CLI
+    // release notes, while the cited custom-agents page still lists no effort
+    // key) and two rule rows below unverified, so the all-or-nothing rule holds.
     {
       name: "effort-axis",
       value:
-        "omitted — this surface publishes no effort key and no model-value parameter, the one " +
-        "documented omission of the reasoning-effort axis",
+        "not emitted — Copilot CLI custom agents accept `reasoning-effort` (1.0.66; applied on " +
+        "agent selection since 1.0.88; release notes, accessed 2026-09-30); this engine does not " +
+        "write it yet",
     },
     {
       name: "hook-enforcement",

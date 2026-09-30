@@ -888,7 +888,9 @@ describe("model pinning", () => {
 
     for (const row of plan.filter((entry) => entry.path.endsWith(".agent.md"))) {
       for (const line of frontmatterLines(row.content)) {
-        expect(line, row.path).not.toMatch(/^(effort|reasoning_effort|model_reasoning_effort):/);
+        // `reasoning-effort` is the key Copilot CLI custom agents accept (1.0.66, applied on
+        // agent selection since 1.0.88); this engine does not write it yet, so it is refused too.
+        expect(line, row.path).not.toMatch(/^(effort|reasoning_effort|reasoning-effort|model_reasoning_effort):/);
       }
     }
 
@@ -899,9 +901,15 @@ describe("model pinning", () => {
     for (const row of MODEL_LADDER) {
       expect(resolveEffortValue(row.modelClass, "copilot")).toBeUndefined();
     }
+    // TEST CHANGE, justified: the pin read "documented omission of the reasoning-effort axis".
+    // The 2026-09-30 currency pass (plan 013, sw14-client-currency-sweep) found that wording
+    // refuted: Copilot CLI custom agents accept `reasoning-effort` since 1.0.66, applied on agent
+    // selection since 1.0.88 (release notes, accessed 2026-09-30). The behaviour this test guards
+    // is unchanged — no effort key is emitted — so the cap row now says the key exists and this
+    // engine does not write it.
     expect(
       COPILOT_DIALECT_FACTS.caps.find((cap) => cap.name === "effort-axis")?.value,
-    ).toContain("documented omission of the reasoning-effort axis");
+    ).toContain("this engine does not write it yet");
   });
 });
 
@@ -1087,7 +1095,10 @@ describe("hooks", () => {
   it("declares the command surface and the effort omission as capability rows", () => {
     expect(capOf("command-surface")).toContain(".github/prompts/");
     expect(capOf("command-surface")).toContain("/st-<id>");
-    expect(capOf("effort-axis")).toContain("omitted");
+    // TEST CHANGE, justified: the pin read "omitted". The row now says "not emitted", because the
+    // client does accept a `reasoning-effort` key (1.0.66; applied on agent selection since
+    // 1.0.88) and the omission is this engine's, not the surface's (sw14-client-currency-sweep).
+    expect(capOf("effort-axis")).toContain("not emitted");
     expect(COPILOT_DIALECT_FACTS.agentsFormat).toContain("model:");
     expect(COPILOT_DIALECT_FACTS.ruleShape).toContain("patterns comma-separated");
 

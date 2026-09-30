@@ -2,7 +2,7 @@
 title: Customization
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.10.0 release cut (2026-09-28). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit bb565dfa. Re-attested 2026-09-30 for the claims the client currency pass moved (the Codex hook result on codex-cli 0.155.1, and the Claude Code line on `AGENTS.md`); the rest stands as verified at the 1.10.0 release cut, 2026-09-28, whose re-attestation commit this names. -->
 <!-- Re-open when: a save gate is added or removed, a content class joins or leaves the
      override tree, a merge verb joins the overlay layer, a class gains or loses overlay
      support, the fork layer's place in the precedence chain moves, or patch-or-replace
@@ -180,7 +180,8 @@ A skill override's directory is projected entire. That means `SKILL.md` plus eve
 beneath it, and the override's own files rather than those of the skill whose id it took.
 
 It lands in `.agents/skills/` whenever a selected client reads that tree. Cursor, Copilot and
-Codex each declare that they do. Claude Code reads neither that tree nor `AGENTS.md`, so it also
+Codex each declare that they do. Claude Code reads `AGENTS.md` only through the bridge import, and
+never reads that tree (its memory page, accessed 2026-09-30), so it also
 gets one client-native copy at `.claude/skills/`, re-targeted from those same rendered bytes. A
 Claude-only setup carries the native copy alone and no `.agents/skills/` tree at all.
 
@@ -348,10 +349,13 @@ additionalContext (the GitHub Copilot hooks reference, read 2026-09-17), so the 
 reaches the session. Copilot cloud reads hook configuration from the default branch.
 
 Codex hooks use command strings and native `/hooks` trust review, and that review is the last of
-three gates. First `features.hooks = true` in `.codex/config.toml`, which stamity emits; the
-vendor states no default. Then the project's trust level. Then the per-hook review. Even with all
-three in place, headless `codex exec` on codex-cli 0.154.0 loaded no project hook layer at all in
-the 2026-09-15 measurement. A hook there is enforcement in the interactive client only. An
+three gates. First `features.hooks = true` in `.codex/config.toml`, which stamity emits; codex-cli
+0.155.1 measured it on by default (2026-09-30). Then the project's trust level. Then the per-hook
+review. Headless `codex exec` on codex-cli 0.154.0 loaded no project hook layer at all in the
+2026-09-15 measurement, and on 0.155.1 it again ran none in 3 of 3 runs (2026-09-30). Both
+trusted the project only through a per-invocation `-c` override, which may leave the project
+`.codex/` layer unloaded, so the cause is not isolated, and a run trusted in the home config is
+unmeasured. A hook there is enforcement in the interactive client only. An
 emitted digest is not native approval, and `stamity check` detects generated-file drift.
 
 The Codex, Cursor and Copilot tool-call payloads do not identify the calling role, so the core

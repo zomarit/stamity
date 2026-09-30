@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.10.0 release cut (2026-09-28). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit bb565dfa. Re-attested 2026-09-30 for the claims the client currency pass moved (the Codex headless hook result on codex-cli 0.155.1); the rest stands as verified at the 1.10.0 release cut, 2026-09-28, whose re-attestation commit this names. -->
 <!-- Re-open when: a `file::symbol` address below stops resolving, a control in the table loses its
      last caller under `src/`, a new install route or execution surface ships, a control named under
      "Publishing this package" changes in `.github/workflows/release.yml`, or the crosswalk in
@@ -230,10 +230,12 @@ where it depends on it.
   `features.hooks = true` in `.codex/config.toml`, which this engine writes explicitly, so the
   client's default does not decide it. The second is the project's trust level. The third is the
   per-hook review through the interactive `/hooks` command, or `--dangerously-bypass-hook-trust`
-  for automation that cannot take that step. With all three in place, headless `codex exec` on codex-cli 0.154.0 loaded no
-  project hook layer at all in the 2026-09-15 measurement. So a hook on that client is enforcement
-  in the interactive session and nothing in the headless lane (`src/adapters/codex.ts`, the
-  `hook enforcement` fact).
+  for automation that cannot take that step. Headless `codex exec` on codex-cli 0.154.0 loaded no
+  project hook layer at all in the 2026-09-15 measurement, and on 0.155.1 it again ran none in 3 of
+  3 runs (2026-09-30). Both trusted the project only through a per-invocation override, so the
+  cause is not isolated, and a run trusted in the home config is unmeasured. So a hook on that
+  client is enforcement in the interactive session and nothing measured in the headless lane
+  (`src/adapters/codex.ts`, the `hook enforcement` fact).
   An MCP server definition likewise becomes a launcher your editor spawns at start-up. Read all
   five, and read the `runs on this machine` block `stamity add` prints before accepting a pack.
 - **Who a signature names.** A verified bundle proves that an identity signed exactly these bytes. It

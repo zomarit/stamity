@@ -3,10 +3,13 @@
  *
  * The core already emitted everything portable: the `AGENTS.md` charter, the
  * vendor-neutral `.agents/skills/` projection, the hook scripts plus the
- * policy document, and the MCP substrate. Claude Code reads neither
- * `AGENTS.md` nor `.agents/skills/`, so this adapter's residue is the bridge,
- * the dialects, and a NATIVE copy of rows the core already rendered — never a
- * second render:
+ * policy document, and the MCP substrate. Claude Code reads `AGENTS.md` only
+ * through the bridge import, and never reads `.agents/skills/` (2.1.277+ reads
+ * `AGENTS.md` directly only where no `CLAUDE.md` exists, and this adapter
+ * emits one; "anything under a `.agents/` directory" is on the not-read list —
+ * code.claude.com/docs/en/memory, accessed 2026-09-30), so this adapter's
+ * residue is the bridge, the dialects, and a NATIVE copy of rows the core
+ * already rendered — never a second render:
  *
  * 1. **`CLAUDE.md` → one managed block bridging into the charter.** An
  *    `@AGENTS.md` import (code.claude.com/docs/en/memory — imports resolve
@@ -361,8 +364,16 @@ function guardFailClosedTail(cli: CliCallContext): string {
  * (code.claude.com/docs/en/memory § "Organize rules with `.claude/rules/`").
  * The whole citation set is stamped with the same date because they were
  * re-verified together.
+ *
+ * Re-stamped 2026-09-30 (from 2026-09-10) by a pass that re-read all five pages
+ * and verified every claim this date covers: the rule load mode and `paths`
+ * shape, the not-read `.agents/` tree, the agent frontmatter keys, the ~200-line
+ * target, exit 2 blocking, native skills and commands, the two stop events,
+ * `ConfigChange`, and the merged `permissions.allow` lists. The one stale line
+ * it found — this file's header, which said the client reads no `AGENTS.md` —
+ * is corrected above.
  */
-const ACCESS_DATE = "2026-09-10";
+const ACCESS_DATE = "2026-09-30";
 
 // ── Permissions chain ────────────────────────────────────────────
 

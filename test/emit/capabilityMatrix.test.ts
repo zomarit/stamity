@@ -462,6 +462,19 @@ describe("currency block — the named revisit triggers", () => {
     expect(triggerFor("Claude Code AGENTS.md support change").watch).toBe("claude");
   });
 
+  // The condition fired: Claude Code 2.1.277+ reads `AGENTS.md` directly, but only where no
+  // `CLAUDE.md` exists (code.claude.com/docs/en/memory, accessed 2026-09-30). This engine emits a
+  // `CLAUDE.md`, so the bridge import stays, and the status has to say both halves.
+  it("records the Claude AGENTS.md trigger as fired, and why the bridge stays", () => {
+    const status = triggerFor("Claude Code AGENTS.md support change").status;
+    expect(status).toMatch(/^Fired/);
+    expect(status).not.toMatch(/^Unchanged/);
+    expect(status).toContain("2.1.277");
+    expect(status).toContain("only where no `CLAUDE.md` exists");
+    expect(status).toContain("`@AGENTS.md` bridge import");
+    expect(status).toContain("entry file");
+  });
+
   // TEST CHANGE: emitted CLI/cloud hooks and VS Code's Preview editor surface
   // are distinct contracts; the old future-GA assertion conflated them.
   it("distinguishes the emitted CLI/cloud deny gate from the editor revisit trigger", () => {
@@ -549,6 +562,57 @@ describe("the trust claim states what the byte-compare proves", () => {
     for (const path of cited) {
       expect(existsSync(join(REPO_ROOT, path)), `the page cites missing ${path}`).toBe(true);
     }
+  });
+});
+
+/**
+ * The 2026-09-30 currency pass (plan 013, `sw14-client-currency-sweep`). A client's citation date
+ * moves only when every claim it covers re-verified on that date (the all-or-nothing rule in
+ * `src/adapters/copilot.ts`), so the pass moved Claude's and held the other three: each of them
+ * had a claim that changed or could not be verified, and those claims carry their own inline
+ * date instead.
+ */
+describe("the 2026-09-30 client currency pass", () => {
+  const datesOf = (tool: Tool): string[] =>
+    factsFor(tool).citations.map((citation) => citation.accessDate);
+  const capOf = (tool: Tool, name: string): string =>
+    factsFor(tool).caps.find((row) => row.name === name)?.value ?? "";
+
+  it("re-stamps Claude's citations, and leaves Copilot's, Codex's and Cursor's where they were", () => {
+    expect(datesOf("claude").length).toBeGreaterThan(0);
+    expect(new Set(datesOf("claude"))).toEqual(new Set(["2026-09-30"]));
+    expect(datesOf("copilot")).toEqual(["2026-09-10", "2026-09-10", "2026-09-10", "2026-09-10", "2026-09-17"]);
+    expect(datesOf("codex")).toEqual(["2026-09-10", "2026-09-17", "2026-09-15", "2026-09-10"]);
+    expect(datesOf("cursor")).toEqual(["2026-09-10", "2026-09-10", "2026-09-17", "2026-09-10", "2026-09-10"]);
+  });
+
+  it("states that Copilot agents accept `reasoning-effort` and that this engine does not write it", () => {
+    const value = capOf("copilot", "effort-axis");
+    expect(value).toMatch(/^not emitted/);
+    expect(value).toContain("`reasoning-effort`");
+    expect(value).toContain("1.0.66");
+    expect(value).toContain("1.0.88");
+    expect(value).toContain("this engine does not write it yet");
+    expect(value).not.toContain("publishes no effort key");
+  });
+
+  it("calls Cursor's no-spaces glob list this engine's choice, not the vendor's rule", () => {
+    const shape = factsFor("cursor").ruleShape;
+    expect(shape).toContain("comma-separated");
+    expect(shape).toContain("this engine's choice");
+    expect(shape).not.toContain("comma-separated list with no spaces;");
+  });
+
+  it("states what codex-cli 0.155.1 measured about hooks, what stays unmeasured, and keeps 0.154.0 as history", () => {
+    const value = capOf("codex", "hook enforcement");
+    expect(value).toContain("0.154.0");
+    expect(value).toContain("0.155.1");
+    expect(value).toContain("on by default");
+    expect(value).toContain("did not turn it off");
+    expect(value).toContain("cause is not isolated");
+    expect(value).toContain("unmeasured");
+    // The claim the 0.155.1 run refuted: that the project file's key is what is read.
+    expect(value).not.toMatch(/measurably read|measured .* to flip the feature/);
   });
 });
 

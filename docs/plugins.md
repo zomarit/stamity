@@ -2,10 +2,10 @@
 title: Plugins
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.10.0 release cut (2026-09-28). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit bb565dfa. Re-attested 2026-09-30 for the claims the client currency pass moved (the Codex hooks line on codex-cli 0.155.1, and the Copilot plugin auto-update paragraph); the rest stands as verified at the 1.10.0 release cut, 2026-09-28, whose re-attestation commit this names. -->
 <!-- Re-open when: the capability-file schema changes shape, the locator's exit codes or its
      candidate order move, or a vendor page behind a command block is re-read on a later access
-     date than the newest this page carries, 2026-09-24. `test/docsPages.test.ts` holds this
+     date than the newest this page carries, 2026-09-30. `test/docsPages.test.ts` holds this
      page to the hand-page contract; `docs/capability-matrix.md` carries the dated source URL
      behind each client's container facts, and `docs/cli-reference.md` is what the `stamity
      plugin` blocks must not contradict. -->
@@ -62,7 +62,8 @@ The reasons, one line each, are the ones each container declares in its own capa
   plugin's own hooks do not (the vendor's hooks reference, read 2026-09-22).
 - **Codex, hooks** — carried means shipped and discoverable, not enforced by shipping alone: a
   plugin's hooks are skipped until the operator trusts them, and a headless run on codex-cli
-  0.154.0 ran no project hook at all.
+  0.154.0 ran no project hook at all, nor did 3 of 3 on 0.155.1 (2026-09-30; the cause not
+  isolated, since both trusted the project only through a per-invocation override).
 - **Every client, mcp** — MCP server selection and its credential references are one repository's
   decision, never a plugin's.
 
@@ -427,11 +428,18 @@ vendor-stated, not measured here. Rolling back is uninstall, re-add at the previ
 vendor's reference; the walk did not execute them). For a
 marketplace on a local path there is nothing to update or roll back through the CLI: the plugin
 loads live, so both are a replacement of the tree the marketplace points at *(measured 2026-09-20
-on 1.0.85)*. A third-party marketplace like this one is not auto-updated at all. *From the
-vendor's CLI plugin reference, accessed 2026-09-21.* `COPILOT_AUTO_UPDATE=false`, or
-`autoUpdate: false` in the configuration, stops the CLI downloading newer versions of ITSELF — it
-is off by default in CI — and the CLI's own help names no effect on plugins. *From `copilot help
-environment` and `copilot help config` on Copilot CLI 1.0.88, read 2026-09-27.*
+on 1.0.85)*. Copilot CLI 1.0.79 added `autoUpdate` on an `extraKnownMarketplaces` entry;
+stamity's marketplace entry does not set it, and a repository-level `autoUpdate` is ignored, so
+opting in is a user-settings step. First-party plugins, those from the built-in
+`copilot-plugins` and `awesome-copilot` marketplaces, "automatically update at the start of each
+session in a trusted working directory"; this marketplace is not one of them. *From the 1.0.79
+release notes and the vendor's CLI plugin reference, accessed 2026-09-30.*
+`COPILOT_AUTO_UPDATE=false`, or `autoUpdate: false` in the configuration, stops the CLI
+downloading newer versions of ITSELF — it is off by default in CI — and the CLI's own help names
+no effect on plugins. *From `copilot help environment` and `copilot help config` on Copilot CLI
+1.0.88, read 2026-09-27.* The plugin reference, though, ties the same two switches to the
+first-party plugin update: `autoUpdate` set to `false` or `COPILOT_AUTO_UPDATE=false` turns it
+off *(accessed 2026-09-30, from a fetched summary of the page rather than its verbatim text)*.
 
 **Cursor: no vendor-documented pin, update or rollback command on 2026-09-21. Codex: a pin is
 the marketplace's `--ref`, and there is no rollback command.** For

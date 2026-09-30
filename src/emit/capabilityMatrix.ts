@@ -311,8 +311,9 @@ export const REVISIT_TRIGGERS: readonly RevisitTrigger[] = [
     action: "drop the bridge",
     watch: "claude",
     status:
-      "Unchanged — `claude` is the one client still declaring an entry file, so the bridge " +
-      "block stays emitted.",
+      "Fired — Claude Code 2.1.277+ reads `AGENTS.md` only where no `CLAUDE.md` exists; " +
+      "stamity emits a `CLAUDE.md`, so the `@AGENTS.md` bridge import is the vendor's " +
+      "documented shape for that case and stays emitted for the one entry file.",
   },
   {
     when: "Agent Plugins scope expansion",

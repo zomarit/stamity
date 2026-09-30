@@ -245,8 +245,16 @@ const EVIDENCE_PAGES: readonly string[] = [CLIENT_CONTRACTS];
  * page asks a repo-local hook to resolve from the git root, and the published Agent Plugins schema
  * still agrees field for field with the vendored copy. The page also lost the second, stale
  * currency claim it carried under this header.
+ *
+ * TEST CHANGE, justified: MOVED 2026-09-30, from 2026-09-22, by the client currency pass (plan 013,
+ * sw14-client-currency-sweep). The Codex learning this page's hook paragraph rests on was re-run on
+ * codex-cli 0.155.1 that day and failed as stated, so the paragraph now carries that result (the
+ * default measured on, the project-file key not shown to be read, `codex exec` running none with
+ * the cause not isolated) beside the 0.154.0 history the literals below still pin. A page carrying
+ * a 2026-09-30 claim can honestly carry only that date, which the 2026-09-22 pin refused as later
+ * than the pass it ships in. The header says the re-attestation covers that paragraph alone.
  */
-const EVIDENCE_REATTESTATION_DATE = "2026-09-22";
+const EVIDENCE_REATTESTATION_DATE = "2026-09-30";
 
 /**
  * The Codex hook-loading facts the contract page must carry, each a literal a reader can check
@@ -551,6 +559,15 @@ const RELEASE_CUT_DATE = "2026-09-28";
  * learnings commit was built on (b28d6a6b, since a commit cannot name its own sha) plus
  * `Re-attested 2026-09-30`. A page re-read today can honestly carry only today's date, which the
  * 2026-09-28 pin refused as later than the pass it ships in. Every other page keeps its cut date.
+ *
+ * NOT MOVED, 2026-09-30, by the client currency pass (plan 013, sw14-client-currency-sweep), which
+ * ran on the constant's own date. It moved dated claims on four more hand pages —
+ * `docs/customization.md`, `docs/getting-started.md`, `SECURITY.md` and `docs/plugins.md` — so
+ * each left the cut form for the commit form naming the cut's re-attestation commit (bb565dfa) plus
+ * `Re-attested 2026-09-30` for the claims it moved, the same shape the 2026-09-22 Copilot pass
+ * gave `docs/plugins.md`. The same pass moved `docs/troubleshooting.md`'s header from the base
+ * commit to the integrated learnings commit cb215fb3, whose own `check` prints the 14 learnings
+ * the sample transcript shows (the 16-learning tree at b28d6a6b did not).
  */
 const REATTESTATION_DATE = "2026-09-30";
 
@@ -2313,8 +2330,11 @@ describe("the guides", () => {
 
   it("tells a Codex reader when to print the resume card by hand", () => {
     // The by-hand `stamity ledger status` advice named Cursor and Copilot only, while Codex
-    // prints the card only with its hooks enabled and trusted, and never under `codex exec`
-    // (learning codex-hooks-need-the-features-flag-and-exec-runs-none). All three loading
+    // prints the card only with its hooks enabled and trusted, and no measured `codex exec` run
+    // has ever run a project hook: none on codex-cli 0.154.0 (2026-09-15) and none in 3 of 3
+    // runs on 0.155.1 (2026-09-30), the cause not isolated, since the project was trusted only
+    // through a per-invocation override (learning codex-hooks-default-on-and-codex-exec-ran-none,
+    // which replaced codex-hooks-need-the-features-flag-and-exec-runs-none). All three loading
     // steps are named, since a reply naming only the flag is the half-answer that learning
     // records.
     const text = read(GETTING_STARTED).replace(/\s+/g, " ");
@@ -2322,6 +2342,46 @@ describe("the guides", () => {
     expect(text).toContain("`[features] hooks = true`");
     expect(text).toContain("the project trusted, and each hook trusted through `/hooks`");
     expect(text).toContain("`codex exec` runs no project hook at all");
+  });
+
+  it("dates every Codex hook claim to what codex-cli 0.155.1 measured, and keeps its open question", () => {
+    // The learning these sentences rest on was re-measured on codex-cli 0.155.1 on 2026-09-30 and
+    // failed as stated: the hooks feature is on by default, a project-file `hooks = false` did not
+    // turn it off under the per-invocation trust override, and `codex exec` ran no project hook in
+    // 3 of 3 runs with the cause not isolated. Each site keeps its 0.154.0 history and adds that
+    // result, and none may say again that the project file's key was measured to be read.
+    const sites = [
+      TROUBLESHOOTING,
+      CUSTOMIZATION,
+      SECURITY,
+      CLIENT_CONTRACTS,
+      GETTING_STARTED,
+      PLUGINS,
+      CAPABILITY_MATRIX,
+      "scripts/qa/hook-runs.mjs",
+      "scripts/plugins/clients/codex.mjs",
+    ];
+    for (const site of sites) {
+      const text = read(site).replace(/\s+/g, " ");
+      expect(text, `${site} does not name the 0.155.1 measurement`).toContain("0.155.1");
+      expect(text, `${site} does not keep the open question`).toContain("not isolated");
+      expect(text, `${site} still says the key was measured to be read`).not.toMatch(
+        /measurably read|measured on 2026-09-15 to flip the feature/,
+      );
+    }
+    // No page tells a reader the vendor states no default, which 0.155.1 measured as on.
+    for (const site of [TROUBLESHOOTING, CUSTOMIZATION]) {
+      expect(read(site).replace(/\s+/g, " "), site).not.toContain("the vendor states no default");
+    }
+  });
+
+  it("says Claude Code reads AGENTS.md only through the bridge import, and never .agents/skills/", () => {
+    // Claude Code 2.1.277+ reads `AGENTS.md` where no `CLAUDE.md` exists, and "anything under a
+    // `.agents/` directory" is on its not-read list (code.claude.com/docs/en/memory, accessed
+    // 2026-09-30). "Reads neither" was stale.
+    const text = read(CUSTOMIZATION).replace(/\s+/g, " ");
+    expect(text).not.toContain("Claude Code reads neither that tree nor `AGENTS.md`");
+    expect(text).toContain("reads `AGENTS.md` only through the bridge import");
   });
 
   it("names the managed CLAUDE.md block wherever a page enumerates what init writes", () => {

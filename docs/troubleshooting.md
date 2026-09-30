@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit b28d6a6b. Re-attested 2026-09-30 against the learnings commit built on that base (four retired, two captured), which moves the sample `check` transcript's learnings count from 16 to 14. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit cb215fb3. Re-attested 2026-09-30 against that commit, the integrated learnings commit (four retired, two captured), whose own `check` prints the 14 learnings the sample transcript shows, down from 16; the client currency pass of the same day moved the Codex hook section to the codex-cli 0.155.1 measurement. -->
 <!-- Re-open when: a `check` probe is added or removed, an error code starts or stops being
      thrown, or a remedy below stops working. `test/docsPages.test.ts` holds this page to the
      hand-page contract and reads the probe rows out of `src/cli/commands/check.ts`;
@@ -190,16 +190,21 @@ enforcement limits.
 
 Three steps stand between the emitted `.codex/hooks.json` and a hook the client runs.
 
-1. `features.hooks = true`. The vendor states no default for that key, and every byte in
-   `hooks.json` is inert without it. stamity writes it into `.codex/config.toml` for you, and
-   `sync` restores it.
+1. `features.hooks = true`. Every byte in `hooks.json` is inert while it is off. On codex-cli
+   0.155.1 it measured on by default (2026-09-30), and the vendor's hooks page says the same.
+   stamity writes it into `.codex/config.toml` for you anyway, and `sync` restores it.
 2. `projects.<path>.trust_level = "trusted"`, in your own Codex home config.
 3. A per-hook review through the interactive `/hooks` command. Automation that cannot take that
    step uses `--dangerously-bypass-hook-trust` instead.
 
-With all three in place, headless `codex exec` on codex-cli 0.154.0 still loaded no project hook
-layer at all, measured on 2026-09-15. Treat a Codex hook as enforcement in the interactive
-client, and as nothing in the headless one.
+Headless `codex exec` has never run a project hook in a measured run here. On codex-cli 0.154.0
+it loaded no project hook layer at all, measured on 2026-09-15. On codex-cli 0.155.1
+(2026-09-30) it again ran none in 3 of 3 runs. Both measurements trusted the project through a
+per-invocation `-c` override, which may leave the project `.codex/` layer unloaded, and on
+0.155.1 a project-file `hooks = false` did not turn the feature off under it. So the cause is
+not isolated: `exec` itself, or a layer that never loaded. A run with the project trusted in
+your home `~/.codex/config.toml` is unmeasured. Treat a Codex hook as enforcement in the
+interactive client, and as nothing measured in the headless one.
 
 ### Claude Code blocks every tool call with "the pre-tool-use guard could not run"
 

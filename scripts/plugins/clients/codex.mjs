@@ -63,8 +63,10 @@ const HOOKS_REASON =
   'the document travels and this client discovers it at the default hooks/hooks.json, but a ' +
   "plugin's hooks are skipped until the operator trusts them (developers.openai.com/plugins/" +
   'build/plugins and learn.chatgpt.com/docs/hooks, 2026-09-20), and headless codex exec on ' +
-  'codex-cli 0.154.0 ran no project hook at all (measured 2026-09-15) — carried means shipped ' +
-  'and discoverable here, never enforced'
+  'codex-cli 0.154.0 ran no project hook at all (measured 2026-09-15), nor in 3 of 3 runs on ' +
+  '0.155.1 (measured 2026-09-30, cause not isolated: the project was trusted only through a ' +
+  'per-invocation override, and a home-config-trusted run is unmeasured) — carried means ' +
+  'shipped and discoverable here, never enforced'
 
 function hookFile(path) {
   return `${HOOKS_DIR}/${path.slice(path.lastIndexOf('/') + 1)}`

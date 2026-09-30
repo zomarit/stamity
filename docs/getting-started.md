@@ -2,7 +2,7 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.10.0 release cut (2026-09-28). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit bb565dfa. Re-attested 2026-09-30 for the claims the client currency pass moved (the Codex headless hook result on codex-cli 0.155.1); the rest stands as verified at the 1.10.0 release cut, 2026-09-28, whose re-attestation commit this names. -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run line changes, a verb joins
      or leaves the CLI, a probe joins or leaves `check`, a path joins or leaves `.stamity/`, or the
      APM route's client floor or per-target output moves. `test/docsPages.test.ts` holds this page
@@ -245,7 +245,9 @@ Copilot, whose session-start hooks never print the card then: Cursor sends the h
 Copilot's `source` is never `compact`. Run it on Codex too when its hooks are not running: Codex
 loads the project's hooks only with `[features] hooks = true` in `.codex/config.toml` (init writes
 it), the project trusted, and each hook trusted through `/hooks` — and `codex exec` runs no
-project hook at all, so a headless run never prints the card.
+project hook at all in any measured run (codex-cli 0.154.0 on 2026-09-15, and 3 of 3 runs on
+0.155.1 on 2026-09-30, the cause not isolated because both trusted the project only through a
+per-invocation override), so a headless run never prints the card.
 
 Those gates exist because a learning is text that re-enters an agent's context on a later
 session. Anything with write access to the repository can author a file that is read back into a

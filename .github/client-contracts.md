@@ -1,6 +1,6 @@
 # Client contract evidence
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6f8f103. Re-attested 2026-09-22 against the vendor pages each bullet cites and four Copilot CLI measurements of that date. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 6f8f103. Re-attested 2026-09-30 for the Codex hook paragraph alone, against the codex-cli 0.155.1 re-run of that date and the Codex hooks page read the same day; every other bullet stands as re-attested 2026-09-22 against the vendor pages it cites and four Copilot CLI measurements of that date. -->
 <!-- Re-open when: a cited vendor page changes what a client guarantees, an adapter emits a
      different configuration key, or a measurement supersedes a dated one below.
      `test/docsPages.test.ts` holds this page to the evidence-page contract and to the Codex
@@ -47,10 +47,11 @@ they do not claim authenticated client sessions, native trust approval, or human
 - **Codex:** `.agents/skills` supports named `$st-*` invocation. Optional `agents/openai.yaml`
   companions add display names and default prompts. Hooks use command strings, and three
   loading steps all have to hold before the client runs one. First, `features.hooks` must be
-  on: the adapter writes `[features] hooks = true` into `.codex/config.toml`, and that key was
-  measured on 2026-09-15 to flip the feature on codex-cli 0.154.0. Second, the project must
-  carry `projects.<path>.trust_level = "trusted"`. Third, each hook needs per-hook `/hooks`
-  trust, or an invocation started with `--dangerously-bypass-hook-trust`. They do not consume
+  on: the adapter writes `[features] hooks = true` into `.codex/config.toml`. The 2026-09-15
+  measurement on codex-cli 0.154.0 showed the feature on with the key written and off under
+  `-c features.hooks=false`, which is a CLI override and never exercises the file. Second, the
+  project must carry `projects.<path>.trust_level = "trusted"`. Third, each hook needs per-hook
+  `/hooks` trust, or an invocation started with `--dangerously-bypass-hook-trust`. They do not consume
   Stamity digests as approval. Neither page states a default for that key as read 2026-09-21 —
   the config reference marks other `[features]` keys "on by default" in so many words and this one
   not, and an earlier hooks-page read of 2026-09-17 did call it on by default — so this page states
@@ -58,10 +59,19 @@ they do not claim authenticated client sessions, native trust approval, or human
   never ran without the key. Headless `codex exec` on codex-cli 0.154.0 ran zero
   project hooks with the feature on, the project trusted and hook trust bypassed (measured
   2026-09-15; three runs, no observation file written, no hook-discovery line in the debug
-  log). An emitted hook therefore enforces nothing on that lane, and a QA row that asks it to
-  is measuring the client.
-  INTERACTIVELY it does enforce, measured 2026-09-22 at 14:41Z on codex-cli 0.155.1 — a newer build
-  than the headless fact above — by walking the emitted hooks in the QA hook fixture:
+  log). The re-run on codex-cli 0.155.1 (2026-09-30, the same fixture recipe, six runs) measured
+  what 0.154.0 left open and failed one claim it had made: with the key absent from both the
+  user and the project config the feature is ON (`codex features list` reads `hooks  stable
+  true`), and a project-file `hooks = false` did NOT turn it off under the recipe's
+  per-invocation trust override (`-c 'projects."<path>".trust_level="trusted"'`), so the
+  project file's key is not shown to be read. `codex exec` again ran zero project hooks in 3 of 3
+  feature-on runs. Both measurements trusted the project only through that override, which may
+  leave the project `.codex/` layer unloaded, so the cause is not isolated — `exec` itself, or a
+  layer that never loaded — and a run with the project trusted in the home `~/.codex/config.toml`
+  is unmeasured, as is codex-cli 0.159.2. An emitted hook therefore enforces nothing measured on
+  that lane, and a QA row that asks it to is measuring the client.
+  INTERACTIVELY it does enforce, measured 2026-09-22 at 14:41Z on codex-cli 0.155.1 — the build
+  the 2026-09-30 headless re-run used, here with the project trusted in the home config — by walking the emitted hooks in the QA hook fixture:
   `features.hooks = true` came from the emitted `.codex/config.toml`, the client asked for the two
   trust decisions and recorded both in the operator's home config (the project's `trust_level =
   "trusted"`, the hook's `trusted_hash`), and it then rendered `Blocked by hook` for

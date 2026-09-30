@@ -854,7 +854,10 @@ describe("claude residue over the real corpus", () => {
       // Re-verified in this unit's research pass; a stale date on a shipped
       // dialect claim is the failure mode the field exists to prevent. Moved
       // through the current full client-contract pass, not a single-claim read.
-      expect(citation.accessDate).toBe("2026-09-10");
+      // TEST CHANGE, justified: moved from 2026-09-10 to 2026-09-30. The 2026-09-30 currency
+      // pass (plan 013, sw14-client-currency-sweep) re-read all five cited pages and verified
+      // every claim this date covers, which is the full pass this pin asks for.
+      expect(citation.accessDate).toBe("2026-09-30");
     }
     // The skills + commands dialect has its own page, and it is the one that
     // establishes both native directories.

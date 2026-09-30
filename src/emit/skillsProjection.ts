@@ -5,9 +5,10 @@
  * Skills are RENDERED once, tool-neutral, into that vendor-neutral tree, and
  * most clients read them from there: Codex/Amp/Goose/Zed read `.agents/skills/`
  * natively, and Cursor and Copilot read it directly (each adapter's
- * `readsAgentsSkillsDir` dialect fact). Claude Code reads neither AGENTS.md nor
- * that tree, so it additionally receives a NATIVE copy at its own project-level
- * skills location ({@link NATIVE_SKILL_DIRS}), re-targeted from these same
+ * `readsAgentsSkillsDir` dialect fact). Claude Code reads AGENTS.md only through
+ * the bridge import, and never reads that tree (code.claude.com/docs/en/memory,
+ * accessed 2026-09-30), so it additionally receives a NATIVE copy at its own
+ * project-level skills location ({@link NATIVE_SKILL_DIRS}), re-targeted from these same
  * rendered bytes by the claude adapter's residue planner
  * ({@link retargetProjection}) — one read, one render, many targets. The two
  * trees duplicate BYTES on purpose; they do not duplicate authorship, because
@@ -105,8 +106,10 @@ import {
 export const SKILLS_PROJECTION_DIR = ".agents/skills";
 
 /**
- * Clients that need a NATIVE copy of the projection because they read neither
- * AGENTS.md nor the vendor-neutral tree — the per-client half of "one read, one
+ * Clients that need a NATIVE copy of the projection because they never read the
+ * vendor-neutral tree, and read AGENTS.md only through a bridge import (Claude
+ * Code, code.claude.com/docs/en/memory, accessed 2026-09-30: "anything under a
+ * `.agents/` directory" is not read) — the per-client half of "one read, one
  * render, many targets", read as DATA by the adapters and by the capability
  * matrix so the location is stated once.
  *

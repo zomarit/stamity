@@ -302,7 +302,7 @@ const EFFORT_SCALE_CAP =
 export const cursorDialectFacts: AdapterDialectFacts = {
   tool: "cursor",
   ruleShape:
-    "`.cursor/rules/<id>.mdc` — `description` plus `globs` as an unquoted comma-separated list with no spaces; `alwaysApply: false` on every emitted rule",
+    "`.cursor/rules/<id>.mdc` — `description` plus `globs` as an unquoted comma-separated list, the vendor's separator (its own example puts a space after the comma; the no-spaces form is this engine's choice — cursor.com/docs/context/rules, accessed 2026-09-30); `alwaysApply: false` on every emitted rule",
   hooksConfigPath: CURSOR_HOOKS_CONFIG_PATH,
   readsAgentsSkillsDir: true,
   agentsFormat:

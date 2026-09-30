@@ -147,17 +147,17 @@ Declared caps:
 
 Sources:
 
-- <https://code.claude.com/docs/en/memory> — accessed 2026-09-10
-- <https://code.claude.com/docs/en/skills> — accessed 2026-09-10
-- <https://code.claude.com/docs/en/sub-agents> — accessed 2026-09-10
-- <https://code.claude.com/docs/en/hooks> — accessed 2026-09-10
-- <https://code.claude.com/docs/en/settings> — accessed 2026-09-10
+- <https://code.claude.com/docs/en/memory> — accessed 2026-09-30
+- <https://code.claude.com/docs/en/skills> — accessed 2026-09-30
+- <https://code.claude.com/docs/en/sub-agents> — accessed 2026-09-30
+- <https://code.claude.com/docs/en/hooks> — accessed 2026-09-30
+- <https://code.claude.com/docs/en/settings> — accessed 2026-09-30
 
 ### `cursor`
 
 | Fact | Declared value |
 |---|---|
-| Rule shape | `.cursor/rules/<id>.mdc` — `description` plus `globs` as an unquoted comma-separated list with no spaces; `alwaysApply: false` on every emitted rule |
+| Rule shape | `.cursor/rules/<id>.mdc` — `description` plus `globs` as an unquoted comma-separated list, the vendor's separator (its own example puts a space after the comma; the no-spaces form is this engine's choice — cursor.com/docs/context/rules, accessed 2026-09-30); `alwaysApply: false` on every emitted rule |
 | Agent format | `.cursor/agents/<id>.md` — `description`, `model` (the operator's pinned id for the role's class, carrying this client's `[effort=…]` parameter; the key is omitted entirely when no pin names one, so the client applies its own default rather than the engine restating it), `readonly` |
 | Hook config | `.cursor/hooks.json` |
 | Reads `.agents/skills/` | yes |
@@ -203,7 +203,7 @@ Declared caps:
 | `agent-prompt-chars` | 30000 |
 | `charter-budget` | ~2 pages; AGENTS.md is native, so no mirror is emitted |
 | `command-surface` | native — the nine touchpoints ship as prompt files in .github/prompts/, invoked as /st-<id>; the format's `agent` and `tools` keys stay unemitted (per-prompt restrictions this engine cannot answer), `model` follows an operator pin |
-| `effort-axis` | omitted — this surface publishes no effort key and no model-value parameter, the one documented omission of the reasoning-effort axis |
+| `effort-axis` | not emitted — Copilot CLI custom agents accept `reasoning-effort` (1.0.66; applied on agent selection since 1.0.88; release notes, accessed 2026-09-30); this engine does not write it yet |
 | `hook-enforcement` | preToolUse exit 2, errors and JSON deny block. Timeouts always fail-open; other events are advisory unless documented. The identity-free core role guard is telemetry. sessionStart output reaches the session: it is injected as additionalContext (docs.github.com hooks reference, 2026-09-17). |
 | `deny-gate` | Repository hooks target Copilot CLI/cloud. preToolUse denies via native JSON or nonzero exit; timeouts fail-open. The core role guard has no calling-agent identity and remains telemetry. |
 | `rule-activation` | glob only; no description-pull mode, so an agent-requested rule emits applyTo: "**" |
@@ -235,7 +235,7 @@ Declared caps:
 | Cap | Declared value |
 |---|---|
 | `AGENTS.md budget` | 32768 bytes (32 KiB) |
-| `hook enforcement` | exit 2 denies supported tool calls after native /hooks trust; the core role guard is telemetry because PreToolUse has no agent identity. Hosted tools and specialized paths may bypass hooks; use native sandbox/permissions for enforcement. Three steps stand between the emitted hooks.json and a hook that runs — `features.hooks = true`, which this engine writes explicitly into .codex/config.toml, so the client's default does not decide it; `projects.<path>.trust_level = "trusted"` in the operator's own Codex home config; and a per-hook hash review through the interactive /hooks command, or --dangerously-bypass-hook-trust for automation that cannot take that step — and with all three in place headless `codex exec` on codex-cli 0.154.0 still loaded no project hook layer at all in this repository's 2026-09-15 measurement, so a hook is enforcement in the interactive client and nothing in that lane. |
+| `hook enforcement` | exit 2 denies supported tool calls after native /hooks trust; the core role guard is telemetry because PreToolUse has no agent identity. Hosted tools and specialized paths may bypass hooks; use native sandbox/permissions for enforcement. Three steps stand between the emitted hooks.json and a hook that runs — `features.hooks = true`, which this engine writes explicitly into .codex/config.toml, so the client's default does not decide it; `projects.<path>.trust_level = "trusted"` in the operator's own Codex home config; and a per-hook hash review through the interactive /hooks command, or --dangerously-bypass-hook-trust for automation that cannot take that step. Headless `codex exec` ran no project hook on codex-cli 0.154.0 in this repository's 2026-09-15 measurement, with the feature on, the project trusted through a per-invocation `-c` override and hook trust bypassed. On codex-cli 0.155.1 (measured 2026-09-30) the hooks feature is on by default, a project-file `hooks = false` did not turn it off under that same override, and `codex exec` again ran no project hook in 3 of 3 runs; because the override may leave the project `.codex/` layer unloaded, the cause is not isolated (exec itself, or a layer that never loaded), and a run with the project trusted in the home config is unmeasured. So a hook is enforcement in the interactive client, and nothing measured in the headless lane. |
 | `per-agent tool allowlist` | no native per-agent tools list is documented as of 2026-09-10; no placeholder key is emitted. sandbox_mode carries the supported filesystem boundary; the policy grant remains a prompt-level restriction. |
 | `command-surface` | none — custom prompts live in the user's Codex home directory, not the repository, and are deprecated in favour of skills, so the nine touchpoint bodies are not emitted here; the charter's touchpoint index still names them |
 | `effort-scale` | minimal, low, medium, high, xhigh — the levels this client's `model_reasoning_effort` key accepts; xhigh is model-dependent, so a model that does not offer it falls back to that model's own default (learn.chatgpt.com/docs/config-file/config-reference, accessed 2026-09-17). This is the only supported client documenting `minimal`, and the only one that cannot be asked for `max`: a `max` request is emitted as `xhigh` with a disclosure, never dropped |
@@ -285,6 +285,6 @@ can be, since nothing here re-reads a page on its own.
 |---|---|---|---|
 | Antigravity adoption/demand | adapter #5 | No adapter, so no row above carries a source for it — the trigger is adoption or demand, not a page this repo re-reads. | unwatched — no supported client carries a source for it |
 | codex#34002 resolution | native glob emission | Open — that client's declared rule shape still down-converts conditional rules into nested `AGENTS.md` files. | `codex`, oldest source read 2026-09-10 |
-| Claude Code AGENTS.md support change | drop the bridge | Unchanged — `claude` is the one client still declaring an entry file, so the bridge block stays emitted. | `claude`, oldest source read 2026-09-10 |
-| Agent Plugins scope expansion | container widens | Four containers are emitted — one root per client, built by `scripts/generate-plugin-packages.mjs` — and the Plugin containers section above states what each carries. The condition is now about the classes a container may hold: an agent or a command class reaching the Agent Plugins format would move two of codex's repository-owned rows into its root. | `claude`, oldest source read 2026-09-10 |
+| Claude Code AGENTS.md support change | drop the bridge | Fired — Claude Code 2.1.277+ reads `AGENTS.md` only where no `CLAUDE.md` exists; stamity emits a `CLAUDE.md`, so the `@AGENTS.md` bridge import is the vendor's documented shape for that case and stays emitted for the one entry file. | `claude`, oldest source read 2026-09-30 |
+| Agent Plugins scope expansion | container widens | Four containers are emitted — one root per client, built by `scripts/generate-plugin-packages.mjs` — and the Plugin containers section above states what each carries. The condition is now about the classes a container may hold: an agent or a command class reaching the Agent Plugins format would move two of codex's repository-owned rows into its root. | `claude`, oldest source read 2026-09-30 |
 | VS Code deny-gate GA | recheck editor-specific hook compatibility | CLI/cloud preToolUse hooks are emitted now, with timeout fail-open. [VS Code hooks](https://code.visualstudio.com/docs/agent-customization/hooks) remain Preview; editor-specific compatibility needs separate verification. | `copilot`, oldest source read 2026-09-10 |
