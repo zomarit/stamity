@@ -34,6 +34,7 @@ import {
   SNAPSHOT_DIR,
   SNAPSHOT_REFRESH_COMMAND,
   computeMergeReadyRate,
+  priorCompleteRun,
   readMeasurementSnapshot,
   readReachSnapshot,
   renderMeasurements,
@@ -303,9 +304,6 @@ describe("the reach proxy is labelled as one", () => {
   });
 });
 
-/** The prior complete run a composed artifact names, as that run's directory id. */
-const PRIOR_RUN = /prior complete run is `([\w.-]+)`/;
-
 /** A run's directory id, read off the `evals/runs/<id>/RESULTS.md` path that points at it. */
 function runId(path: string): string {
   return path.split("/").at(-2) ?? "";
@@ -345,17 +343,77 @@ function readResults(id: string): string {
  * the ids being distinct — a pointer that revisits a run is a broken artifact and throws with the
  * walk it found, which is also what makes a missing prior run readable in the failure.
  */
-function compositionChain(start: string): readonly string[] {
+function compositionChain(
+  start: string,
+  read: (id: string) => string = readResults,
+): readonly string[] {
   const chain: string[] = [start];
   for (;;) {
-    const composition = resultsSection(readResults(chain.at(-1) ?? ""), "0. Composition");
-    const prior = PRIOR_RUN.exec(composition)?.[1];
-    if (prior === undefined) return chain;
+    // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut. This walk read the prior-run line with a
+    // regex of its own over the `## 0. Composition` section, while test/docsPages.test.ts read the
+    // same fact with a second regex over the whole file. The generator now branches on that fact,
+    // so all three read it through the one parser it exports; the parser is scoped to the same
+    // section this walk was, so the walk finds the same chain.
+    const prior = priorCompleteRun(read(chain.at(-1) ?? ""));
+    if (prior === null) return chain;
     if (chain.includes(prior)) {
       throw new Error(`the composition chain revisits ${prior}: ${chain.join(" -> ")}`);
     }
     chain.push(prior);
   }
+}
+
+/**
+ * What the page must say when its run of record is a full run — ADDED 2026-10-01, the 1.11.0 cut,
+ * whose run of record (run 36) measured every case itself with nothing composed.
+ *
+ * The chain is the run alone, the results file carries no composition section, and the page says
+ * the run is a full baseline that measured every case in full in place of the composition
+ * paragraph — no claim of composition, re-measuring, carrying, or a FAIL baseline survives.
+ */
+function expectFullRunOfRecord(results: string, page: string, chain: readonly string[]): void {
+  const run = chain[0] ?? "";
+  const found = chain.join(" -> ");
+  expect(chain, `a full run of record composes with nothing, yet its chain is ${found}`).toEqual([
+    run,
+  ]);
+  expect(
+    resultsSection(results, "0. Composition"),
+    `${run} names no prior complete run yet carries a composition section`,
+  ).toBe("");
+  expect(page, "the page does not call its full run of record a full baseline").toContain(
+    "That run is a full baseline: its results file names no prior complete run",
+  );
+  expect(page, `the page does not say run ${runNumber(run)} measured every case`).toContain(
+    `Run ${runNumber(run)} measured every case in full on its own candidate.`,
+  );
+  for (const claim of [
+    "composed",
+    "incremental rule",
+    "re-measure",
+    "carries the rest",
+    "carried the rest",
+    "alone was FAIL",
+  ]) {
+    expect(page, `the page makes a composition claim ("${claim}") for a full run`).not.toContain(
+      claim,
+    );
+  }
+}
+
+/**
+ * Place a results file at the run of record's path under a fixture root, beside the committed reach
+ * artifact, so `renderMeasurements(root)` has every input it reads. Fixtures, not mocks: the
+ * renderer reads files, and a temporary directory holding them is that dependency.
+ */
+function placeRenderInputs(root: string, results: string): void {
+  mkdirSync(dirname(join(root, REACH_SNAPSHOT_PATH)), { recursive: true });
+  writeFileSync(
+    join(root, REACH_SNAPSHOT_PATH),
+    readFileSync(join(REPO_ROOT, REACH_SNAPSHOT_PATH), "utf-8"),
+  );
+  mkdirSync(dirname(join(root, RUN_OF_RECORD_PATH)), { recursive: true });
+  writeFileSync(join(root, RUN_OF_RECORD_PATH), results);
 }
 
 /** The per-metric score table's body rows, each as its trimmed cells. */
@@ -432,19 +490,18 @@ describe("the restated figures are held to the artifacts they come from", () => 
     );
   });
 
-  it("says the run of record is composed, and names the runs it was composed from", () => {
+  // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut. The case was named "says the run of record
+  // is composed, and names the runs it was composed from" and demanded a composition section and a
+  // chain longer than one of every run of record. Run 36, the 1.11.0 run of record, is a full
+  // baseline (the client moved from Claude Code 2.1.283 to 2.1.286, a new configuration), and its
+  // RESULTS.md names no prior complete run, as run 34's does not. The case now branches on the
+  // generator's own parser: a composed run of record keeps every assertion below unchanged (the
+  // scoring-rule check moved above the branch, since it holds for both kinds); a full one is held
+  // by expectFullRunOfRecord, which "a full run of record" below exercises today on run 34's real
+  // RESULTS.md, before run 36 exists.
+  it("says how the run of record was measured: composed from the runs it names, or in full", () => {
     const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
     const page = renderMeasurements();
-
-    // A composed run scores the whole set from samples some of which were carried from an
-    // earlier run rather than measured again. The page says so, because "PASS, three samples
-    // per case" over 102 cases otherwise reads as 306 fresh measurements on this candidate.
-    const composition = resultsSection(results, "0. Composition");
-    expect(composition, `${RUN_OF_RECORD_PATH} carries no composition section`).toContain(
-      "incremental rule",
-    );
-    expect(page).toContain("SET-v7's incremental rule");
-    expect(page).toContain("composed");
 
     // TEST CHANGE, justified: the page named SET-v7 alone while the artifact heads its score
     // column "Score (SET-v6 rule)" over the SET-v7 set — two version numbers doing two different
@@ -456,6 +513,21 @@ describe("the restated figures are held to the artifacts they come from", () => 
     expect(page, `the page does not name ${scoringRule} as the scoring rule`).toContain(
       `The scoring rule is ${scoringRule}`,
     );
+
+    if (priorCompleteRun(results) === null) {
+      expectFullRunOfRecord(results, page, compositionChain(runId(RUN_OF_RECORD_PATH)));
+      return;
+    }
+
+    // A composed run scores the whole set from samples some of which were carried from an
+    // earlier run rather than measured again. The page says so, because "PASS, three samples
+    // per case" over 102 cases otherwise reads as 306 fresh measurements on this candidate.
+    const composition = resultsSection(results, "0. Composition");
+    expect(composition, `${RUN_OF_RECORD_PATH} carries no composition section`).toContain(
+      "incremental rule",
+    );
+    expect(page).toContain("SET-v7's incremental rule");
+    expect(page).toContain("composed");
 
     // TEST CHANGE, justified: this walked the chain exactly TWO links — the prior complete run,
     // then the run that one names — and asserted the second composes from nothing. That held only
@@ -521,6 +593,85 @@ describe("the restated figures are held to the artifacts they come from", () => 
     );
     expect(page, "the page still carries the run of record to a later release").not.toMatch(
       /carried to \d+\.\d+\.\d+/,
+    );
+  });
+});
+
+// ADDED 2026-10-01, the 1.11.0 cut. Run 36, the 1.11.0 run of record, is a full baseline — the
+// client moved from Claude Code 2.1.283 to 2.1.286, a new configuration — and the generator used to
+// render "composed rather than measured end to end" for every run of record. These cases drive the
+// full branch now, on run 34's real RESULTS.md (a full run: no `## 0. Composition`), before run 36
+// exists, and hold the composed branch beside it on run 35's so the two renders are told apart.
+describe("a full run of record", () => {
+  const FULL_RUN = "2026-09-27-run-34";
+  const COMPOSED_RUN = "2026-09-27-run-35";
+
+  it("is read off the composition section alone, and a broken section throws", () => {
+    const full = readResults(FULL_RUN);
+    expect(priorCompleteRun(full)).toBeNull();
+    expect(priorCompleteRun(readResults(COMPOSED_RUN))).toBe(FULL_RUN);
+
+    // A full run whose text names a prior run OUTSIDE § 0 (here in § 3) is still a full run: the
+    // line is a composition claim only inside the composition section.
+    const mentioned = full.replace(
+      "## 3. Why the run happened\n",
+      "## 3. Why the run happened\n\nNot incremental: the prior complete run is `2026-09-22-run-32`.\n",
+    );
+    expect(mentioned, "the fixture edit did not land").not.toBe(full);
+    expect(priorCompleteRun(mentioned)).toBeNull();
+
+    // A composition section naming no prior run is a broken artifact, and rendering it as a full
+    // run would be the untruth this branch exists to prevent — so it throws rather than reads null.
+    const broken = full.replace(
+      "\n## 1. Set version and sha\n",
+      "\n## 0. Composition\n\nIncremental run.\n\n## 1. Set version and sha\n",
+    );
+    expect(broken, "the fixture edit did not land").not.toBe(full);
+    expect(() => priorCompleteRun(broken)).toThrow(EngineError);
+    expect(() => priorCompleteRun(broken)).toThrow(/names no prior complete run/);
+  });
+
+  it("renders a full baseline's prose from a full results file, and the composition from a composed one", () => {
+    const render = (results: string): string => {
+      const root = fixture({
+        "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
+      });
+      writeMeasurementSnapshot(root, "2026-02-01");
+      placeRenderInputs(root, results);
+      try {
+        return renderMeasurements(root);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    };
+    const fullResults = readResults(FULL_RUN);
+    const fullPage = render(fullResults);
+    const composedPage = render(readResults(COMPOSED_RUN));
+
+    // The fixture's results file sits at the run of record's path, so the chain starts at that id
+    // and reads the fixture's text for it: a full results file ends the chain where it starts.
+    const start = runId(RUN_OF_RECORD_PATH);
+    const chain = compositionChain(start, (id) => (id === start ? fullResults : readResults(id)));
+    expectFullRunOfRecord(fullResults, fullPage, chain);
+
+    // The composed branch on the same tree: today's paragraph, and no full-baseline sentence.
+    expect(composedPage).toContain("That run is composed rather than measured end to end");
+    expect(composedPage).toContain("SET-v7's incremental rule");
+    expect(composedPage).not.toContain("That run is a full baseline");
+
+    // Only the method paragraph differs: the rest of the page, including the shared scoring-rule
+    // sentence, is the same render.
+    const corpus = (page: string): string => page.slice(page.indexOf("## Corpus behaviour"));
+    for (const shared of [
+      "The scoring rule is SET-v6",
+      "The figures below score that whole set:",
+      "## First-run proof",
+    ]) {
+      expect(corpus(fullPage)).toContain(shared);
+      expect(corpus(composedPage)).toContain(shared);
+    }
+    expect(fullPage.slice(0, fullPage.indexOf("## Corpus behaviour"))).toBe(
+      composedPage.slice(0, composedPage.indexOf("## Corpus behaviour")),
     );
   });
 });
@@ -963,11 +1114,12 @@ describe("the snapshot seam", () => {
 
     // The reach snapshot is read from the real tree, so render against a root
     // that carries both: copy the committed reach artifact into the fixture.
-    mkdirSync(dirname(join(root, REACH_SNAPSHOT_PATH)), { recursive: true });
-    writeFileSync(
-      join(root, REACH_SNAPSHOT_PATH),
-      readFileSync(join(REPO_ROOT, REACH_SNAPSHOT_PATH), "utf-8"),
-    );
+    //
+    // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut. The renderer now also reads the run of
+    // record's RESULTS.md under the root it renders, to tell a full run of record from a composed
+    // one, so the fixture carries that file too (the real one, copied like the reach artifact).
+    // Fixture setup only: every assertion of this case is unchanged.
+    placeRenderInputs(root, readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8"));
 
     const page = renderMeasurements(root);
     expect(computeMergeReadyRate(root).rate.d, "the live tree moved, as the case intends").toBe(2);

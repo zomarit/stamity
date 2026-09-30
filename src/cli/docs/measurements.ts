@@ -129,6 +129,44 @@ function runOfRecordNumber(): string {
   return number;
 }
 
+/** The heading a composed run's results file carries its composition under. */
+const COMPOSITION_HEADING = "## 0. Composition";
+
+/** The composition section's pointer to the run it composes with, as that run's directory id. */
+const PRIOR_COMPLETE_RUN = /prior complete run is `([\w.-]+)`/;
+
+/**
+ * The prior complete run a results file composes with, as that run's directory id, or `null` for a
+ * full run — one that measured every case itself.
+ *
+ * The two kinds are told apart the way the eval exporter writes them: a composed run opens with a
+ * `## 0. Composition` section whose first line names "the prior complete run is `<id>`" (run 35's
+ * names run 34), and a full run carries no such section (run 34's has none). The line is read
+ * INSIDE that section only, down to the next `## ` heading, so a full run whose prose mentions a
+ * prior run elsewhere — a reason, a note — is not mistaken for a composed one.
+ *
+ * Exported as the one reading of this fact: the page branches on it, and the suites that walk the
+ * composition chain and hold the hand pages' disclosure read it through here rather than through
+ * regexes of their own.
+ *
+ * Throws `EngineError` (`VALIDATION_ERROR`) when the section is present but names no prior run: a
+ * composed artifact with a broken pointer is not a full run, and reading it as one would render a
+ * full baseline's claim for samples that were carried.
+ */
+export function priorCompleteRun(results: string): string | null {
+  const lines = results.split("\n");
+  const start = lines.findIndex((line) => line.trimEnd() === COMPOSITION_HEADING);
+  if (start === -1) return null;
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => line.startsWith("## "));
+  const section = (end === -1 ? rest : rest.slice(0, end)).join("\n");
+  const prior = PRIOR_COMPLETE_RUN.exec(section)?.[1];
+  if (prior === undefined) {
+    fail(`The results file carries a \`${COMPOSITION_HEADING}\` section that names no prior complete run.`);
+  }
+  return prior;
+}
+
 /** The workflow whose lanes are the first-run proof. */
 export const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
 
@@ -719,6 +757,50 @@ export function readReachSnapshot(root: string = repoRoot()): ReachSnapshot {
   return JSON.parse(readFileSync(path, "utf-8")) as ReachSnapshot;
 }
 
+/**
+ * The run of record's results file, read under the checkout being rendered.
+ *
+ * Read so the page can say how the run was measured: {@link priorCompleteRun} over this text is
+ * what chooses between the composed paragraph and the full baseline's.
+ */
+function readRunOfRecordResults(root: string): string {
+  const path = join(root, RUN_OF_RECORD_PATH);
+  if (!existsSync(path)) {
+    fail(`No results file at ${RUN_OF_RECORD_PATH}; the page cannot state how its run of record was measured.`);
+  }
+  return readFileSync(path, "utf-8");
+}
+
+/**
+ * How the run of record was measured, as the corpus section's second paragraph states it.
+ *
+ * Two shapes, chosen by {@link priorCompleteRun}. A composed run keeps the paragraph that names its
+ * composition — which runs measured in full, which re-measured, and what was carried. A full run
+ * composes with nothing, so the page says it measured every case itself and makes no claim of
+ * composition, re-measuring or carrying: any such sentence would describe samples the run did not
+ * carry. The scoring-rule sentence after this paragraph is shared by both.
+ */
+function measurementMethod(runOfRecord: string, prior: string | null): readonly string[] {
+  if (prior === null) {
+    return [
+      "That run is a full baseline: its results file names no prior complete run, so no case is",
+      "carried from an earlier run.",
+      `Run ${runOfRecord} measured every case in full on its own candidate. The set is SET-v7.`,
+    ];
+  }
+  return [
+    "That run is composed rather than measured end to end, under SET-v7's incremental rule: one",
+    "full baseline run per release, and a later run on another candidate re-measures only the cases",
+    "whose inputs moved and carries the rest with provenance. Run 34 measured every case in full on",
+    "the new model pair. [Run 34](../evals/runs/2026-09-27-run-34/RESULTS.md) alone was FAIL on one",
+    "floor case, `question-shape-and-default-charter-only`; Invariant 2 was then tightened",
+    "(invariants 1.1.0), and run 35 re-measured the two cases whose files moved, composed with",
+    "run 34, and carried the rest from it. Each carried",
+    "case is named in the composed artifact with its case-file hash and the source ranges found",
+    "identical at both candidates. The set is SET-v7.",
+  ];
+}
+
 /** `- ` list of run ids and their one-line reasons, or an explicit "none" line. */
 function noteList(notes: readonly ExcludedRun[]): readonly string[] {
   if (notes.length === 0) return ["None."];
@@ -751,6 +833,7 @@ export function renderMeasurements(root: string = repoRoot()): string {
   const snapshot = readMeasurementSnapshot(root);
   const report = snapshot.report;
   const reach = readReachSnapshot(root);
+  const prior = priorCompleteRun(readRunOfRecordResults(root));
   const daily = reach.daily.downloads;
   const total = daily.reduce((sum, row) => sum + row.downloads, 0);
   const peak = daily.reduce((best, row) => (row.downloads > best.downloads ? row : best), {
@@ -875,15 +958,7 @@ export function renderMeasurements(root: string = repoRoot()): string {
     `[run ${runOfRecord}](../${RUN_OF_RECORD_PATH}) — the ${RUN_OF_RECORD_RELEASE} release run —`,
     "PASS, three samples per case.",
     "",
-    "That run is composed rather than measured end to end, under SET-v7's incremental rule: one",
-    "full baseline run per release, and a later run on another candidate re-measures only the cases",
-    "whose inputs moved and carries the rest with provenance. Run 34 measured every case in full on",
-    "the new model pair. [Run 34](../evals/runs/2026-09-27-run-34/RESULTS.md) alone was FAIL on one",
-    "floor case, `question-shape-and-default-charter-only`; Invariant 2 was then tightened",
-    "(invariants 1.1.0), and run 35 re-measured the two cases whose files moved, composed with",
-    "run 34, and carried the rest from it. Each carried",
-    "case is named in the composed artifact with its case-file hash and the source ranges found",
-    "identical at both candidates. The set is SET-v7.",
+    ...measurementMethod(runOfRecord, prior),
     `The scoring rule is SET-v6, which is what run ${runOfRecord}'s own score table is headed with.`,
     "The figures below score that whole set:",
     "",

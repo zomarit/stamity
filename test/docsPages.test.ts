@@ -3,7 +3,11 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { RUN_OF_RECORD_PATH, RUN_OF_RECORD_RELEASE } from "../src/cli/docs/measurements.ts";
+import {
+  RUN_OF_RECORD_PATH,
+  RUN_OF_RECORD_RELEASE,
+  priorCompleteRun,
+} from "../src/cli/docs/measurements.ts";
 import { COMMAND_ID_PREFIX } from "../src/content/catalog.ts";
 import {
   CLASS_LAYOUT,
@@ -1254,12 +1258,12 @@ const RUN_OF_RECORD_CLAIM =
 
 const collapsed = (text: string): string => text.replace(/\s+/g, " ");
 
-/**
- * The prior complete run a composed run's RESULTS.md names in its composition section, or "" for a
- * full run, whose results carry no composition section and so no such line.
- */
-const priorCompleteRun = (results: string): string =>
-  /prior complete run is `([^`]+)`/.exec(results)?.[1] ?? "";
+// TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut (review M-1). A local `priorCompleteRun` stood
+// here and matched "prior complete run is `…`" anywhere in RESULTS.md, while the measurements chain
+// walk read it only inside `## 0. Composition` — so a full run whose text named a prior run in
+// another section would have read as composed here and full there. Both now use the parser the
+// generator exports and branches on, scoped to that section; it returns null for a full run where
+// the local helper returned "".
 
 describe("the eval run of record on the hand pages", () => {
   // Survives the release that runs the set: that release moves the generator's run and release,
@@ -1303,7 +1307,7 @@ describe("the eval run of record on the hand pages", () => {
     "%s discloses a FAIL baseline behind the composed run of record",
     (page) => {
       const baseline = priorCompleteRun(read(RUN_OF_RECORD_PATH));
-      if (baseline === "") {
+      if (baseline === null) {
         expect(
           collapsed(read(page)),
           `${page} keeps a composition disclosure, but ${RUN_OF_RECORD_PATH} is a full run`,
@@ -1342,7 +1346,9 @@ describe("the eval run of record on the hand pages", () => {
   // prior run, run 35 composed with it and names it. A key that read both alike would send every
   // run of record down one branch.
   it("tells a full run's results from a composed run's by the prior-run line", () => {
-    expect(priorCompleteRun(read("evals/runs/2026-09-27-run-34/RESULTS.md"))).toBe("");
+    // TEST CHANGE, justified: 2026-10-01 (review M-1): the shared parser reads a full run as null,
+    // where the local helper it replaced read "" — the same verdict in the parser's own type.
+    expect(priorCompleteRun(read("evals/runs/2026-09-27-run-34/RESULTS.md"))).toBeNull();
     expect(priorCompleteRun(read("evals/runs/2026-09-27-run-35/RESULTS.md"))).toBe(
       "2026-09-27-run-34",
     );
