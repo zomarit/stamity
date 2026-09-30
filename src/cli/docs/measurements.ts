@@ -136,6 +136,14 @@ const COMPOSITION_HEADING = "## 0. Composition";
 const PRIOR_COMPLETE_RUN = /prior complete run is `([\w.-]+)`/;
 
 /**
+ * What a composed export carries besides its heading: the carried-case table's header row and the
+ * "N case(s) carried" count in its opening line. Every composed results file in `evals/runs/` has
+ * both (runs 29, 30, 31, 32 and 35) and no full one has either (runs 1-27 and 34), so a file
+ * carrying one of them without the section is a composed run whose heading drifted, not a full run.
+ */
+const COMPOSED_MARKERS: readonly RegExp[] = [/^\|\s*Carried case\s*\|/m, /\bcase\(s\) carried\b/];
+
+/**
  * The prior complete run a results file composes with, as that run's directory id, or `null` for a
  * full run — one that measured every case itself.
  *
@@ -151,12 +159,22 @@ const PRIOR_COMPLETE_RUN = /prior complete run is `([\w.-]+)`/;
  *
  * Throws `EngineError` (`VALIDATION_ERROR`) when the section is present but names no prior run: a
  * composed artifact with a broken pointer is not a full run, and reading it as one would render a
- * full baseline's claim for samples that were carried.
+ * full baseline's claim for samples that were carried. It throws the same way when the section is
+ * absent but the file still carries a composed marker ({@link COMPOSED_MARKERS}): "full" is read
+ * only off a file that shows no sign of carried samples, not off a heading's absence alone.
  */
 export function priorCompleteRun(results: string): string | null {
   const lines = results.split("\n");
   const start = lines.findIndex((line) => line.trimEnd() === COMPOSITION_HEADING);
-  if (start === -1) return null;
+  if (start === -1) {
+    if (COMPOSED_MARKERS.some((marker) => marker.test(results))) {
+      fail(
+        `The results file carries no \`${COMPOSITION_HEADING}\` section but still carries ` +
+          "a composed run's carried cases; it cannot be read as a full run.",
+      );
+    }
+    return null;
+  }
   const rest = lines.slice(start + 1);
   const end = rest.findIndex((line) => line.startsWith("## "));
   const section = (end === -1 ? rest : rest.slice(0, end)).join("\n");

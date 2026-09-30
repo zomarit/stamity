@@ -26,11 +26,11 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // Verify: git cat-file -s 95addb30:evals/runs/2026-09-27-run-34/summary.json
   //
   // The 1.11.0 window holds one entry. Run 36 is a full baseline — every case measured, no prior
-  // run and no composition, because the client moved from Claude Code 2.1.283 to 2.1.286, a new
-  // configuration; the claude profile itself is unchanged (scenario claude-opus-5-5 at high effort,
-  // judge claude-fable-5-1) — and it is the 1.11.0 run of record; the next release's incremental
-  // run reads its summary from the retention commit. The 1.11.0 close's evidence-archive step compacts it beside an ARCHIVE.json
-  // pointer and retires this entry.
+  // run and no composition, because the client moved to a new version, a new configuration; the
+  // claude profile itself is unchanged (scenario claude-opus-5-5 at high effort, judge
+  // claude-fable-5-1) — and it is the 1.11.0 run of record; the next release's incremental run
+  // reads its summary from the retention commit. The 1.11.0 close's evidence-archive step compacts
+  // it beside an ARCHIVE.json pointer and retires this entry.
   //
   // A new entry is one exact repository-relative path with its reviewable reason, a named window,
   // and the close step that ends it — never a broad extension exemption, never a raised ceiling.

@@ -493,9 +493,9 @@ describe("the restated figures are held to the artifacts they come from", () => 
   // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut. The case was named "says the run of record
   // is composed, and names the runs it was composed from" and demanded a composition section and a
   // chain longer than one of every run of record. Run 36, the 1.11.0 run of record, is a full
-  // baseline (the client moved from Claude Code 2.1.283 to 2.1.286, a new configuration), and its
-  // RESULTS.md names no prior complete run, as run 34's does not. The case now branches on the
-  // generator's own parser: a composed run of record keeps every assertion below unchanged (the
+  // baseline (the client moved to a new version, a new configuration), and its RESULTS.md names
+  // no prior complete run, as run 34's does not. The case now branches on the generator's own
+  // parser: a composed run of record keeps every assertion below unchanged (the
   // scoring-rule check moved above the branch, since it holds for both kinds); a full one is held
   // by expectFullRunOfRecord, which "a full run of record" below exercises today on run 34's real
   // RESULTS.md, before run 36 exists.
@@ -598,7 +598,7 @@ describe("the restated figures are held to the artifacts they come from", () => 
 });
 
 // ADDED 2026-10-01, the 1.11.0 cut. Run 36, the 1.11.0 run of record, is a full baseline — the
-// client moved from Claude Code 2.1.283 to 2.1.286, a new configuration — and the generator used to
+// client moved to a new version, a new configuration — and the generator used to
 // render "composed rather than measured end to end" for every run of record. These cases drive the
 // full branch now, on run 34's real RESULTS.md (a full run: no `## 0. Composition`), before run 36
 // exists, and hold the composed branch beside it on run 35's so the two renders are told apart.
@@ -629,6 +629,35 @@ describe("a full run of record", () => {
     expect(broken, "the fixture edit did not land").not.toBe(full);
     expect(() => priorCompleteRun(broken)).toThrow(EngineError);
     expect(() => priorCompleteRun(broken)).toThrow(/names no prior complete run/);
+  });
+
+  // ADDED 2026-10-01, the 1.11.0 cut (review W-1). "Full" used to be read off the ABSENCE of the
+  // exact composition heading, so a composed export whose heading spelling drifted rendered
+  // "measured every case in full". A section-less file carrying either composed marker — the carried-case
+  // table header or the "case(s) carried" count — is refused; the real files still read as before.
+  it("refuses a section-less results file that still carries a composed marker", () => {
+    const composed = readResults(COMPOSED_RUN);
+    const drifted = composed.replace("\n## 0. Composition\n", "\n## 0. Composition of the run\n");
+    expect(drifted, "the fixture edit did not land").not.toBe(composed);
+    expect(() => priorCompleteRun(drifted)).toThrow(EngineError);
+    expect(() => priorCompleteRun(drifted)).toThrow(/cannot be read as a full run/);
+
+    // Each marker refuses on its own, planted in run 34's real full file.
+    const full = readResults(FULL_RUN);
+    for (const marker of [
+      "| Carried case | Case file sha256 | Sources compared |\n| --- | --- | --- |\n",
+      "2 case(s) re-measured in this run; 100 case(s) carried.\n",
+    ]) {
+      const planted = full.replace(
+        "## 3. Why the run happened\n",
+        `## 3. Why the run happened\n\n${marker}`,
+      );
+      expect(planted, "the fixture edit did not land").not.toBe(full);
+      expect(() => priorCompleteRun(planted), marker).toThrow(EngineError);
+    }
+
+    expect(priorCompleteRun(full)).toBeNull();
+    expect(priorCompleteRun(composed)).toBe(FULL_RUN);
   });
 
   it("renders a full baseline's prose from a full results file, and the composition from a composed one", () => {
