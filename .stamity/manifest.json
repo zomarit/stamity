@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.10.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-30T12:28:10.975Z",
+  "updatedAt": "2026-09-30T12:28:37.742Z",
   "tools": [
     "claude"
   ],
@@ -148,7 +148,7 @@
       "adapter": "claude",
       "artifactId": "cmd-debug",
       "artifactType": "command",
-      "contentHash": "0a1b80cc4bc2ef9a7ee5710f8284255da2f7cfc804b8dd402f1c6ba18a8e7571",
+      "contentHash": "7fa8cbbc6736e601b37ee55a0c9b0d383e34393f4adfd862fb0d7f6efc1def13",
       "path": ".claude/commands/st-debug.md"
     },
     {

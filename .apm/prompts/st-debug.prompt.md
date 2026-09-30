@@ -1,5 +1,5 @@
 ---
-description: Hypothesis-driven debugging with observation-only instrumentation and user reproduction; fixes route through the work pipeline after root cause and a failing test.
+description: Hypothesis-driven debugging with observation-only instrumentation and user or in-process reproduction; fixes route through the work pipeline after root cause and a failing test.
 ---
 
 # /st-debug
@@ -71,14 +71,17 @@ residue count; a stop that waits on the user leaves it in progress.
    spawn answers it with `BLOCKED_AMBIGUITY`. The same exception covers the strip at step 8.
 3. **Reproduce.** Two routes; the report decides which, and the first response names it
    with the fact that chose it.
-   - **In-process** — the report states an exact input and the expected output, and the
-     code runs here. `implementer` writes gate 2's failing test — that input, that
+   - **In-process** — the report states an exact input, the expected output and the actual
+     output, and the charter's test gate is runnable here: neither `unknown` nor
+     `not-runnable`. `implementer` writes gate 2's failing test — that input, that
      expected output, nothing else — under step 2's exception with a test delta as its
-     only change; `test-runner` runs it. A failure for the stated reason is the
-     reproduction: no stop, and no question to the user. A test that passes on the
-     current tree reproduces nothing, and the round goes back to step 1.
+     only change; `test-runner` runs it twice. A failure for the stated reason on both
+     consecutive runs is the reproduction: no stop, and no question to the user. A test
+     that does not fail for the stated reason on both runs is not a reproduction, and the
+     run takes the user route — never another in-process round.
    - **User** — anything else, or a defect that needs the user's environment, data,
-     traffic or access. Stop and wait. The user runs the scenario and returns the output.
+     device, account, network, traffic or timing. Stop and wait. The user runs the
+     scenario and returns the output.
    This step is not simulated, not inferred from reading the code, and not passed over
    because the cause looks obvious.
 4. **Log analysis.** Order the tagged lines; state which instrumentation points did *not*
@@ -164,9 +167,10 @@ A failed fix is one that reached step 7, landed, and left the symptom, brought i
 broke a gate that had been green. Three failed fixes on one defect end the fix loop.
 
 The counter is **in-session**: the run record holds probes and the round's status, not fix
-attempts, so it counts the fixes attempted in this conversation and nothing earlier. A new session starts at zero, and
-the closing report states the count it is carrying so a user on the fourth attempt across two
-sessions can see that the valve did not fire and call it themselves.
+attempts, so it counts the fixes attempted in this conversation and nothing earlier. A new
+session starts at zero, and the closing report states the count it is carrying so a user on
+the fourth attempt across two sessions can see that the valve did not fire and call it
+themselves.
 
 At the third failure, stop fixing and report instead:
 

@@ -28,7 +28,7 @@ Work a backlog from any source — chat, file, or platform board: fill, pickup w
 
 ## `/st-debug`
 
-Hypothesis-driven debugging with observation-only instrumentation and user reproduction; fixes route through the work pipeline after root cause and a failing test.
+Hypothesis-driven debugging with observation-only instrumentation and user or in-process reproduction; fixes route through the work pipeline after root cause and a failing test.
 
 - **Tags:** `implementation`
 - **Load:** `on-demand`
