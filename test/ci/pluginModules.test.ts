@@ -128,14 +128,35 @@ const stageFor = async (input: { contentRoot: string; forkRoot?: string; cli?: P
   return staged;
 };
 
-/** The staging trees `stageSubstitutedCorpus` currently owns under the system temp directory. */
-const stagingTrees = async (): Promise<string[]> =>
-  (await readdir(tmpdir())).filter((name) => name.startsWith("stamity-plugin-corpus-")).toSorted();
-
 const tempDir = async (): Promise<string> => {
   const path = await mkdtemp(join(tmpdir(), "stamity-plugin-modules-"));
   temps.push(path);
   return path;
+};
+
+const TEMP_ENV_KEYS = ["TMPDIR", "TEMP", "TMP"] as const;
+
+/**
+ * The staging trees `run` leaves behind, counted in a temp root of its own. `stageSubstitutedCorpus`
+ * reads `tmpdir()` at call time, so pointing TMPDIR, TEMP and TMP at a fresh directory for the call
+ * puts its `stamity-plugin-corpus-*` tree there. Listing the SHARED temp root instead let a staging
+ * tree from any concurrent suite on the machine appear as new (CI red on the check floor, prove/7).
+ */
+const stagingTreesLeftBy = async (run: () => Promise<unknown>): Promise<string[]> => {
+  const root = await tempDir();
+  const saved = TEMP_ENV_KEYS.map((key) => [key, process.env[key]] as const);
+  for (const key of TEMP_ENV_KEYS) process.env[key] = root;
+  try {
+    // Without this the listing below could be empty only because staging wrote elsewhere.
+    expect(tmpdir()).toBe(root);
+    await run();
+  } finally {
+    for (const [key, value] of saved) {
+      if (value === undefined) Reflect.deleteProperty(process.env, key);
+      else process.env[key] = value;
+    }
+  }
+  return (await readdir(root)).filter((name) => name.startsWith("stamity-plugin-corpus-")).toSorted();
 };
 
 /** Every regular file under `root`, relative and posix-spelled, sorted. */
@@ -374,13 +395,13 @@ describe("staging refusals and companions (REQ-PLUGIN-003, REQ-PLUGIN-004)", () 
     const contentRoot = await syntheticCorpus(async (root) => {
       await writeFile(join(root, "agents", "rogue.md"), "Ask ${STAMITY:UNKNOWN} for the answer.\n");
     });
-    const before = await stagingTrees();
-
-    await expect(stage({ contentRoot, tokens })).rejects.toThrow(/agents\/rogue\.md/);
+    const left = await stagingTreesLeftBy(async () => {
+      await expect(stage({ contentRoot, tokens })).rejects.toThrow(/agents\/rogue\.md/);
+    });
 
     // The refusal copied `demo-agent.md` before it reached `rogue.md`, so the
     // tree it removed was a partial one rather than an empty directory.
-    expect((await stagingTrees()).filter((name) => !before.includes(name))).toEqual([]);
+    expect(left).toEqual([]);
   });
 
   it("carries a skill's references and scripts byte-for-byte beside its SKILL.md", async () => {
@@ -417,11 +438,12 @@ describe("staging refusals and companions (REQ-PLUGIN-003, REQ-PLUGIN-004)", () 
 
   it("refuses an unpinnable CLI version before it stages anything", async () => {
     const contentRoot = await syntheticCorpus(async () => {});
-    const before = await stagingTrees();
-    await expect(
-      stage({ contentRoot, tokens, cli: { packageName: PACKAGE, version: "latest" } }),
-    ).rejects.toThrow(/pinned CLI call/);
-    expect((await stagingTrees()).filter((name) => !before.includes(name))).toEqual([]);
+    const left = await stagingTreesLeftBy(async () => {
+      await expect(
+        stage({ contentRoot, tokens, cli: { packageName: PACKAGE, version: "latest" } }),
+      ).rejects.toThrow(/pinned CLI call/);
+    });
+    expect(left).toEqual([]);
   });
 
   it("stages the fork layer when it holds files and reports no fork root when it is absent", async () => {
