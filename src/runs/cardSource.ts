@@ -1,5 +1,8 @@
 import {
+  CARD_CLOSED_MAX_AGE_DAYS,
+  CARD_CLOSED_NEXT_LINE,
   CARD_FIELD_MAX,
+  CARD_LEDGER_STATES,
   CARD_LEDGER_TOO_LARGE,
   CARD_LEDGER_UNREADABLE,
   CARD_LIST_MAX,
@@ -9,6 +12,7 @@ import {
   CARD_NOT_REPORT_NAMED,
   CARD_RECOVERY_NOTE,
   CARD_REPORTS_NOT_CHECKED,
+  DEBUG_RUN_SEGMENT,
   FENCE_CLOSE_PATTERN,
   FINDINGS_FENCE,
   fenceOpenPattern,
@@ -113,6 +117,10 @@ const CARD_LEDGER_UNREADABLE = ${json(CARD_LEDGER_UNREADABLE)};
 const CARD_LEDGER_TOO_LARGE = ${json(CARD_LEDGER_TOO_LARGE)};
 const CARD_REPORTS_NOT_CHECKED = ${json(CARD_REPORTS_NOT_CHECKED)};
 const CARD_NOT_REPORT_NAMED = ${json(CARD_NOT_REPORT_NAMED)};
+const CARD_DEBUG_SEGMENT = ${json(DEBUG_RUN_SEGMENT)};
+const CARD_CLOSED_MAX_AGE_DAYS = ${json(CARD_CLOSED_MAX_AGE_DAYS)};
+const CARD_CLOSED_NEXT_LINE = ${json(CARD_CLOSED_NEXT_LINE)};
+const CARD_LEDGER_STATES = ${json(CARD_LEDGER_STATES)};
 
 /** A regular file, never through a link. Absent or unreadable reads as not one. */
 function cardRegularFile(path) {
@@ -198,6 +206,7 @@ function cardRecordHead(path) {
     if (invocation !== null && head.invocation === "") head.invocation = invocation[1];
   }
   return {
+    status: head.status,
     inProgress: head.status !== null && CARD_IN_PROGRESS.test(head.status),
     plan: head.plan,
     invocation: head.invocation,
@@ -205,8 +214,9 @@ function cardRecordHead(path) {
 }
 
 /**
- * Open row ids in file order, and every report path a row carries. Bad lines
- * are skipped. "failed" when a ledger is there but is not read — a link, anything
+ * Open row ids in file order, every report path a row carries, and the rows
+ * counted by state: the CARD_LEDGER_STATES by name, any other (or none) as
+ * other. Bad lines are skipped. "failed" when a ledger is there but is not read — a link, anything
  * else that is not a regular file, one over CARD_LEDGER_MAX_BYTES ("tooLarge"
  * too), or a read that fails — so the card never counts it as empty; an absent
  * ledger is a run with no rows yet. An unread ledger ledgers no report.
@@ -214,22 +224,23 @@ function cardRecordHead(path) {
 function cardLedger(path) {
   const open = [];
   const ledgered = new Set();
+  const states = { fixed: 0, deferred: 0, rejected: 0, open: 0, other: 0 };
   let stats;
   try {
     stats = lstatSync(path);
   } catch (error) {
     // ENOENT is no ledger yet; any other lstat failure is one that cannot be read.
-    return { open, ledgered, failed: !(error && error.code === "ENOENT"), tooLarge: false };
+    return { open, ledgered, states, failed: !(error && error.code === "ENOENT"), tooLarge: false };
   }
-  if (!stats.isFile()) return { open, ledgered, failed: true, tooLarge: false };
+  if (!stats.isFile()) return { open, ledgered, states, failed: true, tooLarge: false };
   // Too large to read whole, and no part of it can stand for the rest: not read at all.
-  if (stats.size > CARD_LEDGER_MAX_BYTES) return { open, ledgered, failed: true, tooLarge: true };
+  if (stats.size > CARD_LEDGER_MAX_BYTES) return { open, ledgered, states, failed: true, tooLarge: true };
   let raw;
   try {
     raw = readFileSync(path, "utf8");
   } catch {
     // EACCES, EBUSY and the rest: there, but not read.
-    return { open, ledgered, failed: true, tooLarge: false };
+    return { open, ledgered, states, failed: true, tooLarge: false };
   }
   for (const line of raw.split(/\r?\n/)) {
     if (line.trim() === "") continue;
@@ -243,8 +254,9 @@ function cardLedger(path) {
     if (row === null || typeof row !== "object" || Array.isArray(row)) continue;
     if (typeof row.id === "string" && row.state === "open") open.push(row.id);
     if (typeof row.report === "string") ledgered.add(row.report);
+    states[CARD_LEDGER_STATES.includes(row.state) ? row.state : "other"] += 1;
   }
-  return { open, ledgered, failed: false, tooLarge: false };
+  return { open, ledgered, states, failed: false, tooLarge: false };
 }
 
 /** Whether the first findings block holds at least one non-blank line before it closes. */
@@ -446,9 +458,38 @@ function cardRender(run, head, ledger, reports, lanes, nowMs, k) {
 }
 
 /**
- * The resume card of the newest run in progress, or null when none is. Lists
- * shrink until the card fits CARD_MAX_CHARS; with every list at zero it always
- * does. A card whose text trips the screen is withheld whole.
+ * The closed card: a run's closing status and its ledger counted by state, no
+ * lists. Five lines of capped fields, so it always fits CARD_MAX_CHARS.
+ */
+function cardRenderClosed(run, head, ledger, nowMs) {
+  const status = cardFlat(head.status === null ? "" : head.status);
+  const plan = cardFlat(head.plan);
+  const invocation = cardFlat(head.invocation);
+  const s = ledger.states;
+  const rows = s.fixed + s.deferred + s.rejected + s.open + s.other;
+  return [
+    "stamity resume card — run " + run + " (closed; as of " + new Date(nowMs).toISOString().slice(0, 16) + "Z)",
+    "status: " + (status === "" ? CARD_NOT_RECORDED : status),
+    "plan: " + (plan === "" ? CARD_NOT_RECORDED : plan) +
+      "  ·  invocation: " + (invocation === "" ? CARD_NOT_RECORDED : invocation),
+    "ledger: " +
+      (ledger.tooLarge
+        ? CARD_LEDGER_TOO_LARGE
+        : ledger.failed
+          ? CARD_LEDGER_UNREADABLE
+          : rows + " rows — fixed " + s.fixed + ", deferred " + s.deferred + ", rejected " + s.rejected +
+            ", open " + s.open + (s.other > 0 ? ", other " + s.other : "")) +
+      "  ·  " + CARD_RECOVERY_NOTE,
+    CARD_CLOSED_NEXT_LINE,
+  ];
+}
+
+/**
+ * The resume card of the newest run in progress; with none, of the newest run
+ * dated within CARD_CLOSED_MAX_AGE_DAYS whose record head reads (the closed
+ * card); else null. A debug round's record is never the run. Lists shrink until
+ * the card fits CARD_MAX_CHARS; with every list at zero it always does. A card
+ * whose text trips the screen is withheld whole.
  */
 function resumeCardLines(rootDir, stateRoot, nowMs) {
   const runsDir = join(stateRoot, CARD_RUNS_DIR);
@@ -462,36 +503,47 @@ function resumeCardLines(rootDir, stateRoot, nowMs) {
   }
   // Newest first by code-unit order, stopping at the first run in progress: the
   // same run the greatest in-progress name picks, for fewer record heads read.
+  // The first closed head on the way, dated at or after the cutoff day, is the
+  // fallback. A debug round's record is passed over by its run id.
   // A link to a directory is not a directory here: a run is never followed out of the tree.
   const runs = entries
-    .filter((entry) => entry.isDirectory() && CARD_RUN_ID.test(entry.name))
+    .filter((entry) => entry.isDirectory() && CARD_RUN_ID.test(entry.name) && !entry.name.includes(CARD_DEBUG_SEGMENT))
     .map((entry) => entry.name)
     .sort()
     .reverse();
+  const cutoff = new Date(nowMs - (CARD_CLOSED_MAX_AGE_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
   let chosen = null;
+  let closed = null;
   for (const run of runs) {
     const head = cardRecordHead(join(runsDir, run, CARD_RECORD_FILE));
-    if (head !== null && head.inProgress) {
+    if (head === null) continue;
+    if (head.inProgress) {
       chosen = { run, head };
       break;
     }
+    if (closed === null && run.slice(0, 10) >= cutoff) closed = { run, head };
   }
-  if (chosen === null) return null;
+  const pick = chosen === null ? closed : chosen;
+  if (pick === null) return null;
 
-  const runDir = join(runsDir, chosen.run);
+  const run = pick.run;
+  const runDir = join(runsDir, run);
   const ledger = cardLedger(join(runDir, CARD_LEDGER_FILE));
-  const reports = cardUnledgered(runDir, chosen.run, ledger.ledgered);
-  const lanes = cardLanes(rootDir);
-
   let lines = [];
-  for (let k = CARD_LIST_MAX; k >= 0; k -= 1) {
-    lines = cardRender(chosen.run, chosen.head, ledger, reports, lanes, nowMs, k);
-    if (lines.join("\n").length <= CARD_MAX_CHARS) break;
+  if (chosen === null) {
+    lines = cardRenderClosed(run, pick.head, ledger, nowMs);
+  } else {
+    const reports = cardUnledgered(runDir, run, ledger.ledgered);
+    const lanes = cardLanes(rootDir);
+    for (let k = CARD_LIST_MAX; k >= 0; k -= 1) {
+      lines = cardRender(run, pick.head, ledger, reports, lanes, nowMs, k);
+      if (lines.join("\n").length <= CARD_MAX_CHARS) break;
+    }
   }
   const hit = screenHit(lines.join("\n"));
   if (hit !== "") {
     return [
-      "stamity resume card — run " + chosen.run + " withheld: its text matched screen pattern " + hit + "; " +
+      "stamity resume card — run " + run + " withheld: its text matched screen pattern " + hit + "; " +
         CARD_RECOVERY_NOTE,
     ];
   }

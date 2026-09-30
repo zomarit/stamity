@@ -235,9 +235,11 @@ is in [the configuration reference](configuration.md).
 There are three more verbs, kept off `stamity --help`. `learn` records a learning through the
 engine's write gates. `handoff` prepares, resumes, lists, completes and prunes handoffs through
 those same gates. `ledger` appends a run's findings to its ledger, closes its rows and prints the
-resume card of a run in progress, as the one serialized writer. All three are plumbing an agent
-calls; `stamity ledger status` is the one you may run yourself — after a compaction on Cursor or
-Copilot, whose session-start hooks never print the card: Cursor sends the hook no `source`, and
+resume card of a run in progress (or, with none, of a run closed in the last two days, with its
+closing status), as the one serialized writer. All three are plumbing an agent calls; the
+session-start hook prints the card after a compaction or on a resume, when the client's payload
+says so. `stamity ledger status` is the one you may run yourself — after a compaction on Cursor or
+Copilot, whose session-start hooks never print the card then: Cursor sends the hook no `source`, and
 Copilot's `source` is never `compact`. Run it on Codex too when its hooks are not running: Codex
 loads the project's hooks only with `[features] hooks = true` in `.codex/config.toml` (init writes
 it), the project trusted, and each hook trusted through `/hooks` — and `codex exec` runs no

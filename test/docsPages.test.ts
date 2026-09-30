@@ -1584,10 +1584,12 @@ describe("SECURITY.md", () => {
   });
 
   it("states the resume card's re-entry surface: what screens it and what it does not defend", () => {
-    // After a compaction the session-start hook and `stamity ledger status` read the record
-    // head, ledger ids, report names and lane paths back into the model's context and the
-    // terminal. The table names the control at the symbols that run it, and the residual
-    // names the screen subset and the unscreened files the card points at.
+    // After a compaction or on a resume the session-start hook and `stamity ledger status`
+    // read the record head, ledger ids, report names and lane paths back into the model's
+    // context and the terminal — and, with no run in progress, a recent closed run's
+    // `Status:` text (sw07, MODIFIED REQ-CTX-013). The table names the control at the
+    // symbols that run it, and the residual names the screen subset and the unscreened
+    // files the card points at.
     const table = text.slice(
       text.indexOf("## What the engine defends today"),
       text.indexOf("## Network and data handling"),
@@ -1599,6 +1601,10 @@ describe("SECURITY.md", () => {
     expect(row).toMatch(/never a finding's text/);
     expect(row).toMatch(/session-start subset/);
     expect(row).toMatch(/meet no screen/);
+    expect(row).toMatch(/After a compaction or on a resume/);
+    expect(row).toMatch(/closed card[^|]*closing `Status:` value/);
+    expect(row).toMatch(/`_debug-`[^|]*never picked/);
+    expect(row).toMatch(/full lists and the record's status/);
   });
 
   it("covers the four surfaces the phase claims, and the limits", () => {

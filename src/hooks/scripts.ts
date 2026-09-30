@@ -636,8 +636,9 @@ export interface SessionStartScriptOptions {
 /**
  * The session-start context load: prints the learnings index and the
  * resumable handoffs for the repo the session opened in — and, on a start
- * whose payload says `source: "compact"`, the resume card of the run in
- * progress (`../runs/cardSource.ts`), screened whole by the same screen.
+ * whose payload says `source: "compact"` or `source: "resume"`, the resume
+ * card of the run in progress, or of a run closed in the last two days
+ * (`../runs/cardSource.ts`), screened whole by the same screen.
  *
  * The index format mirrors the engine's own (`formatLearningsIndex`,
  * `buildHandoffIndex`) line for line, because the two render the same corpus
@@ -687,16 +688,17 @@ export function buildSessionStartScript(opts: SessionStartScriptOptions = {}): s
       "reason, and every field printed — the file name included — is flattened to",
       "one bounded line first. Bodies and matched spans are never printed.",
       "",
-      'After a compaction (a start whose stdin payload says source "compact") it',
-      "appends the resume card of the run in progress: counts and pointers, never",
-      "finding text.",
+      "After a compaction or a resume (a start whose stdin payload says source",
+      '"compact" or "resume") it appends the resume card of the run in progress, or',
+      "of a run closed in the last two days: counts and pointers, never finding text.",
     ],
     [
       "Reads outside repo state: the wall clock, which decides whether a learning's",
-      "review horizon has passed and whether a handoff has expired,",
-      "and the source field of the stdin payload, which decides whether the resume",
-      "card is appended. Same repo, two different days or two different starts,",
-      "two different banners.",
+      "review horizon has passed, whether a handoff has expired and whether a closed",
+      "run is recent enough for the card, and the source field of the stdin payload,",
+      "which decides whether the resume card is appended, after a compaction or a",
+      "resume. Same repo, two different days or two different starts, two different",
+      "banners.",
     ],
   )}
 
@@ -1034,16 +1036,16 @@ ${buildResumeCardSource()}
 // going to type. The check asks fd 0 directly: touching process.stdin would
 // open it as a non-blocking stream, and the read below would then fail with
 // EAGAIN whenever the client had not finished writing yet. Only a start after
-// a compaction appends the card: a fresh session has no run state to lose, and
-// a client that sends no source (or never sends "compact") gets the banner it
-// always got.
+// a compaction or on a resume appends the card: a fresh session has no run
+// state to lose, and a client that sends no source (or neither "compact" nor
+// "resume") gets the banner it always got.
 const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);
 
 // Written once, then the process ends on its own. \`process.exit\` would race
 // the write: stdout is asynchronous when it is a pipe on macOS and the BSDs,
 // which is exactly how a client runs a hook.
 const lines = render();
-if (SOURCE === "compact") {
+if (SOURCE === "compact" || SOURCE === "resume") {
   const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW);
   if (card !== null) lines.push("", ...card);
 }

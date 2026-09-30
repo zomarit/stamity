@@ -17,8 +17,8 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * rows; `close` moves rows on a re-review's closures block (`--report` with the
  * `--ids` it was handed) or by one manual transition (`--id`, `--state`,
  * `--rationale`); `status` prints the run's resume card, the same lines the
- * session-start hook prints after a compaction, and writes nothing. Hidden for the reason
- * `learn` and `handoff` are: its caller is the orchestrating session running
+ * session-start hook prints after a compaction or a resume, and writes nothing.
+ * Hidden for the reason `learn` and `handoff` are: its caller is the orchestrating session running
  * `/st-work`, not a person.
  *
  * **It decides nothing about a finding or a row.** The findings and closures
@@ -487,15 +487,17 @@ async function runClose(ctx: CliContext, opts: Record<string, unknown>): Promise
   };
 }
 
-/** What `status` prints when there is no card: no run in progress, or none named. */
+/** What `status` prints when there is no card: no run in progress, no recent closed run, or none named. */
 const NO_CARD = "stamity: no run in progress under .stamity/runs/ — no resume card.";
 
 /** The status JSON document with no card: the same keys, every count at zero. */
 const NO_CARD_JSON = {
   run: null,
   inProgress: false,
+  status: null,
   card: null,
   counts: { openRows: 0, unledgeredReports: 0, lanes: 0 },
+  ledgerStates: { fixed: 0, deferred: 0, rejected: 0, open: 0 },
   withheld: null,
   listsWithheld: null,
   unreadableLedgerLines: 0,
@@ -507,19 +509,23 @@ const NO_CARD_JSON = {
  * The status JSON document of a card. The lists are echoed only when neither
  * the card nor the full lists tripped the screen — the card names ten items of
  * each, the document would name all of them — and then flattened as the card
- * prints them; the counts are always there.
+ * prints them; the counts are always there. The record's status is screened
+ * with the lists (the in-progress card never prints it), so it is null on a hit.
  */
 function statusJson(card: ResumeCard): Record<string, unknown> {
+  const echo = card.withheld === null && card.listsWithheld === null;
   return {
     run: card.runId,
     inProgress: card.inProgress,
+    status: echo ? card.status : null,
     card: [...card.lines],
     counts: {
       openRows: card.openRowIds.length,
       unledgeredReports: card.unledgeredReports.length,
       lanes: card.lanes.length,
     },
-    ...(card.withheld === null && card.listsWithheld === null
+    ledgerStates: { ...card.ledgerStates },
+    ...(echo
       ? {
           openRowIds: [...card.openRowIds],
           unledgeredReports: [...card.unledgeredReports],
@@ -535,9 +541,10 @@ function statusJson(card: ResumeCard): Record<string, unknown> {
 }
 
 /**
- * `ledger status`: the resume card of the run in progress, or of the run
- * `--run` names whether or not it is in progress. The card's lines go to stdout
- * exactly as the session-start hook prints them, so a client whose hook never
+ * `ledger status`: the resume card of the run in progress — with none, the
+ * closed card of a run closed in the last two days — or of the run `--run`
+ * names whether or not it is in progress, in the in-progress layout. The
+ * card's lines go to stdout exactly as the session-start hook prints them, so a client whose hook never
  * prints the card (or that does not re-run it after a compaction) gets the same
  * bytes by hand. Reads only; `--dry-run` is accepted and changes nothing.
  */
@@ -559,7 +566,10 @@ async function runStatus(ctx: CliContext, opts: Record<string, unknown>): Promis
   });
   if (card === null) {
     ctx.io.out(`${NO_CARD}\n`);
-    return { exitCode: 0, json: { ...NO_CARD_JSON, counts: { ...NO_CARD_JSON.counts } } };
+    return {
+      exitCode: 0,
+      json: { ...NO_CARD_JSON, counts: { ...NO_CARD_JSON.counts }, ledgerStates: { ...NO_CARD_JSON.ledgerStates } },
+    };
   }
 
   if (card.ledgerUnreadable) {

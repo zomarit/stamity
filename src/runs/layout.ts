@@ -153,9 +153,30 @@ export const UNPRINTABLE_CHARS = /[\u0000-\u001F\u007F-\u009F\u061C\u200B-\u200F
  */
 export const UNICODE_TAG_CHARS = /[\u{E0000}-\u{E007F}]/gu;
 
+/**
+ * The run-id segment a debug round's record carries: `<UTC date>_debug-<slug>`.
+ * The card's run selection skips such a run, for the run in progress and for
+ * the closed card alike; a debug record is known by this segment, never by its
+ * `Invocation:` spelling, which differs per client.
+ */
+export const DEBUG_RUN_SEGMENT = "_debug-";
+
+/**
+ * With no run in progress, the card names the newest closed run whose date
+ * prefix falls within this many UTC days, today included: 2 is today and
+ * yesterday. An older closed run prints no card.
+ */
+export const CARD_CLOSED_MAX_AGE_DAYS = 2;
+
+/** The ledger states the closed card counts by name; any other state is summed as `other`. */
+export const CARD_LEDGER_STATES = ["fixed", "deferred", "rejected", "open"] as const;
+
 /** The card's fixed words. */
 export const CARD_RECOVERY_NOTE = "the ledger is the recovery point";
 export const CARD_NEXT_LINE = "next: read the open rows and the listed reports before dispatching anything";
+/** The closed card's last line, in place of {@link CARD_NEXT_LINE}. */
+export const CARD_CLOSED_NEXT_LINE =
+  "next: this run is closed — do not resume its dispatch; its record names what came after it";
 export const CARD_NOT_RECORDED = "(not recorded)";
 /**
  * What the ledger line says instead of a count when a ledger is there but
@@ -181,6 +202,11 @@ export const CARD_NOT_REPORT_NAMED = "not report-named";
 /** Whether `value` is a run folder's name. */
 export function isRunId(value: string): boolean {
   return RUN_ID_PATTERN.test(value);
+}
+
+/** Whether a run id names a debug round's record ({@link DEBUG_RUN_SEGMENT}). */
+export function isDebugRunId(runId: string): boolean {
+  return runId.includes(DEBUG_RUN_SEGMENT);
 }
 
 /**

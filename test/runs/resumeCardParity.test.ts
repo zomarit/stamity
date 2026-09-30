@@ -32,6 +32,14 @@ const COMPACT = JSON.stringify({ source: "compact" });
 const STARTUP = JSON.stringify({ source: "startup" });
 const NO_CARD = "stamity: no run in progress under .stamity/runs/ — no resume card.\n";
 const NEXT = "next: read the open rows and the listed reports before dispatching anything";
+const CLOSED_NEXT = "next: this run is closed — do not resume its dispatch; its record names what came after it";
+/**
+ * Today's UTC date, read once when the fixtures are built. A closed-card
+ * fixture dated today stays inside the two-day window even if a midnight falls
+ * before its hook runs, and both twins read the day the hook printed.
+ */
+const TODAY = new Date().toISOString().slice(0, 10);
+const DONE = `${TODAY}_done`;
 const BOM = String.fromCharCode(0xfeff);
 
 function record(opts: { status?: string; plan?: string; invocation?: string; lead?: readonly string[] } = {}): string {
@@ -634,6 +642,74 @@ const FIXTURES: readonly Fixture[] = [
     expect: (lines) => expect(lines?.[3]).toBe("reports without a ledger row: 0"),
   },
   {
+    // sw07 (MODIFIED REQ-CTX-013): with no run in progress, a run closed today prints the closed card.
+    name: "a run closed today: the closed card, its ledger counted by state",
+    seed: (repo) =>
+      repo.seedFiles({
+        [runFile(DONE, "record.md")]: record({ status: "**closed** — merged" }),
+        [runFile(DONE, "ledger.jsonl")]: [
+          row(`${DONE}/review/1`, "fixed"),
+          row(`${DONE}/review/2`, "fixed"),
+          row(`${DONE}/review/3`, "deferred"),
+          "",
+        ].join("\n"),
+        [runFile(DONE, "reports/u1-reviewer-r1.md")]: reportWith([FINDING]),
+      }),
+    expect: (lines) => {
+      expect(lines?.[0]).toMatch(new RegExp(`^stamity resume card — run ${DONE} \\(closed; as of `));
+      expect(lines?.slice(1)).toEqual([
+        "status: **closed** — merged",
+        "plan: docs/plans/009-x.md  ·  invocation: /st-work docs/plans/009-x.md",
+        "ledger: 3 rows — fixed 2, deferred 1, rejected 0, open 0  ·  the ledger is the recovery point",
+        CLOSED_NEXT,
+      ]);
+    },
+  },
+  {
+    name: "a closed run's ledger with a state outside the four: other 1",
+    seed: (repo) =>
+      repo.seedFiles({
+        [runFile(DONE, "record.md")]: record({ status: "closed" }),
+        [runFile(DONE, "ledger.jsonl")]: [row(`${DONE}/a/1`, "open"), row(`${DONE}/a/2`, "wontfix"), "{torn", ""].join("\n"),
+      }),
+    expect: (lines) =>
+      expect(lines?.[3]).toBe("ledger: 2 rows — fixed 0, deferred 0, rejected 0, open 1, other 1  ·  the ledger is the recovery point"),
+  },
+  {
+    name: "a closed run with no ledger and no status line",
+    seed: (repo) => repo.seedFiles({ [runFile(DONE, "record.md")]: "# Done\n\nPlan: p.md\n" }),
+    expect: (lines) =>
+      expect(lines?.slice(1, 4)).toEqual([
+        "status: (not recorded)",
+        "plan: p.md  ·  invocation: (not recorded)",
+        "ledger: 0 rows — fixed 0, deferred 0, rejected 0, open 0  ·  the ledger is the recovery point",
+      ]),
+  },
+  {
+    name: "a debug round in progress beside a closed work run: the work run's closed card",
+    seed: (repo) =>
+      repo.seedFiles({
+        [runFile(`${TODAY}_debug-x`, "record.md")]: record({ status: "in progress", plan: "none — debug round" }),
+        [runFile(`${TODAY}_debug-y`, "record.md")]: record({ status: "closed", plan: "none — debug round" }),
+        [runFile(`${TODAY}_alpha`, "record.md")]: record({ status: "closed — merged" }),
+      }),
+    expect: (lines) => {
+      expect(lines?.[0]).toMatch(new RegExp(`^stamity resume card — run ${TODAY}_alpha \\(closed; as of `));
+      expect(lines?.join("\n")).not.toContain("_debug-");
+    },
+  },
+  {
+    name: "a closed status that trips the screen (withheld)",
+    seed: (repo) => repo.seedFiles({ [runFile(DONE, "record.md")]: record({ status: `closed — ${OVERRIDE}` }) }),
+    expect: (lines) => {
+      expect(lines).toHaveLength(1);
+      const named = new RegExp(
+        `^stamity resume card — run ${DONE} withheld: its text matched screen pattern (\\S+); the ledger is the recovery point$`,
+      ).exec(lines?.[0] ?? "")?.[1];
+      expect(SESSION_START_SCREEN_PATTERN_IDS).toContain(named);
+    },
+  },
+  {
     // Criterion (e): the newest-first walk passes a closed run and stops at the first in progress.
     name: "a newer closed run beside an older run in progress",
     seed: (repo) =>
@@ -678,7 +754,8 @@ function hookCard(run: HookRun): string[] | null {
 
 /** The minute the hook printed; a withheld card prints none, and its lines carry no time. */
 function printedMinute(lines: readonly string[] | null): Date {
-  const minute = /\(as of (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z)\)$/.exec(lines?.[0] ?? "")?.[1];
+  // TEST CHANGE, justified: the closed card (sw07) stamps "(closed; as of <minute>)".
+  const minute = /\((?:closed; )?as of (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z)\)$/.exec(lines?.[0] ?? "")?.[1];
   return minute === undefined ? new Date() : new Date(minute.replace("Z", ":00Z"));
 }
 
@@ -894,8 +971,65 @@ describe("stamity ledger status", () => {
       "plan: (not recorded)  ·  invocation: (not recorded)",
       "ledger: 1 open rows (2026-09-21_bare/b/1)  ·  the ledger is the recovery point",
     ]);
-    // ...and it is never picked as the run in progress.
+    // ...and it is never picked as the run in progress. 2026-09-20_closed is
+    // outside the closed card's two-day window, so no card prints (sw07).
     expect((await runInProcess(COMMANDS, ["ledger", "status"], { cwd: repo.dir })).stdout).toBe(NO_CARD);
+
+    // A run closed today: --run keeps the in-progress layout; no --run prints the closed card.
+    await repo.seedFiles({ [runFile(DONE, "record.md")]: record({ status: "closed — merged", plan: "docs/plans/done.md" }) });
+    const named = (await runInProcess(COMMANDS, ["ledger", "status", "--run", DONE], { cwd: repo.dir })).stdout.split("\n");
+    expect(named).toHaveLength(7);
+    expect(named.slice(1, 3)).toEqual([
+      "plan: docs/plans/done.md  ·  invocation: /st-work docs/plans/009-x.md",
+      "ledger: 0 open rows  ·  the ledger is the recovery point",
+    ]);
+    const unnamed = (await runInProcess(COMMANDS, ["ledger", "status"], { cwd: repo.dir })).stdout.split("\n");
+    expect(unnamed[0]).toContain(`run ${DONE} (closed; as of `);
+    expect(unnamed[1]).toBe("status: closed — merged");
+  });
+
+  it("gives the closed card's status and ledger states in --json, with inProgress false", async () => {
+    const repo = getRepo();
+    await repo.seedFiles({
+      [runFile(DONE, "record.md")]: record({ status: "**closed** — merged" }),
+      [runFile(DONE, "ledger.jsonl")]: [
+        row(`${DONE}/review/1`, "fixed"),
+        row(`${DONE}/review/2`, "fixed"),
+        row(`${DONE}/review/3`, "deferred"),
+        row(`${DONE}/review/4`, "wontfix"),
+        "",
+      ].join("\n"),
+    });
+    const doc = JSON.parse((await runInProcess(COMMANDS, ["ledger", "status", "--json"], { cwd: repo.dir })).stdout) as Record<
+      string,
+      unknown
+    >;
+    expect(doc).toMatchObject({
+      run: DONE,
+      inProgress: false,
+      status: "**closed** — merged",
+      ledgerStates: { fixed: 2, deferred: 1, rejected: 0, open: 0 },
+      withheld: null,
+      listsWithheld: null,
+    });
+    expect(doc).not.toHaveProperty("closed");
+    expect(Object.keys(doc["ledgerStates"] as object)).toEqual(["fixed", "deferred", "rejected", "open"]);
+    expect(doc["card"]).toHaveLength(5);
+  });
+
+  it("screens the record's status before --json echoes it, though the in-progress card never prints it", async () => {
+    const repo = getRepo();
+    await seedDemo(repo);
+    await repo.seedFiles({ [runFile(RUN, "record.md")]: record({ status: `in progress — ${OVERRIDE}` }) });
+    const plain = await runInProcess(COMMANDS, ["ledger", "status"], { cwd: repo.dir });
+    expect(plain.stdout.split("\n")).toHaveLength(7);
+    const result = await runInProcess(COMMANDS, ["ledger", "status", "--json"], { cwd: repo.dir });
+    expect(result.stdout).not.toContain(OVERRIDE);
+    const doc = JSON.parse(result.stdout) as Record<string, unknown>;
+    expect(doc["withheld"]).toBeNull();
+    expect(SESSION_START_SCREEN_PATTERN_IDS).toContain(doc["listsWithheld"]);
+    expect(doc["status"]).toBeNull();
+    expect(doc["ledgerStates"]).toEqual({ fixed: 1, deferred: 0, rejected: 0, open: 2 });
   });
 
   it("refuses a run that does not exist, a run id that is not one, and an uninitialised repo", async () => {
@@ -954,6 +1088,8 @@ describe("stamity ledger status", () => {
       ok: true,
       run: RUN,
       inProgress: true,
+      status: "in progress — opened 2026-09-23T08:00Z",
+      ledgerStates: { fixed: 1, deferred: 0, rejected: 0, open: 2 },
       counts: { openRows: 2, unledgeredReports: 1, lanes: 1 },
       openRowIds: [`${RUN}/review/1`, `${RUN}/review/2`],
       unledgeredReports: [`.stamity/runs/${RUN}/reports/u2-reviewer-r1.md`],
@@ -983,13 +1119,18 @@ describe("stamity ledger status", () => {
       ok: true,
       run: null,
       inProgress: false,
+      status: null,
       card: null,
       counts: { openRows: 0, unledgeredReports: 0, lanes: 0 },
+      ledgerStates: { fixed: 0, deferred: 0, rejected: 0, open: 0 },
       withheld: null,
       listsWithheld: null,
       unreadableLedgerLines: 0,
     });
     for (const key of ["openRowIds", "unledgeredReports", "lanes"]) expect(none).not.toHaveProperty(key);
+    // The null card keeps the card document's keys: those of a withheld card, which echoes no lists.
+    expect(Object.keys(none).toSorted()).toEqual(Object.keys(withheld).toSorted());
+    expect(Object.keys(none["ledgerStates"] as object)).toEqual(Object.keys(withheld["ledgerStates"] as object));
   });
 
   it("screens the full lists for --json and omits them on a hit, while stdout keeps the hook's card", async () => {

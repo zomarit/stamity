@@ -3,7 +3,10 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { INVISIBLE_SMUGGLING_CHARS, normalizeForDenyScan } from "../denyscan/denyScan.ts";
 import { SESSION_START_SCREEN } from "../hooks/scripts.ts";
 import {
+  CARD_CLOSED_MAX_AGE_DAYS,
+  CARD_CLOSED_NEXT_LINE,
   CARD_FIELD_MAX,
+  CARD_LEDGER_STATES,
   CARD_LEDGER_TOO_LARGE,
   CARD_LEDGER_UNREADABLE,
   CARD_LIST_MAX,
@@ -18,6 +21,7 @@ import {
   fenceOpenPattern,
   GIT_METADATA_MAX_BYTES,
   IN_PROGRESS_PATTERN,
+  isDebugRunId,
   LEDGER_FILE,
   LEDGER_READ_MAX_BYTES,
   RECORD_FILE,
@@ -63,11 +67,29 @@ export interface RecordHead {
   readonly invocation: string | null;
 }
 
+/** Ledger rows counted by the states the closed card names. */
+export type LedgerStateCounts = { readonly [state in (typeof CARD_LEDGER_STATES)[number]]: number };
+
 /** One run's card, with the lists behind its counts. */
 export interface ResumeCard {
   readonly runId: string;
+  /** False on the closed card (and on a `runId` named that is not in progress). */
   readonly inProgress: boolean;
-  /** The printed lines: the six card lines, or the one withheld line. */
+  /**
+   * The record head's status value, flattened as the card prints it; null when
+   * the head names none or cannot be read. Screened with the lists
+   * ({@link listsWithheld}), since the in-progress card never prints it.
+   */
+  readonly status: string | null;
+  /**
+   * The ledger's rows counted by state, all zero when the ledger is absent or
+   * unread. Rows in any other state are summed on the closed card as `other`.
+   */
+  readonly ledgerStates: LedgerStateCounts;
+  /**
+   * The printed lines: the six card lines, the five closed-card lines, or the
+   * one withheld line.
+   */
   readonly lines: readonly string[];
   /** The three lists in full, each item flattened as the card prints it. */
   readonly openRowIds: readonly string[];
@@ -76,9 +98,11 @@ export interface ResumeCard {
   /** The screen pattern id the card's text matched, or null when it printed. */
   readonly withheld: string | null;
   /**
-   * The screen pattern id the three full lists matched, or null. The card
-   * names at most CARD_LIST_MAX items of each, so an item past them is screened
-   * here, never in `lines`; a caller that echoes the lists checks this first.
+   * The screen pattern id the three full lists and the status matched, or
+   * null. The card names at most CARD_LIST_MAX items of each list, and the
+   * in-progress card never prints the status, so an item past them is screened
+   * here, never in `lines`; a caller that echoes the lists or the status checks
+   * this first.
    */
   readonly listsWithheld: string | null;
   /** Non-blank ledger lines that are not JSON objects. */
@@ -225,14 +249,24 @@ function runsDirOf(rootDir: string): string {
   return join(rootDir, ...RUNS_SEGMENTS);
 }
 
+/** The run a card with no named run is about, and whether it is the closed card. */
+export interface CardRun {
+  readonly runId: string;
+  readonly closed: boolean;
+}
+
 /**
  * The lexicographically greatest run folder whose record head says it is in
- * progress, or null. Names are walked newest first by code-unit order and the
- * walk stops at the first run in progress, so no older record head is read. A
- * linked runs folder, a linked run folder, a name that is not a run id and a
- * record that is a link are all passed over.
+ * progress; with none, the greatest whose date prefix is at or after the UTC
+ * day CARD_CLOSED_MAX_AGE_DAYS − 1 days before `now` and whose record head
+ * reads (the closed card); else null. Names are walked newest first by
+ * code-unit order and the walk stops at the first run in progress, so no older
+ * record head is read. A debug round's record (a run id carrying
+ * DEBUG_RUN_SEGMENT) is never picked. A linked runs folder, a linked run
+ * folder, a name that is not a run id and a record that is a link are all
+ * passed over.
  */
-export function findInProgressRun(rootDir: string): string | null {
+export function findCardRun(rootDir: string, now: Date): CardRun | null {
   const runsDir = runsDirOf(rootDir);
   // A linked runs folder is not this repo's runs: nothing in it is read.
   if (!realDir(runsDir)) return null;
@@ -240,15 +274,25 @@ export function findInProgressRun(rootDir: string): string | null {
   if (entries === null) return null;
   const runs = entries
     // A link to a directory is not a directory here: a run is never followed out of the tree.
-    .filter((entry) => entry.isDirectory() && RUN_ID_PATTERN.test(entry.name))
+    .filter((entry) => entry.isDirectory() && RUN_ID_PATTERN.test(entry.name) && !isDebugRunId(entry.name))
     .map((entry) => entry.name)
     .toSorted()
     .toReversed();
-  return runs.find((run) => readRecordHeadFile(join(runsDir, run, RECORD_FILE))?.inProgress === true) ?? null;
+  const cutoff = new Date(now.getTime() - (CARD_CLOSED_MAX_AGE_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
+  let closed: string | null = null;
+  for (const run of runs) {
+    const head = readRecordHeadFile(join(runsDir, run, RECORD_FILE));
+    if (head === null) continue;
+    if (head.inProgress) return { runId: run, closed: false };
+    if (closed === null && run.slice(0, 10) >= cutoff) closed = run;
+  }
+  return closed === null ? null : { runId: closed, closed: true };
 }
 
 interface LedgerRead {
   readonly open: string[];
+  /** Rows by state; `other` sums every state outside CARD_LEDGER_STATES, a missing one included. */
+  readonly states: LedgerStateCounts & { readonly other: number };
   readonly ledgered: Set<string>;
   readonly unreadable: number;
   /** The ledger is there but was not read; an absent ledger is not this. */
@@ -258,15 +302,22 @@ interface LedgerRead {
 }
 
 /**
- * Open row ids in file order, every report path a row carries, and the lines
- * that are not rows. `failed` when a ledger is there but is not read — a link,
- * anything else that is not a regular file, one over LEDGER_READ_MAX_BYTES
- * (`tooLarge` too), or a read that fails — so the card never counts it as
- * empty; an absent ledger is a run with no rows yet. An unread ledger ledgers
- * no report.
+ * Open row ids in file order, every report path a row carries, the rows
+ * counted by state, and the lines that are not rows. `failed` when a ledger is
+ * there but is not read — a link, anything else that is not a regular file, one
+ * over LEDGER_READ_MAX_BYTES (`tooLarge` too), or a read that fails — so the
+ * card never counts it as empty; an absent ledger is a run with no rows yet. An
+ * unread ledger ledgers no report and counts no state.
  */
 function readLedger(path: string): LedgerRead {
-  const read: LedgerRead = { open: [], ledgered: new Set(), unreadable: 0, failed: false, tooLarge: false };
+  const read: LedgerRead = {
+    open: [],
+    states: { fixed: 0, deferred: 0, rejected: 0, open: 0, other: 0 },
+    ledgered: new Set(),
+    unreadable: 0,
+    failed: false,
+    tooLarge: false,
+  };
   let isFile: boolean;
   let size: number;
   try {
@@ -288,6 +339,7 @@ function readLedger(path: string): LedgerRead {
     return { ...read, failed: true };
   }
   let unreadable = 0;
+  const states = { ...read.states };
   for (const line of raw.split(/\r?\n/)) {
     if (line.trim() === "") continue;
     let row: unknown;
@@ -305,8 +357,10 @@ function readLedger(path: string): LedgerRead {
     const fields = row as Record<string, unknown>;
     if (typeof fields["id"] === "string" && fields["state"] === "open") read.open.push(fields["id"]);
     if (typeof fields["report"] === "string") read.ledgered.add(fields["report"]);
+    const state = CARD_LEDGER_STATES.find((named) => named === fields["state"]) ?? "other";
+    states[state] += 1;
   }
-  return { ...read, unreadable };
+  return { ...read, states, unreadable };
 }
 
 /** Whether the first findings block holds at least one non-blank line before it closes. */
@@ -514,6 +568,39 @@ function renderAt(
 }
 
 /**
+ * The closed card's five lines: the run's closing status and its ledger counted
+ * by state, no lists. Every field is capped, so it always fits CARD_MAX_CHARS.
+ */
+function renderClosedCard(
+  parts: {
+    readonly runId: string;
+    readonly status: string | null;
+    readonly plan: string | null;
+    readonly invocation: string | null;
+    readonly states: LedgerRead["states"];
+    readonly ledgerUnreadable: boolean;
+    readonly ledgerTooLarge: boolean;
+  },
+  now: Date,
+): string[] {
+  const status = flat(parts.status ?? "");
+  const plan = flat(parts.plan ?? "");
+  const invocation = flat(parts.invocation ?? "");
+  const { fixed, deferred, rejected, open, other } = parts.states;
+  const rows = fixed + deferred + rejected + open + other;
+  let ledger = `${rows} rows — fixed ${fixed}, deferred ${deferred}, rejected ${rejected}, open ${open}${other > 0 ? `, other ${other}` : ""}`;
+  if (parts.ledgerUnreadable) ledger = CARD_LEDGER_UNREADABLE;
+  if (parts.ledgerTooLarge) ledger = CARD_LEDGER_TOO_LARGE;
+  return [
+    `stamity resume card — run ${parts.runId} (closed; as of ${now.toISOString().slice(0, 16)}Z)`,
+    `status: ${status === "" ? CARD_NOT_RECORDED : status}`,
+    `plan: ${plan === "" ? CARD_NOT_RECORDED : plan}  ·  invocation: ${invocation === "" ? CARD_NOT_RECORDED : invocation}`,
+    `ledger: ${ledger}  ·  ${CARD_RECOVERY_NOTE}`,
+    CARD_CLOSED_NEXT_LINE,
+  ];
+}
+
+/**
  * The six card lines, every list shrunk from CARD_LIST_MAX items down until the
  * joined text fits CARD_MAX_CHARS; with every list at zero it always does.
  */
@@ -564,9 +651,10 @@ export function screenCard(text: string): string {
 
 /**
  * The resume card of a run, recomputed from disk. With no `runId`, the run in
- * progress (the greatest by name), or null when none is; with one, that run
- * whether or not it is in progress, or null when it is not a real run folder
- * under a real runs folder.
+ * progress (the greatest by name), else the closed card of a run closed within
+ * CARD_CLOSED_MAX_AGE_DAYS ({@link findCardRun}), or null when neither is;
+ * with one, that run's six-line card whether or not it is in progress, or null
+ * when it is not a real run folder under a real runs folder.
  */
 export function collectResumeCard(opts: {
   readonly rootDir: string;
@@ -575,8 +663,9 @@ export function collectResumeCard(opts: {
 }): ResumeCard | null {
   const runsDir = runsDirOf(opts.rootDir);
   if (!realDir(runsDir)) return null;
-  const runId = opts.runId ?? findInProgressRun(opts.rootDir);
-  if (runId === null || !RUN_ID_PATTERN.test(runId)) return null;
+  const picked = opts.runId === undefined ? findCardRun(opts.rootDir, opts.now) : { runId: opts.runId, closed: false };
+  if (picked === null || !RUN_ID_PATTERN.test(picked.runId)) return null;
+  const runId = picked.runId;
   const runDir = join(runsDir, runId);
   if (!realDir(runDir)) return null;
 
@@ -586,26 +675,42 @@ export function collectResumeCard(opts: {
   const unledgered = reportsRead.listed;
   const lanes = lanesOf(opts.rootDir);
 
-  const card = renderResumeCard(
-    {
-      runId,
-      plan: head?.plan ?? null,
-      invocation: head?.invocation ?? null,
-      openRowIds: ledger.open,
-      unledgeredReports: unledgered,
-      lanes,
-      ledgerUnreadable: ledger.failed,
-      ledgerTooLarge: ledger.tooLarge,
-      notReportNamed: reportsRead.other,
-      reportsNotChecked: reportsRead.notChecked,
-    },
-    opts.now,
-  );
+  const card = picked.closed
+    ? renderClosedCard(
+        {
+          runId,
+          status: head?.status ?? null,
+          plan: head?.plan ?? null,
+          invocation: head?.invocation ?? null,
+          states: ledger.states,
+          ledgerUnreadable: ledger.failed,
+          ledgerTooLarge: ledger.tooLarge,
+        },
+        opts.now,
+      )
+    : renderResumeCard(
+        {
+          runId,
+          plan: head?.plan ?? null,
+          invocation: head?.invocation ?? null,
+          openRowIds: ledger.open,
+          unledgeredReports: unledgered,
+          lanes,
+          ledgerUnreadable: ledger.failed,
+          ledgerTooLarge: ledger.tooLarge,
+          notReportNamed: reportsRead.other,
+          reportsNotChecked: reportsRead.notChecked,
+        },
+        opts.now,
+      );
   const withheld = screenCard(card.join("\n"));
   const openRowIds = ledger.open.map(flat);
   const reports = unledgered.map(flat);
   const laneItems = lanes.map(flat);
-  const listsWithheld = screenCard([...openRowIds, ...reports, ...laneItems].join("\n"));
+  const rawStatus = head?.status ?? null;
+  const statusText = rawStatus === null ? null : flat(rawStatus);
+  const listsWithheld = screenCard([...openRowIds, ...reports, ...laneItems, statusText ?? ""].join("\n"));
+  const { fixed, deferred, rejected, open } = ledger.states;
   const lines =
     withheld === ""
       ? card
@@ -615,6 +720,8 @@ export function collectResumeCard(opts: {
   return {
     runId,
     inProgress: head?.inProgress ?? false,
+    status: statusText,
+    ledgerStates: { fixed, deferred, rejected, open },
     lines,
     openRowIds,
     unledgeredReports: reports,
