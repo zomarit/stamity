@@ -1,8 +1,9 @@
+import { createHash } from "node:crypto";
 import { link, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { CODEX_AGENTS_OVERRIDE_FILE } from "../../src/adapters/codex.ts";
-import { checkCommand } from "../../src/cli/commands/check.ts";
+import { checkCommand, runDriftGate } from "../../src/cli/commands/check.ts";
 import { applyInit } from "../../src/cli/commands/init/apply.ts";
 import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
 import { syncClosingLines } from "../../src/cli/commands/sync.ts";
@@ -227,6 +228,98 @@ describe("the override follows the AGENTS.md bytes sync writes", () => {
       const override = await readFile(join(repo.rootDir, CODEX_AGENTS_OVERRIDE_FILE), "utf8");
       expect(override.startsWith(OPERATOR_TEXT.trimEnd())).toBe(true);
       expect(override).toContain(APPENDIX_HEADING);
+    });
+  });
+});
+
+/**
+ * The upgrade of a setup 1.10.0 left on disk (QA row P03 of run 2026-09-30_optimization-sweep).
+ *
+ * 1.10.0's Codex adapter wrote the shared root `AGENTS.md` WHOLE — no STAMITY markers — with the
+ * rules appendix inlined after the charter, and recorded it in the ledger under every selected
+ * client as `<client>:charter` (`infra`) with the sha-256 of those bytes, and no `importChoice`.
+ * Read off the published 1.10.0 CLI in scratch on 2026-09-30 (`init -y --tools codex` and
+ * `init -y --tools claude,cursor,copilot,codex`: the same bytes, one owner row against four).
+ *
+ * With no import decision the spec promises no keep (`docs/specs/prove-behavior-and-value.md`,
+ * REQ-PROVE-003/-005): an operator line appended to that whole file is a hand edit of an
+ * engine-owned file, and sync takes the drifted-overwrite lane — written whole, never refused,
+ * the operator's bytes kept in a verified `.bak` and named in a warning.
+ */
+describe("upgrading a 1.10.0 setup whose whole-file AGENTS.md carried the Codex appendix", () => {
+  const LEGACY_OPERATOR_TEXT = "\n## Team notes\n\nOperator line QA-17.\n";
+
+  /** Rebuild the 1.10.0 on-disk shape over a fresh emission of this build. */
+  async function seedLegacyInstall(repo: GoldenRepo, tools: readonly Tool[]): Promise<void> {
+    const charterPath = join(repo.rootDir, AGENTS_MD_FILE);
+    const overridePath = join(repo.rootDir, CODEX_AGENTS_OVERRIDE_FILE);
+    // 1.10.0's AGENTS.md is the charter with the appendix inlined after it — the bytes this build
+    // splits across the two files, and the override already holds exactly that sequence.
+    const legacy = await readFile(overridePath, "utf8");
+    expect(legacy).not.toContain("STAMITY:BEGIN");
+    expect(legacy.split(APPENDIX_HEADING)).toHaveLength(2);
+    await writeFile(charterPath, legacy, "utf8");
+    await rm(overridePath);
+
+    const manifest = await readManifest(repo.rootDir);
+    if (manifest === null) throw new Error("fixture lost its manifest");
+    const contentHash = createHash("sha256").update(legacy).digest("hex");
+    const ledger = [
+      ...manifest.ledger.filter((row) => row.path !== AGENTS_MD_FILE && row.path !== CODEX_AGENTS_OVERRIDE_FILE),
+      ...tools.map((adapter) => ({ adapter, artifactId: "charter", artifactType: "infra" as const, contentHash, path: AGENTS_MD_FILE })),
+    ];
+    const { importChoice: _dropped, ...rest } = manifest;
+    await writeManifest(repo.rootDir, { ...rest, ledger }, { now: GOLDEN_NOW });
+
+    // The operator's edit after the 1.10.0 install.
+    await writeFile(charterPath, `${legacy}${LEGACY_OPERATOR_TEXT}`, "utf8");
+  }
+
+  it.each([
+    { name: "codex only", tools: ["codex"] as const },
+    { name: "all four clients", tools: ["claude", "cursor", "copilot", "codex"] as const },
+  ])("overwrites with a named .bak, moves the appendix to the override, and checks clean ($name)", async ({ tools }) => {
+    await withRepo(tools, async (repo) => {
+      await seedLegacyInstall(repo, tools);
+      const seeded = await readManifest(repo.rootDir);
+      expect(seeded?.importChoice).toBeUndefined();
+      expect(seeded?.ledger.filter((row) => row.path === AGENTS_MD_FILE).map((row) => row.adapter)).toEqual([...tools]);
+      expect(seeded?.ledger.some((row) => row.path === CODEX_AGENTS_OVERRIDE_FILE)).toBe(false);
+
+      // Non-degenerate: before the sync the seeded state is drift on both files.
+      expect((await runDriftGate(repo.rootDir, GOLDEN_ENGINE_VERSION)).clean).toBe(false);
+      const upgrade = await plan(repo);
+      expect(actionOf(upgrade, AGENTS_MD_FILE)).toBe("update");
+      expect(actionOf(upgrade, CODEX_AGENTS_OVERRIDE_FILE)).toBe("create");
+      expect(upgrade.collisions).toEqual([]);
+      const report = await apply(repo, upgrade);
+
+      // Not refused: the drifted-overwrite lane, with its warning naming the file and the backup.
+      expect(report.refused).toEqual([]);
+      const backups = (await readdir(repo.rootDir)).filter(
+        (name) => name.startsWith(`${AGENTS_MD_FILE}.`) && name.endsWith(".bak"),
+      );
+      expect(backups).toHaveLength(1);
+      const backup = backups[0] ?? "";
+      const row = report.wrote.find((entry) => entry.path === AGENTS_MD_FILE);
+      expect(row?.warning).toContain(`Overwrote ${AGENTS_MD_FILE}`);
+      expect(row?.warning).toContain(join(repo.rootDir, backup));
+
+      // The operator's line survives in the backup, and only there.
+      expect(await readFile(join(repo.rootDir, backup), "utf8")).toContain("Operator line QA-17");
+      const charter = await readFile(join(repo.rootDir, AGENTS_MD_FILE), "utf8");
+      expect(charter).not.toContain("Operator line QA-17");
+      expect(charter).not.toContain(APPENDIX_HEADING);
+      const override = await readFile(join(repo.rootDir, CODEX_AGENTS_OVERRIDE_FILE), "utf8");
+      expect(override.split(APPENDIX_HEADING)).toHaveLength(2);
+      expect(override).not.toContain("Operator line QA-17");
+
+      // `check` afterwards: its own drift gate, at the fixture's engine version (the CLI's would
+      // read this checkout's version, and every pinned call in the fixture would then differ).
+      const drift = await runDriftGate(repo.rootDir, GOLDEN_ENGINE_VERSION);
+      expect(drift.changes.map((entry) => `${entry.path}:${entry.action}`)).toEqual([]);
+      expect(drift.missing).toEqual([]);
+      expect(drift.clean).toBe(true);
     });
   });
 });
