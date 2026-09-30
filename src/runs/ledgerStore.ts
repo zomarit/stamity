@@ -340,7 +340,7 @@ export interface AppendedRow {
   readonly decisionNeeded: boolean;
   /**
    * The finding already had a row, so none was appended: `ledgerId` names that
-   * existing row. Only a report-less (`--stdin`) append sets it; see
+   * existing row, and `severity` and `decisionNeeded` are that row's own. Only a report-less (`--stdin`) append sets it; see
    * {@link appendFindings}.
    */
   readonly alreadyFiled: boolean;
@@ -385,22 +385,40 @@ async function readLedger(path: string, relPath: string): Promise<string> {
   return await readFile(path, "utf8");
 }
 
+/** A row an `already-filed` line describes: its id and its own flags, never the incoming finding's. */
+interface FiledRow {
+  readonly id: string;
+  readonly severity: FindingSeverity;
+  readonly decisionNeeded: boolean;
+}
+
+function isFindingSeverity(value: unknown): value is FindingSeverity {
+  return value === "Critical" || value === "Warning" || value === "Minor";
+}
+
 /**
  * The existing rows a report-less append matches its findings against: each
- * `evidence` string of a row filed under `phase` and `source`, mapped to those
- * rows' ids in row order. A row whose evidence is not a string matches nothing.
+ * `evidence` string of a row of this run filed under `phase` and `source`,
+ * mapped to those rows in row order. A row whose id is not of this run (a
+ * hand-planted foreign row, which `ledger close` would refuse by that id), whose
+ * evidence is not a string, or whose severity is not one a finding carries
+ * matches nothing, so every match is a row this run can close and print as it is.
  */
 function filedEvidence(
   held: readonly LedgerRow[],
+  runId: string,
   phase: string,
   source: string,
-): Map<string, string[]> {
-  const filed = new Map<string, string[]>();
+): Map<string, FiledRow[]> {
+  const ownRun = `${runId}/`;
+  const filed = new Map<string, FiledRow[]>();
   for (const row of held) {
     if (row.phase !== phase || row.source !== source || typeof row.evidence !== "string") continue;
-    const ids = filed.get(row.evidence);
-    if (ids === undefined) filed.set(row.evidence, [row.id]);
-    else ids.push(row.id);
+    if (!row.id.startsWith(ownRun) || !isFindingSeverity(row.severity)) continue;
+    const entry = { id: row.id, severity: row.severity, decisionNeeded: row.decision_needed === true };
+    const rows = filed.get(row.evidence);
+    if (rows === undefined) filed.set(row.evidence, [entry]);
+    else rows.push(entry);
   }
   return filed;
 }
@@ -413,7 +431,9 @@ function filedEvidence(
  * append names no report to refuse, so it matches each finding instead
  * (REQ-CTX-005): a finding whose phase, source and stored evidence
  * (`<locator> — <summary>`, after the same strip a row gets) equal an existing
- * row's is not appended, and comes back `alreadyFiled` under that row's id.
+ * row's is not appended, and comes back `alreadyFiled` under that row's id,
+ * with that row's own severity and `decision_needed` — the incoming finding's
+ * may differ, and the row, not the block, is what a close or a sign-off reads.
  * Matching is one-to-one in row order — the k-th finding carrying one evidence
  * string names the k-th row carrying it — and a finding with no such row left
  * is appended, so a re-piped block files nothing and names each original id
@@ -459,7 +479,8 @@ export async function appendFindings(req: {
     }
 
     // A report-less append's matches; a report's repeats were refused above.
-    const filed = req.report === null ? filedEvidence(held, req.phase, req.source) : new Map<string, string[]>();
+    const filed =
+      req.report === null ? filedEvidence(held, req.runId, req.phase, req.source) : new Map<string, FiledRow[]>();
     let next = nextRowNumber(held, req.runId, req.phase);
     const rows: AppendedRow[] = [];
     const lines: string[] = [];
@@ -471,12 +492,18 @@ export async function appendFindings(req: {
       // so a bidi override or a line separator would spoof the line it lands on,
       // and a tag-block payload would return to context with the open rows.
       const evidence = `${locator.text} — ${summary.text}`;
-      const existingId = filed.get(evidence)?.shift();
-      const shared = { severity: finding.severity, localId: finding.id, decisionNeeded: finding.decisionNeeded };
-      if (existingId !== undefined) {
-        rows.push({ ledgerId: existingId, ...shared, alreadyFiled: true });
+      const match = filed.get(evidence)?.shift();
+      if (match !== undefined) {
+        rows.push({
+          ledgerId: match.id,
+          severity: match.severity,
+          localId: finding.id,
+          decisionNeeded: match.decisionNeeded,
+          alreadyFiled: true,
+        });
         continue;
       }
+      const shared = { severity: finding.severity, localId: finding.id, decisionNeeded: finding.decisionNeeded };
       const ledgerId = `${req.runId}/${req.phase}/${next}`;
       next += 1;
       if (locator.tagged || summary.tagged) tagsStripped.push(ledgerId);

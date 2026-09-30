@@ -671,6 +671,25 @@ describe("appendFindings", () => {
     expect(parseLedgerText(await readText(dir, LEDGER)).rows.size).toBe(4);
   });
 
+  it("files a finding again when the only row with its evidence belongs to another run", async () => {
+    const dir = tempDir();
+    const planted = JSON.stringify({
+      id: "2026-09-01_other/review/4",
+      phase: "review",
+      source: "reviewer",
+      severity: "Critical",
+      evidence: "src/a.ts:1 — s",
+      state: "open",
+      rationale: "",
+    });
+    await seedRun(dir, { [LEDGER]: `${planted}\n` });
+
+    const result = await append(dir, [finding()]);
+
+    expect(result.rows).toMatchObject([{ ledgerId: `${RUN}/review/1`, alreadyFiled: false }]);
+    expect(parseLedgerText(await readText(dir, LEDGER)).rows.size).toBe(2);
+  });
+
   it("matches a finding by its stored evidence, after tag characters are stripped", async () => {
     const dir = tempDir();
     await seedRun(dir);
@@ -1000,6 +1019,25 @@ describe("stamity ledger append", () => {
         { ledgerId: `${RUN}/review/2`, localId: "W-1", alreadyFiled: true },
       ],
     });
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("prints an already-filed line with the filed row's severity and decision-needed, not the re-piped finding's", async () => {
+    const dir = tempDir();
+    await seedRun(dir);
+    await cli(dir, [...APPEND, "--stdin"], report([{ ...W1, decision_needed: true }]).split("\n"));
+    const before = await readText(dir, LEDGER);
+    // Same locator and summary, so the same evidence; a raised severity and no decision_needed.
+    const repiped = report([{ ...W1, id: "C-1", severity: "Critical" }]).split("\n");
+
+    const text = await cli(dir, [...APPEND, "--stdin"], repiped);
+    const json = await cli(dir, [...APPEND, "--stdin", "--json"], repiped);
+
+    expect(text.code, text.stderr).toBe(0);
+    expect(text.stdout).toBe(`${RUN}/review/1 Warning C-1 decision-needed already-filed\n`);
+    expect((JSON.parse(json.stdout) as { rows: unknown[] }).rows).toEqual([
+      { ledgerId: `${RUN}/review/1`, severity: "Warning", localId: "C-1", decisionNeeded: true, alreadyFiled: true },
+    ]);
     expect(await readText(dir, LEDGER)).toBe(before);
   });
 
