@@ -93,10 +93,11 @@ Asked only when a row needs a person. When every row auto-proved, the
 checkpoint closes on its pointers with no ask and records "all N rows
 auto-proven". A bare sign-off ("signed off", "ok") records each open row
 `accepted-unwalked` with its input hash, never `walked`, and so does any
-reply for each open row it does not name. A row is `walked` only when the
-person's reply says so for that row or for all of them, and that reply is
-quoted in the record. A row recorded `accepted-unwalked` in an earlier record
-of this change with the same input hash is carried as
+sign-off for each open row it does not name. A reply that withholds sign-off
+records no row as accepted and leaves the checkpoint open. A row is `walked`
+only when the person's reply says so for that row or for all of them, and
+that reply is quoted in the record. A row recorded `accepted-unwalked` in an
+earlier record of this change with the same input hash is carried as
 `accepted-unwalked (carried from <run-id>)`, not asked again — never a row
 whose Risk is now `H`, which is asked at every checkpoint until walked or
 auto-proven; a changed hash reopens it. An unattended run asks nothing and

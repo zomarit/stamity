@@ -86,6 +86,12 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-30, plan 013 file 2, fixer round 2 of unit work-qa-states (run
+ *     2026-09-30_optimization-sweep; review/83). NOTHING moved in this suite;
+ *     the row keeps the two ledgers in step. The round's one emitted change is
+ *     `skills/st-qa/SKILL.md`, +94 bytes in its sign-off paragraph, which no
+ *     golden here carries; the sibling suite itemises it.
+ *
  *   - 2026-09-30, plan 013 file 2, fixer round 1 of unit work-qa-states (run
  *     2026-09-30_optimization-sweep). NOTHING moved in this suite; the row
  *     keeps the two ledgers in step. The round's one emitted change is

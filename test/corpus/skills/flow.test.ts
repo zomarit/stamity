@@ -780,7 +780,15 @@ describe("qa — the human checkpoint", () => {
     );
     expect(text).toContain("(a `walked` row with the quoted reply it rests on)");
     // review/55: a mixed reply leaves the rows it does not name accepted-unwalked, never walked.
-    expect(text).toContain("and so does any reply for each open row it does not name");
+    // TEST CHANGE, justified (2026-09-30): fixer round 2 of work-qa-states (review/83). "any
+    // reply" also fired on a reply that withholds sign-off, and those rows then carried unasked;
+    // REQ-FLOW-017 grants accepted-unwalked only on a sign-off, so the pin moves to "any sign-off".
+    expect(text).toContain("and so does any sign-off for each open row it does not name");
+    expect(text).not.toContain("and so does any reply");
+    // review/83: a withheld sign-off accepts nothing and the checkpoint stays open.
+    expect(text).toContain(
+      "A reply that withholds sign-off records no row as accepted and leaves the checkpoint open.",
+    );
     // The skill's own input hash, not the release harness's rowHash.
     expect(text).toContain("the sha256 of the sorted lines `<path> <git hash-object of path>`");
     expect(text).not.toMatch(/rowHash/);
