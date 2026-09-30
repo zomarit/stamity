@@ -13,22 +13,30 @@ const MAX_FILE_BYTES = 1024 * 1024
 // Exact repository-relative paths only. An exception needs its reviewable reason here,
 // never a broad extension exemption or an automatically raised size ceiling.
 const LARGE_FILE_EXCEPTIONS = new Map([
-  // Empty, and an empty list is the expected steady state: an entry buys one retention window and
-  // retires at the release close that ends it. The last pair — run 34's and run 35's public
-  // summaries, run 35 the 1.10.0 run of record composing with run 34 and reading its summary from
-  // the retention commit (composition.priorSummaryCommit 95addb30) — retired at the 1.10.0 close,
-  // whose archive step replaced both with compact summaries beside an ARCHIVE.json pointer into the
-  // evidence-archive-2026-09-28 release: run 34 from 3512517 to 65379 bytes, run 35 from 3511337 to
-  // 113795. The pair before it, run 31's and run 32's, retired the same way at the 1.9.0 close
-  // (evidence-archive-2026-09-22), and run 30's summary is the first worked precedent: 3418596 bytes
-  // in 68b57ef (2026-09-15), compacted to 112695 bytes at the 1.8.0 close (05cb4ef).
+  // Empty between release windows: an entry buys one retention window and retires at the release
+  // close that ends it. The map now holds the 1.11.0 window's one entry, below. The last pair — run
+  // 34's and run 35's public summaries, run 35 the 1.10.0 run of record composing with run 34 and
+  // reading its summary from the retention commit (composition.priorSummaryCommit 95addb30) —
+  // retired at the 1.10.0 close, whose archive step replaced both with compact summaries beside an
+  // ARCHIVE.json pointer into the evidence-archive-2026-09-28 release: run 34 from 3512517 to 65379
+  // bytes, run 35 from 3511337 to 113795. The pair before it, run 31's and run 32's, retired the
+  // same way at the 1.9.0 close (evidence-archive-2026-09-22), and run 30's summary is the first
+  // worked precedent: 3418596 bytes in 68b57ef (2026-09-15), compacted to 112695 bytes at the 1.8.0
+  // close (05cb4ef).
   // Verify: git cat-file -s 95addb30:evals/runs/2026-09-27-run-34/summary.json
+  //
+  // The 1.11.0 window holds one entry. Run 36 is a full baseline — every case measured, no prior
+  // run and no composition, because the claude profile moved to a new configuration — and it is
+  // the 1.11.0 run of record; the next release's incremental run reads its summary from the
+  // retention commit. The 1.11.0 close's evidence-archive step compacts it beside an ARCHIVE.json
+  // pointer and retires this entry.
   //
   // A new entry is one exact repository-relative path with its reviewable reason, a named window,
   // and the close step that ends it — never a broad extension exemption, never a raised ceiling.
   // An entry may precede its artifact: the map is consulted only for paths Git reports as changed
   // (the `has` below), is never iterated and never stat'd, so an entry for a path not yet in the
   // tree is inert rather than a false pass.
+  ['evals/runs/2026-09-30-run-36/summary.json', 'run 36, the full 1.11.0 baseline on the claude profile, whose summary the next increment reads from the retention commit; retained for the 1.11.0 release window until the 1.11.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/
