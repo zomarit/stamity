@@ -20,6 +20,7 @@ import { createManifest, manifestPath, readManifest, writeManifest } from "../..
 import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
 import type { AdapterOutput, ContentSelection } from "../../../src/types/content.ts";
 import { MANIFEST_VERSION } from "../../../src/types/manifest.ts";
+import type * as PathsApi from "../../../src/shared/paths.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import { canonical, npxCommand } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
@@ -343,8 +344,72 @@ describe("sync — help text", () => {
     // running, and `sync.ts` composes it from `packageName()`. Derived here from the
     // manifest so a renamed private copy reads its own guidance rather than failing on a
     // registry name it cannot install; the canonical checkout asserts the same bytes.
-    expect(result.stdout).toContain(`npx ${canonical().name}@latest sync`);
+    // TEST CHANGE (sw26 fix round 2, review/109): a checkout with no npm channel
+    // (a registry-less fork) prints the no-fetch line instead; the canonical
+    // checkout asserts the same bytes as before.
+    expect(result.stdout).toContain(
+      canonical().npmChannel
+        ? `npx ${canonical().name}@latest sync`
+        : `then npx --no ${canonical().name} sync`,
+    );
     expect(result.stdout).toContain("--force");
+  });
+});
+
+/**
+ * The update line against a pseudo package root (security review/109): a
+ * package with no npm channel names no registry fetch, and one with a channel
+ * keeps the line byte for byte. Only the kit's own root walk is redirected, as
+ * in `test/cli/kit/packageName.test.ts`; the manifest read and the rendering are real.
+ */
+describe("sync — help text, by npm channel", () => {
+  const kitDir = join("src", "cli", "kit");
+
+  async function helpFor(manifest: Record<string, unknown>): Promise<string> {
+    const handle = tempDir();
+    await handle.seedFiles({ "package.json": `${JSON.stringify(manifest)}\n` });
+    vi.resetModules();
+    vi.doMock("../../../src/shared/paths.ts", async (importOriginal) => {
+      const actual = await importOriginal<typeof PathsApi>();
+      return {
+        ...actual,
+        findPackageRoot: (from: string): string =>
+          from.endsWith(kitDir) ? handle.dir : actual.findPackageRoot(from),
+      };
+    });
+    try {
+      const fresh = await import("../../../src/cli/commands/sync.ts");
+      const result = await runInProcess([fresh.syncCommand], ["sync", "--help"], { cwd: handle.dir });
+      expect(result.code).toBe(0);
+      return result.stdout;
+    } finally {
+      vi.doUnmock("../../../src/shared/paths.ts");
+      vi.resetModules();
+    }
+  }
+
+  it("names no registry fetch for a registry-less fork (private, no publishConfig.registry)", async () => {
+    const stdout = await helpFor({ name: "@acme/stamity", version: "1.8.0", private: true });
+
+    expect(stdout).toContain(
+      "update = install the newer release into this project, then npx --no @acme/stamity sync — " +
+        "regenerating from the newest release is the update; no separate update command exists.",
+    );
+    expect(stdout).not.toContain("@latest");
+    expect(stdout).not.toContain("npx @acme/stamity");
+  });
+
+  it.each([
+    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://npm.pkg.github.com" } },
+    { name: "@acme/stamity", version: "1.8.0" },
+  ])("keeps the line byte for byte for a package with a channel (%j)", async (manifest) => {
+    const stdout = await helpFor(manifest);
+
+    expect(stdout).toContain(
+      "update = npx @acme/stamity@latest sync — regenerating from the newest release is the " +
+        "update; no separate update command exists.",
+    );
+    expect(stdout).not.toContain("npx --no");
   });
 });
 

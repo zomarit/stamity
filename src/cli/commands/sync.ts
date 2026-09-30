@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { packageName } from "../kit/packageName.ts";
+import { hasNpmChannel, packageName } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { WorkingTreeStatus } from "../engine/gitStatus.ts";
 import { applySync, planSync, type SyncApplyReport, type SyncPlan } from "./sync/engine.ts";
@@ -42,8 +42,23 @@ import { renderSyncReport, syncJsonPayload } from "./sync/report.ts";
  * A function rather than a constant because the name is read from the running
  * installation: a downstream that renamed the package per
  * `docs/enterprise-forks.md` must be told to run ITS package, not ours.
+ *
+ * A package with no npm channel (`hasNpmChannel()` false: private, no
+ * `publishConfig.registry`) follows the update notice's private-package rule
+ * (`../notice/updateNotice.ts`) and names no registry fetch. Its name is one
+ * nobody holds on the public registry, and `npx <name>@latest` with neither
+ * `-y` nor `--no` installs without asking in a shell with no TTY, which is
+ * an agent's. So the line says to install the newer release into the project
+ * first and then run `npx --no <name> sync`, which runs that installed copy
+ * and refuses to fetch one. A package with a channel keeps its line unchanged.
  */
 function updatePathHelp(): string {
+  if (!hasNpmChannel()) {
+    return (
+      `update = install the newer release into this project, then npx --no ${packageName()} sync — ` +
+      `regenerating from the newest release is the update; no separate update command exists.`
+    );
+  }
   return (
     `update = npx ${packageName()}@latest sync — regenerating from the newest release is the ` +
     `update; no separate update command exists.`

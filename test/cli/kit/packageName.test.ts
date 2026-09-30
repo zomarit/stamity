@@ -322,7 +322,9 @@ describe("a renamed fork's emission", () => {
       manifest: { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://npm.pkg.github.com" } },
       name: "@acme/stamity",
       call: "npx -y @acme/stamity@1.8.0",
-      refused: "npx --no ",
+      // TEST CHANGE (sw26 fix round 2, prove/5): the pinned no-channel form only. The
+      // shared sentence legitimately carries the LOCAL form `npx --no stamity <verb>`.
+      refused: "npx --no @acme/stamity@",
     },
     {
       label: "the canonical build keeps `npx -y`",
@@ -331,7 +333,8 @@ describe("a renamed fork's emission", () => {
       manifest: { name: CANONICAL_PACKAGE_NAME, version: "1.8.0" },
       name: CANONICAL_PACKAGE_NAME,
       call: `npx -y ${CANONICAL_PACKAGE_NAME}@1.8.0`,
-      refused: "npx --no ",
+      // TEST CHANGE (sw26 fix round 2, prove/5): as above.
+      refused: `npx --no ${CANONICAL_PACKAGE_NAME}@`,
     },
   ] as const;
 
