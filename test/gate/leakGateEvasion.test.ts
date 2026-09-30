@@ -768,6 +768,25 @@ describe("leak-gate — email addresses", () => {
     expect(hitCount(dirty, file)).toBe(1);
   });
 
+  it("withholds an address held in a file's NAME wherever the path is printed, keeping the rest readable", () => {
+    // A path is printed in every hit line and every exemption line: a file named with an address
+    // must not publish it through its path, whichever rule or listing prints that path.
+    const scratch = new Scratch();
+    // `_` ends the domain run, so the extension after it stays readable.
+    scratch.write(`docs/${PERSON}_notes.md`, `write to ${PERSON} for access\n`);
+    scratch.write(`node_modules/${PERSON}/index.js`, "module.exports = {}\n");
+
+    const result = scratch.run();
+    const output = `${result.stdout}${result.stderr}`;
+
+    expect(result.status).toBe(1);
+    expect(output).toContain("docs/<withheld>_notes.md (path)  [email-address]");
+    expect(output).toContain("docs/<withheld>_notes.md:1:");
+    expect(output).toContain("node_modules/<withheld>/index.js");
+    expect(output).not.toContain(PROBE_LOCAL);
+    expect(output).not.toContain(PERSON);
+  });
+
   it("reports a credentialed connection string as a credential, not as an address", () => {
     // URL userinfo is a login or a secret, never a mailbox: the credential shape owns it.
     const scratch = new Scratch();

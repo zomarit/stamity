@@ -7,7 +7,7 @@
 // names the path and line without the address.
 import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
-import { EMAIL_RULE, ruleHits } from './leak-gate.mjs'
+import { EMAIL_RULE, maskAddresses, ruleHits } from './leak-gate.mjs'
 
 const MAX_FILE_BYTES = 1024 * 1024
 // Exact repository-relative paths only. An exception needs its reviewable reason here,
@@ -110,7 +110,9 @@ function unquote(path) {
 
 /**
  * `[path, line, text]` for every line `git diff -U0` adds. Hunk bodies are counted off their
- * headers, so an added line that itself begins `+++` is content, never a file header.
+ * headers, so an added line that itself begins `+++` is content, never a file header. A context
+ * row counts on both sides: the call pins `--inter-hunk-context=0`, and this keeps a fused hunk
+ * from leaving the counters open should one arrive anyway.
  */
 function addedLines(diff) {
   const added = []
@@ -119,6 +121,7 @@ function addedLines(diff) {
     if (oldLeft > 0 || newLeft > 0) {
       if (row.startsWith('+')) { if (path !== null) added.push([path, line, row.slice(1)]); line++; newLeft-- }
       else if (row.startsWith('-')) oldLeft--
+      else if (row.startsWith(' ')) { line++; oldLeft--; newLeft-- }
       continue
     }
     const hunk = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(row)
@@ -182,8 +185,10 @@ function main(args) {
       }
       if (!valid) findings.push([path, 'invalid archive manifest; requires source identity, hash, counts and a GitHub Release asset URL'])
     }
-    // Explicit prefixes and no external differ, so a contributor's diff settings cannot move the parse.
-    const diff = git('-c', 'core.quotePath=false', 'diff', '--cached', '-U0', '--no-color', '--no-ext-diff',
+    // Explicit prefixes, no inter-hunk context and no external differ, so a contributor's diff
+    // settings (`diff.interHunkContext` among them, which `-U0` does not override) cannot move the parse.
+    const diff = git('-c', 'core.quotePath=false', 'diff', '--cached', '-U0', '--inter-hunk-context=0',
+      '--no-color', '--no-ext-diff',
       '--no-renames', '--diff-filter=AM', '--src-prefix=a/', '--dst-prefix=b/', base, '--')
     for (const [path, line, text] of addedLines(diff)) {
       if (EMAIL_RULE.allow.some(allowed => allowed(path))) continue
@@ -191,7 +196,8 @@ function main(args) {
       if (ruleHits(EMAIL_RULE, text).length > 0) findings.push([path, `line ${line}: email address added`])
     }
   }
-  for (const [path, reason] of findings) console.error(`repo-hygiene: ${JSON.stringify(path)}: ${reason}`)
+  // A path is printed with any address in it withheld, as the leak gate prints it.
+  for (const [path, reason] of findings) console.error(`repo-hygiene: ${JSON.stringify(maskAddresses(path))}: ${reason}`)
   console.log(`repo-hygiene: ${findings.length ? 'FAIL' : 'PASS'} — ${entries.size} tracked files; ${additions.length} additions checked${options.base === null ? '; raw-evidence/size checks need --base' : ''}`)
   return findings.length ? 1 : 0
 }

@@ -595,8 +595,8 @@ function secretRule(id, source, flags) {
 }
 
 /**
- * Exact paths allowed to carry an address, one `[path, reason]` row each, printed with the files
- * they dropped on every run. Empty is the steady state: an example address is spelled at a
+ * Exact paths allowed to carry an address, one `[path, reason]` row each; every run prints each
+ * dropped path, and the reason stays here, in source, for review. Empty is the steady state: an example address is spelled at a
  * reserved domain, which the rule's shape drops; a row is for an address that has to be real.
  */
 const EMAIL_FIXTURES = []
@@ -811,6 +811,19 @@ function shownMatch(rule, match) {
   return rule.redact ? '<withheld>' : match
 }
 
+/**
+ * `text` with every address the email rule reads withheld, the rest left readable. A path is
+ * printed in every hit and every exemption line, so a file NAMED with an address would otherwise
+ * publish it in the CI log the rule's `redact` protects. Raw only, as the path scan reads paths.
+ */
+export function maskAddresses(text) {
+  let masked = text
+  for (const hit of collect(EMAIL_RULE, text).toReversed()) {
+    masked = `${masked.slice(0, hit.index)}<withheld>${masked.slice(hit.index + hit.match.length)}`
+  }
+  return masked
+}
+
 function excerpt(text) {
   return text.replace(/[\s\p{C}]/gu, ' ').trim().slice(0, EXCERPT_LENGTH)
 }
@@ -845,6 +858,7 @@ const NORMALIZED_PASSES = [
  * and again by its normalized twin is one finding, reported at the offset an operator can seek to.
  */
 function scanContent(file, bytes, rules, hits, seen) {
+  const shown = maskAddresses(file)
   const views = decodeCandidates(bytes)
   const scannable = views.map((view) => ({ ...view, normalized: null, source: null }))
   // Which folds this file's SURVIVING rules read — the allowlists run first, so a file where the
@@ -892,8 +906,8 @@ function scanContent(file, bytes, rules, hits, seen) {
         seen.add(key)
         const where =
           view.label === 'latin1'
-            ? (({ line, column }) => `${file}:${line}:${column}`)(lineColumn(view.text, offset))
-            : `${file} (${view.label}, byte ${offset})`
+            ? (({ line, column }) => `${shown}:${line}:${column}`)(lineColumn(view.text, offset))
+            : `${shown} (${view.label}, byte ${offset})`
         hits.push({
           file,
           rule: rule.id,
@@ -935,7 +949,7 @@ function run() {
     // anything can route the file elsewhere — the step the old skip's `continue` jumped over.
     for (const rule of rules) {
       for (const hit of collect(rule, file)) {
-        hits.push({ file, rule: rule.id, match: shownMatch(rule, hit.match), where: `${file} (path)` })
+        hits.push({ file, rule: rule.id, match: shownMatch(rule, hit.match), where: `${maskAddresses(file)} (path)` })
       }
     }
 
@@ -978,7 +992,7 @@ function run() {
             file,
             rule: rule.id,
             match: shownMatch(rule, hit.match),
-            where: `${file} (symlink target)`,
+            where: `${maskAddresses(file)} (symlink target)`,
             excerpt: rule.redact ? '' : excerpt(target),
           })
         }
@@ -1030,7 +1044,7 @@ function run() {
   const report = hits.length > 0 ? console.error : console.log
   report(censusLine)
   for (const [reason, list] of exemptions) {
-    const shown = list.slice(0, MAX_REPORTED_SKIPS)
+    const shown = list.slice(0, MAX_REPORTED_SKIPS).map(maskAddresses)
     const rest = list.length > shown.length ? `, ... ${list.length - shown.length} more` : ''
     report(`  not scanned (${reason}): ${shown.join(', ')}${rest}`)
   }

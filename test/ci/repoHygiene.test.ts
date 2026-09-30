@@ -406,6 +406,40 @@ describe("repository hygiene — email addresses in added lines", () => {
     expect(result.stderr).toContain('"runs/new/notes.md": line 1: email address added');
   });
 
+  it("keeps path and line right when the contributor's config fuses hunks", () => {
+    // `diff.interHunkContext` is not overridden by `-U0`: left to it, two edits one line apart
+    // arrive as ONE hunk with a context row between them, and an uncounted row shifts every later
+    // path and line. The address sits in a second file, after the fused hunk.
+    const root = fixture();
+    write(root, "docs/a.md", "one\ntwo\nthree\nfour\n");
+    commit(root, "two files");
+    git(root, "config", "diff.interHunkContext", "10");
+    write(root, "docs/a.md", "ONE\ntwo\nTHREE\nfour\n");
+    write(root, "docs/b.md", `first\nsecond\n${PERSON}\n`);
+    git(root, "add", ".");
+
+    const result = run(root, "--base", "HEAD");
+
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stderr).toContain('"docs/b.md": line 3: email address added');
+    expect(result.stderr).not.toContain('"docs/a.md"');
+  });
+
+  it("withholds an address held in a path's name, keeping the rest of the path readable", () => {
+    const root = fixture();
+    write(root, `docs/${PERSON}/notes.md`, `${PERSON}\n`);
+    write(root, `node_modules/${PERSON}_index.js`);
+    git(root, "add", "--force", ".");
+
+    const result = run(root, "--base", "HEAD");
+    const output = `${result.stdout}${result.stderr}`;
+
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stderr).toContain('"docs/<withheld>/notes.md": line 1: email address added');
+    expect(result.stderr).toContain('"node_modules/<withheld>_index.js": tracked runtime/dependency/cache file');
+    expect(output).not.toContain(PROBE_LOCAL);
+  });
+
   it("names a path holding a space by its real name", () => {
     // Git ends such a `+++` header with a tab; the finding names the file, not the header.
     const root = fixture();

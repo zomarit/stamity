@@ -24,7 +24,7 @@ npm run check
 
 | Step | Command | What it proves |
 |---|---|---|
-| Leak gate | `npm run gate` | `scripts/leak-gate.mjs` finds no reserved name, credential shape or private-layer reference in any scanned path or file |
+| Leak gate | `npm run gate` | `scripts/leak-gate.mjs` finds no reserved name, credential shape, private-layer reference or email address in any scanned path or file |
 | Typecheck | `npm run typecheck` | TypeScript 7, strict: zero errors across `src/`, `test/` and the root `*.config.ts` files |
 | Lint | `npm run lint` | oxlint over the TypeScript surface, ESLint over the JavaScript surface |
 | Test | `npm run test` | The whole suite, all three lanes |
@@ -225,12 +225,17 @@ The manifest here selects Claude alone. Claude does not read the `.agents/skills
 It reads every path by name and every file by content. Gitignored files are outside the scan, and so
 are the build and vendor directories.
 
-It fails the build on three families:
+It fails the build on four families:
 
 - **Reserved names** — the working names this project retired, and the predecessor project.
 - **Credential shapes.**
 - **Private-layer references** — a row identifier out of one of the operator's private governance
   ledgers, or the name of the repository holding them.
+- **Email addresses** — a person's address, in a path or in a file. The report names the file and
+  withholds the address, in the path as well. An address at a reserved documentation domain or under
+  `.invalid` or `.test`, a no-reply address, an SSH remote's `git@` host form and URL userinfo
+  are not a person's, so write example addresses that way. An address that has to be real needs an
+  exact path and its reason in `EMAIL_FIXTURES`.
 
 Every exemption is by path, and every run prints the paths it skipped: up to 25 per reason, then a
 count of the rest. That printing happens on a pass as well as on a failure.
