@@ -445,7 +445,15 @@ describe("ask — read-only is a frontmatter contract", () => {
     expect(text).toMatch(/no file dumps, no restated brief, no narration of the search/i);
     expect(text).toMatch(/carries no output-size field/i);
     expect(text).toMatch(/the facet's `depth` and the `output_sections\[\]`/i);
-    expect(text).not.toMatch(/\d+\s*lines/i);
+    // TEST CHANGE, justified: this was `not.toMatch(/\d+\s*lines/i)` over the whole body.
+    // REQ-FLOW-020 (plan 013 unit sw31-ask-sized-to-question) adds one line count that is
+    // not a researcher return cap: the orchestrator's own direct read on a named-target
+    // question hands off to a quick researcher past about 300 lines. The guard still holds
+    // everywhere else — exactly one `<n> lines` in the body, and it is that sentence's.
+    expect([...text.matchAll(/\d+\s*lines/gi)].map((match) => match[0])).toEqual(["300 lines"]);
+    expect(text).toContain(
+      "When that read would pass about 300 lines or a second file's body, one quick researcher answers it instead.",
+    );
   });
 
   it("names the four output blocks including the blocked table", async () => {
@@ -458,6 +466,83 @@ describe("ask — read-only is a frontmatter contract", () => {
     expect(output).toContain("BLOCKED_AMBIGUITY");
     // An omitted block is indistinguishable from a dropped facet, so emptiness is stated.
     expect(output).toMatch(/empty block is stated as empty/i);
+  });
+});
+
+/**
+ * REQ-FLOW-020 — `/st-ask` is sized to the question.
+ *
+ * A question naming one symbol or one file is answered by the orchestrator's own bounded
+ * read, or by one quick researcher when that read would grow; mechanism and impact
+ * questions keep their fan-out. The read is already in contract, so the spawn set and the
+ * read-only contract do not move — asserted here beside the new row so a later edit that
+ * "sizes" ask by adding a role fails in this block.
+ */
+describe("ask — sized to the question (REQ-FLOW-020)", () => {
+  /** The facet table's data rows, header and separator excluded. */
+  function facetRows(file: CorpusFile): string[] {
+    return section(file, "Facets")
+      .split("\n")
+      .filter((line) => line.startsWith("| ") && !line.startsWith("| Question shape"));
+  }
+
+  it("REQ-FLOW-020 opens the facet table with a named-target row at 0-1 quick facets", async () => {
+    const rows = facetRows(await load("commands/st-ask.md"));
+
+    // Non-degenerate: four shapes, so the new row is an addition and not a replacement.
+    expect(rows).toHaveLength(4);
+    expect(rows[0]).toBe(
+      '| Named target — "what does `parseLedgerText` return?", "what is in `src/runs/blocks.ts`?" | 0-1 | quick |',
+    );
+    // The fan-out shapes keep their counts and depths.
+    const cells = rows.slice(1).map((row) => row.split("|").slice(2, 4).map((cell) => cell.trim()));
+    expect(cells).toEqual([
+      ["1", "quick"],
+      ["2-3: entry points, state, failure paths", "standard"],
+      ["3-5: data model, request path, config, tests", "deep"],
+    ]);
+  });
+
+  it("REQ-FLOW-020 answers a named target directly, bounded, cited, and hands a large read to one quick researcher", async () => {
+    const facets = section(await load("commands/st-ask.md"), "Facets").replace(/\s+/g, " ");
+
+    expect(facets).toContain(
+      "A question that names one symbol or one file is answered directly: the orchestrator reads " +
+        "the named definition and at most its direct call sites found by one search, and cites " +
+        "every claim under the Citation rule.",
+    );
+    expect(facets).toContain(
+      "When that read would pass about 300 lines or a second file's body, one quick researcher answers it instead.",
+    );
+    expect(facets).toContain("Mechanism and impact questions keep their fan-out.");
+    // Order: the sizing paragraph sits between the table and the dispatch rule it qualifies.
+    const table = facets.indexOf("| Impact —");
+    const sizing = facets.indexOf("A question that names one symbol");
+    const dispatch = facets.indexOf("Dispatch every facet to `researcher`");
+    expect(table).toBeGreaterThanOrEqual(0);
+    expect(sizing).toBeGreaterThan(table);
+    expect(dispatch).toBeGreaterThan(sizing);
+  });
+
+  it("REQ-FLOW-020 carves the named-target read out of the context budget, and only that", async () => {
+    const text = flow(await load("commands/st-ask.md"));
+
+    expect(text).toContain(
+      "Facet findings land in the orchestrator; file contents do not — except on the named-target " +
+        "shape, where the orchestrator's own bounded read is the answer. A cited line is re-read " +
+        "only to resolve a contradiction between two facets.",
+    );
+    expect(text.match(/except on the named-target shape/g)).toHaveLength(1);
+  });
+
+  it("REQ-FLOW-020 adds no spawn: ask still spawns researchers only and stays read-only", async () => {
+    const file = await load("commands/st-ask.md");
+
+    expect(frontmatterField(file.parsed, "spawns")).toEqual(["researcher"]);
+    expect(frontmatterField(file.parsed, "readonly")).toBe(true);
+    const contract = section(file, "Read-only contract").replace(/\s+/g, " ");
+    expect(contract).toMatch(/Spawns are researchers, and nothing else/);
+    expect(contract).toMatch(/In contract: reading source, tests, config, lockfiles/);
   });
 });
 

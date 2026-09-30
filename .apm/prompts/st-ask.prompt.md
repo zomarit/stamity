@@ -44,9 +44,15 @@ question from one bounded slice of the repository.
 
 | Question shape | Facets | Depth per facet |
 |---|---|---|
+| Named target — "what does `parseLedgerText` return?", "what is in `src/runs/blocks.ts`?" | 0-1 | quick |
 | Single fact — "where is rate limiting enforced?" | 1 | quick |
 | Mechanism — "how does the auth flow work?" | 2-3: entry points, state, failure paths | standard |
 | Impact — "what would multi-tenancy touch?" | 3-5: data model, request path, config, tests | deep |
+
+A question that names one symbol or one file is answered directly: the orchestrator reads the
+named definition and at most its direct call sites found by one search, and cites every claim
+under the Citation rule. When that read would pass about 300 lines or a second file's body, one
+quick researcher answers it instead. Mechanism and impact questions keep their fan-out.
 
 Dispatch every facet to `researcher`, all of them in one message. Serialize only on a
 dependency edge —
@@ -59,7 +65,8 @@ bound the read), `questions[]`, `output_sections[]` (the named tables synthesis 
 
 ### Context budget
 
-- Facet findings land in the orchestrator; file contents do not. A cited line is re-read
+- Facet findings land in the orchestrator; file contents do not — except on the named-target
+  shape, where the orchestrator's own bounded read is the answer. A cited line is re-read
   only to resolve a contradiction between two facets.
 - Each researcher returns findings, citations, and confidence. No file dumps, no restated
   brief, no narration of the search. The brief schema carries no output-size field, so
