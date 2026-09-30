@@ -71,6 +71,7 @@ import { dirname, join, posix } from "node:path";
 import {
   assertSafePath,
   buildContentIndex,
+  emittedIdFor,
   replacedClaimantOf,
   typeIdKey,
   type CatalogFs,
@@ -502,9 +503,128 @@ export function nativeSkillRows<Row extends ProjectedFile>(
   if (dir === undefined || dir === "") return [];
   const demoted = demotedRules[tool];
   return retargetProjection(
-    rows.filter((row) => row.artifactType !== "rule" || demoted.has(row.artifactId)),
+    rows.filter(
+      (row) =>
+        // A touchpoint is never copied: the client with a native skills
+        // directory keeps its own command surface (`.claude/commands/`), and a
+        // second `st-work` beside it would be the same `/name` twice.
+        row.artifactType !== "command" &&
+        (row.artifactType !== "rule" || demoted.has(row.artifactId)),
+    ),
     dir,
   );
+}
+
+// ── Touchpoints as shared skills ─────────────────────────────────
+
+/**
+ * The Codex companion file inside a touchpoint's skill directory, relative to
+ * it. Codex reads `agents/openai.yaml` beside a `SKILL.md`, and the bundled
+ * skills already ship one for their display names.
+ */
+export const TOUCHPOINT_POLICY_FILE = "agents/openai.yaml";
+
+/**
+ * The companion's whole text: the touchpoint may not be picked by the model on
+ * its own judgement. `allow_implicit_invocation: false` is Codex's spelling of
+ * the rule `disable-model-invocation: true` states for Cursor, so both readers
+ * of the one shared file start a touchpoint only when the operator names it.
+ */
+const TOUCHPOINT_POLICY = "policy:\n  allow_implicit_invocation: false\n";
+
+/**
+ * The nine touchpoint commands as shared skills: one
+ * `.agents/skills/st-<id>/SKILL.md` per selected command, with its
+ * {@link TOUCHPOINT_POLICY_FILE} companion.
+ *
+ * Codex and Cursor both read {@link SKILLS_PROJECTION_DIR}, so one file per
+ * touchpoint serves both: Codex had no repository surface for these bodies at
+ * all, and Cursor received a second copy under `.cursor/skills/`. Each of the
+ * two adapters calls this with the commands it admits and emits the rows as its
+ * own; the composer merges byte-identical rows into one write with both owners,
+ * so the file survives the deselection of either client and is reclaimed when
+ * both are gone. That is why the render is tool-neutral — the same
+ * substitution {@link projectSkills} applies, with the platform ask-user marker
+ * resolving to the all-clients table — and why nothing here takes a tool.
+ *
+ * Kept out of {@link projectSkills}' rows on purpose: those are owned by every
+ * client that reads the tree, and Copilot reads it too but keeps its own
+ * `.github/prompts/` files, and Claude re-targets that row set into its native
+ * directory ({@link nativeSkillRows} refuses command rows as well).
+ *
+ * `commands` arrive already admitted by the calling adapter — selection,
+ * catalog reachability and its own `tools:` check — so this function renders
+ * and places, and decides nothing about which bodies ship.
+ */
+export function projectTouchpointSkills(
+  commands: readonly CatalogItem[],
+  ctx: SkillsEmissionContext,
+): ProjectedSkillFile[] {
+  const detection = detectionContextFromManifest(ctx.manifest);
+  const gates = verificationGatesFor(ctx.manifest.detected, readGates(ctx.manifest));
+  const cli = cliCallContextOf(ctx);
+  const rows = commands.flatMap((item) => {
+    const name = emittedIdFor(item);
+    assertSafePath(posix.join(name, SKILL_FILE), `touchpoint "${item.id}" projection`);
+    const row = {
+      artifactId: item.id,
+      artifactType: item.type,
+      artifactPath: item.relativePath,
+      origin: item.origin ?? "corpus",
+    } as const;
+    return [
+      {
+        ...row,
+        path: posix.join(SKILLS_PROJECTION_DIR, name, SKILL_FILE),
+        content: buildTouchpointSkill(item, name, substituteBody(item.body, detection, gates, cli)),
+      },
+      {
+        ...row,
+        path: posix.join(SKILLS_PROJECTION_DIR, name, TOUCHPOINT_POLICY_FILE),
+        content: TOUCHPOINT_POLICY,
+      },
+    ];
+  });
+  return rows.toSorted((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+/**
+ * One touchpoint as an explicitly invoked skill.
+ *
+ * Three frontmatter keys, and no fourth. `name` and `description` are the two
+ * the format requires, and `name` is what the operator types — `/st-work` in
+ * Cursor, `$st-work` in Codex. `disable-model-invocation: true` is what makes
+ * the file a COMMAND rather than a skill on Cursor: the body is included when
+ * the operator names it and never pulled in by the agent on its own judgement
+ * (cursor.com/docs/skills, accessed 2026-08-17). Codex takes the same rule from
+ * the companion file ({@link TOUCHPOINT_POLICY_FILE}). A `paths` scope would be
+ * the fourth, and it is deliberately absent: a touchpoint is invoked, not
+ * attached.
+ */
+export function buildTouchpointSkill(item: CatalogItem, name: string, body: string): string {
+  const front = [
+    `name: ${name}`,
+    `description: ${frontmatterScalar(item.description)}`,
+    "disable-model-invocation: true",
+  ];
+  const rendered = body.endsWith("\n") ? body : `${body}\n`;
+  return `---\n${front.join("\n")}\n---\n${rendered}`;
+}
+
+/**
+ * A one-line YAML scalar: newlines folded to spaces, then double-quoted only
+ * where a plain scalar would misparse — a quote or backslash, a `: ` or ` #`
+ * inside, or a leading indicator character.
+ */
+function frontmatterScalar(value: string): string {
+  const singleLine = value.replace(/\s*[\r\n]+\s*/g, " ").trim();
+  if (singleLine === "") return singleLine;
+  const needsQuoting =
+    /["\\]/.test(singleLine) ||
+    /:(\s|$)/.test(singleLine) ||
+    /\s#/.test(singleLine) ||
+    /^(?:[,[\]{}#&*!|>'%@`]|[-?:](?:\s|$))/.test(singleLine);
+  return needsQuoting ? JSON.stringify(singleLine) : singleLine;
 }
 
 /**

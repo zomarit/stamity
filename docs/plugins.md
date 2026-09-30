@@ -48,8 +48,10 @@ The reasons, one line each, are the ones each container declares in its own capa
   `.github/instructions/` instead.
 - **Copilot CLI, command** — carried as `<id>.md`, not the repository's `<id>.prompt.md`: the CLI
   strips exactly one extension, so `.prompt.md` would register ids the corpus never names.
-- **Codex, agent and command** — the Agent Plugins container carries no agent class, and this
-  client documents no project-scoped command directory; `plugin setup` writes `.codex/agents/`.
+- **Codex, agent and command** — the Agent Plugins container carries no agent class, so
+  `plugin setup` writes `.codex/agents/`. The nine touchpoints stay the repository's too:
+  `plugin setup` writes them into the shared `.agents/skills/`, where Codex starts one as
+  `$st-<id>`.
 - **Copilot CLI, hooks** — carried, and loaded only in a **trusted folder**. Interactively that is
   the client's own trust prompt; headlessly it is `COPILOT_ALLOW_ALL` set to exactly `true`, which
   "additionally trusts the working directory without prompting, which loads that directory's

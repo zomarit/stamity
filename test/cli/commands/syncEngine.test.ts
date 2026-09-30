@@ -681,6 +681,45 @@ describe("reclaim", () => {
     expect(ledger.map((row) => row.adapter)).not.toContain("cursor");
     expect(ledger.map((row) => row.path)).not.toContain(cursorRow.path);
   });
+
+  // REQ-FLOW-026 (sw17-touchpoints-as-shared-skills): a repository set up by 1.10.0 carries the
+  // touchpoints under `.cursor/skills/st-<id>/`. The next sync plans them under `.agents/skills/`
+  // instead, and the sweep removes the old copies — and only them.
+  it("moves a 1.10.0 cursor touchpoint from .cursor/skills to the shared tree and leaves the rest of .cursor/ alone", async () => {
+    const handle = tempDir();
+    const oldTouchpoint: LedgerEntry = {
+      path: ".cursor/skills/st-work/SKILL.md",
+      adapter: "cursor",
+      artifactId: "cmd-work",
+      artifactType: "command",
+    };
+    const root = await seedRepo(handle, { tools: ["claude", "cursor"], ledger: [oldTouchpoint] });
+    await handle.seedFiles({
+      "corpus/commands/st-work.md":
+        "---\nid: work\ntype: command\ndescription: fixture touchpoint\n---\n# /st-work\n\nWork body.\n",
+      "repo/.cursor/skills/st-work/SKILL.md": "---\nname: st-work\n---\n# /st-work\n",
+      "repo/.cursor/notes.md": "the operator's own file\n",
+    });
+
+    const plan = await planSync(root, ENGINE_VERSION);
+    expect(plan.reclaim.map((row) => row.entry)).toEqual([oldTouchpoint]);
+
+    const report = await applySync(root, plan, {
+      engineVersion: ENGINE_VERSION,
+      force: false,
+      dryRun: false,
+      now: T1,
+    });
+    expect(report.reclaimed?.deletedCount).toBe(1);
+    expect(existsSync(join(root, oldTouchpoint.path))).toBe(false);
+    expect(await readFile(join(root, ".agents/skills/st-work/SKILL.md"), "utf8")).toContain("Work body.");
+    expect(await readFile(join(root, ".cursor/notes.md"), "utf8")).toBe("the operator's own file\n");
+    const ledger = (await readManifest(root))?.ledger ?? [];
+    expect(ledger.map((row) => row.path)).not.toContain(oldTouchpoint.path);
+    expect(
+      ledger.filter((row) => row.path === ".agents/skills/st-work/SKILL.md").map((row) => row.adapter),
+    ).toEqual(["cursor"]);
+  });
 });
 
 describe("applySync guards", () => {

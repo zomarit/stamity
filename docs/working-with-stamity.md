@@ -27,8 +27,8 @@ and [setup](getting-started.md) leaves all nine in place.
 | `/st-rework` | apply structured feedback to agent-implemented work |
 | `/st-pr-resolve` | resolve pull-request review comments |
 
-Only a client with a project command surface turns these into `/st-<name>` invocations. Claude Code, Copilot and Cursor do. Cursor ships them as
-explicitly invoked skills under `.cursor/skills/`. Codex has no repository-level command home, so there you ask for the flow by name instead. [The
+All four clients get these as invocations. Claude Code, Copilot and Cursor type `/st-<name>`. Cursor and Codex share them as
+explicitly invoked skills under `.agents/skills/`, and Codex starts a skill with a dollar sign, so there you type `$st-<name>`. [The
 capability matrix](capability-matrix.md) is the one home for that, per client.
 
 ## How the nine fit together

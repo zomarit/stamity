@@ -167,7 +167,11 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
       value:
         `native — the nine touchpoints ship as prompt files in ${PROMPTS_DIR}/, invoked as ` +
         `/st-<id>; the format's \`agent\` and \`tools\` keys stay unemitted (per-prompt ` +
-        `restrictions this engine cannot answer), \`model\` follows an operator pin`,
+        `restrictions this engine cannot answer), \`model\` follows an operator pin. With Codex ` +
+        `or Cursor selected beside it, the same nine also ship in \`.agents/skills/\` with ` +
+        `\`disable-model-invocation: true\`, a tree this client reads, so they list twice for the ` +
+        `operator: Copilot CLI 1.0.89 shows them as project skills (\`copilot skill list\`) beside ` +
+        `the prompt files, and keeps them out of the model's own skills list (measured 2026-09-30)`,
     },
     // Dated inline, and ACCESS_DATE is not re-stamped: the 2026-09-30 pass
     // found this claim changed ("publishes no effort key" was refuted by the CLI

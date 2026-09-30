@@ -186,6 +186,24 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-30, plan 013 file 3, unit sw17-touchpoints-as-shared-skills
+  //     (run 2026-09-30_optimization-sweep). The nine touchpoints MOVED in the
+  //     cursor selection and were ADDED in the codex selection; no body moved.
+  //     The sibling golden (`test/corpus/emissionGoldens.test.ts`) did not move.
+  //
+  //     MOVED `.cursor/skills/st-<id>/SKILL.md` (9) to
+  //       `.agents/skills/st-<id>/SKILL.md` in the cursor and all-four
+  //       selections — the same sha256 and byte count per file (st-work 30982,
+  //       st-ask 8650): one render, a new home Codex reads too.
+  //     ADDED `.agents/skills/st-<id>/SKILL.md` (9) in the codex selection, the
+  //       same bytes again, and `.agents/skills/st-<id>/agents/openai.yaml` (9,
+  //       43 bytes each, `policy.allow_implicit_invocation: false`) in the
+  //       cursor, codex and all-four selections.
+  //     CHANGED `.stamity/manifest.json` — cursor 18677 -> 20965, codex
+  //       15916 -> 20384, all-four 71414 -> 78170: the ledger rows for the
+  //       companions, codex's rows for the nine, and in all-four the second
+  //       owner on each shared row. claude and copilot did not move.
+  //
   //   - 2026-09-30, plan 013 file 3, unit sw18-codex-rules-leave-shared-charter
   //     (run 2026-09-30_optimization-sweep). ONE path ADDED in the two
   //     codex-bearing selections, and the shared charter shrank in them.
@@ -1408,8 +1426,17 @@ describe("four-tool union", () => {
       (tool) => ADAPTER_REGISTRY[tool].facts.readsAgentsSkillsDir,
     );
     expect(projectionReaders.length).toBeGreaterThan(0);
+    // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills, REQ-FLOW-026):
+    // the nine touchpoints joined this tree, and they are owned by the two
+    // clients that emit them — codex and cursor — not by every reader: copilot
+    // reads the tree but keeps its own `.github/prompts/` files. Every other
+    // row keeps the declared-readers rule above, asserted exactly as before.
+    const types = artifactTypesByPath(repo.manifest);
+    const touchpointPaths = skills.filter((path) => types.get(path)?.has("command") === true);
+    expect(touchpointPaths.filter((path) => path.endsWith("/SKILL.md"))).toHaveLength(9);
     for (const path of skills) {
-      expect([...(owners.get(path) ?? [])].toSorted()).toEqual([...projectionReaders].toSorted());
+      const expected = touchpointPaths.includes(path) ? ["codex", "cursor"] : [...projectionReaders];
+      expect([...(owners.get(path) ?? [])].toSorted(), path).toEqual(expected.toSorted());
     }
 
     // TEST CHANGE, justified: native skill and native command homes gave
@@ -1424,6 +1451,9 @@ describe("four-tool union", () => {
       ...Object.values(NATIVE_SKILL_DIRS),
       ...(CURSOR_COMMANDS_DIR === null ? [] : [CURSOR_COMMANDS_DIR]),
     ];
+    // sw17: the touchpoints' home is the shared tree itself, so no `.cursor/skills/` remains.
+    expect(CURSOR_COMMANDS_DIR).toBe(SKILLS_PROJECTION_DIR);
+    expect(Object.keys(tree).filter((path) => path.startsWith(".cursor/skills/"))).toEqual([]);
     const strayCopies = Object.keys(tree).filter(
       (path) =>
         basename(path) === "SKILL.md" &&
@@ -1463,7 +1493,19 @@ describe("four-tool union", () => {
     expect(absent.length, "no rule-skill is left out, so this case proves nothing").toBeGreaterThan(
       0,
     );
-    for (const entry of absent) {
+    // TEST CHANGE, justified (sw17): the touchpoints are the second kind of
+    // absence — never copied, because claude keeps one door per touchpoint, its
+    // `.claude/commands/<id>.md` file. Named here by their ledger class and
+    // that file, then left out of the rule-skill reasoning below.
+    const touchpointEntries = absent.filter(
+      (entry) => types.get(`${SKILLS_PROJECTION_DIR}${entry}`)?.has("command") === true,
+    );
+    expect(touchpointEntries.filter((entry) => entry.endsWith("/SKILL.md"))).toHaveLength(9);
+    for (const entry of touchpointEntries.filter((candidate) => candidate.endsWith("/SKILL.md"))) {
+      const id = entry.split("/")[1] ?? "";
+      expect(tree[`.claude/commands/${id}.md`], entry).toBeDefined();
+    }
+    for (const entry of absent.filter((candidate) => !touchpointEntries.includes(candidate))) {
       const shared = `${SKILLS_PROJECTION_DIR}${entry}`;
       const head = parseFrontmatter(tree[shared] ?? "", shared).frontmatter;
       const stamity = (head["metadata"] as { stamity?: Record<string, unknown> } | undefined)

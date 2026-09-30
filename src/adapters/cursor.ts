@@ -9,13 +9,13 @@
 import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE, ROOT_VARIABLE_PATH } from "../hooks/portableRunner.ts";
 import {
   buildContentIndex,
-  emittedIdFor,
   typeIdKey,
   type CatalogItem,
 } from "../content/catalog.ts";
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
 import { verificationGatesFromManifest } from "../emit/agentsMd.ts";
 import { HOOKS_GENERATED_DIR } from "../emit/hooksInfra.ts";
+import { SKILLS_PROJECTION_DIR, projectTouchpointSkills } from "../emit/skillsProjection.ts";
 import { withoutPluginOwnedRows } from "../emit/ownership.ts";
 import type {
   AdapterDialectFacts,
@@ -73,35 +73,31 @@ export const CURSOR_AGENTS_DIR = ".cursor/agents";
  * user-level and workspace-level" commands into skills carrying
  * `disable-model-invocation: true` — the field whose whole job is to preserve
  * explicit-invocation behaviour (cursor.com/docs/skills, accessed 2026-08-17).
- * Emitting into a directory no current page names would be an invented path;
- * emitting a skill that declines model invocation is the vendor's own answer
- * to "where does a project slash command live now", and it keeps the charter's
+ * A skill that declines model invocation is the vendor's own answer to "where
+ * does a project slash command live now", and it keeps the charter's
  * `/st-<id>` touchpoint spelling literally true on this client.
  *
- * The core's `.agents/skills/` projection is the SKILL class and is untouched
- * by this: disjoint CONTENT (skill bodies there, touchpoint command bodies
- * here), one writer each. What is NOT disjoint is discovery. This client loads
- * project skills from `.agents/skills/` AND `.cursor/skills/`, and "for
- * compatibility" also from `.claude/skills/`, `.codex/skills/`,
- * `~/.claude/skills/` and `~/.codex/skills/` (cursor.com/docs/skills, accessed
- * 2026-08-22). So in a repo that selects `claude` alongside this client, the
- * same skills are discovered twice under one name — once from the core
- * projection, once from the byte-identical native copy the claude adapter
- * re-targets into `.claude/skills/` — and that page documents no tie-break.
- * The cost is context duplication on the always-available slice plus an
- * undefined `/name` resolution, not a wrong emission: both trees are this
- * engine's, byte-identical by construction, so whichever wins is the same
- * bytes.
+ * The directory is the shared {@link SKILLS_PROJECTION_DIR}, not
+ * `.cursor/skills/`. This client loads project skills from `.agents/skills/`
+ * as well as its own tree (cursor.com/docs/skills, accessed 2026-08-22), and
+ * Codex reads only the shared one, so the nine bodies ship there once
+ * ({@link projectTouchpointSkills}) and the two clients co-own each file. A
+ * repository set up by an earlier version keeps `.cursor/skills/st-<id>/`
+ * rows in its ledger; the next sync plans none, so the sweep reclaims them.
  *
- * Deliberately not acted on here. Suppressing the `.claude/skills/` re-target
- * when a client that reads `.agents/skills/` is co-selected would change what
- * a claude-only repo receives on a second client's selection — a behaviour
- * decision, not an adapter detail. Carrying the fact into the generated
- * capability matrix needs a `cross-root discovery` cap row on this client's
- * facts and on the two sibling clients that read each other's roots, which is
- * a three-adapter change plus a page re-render.
+ * Discovery still overlaps elsewhere. This client also reads, "for
+ * compatibility", `.claude/skills/`, `.codex/skills/`, `~/.claude/skills/`
+ * and `~/.codex/skills/` (same page). So in a repo that selects `claude`
+ * alongside this client, the content skills are discovered twice under one
+ * name — once from the core projection, once from the byte-identical native
+ * copy the claude adapter re-targets into `.claude/skills/` — and that page
+ * documents no tie-break. The touchpoints are not among them: the native copy
+ * leaves command rows out, since Claude keeps `.claude/commands/`. The cost is
+ * context duplication on the always-available slice plus an undefined `/name`
+ * resolution, not a wrong emission: both trees are this engine's,
+ * byte-identical by construction, so whichever wins is the same bytes.
  */
-export const CURSOR_COMMANDS_DIR: string | null = ".cursor/skills";
+export const CURSOR_COMMANDS_DIR: string | null = SKILLS_PROJECTION_DIR;
 
 /** Repo-relative hook configuration document. */
 export const CURSOR_HOOKS_CONFIG_PATH = ".cursor/hooks.json";
@@ -335,7 +331,7 @@ export const cursorDialectFacts: AdapterDialectFacts = {
       value:
         CURSOR_COMMANDS_DIR === null
           ? "none — no project surface for an explicitly invoked body is documented, so the touchpoint command bodies are not emitted on this client"
-          : `\`${CURSOR_COMMANDS_DIR}/<id>/SKILL.md\` with \`disable-model-invocation: true\` — this client folded slash commands into skills, so no \`.cursor/commands/\` directory appears in current docs and the touchpoint bodies ship as explicitly invoked skills`,
+          : `\`${CURSOR_COMMANDS_DIR}/<id>/SKILL.md\` with \`disable-model-invocation: true\`, invoked as \`/<id>\` — this client folded slash commands into skills, so no \`.cursor/commands/\` directory appears in current docs and the touchpoint bodies ship as explicitly invoked skills, in the shared tree Codex reads too, one file per touchpoint`,
     },
     {
       name: "user hook enforcement",
@@ -466,13 +462,16 @@ export const cursorResiduePlanner: ResiduePlanner = {
     // explicitly invoked body gets none invented for it, and the fact lives in
     // this adapter's declared caps where the capability matrix renders it.
 
+    //
+    // The touchpoints are the shared rows Codex emits too: rendered tool-neutral
+    // by the core helper, so the composer finds the same bytes from both
+    // adapters and writes each file once, owned by both.
     if (CURSOR_COMMANDS_DIR !== null) {
-      for (const command of admitted("command")) {
-        const name = commandName(command);
+      for (const row of projectTouchpointSkills(admitted("command"), ctx)) {
         rows.push({
-          path: `${CURSOR_COMMANDS_DIR}/${name}/SKILL.md`,
-          content: buildCursorCommand(command, name, render(command.body)),
-          owner: { adapter: "cursor", artifactId: command.id, artifactType: "command" },
+          path: row.path,
+          content: row.content,
+          owner: { adapter: "cursor", artifactId: row.artifactId, artifactType: "command" },
         });
       }
     }
@@ -520,30 +519,12 @@ export const cursorResiduePlanner: ResiduePlanner = {
 
 /**
  * `reviewer` → `stamity-reviewer`: the runtime, wire-visible form of an AGENT or
- * RULE id, the two classes that keep the long prefix. Commands go through
- * {@link commandName}, which asks {@link emittedIdFor} instead — an id the
- * operator types is not the same contract as one the spawn guard matches.
+ * RULE id, the two classes that keep the long prefix. Commands take the typed
+ * `st-` form from `emittedIdFor` inside the shared touchpoint projection — an id
+ * the operator types is not the same contract as one the spawn guard matches.
  */
 function prefixedId(id: string): string {
   return `${CONTENT_PREFIX}${id}`;
-}
-
-/**
- * `cmd-work` → `st-work`: the catalog's command namespacing removed, the runtime
- * prefix restored. It is the emitted directory name AND the skill's `name`,
- * which is what the operator types after the slash — so the charter's
- * `/st-work` touchpoint spelling and the file on disk agree by construction
- * rather than by convention.
- *
- * The spelling comes from {@link emittedIdFor} rather than {@link prefixedId},
- * because this is the typed half of the surface, and it answers by class alone:
- * a command takes `st-` whether the corpus or an installed pack supplied it,
- * since the operator types both the same way. Delegating also picks up the
- * already-prefixed guard the sibling adapters carried and this one did not — an
- * id authored as `st-work` rendered `st-st-work` here alone.
- */
-function commandName(item: CatalogItem): string {
-  return emittedIdFor(item);
 }
 
 // ── Rules ────────────────────────────────────────────────────────
@@ -765,33 +746,6 @@ export function buildCursorAgent(
 
   const rendered = body.endsWith("\n") ? body : `${body}\n`;
   return `---\n${lines.join("\n")}\n---\n${rendered}`;
-}
-
-// ── Commands ─────────────────────────────────────────────────────
-
-/**
- * One touchpoint command as this client's explicitly invoked skill.
- *
- * Three frontmatter keys, and no fourth. `name` and `description` are the two
- * the format requires; `disable-model-invocation: true` is what makes the file
- * a COMMAND rather than a skill — the body is included when the operator types
- * `/<name>` and never pulled in by the agent on its own judgement
- * (cursor.com/docs/skills, accessed 2026-08-17). A `paths` scope would be the
- * fourth, and it is deliberately absent: a touchpoint is invoked, not attached.
- *
- * The vocabulary is this client's own and is NOT normalised toward the other
- * clients' command frontmatter — per-client residue is what this layer is for,
- * and a key borrowed from a sibling dialect reads as a restriction the runtime
- * here never applies.
- */
-export function buildCursorCommand(item: CatalogItem, name: string, body: string): string {
-  const front = [
-    `name: ${name}`,
-    `description: ${frontmatterScalar(item.description)}`,
-    "disable-model-invocation: true",
-  ];
-  const rendered = body.endsWith("\n") ? body : `${body}\n`;
-  return `---\n${front.join("\n")}\n---\n${rendered}`;
 }
 
 // ── Hooks ────────────────────────────────────────────────────────

@@ -1187,6 +1187,11 @@ describe("hooks", () => {
   it("declares the command surface and the effort omission as capability rows", () => {
     expect(capOf("command-surface")).toContain(".github/prompts/");
     expect(capOf("command-surface")).toContain("/st-<id>");
+    // REQ-FLOW-026 (sw17): the double listing beside the shared touchpoint skills is declared,
+    // with what the live check measured about the explicit-invocation key.
+    expect(capOf("command-surface")).toContain("`.agents/skills/`");
+    expect(capOf("command-surface")).toContain("list twice");
+    expect(capOf("command-surface")).toContain("out of the model's own skills list");
     // TEST CHANGE, justified: the pin read "omitted". The row now says "not emitted", because the
     // client does accept a `reasoning-effort` key (1.0.66; applied on agent selection since
     // 1.0.88) and the omission is this engine's, not the surface's (sw14-client-currency-sweep).

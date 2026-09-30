@@ -158,9 +158,9 @@ Then each client gets what it cannot read without help:
 | Client | Entry point | Touchpoint commands | Hooks | Skills |
 |---|---|---|---|---|
 | Claude Code | managed import block in `CLAUDE.md` | `.claude/commands/` — `/st-<id>` | `.claude/settings.json` | copied to `.claude/skills/` |
-| Cursor | `AGENTS.md`, read natively | `.cursor/skills/` | `.cursor/hooks.json` | read from `.agents/skills/` |
+| Cursor | `AGENTS.md`, read natively | `.agents/skills/` — `/st-<id>` | `.cursor/hooks.json` | read from `.agents/skills/` |
 | Copilot | `AGENTS.md`, read natively | `.github/prompts/` — `/st-<id>` | `.github/hooks/stamity.json` | read from `.agents/skills/` |
-| Codex | `AGENTS.override.md` where the rules appendix exists (it repeats `AGENTS.md` as sync writes it, plus the appendix, and Codex reads it instead of `AGENTS.md`); otherwise `AGENTS.md`, read natively | none — no repo-level command home | `.codex/hooks.json` | read from `.agents/skills/` |
+| Codex | `AGENTS.override.md` where the rules appendix exists (it repeats `AGENTS.md` as sync writes it, plus the appendix, and Codex reads it instead of `AGENTS.md`); otherwise `AGENTS.md`, read natively | `.agents/skills/` — `$st-<id>` | `.codex/hooks.json` | read from `.agents/skills/` |
 
 Agents, rules and MCP documents land per client too, each in that client's own dialect.
 [The capability matrix](capability-matrix.md) is the one home for every cell of that. It renders
@@ -185,8 +185,8 @@ How you reach it depends on your client. `init` prints the right line for yours:
 
 Cursor and Codex find skills in `.agents/skills/` and invoke them from there. Copilot's named
 workflow request reaches the same projection. Claude Code reads its own copy under
-`.claude/skills/`. Codex has no emitted project command directory, so its charter is where its
-touchpoints are listed.
+`.claude/skills/`. The nine touchpoints sit in `.agents/skills/` as well, shared by Cursor and
+Codex, and each starts only when you name it.
 
 Every install route is proved before it ships. The npm and APM routes are proved on a clean
 machine, lane by lane, on [the measurements page](measurements.md); the plugin route has a

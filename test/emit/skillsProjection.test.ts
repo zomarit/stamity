@@ -8,7 +8,11 @@ import { createManifest } from "../../src/manifest/manifest.ts";
 import {
   NATIVE_SKILL_DIRS,
   SKILLS_PROJECTION_DIR,
+  TOUCHPOINT_POLICY_FILE,
+  buildTouchpointSkill,
+  nativeSkillRows,
   projectSkills,
+  projectTouchpointSkills,
   retargetProjection,
   toSpecFrontmatter,
   type ProjectedFile,
@@ -92,6 +96,9 @@ function contextOf(skillIds: readonly string[], detected?: DetectedSummary): Emi
 }
 
 const pathsOf = (rows: readonly ProjectedFile[]): string[] => rows.map((row) => row.path);
+
+/** The transformable file inside a skill directory. */
+const SKILL_FILE_NAME = "SKILL.md";
 
 /** A markdown artifact: fenced frontmatter over a body. */
 const artifact = (frontmatter: string, body: string): string => `---\n${frontmatter}\n---\n${body}`;
@@ -1625,5 +1632,106 @@ describe("projectSkills over demoted rules", () => {
     expect(row!.content).toContain(HOUSE_MARKER);
     expect(row!.content).not.toContain(SHIPPED_MARKER);
     expect(row!.content).toContain("The house version of this rule, authored in this repo.");
+  });
+});
+
+// ── Touchpoints as shared skills (sw17, REQ-FLOW-026) ────────────
+
+/** The nine shipped touchpoint commands, as the catalog resolves them. */
+async function corpusCommands(): Promise<CatalogItem[]> {
+  const index = await buildContentIndex();
+  return index.items.filter((item) => item.type === "command");
+}
+
+describe("projectTouchpointSkills", () => {
+  it("places the nine touchpoints once each under .agents/skills/st-<id>/ with the Codex companion", async () => {
+    const commands = await corpusCommands();
+    expect(commands).toHaveLength(9);
+
+    const rows = projectTouchpointSkills(commands, contextOf([], RULE_DETECTION));
+
+    // Two files per touchpoint, and nothing outside the shared tree.
+    expect(rows).toHaveLength(18);
+    const ids = ["ask", "board", "debug", "plan", "pr-resolve", "quick", "rework", "spec", "work"];
+    expect(pathsOf(rows)).toEqual(
+      ids.flatMap((id) => [
+        `${SKILLS_PROJECTION_DIR}/st-${id}/${SKILL_FILE_NAME}`,
+        `${SKILLS_PROJECTION_DIR}/st-${id}/${TOUCHPOINT_POLICY_FILE}`,
+      ]).toSorted(),
+    );
+    for (const row of rows) {
+      // Ledgered as the COMMAND it renders, so deselecting the command reclaims both files.
+      expect(row.artifactType, row.path).toBe("command");
+      expect(commands.map((item) => item.id), row.path).toContain(row.artifactId);
+    }
+  });
+
+  it("heads each body with the three explicit-invocation keys and renders it tool-neutral", async () => {
+    const commands = await corpusCommands();
+    const rows = projectTouchpointSkills(commands, contextOf([], RULE_DETECTION));
+    const work = rows.find((row) => row.path === `${SKILLS_PROJECTION_DIR}/st-work/${SKILL_FILE_NAME}`);
+    expect(work).toBeDefined();
+
+    const head = work!.content.split("\n").slice(0, 5);
+    expect(head[0]).toBe("---");
+    expect(head[1]).toBe("name: st-work");
+    expect(head[2]?.startsWith("description: ")).toBe(true);
+    expect(head[3]).toBe("disable-model-invocation: true");
+    expect(head[4]).toBe("---");
+    expect(work!.content).toContain("# /st-work");
+    // Substituted with THIS repository's facts: the pytest gate, not a token and not npm's.
+    expect(work!.content).not.toContain("${STAMITY:");
+    expect(work!.content).toContain("pytest");
+
+    // The companion turns Codex's implicit invocation off, and says nothing else.
+    const policy = rows.find((row) => row.path === `${SKILLS_PROJECTION_DIR}/st-work/${TOUCHPOINT_POLICY_FILE}`);
+    expect(parse(policy?.content ?? "")).toEqual({ policy: { allow_implicit_invocation: false } });
+  });
+
+  it("renders the same bytes on every call, so two adapters emitting it merge into one write", async () => {
+    const commands = await corpusCommands();
+    const ctx = contextOf([], RULE_DETECTION);
+    expect(projectTouchpointSkills(commands, ctx)).toEqual(projectTouchpointSkills(commands, ctx));
+  });
+
+  it("renders nothing for an empty command selection", () => {
+    expect(projectTouchpointSkills([], contextOf([]))).toEqual([]);
+  });
+
+  it("builds a head with no fourth key", () => {
+    const [item] = [
+      {
+        id: "cmd-quick",
+        type: "command",
+        description: "Small-change lane: batch semantics.",
+      } as CatalogItem,
+    ];
+    const emitted = buildTouchpointSkill(item!, "st-quick", "# /st-quick");
+    const front = emitted.split("---")[1] ?? "";
+    expect(front.trim().split("\n").map((line) => line.split(":")[0])).toEqual([
+      "name",
+      "description",
+      "disable-model-invocation",
+    ]);
+    // A `: ` inside the description would misparse as a plain scalar, so it is quoted.
+    expect(emitted).toContain('description: "Small-change lane: batch semantics."');
+    expect(emitted.endsWith("# /st-quick\n")).toBe(true);
+    expect(emitted).not.toContain("paths:");
+  });
+});
+
+describe("nativeSkillRows leaves the touchpoints out", () => {
+  it("copies a content skill and never a command row, so claude keeps one /st-work", () => {
+    const rows: ProjectedFile[] = [
+      projectedRow(`alpha/${SKILL_FILE_NAME}`),
+      { ...projectedRow(`st-work/${SKILL_FILE_NAME}`), artifactId: "cmd-work", artifactType: "command" },
+      { ...projectedRow(`st-work/${TOUCHPOINT_POLICY_FILE}`), artifactId: "cmd-work", artifactType: "command" },
+    ];
+
+    const copied = nativeSkillRows(rows, "claude");
+
+    expect(pathsOf(copied)).toEqual([`${NATIVE_SKILL_DIRS.claude}/alpha/${SKILL_FILE_NAME}`]);
+    // Non-degenerate: the same input on a client with no native directory copies nothing at all.
+    expect(nativeSkillRows(rows, "cursor")).toEqual([]);
   });
 });

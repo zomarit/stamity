@@ -591,7 +591,9 @@ describe("the CLI pass runs at every emission call site (REQ-FLOW-002)", () => {
         ".claude/skills/stamity-alpha/SKILL.md", // the projection's native claude copy
         ".cursor/agents/stamity-reviewer.md", // src/adapters/cursor.ts
         ".cursor/rules/stamity-ask-first.mdc",
-        ".cursor/skills/st-work/SKILL.md",
+        // TEST CHANGE (sw17): the touchpoint left `.cursor/skills/` for the shared tree Codex
+        // reads too — one rendered file for both clients, from the touchpoint projection.
+        ".agents/skills/st-work/SKILL.md", // src/emit/skillsProjection.ts — touchpoint lane
         ".github/agents/stamity-reviewer.agent.md", // src/adapters/copilot.ts
         ".github/instructions/stamity-ask-first.instructions.md",
         ".github/prompts/st-work.prompt.md",

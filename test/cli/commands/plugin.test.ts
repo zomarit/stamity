@@ -680,7 +680,17 @@ describe("plugin setup — what it writes (REQ-PLUGIN-015)", () => {
     // the shared `.agents/skills/` tree is what this root owns and no copy of
     // it is written here — while `.codex/agents/` stays the repository's, which
     // is what that container declaring `agent: repository-owned` means.
-    expect(onDisk.filter((path) => path.startsWith(".agents/skills"))).toEqual([]);
+    //
+    // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills, sign-off option b):
+    // this read "nothing under `.agents/skills`". The touchpoints now reach
+    // codex as shared skills in that tree, recorded as COMMANDS, and the codex
+    // container keeps commands repository-owned — so setup writes exactly the
+    // fixture's one touchpoint there (its skill file and Codex companion), and
+    // still no skill-class row, which the plugin owns.
+    expect(onDisk.filter((path) => path.startsWith(".agents/skills")).toSorted()).toEqual([
+      ".agents/skills/st-fixture-command/SKILL.md",
+      ".agents/skills/st-fixture-command/agents/openai.yaml",
+    ]);
     expect(onDisk.some((path) => path.startsWith(".codex/agents"))).toBe(true);
     const manifest = (await readManifest(root)) as SetupManifest;
     expect(manifest.plugin?.clients?.codex?.classes).toEqual(["skill"]);

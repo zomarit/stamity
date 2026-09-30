@@ -168,6 +168,8 @@ function treeFiles(dir: string, prefix = ""): string[] {
 let root: string;
 /** The cursor-only repository emission over the SAME substituted corpus: the oracle. */
 let emission: Map<string, string>;
+/** The emitted paths the ledger records as touchpoint COMMANDS — no longer readable off the path. */
+let commandPaths: Set<string>;
 
 function rootFile(rel: string): string {
   return readFileSync(join(root, ...rel.split("/")), "utf8");
@@ -222,6 +224,9 @@ beforeAll(async () => {
       contentRoot,
     });
     emission = new Map(plan.outputs.map((row) => [row.path, row.content]));
+    commandPaths = new Set(
+      plan.outputs.filter((row) => row.owner.artifactType === "command").map((row) => row.path),
+    );
   } finally {
     await staged.dispose();
   }
@@ -391,31 +396,43 @@ describe("hooks/hooks.json", () => {
 // ── Skills, commands, agents ─────────────────────────────────────────────────
 
 describe("skills/, agents/ and the command surface", () => {
-  it("carries the vendor-neutral skills tree and the command-as-skill tree under one skills/", () => {
-    const skills = [...emission.keys()].filter((path) => path.startsWith(".agents/skills/"));
-    const commands = [...emission.keys()].filter((path) => path.startsWith(".cursor/skills/"));
-    // Nine touchpoint commands, and a skills tree with companion files in it.
+  it("carries the vendor-neutral skills tree, touchpoints included, under one skills/", () => {
+    // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills): the nine touchpoints left
+    // `.cursor/skills/` for the shared `.agents/skills/` tree Codex reads too, so the two
+    // trees this case joined are now one, and a touchpoint is told from a skill by its ledger
+    // class rather than its path. Each touchpoint's Codex companion (`agents/openai.yaml`)
+    // stays out of this root — this client reads `disable-model-invocation` from the head.
+    // Every carried file is still byte-compared with the repository emission.
+    expect([...emission.keys()].filter((path) => path.startsWith(".cursor/skills/"))).toEqual([]);
+    const shared = [...emission.keys()].filter((path) => path.startsWith(".agents/skills/"));
+    const commands = shared.filter((path) => commandPaths.has(path));
+    const companions = commands.filter((path) => path.endsWith("/agents/openai.yaml"));
+    // Nine touchpoint commands, each with its companion, and a skills tree with companion files in it.
     expect(new Set(commands.map((path) => path.split("/")[2])).size).toBe(9);
-    expect(skills.length).toBeGreaterThan(9);
+    expect(companions).toHaveLength(9);
+    expect(shared.length - commands.length).toBeGreaterThan(9);
 
+    const carried = shared.filter((path) => !companions.includes(path));
     const expected = [
-      ...skills.map((path) => `skills/${path.slice(".agents/skills/".length)}`),
-      ...commands.map((path) => `skills/${path.slice(".cursor/skills/".length)}`),
+      ...carried.map((path) => `skills/${path.slice(".agents/skills/".length)}`),
       // The one file a root GENERATES rather than carries.
       "skills/st-setup/SKILL.md",
     ].toSorted();
     expect(treeFiles(join(root, "skills"), "skills").toSorted()).toEqual(expected);
 
-    for (const path of [...skills, ...commands]) {
-      const rel = `skills/${path.slice(path.indexOf("/skills/") + "/skills/".length)}`;
+    for (const path of carried) {
+      const rel = `skills/${path.slice(".agents/skills/".length)}`;
       expect(rootFile(rel), rel).toBe(emission.get(path));
     }
   });
 
   it("marks every touchpoint command disable-model-invocation, which is what makes it a command", () => {
-    const ids = [...emission.keys()]
-      .filter((path) => path.startsWith(".cursor/skills/"))
+    // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills): read by ledger class, not by
+    // the `.cursor/skills/` prefix the touchpoints no longer carry.
+    const ids = [...commandPaths]
+      .filter((path) => path.endsWith("/SKILL.md"))
       .map((path) => path.split("/")[2] ?? "");
+    expect(new Set(ids).size).toBe(9);
     expect(ids).toContain("st-work");
     for (const id of new Set(ids)) {
       const front = head(rootFile(`skills/${id}/SKILL.md`));
@@ -436,8 +453,8 @@ describe("skills/, agents/ and the command surface", () => {
     // nine touchpoints were not, and an unbidden `plugin setup` writes files into the operator's
     // repository. The contract that moved is the container's, not this assertion's — the Cursor
     // module now declares `SETUP_COMMAND_FRONTMATTER`, so the generated command carries the same
-    // three keys, in the same order, that `buildCursorCommand` renders for the carried nine
-    // (src/adapters/cursor.ts). The old assertion no longer states a true fact about this root.
+    // three keys, in the same order, that `buildTouchpointSkill` renders for the carried nine
+    // (src/emit/skillsProjection.ts; it was `buildCursorCommand` before sw17 moved the builder). The old assertion no longer states a true fact about this root.
     expect(head(body)).toEqual([
       "name: st-setup",
       'description: "Set this repository up for the stamity plugin: resolve facts and gates, write the repository-owned files, report duplicates."',

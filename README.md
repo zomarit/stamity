@@ -69,8 +69,8 @@ the root `AGENTS.override.md` instead where it has a rules appendix: `AGENTS.md`
 plus the appendix). Claude Code reads the managed block in `CLAUDE.md` and takes a skills copy.
 
 Four adapters add what a client cannot read without help: agents, rules, MCP documents, hook wiring
-and a command surface. Hook wiring reaches all four clients. A command surface reaches three of
-them: Codex has no repository-level command home, so its touchpoints stay the charter's index.
+and a command surface. Both reach all four clients. Codex and Cursor share the nine touchpoints as
+skills under `.agents/skills/`: Codex starts one as `$st-<id>`, Cursor as `/st-<id>`.
 Your setup state lives in `.stamity/`: a manifest, a per-file ledger, learnings and handoffs.
 
 ## Commands

@@ -92,10 +92,10 @@ skills directory carries only the rules it demoted itself.
 
 That trade is paid in a second budget, so it is measured too. The client holds every skill's
 name and description for the whole session in order to decide when to open one, and caps that
-list at 8000 characters when the context window is unknown. The full selection measures 5570 —
-the shipped skills plus the projected rules — and emission refuses outright rather than
-truncating past the cap, the same way it refuses an oversized instruction file. The remaining
-headroom is what a repository's own skills spend into.
+list at 8000 characters when the context window is unknown. The full selection measures 6909 —
+the shipped skills, the projected rules and the nine touchpoints — and emission refuses
+outright rather than truncating past the cap, the same way it refuses an oversized instruction
+file. The remaining headroom is what a repository's own skills spend into.
 
 The appendix is shaped to the client's own 32 KiB ceiling, lowest risk first — rules marked
 critical are kept longest, then floor-tagged rules, then declared precedence, then id. On the
@@ -178,7 +178,7 @@ Declared caps:
 | `rule body` | 500 lines per rule, refused above |
 | `hook enforcement` | Exit 2 denies; failClosed: true also denies hook errors and timeouts, and this client counts no output as such a failure (cursor.com/docs/hooks, accessed 2026-09-17), so every allow is written explicitly. Emitted on both guards and on any authored pre-tool-use row, but NOT on the core pre-tool-use guard: this client's tool-call payload names no calling agent, so that guard is emitted as telemetry and has no verdict to block on |
 | `hook timeout` | timeoutMs converts to native timeout seconds, rounded up; the portable runner also bounds the child to the requested milliseconds |
-| `command surface` | `.cursor/skills/<id>/SKILL.md` with `disable-model-invocation: true` — this client folded slash commands into skills, so no `.cursor/commands/` directory appears in current docs and the touchpoint bodies ship as explicitly invoked skills |
+| `command surface` | `.agents/skills/<id>/SKILL.md` with `disable-model-invocation: true`, invoked as `/<id>` — this client folded slash commands into skills, so no `.cursor/commands/` directory appears in current docs and the touchpoint bodies ship as explicitly invoked skills, in the shared tree Codex reads too, one file per touchpoint |
 | `user hook enforcement` | explicit exit-2 denial applies on supported events; authored pre-tool-use rows also opt into failClosed for hook errors and timeouts, and no output counts as one of those failures (cursor.com/docs/hooks, accessed 2026-09-17), so a row that decides nothing is emitted as an explicit allow. Session-start and session-end responses cannot block |
 | `MCP tool surface` | servers expose tools through mcp.json; the current contract documents no fixed per-session tool-count cap |
 | `workdir guard` | not emitted — mitigated a pre-3.0 path-escape class; revisit if that class recurs on a supported release |
@@ -209,7 +209,7 @@ Declared caps:
 |---|---|
 | `agent-prompt-chars` | 30000 |
 | `charter-budget` | ~2 pages; AGENTS.md is native, so no mirror is emitted |
-| `command-surface` | native — the nine touchpoints ship as prompt files in .github/prompts/, invoked as /st-<id>; the format's `agent` and `tools` keys stay unemitted (per-prompt restrictions this engine cannot answer), `model` follows an operator pin |
+| `command-surface` | native — the nine touchpoints ship as prompt files in .github/prompts/, invoked as /st-<id>; the format's `agent` and `tools` keys stay unemitted (per-prompt restrictions this engine cannot answer), `model` follows an operator pin. With Codex or Cursor selected beside it, the same nine also ship in `.agents/skills/` with `disable-model-invocation: true`, a tree this client reads, so they list twice for the operator: Copilot CLI 1.0.89 shows them as project skills (`copilot skill list`) beside the prompt files, and keeps them out of the model's own skills list (measured 2026-09-30) |
 | `effort-axis` | not emitted — Copilot CLI custom agents accept `reasoning-effort` (1.0.66; applied on agent selection since 1.0.88; release notes, accessed 2026-09-30); this engine does not write it yet |
 | `hook-enforcement` | preToolUse exit 2, errors and JSON deny block. Timeouts always fail-open; other events are advisory unless documented. The identity-free core role guard is telemetry. sessionStart output reaches the session: it is injected as additionalContext (docs.github.com hooks reference, 2026-09-17). |
 | `deny-gate` | Repository hooks target Copilot CLI/cloud. preToolUse denies via native JSON or nonzero exit; timeouts fail-open. The core role guard has no calling-agent identity and remains telemetry. |
@@ -244,7 +244,7 @@ Declared caps:
 | `AGENTS.md budget` | 32768 bytes (32 KiB) |
 | `hook enforcement` | exit 2 denies supported tool calls after native /hooks trust; the core role guard is telemetry because PreToolUse has no agent identity. Hosted tools and specialized paths may bypass hooks; use native sandbox/permissions for enforcement. Three steps stand between the emitted hooks.json and a hook that runs — `features.hooks = true`, which this engine writes explicitly into .codex/config.toml, so the client's default does not decide it; `projects.<path>.trust_level = "trusted"` in the operator's own Codex home config; and a per-hook hash review through the interactive /hooks command, or --dangerously-bypass-hook-trust for automation that cannot take that step. Headless `codex exec` ran no project hook on codex-cli 0.154.0 in this repository's 2026-09-15 measurement, with the feature on, the project trusted through a per-invocation `-c` override and hook trust bypassed. On codex-cli 0.155.1 (measured 2026-09-30) the hooks feature is on by default, a project-file `hooks = false` did not turn it off under that same override, and `codex exec` again ran no project hook in 3 of 3 runs; because the override may leave the project `.codex/` layer unloaded, the cause is not isolated (exec itself, or a layer that never loaded), and a run with the project trusted in the home config is unmeasured. So a hook is enforcement in the interactive client, and nothing measured in the headless lane. |
 | `per-agent tool allowlist` | no native per-agent tools list is documented as of 2026-09-10; no placeholder key is emitted. sandbox_mode carries the supported filesystem boundary; the policy grant remains a prompt-level restriction. |
-| `command-surface` | none — custom prompts live in the user's Codex home directory, not the repository, and are deprecated in favour of skills, so the nine touchpoint bodies are not emitted here; the charter's touchpoint index still names them |
+| `command-surface` | `.agents/skills/st-<id>/SKILL.md`, invoked as `$st-<id>` — the nine touchpoint bodies ship as shared skills, one file each, read by Cursor too, with an `agents/openai.yaml` companion setting `policy.allow_implicit_invocation: false` so a touchpoint starts only when named. Custom prompts are not used: they live in the user's Codex home directory, not the repository, and are deprecated in favour of skills |
 | `effort-scale` | minimal, low, medium, high, xhigh — the levels this client's `model_reasoning_effort` key accepts; xhigh is model-dependent, so a model that does not offer it falls back to that model's own default (learn.chatgpt.com/docs/config-file/config-reference, accessed 2026-09-17). This is the only supported client documenting `minimal`, and the only one that cannot be asked for `max`: a `max` request is emitted as `xhigh` with a disclosure, never dropped |
 
 Sources:

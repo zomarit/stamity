@@ -14,6 +14,7 @@ import { buildContentIndex } from "../../src/content/catalog.ts";
 import { resolveSelection } from "../../src/content/selection.ts";
 import { composeEmissionPlanner } from "../../src/emit/planner.ts";
 import { SKILLS_PROJECTION_DIR } from "../../src/emit/skillsProjection.ts";
+import type { AdapterOutput } from "../../src/types/content.ts";
 import { MANIFEST_VERSION, type SetupManifest } from "../../src/types/manifest.ts";
 // @ts-expect-error — the emitter modules ship as plain .mjs with no type declarations: the
 // generator that builds the plugin roots runs them under bare Node, with no TypeScript nearby.
@@ -240,17 +241,26 @@ describe("the root plugin.json against the vendored Agent Plugins 1.0.0 schema",
  */
 async function codexNativeSkillDirs(): Promise<string[]> {
   const prefix = `${SKILLS_PROJECTION_DIR}/`;
+  // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills, sign-off option b): the codex plan
+  // now also writes the nine touchpoints into `.agents/skills/`, recorded as COMMAND rows, and they
+  // stay repository-owned — `place` drops them. So the directories this root must mirror are the
+  // plan's skill-class rows under that tree; the exact-equality check below is unchanged.
   return [
     ...new Set(
-      (await codexNativePlanPaths())
-        .filter((path) => path.startsWith(prefix))
-        .map((path) => path.slice(prefix.length).split("/")[0] ?? ""),
+      (await codexNativePlanRows())
+        .filter((row) => row.path.startsWith(prefix) && row.owner.artifactType !== "command")
+        .map((row) => row.path.slice(prefix.length).split("/")[0] ?? ""),
     ),
   ].toSorted();
 }
 
 /** Every path the engine plans for codex alone over the real corpus — the rows `place` is handed. */
 async function codexNativePlanPaths(): Promise<string[]> {
+  return (await codexNativePlanRows()).map((row) => row.path);
+}
+
+/** The rows themselves, for a caller that needs their recorded class as well as their path. */
+async function codexNativePlanRows(): Promise<AdapterOutput[]> {
   const contentRoot = { root: join(REPO_ROOT, "content"), forkRoot: join(REPO_ROOT, "fork") };
   const index = await buildContentIndex(contentRoot);
   const manifest: SetupManifest = {
@@ -270,7 +280,7 @@ async function codexNativePlanPaths(): Promise<string[]> {
     facts: { monorepoPackages: [] },
     contentRoot,
   });
-  return plan.outputs.map((row) => row.path);
+  return plan.outputs;
 }
 
 describe("what the codex root carries", () => {
@@ -325,6 +335,26 @@ describe("what the codex root carries", () => {
       expect(treeFiles(root).filter((rel) => rel.endsWith("AGENTS.override.md"))).toEqual([]);
       // The page names what it leaves to the repository, this file among it.
       expect(read("README.md")).toContain("(`AGENTS.override.md`, which Codex reads instead of `AGENTS.md`)");
+    },
+    ONE_ROOT_MS,
+  );
+
+  it(
+    "drops the nine touchpoints by their recorded class, so they stay the repository's",
+    async () => {
+      // sw17 (REQ-FLOW-026): the codex plan writes the touchpoints into `.agents/skills/st-<id>/`
+      // beside the content skills, so the path cannot tell them apart; the ledger class does.
+      const rows = await codexNativePlanRows();
+      const touchpoints = rows.filter(
+        (row) => row.owner.artifactType === "command" && row.path.endsWith("/SKILL.md"),
+      );
+      expect(touchpoints).toHaveLength(9);
+      for (const row of touchpoints) expect(place(row), row.path).toBeNull();
+      // Non-degenerate: a content skill at the same depth still travels.
+      const skill = rows.find((row) => row.path === `${SKILLS_PROJECTION_DIR}/st-onboard/SKILL.md`);
+      expect(skill).toBeDefined();
+      expect(place(skill!)).toEqual({ path: "skills/st-onboard/SKILL.md", class: "skill" });
+      expect(treeFiles(join(root, "skills")).filter((rel) => rel.startsWith("st-work/"))).toEqual([]);
     },
     ONE_ROOT_MS,
   );
@@ -453,7 +483,14 @@ describe("the capability file this root declares itself by", () => {
       expect(classes[name]?.count, name).toBeUndefined();
     }
     expect(classes["agent"]?.reason).toContain(".codex/agents/");
-    expect(classes["command"]?.reason).toContain("no project-scoped command directory");
+    // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills, orchestrator sign-off option b):
+    // the reason read "no project-scoped command directory". Codex now receives the nine
+    // touchpoints as shared skills in the repository's `.agents/skills/`, and they stay
+    // repository-owned — this root drops their rows — so the reason says where they are written
+    // and how Codex starts one. The class status is unchanged and still asserted above.
+    expect(classes["command"]?.reason).toContain(".agents/skills/");
+    expect(classes["command"]?.reason).toContain("$st-<id>");
+    expect(classes["command"]?.reason).not.toContain("no project-scoped command directory");
     expect(classes["rule"]?.reason).toMatch(/skills/);
   });
 });

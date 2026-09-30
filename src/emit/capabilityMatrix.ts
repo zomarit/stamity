@@ -376,12 +376,12 @@ const LIVE_ALWAYS_ON: AlwaysOnDisclosure = {
   ruleDelivery: RULE_DELIVERY_DEFAULT,
   codexFoldedRuleIds: ["injection-screening", "secrets", "security-patterns"],
   codexRuleSkillCount: 9,
-  // 5_570 characters over the 17 skills of the full selection — the 8 shipped
-  // skills plus the 9 projected rules — measured against the real emission by
-  // `test/adapters/codex.test.ts`, which fails when this number stops matching
-  // it. 70% of the ceiling, and the remainder is the headroom a repository
-  // adding its own skills spends into.
-  codexSkillsListChars: 5_570,
+  // 6_909 characters over the 26 skills of the full selection — the 8 shipped
+  // skills, the 9 projected rules and the 9 touchpoints that ship as shared
+  // skills — measured against the real emission by `test/adapters/codex.test.ts`,
+  // which fails when this number stops matching it. 86% of the ceiling, and the
+  // remainder is the headroom a repository adding its own skills spends into.
+  codexSkillsListChars: 6_909,
   codexSkillsListCap: CODEX_SKILLS_LIST_BUDGET_CHARS,
   // Measured on the full four-client selection. `cursor` demotes nothing of its
   // own, so all nine rule-skills in the shared tree duplicate an `.mdc` rule it
@@ -1057,7 +1057,7 @@ function alwaysOnSection(alwaysOn: AlwaysOnDisclosure): string[] {
         "skill's name and description for the whole session in order to decide when to open " +
         `one, and caps that list at ${alwaysOn.codexSkillsListCap} characters when the context ` +
         `window is unknown. The full selection measures ${alwaysOn.codexSkillsListChars} — ` +
-        "the shipped skills plus the projected rules — and emission refuses outright rather " +
+        "the shipped skills, the projected rules and the nine touchpoints — and emission refuses outright rather " +
         "than truncating past the cap, the same way it refuses an oversized instruction file. " +
         "The remaining headroom is what a repository's own skills spend into.",
     ),

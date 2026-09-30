@@ -12,7 +12,6 @@ import {
   MCP_GUARD_PATH,
   SUBAGENT_GUARD_PATH,
   buildCursorAgent,
-  buildCursorCommand,
   buildHooksJson,
   buildMcpGuardScript,
   buildMdcRule,
@@ -20,6 +19,11 @@ import {
   cursorDialectFacts,
   cursorResiduePlanner,
 } from "../../src/adapters/cursor.ts";
+import {
+  SKILLS_PROJECTION_DIR,
+  TOUCHPOINT_POLICY_FILE,
+  buildTouchpointSkill,
+} from "../../src/emit/skillsProjection.ts";
 import { buildContentIndex, type CatalogItem } from "../../src/content/catalog.ts";
 import { __resetContentRootCacheForTests } from "../../src/content/contentRoot.ts";
 import { buildCoreEmissionPlan, composeEmissionPlanner, type EmissionContext } from "../../src/emit/planner.ts";
@@ -760,8 +764,20 @@ describe("touchpoint commands", () => {
       return;
     }
 
-    expect(commandRows.map((row) => row.path)).toEqual([P.askCommand, P.workCommand]);
+    // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills): each
+    // touchpoint is now the shared skill Codex reads too, so it carries the
+    // Codex companion beside its `SKILL.md` — two rows per command, both owned
+    // here, both reclaimed with the command. The `SKILL.md` bytes are held
+    // below exactly as before.
+    expect(commandRows.map((row) => row.path)).toEqual([
+      P.askCommand,
+      P.askCommand.replace("SKILL.md", TOUCHPOINT_POLICY_FILE),
+      P.workCommand,
+      P.workCommand.replace("SKILL.md", TOUCHPOINT_POLICY_FILE),
+    ]);
+    expect(CURSOR_COMMANDS_DIR).toBe(SKILLS_PROJECTION_DIR);
     expect(surfaceCap?.value).toContain(CURSOR_COMMANDS_DIR);
+    expect(surfaceCap?.value).toContain("/<id>");
     for (const row of commandRows) {
       expect(row.owner.adapter).toBe("cursor");
       // The catalog's namespaced id is what the ledger reclaims by; the emitted
@@ -832,8 +848,13 @@ describe("touchpoint commands", () => {
   });
 
   it("carries no frontmatter key this client does not read", () => {
+    // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills): the builder
+    // left this adapter for the shared touchpoint projection, which both Cursor
+    // and Codex emit from; the head it renders — three keys, this order — is
+    // unchanged and still asserted here, against the builder this client's
+    // rows now come from.
     const item = itemOf({ type: "command", id: "cmd-quick", description: "Small-change lane." });
-    const emitted = buildCursorCommand(item, "st-quick", "# /st-quick\n");
+    const emitted = buildTouchpointSkill(item, "st-quick", "# /st-quick\n");
 
     const front = emitted.split("---")[1] ?? "";
     expect(front.trim().split("\n").map((line) => line.split(":")[0])).toEqual([
@@ -1413,13 +1434,20 @@ describe("emitted plan", () => {
     });
     const paths = plan.map((row) => row.path);
 
-    const commandRows = plan.filter((row) => row.owner.artifactType === "command");
+    // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills): nine
+    // touchpoints are now eighteen rows — each `SKILL.md` with its Codex
+    // companion — so the count is taken over the `SKILL.md` rows, and the
+    // nine paths are asserted as before. Nothing is left under `.cursor/skills/`.
+    const commandRows = plan.filter(
+      (row) => row.owner.artifactType === "command" && row.path.endsWith("/SKILL.md"),
+    );
     expect(commandRows).toHaveLength(CURSOR_COMMANDS_DIR === null ? 0 : 9);
     if (CURSOR_COMMANDS_DIR !== null) {
       for (const id of ["spec", "plan", "work", "board", "ask", "debug", "quick", "rework", "pr-resolve"]) {
         expect(paths, id).toContain(`${CURSOR_COMMANDS_DIR}/st-${id}/SKILL.md`);
       }
     }
+    expect(paths.filter((path) => path.startsWith(".cursor/skills/"))).toEqual([]);
 
     // The three read-only specialist lenses: emitted through the ordinary agent
     // path, and restricted — each judges a surface it must not touch.

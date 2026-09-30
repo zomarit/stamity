@@ -25,7 +25,7 @@ import {
   type ResiduePlanner,
 } from "../emit/planner.ts";
 import { withoutPluginOwnedRows } from "../emit/ownership.ts";
-import { SKILLS_PROJECTION_DIR } from "../emit/skillsProjection.ts";
+import { SKILLS_PROJECTION_DIR, projectTouchpointSkills } from "../emit/skillsProjection.ts";
 import {
   cliCallContextOf,
   detectionContextFromManifest,
@@ -75,28 +75,26 @@ export const CODEX_CONFIG_FILE = `${CODEX_DIR}/config.toml`;
 export const CODEX_AGENTS_DIR = `${CODEX_DIR}/agents`;
 
 /**
- * Project-scoped command directory — `null`, because this client documents
- * none.
+ * Project-scoped home of the nine touchpoint bodies: the shared
+ * {@link SKILLS_PROJECTION_DIR}, where each one is a skill the operator starts
+ * by name — `$st-work`, this client's own invocation form for a skill.
  *
- * The nine touchpoint bodies reach every other client through a repo-committed
- * directory. Codex's equivalent surface is custom prompts, and it is
- * user-scoped by definition: prompts "live in your local Codex home directory
- * (for example, `~/.codex`), so they're not shared through your repository",
- * and the page carries a "Deprecated. Use skills for reusable prompts" banner
- * (learn.chatgpt.com/docs/custom-prompts, accessed 2026-08-17). Emitting into a
- * home directory is out of the question — a repo-committed setup writes inside
- * the repo — and inventing `.codex/prompts/` because the sibling
- * `.codex/agents/` happens to be project-scoped would pin a path no
- * documentation grants.
- *
- * So the honest answer is nothing, said out loud: no command rows, and a
- * `command-surface` cap in {@link CODEX_FACTS} naming the gap. Claiming a
- * per-repo surface that is really per-user is exactly the doc-versus-reality
- * defect the dialect-facts table exists to catch. Typed `string | null` so the
- * day the client documents one, this constant is the only edit and the emission
- * below reads it rather than a second decision.
+ * Codex's command surface proper is custom prompts, and it is user-scoped by
+ * definition: prompts "live in your local Codex home directory (for example,
+ * `~/.codex`), so they're not shared through your repository", and the page
+ * carries a "Deprecated. Use skills for reusable prompts" banner
+ * (learn.chatgpt.com/docs/custom-prompts, accessed 2026-08-17). A
+ * repo-committed setup writes inside the repo, so prompts are out, and
+ * inventing `.codex/prompts/` would pin a path no documentation grants. Skills
+ * are the surface the banner names, and this client reads the shared tree
+ * already, so the touchpoints ship there once
+ * ({@link projectTouchpointSkills}), co-owned with Cursor, each with an
+ * `agents/openai.yaml` companion that turns implicit invocation off — a
+ * touchpoint starts when the operator names it, never on the model's own
+ * judgement. Typed `string | null` so the panel and the capability rows read
+ * this constant rather than a second decision.
  */
-export const CODEX_COMMANDS_DIR: string | null = null;
+export const CODEX_COMMANDS_DIR: string | null = SKILLS_PROJECTION_DIR;
 
 /**
  * The Codex-only root instruction file: the shared root `AGENTS.md` as this run
@@ -359,9 +357,11 @@ const CODEX_FACTS: AdapterDialectFacts = {
       // than worked around.
       name: "command-surface",
       value:
-        "none — custom prompts live in the user's Codex home directory, not the " +
-        "repository, and are deprecated in favour of skills, so the nine touchpoint " +
-        "bodies are not emitted here; the charter's touchpoint index still names them",
+        `\`${SKILLS_PROJECTION_DIR}/st-<id>/SKILL.md\`, invoked as \`$st-<id>\` — the nine ` +
+        "touchpoint bodies ship as shared skills, one file each, read by Cursor too, with an " +
+        "`agents/openai.yaml` companion setting `policy.allow_implicit_invocation: false` so " +
+        "a touchpoint starts only when named. Custom prompts are not used: they live in the " +
+        "user's Codex home directory, not the repository, and are deprecated in favour of skills",
     },
     { name: "effort-scale", value: EFFORT_SCALE_CAP },
   ],
@@ -375,7 +375,7 @@ const CODEX_FACTS: AdapterDialectFacts = {
     { url: "https://learn.chatgpt.com/docs/hooks", accessDate: "2026-09-17" },
     // `project_doc_max_bytes`, default 32768 — the budget shaped below.
     { url: "https://learn.chatgpt.com/docs/config-file/config-reference", accessDate: "2026-09-15" },
-    // Custom prompts: home-directory scope, deprecated — why no commands emit.
+    // Custom prompts: home-directory scope, deprecated — why the touchpoints ship as skills.
     { url: "https://learn.chatgpt.com/docs/custom-prompts", accessDate: "2026-09-10" },
   ],
 };
@@ -398,7 +398,12 @@ export const codexResiduePlanner: ResiduePlanner = {
     // a shaping. Nothing here can choose which skill to leave out — every one of
     // them is selected content — so the honest answer is to name the total and
     // stop.
-    const skillsListChars = skillsListCharacters(core.skills);
+    //
+    // The touchpoints count too: they sit in the same `.agents/skills/` tree and
+    // the client lists them by name and description like any other skill.
+    const { agents, rules, commands } = await selectedItems(ctx);
+    const touchpoints = projectTouchpointSkills(commands, ctx);
+    const skillsListChars = skillsListCharacters([...core.skills, ...touchpoints]);
     if (skillsListChars > CODEX_SKILLS_LIST_BUDGET_CHARS) {
       throw new EngineError(
         `codex skills list is ${skillsListChars} characters; this setup caps it at ` +
@@ -411,7 +416,6 @@ export const codexResiduePlanner: ResiduePlanner = {
       );
     }
 
-    const { agents, rules } = await selectedItems(ctx);
     const render = bodyRenderer(ctx);
     // One read of the operator's allocation for the whole batch: pins and
     // efforts are per class, not per agent, so resolving them per file would
@@ -426,6 +430,10 @@ export const codexResiduePlanner: ResiduePlanner = {
       emissionRow(`.stamity/generated/hooks/codex/${PORTABLE_RUNNER_FILE}`, buildPortableHookRunner("codex"), "codex-portable-hook", "infra"),
       emissionRow(CODEX_CONFIG_FILE, composeConfigToml(core, ctx), CONFIG_ARTIFACT_ID, "infra"),
     ];
+
+    for (const row of touchpoints) {
+      rows.push(emissionRow(row.path, row.content, row.artifactId, "command"));
+    }
 
     for (const agent of agents) {
       rows.push(
@@ -463,7 +471,7 @@ export const codexResiduePlanner: ResiduePlanner = {
     for (const file of downConverted.nested) {
       rows.push(emissionRow(file.path, file.content, RULES_APPENDIX_ARTIFACT_ID, "infra"));
     }
-    const warnings: string[] = [commandSurfaceWarning()];
+    const warnings: string[] = [];
     if (downConverted.rootReplacement !== null) {
       // A Codex-only row: the shared AGENTS.md stays the core charter, the same
       // bytes with or without this client selected.
@@ -488,26 +496,6 @@ export const codexResiduePlanner: ResiduePlanner = {
     return { outputs: kept.toSorted((a, b) => compareText(a.path, b.path)), warnings };
   },
 };
-
-/**
- * The touchpoint-delivery disclosure, printed on every run that selects this
- * client.
- *
- * {@link CODEX_COMMANDS_DIR} is `null`, so none of the nine touchpoint bodies
- * is emitted here: what a Codex user gets is the charter's one-line index of
- * the nine, and nothing behind it. The capability matrix and the init panel
- * both said so; the always-on charter did not, and the charter is the file this
- * client actually loads — so the operator most likely to be misled was the one
- * reading the only surface that never disclosed it.
- */
-function commandSurfaceWarning(): string {
-  return (
-    `touchpoints [${TOOL}]: this client documents no project-scoped command directory, so none ` +
-    `of the nine touchpoint workflow bodies is written for it. What ships is the charter's ` +
-    `one-line index of the nine; a user who names one gets the index entry, not the workflow ` +
-    `the other clients run. Select another client alongside it to get the bodies on disk.`
-  );
-}
 
 /**
  * The shared root `AGENTS.md` as this run leaves it, managed-block markers
@@ -713,16 +701,14 @@ function grantFor(item: CatalogItem): ResolvedAgentGrant {
  * reachable claimant of a contested id is emitted, matching the catalog's own
  * resolution.
  *
- * Two classes are absent for two different reasons. Skills are read by this
- * client from the vendor-neutral `.agents/skills/` tree the core already
- * projects, so a native copy would duplicate bytes for no reader. Commands have
- * nowhere to go: {@link CODEX_COMMANDS_DIR} is `null` because the client
- * documents no project-scoped command surface, and a class with no verified
- * destination is not selected into one.
+ * Skills are absent: this client reads them from the vendor-neutral
+ * `.agents/skills/` tree the core already projects, so a native copy would
+ * duplicate bytes for no reader. Commands are selected here because their
+ * shared-skill rows ({@link CODEX_COMMANDS_DIR}) are this adapter's to emit.
  */
 async function selectedItems(
   ctx: EmissionContext,
-): Promise<{ agents: CatalogItem[]; rules: CatalogItem[] }> {
+): Promise<{ agents: CatalogItem[]; rules: CatalogItem[]; commands: CatalogItem[] }> {
   const index = await buildContentIndex(ctx.contentRoot);
   const allowlist = buildSelectionAllowlist(ctx.manifest.selection);
   const admitted = index.items.filter(
@@ -741,6 +727,7 @@ async function selectedItems(
   return {
     agents: admitted.filter((item) => item.type === "agent"),
     rules: admitted.filter((item) => item.type === "rule"),
+    commands: admitted.filter((item) => item.type === "command"),
   };
 }
 

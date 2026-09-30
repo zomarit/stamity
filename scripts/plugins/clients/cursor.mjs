@@ -21,13 +21,15 @@
 // `${CURSOR_PLUGIN_ROOT}`, the variable the client expands itself, so a declared variable would
 // add a second name for a path that already has one.
 //
-// One placement decision worth stating. The engine already renders this client's touchpoint
-// commands as SKILL DIRECTORIES (`.cursor/skills/<id>/SKILL.md`), because that is the shape this
-// client reads a command in. The container's `commands` field points at a directory of files, so
-// pointing it at those directories would declare a surface that does not match what is there.
-// The commands therefore ride under `skills/`, exactly as the client's own conversion produces
-// them, and `classes.command` stays CARRIED with a reason naming the placement — an operator
-// reading the capability file learns both that the commands travel and where they landed.
+// One placement decision worth stating. The engine renders this client's touchpoint commands as
+// SKILL DIRECTORIES, because that is the shape this client reads a command in — and it writes them
+// into the shared `.agents/skills/st-<id>/` tree Codex reads too, beside the
+// content skills. The container's `commands` field points at a directory of files, so pointing
+// it at those directories would declare a surface that does not match what is there. The
+// commands therefore ride under `skills/`, exactly as the client's own conversion produces them,
+// and `classes.command` stays CARRIED with a reason naming the placement — an operator reading
+// the capability file learns both that the commands travel and where they landed. A row's PATH
+// no longer tells a command from a skill, so the ledger's own `artifactType` does.
 
 /** The environment variable this client expands inside a plugin's own files. */
 export const ROOT_VARIABLE = 'CURSOR_PLUGIN_ROOT'
@@ -39,7 +41,8 @@ const COMMAND_REASON =
   'this client converts a command into a skill carrying disable-model-invocation: true, and its ' +
   'commands/ discovery reads files rather than directories (cursor.com/docs/skills and ' +
   '/docs/reference/plugins, 2026-09-20), so the nine touchpoints ride under skills/ as the ' +
-  'client renders them'
+  'client renders them — in a repository they sit in the shared .agents/skills/ tree, not ' +
+  '.cursor/skills/'
 
 const MCP_REASON = 'MCP server selection and credential references are repository-owned'
 
@@ -57,12 +60,17 @@ export function place(row) {
   if (path.startsWith('.cursor/agents/')) {
     return { path: `agents/${path.slice('.cursor/agents/'.length)}`, class: 'agent' }
   }
-  // The command-as-skill surface: the id keeps its own directory under `skills/`.
-  if (path.startsWith('.cursor/skills/')) {
-    return { path: `skills/${path.slice('.cursor/skills/'.length)}`, class: 'command' }
-  }
   if (path.startsWith('.agents/skills/')) {
-    return { path: `skills/${path.slice('.agents/skills/'.length)}`, class: 'skill' }
+    const rel = path.slice('.agents/skills/'.length)
+    // The command-as-skill surface shares the tree, so the ledger's class decides: a touchpoint
+    // keeps its own directory under `skills/` and travels as a command. Its `agents/openai.yaml`
+    // companion is Codex's implicit-invocation switch; this client reads `disable-model-invocation`
+    // from the SKILL.md head instead, so the companion stays out of this root.
+    if (row.owner?.artifactType === 'command') {
+      if (rel.endsWith('/agents/openai.yaml')) return null
+      return { path: `skills/${rel}`, class: 'command' }
+    }
+    return { path: `skills/${rel}`, class: 'skill' }
   }
   if (path === '.cursor/hooks.json') return { path: `${HOOKS_DIR}/hooks.json`, class: 'hooks' }
   if (path.startsWith('.cursor/hooks/')) return { path: hookFile(path), class: 'hooks' }
@@ -135,7 +143,7 @@ export const SETUP_COMMAND_PATH = 'skills/st-setup/SKILL.md'
  * the skills the model could invoke unbidden — and `st-setup` writes files into the repository.
  *
  * The same two keys, in the same order, that this client's carried commands get from
- * `buildCursorCommand` in `src/adapters/cursor.ts`. The other three containers declare none: no
+ * `buildTouchpointSkill` in `src/emit/skillsProjection.ts`. The other three containers declare none: no
  * vendor document for them defines such a field, and borrowing it would state a restriction
  * their runtimes never apply.
  */

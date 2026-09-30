@@ -180,9 +180,10 @@ npx @zomarit/stamity sync
 
 `config` edits state and never regenerates output. The `sync` is what writes the files.
 
-Two absences are expected rather than broken. Codex has no repository-level command home, so no
-command files are written for it. Copilot CLI and cloud hooks land at
-`.github/hooks/stamity.json`, and a selected Copilot setup missing that file needs a sync.
+Two things are expected rather than broken. Codex gets no command files of its own: its
+touchpoints are the shared skills under `.agents/skills/`, started as `$st-<id>`. Copilot CLI and
+cloud hooks land at `.github/hooks/stamity.json`, and a selected Copilot setup missing that file
+needs a sync.
 [The capability matrix](capability-matrix.md) states each client's supported surfaces and
 enforcement limits.
 

@@ -38,9 +38,10 @@ const DESCRIPTION =
  * CURSOR vocabulary, declared by that container as `SETUP_COMMAND_FRONTMATTER` and passed in:
  * on that client a file is a COMMAND rather than a model-invocable skill only when it declares
  * `disable-model-invocation: true`, and the `name` beside it is the id the operator types
- * (cursor.com/docs/skills, accessed 2026-09-20). The order is `src/adapters/cursor.ts`'s own —
- * `buildCursorCommand` renders name, description, disable-model-invocation — so the generated
- * command's head is indistinguishable from the nine carried ones.
+ * (cursor.com/docs/skills, accessed 2026-09-20). The order is the touchpoints' own —
+ * `buildTouchpointSkill` in `src/emit/skillsProjection.ts` renders name, description,
+ * disable-model-invocation — so the generated command's head is indistinguishable from the nine
+ * carried ones.
  *
  * A key absent from this list is a REFUSAL rather than an appended line: the position of a new
  * key is a decision, and a container that could append one would decide it silently.

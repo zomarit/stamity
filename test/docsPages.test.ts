@@ -1351,17 +1351,27 @@ describe("README corpus claims", () => {
     expect(read(README)).toContain(source);
   });
 
-  it("says Codex has no command surface only while its adapter declares none", () => {
+  it("says Codex starts its touchpoints as $st-<id> while its adapter declares that surface", () => {
+    // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills, REQ-FLOW-026): this pinned the
+    // README's "Codex has no repository-level command home" to a codex cap reading "none". The
+    // cap moved — the nine touchpoints ship to Codex as shared skills, invoked as `$st-<id>` —
+    // so the same tie is kept the other way round: the README and the guides say what the cap
+    // says, and none of them still says Codex has no command home.
     const matrix = read(CAPABILITY_MATRIX);
     const sectionStart = matrix.indexOf("### `codex`");
     expect(sectionStart, "capability matrix has no codex section").toBeGreaterThanOrEqual(0);
 
     const declared = (CODEX_COMMAND_SURFACE.exec(matrix.slice(sectionStart))?.[1] ?? "").trim();
     expect(declared, "codex declares no command-surface cap").not.toBe("");
-    expect(declared, "codex gained a command surface — README's prose is now wrong").toMatch(
-      /^none/,
-    );
-    expect(read(README)).toMatch(/Codex has no\s+repository-level command home/);
+    expect(declared).toContain("`.agents/skills/st-<id>/SKILL.md`");
+    expect(declared).toContain("`$st-<id>`");
+
+    const readme = read(README);
+    expect(readme).toMatch(/Codex starts one as\s+`\$st-<id>`/);
+    for (const page of [README, "docs/working-with-stamity.md", "docs/troubleshooting.md", "docs/getting-started.md"]) {
+      expect(read(page), page).not.toMatch(/no\s+(?:repository-level|repo-level)\s+command\s+home/);
+      expect(read(page), page).not.toContain(".cursor/skills");
+    }
   });
 });
 

@@ -25,6 +25,7 @@ import {
   type EmissionContext,
 } from "../../src/emit/planner.ts";
 import type { CoreHooksPlan, PlannedHookScript } from "../../src/emit/hooksInfra.ts";
+import { SKILLS_PROJECTION_DIR } from "../../src/emit/skillsProjection.ts";
 import { type HookInterchange } from "../../src/hooks/model.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
 import { emitCodexToml } from "../../src/mcp/emit.ts";
@@ -119,7 +120,7 @@ const STRAY_FIXTURE = [
   "",
 ].join("\n");
 
-/** A touchpoint command, to prove no client-native command surface consumes it. */
+/** A touchpoint command, to prove it ships as a shared skill and nowhere else. */
 const COMMAND_FIXTURE = [
   "---",
   "id: work",
@@ -919,22 +920,25 @@ describe("grants reach this client through the shared resolver", () => {
 // ── 2d. Command surface ──────────────────────────────────────────
 
 describe("command surface", () => {
-  it("declares no project-scoped command directory", () => {
-    // Verified 2026-08-17: this client's custom prompts live in the user's Codex
-    // home directory and are documented as deprecated in favour of skills, so
-    // there is no repo-committed surface to emit into. `null` is the honest
-    // answer; an invented `.codex/prompts/` would be a fabricated pin.
-    expect(CODEX_COMMANDS_DIR).toBeNull();
+  // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills, REQ-FLOW-026): the
+  // three cases here held the `null` command directory — no touchpoint rows, a
+  // "none" cap, a disclosure on every run. The contract moved: the nine bodies
+  // now ship as shared skills under `.agents/skills/`, the tree this client
+  // reads, invoked as `$st-<id>`. Custom prompts are still not used, and the
+  // cap still says why, with its citation.
+  it("names the shared skills tree as the project-scoped touchpoint home", () => {
+    expect(CODEX_COMMANDS_DIR).toBe(SKILLS_PROJECTION_DIR);
   });
 
-  it("records the gap as a dialect cap instead of leaving it to be inferred", () => {
+  it("records the surface and its invocation form as a dialect cap", () => {
     const cap = codexResiduePlanner.facts.caps.find((row) => row.name === "command-surface");
     expect(cap).toBeDefined();
-    expect(cap!.value).toContain("none");
+    expect(cap!.value).toContain(`${SKILLS_PROJECTION_DIR}/st-<id>/SKILL.md`);
+    expect(cap!.value).toContain("$st-<id>");
+    expect(cap!.value).toContain("allow_implicit_invocation: false");
+    // Why not custom prompts: still stated, still cited.
     expect(cap!.value).toContain("home directory");
     expect(cap!.value).toContain("deprecated");
-
-    // The claim carries a citation with an access date, like every other fact.
     expect(codexResiduePlanner.facts.citations.map((row) => row.url)).toContain(
       "https://learn.chatgpt.com/docs/custom-prompts",
     );
@@ -943,7 +947,7 @@ describe("command surface", () => {
     }
   });
 
-  it("emits no command rows and keeps command bodies out of the AGENTS.md budget", async () => {
+  it("emits a selected touchpoint as a shared skill, and keeps its body out of the instruction files", async () => {
     const temp = getTemp();
     await temp.seedFiles({
       "corpus/charter/stamity-charter.md": CHARTER_FIXTURE,
@@ -956,14 +960,52 @@ describe("command surface", () => {
       commands: ["cmd-work"],
     });
 
-    const rows = (await codexResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx)).outputs;
+    const residue = await codexResiduePlanner.planResidue(await buildCoreEmissionPlan(ctx), ctx);
+    const rows = residue.outputs;
 
-    // A selected command produces no row anywhere: not a `.codex/` file, and not
-    // an appendix section stuffed into the shared charter to fake delivery.
-    expect(rows.some((row) => row.path.includes("work"))).toBe(false);
-    for (const row of rows) {
+    const touchpoint = rows.filter((row) => row.owner.artifactType === "command");
+    expect(touchpoint.map((row) => row.path)).toEqual([
+      `${SKILLS_PROJECTION_DIR}/st-work/SKILL.md`,
+      `${SKILLS_PROJECTION_DIR}/st-work/agents/openai.yaml`,
+    ]);
+    for (const row of touchpoint) {
+      expect(row.owner).toEqual({ adapter: "codex", artifactId: "cmd-work", artifactType: "command" });
+    }
+    const skill = touchpoint[0]!.content;
+    expect(skill).toContain("name: st-work");
+    expect(skill).toContain("disable-model-invocation: true");
+    expect(skill).toContain("Command body nothing on this client reads.");
+    expect(touchpoint[1]!.content).toContain("allow_implicit_invocation: false");
+
+    // Only the skill file carries the body: no `.codex/` file and no appendix section.
+    for (const row of rows.filter((candidate) => candidate.owner.artifactType !== "command")) {
       expect(row.content, row.path).not.toContain("Command body nothing on this client reads.");
     }
+    // The run no longer discloses a missing surface.
+    expect((residue.warnings ?? []).join("\n")).not.toContain("touchpoints [codex]");
+  });
+
+  it("counts the touchpoints in the skills list it refuses past the cap", async () => {
+    const temp = getTemp();
+    const long = "d".repeat(CODEX_SKILLS_LIST_BUDGET_CHARS);
+    await temp.seedFiles({
+      "corpus/charter/stamity-charter.md": CHARTER_FIXTURE,
+      "corpus/commands/stamity-work.md": COMMAND_FIXTURE.replace(
+        'description: "Execute a change end to end."',
+        `description: "${long}"`,
+      ),
+    });
+    const over = ctxOf({ contentRoot: temp.path("corpus"), rules: [], commands: ["cmd-work"] });
+    const under = ctxOf({ contentRoot: temp.path("corpus"), rules: [], commands: [] });
+
+    // The same corpus with the command deselected plans; selected, its listing line alone
+    // is past the cap, so the refusal proves the touchpoint was counted.
+    await expect(
+      codexResiduePlanner.planResidue(await buildCoreEmissionPlan(under), under),
+    ).resolves.toBeDefined();
+    await expect(
+      codexResiduePlanner.planResidue(await buildCoreEmissionPlan(over), over),
+    ).rejects.toThrow(/codex skills list is \d+ characters/);
   });
 });
 
@@ -2045,16 +2087,33 @@ describe("the shipped Codex emission under ruleDelivery: on-demand", () => {
       ruleDelivery: RULE_DELIVERY_DEFAULT,
     });
     const core = await buildCoreEmissionPlan(ctx);
-    const total = skillsListCharacters(core.skills);
+    // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills): the listing
+    // now also holds the nine touchpoints, which this adapter emits into the
+    // same `.agents/skills/` tree rather than the core projection, so the
+    // measured list is the core rows plus the residue's rows under that tree —
+    // everything the client finds there, which is what the page publishes.
+    const residue = await codexResiduePlanner.planResidue(core, ctx);
+    const listed = [
+      ...core.skills,
+      ...residue.outputs
+        .filter((row) => row.path.startsWith(`${SKILLS_PROJECTION_DIR}/`))
+        .map((row) => ({ path: row.path, content: row.content, artifactType: row.owner.artifactType })),
+    ];
+    const total = skillsListCharacters(listed);
 
-    // Non-degenerate: the full selection carries BOTH classes of skill, so a
-    // projection that lost the rules or lost the content skills fails here
-    // rather than quietly measuring half the list.
-    const dirs = core.skills
+    // Non-degenerate: the full selection carries all THREE kinds of skill, so a
+    // projection that lost the rules, the content skills or the touchpoints
+    // fails here rather than quietly measuring part of the list.
+    const dirs = listed
       .filter((row) => row.path.endsWith("/SKILL.md"))
       .map((row) => row.path.split("/").at(-2) ?? "");
     expect(dirs.filter((dir) => dir.startsWith("stamity-")).length).toBe(9);
-    expect(dirs.filter((dir) => dir.startsWith("st-")).length).toBeGreaterThan(0);
+    expect(dirs.filter((dir) => dir.startsWith("st-")).length).toBeGreaterThan(9);
+    const touchpointDirs = listed
+      .filter((row) => row.artifactType === "command" && row.path.endsWith("/SKILL.md"))
+      .map((row) => row.path.split("/").at(-2) ?? "");
+    expect(touchpointDirs).toHaveLength(9);
+    expect(new Set(dirs).size).toBe(dirs.length);
 
     expect(
       LIVE_CAPABILITY_INPUTS.alwaysOn.codexSkillsListChars,

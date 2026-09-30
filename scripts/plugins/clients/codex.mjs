@@ -22,9 +22,12 @@
 // AGENTS. The Agent Plugins specification carries no agent class, so this client's ten subagent
 // definitions cannot ride in the container; `stamity plugin setup` writes `.codex/agents/`.
 //
-// COMMANDS. This client documents no project-scoped command directory. The engine already says so
-// in its own emission (`src/adapters/codex.ts`), and the consequence here is that this root also
-// carries no generated `st-setup` command — the README's manual line is the setup route instead.
+// COMMANDS. The nine touchpoints reach this client as shared skills in the repository's
+// `.agents/skills/st-<id>/` tree (`src/adapters/codex.ts`, `CODEX_COMMANDS_DIR`), co-owned with
+// Cursor, and they stay the repository's: `stamity plugin setup` writes them there, so this root
+// drops their rows rather than carrying a second copy under `skills/`. The ledger's own class, not
+// the path, tells them from the content skills beside them. The root also carries no generated
+// `st-setup` command — the README's manual line is the setup route instead.
 //
 // RULES. A glob-less rule is delivered as a skill by the engine's rule-delivery default and
 // travels under `skills/`; the container carries no rules class for the rest.
@@ -44,7 +47,9 @@ const AGENT_REASON =
   'the Agent Plugins container carries no agent class (agent-plugins.org specification, ' +
   '2026-09-20); stamity plugin setup writes .codex/agents/'
 
-const COMMAND_REASON = 'this client documents no project-scoped command directory'
+const COMMAND_REASON =
+  'the nine touchpoints are repository-owned: stamity plugin setup writes them into the ' +
+  "repository's shared .agents/skills/, where Codex starts one as $st-<id>"
 
 const RULE_REASON = 'glob-less rules ride as skills; the container carries no rules class'
 
@@ -77,6 +82,9 @@ export function place(row) {
   const path = row.path
 
   if (path.startsWith('.agents/skills/')) {
+    // A touchpoint shares the tree with the skills; its ledger class keeps it repository-owned,
+    // see COMMAND_REASON.
+    if (row.owner?.artifactType === 'command') return null
     return { path: `skills/${path.slice('.agents/skills/'.length)}`, class: 'skill' }
   }
   if (path === '.codex/hooks.json') return { path: `${HOOKS_DIR}/hooks.json`, class: 'hooks' }
@@ -133,7 +141,7 @@ export const CLIENT_FLOOR = {
 
 export const PREREQUISITES = {}
 
-/** No command class, so no generated command: the README carries the setup line instead. */
+/** Commands stay repository-owned, so no generated command: the README carries the setup line instead. */
 export const SETUP_COMMAND_PATH = null
 
 export const ASSETS = []

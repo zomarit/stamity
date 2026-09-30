@@ -165,7 +165,9 @@ function claudeSteps(): readonly string[] {
 }
 
 /**
- * Codex discovers neutral skills and invokes them with $name.
+ * Codex discovers neutral skills and invokes them with $name — the touchpoints
+ * included, since they ship as shared skills under {@link CODEX_COMMANDS_DIR}.
+ * A slash spelling here would be a command this client does not run.
  *
  * The hook trust steps that are the operator's to take ride here too, read off
  * the adapter's own step data (`HOOK_TRUST_STEPS`), so the panel and the two
@@ -176,11 +178,14 @@ function claudeSteps(): readonly string[] {
  */
 function codexSteps(): readonly string[] {
   const open = "open a terminal in this repo and type: codex";
-  const onboard =
-    CODEX_COMMANDS_DIR === null
-      ? `then type: $st-onboard — the guided first change at ${SKILLS_PROJECTION_DIR}/st-onboard/SKILL.md`
-      : `then type: /st-onboard — installed in ${CODEX_COMMANDS_DIR}/`;
-  return [...codexTrustStep("project-trust"), open, ...codexTrustStep("hook-review"), onboard];
+  const onboard = `then type: $st-onboard — the guided first change at ${SKILLS_PROJECTION_DIR}/st-onboard/SKILL.md`;
+  return [
+    ...codexTrustStep("project-trust"),
+    open,
+    ...codexTrustStep("hook-review"),
+    ...commandSurfaceStep(CODEX_COMMANDS_DIR, "$st-<id>"),
+    onboard,
+  ];
 }
 
 /** One Codex trust step's operator instruction, or nothing when the setup closes that gate itself. */

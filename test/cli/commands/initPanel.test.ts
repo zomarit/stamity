@@ -200,18 +200,21 @@ describe("nextStepsForTool", () => {
     expect(nextStepsForTool("claude").at(-1)).toMatch(/st-onboard\/SKILL\.md$/);
   });
 
-  it("falls back to a resolvable codex spelling while that client documents no command directory", () => {
+  it("names the codex touchpoints in that client's own $name spelling, never a slash", () => {
     const steps = nextStepsForTool("codex").join("\n");
 
-    if (CODEX_COMMANDS_DIR === null) {
-      // No repo-committed command surface exists on this client, so the row
-      // points at the vendor-neutral skills tree it does read.
-      expect(steps).toContain(SKILLS_PROJECTION_DIR);
-      expect(steps).toContain("then type: $st-onboard");
-    } else {
-      expect(steps).toContain(CODEX_COMMANDS_DIR);
-      expect(steps).toContain("/st-onboard");
-    }
+    // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills, REQ-FLOW-026):
+    // the `null` branch this case held is gone — Codex now receives the nine
+    // touchpoints as shared skills under `.agents/skills/` — and the non-null
+    // branch it carried accepted `/st-onboard`, a command Codex does not run
+    // (it invokes a skill as `$name`). The row still names the tree it reads,
+    // and now also says the touchpoints are there and how to start one.
+    expect(CODEX_COMMANDS_DIR).toBe(SKILLS_PROJECTION_DIR);
+    expect(steps).toContain(`${SKILLS_PROJECTION_DIR}/`);
+    expect(steps).toContain("then type: $st-onboard");
+    expect(steps).toContain("invoke one as $st-<id>");
+    // A slash INVOCATION is what is refused; the skill's own path contains `/st-onboard/`.
+    expect(steps).not.toMatch(/(^|\s)\/st-/m);
   });
 
   it("falls back to a resolvable cursor spelling while that client gets no native skills copy", () => {
@@ -232,10 +235,15 @@ describe("nextStepsForTool", () => {
       expect(steps).toContain("/st-onboard");
     }
 
-    // A command directory is never a home for a skill, whichever branch ran.
-    if (CURSOR_COMMANDS_DIR !== null) {
-      expect(steps).not.toContain(`${CURSOR_COMMANDS_DIR}/st-onboard`);
-    }
+    // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills): this read
+    // "a command directory is never a home for a skill" while the touchpoints
+    // sat in `.cursor/skills/`, a tree holding commands only. They now ship in
+    // the shared skills tree beside `st-onboard`, so the command directory IS
+    // the skills tree; the property — no invocation printed without a file
+    // behind it — holds as "the touchpoints are named where they are emitted".
+    expect(CURSOR_COMMANDS_DIR).toBe(SKILLS_PROJECTION_DIR);
+    expect(steps).toContain(`installed in ${SKILLS_PROJECTION_DIR}/ — invoke one as /<id>`);
+    expect(steps).not.toContain(".cursor/skills");
   });
 
   it("keeps the copilot spelling its own adapter verified", () => {
