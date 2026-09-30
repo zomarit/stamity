@@ -29,8 +29,9 @@
 #     list is `RECORDS_SUITES` in the detector), the generate-and-diff step (the measurements page
 #     renders from the committed runs), the leak gate, and on pull requests the hygiene scan. The
 #     aggregator asserts which side ran, so a records-only pass can never stand in for a full one.
-#   - `check`, four legs, on every change that is not records-only. ubuntu on the declared engines floor (22.22.2) and on the LTS
-#     canonical (24), plus windows on 24 as two legs that each run one half of the suite
+#   - `check`, four legs, on every change that is not records-only. ubuntu on the declared
+#     engines floor (22.22.2) and on the LTS canonical (24), plus windows on 24 as two legs that
+#     each run one half of the suite
 #     (`--shard=1/2`, `--shard=2/2`). Every leg installs, builds and runs its tests through
 #     `scripts/ci/test-run.mjs`; the floor, the LTS and the first windows shard also re-prove the
 #     committed dogfood configs with the binary they just built and run the leak gate. The test

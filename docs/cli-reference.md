@@ -310,7 +310,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--report <path>` | a report inside the run's reports/ folder | — |
 | `--stdin` | read the findings block from stdin | — |
 | `--ids <ledger-ids>` | the comma-separated ledger ids handed to this re-review | — |
-| `--id <ledger-id>` | the one row a manual close moves | — |
+| `--id <ledger-id>` | the one row a manual close or a retirement moves | — |
 | `--state <state>` | the state a manual close sets — one of `fixed`, `rejected`, `deferred` | — |
 | `--rationale <text>` | why a manual close moves the row, recorded on it | — |
 | `--retired <disposition>` | retire a deferred row whose inbox row left: keeps its state and records the date and this disposition | — |

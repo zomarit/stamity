@@ -614,7 +614,7 @@ async function orderOldestFirst(dir: string, names: string[]): Promise<string[]>
  * hostile file cannot spend past, which matters because this runs over every
  * name in the directory including the ones the cap will reject.
  */
-const HEAD_BYTES = 4096;
+export const HEAD_BYTES = 4096;
 
 /**
  * The ordering key: declared calendar date, or the mtime rendered as one. The

@@ -33,6 +33,7 @@ import { cliCallHint } from "../../src/shared/cliCall.ts";
 import { formatLearningsIndex, loadValidatedLearnings } from "../../src/learnings/store.ts";
 import { computeLearningIntegrity, REVIEW_WARNING_DAYS } from "../../src/learnings/validation.ts";
 import { RENAME_RETRY_COUNT } from "../../src/merge/atomicWrite.ts";
+import { REQUIRED_GITIGNORE_ENTRIES } from "../../src/mcp/env.ts";
 import { AGENT_POLICY_ROSTER, isWritePathPattern, verdictReportWritePaths } from "../../src/roster/agentPolicies.ts";
 import { REPORT_NAME_PATTERN, REPORT_ROLES, UNPRINTABLE_CHARS } from "../../src/runs/layout.ts";
 import {
@@ -48,6 +49,7 @@ import {
 } from "../../src/tools/allowlist.ts";
 import { TOOLS } from "../../src/types/core.ts";
 import { EngineError } from "../../src/types/errors.ts";
+import { REVIEW_GATE_LOCK_SUFFIX, REVIEW_GATE_TEMP_INFIX } from "../../src/types/markers.ts";
 import { makeTempDir, useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -564,6 +566,27 @@ describe("buildSessionStartScript", () => {
     expect(lines.slice(0, lines.indexOf("Handoffs: 0 active, 0 skipped.")).join("\n")).toBe(engine);
   });
 
+  it("puts the warning window's edge where the engine puts it: the last warned day and the first quiet one", async () => {
+    // ledger review/126: the hook's inline due formula, pinned at the edge the engine's own
+    // validation test pins (REVIEW_WARNING_DAYS days out warns, one day more does not).
+    const edge = dayFromNow(REVIEW_WARNING_DAYS);
+    const past = dayFromNow(REVIEW_WARNING_DAYS + 1);
+    await getRepo().seedFiles({
+      ".stamity/learnings/edge.md": learning({ id: "edge", reviewBy: edge }),
+      ".stamity/learnings/past.md": learning({ id: "past", reviewBy: past }),
+    });
+    const script = await place("session-start.mjs", buildSessionStartScript());
+
+    const lines = run(script, { cwd: getRepo().dir }).stdout.split("\n");
+
+    expect(lines.find((line) => line.includes("] edge —"))).toMatch(
+      new RegExp(`\\(edge\\.md\\) \\[review due ${edge}\\]$`),
+    );
+    expect(lines.find((line) => line.includes("] past —"))).toMatch(/\(past\.md\)$/);
+    const engine = formatLearningsIndex(await loadValidatedLearnings({ rootDir: getRepo().dir }));
+    expect(lines.slice(0, lines.indexOf("Handoffs: 0 active, 0 skipped.")).join("\n")).toBe(engine);
+  });
+
   it("orders the index by declared date, newest first, whatever the mtimes say", async () => {
     await getRepo().seedFiles({
       ".stamity/learnings/dated-early.md": learning({ id: "dated-early", date: "2026-09-01" }),
@@ -590,6 +613,29 @@ describe("buildSessionStartScript", () => {
     // The engine agrees on the dated pair; the undated file is a schema skip there.
     const engine = await loadValidatedLearnings({ rootDir: getRepo().dir });
     expect(engine.learnings.map((entry) => entry.fileName)).toEqual(["dated-late.md", "dated-early.md"]);
+  });
+
+  it("reads a declared date from the same head bytes the engine reads, so a date past them orders by mtime", async () => {
+    // ledger build/116: a `date` line past the engine's head bound is invisible to its
+    // `orderingDay`, which falls back to the mtime; the hook must read the same bytes.
+    const padding = `# ${"x".repeat(4200)}`;
+    const padded = learning({ id: "padded", date: "2026-09-28" }).replace(/^date: /m, `${padding}\ndate: `);
+    await getRepo().seedFiles({
+      ".stamity/learnings/padded.md": padded,
+      ".stamity/learnings/plain.md": learning({ id: "plain", date: "2026-09-15" }),
+    });
+    const when = new Date("2026-09-01T12:00:00Z");
+    await utimes(getRepo().path(".stamity", "learnings", "padded.md"), when, when);
+    const script = await place("session-start.mjs", buildSessionStartScript());
+
+    const printed = run(script, { cwd: getRepo().dir }).stdout;
+
+    const at = (name: string): number => printed.indexOf(`(${name})`);
+    expect(at("padded.md")).toBeGreaterThan(-1);
+    // Newest first: the padded file's key is its mtime (2026-09-01), older than plain's date.
+    expect(at("plain.md")).toBeLessThan(at("padded.md"));
+    const engine = await loadValidatedLearnings({ rootDir: getRepo().dir });
+    expect(engine.learnings.map((entry) => entry.fileName)).toEqual(["plain.md", "padded.md"]);
   });
 
   it("prints the byte length of the index it printed, beside the bytes on disk", async () => {
@@ -636,6 +682,8 @@ describe("buildSessionStartScript", () => {
     expect(section).toHaveLength(DEFAULT_MAX_INDEX_LINES + 1);
     expect(section.at(-1)).toBe("- … and 2 more learnings not listed.");
     expect(engineSection).toHaveLength(22);
+    // ledger review/125: the 20 lines the hook prints are the engine's first 20, line for line.
+    expect(section.slice(0, DEFAULT_MAX_INDEX_LINES)).toEqual(engineSection.slice(0, DEFAULT_MAX_INDEX_LINES));
     const hookBytes = Buffer.byteLength(section.join("\n"), "utf8");
     const engineBytes = Buffer.byteLength(engineSection.join("\n"), "utf8");
     expect(lines[0]).toMatch(new RegExp(`^Learnings: 22 loaded, 0 skipped, ${hookBytes} bytes in this index `));
@@ -2266,6 +2314,17 @@ function gateResidue(): string[] {
 describe("buildReviewGateScript", () => {
   it("regenerates byte-identical text, so a re-run is never a diff", () => {
     expect(buildReviewGateScript(GATE_OPTIONS)).toBe(buildReviewGateScript(GATE_OPTIONS));
+  });
+
+  it("names its lock and temp files with the suffixes setup's .gitignore entries are built from", () => {
+    // ledger review/68: the gate spells the two suffixes inline and `REQUIRED_GITIGNORE_ENTRIES`
+    // derives its entries from the marker constants; a suffix moved on one side only would let the
+    // gate write a file no ignore rule covers.
+    const body = buildReviewGateScript(GATE_OPTIONS);
+    expect(body).toContain(`const LOCK_FILE = STATE_FILE + ${JSON.stringify(REVIEW_GATE_LOCK_SUFFIX)};`);
+    expect(body).toContain(`STATE_FILE + ${JSON.stringify(REVIEW_GATE_TEMP_INFIX)} + randomBytes(`);
+    expect(REQUIRED_GITIGNORE_ENTRIES).toContain(REVIEW_GATE_STATE_FILE + REVIEW_GATE_LOCK_SUFFIX);
+    expect(REQUIRED_GITIGNORE_ENTRIES).toContain(`${REVIEW_GATE_STATE_FILE}${REVIEW_GATE_TEMP_INFIX}*`);
   });
 
   it("states the cap it was built with, in the code and in the text an operator reads", () => {

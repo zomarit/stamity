@@ -34,6 +34,7 @@ const MAX_LEARNING_BYTES = 65536;
 const MAX_HANDOFF_BYTES = 61440;
 const MAX_FIELD_CHARS = 200;
 const REVIEW_WARNING_DAYS = 14;
+const ORDERING_HEAD_BYTES = 4096;
 const RESUMABLE = ["active","in-progress"];
 const INVISIBLE = new RegExp("(?:[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u070F\\u0890-\\u0891\\u08E2\\u115F-\\u1160\\u17B4-\\u17B5\\u180B-\\u180F\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u206F\\u3164\\uFE00-\\uFE0F\\uFEFF\\uFFA0\\uFFF0-\\uFFFB]|\\uD804\\uDCBD|\\uD804\\uDCCD|\\uD80D[\\uDC30-\\uDC3F]|\\uD82F[\\uDCA0-\\uDCA3]|\\uD834[\\uDD73-\\uDD7A]|\\uDB40[\\uDC80-\\uDFFF]|[\\uDB41-\\uDB43][\\uDC00-\\uDFFF])", "g");
 const SCREEN = [
@@ -185,14 +186,16 @@ function inspect(dir, name, maxBytes, coversSummary) {
   const doc = { name, size: stats.size, day: dayOf(stats.mtimeMs), skip: "", head: null };
   if (stats.size > maxBytes) return { ...doc, skip: "over-size" };
 
-  let raw;
+  let bytes;
   try {
-    raw = readFileSync(join(dir, name), "utf8");
+    bytes = readFileSync(join(dir, name));
   } catch {
     return { ...doc, skip: "invalid-frontmatter" };
   }
-  // Keyed before any screen, as the engine keys a file before it examines it.
-  doc.day = declaredDay(raw) || doc.day;
+  const raw = bytes.toString("utf8");
+  // Keyed before any screen, as the engine keys a file before it examines it, and
+  // from the same head bytes the engine's `orderingDay` reads.
+  doc.day = declaredDay(bytes.subarray(0, ORDERING_HEAD_BYTES).toString("utf8")) || doc.day;
   if (screened(raw)) return { ...doc, skip: "injection-detected" };
   const parsed = parseDocument(raw);
   if (parsed === null) return { ...doc, skip: "invalid-frontmatter" };
@@ -211,8 +214,8 @@ function dayOf(ms) {
 }
 
 /**
- * The `date` inside the opening fence, matched by line the way the engine's
- * `orderingDay` matches it, or "" when there is none.
+ * The `date` inside the opening fence of a file's head bytes, matched by line
+ * the way the engine's `orderingDay` matches it, or "" when there is none.
  */
 function declaredDay(raw) {
   if (!raw.startsWith("---")) return "";
@@ -974,6 +977,7 @@ function resumeCardLines(rootDir, stateRoot, nowMs) {
   const runs = names.filter((name) => !name.includes(CARD_DEBUG_SEGMENT));
   const debug = cardDebugRounds(runsDir, names.filter((name) => name.includes(CARD_DEBUG_SEGMENT)));
   const cutoff = new Date(nowMs - (CARD_CLOSED_MAX_AGE_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
+  const today = new Date(nowMs).toISOString().slice(0, 10);
   let chosen = null;
   let closed = null;
   for (const run of runs) {
@@ -983,7 +987,9 @@ function resumeCardLines(rootDir, stateRoot, nowMs) {
       chosen = { run, head };
       break;
     }
-    if (closed === null && run.slice(0, 10) >= cutoff) closed = { run, head };
+    // A folder dated after today (a clock skew or a hand-made name) is never the closed run.
+    const day = run.slice(0, 10);
+    if (closed === null && day >= cutoff && day <= today) closed = { run, head };
   }
   const pick = chosen === null ? closed : chosen;
   if (pick === null && debug.length === 0) return null;

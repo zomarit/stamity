@@ -946,6 +946,8 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's records-onl
   it("fails a records-only answer unless the records lane passed and the heavy three skipped", () => {
     expect(execute({ ...SHORT, records: "failure" }, "true")).not.toBe(0);
     expect(execute({ ...SHORT, records: "cancelled" }, "true")).not.toBe(0);
+    // ledger review/96: a records lane that never ran is no pass either.
+    expect(execute({ ...SHORT, records: "skipped" }, "true")).not.toBe(0);
     for (const heavy of ["check", "apm-install", "plugin-route"] as const) {
       expect(execute({ ...SHORT, [heavy]: "success" }, "true"), heavy).not.toBe(0);
       expect(execute({ ...SHORT, [heavy]: "failure" }, "true"), heavy).not.toBe(0);
@@ -958,6 +960,8 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's records-onl
     for (const heavy of ["check", "apm-install", "plugin-route"] as const) {
       expect(execute({ ...FULL, [heavy]: "failure" }, "false"), heavy).not.toBe(0);
       expect(execute({ ...FULL, [heavy]: "skipped" }, "false"), heavy).not.toBe(0);
+      // ledger review/96: a cancelled heavy leg is red, as the `= success` test reads it.
+      expect(execute({ ...FULL, [heavy]: "cancelled" }, "false"), heavy).not.toBe(0);
     }
     expect(execute({ ...FULL, records: "success" }, "false")).not.toBe(0);
     // The short lane's green cannot stand in for the full lanes when the answer was not `true`.

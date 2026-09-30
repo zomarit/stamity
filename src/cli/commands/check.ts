@@ -392,7 +392,7 @@ async function checkEnvMcp(
  *
  * The Claude adapter renders every hook command on `${CLAUDE_PROJECT_DIR}`
  * and gives the core guard a POSIX fail-closed tail (`../../adapters/claude.ts`,
- * `PROJECT_DIR_VARIABLE` and `GUARD_FAIL_CLOSED_TAIL`). Both hold under `sh`
+ * `PROJECT_DIR_VARIABLE` and `guardFailClosedTail`). Both hold under `sh`
  * and Git Bash, the two shells the client's hooks page names first. On a
  * Windows host with no Git Bash the client falls back to PowerShell, and there
  * the render cannot work: `${NAME}` is PowerShell's own variable syntax, so the
@@ -1282,9 +1282,24 @@ function commandResolves(
 ): boolean {
   const word = firstCommandWord(command);
   if (word === null) return false;
-  if (/[\\/]/.test(word)) return existsSync(resolve(rootDir, word));
 
   const windows = host.platform === "win32";
+  const extensions = (host.env["PATHEXT"] ?? ".COM;.EXE;.BAT;.CMD")
+    .split(";")
+    .filter((extension) => extension !== "")
+    // Both spellings: PATHEXT is upper case by convention, the files rarely are,
+    // and a case-sensitive file system (a Linux CI leg) tells them apart.
+    .flatMap((extension) => [extension, extension.toLowerCase()]);
+  const asWritten = /\.[^.]+$/.test(word) ? [word] : [];
+  // A path-shaped word is held to the bar the PATH walk below sets: a regular
+  // file with its execute bit on POSIX, completed by PATHEXT on Windows.
+  if (/[\\/]/.test(word)) {
+    const target = resolve(rootDir, word);
+    if (!windows) return isExecutableFile(target, fsConstants.X_OK);
+    const names = [...(asWritten.length > 0 ? [target] : []), ...extensions.map((extension) => target + extension)];
+    return names.some((name) => isExecutableFile(name, fsConstants.F_OK));
+  }
+
   // Windows spells the key `Path`; POSIX keys are case-sensitive, so only there
   // is the match loosened (the same rule `checkClaudeHookShell` reads PATH by).
   const pathKey = Object.keys(host.env).find((name) =>
@@ -1299,13 +1314,6 @@ function commandResolves(
   const dirs = [nodeBin, join(rootDir, ".venv", "bin"), ...pathEntries];
 
   if (!windows) return dirs.some((dir) => isExecutableFile(join(dir, word), fsConstants.X_OK));
-  const extensions = (host.env["PATHEXT"] ?? ".COM;.EXE;.BAT;.CMD")
-    .split(";")
-    .filter((extension) => extension !== "")
-    // Both spellings: PATHEXT is upper case by convention, the files rarely are,
-    // and a case-sensitive file system (a Linux CI leg) tells them apart.
-    .flatMap((extension) => [extension, extension.toLowerCase()]);
-  const asWritten = /\.[^.]+$/.test(word) ? [word] : [];
   return dirs.some((dir) => {
     const names = [
       ...asWritten,

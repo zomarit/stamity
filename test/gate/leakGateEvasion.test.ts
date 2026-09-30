@@ -819,6 +819,23 @@ describe("leak-gate — email addresses", () => {
     expect(hitCount(outside, own)).toBe(1);
   });
 
+  it("scans the near misses of a vendored tree: a prefixed or suffixed folder name and a root file so named", () => {
+    // ledger review/76: the exemption is a whole `node_modules` path segment naming a folder;
+    // a segment that only contains the word, and a file carrying the name, are still read.
+    const scratch = new Scratch();
+    const nearMisses = [
+      scratch.write("x-node_modules/a.json", `{"author":"${PERSON}"}\n`),
+      scratch.write("node_modules-x/a.json", `{"author":"${PERSON}"}\n`),
+      scratch.write("node_modules", `author: ${PERSON}\n`),
+    ];
+
+    const result = scratch.run("--include-build");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("[email-address]");
+    for (const file of nearMisses) expect(hitCount(result, file), file).toBe(1);
+  });
+
   it("reports a credentialed connection string as a credential, not as an address", () => {
     // URL userinfo is a login or a secret, never a mailbox: the credential shape owns it.
     const scratch = new Scratch();

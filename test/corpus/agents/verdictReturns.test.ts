@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { frontmatterField } from "../../../src/content/frontmatter.ts";
+import { READ_ONLY_GIT_SUBCOMMANDS } from "../../../src/roster/agentPolicies.ts";
 import { corpusFileOf, walkAllMarkdown, type CorpusFile } from "../harness.ts";
 
 /**
@@ -260,8 +261,16 @@ const MUTATING_GIT =
   /\bgit (checkout|switch|restore|reset|commit|push|pull|fetch|stash|merge|rebase|add|rm|tag|branch)(?![\w-])/;
 
 /**
+ * A `git <sub>` code span. Beside the MUTATING_GIT denylist, every span the section names must
+ * carry one of the read-only subcommands (ledger review/18): a denylist passes a section widened
+ * to `git cherry-pick`, `git worktree add`, `git clean` or any verb it does not list.
+ */
+const GIT_CODE_SPAN = /`git ([^\s`]+)[^`]*`/g;
+
+/**
  * Every required phrase the `## Reading the change` section lacks, plus any mutating git verb it
- * names; empty when the section is whole. A missing section is itself a gap.
+ * names and any git code span whose subcommand is not read-only; empty when the section is whole.
+ * A missing section is itself a gap.
  */
 function readingTheChangeGaps(file: CorpusFile): string[] {
   const section = sectionOf(file, "Reading the change");
@@ -271,7 +280,11 @@ function readingTheChangeGaps(file: CorpusFile): string[] {
   const text = collapse(section);
   const gaps = READING_THE_CHANGE_PHRASES.filter((phrase) => !text.includes(phrase));
   const mutating = MUTATING_GIT.exec(text);
-  return mutating === null ? gaps : [...gaps, `mutating: ${mutating[0]}`];
+  const readOnly: readonly string[] = READ_ONLY_GIT_SUBCOMMANDS;
+  const outside = [...text.matchAll(GIT_CODE_SPAN)]
+    .filter((span) => !readOnly.includes(span[1] ?? ""))
+    .map((span) => `not read-only: ${span[0]}`);
+  return [...gaps, ...(mutating === null ? [] : [`mutating: ${mutating[0]}`]), ...outside];
 }
 
 describe("verdict roles and the spec-author — they read the change through read-only git", () => {
@@ -348,9 +361,23 @@ describe("readingTheChangeGaps — the helper goes red", () => {
   it("names a mutating git verb offered as allowed", () => {
     const widened = whole.replace("`git log <range>`", "`git log <range>`, `git checkout <sha>`");
 
+    // TEST CHANGE, justified (ledger review/18): the span is outside the read-only five too, so the
+    // allowlist names it beside the denylist.
     expect(readingTheChangeGaps(corpusFileOf("agents/stamity-fixture.md", widened))).toEqual([
       "mutating: git checkout",
+      "not read-only: `git checkout <sha>`",
     ]);
+  });
+
+  it("names a git code span outside the read-only five that the denylist does not list", () => {
+    // ledger review/18: none of these is in MUTATING_GIT, and each moves a tree, a ref or a file.
+    for (const span of ["`git cherry-pick <sha>`", "`git worktree add <dir>`", "`git clean -fd`", "`git apply <patch>`"]) {
+      const widened = whole.replace("`git log <range>`", `\`git log <range>\`, ${span}`);
+
+      expect(readingTheChangeGaps(corpusFileOf("agents/stamity-fixture.md", widened)), span).toEqual([
+        `not read-only: ${span}`,
+      ]);
+    }
   });
 
   it("names the section when the body has none", () => {

@@ -110,8 +110,9 @@ suite between them. Beside the six steps you already ran, it adds six things:
 
 A change made only of records takes a records-only lane instead of those three. Records are run
 records under `.stamity/runs/`, `.stamity/inbox.md`, handoffs under `.stamity/handoffs/`, and plans
-under `docs/plans/`. `node scripts/ci/records-only.mjs` decides, and it answers `true` only when
-every changed path is one of them. The lane runs the suites that read the committed records, the
+under `docs/plans/`, the engine's `.gitkeep` excepted at every location.
+`node scripts/ci/records-only.mjs` decides, and it answers `true` only when every changed path is
+one of them. The lane runs the suites that read the committed records, the
 generate-and-diff step, the leak gate and, on pull requests, the hygiene scan. A learnings change,
 a push with no earlier commit to compare, the weekly schedule and a manual run always get the full
 three lanes. `all-ci-checks` checks which side ran, so a records-only pass never reads as a full one.

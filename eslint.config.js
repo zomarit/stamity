@@ -174,8 +174,13 @@ export default [
     // The emitted copies of that checker keep the directive live, as a user's repository would, and
     // the source above is what gets linted. Under the Node globals declared here the directive
     // suppresses nothing, and the default unused-directive report would both warn on every run
-    // and let `eslint --fix` strip the line out of two sync-owned files.
-    files: [".claude/skills/st-verify/scripts/*.mjs", ".apm/skills/st-verify/scripts/*.mjs"],
+    // and let `eslint --fix` strip the line out of the sync-owned copies (a projected `.agents/`
+    // copy included, which any non-Claude client selection writes).
+    files: [
+      ".claude/skills/st-verify/scripts/*.mjs",
+      ".apm/skills/st-verify/scripts/*.mjs",
+      ".agents/skills/st-verify/scripts/*.mjs",
+    ],
     linterOptions: { reportUnusedDisableDirectives: "off" },
   },
 ];

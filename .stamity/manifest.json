@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.10.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-30T15:44:06.536Z",
+  "updatedAt": "2026-09-30T16:09:44.446Z",
   "tools": [
     "claude"
   ],
@@ -512,7 +512,7 @@
       "adapter": "claude",
       "artifactId": "stamity-session-start",
       "artifactType": "infra",
-      "contentHash": "8336b577b8a0c4d3107fa36d7b3530e9a24bfda5744d4ef5fad93368c5a764f2",
+      "contentHash": "f83c5f04a339d2ad3d8541d49840c5dc0f1a17f19b22d31c8f3ece3d55aa2614",
       "path": ".stamity/generated/hooks/claude/stamity-session-start.mjs"
     },
     {

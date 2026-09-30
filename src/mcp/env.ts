@@ -549,7 +549,8 @@ function refuseRepublishOfLink(path: string): EngineError {
       `not this file's — they are whatever the link points at, including a file outside this ` +
       `tree that was never yours to publish. Writing them back would land those contents at a ` +
       `tracked path as a regular file, where the next commit picks them up. Nothing was written. ` +
-      `Replace the link with a regular file, or delete it and re-run to regenerate the file.`,
+      `Replace the link with a regular file (for a file this setup does not generate, such as ` +
+      `.gitignore, restore your own copy).`,
     { code: "FS_ERROR" },
   );
 }

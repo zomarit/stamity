@@ -70,7 +70,7 @@ interface Fixture {
  * paths, a committed `.stamity/manifest.json` so the presence probe has
  * something to find, an IGNORED `.env.mcp` at 0600, an ignored `node_modules`,
  * and an untracked-and-unignored `.stamity/review-gate.json` — the file the
- * policy's admissibility rule exists to refuse.
+ * policy refuses by name.
  */
 async function seedRepo(base: string, name = "repo"): Promise<Fixture> {
   const root = join(base, name);

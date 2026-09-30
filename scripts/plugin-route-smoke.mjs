@@ -1269,7 +1269,8 @@ export function copilotInstallLeg(context, { names, copilotHome, installed, list
  *
  * `plugin list --json` names the PLUGIN, not its skills, so discovery needs a `codex exec`
  * measurement and waits for `--invoke`. Nothing here asserts anything about hooks: headless codex
- * ran zero project hooks on 0.154.0 (the learning), so a leg that asked it to would be measuring
+ * ran zero project hooks on 0.154.0 and in 3 of 3 runs on 0.155.1, cause not isolated (learning
+ * codex-hooks-default-on-and-codex-exec-ran-none), so a leg that asked it to would be measuring
  * the client and calling the result an emission defect.
  */
 async function codexLegs(context) {

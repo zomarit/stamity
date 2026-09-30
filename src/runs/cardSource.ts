@@ -552,6 +552,7 @@ function resumeCardLines(rootDir, stateRoot, nowMs) {
   const runs = names.filter((name) => !name.includes(CARD_DEBUG_SEGMENT));
   const debug = cardDebugRounds(runsDir, names.filter((name) => name.includes(CARD_DEBUG_SEGMENT)));
   const cutoff = new Date(nowMs - (CARD_CLOSED_MAX_AGE_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
+  const today = new Date(nowMs).toISOString().slice(0, 10);
   let chosen = null;
   let closed = null;
   for (const run of runs) {
@@ -561,7 +562,9 @@ function resumeCardLines(rootDir, stateRoot, nowMs) {
       chosen = { run, head };
       break;
     }
-    if (closed === null && run.slice(0, 10) >= cutoff) closed = { run, head };
+    // A folder dated after today (a clock skew or a hand-made name) is never the closed run.
+    const day = run.slice(0, 10);
+    if (closed === null && day >= cutoff && day <= today) closed = { run, head };
   }
   const pick = chosen === null ? closed : chosen;
   if (pick === null && debug.length === 0) return null;

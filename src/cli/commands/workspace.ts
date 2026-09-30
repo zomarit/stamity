@@ -896,12 +896,15 @@ interface MemberOutcome {
   patched: PropagatedField[];
   /** Locked ids whose removal this member attempted and the lock refused. */
   lockedApplied: string[];
+  /** Lines the member's sync appended to that member's `.gitignore` (REQ-FLOW-016). */
+  gitignoreAdded: string[];
 }
 
 /** One member's row: the cascade's own verdict, plus what the bridge saw. */
 interface SyncRepoRow extends WorkspaceRepoSyncRow {
   patched?: PropagatedField[];
   lockedApplied?: string[];
+  gitignoreAdded?: string[];
 }
 
 /**
@@ -1052,7 +1055,8 @@ function createBridge(
     const { patch, fields } = propagationPatch(manifest, resolved);
     // Recorded whatever happens next, so a member whose apply then fails still
     // reports the patch that reached its manifest.
-    outcomes.set(repo.path, { patched: fields, lockedApplied: [...resolved.lockedApplied] });
+    const outcome: MemberOutcome = { patched: fields, lockedApplied: [...resolved.lockedApplied], gitignoreAdded: [] };
+    outcomes.set(repo.path, outcome);
 
     if (fields.length > 0 && !ctx.dryRun) {
       // `writeManifest` validates before persisting and writes atomically, so a
@@ -1071,6 +1075,8 @@ function createBridge(
       dryRun: ctx.dryRun,
       now: opts.now,
     });
+    // An append to a file the operator owns is named, as the member's own sync names it.
+    outcome.gitignoreAdded = [...(applied.gitignoreAdded ?? [])];
     if (applied.refused.length > 0) throw refusedPaths(repo.path, applied.refused);
   };
 }
@@ -1107,6 +1113,9 @@ function renderSyncDetail(row: SyncRepoRow, dryRun: boolean): string {
   ];
   if ((row.lockedApplied ?? []).length > 0) {
     parts.push(`locked: ${(row.lockedApplied ?? []).join(", ")}`);
+  }
+  if ((row.gitignoreAdded ?? []).length > 0) {
+    parts.push(`.gitignore: added ${(row.gitignoreAdded ?? []).join(", ")}`);
   }
   return sanitizeLabel(parts.join("  "));
 }
@@ -1300,6 +1309,7 @@ async function runSync(
         ...row,
         patched: seen.patched,
         ...(seen.lockedApplied.length === 0 ? {} : { lockedApplied: seen.lockedApplied }),
+        ...(seen.gitignoreAdded.length === 0 ? {} : { gitignoreAdded: seen.gitignoreAdded }),
       };
     }),
     journalWarnings: result.journalWarnings,

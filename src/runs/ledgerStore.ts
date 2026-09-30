@@ -608,7 +608,7 @@ export interface CloseResult {
   readonly changes: readonly CloseChange[];
   /** 1-based ledger lines that are not rows; kept as they are. */
   readonly unreadableLines: readonly number[];
-  /** Ids of rows written with a rationale that carried Unicode tag characters, stripped first. */
+  /** Ids of rows written with a rationale or disposition that carried Unicode tag characters, stripped first. */
   readonly tagsStripped: readonly string[];
 }
 

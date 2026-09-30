@@ -973,7 +973,7 @@ describe("stamity ledger append", () => {
     // TEST CHANGE (REQ-CTX-005, sw21): the refusal now names the bytes it measured beside
     // the ceiling. The figure is what was read when the ceiling tripped (the pipe is not
     // drained), so it is pinned as over the ceiling and at most the 250,002 bytes piped.
-    const measured = /the block piped on stdin is (\d+) bytes, over the 250000 byte input ceiling/.exec(
+    const measured = /the block piped on stdin is at least (\d+) bytes, over the 250000 byte input ceiling/.exec(
       over.stderr,
     );
     expect(measured, over.stderr).not.toBeNull();

@@ -2574,6 +2574,32 @@ describe("check — the gates it did not run (REQ-FLOW-008)", () => {
     expect(kindsFor("CI=1")).toEqual(["test"]);
   });
 
+  // POSIX-ONLY: the claim is the execute bit, which Windows does not have (Node's X_OK
+  // answers existence there), so a mode-644 file cannot be told from a runnable one.
+  it.skipIf(process.platform === "win32")(
+    "takes a path-shaped program only when it names a regular executable file, as the PATH walk does",
+    async () => {
+      // ledger review/79: a first word carrying a separator was taken on bare existence, so a
+      // directory or a file without its execute bit read as a program this machine could run.
+      const handle = getRepo();
+      const manifest = await pinnedPytest(handle);
+      await toolDir(handle, "tools", ["ok"]);
+      await handle.seedFiles({ "tools/plain": "#!/bin/sh\nexit 0\n", "tools/folder/.keep": "" });
+      await chmod(handle.path("tools", "plain"), 0o644);
+      const gates = createEngine().detect.verificationGates;
+      const testUnresolved = (test: string): boolean =>
+        resolveCharterGates(handle.dir, { ...manifest, gates: { test } }, gates, {
+          platform: "linux",
+          env: { PATH: "" },
+        }).unresolved.some((gate) => gate.kind === "test");
+
+      expect(testUnresolved("./tools/ok --fast")).toBe(false);
+      expect(testUnresolved("./tools/plain")).toBe(true);
+      expect(testUnresolved("tools/folder")).toBe(true);
+      expect(testUnresolved("./tools/missing")).toBe(true);
+    },
+  );
+
   describe("resolveCharterGates on a Windows host", () => {
     // The Windows branch cannot be reached through `check` on a POSIX host, so the platform
     // is injected, as `checkClaudeHookShell`'s is.
@@ -2611,6 +2637,23 @@ describe("check — the gates it did not run (REQ-FLOW-008)", () => {
       // npm resolves as npm.CMD; a bare `pytest` is not something cmd.exe would run.
       expect(report.unresolved.map((gate) => gate.kind)).toEqual(["test"]);
       expect(report.notRun).toEqual(["lint", "typecheck", "test"]);
+    });
+
+    it("completes a path-shaped program with PATHEXT, and a directory is no answer", async () => {
+      // ledger review/79: the separator branch walks the same extensions the PATH branch does.
+      const handle = getRepo();
+      const manifest = await pinnedPytest(handle);
+      await handle.seedFiles({ "tools/run.CMD": "@exit /b 0\r\n", "tools/folder/.keep": "" });
+      const gates = createEngine().detect.verificationGates;
+      const testUnresolved = (test: string): boolean =>
+        resolveCharterGates(handle.dir, { ...manifest, gates: { test } }, gates, {
+          platform: "win32",
+          env: { PATH: "", PATHEXT: ".EXE;.CMD" },
+        }).unresolved.some((gate) => gate.kind === "test");
+
+      expect(testUnresolved("tools/run")).toBe(false);
+      expect(testUnresolved("tools/run.CMD")).toBe(false);
+      expect(testUnresolved("tools/folder")).toBe(true);
     });
   });
 });

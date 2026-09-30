@@ -478,7 +478,7 @@ describe("worktree policy — admissibility against git facts (REQ-WORKTREE-003)
     expect(error.message).toContain(POLICY_PATH);
     expect(error.message).toContain(JSON.stringify(path));
     expect(error.message).toContain("review-gate runtime state");
-    expect(error.message).toContain("never travels");
+    expect(error.message).toContain("is never copied between worktrees");
   });
 
   it("refuses a case or trailing-dot spelling of the review-gate state the same way", () => {

@@ -96,7 +96,10 @@ export interface ResumeCard {
    * first two gain the debug line before `next:` while a debug round is open.
    */
   readonly lines: readonly string[];
-  /** The three lists in full, each item flattened as the card prints it. */
+  /**
+   * The three lists in full, each item flattened as the card prints it; empty on the closed
+   * card, which prints none of them and so reads none of them.
+   */
   readonly openRowIds: readonly string[];
   readonly unledgeredReports: readonly string[];
   readonly lanes: readonly string[];
@@ -265,8 +268,8 @@ export interface CardRun {
 /**
  * The lexicographically greatest run folder whose record head says it is in
  * progress; with none, the greatest whose date prefix is at or after the UTC
- * day CARD_CLOSED_MAX_AGE_DAYS − 1 days before `now` and whose record head
- * reads (the closed card); else null. Names are walked newest first by
+ * day CARD_CLOSED_MAX_AGE_DAYS − 1 days before `now`, not after `now`'s UTC
+ * day, and whose record head reads (the closed card); else null. Names are walked newest first by
  * code-unit order and the walk stops at the first run in progress, so no older
  * record head is read. A debug round's record (a run id carrying
  * DEBUG_RUN_SEGMENT) is never picked. A linked runs folder, a linked run
@@ -286,12 +289,15 @@ export function findCardRun(rootDir: string, now: Date): CardRun | null {
     .toSorted()
     .toReversed();
   const cutoff = new Date(now.getTime() - (CARD_CLOSED_MAX_AGE_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
+  const today = now.toISOString().slice(0, 10);
   let closed: string | null = null;
   for (const run of runs) {
     const head = readRecordHeadFile(join(runsDir, run, RECORD_FILE));
     if (head === null) continue;
     if (head.inProgress) return { runId: run, closed: false };
-    if (closed === null && run.slice(0, 10) >= cutoff) closed = run;
+    // A folder dated after today (a clock skew or a hand-made name) is never the closed run.
+    const day = run.slice(0, 10);
+    if (closed === null && day >= cutoff && day <= today) closed = run;
   }
   return closed === null ? null : { runId: closed, closed: true };
 }
@@ -725,9 +731,13 @@ export function collectResumeCard(opts: {
 
   const head = readRecordHeadFile(join(runDir, RECORD_FILE));
   const ledger = readLedger(join(runDir, LEDGER_FILE));
-  const reportsRead = unledgeredReports(runDir, runId, ledger.ledgered);
+  // The closed card prints no row ids, reports or lanes, and the hook twin's closed path
+  // reads none of them: nothing it never prints is read, listed or screened here.
+  const reportsRead = picked.closed
+    ? { listed: [], other: 0, notChecked: 0 }
+    : unledgeredReports(runDir, runId, ledger.ledgered);
   const unledgered = reportsRead.listed;
-  const lanes = lanesOf(opts.rootDir);
+  const lanes = picked.closed ? [] : lanesOf(opts.rootDir);
 
   const card = picked.closed
     ? renderClosedCard(
@@ -760,7 +770,7 @@ export function collectResumeCard(opts: {
         opts.now,
       );
   const withheld = screenCard(card.join("\n"));
-  const openRowIds = ledger.open.map(flat);
+  const openRowIds = picked.closed ? [] : ledger.open.map(flat);
   const reports = unledgered.map(flat);
   const laneItems = lanes.map(flat);
   const rawStatus = head?.status ?? null;

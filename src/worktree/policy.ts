@@ -555,7 +555,7 @@ export function assertRulesAdmissible(
     if (isReviewGateStatePath(rule.path)) {
       refuse(
         `${policy.source}: ${rule.list} row ${JSON.stringify(rule.path)} names review-gate runtime ` +
-          `state, which never travels between worktrees: a review round counted in one worktree must ` +
+          `state, which is never copied between worktrees: a review round counted in one worktree must ` +
           `not gate another, and the gate reads a missing counter as open.`,
         `Remove the row from ${policy.source}.`,
       );

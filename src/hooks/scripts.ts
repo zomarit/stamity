@@ -8,6 +8,7 @@ import {
 } from "../denyscan/denyScan.ts";
 import { MAX_HANDOFF_FILE_BYTES } from "../handoffs/validation.ts";
 import {
+  HEAD_BYTES,
   MAX_LEARNING_FILE_BYTES,
   MAX_LEARNING_SUMMARY_LENGTH,
   REVIEW_WARNING_DAYS,
@@ -72,7 +73,7 @@ import { CLIENT_HOOK_GUARANTEES, type CanonicalHookEvent, type HookFailMode } fr
  * its own banner ({@link header}'s `posture` argument) rather than inheriting a
  * blanket claim: the session-start load reads the wall clock, to expire a
  * review horizon and a handoff, and its payload's `source`, to append the
- * resume card after a compaction; the guard and the notice read the pending
+ * resume card after a compaction or on a resume; the guard and the notice read the pending
  * call's payload off stdin; the review gate reads the clock AND the round
  * counter it owns. What IS deterministic is the GENERATED TEXT — two builds
  * from one option set produce identical bytes, which is what the hash-trust
@@ -725,6 +726,7 @@ const MAX_LEARNING_BYTES = ${MAX_LEARNING_FILE_BYTES};
 const MAX_HANDOFF_BYTES = ${MAX_HANDOFF_FILE_BYTES};
 const MAX_FIELD_CHARS = ${MAX_LEARNING_SUMMARY_LENGTH};
 const REVIEW_WARNING_DAYS = ${REVIEW_WARNING_DAYS};
+const ORDERING_HEAD_BYTES = ${HEAD_BYTES};
 const RESUMABLE = ${json([...RESUMABLE_STATUSES])};
 const INVISIBLE = new RegExp(${json(INVISIBLE_SMUGGLING_CHARS.source)}, "g");
 const SCREEN = [
@@ -766,14 +768,16 @@ function inspect(dir, name, maxBytes, coversSummary) {
   const doc = { name, size: stats.size, day: dayOf(stats.mtimeMs), skip: "", head: null };
   if (stats.size > maxBytes) return { ...doc, skip: "over-size" };
 
-  let raw;
+  let bytes;
   try {
-    raw = readFileSync(join(dir, name), "utf8");
+    bytes = readFileSync(join(dir, name));
   } catch {
     return { ...doc, skip: "invalid-frontmatter" };
   }
-  // Keyed before any screen, as the engine keys a file before it examines it.
-  doc.day = declaredDay(raw) || doc.day;
+  const raw = bytes.toString("utf8");
+  // Keyed before any screen, as the engine keys a file before it examines it, and
+  // from the same head bytes the engine's \`orderingDay\` reads.
+  doc.day = declaredDay(bytes.subarray(0, ORDERING_HEAD_BYTES).toString("utf8")) || doc.day;
   if (screened(raw)) return { ...doc, skip: "injection-detected" };
   const parsed = parseDocument(raw);
   if (parsed === null) return { ...doc, skip: "invalid-frontmatter" };
@@ -792,8 +796,8 @@ function dayOf(ms) {
 }
 
 /**
- * The \`date\` inside the opening fence, matched by line the way the engine's
- * \`orderingDay\` matches it, or "" when there is none.
+ * The \`date\` inside the opening fence of a file's head bytes, matched by line
+ * the way the engine's \`orderingDay\` matches it, or "" when there is none.
  */
 function declaredDay(raw) {
   if (!raw.startsWith("---")) return "";
@@ -1447,7 +1451,9 @@ const GIT_COMMAND_CHARS = /^[A-Za-z0-9 ._/:@^~=+,-]+$/;
  * file, `--ext-diff` and `--textconv` run a configured program,
  * `--show-signature` runs the configured gpg program, `--help` makes git run
  * `git help <sub>` and so `man` or the configured help browser, `--no-index`
- * compares paths outside the repository. Git 2.52 refuses an abbreviated
+ * is refused with them, while an implicit no-index diff of two paths (`git diff
+ * a b` outside a work tree's tracked set) is admitted: the read category already
+ * reads anywhere, so it grants nothing new. Git 2.52 refuses an abbreviated
  * spelling of each of them on these five subcommands (`--show-sig`, `--ext`,
  * `--textc`, `--outp`, `--hel`: "unrecognized argument" or "unknown option"),
  * so a prefix match covers every spelling git accepts. The `--help` prefix

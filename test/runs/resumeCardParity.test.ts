@@ -42,6 +42,10 @@ const DEBUG_NEXT = "next: each open debug round's record names its probes and wh
 const TODAY = new Date().toISOString().slice(0, 10);
 const DONE = `${TODAY}_done`;
 const BOM = String.fromCharCode(0xfeff);
+/** Two tag-block characters (U+E0041 U+E0042): kept by the flattening, which leaves them to the screen. */
+const TAG_PAIR = String.fromCodePoint(0xe0041, 0xe0042);
+/** A C1 control (U+0085) and a bidi override (U+202E) between words. */
+const HOSTILE_STATUS_TAIL = ` a${String.fromCharCode(0x85)} b ${String.fromCharCode(0x202e)}c`;
 
 function record(opts: { status?: string; plan?: string; invocation?: string; lead?: readonly string[] } = {}): string {
   return [
@@ -801,6 +805,55 @@ const FIXTURES: readonly Fixture[] = [
     },
   },
   {
+    // ledger review/58: a closed card's status carries a C1 control and a bidi control; both
+    // twins print the same flattened value.
+    name: "a closed status carrying a C1 and a bidi control, flattened alike",
+    seed: (repo) =>
+      repo.seedFiles({
+        [runFile(DONE, "record.md")]: record({ status: `closed${HOSTILE_STATUS_TAIL}` }),
+      }),
+    expect: (lines) => {
+      expect(lines?.[0]).toMatch(new RegExp(`^stamity resume card — run ${DONE} \\(closed; as of `));
+      expect(lines?.[1]).toBe("status: closed a b c");
+    },
+  },
+  {
+    // ledger review/58: the flattening keeps a tag-block sequence for the screen, so a closed
+    // status carrying one withholds the card in both twins.
+    name: "a closed status carrying tag characters is withheld alike",
+    seed: (repo) => repo.seedFiles({ [runFile(DONE, "record.md")]: record({ status: `closed ${TAG_PAIR}` }) }),
+    expect: (lines) => {
+      expect(lines).toHaveLength(1);
+      const named = new RegExp(
+        `^stamity resume card — run ${DONE} withheld: its text matched screen pattern (\\S+); the ledger is the recovery point$`,
+      ).exec(lines?.[0] ?? "")?.[1];
+      expect(SESSION_START_SCREEN_PATTERN_IDS).toContain(named);
+    },
+  },
+  {
+    // ledger review/58: a line separator inside the Status line ends the pattern's match, so
+    // both twins read no status at all rather than a flattened one (pinned as it stands).
+    name: "a closed status carrying a line separator reads as not recorded in both twins",
+    seed: (repo) =>
+      repo.seedFiles({
+        [runFile(DONE, "record.md")]: record({ status: `closed a${LINE_SEPARATOR}b` }),
+      }),
+    expect: (lines) => expect(lines?.[1]).toBe("status: (not recorded)"),
+  },
+  {
+    // ledger review/65: a run folder dated after today is never the closed run.
+    name: "a closed run dated in the future is passed over for the one closed today",
+    seed: (repo) =>
+      repo.seedFiles({
+        [runFile("2099-01-01_future", "record.md")]: record({ status: "closed — merged", plan: "docs/plans/future.md" }),
+        [runFile(DONE, "record.md")]: record({ status: "closed — merged", plan: "docs/plans/done.md" }),
+      }),
+    expect: (lines) => {
+      expect(lines?.[0]).toMatch(new RegExp(`^stamity resume card — run ${DONE} \\(closed; as of `));
+      expect(lines?.join("\n")).not.toContain("2099-01-01_future");
+    },
+  },
+  {
     // Criterion (e): the newest-first walk passes a closed run and stops at the first in progress.
     name: "a newer closed run beside an older run in progress",
     seed: (repo) =>
@@ -1116,6 +1169,33 @@ describe("stamity ledger status", () => {
     expect(doc).not.toHaveProperty("closed");
     expect(Object.keys(doc["ledgerStates"] as object)).toEqual(["fixed", "deferred", "rejected", "open"]);
     expect(doc["card"]).toHaveLength(5);
+  });
+
+  it("screens only what the closed card reads, so a lane it never prints cannot null its status in --json", async () => {
+    // ledger review/64: the closed card prints no reports and no lanes, and the hook twin's
+    // closed path reads neither; a lane whose branch trips the screen leaves the status echoed.
+    const repo = getRepo();
+    await repo.seedFiles({
+      [runFile(DONE, "record.md")]: record({ status: "closed — merged" }),
+      [runFile(DONE, "ledger.jsonl")]: [row(`${DONE}/review/1`, "open"), ""].join("\n"),
+      [runFile(DONE, "reports/u1-reviewer-r1.md")]: reportWith([FINDING]),
+      ".git/worktrees/lane-a/gitdir": `${join(repo.path("lanes", "lane-a"), ".git")}\n`,
+      ".git/worktrees/lane-a/HEAD": `ref: refs/heads/${OVERRIDE}\n`,
+      "lanes/lane-a/.git": "gitdir: ../../.git/worktrees/lane-a\n",
+    });
+    const result = await runInProcess(COMMANDS, ["ledger", "status", "--json"], { cwd: repo.dir });
+    expect(result.stdout).not.toContain(OVERRIDE);
+    const doc = JSON.parse(result.stdout) as Record<string, unknown>;
+    expect(doc).toMatchObject({
+      run: DONE,
+      inProgress: false,
+      status: "closed — merged",
+      ledgerStates: { fixed: 0, deferred: 0, rejected: 0, open: 1 },
+      counts: { openRows: 0, unledgeredReports: 0, lanes: 0 },
+      withheld: null,
+      listsWithheld: null,
+      lanes: [],
+    });
   });
 
   it("screens the record's status before --json echoes it, though the in-progress card never prints it", async () => {

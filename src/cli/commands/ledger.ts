@@ -186,7 +186,7 @@ async function readAll(input: NodeJS.ReadableStream, maxBytes: number): Promise<
       throw new CliFailure({
         code: "VALIDATION_ERROR",
         // `total` is what was read when the ceiling tripped: the pipe is not drained further.
-        message: `the block piped on stdin is ${total} bytes, over the ${maxBytes} byte input ceiling`,
+        message: `the block piped on stdin is at least ${total} bytes, over the ${maxBytes} byte input ceiling`,
         why: "a findings block is one line per finding; a report is read by path, not piped",
         next: "pipe the stamity-findings block alone, or name the report with --report",
       });
@@ -663,7 +663,7 @@ export const ledgerCommand: CommandModule = {
       .option("--report <path>", "a report inside the run's reports/ folder")
       .option("--stdin", "read the findings block from stdin")
       .option("--ids <ledger-ids>", "the comma-separated ledger ids handed to this re-review")
-      .option("--id <ledger-id>", "the one row a manual close moves")
+      .option("--id <ledger-id>", "the one row a manual close or a retirement moves")
       .addOption(
         new Option("--state <state>", "the state a manual close sets").choices([...MANUAL_STATES]),
       )

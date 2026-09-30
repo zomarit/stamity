@@ -11,6 +11,7 @@ import {
   __setContentRootForTests,
 } from "../../../src/content/contentRoot.ts";
 import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
+import { REQUIRED_GITIGNORE_ENTRIES } from "../../../src/mcp/env.ts";
 import type { MaturityTier, Tool } from "../../../src/types/core.ts";
 import { MANIFEST_FILE, type SetupManifest } from "../../../src/types/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
@@ -1135,6 +1136,7 @@ interface SyncDoc {
     state: string;
     patched?: string[];
     lockedApplied?: string[];
+    gitignoreAdded?: string[];
     error?: { code: string; message: string };
   }[];
   journalWarnings: string[];
@@ -1187,6 +1189,24 @@ describe("workspace sync — the bridge", () => {
     expect(await exists(join(web, ".codex/config.toml"))).toBe(true);
     expect(result.stdout).toContain("patched tools");
     expect(result.stdout).toContain("2 members: 2 synced, 0 failed");
+  });
+
+  it("names the lines a member's sync appended to that member's .gitignore, and none on a re-run", async () => {
+    // ledger review/101: the member's own sync discloses an append to a file the operator owns
+    // (REQ-FLOW-016); the cascade row carried only refusals, so the append went unnamed there.
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const root = await seedWorkspace(temp, manifestOf([{ path: "apps/api" }], { defaults: { tools: ["claude"] } }));
+    const api = await seedSyncMember(root, "apps/api", { tools: ["claude"] });
+
+    const first = await runSync(root);
+    const gitignore = await readFile(join(api, ".gitignore"), "utf8");
+
+    expect(first.code).toBe(0);
+    for (const entry of REQUIRED_GITIGNORE_ENTRIES) expect(gitignore).toContain(entry);
+    expect(first.stdout).toContain(`.gitignore: added ${REQUIRED_GITIGNORE_ENTRIES.join(", ")}`);
+    const again = singleSyncDocument((await runSync(root, ["--json"])).stdout);
+    expect(again.repos[0]).not.toHaveProperty("gitignoreAdded");
   });
 
   it("leaves a member the workspace declares no maturityTier for on its own tier", async () => {
@@ -1670,8 +1690,16 @@ describe("workspace sync — --dry-run and the JSON contract", () => {
     expect(doc.root).toBe(root);
     expect(doc.outcome).toBe("passed");
     expect(doc.counts).toEqual({ total: 1, succeeded: 1, failed: 0, skipped: 0 });
+    // TEST CHANGE, justified (ledger review/101): the member's first sync appends the ignore
+    // rules to its .gitignore, and the row now names that append as the member's own sync does.
     expect(doc.repos).toEqual([
-      { repoPath: "apps/api", ok: true, state: "synced", patched: ["tools"] },
+      {
+        repoPath: "apps/api",
+        ok: true,
+        state: "synced",
+        patched: ["tools"],
+        gitignoreAdded: [...REQUIRED_GITIGNORE_ENTRIES],
+      },
     ]);
     expect(doc.journalWarnings).toEqual([]);
   });

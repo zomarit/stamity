@@ -100,7 +100,9 @@ function withoutPathScopedWrite(body: string): string[] {
   });
   if (importsNarrowed !== 2) throw new Error(`the path-scoped imports narrowed ${importsNarrowed} lines, not 2`);
   const rest = out.join("\n");
-  for (const name of ["WRITE_TOOL", "writePathCheck", "isWritePathPattern", "printable(", "guardRoot"]) {
+  // ledger review/111: the read-only git helpers too, so a render that moved them past
+  // `printable` could not carry them into the container guard unnoticed.
+  for (const name of ["WRITE_TOOL", "writePathCheck", "isWritePathPattern", "printable(", "guardRoot", "GIT_TOOL", "readOnlyGit("]) {
     if (rest.includes(name)) throw new Error(`the path-scoped name ${name} survived the cut`);
   }
   return out;
