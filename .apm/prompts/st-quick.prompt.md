@@ -112,6 +112,14 @@ product code changed as well as an artifact authored is not Tier 1 — it leaves
 5. Report per item — applied, saved, refused, or deferred — with files touched and the gate
    result. A content item reports `saved`, never `applied`, and names the `stamity sync` run
    that publishes it.
+6. An item that fixes an inbox row the request named, or whose `file:line` matches a row's
+   location, retires it after the gate is green. A row whose `Ref:` names a ledger row is
+   retired there first, through
+   `npx --no stamity ledger close --run <its run> --id <row id> --retired "fixed by /st-quick"`
+   (`${STAMITY:CLI}` in place of `npx --no stamity` where npm refuses); then its bullet leaves
+   `.stamity/inbox.md`. When neither form runs, the bullet stays. The batch report names each
+   row retired — quick keeps no run record, so the report is the record — and each named row
+   left in place, with why.
 
 ### Mid-run re-escalation
 

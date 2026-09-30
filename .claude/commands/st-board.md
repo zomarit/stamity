@@ -330,6 +330,8 @@ command is what parses it.
   routed out of the current change, `/st-plan` follow-ups appended while
   planning, `/st-work`'s close, which appends every `deferred` ledger row at
   run exit, and the dep-audit skill's deferred upgrades.
+- **Retirers, two:** `/st-work`'s close and `/st-quick`'s batch, each
+  removing a row its own change fixed, by the Removal rule below.
 - **Readers, three, all mandatory:** `fill` triages the inbox on every run,
   `/st-work` surfaces overlapping entries at its framing phase when a run
   touches the files an entry names, and `/st-plan` folds overlapping entries
@@ -348,10 +350,11 @@ command is what parses it.
   signal a deferred Critical carries; with no reader pulling it forward, a
   deferred Critical is indistinguishable from a Minor.
 - **Removal:** an entry leaves when its destination item exists, when its
-  proposal id is recorded per `fill` step 5, when the user drops it by name, or
+  proposal id is recorded per `fill` step 5, when the user drops it by name,
   when a completeness pass retires it with one line — fixed in a commit, cut
   with a reason, or scheduled with a lane, a trigger and an owner — recorded in
-  that pass's run record. Triage does not rewrite an entry in place.
+  that pass's run record, or when the `/st-work` or `/st-quick` run that
+  fixed it retires it at its close. Triage does not rewrite an entry in place.
 
 ## Return contract
 

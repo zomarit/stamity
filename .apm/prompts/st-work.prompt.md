@@ -395,6 +395,13 @@ reads its own ledger before writing the record and refuses while any row reads
 `open`. The proof block's next-step line names the inbox rows the run appended,
 and its `Not done:` list is empty or names the scheduled item each line became.
 
+An inbox row this run fixed — folded in at Frame or settled by the persisted
+plan — leaves the inbox at the close: its bullet is removed, the run record
+carries `- inbox retired: <location> — fixed in <run id>`, and a row whose
+`Ref:` names a ledger row is retired, its state kept, through
+`stamity ledger close --run <its run> --id <row id> --retired "fixed in <run id>"`.
+A row the run did not fix stays as it is.
+
 Beside `retired`, two more optional fields ride a row appended from a report:
 `report`, the repo-relative path of the report it came from, and
 `decision_needed`, present only as `true` when the fix changes a shared contract

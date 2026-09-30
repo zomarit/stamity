@@ -505,6 +505,8 @@ export interface CloseChange {
   readonly status: ClosureStatus | null;
   /** The row already records this closure or transition; nothing moved. */
   readonly unchanged: boolean;
+  /** A retirement's `retired` value, the one written or the one already there; absent on any other change. */
+  readonly retired?: string;
 }
 
 export interface CloseResult {
@@ -782,6 +784,100 @@ export async function closeRow(req: {
     return {
       changes: [{ ledgerId: req.ledgerId, from, to: req.state, status: null, unchanged: false }],
       rewrites: new Map([[index, { ...row, state: req.state, rationale: extendRationale(prior, text) }]]),
+      tagsStripped: cleaned.tagged ? [req.ledgerId] : [],
+    };
+  });
+}
+
+/** The date half of a `retired` value: the UTC calendar day of `now`, `YYYY-MM-DD`. */
+function retiredDate(now: Date): string {
+  return now.toISOString().slice(0, 10);
+}
+
+/** A `retired` value's disposition: the text after its leading date, or the whole value without one. */
+function retiredDisposition(value: string): string {
+  return value.replace(/^\d{4}-\d{2}-\d{2}\s+/, "");
+}
+
+/**
+ * Retire one `deferred` row whose inbox row left (`ledger close --id --retired`,
+ * REQ-FLOW-024): the row keeps its state and gains the optional `retired`
+ * field, `<UTC YYYY-MM-DD of now> <disposition>`, the shape the records gate
+ * reads. The disposition is stripped by `committedText`, trimmed and capped as a
+ * manual close's rationale is. `now` is the caller's clock, so the date is
+ * testable and never read off the wall here.
+ *
+ * Only a `deferred` row is retired; an id that is not a row is refused. A row
+ * whose `retired` value already states this disposition is `unchanged`, on a
+ * later day too, so a re-run never re-dates a retirement; a row retired with
+ * another disposition is refused, naming the value it carries. Every other
+ * line stays byte for byte, through the same lock, ignore file and writer as a
+ * manual close — an earlier run's missing `reports/.gitignore` included.
+ */
+export async function retireRow(req: {
+  readonly rootDir: string;
+  readonly runId: string;
+  readonly ledgerId: string;
+  readonly disposition: string;
+  readonly now: Date;
+  readonly dryRun: boolean;
+}): Promise<CloseResult> {
+  const cleaned = committedText(req.disposition);
+  const text = cleaned.text.trim();
+  if (text === "" || Array.from(text).length > RATIONALE_MAX) {
+    throw new EngineError(
+      `ledger close --retired needs a non-empty disposition of at most ${RATIONALE_MAX} characters`,
+      {
+        code: "VALIDATION_ERROR",
+        why: "a retirement records what happened to the deferral — fixed in a commit, cut with a reason, or scheduled — beside its date",
+      },
+    );
+  }
+  const value = `${retiredDate(req.now)} ${text}`;
+  return await rewriteRows(req, (parsed, ledgerRel) => {
+    const index = rowIndex(parsed).get(req.ledgerId);
+    const row = index === undefined ? undefined : parsed.rows.get(index);
+    const shown = printableText(cutReportText(req.ledgerId));
+    if (index === undefined || row === undefined) {
+      throw new EngineError(`ledger close refused: ${shown} is not a row of ${ledgerRel}`, {
+        code: "VALIDATION_ERROR",
+        next: "name a ledger id exactly as `ledger append` printed it",
+      });
+    }
+    const from = fieldText(row, "state");
+    if (from !== "deferred") {
+      throw new EngineError(
+        `ledger close refused: ${shown} is ${printableText(cutReportText(from))}, not deferred; only a deferred row is retired`,
+        {
+          code: "VALIDATION_ERROR",
+          why: "`retired` records when a deferral's inbox row left; a row in any other state has no inbox row",
+          next: "close the row with --state and --rationale instead",
+        },
+      );
+    }
+    const prior: unknown = row.retired;
+    if (prior !== undefined) {
+      const recorded = typeof prior === "string" ? prior : String(JSON.stringify(prior));
+      if (retiredDisposition(recorded) === text) {
+        return {
+          changes: [
+            { ledgerId: req.ledgerId, from, to: from, status: null, unchanged: true, retired: recorded },
+          ],
+          rewrites: new Map(),
+        };
+      }
+      throw new EngineError(
+        `ledger close refused: ${shown} is already retired (${printableText(cutReportText(recorded))})`,
+        {
+          code: "VALIDATION_ERROR",
+          why: "a deferral leaves the inbox once, so its retirement is recorded once",
+          next: "leave the row as it is; its `retired` value already states how the deferral left",
+        },
+      );
+    }
+    return {
+      changes: [{ ledgerId: req.ledgerId, from, to: from, status: null, unchanged: false, retired: value }],
+      rewrites: new Map([[index, { ...row, retired: value }]]),
       tagsStripped: cleaned.tagged ? [req.ledgerId] : [],
     };
   });

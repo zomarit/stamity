@@ -1055,6 +1055,26 @@ describe("/st-work — Prove", () => {
     expect(proof).toContain("`Not done:` list is empty or names the scheduled item each line became");
   });
 
+  it("retires the inbox rows the run fixed at its close, keeping the ledger row's state (REQ-FLOW-024)", async () => {
+    const proof = collapse(section(await body(), "### Proof block"));
+
+    // The close appended deferrals but removed nothing, so a row a later run
+    // fixed stayed in the inbox until a completeness pass found it.
+    expect(proof).toContain(
+      "An inbox row this run fixed — folded in at Frame or settled by the persisted plan — leaves the inbox at the close",
+    );
+    expect(proof).toContain("the run record carries `- inbox retired: <location> — fixed in <run id>`");
+    expect(proof).toContain(
+      '`stamity ledger close --run <its run> --id <row id> --retired "fixed in <run id>"`',
+    );
+    expect(proof).toContain("retired, its state kept");
+    expect(proof).toContain("A row the run did not fix stays as it is.");
+    // After the appending paragraph, so the order reads append, then retire.
+    expect(proof.indexOf("An inbox row this run fixed")).toBeGreaterThan(
+      proof.indexOf("names the scheduled item each line became"),
+    );
+  });
+
   it("closes with a next step derived from the run's own state", async () => {
     const proof = collapse(section(await body(), "### Proof block"));
 

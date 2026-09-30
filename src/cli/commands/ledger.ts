@@ -15,9 +15,10 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * the one serialized writer of a work run's findings ledger, its reader, and the
  * CLI's third hidden plumbing verb. `append` files a report's findings as `open`
  * rows; `close` moves rows on a re-review's closures block (`--report` with the
- * `--ids` it was handed) or by one manual transition (`--id`, `--state`,
- * `--rationale`); `status` prints the run's resume card, the same lines the
- * session-start hook prints after a compaction or a resume, and writes nothing.
+ * `--ids` it was handed), by one manual transition (`--id`, `--state`,
+ * `--rationale`) or by one retirement (`--id`, `--retired`); `status`
+ * prints the run's resume card, the same lines the session-start hook prints
+ * after a compaction or a resume, and writes nothing.
  * Hidden for the reason `learn` and `handoff` are: its caller is the orchestrating session running
  * `/st-work`, not a person.
  *
@@ -35,7 +36,8 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * <report-local id>` line each, with a trailing ` decision-needed` on a row the
  * orchestrator must sign off before a fixer acts on it, so the caller reads the
  * ids it dispatches by straight off the pipe; for a close, one
- * `<id> <from> -> <to>` line per row (with its closure status in parentheses),
+ * `<id> <from> -> <to>` line per row (with its closure status, or a
+ * retirement's `retired: <value>`, in parentheses),
  * or `<id> unchanged (already recorded)`; for a status, the card's lines, or the
  * one no-run sentence. Everything else — the nothing-to-do
  * note, the warnings about a line that is not a row or about locking being off
@@ -119,6 +121,7 @@ const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string,
     ["id", "--id", [CLOSE]],
     ["state", "--state", [CLOSE]],
     ["rationale", "--rationale", [CLOSE]],
+    ["retired", "--retired", [CLOSE]],
   ],
   [CLOSE]: [
     ["phase", "--phase", [APPEND]],
@@ -134,6 +137,7 @@ const FOREIGN_FLAGS: Readonly<Record<string, readonly (readonly [string, string,
     ["id", "--id", [CLOSE]],
     ["state", "--state", [CLOSE]],
     ["rationale", "--rationale", [CLOSE]],
+    ["retired", "--retired", [CLOSE]],
   ],
 };
 
@@ -354,7 +358,12 @@ async function runAppend(ctx: CliContext, opts: Record<string, unknown>): Promis
  *  and the ledger, so the line is sanitised where it meets the terminal. */
 function changeLine(change: CloseChange): string {
   if (change.unchanged) return sanitizeLabel(`${change.ledgerId} unchanged (already recorded)`);
-  const status = change.status === null ? "" : ` (${change.status})`;
+  const status =
+    change.retired !== undefined
+      ? ` (retired: ${change.retired})`
+      : change.status === null
+        ? ""
+        : ` (${change.status})`;
   return sanitizeLabel(`${change.ledgerId} ${change.from} -> ${change.to}${status}`);
 }
 
@@ -377,6 +386,7 @@ async function runClose(ctx: CliContext, opts: Record<string, unknown>): Promise
   const state = text(opts, "state");
   const rationale = text(opts, "rationale");
   const idsFlag = text(opts, "ids");
+  const retired = text(opts, "retired");
   if ((reportFlag === undefined) === (id === undefined)) {
     throw closeUsage(
       "ledger close takes exactly one of --report and --id",
@@ -388,6 +398,7 @@ async function runClose(ctx: CliContext, opts: Record<string, unknown>): Promise
   const { ledgerStore, blocks } = ctx.engine.runs;
   let result: CloseResult;
   let report: string | null = null;
+  let tagField = "rationale";
 
   if (reportFlag !== undefined) {
     if (state !== undefined || rationale !== undefined) {
@@ -395,6 +406,13 @@ async function runClose(ctx: CliContext, opts: Record<string, unknown>): Promise
         "ledger close --report takes no --state or --rationale; the closures block carries them",
         "each closure's status sets its row's state, and its note is the rationale",
         "drop --state and --rationale, or close one row with --id instead",
+      );
+    }
+    if (retired !== undefined) {
+      throw closeUsage(
+        "ledger close --report takes no --retired; a retirement names its one row with --id",
+        "a closures block moves the rows a re-review was handed, and a retirement records one deferred row's inbox exit",
+        "drop --retired, or retire the row with --id <ledger-id> --retired <disposition>",
       );
     }
     const handed = idsFlag === undefined ? [] : handedIds(idsFlag);
@@ -458,23 +476,46 @@ async function runClose(ctx: CliContext, opts: Record<string, unknown>): Promise
         "drop --ids, or close a re-review's rows with --report <path> --ids <ids>",
       );
     }
-    if (state === undefined) throw missingFlag(CLOSE, "--state");
-    if (rationale === undefined) throw missingFlag(CLOSE, "--rationale");
-    await ledgerStore.requireRunDir(rootDir, run);
-    warnIfUnlocked(ctx, "closes");
-    result = await ledgerStore.closeRow({
-      rootDir,
-      runId: run,
-      ledgerId: id as string,
-      // Commander's `choices()` refused every other value at parse time.
-      state: state as (typeof MANUAL_STATES)[number],
-      rationale,
-      dryRun: ctx.dryRun,
-    });
+    if (retired !== undefined) {
+      // Taken before the manual close's --state and --rationale checks: a
+      // retirement keeps the row's state and records its own disposition.
+      if (state !== undefined || rationale !== undefined) {
+        throw closeUsage(
+          "ledger close --retired takes no --state or --rationale; a retirement keeps the row's state",
+          "a retired row stays deferred and gains the dated retired field, so there is no state to set and no rationale to append",
+          "drop --state and --rationale, or move the row with --state and --rationale alone",
+        );
+      }
+      await ledgerStore.requireRunDir(rootDir, run);
+      warnIfUnlocked(ctx, "closes");
+      result = await ledgerStore.retireRow({
+        rootDir,
+        runId: run,
+        ledgerId: id as string,
+        disposition: retired,
+        now: ctx.app.runtime.clock.now(),
+        dryRun: ctx.dryRun,
+      });
+      tagField = "retired disposition";
+    } else {
+      if (state === undefined) throw missingFlag(CLOSE, "--state");
+      if (rationale === undefined) throw missingFlag(CLOSE, "--rationale");
+      await ledgerStore.requireRunDir(rootDir, run);
+      warnIfUnlocked(ctx, "closes");
+      result = await ledgerStore.closeRow({
+        rootDir,
+        runId: run,
+        ledgerId: id as string,
+        // Commander's `choices()` refused every other value at parse time.
+        state: state as (typeof MANUAL_STATES)[number],
+        rationale,
+        dryRun: ctx.dryRun,
+      });
+    }
   }
 
   warnUnreadable(ctx, result.ledger, result.unreadableLines);
-  warnTagsStripped(ctx, result.tagsStripped, "rationale");
+  warnTagsStripped(ctx, result.tagsStripped, tagField);
   for (const change of result.changes) ctx.io.out(`${changeLine(change)}\n`);
   if (ctx.dryRun) {
     const moving = result.changes.filter((change) => !change.unchanged).length;
@@ -617,7 +658,11 @@ export const ledgerCommand: CommandModule = {
       .addOption(
         new Option("--state <state>", "the state a manual close sets").choices([...MANUAL_STATES]),
       )
-      .option("--rationale <text>", "why a manual close moves the row, recorded on it");
+      .option("--rationale <text>", "why a manual close moves the row, recorded on it")
+      .option(
+        "--retired <disposition>",
+        "retire a deferred row whose inbox row left: keeps its state and records the date and this disposition",
+      );
   },
 
   async run(ctx, opts, args): Promise<CommandResult> {

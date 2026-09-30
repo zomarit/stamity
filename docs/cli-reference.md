@@ -313,5 +313,6 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--id <ledger-id>` | the one row a manual close moves | — |
 | `--state <state>` | the state a manual close sets — one of `fixed`, `rejected`, `deferred` | — |
 | `--rationale <text>` | why a manual close moves the row, recorded on it | — |
+| `--retired <disposition>` | retire a deferred row whose inbox row left: keeps its state and records the date and this disposition | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.

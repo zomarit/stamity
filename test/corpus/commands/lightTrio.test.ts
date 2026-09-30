@@ -754,6 +754,26 @@ describe("quick — the guardrails are the command", () => {
     expect(text).toMatch(/disposition for every item/i);
   });
 
+  it("retires an inbox row the batch fixed after the gate is green, and names it in the report (REQ-FLOW-024)", async () => {
+    const text = flow(await load("commands/st-quick.md"));
+    const step = text.slice(text.indexOf("6. An item that fixes an inbox row"), text.indexOf("### Mid-run re-escalation"));
+
+    expect(step).toContain(
+      "6. An item that fixes an inbox row the request named, or whose `file:line` matches a row's location, retires it after the gate is green.",
+    );
+    // The ledger row first, then the bullet: a deferral whose bullet left with its row
+    // still unretired is the gap the records gate refuses.
+    expect(step).toContain(
+      '`npx --no stamity ledger close --run <its run> --id <row id> --retired "fixed by /st-quick"`',
+    );
+    expect(step).toContain("(`${STAMITY:CLI}` in place of `npx --no stamity` where npm refuses)");
+    expect(step.indexOf("retired there first")).toBeLessThan(step.indexOf("then its bullet leaves `.stamity/inbox.md`"));
+    expect(step).toContain("When neither form runs, the bullet stays.");
+    // Quick keeps no run record, so its report carries the retirement, and a named row left stays named.
+    expect(step).toContain("The batch report names each row retired");
+    expect(step).toContain("each named row left in place, with why");
+  });
+
   it("runs the full gate in the test-runner and never turns it off", async () => {
     const text = flow(await load("commands/st-quick.md"));
 

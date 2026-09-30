@@ -573,11 +573,27 @@ describe("st-board — sources, signals, and the inbox", () => {
     // four -> five when `/st-work`'s close began appending every `deferred`
     // ledger row at run exit: the census is derived from the corpus, so the
     // fifth writer had to be named here the moment the corpus carried it.
+    //
+    // TEST CHANGE, justified (2026-09-30, REQ-FLOW-024): `/st-quick` now names
+    // `.stamity/inbox.md` because its batch retires the rows it fixed, which
+    // made it match this filter as a sixth writer. It appends nothing; the
+    // census declares it under its own `Retirers` bullet. So the filter
+    // excludes a declared retirer the Writers bullet does not also name — the
+    // count stays derived from the corpus, and `/st-work`, both a writer and a
+    // retirer, still counts as a writer.
+    const bullet = (label: string): string => new RegExp(`${label}[^:]*:\\*\\*(.*?)- \\*\\*`).exec(inbox)?.[1] ?? "";
+    const writerBullet = bullet("Writers");
+    const retirerOnly = [...bullet("Retirers").matchAll(/`\/(st-[a-z-]+)`/g)]
+      .map((match) => match[1] ?? "")
+      .filter((id) => !writerBullet.includes(`/${id}`))
+      .map((id) => `commands/${id}.md`);
+    expect(retirerOnly).toEqual(["commands/st-quick.md"]);
 
     const writers = files
       .filter(
         (file) =>
           file.relPath !== ARTIFACT_PATH &&
+          !retirerOnly.includes(file.relPath) &&
           /append|land|routed|deferr/i.test(file.parsed.body) &&
           file.parsed.body.includes(".stamity/inbox.md"),
       )
@@ -592,6 +608,23 @@ describe("st-board — sources, signals, and the inbox", () => {
     expect(flat(section(section((await board()).parsed.body, "Modes"), "fill — intake to items", "###"))).toContain(
       ".stamity/inbox.md",
     );
+  });
+
+  it("declares the two retirers and lets the run that fixed a row retire it at its close (REQ-FLOW-024)", async () => {
+    const inbox = flat(section((await board()).parsed.body, "Deferral inbox"));
+
+    expect(inbox).toMatch(/Retirers, two:\*\* `\/st-work`'s close and `\/st-quick`'s batch/);
+    expect(inbox).toMatch(
+      /Removal:.*or when the `\/st-work` or `\/st-quick` run that fixed it retires it at its close\. Triage does not rewrite an entry in place/,
+    );
+
+    // Each declared retirer's own body carries the step, so the census names
+    // what the corpus does rather than what it once did.
+    const files = await walkAllMarkdown();
+    for (const relPath of ["commands/st-work.md", "commands/st-quick.md"]) {
+      const text = flat(files.find((file) => file.relPath === relPath)?.parsed.body ?? "");
+      expect(text, `${relPath} retires a fixed row`).toMatch(/ledger close --run <its run> --id <row id> --retired "fixed /);
+    }
   });
 
   it("declares one row grammar and pulls critical-deferred rows to the front", async () => {

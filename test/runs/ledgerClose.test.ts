@@ -3,7 +3,14 @@ import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { COMMANDS } from "../../src/cli.ts";
 import { parseClosuresBlock } from "../../src/runs/blocks.ts";
-import { applyClosures, closeRow, ClosuresRefused, CLOSURE_TARGET } from "../../src/runs/ledgerStore.ts";
+import { runCli } from "../../src/cli/kit/program.ts";
+import {
+  applyClosures,
+  closeRow,
+  ClosuresRefused,
+  CLOSURE_TARGET,
+  retireRow,
+} from "../../src/runs/ledgerStore.ts";
 import { runInProcess } from "../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../support/tempDir.ts";
 
@@ -728,6 +735,174 @@ describe("closeRow", () => {
   });
 });
 
+/** The fixed instant every retirement below is stamped from (REQ-FLOW-024). */
+const RETIRE_AT = new Date("2026-10-02T09:30:00Z");
+
+/** A `deferred` row, as a close leaves it before its inbox row leaves. */
+const deferredRow = (n: number, extra: Record<string, unknown> = {}): string =>
+  row(n, { state: "deferred", rationale: "after the release", ...extra });
+
+describe("retireRow", () => {
+  const retire = async (
+    dir: TempDirHandle,
+    ledgerId: string,
+    disposition: string,
+    opts: { now?: Date; dryRun?: boolean } = {},
+  ): ReturnType<typeof retireRow> =>
+    await retireRow({
+      rootDir: dir.dir,
+      runId: RUN,
+      ledgerId,
+      disposition,
+      now: opts.now ?? RETIRE_AT,
+      dryRun: opts.dryRun ?? false,
+    });
+
+  it("keeps the row deferred and adds the dated `retired` field, every other line byte for byte", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [LEDGER]: `${row(1)}\n${deferredRow(2)}\n${deferredRow(3)}\n` });
+
+    const result = await retire(dir, rid(2), "  fixed in 2026-10-02_next  ");
+
+    const lines = (await readText(dir, LEDGER)).split("\n");
+    expect(lines[0]).toBe(row(1));
+    expect(lines[2]).toBe(deferredRow(3));
+    expect(JSON.parse(lines[1] ?? "")).toEqual({
+      ...(JSON.parse(deferredRow(2)) as Record<string, unknown>),
+      retired: "2026-10-02 fixed in 2026-10-02_next",
+    });
+    expect(result.changes).toEqual([
+      {
+        ledgerId: rid(2),
+        from: "deferred",
+        to: "deferred",
+        status: null,
+        unchanged: false,
+        retired: "2026-10-02 fixed in 2026-10-02_next",
+      },
+    ]);
+  });
+
+  it("stamps the UTC date of the clock it is handed, not the local one", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [LEDGER]: `${deferredRow(1)}\n` });
+
+    // 23:30 on the 2nd in UTC-10 is already the 3rd in UTC.
+    await retire(dir, rid(1), "fixed in r2", { now: new Date("2026-10-02T23:30:00-10:00") });
+
+    expect(rowsOf(await readText(dir, LEDGER))[0]?.["retired"]).toBe("2026-10-03 fixed in r2");
+  });
+
+  it("reports a retirement already recorded as unchanged and leaves the ledger byte-identical", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [LEDGER]: `${deferredRow(1)}\n` });
+    await retire(dir, rid(1), "fixed in r2");
+    const once = await readText(dir, LEDGER);
+
+    const again = await retire(dir, rid(1), "fixed in r2");
+    // A re-run on a later day names the same retirement; it is not re-dated.
+    const later = await retire(dir, rid(1), "fixed in r2", { now: new Date("2026-10-05T00:00:00Z") });
+
+    for (const result of [again, later]) {
+      expect(result.changes).toEqual([
+        {
+          ledgerId: rid(1),
+          from: "deferred",
+          to: "deferred",
+          status: null,
+          unchanged: true,
+          retired: "2026-10-02 fixed in r2",
+        },
+      ]);
+    }
+    expect(await readText(dir, LEDGER)).toBe(once);
+  });
+
+  it("refuses a row retired with another disposition, naming the one it carries", async () => {
+    const dir = tempDir();
+    const before = `${deferredRow(1, { retired: "2026-09-30 cut: out of scope" })}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    await expect(retire(dir, rid(1), "fixed in r2")).rejects.toThrow(
+      `ledger close refused: ${rid(1)} is already retired (2026-09-30 cut: out of scope)`,
+    );
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it.each([
+    ["open", row(1)],
+    ["fixed", row(1, { state: "fixed" })],
+    ["rejected", row(1, { state: "rejected", rationale: "not a defect" })],
+  ])("refuses a row that is %s, not deferred, with the ledger byte-identical", async (state, line) => {
+    const dir = tempDir();
+    const before = `${line}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    await expect(retire(dir, rid(1), "fixed in r2")).rejects.toThrow(
+      `ledger close refused: ${rid(1)} is ${state}, not deferred; only a deferred row is retired`,
+    );
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("refuses an id absent from the ledger", async () => {
+    const dir = tempDir();
+    const before = `${deferredRow(1)}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    await expect(retire(dir, rid(7), "fixed in r2")).rejects.toThrow(
+      `ledger close refused: ${rid(7)} is not a row of ${LEDGER}`,
+    );
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it.each([
+    ["an empty disposition", "   "],
+    ["a disposition blank once stripped", "\u200B\u202E"],
+    ["a disposition over 2,000 characters", "x".repeat(2_001)],
+  ])("refuses %s", async (_label, disposition) => {
+    const dir = tempDir();
+    const before = `${deferredRow(1)}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    await expect(retire(dir, rid(1), disposition)).rejects.toThrow(
+      "ledger close --retired needs a non-empty disposition of at most 2000 characters",
+    );
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("strips control, bidi and tag characters from the disposition and names the row it cleaned", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [LEDGER]: `${deferredRow(1)}\n` });
+
+    const result = await retire(dir, rid(1), "fixed\u202E in\u200B r2\u{E0041}");
+
+    expect(rowsOf(await readText(dir, LEDGER))[0]?.["retired"]).toBe("2026-10-02 fixed in r2");
+    expect(result.tagsStripped).toEqual([rid(1)]);
+  });
+
+  it("writes the reports ignore file of an earlier run that lacks one, as a manual close does", async () => {
+    const dir = tempDir();
+    await mkdir(dir.path(RUN_DIR), { recursive: true });
+    await writeFile(dir.path(LEDGER), `${deferredRow(1)}\n`);
+
+    await retire(dir, rid(1), "fixed in r2");
+
+    expect(await readText(dir, `${RUN_DIR}/reports/.gitignore`)).toBe("*\n");
+  });
+
+  it("previews under a dry run and writes nothing, not even the reports ignore file", async () => {
+    const dir = tempDir();
+    const before = `${deferredRow(1)}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    const result = await retire(dir, rid(1), "fixed in r2", { dryRun: true });
+
+    expect(result.changes).toMatchObject([{ unchanged: false, retired: "2026-10-02 fixed in r2" }]);
+    expect(await readText(dir, LEDGER)).toBe(before);
+    expect(existsSync(dir.path(RUN_DIR, "reports", ".gitignore"))).toBe(false);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // The CLI
 // ---------------------------------------------------------------------------
@@ -1292,5 +1467,150 @@ describe("stamity ledger close", () => {
 
     expect(result.code).toBe(1);
     expect(existsSync(dir.path(LEDGER))).toBe(false);
+  });
+});
+
+/**
+ * `ledger close --retired` through the funnel on a fixed clock. The kit's own
+ * clock seam (`RunCliOptions.clock`), not a mock: `runInProcess` forwards no
+ * clock, and the retirement's date is read from the one the funnel is handed.
+ */
+async function cliAt(
+  dir: TempDirHandle,
+  argv: readonly string[],
+  now: Date = RETIRE_AT,
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const code = await runCli(argv, COMMANDS, {
+    cwd: dir.dir,
+    env: {},
+    io: {
+      out: (text) => {
+        stdout.push(text);
+      },
+      err: (text) => {
+        stderr.push(text);
+      },
+    },
+    terminal: { stdoutIsTTY: false, stderrIsTTY: false, stdinIsTTY: false },
+    clock: { now: () => now },
+  });
+  return { code, stdout: stdout.join(""), stderr: stderr.join("") };
+}
+
+describe("stamity ledger close --retired", () => {
+  const RETIRE = (n: number, disposition = "fixed in r2"): string[] => [
+    ...CLOSE,
+    "--id",
+    rid(n),
+    "--retired",
+    disposition,
+  ];
+
+  it("retires a deferred row with no --state and no --rationale, and prints unchanged on a re-run", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [LEDGER]: `${row(1)}\n${deferredRow(2)}\n` });
+
+    const first = await cliAt(dir, RETIRE(2));
+    const once = await readText(dir, LEDGER);
+    const second = await cliAt(dir, RETIRE(2));
+    const json = await cliAt(dir, [...RETIRE(2), "--json"]);
+
+    expect(first.code, first.stderr).toBe(0);
+    expect(first.stdout).toBe(`${rid(2)} deferred -> deferred (retired: 2026-10-02 fixed in r2)\n`);
+    expect(rowsOf(once)[1]).toMatchObject({ state: "deferred", retired: "2026-10-02 fixed in r2" });
+    expect(rowsOf(once)[0]).toEqual(JSON.parse(row(1)));
+    expect(second.code).toBe(0);
+    expect(second.stdout).toBe(`${rid(2)} unchanged (already recorded)\n`);
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      report: null,
+      changes: [{ ledgerId: rid(2), unchanged: true, retired: "2026-10-02 fixed in r2" }],
+    });
+    expect(await readText(dir, LEDGER)).toBe(once);
+  });
+
+  it("previews a retirement under --dry-run and writes nothing", async () => {
+    const dir = tempDir();
+    const before = `${deferredRow(1)}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    const result = await cliAt(dir, [...RETIRE(1), "--dry-run"]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toBe(
+      `${rid(1)} deferred -> deferred (retired: 2026-10-02 fixed in r2)\nDry run: 1 row(s) would change in ${LEDGER}. Nothing was written.\n`,
+    );
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("names a disposition cleaned of tag characters on stderr as the retired field", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [LEDGER]: `${deferredRow(1)}\n` });
+
+    const result = await cliAt(dir, RETIRE(1, "fixed in r2\u{E0041}"));
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stderr).toBe(
+      `warning: ${rid(1)} carried Unicode tag characters in its retired disposition; they were stripped before the row was written\n`,
+    );
+  });
+
+  it.each([
+    ["an open row", row(1), "is open, not deferred; only a deferred row is retired"],
+    ["an unknown id", deferredRow(2), `${rid(1)} is not a row of ${LEDGER}`],
+    ["--retired beside --state", deferredRow(1), "ledger close --retired takes no --state or --rationale"],
+    ["--retired beside --rationale", deferredRow(1), "ledger close --retired takes no --state or --rationale"],
+    ["--retired beside --report", deferredRow(1), "ledger close --report takes no --retired"],
+    ["--retired beside --ids", deferredRow(1), "ledger close --id takes no --ids"],
+  ] as const)("refuses %s with exit 1 and the ledger byte-identical", async (label, line, fragment) => {
+    const dir = tempDir();
+    const before = `${line}\n`;
+    await seedRun(dir, { [LEDGER]: before, [REPORT_REL]: rereview([closure(1, "fixed")]) });
+    const extra: Record<string, string[]> = {
+      "--retired beside --state": ["--state", "fixed"],
+      "--retired beside --rationale": ["--rationale", "r"],
+      "--retired beside --ids": ["--ids", ids(1)],
+    };
+    const argv =
+      label === "--retired beside --report"
+        ? [...CLOSE, "--report", REPORT_REL, "--ids", ids(1), "--retired", "fixed in r2"]
+        : [...RETIRE(1), ...(extra[label] ?? [])];
+
+    const result = await cliAt(dir, argv);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain(fragment);
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("refuses a retirement on a run whose folder is missing as a validation error", async () => {
+    const dir = tempDir();
+    await mkdir(dir.path(".stamity"), { recursive: true });
+
+    const result = await cliAt(dir, [...RETIRE(1), "--json"]);
+
+    expect(result.code).toBe(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({ ok: false, error: { code: "VALIDATION_ERROR" } });
+    expect(existsSync(dir.path(RUN_DIR))).toBe(false);
+  });
+
+  it.each([
+    ["append", ["ledger", "append", "--run", RUN, "--phase", "review", "--source", "reviewer", "--report", REPORT_REL]],
+    ["status", ["ledger", "status", "--run", RUN]],
+  ] as const)("refuses `ledger %s --retired` as a usage error naming it a flag of ledger close", async (subcommand, valid) => {
+    const dir = tempDir();
+    const before = `${deferredRow(1)}\n`;
+    await seedRun(dir, { [LEDGER]: before, [REPORT_REL]: rereview([closure(1, "fixed")]) });
+
+    const human = await cliAt(dir, [...valid, "--retired", "x"]);
+    const json = await cliAt(dir, [...valid, "--retired", "x", "--json"]);
+
+    expect(human.code).toBe(1);
+    expect(human.stdout).toBe("");
+    expect(human.stderr).toContain(`ledger ${subcommand} takes no --retired; it is a flag of ledger close`);
+    expect(JSON.parse(json.stdout)).toMatchObject({ ok: false, error: { code: "USAGE" } });
+    expect(await readText(dir, LEDGER)).toBe(before);
   });
 });
