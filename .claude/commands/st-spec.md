@@ -93,15 +93,15 @@ stubs it writes — never the charter.
 
 Specs accrete per change: the first time work touches a surface, that surface
 gets its spec file. A backfill request needs an explicitly named scope — a
-module path, a feature name, a route group, or the whole app when the repo is
-small. Below 5,000 source lines, counted over the files the Source tree probe
-found, the whole app is a named scope: it is offered beside the narrowest
-readings, and it is the default when the request names the app ("create the
-spec", "spec this app"); the mode-chosen line states the count. "Backfill the
-specs" with no named scope gets one question offering the three narrowest
-readings; the default when no answer arrives is to decline the sweep and keep
-accreting per change. A 200k-line codebase is the case the rule exists for: a
-sweep of that size produces prose nobody verified and everybody then trusts.
+module path, a feature name, a route group, or the whole app on a small repo,
+asked and never assumed. Below 5,000 source lines, counted over the files the
+Source tree probe found, the whole app is the first numbered option beside the
+narrowest readings and the declared default when the request names the app
+("create the spec", "spec this app"); the mode-chosen line states the count.
+"Backfill the specs" with no named scope gets one question offering the three
+narrowest readings; the default when no answer arrives is to decline the sweep
+and keep accreting per change. A 200k-line codebase is the case the rule exists
+for: a sweep of that size produces prose nobody verified and everybody then trusts.
 
 Brownfield requirements that change an existing contract state their
 expand-contract path and the rollback step for each phase. A spec that mandates

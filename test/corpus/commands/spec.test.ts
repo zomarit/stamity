@@ -364,18 +364,23 @@ describe("/st-spec — edge cases the design names", () => {
     expect(text).toMatch(/codebase-map\.md[^.]*inventory, not truth/);
   });
 
-  // REQ-FLOW-012: below the 5,000-line bound the whole app is a scope the
-  // question may offer, and the default only when the request names the app;
-  // the no-named-scope sweep above keeps its decline default.
-  it("offers the whole app as a named scope on a small repository", async () => {
+  // REQ-FLOW-012: below the 5,000-line bound the whole app is an option of the
+  // scope question, and its declared default only when the request names the
+  // app; naming the app never skips the question. The no-named-scope sweep
+  // above keeps its decline default.
+  it("offers the whole app as the scope question's default on a small repository", async () => {
     const text = await prose();
+    const flat = text.replace(/\s+/g, " ");
 
-    expect(text).toMatch(/Below 5,000 source lines/);
-    expect(text).toMatch(/counted over the files the Source tree probe found/);
-    expect(text).toMatch(/the whole app is a named scope/);
-    expect(text).toMatch(/offered beside the narrowest readings/);
-    expect(text).toMatch(/default when the request names the app/);
-    expect(text).toMatch(/the mode-chosen line states the count/);
+    expect(flat).toMatch(/Below 5,000 source lines/);
+    expect(flat).toMatch(/counted over the files the Source tree probe found/);
+    // The lead sentence: the whole app is asked, never taken as a scope unasked.
+    expect(flat).toMatch(/or the whole app on a small repo, asked and never assumed/);
+    expect(flat).not.toMatch(/the whole app is a named scope/);
+    expect(flat).toMatch(
+      /the whole app is the first numbered option beside the narrowest readings and the declared default when the request names the app/,
+    );
+    expect(flat).toMatch(/the mode-chosen line states the count/);
   });
 
   it("leaves charter production to the engine — a spec run never writes it", async () => {
