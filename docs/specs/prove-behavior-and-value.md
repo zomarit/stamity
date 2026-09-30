@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md on 2026-09-30, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, and excluded from the site build.
 status: shipped-with-1.8.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
@@ -16,7 +16,11 @@ as-built text, and the criterion added with it, were merged on 2026-09-28 from t
 `run-of-record-1-10-0`; they cite the tree at `0f018460`, as do the refreshed citations in that
 requirement's first paragraph. The amendment dated 2026-09-30 to REQ-PROVE-021 comes from the spec delta of
 `docs/plans/013-optimization-sweep-02.md` (D), merged at the Prove phase of its run; it cites the tree at `b855876a`
-and is not in a release yet.
+and is not in a release yet. The amendments dated 2026-09-30 to REQ-PROVE-003, REQ-PROVE-004 and REQ-PROVE-005 come
+from the spec delta of `docs/plans/013-optimization-sweep-03.md` (D) and the units `sw18-codex-rules-leave-shared-charter`
+and `sw17-touchpoints-as-shared-skills`, merged in the same run's second spec-merge pass. They cite the tree at
+`cdfaa723`, except the figure REQ-PROVE-004 takes from `sw17-touchpoints-as-shared-skills`, which was not on that
+tree yet and is read at its lane, branch `p17s2-sw17` at `a70e58f3`. They are not in a release yet.
 
 ## Intent
 
@@ -72,6 +76,68 @@ to a nested `AGENTS.md`; every other rule projects as a skill instead.
 - GIVEN `on-demand` with codex selected WHEN emission runs THEN the appendix holds only floor-class
   rules and its omission notice (`:332-336`) names zero rules, or names each beside a skill path.
 
+Amended 2026-09-30 (`docs/plans/013-optimization-sweep-03.md` § Spec delta D, unit
+`sw18-codex-rules-leave-shared-charter`, integrated as `666dd70e`, `d0ee2236` and `cdfaa723`; cited at `cdfaa723`).
+The appendix no longer goes into the shared root `AGENTS.md`. It goes into a root `AGENTS.override.md`
+(`CODEX_AGENTS_OVERRIDE_FILE`, `src/adapters/codex.ts:101-123`), which Codex reads instead of `AGENTS.md` and no other
+supported client reads. In a fixture holding both files, codex-cli 0.155.1 quoted a marker placed only in the
+override, and a second run with a marker in each file quoted only the override's; Claude Code 2.1.285, cursor-agent
+2026.09.28 and Copilot CLI 1.0.89 did not quote it, and all four quoted a control marker in `AGENTS.md`
+(`.stamity/runs/2026-09-30_optimization-sweep/record.md:112-116`). The shared `AGENTS.md` is the core charter for
+every selection, so its bytes are the same with and without Codex (REQ-PROVE-005).
+
+- **What the override holds.** `AGENTS.md` as this sync writes it, then the appendix (`src/adapters/codex.ts:456-481`,
+  `:1185-1199`). With no import decision for `AGENTS.md`, or `replace`, that is the core charter render, and nothing
+  is read from disk. Under `supplement` it is the operator's text before and after the managed block, kept around
+  this run's charter; under `skip` it is the operator's file as it stands (`:512-568`). It is read at plan time, so
+  `check` reports the override as drift when the operator's text in `AGENTS.md` changed after the last sync, and the
+  next sync carries the change across. The engine's own old block is never read back, so an appendix an earlier
+  version left in `AGENTS.md` is dropped at the first sync.
+- **Ownership.** The override is a Codex-owned infra row, written whole with no managed block (`:306-307`,
+  `:466-478`). An operator's own root `AGENTS.override.md` is an unmanaged collision: sync refuses it without
+  `--force`, and takes a verified `.bak` with it (sign-off at 14:49Z, `record.md:500-504`). Deselecting Codex reclaims
+  the override. The Codex plugin does not carry it; `stamity plugin setup` writes it
+  (`scripts/plugins/clients/codex.mjs:90-95`).
+- **A refused source.** Before the override repeats any operator bytes from `AGENTS.md`, the gates the merge lane
+  puts on kept operator bytes apply: a symbolic link or a shared hard link is refused unread, and the repeated text is
+  deny-scanned (`readRepublishSource` and `republishDenyRefusal` in `src/merge/safeWrite.ts`, called at
+  `src/adapters/codex.ts:549-562`). A refusal leaves the core render in the planned text and rides on the row as
+  `sourceRefusal` (`src/types/content.ts:98-116`). The plan states it as a collision on `AGENTS.override.md`, of class
+  `linked-source` or `deny-scan`, marked `refusedAtSource` (`src/cli/commands/sync/engine.ts:122-151`, `:313-323`),
+  so `check` and `sync` agree. No writer lands the row, forced or not (`engine.ts:770-774`;
+  `src/cli/commands/init/apply.ts:325-328`). The remedy named is the source's: repair `AGENTS.md`, so it is a regular,
+  unlinked file with no flagged text, then sync. Neither `check` nor a sync tells the operator to move the override
+  aside or to re-run with `--force` (`src/cli/commands/check.ts:1444-1471`; `src/cli/commands/sync.ts:100-128`).
+  While the file on disk is still the engine's last write (a regular, unshared file whose hash matches the recorded
+  row), the refused run keeps the override's ledger row, so the sync after the repair updates the file and a Codex
+  deselection reclaims it (`engine.ts:569-598`, `:806-811`; sign-offs at 15:40Z and 16:05Z, `record.md:556-564`,
+  `:571-576`).
+- **Budget.** The 32 KiB shaper applies to the override. An override still over budget after shaping, because the
+  operator text it repeats is long, gets a warning naming its size (`src/adapters/codex.ts:479-480`, `:597-609`). The
+  omission notice stays in the file that dropped a rule, and the run's warning names the override as that file
+  (`:587-595`, `:1377-1388`).
+- **As built, where the delta differed:** the delta left the location to the live check. Candidate (a), the root
+  override, passed; candidate (b), `developer_instructions` in `.codex/config.toml`, was not needed. The delta's
+  expand/contract landed the Codex file first and removed the shared copy after; the build does both in one sync, and
+  rollback is a re-sync at the prior version. The delta said nothing about the operator's text in `AGENTS.md`, the
+  collision lane, the refused source or the kept ledger row; each comes from the sign-offs named above.
+
+- GIVEN sync with Claude only, and with Claude plus Codex, WHEN the root `AGENTS.md` files are compared THEN they are
+  byte-identical, and with Codex a root `AGENTS.override.md` holds that file's text followed by the appendix.
+- GIVEN Codex selected THEN the floor-class rules exist in exactly one Codex-only root file, `AGENTS.override.md`.
+- GIVEN a symlinked `AGENTS.md` under `skip`, a hard-linked one under `supplement`, or one under `supplement` whose
+  operator text carries a block-severity pattern, WHEN sync plans THEN `AGENTS.override.md` is a collision of class
+  `linked-source` or `deny-scan`, the file is byte-unchanged after a sync and after a forced sync, and `check` names
+  the repair of `AGENTS.md`, not moving the override aside and not `--force`.
+- GIVEN that refused run and then a repaired `AGENTS.md` WHEN sync runs without `--force` THEN it updates the
+  override and takes no `.bak`.
+- GIVEN an operator's own root `AGENTS.override.md` WHEN sync runs THEN it refuses without `--force`, and takes a
+  verified `.bak` with it.
+- `judgment: maintainer` · GIVEN a live Codex session on a fixture WHEN asked for the first line of the secrets rule
+  THEN it quotes it. (The live check quoted a marker placed in the override, not this line.)
+- Tests: `test/emit/sharedCharterIdentity.test.ts`, `test/adapters/codex.test.ts`,
+  `test/ci/pluginPackages.codex.test.ts`, `test/emit/syncDriftProof.e2e.test.ts`.
+
 ### REQ-PROVE-004 — Codex skills-list budget
 
 Emission sums `name` plus `description` characters over every projected skill when codex is selected
@@ -88,6 +154,16 @@ whose text is the codex adapter's `VALIDATION_ERROR` message.
   `codexSkillsListChars`/`codexSkillsListCap` (`src/emit/capabilityMatrix.ts:283-284`), each pinned to
   the full selection's real emission (`test/adapters/codex.test.ts:1710-1747`).
 
+Amended 2026-09-30 (unit `sw17-touchpoints-as-shared-skills`, in a fix round and not on the package head at this
+merge). The text above names no measured figure, and its citations have moved. The measured figure is the constant
+`codexSkillsListChars` in `LIVE_ALWAYS_ON`, beside the cap `CODEX_SKILLS_LIST_BUDGET_CHARS`. At `cdfaa723` it reads
+5,570 characters over 17 skills, the 8 content skills and the 9 projected rules: 70% of the cap
+(`src/emit/capabilityMatrix.ts:379-385`; the refusal at `src/adapters/codex.ts:396-412`). The nine touchpoints ship
+as shared skills under REQ-FLOW-026 and sit in the same list, so the unit counts them in the refusal and re-measures
+the figure at 6,909 characters over 26 skills (8 content skills, 9 rules and 9 touchpoints), 86% of the 8,000 cap
+(branch `p17s2-sw17` at `a70e58f3`: `src/emit/capabilityMatrix.ts:379-384`, `src/adapters/codex.ts:394-415`). The
+full-selection pin in `test/adapters/codex.test.ts` holds the constant to the real emission.
+
 ### REQ-PROVE-005 — Always-on composite re-measured
 
 `composeAlwaysOnLoad(tool, plan, mode)` counts, per client, the charter plus only the rules it still
@@ -98,6 +174,29 @@ loads unconditionally under that mode (`src/content/charter.ts:307-320`); `ALWAY
 - GIVEN `on-demand` WHEN the corpus suite runs THEN every ceiling EQUALS the computed composite, and
   fails in both directions — over is a slice nobody authorised, under a saving nobody wrote down
   (`test/corpus/invariants.test.ts:588-603`); the matrix names each client's mode.
+
+Amended 2026-09-30 (`docs/plans/013-optimization-sweep-03.md` § Spec delta D, unit
+`sw18-codex-rules-leave-shared-charter`; cited at `cdfaa723`). The shared root `AGENTS.md` is the same file with and
+without Codex (REQ-PROVE-003, amended 2026-09-30), so the two shared-byte constants hold one figure:
+`ALWAYS_ON_SHARED_BYTES_WITH_CODEX` and `ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX` both read 5,276 bytes on the
+cross-client golden (`src/content/charter.ts:301`, `:323`). The appendix's bytes are Codex's own, counted in Codex's
+row as a third constant, `ALWAYS_ON_CODEX_OVERRIDE_BYTES`, which reads 25,306: the old with-Codex figure, byte for
+byte (`:325-342`). The line ceilings hold, cursor 95 · claude 95 · copilot 95 · codex 407 (`:157-216`), and
+`composeAlwaysOnLoad` is at `:381-394`. The corpus suite requires one root `AGENTS.md` figure in the golden, equal to
+both shared constants, and every `AGENTS.override.md` figure equal to the third. The capability page's guard refuses
+two shared figures that differ, and an override figure not larger than the shared one
+(`src/emit/capabilityMatrix.ts:521-553`), and the page carries the override's bytes in Codex's row (the input, `codexOverrideBytes`, at `:363-368`). A
+real four-client init at the unit's build measured the shared file at 5,379 bytes with Codex and 5,379 without (`cmp`
+identical) and the override at 25,409 (`.stamity/runs/2026-09-30_optimization-sweep/record.md:545-546`); a real init
+pins a different CLI version into the charter than the golden does, so its bytes differ from the golden's. The
+figures in the paragraph above read "24,904 shared bytes with codex against 5,192 without"; the constants named here
+are the figures of record, and a charter edit moves them.
+
+- GIVEN the cross-client golden WHEN the corpus suite runs THEN it records one root `AGENTS.md` byte figure, equal to
+  both shared constants, every `AGENTS.override.md` figure equals `ALWAYS_ON_CODEX_OVERRIDE_BYTES`, and every ceiling
+  equals the computed composite (`test/corpus/invariants.test.ts`).
+- GIVEN a disclosure whose two shared figures differ, or whose override figure is not larger than the shared one,
+  WHEN the capability page renders THEN it refuses (`test/emit/capabilityMatrix.test.ts`).
 
 ### REQ-PROVE-006 — Charter carries the ai-evals floor in one line
 

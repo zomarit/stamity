@@ -14,8 +14,10 @@ The requirement text comes from the `## Spec delta` sections of `docs/plans/013-
 `docs/plans/013-optimization-sweep-03.md` (A), merged on 2026-09-30 at the Prove phase of the run
 `.stamity/runs/2026-09-30_optimization-sweep/`. It is measured against the built code: where a delta and the code
 differed, the text below states what the code does, and a line headed "As built" says what moved. Every `path:line`
-below was read at the package head `b855876a`. Two requirements, REQ-FLOW-022 and REQ-FLOW-026, belong to units still
-building when this merge ran; their headings stand, and their text merges in the run's second spec-merge pass.
+below was read at the package head `b855876a`, except in REQ-FLOW-022 and REQ-FLOW-026. Those two were merged in the
+run's second spec-merge pass, the same day. REQ-FLOW-022 cites the package head `cdfaa723`. The unit behind
+REQ-FLOW-026 was still in a fix round and not on the package head then, so that requirement cites the unit's lane,
+branch `p17s2-sw17` at `a70e58f3`, and its line numbers move when the unit integrates.
 
 ## Intent
 
@@ -421,8 +423,72 @@ context budget allows the orchestrator's own bounded read on the named-target sh
 
 ### REQ-FLOW-022 — First-run output matches what setup did
 
-Pending: unit `sw10-first-run-output` was still building when this merge ran. Its text merges in the run's second
-spec-merge pass; until then the draft is `docs/plans/013-optimization-sweep-03.md` § Spec delta A.
+From `docs/plans/013-optimization-sweep-03.md` § Spec delta A, the unit `sw10-first-run-output` (integrated at
+`84a87300` and `1f0c0f2f`) and its sign-offs; every `path:line` is read at `cdfaa723`.
+
+- **The file count.** The init panel counts distinct paths, not ledger rows: the generated paths the run wrote, the
+  manifest, and the state-directory `.gitkeep` files the run created. It says when `.gitignore` changed, counts a path
+  several clients share (`AGENTS.md`) once, and reports a skipped path as left alone
+  (`src/cli/commands/init/panel.ts:312-343`). The keep files come from the report field `createdKeeps`, probed before
+  the scaffold runs; the appended `.gitignore` entries come from `gitignoreAdded`, the return value of
+  `ensureGitignoreEntry`, which is empty under a dry run (`src/cli/commands/init/apply.ts:131-172`). A dry run prints
+  the same count in the future tense (`panel.ts:333-335`; `src/cli/commands/init.ts:777`).
+- **`check`'s manifest row** names the managed paths, then the ledger rows across the clients:
+  `<paths> managed path(s) (<rows> ledger rows across <n> client(s))` (`src/cli/commands/check.ts:222-232`).
+  `docs/troubleshooting.md:32` quotes it.
+- **A defaulted client set says so.** When init defaulted the tools, the panel and the dry run print
+  `clients: <tools> (the default — no other client's files were found; <route>)`. On a dry run the route is
+  `add more with --tools claude,cursor,copilot,codex`. After a live init it is the pinned
+  `config set tools claude,cursor,copilot,codex`, then the pinned `sync` (`panel.ts:379-402`, called at `:755` and at
+  `init.ts:775`). A detected or flagged client set prints no such line, and a client list carried from a predecessor
+  setup is not called the default (`init.ts:595-599`).
+- **Codex next steps** carry the two trust steps that are the operator's, read from the adapter's `HOOK_TRUST_STEPS`:
+  project trust in `~/.codex/config.toml` before `codex`, and the `/hooks` review after it. The feature flag has no
+  operator step, because setup writes it (`panel.ts:167-191`; `src/adapters/codex.ts:183-266`). The
+  `.codex/hooks.json` description and the `.codex/config.toml` comment keep their bytes, so Codex asks for no new hook
+  trust.
+- **Copilot next steps** name the coding agent's setup workflow and when GitHub runs it, and only when the live run
+  wrote that file. The same step reaches the `nextSteps` of `init --json` (`panel.ts:404-437`; `init.ts:1212`).
+- **The `.gitignore` disclosure** names exactly the entries the run appended, each with a neutral reason, and the
+  panel prints no line when none was appended. An entry with no recorded reason reads
+  `machine-local state this setup writes`. The words "the credential file this setup uses" appear only when an MCP
+  server is configured and `.env.mcp` is among the entries (`panel.ts:624-669`, `:762-773`). A dry run names the whole
+  required set, "wherever it lacks them" (`init.ts:779-788`).
+- **The update notice** reads `Update available: <current> -> <new>. To move: npx -y <name>@<new> sync. To stay on
+  <current>, do nothing.` The move command is the pinned call, both halves name the one normalized version, and it
+  never says `@latest` (`src/cli/notice/updateNotice.ts:257-294`). A package with no npm channel is `private`, so it
+  never reaches the notice.
+- **`sync --help`** names the exact-version form with a `<version>` placeholder. A package with no npm channel keeps
+  its line: install the newer release into the project, then `npx --no <name> sync`
+  (`src/cli/commands/sync.ts:63-74`).
+- **The Copilot setup workflow follows the project's pins.** `node-version` comes from `.nvmrc`, then
+  `.node-version`, then the lower bound `engines.node` names, at the precision it names it (`22` gives `22`, `>=22.12`
+  gives `22.12`), else `lts/*`; a value that is not a safe version string is not copied. The `actions/checkout` and
+  `actions/setup-node` refs come from the first `uses:` of each in the project's own `.github/workflows/`, read in name
+  order, a SHA pin with its trailing comment, else `@v5`. The scan skips the emitted workflow by its own file name, so
+  a second sync writes the same bytes (`src/adapters/copilot.ts:538-590`, `:613-620`, `:665-756`). A repository with
+  no Node toolchain gets a checkout only, and the file says so (`:549-555`).
+
+- **As built, where the delta differed:**
+  - The delta said every printed count equals the files written. The count covers the files the run put on disk other
+    than `.gitignore`, which the panel names as changed instead of counting.
+  - The cell's default-clients line said `add more with --tools …` in both modes. After a live init a second `init`
+    refuses without `--force`, so the live panel names the config `tools` key and a sync (ledger `build/131`, signed
+    off at 14:59Z); the dry run keeps `--tools`.
+  - The cell's census amendment named `ENGINE_EMITTED_WORKFLOWS` as the scan's skip list. The built scan skips the
+    base name of Copilot's own `COPILOT_SETUP_STEPS_PATH` (sign-off at 14:40Z), so one file name has two sources:
+    that constant and `ENGINE_EMITTED_WORKFLOWS` (`src/detect/repoAnalyzer.ts:305`).
+  - The cell gave `InitApplyReport` one new field. The build added two, `createdKeeps` and `gitignoreAdded`
+    (sign-off at 14:40Z), because a count taken from the created directories undercounts.
+  - The plan's decision 1 spelled the move as `npx <package>@<version> sync`. The built notice renders the pinned
+    call, `npx -y <name>@<version> sync`, as the cell's census amendment says.
+  - The Copilot workflow step also reaches `init --json`, and prints on no dry run (`review/138`, `review/141`). The
+    banner's version line prints the normalized version, not the raw registry answer (`review/142`).
+- **Proof:** `test/cli/commands/initPanel.test.ts`, `test/cli/commands/init.test.ts`,
+  `test/cli/commands/initApply.test.ts`, `test/cli/commands/check.test.ts`, `test/cli/notice/updateNotice.test.ts`,
+  `test/cli/commands/sync.test.ts`, `test/adapters/copilot.test.ts`; the Codex pins in `test/adapters/codex.test.ts`
+  and the goldens in `test/emit/crossClientGoldens.test.ts`, green with no Codex byte moved; `docs/getting-started.md`,
+  `docs/troubleshooting.md`; QA.
 
 ### REQ-FLOW-023 — Copilot's writing agents load the charter
 
@@ -467,7 +533,7 @@ Dropping them needs a decision this run did not take: the engine owns the whole 
 with an empty list collides with a hand-added row, and dropping the key changes the settings-ownership contract
 (ledger `build/124`, decision needed, answered on 2026-09-30 at 14:29Z: deferred). The rows are harmless, since the
 client already allows reads inside the working directory. A follow-up row at the run's close names both readings for
-the maintainer.
+the maintainer; the plan carries it under Follow-ups (`docs/plans/013-optimization-sweep-03.md`).
 
 - **Proof:** `test/corpus/recordWrites.test.ts` (the Frame text, and a line lint over `content/` that fails on a shell
   redirect, heredoc or `tee` aimed under `.stamity/`); must-holds `work-proof-block-fields` and the floor
@@ -475,8 +541,56 @@ the maintainer.
 
 ### REQ-FLOW-026 — The touchpoints ship as shared skills, so Codex gets them
 
-Pending: unit `sw17-touchpoints-as-shared-skills` was still building when this merge ran. Its text merges in the
-run's second spec-merge pass; until then the draft is `docs/plans/013-optimization-sweep-03.md` § Spec delta A.
+From `docs/plans/013-optimization-sweep-03.md` § Spec delta A, the unit `sw17-touchpoints-as-shared-skills`, its
+sign-offs and its live check. The unit was in a fix round and not on the package head when this merged: every
+`path:line` below reads its lane, branch `p17s2-sw17` at `a70e58f3`. At `cdfaa723` Codex still receives no touchpoint
+body (`CODEX_COMMANDS_DIR` is `null`, `src/adapters/codex.ts:99`).
+
+- When Codex or Cursor is selected, sync emits each of the nine touchpoint bodies once, as
+  `.agents/skills/st-<id>/SKILL.md`, with a companion `.agents/skills/st-<id>/agents/openai.yaml` that sets
+  `policy.allow_implicit_invocation: false` (`src/emit/skillsProjection.ts:522-593`). The skill's head has three
+  keys: `name`, `description` and `disable-model-invocation: true` (`:595-616`). Codex and Cursor both emit the rows
+  and co-own each file, so it survives the deselection of one of them (`src/adapters/codex.ts:77-97`, `:432-434`;
+  `src/adapters/cursor.ts:70-104`).
+- Codex starts one as `$st-<id>`, and Cursor as `/st-<id>`. Init's Codex steps say `invoke one as $st-<id>` and
+  `then type: $st-onboard`, never a slash (`src/cli/commands/init/panel.ts:167-189`). Codex's `command-surface`
+  capability row names the tree, the companion key and what was measured (`src/adapters/codex.ts:352-363`).
+- Claude keeps its `.claude/commands/` files, and its native skills copy carries no touchpoint. Copilot alone gets no
+  shared touchpoint, and its prompt files stay. With Codex or Cursor beside it, Copilot lists the nine as project
+  skills beside its prompt files and keeps them out of the model's own skills list; its `command-surface` row
+  declares the double listing (`src/adapters/copilot.ts:165-175`).
+- Sync stops writing `.cursor/skills/st-<id>/`. The rows a 1.10.0 install recorded there are planned by nobody, so the
+  reclaim sweep removes those files and nothing else under `.cursor/` (`src/adapters/cursor.ts:84-90`).
+- Codex's skills-list check counts the touchpoints: the full selection measures 6,909 characters over 26 skills
+  against the 8,000 cap (`codexSkillsListChars`, `src/emit/capabilityMatrix.ts:379-384`; the refusal at
+  `src/adapters/codex.ts:394-415`; REQ-PROVE-004).
+- The Codex plugin does not carry the touchpoints. They stay repository-owned, `stamity plugin setup` writes them into
+  the shared tree, and the packager drops a command-class row there (`scripts/plugins/clients/codex.mjs:25-30`,
+  `:50-52`, `:84-89`; sign-off at 15:56Z, option (b)). The Cursor plugin carries them under `skills/` as class
+  `command`, without the Codex companion (`scripts/plugins/clients/cursor.mjs:63-73`).
+
+- **Live check** (2026-09-30T15:56Z, a fixture set up by the lane's `init -y --tools codex,cursor,copilot`):
+  codex-cli 0.155.1 loaded the body on `$st-work`; cursor-agent 2026.09.28 loaded it on `/st-work`; Copilot CLI
+  1.0.89 listed the nine under project skills, and its model-visible skills list omitted them
+  (`.stamity/runs/2026-09-30_optimization-sweep/record.md:118-122`).
+- **As built, where the delta differed:**
+  - The delta relied on `disable-model-invocation: true` alone. Codex takes the rule from the `agents/openai.yaml`
+    companion, which the build adds.
+  - The delta's criterion counted the rows with Codex selected. They also land with Cursor alone, which reads the
+    shared tree, and never for Claude or Copilot alone.
+  - The delta did not say where the Codex plugin puts the touchpoints. The unit first packaged them as plugin skills
+    (26 folders against the pinned 17) and stopped; the sign-off kept them repository-owned.
+  - Whether a plain ask that names no touchpoint can still start one on Codex is unmeasured, and the capability row
+    says so (`review/156`, signed off at 16:14Z).
+- **Expand/contract:** the shared rows are added and the `.cursor/skills/st-<id>/` rows reclaimed in the same sync,
+  which the live Cursor check gated. Rollback is a re-sync at the prior version. The Codex cells of the parity table in
+  `docs/specs/orchestrator-context.md` still say no `/st-work` body is emitted, which is true at `cdfaa723`; they
+  change when the unit integrates.
+- **Proof:** `test/emit/touchpointSkills.test.ts`, `test/emit/skillsProjection.test.ts`,
+  `test/adapters/codex.test.ts`, `test/adapters/cursor.test.ts`, `test/adapters/copilot.test.ts`,
+  `test/cli/commands/initPanel.test.ts`, `test/cli/commands/syncEngine.test.ts` (the 1.10.0 reclaim case),
+  `test/ci/pluginPackages.codex.test.ts`, `test/ci/pluginPackages.cursor.test.ts`, `test/cli/commands/plugin.test.ts`,
+  `test/docsPages.test.ts`; the live check; QA.
 
 ## Acceptance criteria
 
@@ -689,6 +803,27 @@ exists, it is the normative record for that requirement.
   `date` first.
 - GIVEN any banner THEN each printed byte figure equals the byte length of the index lines it printed.
 
+**REQ-FLOW-022**
+
+- GIVEN init for all four clients WHEN its output is compared with the files on disk THEN the printed count equals the
+  files the run wrote other than `.gitignore`, and each path it reports writing exists.
+- GIVEN two clients that share `AGENTS.md` WHEN `check` runs THEN its manifest row names fewer managed paths than ledger
+  rows, and names both clients.
+- GIVEN an install pinned at 1.9.1 and a registry answering 1.10.0 WHEN the notice prints THEN it contains
+  `npx -y <name>@1.10.0 sync` and a way to stay, and no `@latest`. GIVEN the registry answer `v1.3.0` THEN both halves
+  of the banner name `1.3.0`.
+- GIVEN a repository with `engines.node: "22"` and `actions/checkout@v7` in its own workflow WHEN setup emits the
+  Copilot workflow THEN it carries `node-version: "22"` and `actions/checkout@v7`. GIVEN the emitted workflow as the
+  repository's only workflow WHEN sync runs again THEN the file is byte-identical.
+- GIVEN `init -y` with no client traces THEN the panel names claude as the default with the pinned `config set tools`
+  route, and the dry run names `--tools`. GIVEN a detected or flagged client set THEN no default line prints.
+- GIVEN codex selected THEN init's next steps list project trust before `codex` and the `/hooks` review after it, and
+  `.codex/hooks.json` and `.codex/config.toml` are byte-identical to the emission before the unit.
+- GIVEN a `.gitignore` that already covers `.env.mcp` THEN the panel names only the entries the run appended. GIVEN no
+  MCP server THEN no line says "the credential file this setup uses".
+- GIVEN a live `init -y --tools copilot` THEN the panel and the `nextSteps` of `--json` name the setup workflow. GIVEN a
+  dry run THEN neither does.
+
 **REQ-FLOW-024**
 
 - GIVEN an inbox row whose `file:line` the run's change fixes, and which the run names as fixed, WHEN the close runs THEN
@@ -708,6 +843,21 @@ exists, it is the normative record for that requirement.
 - GIVEN `content/commands/st-work.md` WHEN its Frame step is read THEN it names the file tools for `record.md`,
   `plan.md`, reports and the inbox, and forbids a shell redirect, a heredoc and `cat >`.
 
+**REQ-FLOW-026**
+
+- GIVEN sync with Codex selected THEN nine `.agents/skills/st-<id>/SKILL.md` files exist, each with an
+  `agents/openai.yaml` that turns implicit invocation off, and Codex's skills-list total stays under 8,000.
+- GIVEN tools `[claude, cursor]` THEN no `.cursor/skills/st-<id>/` and no `.claude/skills/st-<id>/` exists, and
+  `.claude/commands/st-<id>.md` does.
+- GIVEN sync on a tree whose ledger carries 1.10.0's `.cursor/skills/st-<id>/` files THEN they are removed, and every
+  other file under `.cursor/` is byte-identical.
+- GIVEN Copilot selected beside Codex or Cursor THEN its capability disclosure declares the double listing.
+- GIVEN a Codex plugin build THEN no touchpoint ships in the plugin, and the content skills still map under `skills/`.
+- GIVEN tools `[codex]` WHEN init prints its next steps THEN they name `$st-onboard` and `$st-<id>`, and never
+  `/st-onboard`.
+- `judgment: maintainer` · GIVEN a live Codex session WHEN the user types `$st-work` THEN the body loads; GIVEN a live
+  Cursor session WHEN the user types `/st-work` THEN it loads there too.
+
 ## References
 
 - `docs/plans/013-optimization-sweep-01.md` — the measures and the method that found these items.
@@ -719,8 +869,10 @@ exists, it is the normative record for that requirement.
 - `source`: `src/shared/cliCall.ts`, `src/emit/substitution.ts`, `src/cli/kit/packageName.ts`,
   `scripts/plugins/tokens.mjs`, `src/types/markers.ts`, `src/detect/repoAnalyzer.ts`, `src/detect/verificationGates.ts`,
   `src/cli/commands/init/plan.ts`, `src/cli/commands/check.ts`, `src/mcp/env.ts`, `src/cli/commands/sync/engine.ts`,
-  `src/learnings/validation.ts`, `src/learnings/store.ts`, `src/runs/ledgerStore.ts`, and the command, agent and skill
-  bodies under `content/`.
+  `src/learnings/validation.ts`, `src/learnings/store.ts`, `src/runs/ledgerStore.ts`, `src/cli/commands/init/panel.ts`,
+  `src/cli/commands/init/apply.ts`, `src/cli/notice/updateNotice.ts`, `src/adapters/copilot.ts`, `src/adapters/codex.ts`,
+  `src/adapters/cursor.ts`, `src/emit/skillsProjection.ts`, `scripts/plugins/clients/codex.mjs`,
+  `scripts/plugins/clients/cursor.mjs`, and the command, agent and skill bodies under `content/`.
 
 ## Risks
 
@@ -733,6 +885,8 @@ exists, it is the normative record for that requirement.
   and Codex records trust against that file's hash (REQ-FLOW-002). The 1.11.0 release notes say so.
 - REQ-FLOW-013 and REQ-CTX-017 moved eval Expected blocks; each moved block carries its reviewed disposition in
   `evals/SET-v7.md`.
+- With Codex or Cursor selected beside Copilot, an operator sees the nine touchpoints twice in Copilot: as prompt files
+  and as project skills (REQ-FLOW-026). The model's own list holds them once.
 
 ## Concerns
 
@@ -748,3 +902,10 @@ exists, it is the normative record for that requirement.
   `detected.packageManager` (deferred).
 - REQ-FLOW-012 leaves the method for counting source lines to the Source tree probe the command already runs.
 - REQ-FLOW-025 ships without its allowlist sentence; the follow-up row names both readings.
+- REQ-FLOW-022: the Copilot workflow's bun branch still tells the reader to "add its setup step here" in a file that
+  says edits are overwritten (`src/adapters/copilot.ts:606-608`); the unit fixed only the non-Node branch. The file
+  name the pin scan skips has two sources (`COPILOT_SETUP_STEPS_PATH` and `ENGINE_EMITTED_WORKFLOWS`). That `check`
+  reports the workflow as drifted after the project moves a pin, until the next sync, follows from `check` re-planning
+  live and was not measured.
+- REQ-FLOW-026: a command restricted with `tools:` to one client would still reach every client that reads the shared
+  tree. No shipped command uses `tools:` (the unit's deferral M-1).
