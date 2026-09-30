@@ -335,19 +335,21 @@ and `check` is what catches it drifting from what the engine would emit today.
 
 ### What not to commit
 
-Apart from each run's `reports/` folder, which ignores itself, one file stays out of the
-repository: `.env.mcp`, which holds MCP credentials. It is the single entry `init` adds to your
-`.gitignore` for you.
+Apart from each run's `reports/` folder, which ignores itself, two things stay out of the
+repository, and `init` and `sync` add their `.gitignore` lines for you:
+
+- `.env.mcp`, which holds MCP credentials.
+- The review gate's runtime state: `.stamity/review-gate.json`, its `.lock` and its `.tmp-*`
+  files. A run writes them, and they belong to the run that wrote them. When the counter is
+  missing, the review gate is open.
+
+A line your `.gitignore` already covers, with `.stamity/` or `.env*` for example, is not added
+twice. A file you committed before the line existed stays tracked: setup never touches the git index.
 
 Because everything else is committed, a second checkout of this repository arrives with the
-whole setup in place and that one file missing. Placing it is exactly what
-`stamity worktree setup` does when it creates one.
-
-`review-gate.json` is the one path that is neither committed nor ignored. A run writes it,
-nothing commits it, and nothing ignores it. Leave it in that state. It is runtime state for the
-run that wrote it, and its absence means the review gate is open. A path that is
-untracked and un-ignored is one `stamity worktree setup` refuses to carry across, so a review
-round counted in one worktree never gates another.
+whole setup in place and only those files missing. Placing `.env.mcp` is exactly what
+`stamity worktree setup` does when it creates one. It refuses to carry the review gate's state
+across, so a review round counted in one worktree never gates another.
 
 ## Keeping your setup current
 

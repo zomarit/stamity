@@ -170,6 +170,31 @@ export const GENERATED_DIR = `${STATE_DIR}/generated`;
 /** Per-tool hook script root: scripts land under `<here>/<tool>/<file>`. */
 export const HOOKS_GENERATED_DIR = `${GENERATED_DIR}/hooks`;
 
+// ── Review-gate runtime state ────────────────────────────────────
+//
+// Here, at the bottom of the tree, because three layers name these paths and
+// none of them may import another: the hook builder that writes them
+// (`../hooks/scripts.ts`, which re-exports the state file), the gitignore lane
+// that keeps them out of a commit (`../mcp/env.ts`), and the worktree lane that
+// refuses to carry them (`../worktree/policy.ts`). The generated gate spells
+// the lock and temp names inline (`STATE_FILE + ".lock"`, `".tmp-"`); these
+// constants mirror those bytes rather than feed them.
+
+/**
+ * Where the review gate's round counter lives: beside the other RUNTIME state
+ * under the state directory, and deliberately not under the engine's generated
+ * tree. Generated output is rewritten wholesale by a sync, so a counter kept
+ * there would be deleted mid-run — and a gate whose counter vanishes re-opens
+ * a loop that had already converged, or forgets a cap it had already reached.
+ */
+export const REVIEW_GATE_STATE_FILE: string = `${STATE_DIR}/review-gate.json`;
+
+/** Suffix of the gate's lock: a DIRECTORY at `<state file>.lock` holding an `owner` file. */
+export const REVIEW_GATE_LOCK_SUFFIX = ".lock";
+
+/** Infix of the gate's publish temp files: `<state file>.tmp-<16 hex>`, renamed over the state file. */
+export const REVIEW_GATE_TEMP_INFIX = ".tmp-";
+
 /**
  * Filename prefix on generated content artifacts the operator does not type:
  * agents, rules, hook scripts, carried learnings (`stamity-implementer.md`).

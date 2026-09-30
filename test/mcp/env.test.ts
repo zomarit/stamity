@@ -16,6 +16,7 @@ import {
   ensureEnvMcp,
   ensureGitignoreEntry,
   generateEnvMcpContent,
+  REQUIRED_GITIGNORE_ENTRIES,
   getSourceEnvMcpCommand,
   getSourceEnvMcpDisclaimer,
   parseEnvFile,
@@ -399,6 +400,16 @@ describe("getSourceEnvMcpDisclaimer", () => {
   });
 });
 
+/** The review gate's three runtime-state entries, in the order they are appended. */
+const REVIEW_GATE_TAIL = [
+  ".stamity/review-gate.json",
+  ".stamity/review-gate.json.lock",
+  ".stamity/review-gate.json.tmp-*",
+];
+
+/** Every entry an empty `.gitignore` receives, in order. */
+const REQUIRED_TAIL = [".env.mcp", ...REVIEW_GATE_TAIL];
+
 describe("ensureGitignoreEntry", () => {
   it("creates the file, then stays idempotent across repeat calls", async () => {
     const dir = repo();
@@ -420,7 +431,11 @@ describe("ensureGitignoreEntry", () => {
     await ensureGitignoreEntry(dir.dir);
 
     const content = await readFile(dir.path(".gitignore"), "utf8");
-    expect(content).toBe(`${existing}.env.mcp\r\n`);
+    // TEST CHANGE, justified (REQ-FLOW-016): the required set grew from the
+    // credential file alone to it plus the review gate's three state entries, so
+    // the appended tail is four CRLF lines, not one. The behaviour pinned here —
+    // existing bytes kept, CRLF answered with CRLF — is unchanged.
+    expect(content).toBe(`${existing}${REQUIRED_TAIL.join("\r\n")}\r\n`);
     expect(content).not.toMatch(/[^\r]\n/);
   });
 
@@ -430,7 +445,9 @@ describe("ensureGitignoreEntry", () => {
 
     await ensureGitignoreEntry(dir.dir);
 
-    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe("dist/\n.env.mcp\n");
+    // TEST CHANGE, justified (REQ-FLOW-016): four required entries now, not one;
+    // the new line still goes after the last byte, never glued onto `dist/`.
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(`dist/\n${REQUIRED_TAIL.join("\n")}\n`);
   });
 
   it("adds nothing when a broader rule already covers the file", async () => {
@@ -439,7 +456,10 @@ describe("ensureGitignoreEntry", () => {
 
     await ensureGitignoreEntry(dir.dir);
 
-    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(".env.*\n");
+    // TEST CHANGE, justified (REQ-FLOW-016): `.env.*` dominates the credential
+    // file only, so the three review-gate entries it does not cover are appended;
+    // what this case pins is that `.env.mcp` itself is NOT added beside it.
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(`.env.*\n${REVIEW_GATE_TAIL.join("\n")}\n`);
   });
 
   it("leaves an explicit negation alone rather than overriding the decision", async () => {
@@ -448,7 +468,83 @@ describe("ensureGitignoreEntry", () => {
 
     await ensureGitignoreEntry(dir.dir);
 
-    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(".env.*\n!.env.mcp\n");
+    // TEST CHANGE, justified (REQ-FLOW-016): the negation keeps `.env.mcp` out
+    // as before; the review gate's three entries, which it says nothing about, are
+    // now appended after it.
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(
+      `.env.*\n!.env.mcp\n${REVIEW_GATE_TAIL.join("\n")}\n`,
+    );
+  });
+
+  it("adds each of the four required entries exactly once across three runs", async () => {
+    const dir = repo();
+
+    await ensureGitignoreEntry(dir.dir);
+    await ensureGitignoreEntry(dir.dir);
+    await ensureGitignoreEntry(dir.dir);
+
+    const lines = (await readFile(dir.path(".gitignore"), "utf8")).split("\n");
+    for (const entry of REQUIRED_TAIL) {
+      expect(lines.filter((line) => line === entry), entry).toHaveLength(1);
+    }
+    // Literal on purpose: the exported list is what is under test, so it is not
+    // the oracle.
+    expect(REQUIRED_GITIGNORE_ENTRIES).toEqual(REQUIRED_TAIL);
+  });
+
+  it("adds nothing when the three review-gate files are already ignored in root-anchored form", async () => {
+    // This repository's own spelling (`.gitignore`), beside a `.env*` rule.
+    const dir = repo();
+    const existing =
+      ".env*\n/.stamity/review-gate.json\n/.stamity/review-gate.json.lock\n/.stamity/review-gate.json.tmp-*\n";
+    await dir.seedFiles({ ".gitignore": existing });
+
+    await ensureGitignoreEntry(dir.dir);
+
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(existing);
+  });
+
+  it.each([
+    ".stamity/",
+    "/.stamity/",
+    ".stamity/*",
+    "/.stamity/*",
+    ".stamity/**",
+    "/.stamity/**",
+    ".stamity/review-gate.json*",
+    "/.stamity/review-gate.json*",
+  ])("adds no review-gate line when %s already ignores it", async (rule) => {
+    const dir = repo();
+    const existing = `.env.mcp\n${rule}\n`;
+    await dir.seedFiles({ ".gitignore": existing });
+
+    await ensureGitignoreEntry(dir.dir);
+
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(existing);
+  });
+
+  it("leaves a negated review-gate file alone and adds only the entries it does not name", async () => {
+    const dir = repo();
+    await dir.seedFiles({ ".gitignore": ".env.mcp\n!.stamity/review-gate.json\n" });
+
+    await ensureGitignoreEntry(dir.dir);
+
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(
+      ".env.mcp\n!.stamity/review-gate.json\n.stamity/review-gate.json.lock\n.stamity/review-gate.json.tmp-*\n",
+    );
+  });
+
+  it("reads a root-anchored negation as the same decision", async () => {
+    // Appending the bare entry after `!/.stamity/review-gate.json` would win over
+    // it (the last matching line decides), which silently reverses the operator.
+    const dir = repo();
+    await dir.seedFiles({ ".gitignore": ".env.mcp\n!/.stamity/review-gate.json\n" });
+
+    await ensureGitignoreEntry(dir.dir);
+
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(
+      ".env.mcp\n!/.stamity/review-gate.json\n.stamity/review-gate.json.lock\n.stamity/review-gate.json.tmp-*\n",
+    );
   });
 
   it.skipIf(process.platform === "win32")(

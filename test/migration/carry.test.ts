@@ -730,7 +730,7 @@ describe("carryPredecessorAssets", () => {
     ).toBe(bytesBefore);
   });
 
-  it("keeps the credential file byte-exact and adds its ignore rule exactly once", async () => {
+  it("keeps the credential file byte-exact and adds each ignore rule exactly once", async () => {
     const state = await seedFullPredecessorRepo();
     const repo = getRepo();
     const credentials = await readFile(repo.path(".env.mcp"), "utf8");
@@ -740,6 +740,11 @@ describe("carryPredecessorAssets", () => {
     expect(await readFile(repo.path(".env.mcp"), "utf8")).toBe(credentials);
     const firstIgnore = await readFile(repo.path(".gitignore"), "utf8");
     expect(firstIgnore.split(/\r?\n/).filter((line) => line.trim() === ".env.mcp")).toHaveLength(1);
+    // REQ-FLOW-016: every caller of the gitignore lane inherits the review
+    // gate's three entries, once each.
+    for (const entry of [".stamity/review-gate.json", ".stamity/review-gate.json.lock", ".stamity/review-gate.json.tmp-*"]) {
+      expect(firstIgnore.split(/\r?\n/).filter((line) => line.trim() === entry), entry).toHaveLength(1);
+    }
 
     // Idempotent: a second carry appends nothing.
     await carryPredecessorAssets(repo.dir, state, { dryRun: false, now: NOW });
@@ -852,6 +857,9 @@ describe("carryPredecessorAssets — the credential file", () => {
     // and the publish leaves no temp file behind.
     expect((await readdir(root)).toSorted()).toEqual([".env.mcp", ".gitignore"]);
     expect((await readFile(join(root, ".gitignore"), "utf8")).split(/\r?\n/)).toContain(".env.mcp");
+    expect((await readFile(join(root, ".gitignore"), "utf8")).split(/\r?\n/)).toEqual(
+      expect.arrayContaining([".stamity/review-gate.json", ".stamity/review-gate.json.lock", ".stamity/review-gate.json.tmp-*"]),
+    );
   });
 
   it.skipIf(process.platform === "win32")(
@@ -951,6 +959,9 @@ describe("carryPredecessorAssets — the credential file", () => {
     expect(await readFile(destination, "utf8")).toBe(CREDENTIALS);
     // The ignore rule is the half of the carry that still runs on the skip path.
     expect((await readFile(join(root, ".gitignore"), "utf8")).split(/\r?\n/)).toContain(".env.mcp");
+    expect((await readFile(join(root, ".gitignore"), "utf8")).split(/\r?\n/)).toEqual(
+      expect.arrayContaining([".stamity/review-gate.json", ".stamity/review-gate.json.lock", ".stamity/review-gate.json.tmp-*"]),
+    );
   });
 
   it.skipIf(process.platform === "win32")(

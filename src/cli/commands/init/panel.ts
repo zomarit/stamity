@@ -499,10 +499,18 @@ function noticeLines(report: InitApplyReport): string[] {
  * empty set would be noise.
  */
 export function gitignoreLine(dryRun: boolean, gitAvailable = true): string {
-  const tense = dryRun ? "would be added to" : "was added to";
+  const tense = dryRun ? "would be added to" : "were added to";
+  const where = dryRun ? "wherever it lacks them" : "wherever it lacked them";
+  // Every entry the lane writes (`REQUIRED_GITIGNORE_ENTRIES`, `../../../mcp/env.ts`)
+  // is named here, and `test/cli/commands/initPanel.test.ts` checks this line
+  // against that list: an entry added there without reaching this line is an
+  // unannounced edit to a file the operator owns.
+  const reviewGate = `${STATE_DIR}/review-gate.json`;
+  const entries = [ENV_MCP_FILE, reviewGate, `${reviewGate}.lock`, `${reviewGate}.tmp-*`];
   const head =
-    `security: one line — ${ENV_MCP_FILE} — ${tense} your .gitignore, so the credential file ` +
-    `this setup uses can never be committed. Nothing else in your .gitignore is touched`;
+    `security: these lines — ${entries.join(", ")} — ${tense} your .gitignore ` +
+    `${where}, so the credential file this setup uses (${ENV_MCP_FILE}) can never be committed, ` +
+    `and neither can the review gate's per-run state. Nothing else in your .gitignore is touched`;
   // Both halves of the tail are claims ABOUT A REPOSITORY, and this line used
   // to make them unconditionally — including in a directory git does not answer
   // for, where "can never be committed" and "is committed on purpose" describe
@@ -510,7 +518,7 @@ export function gitignoreLine(dryRun: boolean, gitAvailable = true): string {
   // ordinary file, and it is what makes the guarantee true the moment a repo
   // exists), so the branch requalifies the promise rather than dropping it.
   return gitAvailable
-    ? `${head}, and the ${STATE_DIR}/ state directory is committed on purpose.`
+    ? `${head}, and the rest of the ${STATE_DIR}/ state directory is committed on purpose.`
     : `${head}. This directory is not a git repository yet, so nothing is tracked or ignored ` +
         `here at all: the rule takes effect on the first \`git init\`, and the ${STATE_DIR}/ ` +
         `state directory is meant to be committed once there is somewhere to commit it.`;

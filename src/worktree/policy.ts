@@ -2,6 +2,11 @@ import { readFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { ENV_MCP_FILE } from "../mcp/env.ts";
 import { EngineError } from "../types/errors.ts";
+import {
+  REVIEW_GATE_LOCK_SUFFIX,
+  REVIEW_GATE_STATE_FILE,
+  REVIEW_GATE_TEMP_INFIX,
+} from "../types/markers.ts";
 
 /**
  * `.stamity/worktree.json` — the worktree lane's policy file, and the
@@ -25,7 +30,9 @@ import { EngineError } from "../types/errors.ts";
  *   3. **Only ignored paths are materialized.** A row naming a path git tracks
  *      is refused (the checkout supplies it); a row naming a path git neither
  *      tracks nor ignores is refused (materializing it would leave the new
- *      worktree dirty at creation).
+ *      worktree dirty at creation). The review gate's runtime state is refused
+ *      by name ahead of that rule, because setup ignores it and git would
+ *      otherwise answer "carry it".
  *
  * The git facts behind (3) arrive as an INJECTED classifier. This module owns
  * the rule; the `git check-ignore` / `git ls-files` pass that answers it is the
@@ -173,6 +180,38 @@ function normalizeCredentialBasename(name: string): string {
  */
 export function isKnownCredentialPath(relPath: string): boolean {
   return KNOWN_CREDENTIAL_BASENAMES.has(normalizeCredentialBasename(basename(relPath)));
+}
+
+/** Lowercased, trailing-dot-and-space-stripped per segment: the spelling a lookup compares. */
+function foldPathSpelling(relPath: string): string {
+  return relPath
+    .split("/")
+    .map((segment) => normalizeCredentialBasename(segment))
+    .join("/");
+}
+
+/**
+ * True when `relPath` is the review gate's runtime state: the counter file, its
+ * lock directory or anything under it, or one of its `.tmp-` publish files.
+ *
+ * Refused by NAME rather than by git's answer. Setup ignores these three
+ * (`../mcp/env.ts`, REQ-FLOW-016), so git would classify a row naming one as
+ * `ignored` — admissible — and the lane would copy one worktree's review
+ * rounds into another, where they would gate a loop that never ran there. The
+ * comparison folds case and trailing dots/spaces, for the same reason
+ * {@link normalizeCredentialBasename} does: on a case-insensitive or
+ * dot-stripping filesystem those spellings name the same file.
+ */
+function isReviewGateStatePath(relPath: string): boolean {
+  const path = foldPathSpelling(relPath);
+  const state = foldPathSpelling(REVIEW_GATE_STATE_FILE);
+  const lock = state + REVIEW_GATE_LOCK_SUFFIX;
+  return (
+    path === state ||
+    path === lock ||
+    path.startsWith(`${lock}/`) ||
+    path.startsWith(state + REVIEW_GATE_TEMP_INFIX)
+  );
 }
 
 const TOP_LEVEL_KEYS: ReadonlySet<string> = new Set(["version", "farmDir", "entries", "overrides"]);
@@ -491,16 +530,29 @@ export function materializationRules(policy: WorktreePolicy): readonly WorktreeP
  * answer, and this module is the rule about it rather than the pass that
  * produces it.
  *
+ * A row naming the review gate's runtime state ({@link isReviewGateStatePath})
+ * is refused before git is asked: it is ignored, so git's answer would admit it.
+ *
  * Only materializing rows are checked. A `skip` row writes nothing, so it can
  * neither be supplied twice by the checkout nor dirty the new worktree — and
  * refusing one would brick the verb in a repository that commits the very
- * directory the built-in defaults name.
+ * directory the built-in defaults name. The same holds for a `skip` row naming
+ * the review gate's state: it carries nothing across, which is the outcome the
+ * refusal exists for.
  */
 export function assertRulesAdmissible(
   policy: WorktreePolicy,
   classify: (relPath: string) => GitPathClass,
 ): void {
   for (const rule of materializationRules(policy)) {
+    if (isReviewGateStatePath(rule.path)) {
+      refuse(
+        `${policy.source}: ${rule.list} row ${JSON.stringify(rule.path)} names review-gate runtime ` +
+          `state, which never travels between worktrees: a review round counted in one worktree must ` +
+          `not gate another, and the gate reads a missing counter as open.`,
+        `Remove the row from ${policy.source}.`,
+      );
+    }
     const verdict = classify(rule.path);
     if (verdict === "ignored") continue;
     // A built-in row has no file to edit, so pointing at one would be a next

@@ -224,6 +224,10 @@ describe("applyInit — fresh repo", () => {
     expect(manifest?.ledger).toEqual([]);
 
     expect(await readFile(join(root, ".gitignore"), "utf8")).toContain(".env.mcp");
+    // REQ-FLOW-016: the same lane ignores the review gate's runtime state.
+    expect((await readFile(join(root, ".gitignore"), "utf8")).split("\n")).toEqual(
+      expect.arrayContaining([".stamity/review-gate.json", ".stamity/review-gate.json.lock", ".stamity/review-gate.json.tmp-*"]),
+    );
   });
 
   it("selects the full corpus when the bundled catalog carries artifacts", async () => {

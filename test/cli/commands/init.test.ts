@@ -385,11 +385,22 @@ describe("init — fresh repo", () => {
     // The credential file is the entry init guarantees; the state dir is
     // committed on purpose, so it is not one.
     expect(await readFile(join(root, ".gitignore"), "utf8")).toContain(".env.mcp");
+    // REQ-FLOW-016: the review gate's runtime state is ignored beside it.
+    expect((await readFile(join(root, ".gitignore"), "utf8")).split("\n")).toEqual(
+      expect.arrayContaining([
+        ".stamity/review-gate.json",
+        ".stamity/review-gate.json.lock",
+        ".stamity/review-gate.json.tmp-*",
+      ]),
+    );
     // The edit is DISCLOSED too. This repo has no predecessor and no
     // MCP server, which is the ordinary case the disclosure never reached —
     // init edited a file the operator owns and said nothing about it.
     expect(result.stdout).toContain("security:");
-    expect(result.stdout).toContain(".env.mcp — was added to your .gitignore");
+    // TEST CHANGE, justified (REQ-FLOW-016): the disclosure now names the four
+    // entries init guarantees, not the credential file alone.
+    expect(result.stdout).toContain(".stamity/review-gate.json.tmp-* — were added to your .gitignore");
+    expect(result.stdout).toContain("security: these lines — .env.mcp, ");
     // The credential hint stays conditional: no server, nothing to load.
     expect(result.stdout).not.toContain("credentials:");
     // Nothing detected means nothing uncovered to disclose: no block at all.
@@ -1137,7 +1148,11 @@ describe("init --dry-run", () => {
     const result = await runInit(root, ["--dry-run", "-y"]);
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain(".env.mcp — would be added to your .gitignore");
+    // TEST CHANGE, justified (REQ-FLOW-016): the preview names the four entries
+    // it would add, not the credential file alone; still future tense, still
+    // nothing written.
+    expect(result.stdout).toContain(".stamity/review-gate.json.tmp-* — would be added to your .gitignore");
+    expect(result.stdout).toContain("security: these lines — .env.mcp, ");
     expect(existsSync(join(root, ".gitignore"))).toBe(false);
   });
 

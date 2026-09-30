@@ -1170,6 +1170,10 @@ describe("config mcp", () => {
     expect((await readManifest(handle.dir))?.mcp?.servers).toEqual(["brave-search"]);
     expect(await readOrNull(handle, ".env.mcp")).toContain("BRAVE_API_KEY=");
     expect(await readOrNull(handle, ".gitignore")).toContain(".env.mcp");
+    // REQ-FLOW-016: every caller of the gitignore lane inherits the review gate's entries.
+    expect((await readOrNull(handle, ".gitignore"))?.split("\n")).toEqual(
+      expect.arrayContaining([".stamity/review-gate.json", ".stamity/review-gate.json.lock", ".stamity/review-gate.json.tmp-*"]),
+    );
     // The disclaimer names the command for the shell this process is running in.
     expect(result.stdout).toContain(getSourceEnvMcpCommand());
     expect(result.stdout).toContain("next: run stamity sync to apply");

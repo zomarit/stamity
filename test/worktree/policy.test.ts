@@ -430,18 +430,88 @@ describe("worktree policy — admissibility against git facts (REQ-WORKTREE-003)
     expect(error.message).toContain("checkout");
   });
 
+  // TEST CHANGE, justified (REQ-WORKTREE-003, MODIFIED by plan 013 SW-27): the
+  // example path was `.stamity/review-gate.json`, which setup now ignores and the
+  // lane refuses BY NAME before git is asked (the cases below). The rule under
+  // test — untracked and un-ignored is refused naming both conditions — is
+  // unchanged, so it takes another untracked path.
   it("refuses a path git neither tracks nor ignores, naming both conditions", () => {
     const policy = parseWorktreePolicy(
-      policyText({ version: 1, entries: [{ path: ".stamity/review-gate.json", strategy: "copy" }] }),
+      policyText({ version: 1, entries: [{ path: "scratch/notes.md", strategy: "copy" }] }),
       POLICY_PATH,
     );
     const error = refuses(
-      () => assertRulesAdmissible(policy, classifierFor({ ".stamity/review-gate.json": "untracked" })),
+      () => assertRulesAdmissible(policy, classifierFor({ "scratch/notes.md": "untracked" })),
       "VALIDATION_ERROR",
     );
-    expect(error.message).toContain(".stamity/review-gate.json");
+    expect(error.message).toContain("scratch/notes.md");
     expect(error.message).toContain("tracks");
     expect(error.message).toContain("ignores");
+  });
+
+  /**
+   * REQ-WORKTREE-003/004 as modified by plan 013 (SW-27): setup ignores the
+   * review gate's state, so git would now answer `ignored` and the admissibility
+   * rule alone would CARRY it. The lane refuses it by name instead: a review
+   * round counted in one worktree must never gate another. Each classifier below
+   * answers `ignored`, which is what makes the refusal the name check's and not
+   * the git rule's.
+   */
+  it.each([
+    ".stamity/review-gate.json",
+    ".stamity/review-gate.json.lock",
+    ".stamity/review-gate.json.lock/owner",
+    ".stamity/review-gate.json.tmp-deadbeef",
+  ])("refuses %s as review-gate runtime state even when git ignores it", (path) => {
+    const policy = parseWorktreePolicy(
+      policyText({ version: 1, entries: [{ path, strategy: "copy" }] }),
+      POLICY_PATH,
+    );
+    const error = refuses(
+      () => assertRulesAdmissible(policy, classifierFor({ [path]: "ignored" })),
+      "VALIDATION_ERROR",
+    );
+    expect(error.message).toContain(POLICY_PATH);
+    expect(error.message).toContain(JSON.stringify(path));
+    expect(error.message).toContain("review-gate runtime state");
+    expect(error.message).toContain("never travels");
+  });
+
+  it("refuses a case or trailing-dot spelling of the review-gate state the same way", () => {
+    // A case-insensitive volume, or Windows dropping a trailing dot, makes these
+    // the SAME file as the canonical name.
+    for (const path of [".STAMITY/Review-Gate.json", ".stamity/review-gate.json.lock./owner"]) {
+      const policy = parseWorktreePolicy(
+        policyText({ version: 1, overrides: [{ path, strategy: "symlink" }] }),
+        POLICY_PATH,
+      );
+      const error = refuses(
+        () => assertRulesAdmissible(policy, classifierFor({ [path]: "ignored" })),
+        "VALIDATION_ERROR",
+      );
+      expect(error.message, path).toContain("review-gate runtime state");
+    }
+  });
+
+  it("admits a neighbour that only shares the review-gate prefix", () => {
+    // `review-gate.json.lockfile` is not under the lock directory, and
+    // `review-gate.jsonl` is a different file: segment and suffix boundaries hold.
+    const paths = [".stamity/review-gate.json.lockfile", ".stamity/review-gate.jsonl"];
+    const policy = parseWorktreePolicy(
+      policyText({ version: 1, entries: paths.map((path) => ({ path, strategy: "copy" })) }),
+      POLICY_PATH,
+    );
+    expect(() =>
+      assertRulesAdmissible(policy, classifierFor(Object.fromEntries(paths.map((path) => [path, "ignored"])))),
+    ).not.toThrow();
+  });
+
+  it("admits a skip row naming the review-gate state, because a skip row carries nothing", () => {
+    const policy = parseWorktreePolicy(
+      policyText({ version: 1, entries: [{ path: ".stamity/review-gate.json", strategy: "skip" }] }),
+      POLICY_PATH,
+    );
+    expect(() => assertRulesAdmissible(policy, classifierFor({}))).not.toThrow();
   });
 
   /**

@@ -71,9 +71,9 @@ import { fullCoreSelection, type InitDecisions } from "./plan.ts";
  * that fails mid-emission must leave no manifest asserting claims the tree
  * does not back. Before it land, in order: state directories, planned emission
  * outputs (each through the merge engine, so a pre-existing file is merged or
- * skipped, never clobbered), and the `.env.mcp` gitignore rule — the single
- * gitignore entry this engine owns; the state directory itself is committed by
- * design.
+ * skipped, never clobbered), and the gitignore rules this engine owns — the
+ * `.env.mcp` credential file and the review gate's runtime state (its counter,
+ * lock and temp files); the rest of the state directory is committed by design.
  *
  * `dryRun: true` computes the identical report — directories that would be
  * created, per-file merge dispositions via the writer's own predictor — and
@@ -138,7 +138,7 @@ export interface InitApplyReport {
   warnings: string[];
   /** Ledger rows the manifest carries after this run. */
   ledgerCount: number;
-  /** True when the `.env.mcp` gitignore rule was put in place (never under `dryRun`). */
+  /** True when the required gitignore rules (`.env.mcp`, the review gate's state) were put in place (never under `dryRun`). */
   gitignoreEnsured: boolean;
   dryRun: boolean;
 }
@@ -378,8 +378,8 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
   manifest.ledger = ledger;
 
   if (!dryRun) {
-    // .env.mcp is the single entry this engine gitignores; the state dir is
-    // committed by design (resolved SoT silence).
+    // The credential file and the review gate's runtime state are the entries
+    // this engine gitignores; the rest of the state dir is committed by design.
     await ensureGitignoreEntry(rootDir);
     // The commit point, last — see the module header.
     await writeManifest(rootDir, manifest, { now });

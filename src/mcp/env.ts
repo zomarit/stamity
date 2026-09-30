@@ -10,6 +10,12 @@ import {
 import { atomicWriteFile, isSharedRegularFile } from "../merge/atomicWrite.ts";
 import { TOOLS, type Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
+import {
+  REVIEW_GATE_LOCK_SUFFIX,
+  REVIEW_GATE_STATE_FILE,
+  REVIEW_GATE_TEMP_INFIX,
+  STATE_DIR,
+} from "../types/markers.ts";
 import { resolveServerMeta, type PackSuppliedServer } from "./catalog.ts";
 import { maskValue, scanValueForSecrets } from "./secretScan.ts";
 
@@ -173,18 +179,56 @@ const TOOL_ENV_NOTES: Record<Tool, string> = {
 };
 
 /**
- * Paths this engine writes that must never reach a commit. One member today:
- * the credential file. Machine-local state written by other modules registers
- * here too, so a single scan covers every ignore rule the engine depends on.
+ * Paths this engine writes that must never reach a commit: the credential
+ * file, and the review gate's runtime state — its counter, the lock directory
+ * beside it, and the temp files its publish renames over the counter. The gate
+ * writes those three on every review round; a counter that was committed would
+ * carry one worktree's rounds into every checkout of the branch.
+ *
+ * Machine-local state written by other modules registers here too, so a single
+ * scan covers every ignore rule the engine depends on, and every write command
+ * that calls {@link ensureGitignoreEntry} — `init`, `sync`, the migration carry,
+ * `config mcp` — leaves the whole set in place.
  */
-export const REQUIRED_GITIGNORE_ENTRIES: readonly string[] = [ENV_MCP_FILE];
+export const REQUIRED_GITIGNORE_ENTRIES: readonly string[] = [
+  ENV_MCP_FILE,
+  REVIEW_GATE_STATE_FILE,
+  REVIEW_GATE_STATE_FILE + REVIEW_GATE_LOCK_SUFFIX,
+  `${REVIEW_GATE_STATE_FILE}${REVIEW_GATE_TEMP_INFIX}*`,
+];
+
+/**
+ * Rules that ignore every review-gate entry at once: the state directory in
+ * each spelling git reads as covering its contents, and the state file's own
+ * name as a prefix pattern. Rooted and unrooted forms both count, because the
+ * `.gitignore` this lane edits is the one at the repository root.
+ */
+const REVIEW_GATE_DOMINATORS: readonly string[] = [
+  `${STATE_DIR}/`,
+  `/${STATE_DIR}/`,
+  `${STATE_DIR}/*`,
+  `/${STATE_DIR}/*`,
+  `${STATE_DIR}/**`,
+  `/${STATE_DIR}/**`,
+  `${REVIEW_GATE_STATE_FILE}*`,
+  `/${REVIEW_GATE_STATE_FILE}*`,
+];
 
 /**
  * Existing patterns that already ignore an entry. Appending our literal beside
  * one of these would add a redundant rule to a file the operator maintains.
+ * Each review-gate entry is also dominated by its own root-anchored twin
+ * (`/.stamity/review-gate.json` — the spelling a hand-written rule usually
+ * takes).
  */
 const DOMINATING_PATTERNS: Record<string, readonly string[]> = {
   [ENV_MCP_FILE]: [".env.*", ".env*", "*.mcp"],
+  ...Object.fromEntries(
+    REQUIRED_GITIGNORE_ENTRIES.filter((entry) => entry !== ENV_MCP_FILE).map((entry) => [
+      entry,
+      [`/${entry}`, ...REVIEW_GATE_DOMINATORS],
+    ]),
+  ),
 };
 
 // ── Collection ───────────────────────────────────────────────────
@@ -595,10 +639,21 @@ export async function ensureGitignoreEntry(rootDir: string): Promise<void> {
   });
 }
 
+/**
+ * True when a line of the file already answers for `entry`: the entry itself,
+ * a rule {@link DOMINATING_PATTERNS} lists for it, or a negation of the entry in
+ * either its bare or its root-anchored spelling. A negation is the operator's
+ * decision, and appending the bare entry after it would reverse that decision,
+ * because git lets the last matching line win.
+ */
 function isCovered(entry: string, lines: readonly string[]): boolean {
   const dominating = DOMINATING_PATTERNS[entry] ?? [];
   return lines.some(
-    (line) => line === entry || line === `!${entry}` || dominating.includes(line),
+    (line) =>
+      line === entry ||
+      line === `!${entry}` ||
+      line === `!/${entry}` ||
+      dominating.includes(line),
   );
 }
 

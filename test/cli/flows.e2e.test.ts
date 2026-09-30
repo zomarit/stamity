@@ -181,8 +181,10 @@ describe("the full lifecycle journey", () => {
 
     const treeAfter = await snapshotTree(fixture.repoDir);
     expect(treeAfter).toEqual([".gitignore", "history.md"]);
-    // The one surviving addition is the engine's single gitignore entry.
+    // The one surviving addition is the engine's gitignore entries: the
+    // credential file and the review gate's runtime state (REQ-FLOW-016).
     const gitignore = await readFile(join(fixture.repoDir, ".gitignore"), "utf8");
     expect(gitignore).toContain(".env.mcp");
+    expect(gitignore).toContain(".stamity/review-gate.json.tmp-*");
   });
 });

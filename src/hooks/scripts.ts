@@ -186,13 +186,13 @@ export const MAX_POLICY_FILE_BYTES = 262_144;
 export const DEFAULT_MAX_INDEX_LINES = 20;
 
 /**
- * Where the review gate's round counter lives: beside the other RUNTIME state
- * under the state directory, and deliberately not under the engine's generated
- * tree. Generated output is rewritten wholesale by a sync, so a counter kept
- * there would be deleted mid-run — and a gate whose counter vanishes re-opens
- * a loop that had already converged, or forgets a cap it had already reached.
+ * Where the review gate's round counter lives — defined at the bottom of the
+ * tree (`../types/markers.ts`, which says why it sits outside the generated
+ * tree) because the gitignore lane and the worktree lane name it too and may
+ * not import this module. Re-exported under the same name for the adapters
+ * that wire the gate.
  */
-export const REVIEW_GATE_STATE_FILE: string = `${STATE_DIR}/review-gate.json`;
+export { REVIEW_GATE_STATE_FILE } from "../types/markers.ts";
 
 /**
  * Ceiling on the counter file the review gate will parse.

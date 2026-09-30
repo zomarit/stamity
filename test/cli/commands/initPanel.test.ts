@@ -5,11 +5,13 @@ import { COPILOT_PROMPTS_DIR } from "../../../src/adapters/copilot.ts";
 import { CURSOR_COMMANDS_DIR } from "../../../src/adapters/cursor.ts";
 import type { InitApplyReport } from "../../../src/cli/commands/init/apply.ts";
 import {
+  gitignoreLine,
   MAX_STACK_SUGGESTION_ROWS,
   nextStepsForTool,
   renderInitPanel,
   type InitPanelInput,
 } from "../../../src/cli/commands/init/panel.ts";
+import { REQUIRED_GITIGNORE_ENTRIES } from "../../../src/mcp/env.ts";
 import type { InitDecisions } from "../../../src/cli/commands/init/plan.ts";
 import { makePalette } from "../../../src/cli/kit/terminal.ts";
 import { suggestStackPacks, type StackSuggestion } from "../../../src/detect/stackSupport.ts";
@@ -574,10 +576,27 @@ describe("renderInitPanel — security disclosure", () => {
     const output = renderInitPanel(panelInput({ mcpServers: [] }));
 
     expect(output).toContain("security:");
-    expect(output).toContain(".env.mcp — was added to your .gitignore");
+    // TEST CHANGE, justified (REQ-FLOW-016): the disclosure named one line
+    // (`.env.mcp — was added to your .gitignore`); init now adds up to four, so
+    // it names all four. The case pinned — disclosed on an ordinary init with no
+    // MCP server — is unchanged.
+    expect(output).toContain(".env.mcp, .stamity/review-gate.json, .stamity/review-gate.json.lock, .stamity/review-gate.json.tmp-* — were added to your .gitignore wherever it lacked them");
     // The credential half stays conditional: no server, no credential to load.
     expect(output).not.toContain("credentials:");
     expect(output).not.toContain("Before starting your tool");
+  });
+
+  it("names every entry the gitignore lane requires, derived from the lane's own list", () => {
+    // Derived, not typed: an entry added to the required set without reaching
+    // the disclosure is an edit to the operator's file that nobody announced.
+    const output = renderInitPanel(panelInput({ mcpServers: [] }));
+    const line = output.split("\n").find((row) => row.includes("security:")) ?? "";
+    for (const entry of REQUIRED_GITIGNORE_ENTRIES) expect(line, entry).toContain(entry);
+    expect(line).toContain("review gate");
+  });
+
+  it("previews the same four entries in the future tense", () => {
+    expect(gitignoreLine(true)).toContain(".env.mcp, .stamity/review-gate.json, .stamity/review-gate.json.lock, .stamity/review-gate.json.tmp-* — would be added to your .gitignore wherever it lacks them");
   });
 
   it("stays silent about the gitignore when nothing was written to it", () => {

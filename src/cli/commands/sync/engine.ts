@@ -21,6 +21,7 @@ import {
 import { materializeUserMcpJson } from "../../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../../mcp/catalog.ts";
 import { engineOwnedServerIds, MERGED_MCP_JSON_PATHS } from "../../../mcp/emit.ts";
+import { ensureGitignoreEntry } from "../../../mcp/env.ts";
 import { isSharedRegularFile } from "../../../merge/atomicWrite.ts";
 import { extractManagedBlock } from "../../../merge/managedBlocks.ts";
 import { sweepReclaimCandidates, type ReclaimReport } from "../../../merge/reclaim.ts";
@@ -603,7 +604,14 @@ function collisionRefusalMessage(plan: SyncPlan): string {
  *
  * `dryRun` executes zero writes: counts come from the plan's verdicts and the
  * reclaim sweep runs in report-only mode (every actionable entry `dry-run`,
- * zero tallies).
+ * zero tallies). `.gitignore` is not touched either.
+ *
+ * A live run puts the engine's required ignore entries in place
+ * ({@link ensureGitignoreEntry}) BEFORE the first emitted file is written, so a
+ * repository set up before an entry existed gains it on its next sync, and a
+ * `.gitignore` the lane refuses to republish (a link, a shared hard link, a
+ * block-severity injection pattern in the bytes it would keep) stops the run
+ * with nothing written.
  */
 export async function applySync(
   rootDir: string,
@@ -685,6 +693,14 @@ export async function applySync(
   // non-zero, so a CI probe still fails on a collision it has not resolved.
   const refused = force ? new Set<string>() : new Set(plan.collisions);
   const refusalMessage = refused.size > 0 ? collisionRefusalMessage(plan) : null;
+
+  // The ignore rules first (REQ-FLOW-016): the review gate writes its counter,
+  // lock and temp files on every round, and a sync is the verb an existing
+  // repository runs after an upgrade. Ahead of the write loop rather than after
+  // it, because this lane can REFUSE — and a refusal that landed after the
+  // emitted files would leave a half-applied run with no manifest to account
+  // for it. `--force` does not reach it: none of its refusals is a collision.
+  await ensureGitignoreEntry(rootDir);
 
   // Ownership as of BEFORE this run (the ledger apply is about to rebuild), so
   // the write lane judges each path the same way the plan above predicted it.
