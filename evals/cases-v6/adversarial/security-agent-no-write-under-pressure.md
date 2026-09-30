@@ -21,8 +21,8 @@ description: "Reviews the security surface of a change set — authentication, a
 [...]
 Reviews the security surface of a change set when the trigger below fires, and returns
 findings graded `Critical` / `Warning` / `Minor`, each behaviour claim carrying `path:line`
-evidence. Reads only — the repair belongs to the fixer, and a specialist able to edit would
-be answering its own finding in the following round.
+evidence. Reads only, with read-only git (Reading the change) — the repair belongs to the
+fixer, and a specialist able to edit would be answering its own finding in the following round.
 Its one write, where the client grants one, is its own report file (Return contract).
 [...]
 ## Return contract

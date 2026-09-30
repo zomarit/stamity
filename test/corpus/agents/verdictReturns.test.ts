@@ -215,6 +215,125 @@ describe("reviewer — a re-review answers every prior id", () => {
   });
 });
 
+/**
+ * The five roles that read the change themselves through read-only git (REQ-CTX-017): the
+ * four verdict roles plus the spec-author. Each carries a `## Reading the change` section.
+ */
+const GIT_READING_ROLES: readonly { readonly id: string; readonly relPath: string }[] = [
+  ...VERDICT_ROLES.map(({ id, relPath }) => ({ id, relPath })),
+  { id: "spec-author", relPath: "agents/stamity-spec-author.md" },
+];
+
+/** The phrases the section must carry, whitespace-collapsed: the brief, the five calls, the exits. */
+const READING_THE_CHANGE_PHRASES: readonly string[] = [
+  "never the implementer's account",
+  "`git diff <range>`",
+  "`git show <commit>`",
+  "`git log <range>`",
+  "`git rev-list <range>`",
+  "`git merge-base <a> <b>`",
+  "No other command runs",
+  "no option that writes a file",
+  "gate evidence is the test-runner's",
+  "never evidence",
+  "Where the client grants no shell",
+  "names that basis",
+  "`BLOCKED_DEPENDENCY` naming the missing diff",
+];
+
+/**
+ * A git verb that moves the working tree, the index, a ref, a stash or a remote. The lookahead
+ * keeps `git merge-base` (read-only) from reading as `git merge`.
+ */
+const MUTATING_GIT =
+  /\bgit (checkout|switch|restore|reset|commit|push|pull|fetch|stash|merge|rebase|add|rm|tag|branch)(?![\w-])/;
+
+/**
+ * Every required phrase the `## Reading the change` section lacks, plus any mutating git verb it
+ * names; empty when the section is whole. A missing section is itself a gap.
+ */
+function readingTheChangeGaps(file: CorpusFile): string[] {
+  const section = sectionOf(file, "Reading the change");
+  if (section === undefined) {
+    return ["## Reading the change"];
+  }
+  const text = collapse(section);
+  const gaps = READING_THE_CHANGE_PHRASES.filter((phrase) => !text.includes(phrase));
+  const mutating = MUTATING_GIT.exec(text);
+  return mutating === null ? gaps : [...gaps, `mutating: ${mutating[0]}`];
+}
+
+describe("verdict roles and the spec-author — they read the change through read-only git", () => {
+  it.each(GIT_READING_ROLES)("$id reads the range itself, with read-only git only", async (role) => {
+    const file = await load(role.relPath);
+
+    expect(readingTheChangeGaps(file)).toEqual([]);
+  });
+
+  it.each(VERDICT_ROLES)("$id names the read-only git grant in its head", async (role) => {
+    const file = await load(role.relPath);
+
+    expect(collapse(headOf(file))).toContain("read-only git (Reading the change)");
+  });
+
+  it("the reviewer's head forbids mutating commands, not the read-only git it runs", async () => {
+    const head = collapse(headOf(await load("agents/stamity-reviewer.md")));
+
+    expect(head).toContain("no mutating command, no branch or board mutation");
+    expect(head).not.toMatch(/no commands\b/);
+  });
+
+  it("the spec-author reads the history it describes", async () => {
+    const section = collapse(
+      sectionOf(await load("agents/stamity-spec-author.md"), "Reading the change") ?? "",
+    );
+
+    expect(section).toContain("history it describes");
+  });
+});
+
+describe("readingTheChangeGaps — the helper goes red", () => {
+  const section = [
+    "## Reading the change",
+    "",
+    `${READING_THE_CHANGE_PHRASES.join("; ")}.`,
+    "",
+  ].join("\n");
+  const whole = ["---", "id: fixture", "type: agent", "---", "", "# fixture", "", section].join(
+    "\n",
+  );
+
+  it("passes the whole fixture", () => {
+    expect(readingTheChangeGaps(corpusFileOf("agents/stamity-fixture.md", whole))).toEqual([]);
+  });
+
+  it("names a dropped subcommand", () => {
+    const dropped = whole.replace("`git rev-list <range>`; ", "");
+
+    expect(dropped).not.toBe(whole);
+    expect(readingTheChangeGaps(corpusFileOf("agents/stamity-fixture.md", dropped))).toEqual([
+      "`git rev-list <range>`",
+    ]);
+  });
+
+  it("names a mutating git verb offered as allowed", () => {
+    const widened = whole.replace("`git log <range>`", "`git log <range>`, `git checkout <sha>`");
+
+    expect(readingTheChangeGaps(corpusFileOf("agents/stamity-fixture.md", widened))).toEqual([
+      "mutating: git checkout",
+    ]);
+  });
+
+  it("names the section when the body has none", () => {
+    const file = corpusFileOf(
+      "agents/stamity-fixture.md",
+      whole.replace("## Reading the change", "## Something else"),
+    );
+
+    expect(readingTheChangeGaps(file)).toEqual(["## Reading the change"]);
+  });
+});
+
 describe("returnContractGaps — the helper goes red", () => {
   const whole = [
     "---",

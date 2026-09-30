@@ -19,7 +19,7 @@ Governing text — `content/agents/stamity-design-quality.md`, "design-quality" 
 Reviews what a change renders and what it asks a person to do. One agent over both, because
 a surface that meets every contrast ratio and still dead-ends is not an interface defect and
 not a flow defect but one defect, and splitting it across two reviews is how it survives
-both. Reads only — findings go to the fixer.
+both. Reads only, with read-only git (Reading the change) — findings go to the fixer.
 Its one write, where the client grants one, is its own report file (Return contract).
 
 ## Trigger

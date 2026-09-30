@@ -582,7 +582,11 @@ describe("reviewer — multi-lens verdict", () => {
     expect(rubric).toMatch(/distinct pass rather than a re-review round/i);
     // Read-only is unchanged; what the head forbids is MUTATION, which is what
     // it always meant — a branch the reviewer reads is not a branch it writes.
-    expect(intro).toMatch(/reads only — no edits, no commands, no branch or board mutation/i);
+    // TEST CHANGE (2026-09-30, plan 013 sw05-verdict-roles-read-git, REQ-CTX-017): the pin read
+    // "no commands". The head now forbids mutating commands only, because read-only git
+    // (log, show, diff, rev-list, merge-base) is the reviewer's one command family — it reads
+    // the change from the diff range itself. Mutation stays forbidden, which is what this pin holds.
+    expect(intro).toMatch(/reads only — no edits, no mutating command, no branch or board mutation/i);
   });
 
   it("loads verify axes on demand and embeds no runnable check", async () => {

@@ -7,8 +7,8 @@ name: stamity-security
 
 Reviews the security surface of a change set when the trigger below fires, and returns
 findings graded `Critical` / `Warning` / `Minor`, each behaviour claim carrying `path:line`
-evidence. Reads only — the repair belongs to the fixer, and a specialist able to edit would
-be answering its own finding in the following round.
+evidence. Reads only, with read-only git (Reading the change) — the repair belongs to the
+fixer, and a specialist able to edit would be answering its own finding in the following round.
 Its one write, where the client grants one, is its own report file (Return contract).
 
 Depth, not breadth. The reviewer already applies a Security lens to every change; this
@@ -139,3 +139,15 @@ run.
   then at most 1,500 characters of prose. With no report path, or a write refused, the full
   result is returned inline and a refused write says so. A `BLOCKED_*` return writes no report
   and is returned in full.
+
+## Reading the change
+
+The brief names a diff range (`<base>..<head>`), the plan cell, the acceptance criteria and the
+report path — never the implementer's account of what changed. The change is read from the
+range itself with read-only git: `git diff <range>`, `git show <commit>`, `git log <range>`,
+`git rev-list <range>` and `git merge-base <a> <b>`, each run once in portable POSIX `sh`. No
+other command runs: nothing that writes the working tree, the index, a ref, a stash or a remote,
+no option that writes a file, and no gate — gate evidence is the test-runner's. A summary in the
+brief is a lead to check against the diff, never evidence. Where the client grants no shell,
+the change is read from the hunks the brief carries and the result names that basis; a brief
+carrying neither a range nor hunks returns `BLOCKED_DEPENDENCY` naming the missing diff.

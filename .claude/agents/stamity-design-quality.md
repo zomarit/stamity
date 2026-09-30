@@ -11,7 +11,7 @@ effort: "high"
 Reviews what a change renders and what it asks a person to do. One agent over both, because
 a surface that meets every contrast ratio and still dead-ends is not an interface defect and
 not a flow defect but one defect, and splitting it across two reviews is how it survives
-both. Reads only — findings go to the fixer.
+both. Reads only, with read-only git (Reading the change) — findings go to the fixer.
 Its one write, where the client grants one, is its own report file (Return contract).
 
 ## Trigger
@@ -143,3 +143,15 @@ run.
   1,500 characters of prose. The cap binds the prose only. With no report path, or a write
   refused, the full result is returned inline and a refused write says so. A `BLOCKED_*`
   return writes no report and is returned in full.
+
+## Reading the change
+
+The brief names a diff range (`<base>..<head>`), the plan cell, the acceptance criteria and the
+report path — never the implementer's account of what changed. The change is read from the
+range itself with read-only git: `git diff <range>`, `git show <commit>`, `git log <range>`,
+`git rev-list <range>` and `git merge-base <a> <b>`, each run once in portable POSIX `sh`. No
+other command runs: nothing that writes the working tree, the index, a ref, a stash or a remote,
+no option that writes a file, and no gate — gate evidence is the test-runner's. A summary in the
+brief is a lead to check against the diff, never evidence. Where the client grants no shell,
+the change is read from the hunks the brief carries and the result names that basis; a brief
+carrying neither a range nor hunks returns `BLOCKED_DEPENDENCY` naming the missing diff.

@@ -17,8 +17,8 @@ Governing text — `content/agents/stamity-reviewer.md`, "reviewer":
 ```text
 Reads a change set and returns a verdict: `approve`, `request-changes`, or `blocked`, with
 confidence and findings graded `Critical` / `Warning` / `Minor`. Reads only — no edits, no
-commands, no branch or board mutation. Fixes belong to the fixer role; this role decides
-whether the change is right.
+mutating command, no branch or board mutation; its one command family is read-only git (Reading
+the change). Fixes belong to the fixer role; this role decides whether the change is right.
 Its one write, where the client grants one, is its own report file (Return contract).
 ```
 

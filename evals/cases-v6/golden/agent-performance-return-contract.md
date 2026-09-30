@@ -17,8 +17,8 @@ unless budgets":
 
 ```text
 Reviews what a change costs per operation and compares it with what the repository declared
-it would spend. Reads only. Its findings are advisory unless a declared budget is breached,
-which is the one condition that makes a performance finding blocking.
+it would spend. Reads only, with read-only git (Reading the change). Its findings are advisory
+unless a declared budget is breached, which is the one condition that makes a performance finding blocking.
 Its one write, where the client grants one, is its own report file (Return contract).
 
 [...]

@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.10.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-30T12:01:54.261Z",
+  "updatedAt": "2026-09-30T12:03:54.695Z",
   "tools": [
     "claude"
   ],
@@ -71,7 +71,7 @@
       "adapter": "claude",
       "artifactId": "design-quality",
       "artifactType": "agent",
-      "contentHash": "ae55eb5edfe86554f4b6b860d66725ea5741201139ceef50ef0f40bb425d1e6f",
+      "contentHash": "88a3a1b4622f7348cd97b55c6e17f6af2eadedbfdfed84b353279658c308dd30",
       "path": ".claude/agents/stamity-design-quality.md"
     },
     {
@@ -92,7 +92,7 @@
       "adapter": "claude",
       "artifactId": "performance",
       "artifactType": "agent",
-      "contentHash": "b31923420f5708b712892cfeacd35977d8021891bfd1a314f756a16c152b0d64",
+      "contentHash": "823b3f7becfe37df0acace0747391cfcce6f7031e1cd4a79ae5ee516e17c29df",
       "path": ".claude/agents/stamity-performance.md"
     },
     {
@@ -106,21 +106,21 @@
       "adapter": "claude",
       "artifactId": "reviewer",
       "artifactType": "agent",
-      "contentHash": "d484a79bd021107747863c325a0db1d98353b368f1ae0b217b031ee53f2e254b",
+      "contentHash": "5b4f9696b192cfc9af9cc16c50797a5be94443898a26b15e7d5993c3a746a43a",
       "path": ".claude/agents/stamity-reviewer.md"
     },
     {
       "adapter": "claude",
       "artifactId": "security",
       "artifactType": "agent",
-      "contentHash": "86c19e1e864a167259a661c0925218e8bfc38aa68647a92e8a5afbf7dbf70a33",
+      "contentHash": "1d9f0bfc9cb7e69c0170172a1c58c8bbfcf0f04162dd1ae499868ab4781e221f",
       "path": ".claude/agents/stamity-security.md"
     },
     {
       "adapter": "claude",
       "artifactId": "spec-author",
       "artifactType": "agent",
-      "contentHash": "348d1bfeb368e0ab85adee957d3a3fbcf04db133bb7708d3fe90412ccf2169fd",
+      "contentHash": "05f914f947895c3618fa38c0817a0f7042ce4e6cca9db5c98163101b0a37e757",
       "path": ".claude/agents/stamity-spec-author.md"
     },
     {
