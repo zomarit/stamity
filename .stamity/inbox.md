@@ -300,3 +300,10 @@ replay rows (build/7, 14, 17; review/3, 18, 28; prove/4 to prove/11) left this i
 carries a dated `retired` field.
 
 - Minor · docs/troubleshooting.md:34 · no test compares the sample check transcript's learnings row with the repository's real learnings count, so the count can drift while every test stays green (section 0's implementer) (deferred: a docs-page sample pin belongs to the docs tests; carried to Package 17's sweep (attested-claim drift), not this package's instrument) · source: /st-work · Ref: .stamity/runs/2026-09-28_replay-v2/ledger.jsonl#2026-09-28_replay-v2/build/1
+
+Rows appended 2026-09-30 by `/st-plan` for Package 17's session-2 plans (`docs/plans/013-optimization-sweep-02.md` and
+`-03.md`): follow-ups the plans deliberately leave out. The plans' drop list is not copied here: dropped items are not
+deferred work, and each carries its revisit trigger in file 3.
+
+- Minor · src/runs/blocks.ts:17-18 · the ledger CLI refuses a whole findings block for one bad line (a prose line, an over-cap locator or summary, an id letter that does not match its severity) and a whole closures block for one bad closure (src/runs/ledgerStore.ts:529-534), and runs have re-filed rows by hand (.stamity/runs/2026-09-23_orchestrator-context/record.md:89, :108); plan 013 file 3 takes short ids, an idempotent --stdin and the measured size in each refusal, and a salvage mode waits for the next hand re-filing · source: /st-plan · Ref: docs/plans/013-optimization-sweep-03.md
+- Minor · — · run records written by /st-rework and /st-pr-resolve stay outside plan 013 file 3's records-through-file-tools unit, to spare the census cost of their persistence cases; extend the rule when a user reports shell prompts from either command's record · source: /st-plan · Ref: docs/plans/013-optimization-sweep-03.md
