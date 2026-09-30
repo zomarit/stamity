@@ -360,13 +360,15 @@ exception: the link shares the directory live, state included, and setup cannot 
 ## Keeping your setup current
 
 ```sh
-npx @zomarit/stamity@latest sync
+npx -y @zomarit/stamity@<version> sync
 ```
 
-`sync` regenerates every managed file from the bundled content of whichever version ran it.
-Pinning `@latest` on the sync is how you take an engine update. Your own edits outside a managed
-block survive; the block itself is rewritten. Run `check` afterwards to confirm the tree is
-clean.
+`sync` regenerates every managed file from the bundled content of whichever version ran it, so
+running it at a newer version is how you take an engine update. Name the exact version you are
+moving to; when a newer release exists, the update notice prints this command with it filled in.
+Staying on the version you have needs nothing — the setup keeps the version it was generated
+with until you run a newer one. Your own edits outside a managed block survive;
+the block itself is rewritten. Run `check` afterwards to confirm the tree is clean.
 
 ## Where to go next
 

@@ -336,7 +336,7 @@ describe("sync --json", () => {
 });
 
 describe("sync — help text", () => {
-  it("carries the npx @zomarit/stamity@latest sync update guidance and the --force flag", async () => {
+  it("carries the exact-version npx sync update guidance and the --force flag", async () => {
     const result = await runSync(process.cwd(), ["--help"]);
 
     expect(result.code).toBe(0);
@@ -347,11 +347,15 @@ describe("sync — help text", () => {
     // TEST CHANGE (sw26 fix round 2, review/109): a checkout with no npm channel
     // (a registry-less fork) prints the no-fetch line instead; the canonical
     // checkout asserts the same bytes as before.
+    // TEST CHANGE (sw10-first-run-output, REQ-FLOW-022): the channel line named
+    // `@latest`; it now names the exact-version pinned form with a placeholder, the
+    // spelling the update notice prints. The no-channel line is unchanged.
     expect(result.stdout).toContain(
       canonical().npmChannel
-        ? `npx ${canonical().name}@latest sync`
+        ? `npx -y ${canonical().name}@<version> sync`
         : `then npx --no ${canonical().name} sync`,
     );
+    expect(result.stdout).not.toContain("@latest");
     expect(result.stdout).toContain("--force");
   });
 });
@@ -402,13 +406,17 @@ describe("sync — help text, by npm channel", () => {
   it.each([
     { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://npm.pkg.github.com" } },
     { name: "@acme/stamity", version: "1.8.0" },
-  ])("keeps the line byte for byte for a package with a channel (%j)", async (manifest) => {
+  ])("names the exact-version pinned sync for a package with a channel (%j)", async (manifest) => {
     const stdout = await helpFor(manifest);
 
+    // TEST CHANGE (sw10-first-run-output, REQ-FLOW-022): the channel line moved
+    // from `npx <name>@latest sync` to the pinned exact-version form; what this case
+    // pins, the channel line against the no-channel line, is unchanged.
     expect(stdout).toContain(
-      "update = npx @acme/stamity@latest sync — regenerating from the newest release is the " +
-        "update; no separate update command exists.",
+      "update = npx -y @acme/stamity@<version> sync, with <version> the release to move to — " +
+        "regenerating from that release is the update; no separate update command exists.",
     );
+    expect(stdout).not.toContain("@latest");
     expect(stdout).not.toContain("npx --no");
   });
 });

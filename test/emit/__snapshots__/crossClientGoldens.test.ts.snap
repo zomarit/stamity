@@ -599,7 +599,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          # Replace with this project's pin (.nvmrc, engines.node) when it declares one.
+          # No .nvmrc, .node-version or engines.node pin was found, so the current LTS.
           node-version: "lts/*"
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
@@ -1390,7 +1390,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".github/prompts/st-spec.prompt.md": "9db1bfa5bb3e6da20e339c391f7a901a6519a4a2796fda120e30a7ca78bcf750 17480 bytes",
   ".github/prompts/st-work.prompt.md": "c293a09297d0420ec29b1b942b8a4e6605a545ea9bb5c18c9a59ae182b420914 30937 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
-  ".github/workflows/copilot-setup-steps.yml": "ecbfbddf199468b9cb2bad4e811b6d1b9eef4d810dfb64267a9ec3f4edc4fc9f 881 bytes",
+  ".github/workflows/copilot-setup-steps.yml": "deb31212a939b4204646d43bbec9557e5c02514f4b5266889477f781c83cc033 880 bytes",
   ".gitignore": "68e1915eebd166319591b48c27e069a555032539e8a3205aef245ac486a7e2c2 98 bytes",
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
@@ -1414,7 +1414,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "fc97a68709cd6c21df09851bedb860d9c4accbf6d8df5cf03032d02893f91525 71175 bytes",
+  ".stamity/manifest.json": "17058a2358a7875f677a25c9eb5dde1a8977f3a7365fcb57c003de6903f06c95 71175 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "de316fa2ecd20351ecf1604d8b84a1a80b674b305c60804cb26c867aa11fc87d 25306 bytes",
@@ -2502,7 +2502,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          # Replace with this project's pin (.nvmrc, engines.node) when it declares one.
+          # No .nvmrc, .node-version or engines.node pin was found, so the current LTS.
           node-version: "lts/*"
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
@@ -2695,7 +2695,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".github/prompts/st-spec.prompt.md": "9db1bfa5bb3e6da20e339c391f7a901a6519a4a2796fda120e30a7ca78bcf750 17480 bytes",
   ".github/prompts/st-work.prompt.md": "c293a09297d0420ec29b1b942b8a4e6605a545ea9bb5c18c9a59ae182b420914 30937 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
-  ".github/workflows/copilot-setup-steps.yml": "ecbfbddf199468b9cb2bad4e811b6d1b9eef4d810dfb64267a9ec3f4edc4fc9f 881 bytes",
+  ".github/workflows/copilot-setup-steps.yml": "deb31212a939b4204646d43bbec9557e5c02514f4b5266889477f781c83cc033 880 bytes",
   ".gitignore": "68e1915eebd166319591b48c27e069a555032539e8a3205aef245ac486a7e2c2 98 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
@@ -2706,7 +2706,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "db7afce278c0c175c449d344410cbfd1aee1d9d515d84513803108f51efd7b8c 19055 bytes",
+  ".stamity/manifest.json": "fa04ac6adf242fbc6dba5092af8f42019c969e60b02adf54892650928e7ccd20 19055 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",

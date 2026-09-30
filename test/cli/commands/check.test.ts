@@ -434,6 +434,24 @@ describe("check — a healthy repository", () => {
     ]);
   });
 
+  it("counts managed paths once and names the ledger rows beside them (REQ-FLOW-022)", async () => {
+    // Two clients share `AGENTS.md`, so the ledger holds more rows than the repo
+    // holds files. The row used to print the row count alone, which disagreed with
+    // init's file count for the same setup.
+    const root = await seedRepo(getRepo(), { tools: ["claude", "codex"] });
+
+    const { doc } = await runJson(root);
+
+    const ledger = (await readManifest(root))?.ledger ?? [];
+    const paths = new Set(ledger.map((entry) => entry.path)).size;
+    expect(paths).toBeGreaterThan(0);
+    expect(paths).toBeLessThan(ledger.length);
+    expect(row(doc, "manifest").detail).toContain(
+      `tools claude, codex, ${paths} managed path(s) (${ledger.length} ledger rows across 2 client(s))`,
+    );
+    expect(row(doc, "manifest").detail).not.toContain("ledger row(s)");
+  });
+
   it("prints the doctor table, the drift verdict, provenance, and a closing line", async () => {
     const root = await seedRepo(getRepo());
 

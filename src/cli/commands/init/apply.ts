@@ -1,4 +1,4 @@
-import { mkdir, stat } from "node:fs/promises";
+import { lstat, mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { CLAUDE_SETTINGS_PATH, claudeSettingsOwnedKeys } from "../../../adapters/claude.ts";
 import { buildContentIndex, type ContentRoots } from "../../../content/catalog.ts";
@@ -18,7 +18,7 @@ import {
   readManifest,
   writeManifest,
 } from "../../../manifest/manifest.ts";
-import { ensureStateScaffold } from "../../../emit/stateScaffold.ts";
+import { ensureStateScaffold, stateKeepPaths } from "../../../emit/stateScaffold.ts";
 import {
   materializeClaudeSettings,
   predictClaudeSettingsMerge,
@@ -134,6 +134,13 @@ export interface InitApplyReport {
   manifestPath: string;
   /** Repo-relative state directories this run created (existing ones are not listed). */
   createdDirs: string[];
+  /**
+   * Repo-relative `.gitkeep` placeholders this run created in the state
+   * subdirectories (`../../../emit/stateScaffold.ts`) — or, under `dryRun`,
+   * would create. Probed before the scaffold runs, so an existing placeholder
+   * is not listed; the panel's file count adds exactly these.
+   */
+  createdKeeps: string[];
   /** One merge result per planned emission output, in emission order. */
   wrote: MergeResult[];
   /**
@@ -154,6 +161,13 @@ export interface InitApplyReport {
   ledgerCount: number;
   /** True when the required gitignore rules (`.env.mcp`, the review gate's state) were put in place (never under `dryRun`). */
   gitignoreEnsured: boolean;
+  /**
+   * The `.gitignore` entries this run appended, in the order written: the
+   * return value of `ensureGitignoreEntry` (`../../../mcp/env.ts`). Empty when
+   * the file already covered every required entry, and always under `dryRun`,
+   * which writes nothing. The panel names exactly these.
+   */
+  gitignoreAdded: string[];
   dryRun: boolean;
 }
 
@@ -210,6 +224,12 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     STATE_DIRS.map(async (dir) => ({ dir, exists: await dirExists(join(rootDir, dir)) })),
   );
   const createdDirs = missing.filter((entry) => !entry.exists).map((entry) => entry.dir);
+  // The placeholders the scaffold below writes only where none exists (`wx`),
+  // probed first for the same reason: the report lists what this run adds.
+  const keepProbes = await Promise.all(
+    stateKeepPaths().map(async (path) => ({ path, exists: await pathExists(join(rootDir, path)) })),
+  );
+  const createdKeeps = keepProbes.filter((entry) => !entry.exists).map((entry) => entry.path);
   if (!dryRun) {
     await Promise.all(createdDirs.map((dir) => mkdir(join(rootDir, dir), { recursive: true })));
     // The placeholders that make the two writable subdirectories survivable
@@ -398,10 +418,12 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
   }
   manifest.ledger = ledger;
 
+  let gitignoreAdded: string[] = [];
   if (!dryRun) {
     // The credential file and the review gate's runtime state are the entries
     // this engine gitignores; the rest of the state dir is committed by design.
-    await ensureGitignoreEntry(rootDir);
+    // Kept, not discarded: the panel names the entries this run actually added.
+    gitignoreAdded = await ensureGitignoreEntry(rootDir);
     // The commit point, last — see the module header.
     await writeManifest(rootDir, manifest, { now });
   }
@@ -409,10 +431,12 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
   return {
     manifestPath: manifestPath(rootDir),
     createdDirs,
+    createdKeeps,
     wrote,
     warnings,
     ledgerCount: ledger.length,
     gitignoreEnsured: !dryRun,
+    gitignoreAdded,
     dryRun,
   };
 }
@@ -690,6 +714,19 @@ async function loadFullSelection(): Promise<ContentSelection> {
     throw error;
   }
   return fullCoreSelection(await buildContentIndex(roots));
+}
+
+/**
+ * True when anything sits at `path`, a dangling link included — the scaffold's
+ * `wx` write refuses over any of them. Any other refusal reads as absent.
+ */
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** True when `path` is a directory. Any filesystem refusal reads as absent. */

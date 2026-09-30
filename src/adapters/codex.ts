@@ -165,23 +165,80 @@ const CONFIG_REFERENCE_PAGE =
  * surface — a config key this engine writes, a trust record in the operator's
  * Codex home, and a per-hook hash review that only the interactive client can
  * take — so the operator is told all three wherever the subject comes up, in
- * {@link buildHooksJson}'s `description` and in the `[features]` comment of
- * {@link composeConfigToml}.
+ * {@link buildHooksJson}'s `description`, in the `[features]` comment of
+ * {@link composeConfigToml}, and in init's next steps for this client.
+ *
+ * Data, one entry per step, so all three renderings derive from one source.
+ * Each step carries the wrapped comment lines the two emitted files print and,
+ * where the step is the operator's to take, the one-line instruction init's
+ * panel prints. The comment lines are held byte for byte: joined, they are the
+ * `description` of {@link CODEX_HOOKS_FILE}, whose hash Codex trusts, so a
+ * moved byte there makes every operator re-review every hook.
  */
-const HOOK_TRUST_STEPS = [
-  "Three steps stand between this file and a hook the client runs.",
-  "1. Feature flag: `features.hooks = true` (deprecated alias `features.codex_hooks`); this file",
-  `   is not read while it is off. ${CODEX_CONFIG_FILE} writes it explicitly, so the client's`,
-  "   default does not decide it. The per-invocation equivalent is `codex exec --enable hooks`,",
-  "   which is shorthand for `-c features.hooks=true`.",
-  "2. Project trust: a project `.codex/` layer loads only when it is trusted. Record",
-  '   `projects.<path>.trust_level = "trusted"` in the Codex home config (`~/.codex/config.toml`),',
-  "   which is the operator's file and not one this engine writes.",
-  "3. Per-hook review: each hook is trusted by hash through the interactive `/hooks` command.",
-  "   Automation that cannot take that step runs `--dangerously-bypass-hook-trust`, which runs",
-  "   enabled hooks with no persisted trust.",
-  `Key set: ${CONFIG_REFERENCE_PAGE}.`,
-] as const;
+export interface CodexHookTrustStep {
+  /** Which gate the step closes. */
+  readonly id: "feature-flag" | "project-trust" | "hook-review";
+  /** The step as the two emitted files print it: wrapped comment lines, numbered. */
+  readonly lines: readonly string[];
+  /**
+   * The step as a next-step instruction, or `null` when this engine closes the
+   * gate itself — the feature flag is written into {@link CODEX_CONFIG_FILE},
+   * so the operator has nothing to do for it.
+   */
+  readonly operatorStep: string | null;
+}
+
+export const HOOK_TRUST_STEPS: readonly CodexHookTrustStep[] = [
+  {
+    id: "feature-flag",
+    lines: [
+      "1. Feature flag: `features.hooks = true` (deprecated alias `features.codex_hooks`); this file",
+      `   is not read while it is off. ${CODEX_CONFIG_FILE} writes it explicitly, so the client's`,
+      "   default does not decide it. The per-invocation equivalent is `codex exec --enable hooks`,",
+      "   which is shorthand for `-c features.hooks=true`.",
+    ],
+    operatorStep: null,
+  },
+  {
+    id: "project-trust",
+    lines: [
+      "2. Project trust: a project `.codex/` layer loads only when it is trusted. Record",
+      '   `projects.<path>.trust_level = "trusted"` in the Codex home config (`~/.codex/config.toml`),',
+      "   which is the operator's file and not one this engine writes.",
+    ],
+    operatorStep:
+      'trust this project for Codex: record `projects."<this repo\'s absolute path>".trust_level = "trusted"` ' +
+      "in ~/.codex/config.toml (your own Codex file, which setup does not write) — until then Codex " +
+      `loads no ${CODEX_CONFIG_FILE} and no ${CODEX_HOOKS_FILE} from this repo`,
+  },
+  {
+    id: "hook-review",
+    lines: [
+      "3. Per-hook review: each hook is trusted by hash through the interactive `/hooks` command.",
+      "   Automation that cannot take that step runs `--dangerously-bypass-hook-trust`, which runs",
+      "   enabled hooks with no persisted trust.",
+    ],
+    operatorStep:
+      "inside Codex, type: /hooks and review each stamity hook — Codex trusts each one by hash, and a " +
+      "hook you have not reviewed does not run",
+  },
+];
+
+/** The line that opens the trust notice, above the numbered steps. */
+const HOOK_TRUST_INTRO = "Three steps stand between this file and a hook the client runs.";
+
+/**
+ * The trust notice as the two emitted files print it: the intro, every step's
+ * lines in order, and the page the key was read from. The rendered bytes of
+ * the list this reshape replaced, unchanged.
+ */
+function hookTrustLines(): string[] {
+  return [
+    HOOK_TRUST_INTRO,
+    ...HOOK_TRUST_STEPS.flatMap((step) => step.lines),
+    `Key set: ${CONFIG_REFERENCE_PAGE}.`,
+  ];
+}
 
 /** The one transformable file in a projected skill directory. */
 const SKILL_FILE = "SKILL.md";
@@ -642,7 +699,7 @@ function bodyRenderer(ctx: EmissionContext): (raw: string) => string {
  * two renderings from drifting apart; a step added above appears in both.
  */
 function hookTrustSentence(): string {
-  return HOOK_TRUST_STEPS.join(" ").replaceAll(/\s+/gu, " ");
+  return hookTrustLines().join(" ").replaceAll(/\s+/gu, " ");
 }
 
 /**
@@ -882,7 +939,7 @@ export function composeConfigToml(core: CoreEmissionPlan, ctx: EmissionContext):
       "Lifecycle hooks: an emitted hooks.json is read only while this key is on. It is written",
       "explicitly, so the client's default does not decide it. Enabling it here is step 1 of 3.",
       "",
-      ...HOOK_TRUST_STEPS,
+      ...hookTrustLines(),
       "",
       "One writer: this whole file is generated, so a `[features]` table of your own does not",
       "belong in it — TOML reads a second [features] header as a redefinition, not a merge, and",

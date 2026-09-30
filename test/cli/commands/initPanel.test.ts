@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { CLAUDE_COMMANDS_DIR, CLAUDE_SKILLS_DIR } from "../../../src/adapters/claude.ts";
-import { CODEX_COMMANDS_DIR } from "../../../src/adapters/codex.ts";
-import { COPILOT_PROMPTS_DIR } from "../../../src/adapters/copilot.ts";
+import { CODEX_COMMANDS_DIR, HOOK_TRUST_STEPS } from "../../../src/adapters/codex.ts";
+import { COPILOT_PROMPTS_DIR, COPILOT_SETUP_STEPS_PATH } from "../../../src/adapters/copilot.ts";
 import { CURSOR_COMMANDS_DIR } from "../../../src/adapters/cursor.ts";
 import type { InitApplyReport } from "../../../src/cli/commands/init/apply.ts";
 import {
+  defaultClientsLine,
+  emissionSummary,
   gitignoreLine,
   MAX_STACK_SUGGESTION_ROWS,
   nextStepsForTool,
@@ -81,10 +83,15 @@ function reportFixture(wrote: MergeResult[] = [], warnings: string[] = []): Init
   return {
     manifestPath: "/repo/.stamity/manifest.json",
     createdDirs: [".stamity", ".stamity/learnings", ".stamity/handoffs"],
+    // FIXTURE RECONCILIATION (sw10-first-run-output): the report gained the
+    // placeholders a fresh init creates and the .gitignore entries it appended —
+    // here the fresh-repo answer for both, the whole required set included.
+    createdKeeps: [".stamity/learnings/.gitkeep", ".stamity/handoffs/.gitkeep"],
     wrote,
     warnings,
     ledgerCount: wrote.length,
     gitignoreEnsured: true,
+    gitignoreAdded: [...REQUIRED_GITIGNORE_ENTRIES],
     dryRun: false,
   };
 }
@@ -273,7 +280,14 @@ describe("renderInitPanel — disclosure line", () => {
         ]),
       }),
     );
-    expect(output).toContain("detected typescript, claude traces -> installed claude (2 file(s))");
+    // TEST CHANGE (sw10-first-run-output, REQ-FLOW-022): the count names every file
+    // the run put on disk — the generated paths plus the manifest and the two
+    // placeholders — and says the .gitignore changed. It counted the generated
+    // rows alone, which disagreed with `git status` on the same repo.
+    expect(output).toContain(
+      "detected typescript, claude traces -> installed claude (5 file(s) on disk (2 generated, " +
+        "the manifest (.stamity/manifest.json), 2 state-directory keep file(s); .gitignore changed))",
+    );
     // TEST CHANGE (sw26-engine-cli-call-form, REQ-FLOW-002): the change
     // instruction names the pinned npx call instead of a bare `stamity config`
     // that only a global install provides. Same claim, the runnable spelling.
@@ -305,7 +319,13 @@ describe("renderInitPanel — disclosure line", () => {
     // Changed expectation (not a weakening): the count claim is
     // unchanged and still asserted; what is ADDED is that the skipped row is
     // disclosed on the same line rather than only in a warning below it.
-    expect(output).toContain("(2 file(s), 1 left alone (already yours))");
+    // TEST CHANGE (sw10-first-run-output): the count clause names the manifest and
+    // the placeholders beside the generated paths; the skipped row is still excluded
+    // from the count and still disclosed on the same line.
+    expect(output).toContain(
+      "(5 file(s) on disk (2 generated, the manifest (.stamity/manifest.json), " +
+        "2 state-directory keep file(s); .gitignore changed), 1 left alone (already yours))",
+    );
   });
 
   it("names a total collision as a failed install, not as a build that emits nothing", () => {
@@ -589,7 +609,17 @@ describe("renderInitPanel — security disclosure", () => {
     // (`.env.mcp — was added to your .gitignore`); init now adds up to four, so
     // it names all four. The case pinned — disclosed on an ordinary init with no
     // MCP server — is unchanged.
-    expect(output).toContain(".env.mcp, .stamity/review-gate.json, .stamity/review-gate.json.lock, .stamity/review-gate.json.tmp-* — were added to your .gitignore wherever it lacked them");
+    // TEST CHANGE (sw10-first-run-output, REQ-FLOW-022): each entry now carries a
+    // neutral reason, and the line names the entries the run appended rather than
+    // the whole set "wherever it lacked them". The case pinned — disclosed on an
+    // ordinary init with no MCP server — is unchanged.
+    expect(output).toContain(
+      "these lines — .env.mcp (MCP server credentials), .stamity/review-gate.json (the review " +
+        "gate's per-run state), .stamity/review-gate.json.lock (the review gate's lock), " +
+        ".stamity/review-gate.json.tmp-* (the review gate's temporary writes) — were added to your .gitignore",
+    );
+    // No MCP server: no credential file this setup uses, so no such claim.
+    expect(output).not.toContain("credential file this setup uses");
     // The credential half stays conditional: no server, no credential to load.
     expect(output).not.toContain("credentials:");
     expect(output).not.toContain("Before starting your tool");
@@ -605,7 +635,53 @@ describe("renderInitPanel — security disclosure", () => {
   });
 
   it("previews the same four entries in the future tense", () => {
-    expect(gitignoreLine(true)).toContain(".env.mcp, .stamity/review-gate.json, .stamity/review-gate.json.lock, .stamity/review-gate.json.tmp-* — would be added to your .gitignore wherever it lacks them");
+    // TEST CHANGE (sw10-first-run-output): `gitignoreLine` takes its entries and
+    // the MCP condition as input; a preview passes the whole required set, and the
+    // future tense with "wherever it lacks them" is what this case still pins.
+    const line = gitignoreLine({
+      dryRun: true,
+      entries: REQUIRED_GITIGNORE_ENTRIES,
+      mcpConfigured: false,
+    });
+    for (const entry of REQUIRED_GITIGNORE_ENTRIES) expect(line, entry).toContain(entry);
+    expect(line).toContain("— would be added to your .gitignore wherever it lacks them");
+  });
+
+  it("names only the entries this run added (REQ-FLOW-022)", () => {
+    // A .gitignore that already covered .env.mcp: the lane appended the three
+    // review-gate entries alone, and the panel names exactly those.
+    const added = REQUIRED_GITIGNORE_ENTRIES.filter((entry) => entry !== ".env.mcp");
+    const output = renderInitPanel(
+      panelInput({ report: { ...reportFixture(), gitignoreAdded: added } }),
+    );
+    const line = output.split("\n").find((row) => row.includes("security:")) ?? "";
+
+    expect(added.length).toBe(REQUIRED_GITIGNORE_ENTRIES.length - 1);
+    for (const entry of added) expect(line, entry).toContain(entry);
+    expect(line).not.toContain(".env.mcp");
+    expect(line).not.toContain("credential");
+  });
+
+  it("names the one entry added in the singular", () => {
+    const output = renderInitPanel(
+      panelInput({ report: { ...reportFixture(), gitignoreAdded: [".env.mcp"] } }),
+    );
+
+    expect(output).toContain("security: this line — .env.mcp (MCP server credentials) — was added to");
+  });
+
+  it("prints no gitignore disclosure when the run appended nothing", () => {
+    const output = renderInitPanel(
+      panelInput({ report: { ...reportFixture(), gitignoreAdded: [] } }),
+    );
+
+    expect(output).not.toContain("security:");
+  });
+
+  it("keeps the credential wording for a run with an MCP server", () => {
+    const output = renderInitPanel(panelInput({ mcpServers: ["github"] }));
+
+    expect(output).toContain("the credential file this setup uses (.env.mcp) among them");
   });
 
   it("stays silent about the gitignore when nothing was written to it", () => {
@@ -708,6 +784,63 @@ describe("renderInitPanel — stack suggestions", () => {
   });
 });
 
+describe("renderInitPanel — the file count (REQ-FLOW-022)", () => {
+  it("counts a path several outputs address once", () => {
+    const report = reportFixture([
+      { path: "AGENTS.md", action: "created" },
+      { path: "AGENTS.md", action: "updated" },
+      { path: ".claude/agents/a.md", action: "created" },
+    ]);
+
+    // Two distinct generated paths, the manifest, two placeholders.
+    expect(emissionSummary(report)).toMatch(/^5 file\(s\) on disk \(2 generated, /u);
+  });
+
+  it("names no placeholder the run did not create, and no .gitignore it did not change", () => {
+    const report = {
+      ...reportFixture([{ path: "a.md", action: "created" }]),
+      createdKeeps: [],
+      gitignoreAdded: [],
+    };
+
+    expect(emissionSummary(report)).toBe(
+      "2 file(s) on disk (1 generated, the manifest (.stamity/manifest.json))",
+    );
+  });
+
+  it("previews the same count in the conditional", () => {
+    const report = { ...reportFixture([{ path: "a.md", action: "created" }]), dryRun: true };
+
+    expect(emissionSummary(report)).toBe(
+      "4 file(s) would be written (1 generated, the manifest (.stamity/manifest.json), " +
+        "2 state-directory keep file(s))",
+    );
+  });
+});
+
+describe("renderInitPanel — a defaulted client set (REQ-FLOW-022)", () => {
+  it("names claude as the default when no other client's files were found", () => {
+    const output = renderInitPanel(panelInput({ decisions: decisionsFixture({ toolsSource: "default" }) }));
+
+    expect(output).toContain(
+      "  clients: claude (the default — no other client's files were found; add more with " +
+        "--tools claude,cursor,copilot,codex)",
+    );
+    // The line sits directly under the disclosure line it qualifies.
+    const lines = output.split("\n");
+    expect(lines[lines.findIndex((line) => line.includes("-> installed")) + 1]).toContain("clients:");
+  });
+
+  it("prints no default line for a detected or a flagged client set", () => {
+    for (const toolsSource of ["detected", "flag"] as const) {
+      expect(defaultClientsLine(decisionsFixture({ toolsSource }))).toBeNull();
+      expect(renderInitPanel(panelInput({ decisions: decisionsFixture({ toolsSource }) }))).not.toContain(
+        "the default —",
+      );
+    }
+  });
+});
+
 describe("renderInitPanel — next steps", () => {
   it("numbers the steps for a single tool under one heading", () => {
     const output = renderInitPanel(panelInput());
@@ -715,6 +848,46 @@ describe("renderInitPanel — next steps", () => {
     expect(output).toContain("  1. ");
     expect(output).toContain("  2. ");
     expect(output).toContain("st-onboard");
+  });
+
+  it("lists both Codex trust steps the operator takes, from the adapter's own step data", () => {
+    const steps = nextStepsForTool("codex");
+    const operatorSteps = HOOK_TRUST_STEPS.flatMap((step) =>
+      step.operatorStep === null ? [] : [step.operatorStep],
+    );
+
+    expect(operatorSteps).toHaveLength(2);
+    for (const step of operatorSteps) expect(steps).toContain(step);
+    expect(steps.join("\n")).toContain("~/.codex/config.toml");
+    expect(steps.join("\n")).toContain("/hooks");
+    // Project trust comes before the client opens the repo; the review, after.
+    const open = steps.findIndex((step) => step.includes("type: codex"));
+    expect(steps.findIndex((step) => step.includes("~/.codex/config.toml"))).toBeLessThan(open);
+    expect(steps.findIndex((step) => step.includes("type: /hooks"))).toBeGreaterThan(open);
+  });
+
+  it("names the Copilot setup workflow and when it runs, only when the run wrote it", () => {
+    const decisions = decisionsFixture({ tools: ["copilot"], toolsSource: "flag" });
+    const written = renderInitPanel(
+      panelInput({
+        decisions,
+        report: reportFixture([{ path: COPILOT_SETUP_STEPS_PATH, action: "created" }]),
+      }),
+    );
+    const skipped = renderInitPanel(
+      panelInput({
+        decisions,
+        report: reportFixture([
+          { path: COPILOT_SETUP_STEPS_PATH, action: "skipped", warning: "user-owned" },
+        ]),
+      }),
+    );
+
+    expect(written).toContain(`the coding agent's setup workflow is at ${COPILOT_SETUP_STEPS_PATH}`);
+    expect(written).toContain("before the Copilot coding agent starts work on a task");
+    // The in-chat instruction stays the last step.
+    expect(written.trimEnd().split("\n").at(-1)).toContain("@workspace");
+    expect(skipped).not.toContain("setup workflow is at");
   });
 
   it("prints one named block per tool when several are targeted", () => {

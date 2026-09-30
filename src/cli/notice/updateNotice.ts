@@ -1,14 +1,17 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import semver from "semver";
+import { pinnedCliCall } from "../../shared/cliCall.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 
 /**
  * The startup update notice: async, cached, silent-fail, opt-out-able, and
  * explicitly NOT a self-updater. There is no `update` command and nothing
  * here rewrites an install — the banner names the one supported upgrade path,
- * `npx <name>@latest sync`, because a newer CLI does nothing for the user's repo
- * until the managed blocks regenerate.
+ * a sync run by the newer release (`npx -y <name>@<newer version> sync`),
+ * because a newer CLI does nothing for the user's repo until the managed blocks
+ * regenerate. It names the exact version, never `@latest`, and says how to
+ * stay on the running one, since a setup pinned to its version is a choice.
  *
  * Zero new dependencies: global `fetch` plus one JSON stamp file. `semver` is
  * already the engine's version comparator, so the guard reuses it rather than
@@ -260,15 +263,31 @@ async function probeRegistry(opts: UpdateNoticeOptions): Promise<string | null> 
  * either way means no banner — the guard fails closed.
  *
  * No prerelease filtering: whatever the `latest` dist-tag points at is what the
- * publisher chose to hand `npx <name>@latest`, so a prerelease sitting on that
- * tag is exactly what the user would install.
+ * publisher chose to hand an unpinned install, so a prerelease sitting on that
+ * tag is exactly the version the banner names.
+ *
+ * The move command is the pinned call (`../../shared/cliCall.ts`), the one
+ * spelling every other remedy uses: `npx -y <name>@<latest> sync`. `-y`
+ * because the reader may be an agent's shell, and the exact version because an
+ * `@latest` advice runs whatever the registry serves on the day it is typed.
+ * The `npx --no` form of a package with no npm channel never renders here: such
+ * a package is `private`, and step 2 returned before any registry probe.
+ * A package name the pinned call refuses throws, and the caller's net turns
+ * that into no banner — the fail-closed direction for a cosmetic line.
  *
  * Plain text, no palette — the caller may be writing to a non-TTY stream and
  * owns all styling decisions.
  */
 function buildBanner(opts: UpdateNoticeOptions, latest: string | null): string | null {
   if (latest === null) return null;
-  if (semver.valid(latest) === null || semver.valid(opts.currentVersion) === null) return null;
-  if (!semver.gt(latest, opts.currentVersion)) return null;
-  return `Update available: ${opts.currentVersion} -> ${latest}. Run: npx ${opts.packageName}@latest sync`;
+  // The normalized spelling goes into the command: `semver.valid` admits a
+  // leading `v` or `=` that the pinned call's own shape check refuses.
+  const target = semver.valid(latest);
+  if (target === null || semver.valid(opts.currentVersion) === null) return null;
+  if (!semver.gt(target, opts.currentVersion)) return null;
+  return (
+    `Update available: ${opts.currentVersion} -> ${latest}. ` +
+    `To move: ${pinnedCliCall(opts.packageName, target, "sync")}. ` +
+    `To stay on ${opts.currentVersion}, do nothing.`
+  );
 }

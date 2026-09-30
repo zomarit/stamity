@@ -5,6 +5,7 @@ import { Option, type Command } from "commander";
 import { CLAUDE_SETTINGS_PATH } from "../../adapters/claude.ts";
 import { suggestStackPacks } from "../../detect/stackSupport.ts";
 import { readManifest } from "../../manifest/manifest.ts";
+import { REQUIRED_GITIGNORE_ENTRIES } from "../../mcp/env.ts";
 import {
   carryPredecessorAssets,
   mapPredecessorDefaults,
@@ -51,6 +52,7 @@ import {
   type InitOverrides,
 } from "./init/plan.ts";
 import {
+  defaultClientsLine,
   emissionSummary,
   gitignoreLine,
   migrationLines,
@@ -590,7 +592,12 @@ function effectiveView(
     decisions.maturitySource === "flag"
       ? decisions.maturityTier
       : defaults?.maturityTier ?? decisions.maturityTier;
-  return { ...decisions, tools, maturityTier };
+  // A predecessor's client list replacing the default is no longer the default:
+  // the panel's "the default" line must not print over a carried choice. The
+  // JSON document reports the settled source, not this view's.
+  const toolsSource =
+    tools === decisions.tools ? decisions.toolsSource : ("detected" as const);
+  return { ...decisions, tools, toolsSource, maturityTier };
 }
 
 // ── Rendering ──────────────────────────────────────────────────
@@ -743,9 +750,15 @@ function migrateNote(
  * come back as a `skipped` row whose warning is the only place the preview says
  * so. Dropping them would preview a refusal as `1 left alone (already yours)`,
  * which is the reading it is least like.
+ *
+ * A defaulted client set is named as the default, with the panel's own line
+ * ({@link defaultClientsLine}): a preview is where the operator can still add
+ * a client, and `write: … claude` alone read as a choice somebody made.
  */
 function renderDryRun(
   ctx: CliContext,
+  decisions: InitDecisions,
+  mcpServers: readonly string[],
   report: InitApplyReport,
   carry: CarryReport | null,
   residue: MigrationResidue | undefined,
@@ -759,9 +772,20 @@ function renderDryRun(
       ? `  create: ${report.createdDirs.join(", ")}\n`
       : "  create: no new state directories (all present)\n",
   );
+  const defaulted = defaultClientsLine(decisions);
+  if (defaulted !== null) io.out(`  ${defaulted}\n`);
   io.out(`  write: ${emissionSummary(report, true)}\n`);
   io.out(`  manifest: ${report.manifestPath}\n`);
-  io.out(`  ${gitignoreLine(true, gitAvailable)}\n`);
+  // A preview writes nothing, so it cannot know which entries are missing: it
+  // names the whole required set, "wherever it lacks them".
+  io.out(
+    `  ${gitignoreLine({
+      dryRun: true,
+      gitAvailable,
+      entries: REQUIRED_GITIGNORE_ENTRIES,
+      mcpConfigured: mcpServers.length > 0,
+    })}\n`,
+  );
   for (const warning of [
     ...report.wrote.flatMap((row) => (row.warning === undefined ? [] : [row.warning])),
     ...report.warnings,
@@ -1111,7 +1135,7 @@ export const initCommand: CommandModule = {
     }
 
     if (ctx.dryRun) {
-      renderDryRun(ctx, report, carry, residue, notes, git.available);
+      renderDryRun(ctx, effective, mcpServers, report, carry, residue, notes, git.available);
     } else {
       for (const note of notes) ctx.io.out(`${note}\n`);
       // The mark, once, on the one surface that is a first screen for a person.

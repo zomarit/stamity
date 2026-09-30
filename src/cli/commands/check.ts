@@ -219,12 +219,17 @@ function checkManifest(state: ManifestState, app: App): DoctorCheck {
       ? ""
       : ` (last written by stamity ${manifest.generatedBy}; this build is ${app.version}, and ` +
         `the next sync restamps)`;
+  // Paths first, rows second: a file several clients share (`AGENTS.md`) has
+  // one ledger row per client, so the row count named more files than the repo
+  // holds, and read against init's file count the two numbers disagreed.
+  const paths = new Set(manifest.ledger.map((row) => row.path)).size;
   return {
     id,
     status: "pass",
     detail:
       `${MANIFEST_DISPLAY} is valid — schema ${manifest.version}, tools ` +
-      `${manifest.tools.join(", ")}, ${manifest.ledger.length} ledger row(s)${skew}`,
+      `${manifest.tools.join(", ")}, ${paths} managed path(s) (${manifest.ledger.length} ledger ` +
+      `rows across ${manifest.tools.length} client(s))${skew}`,
   };
 }
 

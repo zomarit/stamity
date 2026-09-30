@@ -15,6 +15,9 @@ import {
   buildPromptFile,
   buildSetupSteps,
   copilotResiduePlanner,
+  engineRangeFloor,
+  NO_SETUP_STEPS_PINS,
+  readSetupStepsPins,
 } from "../../src/adapters/copilot.ts";
 import { __resetContentRootCacheForTests } from "../../src/content/contentRoot.ts";
 import type { CatalogItem } from "../../src/content/catalog.ts";
@@ -916,8 +919,12 @@ describe("model pinning", () => {
 // ── Setup steps workflow ─────────────────────────────────────────
 
 describe("copilot-setup-steps.yml", () => {
+  // TEST CHANGE (sw10-first-run-output, REQ-FLOW-022): `buildSetupSteps` takes the
+  // project's pre-read pins as a third argument. The cases below pass
+  // `NO_SETUP_STEPS_PINS` (every value at its default) and pin the same lane
+  // behaviour they pinned before; the pin cases follow them.
   it("parses as YAML and declares the job name the coding agent runs", () => {
-    const yaml = buildSetupSteps(packageManagerOf({ lockfile: "package-lock.json" }), ["typescript"]);
+    const yaml = buildSetupSteps(packageManagerOf({ lockfile: "package-lock.json" }), ["typescript"], NO_SETUP_STEPS_PINS);
     const parsed = parseYaml(yaml) as { jobs: Record<string, { steps: unknown[] }> };
 
     expect(Object.keys(parsed.jobs)).toEqual(["copilot-setup-steps"]);
@@ -926,39 +933,124 @@ describe("copilot-setup-steps.yml", () => {
   });
 
   it("installs frozen only when a lockfile is actually present", () => {
-    expect(buildSetupSteps(packageManagerOf({ lockfile: "package-lock.json" }), [])).toContain(
+    expect(buildSetupSteps(packageManagerOf({ lockfile: "package-lock.json" }), [], NO_SETUP_STEPS_PINS)).toContain(
       "- run: npm ci",
     );
     // `npm ci` without a lockfile fails outright, so the honest command is `install`.
-    expect(buildSetupSteps(packageManagerOf({}), ["javascript"])).toContain("- run: npm install");
+    expect(buildSetupSteps(packageManagerOf({}), ["javascript"], NO_SETUP_STEPS_PINS)).toContain("- run: npm install");
     expect(
-      buildSetupSteps(packageManagerOf({ name: "pnpm", lockfile: "pnpm-lock.yaml" }), []),
+      buildSetupSteps(packageManagerOf({ name: "pnpm", lockfile: "pnpm-lock.yaml" }), [], NO_SETUP_STEPS_PINS),
     ).toContain("- run: pnpm install --frozen-lockfile");
     expect(
-      buildSetupSteps(packageManagerOf({ name: "bun", lockfile: "bun.lock" }), []),
+      buildSetupSteps(packageManagerOf({ name: "bun", lockfile: "bun.lock" }), [], NO_SETUP_STEPS_PINS),
     ).toContain("- run: bun install --frozen-lockfile");
   });
 
   it("enables Corepack for the managers that need provisioning, and not for the others", () => {
-    expect(buildSetupSteps(packageManagerOf({ name: "yarn", lockfile: "yarn.lock" }), [])).toContain(
+    expect(buildSetupSteps(packageManagerOf({ name: "yarn", lockfile: "yarn.lock" }), [], NO_SETUP_STEPS_PINS)).toContain(
       "- run: corepack enable",
     );
     expect(
-      buildSetupSteps(packageManagerOf({ name: "npm", lockfile: "package-lock.json" }), []),
+      buildSetupSteps(packageManagerOf({ name: "npm", lockfile: "package-lock.json" }), [], NO_SETUP_STEPS_PINS),
     ).not.toContain("corepack enable");
   });
 
   it("checks out and stops when no Node evidence exists, naming what was detected", () => {
-    const yaml = buildSetupSteps(packageManagerOf({}), ["python"]);
+    const yaml = buildSetupSteps(packageManagerOf({}), ["python"], NO_SETUP_STEPS_PINS);
     const parsed = parseYaml(yaml) as { jobs: Record<string, { steps: { uses?: string }[] }> };
 
     expect(parsed.jobs["copilot-setup-steps"]?.steps).toHaveLength(1);
     expect(yaml).not.toContain("npm install");
     expect(yaml).toContain("detected: python");
+    // The generated file is overwritten on every sync, so it no longer invites an
+    // edit; it says what the agent gets instead.
+    expect(yaml).not.toContain("here.");
+    expect(yaml).toContain("The agent gets a checkout only");
+  });
+
+  it("follows the project's engines.node and its own checkout ref (REQ-FLOW-022)", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({
+      "repo/package-lock.json": "{}\n",
+      "repo/package.json": `${JSON.stringify({ name: "x", engines: { node: "22" } })}\n`,
+      "repo/.github/workflows/ci.yml":
+        "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v7\n",
+    });
+    const rootDir = temp.path("repo");
+
+    const yaml = rowAt(await planResidue({ rootDir }), COPILOT_SETUP_STEPS_PATH).content;
+
+    expect(yaml).toContain('node-version: "22"');
+    expect(yaml).toContain("- uses: actions/checkout@v7");
+    // setup-node is not in the project's workflow, so it keeps the major tag.
+    expect(yaml).toContain("- uses: actions/setup-node@v5");
+    expect(yaml).toContain("From this project's package.json engines.node");
+    expect(yaml).toContain(".github/workflows/ci.yml");
+    expect(yaml).not.toContain("lts/*");
+    expect(yaml).not.toContain("actions/checkout@v5");
+    expect(parseYaml(yaml)).toBeTypeOf("object");
+  });
+
+  it("copies a SHA pin with its trailing comment, and reads .nvmrc before engines.node", async () => {
+    const temp = getTemp();
+    const sha = "11bd71901bbe5b1630ceea73d27597364c9af683";
+    await temp.seedFiles({
+      "repo/.nvmrc": "\n  22.12.0\n",
+      "repo/package.json": `${JSON.stringify({ engines: { node: ">=20" } })}\n`,
+      "repo/.github/workflows/a.yaml": `jobs:\n  x:\n    steps:\n      - uses: "actions/setup-node@v6"\n`,
+      "repo/.github/workflows/b.yml": `jobs:\n  x:\n    steps:\n      - uses: actions/checkout@${sha} # v4.2.2\n      - uses: actions/checkout@v3\n`,
+    });
+
+    const pins = await readSetupStepsPins(temp.path("repo"));
+
+    expect(pins.node).toEqual({ version: "22.12.0", source: ".nvmrc" });
+    expect(pins.checkout).toEqual({ ref: sha, comment: "v4.2.2", source: ".github/workflows/b.yml" });
+    expect(pins.setupNode).toEqual({ ref: "v6", comment: null, source: ".github/workflows/a.yaml" });
+    const yaml = buildSetupSteps(packageManagerOf({ lockfile: "package-lock.json" }), [], pins);
+    expect(yaml).toContain(`- uses: actions/checkout@${sha} # v4.2.2`);
+    expect(yaml).toContain("- uses: actions/setup-node@v6");
+    expect(yaml).toContain('node-version: "22.12.0"');
+  });
+
+  it("never reads its own emitted workflow: a second plan over the first's output is byte-identical", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({ "repo/package-lock.json": "{}\n" });
+    const rootDir = temp.path("repo");
+
+    const first = rowAt(await planResidue({ rootDir }), COPILOT_SETUP_STEPS_PATH).content;
+    // The emitted file is the repo's only workflow. It names actions/checkout@v5,
+    // so a scan that read it would find a "project" pin and rewrite the comments.
+    await temp.seedFiles({ [`repo/${COPILOT_SETUP_STEPS_PATH}`]: first });
+    const second = rowAt(await planResidue({ rootDir }), COPILOT_SETUP_STEPS_PATH).content;
+
+    expect(second).toBe(first);
+    expect(await readSetupStepsPins(rootDir)).toEqual(NO_SETUP_STEPS_PINS);
+  });
+
+  it("takes the floor of an engines.node range at the precision it names", () => {
+    expect(engineRangeFloor("22")).toBe("22");
+    expect(engineRangeFloor(">=22.12")).toBe("22.12");
+    expect(engineRangeFloor(">= 22.12 <23")).toBe("22.12");
+    expect(engineRangeFloor("^20.11.0 || ^22")).toBe("20.11.0");
+    expect(engineRangeFloor("22.x")).toBe("22");
+    // No lower bound, or a strict one: no floor, so the LTS default stays.
+    expect(engineRangeFloor("<23")).toBeNull();
+    expect(engineRangeFloor(">22")).toBeNull();
+    expect(engineRangeFloor("*")).toBeNull();
+  });
+
+  it("does not copy a node-version value that could break the quoted scalar", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({ "repo/.nvmrc": 'v22" evil\n', "repo/.node-version": "lts/iron\n" });
+
+    expect((await readSetupStepsPins(temp.path("repo"))).node).toEqual({
+      version: "lts/iron",
+      source: ".node-version",
+    });
   });
 
   it("takes a Corepack pin as Node evidence on its own", () => {
-    const yaml = buildSetupSteps(packageManagerOf({ name: "pnpm", fromPackageJsonField: true }), []);
+    const yaml = buildSetupSteps(packageManagerOf({ name: "pnpm", fromPackageJsonField: true }), [], NO_SETUP_STEPS_PINS);
 
     expect(yaml).toContain("actions/setup-node@v5");
     expect(yaml).toContain("- run: pnpm install");

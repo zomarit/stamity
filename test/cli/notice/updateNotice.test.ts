@@ -184,8 +184,14 @@ describe("checkForUpdateNotice — the strictly-greater guard", () => {
       fetchImpl: fetch.impl,
     });
 
-    expect(notice).toBe(`Update available: 1.2.2 -> 1.2.3. Run: npx ${PKG}@latest sync`);
-    expect(notice).toContain(`npx ${PKG}@latest sync`);
+    // TEST CHANGE (sw10-first-run-output, REQ-FLOW-022): the banner used to advise
+    // `npx <name>@latest sync`, which runs whatever the registry serves on the day it
+    // is typed. It now names the exact version through the pinned call, and how to
+    // stay. The upgrade path it names is still a sync, which is the claim this case pins.
+    expect(notice).toBe(
+      `Update available: 1.2.2 -> 1.2.3. To move: npx -y ${PKG}@1.2.3 sync. To stay on 1.2.2, do nothing.`,
+    );
+    expect(notice).not.toContain("@latest");
     // Scoped-name contract: one path segment, with the scope separator encoded as
     // %2F. An unencoded `@zomarit/stamity` would split into two segments and the
     // registry would answer 404, which this module reports as "no banner" — a
@@ -234,7 +240,49 @@ describe("checkForUpdateNotice — the strictly-greater guard", () => {
 
     const notice = await checkForUpdateNotice(options(dir, fetch.impl, { now: frozen() }));
 
-    expect(notice).toBe(`Update available: 1.2.2 -> 1.2.3-beta.1. Run: npx ${PKG}@latest sync`);
+    // TEST CHANGE (sw10-first-run-output): the exact-version form, as above; the
+    // prerelease is still named unfiltered.
+    expect(notice).toBe(
+      `Update available: 1.2.2 -> 1.2.3-beta.1. To move: npx -y ${PKG}@1.2.3-beta.1 sync. ` +
+        "To stay on 1.2.2, do nothing.",
+    );
+  });
+
+  it("names the exact new version on a pinned 1.9.1 install and never @latest (REQ-FLOW-022)", async () => {
+    const dir = tempDir().path("cache");
+    const fetch = versionResponse("1.10.0");
+
+    const notice = await checkForUpdateNotice(
+      options(dir, fetch.impl, { currentVersion: "1.9.1", now: frozen() }),
+    );
+
+    expect(notice).toContain(`npx -y ${PKG}@1.10.0 sync`);
+    expect(notice).toContain("To stay on 1.9.1, do nothing.");
+    expect(notice).not.toContain("@latest");
+  });
+
+  it("puts the normalized version in the move command when the registry answers with a v prefix", async () => {
+    const dir = tempDir().path("cache");
+    const fetch = versionResponse("v1.3.0");
+
+    const notice = await checkForUpdateNotice(options(dir, fetch.impl, { now: frozen() }));
+
+    expect(notice).toContain(`npx -y ${PKG}@1.3.0 sync`);
+    expect(notice).not.toContain("@v1.3.0");
+  });
+
+  it("stays silent for a package name the pinned call cannot run", async () => {
+    const dir = tempDir().path("cache");
+    const fetch = versionResponse("1.3.0");
+
+    // A leading dash would read as an npx flag; the pinned call refuses it and the
+    // notice's own net turns the refusal into no banner.
+    const notice = await checkForUpdateNotice({
+      ...options(dir, fetch.impl, { now: frozen() }),
+      packageName: "-rf",
+    });
+
+    expect(notice).toBeNull();
   });
 
   it("fails closed when the running version is not semver (dev builds)", async () => {

@@ -24,6 +24,7 @@ import {
   __setContentRootForTests,
 } from "../../../src/content/contentRoot.ts";
 import { collectManifestErrors, readManifest } from "../../../src/manifest/manifest.ts";
+import { REQUIRED_GITIGNORE_ENTRIES } from "../../../src/mcp/env.ts";
 import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
 import type { AdapterOutput } from "../../../src/types/content.ts";
 import type { PredecessorDefaults } from "../../../src/migration/carry.ts";
@@ -190,13 +191,19 @@ describe("applyInit — fresh repo", () => {
     const root = await makeRepo();
     const report = await applyInit(optionsFor(root));
 
+    // TEST CHANGE (sw10-first-run-output, REQ-FLOW-022): the report gained two
+    // fields the panel counts and names — the placeholders this run created and the
+    // .gitignore entries it appended. A fresh repo gets both placeholders and the
+    // whole required set; every field the case pinned before is pinned unchanged.
     expect(report).toEqual({
       manifestPath: join(root, ".stamity", "manifest.json"),
       createdDirs: [...STATE_DIRS],
+      createdKeeps: [".stamity/learnings/.gitkeep", ".stamity/handoffs/.gitkeep"],
       wrote: [],
       warnings: [],
       ledgerCount: 0,
       gitignoreEnsured: true,
+      gitignoreAdded: [...REQUIRED_GITIGNORE_ENTRIES],
       dryRun: false,
     });
     for (const dir of STATE_DIRS) {
@@ -305,6 +312,9 @@ describe("applyInit — existing setup", () => {
 
     // The dirs already exist, so a forced re-init creates none.
     expect(report.createdDirs).toEqual([]);
+    // Nor a placeholder, nor a .gitignore line: the first run put all of them there.
+    expect(report.createdKeeps).toEqual([]);
+    expect(report.gitignoreAdded).toEqual([]);
     const manifest = await readManifest(root);
     expect(manifest?.createdAt).toBe(LATER_NOW.toISOString());
     expect(manifest?.updatedAt).toBe(LATER_NOW.toISOString());
@@ -339,6 +349,9 @@ describe("applyInit — dry run", () => {
     expect(report.wrote).toEqual([]);
     expect(report.ledgerCount).toBe(0);
     expect(report.gitignoreEnsured).toBe(false);
+    // A preview names the placeholders it would create and appends nothing.
+    expect(report.createdKeeps).toEqual([".stamity/learnings/.gitkeep", ".stamity/handoffs/.gitkeep"]);
+    expect(report.gitignoreAdded).toEqual([]);
     expect(report.manifestPath).toBe(join(root, ".stamity", "manifest.json"));
 
     expect(await snapshotTree(root)).toEqual(before);

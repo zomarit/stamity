@@ -29,7 +29,7 @@ that is otherwise clean.
 doctor
   ok    node-version         Node 22.22.3 satisfies >=22.22.2
   ok    git-available        git reports a clean working tree
-  ok    manifest             .stamity/manifest.json is valid — schema 1.0.0, tools claude, 67 ledger row(s)
+  ok    manifest             .stamity/manifest.json is valid — schema 1.0.0, tools claude, 67 managed path(s) (67 ledger rows across 1 client(s))
   ok    state-dirs           .stamity/learnings, .stamity/handoffs are present
   ok    learnings            14 learning(s), all valid
   ok    tmp-hygiene          no writer temp files left behind

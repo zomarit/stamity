@@ -1,12 +1,17 @@
 import { CLAUDE_COMMANDS_DIR, CLAUDE_SKILLS_DIR } from "../../../adapters/claude.ts";
-import { CODEX_COMMANDS_DIR } from "../../../adapters/codex.ts";
-import { COPILOT_PROMPTS_DIR } from "../../../adapters/copilot.ts";
+import {
+  CODEX_COMMANDS_DIR,
+  HOOK_TRUST_STEPS,
+  type CodexHookTrustStep,
+} from "../../../adapters/codex.ts";
+import { COPILOT_PROMPTS_DIR, COPILOT_SETUP_STEPS_PATH } from "../../../adapters/copilot.ts";
 import { CURSOR_COMMANDS_DIR } from "../../../adapters/cursor.ts";
 import type { StackSuggestion } from "../../../detect/stackSupport.ts";
 import { NATIVE_SKILL_DIRS, SKILLS_PROJECTION_DIR } from "../../../emit/skillsProjection.ts";
 import { ENV_MCP_FILE, getSourceEnvMcpCommand } from "../../../mcp/env.ts";
 import type { CarryReport } from "../../../migration/carry.ts";
-import type { Tool } from "../../../types/core.ts";
+import { TOOLS, type Tool } from "../../../types/core.ts";
+import { MANIFEST_FILE } from "../../../types/manifest.ts";
 import { STATE_DIR } from "../../../types/markers.ts";
 import { packageCommand } from "../../kit/packageName.ts";
 import type { Palette } from "../../kit/terminal.ts";
@@ -153,16 +158,30 @@ function claudeSteps(): readonly string[] {
   ];
 }
 
-/** Codex discovers neutral skills and invokes them with $name. */
+/**
+ * Codex discovers neutral skills and invokes them with $name.
+ *
+ * The hook trust steps that are the operator's to take ride here too, read off
+ * the adapter's own step data (`HOOK_TRUST_STEPS`), so the panel and the two
+ * emitted files name the same gates: project trust before the client opens
+ * the repo, since an untrusted project loads no `.codex/` layer at all, and the
+ * per-hook `/hooks` review once it is open. The feature flag carries no
+ * operator step — the setup writes it.
+ */
 function codexSteps(): readonly string[] {
   const open = "open a terminal in this repo and type: codex";
-  if (CODEX_COMMANDS_DIR === null) {
-    return [
-      open,
-      `then type: $st-onboard — the guided first change at ${SKILLS_PROJECTION_DIR}/st-onboard/SKILL.md`,
-    ];
-  }
-  return [open, `then type: /st-onboard — installed in ${CODEX_COMMANDS_DIR}/`];
+  const onboard =
+    CODEX_COMMANDS_DIR === null
+      ? `then type: $st-onboard — the guided first change at ${SKILLS_PROJECTION_DIR}/st-onboard/SKILL.md`
+      : `then type: /st-onboard — installed in ${CODEX_COMMANDS_DIR}/`;
+  return [...codexTrustStep("project-trust"), open, ...codexTrustStep("hook-review"), onboard];
+}
+
+/** One Codex trust step's operator instruction, or nothing when the setup closes that gate itself. */
+function codexTrustStep(id: CodexHookTrustStep["id"]): string[] {
+  return HOOK_TRUST_STEPS.flatMap((step) =>
+    step.id === id && step.operatorStep !== null ? [step.operatorStep] : [],
+  );
 }
 
 /** Both neutral and native Cursor skill directories support /name invocation. */
@@ -285,11 +304,29 @@ function detectedLabel(input: InitPanelInput): string {
  * later release" at precisely the moment the setup had failed to install.
  */
 export function emissionSummary(report: InitApplyReport, dryRun = report.dryRun): string {
-  const written = report.wrote.filter((row) => row.action !== "skipped").length;
-  const skipped = report.wrote.filter((row) => row.action === "skipped").length;
-  if (written > 0) {
+  // Distinct paths, not rows: several outputs address one shared file
+  // (`AGENTS.md`), and a count of rows named more files than the run put on
+  // disk. The manifest and the state-directory placeholders are files this run
+  // writes too, so they are counted and named beside the generated set.
+  const generated = new Set(
+    report.wrote.filter((row) => row.action !== "skipped").map((row) => row.path),
+  ).size;
+  const skipped = new Set(
+    report.wrote.filter((row) => row.action === "skipped").map((row) => row.path),
+  ).size;
+  if (generated > 0) {
     const tail = skipped > 0 ? `, ${skipped} left alone (already yours)` : "";
-    return dryRun ? `${written} file(s) would be written${tail}` : `${written} file(s)${tail}`;
+    const keeps = report.createdKeeps.length;
+    const total = generated + 1 + keeps;
+    const parts = [
+      `${generated} generated`,
+      `the manifest (${STATE_DIR}/${MANIFEST_FILE})`,
+      ...(keeps > 0 ? [`${keeps} state-directory keep file(s)`] : []),
+    ].join(", ");
+    const gitignore = report.gitignoreAdded.length > 0 ? "; .gitignore changed" : "";
+    return dryRun
+      ? `${total} file(s) would be written (${parts})${tail}`
+      : `${total} file(s) on disk (${parts}${gitignore})${tail}`;
   }
   if (skipped > 0) {
     return dryRun
@@ -331,6 +368,37 @@ function gatePinLine(decisions: InitDecisions): string | null {
  */
 function installedLabel(decisions: InitDecisions, report: InitApplyReport): string {
   return `${decisions.tools.join(", ")} (${emissionSummary(report)})`;
+}
+
+/**
+ * The line that says a client set was defaulted, or `null` when the operator
+ * named it or detection found it.
+ *
+ * A zero-evidence init installs claude alone, and the disclosure line printed
+ * only `installed claude` — which read as a choice somebody made. Shared by the
+ * panel and init's dry-run report, so both say it the same way.
+ */
+export function defaultClientsLine(decisions: InitDecisions): string | null {
+  if (decisions.toolsSource !== "default") return null;
+  return (
+    `clients: ${decisions.tools.join(", ")} (the default — no other client's files were found; ` +
+    `add more with --tools ${TOOLS.join(",")})`
+  );
+}
+
+/**
+ * The Copilot coding agent's setup workflow, named where the operator reads
+ * next steps — or nothing when this run did not put it on disk (a user-owned
+ * file at that path is skipped, and naming it as installed would be false).
+ */
+function copilotWorkflowStep(report: InitApplyReport): string[] {
+  const row = report.wrote.find((entry) => entry.path === COPILOT_SETUP_STEPS_PATH);
+  if (row === undefined || row.action === "skipped") return [];
+  return [
+    `the coding agent's setup workflow is at ${COPILOT_SETUP_STEPS_PATH} — GitHub runs it before ` +
+      `the Copilot coding agent starts work on a task, on a push or pull request that changes the ` +
+      `file, and by hand from the Actions tab`,
+  ];
 }
 
 /**
@@ -495,24 +563,54 @@ function noticeLines(report: InitApplyReport): string[] {
  * saying nothing is the disclosure gap the decision exists to close, and it has
  * nothing to do with whether any MCP server was configured.
  *
- * So the gitignore half prints whenever the rule was put in place (or, in a
- * preview, would be), and the credential half stays conditional: a repo with no
- * MCP server has no credential to load, and printing a load command for an
- * empty set would be noise.
+ * So the gitignore half prints whenever the run appended an entry (or, in a
+ * preview, would), naming exactly the entries appended — the lane reports them
+ * (`InitApplyReport.gitignoreAdded`) — and the credential half stays
+ * conditional: a repo with no MCP server has no credential to load, and
+ * printing a load command for an empty set would be noise. The same condition
+ * governs the credential wording inside the gitignore half.
  */
-export function gitignoreLine(dryRun: boolean, gitAvailable = true): string {
-  const tense = dryRun ? "would be added to" : "were added to";
-  const where = dryRun ? "wherever it lacks them" : "wherever it lacked them";
-  // Every entry the lane writes (`REQUIRED_GITIGNORE_ENTRIES`, `../../../mcp/env.ts`)
-  // is named here, and `test/cli/commands/initPanel.test.ts` checks this line
-  // against that list: an entry added there without reaching this line is an
-  // unannounced edit to a file the operator owns.
-  const reviewGate = `${STATE_DIR}/review-gate.json`;
-  const entries = [ENV_MCP_FILE, reviewGate, `${reviewGate}.lock`, `${reviewGate}.tmp-*`];
+export interface GitignoreLineInput {
+  /** A preview: the future tense, and "wherever it lacks them". */
+  dryRun: boolean;
+  /** Whether git answers for this directory; see {@link InitPanelInput.gitAvailable}. */
+  gitAvailable?: boolean;
+  /**
+   * The entries named. A live run passes exactly what it appended
+   * (`InitApplyReport.gitignoreAdded`); a preview, which writes nothing and so
+   * cannot know which are missing, passes the whole required set
+   * (`REQUIRED_GITIGNORE_ENTRIES`, `../../../mcp/env.ts`).
+   */
+  entries: readonly string[];
+  /** Whether an MCP server is configured: the credential wording needs one. */
+  mcpConfigured: boolean;
+}
+
+/** Why one entry is ignored, in words that assume nothing about the run. */
+function gitignoreReason(entry: string): string {
+  if (entry === ENV_MCP_FILE) return "MCP server credentials";
+  if (entry.endsWith(".lock")) return "the review gate's lock";
+  if (entry.includes("*")) return "the review gate's temporary writes";
+  return "the review gate's per-run state";
+}
+
+export function gitignoreLine(input: GitignoreLineInput): string {
+  const { dryRun, entries } = input;
+  const gitAvailable = input.gitAvailable ?? true;
+  const tense = dryRun ? "would be added to" : entries.length === 1 ? "was added to" : "were added to";
+  const where = dryRun ? " wherever it lacks them" : "";
+  // Each entry is named with a neutral reason. The credential wording is kept
+  // for a run that configured an MCP server: with none, there is no credential
+  // file this setup uses, and saying so was a claim about a file that holds nothing.
+  const named = entries.map((entry) => `${entry} (${gitignoreReason(entry)})`).join(", ");
+  const credential =
+    input.mcpConfigured && entries.includes(ENV_MCP_FILE)
+      ? `, the credential file this setup uses (${ENV_MCP_FILE}) among them`
+      : "";
   const head =
-    `security: these lines — ${entries.join(", ")} — ${tense} your .gitignore ` +
-    `${where}, so the credential file this setup uses (${ENV_MCP_FILE}) can never be committed, ` +
-    `and neither can the review gate's per-run state. Nothing else in your .gitignore is touched`;
+    `security: ${entries.length === 1 ? "this line" : "these lines"} — ${named} — ${tense} your ` +
+    `.gitignore${where}, so git leaves those files out of commits${credential}. Nothing else in ` +
+    `your .gitignore is touched`;
   // Both halves of the tail are claims ABOUT A REPOSITORY, and this line used
   // to make them unconditionally — including in a directory git does not answer
   // for, where "can never be committed" and "is committed on purpose" describe
@@ -610,12 +708,25 @@ export function renderInitPanel(input: InitPanelInput): string {
     `  detected ${detectedLabel(input)} -> installed ${installedLabel(decisions, report)} ` +
       palette.dim(`(tier: ${decisions.maturityTier}, change with \`${packageCommand("config")}\`)`),
   );
+  const defaulted = defaultClientsLine(decisions);
+  if (defaulted !== null) lines.push(`  ${defaulted}`);
   const pinLine = gatePinLine(decisions);
   if (pinLine !== null) lines.push(`  ${pinLine}`);
   if (carry !== null) {
     for (const line of migrationLines(carry, input.residue)) lines.push(`  ${line}`);
   }
-  if (report.gitignoreEnsured) lines.push(`  ${gitignoreLine(false, input.gitAvailable ?? true)}`);
+  // Only the entries this run appended: a .gitignore that already covered them
+  // was not edited, and there is nothing to disclose.
+  if (report.gitignoreEnsured && report.gitignoreAdded.length > 0) {
+    lines.push(
+      `  ${gitignoreLine({
+        dryRun: false,
+        gitAvailable: input.gitAvailable ?? true,
+        entries: report.gitignoreAdded,
+        mcpConfigured: mcpServers.length > 0,
+      })}`,
+    );
+  }
   if (mcpServers.length > 0) lines.push(`  ${credentialLine(mcpServers)}`);
   for (const notice of noticeLines(report)) lines.push(`  ${notice}`);
   for (const warning of warningLines(report)) {
@@ -631,7 +742,11 @@ export function renderInitPanel(input: InitPanelInput): string {
         ? `${palette.bold(`next steps (${tool}):`)}`
         : palette.bold("next steps:");
     lines.push(heading);
-    for (const [index, step] of nextStepsForTool(tool).entries()) {
+    const steps = nextStepsForTool(tool);
+    // Copilot's workflow line depends on what this run wrote, so it joins here
+    // rather than in the static table, just before the in-chat instruction.
+    if (tool === "copilot") steps.splice(-1, 0, ...copilotWorkflowStep(report));
+    for (const [index, step] of steps.entries()) {
       lines.push(`  ${index + 1}. ${step}`);
     }
   }

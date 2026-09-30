@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { link, mkdir, readFile, writeFile } from "node:fs/promises";
+import { link, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { stripVTControlCharacters } from "node:util";
@@ -335,8 +335,56 @@ describe("init — fresh repo", () => {
     expect(countQuestions(result.stdout)).toBe(0);
     expect(result.stdout).toContain("detected a fresh repo (no traces)");
     expect(result.stdout).toContain("installed claude");
+    // REQ-FLOW-022: the defaulted set is named as the default, not as a choice.
+    expect(result.stdout).toContain(
+      "clients: claude (the default — no other client's files were found; add more with " +
+        "--tools claude,cursor,copilot,codex)",
+    );
     expect(result.stdout).toContain("stamity is ready.");
     expect((await readManifest(root))?.tools).toEqual(["claude"]);
+  });
+
+  it("names no default for a detected client set", async () => {
+    await getTemp().seedFiles({ "repo/.claude/settings.json": "{}\n" });
+    const root = await makeRepo();
+
+    const result = await runInit(root, ["-y"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("claude traces");
+    expect(result.stdout).not.toContain("the default —");
+  });
+
+  it("prints a file count equal to the files it put on disk, for all four clients (REQ-FLOW-022)", async () => {
+    const root = await makeRepo();
+
+    const result = await runInit(root, ["-y", "--tools", "claude,cursor,copilot,codex"]);
+
+    expect(result.code).toBe(0);
+    const count = /-> installed [^(]+\((\d+) file\(s\) on disk \(/u.exec(result.stdout);
+    expect(count, result.stdout).not.toBeNull();
+    // Every file under the root but the .gitignore, which the clause names as changed
+    // rather than counting: the generated set, the manifest and the placeholders.
+    const onDisk = (await readdir(root, { recursive: true, withFileTypes: true })).filter(
+      (entry) => entry.isFile() && !(entry.parentPath === root && entry.name === ".gitignore"),
+    );
+    expect(Number(count?.[1])).toBe(onDisk.length);
+    expect(onDisk.length).toBeGreaterThan(10);
+    expect(result.stdout).toContain(".gitignore changed");
+  });
+
+  it("names only the .gitignore entries it added when the file already covered one", async () => {
+    await getTemp().seedFiles({ "repo/.gitignore": ".env.mcp\n" });
+    const root = await makeRepo();
+
+    const result = await runInit(root, ["-y"]);
+
+    expect(result.code).toBe(0);
+    const line = result.stdout.split("\n").find((row) => row.includes("security:")) ?? "";
+    expect(line).toContain(".stamity/review-gate.json (the review gate's per-run state)");
+    expect(line).not.toContain(".env.mcp");
+    // The file carries the entry once: the operator's own line, not a second one.
+    expect((await readFile(join(root, ".gitignore"), "utf8")).split("\n").filter((row) => row === ".env.mcp")).toHaveLength(1);
   });
 
   // The welcome mark's fit gate, wired at THIS call site and not only at the
@@ -402,8 +450,14 @@ describe("init — fresh repo", () => {
     expect(result.stdout).toContain("security:");
     // TEST CHANGE, justified (REQ-FLOW-016): the disclosure now names the four
     // entries init guarantees, not the credential file alone.
-    expect(result.stdout).toContain(".stamity/review-gate.json.tmp-* — were added to your .gitignore");
-    expect(result.stdout).toContain("security: these lines — .env.mcp, ");
+    // TEST CHANGE (sw10-first-run-output, REQ-FLOW-022): each entry named carries a
+    // neutral reason now; the four entries and the tense are what this still pins.
+    expect(result.stdout).toContain(
+      ".stamity/review-gate.json.tmp-* (the review gate's temporary writes) — were added to your .gitignore",
+    );
+    expect(result.stdout).toContain("security: these lines — .env.mcp (MCP server credentials), ");
+    // No MCP server, so no credential file this setup uses.
+    expect(result.stdout).not.toContain("credential file this setup uses");
     // The credential hint stays conditional: no server, nothing to load.
     expect(result.stdout).not.toContain("credentials:");
     // Nothing detected means nothing uncovered to disclose: no block at all.
@@ -1154,8 +1208,14 @@ describe("init --dry-run", () => {
     // TEST CHANGE, justified (REQ-FLOW-016): the preview names the four entries
     // it would add, not the credential file alone; still future tense, still
     // nothing written.
-    expect(result.stdout).toContain(".stamity/review-gate.json.tmp-* — would be added to your .gitignore");
-    expect(result.stdout).toContain("security: these lines — .env.mcp, ");
+    // TEST CHANGE (sw10-first-run-output): the neutral reason per entry, as on the
+    // panel; still the four entries, still the future tense.
+    expect(result.stdout).toContain(
+      ".stamity/review-gate.json.tmp-* (the review gate's temporary writes) — would be added to your .gitignore",
+    );
+    expect(result.stdout).toContain("security: these lines — .env.mcp (MCP server credentials), ");
+    // REQ-FLOW-022: the preview names a defaulted client set as the default too.
+    expect(result.stdout).toContain("  clients: claude (the default — no other client's files were found");
     expect(existsSync(join(root, ".gitignore"))).toBe(false);
   });
 

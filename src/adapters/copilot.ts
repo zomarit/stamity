@@ -7,6 +7,8 @@
  * (2026-09-10).
  */
 
+import { readFile, readdir } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE } from "../hooks/portableRunner.ts";
 import { CLAUDE_EVENT_NAMES, type HookInterchange } from "../hooks/model.ts";
 import {
@@ -277,9 +279,10 @@ export const copilotResiduePlanner: ResiduePlanner = {
   tool: TOOL,
   facts: COPILOT_DIALECT_FACTS,
   async planResidue(core: CoreEmissionPlan, ctx: EmissionContext): Promise<ResidueEmission> {
-    const [items, packageManager] = await Promise.all([
+    const [items, packageManager, setupPins] = await Promise.all([
       selectedItems(ctx),
       detectPackageManager(ctx.rootDir),
+      readSetupStepsPins(ctx.rootDir),
     ]);
     const render = bodyRenderer(ctx);
     // The operator's pins, read once: every emitted model value on this client
@@ -307,7 +310,7 @@ export const copilotResiduePlanner: ResiduePlanner = {
     rows.push({ path: `.stamity/generated/hooks/copilot/${PORTABLE_RUNNER_FILE}`, content: buildPortableHookRunner("copilot"), owner: owner("copilot-portable-hook", "infra") });
     rows.push({
       path: COPILOT_SETUP_STEPS_PATH,
-      content: buildSetupSteps(packageManager, ctx.manifest.detected?.languages ?? []),
+      content: buildSetupSteps(packageManager, ctx.manifest.detected?.languages ?? [], setupPins),
       owner: owner(SETUP_STEPS_JOB, "infra"),
     });
     // Placed verbatim: the core rendered these documents and chose their paths,
@@ -520,14 +523,22 @@ function modelLine(item: CatalogItem, pins: ModelPinMap): string[] {
  * WAS detected in a comment: a fabricated install step for a stack the engine
  * cannot see would fail on the first agent run.
  *
- * Actions are referenced by major version. A full-length commit SHA is the
- * stronger supply-chain posture, and the emitted comment says so — but a SHA
- * this engine cannot verify would be a fabricated pin, which is worse than an
- * honest tag.
+ * The project's own pins decide the versions ({@link readSetupStepsPins}): the
+ * Node version from `.nvmrc`, `.node-version` or `engines.node`, and each
+ * action's ref from the first workflow of the project's own that uses it — a
+ * SHA pin with its trailing comment included. Where the project names none,
+ * an action is referenced by major version and Node by the current LTS. A
+ * full-length commit SHA is the stronger supply-chain posture, and the emitted
+ * comment says so — but a SHA this engine cannot verify would be a fabricated
+ * pin, which is worse than an honest tag.
+ *
+ * `check` re-plans live, so a project that moves one of its own pins sees this
+ * file reported as drifted until the next sync copies the new pin.
  */
 export function buildSetupSteps(
   packageManager: PackageManagerInfo,
   languages: readonly string[],
+  pins: SetupStepsPins,
 ): string {
   const named = [...languages].map((value) => value.trim()).filter((value) => value !== "");
   const isNode =
@@ -536,12 +547,18 @@ export function buildSetupSteps(
     named.some((language) => NODE_LANGUAGES.has(language.toLowerCase()));
 
   const steps = isNode
-    ? nodeSteps(packageManager)
+    ? nodeSteps(packageManager, pins)
     : [
         "      # No Node toolchain was detected for this repository " +
           `(detected: ${named.length === 0 ? "nothing" : named.join(", ")}).`,
-        "      # Add the runtime setup and dependency-install steps the agent needs here.",
+        "      # The agent gets a checkout only: this generated file installs no runtime for that stack.",
       ];
+  const copied = [pins.checkout, pins.setupNode].flatMap((pin) => (pin === null ? [] : [pin.source]));
+  const refNote =
+    copied.length === 0
+      ? "      # Pin these to a full-length commit SHA for a stricter supply-chain posture."
+      : `      # Action refs follow this project's own workflows (${[...new Set(copied)].join(", ")}) ` +
+        "where they use the action, else a major tag; each sync re-reads them.";
 
   return [
     "name: Copilot Setup Steps",
@@ -565,20 +582,22 @@ export function buildSetupSteps(
     "    permissions:",
     "      contents: read",
     "    steps:",
-    "      # Pin these to a full-length commit SHA for a stricter supply-chain posture.",
-    "      - uses: actions/checkout@v5",
+    refNote,
+    `      - uses: ${actionUse("checkout", pins.checkout)}`,
     ...steps,
     "",
   ].join("\n");
 }
 
 /** The Node lane's steps: toolchain setup, Corepack where the manager needs it, install. */
-function nodeSteps(packageManager: PackageManagerInfo): string[] {
+function nodeSteps(packageManager: PackageManagerInfo, pins: SetupStepsPins): string[] {
   const lines = [
-    "      - uses: actions/setup-node@v5",
+    `      - uses: ${actionUse("setup-node", pins.setupNode)}`,
     "        with:",
-    "          # Replace with this project's pin (.nvmrc, engines.node) when it declares one.",
-    '          node-version: "lts/*"',
+    pins.node === null
+      ? `          # No ${NODE_PIN_FILES.join(", ")} or engines.node pin was found, so the current LTS.`
+      : `          # From this project's ${pins.node.source}; each sync re-reads it.`,
+    `          node-version: "${pins.node?.version ?? "lts/*"}"`,
   ];
   if (packageManager.name === "pnpm" || packageManager.name === "yarn") {
     // Corepack ships with Node and provisions both; bun is not a Corepack manager.
@@ -589,6 +608,160 @@ function nodeSteps(packageManager: PackageManagerInfo): string[] {
   }
   lines.push(`      - run: ${installCommand(packageManager)}`);
   return lines;
+}
+
+/** The ref an action is used at when the project's own workflows name none. */
+const DEFAULT_ACTION_REF = "v5";
+
+/** `actions/<name>@<ref>`, with a copied pin's trailing comment kept. */
+function actionUse(name: "checkout" | "setup-node", pin: ActionPin | null): string {
+  if (pin === null) return `actions/${name}@${DEFAULT_ACTION_REF}`;
+  return `actions/${name}@${pin.ref}${pin.comment === null ? "" : ` # ${pin.comment}`}`;
+}
+
+/** One action ref copied from the project's own workflows. */
+export interface ActionPin {
+  /** The ref after `@`: a tag, a branch or a commit SHA. */
+  readonly ref: string;
+  /** The text after `#` on the same line (a SHA pin's version note), or `null`. */
+  readonly comment: string | null;
+  /** The repo-relative workflow the ref was copied from. */
+  readonly source: string;
+}
+
+/** What the setup workflow copies from the project's own configuration. */
+export interface SetupStepsPins {
+  /** The Node version and the file it came from; `null` renders `lts/*`. */
+  readonly node: { readonly version: string; readonly source: string } | null;
+  /** The `actions/checkout` ref; `null` renders the major tag. */
+  readonly checkout: ActionPin | null;
+  /** The `actions/setup-node` ref; `null` renders the major tag. */
+  readonly setupNode: ActionPin | null;
+}
+
+/** No project pins: every value at its default. */
+export const NO_SETUP_STEPS_PINS: SetupStepsPins = { node: null, checkout: null, setupNode: null };
+
+/** The version files read before `engines.node`, in precedence order. */
+const NODE_PIN_FILES = [".nvmrc", ".node-version"] as const;
+
+/** The directory GitHub reads workflows from; only its immediate files count. */
+const WORKFLOWS_DIR = ".github/workflows";
+
+/**
+ * A value safe to write into the quoted `node-version` scalar: a version, a
+ * partial one, an alias such as `lts/iron` or `node`. Anything else (a quote,
+ * a space, a second line) is not copied.
+ */
+const NODE_VERSION_VALUE = /^[A-Za-z0-9.*/_+-]{1,40}$/u;
+
+/**
+ * A `uses:` line naming checkout or setup-node, quoted or not, with its ref
+ * and an optional trailing comment.
+ */
+const ACTION_USE_LINE =
+  /^\s*(?:-\s+)?uses:\s*(["']?)actions\/(checkout|setup-node)@([A-Za-z0-9._/-]{1,100})\1\s*(?:#\s*([^\r\n]*?))?\s*$/u;
+
+/**
+ * Read the project's own pins for the setup workflow. Every read is tolerant: a
+ * missing or unreadable file answers "no pin", never an error, so a repository
+ * with none of these files gets the defaults.
+ *
+ * The workflow scan skips the file this adapter emits
+ * ({@link COPILOT_SETUP_STEPS_PATH}), so the emission never reads its own
+ * output and a second sync writes the same bytes. Files are read in name order
+ * and lines in file order; the first `uses:` of each action wins.
+ */
+export async function readSetupStepsPins(rootDir: string): Promise<SetupStepsPins> {
+  const [node, actions] = await Promise.all([readNodePin(rootDir), readActionPins(rootDir)]);
+  return { node, ...actions };
+}
+
+/** `.nvmrc`, then `.node-version`, then `engines.node`'s floor. */
+async function readNodePin(
+  rootDir: string,
+): Promise<{ version: string; source: string } | null> {
+  for (const file of NODE_PIN_FILES) {
+    // oxlint-disable-next-line no-await-in-loop -- precedence order: the first file present wins
+    const text = await readTextOrNull(join(rootDir, file));
+    const first = text?.split(/\r?\n/u).map((line) => line.trim()).find((line) => line !== "");
+    if (first !== undefined && NODE_VERSION_VALUE.test(first)) return { version: first, source: file };
+  }
+  const manifest = await readTextOrNull(join(rootDir, "package.json"));
+  if (manifest === null) return null;
+  let engines: unknown;
+  try {
+    engines = (JSON.parse(manifest) as { engines?: unknown }).engines;
+  } catch {
+    return null;
+  }
+  const range =
+    typeof engines === "object" && engines !== null
+      ? (engines as Record<string, unknown>)["node"]
+      : undefined;
+  if (typeof range !== "string") return null;
+  const floor = engineRangeFloor(range);
+  return floor === null ? null : { version: floor, source: "package.json engines.node" };
+}
+
+/**
+ * The lower bound an `engines.node` range names, at the precision it names it:
+ * `22` stays `22`, `>=22.12` gives `22.12`, `^20.11.0` gives `20.11.0`,
+ * `22.x` gives `22`. Only the first `||` alternative is read, and a range
+ * with no lower bound (`<23`, `*`) or a strict one (`>22`) names none, so
+ * the workflow keeps the LTS default rather than guessing.
+ */
+export function engineRangeFloor(range: string): string | null {
+  const first = (range.split("||")[0] ?? "").trim().replace(/^(>=|\^|~|=)\s+/u, "$1");
+  const comparator = first.split(/\s+/u)[0] ?? "";
+  const match = /^(?:>=|\^|~|=)?v?(\d+(?:\.\d+){0,2})(?:\.[xX*])*$/u.exec(comparator);
+  return match?.[1] ?? null;
+}
+
+/** The first `actions/checkout` and `actions/setup-node` refs in the project's own workflows. */
+async function readActionPins(
+  rootDir: string,
+): Promise<{ checkout: ActionPin | null; setupNode: ActionPin | null }> {
+  const found: { checkout: ActionPin | null; setupNode: ActionPin | null } = {
+    checkout: null,
+    setupNode: null,
+  };
+  let names: string[];
+  try {
+    const entries = await readdir(join(rootDir, WORKFLOWS_DIR), { withFileTypes: true });
+    names = entries
+      .filter((entry) => entry.isFile() && /\.ya?ml$/iu.test(entry.name))
+      .map((entry) => entry.name)
+      .filter((name) => name !== basename(COPILOT_SETUP_STEPS_PATH))
+      .toSorted();
+  } catch {
+    return found;
+  }
+  const texts = await Promise.all(
+    names.map(async (name) => ({
+      source: `${WORKFLOWS_DIR}/${name}`,
+      text: await readTextOrNull(join(rootDir, WORKFLOWS_DIR, name)),
+    })),
+  );
+  for (const { source, text } of texts) {
+    for (const line of text?.split(/\r?\n/u) ?? []) {
+      const match = ACTION_USE_LINE.exec(line);
+      if (match === null) continue;
+      const pin: ActionPin = { ref: match[3] ?? "", comment: match[4] || null, source };
+      if (match[2] === "checkout") found.checkout ??= pin;
+      else found.setupNode ??= pin;
+    }
+  }
+  return found;
+}
+
+/** A file's text, or `null` when it is absent or unreadable. */
+async function readTextOrNull(path: string): Promise<string | null> {
+  try {
+    return await readFile(path, "utf8");
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -27,8 +27,9 @@ import { renderSyncReport, syncJsonPayload } from "./sync/report.ts";
  *   carries the `init` remedy for this installation), newer-schema manifest
  *   (`CONFIG_ERROR`, upgrade
  *   guidance) — passes through to the kit funnel, which renders it and exits 1.
- * - **Update path.** There is no update command: `npx <this package>@latest sync`
- *   IS the update, so the help text says exactly that, and manifest schema
+ * - **Update path.** There is no update command: a sync run by the newer
+ *   release, `npx -y <this package>@<version> sync` with the exact version to
+ *   move to, IS the update, so the help text says exactly that, and manifest schema
  *   migrations run inside sync — a migrated manifest gets its own report line
  *   so the on-version-change rewrite is visible.
  */
@@ -43,14 +44,21 @@ import { renderSyncReport, syncJsonPayload } from "./sync/report.ts";
  * installation: a downstream that renamed the package per
  * `docs/enterprise-forks.md` must be told to run ITS package, not ours.
  *
+ * The exact-version form, never `@latest`: an `@latest` advice runs whatever the
+ * registry serves on the day it is typed, and a setup pinned to one version is
+ * moved on purpose, the same form the update notice prints
+ * (`../notice/updateNotice.ts`). The version is spelled as a placeholder, since
+ * help text has no registry answer to name and the pinned call
+ * (`../../shared/cliCall.ts`) refuses a version that is not semver-shaped.
+ *
  * A package with no npm channel (`hasNpmChannel()` false: private, no
  * `publishConfig.registry`) follows the update notice's private-package rule
  * (`../notice/updateNotice.ts`) and names no registry fetch. Its name is one
- * nobody holds on the public registry, and `npx <name>@latest` with neither
+ * nobody holds on the public registry, and an `npx <name>@<version>` with neither
  * `-y` nor `--no` installs without asking in a shell with no TTY, which is
  * an agent's. So the line says to install the newer release into the project
  * first and then run `npx --no <name> sync`, which runs that installed copy
- * and refuses to fetch one. A package with a channel keeps its line unchanged.
+ * and refuses to fetch one.
  */
 function updatePathHelp(): string {
   if (!hasNpmChannel()) {
@@ -60,8 +68,8 @@ function updatePathHelp(): string {
     );
   }
   return (
-    `update = npx ${packageName()}@latest sync — regenerating from the newest release is the ` +
-    `update; no separate update command exists.`
+    `update = npx -y ${packageName()}@<version> sync, with <version> the release to move to — ` +
+    `regenerating from that release is the update; no separate update command exists.`
   );
 }
 
