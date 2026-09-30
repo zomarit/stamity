@@ -10,6 +10,7 @@ import {
 } from "../../plugins/capabilityFile.ts";
 import { TOOLS, VALID_TOOLS, type Tool } from "../../types/core.ts";
 import { EngineError } from "../../types/errors.ts";
+import { STATE_DIR } from "../../types/markers.ts";
 import { CliFailure } from "../kit/output.ts";
 import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -367,7 +368,12 @@ async function runSetup(ctx: CliContext, opts: Record<string, unknown>): Promise
     throw new EngineError(cleanThenSetup(roots.map((entry) => entry.tool)), {
       code: "VALIDATION_ERROR",
       why: "a plugin-backed setup records ownership on a manifest it creates, and this repository already has one",
-      next: `${packageCommand("clean -y")} keeps learnings, handoffs, overrides and user hooks`,
+      // `clean` deletes the whole state directory (clean.ts removeStateDir), so
+      // the route is destructive: the hint says so and names the save-first step.
+      next:
+        `${packageCommand("clean -y")} deletes the whole ${STATE_DIR}/ directory ` +
+        `(learnings, handoffs, overrides and packs included): copy out what you want to keep first ` +
+        `and put it back after plugin setup; ${packageCommand("clean --dry-run")} lists what it removes`,
     });
   }
 

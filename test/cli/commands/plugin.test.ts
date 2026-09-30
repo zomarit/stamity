@@ -740,6 +740,27 @@ describe("plugin setup — what it refuses", () => {
     expect(await shaMap(root)).toEqual(before);
   });
 
+  it("says clean deletes the whole .stamity/ directory and to save what to keep first", async () => {
+    // The route the refusal hands out is destructive: `clean` deletes the state
+    // directory with every learning, handoff, override and pack in it. A hint
+    // claiming it keeps them sends a reader into data loss (shipped since 1.9.0).
+    const root = await makeRepo();
+    await seedGenerated(root);
+    const installed = await pluginRoot("claude-root");
+
+    const result = await plugin(root, ["setup", "--plugin-root", installed, "-y"]);
+
+    expect(result.code).toBe(1);
+    const next = result.stderr.split("\n").find((line) => /^\s*next:/.test(line)) ?? "";
+    expect(next).not.toMatch(/\bkeeps?\s+(learnings|handoffs|overrides)/i);
+    expect(next).toContain(npxCommand("clean -y"));
+    expect(next).toContain("deletes");
+    expect(next).toContain(".stamity/");
+    for (const kept of ["learnings", "handoffs", "overrides"]) expect(next).toContain(kept);
+    expect(next).toMatch(/copy out what you want to keep first/);
+    expect(next).toContain(npxCommand("clean --dry-run"));
+  });
+
   it("refuses when neither a flag nor a root variable names a root", async () => {
     const root = await makeRepo();
 
