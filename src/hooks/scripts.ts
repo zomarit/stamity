@@ -1407,12 +1407,23 @@ const GIT_COMMAND_CHARS = /^[A-Za-z0-9 ._/:@^~=+,-]+$/;
 
 /**
  * Option prefixes refused anywhere after the subcommand: `--output` writes a
- * file, `--ext-diff` and `--textconv` run a configured program, `--no-index`
+ * file, `--ext-diff` and `--textconv` run a configured program,
+ * `--show-signature` runs the configured gpg program, `--help` makes git run
+ * `git help <sub>` and so `man` or the configured help browser, `--no-index`
  * compares paths outside the repository. Git 2.52 refuses an abbreviated
- * spelling of each of them on these five subcommands, so a prefix match covers
- * every spelling git accepts.
+ * spelling of each of them on these five subcommands (`--show-sig`, `--ext`,
+ * `--textc`, `--outp`, `--hel`: "unrecognized argument" or "unknown option"),
+ * so a prefix match covers every spelling git accepts. The `--help` prefix
+ * also refuses `--help-all`, which only prints usage: failing closed.
  */
-const GIT_DENIED_OPTION_PREFIXES = ["--output", "--ext-diff", "--textconv", "--no-index"] as const;
+const GIT_DENIED_OPTION_PREFIXES = [
+  "--output",
+  "--ext-diff",
+  "--textconv",
+  "--show-signature",
+  "--help",
+  "--no-index",
+] as const;
 
 /**
  * The rendered half of read-only git (REQ-CTX-017), rendered inside
@@ -1425,7 +1436,8 @@ const GIT_DENIED_OPTION_PREFIXES = ["--output", "--ext-diff", "--textconv", "--n
  * token starting with one of {@link GIT_DENIED_OPTION_PREFIXES}.
  *
  * The residual, which a command-line check cannot see: a diff driver, a
- * textconv filter, `log.showSignature` (which runs the configured gpg program)
+ * textconv filter, `log.showSignature` (which runs the configured gpg program
+ * without `--show-signature` on the command line)
  * or any other program that the repository's or the user's git config runs by
  * default. Those come from local configuration, not from the command an agent
  * typed, and a local config that runs a program on `git log` already runs it
@@ -1473,7 +1485,7 @@ const READ_ONLY_GIT_BRANCH = `    // Read-only git for a role without execute: B
         category,
         reasonCode: "GIT_COMMAND_DENIED",
         message: printable(
-          \`Agent "\${agentId}" may run only read-only git in a shell — git \${GIT_SUBCOMMANDS.join(", ")}, with no \${GIT_DENIED_OPTIONS.join(", ")} and no shell syntax — and this command was refused. Read the change another way, or return the dependency to the parent.\`,
+          \`Agent "\${agentId}" may run only read-only git in a shell — git \${GIT_SUBCOMMANDS.join(", ")} right after "git" (no option before the subcommand, not even --no-pager), with no \${GIT_DENIED_OPTIONS.join(", ")} and no shell syntax — and this command was refused. Read the change another way, or return the dependency to the parent.\`,
         ),
       };
     }

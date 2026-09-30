@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.10.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-30T14:02:50.062Z",
+  "updatedAt": "2026-09-30T14:03:05.826Z",
   "tools": [
     "claude"
   ],
@@ -498,7 +498,7 @@
       "adapter": "claude",
       "artifactId": "stamity-pre-tool-use-guard",
       "artifactType": "infra",
-      "contentHash": "d37bec892a8a323c7398d263f5c241384c4ecd91876f1b30b6c4557e74f5abae",
+      "contentHash": "a9cb6702e22397eab72daa1d1395d835b4910ab7dc0ca59e9aaf612982686a60",
       "path": ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs"
     },
     {

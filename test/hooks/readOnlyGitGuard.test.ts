@@ -171,6 +171,28 @@ describe("the guard's read-only git for verdict roles", () => {
     }
   });
 
+  it("refuses --show-signature (runs gpg.program) and --help (git runs `git help <sub>`) on every subcommand", async () => {
+    const guard = await placeGuard();
+
+    // Git 2.52 refuses the abbreviations (`--show-sig`, `--hel`) itself, so
+    // only the full spellings need the guard; the prefix match also catches a
+    // longer token such as `--help-all`.
+    for (const sub of READ_ONLY_GIT_SUBCOMMANDS) {
+      for (const command of [`git ${sub} --show-signature HEAD`, `git ${sub} --help`, `git ${sub} HEAD --help-all`]) {
+        expectRefused(run(guard, shellCall("stamity-security", command)), "GIT_COMMAND_DENIED", command);
+      }
+    }
+  });
+
+  it("names both new options and the no-option-before-the-subcommand rule in the refusal", async () => {
+    const guard = await placeGuard();
+
+    const message = String(refusal(run(guard, shellCall("stamity-reviewer", "git --no-pager log"))).message);
+    expect(message).toContain("--show-signature");
+    expect(message).toContain("--help");
+    expect(message).toContain("no option before the subcommand, not even --no-pager");
+  });
+
   it("refuses a Bash call that carries no command", async () => {
     const guard = await placeGuard();
 

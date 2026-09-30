@@ -203,7 +203,7 @@ function writePathCheck(payload, patterns) {
 
 const GIT_TOOL = "Bash";
 const GIT_SUBCOMMANDS = ["log","show","diff","rev-list","merge-base"];
-const GIT_DENIED_OPTIONS = ["--output","--ext-diff","--textconv","--no-index"];
+const GIT_DENIED_OPTIONS = ["--output","--ext-diff","--textconv","--show-signature","--help","--no-index"];
 const GIT_CHARS = new RegExp("^[A-Za-z0-9 ._/:@^~=+,-]+$");
 
 /** Whether a shell command is read-only git: one listed subcommand, no writing option, no shell syntax. */
@@ -474,7 +474,7 @@ function evaluate() {
         category,
         reasonCode: "GIT_COMMAND_DENIED",
         message: printable(
-          `Agent "${agentId}" may run only read-only git in a shell — git ${GIT_SUBCOMMANDS.join(", ")}, with no ${GIT_DENIED_OPTIONS.join(", ")} and no shell syntax — and this command was refused. Read the change another way, or return the dependency to the parent.`,
+          `Agent "${agentId}" may run only read-only git in a shell — git ${GIT_SUBCOMMANDS.join(", ")} right after "git" (no option before the subcommand, not even --no-pager), with no ${GIT_DENIED_OPTIONS.join(", ")} and no shell syntax — and this command was refused. Read the change another way, or return the dependency to the parent.`,
         ),
       };
     }
