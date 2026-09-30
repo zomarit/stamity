@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable */
 // stamity — configuration-change notice.
 //
 // Prints a review reminder when agent configuration changes, and never

@@ -46,6 +46,7 @@ exports[`emission goldens — catalog > indexes the corpus to sorted, collision-
 
 exports[`emission goldens — hook scripts > plans three deterministic scripts for claude on the portable event triple > stamity-config-tamper-notice.mjs 1`] = `
 "#!/usr/bin/env node
+/* eslint-disable */
 // stamity — configuration-change notice.
 //
 // Prints a review reminder when agent configuration changes, and never
@@ -117,6 +118,7 @@ process.stdout.write(lines.join("\\n") + "\\n");
 
 exports[`emission goldens — hook scripts > plans three deterministic scripts for claude on the portable event triple > stamity-pre-tool-use-guard.mjs 1`] = `
 "#!/usr/bin/env node
+/* eslint-disable */
 // stamity — pre-tool-use allowlist guard.
 //
 // Rules on the pending tool call against the emitted policy document.
@@ -596,6 +598,7 @@ if (refusal !== null) {
 
 exports[`emission goldens — hook scripts > plans three deterministic scripts for claude on the portable event triple > stamity-session-start.mjs 1`] = `
 "#!/usr/bin/env node
+/* eslint-disable */
 // stamity — session-start context load.
 //
 // Prints the learnings index and the resumable handoffs for this repo by
@@ -1517,6 +1520,7 @@ process.stdout.write(lines.join("\\n") + "\\n");
 
 exports[`emission goldens — hook scripts > plans three deterministic scripts for codex on the portable event triple > stamity-config-tamper-notice.mjs 1`] = `
 "#!/usr/bin/env node
+/* eslint-disable */
 // stamity — configuration-change notice.
 //
 // Prints a review reminder when agent configuration changes, and never
@@ -1588,6 +1592,7 @@ process.stdout.write(lines.join("\\n") + "\\n");
 
 exports[`emission goldens — hook scripts > plans three deterministic scripts for codex on the portable event triple > stamity-pre-tool-use-guard.mjs 1`] = `
 "#!/usr/bin/env node
+/* eslint-disable */
 // stamity — pre-tool-use allowlist guard.
 //
 // Rules on the pending tool call against the emitted policy document.
@@ -1861,6 +1866,7 @@ if (refusal !== null) {
 
 exports[`emission goldens — hook scripts > plans three deterministic scripts for codex on the portable event triple > stamity-session-start.mjs 1`] = `
 "#!/usr/bin/env node
+/* eslint-disable */
 // stamity — session-start context load.
 //
 // Prints the learnings index and the resumable handoffs for this repo by
@@ -2782,6 +2788,7 @@ process.stdout.write(lines.join("\\n") + "\\n");
 
 exports[`emission goldens — hook scripts > plans three deterministic scripts for copilot on the portable event triple > stamity-config-tamper-notice.mjs 1`] = `
 "#!/usr/bin/env node
+/* eslint-disable */
 // stamity — configuration-change notice.
 //
 // Prints a review reminder when agent configuration changes, and never
@@ -2853,6 +2860,7 @@ process.stdout.write(lines.join("\\n") + "\\n");
 
 exports[`emission goldens — hook scripts > plans three deterministic scripts for copilot on the portable event triple > stamity-pre-tool-use-guard.mjs 1`] = `
 "#!/usr/bin/env node
+/* eslint-disable */
 // stamity — pre-tool-use allowlist guard.
 //
 // Rules on the pending tool call against the emitted policy document.
@@ -3126,6 +3134,7 @@ if (refusal !== null) {
 
 exports[`emission goldens — hook scripts > plans three deterministic scripts for copilot on the portable event triple > stamity-session-start.mjs 1`] = `
 "#!/usr/bin/env node
+/* eslint-disable */
 // stamity — session-start context load.
 //
 // Prints the learnings index and the resumable handoffs for this repo by
@@ -4047,6 +4056,7 @@ process.stdout.write(lines.join("\\n") + "\\n");
 
 exports[`emission goldens — hook scripts > plans three deterministic scripts for cursor on the portable event triple > stamity-config-tamper-notice.mjs 1`] = `
 "#!/usr/bin/env node
+/* eslint-disable */
 // stamity — configuration-change notice.
 //
 // Prints a review reminder when agent configuration changes, and never
@@ -4118,6 +4128,7 @@ process.stdout.write(lines.join("\\n") + "\\n");
 
 exports[`emission goldens — hook scripts > plans three deterministic scripts for cursor on the portable event triple > stamity-pre-tool-use-guard.mjs 1`] = `
 "#!/usr/bin/env node
+/* eslint-disable */
 // stamity — pre-tool-use allowlist guard.
 //
 // Rules on the pending tool call against the emitted policy document.
@@ -4391,6 +4402,7 @@ if (refusal !== null) {
 
 exports[`emission goldens — hook scripts > plans three deterministic scripts for cursor on the portable event triple > stamity-session-start.mjs 1`] = `
 "#!/usr/bin/env node
+/* eslint-disable */
 // stamity — session-start context load.
 //
 // Prints the learnings index and the resumable handoffs for this repo by
@@ -5312,6 +5324,7 @@ process.stdout.write(lines.join("\\n") + "\\n");
 
 exports[`emission goldens — hook scripts > preserves the deterministic portable runner bytes for codex 1`] = `
 "#!/usr/bin/env node
+/* eslint-disable */
 import { readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -5556,6 +5569,7 @@ try { main(); } catch (error) {
 
 exports[`emission goldens — hook scripts > preserves the deterministic portable runner bytes for copilot 1`] = `
 "#!/usr/bin/env node
+/* eslint-disable */
 import { readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -5800,6 +5814,7 @@ try { main(); } catch (error) {
 
 exports[`emission goldens — hook scripts > preserves the deterministic portable runner bytes for cursor 1`] = `
 "#!/usr/bin/env node
+/* eslint-disable */
 import { readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";

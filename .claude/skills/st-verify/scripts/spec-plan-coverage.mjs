@@ -1,3 +1,4 @@
+/* eslint-disable */
 /** Read-only structural checks for the existing Markdown spec/plan format. Node 22+. */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";

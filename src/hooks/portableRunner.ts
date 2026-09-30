@@ -1,5 +1,6 @@
 import type { HookInterchange } from "./model.ts";
 import type { Tool } from "../types/core.ts";
+import { GENERATED_SCRIPT_LINT_DIRECTIVE } from "../types/markers.ts";
 
 /** Repository-owned launcher; the interchange remains exec-form argv. */
 export const PORTABLE_RUNNER_FILE = "stamity-portable-hook.mjs";
@@ -75,6 +76,7 @@ export function portableHookCommand(
  */
 export function buildPortableHookRunner(tool: Tool): string {
   return `#!/usr/bin/env node
+${GENERATED_SCRIPT_LINT_DIRECTIVE}
 import { readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";

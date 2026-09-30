@@ -51,7 +51,7 @@ import {
 } from "../tools/translator.ts";
 import type { AdapterOutput } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
-import { CONTENT_PREFIX } from "../types/markers.ts";
+import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE } from "../types/markers.ts";
 
 // ── Layout ───────────────────────────────────────────────────────
 
@@ -890,10 +890,11 @@ function shellCommand(argv: readonly string[]): string {
 
 // ── Guard scripts ────────────────────────────────────────────────
 
-/** Shared head: shebang, summary, and the trust posture the bytes must keep. */
+/** Shared head: shebang, the lint directive (REQ-FLOW-001), summary, and the trust posture the bytes must keep. */
 function guardHeader(summary: readonly string[]): string {
   return [
     "#!/usr/bin/env node",
+    GENERATED_SCRIPT_LINT_DIRECTIVE,
     ...summary.map((line) => (line === "" ? "//" : `// ${line}`)),
     "//",
     "// Generated file — regenerate it rather than editing; local edits are overwritten.",

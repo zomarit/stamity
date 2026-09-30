@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable */
 // stamity — pre-tool-use allowlist guard.
 //
 // Rules on the pending tool call against the emitted policy document.

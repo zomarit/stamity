@@ -11,6 +11,19 @@
  * version; a bare (unstamped) BEGIN marker always reads as stale.
  */
 
+/**
+ * The file-level lint-disable directive every script setup emits into a user's
+ * repository carries (REQ-FLOW-001): line 2, right after the shebang, or line 1
+ * where the script has none. The scripts are byte-governed Node programs, never
+ * shaped to the user's lint configuration, so without it a stock config with no
+ * Node globals fails the user's own lint gate on files they did not write.
+ *
+ * It lives here, in the zero-import leaf, because its three writers —
+ * `hooks/scripts.ts`, `hooks/portableRunner.ts` and `adapters/cursor.ts` — sit
+ * in different units, and an edge between any two of them breaks the wave rule.
+ */
+export const GENERATED_SCRIPT_LINT_DIRECTIVE = "/* eslint-disable */";
+
 /** A start/end marker pair delimiting a managed block in one host comment syntax. */
 export interface ManagedBlockMarkers {
   readonly start: string;

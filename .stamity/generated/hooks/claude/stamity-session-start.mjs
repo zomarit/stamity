@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable */
 // stamity — session-start context load.
 //
 // Prints the learnings index and the resumable handoffs for this repo by

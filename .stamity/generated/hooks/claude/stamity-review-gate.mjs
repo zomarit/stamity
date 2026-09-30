@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable */
 // stamity — work-scoped review gate.
 //
 // Holds a run's completion while its review loop has an open round, up to

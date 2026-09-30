@@ -22,7 +22,7 @@ import {
 } from "../tools/translator.ts";
 import type { Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
-import { CONTENT_PREFIX, STATE_DIR } from "../types/markers.ts";
+import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, STATE_DIR } from "../types/markers.ts";
 import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
 import { UNPRINTABLE_CHARS } from "../runs/layout.ts";
 import { CLIENT_HOOK_GUARANTEES, type CanonicalHookEvent, type HookFailMode } from "./model.ts";
@@ -428,7 +428,9 @@ function json(value: unknown): string {
 /**
  * The banner every generated script opens with: what it is, then the two facts
  * a reader needs before running it — that edits are overwritten, and what the
- * body is and is not guaranteed to do.
+ * body is and is not guaranteed to do. Line 2, under the shebang, is the
+ * file-level lint directive (REQ-FLOW-001), so the user's own lint gate passes
+ * over a script they did not write.
  *
  * `posture` is per-script and required, because the part that used to be shared
  * was the part that was false. The four bodies agree on exec form, repo
@@ -441,6 +443,7 @@ function json(value: unknown): string {
 function header(summary: readonly string[], posture: readonly string[]): string {
   return [
     "#!/usr/bin/env node",
+    GENERATED_SCRIPT_LINT_DIRECTIVE,
     ...summary.map((line) => (line === "" ? "//" : `// ${line}`)),
     "//",
     "// Generated file — regenerate it rather than editing; local edits are overwritten.",
