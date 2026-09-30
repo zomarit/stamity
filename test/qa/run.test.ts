@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type * as NodeModule from "node:module";
 import { join, resolve } from "node:path";
 import type * as NodePath from "node:path";
@@ -476,5 +476,123 @@ describe("hashFixtureInputs — H1 label shape", () => {
     expect(
       [...claudeLabels].some((label) => label.includes(".stamity/generated/hooks/codex/")),
     ).toBe(false);
+  });
+});
+
+/**
+ * Human answers on the command line (plan 013-02, unit qa-harness-accepted-unwalked). A person who
+ * walked a row says `--walked`, one who signs it off without a walk says `--accept-unwalked`, and
+ * both name themselves with `--by`. The acceptance holds for the run that recorded it; the next run
+ * reopens it (census S8), while a walk keeps carrying on an equal hash.
+ */
+describe("parseArgs — the human-answer options", () => {
+  it("returns the comma lists, the name and the date", async () => {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { parseArgs } = await import("../../scripts/qa/run.mjs");
+
+    const options = parseArgs(["--walked", "H1c,H2", "--by", "the maintainer", "--on", "2026-09-30"]);
+
+    expect(options.walked).toEqual(["H1c", "H2"]);
+    expect(options.acceptUnwalked).toEqual([]);
+    expect(options.by).toBe("the maintainer");
+    expect(options.on).toBe("2026-09-30");
+    expect(parseArgs(["--accept-unwalked", "H4b,,H5"]).acceptUnwalked).toEqual(["H4b", "H5"]);
+  });
+
+  it("names the four options in the usage banner", async () => {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { USAGE } = await import("../../scripts/qa/run.mjs");
+
+    expect(USAGE).toContain("[--walked <ids>] [--accept-unwalked <ids>] [--by <name>] [--on <YYYY-MM-DD>]");
+  });
+});
+
+type AnsweredEvidence = {
+  rows: { row: string; status: string; reason: string; performedAt?: string; acceptedAt?: string; acceptedBy?: string }[];
+};
+
+/** One row of an evidence object, by id. */
+function answeredRow(evidence: AnsweredEvidence, id: string): AnsweredEvidence["rows"][number] {
+  return evidence.rows.find((entry) => entry.row === id)!;
+}
+
+describe("main — human answers across two runs", () => {
+  const temps: string[] = [];
+
+  afterEach(() => {
+    for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** Two pages only, so H2 and H3 are MEASURED `failed` (pages missing) — the rows that must refuse an answer. */
+  function siteFixture(): string {
+    mkdirSync(join(REPO_ROOT, "website", "build"), { recursive: true });
+    const dir = mkdtempSync(join(REPO_ROOT, "website", "build", "stamity-qa-run-answers-"));
+    temps.push(dir);
+    for (const file of ["index.html", "docs/getting-started/index.html"]) {
+      const target = join(dir, ...file.split("/"));
+      mkdirSync(join(target, ".."), { recursive: true });
+      writeFileSync(target, `<!doctype html><title>${file}</title>\n`);
+    }
+    return dir;
+  }
+
+  function evidencePath(): string {
+    const dir = mkdtempSync(join(tmpdir(), "stamity-qa-run-answers-out-"));
+    temps.push(dir);
+    return join(dir, "evidence.json");
+  }
+
+
+  it("records a walk and an acceptance, carries the walk, and reopens the acceptance on the next run", async () => {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { main } = await import("../../scripts/qa/run.mjs");
+    const site = siteFixture();
+    const out = evidencePath();
+    const base = ["--site", site, "--skip-browser", "--skip-hooks", "--skip-plugins", "--sha", "d".repeat(40), "--out", out];
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    let first: AnsweredEvidence;
+    let second: AnsweredEvidence;
+    let printed: string;
+    try {
+      first = (await main([...base, "--walked", "H1a", "--accept-unwalked", "H1b,H4b", "--by", "the maintainer", "--on", "2026-09-30"])) as AnsweredEvidence;
+      printed = write.mock.calls.map((call) => String(call[0])).join("");
+      second = (await main(base)) as AnsweredEvidence;
+    } finally {
+      write.mockRestore();
+    }
+    expect(answeredRow(first, "H1a")).toMatchObject({ status: "performed", performedAt: "2026-09-30" });
+    expect(answeredRow(first, "H1b")).toMatchObject({ status: "accepted-unwalked", acceptedAt: "2026-09-30", acceptedBy: "the maintainer" });
+    expect(answeredRow(first, "H4b").status).toBe("accepted-unwalked");
+    // 14 rows: H1a walked, H1b and H4b accepted, H2 and H3a–H3d measured failed, 6 left open.
+    expect(printed).toContain("[qa] human answers: 1 performed, 2 accepted-unwalked, 6 open");
+
+    expect(answeredRow(second, "H1a")).toMatchObject({ status: "performed", performedAt: "2026-09-30" });
+    for (const id of ["H1b", "H4b"]) {
+      expect(answeredRow(second, id).status, id).toBe("unperformed");
+      expect(answeredRow(second, id).reason, id).toContain("accepted-unwalked");
+      expect(answeredRow(second, id).acceptedAt, id).toBeUndefined();
+    }
+  });
+
+  it("refuses a row id the form does not carry, and writes no evidence file", async () => {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { main } = await import("../../scripts/qa/run.mjs");
+    const out = evidencePath();
+
+    await expect(
+      main(["--site", siteFixture(), "--skip-browser", "--skip-hooks", "--skip-plugins", "--sha", "e".repeat(40), "--out", out, "--walked", "H9", "--by", "the maintainer"]),
+    ).rejects.toThrow("row H9 is not in this evidence file");
+    expect(existsSync(out)).toBe(false);
+  });
+
+  it("refuses an answer on a measured row, and writes no evidence file", async () => {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { main } = await import("../../scripts/qa/run.mjs");
+    const out = evidencePath();
+
+    await expect(
+      main(["--site", siteFixture(), "--skip-browser", "--skip-hooks", "--skip-plugins", "--sha", "f".repeat(40), "--out", out, "--accept-unwalked", "H2", "--by", "the maintainer"]),
+    ).rejects.toThrow("row H2 was measured failed by the harness; a measured row takes no human answer");
+    expect(existsSync(out)).toBe(false);
   });
 });

@@ -29,6 +29,12 @@
 //   node scripts/qa/run.mjs [--site website/build] [--sha <sha>] [--out <path>]
 //                           [--fixtures <dir>] [--dist <dir>] [--clients claude,codex,cursor,copilot]
 //                           [--skip-hooks] [--skip-browser] [--skip-plugins]
+//                           [--walked <ids>] [--accept-unwalked <ids>] [--by <name>] [--on <YYYY-MM-DD>]
+//
+// A person's answers ride on the run that measures: `--walked` records the rows they walked as
+// `performed`, `--accept-unwalked` the rows they signed off without a walk as `accepted-unwalked`,
+// both dated `--on` (default today, UTC) and signed `--by`. A walk carries to later runs while its
+// row's hash holds; an acceptance holds for this run only (`bind.mjs`, `carryForward`).
 
 import { execFileSync } from 'node:child_process'
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -36,7 +42,7 @@ import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
 import { extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { carryForward, hashFile, inputHashMap, rowHash } from './bind.mjs'
+import { carryForward, hashFile, inputHashMap, recordHumanAnswers, rowHash } from './bind.mjs'
 import { QA_ROWS } from './form.mjs'
 import { exitDescription, runHookClients } from './hook-runs.mjs'
 import { runLifecycleWalk, runPluginClients } from './plugin-runs.mjs'
@@ -181,11 +187,24 @@ export const USAGE =
   'Usage: node scripts/qa/run.mjs [--site website/build] [--sha <sha>] [--out <path>]\n' +
   '                               [--fixtures <dir>] [--dist <dir>]\n' +
   '                               [--clients claude,codex,cursor,copilot]\n' +
-  '                               [--skip-hooks] [--skip-browser] [--skip-plugins]'
+  '                               [--skip-hooks] [--skip-browser] [--skip-plugins]\n' +
+  '                               [--walked <ids>] [--accept-unwalked <ids>] [--by <name>] [--on <YYYY-MM-DD>]'
 
-/** `--flag value` and `--flag` over argv. Deliberately small: this script takes nine options. */
+/** A comma list of ids, with empty entries dropped. */
+function idList(value) {
+  return (value ?? '').split(',').filter((id) => id !== '')
+}
+
+/** `--flag value` and `--flag` over argv. Deliberately small: this script takes thirteen options. */
 export function parseArgs(argv) {
-  const options = { clients: ['claude', 'codex', 'cursor', 'copilot'], skipHooks: false, skipBrowser: false, skipPlugins: false }
+  const options = {
+    clients: ['claude', 'codex', 'cursor', 'copilot'],
+    skipHooks: false,
+    skipBrowser: false,
+    skipPlugins: false,
+    walked: [],
+    acceptUnwalked: [],
+  }
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     const next = argv[i + 1]
@@ -199,6 +218,10 @@ export function parseArgs(argv) {
     else if (arg === '--skip-hooks') options.skipHooks = true
     else if (arg === '--skip-browser') options.skipBrowser = true
     else if (arg === '--skip-plugins') options.skipPlugins = true
+    else if (arg === '--walked') { options.walked = idList(next); i += 1 }
+    else if (arg === '--accept-unwalked') { options.acceptUnwalked = idList(next); i += 1 }
+    else if (arg === '--by') { options.by = next; i += 1 }
+    else if (arg === '--on') { options.on = next; i += 1 }
     else throw new Error(`Unknown option ${arg}.\n${USAGE}`)
   }
   return options
@@ -438,6 +461,19 @@ export async function main(argv) {
   }
   const siteDir = resolve(REPO_ROOT, options.site ?? 'website/build')
   assertSiteWithinRoot(REPO_ROOT, siteDir)
+  const answers = {
+    walked: options.walked,
+    accepted: options.acceptUnwalked,
+    by: options.by,
+    on: options.on ?? new Date().toISOString().slice(0, 10),
+  }
+  // Refuse a malformed answer (no --by, a bad --on, a row named twice or not on the form) BEFORE a
+  // run that can take minutes: every catalogue row is in every evidence file, so the catalogue is
+  // the id list the real call will see. Only "that row was measured" has to wait for the rows.
+  recordHumanAnswers(
+    QA_ROWS.map((definition) => ({ row: definition.id, status: 'not-run' })),
+    answers,
+  )
   const sha = options.sha ?? execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT, encoding: 'utf8' }).trim()
   const out = resolve(REPO_ROOT, options.out ?? `.stamity/evidence/qa-${sha.slice(0, 7)}.json`)
 
@@ -664,7 +700,7 @@ export async function main(argv) {
     sha,
     timestamp: new Date().toISOString(),
     harness,
-    rows: carryForward(previousEvidence(out), rows),
+    rows: recordHumanAnswers(carryForward(previousEvidence(out), rows), answers),
   }
 
   mkdirSync(resolve(out, '..'), { recursive: true })
@@ -674,6 +710,11 @@ export async function main(argv) {
   for (const row of evidence.rows) {
     process.stdout.write(`  ${row.row.padEnd(4)} ${row.status.padEnd(12)} ${row.reason}\n`)
   }
+  const count = (...statuses) => evidence.rows.filter((row) => statuses.includes(row.status)).length
+  process.stdout.write(
+    `[qa] human answers: ${count('performed')} performed, ${count('accepted-unwalked')} accepted-unwalked, ` +
+      `${count('not-run', 'unperformed')} open\n`,
+  )
   return evidence
 }
 

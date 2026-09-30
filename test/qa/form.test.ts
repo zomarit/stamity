@@ -302,3 +302,46 @@ describe("humanCell", () => {
     expect(humanCell({ automated: false, status: "performed" })).toContain("date not recorded");
   });
 });
+
+/**
+ * `accepted-unwalked` (plan 013-02, unit qa-harness-accepted-unwalked): a row a person signed off
+ * without walking renders as exactly that — never as PERFORMED, and never as a carry, because an
+ * acceptance holds for the run that recorded it only (census S8).
+ */
+describe("the accepted-unwalked row", () => {
+  const acceptedRow = {
+    row: "H1d",
+    automated: false,
+    status: "accepted-unwalked",
+    reason: "not on PATH",
+    inputHashes: { "fixture(copilot)/.github/hooks/stamity.json": "d".repeat(64) },
+    rowHash: "d1".repeat(32),
+    acceptedAt: "2026-09-13",
+    acceptedBy: "the maintainer",
+  };
+
+  it("renders ACCEPTED UNWALKED with its date and name, and says it was not walked", () => {
+    const markdown = renderForm({
+      ...evidence,
+      rows: evidence.rows.map((row) => (row.row === "H1d" ? acceptedRow : row)),
+    }) as string;
+
+    const row = markdown.split("\n").find((line) => line.startsWith("| **H1d**")) ?? "";
+    expect(row).toContain("ACCEPTED UNWALKED 2026-09-13 by the maintainer");
+    expect(row).toContain("not walked");
+    expect(row).not.toContain("PERFORMED");
+    expect(row).not.toContain("carried forward");
+    expect(row).toContain("| accepted-unwalked |");
+  });
+
+  it("reads undated rather than inventing a date, and wins over the automated label", () => {
+    expect(humanCell({ automated: true, status: "accepted-unwalked" })).toContain("ACCEPTED UNWALKED date not recorded");
+  });
+
+  it("says in the footer that an acceptance reopens on the next run", () => {
+    const markdown = renderForm(evidence) as string;
+
+    expect(markdown).toContain("A human row stays PERFORMED only while its `rowHash` holds");
+    expect(markdown).toContain("An ACCEPTED UNWALKED row holds for the run that recorded it and reopens on the next run");
+  });
+});

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { carryForward, hashFile, hashInputs, inputHashMap, rowHash, sha256 } from "../../scripts/qa/bind.mjs";
+import { HUMAN_ANSWERS, ROW_STATUSES, carryForward, hashFile, hashInputs, inputHashMap, recordHumanAnswers, rowHash, sha256 } from "../../scripts/qa/bind.mjs";
 
 /**
  * The binding layer decides whether a human QA answer still describes the tree it was given
@@ -38,6 +38,8 @@ interface Row {
   rowHash: string;
   performedAt?: string;
   performedBy?: string;
+  acceptedAt?: string;
+  acceptedBy?: string;
 }
 
 const inputs: Input[] = [
@@ -176,5 +178,192 @@ describe("carryForward", () => {
     expect(previous.rows[0]!.status).toBe("performed");
     expect(current[0]!.status).toBe("not-run");
     expect(current[0]!.performedAt).toBeUndefined();
+  });
+});
+
+/**
+ * `accepted-unwalked` (plan 013-02, unit qa-harness-accepted-unwalked, census S8): a person may sign
+ * a row off WITHOUT walking it, and the evidence file says so rather than rounding it up to
+ * `performed`. Every harness row id starts with `H` — each one is a release-QA row — so an
+ * acceptance is good for the run that recorded it and NEVER carries: the next run reopens it
+ * whatever its hash, and a person walks it or accepts it again. `performed` keeps carrying.
+ */
+describe("the accepted-unwalked status", () => {
+  const accepted: Row = {
+    row: "H1c",
+    automated: false,
+    status: "accepted-unwalked",
+    reason: "no headless CLI on this machine",
+    inputHashes: inputHashMap(inputs),
+    rowHash: rowHash(inputs),
+    acceptedAt: "2026-09-13",
+    acceptedBy: "the maintainer",
+  };
+
+  const openRow = (overrides: Partial<Row> = {}): Row => ({
+    row: "H1c",
+    automated: false,
+    status: "not-run",
+    reason: "no headless CLI on this machine",
+    inputHashes: inputHashMap(inputs),
+    rowHash: rowHash(inputs),
+    ...overrides,
+  });
+
+  it("is a row status, and a human answer beside performed", () => {
+    expect(ROW_STATUSES).toEqual(["passed", "failed", "not-run", "performed", "accepted-unwalked", "unperformed"]);
+    expect([...(HUMAN_ANSWERS as Set<string>)].toSorted()).toEqual(["accepted-unwalked", "performed"]);
+  });
+
+  it("never carries on an equal hash: the row reopens as unperformed, naming accepted-unwalked", () => {
+    const [carried] = carryForward({ rows: [accepted] }, [openRow()]) as Row[];
+
+    expect(carried!.status).toBe("unperformed");
+    expect(carried!.reason).toContain("accepted-unwalked");
+    expect(carried!.reason).toContain("walk it or accept it again");
+    // The acceptance's own date and name stay out of the row's fields: the row is open, and a
+    // reader of the fields alone must not see a signature on it.
+    expect(carried!.acceptedAt).toBeUndefined();
+    expect(carried!.acceptedBy).toBeUndefined();
+    expect(carried!.reason).toContain("2026-09-13");
+    expect(carried!.reason).toContain("no headless CLI on this machine");
+  });
+
+  it("never carries for ANY row id — the carry exception keys on the status, not on the id letter", () => {
+    for (const id of ["H1", "H1c", "H5", "M2", "L1"]) {
+      const [carried] = carryForward({ rows: [{ ...accepted, row: id }] }, [openRow({ row: id })]) as Row[];
+      expect(carried!.status, id).toBe("unperformed");
+      expect(carried!.reason, id).toContain("accepted-unwalked");
+    }
+  });
+
+  it("reopens with both hashes named when the hash moved", () => {
+    const moved = [...inputs.slice(0, 2), { path: inputs[2]!.path, sha256: "d".repeat(64) }];
+    const [carried] = carryForward({ rows: [accepted] }, [
+      openRow({ inputHashes: inputHashMap(moved), rowHash: rowHash(moved) }),
+    ]) as Row[];
+
+    expect(carried!.status).toBe("unperformed");
+    expect(carried!.reason).toContain("accepted-unwalked");
+    expect(carried!.reason).toContain(accepted.rowHash);
+    expect(carried!.reason).toContain(rowHash(moved));
+    expect(carried!.reason).toContain(
+      `reopened: accepted-unwalked against rowHash ${accepted.rowHash} on 2026-09-13, ` +
+        `and this run's inputs hash to ${rowHash(moved)}`,
+    );
+  });
+
+  it("keeps the performed reopening text byte-identical to the text before accepted-unwalked existed", () => {
+    const moved = [...inputs.slice(0, 2), { path: inputs[2]!.path, sha256: "e".repeat(64) }];
+    const performed: Row = { ...accepted, status: "performed", performedAt: "2026-09-12", performedBy: "the maintainer" };
+    delete performed.acceptedAt;
+    delete performed.acceptedBy;
+    const [carried] = carryForward({ rows: [performed] }, [
+      openRow({ reason: "", inputHashes: inputHashMap(moved), rowHash: rowHash(moved) }),
+    ]) as Row[];
+
+    expect(carried!.reason).toBe(
+      `reopened: performed against rowHash ${performed.rowHash} on 2026-09-12, and this run's inputs hash to ${rowHash(moved)}`,
+    );
+  });
+
+  it("lets this run's measurement win over a prior acceptance", () => {
+    const measuredPass = openRow({ automated: true, status: "passed", reason: "12 stops" });
+    const measuredFail = openRow({ automated: true, status: "failed", reason: "the hook recorded no call at all" });
+
+    const [passed, failed] = carryForward({ rows: [accepted] }, [measuredPass, { ...measuredFail, row: "H1c" }]) as Row[];
+
+    expect(passed).toEqual(measuredPass);
+    expect(failed!.status).toBe("failed");
+    expect(failed!.reason).toBe("the hook recorded no call at all");
+  });
+});
+
+/** Four rows, one per shape an answer meets: reopened, unmeasured, measured passed, measured failed. */
+function answerRows(): Row[] {
+  return [
+    { row: "H1c", automated: false, status: "unperformed", reason: "reopened", inputHashes: {}, rowHash: "1".repeat(64) },
+    { row: "H2", automated: true, status: "not-run", reason: "browser skipped", inputHashes: {}, rowHash: "2".repeat(64) },
+    { row: "H3a", automated: true, status: "passed", reason: "18 stops", inputHashes: {}, rowHash: "3".repeat(64) },
+    { row: "H3b", automated: true, status: "failed", reason: "a stop with no ring", inputHashes: {}, rowHash: "4".repeat(64) },
+  ];
+}
+
+describe("recordHumanAnswers", () => {
+  const rows = answerRows;
+
+  it("records a walk as performed and an acceptance as accepted-unwalked, with the date and the name", () => {
+    const input = rows();
+    const out = recordHumanAnswers(input, {
+      walked: ["H1c"],
+      accepted: ["H2"],
+      by: "the maintainer",
+      on: "2026-09-30",
+    }) as Row[];
+
+    expect(out[0]).toMatchObject({ status: "performed", performedAt: "2026-09-30", performedBy: "the maintainer" });
+    expect(out[0]!.acceptedAt).toBeUndefined();
+    expect(out[1]).toMatchObject({ status: "accepted-unwalked", acceptedAt: "2026-09-30", acceptedBy: "the maintainer" });
+    expect(out[1]!.performedAt).toBeUndefined();
+    // Rows nobody answered pass through as the harness left them.
+    expect(out[2]).toEqual(input[2]);
+    expect(out[3]).toEqual(input[3]);
+    // New objects: the caller's rows are not mutated.
+    expect(input[0]!.status).toBe("unperformed");
+    expect(input[1]!.status).toBe("not-run");
+  });
+
+  it("turns a row reopened from an acceptance into performed when a person walks it", () => {
+    const prior: Row = { ...rows()[0]!, status: "accepted-unwalked", acceptedAt: "2026-09-13", acceptedBy: "the maintainer" };
+    const [reopened] = carryForward({ rows: [prior] }, [{ ...rows()[0]!, status: "not-run" }]) as Row[];
+    expect(reopened!.status).toBe("unperformed");
+
+    const [walked] = recordHumanAnswers([reopened], { walked: ["H1c"], by: "the maintainer", on: "2026-09-30" }) as Row[];
+
+    expect(walked!.status).toBe("performed");
+    expect(walked!.performedAt).toBe("2026-09-30");
+  });
+
+  it("returns the rows unchanged when nobody answered, and needs no --by then", () => {
+    const input = rows();
+    expect(recordHumanAnswers(input, { on: "2026-09-30" })).toEqual(input);
+  });
+
+  it("refuses an answer with no --by", () => {
+    expect(() => recordHumanAnswers(rows(), { walked: ["H1c"], on: "2026-09-30" })).toThrow(
+      new Error("--by is required when --walked or --accept-unwalked is given"),
+    );
+    expect(() => recordHumanAnswers(rows(), { accepted: ["H1c"], by: "", on: "2026-09-30" })).toThrow(
+      new Error("--by is required when --walked or --accept-unwalked is given"),
+    );
+  });
+
+  it("refuses a row id the evidence file does not carry", () => {
+    expect(() => recordHumanAnswers(rows(), { accepted: ["H9"], by: "the maintainer", on: "2026-09-30" })).toThrow(
+      new Error("row H9 is not in this evidence file"),
+    );
+  });
+
+  it("refuses a human answer on a row the harness measured, passed or failed", () => {
+    expect(() => recordHumanAnswers(rows(), { walked: ["H3a"], by: "the maintainer", on: "2026-09-30" })).toThrow(
+      new Error("row H3a was measured passed by the harness; a measured row takes no human answer"),
+    );
+    expect(() => recordHumanAnswers(rows(), { accepted: ["H3b"], by: "the maintainer", on: "2026-09-30" })).toThrow(
+      new Error("row H3b was measured failed by the harness; a measured row takes no human answer"),
+    );
+  });
+
+  it("refuses a row named by both --walked and --accept-unwalked", () => {
+    expect(() =>
+      recordHumanAnswers(rows(), { walked: ["H1c"], accepted: ["H1c"], by: "the maintainer", on: "2026-09-30" }),
+    ).toThrow(new Error("row H1c is named by both --walked and --accept-unwalked"));
+  });
+
+  it("refuses an --on that is not a YYYY-MM-DD date", () => {
+    for (const on of ["30.09.2026", "2026-9-30", "2026-02-30", "yesterday"]) {
+      expect(() => recordHumanAnswers(rows(), { walked: ["H1c"], by: "the maintainer", on })).toThrow(
+        new Error(`--on ${on} is not a YYYY-MM-DD date`),
+      );
+    }
   });
 });

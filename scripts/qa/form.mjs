@@ -9,7 +9,8 @@
 // never carries: what it was measured against. The rows the harness can measure end to end it
 // measures; the rest stay human, and a human row reads UNPERFORMED until somebody signs it — with
 // the row's input hash beside the signature, so the next run can tell whether that signature still
-// describes the tree.
+// describes the tree. A person who signs a row off without walking it gets ACCEPTED UNWALKED, which
+// says exactly that and holds for one run only.
 //
 // Nothing here decides a status. `run.mjs` measures, `bind.mjs` carries human answers forward, and
 // this file only renders what those two produced. A row with no measurement renders as `not-run`
@@ -174,6 +175,13 @@ export function humanCell(row) {
     const at = row.performedAt === undefined ? 'date not recorded' : row.performedAt
     return `PERFORMED ${at}${by} (carried forward: inputs unchanged)`
   }
+  // Signed off WITHOUT a walk. It never reads as PERFORMED and never as a carry: `carryForward`
+  // reopens an acceptance on the next run whatever its hash, so the cell says so.
+  if (row.status === 'accepted-unwalked') {
+    const by = row.acceptedBy === undefined ? '' : ` by ${row.acceptedBy}`
+    const at = row.acceptedAt === undefined ? 'date not recorded' : row.acceptedAt
+    return `ACCEPTED UNWALKED ${at}${by} (not walked; holds for this run only)`
+  }
   if (row.automated === true) return `automated (${row.status})`
   return 'UNPERFORMED'
 }
@@ -250,7 +258,9 @@ export function renderForm(evidence) {
 
   lines.push(
     'A human row stays PERFORMED only while its `rowHash` holds. Change a byte under any input ' +
-      'above and `scripts/qa/bind.mjs` reopens that row on the next run.',
+      'above and `scripts/qa/bind.mjs` reopens that row on the next run. An ACCEPTED UNWALKED row ' +
+      'holds for the run that recorded it and reopens on the next run whatever its hash: walk it or ' +
+      'accept it again.',
   )
   return `${lines.join('\n')}\n`
 }

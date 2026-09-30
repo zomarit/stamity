@@ -15,14 +15,25 @@
 // which hash it was performed against. Nothing here decides that a row passed — an automated row's
 // status comes from the harness that ran it, and a human row's from a person.
 //
+// A person may also sign a row off WITHOUT walking it, and the file says so: `accepted-unwalked`,
+// never rounded up to `performed`. Every row this harness writes is a release-QA row (every id
+// starts with `H`), and a release row needs a walk or a fresh acceptance — so an acceptance holds
+// for the run that recorded it and never carries into the next one, whatever its hash.
+//
 // Pure functions over plain data: no clock, no filesystem beyond `hashFile`, no process state. The
 // suite (`test/qa/bind.test.ts`) is the contract.
 
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 
-/** The five statuses a row can carry. `performed`/`unperformed` are the human half. */
-export const ROW_STATUSES = ['passed', 'failed', 'not-run', 'performed', 'unperformed']
+/**
+ * The six statuses a row can carry. `performed`/`accepted-unwalked`/`unperformed` are the human
+ * half; `performed` is this harness's spelling of "walked", kept so older evidence files still read.
+ */
+export const ROW_STATUSES = ['passed', 'failed', 'not-run', 'performed', 'accepted-unwalked', 'unperformed']
+
+/** The two statuses only a person's recorded answer can give a row. */
+export const HUMAN_ANSWERS = new Set(['performed', 'accepted-unwalked'])
 
 /** Hex sha256 of a string or buffer. One hash function for the whole harness. */
 export function sha256(data) {
@@ -96,6 +107,11 @@ const CARRYABLE = new Set(['not-run', 'unperformed'])
  * hashes, so the reader can see WHICH tree the answer was given against rather than being told to
  * take it on faith.
  *
+ * An `accepted-unwalked` prior never carries. Every harness row is a release-QA row, and a release
+ * row needs a walk or a fresh acceptance, so the row reopens as `unperformed` even on an equal hash,
+ * with a reason naming the acceptance it had — and, when the hash moved, both hashes as well. The
+ * exception keys on the STATUS, never on the row id's letter.
+ *
  * Everything else is left exactly as the caller computed it. A row that was `unperformed` before
  * stays whatever this run made it, and a row the previous run did not carry at all is new and
  * passes through untouched.
@@ -108,11 +124,14 @@ export function carryForward(previous, current) {
   const carried = []
   for (const row of rowsOf(current)) {
     const prior = before.get(row.row)
-    if (prior === undefined || prior.status !== 'performed' || !CARRYABLE.has(row.status)) {
+    if (prior === undefined || !HUMAN_ANSWERS.has(prior.status) || !CARRYABLE.has(row.status)) {
       carried.push({ ...row })
       continue
     }
-    if (prior.rowHash === row.rowHash) {
+    const accepted = prior.status === 'accepted-unwalked'
+    const answeredOn = accepted ? prior.acceptedAt : prior.performedAt
+    const on = answeredOn === undefined ? '' : ` on ${answeredOn}`
+    if (prior.rowHash === row.rowHash && !accepted) {
       carried.push({
         ...row,
         status: 'performed',
@@ -123,9 +142,11 @@ export function carryForward(previous, current) {
       continue
     }
     const reopened =
-      `reopened: performed against rowHash ${prior.rowHash}` +
-      `${prior.performedAt === undefined ? '' : ` on ${prior.performedAt}`}, ` +
-      `and this run's inputs hash to ${row.rowHash}`
+      prior.rowHash === row.rowHash
+        ? `reopened: accepted-unwalked${on}${prior.acceptedBy === undefined ? '' : ` by ${prior.acceptedBy}`} ` +
+          'does not carry to a new run — every harness row is a release-QA row; walk it or accept it again'
+        : `reopened: ${prior.status} against rowHash ${prior.rowHash}${on}, ` +
+          `and this run's inputs hash to ${row.rowHash}`
     carried.push({
       ...row,
       status: 'unperformed',
@@ -133,4 +154,62 @@ export function carryForward(previous, current) {
     })
   }
   return carried
+}
+
+/** A `YYYY-MM-DD` string that names a real calendar day. */
+function isCalendarDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(`${value}T00:00:00Z`)
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
+}
+
+/**
+ * Record this run's human answers onto its rows.
+ *
+ * `walked` ids become `performed` with `performedAt: on` and `performedBy: by`; `accepted` ids
+ * become `accepted-unwalked` with `acceptedAt: on` and `acceptedBy: by`. A row the harness MEASURED
+ * (`passed` or `failed`) takes no human answer: a signature must never sit on top of a measurement,
+ * in either direction. With no answers the rows pass through unchanged and `by` is not needed.
+ *
+ * Every refusal throws before any row is written, so a bad answer leaves nothing half-recorded.
+ * Returns a NEW array of new objects; `rows` is not mutated.
+ */
+export function recordHumanAnswers(rows, { walked = [], accepted = [], by, on } = {}) {
+  const current = rowsOf(rows)
+  const walkedIds = new Set(walked)
+  const acceptedIds = new Set(accepted)
+  if (walkedIds.size > 0 || acceptedIds.size > 0) {
+    if (typeof by !== 'string' || by.trim() === '') {
+      throw new Error('--by is required when --walked or --accept-unwalked is given')
+    }
+    if (!isCalendarDate(on)) throw new Error(`--on ${on} is not a YYYY-MM-DD date`)
+    for (const id of walkedIds) {
+      if (acceptedIds.has(id)) throw new Error(`row ${id} is named by both --walked and --accept-unwalked`)
+    }
+    const byId = new Map(current.map((row) => [row.row, row]))
+    for (const id of [...walkedIds, ...acceptedIds]) {
+      const row = byId.get(id)
+      if (row === undefined) throw new Error(`row ${id} is not in this evidence file`)
+      if (row.status === 'passed' || row.status === 'failed') {
+        throw new Error(`row ${id} was measured ${row.status} by the harness; a measured row takes no human answer`)
+      }
+    }
+  }
+  const answered = []
+  for (const row of current) {
+    const copy = { ...row }
+    // A new answer replaces the old one whole: a walk drops a stale acceptance's date and name, and
+    // an acceptance drops a stale walk's, so no row carries two signatures that disagree.
+    if (walkedIds.has(row.row)) {
+      delete copy.acceptedAt
+      delete copy.acceptedBy
+      Object.assign(copy, { status: 'performed', performedAt: on, performedBy: by })
+    } else if (acceptedIds.has(row.row)) {
+      delete copy.performedAt
+      delete copy.performedBy
+      Object.assign(copy, { status: 'accepted-unwalked', acceptedAt: on, acceptedBy: by })
+    }
+    answered.push(copy)
+  }
+  return answered
 }
