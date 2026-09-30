@@ -282,7 +282,12 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // did not wrap, so no line count moved. The same +29 lands in the charter-alone
 // figure below. A real release pins a shorter version (`1.11.0`: +23 bytes).
 // Ratio ≈4.79x.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 25_274;
+// 25_274 -> 25_306 on 2026-09-30, sw07 fix round 1: the injection-screening
+// rule's floor names the resume card's second trigger (a resume) and its added
+// source (open debug run ids), +32 bytes of the codex rules appendix, rewrapped
+// inside the five lines the sentence already had, so no line count moved. The
+// charter-alone figure is unchanged. Ratio ≈4.80x.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 25_306;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.

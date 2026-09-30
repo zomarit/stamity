@@ -1587,7 +1587,8 @@ describe("SECURITY.md", () => {
     // After a compaction or on a resume the session-start hook and `stamity ledger status`
     // read the record head, ledger ids, report names and lane paths back into the model's
     // context and the terminal — and, with no run in progress, a recent closed run's
-    // `Status:` text (sw07, MODIFIED REQ-CTX-013). The table names the control at the
+    // `Status:` text, plus the run ids of open debug rounds, which alone print a card naming
+    // no run (sw07, MODIFIED REQ-CTX-013). The table names the control at the
     // symbols that run it, and the residual names the screen subset and the unscreened
     // files the card points at.
     const table = text.slice(
@@ -1604,6 +1605,8 @@ describe("SECURITY.md", () => {
     expect(row).toMatch(/After a compaction or on a resume/);
     expect(row).toMatch(/closed card[^|]*closing `Status:` value/);
     expect(row).toMatch(/`_debug-`[^|]*never picked/);
+    expect(row).toMatch(/`debug rounds open:` line[^|]*names no run/);
+    expect(row).toMatch(/no run in progress` on the card that names none/);
     expect(row).toMatch(/full lists and the record's status/);
   });
 

@@ -701,8 +701,8 @@ export function screenCard(text: string): string {
 
 /**
  * The resume card of a run, recomputed from disk. With no `runId`, the run in
- * progress (the greatest by name), else the closed card of a run closed within
- * CARD_CLOSED_MAX_AGE_DAYS ({@link findCardRun}), else the card of the open
+ * progress (the greatest by name), else the closed card of the newest closed run
+ * dated (by its run id) within CARD_CLOSED_MAX_AGE_DAYS ({@link findCardRun}), else the card of the open
  * debug rounds alone, which names no run, or null when none of the three is;
  * with one, that run's six-line card whether or not it is in progress, or null
  * when it is not a real run folder under a real runs folder. Every card but the

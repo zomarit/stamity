@@ -637,8 +637,8 @@ export interface SessionStartScriptOptions {
  * The session-start context load: prints the learnings index and the
  * resumable handoffs for the repo the session opened in — and, on a start
  * whose payload says `source: "compact"` or `source: "resume"`, the resume
- * card of the run in progress, or of a run closed in the last two days
- * (`../runs/cardSource.ts`), screened whole by the same screen.
+ * card of the run in progress, or of the newest closed run dated within the
+ * last two days (`../runs/cardSource.ts`), screened whole by the same screen.
  *
  * The index format mirrors the engine's own (`formatLearningsIndex`,
  * `buildHandoffIndex`) line for line, because the two render the same corpus
@@ -690,7 +690,7 @@ export function buildSessionStartScript(opts: SessionStartScriptOptions = {}): s
       "",
       "After a compaction or a resume (a start whose stdin payload says source",
       '"compact" or "resume") it appends the resume card of the run in progress, or',
-      "of a run closed in the last two days: counts and pointers, never finding text.",
+      "of a closed run dated within the last two days: counts and pointers, never finding text.",
     ],
     [
       "Reads outside repo state: the wall clock, which decides whether a learning's",

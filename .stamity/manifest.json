@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.10.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-30T12:57:03.287Z",
+  "updatedAt": "2026-09-30T12:57:19.232Z",
   "tools": [
     "claude"
   ],
@@ -211,7 +211,7 @@
       "adapter": "claude",
       "artifactId": "injection-screening",
       "artifactType": "rule",
-      "contentHash": "6992bb0199d12eb9429e224f4245550168c8f9806ecfc5842128fd55565e2886",
+      "contentHash": "c50f682aee1d6fda5cfb22d80fb2d5a49b0c73718f3e174be50760adec62c916",
       "path": ".claude/rules/stamity-injection-screening.md"
     },
     {
@@ -512,7 +512,7 @@
       "adapter": "claude",
       "artifactId": "stamity-session-start",
       "artifactType": "infra",
-      "contentHash": "60e02904e1a4beb42dab36ef7ac1c92ce71f11d4181cc376c5082a2049dd81bc",
+      "contentHash": "a68274c9aa816fcf31d2ea265c08c7644690721992e88774443cbd538f8ea1a3",
       "path": ".stamity/generated/hooks/claude/stamity-session-start.mjs"
     },
     {

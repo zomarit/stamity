@@ -546,8 +546,8 @@ function statusJson(card: ResumeCard): Record<string, unknown> {
 
 /**
  * `ledger status`: the resume card of the run in progress — with none, the
- * closed card of a run closed in the last two days; with neither, the card of
- * the open debug rounds, which names no run — or of the run `--run`
+ * closed card of the newest closed run dated within the last two days; with
+ * neither, the card of the open debug rounds, which names no run — or of the run `--run`
  * names whether or not it is in progress, in the in-progress layout. The
  * card's lines go to stdout exactly as the session-start hook prints them, so a client whose hook never
  * prints the card (or that does not re-run it after a compaction) gets the same

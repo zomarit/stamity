@@ -623,7 +623,10 @@ describe("injection-screening — the perimeter, stated as it holds", () => {
     // session-start hook also reads the resume card's sources (`src/runs/cardSource.ts`),
     // screened as the printed card only, so the pin names that source and still holds the
     // "nothing else" closure and the unscreened bodies the card points at.
-    expect(floor).toMatch(/covers `learnings\/` and `handoffs\/` and, after a compaction, the resume card's sources/i);
+    // TEST CHANGE, justified: the card also prints on a resume and lists open debug run ids
+    // (sw07, MODIFIED REQ-CTX-013), so the pin names both triggers and the added source.
+    expect(floor).toMatch(/covers `learnings\/` and `handoffs\/` and, after a compaction or a resume, the resume card's sources/i);
+    expect(floor).toMatch(/lane paths and open debug run ids — screened only/);
     expect(floor).toMatch(/screened only as the printed card\. It screens nothing else/);
     expect(floor).toMatch(/a record body or a report the card points at is unscreened when opened/i);
     expect(floor).toMatch(/for the rest, this floor is the gate/i);

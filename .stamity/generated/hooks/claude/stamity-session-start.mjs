@@ -11,7 +11,7 @@
 //
 // After a compaction or a resume (a start whose stdin payload says source
 // "compact" or "resume") it appends the resume card of the run in progress, or
-// of a run closed in the last two days: counts and pointers, never finding text.
+// of a closed run dated within the last two days: counts and pointers, never finding text.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
