@@ -28,6 +28,7 @@ import * as cursorContainer from "../../scripts/plugins/clients/cursor.mjs";
 import * as tokens from "../../scripts/plugins/tokens.mjs";
 import { CLI_TOKEN, INVARIANTS_VERSION_TOKEN, REPO_SUBSTITUTION_TOKENS } from "../../src/emit/substitution.ts";
 import { pinnedCliPrefix } from "../../src/shared/cliCall.ts";
+import { canonical } from "../support/identity.ts";
 
 /**
  * The four planner-independent halves of the plugin package emitter (REQ-PLUGIN-002, -003, -004).
@@ -91,6 +92,11 @@ const substitute = tokens.substitute as (
   cli?: PluginCli,
 ) => { text: string; unresolved: string[] };
 const pluginCliToken = tokens.CLI_TOKEN as string;
+/**
+ * The package the CLI-call cases render, read from this checkout's manifest rather than spelled:
+ * the renderer copies whatever name it is handed, so a renamed fork runs these cases unedited.
+ */
+const PACKAGE = canonical().name;
 
 const disposals: Staged[] = [];
 const temps: string[] = [];
@@ -169,10 +175,10 @@ describe("charter-reference phrases (REQ-PLUGIN-004)", () => {
   });
 
   it("renders the CLI-call token to the pinned call at the plugin's own version", () => {
-    const cli = { packageName: "@zomarit/stamity", version: "1.11.0" };
+    const cli = { packageName: PACKAGE, version: "1.11.0" };
     const result = substitute(`Run \`${CLI_TOKEN} learn capture\` and ${CLI_TOKEN} check.\n`, cli);
     expect(result).toEqual({
-      text: "Run `npx -y @zomarit/stamity@1.11.0 learn capture` and npx -y @zomarit/stamity@1.11.0 check.\n",
+      text: `Run \`npx -y ${PACKAGE}@1.11.0 learn capture\` and npx -y ${PACKAGE}@1.11.0 check.\n`,
       unresolved: [],
     });
     // The same literal the engine renders into a repository for the same package and version.
@@ -193,9 +199,9 @@ describe("charter-reference phrases (REQ-PLUGIN-004)", () => {
 
   it("refuses a CLI context that would render an unpinned or unrunnable call", () => {
     for (const cli of [
-      { packageName: "@zomarit/stamity", version: "latest" },
-      { packageName: "@zomarit/stamity", version: "1.9.0+1" },
-      { packageName: "@zomarit/stamity", version: "" },
+      { packageName: PACKAGE, version: "latest" },
+      { packageName: PACKAGE, version: "1.9.0+1" },
+      { packageName: PACKAGE, version: "" },
       { packageName: "", version: "1.11.0" },
       { packageName: "-y", version: "1.11.0" },
     ]) {
@@ -361,9 +367,9 @@ describe("staging refusals and companions (REQ-PLUGIN-003, REQ-PLUGIN-004)", () 
     const contentRoot = await syntheticCorpus(async (root) => {
       await writeFile(join(root, "agents", "recorder.md"), `Record with \`${CLI_TOKEN} learn capture\`.\n`);
     });
-    const staged = await stageFor({ contentRoot, cli: { packageName: "@zomarit/stamity", version: "1.11.0" } });
+    const staged = await stageFor({ contentRoot, cli: { packageName: PACKAGE, version: "1.11.0" } });
     expect(await readFile(join(staged.root, "agents/recorder.md"), "utf8")).toBe(
-      "Record with `npx -y @zomarit/stamity@1.11.0 learn capture`.\n",
+      `Record with \`npx -y ${PACKAGE}@1.11.0 learn capture\`.\n`,
     );
 
     await expect(stage({ contentRoot, tokens })).rejects.toThrow(/agents\/recorder\.md/);
@@ -374,7 +380,7 @@ describe("staging refusals and companions (REQ-PLUGIN-003, REQ-PLUGIN-004)", () 
     const contentRoot = await syntheticCorpus(async () => {});
     const before = await stagingTrees();
     await expect(
-      stage({ contentRoot, tokens, cli: { packageName: "@zomarit/stamity", version: "latest" } }),
+      stage({ contentRoot, tokens, cli: { packageName: PACKAGE, version: "latest" } }),
     ).rejects.toThrow(/pinned CLI call/);
     expect((await stagingTrees()).filter((name) => !before.includes(name))).toEqual([]);
   });
