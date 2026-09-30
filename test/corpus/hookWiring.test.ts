@@ -107,7 +107,11 @@ const GUARD_CASES: readonly GuardCase[] = [
   { agentId: "stamity-researcher", tool: "WebFetch", allowed: true },
   { agentId: "stamity-implementer", tool: "WebFetch", allowed: false, reasonCode: "CATEGORY_DENIED" },
   { agentId: "stamity-test-runner", tool: "Bash", allowed: true },
-  { agentId: "stamity-spec-author", tool: "Bash", allowed: false, reasonCode: "CATEGORY_DENIED" },
+  // TEST CHANGE 2026-09-30, justified — sw05-read-only-git-grants: the
+  // spec-author's row carries `readOnlyGit`, so its Bash reaches the git check,
+  // and a call naming no git command refuses there. Still refused, and still
+  // refused by the in-process check below: only the reason code moved.
+  { agentId: "stamity-spec-author", tool: "Bash", allowed: false, reasonCode: "GIT_COMMAND_DENIED" },
   // No row holds `spawn`, so the delegation tool refuses for every agent.
   { agentId: "stamity-creator", tool: "Agent", allowed: false, reasonCode: "CATEGORY_DENIED" },
   // The silent-lockout edge: a shipped agent with no roster row may use nothing.

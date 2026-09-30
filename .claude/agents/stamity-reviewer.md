@@ -1,7 +1,7 @@
 ---
 name: stamity-reviewer
 description: "Reviews a change set across ten quality lenses and returns a verdict with confidence and graded findings, each behavior claim carrying path:line evidence."
-tools: Read, Grep, Glob, Skill, Write
+tools: Read, Grep, Glob, Skill, Write, Bash
 model: "opus"
 effort: "high"
 ---

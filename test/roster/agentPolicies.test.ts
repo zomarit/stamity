@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   AGENT_POLICY_ROSTER,
   GRANTABLE_TOOL_CATEGORIES,
+  READ_ONLY_GIT_SUBCOMMANDS,
   RUNTIME_AGENT_IDS,
   isWritePathPattern,
   verdictReportWritePaths,
@@ -247,6 +248,28 @@ describe("AGENT_POLICY_ROSTER", () => {
         }
       }
     }
+  });
+
+  it("holds read-only git on the four verdict rows and the spec-author, none of which holds execute", () => {
+    // Only these five rows read a change themselves through git; a sixth
+    // carrier would be a shell nobody decided on.
+    const carriers = AGENT_POLICY_ROSTER.filter((row) => row.readOnlyGit !== undefined).map(
+      (row) => row.agentId,
+    );
+    expect(carriers.toSorted()).toEqual(
+      [...Object.keys(VERDICT_REPORT_ROLES), "stamity-spec-author"].toSorted(),
+    );
+    for (const id of carriers) {
+      const row = AGENT_POLICY_ROSTER.find((entry) => entry.agentId === id);
+      expect(row?.readOnlyGit, id).toBe(true);
+      // `execute` would admit every command before the git check is reached,
+      // and a guard that predates the key decides on `allow` alone.
+      expect(row?.allow as readonly string[], id).not.toContain("execute");
+    }
+    expect([...READ_ONLY_GIT_SUBCOMMANDS]).toEqual(["log", "show", "diff", "rev-list", "merge-base"]);
+    expect(
+      AGENT_POLICY_ROSTER.find((entry) => entry.agentId === "stamity-spec-author")?.rationale,
+    ).toContain("read-only git");
   });
 
   it("ships no denyTools row, so no grant is qualified by a name list", () => {

@@ -8,6 +8,7 @@ import {
 } from "../denyscan/denyScan.ts";
 import { MAX_HANDOFF_FILE_BYTES } from "../handoffs/validation.ts";
 import { MAX_LEARNING_FILE_BYTES, MAX_LEARNING_SUMMARY_LENGTH } from "../learnings/validation.ts";
+import { READ_ONLY_GIT_SUBCOMMANDS } from "../roster/agentPolicies.ts";
 import {
   HARD_MAX_REVIEW_ITERATIONS,
   MIN_MAX_REVIEW_ITERATIONS,
@@ -15,6 +16,7 @@ import {
 import { AGENT_TOOL_POLICIES_FILE, AGENT_TOOL_POLICIES_SCHEMA } from "../tools/allowlist.ts";
 import { FUNCTIONAL_TOOL_CATEGORIES, type ToolCategory } from "../tools/categories.ts";
 import {
+  CLAUDE_READ_ONLY_GIT_TOOL,
   CLAUDE_REPORT_WRITE_TOOL,
   toClaudeToolsFrontmatter,
   toCodexToolsFrontmatter,
@@ -128,7 +130,8 @@ export const REVIEW_GATE_FILE = "stamity-review-gate.mjs";
  */
 export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: number; readonly lines: number }>> = {
   // Fixed ceiling. Measured 2026-09-26 at 8c08660e: 19,125 bytes / 475 lines
-  // (the identity-bearing claude guard, generated layout).
+  // (the identity-bearing claude guard, generated layout). Measured 2026-09-30
+  // with the read-only git branch: 20,711 bytes / 511 lines; the ceiling holds.
   [GUARD_FILE]: { bytes: 24_576, lines: 600 },
   // Fixed ceiling. Measured 2026-09-26 at 8c08660e: 40,914 bytes / 917 lines
   // (generated layout; a plugin root renders 40,195 / 896).
@@ -1165,6 +1168,10 @@ const MAX_WRITE_FILE_PATH_CHARS = 1024;
  * A write swapped under the check (a directory replaced by a link between this
  * run and the client's write) needs an agent that can already write anywhere,
  * so the race is not an escalation.
+ *
+ * The same block carries {@link readOnlyGitHelpers}, rendered just before the
+ * `printable` helper both branches' refusals share, so the path-scoped block
+ * runs from `WRITE_TOOL` to that helper as one piece.
  */
 function pathScopedWriteHelpers(): string {
   return `const WRITE_TOOL = ${json(CLAUDE_REPORT_WRITE_TOOL)};
@@ -1337,6 +1344,8 @@ function writePathCheck(payload, patterns) {
   return patterns.some((pattern) => patternMatches(path, pattern)) ? "" : "no-pattern-match";
 }
 
+${readOnlyGitHelpers()}
+
 /**
  * The engine's shared unprintable class, embedded by source and flags: C0, DEL,
  * C1, the zero-width marks, the line and paragraph separators, the bidi
@@ -1386,6 +1395,90 @@ const PATH_SCOPED_WRITE_BRANCH = `    // A verdict role's one write: its own rep
     }
 `;
 
+/** Longest shell command the read-only git check reads, in UTF-16 code units. */
+const MAX_GIT_COMMAND_CHARS = 1024;
+
+/**
+ * The whole alphabet of a command the read-only git check admits: no quote, no
+ * `;`, `|`, `&`, `$`, backtick, redirect, glob, brace or newline, so no shell
+ * syntax can ride along with the git call. Space is the only separator.
+ */
+const GIT_COMMAND_CHARS = /^[A-Za-z0-9 ._/:@^~=+,-]+$/;
+
+/**
+ * Option prefixes refused anywhere after the subcommand: `--output` writes a
+ * file, `--ext-diff` and `--textconv` run a configured program, `--no-index`
+ * compares paths outside the repository. Git 2.52 refuses an abbreviated
+ * spelling of each of them on these five subcommands, so a prefix match covers
+ * every spelling git accepts.
+ */
+const GIT_DENIED_OPTION_PREFIXES = ["--output", "--ext-diff", "--textconv", "--no-index"] as const;
+
+/**
+ * The rendered half of read-only git (REQ-CTX-017), rendered inside
+ * {@link pathScopedWriteHelpers} and so carried by the same body: the
+ * identity-bearing guard of the `generated` layout. A command is read-only git when it (a) is at most
+ * {@link MAX_GIT_COMMAND_CHARS} characters, (b) uses only
+ * {@link GIT_COMMAND_CHARS}, (c) splits on single spaces into `git`, then one of
+ * {@link READ_ONLY_GIT_SUBCOMMANDS} — so a top-level `-c`, `-p`, `--paginate`
+ * or `--exec-path` before the subcommand is refused — and (d) has no later
+ * token starting with one of {@link GIT_DENIED_OPTION_PREFIXES}.
+ *
+ * The residual, which a command-line check cannot see: a diff driver, a
+ * textconv filter, `log.showSignature` (which runs the configured gpg program)
+ * or any other program that the repository's or the user's git config runs by
+ * default. Those come from local configuration, not from the command an agent
+ * typed, and a local config that runs a program on `git log` already runs it
+ * for every person in that checkout.
+ */
+function readOnlyGitHelpers(): string {
+  return `const GIT_TOOL = ${json(CLAUDE_READ_ONLY_GIT_TOOL)};
+const GIT_SUBCOMMANDS = ${json(READ_ONLY_GIT_SUBCOMMANDS)};
+const GIT_DENIED_OPTIONS = ${json(GIT_DENIED_OPTION_PREFIXES)};
+const GIT_CHARS = new RegExp(${json(GIT_COMMAND_CHARS.source)});
+
+/** Whether a shell command is read-only git: one listed subcommand, no writing option, no shell syntax. */
+function readOnlyGit(command) {
+  if (typeof command !== "string" || command.length > ${MAX_GIT_COMMAND_CHARS} || !GIT_CHARS.test(command)) return false;
+  const tokens = command.split(" ");
+  return (
+    tokens[0] === "git" &&
+    GIT_SUBCOMMANDS.includes(tokens[1]) &&
+    !tokens.slice(2).some((token) => GIT_DENIED_OPTIONS.some((prefix) => token.startsWith(prefix)))
+  );
+}`;
+}
+
+/**
+ * The branch {@link readOnlyGitHelpers} serves, rendered just before the
+ * category refusal and after {@link PATH_SCOPED_WRITE_BRANCH}. It keys on the
+ * TOOL name — `PowerShell` shares `execute` with `Bash` and is never admitted —
+ * and only on a row that withholds `execute` and carries `readOnlyGit: true`.
+ * Every other command such a row sends refuses as `GIT_COMMAND_DENIED`, so a
+ * verdict role's `ls` reads that code rather than `CATEGORY_DENIED`.
+ */
+const READ_ONLY_GIT_BRANCH = `    // Read-only git for a role without execute: Bash, one listed subcommand, no
+    // writing option. A program a local git config runs by default is outside
+    // what this check sees.
+    if (
+      tool === GIT_TOOL &&
+      category === "execute" &&
+      Array.isArray(policy.allow) &&
+      !policy.allow.includes("execute") &&
+      policy.readOnlyGit === true
+    ) {
+      if (readOnlyGit(own(own(payload, "tool_input"), "command"))) return null;
+      return {
+        ...subject,
+        category,
+        reasonCode: "GIT_COMMAND_DENIED",
+        message: printable(
+          \`Agent "\${agentId}" may run only read-only git in a shell — git \${GIT_SUBCOMMANDS.join(", ")}, with no \${GIT_DENIED_OPTIONS.join(", ")} and no shell syntax — and this command was refused. Read the change another way, or return the dependency to the parent.\`,
+        ),
+      };
+    }
+`;
+
 /**
  * The tool-call authorization gate: deny-by-default over the policy document
  * the engine emitted.
@@ -1422,7 +1515,10 @@ const PATH_SCOPED_WRITE_BRANCH = `    // A verdict role's one write: its own rep
  * regular file under the repository root that matches one of them — and nothing
  * else. It is rendered only into the identity-bearing guard of the `generated`
  * layout, see {@link pathScopedWriteHelpers}; every other body stays
- * byte-identical to the guard before the field existed.
+ * byte-identical to the guard before the field existed. A second exception
+ * rides the same body: a row that withholds `execute` but carries
+ * `readOnlyGit: true` may use `Bash` for a read-only git command, and any other
+ * command it sends refuses as `GIT_COMMAND_DENIED` ({@link readOnlyGitHelpers}).
  */
 export function buildPreToolUseGuardScript(opts: GuardScriptOptions): string {
   const identityBearing = opts.identityBearing ?? true;
@@ -1651,7 +1747,7 @@ function evaluate() {
         message: \`Tool "\${tool}" maps to no category on this client, so it cannot be authorized.\`,
       };
     }
-${pathScoped ? PATH_SCOPED_WRITE_BRANCH : ""}    if (!Array.isArray(policy.allow) || !policy.allow.includes(category)) {
+${pathScoped ? PATH_SCOPED_WRITE_BRANCH + READ_ONLY_GIT_BRANCH : ""}    if (!Array.isArray(policy.allow) || !policy.allow.includes(category)) {
       return {
         ...subject,
         category,

@@ -1451,6 +1451,25 @@ describe("emitted plan", () => {
     );
   });
 
+  it("keeps the four verdict roles readonly although their roster rows carry readOnlyGit", async () => {
+    // Non-degenerate: every verdict row really carries `readOnlyGit`, the key
+    // the Claude adapter turns into a command-checked `Bash`. Cursor's boolean
+    // names no command, so the frontmatter is unchanged: `readonly: true`
+    // already blocks edits and state-changing shell commands.
+    const verdictIds = ["reviewer", "security", "performance", "design-quality"];
+    for (const id of verdictIds) {
+      const grant = resolveAgentGrant({ runtimeId: `stamity-${id}`, frontmatter: {} });
+      expect(grant.readOnlyGit, id).toBe(true);
+    }
+
+    const plan = await planFor(CORPUS_ROOT, { agents: verdictIds, rules: [], commands: [] });
+    for (const id of verdictIds) {
+      const agent = contentAt(plan, `${CURSOR_AGENTS_DIR}/stamity-${id}.md`);
+      expect(agent, id).toContain("readonly: true");
+      expect(agent, id).not.toMatch(/^readOnlyGit:/m);
+    }
+  });
+
   it("plans identical bytes twice, with every row owned by this adapter", async () => {
     const corpus = await seedCorpus();
 

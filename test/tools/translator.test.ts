@@ -18,6 +18,7 @@ import {
 } from "../../src/tools/categories.ts";
 import {
   ADAPTER_ALLOWLIST_COVERAGE,
+  CLAUDE_READ_ONLY_GIT_TOOL,
   CLAUDE_REPORT_WRITE_TOOL,
   PLATFORM_TOOL_MARKER,
   buildAllowlistCoverageTable,
@@ -448,5 +449,56 @@ describe("platform-tool marker substitution", () => {
     expect(out).toBe(`pre ${getAskUserToolEntry("claude").note} post`);
     expect(out.startsWith("pre ")).toBe(true);
     expect(out.endsWith(" post")).toBe(true);
+  });
+});
+
+/** One client's coverage mechanism, or "" when the row is missing. */
+function coverageMechanism(tool: string): string {
+  return ADAPTER_ALLOWLIST_COVERAGE.find((row) => row.tool === tool)?.mechanism ?? "";
+}
+
+describe("read-only git in the Claude dialect (sw05-read-only-git-grants)", () => {
+  it("names Bash, which the execute category already lists, and never PowerShell", () => {
+    expect(CLAUDE_READ_ONLY_GIT_TOOL).toBe("Bash");
+    expect(toClaudeToolsFrontmatter(["execute"]).split(", ")).toEqual(["Bash", "PowerShell"]);
+  });
+
+  it("appends Bash in the execute slot, after the scoped Write and every edit name", () => {
+    expect(toClaudeToolsFrontmatter(["read"], { pathScopedWrite: true, readOnlyGit: true })).toBe(
+      "Read, Grep, Glob, Skill, Write, Bash",
+    );
+    expect(toClaudeToolsFrontmatter(["read"], { readOnlyGit: true })).toBe("Read, Grep, Glob, Skill, Bash");
+    // The spec-author's shape: edit held, no write path.
+    expect(toClaudeToolsFrontmatter(["read", "edit"], { readOnlyGit: true })).toBe(
+      "Read, Grep, Glob, Skill, Edit, Write, NotebookEdit, Bash",
+    );
+    // Before every later category's names, so the table's order holds.
+    expect(toClaudeToolsFrontmatter(["read", "network"], { readOnlyGit: true })).toBe(
+      "Read, Grep, Glob, Skill, Bash, WebFetch, WebSearch",
+    );
+  });
+
+  it("keeps an empty grant empty, and adds nothing to a grant that already holds execute", () => {
+    expect(toClaudeToolsFrontmatter([], { readOnlyGit: true })).toBe("");
+    expect(toClaudeToolsFrontmatter(["read", "execute"], { readOnlyGit: true })).toBe(
+      toClaudeToolsFrontmatter(["read", "execute"]),
+    );
+  });
+
+  it("returns exactly the one-argument output when the option is off", () => {
+    for (const grant of [["read"], FULL_GRANT, READ_ONLY_GRANT, []] as const) {
+      expect(toClaudeToolsFrontmatter(grant, { readOnlyGit: false })).toBe(toClaudeToolsFrontmatter(grant));
+    }
+  });
+
+  it("states the read-only git scope on every client's coverage row", () => {
+    expect(coverageMechanism("claude")).toContain("the four verdict roles and the spec-author also carry `Bash`");
+    expect(coverageMechanism("claude")).toContain("log, show, diff, rev-list, merge-base");
+    expect(coverageMechanism("claude")).toContain("never `PowerShell`");
+    expect(coverageMechanism("claude")).toContain("a plugin install renders no `Bash` for them");
+    expect(coverageMechanism("cursor")).toContain("`readonly: true` blocks state-changing shell commands");
+    expect(coverageMechanism("copilot")).toContain("the brief must carry the diff");
+    expect(coverageMechanism("codex")).toContain("permits read-only git (log, show, diff, rev-list, merge-base)");
+    for (const row of ADAPTER_ALLOWLIST_COVERAGE) expect(row.mechanism, row.tool).not.toContain("|");
   });
 });

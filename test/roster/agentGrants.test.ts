@@ -625,3 +625,71 @@ describe("grantableFootprint", () => {
     expect(grant.diagnostics.join(" ")).toContain("outside the pack's declared tool footprint");
   });
 });
+
+/**
+ * `readOnlyGit` travels from the core roster only, like `writePaths`
+ * (sw05-read-only-git-grants). A frontmatter key of the same name is a claim no
+ * pack can turn into a shell.
+ */
+describe("resolveAgentGrant — read-only git", () => {
+  const GIT_NOTE =
+    "declares `readOnlyGit:`, which no frontmatter can grant — read-only git comes " +
+    "from the core roster only; ignored.";
+
+  it("carries readOnlyGit from exactly the five rows that hold it, and adds no key elsewhere", () => {
+    const carriers: string[] = [];
+    for (const row of AGENT_POLICY_ROSTER) {
+      const grant = resolveAgentGrant({ runtimeId: row.agentId, frontmatter: {} });
+      if (grant.readOnlyGit === true) carriers.push(row.agentId);
+      else expect(Object.hasOwn(grant, "readOnlyGit"), row.agentId).toBe(false);
+    }
+    expect(carriers.toSorted()).toEqual([
+      "stamity-design-quality",
+      "stamity-performance",
+      "stamity-reviewer",
+      "stamity-security",
+      "stamity-spec-author",
+    ]);
+  });
+
+  it("copies only the literal true from an injected row", () => {
+    for (const value of ["true", 1, false]) {
+      const grant = resolveAgentGrant({
+        runtimeId: PACK_AGENT_ID,
+        frontmatter: {},
+        roster: [
+          // A row is data: the injected value is typed as a claim, not a fact.
+          { agentId: PACK_AGENT_ID, allow: ["read"], readOnlyGit: value as unknown as true, rationale: "Injected." },
+        ],
+      });
+      expect(Object.hasOwn(grant, "readOnlyGit"), String(value)).toBe(false);
+    }
+  });
+
+  it("resolves a pack file under a core id to the core row, and says the git claim", () => {
+    const grant = resolveAgentGrant({
+      runtimeId: "stamity-reviewer",
+      frontmatter: { capabilities: ["read"], readOnlyGit: true },
+      declaredTools: WIDE_FOOTPRINT,
+    });
+
+    expect(grant.source).toBe("roster");
+    expect(grant.readOnlyGit).toBe(true);
+    expect(grant.diagnostics).toEqual([`stamity-reviewer: ${GIT_NOTE}`]);
+  });
+
+  it("grants a pack agent no read-only git from its frontmatter, and says so", () => {
+    for (const declaredTools of [WIDE_FOOTPRINT, undefined]) {
+      const grant = resolveAgentGrant({
+        runtimeId: PACK_AGENT_ID,
+        frontmatter: { capabilities: ["read"], readOnlyGit: true },
+        ...(declaredTools === undefined ? {} : { declaredTools }),
+      });
+
+      expect(Object.hasOwn(grant, "readOnlyGit")).toBe(false);
+      expect(grant.diagnostics).toContain(`${PACK_AGENT_ID}: ${GIT_NOTE}`);
+    }
+    // The control: the same agent without the key draws no such note.
+    expect(reasoning(resolvePackAgent(["read"]))).not.toContain("readOnlyGit");
+  });
+});

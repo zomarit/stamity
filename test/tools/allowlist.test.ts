@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import * as fc from "fast-check";
 import { afterEach, describe, expect, it } from "vitest";
 import { formatLogEntry, parseFailureLog } from "../../src/resilience/failureLog.ts";
-import { isWritePathPattern } from "../../src/roster/agentPolicies.ts";
+import { AGENT_POLICY_ROSTER, isWritePathPattern } from "../../src/roster/agentPolicies.ts";
 import {
   AGENT_TOOL_POLICIES_FILE,
   AGENT_TOOL_POLICIES_SCHEMA,
@@ -84,6 +84,7 @@ interface PolicyDocument {
     allow: string[];
     denyTools?: string[];
     writePaths?: string[];
+    readOnlyGit?: boolean;
     rationale: string;
     source?: { kind: string; packId?: string };
   }>;
@@ -804,6 +805,83 @@ describe("write paths", () => {
   });
 });
 
+/**
+ * A row's `readOnlyGit` (sw05-read-only-git-grants): read-only git through the
+ * shell tool, honoured by the generated guard alone. Emitted only as `true`,
+ * under the unchanged v1 schema.
+ */
+describe("read-only git", () => {
+  const reviewer: AgentToolPolicy = { agentId: "stamity-reviewer", allow: ["read"], rationale: "r" };
+
+  function emitted(rows: readonly AgentToolPolicy[]): PolicyDocument {
+    return JSON.parse(buildAgentToolPoliciesJson(rows)) as PolicyDocument;
+  }
+
+  it("emits the key as true, after writePaths and before rationale, under the v1 schema", () => {
+    const document = emitted([{ ...reviewer, writePaths: ["a/*.md"], readOnlyGit: true }]);
+
+    expect(document.schema).toBe("stamity/agent-tool-policies/v1");
+    expect(document.policies[0]?.readOnlyGit).toBe(true);
+    expect(Object.keys(document.policies[0] ?? {})).toEqual([
+      "agentId",
+      "allow",
+      "writePaths",
+      "readOnlyGit",
+      "rationale",
+    ]);
+  });
+
+  it("carries the key for exactly the five shipped rows that hold it", () => {
+    const carriers = emitted(AGENT_POLICY_ROSTER)
+      .policies.filter((policy) => Object.hasOwn(policy, "readOnlyGit"))
+      .map((policy) => [policy.agentId, policy.readOnlyGit]);
+
+    expect(carriers).toEqual([
+      ["stamity-design-quality", true],
+      ["stamity-performance", true],
+      ["stamity-reviewer", true],
+      ["stamity-security", true],
+      ["stamity-spec-author", true],
+    ]);
+  });
+
+  it("drops any value but true, byte for byte", () => {
+    const before = buildAgentToolPoliciesJson([reviewer]);
+
+    for (const value of [false, "true", 1]) {
+      expect(
+        buildAgentToolPoliciesJson([{ ...reviewer, readOnlyGit: value } as unknown as AgentToolPolicy]),
+        String(value),
+      ).toBe(before);
+    }
+  });
+
+  it("reports a value that is not true, and the flag beside execute", () => {
+    expect(validateToolPolicies([{ ...reviewer, readOnlyGit: true }])).toEqual([]);
+    expect(
+      validateToolPolicies([{ ...reviewer, readOnlyGit: "yes" } as unknown as AgentToolPolicy]),
+    ).toEqual([
+      'Agent "stamity-reviewer" declares readOnlyGit "yes", which is not true; the emitter drops the key, so the agent runs no git.',
+    ]);
+    expect(
+      validateToolPolicies([{ ...reviewer, allow: ["read", "execute"], readOnlyGit: true }]),
+    ).toEqual([
+      'Agent "stamity-reviewer" holds "execute", so readOnlyGit scopes nothing — the guard admits every command through the category first. Drop one.',
+    ]);
+  });
+
+  it("widens nothing in the in-process check, which never reads the field", () => {
+    const scoped: readonly AgentToolPolicy[] = [{ ...reviewer, readOnlyGit: true }];
+
+    // `Bash` resolves to `execute`, which the row does not hold; the command
+    // check is the generated guard's, so this check still refuses the call.
+    expect(checkToolAccess(scoped, "stamity-reviewer", "Bash", TOOL_MAP)).toMatchObject({
+      allowed: false,
+      category: "execute",
+    });
+  });
+});
+
 describe("deriveUserAgentPolicy", () => {
   const base: AgentToolPolicy = {
     agentId: "stamity-user-agent",
@@ -876,6 +954,18 @@ describe("deriveUserAgentPolicy", () => {
 
     expect(Object.hasOwn(derived, "writePaths")).toBe(false);
     expect(derived.allow).toEqual(["read", "planning"]);
+  });
+
+  it("drops the base's read-only git: a user-authored agent never carries the key", () => {
+    // The shipped reviewer row really carries it, so the absence is the drop.
+    const shipped = AGENT_POLICY_ROSTER.find((row) => row.agentId === "stamity-reviewer");
+    expect(shipped?.readOnlyGit).toBe(true);
+
+    const derived = deriveUserAgentPolicy(shipped!, ["planning"]);
+
+    expect(Object.hasOwn(derived, "readOnlyGit")).toBe(false);
+    expect(derived.allow).toEqual(["read", "planning"]);
+    expect(JSON.parse(buildAgentToolPoliciesJson([derived])).policies[0]).not.toHaveProperty("readOnlyGit");
   });
 });
 

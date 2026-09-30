@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.10.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-30T13:54:16.744Z",
+  "updatedAt": "2026-09-30T14:02:50.062Z",
   "tools": [
     "claude"
   ],
@@ -71,7 +71,7 @@
       "adapter": "claude",
       "artifactId": "design-quality",
       "artifactType": "agent",
-      "contentHash": "9b9021cad25d7fb740f9251ed06ec7f0ba0b6edbf1563099739bfa61a1ae812e",
+      "contentHash": "7c314cf730c07981e30b0d8bedd545a0734c3e7a2ebe5573d4909287d57289b8",
       "path": ".claude/agents/stamity-design-quality.md"
     },
     {
@@ -92,7 +92,7 @@
       "adapter": "claude",
       "artifactId": "performance",
       "artifactType": "agent",
-      "contentHash": "c8d8cf9243b0b429db1c13db7056f3256b0b098d4f3bdb8588f73e6d59e86ac3",
+      "contentHash": "888f323c6ecc0147c4f48d6c34e252312d88866c8c5fd22000de8e69b3044560",
       "path": ".claude/agents/stamity-performance.md"
     },
     {
@@ -106,21 +106,21 @@
       "adapter": "claude",
       "artifactId": "reviewer",
       "artifactType": "agent",
-      "contentHash": "c31532ae828ffe0c151dd2b15b779076408a23e7d61c9d27f786e4763113ae41",
+      "contentHash": "a26600b199aa51d3b65779c9943e32433ff0a45771a3385bf5d66e2517c3f28a",
       "path": ".claude/agents/stamity-reviewer.md"
     },
     {
       "adapter": "claude",
       "artifactId": "security",
       "artifactType": "agent",
-      "contentHash": "93d90ebfb007f193ba489155c537387be13b2e780fcd71d86a0f7cd80ac90906",
+      "contentHash": "46c1fabe24b862f1156c34b2dd026d3fb77fc1399d44e663e4468156479d6baf",
       "path": ".claude/agents/stamity-security.md"
     },
     {
       "adapter": "claude",
       "artifactId": "spec-author",
       "artifactType": "agent",
-      "contentHash": "e4bc977f2ba3eb745238f613d381aaf9fcea09b7d52de13cd37cacede560023e",
+      "contentHash": "fc728fdb7fe3cc268eea543e4f8d0d5eab88bcd84d9633cec078cae160602ee3",
       "path": ".claude/agents/stamity-spec-author.md"
     },
     {
@@ -484,7 +484,7 @@
       "adapter": "claude",
       "artifactId": "agent-tool-policies",
       "artifactType": "infra",
-      "contentHash": "d423255807751afda5b131b6c205e538ae966a05a31e51e4e45a40b2c39f908d",
+      "contentHash": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3",
       "path": ".stamity/generated/agent-tool-policies.json"
     },
     {
@@ -498,7 +498,7 @@
       "adapter": "claude",
       "artifactId": "stamity-pre-tool-use-guard",
       "artifactType": "infra",
-      "contentHash": "87fa5a6074083287304063b094c6319ad9ef1e84df9ee290f112d546368c8f7d",
+      "contentHash": "d37bec892a8a323c7398d263f5c241384c4ecd91876f1b30b6c4557e74f5abae",
       "path": ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs"
     },
     {

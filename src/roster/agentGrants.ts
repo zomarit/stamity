@@ -70,6 +70,12 @@ export interface ResolvedAgentGrant {
    * Absent unless that row carries at least one valid pattern.
    */
   readonly writePaths?: readonly string[];
+  /**
+   * Read-only git through the client's shell tool — roster-only like
+   * {@link writePaths}, copied from the core row that answered when that row
+   * says exactly `true`, and never derived from frontmatter. Absent otherwise.
+   */
+  readonly readOnlyGit?: true;
 }
 
 /** Everything the resolver rules on. No handle, path, or manifest — see the module header. */
@@ -108,6 +114,9 @@ const CAPABILITIES_FIELD = "capabilities";
 
 /** The roster field a frontmatter map may spell but can never grant. */
 const WRITE_PATHS_FIELD = "writePaths";
+
+/** The second roster-only field: read-only git is a core-roster decision too. */
+const READ_ONLY_GIT_FIELD = "readOnlyGit";
 
 /** Membership over `unknown`: frontmatter is parsed data, so its types are claims, not facts. */
 const GRANTABLE_LOOKUP: ReadonlySet<string> = new Set<string>(GRANTABLE_TOOL_CATEGORIES);
@@ -191,6 +200,14 @@ function describeRejected(entry: unknown): string {
 function writePathsClaimNote(note: (message: string) => string): string {
   return note(
     `declares \`${WRITE_PATHS_FIELD}:\`, which no frontmatter can grant — write paths come ` +
+      `from the core roster only; ignored.`,
+  );
+}
+
+/** The note for a frontmatter `readOnlyGit:` key: said, never granted, like a write path. */
+function readOnlyGitClaimNote(note: (message: string) => string): string {
+  return note(
+    `declares \`${READ_ONLY_GIT_FIELD}:\`, which no frontmatter can grant — read-only git comes ` +
       `from the core roster only; ignored.`,
   );
 }
@@ -400,7 +417,10 @@ export function resolveAgentGrant(input: ResolveAgentGrantInput): ResolvedAgentG
     // comparison above is over categories only, so a file under a core id
     // trying to add a write would otherwise resolve in silence.
     if (Object.hasOwn(frontmatter, WRITE_PATHS_FIELD)) diagnostics.push(writePathsClaimNote(note));
+    if (Object.hasOwn(frontmatter, READ_ONLY_GIT_FIELD)) diagnostics.push(readOnlyGitClaimNote(note));
     const writePaths = rosterWritePaths(row, note, diagnostics);
+    // Exactly `true`: a row is data, and any other value grants nothing.
+    const readOnlyGit: unknown = row.readOnlyGit;
     // The row IS the answer, returned as authored: a consumer swapping its own
     // roster lookup for this call emits byte-identical core agent files.
     return {
@@ -409,6 +429,7 @@ export function resolveAgentGrant(input: ResolveAgentGrantInput): ResolvedAgentG
       source: "roster",
       diagnostics,
       ...(writePaths.length > 0 ? { writePaths } : {}),
+      ...(readOnlyGit === true ? { readOnlyGit: true as const } : {}),
     };
   }
 
@@ -418,6 +439,7 @@ export function resolveAgentGrant(input: ResolveAgentGrantInput): ResolvedAgentG
   // roster decision, and a pack file claiming one is told so rather than
   // silently ignored.
   if (Object.hasOwn(frontmatter, WRITE_PATHS_FIELD)) diagnostics.push(writePathsClaimNote(note));
+  if (Object.hasOwn(frontmatter, READ_ONLY_GIT_FIELD)) diagnostics.push(readOnlyGitClaimNote(note));
 
   if (declared.categories.length === 0) {
     return { runtimeId, allow: [], source: "none", diagnostics };

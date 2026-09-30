@@ -1,7 +1,7 @@
 ---
 name: stamity-design-quality
 description: "Reviews rendered surfaces and the flows through them when a component, view, or style file changes, deciding named accessibility success criteria and design-token adherence, and returning graded findings with path:line evidence and no edits."
-tools: Read, Grep, Glob, Skill, Write
+tools: Read, Grep, Glob, Skill, Write, Bash
 model: "opus"
 effort: "high"
 ---

@@ -1,7 +1,7 @@
 ---
 name: stamity-spec-author
 description: "Authors specs, plans, ADRs and docs in the spec format contract; greenfield, brownfield, architect and docs modes."
-tools: Read, Grep, Glob, Skill, Edit, Write, NotebookEdit
+tools: Read, Grep, Glob, Skill, Edit, Write, NotebookEdit, Bash
 model: "opus"
 effort: "high"
 ---

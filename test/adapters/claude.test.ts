@@ -499,9 +499,17 @@ describe("claude residue over the real corpus", () => {
       // expectation reads the same key-presence test the adapter applies to the
       // resolved grant: a row whose patterns all fail the grammar resolves with
       // no `writePaths` key and expects no `Write`.
+      //
+      // TEST CHANGE 2026-09-30, justified — sw05-read-only-git-grants: the four
+      // verdict rows and the spec-author carry a roster-only `readOnlyGit`, and
+      // the repository layout renders `Bash` for them; the expectation reads the
+      // same grant key the adapter applies.
       const grant = resolveAgentGrant({ runtimeId, frontmatter: {} });
       expect(parsed.frontmatter["tools"]).toBe(
-        toClaudeToolsFrontmatter(roster!.allow, { pathScopedWrite: grant.writePaths !== undefined }),
+        toClaudeToolsFrontmatter(roster!.allow, {
+          pathScopedWrite: grant.writePaths !== undefined,
+          readOnlyGit: grant.readOnlyGit === true,
+        }),
       );
 
       const modelClass = item.frontmatter["model_class"] as string;
@@ -519,7 +527,11 @@ describe("claude residue over the real corpus", () => {
     // `writePaths` (C8), so the repository layout renders the one path-scoped
     // `Write` after the read names; its category grant is still read-only, and
     // `Edit`/`NotebookEdit` stay absent.
-    expect(agentHead(rows, "stamity-reviewer")["tools"]).toBe("Read, Grep, Glob, Skill, Write");
+    //
+    // TEST CHANGE 2026-09-30, justified — sw05-read-only-git-grants: the
+    // reviewer's row carries `readOnlyGit`, so `Bash` follows in the `execute`
+    // slot; the guard admits it only for a read-only git command.
+    expect(agentHead(rows, "stamity-reviewer")["tools"]).toBe("Read, Grep, Glob, Skill, Write, Bash");
 
     // No row this adapter RENDERS leaks a well-formed unresolved substitution
     // token. CHANGED: the assertion used to cover every row, which was
@@ -590,7 +602,11 @@ describe("claude residue over the real corpus", () => {
       // TEST CHANGE 2026-09-24, justified — the three lenses are verdict roles
       // whose roster rows carry `writePaths` (C8), so the repository layout adds
       // the path-scoped `Write`; the category grant is still `["read"]`.
-      expect(head["tools"], id).toBe(toClaudeToolsFrontmatter(["read"], { pathScopedWrite: true }));
+      // TEST CHANGE 2026-09-30, justified — sw05-read-only-git-grants: the
+      // three lenses carry `readOnlyGit` too, so the line gains `Bash`.
+      expect(head["tools"], id).toBe(
+        toClaudeToolsFrontmatter(["read"], { pathScopedWrite: true, readOnlyGit: true }),
+      );
       expect(head["model"], id).toBe(model);
     }
   });
@@ -2129,7 +2145,10 @@ describe("the verdict roles' path-scoped report write", () => {
 
     for (const id of VERDICT_IDS) {
       const names = toolNames(rows, id);
-      expect(names, id).toEqual(["Read", "Grep", "Glob", "Skill", CLAUDE_REPORT_WRITE_TOOL]);
+      // TEST CHANGE 2026-09-30, justified — sw05-read-only-git-grants: each
+      // verdict row also carries `readOnlyGit`, which appends `Bash` after the
+      // scoped `Write`; this case still pins Write's slot and Edit's absence.
+      expect(names, id).toEqual(["Read", "Grep", "Glob", "Skill", CLAUDE_REPORT_WRITE_TOOL, "Bash"]);
       expect(names, id).not.toContain("Edit");
       expect(names, id).not.toContain("NotebookEdit");
     }
@@ -2242,7 +2261,9 @@ describe("the verdict roles' path-scoped report write", () => {
 
     it("renders Write for a pack agent under a verdict id, because the roster row wins", async () => {
       const rows = await packPlan();
-      expect(agentHead(rows, "stamity-reviewer")["tools"]).toBe("Read, Grep, Glob, Skill, Write");
+      // TEST CHANGE 2026-09-30, justified — sw05-read-only-git-grants: the
+      // roster row that wins carries `readOnlyGit` as well, so `Bash` follows.
+      expect(agentHead(rows, "stamity-reviewer")["tools"]).toBe("Read, Grep, Glob, Skill, Write, Bash");
     });
 
     it("never renders Write for a pack agent that claims writePaths itself", async () => {
@@ -2251,5 +2272,73 @@ describe("the verdict roles' path-scoped report write", () => {
       // absence of `Write` is the claim being ignored, not an empty list.
       expect(agentHead(rows, "stamity-scribe")["tools"]).toBe("Read, Grep, Glob, Skill");
     });
+  });
+});
+
+describe("read-only git on the Claude tools line (sw05-read-only-git-grants)", () => {
+  /** The rows that carry `readOnlyGit`: the four verdict roles and the spec-author. */
+  const GIT_READERS = [
+    "stamity-reviewer",
+    "stamity-security",
+    "stamity-performance",
+    "stamity-design-quality",
+    "stamity-spec-author",
+  ] as const;
+
+  function toolNames(rows: readonly AdapterOutput[], runtimeId: string): string[] {
+    return String(agentHead(rows, runtimeId)["tools"]).split(", ");
+  }
+
+  it("renders Bash, never PowerShell, for every read-only git row in the repository layout", async () => {
+    const { rows } = await planned();
+
+    for (const id of GIT_READERS) {
+      const grant = resolveAgentGrant({ runtimeId: id, frontmatter: {} });
+      // Non-degenerate: the key is there and the category that names Bash is not.
+      expect(grant.readOnlyGit, id).toBe(true);
+      expect(grant.allow, id).not.toContain("execute");
+      expect(toolNames(rows, id), id).toContain("Bash");
+      expect(toolNames(rows, id), id).not.toContain("PowerShell");
+    }
+  });
+
+  it("renders Bash for the spec-author, which carries no writePaths", async () => {
+    const { rows } = await planned();
+    const grant = resolveAgentGrant({ runtimeId: "stamity-spec-author", frontmatter: {} });
+
+    // The adapter keys off `readOnlyGit`, not off `writePaths`: this row has none.
+    expect(Object.hasOwn(grant, "writePaths")).toBe(false);
+    expect(agentHead(rows, "stamity-spec-author")["tools"]).toBe(
+      "Read, Grep, Glob, Skill, Edit, Write, NotebookEdit, Bash",
+    );
+  });
+
+  it("renders no Bash for a row without readOnlyGit that withholds execute", async () => {
+    const { rows } = await planned();
+
+    for (const id of ["stamity-researcher", "stamity-creator"]) {
+      const grant = resolveAgentGrant({ runtimeId: id, frontmatter: {} });
+      expect(Object.hasOwn(grant, "readOnlyGit"), id).toBe(false);
+      expect(toolNames(rows, id), id).not.toContain("Bash");
+    }
+  });
+
+  it("renders no Bash for these rows under a plugin hook root (the container layout)", async () => {
+    const control = (await planned()).rows;
+    const { rows } = await planned({ hookScriptsRoot: "${CLAUDE_PLUGIN_ROOT}/hooks" });
+
+    for (const id of GIT_READERS) {
+      // The control renders it, so the absence below is the layout's doing.
+      expect(toolNames(control, id), id).toContain("Bash");
+      expect(toolNames(rows, id), id).not.toContain("Bash");
+    }
+  });
+
+  it("does not pre-approve Bash for the session", async () => {
+    const { rows } = await planned();
+
+    // Ask mode: each git call prompts unless the user allows it, because the
+    // permission rows cover `read` only.
+    expect(settingsOf(rows).permissions.allow).not.toContain("Bash");
   });
 });

@@ -539,11 +539,33 @@ describe("subagent TOML", () => {
         "",
         "Read the diff.",
         "",
-        `Role tool policy: only use tools in these categories: ${grant.allow.join(", ")}. If work needs another category, return that dependency to the parent. Native sandbox and approval controls still apply.`,
+        // TEST CHANGE 2026-09-30, justified — sw05-read-only-git-grants: the
+        // reviewer's row carries `readOnlyGit`, so the role sentence appends the
+        // read-only git permission; the sandbox stays `read-only`.
+        `Role tool policy: only use tools in these categories: ${grant.allow.join(", ")}. If work needs another category, return that dependency to the parent. Native sandbox and approval controls still apply. You may also run read-only git: git log, git show, git diff, git rev-list, git merge-base; nothing else in a shell.`,
         '"""',
         "",
       ].join("\n"),
     );
+  });
+
+  it("names exactly the five read-only git subcommands for a verdict role, and none for the implementer", () => {
+    const reviewer = buildAgentToml(reviewerItem, grantOf(reviewerItem));
+    expect(reviewer).toContain('sandbox_mode = "read-only"');
+    const sentence = /You may also run read-only git: ([^;]+); nothing else in a shell\./.exec(reviewer);
+    expect(sentence?.[1]?.split(", ")).toEqual([
+      "git log",
+      "git show",
+      "git diff",
+      "git rev-list",
+      "git merge-base",
+    ]);
+
+    const implementer = agentItem("advanced", "implementer");
+    const toml = buildAgentToml(implementer, grantOf(implementer));
+    // The control: the implementer holds `execute` and no `readOnlyGit`.
+    expect(toml).toContain("Role tool policy:");
+    expect(toml).not.toContain("read-only git");
   });
 
   it("widens sandbox_mode only for a grant that changes the workspace", () => {

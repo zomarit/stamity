@@ -749,6 +749,11 @@ function buildRuleFile(item: CatalogItem, render: (raw: string) => string): Adap
  * test: the resolver keeps only patterns that pass the guard's grammar and
  * omits the key when none remain, and it never reads the key from frontmatter,
  * so a pack agent claiming write paths renders none.
+ *
+ * The same layout test gates read-only git: a grant carrying `readOnlyGit`
+ * renders `Bash` alone (never `PowerShell`), which the guard admits only for a
+ * read-only git command. It keys off `grant.readOnlyGit`, not off `writePaths`,
+ * because the spec-author holds read-only git with no report write path.
  */
 function buildAgentFile(
   item: CatalogItem,
@@ -759,6 +764,7 @@ function buildAgentFile(
 ): AdapterOutput {
   const tools = toClaudeToolsFrontmatter(grant.allow, {
     pathScopedWrite: scopedWrite && grant.writePaths !== undefined,
+    readOnlyGit: scopedWrite && grant.readOnlyGit === true,
   });
   const head = [
     `name: ${emittedId(item)}`,

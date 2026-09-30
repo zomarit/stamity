@@ -1,7 +1,7 @@
 ---
 name: stamity-security
 description: "Reviews the security surface of a change set — authentication, authorization, cryptography, trust boundaries, and the dependency set — when a change lands on those paths, returning graded findings with path:line evidence and making no edits."
-tools: Read, Grep, Glob, Skill, Write
+tools: Read, Grep, Glob, Skill, Write, Bash
 model: "opus"
 effort: "high"
 ---

@@ -201,6 +201,22 @@ function writePathCheck(payload, patterns) {
   return patterns.some((pattern) => patternMatches(path, pattern)) ? "" : "no-pattern-match";
 }
 
+const GIT_TOOL = "Bash";
+const GIT_SUBCOMMANDS = ["log","show","diff","rev-list","merge-base"];
+const GIT_DENIED_OPTIONS = ["--output","--ext-diff","--textconv","--no-index"];
+const GIT_CHARS = new RegExp("^[A-Za-z0-9 ._/:@^~=+,-]+$");
+
+/** Whether a shell command is read-only git: one listed subcommand, no writing option, no shell syntax. */
+function readOnlyGit(command) {
+  if (typeof command !== "string" || command.length > 1024 || !GIT_CHARS.test(command)) return false;
+  const tokens = command.split(" ");
+  return (
+    tokens[0] === "git" &&
+    GIT_SUBCOMMANDS.includes(tokens[1]) &&
+    !tokens.slice(2).some((token) => GIT_DENIED_OPTIONS.some((prefix) => token.startsWith(prefix)))
+  );
+}
+
 /**
  * The engine's shared unprintable class, embedded by source and flags: C0, DEL,
  * C1, the zero-width marks, the line and paragraph separators, the bidi
@@ -441,6 +457,26 @@ function evaluate() {
           ),
         };
       }
+    }
+    // Read-only git for a role without execute: Bash, one listed subcommand, no
+    // writing option. A program a local git config runs by default is outside
+    // what this check sees.
+    if (
+      tool === GIT_TOOL &&
+      category === "execute" &&
+      Array.isArray(policy.allow) &&
+      !policy.allow.includes("execute") &&
+      policy.readOnlyGit === true
+    ) {
+      if (readOnlyGit(own(own(payload, "tool_input"), "command"))) return null;
+      return {
+        ...subject,
+        category,
+        reasonCode: "GIT_COMMAND_DENIED",
+        message: printable(
+          `Agent "${agentId}" may run only read-only git in a shell — git ${GIT_SUBCOMMANDS.join(", ")}, with no ${GIT_DENIED_OPTIONS.join(", ")} and no shell syntax — and this command was refused. Read the change another way, or return the dependency to the parent.`,
+        ),
+      };
     }
     if (!Array.isArray(policy.allow) || !policy.allow.includes(category)) {
       return {

@@ -498,6 +498,27 @@ describe("agents → .github/agents", () => {
     );
   });
 
+  it("gives no verdict role execute although their roster rows carry readOnlyGit", async () => {
+    // Non-degenerate: every verdict row really carries `readOnlyGit`, the key
+    // the Claude adapter turns into a command-checked `Bash`. Copilot's alias
+    // list has no per-command granularity, so the key moves nothing here and
+    // the brief must carry the diff.
+    const verdictIds = ["reviewer", "security", "performance", "design-quality"] as const;
+    for (const id of verdictIds) {
+      const grant = resolveAgentGrant({ runtimeId: `stamity-${id}`, frontmatter: {} });
+      expect(grant.readOnlyGit, id).toBe(true);
+    }
+
+    const plan = await planResidue();
+    for (const id of verdictIds) {
+      const row = rowAt(plan, `.github/agents/stamity-${id}.agent.md`);
+      expect(frontmatterValue(row.content, "tools"), id).not.toContain('"execute"');
+    }
+    expect(ADAPTER_ALLOWLIST_COVERAGE.find((row) => row.tool === "copilot")?.mechanism).toContain(
+      "the brief must carry the diff",
+    );
+  });
+
   it("carries a core agent's roster grant unchanged when its own frontmatter would differ", () => {
     // A file shipped under a core id cannot widen (or narrow) that id's grant:
     // the roster answers, and the emitted map is the one the shipped agent has

@@ -89,6 +89,15 @@ const CLAUDE_TOOL_NAMES: CategoryToolNames = {
 export const CLAUDE_REPORT_WRITE_TOOL = "Write";
 
 /**
+ * The one Claude Code tool a `readOnlyGit` row may use outside its categories:
+ * `Bash`, which the generated guard admits only for a read-only git command.
+ * `PowerShell` shares its `execute` category and stays withheld. Named here for
+ * the same reason as {@link CLAUDE_REPORT_WRITE_TOOL}: the guard and the Claude
+ * adapter spell it from one place.
+ */
+export const CLAUDE_READ_ONLY_GIT_TOOL = "Bash";
+
+/**
  * Codex custom agents are TOML files under `.codex/agents/`. The current
  * contract documents no native per-agent `tools` key; `sandbox_mode` is the
  * supported filesystem boundary (the dated source census is in
@@ -201,10 +210,18 @@ function renderToolNames(
  * because the write rides a role's grant and does not stand in for one.
  * Without the option the output is exactly the one-argument form, which the
  * guard's name-to-category map (`../hooks/scripts.ts`) keeps calling.
+ *
+ * `readOnlyGit` adds {@link CLAUDE_READ_ONLY_GIT_TOOL} alone — never
+ * `PowerShell` — for a role whose policy row carries `readOnlyGit`. Like the
+ * scoped write it is not a category grant: the generated guard admits that
+ * `Bash` only for a read-only git command and refuses every other command.
+ * The name lands in the canonical `execute` slot, after the last `read` or
+ * `edit` name; a grant that already renders it gains nothing, and an empty
+ * grant stays empty.
  */
 export function toClaudeToolsFrontmatter(
   categories: readonly ToolCategory[],
-  options?: { readonly pathScopedWrite?: boolean },
+  options?: { readonly pathScopedWrite?: boolean; readonly readOnlyGit?: boolean },
 ): string {
   const names = renderToolNames(categories, CLAUDE_TOOL_NAMES);
   if (
@@ -215,6 +232,15 @@ export function toClaudeToolsFrontmatter(
     const readNames = new Set(CLAUDE_TOOL_NAMES.read ?? []);
     const slot = names.findLastIndex((name) => readNames.has(name)) + 1;
     names.splice(slot, 0, CLAUDE_REPORT_WRITE_TOOL);
+  }
+  if (
+    options?.readOnlyGit === true &&
+    names.length > 0 &&
+    !names.includes(CLAUDE_READ_ONLY_GIT_TOOL)
+  ) {
+    const before = new Set([...(CLAUDE_TOOL_NAMES.read ?? []), ...(CLAUDE_TOOL_NAMES.edit ?? [])]);
+    const slot = names.findLastIndex((name) => before.has(name)) + 1;
+    names.splice(slot, 0, CLAUDE_READ_ONLY_GIT_TOOL);
   }
   return names.join(", ");
 }
@@ -304,28 +330,28 @@ export const ADAPTER_ALLOWLIST_COVERAGE: readonly AdapterAllowlistCoverage[] = [
     // code.claude.com/docs/en/sub-agents (accessed 2026-08-13)
     tool: "claude",
     mechanism:
-      "`tools:` sub-agent frontmatter allowlist (comma-separated names); an omitted field inherits every tool, and a list resolving to nothing refuses the spawn; the four verdict roles also carry `Write` in the repository layout, which the generated pre-tool-use guard admits only for a regular file matching the row's `writePaths` under the repository root — never `Edit` or `NotebookEdit`; a plugin install (a plugin hook root or plugin-owned hooks) renders no `Write`, and those roles return their full report inline there",
+      "`tools:` sub-agent frontmatter allowlist (comma-separated names); an omitted field inherits every tool, and a list resolving to nothing refuses the spawn; the four verdict roles also carry `Write` in the repository layout, which the generated pre-tool-use guard admits only for a regular file matching the row's `writePaths` under the repository root — never `Edit` or `NotebookEdit`; a plugin install (a plugin hook root or plugin-owned hooks) renders no `Write`, and those roles return their full report inline there; the four verdict roles and the spec-author also carry `Bash` in the repository layout, which the guard admits only for `git` with one read-only subcommand (log, show, diff, rev-list, merge-base) and nothing that writes a file or runs a configured program — never `PowerShell`; a plugin install renders no `Bash` for them",
     strength: "hard",
   },
   {
     // cursor.com/docs/agent/subagents (accessed 2026-08-13)
     tool: "cursor",
     mechanism:
-      "`readonly:` boolean — blocks file edits and state-changing shell commands, but cannot name individual tools, so network and delegation grants are unexpressed; verdict roles (reviewer, security, performance, design-quality) stay read-only here and return their full report inline, because nothing on this client can scope a write to the reports folder",
+      "`readonly:` boolean — blocks file edits and state-changing shell commands, but cannot name individual tools, so network and delegation grants are unexpressed; verdict roles (reviewer, security, performance, design-quality) stay read-only here and return their full report inline, because nothing on this client can scope a write to the reports folder; for read-only git a verdict role relies on the client itself, because `readonly: true` blocks state-changing shell commands and names no read-only subcommand list",
     strength: "soft",
   },
   {
     // docs.github.com/en/copilot/reference/custom-agents-configuration (accessed 2026-08-13)
     tool: "copilot",
     mechanism:
-      "`tools:` alias list where `[]` grants nothing; tool-level only, with no sub-tool (per-shell-command) granularity; verdict roles (reviewer, security, performance, design-quality) stay read-only here and return their full report inline, because nothing on this client can scope a write to the reports folder",
+      "`tools:` alias list where `[]` grants nothing; tool-level only, with no sub-tool (per-shell-command) granularity; verdict roles (reviewer, security, performance, design-quality) stay read-only here and return their full report inline, because nothing on this client can scope a write to the reports folder; no verdict role gets `execute`, since nothing here can limit a shell to read-only git, so the brief must carry the diff",
     strength: "hard",
   },
   {
     // .github/client-contracts.md records the current official-source census.
     tool: "codex",
     mechanism:
-      "no documented native per-agent `tools` key in `.codex/agents/*.toml`; the role grant is developer-instruction prose, while `sandbox_mode` supplies the supported filesystem boundary; verdict roles (reviewer, security, performance, design-quality) stay read-only here and return their full report inline, because nothing on this client can scope a write to the reports folder",
+      "no documented native per-agent `tools` key in `.codex/agents/*.toml`; the role grant is developer-instruction prose, while `sandbox_mode` supplies the supported filesystem boundary; verdict roles (reviewer, security, performance, design-quality) stay read-only here and return their full report inline, because nothing on this client can scope a write to the reports folder; their role sentence permits read-only git (log, show, diff, rev-list, merge-base) inside the `read-only` sandbox, as prose only",
     strength: "soft",
     provisional: true,
   },

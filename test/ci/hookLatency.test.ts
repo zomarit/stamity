@@ -199,7 +199,10 @@ describe("hook-latency: the payloads", () => {
     read.tool_input = { command: "ls" };
     const result = spawnSync(process.execPath, [REAL_GUARD], { input: JSON.stringify(read), encoding: "utf8", windowsHide: true });
     expect(result.status).toBe(2);
-    expect(result.stderr).toContain("CATEGORY_DENIED");
+    // TEST CHANGE 2026-09-30, justified — sw05-read-only-git-grants: a verdict
+    // role's Bash now reaches the read-only git check, which refuses `ls` as
+    // GIT_COMMAND_DENIED; the call still reaches the policy read this row times.
+    expect(result.stderr).toContain("GIT_COMMAND_DENIED");
   });
 
   it("the allowed Write reaches the guard's write-path check: the same payload aimed at src/ is refused", () => {

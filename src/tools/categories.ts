@@ -52,6 +52,13 @@ export const FUNCTIONAL_TOOL_CATEGORIES = [
  * git or board tool has a slot to map onto without a taxonomy migration. Until
  * then no policy can grant them: access checks deny a tool that maps here, and
  * policy derivation strips them.
+ *
+ * The read-only git a verdict role holds is NOT a `git` grant. It is a
+ * roster flag (`readOnlyGit`, `../roster/agentPolicies.ts`) that lets the
+ * generated guard admit the shell tool for a listed read-only subcommand, one
+ * command at a time; the tool still resolves to `execute`. Granting `git`
+ * here would widen nothing on today's clients and would read as a git grant
+ * that no command check narrows.
  */
 export const RESERVED_TOOL_CATEGORIES = ["git", "board"] as const;
 export type ReservedToolCategory = (typeof RESERVED_TOOL_CATEGORIES)[number];

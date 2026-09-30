@@ -43,6 +43,7 @@ import {
   resolveAgentGrant,
   type ResolvedAgentGrant,
 } from "../roster/agentGrants.ts";
+import { READ_ONLY_GIT_SUBCOMMANDS } from "../roster/agentPolicies.ts";
 import {
   CLIENT_MODEL_PROJECTION,
   resolveEffortValue,
@@ -787,7 +788,12 @@ export function buildAgentToml(
   const rolePolicy = allow.length === 0
     ? "Role tool policy: no tool categories are granted. Decline tool use and return the missing permission to the parent."
     : `Role tool policy: only use tools in these categories: ${allow.join(", ")}. If work needs another category, return that dependency to the parent. Native sandbox and approval controls still apply.`;
-  entries.push(["developer_instructions", `${body.trim()}\n\n${rolePolicy}\n`]);
+  // Prose only, like the sentence it extends: the sandbox stays as the grant
+  // set it, `read-only` for a verdict role, and read-only git runs inside it.
+  const gitPolicy = grant.readOnlyGit === true && allow.length > 0
+    ? ` You may also run read-only git: ${READ_ONLY_GIT_SUBCOMMANDS.map((sub) => `git ${sub}`).join(", ")}; nothing else in a shell.`
+    : "";
+  entries.push(["developer_instructions", `${body.trim()}\n\n${rolePolicy}${gitPolicy}\n`]);
 
   const comments = [
     `stamity — Codex subagent "${runtimeId}". Generated file: regenerate rather than`,

@@ -98,6 +98,17 @@ export interface AgentPolicyRow {
    * category. Absent on every row but the four verdict roles'.
    */
   readonly writePaths?: readonly string[];
+  /**
+   * Read-only git for a role that withholds `execute`: the client's `Bash` tool,
+   * admitted one command at a time when the command is `git` followed by one of
+   * {@link READ_ONLY_GIT_SUBCOMMANDS} and nothing that writes a file or runs a
+   * configured program. Honoured only by the generated Claude Code guard in the
+   * repository layout, like {@link writePaths}; every other reader ignores it,
+   * so a reader unaware of the field denies `Bash` through the category. Set on
+   * the four verdict roles and the spec-author, which read a change themselves
+   * instead of trusting a brief's account of it.
+   */
+  readonly readOnlyGit?: true;
   /** Why this agent holds this grant, in its own terms. Read by operators auditing privilege. */
   readonly rationale: string;
 }
@@ -126,6 +137,14 @@ export function verdictReportWritePaths(
 ): readonly string[] {
   return [`.stamity/runs/*/reports/*-${role}-r*.md`];
 }
+
+/**
+ * The git subcommands a `readOnlyGit` row may run: each reads history or the
+ * object store and writes nothing (REQ-CTX-017). The generated guard spells
+ * the same list from here, so the Codex role sentence, the guard and the tests
+ * cannot name different sets.
+ */
+export const READ_ONLY_GIT_SUBCOMMANDS = ["log", "show", "diff", "rev-list", "merge-base"] as const;
 
 /** Longest pattern the grammar admits, in UTF-16 code units. */
 const MAX_WRITE_PATH_CHARS = 200;
@@ -188,6 +207,7 @@ export const AGENT_POLICY_ROSTER: readonly AgentPolicyRow[] = [
     agentId: "stamity-reviewer",
     allow: ["read"],
     writePaths: verdictReportWritePaths("reviewer"),
+    readOnlyGit: true,
     rationale:
       "Returns a verdict on a change set it must not touch, citing path:line for every behavior claim it makes. Withholding edit is what keeps the following round reviewing the author's work instead of the reviewer's own. Its single file write is the review report it saves for the run.",
   },
@@ -206,8 +226,9 @@ export const AGENT_POLICY_ROSTER: readonly AgentPolicyRow[] = [
   {
     agentId: "stamity-spec-author",
     allow: ["read", "edit"],
+    readOnlyGit: true,
     rationale:
-      "Writes specs, plans, decision records and docs after reading the code and history they describe. No execute: authoring needs no shell, and a spec pass able to run commands drifts into the implementation it exists to specify.",
+      "Writes specs, plans, decision records and docs after reading the code and history they describe. No execute: authoring needs no shell beyond reading history, and a spec pass able to run commands drifts into the implementation it exists to specify. Its one shell use is read-only git, admitted command by command.",
   },
   {
     agentId: "stamity-creator",
@@ -219,6 +240,7 @@ export const AGENT_POLICY_ROSTER: readonly AgentPolicyRow[] = [
     agentId: "stamity-security",
     allow: ["read"],
     writePaths: verdictReportWritePaths("security"),
+    readOnlyGit: true,
     rationale:
       "Judges authentication, cryptography, trust boundaries and the dependency set on triggered paths, quoting locations for each defect it names. No code write grant: those surfaces are where an unexamined edit costs most, and the repair belongs to a later pass under its own review. Only its own findings report may be saved.",
   },
@@ -226,6 +248,7 @@ export const AGENT_POLICY_ROSTER: readonly AgentPolicyRow[] = [
     agentId: "stamity-design-quality",
     allow: ["read"],
     writePaths: verdictReportWritePaths("design-quality"),
+    readOnlyGit: true,
     rationale:
       "Measures rendered surfaces against named success criteria and the project's token source, so its output is numbers rather than preferences. Inspection alone — nudging a spacing value while judging it would make one pass both author and judge of the same pixel. The lone file it creates is that measurement report.",
   },
@@ -233,6 +256,7 @@ export const AGENT_POLICY_ROSTER: readonly AgentPolicyRow[] = [
     agentId: "stamity-performance",
     allow: ["read"],
     writePaths: verdictReportWritePaths("performance"),
+    readOnlyGit: true,
     rationale:
       "Weighs cost per operation against declared budgets across data-access, background-work and cache paths. Nothing beyond inspection: an agent tuning what it measures forfeits the independence that makes the measurement worth reading, and tuning is the implementer's lane. Keeping its budget report on disk is the exception.",
   },

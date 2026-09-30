@@ -48,9 +48,11 @@ import {
  * belt-and-braces — it is the only filter between a roster row and what a
  * running agent is permitted, which is why the emitted document is
  * pre-sanitized to exactly what {@link checkToolAccess} WOULD authorize — with
- * one exception, a row's `writePaths`: the guard alone honours them, and the
- * check, which has no path to rule on, keeps denying `Write` through the
- * category (see {@link AgentToolPolicy.writePaths}).
+ * two exceptions, both the guard's alone. A row's `writePaths`: the check,
+ * which has no path to rule on, keeps denying `Write` through the category
+ * (see {@link AgentToolPolicy.writePaths}). And a row's `readOnlyGit`: the
+ * check, which has no command to rule on, keeps denying `Bash` through the
+ * category (see {@link AgentToolPolicy.readOnlyGit}).
  *
  * Wiring the check at the delegation boundary is what would make a second point
  * real; until then this header states the single point that exists.
@@ -99,6 +101,16 @@ export interface AgentToolPolicy {
    * give it a path parameter first.
    */
   writePaths?: readonly string[];
+  /**
+   * Read-only git outside the {@link allow} categories: the generated guard
+   * admits the client's `Bash` tool for a command that is `git` plus one
+   * subcommand of `READ_ONLY_GIT_SUBCOMMANDS` (`../roster/agentPolicies.ts`)
+   * and refuses every other command as `GIT_COMMAND_DENIED`. Read only by that
+   * guard, never by {@link checkToolAccess}, which has no command to rule on and
+   * keeps denying `Bash` through the category — the same one-way divergence as
+   * {@link writePaths}. Emitted only as `true`.
+   */
+  readOnlyGit?: boolean;
   /** Why this agent holds this grant. Read by operators auditing privilege. */
   rationale: string;
   /**
@@ -159,6 +171,10 @@ export const ALLOWLIST_FAILURE_PHASE = "tool-allowlist";
  * reason, from the safe side: a guard that predates the field ignores it and
  * decides on `allow` alone, so a verdict role's report `Write` is denied there
  * through the category — fail-closed, never wider.
+ *
+ * The optional per-row `readOnlyGit` field leaves it unchanged on the same
+ * side: a guard that predates the key denies a verdict role's `Bash` through
+ * the category, so every git call refuses there.
  */
 export const AGENT_TOOL_POLICIES_SCHEMA = "stamity/agent-tool-policies/v1";
 
@@ -353,7 +369,11 @@ export function checkToolAccess(
  * - a malformed write path — dropped by the emitter, so the row writes less
  *   than it reads as writing;
  * - write paths beside `edit` — the category admits every write before a path
- *   is ever consulted, so the list scopes nothing while reading as a limit.
+ *   is ever consulted, so the list scopes nothing while reading as a limit;
+ * - a `readOnlyGit` that is not `true` — dropped by the emitter, so the row
+ *   runs no git while reading as if it might;
+ * - `readOnlyGit` beside `execute` — the category admits every command before
+ *   the git check is reached, so the flag scopes nothing.
  *
  * Issues are returned rather than thrown: the caller owns whether a roster
  * problem is fatal (a `validate` command reporting all of them) or tolerable.
@@ -435,6 +455,20 @@ export function validateToolPolicies(roster: readonly AgentToolPolicy[]): string
           `write through the category first. Drop one.`,
       );
     }
+
+    const readOnlyGit: unknown = policy.readOnlyGit;
+    if (readOnlyGit !== undefined && readOnlyGit !== true) {
+      issues.push(
+        `Agent "${id}" declares readOnlyGit ${JSON.stringify(readOnlyGit) ?? typeof readOnlyGit}, ` +
+          `which is not true; the emitter drops the key, so the agent runs no git.`,
+      );
+    }
+    if (readOnlyGit === true && policy.allow.includes("execute")) {
+      issues.push(
+        `Agent "${id}" holds "execute", so readOnlyGit scopes nothing — the guard admits every ` +
+          `command through the category first. Drop one.`,
+      );
+    }
   }
 
   return issues;
@@ -470,6 +504,7 @@ interface EmittedPolicy {
   allow: readonly ToolCategory[];
   denyTools?: readonly string[];
   writePaths?: readonly string[];
+  readOnlyGit?: true;
   rationale: string;
   source?: AgentPolicySource;
 }
@@ -494,8 +529,8 @@ function emittedSource(source: AgentPolicySource | undefined): AgentPolicySource
 /**
  * One row as the document carries it: categories filtered to what an access
  * check would authorize, denied names deduplicated and sorted, write paths
- * reduced to the valid patterns and deduplicated and sorted, provenance
- * rebuilt. Key order is fixed here rather than by the input, and an optional key
+ * reduced to the valid patterns and deduplicated and sorted, `readOnlyGit`
+ * kept only as `true`, provenance rebuilt. Key order is fixed here rather than by the input, and an optional key
  * is omitted rather than emitted as null — both are what make the bytes a
  * function of the grant instead of of how the row was written.
  */
@@ -511,6 +546,7 @@ function emittedRow(policy: AgentToolPolicy): EmittedPolicy {
     allow,
     ...(denyTools.length > 0 ? { denyTools } : {}),
     ...(writePaths.length > 0 ? { writePaths } : {}),
+    ...(policy.readOnlyGit === true ? { readOnlyGit: true as const } : {}),
     rationale: policy.rationale,
     ...(source === undefined ? {} : { source }),
   };
@@ -530,8 +566,9 @@ function emittedRow(policy: AgentToolPolicy): EmittedPolicy {
  * unnamed {@link AgentPolicySource} is dropped, a write path outside the
  * {@link isWritePathPattern} grammar is dropped, and a duplicated agent id keeps
  * its first row. The guard has no validator, so what it reads must already be
- * exactly what {@link checkToolAccess} would authorize, write paths aside (the
- * guard's alone, see {@link AgentToolPolicy.writePaths}) — the pre-emission call
+ * exactly what {@link checkToolAccess} would authorize, write paths and
+ * read-only git aside (the guard's alone, see {@link AgentToolPolicy.writePaths}
+ * and {@link AgentToolPolicy.readOnlyGit}) — the pre-emission call
  * to {@link validateToolPolicies} is what reports the entries dropped here, and
  * skipping it means dropping them silently.
  *
@@ -587,6 +624,10 @@ export function buildAgentToolPoliciesJson(roster: readonly AgentToolPolicy[]): 
  * the field the guard denies `Write` through the category, so the derivation
  * can only write less than its base — never carry a report grant onto a row
  * the roster did not author.
+ *
+ * `readOnlyGit` is dropped for the same reason: read-only git is a
+ * core-roster decision about one shipped role, so a user-derived row runs no
+ * git unless its additions grant `execute` outright.
  */
 export function deriveUserAgentPolicy(
   base: AgentToolPolicy,
