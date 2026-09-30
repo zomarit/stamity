@@ -26,6 +26,12 @@ import { makeTempDir, type TempDirHandle } from "../support/tempDir.ts";
  * marker file. Its request log is the evidence that npm really resolved the
  * name (the packument was fetched) and never fetched the tarball.
  *
+ * A positive control runs the same squatter with `--yes` and must see the
+ * tarball fetched, the preinstall and the bin both write the marker, and the
+ * bin's output: without it the "nothing ran" assertions could never fail. Each
+ * case has its own marker path, baked into its own tarball, so the control's
+ * marker cannot satisfy or poison a refusal case.
+ *
  * npm is run as the JavaScript program it is — `npx-cli.js` under this
  * interpreter — so no `.cmd` shim and no shell sits between the test and npm on
  * Windows. The child environment is built from scratch: `npm test` exports
@@ -127,8 +133,17 @@ function npmTarball(files: Record<string, string>): Buffer {
   return gzipSync(Buffer.concat(blocks));
 }
 
-/** The squatter: a real, installable `stamity` that writes `markerPath` if it is installed or run. */
-function squatterPackage(markerPath: string): { manifest: Record<string, unknown>; tarball: Buffer } {
+/** A package the stub registry serves: its manifest and its tarball. */
+interface ServedPackage {
+  readonly manifest: Record<string, unknown>;
+  readonly tarball: Buffer;
+}
+
+/**
+ * The squatter: a real, installable `stamity` that appends to `markerPath` when
+ * its preinstall runs (`installed`) and when its bin runs (`ran`).
+ */
+function squatterPackage(markerPath: string): ServedPackage {
   const manifest = {
     name: NAME,
     version: SQUATTER_VERSION,
@@ -138,29 +153,30 @@ function squatterPackage(markerPath: string): { manifest: Record<string, unknown
   const marker = JSON.stringify(markerPath);
   const tarball = npmTarball({
     "package.json": JSON.stringify(manifest),
-    "bin.js": `#!/usr/bin/env node\nrequire("node:fs").writeFileSync(${marker}, "ran");\nconsole.log(${JSON.stringify(RAN_TEXT)});\n`,
-    "install.js": `require("node:fs").writeFileSync(${marker}, "installed");\n`,
+    "bin.js": `#!/usr/bin/env node\nrequire("node:fs").appendFileSync(${marker}, "ran\\n");\nconsole.log(${JSON.stringify(RAN_TEXT)});\n`,
+    "install.js": `require("node:fs").appendFileSync(${marker}, "installed\\n");\n`,
   });
   return { manifest, tarball };
 }
-
-type RegistryMode = "squatter" | "absent";
 
 interface StubRegistry {
   readonly server: Server;
   readonly url: string;
   /** Every request's path, in arrival order. */
   readonly requests: string[];
-  mode: RegistryMode;
+  /** The squatter this registry serves as `stamity`; `null` serves a 404 for every path. */
+  served: ServedPackage | null;
 }
 
-async function startRegistry(tarball: Buffer, manifest: Record<string, unknown>): Promise<StubRegistry> {
+async function startRegistry(): Promise<StubRegistry> {
   const requests: string[] = [];
-  const state = { mode: "absent" as RegistryMode, url: "" };
+  const state = { served: null as ServedPackage | null, url: "" };
   const server = createServer((request, response) => {
     const path = request.url ?? "";
     requests.push(path);
-    if (state.mode === "squatter" && path === PACKUMENT_PATH) {
+    const served = state.served;
+    if (served !== null && path === PACKUMENT_PATH) {
+      const { manifest, tarball } = served;
       const packument = {
         name: NAME,
         "dist-tags": { latest: SQUATTER_VERSION },
@@ -180,9 +196,9 @@ async function startRegistry(tarball: Buffer, manifest: Record<string, unknown>)
       response.end(JSON.stringify(packument));
       return;
     }
-    if (state.mode === "squatter" && path === TARBALL_PATH) {
+    if (served !== null && path === TARBALL_PATH) {
       response.writeHead(200, { "content-type": "application/octet-stream" });
-      response.end(tarball);
+      response.end(served.tarball);
       return;
     }
     response.writeHead(404, { "content-type": "application/json" });
@@ -198,11 +214,11 @@ async function startRegistry(tarball: Buffer, manifest: Record<string, unknown>)
     server,
     url: state.url,
     requests,
-    get mode() {
-      return state.mode;
+    get served() {
+      return state.served;
     },
-    set mode(next: RegistryMode) {
-      state.mode = next;
+    set served(next: ServedPackage | null) {
+      state.served = next;
     },
   };
 }
@@ -230,8 +246,12 @@ async function preparePathDir(root: string): Promise<void> {
   await symlink("/bin/sh", join(dir, "sh"));
 }
 
-/** Windows needs these to start any process; none of them carries npm configuration. */
-const WINDOWS_CARRIED = ["SystemRoot", "SYSTEMROOT", "windir", "WINDIR", "ComSpec", "COMSPEC", "PATHEXT"];
+/**
+ * Windows needs these to start any process; none of them carries npm
+ * configuration. One spelling each: `process.env` reads them case-insensitively
+ * there, so a second spelling would only duplicate the key in the child.
+ */
+const WINDOWS_CARRIED = ["SystemRoot", "windir", "ComSpec", "PATHEXT"];
 
 /**
  * The child environment, from scratch: no inherited key at all but Windows'
@@ -321,14 +341,11 @@ describe("npx --no on the unscoped name (REQ-FLOW-002, QA P01)", () => {
   let npm: NpmInstall;
   let temp: TempDirHandle;
   let registry: StubRegistry;
-  let markerPath: string;
 
   beforeAll(async () => {
     npm = locateNpm();
     temp = await makeTempDir("npx-no-refusal");
-    markerPath = temp.path("marker.txt");
-    const { manifest, tarball } = squatterPackage(markerPath);
-    registry = await startRegistry(tarball, manifest);
+    registry = await startRegistry();
   });
 
   afterAll(async () => {
@@ -345,8 +362,13 @@ describe("npx --no on the unscoped name (REQ-FLOW-002, QA P01)", () => {
     registry.requests.length = 0;
   });
 
-  /** A fresh project and a fresh npm home per case, so neither case sees the other's cache. */
-  async function freshCase(label: string): Promise<{ project: string; root: string; env: Record<string, string> }> {
+  /**
+   * A fresh project, npm home and marker path per case, so no case sees another's
+   * cache or marker.
+   */
+  async function freshCase(
+    label: string,
+  ): Promise<{ project: string; root: string; markerPath: string; env: Record<string, string> }> {
     const root = temp.path(label);
     const project = join(root, "project");
     const dirs = [project, join(root, "home"), join(root, "tmp"), join(root, "global")];
@@ -359,14 +381,14 @@ describe("npx --no on the unscoped name (REQ-FLOW-002, QA P01)", () => {
       join(project, "package.json"),
       `${JSON.stringify({ name: `qa-p01-${label}`, version: "1.0.0", private: true }, null, 2)}\n`,
     );
-    return { project, root, env: isolatedEnv(root, registry.url) };
+    return { project, root, markerPath: join(root, "marker.txt"), env: isolatedEnv(root, registry.url) };
   }
 
   it(
     "refuses a registry-served stamity: reads its manifest, never fetches the tarball, installs and runs nothing",
     async () => {
-      registry.mode = "squatter";
-      const { project, root, env } = await freshCase("squatter");
+      const { project, root, markerPath, env } = await freshCase("squatter");
+      registry.served = squatterPackage(markerPath);
       const before = await readFile(join(project, "package.json"), "utf8");
 
       const run = await runNpx(npm.npxCli, ["--no", NAME, "check"], project, env);
@@ -397,8 +419,8 @@ describe("npx --no on the unscoped name (REQ-FLOW-002, QA P01)", () => {
   it(
     "refuses when the registry holds no stamity: a 404, a non-zero exit, nothing installed or run",
     async () => {
-      registry.mode = "absent";
-      const { project, root, env } = await freshCase("absent");
+      const { project, root, markerPath, env } = await freshCase("absent");
+      registry.served = null;
       const before = await readFile(join(project, "package.json"), "utf8");
 
       const run = await runNpx(npm.npxCli, ["--no", NAME, "check"], project, env);
@@ -416,6 +438,28 @@ describe("npx --no on the unscoped name (REQ-FLOW-002, QA P01)", () => {
       expect(await readFile(join(project, "package.json"), "utf8"), context).toBe(before);
       expect(npxInstalls(join(root, "cache")), context).toEqual([]);
       expect(globalCopies(join(root, "global")), context).toEqual([]);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "control: the same squatter with --yes is fetched, installed and run, so the refusal assertions can fail",
+    async () => {
+      const { project, markerPath, env } = await freshCase("yes-control");
+      registry.served = squatterPackage(markerPath);
+
+      const run = await runNpx(npm.npxCli, ["--yes", NAME, "check"], project, env);
+      const context = `npm ${npm.version}\nstdout:\n${run.stdout}\nstderr:\n${run.stderr}\nrequests: ${registry.requests.join(", ")}`;
+      expect(stamityOnPath(env), context).toEqual([]);
+
+      // The stub's packument is accepted and its tarball is installable.
+      expect(registry.requests, context).toContain(PACKUMENT_PATH);
+      expect(registry.requests, context).toContain(TARBALL_PATH);
+      // The preinstall script ran, then the bin ran, each through the child's PATH.
+      expect(existsSync(markerPath), context).toBe(true);
+      expect(await readFile(markerPath, "utf8"), context).toBe("installed\nran\n");
+      expect(run.stdout, context).toContain(RAN_TEXT);
+      expect(run.code, context).toBe(0);
     },
     TEST_TIMEOUT_MS,
   );
