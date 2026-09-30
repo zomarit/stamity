@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { CLAUDE_COMMANDS_DIR, CLAUDE_SKILLS_DIR } from "../../../adapters/claude.ts";
 import {
   CODEX_COMMANDS_DIR,
@@ -12,7 +13,12 @@ import { ENV_MCP_FILE, getSourceEnvMcpCommand } from "../../../mcp/env.ts";
 import type { CarryReport } from "../../../migration/carry.ts";
 import { TOOLS, type Tool } from "../../../types/core.ts";
 import { MANIFEST_FILE } from "../../../types/manifest.ts";
-import { STATE_DIR } from "../../../types/markers.ts";
+import {
+  REVIEW_GATE_LOCK_SUFFIX,
+  REVIEW_GATE_STATE_FILE,
+  REVIEW_GATE_TEMP_INFIX,
+  STATE_DIR,
+} from "../../../types/markers.ts";
 import { packageCommand } from "../../kit/packageName.ts";
 import type { Palette } from "../../kit/terminal.ts";
 import type { InitApplyReport } from "./apply.ts";
@@ -377,28 +383,57 @@ function installedLabel(decisions: InitDecisions, report: InitApplyReport): stri
  * A zero-evidence init installs claude alone, and the disclosure line printed
  * only `installed claude` — which read as a choice somebody made. Shared by the
  * panel and init's dry-run report, so both say it the same way.
+ *
+ * The route to more clients differs by mode. Before anything is written (the
+ * dry run) `--tools` on the real run is the route. After a live init, a second
+ * `init` refuses without `--force`, so the route is the manifest's `tools` key
+ * and a sync, in the pinned call form the panel uses elsewhere.
  */
-export function defaultClientsLine(decisions: InitDecisions): string | null {
+export function defaultClientsLine(decisions: InitDecisions, dryRun: boolean): string | null {
   if (decisions.toolsSource !== "default") return null;
+  const all = TOOLS.join(",");
+  const route = dryRun
+    ? `add more with --tools ${all}`
+    : `add more with ${packageCommand(`config set tools ${all}`)}, then ${packageCommand("sync")}`;
   return (
     `clients: ${decisions.tools.join(", ")} (the default — no other client's files were found; ` +
-    `add more with --tools ${TOOLS.join(",")})`
+    `${route})`
   );
 }
 
 /**
  * The Copilot coding agent's setup workflow, named where the operator reads
  * next steps — or nothing when this run did not put it on disk (a user-owned
- * file at that path is skipped, and naming it as installed would be false).
+ * file at that path is skipped, and naming it as installed would be false; a
+ * dry run put nothing on disk).
+ *
+ * The report's rows carry the absolute target the writer resolved
+ * (`apply.ts` joins the root; `safeWriteFile` returns the resolved path), so
+ * the repo-relative constant is joined onto the root the same way before the
+ * comparison — as init's import notes compare their rows.
  */
-function copilotWorkflowStep(report: InitApplyReport): string[] {
-  const row = report.wrote.find((entry) => entry.path === COPILOT_SETUP_STEPS_PATH);
+function copilotWorkflowStep(report: InitApplyReport, rootDir: string): string[] {
+  if (report.dryRun) return [];
+  const target = join(rootDir, ...COPILOT_SETUP_STEPS_PATH.split("/"));
+  const row = report.wrote.find((entry) => entry.path === target);
   if (row === undefined || row.action === "skipped") return [];
   return [
     `the coding agent's setup workflow is at ${COPILOT_SETUP_STEPS_PATH} — GitHub runs it before ` +
       `the Copilot coding agent starts work on a task, on a push or pull request that changes the ` +
       `file, and by hand from the Actions tab`,
   ];
+}
+
+/**
+ * One tool's next steps after this run: the static table plus, for Copilot,
+ * the workflow line when this run wrote the workflow — spliced in just before
+ * the in-chat instruction, which stays last. Shared by the panel and init's
+ * `--json` document, so the two list the same steps.
+ */
+export function nextStepsAfterRun(tool: Tool, report: InitApplyReport, rootDir: string): string[] {
+  const steps = nextStepsForTool(tool);
+  if (tool === "copilot") steps.splice(-1, 0, ...copilotWorkflowStep(report, rootDir));
+  return steps;
 }
 
 /**
@@ -586,12 +621,21 @@ export interface GitignoreLineInput {
   mcpConfigured: boolean;
 }
 
+/**
+ * Why each required entry is ignored, keyed on the exact entries the engine
+ * registers (`REQUIRED_GITIGNORE_ENTRIES`), so an entry added there later gets
+ * the neutral fallback below rather than a borrowed, false reason.
+ */
+const GITIGNORE_REASONS: ReadonlyMap<string, string> = new Map([
+  [ENV_MCP_FILE, "MCP server credentials"],
+  [REVIEW_GATE_STATE_FILE, "the review gate's per-run state"],
+  [REVIEW_GATE_STATE_FILE + REVIEW_GATE_LOCK_SUFFIX, "the review gate's lock"],
+  [`${REVIEW_GATE_STATE_FILE}${REVIEW_GATE_TEMP_INFIX}*`, "the review gate's temporary writes"],
+]);
+
 /** Why one entry is ignored, in words that assume nothing about the run. */
 function gitignoreReason(entry: string): string {
-  if (entry === ENV_MCP_FILE) return "MCP server credentials";
-  if (entry.endsWith(".lock")) return "the review gate's lock";
-  if (entry.includes("*")) return "the review gate's temporary writes";
-  return "the review gate's per-run state";
+  return GITIGNORE_REASONS.get(entry) ?? "machine-local state this setup writes";
 }
 
 export function gitignoreLine(input: GitignoreLineInput): string {
@@ -708,7 +752,7 @@ export function renderInitPanel(input: InitPanelInput): string {
     `  detected ${detectedLabel(input)} -> installed ${installedLabel(decisions, report)} ` +
       palette.dim(`(tier: ${decisions.maturityTier}, change with \`${packageCommand("config")}\`)`),
   );
-  const defaulted = defaultClientsLine(decisions);
+  const defaulted = defaultClientsLine(decisions, false);
   if (defaulted !== null) lines.push(`  ${defaulted}`);
   const pinLine = gatePinLine(decisions);
   if (pinLine !== null) lines.push(`  ${pinLine}`);
@@ -742,10 +786,7 @@ export function renderInitPanel(input: InitPanelInput): string {
         ? `${palette.bold(`next steps (${tool}):`)}`
         : palette.bold("next steps:");
     lines.push(heading);
-    const steps = nextStepsForTool(tool);
-    // Copilot's workflow line depends on what this run wrote, so it joins here
-    // rather than in the static table, just before the in-chat instruction.
-    if (tool === "copilot") steps.splice(-1, 0, ...copilotWorkflowStep(report));
+    const steps = nextStepsAfterRun(tool, report, decisions.repoInfo.rootDir);
     for (const [index, step] of steps.entries()) {
       lines.push(`  ${index + 1}. ${step}`);
     }

@@ -56,7 +56,7 @@ import {
   emissionSummary,
   gitignoreLine,
   migrationLines,
-  nextStepsForTool,
+  nextStepsAfterRun,
   renderInitPanel,
   type MigrationResidue,
 } from "./init/panel.ts";
@@ -772,7 +772,7 @@ function renderDryRun(
       ? `  create: ${report.createdDirs.join(", ")}\n`
       : "  create: no new state directories (all present)\n",
   );
-  const defaulted = defaultClientsLine(decisions);
+  const defaulted = defaultClientsLine(decisions, true);
   if (defaulted !== null) io.out(`  ${defaulted}\n`);
   io.out(`  write: ${emissionSummary(report, true)}\n`);
   io.out(`  manifest: ${report.manifestPath}\n`);
@@ -1209,7 +1209,7 @@ export const initCommand: CommandModule = {
         },
         report,
         carry,
-        nextSteps: effective.tools.flatMap((tool) => nextStepsForTool(tool)),
+        nextSteps: effective.tools.flatMap((tool) => nextStepsAfterRun(tool, report, rootDir)),
       },
     };
   },

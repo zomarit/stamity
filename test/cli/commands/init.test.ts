@@ -336,9 +336,12 @@ describe("init — fresh repo", () => {
     expect(result.stdout).toContain("detected a fresh repo (no traces)");
     expect(result.stdout).toContain("installed claude");
     // REQ-FLOW-022: the defaulted set is named as the default, not as a choice.
+    // TEST CHANGE (build/131, signed off): after a live init the route to more
+    // clients is the config `tools` key and a sync — a second `init --tools`
+    // refuses without --force — so the line names that, pinned.
     expect(result.stdout).toContain(
       "clients: claude (the default — no other client's files were found; add more with " +
-        "--tools claude,cursor,copilot,codex)",
+        `${npxCommand("config set tools claude,cursor,copilot,codex")}, then ${npxCommand("sync")})`,
     );
     expect(result.stdout).toContain("stamity is ready.");
     expect((await readManifest(root))?.tools).toEqual(["claude"]);
@@ -352,6 +355,52 @@ describe("init — fresh repo", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("claude traces");
+    expect(result.stdout).not.toContain("the default —");
+  });
+
+  it("names the Copilot setup workflow it wrote on a live init, on the panel and in --json (review/138, review/141)", async () => {
+    const root = await makeRepo();
+
+    const result = await runInit(root, ["-y", "--tools", "copilot"]);
+
+    expect(result.code).toBe(0);
+    expect(existsSync(join(root, ".github", "workflows", "copilot-setup-steps.yml"))).toBe(true);
+    expect(result.stdout).toContain(
+      "the coding agent's setup workflow is at .github/workflows/copilot-setup-steps.yml",
+    );
+
+    const json = await runInit(await makeRepo("repo2"), ["-y", "--json", "--tools", "copilot"]);
+    expect(json.code).toBe(0);
+    const nextSteps = parseSingleDoc(json.stdout)["nextSteps"] as string[];
+    expect(
+      nextSteps.some((step) =>
+        step.includes("setup workflow is at .github/workflows/copilot-setup-steps.yml"),
+      ),
+    ).toBe(true);
+  });
+
+  it("names no default when a predecessor's client list replaced the defaulted set (review/139)", async () => {
+    // No tool trace here (no marked CLAUDE.md), so detection settles on the
+    // default; the carried predecessor manifest then supplies claude and cursor.
+    // The panel must not call that carried choice "the default".
+    const probe = await runInit(await seedPredecessorRepo({}, "probe"), [
+      "-y",
+      "--json",
+      "--dry-run",
+      "--migrate",
+      "full",
+    ]);
+    expect(probe.code).toBe(0);
+    expect((parseSingleDoc(probe.stdout)["decisions"] as Record<string, unknown>)["toolsSource"]).toBe(
+      "default",
+    );
+
+    const root = await seedPredecessorRepo();
+    const result = await runInit(root, ["-y", "--migrate", "full"]);
+
+    expect(result.code).toBe(0);
+    expect((await readManifest(root))?.tools).toEqual(["claude", "cursor"]);
+    expect(result.stdout).toContain("-> installed claude, cursor");
     expect(result.stdout).not.toContain("the default —");
   });
 
@@ -1215,7 +1264,12 @@ describe("init --dry-run", () => {
     );
     expect(result.stdout).toContain("security: these lines — .env.mcp (MCP server credentials), ");
     // REQ-FLOW-022: the preview names a defaulted client set as the default too.
-    expect(result.stdout).toContain("  clients: claude (the default — no other client's files were found");
+    // build/131: before anything is written, `--tools` is the route that works.
+    expect(result.stdout).toContain(
+      "  clients: claude (the default — no other client's files were found; add more with " +
+        "--tools claude,cursor,copilot,codex)",
+    );
+    expect(result.stdout).not.toContain("config set tools");
     expect(existsSync(join(root, ".gitignore"))).toBe(false);
   });
 

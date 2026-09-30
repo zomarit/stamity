@@ -269,6 +269,9 @@ describe("checkForUpdateNotice — the strictly-greater guard", () => {
 
     expect(notice).toContain(`npx -y ${PKG}@1.3.0 sync`);
     expect(notice).not.toContain("@v1.3.0");
+    // review/142: the version line names the same normalized version the command pins.
+    expect(notice).toContain("-> 1.3.0. To move:");
+    expect(notice).not.toContain("v1.3.0");
   });
 
   it("stays silent for a package name the pinned call cannot run", async () => {

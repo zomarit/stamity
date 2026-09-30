@@ -280,13 +280,14 @@ async function probeRegistry(opts: UpdateNoticeOptions): Promise<string | null> 
  */
 function buildBanner(opts: UpdateNoticeOptions, latest: string | null): string | null {
   if (latest === null) return null;
-  // The normalized spelling goes into the command: `semver.valid` admits a
-  // leading `v` or `=` that the pinned call's own shape check refuses.
+  // The normalized spelling goes into the command and the version line alike:
+  // `semver.valid` admits a leading `v` or `=` that the pinned call's own shape
+  // check refuses, and the two halves of one sentence name one version.
   const target = semver.valid(latest);
   if (target === null || semver.valid(opts.currentVersion) === null) return null;
   if (!semver.gt(target, opts.currentVersion)) return null;
   return (
-    `Update available: ${opts.currentVersion} -> ${latest}. ` +
+    `Update available: ${opts.currentVersion} -> ${target}. ` +
     `To move: ${pinnedCliCall(opts.packageName, target, "sync")}. ` +
     `To stay on ${opts.currentVersion}, do nothing.`
   );

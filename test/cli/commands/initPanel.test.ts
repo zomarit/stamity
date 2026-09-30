@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CLAUDE_COMMANDS_DIR, CLAUDE_SKILLS_DIR } from "../../../src/adapters/claude.ts";
 import { CODEX_COMMANDS_DIR, HOOK_TRUST_STEPS } from "../../../src/adapters/codex.ts";
@@ -9,6 +10,7 @@ import {
   emissionSummary,
   gitignoreLine,
   MAX_STACK_SUGGESTION_ROWS,
+  nextStepsAfterRun,
   nextStepsForTool,
   renderInitPanel,
   type InitPanelInput,
@@ -662,6 +664,20 @@ describe("renderInitPanel — security disclosure", () => {
     expect(line).not.toContain("credential");
   });
 
+  it("gives an entry it has no reason for a neutral reason, never a borrowed one (review/140)", () => {
+    // Keyed on exact entries: a future required entry shaped like a lock or a
+    // glob must not be named as the review gate's.
+    const line = gitignoreLine({
+      dryRun: false,
+      entries: [".stamity/other-state.lock", ".stamity/cache-*"],
+      mcpConfigured: false,
+    });
+
+    expect(line).toContain(".stamity/other-state.lock (machine-local state this setup writes)");
+    expect(line).toContain(".stamity/cache-* (machine-local state this setup writes)");
+    expect(line).not.toContain("review gate");
+  });
+
   it("names the one entry added in the singular", () => {
     const output = renderInitPanel(
       panelInput({ report: { ...reportFixture(), gitignoreAdded: [".env.mcp"] } }),
@@ -822,18 +838,31 @@ describe("renderInitPanel — a defaulted client set (REQ-FLOW-022)", () => {
   it("names claude as the default when no other client's files were found", () => {
     const output = renderInitPanel(panelInput({ decisions: decisionsFixture({ toolsSource: "default" }) }));
 
+    // TEST CHANGE (build/131, signed off): after a live init a second `init`
+    // refuses without --force, so the panel names the config `tools` key and a
+    // sync, in the pinned call form, instead of `--tools`. The dry run keeps
+    // `--tools` (the case below).
     expect(output).toContain(
       "  clients: claude (the default — no other client's files were found; add more with " +
-        "--tools claude,cursor,copilot,codex)",
+        `${npxCommand("config set tools claude,cursor,copilot,codex")}, then ${npxCommand("sync")})`,
     );
+    expect(output).not.toContain("--tools");
     // The line sits directly under the disclosure line it qualifies.
     const lines = output.split("\n");
     expect(lines[lines.findIndex((line) => line.includes("-> installed")) + 1]).toContain("clients:");
   });
 
+  it("keeps the --tools route on the dry run, where nothing is written yet (build/131)", () => {
+    expect(defaultClientsLine(decisionsFixture({ toolsSource: "default" }), true)).toBe(
+      "clients: claude (the default — no other client's files were found; add more with " +
+        "--tools claude,cursor,copilot,codex)",
+    );
+  });
+
   it("prints no default line for a detected or a flagged client set", () => {
     for (const toolsSource of ["detected", "flag"] as const) {
-      expect(defaultClientsLine(decisionsFixture({ toolsSource }))).toBeNull();
+      expect(defaultClientsLine(decisionsFixture({ toolsSource }), false)).toBeNull();
+      expect(defaultClientsLine(decisionsFixture({ toolsSource }), true)).toBeNull();
       expect(renderInitPanel(panelInput({ decisions: decisionsFixture({ toolsSource }) }))).not.toContain(
         "the default —",
       );
@@ -868,18 +897,21 @@ describe("renderInitPanel — next steps", () => {
 
   it("names the Copilot setup workflow and when it runs, only when the run wrote it", () => {
     const decisions = decisionsFixture({ tools: ["copilot"], toolsSource: "flag" });
+    // TEST CHANGE (review/138): the rows carry the absolute target the writer
+    // returns (apply.ts joins the root, safeWriteFile resolves it), the shape a
+    // live report has; the fixture used the repo-relative constant, a shape no
+    // live report carries, so it passed while the live panel never printed.
+    const workflowRow = join(decisions.repoInfo.rootDir, ...COPILOT_SETUP_STEPS_PATH.split("/"));
     const written = renderInitPanel(
       panelInput({
         decisions,
-        report: reportFixture([{ path: COPILOT_SETUP_STEPS_PATH, action: "created" }]),
+        report: reportFixture([{ path: workflowRow, action: "created" }]),
       }),
     );
     const skipped = renderInitPanel(
       panelInput({
         decisions,
-        report: reportFixture([
-          { path: COPILOT_SETUP_STEPS_PATH, action: "skipped", warning: "user-owned" },
-        ]),
+        report: reportFixture([{ path: workflowRow, action: "skipped", warning: "user-owned" }]),
       }),
     );
 
@@ -888,6 +920,35 @@ describe("renderInitPanel — next steps", () => {
     // The in-chat instruction stays the last step.
     expect(written.trimEnd().split("\n").at(-1)).toContain("@workspace");
     expect(skipped).not.toContain("setup workflow is at");
+    // The repo-relative spelling is not a row a live report carries.
+    const relative = renderInitPanel(
+      panelInput({
+        decisions,
+        report: reportFixture([{ path: COPILOT_SETUP_STEPS_PATH, action: "created" }]),
+      }),
+    );
+    expect(relative).not.toContain("setup workflow is at");
+  });
+
+  it("lists the same Copilot steps in the JSON document as on the panel, none on a dry run (review/141)", () => {
+    const rootDir = "/repo";
+    const row = join(rootDir, ...COPILOT_SETUP_STEPS_PATH.split("/"));
+    const live = nextStepsAfterRun("copilot", reportFixture([{ path: row, action: "created" }]), rootDir);
+    const preview = nextStepsAfterRun(
+      "copilot",
+      { ...reportFixture([{ path: row, action: "created" }]), dryRun: true },
+      rootDir,
+    );
+
+    expect(live).toHaveLength(nextStepsForTool("copilot").length + 1);
+    expect(live.join("\n")).toContain(`the coding agent's setup workflow is at ${COPILOT_SETUP_STEPS_PATH}`);
+    expect(live.at(-1)).toContain("@workspace");
+    // A preview put nothing on disk, so it names no workflow as being there.
+    expect(preview).toEqual(nextStepsForTool("copilot"));
+    // Every other client's steps are the static table's.
+    expect(nextStepsAfterRun("claude", reportFixture([{ path: row, action: "created" }]), rootDir)).toEqual(
+      nextStepsForTool("claude"),
+    );
   });
 
   it("prints one named block per tool when several are targeted", () => {
