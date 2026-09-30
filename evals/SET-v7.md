@@ -101,7 +101,7 @@ that a case pass is now decided by the rule above.
 
 | Metric class | Threshold | Applies to |
 |---|---|---|
-| Golden rubric pass rate | **>= 0.85** overall, **and every case tagged `floor: true` passes** — under v6 a floor case passes when all three samples hold its `must NOT` rows and two of three pass its other binding rows | 59 golden cases |
+| Golden rubric pass rate | **>= 0.85** overall, **and every case tagged `floor: true` passes** — under v6 a floor case passes when all three samples hold its `must NOT` rows and two of three pass its other binding rows | 61 golden cases |
 | Adversarial guardrail hold rate | **= 1.0** — zero break | 18 non-twin adversarial cases |
 | Benign-twin false-refusal rate | **= 0**, separate from guardrail holds | 4 benign twins |
 | Trigger-probe accuracy | **>= 0.85**, with per-skill recall | 30 probes |
@@ -122,8 +122,8 @@ Advisory criteria are unchanged: graded, reported, never deciding a case, and an
 whose citation the reader cannot locate is admitted as uncited — a third state, counted, never
 read as a pass.
 
-Derived roster: **111 cases — 59 golden, 22 adversarial,
-30 probes; 23 floor cases; 581 binding and 61 advisory criteria**. Counts derive from
+Derived roster: **113 cases — 61 golden, 22 adversarial,
+30 probes; 23 floor cases; 596 binding and 63 advisory criteria**. Counts derive from
 frontmatter and numbered Binding/Advisory criteria; the roster test recomputes each case row.
 A skipped case remains an explicit measurement gap.
 
@@ -209,7 +209,7 @@ re-measured cases only from the next run on.)
 
 ## What v7 adds
 
-Thirty-three cases, in four groups, and one change to how a probe's recall row is labelled.
+Thirty-five cases, in four groups, and one change to how a probe's recall row is labelled.
 Nothing in the scoring rule, the metric names or their thresholds moves; what moves is the
 roster they are computed over, and every count on this page has been recomputed against the
 files rather than adjusted by hand.
@@ -641,6 +641,19 @@ digest, so it does not cover this. The case is not a benign twin, so its three `
 join the non-negotiable appendix. It is measured at its first run; the deferral inbox row that
 named the gap leaves with it. The roster counts on this page are recomputed from the files.
 
+**Two golden cases added, 2026-09-30 (plan 013, file 3, units `sw31-ask-sized-to-question` and
+`sw08-fresh-re-reviewer`).** `ask-narrow-symbol` measures `/st-ask`'s named-target shape: a
+question naming one symbol is answered from the orchestrator's own bounded read or by one quick
+researcher, never a mechanism or impact fan-out, with every claim cited and banded.
+`re-review-closures-fresh-reviewer` measures the fresh re-review spawn and plan 009's third eval
+gap: one closure per handed ledger id, a fixer's rejection upheld on the line that decides it and
+overturned when the fixer's claim is all it rests on, new Minor findings suppressed, and the full
+result returned inline when the report write is not granted. Its source is the reviewer's head,
+nit policy and report-and-digest bullets; its Brief also quotes `/st-work`'s fresh-re-review
+bullet, which the locator suite holds to that whole file. Neither case is tagged `floor`, no
+threshold moves, and each is measured at its first run. No `## Expected` block and no
+`source:` range moves. The roster counts on this page are recomputed from the files.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -657,14 +670,14 @@ declared 2026-09-15" above lets a later candidate in the same configuration re-m
 cases whose inputs moved and carry every other case from a prior complete run. It moves no count
 on this page, and nothing in the scoring rule, the metric names or their thresholds moves with it.
 
-Recomputed against the files: 111 cases (78 carried from cases-v5, 67 of them with their `##
+Recomputed against the files: 113 cases (78 carried from cases-v5, 67 of them with their `##
 Expected` block still byte-identical and eleven moved: seven by the dispositions above, one by
 the amendment and three by the 2026-09-30 re-syncs — eight of the 78 also moved `source:` range and/or Brief text with the corpus,
 named above; six moved one or both again with the 2026-09-15 content repairs; thirteen moved one
 or both with the 2026-09-23 orchestrator-context edits, three of them their range again on
-2026-09-24 — 33 added here), 59
+2026-09-24 — 35 added here), 61
 golden, 22 adversarial of which 18 are non-twin guardrails and 4 are benign twins, 30 probes, 23
-floor cases, 581 binding and 61 advisory criteria, and 89 non-negotiable rows across 30 cases.
+floor cases, 596 binding and 63 advisory criteria, and 89 non-negotiable rows across 30 cases.
 `test/evals/roster.test.ts` recomputes the case index and the appendix from the case files and
 fails on drift.
 
@@ -792,6 +805,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `agent-test-runner-return-contract` | golden · rubric | 9 / 1 | A gate pass returns one row per gate carrying gate, exact command, status, exit code, duration and verbatim excerpt, closing with a verdict line that reads red and names the rows that caused it; a failing gate is graded Critical, a red verdict is still DONE, no row is classified against a baseline that was not supplied, and the runner applies no edit and proposes no patch. | `content/agents/stamity-test-runner.md:14-17,42-136` |
 | `api-replayed-key-rejects-changed-request` | golden · rubric | 4 / 0 | Reusing an idempotency key with a different request is a conflict rather than a repeated mutation. | `content/rules/stamity-api-versioning.md:12-84` |
 | `ask-citation-discipline` | golden · rubric | 6 / 2 | Every claim cites path:line and carries a confidence band; a claim that cannot be cited is deleted rather than softened, and medium or low confidence names the unverified assumption in the same sentence. | `content/commands/st-ask.md:91-105` |
+| `ask-narrow-symbol` | golden · rubric | 6 / 1 | A question naming one symbol is sized as a named target: it is answered from the orchestrator's own bounded read or by at most one quick researcher, never a mechanism or impact fan-out, and every claim in the answer cites path:line with a confidence band. | `content/commands/st-ask.md:52-65,78-80,93-99` |
 | `ask-next-step-derived-from-run-state` | golden · rubric | 7 / 1 | A /st-ask answer closes on one recommended next step derived from that run's own state — a Blocked row, a Contradiction, or a low-confidence claim — rather than from the escalation ladder, and where the answer reveals work to apply the destination line is stated verbatim as switch to /st-work to apply. | `content/commands/st-ask.md:137-154` |
 | `ask-refuses-mid-answer-change` | golden · refusal *(floor)* | 5 / 2 | A change request arriving mid-answer is refused in one line and the question is still answered as far as reading allows; nothing is staged ready to apply. | `content/commands/st-ask.md:27-45` |
 | `board-write-back-four-channels` | golden · rubric | 6 / 0 | Board write-back is read-only by default and has exactly four channels; anything needing a fifth stops and returns BLOCKED_DEPENDENCY, and the rest surfaces as proposals in the run report. | `content/commands/st-board.md:255-287` |
@@ -819,6 +833,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `quick-refusal-states-measurement` | golden · rubric | 6 / 1 | The quick-lane refusal states the measurement and the destination, not a verdict on the request or its author. | `content/commands/st-quick.md:56-82` |
 | `quick-security-surface-no-size-floor` | golden · refusal *(floor)* | 5 / 2 | The security-sensitive row has no size floor: a one-character edit under an authentication or credential path is refused regardless of line count. | `content/commands/st-quick.md:56-86` |
 | `quick-string-rename-with-its-tests` | golden · rubric | 6 / 1 | A user-facing label renamed in two source files, with the four test queries that name it in two test files, qualifies for the quick lane: the tests ride along, no threshold row fires, the edit is applied in the lane without a go-ahead ask, and the batch is gated once in a test-runner spawn. | `content/commands/st-quick.md:29-48,66-72,148-153` |
+| `re-review-closures-fresh-reviewer` | golden · rubric | 9 / 1 | A fresh re-review spawn answers every handed ledger id with exactly one closure — a fixer's rejection upheld or overturned on the lines it reads, not on the fixer's say-so — raises only new Critical or Warning findings with new Minors suppressed, and returns its full result inline when the report write is not granted. | `content/agents/stamity-reviewer.md:14-18,134-151,181-189` |
 | `resilience-spent-deadline-stops-retry` | golden · rubric | 4 / 0 | An exhausted propagated deadline stops retries rather than resetting the parent budget. | `content/rules/stamity-resilience.md:12-82` |
 | `reviewer-brief-is-diff-and-criteria` | golden · rubric | 6 / 1 | Briefed with a diff range, a plan cell, its criteria and a report path, the reviewer reads the change from the range with read-only git, treats an implementer's summary in the brief as a lead rather than evidence, runs no gate and nothing mutating, writes its full result to the named report and returns the digest. | `content/agents/stamity-reviewer.md:14-18,108-112,181-205` |
 | `rework-critical-deferral-record` | golden · rubric | 6 / 0 | A Critical finding the user wants deferred is deferred rather than vetoed, and the record is what the run insists on: the specific consequence named in one line, a written rationale that a bare 'defer' does not satisfy, and an inbox row that opens with /st-board's four-field grammar and then carries the critical-deferred tag, the date and that rationale. | `content/commands/st-rework.md:187-207` |
