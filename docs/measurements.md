@@ -6,12 +6,12 @@ title: Measurements
 
 # Measurements
 
-What this repository can prove about its own output, as of 2026-09-28 — the newest
+What this repository can prove about its own output, as of 2026-09-30 — the newest
 closed run record's date, which is what this page is stamped with rather than the day it was
 rendered. Every number below is computed from a committed artifact, so a claim here can be
 checked rather than believed.
 
-The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-09-29.json`](../evals/measurements/merge-ready-2026-09-29.json), the frozen
+The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-10-01.json`](../evals/measurements/merge-ready-2026-10-01.json), the frozen
 measurement committed beside this page. Refreshed per release by `node scripts/merge-ready-rate.mjs --write`
 (the release checklist's record-currency line); the snapshot named above is the input, and a
 run record written after it is not on this page until the next refresh.
@@ -86,10 +86,11 @@ the number is: an exclusion nobody can see is a number nobody can check.
 - `2026-09-16_package-14` — no proof block
 - `2026-09-17_codex-astra-audit` — no record
 - `2026-09-24_enterprise-release` — gates in prose only — no gate row carries a pass or fail
+- `2026-09-30_optimization-sweep` — gates in prose only — no gate row carries a pass or fail
 
 ### What the number is limited by, stated rather than tuned away
 
-20 run directories are outside the measure and every one of them is named
+21 run directories are outside the measure and every one of them is named
 above. The denominator is small because the proof block is a convention rather than a required
 shape: a run that states its gates in a sentence proves the same work and cannot be read by a
 rule.
