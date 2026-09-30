@@ -186,6 +186,30 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-30, plan 013 file 3, fixer round 1 of unit
+  //     sw17-touchpoints-as-shared-skills (run 2026-09-30_optimization-sweep;
+  //     review/157). The charter moved, plus the manifest rows that record it.
+  //     No emitted path was added or removed.
+  //
+  //     CHANGED every emitted charter (`AGENTS.md`, and the monorepo
+  //       `packages/alpha/AGENTS.md` and `packages/beta/AGENTS.md`) by +20
+  //       bytes at an unchanged line count, 5276 -> 5296, and
+  //       `AGENTS.override.md` in the codex and all-four selections by the
+  //       same +20, 25306 -> 25326. The Touchpoints paragraph now says a
+  //       client that reads `.agents/skills/` instead of a command surface
+  //       receives the nine there as skills, started as `$st-<id>`, where it
+  //       said that client received no command file at all; rewrapped inside
+  //       its two lines. `ALWAYS_ON_SHARED_BYTES_WITH_CODEX`,
+  //       `..._WITHOUT_CODEX`, `ALWAYS_ON_CODEX_OVERRIDE_BYTES` and
+  //       `docs/capability-matrix.md` moved with the figures.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 row of the charter.
+  //
+  //     What did NOT move: every agent, command, rule, skill, touchpoint,
+  //       companion, hook script, guard and policy document. The round's
+  //       other edits (the one `frontmatterScalar` home, the codex
+  //       `command-surface` cap text, two comments) emit no byte here.
+  //
   //   - 2026-09-30, plan 013 file 3, unit sw17-touchpoints-as-shared-skills
   //     (run 2026-09-30_optimization-sweep). The nine touchpoints MOVED in the
   //     cursor selection and were ADDED in the codex selection; no body moved.

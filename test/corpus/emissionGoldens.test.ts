@@ -93,6 +93,23 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-30, plan 013 file 3, fixer round 1 of unit
+ *     sw17-touchpoints-as-shared-skills (run 2026-09-30_optimization-sweep;
+ *     review/157). ONE golden moved:
+ *
+ *     SUBSTITUTION moved on the charter by +20 bytes at an unchanged line
+ *     count (5667 -> 5687 in the corpus source, the same in the golden: no
+ *     token sits in the moved text). The Touchpoints paragraph's two
+ *     reworded lines say a client that reads `.agents/skills/` instead of a
+ *     command surface receives the nine there as skills, started as
+ *     `$st-<id>`, where they said that client received no command file at
+ *     all.
+ *
+ *     NOTHING else moved here: the round's `src/` edits (the one
+ *     `frontmatterScalar` home, the codex `command-surface` cap text, two
+ *     comments) render no byte into any golden in this suite; the sibling
+ *     suite itemises the charter's emitted copies.
+ *
  *   - 2026-09-30, plan 013 file 3, unit sw08-fresh-re-reviewer (run
  *     2026-09-30_optimization-sweep). ONE golden moved:
  *
