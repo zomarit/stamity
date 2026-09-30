@@ -1,7 +1,3 @@
 # This repository commits its emitted tree and every gate compares bytes, so a checkout that
 # rewrote line endings reads as content drift. CI pins core.autocrlf=false on the Windows leg.
 * text=auto eol=lf
-
-# Replay patches carry planted lines byte-for-byte, trailing whitespace included; a whitespace
-# check that flagged them would push a fix into the very bytes the replay measures.
-evals/replay/v1/**/*.patch -whitespace

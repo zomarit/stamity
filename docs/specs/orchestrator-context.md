@@ -1,6 +1,7 @@
 ---
 id: orchestrator-context
 # A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, and excluded from the site build.
+# The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 status: shipped-with-1.10.0
 obsolete_when: every supported client hands a parent a sub-agent's full report by reference and restores a running flow's state after a compaction on its own, or a decision row cuts the surface
 ---
@@ -33,6 +34,8 @@ from R6–R10 in `docs/plans/011-replay-v2-02.md`: defaults taken unattended, wh
 maintainer's confirmation. They apply under REPLAY-v2 only; REPLAY-v1 and its measurement stay as
 they are. The paragraphs and criteria marked "amended 2026-09-29" record the maintainer's decision
 of that day to retire the replay; no plan file carries it.
+
+The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
 Line citations outside the Context section are to the tree at `d227ca57`, the 1.10.0 release
 candidate. On 2026-09-27 each one was read at the tree it was first written against and found
@@ -132,6 +135,8 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 | 016 hook budgets | yes: the session-start rows and the ConfigChange tamper notice at 30 s; the latency check reads this client's guard | yes: the session-start rows at 30 s | yes: the session-start rows at 30 s | yes: the session-start rows at 30 s |
 
 ## References
+
+The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
 - `docs/plans/009-orchestrator-context-economy-01.md`: the shared contracts C1–C12, the decisions D1–D11, the amendments A1–A22 and the resolutions R1–R39.
 - `test`: `test/records/ledgers.test.ts` (ledger grammar); `test/corpus/commands/work.test.ts`
@@ -471,6 +476,8 @@ Implements D7.
 
 ### REQ-CTX-015 — The replay, its floor, and the release gate
 
+The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
+
 A replay compares the changed shape with the 1.9.1 baseline:
 
 - **Retired** (amended 2026-09-29, the maintainer's decision). REPLAY-v3 is dropped. It stopped
@@ -808,8 +815,8 @@ eye.
 
 **Invariants**
 
-- GIVEN the tree carrying this spec, the replay's committed artifacts and the emission
-  `stamity sync` produces from this change WHEN `npm run gate` runs THEN it exits 0.
+- GIVEN the tree carrying this spec and the emission `stamity sync` produces from this change
+  WHEN `npm run gate` runs THEN it exits 0.
 
 **REQ-CTX-001**
 
