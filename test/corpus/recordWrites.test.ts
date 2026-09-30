@@ -34,9 +34,10 @@ const STATE_DIR = ".stamity/";
  * A shell redirect (`>`, `>>`, `>|`, `2>`, `&>`) whose target path reaches the
  * state directory. The operator must follow whitespace, a line start or a
  * shell separator, so a template path such as `<run-id>/record.md` is not read
- * as a redirect.
+ * as a redirect; a target opening with a backtick is a markdown code span (a
+ * blockquote such as "> `.stamity/…`"), not a shell path.
  */
-const REDIRECT_INTO_STATE = /(?:^|[\s;&(]|\s\d)>>?\|?\s*["']?[^\s"'|;&]*\.stamity\//;
+const REDIRECT_INTO_STATE = /(?:^|[\s;&(]|\s\d)>>?\|?\s*["']?[^\s"'|;&`]*\.stamity\//;
 
 /** `tee` (any flags) whose first operand reaches the state directory. */
 const TEE_INTO_STATE = /\btee(?:\s+-{1,2}[\w-]+)*\s+["']?[^\s"'|;&]*\.stamity\//;
@@ -110,7 +111,7 @@ describe("run records are written with the file tools", () => {
     // Ledger writes bullet instead, because the CLI-calls definition must precede the first
     // `stamity ledger` call (test/corpus/commands/work.test.ts, REQ-FLOW-002).
     expect(frame).toContain(
-      "Records are files: create and extend `record.md`, reports and the inbox with the client's file write and edit tools — never a shell redirect, a heredoc or `cat >` — and move ledger rows only through the `ledger` verb under Ledger writes.",
+      "Records are files: create and extend `record.md`, `plan.md`, reports and the inbox with the client's file write and edit tools — never a shell redirect, a heredoc or `cat >` — and move ledger rows only through the `ledger` verb under Ledger writes.",
     );
   });
 
@@ -129,6 +130,7 @@ describe("run records are written with the file tools", () => {
       "cat <<'EOF' | node scripts/x.mjs .stamity/runs/x/plan.md",
       "echo done > build/out.txt",
       "Reports land in `<root>/.stamity/runs/<run-id>/reports/`.",
+      "> `.stamity/runs/<run-id>/record.md` is the run's head.",
     ].join("\n");
 
     expect(shellWrites(sample)).toEqual([

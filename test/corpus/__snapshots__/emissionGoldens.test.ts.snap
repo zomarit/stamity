@@ -7023,10 +7023,10 @@ Seconds, not ceremony. In order:
    command line, verbatim>\`. The resume card is built from them after a
    compaction. Create the run's \`reports/\` folder beside the record, holding a
    \`.gitignore\` whose one line is \`*\`: reports stay local and the ledger is the
-   record. Records are files: create and extend \`record.md\`, reports and the
-   inbox with the client's file write and edit tools — never a shell redirect,
-   a heredoc or \`cat >\` — and move ledger rows only through the \`ledger\` verb
-   under Ledger writes.
+   record. Records are files: create and extend \`record.md\`, \`plan.md\`,
+   reports and the inbox with the client's file write and edit tools — never a
+   shell redirect, a heredoc or \`cat >\` — and move ledger rows only through the
+   \`ledger\` verb under Ledger writes.
 
 ## Phase 1 — Understand
 
