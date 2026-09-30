@@ -50,13 +50,13 @@ forgotten).
 
 ## Capture
 
-**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.10.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
+**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.11.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
 When neither form runs, the finding is not written with a file tool; the closing message carries its title, summary, confidence and body under `Not done: learning not captured — CLI unavailable`, with the capture command to run once the CLI resolves.
 
 The CLI is the write path, and the only one:
 
 ```bash
-npx -y @zomarit/stamity@1.10.0 learn capture \
+npx -y @zomarit/stamity@1.11.0 learn capture \
   --title "cache warmup order" \
   --summary "<one index line>" \
   --confidence medium \

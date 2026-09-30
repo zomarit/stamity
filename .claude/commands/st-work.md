@@ -151,7 +151,7 @@ Every spawn runs under these contracts:
   weaker class. A resume is neither a ladder rung nor a review round. Each
   event is one run-record line:
   `- <UTC> capacity: <role> <stop class> → <resumed | waited until <UTC> | BLOCKED_DEPENDENCY>`.
-- **CLI calls.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.10.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
+- **CLI calls.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.11.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
   When neither form runs, the orchestrator, still the one writer, edits `ledger.jsonl` by hand in the row grammar under Proof block and records `ledger: by hand (no CLI)`.
 - **Ledger writes.** Rows reach the ledger through `stamity ledger append`
   (`--run`, `--phase`, `--source`, and `--report <path>`, or `--stdin` for a
