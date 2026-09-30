@@ -224,7 +224,10 @@ const GIT_READING_ROLES: readonly { readonly id: string; readonly relPath: strin
   { id: "spec-author", relPath: "agents/stamity-spec-author.md" },
 ];
 
-/** The phrases the section must carry, whitespace-collapsed: the brief, the five calls, the exits. */
+/**
+ * The phrases every role's section must carry, whitespace-collapsed: the brief, the five calls,
+ * the options that write or execute, the no-shell basis.
+ */
 const READING_THE_CHANGE_PHRASES: readonly string[] = [
   "never the implementer's account",
   "`git diff <range>`",
@@ -233,11 +236,19 @@ const READING_THE_CHANGE_PHRASES: readonly string[] = [
   "`git rev-list <range>`",
   "`git merge-base <a> <b>`",
   "No other command runs",
-  "no option that writes a file",
+  "no option that writes a file or runs a configured external program",
   "gate evidence is the test-runner's",
   "never evidence",
   "Where the client grants no shell",
   "names that basis",
+];
+
+/**
+ * The exits only the four verdict roles carry: a range that does not resolve, and a brief with
+ * neither a range nor hunks. The spec-author works from its mode's inputs instead (review/17).
+ */
+const VERDICT_READING_EXIT_PHRASES: readonly string[] = [
+  "`BLOCKED_DEPENDENCY` naming the unresolved range",
   "`BLOCKED_DEPENDENCY` naming the missing diff",
 ];
 
@@ -268,6 +279,24 @@ describe("verdict roles and the spec-author — they read the change through rea
     const file = await load(role.relPath);
 
     expect(readingTheChangeGaps(file)).toEqual([]);
+  });
+
+  it.each(VERDICT_ROLES)("$id blocks on a missing or unresolved diff", async (role) => {
+    const section = collapse(sectionOf(await load(role.relPath), "Reading the change") ?? "");
+
+    for (const phrase of VERDICT_READING_EXIT_PHRASES) {
+      expect(section, `${role.id}: no ${phrase}`).toContain(phrase);
+    }
+  });
+
+  it("the spec-author's section carries no BLOCKED_DEPENDENCY exit", async () => {
+    const section = collapse(
+      sectionOf(await load("agents/stamity-spec-author.md"), "Reading the change") ?? "",
+    );
+
+    expect(section).not.toBe("");
+    expect(section).not.toContain("BLOCKED_DEPENDENCY");
+    expect(section).toContain("works from its own inputs");
   });
 
   it.each(VERDICT_ROLES)("$id names the read-only git grant in its head", async (role) => {
