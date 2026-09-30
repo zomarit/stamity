@@ -601,6 +601,15 @@ function secretRule(id, source, flags) {
  */
 const EMAIL_FIXTURES = []
 
+/**
+ * Vendored package trees, at any depth, exempt from the email rule ONLY. A third-party package's
+ * metadata carries its authors' addresses by design (`package.json` author fields, LICENSE lines),
+ * and `--include-build` over a packed runtime reads every one of them. This is an exemption by
+ * PATH, printed with the files it dropped like every other; every other rule — credential shapes
+ * included — still reads these files exactly as before, so a secret vendored in is still a hit.
+ */
+const VENDOR_EMAIL_PATHS = ['node_modules/', '**/node_modules/**']
+
 /** Documentation and special-use domains, which deliver to nobody, plus the project's own. */
 const RESERVED_EMAIL_DOMAIN = new RegExp(
   [
@@ -677,7 +686,7 @@ const EMAIL_RULES = [
     id: 'email-address',
     source: EMAIL_SOURCE,
     flags: 'gi',
-    allow: EMAIL_FIXTURES.map(([path]) => path),
+    allow: [...VENDOR_EMAIL_PATHS, ...EMAIL_FIXTURES.map(([path]) => path)],
     drop: isNotAnAddress,
     redact: true,
   },

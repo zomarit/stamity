@@ -787,6 +787,38 @@ describe("leak-gate — email addresses", () => {
     expect(output).not.toContain(PERSON);
   });
 
+  it("drops a vendored package's author address from the email rule only, by path, and says so", () => {
+    // A packed runtime scanned with `--include-build` reads every vendored package's metadata,
+    // where an author address is there by design. The email rule skips any `node_modules/` tree,
+    // at the root or nested; every other rule still reads the same file.
+    const scratch = new Scratch();
+    const vendored = [
+      scratch.write("node_modules/x/package.json", `{"name":"x","author":"Jane Roe <${PERSON}>"}\n`),
+      scratch.write("packs/ops/node_modules/x/package.json", `{"name":"x","author":"${PERSON}"}\n`),
+    ];
+
+    const clean = scratch.run("--include-build");
+    expect(clean.status, clean.stderr).toBe(0);
+    expect(clean.stdout).toContain("not scanned (rule email-address allowlisted)");
+    for (const file of vendored) expect(clean.stdout, file).toContain(file);
+
+    // The control: the same vendored files are still read by the credential shapes.
+    for (const file of vendored) {
+      scratch.write(file, `{"name":"x","author":"${PERSON}","token":"${GITHUB_TOKEN}"}\n`);
+    }
+    const dirty = scratch.run("--include-build");
+    expect(dirty.status).toBe(1);
+    expect(dirty.stderr).toContain("[github-token]");
+    expect(dirty.stderr).not.toContain("[email-address]");
+    for (const file of vendored) expect(hitCount(dirty, file), file).toBe(1);
+
+    // Outside a vendored tree the same address is still a hit.
+    const own = scratch.write("docs/package.json", `{"author":"${PERSON}"}\n`);
+    const outside = scratch.run("--include-build");
+    expect(outside.stderr).toContain("[email-address]");
+    expect(hitCount(outside, own)).toBe(1);
+  });
+
   it("reports a credentialed connection string as a credential, not as an address", () => {
     // URL userinfo is a login or a secret, never a mailbox: the credential shape owns it.
     const scratch = new Scratch();
