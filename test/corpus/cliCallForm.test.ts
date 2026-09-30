@@ -45,8 +45,10 @@ interface CallSite {
 }
 
 /**
- * Every corpus body that runs a verb. A new site adds one row: `st-work` joins
- * with its own bullet label, `- **CLI calls.** `, when its unit lands.
+ * Every corpus body that runs a verb. A new site adds one row. `st-work`
+ * carries the sentence as a Dispatch-contract bullet, so its label is the
+ * bullet's own, `- **CLI calls.** `, and its fallback is the one writer's
+ * by-hand ledger edit (unit work-cli-call-form).
  */
 const CALL_SITES: readonly CallSite[] = [
   {
@@ -65,6 +67,12 @@ const CALL_SITES: readonly CallSite[] = [
     relPath: "commands/st-debug.md",
     label: RUNNING_CLI_LABEL,
     fallback: "A `not-runnable` result on both names the install as the unresolved input.",
+  },
+  {
+    relPath: "commands/st-work.md",
+    label: "- **CLI calls.** ",
+    fallback:
+      "When neither form runs, the orchestrator, still the one writer, edits `ledger.jsonl` by hand in the row grammar under Proof block and records `ledger: by hand (no CLI)`.",
   },
 ];
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { frontmatterField } from "../../../src/content/frontmatter.ts";
 import { cursorCompanionFrontmatter } from "../../../src/content/mdcCompanions.ts";
-import { VERIFY_GATE_ALL_TOKEN } from "../../../src/emit/substitution.ts";
+import { CLI_TOKEN, VERIFY_GATE_ALL_TOKEN } from "../../../src/emit/substitution.ts";
 import { MODEL_LADDER } from "../../../src/roster/modelLadder.ts";
 import {
   DEFAULT_MAX_REVIEW_ITERATIONS,
@@ -1177,6 +1177,24 @@ describe("/st-work — dispatch contract", () => {
     // Resume: the card by hook where the client re-runs it, by hand elsewhere.
     expect(dispatch).toContain("`stamity ledger status`");
     expect(dispatch).toContain("re-read this command's own file");
+  });
+
+  it("defines how a `stamity <verb>` call runs before the first one, with a by-hand ledger fallback (REQ-FLOW-002, REQ-FLOW-003)", async () => {
+    const dispatch = collapse(section(await body(), "## Dispatch contract"));
+
+    // The shared sentence itself is pinned byte-identical, label included, by
+    // the call-site row in test/corpus/cliCallForm.test.ts; here the bullet's
+    // place in the contract and the fallback's one-writer rule are pinned.
+    expect(dispatch).toContain("- **CLI calls.** Every `stamity <verb>` call in this file runs as");
+    expect(dispatch).toContain("`npx --no stamity <verb>`");
+    expect(dispatch).toContain(`\`${CLI_TOKEN} <verb>\``);
+    expect(dispatch).toContain("When neither form runs, the orchestrator, still the one writer,");
+    expect(dispatch).toContain("`ledger: by hand (no CLI)`");
+
+    // The definition precedes every call it defines, the first ledger verb included.
+    const full = collapse(await body());
+    expect(full.indexOf("**CLI calls.**")).toBeGreaterThan(-1);
+    expect(full.indexOf("**CLI calls.**")).toBeLessThan(full.indexOf("`stamity ledger"));
   });
 
   it("briefs a verdict role with the range, cell, criteria and report path, never the implementer's account (REQ-CTX-017)", async () => {

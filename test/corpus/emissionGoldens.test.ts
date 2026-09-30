@@ -93,6 +93,23 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-30, plan 013 file 2, unit work-cli-call-form (run
+ *     2026-09-30_optimization-sweep). ONE golden moved:
+ *
+ *     SUBSTITUTION moved on `commands/st-work.md` by two added lines, 476 ->
+ *     478 body lines: the Dispatch contract gains a CLI calls bullet before
+ *     Ledger writes — the shared sentence that defines how a `stamity <verb>`
+ *     call runs (`npx --no stamity <verb>` for an installed copy, else the
+ *     pinned call), and the one writer's by-hand ledger edit when neither form
+ *     runs. The golden carries the pinned call rendered at the golden engine
+ *     version (`npx -y @zomarit/stamity@1.0.0-golden <verb>`), so its added
+ *     bytes exceed the corpus source's +665 (29459 -> 30124) by the token's
+ *     rendered length. The golden's added lines are the corpus diff's two
+ *     added lines and nothing else (none removed).
+ *
+ *     NOTHING else moved here: no file under `src/` changed, so the charter,
+ *     every agent body and every script are byte-identical.
+ *
  *   - 2026-09-30, plan 013 file 2, fixer round 2 of unit work-qa-states (run
  *     2026-09-30_optimization-sweep; review/83). NOTHING moved in this suite;
  *     the row keeps the two ledgers in step. The round's one emitted change is
