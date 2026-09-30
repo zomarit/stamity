@@ -53,12 +53,15 @@ check has one stable name, so a required check does not rotate when the matrix d
 A full run passes when three lanes pass: the check matrix, the APM route lane, and the plugin
 route lane.
 
-The check matrix runs three legs: the pinned Node floor, the current LTS, and one Windows leg.
-Which step runs on which leg is not uniform.
+The check matrix runs four legs: the pinned Node floor, the current LTS, and Windows in two
+shards, each shard running half of the test suite. Which step runs on which leg is not uniform.
 
-- **Every leg** runs the build, the test suite, the dogfood check and the leak gate. The dogfood
-  check re-proves that this repository's own generated setup is drift-clean. The leak gate refuses
-  a retired name, a credential shape, or a reference to the private layer anywhere in the tree.
+- **Every leg** runs the build and the test suite, each Windows shard its own half of it.
+- **Every leg but the second Windows shard** runs the dogfood check and the leak gate, so on
+  Windows they run on the first shard only: they read the checkout and the built binary, which
+  are the same on both shards. The dogfood check re-proves that this repository's own generated
+  setup is drift-clean. The leak gate refuses a retired name, a credential shape, or a reference
+  to the private layer anywhere in the tree.
 - **The LTS toolchain leg only** runs typecheck, lint, the repository-hygiene scan, the
   self-consistency generate-and-diff over every derived page, and the unused-code scan. Their
   answers turn on neither the operating system nor the Node version, and their vendors do not

@@ -176,6 +176,26 @@ describe("the global setup", () => {
     expect(lines).toHaveLength(1);
   });
 
+  // ADDED 2026-09-30 (sw12-flake-unit fixer, round 1): the volume check only ever warns, so a
+  // statfs that throws must not throw out of the global setup and fail the whole run.
+  it("warns and carries on when the temp volume cannot be read", () => {
+    // Justified fake: no real volume can be made to refuse statfs inside a test.
+    const parent = parentDir();
+    const root = join(parent, `${PRIVATE_TMP_PREFIX}1`);
+    const lines: string[] = [];
+    expect(() =>
+      prepareTempRoot({
+        root,
+        statfs: () => {
+          throw new Error("ENOSYS: statfs not supported");
+        },
+        warn: (line) => lines.push(line),
+      }),
+    ).not.toThrow();
+    expect(existsSync(root)).toBe(true);
+    expect(lines).toEqual([`warning: could not read the temp volume at ${parent}: ENOSYS: statfs not supported`]);
+  });
+
   it("sweeps a stale sibling root and keeps a fresh one, its own, and anything not its own", () => {
     const parent = parentDir();
     const now = Date.now();

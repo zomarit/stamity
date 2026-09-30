@@ -5,9 +5,10 @@
 //   node scripts/ci/test-run.mjs [--coverage] [--shard=<i>/<n>]
 //
 // It runs vitest once, with this file as an extra reporter (the default export below) that writes
-// every failure's messages to a JSON report. Exit 0 from vitest is a pass. Otherwise the report
-// decides. When EVERY failure message is a vitest timeout ("Test timed out" or "Hook timed out")
-// and nothing else went wrong, it runs again ONCE: the failed files alone on a leg without
+// every failure's error name and message to a JSON report. Exit 0 from vitest is a pass. Otherwise
+// the report decides. When EVERY failure is a vitest timeout — a message that STARTS "Test timed
+// out in <n>ms" or "Hook timed out in <n>ms", on an error that is not an `AssertionError` — and
+// nothing else went wrong, it runs again ONCE: the failed files alone on a leg without
 // coverage, or the whole run again with `--coverage` on a coverage leg, because a partial run
 // cannot meet the per-file floors. A green re-run exits 0 and says so out loud — one
 // `::warning title=flaky test::` annotation per file and one line per file in
@@ -28,8 +29,15 @@ import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-/** Vitest's two timeout messages, and nothing wider: `ETIMEDOUT` from a spawn is not one. */
-export const TIMEOUT = /(Test|Hook) timed out/
+/**
+ * Vitest's two timeout messages, and nothing wider: anchored at the start, because an assertion's
+ * custom message (`expect(status, childOutput)`) is a prefix of its failure text and can quote a
+ * child vitest's "Hook timed out"; and `ETIMEDOUT` from a spawn is not one.
+ */
+export const TIMEOUT = /^(Test|Hook) timed out in \d+ms/
+
+/** An assertion failure is never a timeout, whatever its message quotes. */
+const ASSERTION_ERROR = 'AssertionError'
 
 /** Where the reporter writes its JSON; set by the runner below for each vitest process. */
 export const REPORT_ENV = 'STAMITY_TEST_RUN_REPORT'
@@ -38,10 +46,11 @@ const SELF = fileURLToPath(import.meta.url)
 const USAGE = 'usage: node scripts/ci/test-run.mjs [--coverage] [--shard=<i>/<n>]'
 
 /**
- * The vitest reporter. It writes `{ reason, unhandled, failures: [{ file, messages }] }`, where a
- * file's messages are its own errors, every suite's errors (hooks included) and every failed
- * test's errors. A file vitest failed with none of those still appears, with no message, so the
- * decision below can refuse it.
+ * The vitest reporter. It writes
+ * `{ reason, unhandled, failures: [{ file, errors: [{ name, message }] }] }`, where a file's errors
+ * are its own, every suite's (hooks included) and every failed test's, each carrying the error's
+ * `name` so the decision can tell an assertion from a timeout. A file vitest failed with none of
+ * those still appears, with no error, so the decision below can refuse it.
  */
 export default class FailureReport {
   onTestRunEnd(testModules, unhandledErrors, reason) {
@@ -61,7 +70,7 @@ export function collectFailures(testModules, unhandledErrors, reason, cwd) {
       ...[...module.children.allTests('failed')].flatMap(test => test.result().errors ?? []),
     ]
     if (module.state() === 'failed' || errors.length > 0) {
-      failures.push({ file: relative(cwd, module.moduleId).replaceAll('\\', '/'), messages: errors.map(messageOf) })
+      failures.push({ file: relative(cwd, module.moduleId).replaceAll('\\', '/'), errors: errors.map(entryOf) })
     }
   }
   return { reason, unhandled: unhandledErrors.map(messageOf), failures }
@@ -69,6 +78,14 @@ export function collectFailures(testModules, unhandledErrors, reason, cwd) {
 
 function messageOf(error) {
   return String(error?.message ?? error)
+}
+
+function entryOf(error) {
+  return { name: String(error?.name ?? ''), message: messageOf(error) }
+}
+
+function isTimeout(error) {
+  return error.name !== ASSERTION_ERROR && TIMEOUT.test(error.message)
 }
 
 function firstLine(text) {
@@ -81,8 +98,8 @@ function fail(reason) {
 
 /**
  * The decision, with no I/O: `{ action: 'pass' | 'rerun' | 'fail', files, reason }`. `rerun` needs
- * a report that names at least one failed file, every failed file carrying at least one message,
- * and every message a timeout; anything short of that is `fail`.
+ * a report that names at least one failed file, every failed file carrying at least one error,
+ * and every error a timeout; anything short of that is `fail`.
  */
 export function decide({ exitCode, report }) {
   if (exitCode === 0) return { action: 'pass', files: [], reason: 'vitest exited 0' }
@@ -97,9 +114,9 @@ export function decide({ exitCode, report }) {
     return fail(`vitest exited ${exitCode} with no failed file (a coverage floor or a run-level error)`)
   }
   for (const failure of report.failures) {
-    if (failure.messages.length === 0) return fail(`${failure.file} failed without a message`)
-    const other = failure.messages.find(message => !TIMEOUT.test(message))
-    if (other !== undefined) return fail(`${failure.file}: ${firstLine(other)}`)
+    if (failure.errors.length === 0) return fail(`${failure.file} failed without a message`)
+    const other = failure.errors.find(error => !isTimeout(error))
+    if (other !== undefined) return fail(`${failure.file}: ${other.name}: ${firstLine(other.message)}`)
   }
   const files = report.failures.map(failure => failure.file)
   return { action: 'rerun', files, reason: `every failure is a timeout, in ${files.length} file(s)` }

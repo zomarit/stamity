@@ -22,9 +22,13 @@ import { lazyCleanup } from "../support/lazyCleanup.ts";
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const SCRIPT = join(REPO_ROOT, "scripts", "ci", "test-run.mjs");
 
+interface ReportedError {
+  readonly name: string;
+  readonly message: string;
+}
 interface Failure {
   readonly file: string;
-  readonly messages: readonly string[];
+  readonly errors: readonly ReportedError[];
 }
 interface Report {
   readonly reason: "passed" | "failed" | "interrupted";
@@ -56,9 +60,29 @@ const vitestArgsTyped = vitestArgs as (
   env: Readonly<Record<string, string | undefined>>,
 ) => string[];
 
-const HOOK = "Hook timed out in 20000ms.\nIf this is a long-running hook, pass a timeout value as the last argument or configure it globally with \"hookTimeout\".";
-const TEST = "Test timed out in 20000ms.\nIf this is a long-running test, pass a timeout value as the last argument or configure it globally with \"testTimeout\".";
-const ASSERTION = "expected 29 to be 30 // Object.is equality";
+// TEST CHANGE 2026-09-30 (sw12-flake-unit fixer, round 1): a failure is now `{ name, message }`
+// rather than a bare message, because the re-run is refused for an `AssertionError` whatever its
+// message quotes; the three fixtures carry the names vitest and chai give them.
+const HOOK: ReportedError = {
+  name: "Error",
+  message: "Hook timed out in 20000ms.\nIf this is a long-running hook, pass a timeout value as the last argument or configure it globally with \"hookTimeout\".",
+};
+const TEST: ReportedError = {
+  name: "Error",
+  message: "Test timed out in 20000ms.\nIf this is a long-running test, pass a timeout value as the last argument or configure it globally with \"testTimeout\".",
+};
+const ASSERTION: ReportedError = { name: "AssertionError", message: "expected 29 to be 30 // Object.is equality" };
+// An assertion whose custom message is a child vitest's output, the shape of the CLI case's own
+// `expect(result.status, stdout + stderr)` below: chai puts the custom message first, so the
+// failure text can even START with vitest's timeout phrase.
+const QUOTED_AT_START: ReportedError = {
+  name: "AssertionError",
+  message: "Hook timed out in 500ms.\n: expected 1 to be +0 // Object.is equality",
+};
+const QUOTED_INSIDE: ReportedError = {
+  name: "AssertionError",
+  message: " RUN  v5.0.1\n FAIL  flaky.test.mjs\nError: Hook timed out in 500ms.\n: expected 1 to be +0",
+};
 
 const failed = (...failures: Failure[]): Outcome => ({
   exitCode: 1,
@@ -72,7 +96,7 @@ describe("decide — which failures earn one re-run", () => {
   });
 
   it("re-runs a run whose only failure is a hook timeout, naming the file", () => {
-    const decision = decideTyped(failed({ file: "test/upstream/lane.test.ts", messages: [HOOK] }));
+    const decision = decideTyped(failed({ file: "test/upstream/lane.test.ts", errors: [HOOK] }));
     expect(decision.action).toBe("rerun");
     expect(decision.files).toEqual(["test/upstream/lane.test.ts"]);
   });
@@ -80,8 +104,8 @@ describe("decide — which failures earn one re-run", () => {
   it("re-runs timeouts across two files, a hook and a test, and names both", () => {
     const decision = decideTyped(
       failed(
-        { file: "test/ci/apmDownstream.test.ts", messages: [HOOK] },
-        { file: "test/upstream/workflowRecovery.test.ts", messages: [TEST, HOOK] },
+        { file: "test/ci/apmDownstream.test.ts", errors: [HOOK] },
+        { file: "test/upstream/workflowRecovery.test.ts", errors: [TEST, HOOK] },
       ),
     );
     expect(decision).toEqual({
@@ -92,29 +116,34 @@ describe("decide — which failures earn one re-run", () => {
   });
 
   it("refuses a re-run when an assertion failed, even beside a timeout", () => {
-    const alone = decideTyped(failed({ file: "test/hooks/scripts.test.ts", messages: [ASSERTION] }));
+    const alone = decideTyped(failed({ file: "test/hooks/scripts.test.ts", errors: [ASSERTION] }));
     expect(alone.action).toBe("fail");
     const beside = decideTyped(
       failed(
-        { file: "test/upstream/lane.test.ts", messages: [HOOK] },
-        { file: "test/hooks/scripts.test.ts", messages: [ASSERTION] },
+        { file: "test/upstream/lane.test.ts", errors: [HOOK] },
+        { file: "test/hooks/scripts.test.ts", errors: [ASSERTION] },
       ),
     );
     expect(beside).toEqual({ action: "fail", files: [], reason: expect.stringContaining("expected 29 to be 30") });
     // One file carrying a timeout AND an assertion is the same answer.
-    expect(decideTyped(failed({ file: "a.test.ts", messages: [TEST, ASSERTION] })).action).toBe("fail");
+    expect(decideTyped(failed({ file: "a.test.ts", errors: [TEST, ASSERTION] })).action).toBe("fail");
   });
 
   it("refuses a re-run for every failure it cannot prove is a timeout", () => {
     const cases: readonly [string, Outcome][] = [
       ["no report at all", { exitCode: 1, report: null }],
       ["a killed vitest", { exitCode: 137, report: null }],
-      ["an interrupted run", { exitCode: 1, report: { reason: "interrupted", unhandled: [], failures: [{ file: "a.test.ts", messages: [HOOK] }] } }],
-      ["an unhandled error", { exitCode: 1, report: { reason: "failed", unhandled: [HOOK], failures: [{ file: "a.test.ts", messages: [HOOK] }] } }],
+      ["an interrupted run", { exitCode: 1, report: { reason: "interrupted", unhandled: [], failures: [{ file: "a.test.ts", errors: [HOOK] }] } }],
+      ["an unhandled error", { exitCode: 1, report: { reason: "failed", unhandled: [HOOK.message], failures: [{ file: "a.test.ts", errors: [HOOK] }] } }],
       // A coverage floor or a run-level error exits 1 with every file green.
       ["a red exit with no failed file", { exitCode: 1, report: { reason: "passed", unhandled: [], failures: [] } }],
-      ["a failed file with no message", failed({ file: "a.test.ts", messages: [] })],
-      ["a message that only mentions a timeout", failed({ file: "a.test.ts", messages: ["the Test timeout was 20s"] })],
+      ["a failed file with no message", failed({ file: "a.test.ts", errors: [] })],
+      ["a message that only mentions a timeout", failed({ file: "a.test.ts", errors: [{ name: "Error", message: "the Test timeout was 20s" }] })],
+      // TEST CHANGE 2026-09-30 (sw12-flake-unit fixer, round 1): an assertion that quotes the
+      // phrase, at the start of its text or inside it, is an assertion and never a timeout.
+      ["an assertion whose message starts with the timeout phrase", failed({ file: "a.test.ts", errors: [QUOTED_AT_START] })],
+      ["an assertion whose message quotes the timeout phrase", failed({ file: "a.test.ts", errors: [QUOTED_INSIDE] })],
+      ["a non-assertion error that quotes the phrase after other text", failed({ file: "a.test.ts", errors: [{ name: "Error", message: "child output:\nHook timed out in 500ms." }] })],
     ];
     for (const [label, outcome] of cases) {
       const decision = decideTyped(outcome);
@@ -124,10 +153,18 @@ describe("decide — which failures earn one re-run", () => {
   });
 
   it("matches vitest's two timeout messages and nothing wider", () => {
-    expect(TIMEOUT.test(HOOK)).toBe(true);
-    expect(TIMEOUT.test(TEST)).toBe(true);
-    expect(TIMEOUT.test(ASSERTION)).toBe(false);
+    expect(TIMEOUT.test(HOOK.message)).toBe(true);
+    expect(TIMEOUT.test(TEST.message)).toBe(true);
+    expect(TIMEOUT.test(ASSERTION.message)).toBe(false);
     expect(TIMEOUT.test("Error: spawnSync git ETIMEDOUT")).toBe(false);
+    // TEST CHANGE 2026-09-30 (sw12-flake-unit fixer, round 1): anchored at the start, with the
+    // budget vitest prints, so an embedded quote of the phrase is not a timeout.
+    expect(TIMEOUT.test(QUOTED_INSIDE.message)).toBe(false);
+    expect(TIMEOUT.test("stdout:\nHook timed out in 500ms.")).toBe(false);
+    expect(TIMEOUT.test("Hook timed out")).toBe(false);
+    // The name check is what refuses an assertion whose text starts with the phrase.
+    expect(TIMEOUT.test(QUOTED_AT_START.message)).toBe(true);
+    expect(decideTyped(failed({ file: "a.test.ts", errors: [QUOTED_AT_START] })).reason).toContain("AssertionError");
   });
 });
 
@@ -185,7 +222,7 @@ function scripted(...outcomes: Outcome[]) {
 
 describe("runTests — the one re-run and what it says", () => {
   it("re-runs only the timed-out file on a shard leg and reports it flaky when it passes", () => {
-    const run = scripted(failed({ file: "test/upstream/lane.test.ts", messages: [HOOK] }), GREEN);
+    const run = scripted(failed({ file: "test/upstream/lane.test.ts", errors: [HOOK] }), GREEN);
     expect(runTyped(["--shard=1/2"], run.io)).toBe(0);
     expect(run.calls).toHaveLength(2);
     expect(run.calls[0]).toContain("--shard=1/2");
@@ -202,8 +239,8 @@ describe("runTests — the one re-run and what it says", () => {
   it("re-runs the whole suite with coverage on a coverage leg, so the floors are measured whole", () => {
     const run = scripted(
       failed(
-        { file: "test/ci/apmDownstream.test.ts", messages: [HOOK] },
-        { file: "test/upstream/workflowRecovery.test.ts", messages: [HOOK] },
+        { file: "test/ci/apmDownstream.test.ts", errors: [HOOK] },
+        { file: "test/upstream/workflowRecovery.test.ts", errors: [HOOK] },
       ),
       GREEN,
     );
@@ -217,7 +254,7 @@ describe("runTests — the one re-run and what it says", () => {
   });
 
   it("is red when the re-run times out again, and says nothing about flakiness", () => {
-    const hook = failed({ file: "test/upstream/lane.test.ts", messages: [HOOK] });
+    const hook = failed({ file: "test/upstream/lane.test.ts", errors: [HOOK] });
     const run = scripted(hook, hook);
     expect(runTyped(["--shard=2/2"], run.io)).toBe(1);
     expect(run.calls).toHaveLength(2);
@@ -227,7 +264,7 @@ describe("runTests — the one re-run and what it says", () => {
   });
 
   it("is red on an assertion failure and never runs the suite twice", () => {
-    const run = scripted(failed({ file: "test/hooks/scripts.test.ts", messages: [ASSERTION] }));
+    const run = scripted(failed({ file: "test/hooks/scripts.test.ts", errors: [ASSERTION] }));
     expect(runTyped(["--coverage"], run.io)).toBe(1);
     expect(run.calls).toHaveLength(1);
     expect(run.out).toEqual([]);
@@ -331,6 +368,29 @@ it("fails", () => { expect(29).toBe(30); });
       expect(result.stdout).not.toContain("flaky test");
       expect(result.stderr).toContain("no re-run");
       expect(result.summary).toBe("");
+    },
+    CLI_MS,
+  );
+
+  // TEST CHANGE 2026-09-30 (sw12-flake-unit fixer, round 1): the reporter carries each error's
+  // name, so an assertion whose custom message opens with vitest's own timeout phrase is still red
+  // on the first run.
+  it(
+    "runs an assertion that quotes a hook timeout once and exits 1",
+    () => {
+      const root = project("quoted", {
+        "quoted.test.mjs": `import { appendFileSync } from "node:fs";
+import { it, expect } from "vitest";
+appendFileSync(new URL("./loads", import.meta.url), "load\\n");
+it("fails", () => { expect(1, "Hook timed out in 500ms.").toBe(0); });
+`,
+      });
+      const result = cli(root, []);
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(1);
+      expect(readFileSync(join(root, "loads"), "utf8")).toBe("load\n");
+      expect(result.stdout).not.toContain("flaky test");
+      expect(result.stderr).toContain("no re-run");
+      expect(result.stderr).toContain("AssertionError");
     },
     CLI_MS,
   );

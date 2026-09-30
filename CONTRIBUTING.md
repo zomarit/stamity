@@ -78,13 +78,14 @@ covers the mechanics.
 Two required status contexts gate a merge.
 
 `all-ci-checks` (`.github/workflows/ci.yml`) runs on every event. A full run passes when three
-lanes pass: the check matrix, the APM route lane, and the plugin route lane. The matrix has three
-legs: the declared Node floor, the LTS canonical, and one Windows leg. Beside the six steps you
-already ran, it adds six things:
+lanes pass: the check matrix, the APM route lane, and the plugin route lane. The matrix has four
+legs: the declared Node floor, the LTS canonical, and Windows in two shards that split the test
+suite between them. Beside the six steps you already ran, it adds six things:
 
 - A generate-and-diff self-consistency step over every generated artifact class.
 - The dogfood check, `node dist/cli.js check`, which re-proves this repository's own generated setup
-  drift-clean against the binary the job just built.
+  drift-clean against the binary the job just built. It and the leak gate run on every leg but the
+  second Windows shard, so on Windows on the first shard only.
 - A tarball smoke on the floor leg: pack the package, install it into a throwaway project, then run
   it. The published shape is a different tree from the repository, and this is the only gate that
   reads it.

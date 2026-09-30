@@ -170,7 +170,10 @@ jobs:
     # 30, not the 15 this job carried while it was ubuntu-only: a windows leg installs, builds
     # and runs its half of the suite on the slowest runner image in the matrix, a timeout-only
     # failure can run its files a second time, and a ceiling that a healthy run brushes against
-    # is a flake generator rather than a hang detector.
+    # is a flake generator rather than a hang detector. Measured on main's green runs of
+    # 2026-09-29 (36627490873, 36587123668): an ubuntu leg's coverage step took 3.7-4.9 min in a
+    # 4.3-5.5 min job, so a coverage leg's full re-run lands near 11 min; the unsharded windows
+    # Test step took 13-14 min, of which a shard runs about half before any re-run of its files.
     timeout-minutes: 30
     permissions:
       contents: read

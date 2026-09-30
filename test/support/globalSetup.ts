@@ -72,13 +72,24 @@ export interface PrepareOptions {
   readonly warn?: Warn;
 }
 
-/** Creates the private root, sweeps stale siblings, and checks the temp volume. Idempotent. */
+/**
+ * Creates the private root, sweeps stale siblings, and checks the temp volume. Idempotent. The
+ * volume check is advisory: a volume that cannot be read is warned about, never thrown out of
+ * vitest's global setup, where a throw would fail every test.
+ */
 export function prepareTempRoot(options: PrepareOptions): void {
   const { root, now = Date.now(), statfs = statfsSync, warn = console.warn } = options;
   const parent = dirname(root);
   mkdirSync(root, { recursive: true });
   sweepStaleRoots(parent, root, now, warn);
-  const line = tempVolumeWarning(parent, statfs(parent));
+  let stats: VolumeStats;
+  try {
+    stats = statfs(parent);
+  } catch (error) {
+    warn(`warning: could not read the temp volume at ${parent}: ${(error as Error).message}`);
+    return;
+  }
+  const line = tempVolumeWarning(parent, stats);
   if (line !== null) warn(line);
 }
 
