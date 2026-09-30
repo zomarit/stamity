@@ -2540,12 +2540,16 @@ describe("check — the gates it did not run (REQ-FLOW-008)", () => {
   it("looks up the program past leading NAME=value assignments and quotes, and a bare assignment names none", async () => {
     const handle = getRepo();
     const manifest = await pinnedPytest(handle);
-    const tools = await toolDir(handle, "tools", ["npm", "pytest"]);
+    // The programs sit in the root's `node_modules/.bin`, which the resolver walks before PATH,
+    // and PATH stays empty: a host-built PATH is `D:\…` on a Windows runner, which the injected
+    // POSIX branch splits at the drive letter's colon. The lookup, not the PATH syntax, is the
+    // claim, and this layout holds it on every host.
+    await toolDir(handle, "node_modules/.bin", ["npm", "pytest"]);
     const gates = createEngine().detect.verificationGates;
     const kindsFor = (test: string): string[] =>
       resolveCharterGates(handle.dir, { ...manifest, gates: { test } }, gates, {
         platform: "linux",
-        env: { PATH: tools },
+        env: { PATH: "" },
       }).unresolved.map((gate) => gate.kind);
 
     expect(kindsFor('CI=1 PYTHONPATH=src "pytest" -q')).toEqual([]);
