@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, and excluded from the site build.
 status: shipped-with-1.8.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
@@ -20,7 +20,9 @@ and is not in a release yet. The amendments dated 2026-09-30 to REQ-PROVE-003, R
 from the spec delta of `docs/plans/013-optimization-sweep-03.md` (D) and the units `sw18-codex-rules-leave-shared-charter`
 and `sw17-touchpoints-as-shared-skills`, merged in the same run's second and third spec-merge passes. The amendment
 to REQ-PROVE-003 cites the tree at `cdfaa723`; those to REQ-PROVE-004 and REQ-PROVE-005 cite `a9e94f06`, the package
-head once `sw17-touchpoints-as-shared-skills` had integrated. They are not in a release yet.
+head once `sw17-touchpoints-as-shared-skills` had integrated. They are not in a release yet. The
+amendment dated 2026-10-01 to REQ-PROVE-020 was written at the 1.11.0 cut, on the release branch; it
+cites the tree at `108c57e0` and is not in a release yet.
 
 ## Intent
 
@@ -483,6 +485,52 @@ chain `2026-09-27-run-35 -> 2026-09-27-run-34`: run 35 names run 34 as its prior
 (`evals/runs/2026-09-27-run-35/RESULTS.md:12`), and run 34 has no composition section, so the walk
 ends there. Its matcher reads `runs?`, so a one-link chain passes (`:487-492`). The page case
 (`:515-525`) and the hand-page case (`test/docsPages.test.ts:1225-1229`) refuse a carried clause.
+
+Amended 2026-10-01 (the 1.11.0 cut; cited at `108c57e0`). The 1.11.0 run of record is to be run 36,
+a full baseline: the client moved to a new version, a new configuration, so there is no prior
+complete run for it to compose with (the TEST CHANGE note above the renamed case named below).
+1.10.0's run of record was composed, run 35 with run 34. The page now admits both kinds.
+
+- **What the page renders for a full run.** When the run of record's `RESULTS.md` has no
+  `## 0. Composition` section, the corpus section renders the full-baseline paragraph in place of
+  the composed one: "That run is a full baseline: its results file names no prior complete run, so
+  no case is carried from an earlier run. Run N measured every case in full on its own candidate.
+  The set is SET-v7." (`src/cli/docs/measurements.ts:801-808`). It makes no composed, re-measure or
+  carry claim. The scoring-rule sentence after the paragraph is the same for both kinds (`:980`).
+- **The one reading.** `priorCompleteRun` (`src/cli/docs/measurements.ts:166-186`) decides the kind,
+  and the page branches on it (read at `:854`, branched at `:802`). It reads the prior-run line
+  only inside the `## 0. Composition` section, down to the next `## ` heading (`:133-136`, `:168`,
+  `:178-181`), and returns `null` for a full run. It throws `VALIDATION_ERROR` on a section-less file that still
+  carries a composed marker, the `| Carried case |` table header or the "case(s) carried" count
+  (`:144`, `:169-175`), and on a section that names no prior run (`:181-184`). The composition-chain
+  walk in `test/cli/docs/measurements.test.ts` and the hand-page case in `test/docsPages.test.ts`
+  read the fact through this export rather than through regexes of their own.
+- **No disclosure without a composed run.** With a full-baseline run of record, none of README, the
+  doctrine page and the measurements page carries an "alone was FAIL" composition disclosure. The
+  FAIL-baseline criterion above binds only when the run of record is composed.
+
+- GIVEN a run of record whose results file has no `## 0. Composition` section and no composed
+  marker WHEN the page renders THEN it calls that run a full baseline that measured every case in
+  full on its own candidate, and contains none of "composed", "incremental rule", "re-measure",
+  "carries the rest", "carried the rest" or "alone was FAIL"; GIVEN a composed one THEN the composed
+  paragraph renders without the full-baseline sentence, and the page above the corpus section is
+  the same for both. Test evidence by name, since every cut moves these suites' lines: in
+  `test/cli/docs/measurements.test.ts`, the case "says how the run of record was measured: composed
+  from the runs it names, or in full" (renamed from "says the run of record is composed, and names
+  the runs it was composed from"), and the describe "a full run of record" with its case "renders a
+  full baseline's prose from a full results file, and the composition from a composed one", run on
+  run 34's real results file before run 36 exists.
+- GIVEN a section-less results file carrying either composed marker, or a composition section that
+  names no prior run, WHEN `priorCompleteRun` reads it THEN it throws `EngineError`; GIVEN a full
+  run whose prose names a prior run outside that section THEN it still reads as full. Test evidence:
+  the same describe's cases "is read off the composition section alone, and a broken section throws"
+  and "refuses a section-less results file that still carries a composed marker".
+- GIVEN a full-baseline run of record THEN README, the doctrine and the page carry no "alone was
+  FAIL" disclosure: `test/docsPages.test.ts`'s "the eval run of record on the hand pages", its case
+  "%s discloses a FAIL baseline behind the composed run of record" (name unchanged; the full-run
+  branch added), and the added case "tells a full run's results from a composed run's by the
+  prior-run line", which holds the reading to run 34 (full, `null`) and run 35 (composed, naming
+  run 34).
 
 ### REQ-PROVE-021 — QA automation and binding
 
