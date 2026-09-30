@@ -34,7 +34,9 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  *
  * **Stdout carries rows only**: for an append, one `<ledger-id> <severity>
  * <report-local id>` line each, with a trailing ` decision-needed` on a row the
- * orchestrator must sign off before a fixer acts on it, so the caller reads the
+ * orchestrator must sign off before a fixer acts on it, and a trailing
+ * ` already-filed` on a `--stdin` finding an existing row already carries (the
+ * id printed is that row's), so the caller reads the
  * ids it dispatches by straight off the pipe; for a close, one
  * `<id> <from> -> <to>` line per row (with its closure status, or a
  * retirement's `retired: <value>`, in parentheses),
@@ -183,7 +185,8 @@ async function readAll(input: NodeJS.ReadableStream, maxBytes: number): Promise<
     if (total > maxBytes) {
       throw new CliFailure({
         code: "VALIDATION_ERROR",
-        message: `the block piped on stdin is over the ${maxBytes} byte input ceiling`,
+        // `total` is what was read when the ceiling tripped: the pipe is not drained further.
+        message: `the block piped on stdin is ${total} bytes, over the ${maxBytes} byte input ceiling`,
         why: "a findings block is one line per finding; a report is read by path, not piped",
         next: "pipe the stamity-findings block alone, or name the report with --report",
       });
@@ -237,9 +240,16 @@ function requireRun(ctx: CliContext, subcommand: string, opts: Record<string, un
   return run;
 }
 
-/** The row line a caller reads its ledger ids from. */
+/**
+ * The row line a caller reads its ledger ids from; ` already-filed` ends the
+ * line of a finding an existing row carries. That row's id is read from the
+ * ledger, not minted here, so the line is sanitised where it meets the
+ * terminal, as a close's line is.
+ */
 function rowLine(row: AppendResult["rows"][number]): string {
-  return `${row.ledgerId} ${row.severity} ${row.localId}${row.decisionNeeded ? " decision-needed" : ""}`;
+  return sanitizeLabel(
+    `${row.ledgerId} ${row.severity} ${row.localId}${row.decisionNeeded ? " decision-needed" : ""}${row.alreadyFiled ? " already-filed" : ""}`,
+  );
 }
 
 async function runAppend(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
@@ -343,9 +353,8 @@ async function runAppend(ctx: CliContext, opts: Record<string, unknown>): Promis
   }
   for (const row of result.rows) ctx.io.out(`${rowLine(row)}\n`);
   if (ctx.dryRun) {
-    ctx.io.out(
-      `Dry run: ${result.rows.length} row(s) would be appended to ${result.ledger}. Nothing was written.\n`,
-    );
+    const appending = result.rows.filter((row) => !row.alreadyFiled).length;
+    ctx.io.out(`Dry run: ${appending} row(s) would be appended to ${result.ledger}. Nothing was written.\n`);
   }
 
   return {

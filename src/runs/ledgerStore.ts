@@ -338,6 +338,12 @@ export interface AppendedRow {
   /** The finding's id inside its report (`C-1`, `W-2`, …). */
   readonly localId: string;
   readonly decisionNeeded: boolean;
+  /**
+   * The finding already had a row, so none was appended: `ledgerId` names that
+   * existing row. Only a report-less (`--stdin`) append sets it; see
+   * {@link appendFindings}.
+   */
+  readonly alreadyFiled: boolean;
 }
 
 export interface AppendResult {
@@ -380,10 +386,40 @@ async function readLedger(path: string, relPath: string): Promise<string> {
 }
 
 /**
+ * The existing rows a report-less append matches its findings against: each
+ * `evidence` string of a row filed under `phase` and `source`, mapped to those
+ * rows' ids in row order. A row whose evidence is not a string matches nothing.
+ */
+function filedEvidence(
+  held: readonly LedgerRow[],
+  phase: string,
+  source: string,
+): Map<string, string[]> {
+  const filed = new Map<string, string[]>();
+  for (const row of held) {
+    if (row.phase !== phase || row.source !== source || typeof row.evidence !== "string") continue;
+    const ids = filed.get(row.evidence);
+    if (ids === undefined) filed.set(row.evidence, [row.id]);
+    else ids.push(row.id);
+  }
+  return filed;
+}
+
+/**
  * Append one `open` row per finding to the run's ledger, under its write lock.
  *
  * Refuses a report the ledger already carries rows from, naming them, so a
- * retried append cannot file the same findings twice. Zero findings take no lock
+ * retried append cannot file the same findings twice. A report-less (`--stdin`)
+ * append names no report to refuse, so it matches each finding instead
+ * (REQ-CTX-005): a finding whose phase, source and stored evidence
+ * (`<locator> — <summary>`, after the same strip a row gets) equal an existing
+ * row's is not appended, and comes back `alreadyFiled` under that row's id.
+ * Matching is one-to-one in row order — the k-th finding carrying one evidence
+ * string names the k-th row carrying it — and a finding with no such row left
+ * is appended, so a re-piped block files nothing and names each original id
+ * once. Only rows already in the ledger are matched, never the block's own
+ * earlier findings, and the ledger is read under the lock, so two concurrent
+ * appends of one block file it once. Zero findings take no lock
  * and touch no file but the reports folder's ignore file. A dry run reads,
  * numbers and returns the rows it would append, and writes nothing at all — not
  * the ignore file either, because its line says nothing was written.
@@ -422,14 +458,27 @@ export async function appendFindings(req: {
       }
     }
 
-    const first = nextRowNumber(held, req.runId, req.phase);
+    // A report-less append's matches; a report's repeats were refused above.
+    const filed = req.report === null ? filedEvidence(held, req.phase, req.source) : new Map<string, string[]>();
+    let next = nextRowNumber(held, req.runId, req.phase);
     const rows: AppendedRow[] = [];
     const lines: string[] = [];
     const tagsStripped: string[] = [];
-    for (const [offset, finding] of req.findings.entries()) {
-      const ledgerId = `${req.runId}/${req.phase}/${first + offset}`;
+    for (const finding of req.findings) {
       const locator = committedText(finding.locator);
       const summary = committedText(finding.summary);
+      // Stripped before the row is built: the ledger is committed and diffed,
+      // so a bidi override or a line separator would spoof the line it lands on,
+      // and a tag-block payload would return to context with the open rows.
+      const evidence = `${locator.text} — ${summary.text}`;
+      const existingId = filed.get(evidence)?.shift();
+      const shared = { severity: finding.severity, localId: finding.id, decisionNeeded: finding.decisionNeeded };
+      if (existingId !== undefined) {
+        rows.push({ ledgerId: existingId, ...shared, alreadyFiled: true });
+        continue;
+      }
+      const ledgerId = `${req.runId}/${req.phase}/${next}`;
+      next += 1;
       if (locator.tagged || summary.tagged) tagsStripped.push(ledgerId);
       lines.push(
         JSON.stringify({
@@ -437,25 +486,18 @@ export async function appendFindings(req: {
           phase: req.phase,
           source: req.source,
           severity: finding.severity,
-          // Stripped before the row is built: the ledger is committed and diffed,
-          // so a bidi override or a line separator would spoof the line it lands on,
-          // and a tag-block payload would return to context with the open rows.
-          evidence: `${locator.text} — ${summary.text}`,
+          evidence,
           state: "open",
           rationale: "",
           ...(req.report === null ? {} : { report: req.report }),
           ...(finding.decisionNeeded ? { decision_needed: true } : {}),
         }),
       );
-      rows.push({
-        ledgerId,
-        severity: finding.severity,
-        localId: finding.id,
-        decisionNeeded: finding.decisionNeeded,
-      });
+      rows.push({ ledgerId, ...shared, alreadyFiled: false });
     }
 
-    if (!req.dryRun) {
+    // Every finding already filed: nothing to add, so the ledger is not rewritten.
+    if (!req.dryRun && lines.length > 0) {
       const head = existing === "" || existing.endsWith("\n") ? existing : existing + parsed.eol;
       const text = head + lines.join(parsed.eol) + parsed.eol;
       await atomicWriteFileUnlocked(ledgerPath, text, { boundaryDir: dir });
@@ -484,6 +526,29 @@ export function qualifyLedgerId(
   const named = slash < 0 ? "" : given.slice(0, slash);
   return { id: given, foreignRun: isRunId(named) && named !== runId ? named : null };
 }
+
+/**
+ * The `--id` of a manual close or a retirement, read through
+ * {@link qualifyLedgerId} (REQ-CTX-008): `<phase>/<n>` names this run's row,
+ * and an id naming another run is refused before the lock is taken.
+ */
+function ownLedgerId(runId: string, given: string): string {
+  const qualified = qualifyLedgerId(runId, given);
+  if (qualified.foreignRun !== null) {
+    throw new EngineError(
+      `ledger close refused: --id names ${printableText(cutReportText(given))}, a row of run ${qualified.foreignRun}, not ${runId}`,
+      {
+        code: "VALIDATION_ERROR",
+        why: "a close moves only the rows of the run it names, so no row changed",
+        next: `name a row of ${runId}, or close the other run's row with its own --run`,
+      },
+    );
+  }
+  return qualified.id;
+}
+
+/** The next step of an `--id` that is not a row: either spelling of a ledger id. */
+const NOT_A_ROW_NEXT = "name a ledger id as `ledger append` printed it, or its short form <phase>/<n>";
 
 /** Where each closure status leaves its row (C9). */
 export const CLOSURE_TARGET: Readonly<Record<ClosureStatus, "fixed" | "rejected" | "open">> = {
@@ -740,7 +805,9 @@ export async function applyClosures(req: {
  * tag block), then trimmed, before the cap and the write — by the same rule as
  * a closure's note. Any prior state
  * may move; an id that is not a row is refused, and a row already in `state`
- * whose rationale carries the text is `unchanged`.
+ * whose rationale carries the text is `unchanged`. The id is read through
+ * {@link qualifyLedgerId}, so `<phase>/<n>` names this run's row and an id of
+ * another run is refused; the change names the row by its full id.
  */
 export async function closeRow(req: {
   readonly rootDir: string;
@@ -752,39 +819,38 @@ export async function closeRow(req: {
 }): Promise<CloseResult> {
   const cleaned = committedText(req.rationale);
   const text = cleaned.text.trim();
-  if (text === "" || Array.from(text).length > RATIONALE_MAX) {
+  const length = Array.from(text).length;
+  if (text === "" || length > RATIONALE_MAX) {
     throw new EngineError(
-      `ledger close --id needs a non-empty --rationale of at most ${RATIONALE_MAX} characters`,
+      `ledger close --id needs a non-empty --rationale of at most ${RATIONALE_MAX} characters; this one is ${length} characters`,
       {
         code: "VALIDATION_ERROR",
         why: "a manual transition is the one ledger move no report explains, so its reason is recorded on the row",
       },
     );
   }
+  const ledgerId = ownLedgerId(req.runId, req.ledgerId);
   return await rewriteRows(req, (parsed, ledgerRel) => {
-    const index = rowIndex(parsed).get(req.ledgerId);
+    const index = rowIndex(parsed).get(ledgerId);
     const row = index === undefined ? undefined : parsed.rows.get(index);
     if (index === undefined || row === undefined) {
       throw new EngineError(
-        `ledger close refused: ${printableText(cutReportText(req.ledgerId))} is not a row of ${ledgerRel}`,
-        {
-          code: "VALIDATION_ERROR",
-          next: "name a ledger id exactly as `ledger append` printed it",
-        },
+        `ledger close refused: ${printableText(cutReportText(ledgerId))} is not a row of ${ledgerRel}`,
+        { code: "VALIDATION_ERROR", next: NOT_A_ROW_NEXT },
       );
     }
     const from = fieldText(row, "state");
     const prior = fieldText(row, "rationale");
     if (from === req.state && prior.includes(text)) {
       return {
-        changes: [{ ledgerId: req.ledgerId, from, to: from, status: null, unchanged: true }],
+        changes: [{ ledgerId, from, to: from, status: null, unchanged: true }],
         rewrites: new Map(),
       };
     }
     return {
-      changes: [{ ledgerId: req.ledgerId, from, to: req.state, status: null, unchanged: false }],
+      changes: [{ ledgerId, from, to: req.state, status: null, unchanged: false }],
       rewrites: new Map([[index, { ...row, state: req.state, rationale: extendRationale(prior, text) }]]),
-      tagsStripped: cleaned.tagged ? [req.ledgerId] : [],
+      tagsStripped: cleaned.tagged ? [ledgerId] : [],
     };
   });
 }
@@ -807,7 +873,9 @@ function retiredDisposition(value: string): string {
  * manual close's rationale is. `now` is the caller's clock, so the date is
  * testable and never read off the wall here.
  *
- * Only a `deferred` row is retired; an id that is not a row is refused. A row
+ * Only a `deferred` row is retired; an id that is not a row is refused, and
+ * the id is read as a manual close reads it (`<phase>/<n>` names this run's
+ * row, an id of another run is refused). A row
  * whose `retired` value already states this disposition is `unchanged`, on a
  * later day too, so a re-run never re-dates a retirement; a row retired with
  * another disposition is refused, naming the value it carries. Every other
@@ -834,14 +902,15 @@ export async function retireRow(req: {
     );
   }
   const value = `${retiredDate(req.now)} ${text}`;
+  const ledgerId = ownLedgerId(req.runId, req.ledgerId);
   return await rewriteRows(req, (parsed, ledgerRel) => {
-    const index = rowIndex(parsed).get(req.ledgerId);
+    const index = rowIndex(parsed).get(ledgerId);
     const row = index === undefined ? undefined : parsed.rows.get(index);
-    const shown = printableText(cutReportText(req.ledgerId));
+    const shown = printableText(cutReportText(ledgerId));
     if (index === undefined || row === undefined) {
       throw new EngineError(`ledger close refused: ${shown} is not a row of ${ledgerRel}`, {
         code: "VALIDATION_ERROR",
-        next: "name a ledger id exactly as `ledger append` printed it",
+        next: NOT_A_ROW_NEXT,
       });
     }
     const from = fieldText(row, "state");
@@ -860,9 +929,7 @@ export async function retireRow(req: {
       const recorded = typeof prior === "string" ? prior : String(JSON.stringify(prior));
       if (retiredDisposition(recorded) === text) {
         return {
-          changes: [
-            { ledgerId: req.ledgerId, from, to: from, status: null, unchanged: true, retired: recorded },
-          ],
+          changes: [{ ledgerId, from, to: from, status: null, unchanged: true, retired: recorded }],
           rewrites: new Map(),
         };
       }
@@ -876,9 +943,9 @@ export async function retireRow(req: {
       );
     }
     return {
-      changes: [{ ledgerId: req.ledgerId, from, to: from, status: null, unchanged: false, retired: value }],
+      changes: [{ ledgerId, from, to: from, status: null, unchanged: false, retired: value }],
       rewrites: new Map([[index, { ...row, retired: value }]]),
-      tagsStripped: cleaned.tagged ? [req.ledgerId] : [],
+      tagsStripped: cleaned.tagged ? [ledgerId] : [],
     };
   });
 }

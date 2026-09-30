@@ -196,7 +196,9 @@ describe("parseFindingsBlock", () => {
     const problems = parsed.ok ? [] : parsed.problems;
     expect(problems.map((problem) => `${problem.line}: ${problem.message}`)).toEqual([
       '7: severity "High" is not Critical, Warning or Minor',
-      "8: summary is over 300 characters",
+      // TEST CHANGE (REQ-CTX-005, sw21): the over-cap refusal now names the text's own
+      // length beside the cap; the same line is still refused, with the same field named.
+      "8: summary is 301 characters, over the 300-character cap",
       '9: missing "locator"',
       expect.stringMatching(/^10: not JSON \(.+\)$/) as unknown as string,
       "11: not a JSON object",
@@ -570,17 +572,116 @@ describe("appendFindings", () => {
     expect((await readText(dir, LEDGER)).startsWith(before)).toBe(true);
   });
 
-  it("gives two concurrent appends disjoint id ranges, and all six rows land", async () => {
+  // TEST CHANGE (REQ-CTX-005, sw21): a report-less append no longer re-files a finding
+  // whose phase, source and evidence already have a row, and these three findings all
+  // carry `src/a.ts:1 — s`. The case still proves the lock (one writer at a time): the
+  // second append to take it reads the first one's rows, so the ledger holds 3 rows and
+  // that append names the first one's three ids, in order, as already filed. The
+  // disjoint-ranges half of the old case moved to the next case, with distinct evidence.
+  it("files one block appended twice at once exactly once: the second append names the first one's ids", async () => {
     const dir = tempDir();
     await seedRun(dir);
     const three = [finding(), finding({ id: "C-2" }), finding({ id: "C-3" })];
 
-    const [first, second] = await Promise.all([append(dir, three), append(dir, three)]);
+    const results = await Promise.all([append(dir, three), append(dir, three)]);
+
+    const firstIds = [1, 2, 3].map((n) => `${RUN}/review/${n}`);
+    const writer = results.find((result) => result.rows.every((row) => !row.alreadyFiled));
+    const later = results.find((result) => result.rows.every((row) => row.alreadyFiled));
+    expect(writer?.rows.map((row) => row.ledgerId)).toEqual(firstIds);
+    expect(later?.rows.map((row) => [row.ledgerId, row.localId])).toEqual([
+      [firstIds[0], "C-1"],
+      [firstIds[1], "C-2"],
+      [firstIds[2], "C-3"],
+    ]);
+    expect((await readText(dir, LEDGER)).trimEnd().split("\n")).toHaveLength(3);
+  });
+
+  it("gives two concurrent appends of different findings disjoint id ranges, and all six rows land", async () => {
+    const dir = tempDir();
+    await seedRun(dir);
+    const block = (tag: string): Finding[] =>
+      [1, 2, 3].map((n) => finding({ id: `C-${n}`, summary: `${tag} ${n}` }));
+
+    const [first, second] = await Promise.all([append(dir, block("left")), append(dir, block("right"))]);
 
     const ids = [...(first?.rows ?? []), ...(second?.rows ?? [])].map((row) => row.ledgerId);
     expect(new Set(ids).size).toBe(6);
     expect(ids.toSorted()).toEqual([1, 2, 3, 4, 5, 6].map((n) => `${RUN}/review/${n}`).toSorted());
+    expect([...(first?.rows ?? []), ...(second?.rows ?? [])].some((row) => row.alreadyFiled)).toBe(false);
     expect((await readText(dir, LEDGER)).trimEnd().split("\n")).toHaveLength(6);
+  });
+
+  it("matches repeated evidence one-to-one in row order, and appends the finding no row is left for", async () => {
+    const dir = tempDir();
+    await seedRun(dir);
+    await append(dir, [finding(), finding({ id: "C-2" })]);
+    const before = await readText(dir, LEDGER);
+
+    const result = await append(dir, [finding({ id: "C-7" }), finding({ id: "C-8" }), finding({ id: "C-9" })]);
+
+    expect(result.rows).toEqual([
+      { ledgerId: `${RUN}/review/1`, severity: "Critical", localId: "C-7", decisionNeeded: false, alreadyFiled: true },
+      { ledgerId: `${RUN}/review/2`, severity: "Critical", localId: "C-8", decisionNeeded: false, alreadyFiled: true },
+      { ledgerId: `${RUN}/review/3`, severity: "Critical", localId: "C-9", decisionNeeded: false, alreadyFiled: false },
+    ]);
+    const after = await readText(dir, LEDGER);
+    expect(after.startsWith(before)).toBe(true);
+    expect(parseLedgerText(after).rows.size).toBe(3);
+    expect(JSON.parse(after.trimEnd().split("\n")[2] ?? "")).toMatchObject({
+      id: `${RUN}/review/3`,
+      evidence: "src/a.ts:1 — s",
+      state: "open",
+    });
+  });
+
+  it("appends a new finding beside repeated ones and numbers it past the highest row", async () => {
+    const dir = tempDir();
+    await seedRun(dir);
+    await append(dir, [finding(), finding({ id: "C-2", summary: "t" })]);
+
+    const result = await append(dir, [
+      finding({ id: "C-2", summary: "t" }),
+      finding({ id: "C-3", summary: "new" }),
+      finding(),
+    ]);
+
+    expect(result.rows.map((row) => [row.ledgerId, row.localId, row.alreadyFiled])).toEqual([
+      [`${RUN}/review/2`, "C-2", true],
+      [`${RUN}/review/3`, "C-3", false],
+      [`${RUN}/review/1`, "C-1", true],
+    ]);
+    expect(parseLedgerText(await readText(dir, LEDGER)).rows.size).toBe(3);
+  });
+
+  it("files a repeated finding again under another phase or source, and from a report", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [REPORT_REL]: report([]) });
+    await append(dir, [finding()]);
+    const other = (phase: string, source: string): ReturnType<typeof appendFindings> =>
+      appendFindings({ rootDir: dir.dir, runId: RUN, phase, source, findings: [finding()], report: null, dryRun: false });
+
+    const byPhase = await other("build", "reviewer");
+    const bySource = await other("review", "security-reviewer");
+    const byReport = await append(dir, [finding()], REPORT_REL);
+
+    expect(byPhase.rows).toMatchObject([{ ledgerId: `${RUN}/build/1`, alreadyFiled: false }]);
+    expect(bySource.rows).toMatchObject([{ ledgerId: `${RUN}/review/2`, alreadyFiled: false }]);
+    expect(byReport.rows).toMatchObject([{ ledgerId: `${RUN}/review/3`, alreadyFiled: false }]);
+    expect(parseLedgerText(await readText(dir, LEDGER)).rows.size).toBe(4);
+  });
+
+  it("matches a finding by its stored evidence, after tag characters are stripped", async () => {
+    const dir = tempDir();
+    await seedRun(dir);
+    await append(dir, [finding({ summary: "plain" })]);
+    const before = await readText(dir, LEDGER);
+
+    const result = await append(dir, [finding({ summary: `plain${String.fromCodePoint(0xe0041)}` })]);
+
+    expect(result.rows).toMatchObject([{ ledgerId: `${RUN}/review/1`, alreadyFiled: true }]);
+    expect(result.tagsStripped).toEqual([]);
+    expect(await readText(dir, LEDGER)).toBe(before);
   });
 
   it("takes over a lock directory left stale for 60 s and removes it", async () => {
@@ -717,7 +818,10 @@ describe("stamity ledger append", () => {
       [REPORT_REL]: report([{ ...C1, security: true }, { ...W1, decision_needed: true }, M1]),
     });
     expect((await cli(dir, [...APPEND, "--report", REPORT_REL])).code).toBe(0);
-    const piped = report([{ ...C1, id: "C-2" }]).split("\n");
+    // TEST CHANGE (REQ-CTX-005, sw21): a report-less append no longer re-files a finding
+    // whose phase, source and evidence a row already carries, and C1's evidence is row 1's,
+    // so the piped finding carries its own summary; the stdin row still lands as row 4.
+    const piped = report([{ ...C1, id: "C-2", summary: "a second crash on the merge" }]).split("\n");
     expect((await cli(dir, [...APPEND, "--stdin"], piped)).code).toBe(0);
 
     const text = await readText(dir, LEDGER);
@@ -847,7 +951,15 @@ describe("stamity ledger append", () => {
 
     expect(over.code).toBe(1);
     expect(over.stdout).toBe("");
-    expect(over.stderr).toContain("the block piped on stdin is over the 250000 byte input ceiling");
+    // TEST CHANGE (REQ-CTX-005, sw21): the refusal now names the bytes it measured beside
+    // the ceiling. The figure is what was read when the ceiling tripped (the pipe is not
+    // drained), so it is pinned as over the ceiling and at most the 250,002 bytes piped.
+    const measured = /the block piped on stdin is (\d+) bytes, over the 250000 byte input ceiling/.exec(
+      over.stderr,
+    );
+    expect(measured, over.stderr).not.toBeNull();
+    expect(Number(measured?.[1])).toBeGreaterThan(250_000);
+    expect(Number(measured?.[1])).toBeLessThanOrEqual(250_002);
     expect(existsSync(dir.path(LEDGER))).toBe(false);
   });
 
@@ -864,6 +976,75 @@ describe("stamity ledger append", () => {
       false,
       false,
     ]);
+  });
+
+  it("files a block piped twice once: the second run appends nothing and prints each first id already-filed", async () => {
+    const dir = tempDir();
+    await seedRun(dir);
+    const piped = report([C1, { ...W1, decision_needed: true }]).split("\n");
+    const first = await cli(dir, [...APPEND, "--stdin"], piped);
+    const before = await readText(dir, LEDGER);
+
+    const second = await cli(dir, [...APPEND, "--stdin"], piped);
+    const json = await cli(dir, [...APPEND, "--stdin", "--json"], piped);
+
+    expect(first.stdout).toBe(`${RUN}/review/1 Critical C-1\n${RUN}/review/2 Warning W-1 decision-needed\n`);
+    expect(second.code, second.stderr).toBe(0);
+    expect(second.stdout).toBe(
+      `${RUN}/review/1 Critical C-1 already-filed\n${RUN}/review/2 Warning W-1 decision-needed already-filed\n`,
+    );
+    expect(second.stderr).toBe("");
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      rows: [
+        { ledgerId: `${RUN}/review/1`, localId: "C-1", alreadyFiled: true },
+        { ledgerId: `${RUN}/review/2`, localId: "W-1", alreadyFiled: true },
+      ],
+    });
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("sanitises an already-filed line, whose id is read from the ledger rather than minted", async () => {
+    const dir = tempDir();
+    const planted = JSON.stringify({
+      id: `${RUN}/review/1${String.fromCodePoint(0x1b)}[2J`,
+      phase: "review",
+      source: "reviewer",
+      severity: "Critical",
+      evidence: "src/a.ts:10 — a null row crashes the merge",
+      state: "open",
+      rationale: "",
+    });
+    await seedRun(dir, { [LEDGER]: `${planted}\n` });
+
+    const result = await cli(dir, [...APPEND, "--stdin"], report([C1]).split("\n"));
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toBe(`${RUN}/review/1[2J Critical C-1 already-filed\n`);
+  });
+
+  it("appends only the new finding of a re-piped block, and says so under --dry-run first", async () => {
+    const dir = tempDir();
+    await seedRun(dir);
+    await cli(dir, [...APPEND, "--stdin"], report([C1, W1]).split("\n"));
+    const before = await readText(dir, LEDGER);
+    const grown = report([C1, W1, M1]).split("\n");
+
+    const dry = await cli(dir, [...APPEND, "--stdin", "--dry-run"], grown);
+    const unchanged = await readText(dir, LEDGER);
+    const real = await cli(dir, [...APPEND, "--stdin", "--json"], grown);
+
+    expect(dry.stdout).toBe(
+      `${RUN}/review/1 Critical C-1 already-filed\n${RUN}/review/2 Warning W-1 already-filed\n` +
+        `${RUN}/review/3 Minor M-1\nDry run: 1 row(s) would be appended to ${LEDGER}. Nothing was written.\n`,
+    );
+    expect(unchanged).toBe(before);
+    expect(real.code, real.stderr).toBe(0);
+    expect((JSON.parse(real.stdout) as { rows: unknown[] }).rows).toEqual([
+      { ledgerId: `${RUN}/review/1`, severity: "Critical", localId: "C-1", decisionNeeded: false, alreadyFiled: true },
+      { ledgerId: `${RUN}/review/2`, severity: "Warning", localId: "W-1", decisionNeeded: false, alreadyFiled: true },
+      { ledgerId: `${RUN}/review/3`, severity: "Minor", localId: "M-1", decisionNeeded: false, alreadyFiled: false },
+    ]);
+    expect(parseLedgerText(await readText(dir, LEDGER)).rows.size).toBe(3);
   });
 
   it("refuses the same report twice, naming the first append's ids", async () => {
@@ -1099,9 +1280,17 @@ describe("stamity ledger append across two processes", () => {
       const runDir = join(child.repoDir, RUN_DIR);
       await mkdir(runDir, { recursive: true });
       await writeFile(join(runDir, "ledger.jsonl"), `{"id":"${RUN}/review/2"}\n`);
+      // TEST CHANGE (REQ-CTX-005, sw21): every finding here used to carry C1's evidence,
+      // and a report-less append now files a finding whose phase, source and evidence
+      // already have a row only once, so the two blocks would share rows. Each finding
+      // now carries its own summary, and the case still proves 3 + 4 serialized rows.
       const block = (count: number): string =>
         report(
-          Array.from({ length: count }, (_, index) => ({ ...C1, id: `C-${index + 1}` })),
+          Array.from({ length: count }, (_, index) => ({
+            ...C1,
+            id: `C-${index + 1}`,
+            summary: `finding ${index + 1} of ${count}`,
+          })),
         );
 
       const [three, four] = await Promise.all([

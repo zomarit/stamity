@@ -139,8 +139,10 @@ function textProblems(key: string, value: string): string[] {
   if (value.trim() === "") return [`${key} is empty`];
   const problems: string[] = [];
   if (/[\r\n]/.test(value)) problems.push(`${key} spans more than one line`);
-  if (Array.from(value).length > FINDING_TEXT_MAX) {
-    problems.push(`${key} is over ${FINDING_TEXT_MAX} characters`);
+  const length = Array.from(value).length;
+  if (length > FINDING_TEXT_MAX) {
+    // The measured length beside the cap (REQ-CTX-005), so the author knows how far to cut.
+    problems.push(`${key} is ${length} characters, over the ${FINDING_TEXT_MAX}-character cap`);
   }
   return problems;
 }

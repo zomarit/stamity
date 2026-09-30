@@ -674,16 +674,59 @@ describe("closeRow", () => {
     expect(await readText(dir, LEDGER)).toBe(before);
   });
 
+  it("moves the row a short id `<phase>/<n>` names in this run, and names it by its full id", async () => {
+    const dir = tempDir();
+    const build12 = row(12, { id: `${RUN}/build/12`, phase: "build" });
+    await seedRun(dir, { [LEDGER]: `${row(12)}\n${build12}\n` });
+
+    const result = await manual(dir, "build/12", "fixed", "x");
+
+    const rows = rowsOf(await readText(dir, LEDGER));
+    expect(rows[0]).toEqual(JSON.parse(row(12)));
+    expect(rows[1]).toMatchObject({ id: `${RUN}/build/12`, state: "fixed", rationale: "x" });
+    expect(result.changes).toEqual([
+      { ledgerId: `${RUN}/build/12`, from: "open", to: "fixed", status: null, unchanged: false },
+    ]);
+  });
+
+  it("refuses a short id that names no row with the qualified id, and admits the short form in its next step", async () => {
+    const dir = tempDir();
+    const before = `${row(1)}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    const refusal = await manual(dir, "review/7", "deferred", "x").catch((error: unknown) => error);
+
+    expect(refusal).toMatchObject({
+      message: `ledger close refused: ${rid(7)} is not a row of ${LEDGER}`,
+      next: "name a ledger id as `ledger append` printed it, or its short form <phase>/<n>",
+    });
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  it("refuses an id of another run, even one a row of this ledger carries, with the ledger byte-identical", async () => {
+    const dir = tempDir();
+    const foreign = "2026-09-22_other/review/1";
+    const before = `${row(1)}\n${row(2, { id: foreign })}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    await expect(manual(dir, foreign, "fixed", "x")).rejects.toThrow(
+      `ledger close refused: --id names ${foreign}, a row of run 2026-09-22_other, not ${RUN}`,
+    );
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
+  // TEST CHANGE (REQ-CTX-008, sw21): the refusal now names the rationale's measured
+  // length (after the strip and the trim) beside the cap, so each case pins its figure.
   it.each([
-    ["an empty rationale", "   "],
-    ["a rationale over 2,000 characters", "x".repeat(2_001)],
-  ])("refuses %s", async (_label, rationale) => {
+    ["an empty rationale", "   ", 0],
+    ["a rationale over 2,000 characters", "x".repeat(2_001), 2_001],
+  ])("refuses %s", async (_label, rationale, length) => {
     const dir = tempDir();
     const before = `${row(1)}\n`;
     await seedRun(dir, { [LEDGER]: before });
 
     await expect(manual(dir, rid(1), "deferred", rationale)).rejects.toThrow(
-      "ledger close --id needs a non-empty --rationale of at most 2000 characters",
+      `ledger close --id needs a non-empty --rationale of at most 2000 characters; this one is ${length} characters`,
     );
     expect(await readText(dir, LEDGER)).toBe(before);
   });
@@ -714,8 +757,9 @@ describe("closeRow", () => {
     const before = `${row(1)}\n`;
     await seedRun(dir, { [LEDGER]: before });
 
+    // TEST CHANGE (REQ-CTX-008, sw21): the refusal names the stripped rationale's length, 0 here.
     await expect(manual(dir, rid(1), "deferred", "\u200B\u202E")).rejects.toThrow(
-      "ledger close --id needs a non-empty --rationale of at most 2000 characters",
+      "ledger close --id needs a non-empty --rationale of at most 2000 characters; this one is 0 characters",
     );
     expect(await readText(dir, LEDGER)).toBe(before);
   });
@@ -855,6 +899,39 @@ describe("retireRow", () => {
     expect(await readText(dir, LEDGER)).toBe(before);
   });
 
+  it("retires the row a short id `<phase>/<n>` names in this run, and names it by its full id", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [LEDGER]: `${deferredRow(1)}\n${deferredRow(2)}\n` });
+
+    const result = await retire(dir, "review/2", "fixed in r2");
+
+    const rows = rowsOf(await readText(dir, LEDGER));
+    expect(rows[0]).toEqual(JSON.parse(deferredRow(1)));
+    expect(rows[1]).toMatchObject({ id: rid(2), state: "deferred", retired: "2026-10-02 fixed in r2" });
+    expect(result.changes).toEqual([
+      {
+        ledgerId: rid(2),
+        from: "deferred",
+        to: "deferred",
+        status: null,
+        unchanged: false,
+        retired: "2026-10-02 fixed in r2",
+      },
+    ]);
+  });
+
+  it("refuses to retire an id of another run with the ledger byte-identical", async () => {
+    const dir = tempDir();
+    const foreign = "2026-09-22_other/review/1";
+    const before = `${deferredRow(1, { id: foreign })}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    await expect(retire(dir, foreign, "fixed in r2")).rejects.toThrow(
+      `ledger close refused: --id names ${foreign}, a row of run 2026-09-22_other, not ${RUN}`,
+    );
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
   it.each([
     ["an empty disposition", "   "],
     ["a disposition blank once stripped", "\u200B\u202E"],
@@ -908,6 +985,45 @@ describe("retireRow", () => {
 // ---------------------------------------------------------------------------
 
 describe("stamity ledger close", () => {
+  it("moves the row `--id build/12` names under --run exactly as the full id does", async () => {
+    const dir = tempDir();
+    const build12 = row(12, { id: `${RUN}/build/12`, phase: "build" });
+    await seedRun(dir, { [LEDGER]: `${row(1)}\n${build12}\n` });
+
+    const short = await cli(dir, [...CLOSE, "--id", "build/12", "--state", "fixed", "--rationale", "x"]);
+    const once = await readText(dir, LEDGER);
+    const long = await cli(dir, [...CLOSE, "--id", `${RUN}/build/12`, "--state", "fixed", "--rationale", "x"]);
+
+    expect(short.code, short.stderr).toBe(0);
+    expect(short.stdout).toBe(`${RUN}/build/12 open -> fixed\n`);
+    expect(rowsOf(once)[0]).toEqual(JSON.parse(row(1)));
+    expect(rowsOf(once)[1]).toMatchObject({ id: `${RUN}/build/12`, state: "fixed", rationale: "x" });
+    // The full spelling names the same row: the transition is already recorded on it.
+    expect(long.stdout).toBe(`${RUN}/build/12 unchanged (already recorded)\n`);
+    expect(await readText(dir, LEDGER)).toBe(once);
+  });
+
+  it("refuses an --id of another run with exit 1 and the ledger byte-identical", async () => {
+    const dir = tempDir();
+    const before = `${row(1)}\n`;
+    await seedRun(dir, { [LEDGER]: before });
+
+    const result = await cli(dir, [
+      ...CLOSE,
+      "--id",
+      "2026-09-22_other/review/1",
+      "--state",
+      "fixed",
+      "--rationale",
+      "x",
+    ]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("a row of run 2026-09-22_other, not");
+    expect(await readText(dir, LEDGER)).toBe(before);
+  });
+
   it("applies a closures block and prints `<id> <from> -> <to> (<status>)` per change", async () => {
     const dir = tempDir();
     await seedRun(dir, {
@@ -1507,6 +1623,17 @@ describe("stamity ledger close --retired", () => {
     "--retired",
     disposition,
   ];
+
+  it("retires the row a short `--id review/2` names under --run", async () => {
+    const dir = tempDir();
+    await seedRun(dir, { [LEDGER]: `${deferredRow(1)}\n${deferredRow(2)}\n` });
+
+    const result = await cliAt(dir, [...CLOSE, "--id", "review/2", "--retired", "fixed in r2"]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toBe(`${rid(2)} deferred -> deferred (retired: 2026-10-02 fixed in r2)\n`);
+    expect(rowsOf(await readText(dir, LEDGER))[1]).toMatchObject({ retired: "2026-10-02 fixed in r2" });
+  });
 
   it("retires a deferred row with no --state and no --rationale, and prints unchanged on a re-run", async () => {
     const dir = tempDir();
