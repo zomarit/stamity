@@ -16,7 +16,8 @@
     "no-var": "error",
     "prefer-const": "error",
     "typescript/no-explicit-any": "error",
-    "typescript/consistent-type-imports": "error"
+    "typescript/consistent-type-imports": "error",
+    "unicorn/consistent-function-scoping": "off"
   },
   "overrides": [
     {

@@ -2263,10 +2263,6 @@ describe("C1-residual: a byte left behind by a menu does not silently answer the
  * a command: the colour decision first, then the accent depth resolved from
  * the same env. Nothing here decides colour on its own — that is the point of
  * the leg that uses it, which measures what the funnel hands the prompts.
- *
- * Module scope rather than inside the describe below, because a describe-scoped
- * helper that captures nothing from that scope is an oxlint error here
- * (`unicorn/consistent-function-scoping`).
  */
 const funnelPalette = (env: Record<string, string | undefined>): Palette => {
   const colorEnabled = resolveColorEnabled({ noColorFlag: false, env, stdoutIsTTY: true });
