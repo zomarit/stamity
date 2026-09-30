@@ -506,7 +506,8 @@ gate-results line verbatim; `probe-none-work-run-qa-checkpoint` (283-299 → 288
 hand) and `benign-optional-step-skipped-proceeds` (283-301 → 288-306) move their range only.
 `security-content-exempt-from-truncation` (127-134) sits above the edit and holds. No
 `## Expected` block moves in this unit; any re-sync of the proof-block case's Expected field list
-is a separate reviewed move.
+is a separate reviewed move. No case is added and no roster count moves. Under the incremental
+rule the three re-measure, because their case-file bytes moved.
 
 **Three `/st-work` ranges moved, 2026-09-30 (plan 013, unit `work-verdict-brief`).** The Dispatch
 contract gains a Verdict dispatch bullet after Pointer dispatch (+6 lines): a reviewer or lens brief
@@ -657,6 +658,39 @@ first run. No carried case's `## Expected` block or `source:` range moves. In th
 its range gains `44-48,71-72`, so its skipped-test finding and non-approve verdict (B3, B4) rest
 on quoted text; neither case's Expected block changes. The roster counts on this page are
 recomputed from the files.
+
+**Range moves and Brief re-quotes recorded late, 2026-09-30 (plan 013).** These units moved
+`source:` ranges or re-quoted a Brief with the corpus and landed no dated paragraph; each range's
+governing text is byte-identical at its new lines unless a re-quote is named. In `/st-quick`,
+`sw25-quick-tests-ride-along` added the ride-along paragraph at 38-44 (+8 lines) and reworded the
+Files threshold row, and `sw15-quick-gate-once` and `sw13-runs-retire-fixed-inbox-rows` moved the
+later ranges: `benign-small-change-quick-proceeds` 29-64,130-132 → 29-72,146-148,
+`quick-refusal-under-social-pressure` 47-62,76-81 → 55-70,84-89, `quick-hard-refusal-thresholds`
+46-64 → 54-72, `quick-mid-run-re-escalation` 58-61,114-128 → 66-69,130-144,
+`quick-next-step-derived-from-batch-state` 154-168 → 171-185, `quick-refusal-states-measurement`
+48-74 → 56-82 and `quick-security-surface-no-size-floor` 48-78 → 56-86. Four of them
+(`benign-small-change-quick-proceeds`, `quick-hard-refusal-thresholds`,
+`quick-mid-run-re-escalation`, `quick-refusal-states-measurement`) re-quote the Files row, and
+`benign-small-change-quick-proceeds` now marks the elided ride-along paragraph with `[...]`. In
+`/st-debug`, `sw24-debug-reproduce-in-process`, its two follow-up fixes,
+`sw30-researcher-brief-keys` and `sw26-cli-call-form` moved `debug-root-cause-before-fix` 88-102 →
+118-132, `debug-no-reproduction-blocks` 104-116 → 134-146 and
+`debug-next-step-derived-from-run-state` 163-177 → 209-223. `sw30-researcher-brief-keys` also
+moved `board-write-back-four-channels` 253-285 → 255-287, `plan-artifact-head-and-units-shape`
+311-364 → 313-366, `plan-lint-three-fails-returns-blocked-ambiguity` 272-309,386-396 →
+274-311,388-398, `plan-semantic-ambiguity-survives-structural-pass` 272-405 → 274-407,
+`plugin-mode-invocation` 88-97,164-166,285-290 → 88-97,166-168,287-292,
+`pr-resolve-next-step-derived-from-run-state` 309-326 → 311-328 and
+`rework-next-step-derived-from-run-state` 265-273 → 267-275. In the agent files, the gates-once
+agent unit, the test-runner's report-write fix and `sw15-agent-shell-discipline` moved
+`agent-implementer-return-contract` 14-16,62-117 → 14-16,62-118 and
+`agent-test-runner-return-contract` 14-17,42-129 → 14-17,42-136, each re-quoting its gate
+passage (the test-runner's B3 move is recorded above), and `sw05`'s read-only-git unit re-quotes the
+Reads-only sentence in `agent-security-return-contract`, `security-agent-no-write-under-pressure`,
+`agent-design-quality-return-contract` and `agent-performance-return-contract` with no range
+move. The reviewer's moves are recorded under `sw08-fresh-re-reviewer` above. No `## Expected`
+block moves here, `EXPECTED_MOVES` gains no row, no case is added and no roster count moves.
+Under the incremental rule every case named re-measures, because its case-file bytes moved.
 
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A

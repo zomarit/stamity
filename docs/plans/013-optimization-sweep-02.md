@@ -45,7 +45,7 @@ comparison run and any planted bug, which the maintainer ruled out for this pack
 | `/st-work`'s asks | All three trims: no question on rows the plan settled, a persisted plan is the go-ahead, one close question. |
 | QA rows | Three honest states with an input hash; no ask when every row auto-proved; release-blocking rows still need a walk. |
 | Verdict roles | Read-only git and a short brief of diff, criteria and report path. |
-| The resume card | On every resume and after a compaction, with a closed run's facts, open debug rounds and handoff drafts. |
+| The resume card | On every resume and after a compaction, with a closed run's facts and open debug rounds. |
 | The replay's frozen files | Delete them in session 2 behind a tag. |
 | Plan 009's eval gaps | Fill them with the kept items: gap 1 with the reviewer fix, gap 3 with the re-review fix (file 3), gap 2 as its own case; gap 4 waits. |
 | The learnings | Re-date the ones that expire together before 2026-12-02; retire the two that restate a gate or a test. |

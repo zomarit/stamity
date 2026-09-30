@@ -207,6 +207,14 @@ describe("REQ-FINISH-003 — structural spec/plan coverage", () => {
       expect(run(["plan.md", "missing.md"]).code).toBe(2);
       expect(run(["absent-plan.md", "spec.md"], plan, spec).code).toBe(2);
     });
+    it("keeps exit 2 for a missing spec named with any file extension, not only `.md`", () => {
+      for (const name of ["spec.txt", "spec.markdown", "Spec.MD", "docs/specs/auth.md"]) expect(run(["plan.md", name], noIds).code).toBe(2);
+    });
+    it("reports a repeated missing spec directory once", () => {
+      const { code, report } = run(["plan.md", "docs/specs", "docs/specs"], noIds);
+      expect(code).toBe(0);
+      expect(report?.findings.map((row) => row.code)).toEqual(["missing-spec-input"]);
+    });
   });
 
   it("scopes all twenty-two requirements of the persisted Prove plan, not its range endpoints", () => {

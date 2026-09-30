@@ -106,9 +106,9 @@ unit has no peer; either skips the step and records the skip in one line.
 ## Phase 3 — Build
 
 One implementer per unit, parallel across disjoint units, single writer per
-file, under the `implementer` agent file's unit contract: tests ship with the
-change, lint and type fixes land inline and spawn nothing, and a mis-scoped
-unit returns BLOCKED_* rather than improvising scope.
+file, under the `implementer` agent file's Unit contract, Testing rules and
+Gates: tests ship with the change, lint and type fixes land inline and spawn
+nothing, and a mis-scoped unit returns BLOCKED_* rather than improvising scope.
 
 ## Dispatch contract
 
@@ -178,11 +178,11 @@ Every spawn runs under these contracts:
   the amended cell first; an implementer whose cell no longer resolves at HEAD
   returns BLOCKED_DEPENDENCY.
 - **Verdict dispatch.** A reviewer or lens brief names the range
-  `<base>..<head>` (or worktree and base), the plan path and unit id (or
-  `branch`) whose criteria it judges, the report path; for a re-review, the
-  ledger ids. It never carries the implementer's or fixer's account; the
-  role reads the change itself, or with no git grant the orchestrator's
-  `reports/<pass>-diff-r<N>.patch`.
+  `<base>..<head>` (or, for work not yet committed, worktree and base), the
+  plan path and unit id (or `branch`) whose criteria it judges, the report
+  path; for a re-review, the ledger ids. It never carries the implementer's
+  or fixer's account; the role reads the change itself, or with no git grant
+  the orchestrator's `reports/<pass>-diff-r<N>.patch`.
 - **Resume after a compaction.** Where the client re-runs its session-start
   hook after a compaction, the hook prints the resume card; elsewhere, run
   `stamity ledger status` by hand after one. Read the open rows and the listed
@@ -406,11 +406,11 @@ reads its own ledger before writing the record and refuses while any row reads
 and its `Not done:` list is empty or names the scheduled item each line became.
 
 An inbox row this run fixed — folded in at Frame or settled by the persisted
-plan — leaves the inbox at the close: its bullet is removed, the run record
-carries `- inbox retired: <location> — fixed in <run id>`, and a row whose
-`Ref:` names a ledger row is retired, its state kept, through
-`stamity ledger close --run <its run> --id <row id> --retired "fixed in <run id>"`.
-A row the run did not fix stays as it is.
+plan — leaves the inbox at the close: a row whose `Ref:` names a ledger row is
+first retired, its state kept, through
+`stamity ledger close --run <its run> --id <row id> --retired "fixed in <run id>"`;
+then its bullet is removed, and the run record carries
+`- inbox retired: <location> — fixed in <run id>`. A row the run did not fix stays as it is.
 
 Beside `retired`, two more optional fields ride a row appended from a report:
 `report`, the repo-relative path of the report it came from, and

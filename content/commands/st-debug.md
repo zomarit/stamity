@@ -173,9 +173,9 @@ next run over the same defect strips it first. No other path holds residue.
 
 ### `--diagnose` (report only)
 
-Stops after gate `root-cause-before-fix`. Produces the ranked hypotheses with their verdicts,
-the root cause with cited evidence and confidence, the failing test as a specification (what
-it asserts and where it belongs, not a written file), and the fix approach with its risk.
+Stops after gate `root-cause-before-fix`. Produces the ranked hypotheses with their verdicts, the
+root cause with cited evidence and confidence, the failing test as a specification (what it asserts
+and where it belongs, or the written test when step 3 took the in-process route), and the fix approach with its risk.
 Steps 6 and 7 do not run. Step 8 does.
 
 ## Escape valve — three failed fixes question the architecture

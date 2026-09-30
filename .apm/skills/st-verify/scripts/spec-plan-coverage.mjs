@@ -1,7 +1,7 @@
 /* eslint-disable */
 /** Read-only structural checks for the existing Markdown spec/plan format. Node 22+. */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const clean = (text) => text.replaceAll("`", "").replaceAll("**", "").trim();
@@ -99,7 +99,7 @@ export function checkCoverage(plan, specs, options = {}) {
   const add = (code, path, line, message) => findings.push({ code, path, line, message });
   // A spec directory that does not exist yet is read as no spec, never as a crash: the plan's own
   // delta headings and `spec carries no ids` still decide whether each cited ID is defined.
-  for (const path of options.missingSpecInputs ?? []) {
+  for (const path of new Set(options.missingSpecInputs ?? [])) {
     add("missing-spec-input", path, 1, `${path} does not exist; read as no spec — every cited ID must be defined in this plan's delta or the unit must say spec carries no ids.`);
   }
   // `quiet` suppresses a second report of findings the caller has already raised over the same
@@ -243,8 +243,8 @@ export function main(args) {
   }
   try {
     const [planPath, ...inputs] = args;
-    // Only a directory-shaped input may be absent; a named `.md` file that is missing is a typo.
-    const missingSpecInputs = inputs.filter((path) => !path.endsWith(".md") && !existsSync(path));
+    // Only a directory-shaped input may be absent; a missing name with any file extension is a typo.
+    const missingSpecInputs = inputs.filter((path) => !/.\.[A-Za-z0-9]+$/.test(basename(path)) && !existsSync(path));
     const paths = inputs.filter((path) => !missingSpecInputs.includes(path)).flatMap((path) => statSync(path).isDirectory()
       ? readdirSync(path).filter((name) => name.endsWith(".md") && name !== "manifest.md").toSorted().map((name) => join(path, name))
       : [path]);

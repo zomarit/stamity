@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.10.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-30T14:31:14.808Z",
+  "updatedAt": "2026-09-30T15:44:06.536Z",
   "tools": [
     "claude"
   ],
@@ -99,7 +99,7 @@
       "adapter": "claude",
       "artifactId": "researcher",
       "artifactType": "agent",
-      "contentHash": "63d8fe2b452a32b026fe5178b9b1604dc77816460b79dce44715e996c683fd4c",
+      "contentHash": "ddd73f1c30b8f2c4010e7b6092553086a0c28e6a87589484ffe7896f4ae1ba23",
       "path": ".claude/agents/stamity-researcher.md"
     },
     {
@@ -148,7 +148,7 @@
       "adapter": "claude",
       "artifactId": "cmd-debug",
       "artifactType": "command",
-      "contentHash": "2fdafd68c4c5192ca71687730a4a87413f2c8f247ec7258d269215ef5c359e51",
+      "contentHash": "5b8d5c9e8c7fe41bec404255a92197543c8954daff7d3103de2e4757d1ce25ae",
       "path": ".claude/commands/st-debug.md"
     },
     {
@@ -169,7 +169,7 @@
       "adapter": "claude",
       "artifactId": "cmd-quick",
       "artifactType": "command",
-      "contentHash": "229fed64b516a53af0e87c6195525913687c0d689291f97c2fb7ca04a137d5e5",
+      "contentHash": "3b8e2b4be38bee14e0667f818c002ecd5308d13f2971d9c96b52371d3147c480",
       "path": ".claude/commands/st-quick.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "f9dfa700ebb2085bb431b0272fbd9f7109a0a91d539c5f2515dfce59a4528156",
+      "contentHash": "d7b046e1db777236d76c1656bab48bf4d1286d345731d586501142cba44bf16a",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -463,7 +463,7 @@
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
-      "contentHash": "cad599815524c0b6d23aad5c089090fec2cd781352d19c8eecd6252622609145",
+      "contentHash": "b8f4e5232d8548c7012f4e85e556060647a1bc9f2d2ec3f71241bec18e9f0d61",
       "path": ".claude/skills/st-verify/scripts/spec-plan-coverage.mjs"
     },
     {

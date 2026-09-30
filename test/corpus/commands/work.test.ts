@@ -901,9 +901,10 @@ describe("/st-work — Prove", () => {
     expect(loop).toContain("each finding's locator at HEAD");
     expect(loop).toContain("no fixer claim");
 
-    // The gate is the one the run record declares, in the form the measurements
-    // page reads; with none declared an approval counts and starts no round, while
-    // the hook's refusal of a `low` approval still holds.
+    // The gate is the one the run record declares; the measurements page reads a
+    // decimal gate only (a word gate such as `high` falls to its 0.8 default). With
+    // none declared an approval counts and starts no round, while the hook's
+    // refusal of a `low` approval still holds.
     expect(loop).toContain("the one the run record declares (`Confidence gate: <value>`)");
     expect(loop).toContain("An approval below it re-reviews once on a stronger class before it counts");
     expect(loop).toContain("With no gate declared, an approval counts as given and no extra round runs");

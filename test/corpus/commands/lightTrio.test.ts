@@ -756,10 +756,10 @@ describe("quick — the guardrails are the command", () => {
 
   it("retires an inbox row the batch fixed after the gate is green, and names it in the report (REQ-FLOW-024)", async () => {
     const text = flow(await load("commands/st-quick.md"));
-    const step = text.slice(text.indexOf("6. An item that fixes an inbox row"), text.indexOf("### Mid-run re-escalation"));
+    const step = text.slice(text.indexOf("5. An item that fixes an inbox row"), text.indexOf("6. Report per item"));
 
     expect(step).toContain(
-      "6. An item that fixes an inbox row the request named, or whose `file:line` matches a row's location, retires it after the gate is green.",
+      "5. An item that fixes an inbox row the request named, or whose `file:line` matches a row's location, retires it after the gate is green.",
     );
     // The ledger row first, then the bullet: a deferral whose bullet left with its row
     // still unretired is the gap the records gate refuses.
