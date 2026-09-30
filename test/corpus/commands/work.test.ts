@@ -863,6 +863,33 @@ describe("/st-work — Prove", () => {
     expect(loop).not.toContain("never applied");
   });
 
+  it("closes each QA row walked, auto-proven or accepted-unwalked, and records them (REQ-FLOW-017, REQ-FLOW-018)", async () => {
+    const qa = collapse(section(await body(), "### QA checkpoint"));
+    expect(qa).toContain("**Row states.**");
+    for (const state of ["`walked`", "`auto-proven`", "`accepted-unwalked`", "`not signed`"]) {
+      expect(qa, `row state missing: ${state}`).toContain(state);
+    }
+    // A bare sign-off is an acceptance, never a walk.
+    expect(qa).toContain("never `walked`");
+    expect(qa).toContain("not asked again");
+    expect(qa).toContain("there is no ask");
+    // The H row exception: release-blocking rows never carry on a hash.
+    expect(qa).toContain("A non-`H` row accepted earlier with the same input hash");
+    expect(qa).toContain("An `H` row blocks release until it is walked or auto-proven");
+    // The paragraph lands after the existing close of the checkpoint, which stays as it was.
+    expect(qa.indexOf("**Row states.**")).toBeGreaterThan(
+      qa.indexOf("The checkpoint covers what automation cannot."),
+    );
+
+    const proof = collapse(section(await body(), "### Proof block"));
+    expect(proof).toContain("QA rows —");
+    expect(proof).toContain("`accepted-unwalked` with its input hash; then the sign-off, or `not signed`");
+    // The QA line follows the review-verdicts line and precedes the decisions trace.
+    const qaLine = proof.indexOf("QA rows —");
+    expect(qaLine).toBeGreaterThan(proof.indexOf("review verdicts + confidence, per round"));
+    expect(qaLine).toBeLessThan(proof.indexOf("decisions trace"));
+  });
+
   it("names the two optional ledger fields a report-appended row carries (REQ-CTX-006)", async () => {
     const proof = collapse(section(await body(), "### Proof block"));
     expect(proof).toContain("`report`, the repo-relative path of the report it came from");

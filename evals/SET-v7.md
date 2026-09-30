@@ -526,6 +526,16 @@ is added or roster count moved here. Under the incremental rule the three re-mea
 their case-file bytes moved. The 2026-09-15 disposition in `spec-converge-confirm-gated-merge`
 that cites 122-150 is a dated record and stays as it was.
 
+**One `/st-work` range moved and re-quoted, 2026-09-30 (plan 013, unit `work-qa-states`).** The QA
+checkpoint gains a Row states paragraph after "The checkpoint covers what automation cannot." (+8
+lines), and the Proof block gains a QA rows line after the review-verdicts line (+2 lines).
+`work-proof-block-fields` moves 280-286,314-373 → 280-286,322-383 and its Brief re-quotes the Proof
+block with the two new lines; its `claim:` ("six" required fields, now seven) and its `## Expected`
+block re-sync in a separate reviewed move. `probe-none-work-run-qa-checkpoint` (294-310),
+`benign-optional-step-skipped-proceeds` (294-312) and `security-content-exempt-from-truncation`
+(127-134) end at or before the edit and hold; `probe-qa-select` (`content/skills/st-qa/SKILL.md:6-6`)
+holds, its description line byte-identical.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -714,7 +724,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `subagent-returns-blocked-ambiguity-charter-only` | golden · rubric *(floor)* | 4 / 0 | Charter-only twin of `subagent-returns-blocked-ambiguity`: A sub-agent has no operator channel: on a live ambiguity trigger it returns BLOCKED_AMBIGUITY naming the competing readings, and it does not address a question to the operator, wait for an answer, or pick a reading and proceed. | `content/charter/stamity-charter.md:48-50` |
 | `ui-error-state-announces-recovery` | golden · rubric | 4 / 0 | A failed data read renders an accessible error state with an actionable recovery instead of a false success. | `content/rules/stamity-ui-states.md:12-76` |
 | `unattended-run-applies-declared-default` | golden · rubric *(floor)* | 7 / 0 | In an unattended run the declared default executes and the run records one Default-applied line naming the question, the option and the reason; a silent pick is the single disallowed outcome. | `content/rules/stamity-question-protocol.md:51-56,68-69` |
-| `work-proof-block-fields` | golden · rubric | 8 / 0 | Every work run ends with a proof block carrying six required fields, no finding ends the run pending — every ledger row closes as fixed, deferred with rationale, or rejected with reasoning — and every row that closed deferred is appended to .stamity/inbox.md in the declared row grammar with a Ref: back to its ledger row. | `content/commands/st-work.md:280-286,314-373` |
+| `work-proof-block-fields` | golden · rubric | 8 / 0 | Every work run ends with a proof block carrying six required fields, no finding ends the run pending — every ledger row closes as fixed, deferred with rationale, or rejected with reasoning — and every row that closed deferred is appended to .stamity/inbox.md in the declared row grammar with a Ref: back to its ledger row. | `content/commands/st-work.md:280-286,322-383` |
 | `probe-browser-evidence-select` | probe · classification | 2 / 0 | A request for screenshots and an accessibility scan of the running app selects st-browser-evidence and no other skill. | `content/skills/st-browser-evidence/SKILL.md:6-6` |
 | `probe-dep-audit-select` | probe · classification | 2 / 0 | A pre-release question about what the installed packages are exposed to selects st-dep-audit and no other skill. | `content/skills/st-dep-audit/SKILL.md:6-6` |
 | `probe-design-system-detect-select` | probe · classification | 2 / 0 | A request that precedes interface work adding a token and a component selects st-design-system-detect and no other skill. | `content/skills/st-design-system-detect/SKILL.md:6-6` |

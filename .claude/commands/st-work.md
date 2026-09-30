@@ -305,6 +305,14 @@ different change. Human QA sign-off still comes from the guided pass.
 
 The checkpoint covers what automation cannot.
 
+**Row states.** The qa skill closes each row as `walked` (only when the
+person says they walked it), `auto-proven` (with its pointer) or
+`accepted-unwalked` (with the row's input hash); a bare sign-off records
+`accepted-unwalked`, never `walked`. A non-`H` row accepted earlier with the same
+input hash is not asked again, and when every row auto-proved there is no
+ask. An unattended run records `not signed`. An `H` row blocks release
+until it is walked or auto-proven.
+
 ### Proof block
 
 Every run ends with a proof block, machine- and human-readable, doubling as an
@@ -313,6 +321,8 @@ audit record:
 - gate results — per gate: command, pass/fail/unknown, failing excerpt if
   any, or the earlier result a byte-identical tree cites
 - review verdicts + confidence, per round
+- QA rows — per row: `walked`, `auto-proven` with its pointer, or
+  `accepted-unwalked` with its input hash; then the sign-off, or `not signed`
 - decisions trace — every gate decision, ASK outcome, and deferral with its
   rationale
 - artifacts touched — path + owning sub-agent

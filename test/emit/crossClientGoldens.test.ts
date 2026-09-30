@@ -178,6 +178,32 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-30, plan 013 file 2, unit work-qa-states (run
+  //     2026-09-30_optimization-sweep). ONE command body and ONE skill body
+  //     moved, plus the manifest rows that record them. No emitted path was
+  //     added or removed.
+  //
+  //     CHANGED `commands/st-work.md` 27702 -> 28321 in the claude and copilot
+  //       dialects (`.claude/commands/st-work.md`,
+  //       `.github/prompts/st-work.prompt.md`) and 27747 -> 28366 as the cursor
+  //       skill (`.cursor/skills/st-work/SKILL.md`) — one body, three heads, so
+  //       the same +619 in each, matching the corpus source's +619. The QA
+  //       checkpoint gains a Row states paragraph and the Proof block a QA rows
+  //       line (`walked`, `auto-proven`, `accepted-unwalked`, `not signed`).
+  //     CHANGED `skills/st-qa/SKILL.md` 6039 -> 6722 at every emitted location
+  //       (`.claude/skills/st-qa/SKILL.md` for claude and all-four,
+  //       `.agents/skills/st-qa/SKILL.md` for codex, copilot, cursor and
+  //       all-four) — the corpus source's +683. The Proof column names the row
+  //       states and the skill's own input hash, the auto-prove pass refuses a
+  //       gate row whose status is `unknown`, and the sign-off is asked only
+  //       when a row needs a person; the description line is byte-identical.
+  //     CHANGED `.stamity/manifest.json` in all five selections — all-four,
+  //       claude, codex, copilot and cursor — each at UNCHANGED byte length,
+  //       the fixed-width sha256 rows for those two artifacts.
+  //
+  //     What did NOT move: every agent, rule, hook script, guard, charter,
+  //       policy document and generated page, and every other command and skill.
+  //
   //   - 2026-09-30, plan 013 file 2, unit work-verdict-brief (run
   //     2026-09-30_optimization-sweep). ONE command body moved, plus the
   //     manifest rows that record it. No emitted path was added or removed.

@@ -749,16 +749,40 @@ describe("qa — the human checkpoint", () => {
     expect(text).toMatch(/Auto-proven rows move to an appendix with their pointers/i);
   });
 
-  it("keeps the sign-off mandatory even when every row auto-proved", async () => {
+  // TEST CHANGE, justified (2026-09-30): the checkpoint no longer asks when every row
+  // auto-proved (plan 013-02, unit work-qa-states). REQ-FLOW-018 moves the behaviour this
+  // case pinned: a fully auto-proven table closes on its pointers with no question, a bare
+  // sign-off records `accepted-unwalked` rather than `walked`, and an unattended run records
+  // `not signed`. The three pins on the sign-off block itself are kept unchanged.
+  it("asks only when a row needs a person, and never records a bare sign-off as walked", async () => {
     const text = flow(await load("skills/st-qa/SKILL.md"));
 
-    // Edge case: a fully machine-proven table is exactly when a person is skipped.
-    expect(text).toMatch(/Required on every run, including the run where every row auto-proved/i);
-    expect(text).toMatch(/a machine's blind spot is invisible/i);
-    expect(text).toMatch(/all N rows auto-proven; spot-check the two highest-risk pointers/i);
+    expect(text).toMatch(/Asked only when a row needs a person/);
+    expect(text).toMatch(/no ask and records "all N rows auto-proven"/);
+    expect(text).toMatch(/never `walked`/);
+    expect(text).toMatch(/Shippable: not signed/);
+    // An H row never carries on a hash, and an accepted-unwalked H row blocks release.
+    expect(text).toMatch(/never an `H` row, which is asked at every checkpoint/);
+    expect(text).toMatch(/an H row accepted unwalked blocks release/);
+    // The skill's own input hash, not the release harness's rowHash.
+    expect(text).toContain("the sha256 of the sorted lines `<path> <git hash-object of path>`");
+    expect(text).not.toMatch(/rowHash/);
+    // The old always-ask wording is gone.
+    expect(text).not.toMatch(/Required on every run, including the run where every row auto-proved/i);
     expect(text).toMatch(/An unsigned checkpoint is not a passed one/i);
     expect(text).toContain("Shippable: YES / NO");
     expect(text).toContain("Rollback:");
+  });
+
+  it("treats a gate row whose status is unknown as no proof", async () => {
+    const text = flow(await load("skills/st-qa/SKILL.md"));
+
+    // The test-runner's row status may read `unknown` (a code the tool did not show);
+    // the auto-prove pass is the one reader that could turn it into proof.
+    expect(text).toMatch(/a gate row whose status is `unknown` proves nothing/i);
+    // Inside the auto-prove pass, not merely somewhere in the body.
+    const autoProve = text.slice(text.indexOf("## Auto-prove pass"), text.indexOf("## Human sign-off"));
+    expect(autoProve).toMatch(/a gate row whose status is `unknown` proves nothing/i);
   });
 
   it("hands four facts back to the run that called it", async () => {

@@ -57,7 +57,11 @@ Seven columns, every one filled: `#`, `Scenario`, `Steps`, `Expected`, `Risk`,
   minute per step a person performs, rounded up, plus any wait a step names. It
   is stated per row because the sort and the split below are computed from it,
   and a threshold on a number no column carries cannot be applied.
-- **Proof** is an evidence pointer, or an unchecked box for a person to walk.
+- **Proof** is the row's state: `auto-proven` with its evidence pointer,
+  `walked` (recorded only when the person says they walked that row), or
+  `accepted-unwalked` with its input hash — the sha256 of the sorted lines
+  `<path> <git hash-object of path>` over the files the row derives from. An
+  open row shows an unchecked box.
 
 Sort by `Risk` descending, then by `Minutes` ascending. Past 90 minutes summed
 over the `Minutes` column, split the table into sessions of 30 minutes or less
@@ -83,6 +87,7 @@ Three rules make the pass honest:
    not proof of a particular scenario. A passing gate carries no failing
    excerpt, so what covers the row is cited from the test source — the file and
    line of the assertion — with the runner's command and outcome beside it.
+   A gate row whose status is `unknown` proves nothing.
 2. Absent tooling or a failed prover records `no` with the reason. Missing
    evidence is never scored as a pass — unproven rows stay on the human path,
    which is the safe direction.
@@ -91,20 +96,24 @@ Three rules make the pass honest:
 
 ## Human sign-off
 
-Required on every run, including the run where every row auto-proved. The
-checkpoint exists to put a person in front of the change, and a table of green
-pointers is exactly the case where a machine's blind spot is invisible. When the
-remainder is empty the table says so — "all N rows auto-proven; spot-check the
-two highest-risk pointers, then sign" — and the sign-off still gates the close.
+Asked only when a row needs a person. When every row auto-proved, the
+checkpoint closes on its pointers with no ask and records "all N rows
+auto-proven". A bare sign-off ("signed off", "ok") records each open row
+`accepted-unwalked` with its input hash, never `walked`; a row is `walked`
+only when the person says so for that row or for all of them. A row recorded
+`accepted-unwalked` in an earlier record of this change with the same input
+hash is carried, not asked again — never an `H` row, which is asked at every
+checkpoint until walked or auto-proven; a changed hash reopens it. An unattended
+run asks nothing and records `Shippable: not signed`.
 
 ```markdown
 **Sign-off** — <change>, <date>
 
-- [ ] Every H row walked and passing.
+- [ ] Every H row walked or auto-proven, and passing — an H row accepted unwalked blocks release.
 - [ ] Every failing M row has a filed follow-up, linked.
 - L failures are recorded, not blocking.
 - Rollback: <the concrete revert path — a revert command, or the flag to flip>.
-- Shippable: YES / NO. On NO, list the blocking rows.
+- Shippable: YES / NO / not signed. On NO, list the blocking rows.
 ```
 
 An unsigned checkpoint is not a passed one: report the checkpoint as open
@@ -113,6 +122,6 @@ rather than closing the run around it.
 ## Handback
 
 Return four facts to the caller: rows derived, rows auto-proven with their
-pointers, rows left for a person, and the sign-off outcome. Inside a work run
-those four land in the proof block as the checkpoint's record; invoked on its
-own, the skill prints them and stops.
+pointers, rows left for a person with each row's state and input hash, and
+the sign-off outcome. Inside a work run those four land in the proof block as
+the checkpoint's record; invoked on its own, the skill prints them and stops.

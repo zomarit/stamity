@@ -86,6 +86,22 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-30, plan 013 file 2, unit work-qa-states (run
+ *     2026-09-30_optimization-sweep). ONE golden moved:
+ *
+ *     SUBSTITUTION moved on `commands/st-work.md` by +619 bytes, 453 -> 463
+ *     body lines: the QA checkpoint gains a Row states paragraph after "The
+ *     checkpoint covers what automation cannot." — each row closes `walked`,
+ *     `auto-proven` or `accepted-unwalked`, a bare sign-off is never `walked`,
+ *     an unattended run records `not signed` — and the Proof block gains a QA
+ *     rows line after the review-verdicts line. The golden's added lines are
+ *     the corpus diff's ten added lines and nothing else (none removed); the
+ *     corpus source went 27999 -> 28618 bytes. The `st-qa` skill body also
+ *     changed, but no golden here carries it.
+ *
+ *     NOTHING else moved here: no file under `src/` changed, so the charter,
+ *     every agent body and every script are byte-identical.
+ *
  *   - 2026-09-30, plan 013 file 2, unit work-verdict-brief (run
  *     2026-09-30_optimization-sweep). ONE golden moved:
  *
