@@ -178,6 +178,26 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-30, plan 013 file 2, unit work-gates-once (run
+  //     2026-09-30_optimization-sweep). ONE command body moved, plus the
+  //     manifest rows that record it. No emitted path was added or removed.
+  //
+  //     CHANGED `commands/st-work.md` 26902 -> 27307 in the claude and copilot
+  //       dialects (`.claude/commands/st-work.md`,
+  //       `.github/prompts/st-work.prompt.md`) and 26947 -> 27352 as the cursor
+  //       skill (`.cursor/skills/st-work/SKILL.md`) — one body, three heads, so
+  //       the same +405 in each, matching the corpus source's +405. The Gates
+  //       paragraph runs each gate once with its exit code read from the tool
+  //       (`unknown`, never a pass) and a byte-identical tree may cite an
+  //       earlier result; the Proof block's gate-results line reads
+  //       pass/fail/unknown.
+  //     CHANGED `.stamity/manifest.json` in the four selections that emit
+  //       commands — all-four, claude, copilot and cursor — each at UNCHANGED
+  //       byte length, the fixed-width sha256 row for that one command.
+  //
+  //     What did NOT move: every agent, rule, skill, hook script, guard,
+  //       charter, policy document and generated page, and every other command.
+  //
   //   - 2026-09-27, plan 010 D5, unit invariant-2-tighten (run
   //     2026-09-24_enterprise-release). The charter moved, plus the manifest
   //     rows that record it. No emitted path was added or removed.

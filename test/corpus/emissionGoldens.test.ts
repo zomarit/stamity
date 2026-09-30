@@ -86,6 +86,21 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-30, plan 013 file 2, unit work-gates-once (run
+ *     2026-09-30_optimization-sweep). ONE golden moved:
+ *
+ *     SUBSTITUTION moved on `commands/st-work.md` by +405 bytes, 441 -> 447
+ *     body lines: the Gates paragraph runs each gate once, reads the exit
+ *     code from the tool (an unreadable code is `unknown`, never a pass) and
+ *     lets a byte-identical tree cite an earlier result while the final tree
+ *     gets its own run; the Proof block's gate-results line reads
+ *     pass/fail/unknown. The golden's removed and added lines are the corpus
+ *     diff's lines and nothing else; the corpus source went 27199 -> 27604
+ *     bytes.
+ *
+ *     NOTHING else moved here: no file under `src/` changed, so the charter,
+ *     the test-runner body and every script are byte-identical.
+ *
  *   - 2026-09-27, plan 010 D5, unit invariant-2-tighten (run
  *     2026-09-24_enterprise-release). ONE golden moved:
  *

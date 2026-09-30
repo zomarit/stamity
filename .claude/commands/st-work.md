@@ -199,12 +199,17 @@ re-reading its transcript:
 
 ### Gates
 
-Each Prove pass spawns a dedicated test-runner sub-agent that runs the gates
-and returns a structured result: gate-by-gate pass/fail, the exact command run
-per gate, and verbatim failing excerpts (test names, assertion diffs, build
-errors). Bare pass/fail is not a result. The orchestrator's context stays
-clean; the fixer receives the debugging signal intact. Judgment-only passes
-(spec review, plan review) may run inline — they execute no commands.
+Each Prove pass spawns a dedicated test-runner sub-agent that runs each gate
+once, as the charter spells it (no wrapper, pipe, redirect or re-run), and
+reads the exit code from the tool: a code it cannot read is `unknown`, never
+a pass. It returns gate-by-gate pass/fail/unknown, the exact command run per
+gate, and verbatim failing excerpts (test names, assertion diffs, build
+errors). Bare pass/fail is not a result. A pass may cite this run's earlier
+result on a byte-identical tree (same HEAD, same diff, untracked files
+included); the final tree always gets a run of its own, and citing is never
+a lighter pass. The orchestrator's context stays clean; the fixer receives
+the debugging signal intact. Judgment-only passes (spec review, plan
+review) may run inline — they execute no commands.
 
 Gate commands are the charter's verification gates: `npm run lint && npm run typecheck && npm run test`
 for the full pass, the narrow gates in the `test-runner` agent file for re-runs.
@@ -299,7 +304,8 @@ The checkpoint covers what automation cannot.
 Every run ends with a proof block, machine- and human-readable, doubling as an
 audit record:
 
-- gate results — per gate: command, pass/fail, failing excerpt if any
+- gate results — per gate: command, pass/fail/unknown, failing excerpt if
+  any, or the earlier result a byte-identical tree cites
 - review verdicts + confidence, per round
 - decisions trace — every gate decision, ASK outcome, and deferral with its
   rationale

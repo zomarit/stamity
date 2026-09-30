@@ -671,6 +671,28 @@ describe("/st-work — Prove", () => {
     expect(gates).toContain("Bare pass/fail is not a result");
   });
 
+  it("runs each gate once, reads its exit code from the tool, and never counts unknown as a pass", async () => {
+    const raw = section(await body(), "### Gates");
+    const gates = collapse(raw);
+    // REQ-FLOW-013: one run per gate, as the charter spells it, exit code read from the tool.
+    expect(gates).toContain("runs each gate once");
+    expect(gates).toContain("reads the exit code from the tool");
+    expect(gates).toContain("`unknown`, never a pass");
+    expect(gates).toContain("pass/fail/unknown");
+    // REQ-FLOW-015: a byte-identical tree may cite; the final tree is always gated.
+    expect(gates).toContain("byte-identical tree");
+    expect(gates).toContain("the final tree always gets a run of its own");
+    expect(gates).toContain("never a lighter pass");
+    // The rule is stated in words; no shell exit-status idiom rides along in the body.
+    expect(raw).not.toMatch(/PIPESTATUS|\$\?/);
+  });
+
+  it("records gate results as pass/fail/unknown in the proof block", async () => {
+    const proof = collapse(section(await body(), "### Proof block"));
+    expect(proof).toContain("per gate: command, pass/fail/unknown");
+    expect(proof).toContain("the earlier result a byte-identical tree cites");
+  });
+
   it("references verification commands only through substitution tokens", async () => {
     const text = await body();
     const lowered = text.toLowerCase();
