@@ -178,6 +178,26 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-30, plan 013 file 2, fixer round 1 of unit work-qa-states (run
+  //     2026-09-30_optimization-sweep; review/52, review/53, build/46,
+  //     review/54, review/55). ONE skill body moved, plus the manifest rows
+  //     that record it. No emitted path was added or removed.
+  //
+  //     CHANGED `skills/st-qa/SKILL.md` 6833 -> 7135 at every emitted location
+  //       (`.claude/skills/st-qa/SKILL.md` for claude and all-four,
+  //       `.agents/skills/st-qa/SKILL.md` for codex, copilot, cursor and
+  //       all-four) — the corpus source's +302 (6799 -> 7101): `walked` rests
+  //       on the person's quoted reply, a carried row reads
+  //       `accepted-unwalked (carried from <run-id>)`, the row's Risk now
+  //       decides the H exception, rows a reply does not name are
+  //       accepted-unwalked, and the Shippable line is YES only with no H row
+  //       accepted-unwalked. The description line is byte-identical.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length, the fixed-width sha256 row for that skill.
+  //
+  //     What did NOT move: every command, agent, rule, hook script, guard,
+  //       charter, policy document and generated page, and every other skill.
+  //
   //   - 2026-09-30, plan 013 file 2, unit work-asks-once (run
   //     2026-09-30_optimization-sweep). ONE command body and ONE skill body
   //     moved, plus the manifest rows that record them. No emitted path was

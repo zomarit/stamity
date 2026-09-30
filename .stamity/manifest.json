@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.10.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-30T12:47:23.509Z",
+  "updatedAt": "2026-09-30T12:47:48.098Z",
   "tools": [
     "claude"
   ],
@@ -365,7 +365,7 @@
       "adapter": "claude",
       "artifactId": "qa",
       "artifactType": "skill",
-      "contentHash": "7385494de4fbf126ad052325872d0a79fa18bee31e214cb25eb914144737745e",
+      "contentHash": "76b5a3ef5246c67e37831ac023a073045b6bdc1725a99cdec8574f903e518f81",
       "path": ".claude/skills/st-qa/SKILL.md"
     },
     {

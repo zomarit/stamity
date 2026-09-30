@@ -96,12 +96,15 @@ Three rules make the pass honest:
 Asked only when a row needs a person. When every row auto-proved, the
 checkpoint closes on its pointers with no ask and records "all N rows
 auto-proven". A bare sign-off ("signed off", "ok") records each open row
-`accepted-unwalked` with its input hash, never `walked`; a row is `walked`
-only when the person says so for that row or for all of them. A row recorded
-`accepted-unwalked` in an earlier record of this change with the same input
-hash is carried, not asked again — never an `H` row, which is asked at every
-checkpoint until walked or auto-proven; a changed hash reopens it. An unattended
-run asks nothing and records `Shippable: not signed`.
+`accepted-unwalked` with its input hash, never `walked`, and so does any
+reply for each open row it does not name. A row is `walked` only when the
+person's reply says so for that row or for all of them, and that reply is
+quoted in the record. A row recorded `accepted-unwalked` in an earlier record
+of this change with the same input hash is carried as
+`accepted-unwalked (carried from <run-id>)`, not asked again — never a row
+whose Risk is now `H`, which is asked at every checkpoint until walked or
+auto-proven; a changed hash reopens it. An unattended run asks nothing and
+records `Shippable: not signed`.
 
 ```markdown
 **Sign-off** — <change>, <date>
@@ -110,7 +113,8 @@ run asks nothing and records `Shippable: not signed`.
 - [ ] Every failing M row has a filed follow-up, linked.
 - L failures are recorded, not blocking.
 - Rollback: <the concrete revert path — a revert command, or the flag to flip>.
-- Shippable: YES / NO / not signed. On NO, list the blocking rows.
+- Shippable: YES / NO / not signed. YES only with no H row accepted-unwalked;
+  otherwise NO, naming the open H row. On NO, list the blocking rows.
 ```
 
 An unsigned checkpoint is not a passed one: report the checkpoint as open
@@ -119,8 +123,9 @@ rather than closing the run around it.
 ## Handback
 
 Return four facts to the caller: rows derived, rows auto-proven with their
-pointers, rows left for a person with each row's state and input hash, and
-the sign-off outcome. Inside a work run those four land in the proof block as
-the checkpoint's record; invoked on its own, the skill prints them and stops.
+pointers, rows left for a person with each row's state and input hash (a
+`walked` row with the quoted reply it rests on), and the sign-off outcome.
+Inside a work run those four land in the proof block as the checkpoint's
+record; invoked on its own, the skill prints them and stops.
 Inside a work run the skill asks nothing itself: the rows left for a person
 ride the run's one close question.

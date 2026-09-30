@@ -762,8 +762,25 @@ describe("qa — the human checkpoint", () => {
     expect(text).toMatch(/never `walked`/);
     expect(text).toMatch(/Shippable: not signed/);
     // An H row never carries on a hash, and an accepted-unwalked H row blocks release.
-    expect(text).toMatch(/never an `H` row, which is asked at every checkpoint/);
+    // TEST CHANGE, justified (2026-09-30): fixer round 1 of work-qa-states (review/54) says
+    // whose Risk decides — the row's Risk NOW, so a row accepted as M earlier and derived as
+    // H at this checkpoint is asked again. The pin moves from "never an `H` row" to that
+    // wording; the behaviour pinned (an H row never carries) is unchanged.
+    expect(text).toMatch(/never a row whose Risk is now `H`, which is asked at every checkpoint/);
     expect(text).toMatch(/an H row accepted unwalked blocks release/);
+    // REQ-FLOW-018 item 4 (review/52): the Shippable line itself is bound to the H state.
+    expect(text).toContain(
+      "Shippable: YES / NO / not signed. YES only with no H row accepted-unwalked; otherwise NO, naming the open H row.",
+    );
+    // REQ-FLOW-018 item 3 (build/46): a carried row names the record its acceptance came from.
+    expect(text).toContain("carried as `accepted-unwalked (carried from <run-id>)`, not asked again");
+    // REQ-FLOW-017 criterion 3 (review/53): `walked` rests on the person's reply, quoted.
+    expect(text).toContain(
+      "A row is `walked` only when the person's reply says so for that row or for all of them, and that reply is quoted in the record.",
+    );
+    expect(text).toContain("(a `walked` row with the quoted reply it rests on)");
+    // review/55: a mixed reply leaves the rows it does not name accepted-unwalked, never walked.
+    expect(text).toContain("and so does any reply for each open row it does not name");
     // The skill's own input hash, not the release harness's rowHash.
     expect(text).toContain("the sha256 of the sorted lines `<path> <git hash-object of path>`");
     expect(text).not.toMatch(/rowHash/);
