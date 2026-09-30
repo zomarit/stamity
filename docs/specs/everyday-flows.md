@@ -15,9 +15,8 @@ The requirement text comes from the `## Spec delta` sections of `docs/plans/013-
 `.stamity/runs/2026-09-30_optimization-sweep/`. It is measured against the built code: where a delta and the code
 differed, the text below states what the code does, and a line headed "As built" says what moved. Every `path:line`
 below was read at the package head `b855876a`, except in REQ-FLOW-022 and REQ-FLOW-026. Those two were merged in the
-run's second spec-merge pass, the same day. REQ-FLOW-022 cites the package head `cdfaa723`. The unit behind
-REQ-FLOW-026 was still in a fix round and not on the package head then, so that requirement cites the unit's lane,
-branch `p17s2-sw17` at `a70e58f3`, and its line numbers move when the unit integrates.
+run's second spec-merge pass, the same day. REQ-FLOW-022 cites the package head `cdfaa723`. REQ-FLOW-026 cites
+`a9e94f06`, the package head once its unit had integrated (the third pass moved it there).
 
 ## Intent
 
@@ -194,9 +193,13 @@ it never prints an unqualified `all green`: the closing line names the gates it 
 
 Above that line it warns about each charter gate it cannot resolve:
 `warning: the <kind> gate cannot be resolved — the charter says "<value>"` (`:1538-1545`). A gate is unresolved when
-nothing configures it, or when its command's first word is found neither as a path relative to the root nor as an
-executable in `node_modules/.bin/`, `.venv/bin/` or on `PATH`; on Windows each lookup tries the `PATHEXT` extensions
-(`:1220-1314`). The warnings never change the exit code. `--json` carries the same data under `gates`, with `notRun`
+nothing configures it, or when its command's first word finds nothing. A word with a path separator is a path
+relative to the root, and it must be a regular file with its execute bit set on POSIX; on Windows it counts when it
+exists as written with an extension, or with one of the `PATHEXT` extensions added. Any other word is looked up as
+an executable file in `node_modules/.bin/`, `.venv/bin/` and each `PATH` entry, in that order; on Windows each lookup
+tries the `PATHEXT` extensions, `node_modules/.bin/<word>.cmd`, and the word as written only when it already carries
+an extension (`src/cli/commands/check.ts:1225-1327`, read at `a9e94f06`; `review/79`, `review/151`). The warnings
+never change the exit code. `--json` carries the same data under `gates`, with `notRun`
 and `unresolved`, absent only when there is no manifest (`:1705-1715`).
 
 - **As built:** the warning quotes the charter's value rather than naming the tool alone (ledger `build/61`); the full
@@ -331,8 +334,9 @@ half-applied run; a dry run writes nothing (`src/cli/commands/sync/engine.ts:711
 `ensureGitignoreEntry` returns the entries it appended (`src/mcp/env.ts:611-648`), and sync's report and its JSON
 name them (`review/67`).
 
-- **As built:** the ordering is deliberate (ledger `prove/6`, signed off 13:50Z); a workspace cascade still drops the
-  returned list for member repositories (`review/101`, open).
+- **As built:** the ordering is deliberate (ledger `prove/6`, signed off 13:50Z); a workspace cascade carries each
+  member's added `.gitignore` entries into its row as `gitignoreAdded` (`src/cli/commands/workspace.ts:1079`, `:1312`,
+  read at `a9e94f06`; `review/101`, fixed by minor-polish-b, integrated at `ffadc8a2`).
 - **Evidence:** the state file is defined at `src/types/markers.ts:183-196`.
 - **Proof:** `test/mcp/env.test.ts`, `test/cli/commands/syncEngine.test.ts`, `test/merge/writeEscape.test.ts`; QA.
 
@@ -542,19 +546,18 @@ the maintainer; the plan carries it under Follow-ups (`docs/plans/013-optimizati
 ### REQ-FLOW-026 — The touchpoints ship as shared skills, so Codex gets them
 
 From `docs/plans/013-optimization-sweep-03.md` § Spec delta A, the unit `sw17-touchpoints-as-shared-skills`, its
-sign-offs and its live check. The unit was in a fix round and not on the package head when this merged: every
-`path:line` below reads its lane, branch `p17s2-sw17` at `a70e58f3`. At `cdfaa723` Codex still receives no touchpoint
-body (`CODEX_COMMANDS_DIR` is `null`, `src/adapters/codex.ts:99`).
+sign-offs and its live check. Every `path:line` below is read at `a9e94f06`, where the unit and its fix rounds have
+integrated. Before the unit, `CODEX_COMMANDS_DIR` was `null` and Codex received no touchpoint body.
 
 - When Codex or Cursor is selected, sync emits each of the nine touchpoint bodies once, as
   `.agents/skills/st-<id>/SKILL.md`, with a companion `.agents/skills/st-<id>/agents/openai.yaml` that sets
   `policy.allow_implicit_invocation: false` (`src/emit/skillsProjection.ts:522-593`). The skill's head has three
   keys: `name`, `description` and `disable-model-invocation: true` (`:595-616`). Codex and Cursor both emit the rows
-  and co-own each file, so it survives the deselection of one of them (`src/adapters/codex.ts:77-97`, `:432-434`;
+  and co-own each file, so it survives the deselection of one of them (`src/adapters/codex.ts:77-97`, `:435-437`;
   `src/adapters/cursor.ts:70-104`).
 - Codex starts one as `$st-<id>`, and Cursor as `/st-<id>`. Init's Codex steps say `invoke one as $st-<id>` and
   `then type: $st-onboard`, never a slash (`src/cli/commands/init/panel.ts:167-189`). Codex's `command-surface`
-  capability row names the tree, the companion key and what was measured (`src/adapters/codex.ts:352-363`).
+  capability row names the tree, the companion key and what was measured (`src/adapters/codex.ts:355-366`).
 - Claude keeps its `.claude/commands/` files, and its native skills copy carries no touchpoint. Copilot alone gets no
   shared touchpoint, and its prompt files stay. With Codex or Cursor beside it, Copilot lists the nine as project
   skills beside its prompt files and keeps them out of the model's own skills list; its `command-surface` row
@@ -563,7 +566,7 @@ body (`CODEX_COMMANDS_DIR` is `null`, `src/adapters/codex.ts:99`).
   reclaim sweep removes those files and nothing else under `.cursor/` (`src/adapters/cursor.ts:84-90`).
 - Codex's skills-list check counts the touchpoints: the full selection measures 6,909 characters over 26 skills
   against the 8,000 cap (`codexSkillsListChars`, `src/emit/capabilityMatrix.ts:379-384`; the refusal at
-  `src/adapters/codex.ts:394-415`; REQ-PROVE-004).
+  `src/adapters/codex.ts:397-418`; REQ-PROVE-004).
 - The Codex plugin does not carry the touchpoints. They stay repository-owned, `stamity plugin setup` writes them into
   the shared tree, and the packager drops a command-class row there (`scripts/plugins/clients/codex.mjs:25-30`,
   `:50-52`, `:84-89`; sign-off at 15:56Z, option (b)). The Cursor plugin carries them under `skills/` as class
@@ -584,8 +587,7 @@ body (`CODEX_COMMANDS_DIR` is `null`, `src/adapters/codex.ts:99`).
     says so (`review/156`, signed off at 16:14Z).
 - **Expand/contract:** the shared rows are added and the `.cursor/skills/st-<id>/` rows reclaimed in the same sync,
   which the live Cursor check gated. Rollback is a re-sync at the prior version. The Codex cells of the parity table in
-  `docs/specs/orchestrator-context.md` still say no `/st-work` body is emitted, which is true at `cdfaa723`; they
-  change when the unit integrates.
+  `docs/specs/orchestrator-context.md` moved with the unit (amended 2026-09-30).
 - **Proof:** `test/emit/touchpointSkills.test.ts`, `test/emit/skillsProjection.test.ts`,
   `test/adapters/codex.test.ts`, `test/adapters/cursor.test.ts`, `test/adapters/copilot.test.ts`,
   `test/cli/commands/initPanel.test.ts`, `test/cli/commands/syncEngine.test.ts` (the 1.10.0 reclaim case),

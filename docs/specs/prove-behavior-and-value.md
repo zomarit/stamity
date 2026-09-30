@@ -18,9 +18,9 @@ requirement's first paragraph. The amendment dated 2026-09-30 to REQ-PROVE-021 c
 `docs/plans/013-optimization-sweep-02.md` (D), merged at the Prove phase of its run; it cites the tree at `b855876a`
 and is not in a release yet. The amendments dated 2026-09-30 to REQ-PROVE-003, REQ-PROVE-004 and REQ-PROVE-005 come
 from the spec delta of `docs/plans/013-optimization-sweep-03.md` (D) and the units `sw18-codex-rules-leave-shared-charter`
-and `sw17-touchpoints-as-shared-skills`, merged in the same run's second spec-merge pass. They cite the tree at
-`cdfaa723`, except the figure REQ-PROVE-004 takes from `sw17-touchpoints-as-shared-skills`, which was not on that
-tree yet and is read at its lane, branch `p17s2-sw17` at `a70e58f3`. They are not in a release yet.
+and `sw17-touchpoints-as-shared-skills`, merged in the same run's second and third spec-merge passes. The amendment
+to REQ-PROVE-003 cites the tree at `cdfaa723`; those to REQ-PROVE-004 and REQ-PROVE-005 cite `a9e94f06`, the package
+head once `sw17-touchpoints-as-shared-skills` had integrated. They are not in a release yet.
 
 ## Intent
 
@@ -154,15 +154,14 @@ whose text is the codex adapter's `VALIDATION_ERROR` message.
   `codexSkillsListChars`/`codexSkillsListCap` (`src/emit/capabilityMatrix.ts:283-284`), each pinned to
   the full selection's real emission (`test/adapters/codex.test.ts:1710-1747`).
 
-Amended 2026-09-30 (unit `sw17-touchpoints-as-shared-skills`, in a fix round and not on the package head at this
-merge). The text above names no measured figure, and its citations have moved. The measured figure is the constant
-`codexSkillsListChars` in `LIVE_ALWAYS_ON`, beside the cap `CODEX_SKILLS_LIST_BUDGET_CHARS`. At `cdfaa723` it reads
-5,570 characters over 17 skills, the 8 content skills and the 9 projected rules: 70% of the cap
-(`src/emit/capabilityMatrix.ts:379-385`; the refusal at `src/adapters/codex.ts:396-412`). The nine touchpoints ship
-as shared skills under REQ-FLOW-026 and sit in the same list, so the unit counts them in the refusal and re-measures
-the figure at 6,909 characters over 26 skills (8 content skills, 9 rules and 9 touchpoints), 86% of the 8,000 cap
-(branch `p17s2-sw17` at `a70e58f3`: `src/emit/capabilityMatrix.ts:379-384`, `src/adapters/codex.ts:394-415`). The
-full-selection pin in `test/adapters/codex.test.ts` holds the constant to the real emission.
+Amended 2026-09-30 (unit `sw17-touchpoints-as-shared-skills`; cited at `a9e94f06`). The text above names no
+measured figure, and its citations have moved. The measured figure is the constant `codexSkillsListChars` in
+`LIVE_ALWAYS_ON`, beside the cap `CODEX_SKILLS_LIST_BUDGET_CHARS` (`src/emit/capabilityMatrix.ts:379-385`). Before
+the unit it read 5,570 characters over 17 skills, the 8 content skills and the 9 projected rules: 70% of the cap. The
+nine touchpoints now ship as shared skills under REQ-FLOW-026 and sit in the same list, so the refusal counts them
+(`src/adapters/codex.ts:397-418`) and the figure reads 6,909 characters over 26 skills (8 content skills, 9 rules and
+9 touchpoints), 86% of the 8,000 cap. The full-selection pin in `test/adapters/codex.test.ts` holds the constant to
+the real emission.
 
 ### REQ-PROVE-005 — Always-on composite re-measured
 
@@ -176,17 +175,19 @@ loads unconditionally under that mode (`src/content/charter.ts:307-320`); `ALWAY
   (`test/corpus/invariants.test.ts:588-603`); the matrix names each client's mode.
 
 Amended 2026-09-30 (`docs/plans/013-optimization-sweep-03.md` § Spec delta D, unit
-`sw18-codex-rules-leave-shared-charter`; cited at `cdfaa723`). The shared root `AGENTS.md` is the same file with and
-without Codex (REQ-PROVE-003, amended 2026-09-30), so the two shared-byte constants hold one figure:
-`ALWAYS_ON_SHARED_BYTES_WITH_CODEX` and `ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX` both read 5,276 bytes on the
-cross-client golden (`src/content/charter.ts:301`, `:323`). The appendix's bytes are Codex's own, counted in Codex's
-row as a third constant, `ALWAYS_ON_CODEX_OVERRIDE_BYTES`, which reads 25,306: the old with-Codex figure, byte for
-byte (`:325-342`). The line ceilings hold, cursor 95 · claude 95 · copilot 95 · codex 407 (`:157-216`), and
-`composeAlwaysOnLoad` is at `:381-394`. The corpus suite requires one root `AGENTS.md` figure in the golden, equal to
+`sw18-codex-rules-leave-shared-charter`, with the charter edit of `sw17-touchpoints-as-shared-skills`; cited at
+`a9e94f06`). The shared root `AGENTS.md` is the same file with and without Codex (REQ-PROVE-003, amended
+2026-09-30), so the two shared-byte constants hold one figure: `ALWAYS_ON_SHARED_BYTES_WITH_CODEX` and
+`ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX` both read 5,296 bytes on the cross-client golden (`src/content/charter.ts:307`,
+`:331`). The appendix's bytes are Codex's own, counted in Codex's row as a third constant,
+`ALWAYS_ON_CODEX_OVERRIDE_BYTES`, which reads 25,326 (`:333-352`). It began at 25,306, the old with-Codex figure byte
+for byte, and took the same +20 bytes as the shared pair when the charter's touchpoint paragraph was reworded
+(`review/157`; the dated comments at `:301-306`, `:329-330` and `:350-351`). The line ceilings hold, cursor 95 ·
+claude 95 · copilot 95 · codex 407 (`:157-216`), and `composeAlwaysOnLoad` is at `:391-404`. The corpus suite requires one root `AGENTS.md` figure in the golden, equal to
 both shared constants, and every `AGENTS.override.md` figure equal to the third. The capability page's guard refuses
 two shared figures that differ, and an override figure not larger than the shared one
 (`src/emit/capabilityMatrix.ts:521-553`), and the page carries the override's bytes in Codex's row (the input, `codexOverrideBytes`, at `:363-368`). A
-real four-client init at the unit's build measured the shared file at 5,379 bytes with Codex and 5,379 without (`cmp`
+real four-client init at the `sw18-codex-rules-leave-shared-charter` build, before the +20, measured the shared file at 5,379 bytes with Codex and 5,379 without (`cmp`
 identical) and the override at 25,409 (`.stamity/runs/2026-09-30_optimization-sweep/record.md:545-546`); a real init
 pins a different CLI version into the charter than the golden does, so its bytes differ from the golden's. The
 figures in the paragraph above read "24,904 shared bytes with codex against 5,192 without"; the constants named here

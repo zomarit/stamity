@@ -131,17 +131,17 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 
 | Requirement | Claude Code | Cursor | GitHub Copilot CLI | Codex |
 |---|---|---|---|---|
-| 001, 002 two-tier returns | yes | yes | yes | yes in the agent definitions; no `/st-work` body is emitted (`docs/capability-matrix.md:240`) |
+| 001, 002 two-tier returns | yes | yes | yes | yes in the agent definitions and in the `/st-work` body, which ships as the shared skill `.agents/skills/st-work/SKILL.md`, started as `$st-work` (`src/adapters/codex.ts:77-97`, `:435-437`, read at `a9e94f06`; REQ-FLOW-026) (amended 2026-09-30; it read "yes in the agent definitions; no `/st-work` body is emitted (`docs/capability-matrix.md:240`)") |
 | 003 verdict-role report write | yes; degraded on a plugin install (the container hook layout): no `Write`, full inline return (amendment A2) | degraded: full inline return, disclosure line | degraded: full inline return, disclosure line | degraded: full inline return, disclosure line |
 | 004 report naming | yes | yes | yes | yes |
-| 005–008 ledger verb, fields, fixer, closures | yes | yes | yes | verb yes; the body-carried steps have no carrier |
-| 009–012 dispatch, amendment, implementer return, record head | yes | yes | yes | agent-definition parts yes; body-carried parts have no carrier |
+| 005–008 ledger verb, fields, fixer, closures | yes | yes | yes | yes: the verb, and the body-carried steps through the `$st-work` skill (amended 2026-09-30; it read "verb yes; the body-carried steps have no carrier") |
+| 009–012 dispatch, amendment, implementer return, record head | yes | yes | yes | yes: the agent-definition parts, and the body-carried parts through the `$st-work` skill (amended 2026-09-30; it read "agent-definition parts yes; body-carried parts have no carrier") |
 | 013 resume card | hook after a compaction and on a resume (`"source":"resume"`), with the closed-run card and the debug-rounds line; and the verb (amended 2026-09-30; it read "hook after compaction, and the verb") | the verb, run by hand after a compaction summary | the verb, run by hand after a compaction summary | hook after a compaction, and on a resume where the payload names one (not measured on this client); and the verb (amended 2026-09-30; it read "hook after compaction, and the verb") |
-| 014 body order | yes | not applicable: no documented body re-attachment | not applicable: no documented body re-attachment | not applicable: no body emitted |
+| 014 body order | yes | not applicable: no documented body re-attachment | not applicable: no documented body re-attachment | not applicable: no documented body re-attachment (amended 2026-09-30; it read "not applicable: no body emitted") |
 | 015 replay | retired 2026-09-29 before any scored run (amended; it read `measured`) | `not-run`, with reason | `not-run`, with reason | `not-run`, with reason |
 | 016 hook budgets | yes: the session-start rows and the ConfigChange tamper notice at 30 s; the latency check reads this client's guard | yes: the session-start rows at 30 s | yes: the session-start rows at 30 s | yes: the session-start rows at 30 s |
 | 017 read-only git for the verdict roles and the spec-author (added 2026-09-30) | yes in the repository layout: `Bash` admitted by the generated guard for the five read-only subcommands only; degraded on a plugin install: no `Bash`, the brief carries the hunks | degraded: `readonly: true` blocks state-changing shell commands but names no subcommand list, so the role relies on the client (soft) | gap: no shell for a verdict role; the brief carries the diff as a patch file in the run's reports folder, never the implementer's account | degraded: the role sentence permits the five subcommands inside the `read-only` sandbox, as prose only (soft, provisional) |
-| 018 fresh re-review, approval with no declared gate (added 2026-09-30) | yes | yes | yes | agent-definition parts yes; the `/st-work` body is not emitted |
+| 018 fresh re-review, approval with no declared gate (added 2026-09-30) | yes | yes | yes | yes: the agent-definition parts, and the body through the `$st-work` skill (amended 2026-09-30; it read "agent-definition parts yes; the `/st-work` body is not emitted") |
 
 ## References
 
@@ -350,9 +350,9 @@ Amended 2026-09-30 (plan 013 file 3, unit `sw21-ledger-cli-papercuts`). Two chan
   finding's (`src/cli/commands/ledger.ts:243-253`; `review/127`); each `--json` row carries `alreadyFiled`. The append
   exits 0.
 - **The stdin refusal names the size.** It reads
-  `the block piped on stdin is <n> bytes, over the <ceiling> byte input ceiling`, where `<n>` is what was read when the
-  ceiling tripped: the pipe is not drained further, so the figure is a lower bound over the ceiling
-  (`src/cli/commands/ledger.ts:177-197`; ledger `build/118`).
+  `the block piped on stdin is at least <n> bytes, over the <ceiling> byte input ceiling`, where `<n>` is what was read
+  when the ceiling tripped: the pipe is not drained further, so the message states the figure as a lower bound
+  (`src/cli/commands/ledger.ts:177-197`, the message at `:189`, read at `a9e94f06`; ledger `build/118`, `review/149`).
 
 As built, beyond the delta: a `--stdin` finding also matches a row that was filed from a report, since the rule names
 phase, source and evidence only (ledger `build/120`).

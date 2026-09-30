@@ -331,8 +331,8 @@ Rules, all of them refusals rather than resolutions:
   materializing row naming `.stamity/review-gate.json`, its `.lock` directory, a
   path under that directory, or a `.tmp-*` file beside it is refused before git is
   asked, since setup now ignores all three and git's answer would admit them; the
-  message says the state never travels between worktrees
-  (`src/worktree/policy.ts:534-562` at `b855876a`). A `skip` row naming them is
+  message says the state is never copied between worktrees
+  (`src/worktree/policy.ts:550-562`, the message at `:557-559`, read at `a9e94f06`; `review/150`). A `skip` row naming them is
   admitted, as every `skip` row is: it carries nothing across (ledger `build/54`,
   closed rejected).
 - **Both admissibility refusals apply to MATERIALIZING rows only.** A `skip` row

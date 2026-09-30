@@ -314,7 +314,7 @@ fields:
 |---|---|
 | `workspace status` | `root`, `members` with each row's `state`, and `journal` — an array, empty when no member is in flight |
 | `workspace init` | `path`, `created`, `dryRun`, `members`, the resolved `defaults`, and `manifest` in full |
-| `workspace sync` | `root`, `dryRun`, `outcome`, `counts`, `repos[]` with each row's `state` and error, and `journalWarnings`. Rows the cascade reached also carry `patched` and `lockedApplied` |
+| `workspace sync` | `root`, `dryRun`, `outcome`, `counts`, `repos[]` with each row's `state` and error, and `journalWarnings`. Rows the cascade reached also carry `patched` and `lockedApplied`, and `gitignoreAdded` (the `.gitignore` lines that member's sync appended) when it appended any |
 
 Exit statuses are 0, 1 and 2 only. The failure class travels as `error.code` rather than in the
 number. See the [CLI reference](cli-reference.md) for what each status and code means.
