@@ -460,7 +460,7 @@ From `docs/plans/013-optimization-sweep-03.md` § Spec delta A, the unit `sw10-f
   required set, "wherever it lacks them" (`init.ts:779-788`).
 - **The update notice** reads `Update available: <current> -> <new>. To move: npx -y <name>@<new> sync. To stay on
   <current>, do nothing.` The move command is the pinned call, both halves name the one normalized version, and it
-  never says `@latest` (`src/cli/notice/updateNotice.ts:257-294`). A package with no npm channel is `private`, so it
+  never says `@latest` (`src/cli/notice/updateNotice.ts:286-323`). A package with no npm channel is `private`, so it
   never reaches the notice.
 - **`sync --help`** names the exact-version form with a `<version>` placeholder. A package with no npm channel keeps
   its line: install the newer release into the project, then `npx --no <name> sync`

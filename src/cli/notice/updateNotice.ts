@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import semver from "semver";
 import { pinnedCliCall } from "../../shared/cliCall.ts";
 import { STATE_DIR } from "../../types/markers.ts";
+import type { OwnPackageFacts } from "../kit/packageName.ts";
 
 /**
  * The startup update notice: async, cached, silent-fail, opt-out-able, and
@@ -108,6 +109,34 @@ export interface UpdateNoticeOptions {
 interface CacheStamp {
   checkedAt: string;
   latest: string | null;
+}
+
+/**
+ * The startup options for this running package, from ONE manifest read: the
+ * name the banner names and the registry it asks come from the same facts.
+ *
+ * A manifest naming `publishConfig.registry` — a fork made with
+ * `scripts/fork-identity.mjs --registry` — is probed at that registry and never
+ * at {@link DEFAULT_REGISTRY_BASE_URL}: the fork's scope on the public registry
+ * may be held by anybody, and a banner built from that answer would hand every
+ * operator a third party's version as the CLI's own move command. The probe
+ * sends no credentials, so a registry that needs them answers non-2xx and the
+ * notice stays silent (step 4). The canonical build names no registry and keeps
+ * the default; a package with no npm channel is `private` and stops at step 2.
+ */
+export function noticeOptionsFromFacts(
+  facts: OwnPackageFacts,
+  env: Readonly<Record<string, string | undefined>>,
+  cacheDir: string,
+): UpdateNoticeOptions {
+  return {
+    packageName: facts.name,
+    currentVersion: facts.version,
+    isPrivate: facts.isPrivate,
+    env,
+    cacheDir,
+    ...(facts.registry === null ? {} : { registryBaseUrl: facts.registry }),
+  };
 }
 
 /**

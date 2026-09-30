@@ -121,10 +121,13 @@ describe("packageCommand — a renamed private downstream", () => {
 
     const kit = await loadKitRootedAt(fixture.dir);
 
+    // TEST CHANGE (branch fix round 2, review/167): the facts carry
+    // `publishConfig.registry` too, `null` when the manifest names none.
     expect(kit.resolveOwnPackageFacts()).toEqual({
       name: "@acme/stamity",
       version: "1.8.0",
       isPrivate: true,
+      registry: null,
     });
     expect(kit.packageName()).toBe("@acme/stamity");
     // TEST CHANGE (sw26-engine-cli-call-form): the fork's own name AND its own
@@ -150,7 +153,22 @@ describe("packageCommand — a renamed private downstream", () => {
 
     expect(kit.hasNpmChannel()).toBe(true);
     expect(kit.packageCommand("sync")).toBe("npx -y @acme/stamity@1.8.0 sync");
+    // The same read answers the registry the update notice asks (review/167).
+    expect(kit.resolveOwnPackageFacts().registry).toBe(manifest.publishConfig.registry);
   });
+
+  it.each([{ registry: "" }, { registry: 42 }, "https://npm.acme.example"])(
+    "reads no registry from a publishConfig that names none as a non-empty string (%j)",
+    async (publishConfig) => {
+      const fixture = getFixture();
+      await fixture.seedFiles({
+        "package.json": `${JSON.stringify({ name: "@acme/stamity", version: "1.8.0", publishConfig })}\n`,
+      });
+      const kit = await loadKitRootedAt(fixture.dir);
+
+      expect(kit.resolveOwnPackageFacts().registry).toBeNull();
+    },
+  );
 
   it("reads `private` in its hand-edited string form, and drops a non-string version", async () => {
     const fixture = getFixture();
@@ -163,10 +181,13 @@ describe("packageCommand — a renamed private downstream", () => {
 
     const kit = await loadKitRootedAt(fixture.dir);
 
+    // TEST CHANGE (branch fix round 2, review/167): the facts carry
+    // `publishConfig.registry` too, `null` when the manifest names none.
     expect(kit.resolveOwnPackageFacts()).toEqual({
       name: "@acme/stamity",
       version: "",
       isPrivate: true,
+      registry: null,
     });
     // Unchanged on purpose: a manifest with no string version has nothing to
     // pin, so the remedy keeps the unpinned form rather than inventing one.
@@ -197,7 +218,14 @@ describe("packageCommand — the unnamed sentinel", () => {
 
     const kit = await loadKitRootedAt(fixture.dir);
 
-    expect(kit.resolveOwnPackageFacts()).toEqual({ name: "", version: "1.8.0", isPrivate: false });
+    // TEST CHANGE (branch fix round 2, review/167): the facts carry
+    // `publishConfig.registry` too, `null` when the manifest names none.
+    expect(kit.resolveOwnPackageFacts()).toEqual({
+      name: "",
+      version: "1.8.0",
+      isPrivate: false,
+      registry: null,
+    });
     // The fallback is a canonical-source constant, not a pin on the running
     // manifest: a fork inherits this source unchanged, and a fork whose manifest
     // WAS read never reaches this branch.
@@ -212,7 +240,14 @@ describe("packageCommand — the unnamed sentinel", () => {
     // same path a malformed manifest or a failed root walk takes.
     const kit = await loadKitRootedAt(fixture.dir);
 
-    expect(kit.resolveOwnPackageFacts()).toEqual({ name: "", version: "", isPrivate: true });
+    // TEST CHANGE (branch fix round 2, review/167): the facts carry
+    // `publishConfig.registry` too, `null` when the manifest names none.
+    expect(kit.resolveOwnPackageFacts()).toEqual({
+      name: "",
+      version: "",
+      isPrivate: true,
+      registry: null,
+    });
     expect(kit.packageCommand("sync")).toBe("npx @zomarit/stamity sync");
     // The private-marked fallback facts do not make the canonical name a
     // registry-less package: the canonical package is published, so the
@@ -226,7 +261,14 @@ describe("packageCommand — the unnamed sentinel", () => {
 
     const kit = await loadKitRootedAt(fixture.dir);
 
-    expect(kit.resolveOwnPackageFacts()).toEqual({ name: "", version: "", isPrivate: true });
+    // TEST CHANGE (branch fix round 2, review/167): the facts carry
+    // `publishConfig.registry` too, `null` when the manifest names none.
+    expect(kit.resolveOwnPackageFacts()).toEqual({
+      name: "",
+      version: "",
+      isPrivate: true,
+      registry: null,
+    });
     expect(kit.packageName()).toBe("@zomarit/stamity");
   });
 });

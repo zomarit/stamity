@@ -19,6 +19,7 @@ import { runCli, type CommandModule } from "./cli/kit/program.ts";
 import {
   checkForUpdateNotice,
   noticeCacheDir,
+  noticeOptionsFromFacts,
   resolveOwnPackageFacts,
 } from "./cli/notice/updateNotice.ts";
 
@@ -118,15 +119,16 @@ async function main(): Promise<void> {
   // Fired before the command, awaited never: the probe caches under the XDG
   // cache root and resolves `null` on every failure — and on every registry
   // answer that is not strictly newer than this build — so it is invisible
-  // unless it has something to say.
-  const facts = resolveOwnPackageFacts();
-  const notice = checkForUpdateNotice({
-    packageName: facts.name,
-    currentVersion: facts.version,
-    isPrivate: facts.isPrivate,
-    env: process.env,
-    cacheDir: noticeCacheDir(process.env, homedir()),
-  });
+  // unless it has something to say. A fork made with `--registry` is asked
+  // about at its own `publishConfig.registry`, never the public one
+  // (`noticeOptionsFromFacts`).
+  const notice = checkForUpdateNotice(
+    noticeOptionsFromFacts(
+      resolveOwnPackageFacts(),
+      process.env,
+      noticeCacheDir(process.env, homedir()),
+    ),
+  );
 
   // Bare `stamity` is a first touch, not a mistake: show help and exit 0. The
   // explicit rewrite (rather than commander's help-as-error default, which the

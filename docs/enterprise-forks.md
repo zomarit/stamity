@@ -167,7 +167,9 @@ read `name` from `package.json`, and the four plugin manifests are projected fro
 regenerated marketplace entry follows the package. Without `--registry` the package is private and
 has no npm channel, so the entry carries a `github` source naming your repository instead of an
 npm package you never publish. With `--registry` the entry carries an `npm` source naming your
-package, which your developers fetch from your registry.
+package and version but no registry, so a developer's client fetches it from your registry only
+on a machine that maps your scope to that registry in its `.npmrc`, the same precondition the
+CLI calls below carry. Without the mapping it asks the public npm registry for your package name.
 
 The CLI calls your setup writes follow the same split. `init`, `sync` and the plugin build pin
 every call they write into `AGENTS.md`, the generated bodies, the hook hints, the guard messages
@@ -179,7 +181,9 @@ finds a scope's registry in npm's configuration; `publishConfig` in your manifes
 `npm publish` only. On a developer machine or CI runner without the mapping, the same call asks
 the public npm registry for your package name. Hold your scope on the public registry too, and
 publish nothing there, so a missing mapping ends with a 404 instead of fetching a package
-someone else published under your name. Without `--registry` the call is
+someone else published under your name. The startup update notice asks your registry, never the
+public one, whether a newer version exists. It sends no credentials, so a registry that needs them
+leaves the notice silent. Without `--registry` the call is
 `npx --no @<scope>/stamity@<version> <verb>`. Your scope is a public, predictable name that
 nobody holds on the public npm registry, and a `-y` call would install whatever a third party
 published there under it, without asking. `--no` makes npm run a copy the project already has

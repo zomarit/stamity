@@ -43,7 +43,21 @@ const OWN_DIR = dirname(fileURLToPath(import.meta.url));
 export const CANONICAL_PACKAGE_NAME = "@zomarit/stamity";
 
 /** Fallback facts: unnamed and private, so the update notice stays silent. */
-const UNKNOWN_PACKAGE_FACTS = { name: "", version: "", isPrivate: true } as const;
+const UNKNOWN_PACKAGE_FACTS = { name: "", version: "", isPrivate: true, registry: null } as const;
+
+/** What {@link resolveOwnPackageFacts} answers. */
+export interface OwnPackageFacts {
+  name: string;
+  version: string;
+  isPrivate: boolean;
+  /**
+   * `publishConfig.registry` as a non-empty string, else `null`. A fork made
+   * with `scripts/fork-identity.mjs --registry` publishes there, so it is the
+   * registry the update notice asks about that fork's name — never the public
+   * one, where the fork's scope may be anybody's.
+   */
+  registry: string | null;
+}
 
 /**
  * This package's own `package.json`, parsed, or `null` when there is nothing
@@ -75,24 +89,25 @@ function readOwnManifest(): Record<string, unknown> | null {
  * it selects {@link CANONICAL_PACKAGE_NAME}. Failing toward silence is the only
  * safe direction for a self-read that decorates other output.
  */
-export function resolveOwnPackageFacts(): { name: string; version: string; isPrivate: boolean } {
+export function resolveOwnPackageFacts(): OwnPackageFacts {
   return factsOf(readOwnManifest());
 }
 
 /** {@link resolveOwnPackageFacts} over a manifest already read. */
-function factsOf(parsed: Record<string, unknown> | null): {
-  name: string;
-  version: string;
-  isPrivate: boolean;
-} {
+function factsOf(parsed: Record<string, unknown> | null): OwnPackageFacts {
   if (parsed === null) return UNKNOWN_PACKAGE_FACTS;
-  const { name, version, private: isPrivate } = parsed;
+  const { name, version, private: isPrivate, publishConfig } = parsed;
+  const registry =
+    typeof publishConfig === "object" && publishConfig !== null
+      ? (publishConfig as Record<string, unknown>)["registry"]
+      : undefined;
   return {
     name: typeof name === "string" ? name : "",
     version: typeof version === "string" ? version : "",
     // `private` is a boolean in the npm schema, but the string form appears in
     // hand-edited manifests; both mean "do not publish", so both suppress.
     isPrivate: isPrivate === true || isPrivate === "true",
+    registry: typeof registry === "string" && registry !== "" ? registry : null,
   };
 }
 
@@ -107,20 +122,14 @@ let cachedIdentity: { name: string; npmChannel: boolean } | null = null;
 
 function ownCallIdentity(): { name: string; npmChannel: boolean } {
   if (cachedIdentity === null) {
-    const parsed = readOwnManifest();
-    const { name, isPrivate } = factsOf(parsed);
-    const publishConfig = parsed?.["publishConfig"];
-    const registry =
-      typeof publishConfig === "object" && publishConfig !== null
-        ? (publishConfig as Record<string, unknown>)["registry"]
-        : undefined;
+    const { name, isPrivate, registry } = factsOf(readOwnManifest());
     cachedIdentity =
       // The empty name is the unnamed sentinel above, and the only path to the
       // canonical fallback: a manifest that WAS read answers with its own name,
       // renamed or not. The canonical package is published, so it has a channel.
       name === ""
         ? { name: CANONICAL_PACKAGE_NAME, npmChannel: true }
-        : { name, npmChannel: !isPrivate || (typeof registry === "string" && registry !== "") };
+        : { name, npmChannel: !isPrivate || registry !== null };
   }
   return cachedIdentity;
 }

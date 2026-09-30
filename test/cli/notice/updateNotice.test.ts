@@ -7,6 +7,7 @@ import {
   DEFAULT_REGISTRY_BASE_URL,
   checkForUpdateNotice,
   noticeCacheDir,
+  noticeOptionsFromFacts,
   resolveOwnPackageFacts,
   type UpdateNoticeOptions,
 } from "../../../src/cli/notice/updateNotice.ts";
@@ -445,6 +446,91 @@ describe("checkForUpdateNotice — unwritable cache directory", () => {
   });
 });
 
+/**
+ * review/167: a fork made with `scripts/fork-identity.mjs --registry` removes
+ * `private` and sets `publishConfig.registry`, so it passes step 2. Its scope on
+ * the PUBLIC registry may be anybody's, so the notice must ask the fork's own
+ * registry and never the default URL — else a third party's publish reaches every
+ * operator as the CLI's own move command.
+ */
+describe("noticeOptionsFromFacts — the registry a fork's notice asks", () => {
+  const FORK = "@acme/stamity";
+  const FORK_REGISTRY = "https://npm.acme.example/api/npm/";
+
+  it("asks a --registry fork's own registry, never the default URL", async () => {
+    const dir = tempDir().path("cache");
+    const fetch = versionResponse("1.2.3");
+    const opts = noticeOptionsFromFacts(
+      { name: FORK, version: CURRENT, isPrivate: false, registry: FORK_REGISTRY },
+      {},
+      dir,
+    );
+
+    const notice = await checkForUpdateNotice({ ...opts, fetchImpl: fetch.impl, now: frozen() });
+
+    expect(opts.registryBaseUrl).toBe(FORK_REGISTRY);
+    expect(fetch.calls).toEqual(["https://npm.acme.example/api/npm/%40acme%2Fstamity/latest"]);
+    expect(fetch.calls[0]).not.toContain(DEFAULT_REGISTRY_BASE_URL);
+    expect(notice).toBe(
+      `Update available: 1.2.2 -> 1.2.3. To move: npx -y ${FORK}@1.2.3 sync. To stay on 1.2.2, do nothing.`,
+    );
+  });
+
+  it.each([
+    ["answers 401 (needs credentials the probe does not send)", () =>
+      spyFetch(async () => new Response("{}", { status: 401 }))],
+    ["answers 404", () => spyFetch(async () => new Response("{}", { status: 404 }))],
+    ["is unreachable", () =>
+      spyFetch(() => {
+        throw new TypeError("fetch failed");
+      })],
+  ])("prints nothing when the fork's registry %s", async (_label, makeFetch) => {
+    const dir = tempDir().path("cache");
+    const fetch = makeFetch();
+    const opts = noticeOptionsFromFacts(
+      { name: FORK, version: CURRENT, isPrivate: false, registry: FORK_REGISTRY },
+      {},
+      dir,
+    );
+
+    const notice = await checkForUpdateNotice({ ...opts, fetchImpl: fetch.impl, now: frozen() });
+
+    expect(notice).toBeNull();
+    expect(fetch.calls).toHaveLength(1);
+    expect(fetch.calls[0]).toMatch(/^https:\/\/npm\.acme\.example\//);
+  });
+
+  it("keeps the canonical build on the default registry", async () => {
+    const dir = tempDir().path("cache");
+    const fetch = versionResponse("1.2.3");
+    const opts = noticeOptionsFromFacts(
+      { name: PKG, version: CURRENT, isPrivate: false, registry: null },
+      {},
+      dir,
+    );
+
+    const notice = await checkForUpdateNotice({ ...opts, fetchImpl: fetch.impl, now: frozen() });
+
+    expect(opts).not.toHaveProperty("registryBaseUrl");
+    expect(fetch.calls).toEqual([`${DEFAULT_REGISTRY_BASE_URL}/${PKG_ENCODED}/latest`]);
+    expect(notice).toContain(`npx -y ${PKG}@1.2.3 sync`);
+  });
+
+  it("keeps a package with no npm channel silent, with no probe", async () => {
+    const dir = tempDir().path("cache");
+    const fetch = forbiddenFetch();
+    const opts = noticeOptionsFromFacts(
+      { name: FORK, version: CURRENT, isPrivate: true, registry: null },
+      {},
+      dir,
+    );
+
+    expect(await checkForUpdateNotice({ ...opts, fetchImpl: fetch.impl, now: frozen() })).toBeNull();
+    expect(fetch.calls).toEqual([]);
+    expect(existsSync(dir)).toBe(false);
+  });
+});
+
 describe("noticeCacheDir", () => {
   it("prefers a non-empty XDG_CACHE_HOME", () => {
     expect(noticeCacheDir({ XDG_CACHE_HOME: join("/xdg", "root") }, join("/home", "u"))).toBe(
@@ -464,13 +550,17 @@ describe("resolveOwnPackageFacts", () => {
     const facts = resolveOwnPackageFacts();
     const manifest = JSON.parse(
       readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
-    ) as { name: string; version: string };
+    ) as { name: string; version: string; publishConfig?: { registry?: unknown } };
     const identity = canonical();
+    const registry = manifest.publishConfig?.registry;
 
+    // TEST CHANGE (branch fix round 2, review/167): the facts carry
+    // `publishConfig.registry` too — the registry the notice asks a fork's name at.
     expect(facts).toEqual({
       name: manifest.name,
       version: manifest.version,
       isPrivate: identity.private,
+      registry: typeof registry === "string" && registry !== "" ? registry : null,
     });
     // TEST CHANGE, justified (audit FORK-3): the two pins below said "this repo is the
     // canonical published package" unconditionally, which a downstream that renamed the
