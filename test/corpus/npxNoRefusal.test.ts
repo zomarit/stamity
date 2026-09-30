@@ -445,7 +445,7 @@ describe("npx --no on the unscoped name (REQ-FLOW-002, QA P01)", () => {
   it(
     "control: the same squatter with --yes is fetched, installed and run, so the refusal assertions can fail",
     async () => {
-      const { project, markerPath, env } = await freshCase("yes-control");
+      const { project, root, markerPath, env } = await freshCase("yes-control");
       registry.served = squatterPackage(markerPath);
 
       const run = await runNpx(npm.npxCli, ["--yes", NAME, "check"], project, env);
@@ -460,6 +460,8 @@ describe("npx --no on the unscoped name (REQ-FLOW-002, QA P01)", () => {
       expect(await readFile(markerPath, "utf8"), context).toBe("installed\nran\n");
       expect(run.stdout, context).toContain(RAN_TEXT);
       expect(run.code, context).toBe(0);
+      // The install is visible in npx's cache, so the refusal cases' empty-cache check can fail.
+      expect(npxInstalls(join(root, "cache")), context).not.toEqual([]);
     },
     TEST_TIMEOUT_MS,
   );
