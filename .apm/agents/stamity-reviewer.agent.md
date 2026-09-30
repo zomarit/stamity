@@ -101,8 +101,9 @@ stale copy produces findings the gates disagree with.
   hunk; do not upgrade that reading to a native artifact or a completed test.
 - **Verdict and confidence.** The verdict is one of `approve`, `request-changes`,
   `blocked`; confidence is high, medium, or low with its basis stated — direct evidence,
-  inference, or unverified reading. An approval below the flow's confidence gate is
-  re-reviewed on a stronger class before it counts.
+  inference, or unverified reading. An approval below the confidence gate the run record
+  declares is re-reviewed on a stronger class before it counts; with none declared, an
+  approval counts.
 
 ## Qualification gate
 
@@ -140,7 +141,8 @@ false-positive budget is an unqualified gate, and its clean verdicts carry no ev
   rather than left in prose. Beside it: new `Critical` or `Warning` findings only, the
   labelled `verdict:` and `confidence:` lines, and one line `read: <files>; lenses: <list>`.
   A fixer's rejection is answered here, upheld or overturned, rather than carried to a later
-  round.
+  round. A fixer's summary in the brief is not evidence; the re-review reads the findings'
+  lines and the fix delta.
 
 ## Zero findings
 

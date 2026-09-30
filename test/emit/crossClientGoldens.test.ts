@@ -178,6 +178,29 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-30, plan 013 file 3, unit sw08-fresh-re-reviewer (run
+  //     2026-09-30_optimization-sweep). ONE command body and ONE agent body
+  //     moved, plus the manifest rows that record them. No emitted path was
+  //     added or removed.
+  //
+  //     CHANGED `commands/st-work.md` 29849 -> 30216 in the claude and copilot
+  //       dialects and 29894 -> 30261 as the cursor skill — one body, three
+  //       heads, the same +367 as the corpus source. The Review loop names the
+  //       confidence gate the run record declares, counts an approval when none
+  //       is declared, and makes each re-review a fresh reviewer spawn with no
+  //       fixer claim in its brief.
+  //     CHANGED `agents/stamity-reviewer.md` +168 in every dialect: claude
+  //       14166 -> 14334, codex (`.toml`) 14759 -> 14927, cursor 14089 -> 14257,
+  //       copilot 14148 -> 14316. The Verdict and confidence bullet reads the
+  //       declared gate, and the re-review bullet says a fixer's summary is not
+  //       evidence.
+  //     CHANGED `.stamity/manifest.json` in the five selections — all-four,
+  //       claude, codex, copilot and cursor — each at UNCHANGED byte length, the
+  //       fixed-width sha256 rows for those files.
+  //
+  //     What did NOT move: every other agent, command, rule, skill, hook script,
+  //       guard, charter, policy document and generated page.
+  //
   //   - 2026-09-30, plan 013 file 2, unit work-cli-call-form (run
   //     2026-09-30_optimization-sweep). ONE command body moved, plus the
   //     manifest rows that record it. No emitted path was added or removed.

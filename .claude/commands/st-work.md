@@ -234,8 +234,11 @@ Evidence-graded reviewer ↔ fixer loop over the built units:
 
 - The reviewer returns verdict, confidence and graded, located findings, as
   its agent file states. Critical and Warning findings route to a fixer; the
-  fix re-enters review. An approval below the declared confidence gate
-  re-reviews once on a stronger class before it counts.
+  fix re-enters review. The confidence gate is the one the run record
+  declares (`Confidence gate: <value>`). An approval below it re-reviews once
+  on a stronger class before it counts. With no gate declared, an approval
+  counts as given and no extra round runs; the review-gate hook still refuses
+  an approval the reviewer rated `low`.
 - Iteration cap: 4 rounds by default, operator-configurable within 1..10 — the
   engine clamps to that band, and this text stays lockstepped with its default.
 - Escalation ladder: rounds 1–3 keep the same fixer; round 4 spawns a fresh
@@ -248,7 +251,9 @@ Evidence-graded reviewer ↔ fixer loop over the built units:
   exit as diverged (BLOCKED_FAILURE), not burning the remaining rounds.
 - Minor/nit findings are ledgered, never loop-triggering; on re-review new
   nits are suppressed, as the reviewer's nit policy states.
-- A re-review is handed the ledger ids it verifies and returns one closure
+- Each re-review is a fresh reviewer spawn, never a resumed one; its brief
+  is the Verdict dispatch's, plus the ledger ids and each finding's locator
+  at HEAD, and no fixer claim. It verifies those ids and returns one closure
   per id in its closures block — `fixed`, `not-fixed`, `regressed`,
   `rejection-upheld`, `rejection-overturned` — plus new Critical/Warning
   findings only. `stamity ledger close --report` applies the closures, with

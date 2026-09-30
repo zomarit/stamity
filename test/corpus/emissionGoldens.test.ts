@@ -93,6 +93,21 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-30, plan 013 file 3, unit sw08-fresh-re-reviewer (run
+ *     2026-09-30_optimization-sweep). ONE golden moved:
+ *
+ *     SUBSTITUTION moved on `commands/st-work.md` by five added lines and two
+ *     reworded ones in the Review loop, +367 bytes (30124 -> 30491 in the
+ *     corpus source, the same in the golden: no token sits in the moved
+ *     text): the confidence gate is the one the run record declares, and with
+ *     none declared an approval counts and no extra round runs (the hook
+ *     still refuses a `low` approval); each re-review is a fresh reviewer
+ *     spawn briefed as a verdict role with each finding's locator at HEAD
+ *     and no fixer claim.
+ *
+ *     NOTHING else moved here: the reviewer agent body changed too, but no
+ *     golden in this suite carries it; no file under `src/` changed.
+ *
  *   - 2026-09-30, plan 013 file 2, unit work-cli-call-form (run
  *     2026-09-30_optimization-sweep). ONE golden moved:
  *

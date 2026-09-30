@@ -891,6 +891,26 @@ describe("/st-work — Prove", () => {
     expect(loop).not.toContain("never applied");
   });
 
+  it("re-reviews with a fresh reviewer and counts an approval when no gate is declared (REQ-CTX-018)", async () => {
+    const loop = collapse(section(await body(), "### Review loop"));
+
+    // A resumed reviewer carries the round it already judged; a fresh spawn reads
+    // the fix itself, briefed like any verdict role and never with a fixer's claim.
+    expect(loop).toContain("Each re-review is a fresh reviewer spawn, never a resumed one");
+    expect(loop).toContain("its brief is the Verdict dispatch's");
+    expect(loop).toContain("each finding's locator at HEAD");
+    expect(loop).toContain("no fixer claim");
+
+    // The gate is the one the run record declares, in the form the measurements
+    // page reads; with none declared an approval counts and starts no round, while
+    // the hook's refusal of a `low` approval still holds.
+    expect(loop).toContain("the one the run record declares (`Confidence gate: <value>`)");
+    expect(loop).toContain("An approval below it re-reviews once on a stronger class before it counts");
+    expect(loop).toContain("With no gate declared, an approval counts as given and no extra round runs");
+    expect(loop).toContain("still refuses an approval the reviewer rated `low`");
+    expect(loop).not.toContain("below the declared confidence gate");
+  });
+
   it("closes each QA row walked, auto-proven or accepted-unwalked, and records them (REQ-FLOW-017, REQ-FLOW-018)", async () => {
     const qa = collapse(section(await body(), "### QA checkpoint"));
     expect(qa).toContain("**Row states.**");
