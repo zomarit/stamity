@@ -2,7 +2,7 @@
 id: spec-converge-confirm-gated-merge
 class: golden
 claim: "Spec drift merges only through the confirm gate: a T2 converge addition is auto-proposed as an append/merge-only diff the operator confirms before any write, a T3 requirement-text mutation is presented with its requirement id, before/after text and evidence, and T1 execution state is never written into a spec file."
-source: content/commands/st-spec.md:122-150
+source: content/commands/st-spec.md:126-154
 metric: rubric
 ---
 

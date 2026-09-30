@@ -364,6 +364,20 @@ describe("/st-spec — edge cases the design names", () => {
     expect(text).toMatch(/codebase-map\.md[^.]*inventory, not truth/);
   });
 
+  // REQ-FLOW-012: below the 5,000-line bound the whole app is a scope the
+  // question may offer, and the default only when the request names the app;
+  // the no-named-scope sweep above keeps its decline default.
+  it("offers the whole app as a named scope on a small repository", async () => {
+    const text = await prose();
+
+    expect(text).toMatch(/Below 5,000 source lines/);
+    expect(text).toMatch(/counted over the files the Source tree probe found/);
+    expect(text).toMatch(/the whole app is a named scope/);
+    expect(text).toMatch(/offered beside the narrowest readings/);
+    expect(text).toMatch(/default when the request names the app/);
+    expect(text).toMatch(/the mode-chosen line states the count/);
+  });
+
   it("leaves charter production to the engine — a spec run never writes it", async () => {
     const text = await prose();
 

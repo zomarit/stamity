@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.10.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-30T12:31:35.794Z",
+  "updatedAt": "2026-09-30T12:36:05.859Z",
   "tools": [
     "claude"
   ],
@@ -183,7 +183,7 @@
       "adapter": "claude",
       "artifactId": "cmd-spec",
       "artifactType": "command",
-      "contentHash": "aec2fb4f8d2c5a2bcbd747618416fe8afa8f9f0fb4436d1256e7717bed14eba1",
+      "contentHash": "88b507679dd53a007f50ccb074d0b8d0dd0ab4f7d3b4447301becee1941338b3",
       "path": ".claude/commands/st-spec.md"
     },
     {

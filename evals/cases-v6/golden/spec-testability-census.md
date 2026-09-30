@@ -2,7 +2,7 @@
 id: spec-testability-census
 class: golden
 claim: "The check-mode testability census classifies every acceptance criterion as machine-checkable or judgment-tagged, reports per-file counts, names every criterion that is neither, routes confirmation of a criterion whose test exists through a test-runner spawn rather than running the gate in this command's own context, reports a criterion pointing at a missing test as a gap, and writes nothing — check is report-only on both sides."
-source: content/commands/st-spec.md:210-222,256-268
+source: content/commands/st-spec.md:214-226,260-272
 metric: rubric
 ---
 
