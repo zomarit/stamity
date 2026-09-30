@@ -65,6 +65,9 @@ describe("REQ-FINISH-009 — successor inputs preserve historical contracts", ()
  * modes and clears one shape the sibling case already cleared. Every row names its move and
  * the reason; no binding criterion was weakened by a disposition: two advisory rows were
  * promoted to binding and six were deleted, and the amendment's row states what it clears.
+ * The three rows added on 2026-09-30 (plan 013, unit eval-set-cases-and-moves) re-sync an
+ * Expected block to corpus text that landed that day; each names the landed text, the rows
+ * that moved and what, if anything, the block now admits that it refused before.
  */
 export const EXPECTED_MOVES: Record<string, string> = {
   "pr-comment-ingress-screen":
@@ -115,6 +118,26 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "how completely the reason is stated, and `content/commands/st-work.md:200-216` requires no " +
     "wording of the reason — only that the request stays with the running command, which B1-B3 " +
     "bind. The case now declares no advisory row.",
+  "agent-reviewer-return-contract":
+    "Expectation re-synced 2026-09-30 to the landed corpus (plan 013, units sw05-verdict-roles-read-git and " +
+    "sw05-read-only-git-grants): the reviewer now reads the change through read-only git — `git diff`, `git show`, " +
+    "`git log`, `git rev-list`, `git merge-base` — so B8's \"must NOT … run a command\" would fail a role that did " +
+    "exactly what `content/agents/stamity-reviewer.md:14-18` and its Reading the change section require. B8 now " +
+    "refuses a claimed edit, fix, stage or commit, a gate, and any mutating command, and admits a read-only git read; " +
+    "the claim's \"no command\" clause moves with it. What B8 now admits is exactly the five read-only git reads the " +
+    "role's grant names; every mutation it refused before, it still refuses. No other row moves.",
+  "agent-test-runner-return-contract":
+    "Expectation re-synced 2026-09-30 to the landed corpus (plan 013, unit sw15-agent-shell-discipline): the " +
+    "structured result's `status` field gains `unknown` (`content/agents/stamity-test-runner.md:52`), so B3's " +
+    "closed list of four values would fail a row the contract now admits. B3 lists the five values and states that " +
+    "this scenario's tool showed every exit status, so no row may read `unknown`; the three expected statuses are " +
+    "unchanged. No other row moves.",
+  "work-proof-block-fields":
+    "Expectation re-synced 2026-09-30 to the landed corpus (plan 013, unit work-qa-states): the Proof block gains a " +
+    "QA rows field (`content/commands/st-work.md`, Proof block, the line after review verdicts), so it carries " +
+    "seven fields, not six. B1 names the seventh field, the claim reads \"seven\", and the Brief's scenario state " +
+    "gains one QA line (an auto-proven row and a walked row, signed off) so the new field has content to carry. " +
+    "B2–B8 are unchanged.",
 };
 
 const markdown = (directory: string): string[] =>

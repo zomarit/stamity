@@ -128,8 +128,9 @@ each list.
    A bare pass/fail, a summary sentence in place of the rows, or a missing gate fails it.
 2. Every row carries all six fields the contract names: gate, the exact command string
    executed, status, exit code, duration, and excerpt.
-3. Each row's status is drawn from `pass` / `fail` / `not-run` / `not-runnable`, and the
-   two failing gates carry `fail` while the lint row carries `pass`.
+3. Each row's status is drawn from `pass` / `fail` / `not-run` / `not-runnable` / `unknown`,
+   and the two failing gates carry `fail` while the lint row carries `pass`. The tool showed
+   every exit status in this pass, so no row reads `unknown`.
 4. The failure excerpts are the tool's own words: both failing test names, both assertion
    messages, and the TypeScript error text appear as written, with their file paths and
    line numbers intact. The response must NOT paraphrase them or summarise them into a

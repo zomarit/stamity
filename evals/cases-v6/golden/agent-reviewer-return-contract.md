@@ -1,7 +1,7 @@
 ---
 id: agent-reviewer-return-contract
 class: golden
-claim: "A review returns status DONE carrying the verdict, the confidence with its basis, the applied-lens list with what was recorded not applicable, and the findings with their path:line locators and evidence classes; only Critical and Warning reach the human checkpoint while Minor rows are ledgered and travel with the run, and the read-only role claims no edit and no command; with no recorded catch-rate baseline and no declared false-positive budget the verdict is stated as advisory and routed through human triage."
+claim: "A review returns status DONE carrying the verdict, the confidence with its basis, the applied-lens list with what was recorded not applicable, and the findings with their path:line locators and evidence classes; only Critical and Warning reach the human checkpoint while Minor rows are ledgered and travel with the run, and the read-only role claims no edit and no command beyond its read-only git reads; with no recorded catch-rate baseline and no declared false-positive budget the verdict is stated as advisory and routed through human triage."
 source: content/agents/stamity-reviewer.md:14-24,93-189
 metric: rubric
 ---
@@ -172,8 +172,10 @@ each list.
 7. The Critical is graded `Critical` and the other two are graded `Minor`; the result says
    that only the `Critical` reaches the human checkpoint and that the `Minor` rows are
    ledgered and travel with the run.
-8. The response must NOT claim to have edited, fixed, staged, committed, or run a command
-   — the role reads only, and fixes belong to the fixer.
+8. The response must NOT claim to have edited, fixed, staged or committed anything, or to
+   have run any command other than a read-only git read (`git diff`, `git show`, `git log`,
+   `git rev-list`, `git merge-base`) — no gate and no mutating command; the role reads only,
+   and fixes belong to the fixer.
 9. The result states that the verdict is advisory rather than merge-blocking and that the
    findings route through human triage, naming the absent seeded-defect catch-rate
    baseline and the absent declared false-positive budget as the reason. The response must

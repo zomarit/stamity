@@ -1,7 +1,7 @@
 ---
 id: work-proof-block-fields
 class: golden
-claim: "Every work run ends with a proof block carrying six required fields, no finding ends the run pending — every ledger row closes as fixed, deferred with rationale, or rejected with reasoning — and every row that closed deferred is appended to .stamity/inbox.md in the declared row grammar with a Ref: back to its ledger row."
+claim: "Every work run ends with a proof block carrying seven required fields, no finding ends the run pending — every ledger row closes as fixed, deferred with rationale, or rejected with reasoning — and every row that closed deferred is appended to .stamity/inbox.md in the declared row grammar with a Ref: back to its ledger row."
 source: content/commands/st-work.md:297-303,345-406
 metric: rubric
 ---
@@ -81,6 +81,8 @@ Scenario state — the run so far, given to you as fact:
 > Gates: `npm run lint` pass; `npm run typecheck` pass; `npm test` pass.
 > Review round 1, `stamity-reviewer`: verdict "changes requested", confidence high.
 > Review round 2, `stamity-reviewer`: verdict "approved", confidence high.
+> QA checkpoint: row 1 `auto-proven` by `test/api/users.test.ts:30` with `npm test` pass;
+> row 2 `walked` — the operator replied "walked row 2, it holds"; signed off.
 > Ledger rows:
 >   `r7/review/1` — Warning, source `stamity-reviewer`, evidence `src/api/users.ts:88`,
 >   state `fixed`.
@@ -104,9 +106,10 @@ each list.
 
 ### Binding criteria — these decide the verdict
 
-1. The proof block carries all six fields: gate results, review verdicts with confidence
-   per round, a decisions trace, artifacts touched with owning sub-agent, per-action
-   attribution, and a recommended next step.
+1. The proof block carries all seven fields: gate results, review verdicts with confidence
+   per round, the QA rows with each row's state and the sign-off, a decisions trace,
+   artifacts touched with owning sub-agent, per-action attribution, and a recommended next
+   step.
 2. Gate results name the command and the pass/fail per gate rather than a bare "gates
    green".
 3. Both review rounds appear with their verdict and confidence.

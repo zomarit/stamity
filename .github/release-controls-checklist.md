@@ -207,9 +207,9 @@ records the selected pair, rubric, reasoning/decoding and harness controls, with
 that configuration. A Codex profile's result starts a separate baseline and cannot be presented
 as the Claude run.
 
-The current full release run covers all 102 v6 cases, three admitted samples each. At 1.10.0
-that is run 34 (`evals/runs/2026-09-27-run-34/`), the full baseline on the moved profile; alone
-it is FAIL on one floor case. Run 35 (`evals/runs/2026-09-27-run-35/`) re-measured the two cases
+The current full release run covers all 110 v6 cases, three admitted samples each. At 1.10.0,
+when the roster held 102 cases, that was run 34 (`evals/runs/2026-09-27-run-34/`), the full
+baseline on the moved profile; alone it is FAIL on one floor case. Run 35 (`evals/runs/2026-09-27-run-35/`) re-measured the two cases
 whose files moved and composed with run 34 under the incremental rule, and the composed run holds
 every threshold with calibration 5 of 5 in each run; run 35 is the run of record.
 For a selected Codex profile, the manual stateless transport is documented in
