@@ -29,6 +29,299 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before anything is published.
 -->
 
+## [1.11.0] - 2026-10-01
+
+### Added
+
+- **Codex gets the nine touchpoints, as shared skills.** When Codex or Cursor is selected, sync
+  writes each touchpoint once as `.agents/skills/st-<id>/SKILL.md`, with an `agents/openai.yaml`
+  beside it that turns implicit invocation off, so a touchpoint starts only when you name it:
+  `$st-<id>` in Codex (`$st-work`), `/st-<id>` in Cursor. Until this release Codex received no
+  touchpoint body at all. Cursor's copies move to the shared tree: the next `stamity sync` writes
+  the shared files and reclaims the rows a 1.10.0 install recorded under `.cursor/skills/st-<id>/`,
+  and changes nothing else under `.cursor/`. Claude Code keeps `.claude/commands/`. Copilot keeps
+  `.github/prompts/`; with Codex or Cursor beside it, Copilot also lists the nine as project skills,
+  and its capability row says so. Codex's skills-list check now counts the touchpoints against its
+  8,000-character cap. The charter's Touchpoints paragraph now says a client that reads
+  `.agents/skills/` starts them as any skill (`/st-<id>` or `$st-<id>`), so every generated
+  `AGENTS.md` moves on the next sync. The Codex plugin does not carry the touchpoints:
+  `stamity plugin setup` writes them into the repository. Nothing to do beyond the sync.
+- **`/st-debug` reproduces a precisely described bug itself.** When the report gives an exact input,
+  the expected output and the actual output, and the charter's test gate can run, the implementer
+  writes a failing test for that input and the test-runner runs it twice. A failure for the stated
+  reason both times is the reproduction: no stop and no question. The run goes on through root cause
+  and hands off to `/st-work` in the same session. Anything else, or a defect that needs your
+  environment, data or timing, still stops and waits for your output. Probes must keep the lint and
+  typecheck gates green, and each carries the run id, `[STAMITY-DEBUG <run-id>]`. A debug round now
+  opens a run record, `.stamity/runs/<UTC date>_debug-<slug>/record.md`, at its first probe or test.
+  The command body moves on the next sync.
+- **`/st-spec` offers the whole app as a scope on a small repository.** Below 5,000 source lines,
+  the scope question lists the whole app first, beside the narrowest readings, and makes it the
+  declared default when the request names the app ("create the spec", "spec this app"). The line
+  that states the chosen mode also states the line count. The whole app is always asked, never
+  assumed, and a bare "backfill the specs" still declines the sweep by default.
+- **Runs retire the inbox rows they fix.** At its close, `/st-work` removes each `.stamity/inbox.md`
+  row its change fixed and records `- inbox retired: <location> — fixed in <run id>` in the run
+  record. `/st-quick`, which keeps no run record, retires a row once its gate is green and names each
+  row in its batch report. A row that points at a ledger row is retired there first, through the new
+  `stamity ledger close --id <row> --retired "<disposition>"`. The row stays `deferred` and gains a
+  dated `retired` field. Running it again with the same disposition prints `unchanged` and never
+  re-dates it, and a different disposition is refused.
+- **Python gates run without an activated environment.** When a committed `uv.lock`,
+  `poetry.lock` or `pdm.lock`, or a `[tool.hatch.envs` table in `pyproject.toml`, declares the
+  runner, every Python gate is prefixed with it (`uv run pytest`, `poetry run ruff check .`, and so
+  on). With no declared runner and a `.venv/` (or `venv/`) holding `pyvenv.cfg`, `init` pins the three
+  gates to that interpreter: `<venv>/bin/python -m pytest`, `… ruff check .` and `… mypy src`
+  (`mypy .` with no root `src/`). The init panel names the pins, and `sync` never rewrites them. The
+  pins use the POSIX interpreter path, and the panel says they will not run on Windows until the
+  `gates.*` keys are changed. An existing setup that wants the same pins sets them with
+  `stamity config set gates.*`.
+
+### Changed
+
+- **Codex asks for hook approval again after every upgrade.** `.codex/hooks.json` now carries the
+  pinned CLI call, at the version that wrote it: the starter's missing-script message and the
+  description's check hint. Codex trusts that file by its hash, so each `stamity sync` at a new
+  version, starting with this one, changes the hash. Codex then asks you to review each stamity
+  hook again through `/hooks`, and a hook you have not reviewed does not run. This is accepted
+  deliberately: the alternative was a bare `stamity` call that the documented `npx` setup cannot
+  run. After upgrading, open Codex and type `/hooks`.
+- **Codex's rules move to a root `AGENTS.override.md`.** Codex's conditional-rules appendix no
+  longer sits in the shared `AGENTS.md`. It goes to `AGENTS.override.md`, which Codex reads instead
+  of `AGENTS.md` and which Claude Code, Cursor and Copilot do not read, as measured on each client.
+  The shared `AGENTS.md` is now the same bytes with or without Codex, so the co-selected clients
+  stop paying for the appendix. The override repeats `AGENTS.md` as sync writes it, then the
+  appendix. It is engine-owned and written whole: `check` reports it as drift after you edit
+  `AGENTS.md`, and the next sync carries your edit across. The operator's text reaches the override
+  only under a `supplement` or `skip` import decision. With no decision, or with `replace`,
+  `AGENTS.md` is engine-owned whole.
+  In a 1.10.0 Codex setup, the next sync writes the new `AGENTS.md` and creates the override. If
+  you edited that `AGENTS.md` by hand, the sync takes the drifted-overwrite lane, as any re-sync
+  over a hand-edited engine-owned file does: it regenerates `AGENTS.md` whole, keeps your previous
+  file in a `.bak` beside it (`AGENTS.md.bak`, or another name if that one is taken; the warning
+  prints the path), and prints a warning naming both. To keep the text, move it from the `.bak`
+  into a `supplement` import. An `AGENTS.override.md` of your own is refused without `--force` and
+  backed up with it. Deselecting Codex reclaims the override.
+- **`stamity check` names the gates it did not run.** `check` runs no gate, and it no longer says
+  so with a bare `all green`. A green run now closes on
+  `setup green — gates not run: lint, typecheck, test (check runs no gate)`, or
+  `ok — <n> advisory warning(s) above; gates not run: …` beside warnings. Above that line it warns
+  about each charter gate it cannot resolve:
+  `warning: the <kind> gate cannot be resolved — the charter says "<value>"`. That happens when
+  nothing configures the gate, or when the command's first word is not found in
+  `node_modules/.bin/`, `.venv/bin/` or on `PATH`. The warnings never change the exit code, and
+  `--json` carries the same data under `gates`.
+- **First-run output says what setup did.** The init panel counts distinct files on disk: the
+  generated files, the manifest and the state-directory keep files it created. It says when
+  `.gitignore` changed and counts a file several clients share once. A client set that init
+  defaulted is labelled as the default, with the route to add more: `--tools` on a dry run, and
+  `config set tools …` then `sync` after a live init. Codex's next steps list the two trust steps
+  that are yours: project trust in `~/.codex/config.toml`, then the `/hooks` review. Copilot's name
+  the coding agent's setup workflow when the run wrote it. The `.gitignore` line names exactly the
+  entries the run appended, each with a reason. It mentions a credential file only when an MCP
+  server is configured.
+- **The update notice names the exact version, and how to stay.** A newer release prints
+  `Update available: <current> -> <new>. To move: npx -y @zomarit/stamity@<new> sync. To stay on
+  <current>, do nothing.` It never advises `@latest`. `sync --help` and the getting-started page
+  give the same exact-version form, `npx -y @zomarit/stamity@<version> sync`. The page adds that
+  staying on the version you have needs nothing.
+- **Copilot's setup workflow follows the project's own pins.**
+  `.github/workflows/copilot-setup-steps.yml` takes its Node version from `.nvmrc`,
+  `.node-version` or the lower bound of `engines.node`, else `lts/*`. It takes the
+  `actions/checkout` and `actions/setup-node` refs from the project's own workflows, a SHA pin with
+  its comment included, else a major tag. A repository with no Node toolchain gets a checkout only,
+  and the file says so. The workflow moves on the next sync, and again whenever you move one of
+  those pins, until you sync; `check` reports it as drift in between.
+- **The resume card prints on a resume too, and names a recently closed run.** The session-start
+  hook now appends the card after a compaction and on a resume, when the client's payload says so.
+  With no run in progress, the card shows the newest run dated within the last two days: its
+  closing status, plan and command line, and its ledger rows counted by state. Open debug rounds
+  are listed by run id on a `debug rounds open:` line. When those are all there is, the card names
+  no run. `stamity ledger status` prints the same card, and its `--json` gains `status`,
+  `ledgerStates` and `debugRounds`. The session-start script moves on the next sync.
+- **Verdict roles read the change themselves.** A reviewer or lens brief now names the diff range,
+  the plan cell whose criteria it judges and the report path. It never carries the implementer's
+  or fixer's account of the change. The reviewer, the three lenses and the spec-author may run
+  read-only git to read that range: `git log`, `show`, `diff`, `rev-list` and `merge-base`. On
+  Claude Code in the repository layout, the generated guard enforces the grant. On Codex, the
+  role's own instructions state it, and the role runs inside its `read-only` sandbox. Anywhere a
+  role has no git grant, the orchestrator hands it a patch of the range instead.
+- **A re-review is a fresh reviewer, and with no declared gate an approval counts at once.** Each
+  re-review is a new reviewer spawn, never a resumed one. It gets the handed ledger ids and each
+  finding's locator at HEAD, and no fixer claim. A run that declares no `Confidence gate:` counts an
+  approval as given and runs no extra round. The review-gate hook still refuses an approval rated
+  `low`.
+- **`/st-work` asks only what needs you.** Frame asks nothing about an inbox row a persisted plan
+  already settles. At standard intensity, a persisted `/st-plan` artifact that passes the freshness
+  guard is the go-ahead, logged as
+  `Default applied: plan gate → option 1, execute now (persisted plan <path>)`. Deep runs and
+  in-flow plans still ask. The close asks once: one question covers the unproven QA rows, the
+  spec-delta merge and the commit. With no answer, the change stays uncommitted and nothing merges.
+- **QA rows close as walked, auto-proven or accepted-unwalked.** A row reads `walked` only when you
+  say you walked it. A bare sign-off ("ok") records every open row `accepted-unwalked`, with an input
+  hash over the files the row derives from. An unchanged hash is not asked again, except for a
+  high-risk `H` row. When every row auto-proved there is no ask, and an unattended run records
+  `not signed`. `Shippable: YES` is recorded only while no `H` row is accepted unwalked.
+- **Each gate runs once, as the charter spells it, and an exit code the tool did not show is
+  `unknown`.** The test-runner runs each requested gate once from the root, with no wrapper, added
+  flag or filter. It reads the exit code from the tool. Before the first gate it runs `false` once
+  to learn whether the tool shows a status. An `unknown` row makes the verdict red, never a pass.
+  `/st-quick` gates its batch once the same way. Every agent that runs commands carries one shared
+  paragraph for portable POSIX `sh`, and waits on a long command instead of polling it.
+- **`/st-quick` takes a small change with the tests that follow it.** A test file edited only where
+  it exercises the item's changed lines rides with the item and does not count toward the
+  one-source-file rule; its lines still count toward `Size`. A user-facing string or label
+  correction may span two source files. The five-file batch cap still counts every file, and a
+  riding test moves no other row: a test under a security-sensitive path still fires that row.
+- **`/st-ask` answers a question about one symbol or file directly.** The orchestrator reads the
+  named definition and, with one search, at most its direct call sites, citing every claim. A read
+  past about 300 lines, or into a second file's body, goes to one quick researcher instead. A symbol
+  defined in more than one file fans out as a mechanism question. A named symbol the search cannot
+  find is reported unanswerable, with the pattern and paths searched.
+- **Run records are written with the file tools.** `/st-work` tells the agent to create and extend
+  `record.md`, `plan.md`, reports and the inbox with the client's file write and edit tools, never a
+  shell redirect, a heredoc or `cat >`. Ledger rows still move only through `stamity ledger`.
+- **Not in this release: setup still writes the read-permission allowlist.** The plan for this
+  release said setup would write no permission allowlist. That part did not ship. `.claude/settings.json`
+  still carries the session-wide `permissions.allow` rows for reads. The engine owns the whole
+  `permissions` key, and removing the rows safely needs a decision on that ownership that this
+  release did not take.
+- **The learnings index warns two weeks ahead, orders by date, and reports the bytes it printed.**
+  A learning whose `reviewBy` falls within 14 days now draws a warning. The index lists learnings by
+  their frontmatter `date`, newest first, ties broken by file name, instead of by modified time. Past
+  the 20-line cut, the session banner's byte figure counts the lines it actually printed.
+- **`stamity ledger` files a re-piped block once, and takes short ids.** A `--stdin` append whose
+  findings already have rows appends none of them. It prints each existing row's id with
+  ` already-filed`, with that row's own severity and `decision-needed` mark, and still appends the
+  new findings. `ledger close --id` accepts `<phase>/<n>` for the run `--run` names and refuses
+  another run's id. The stdin ceiling and the rationale cap now name the measured size beside the
+  limit.
+- **Codex's hook claims are re-measured.** On codex-cli 0.155.1 (2026-09-30), the hooks feature was on
+  by default, and headless `codex exec` again ran no project hook in 3 of 3 runs. Both runs trusted
+  the project through a per-invocation override, so the cause is not isolated. The getting-started
+  page, `SECURITY.md` and the Codex capability row say so. Setup still writes
+  `[features] hooks = true` explicitly.
+- **`SECURITY.md` has no accepted risk left.** The documentation site's `image-size` dependency
+  was the one accepted risk. Its advisories now name a patched version, and the site's lockfile
+  moved to 2.0.4. The site is not part of the published package.
+- **The eval set grows to 113 cases.** `SET-v7` adds eleven cases, none tagged `floor`, for this
+  release's behaviour. The new cases cover the quick lane's riding tests and its refusal on an
+  authentication path, the in-process debug route, the small-repository spec scope, the
+  test-runner's honest exit code, the bare QA sign-off, the reviewer's range-and-criteria brief, a
+  persisted plan asking once, a named-symbol ask, the fresh re-reviewer, and a digest carrying
+  every security finding in full. Three carried `## Expected` blocks re-synced to the landed corpus.
+  The roster is 61 golden, 22 adversarial (18 guardrails and 4 benign twins) and 30 probes, with
+  23 floor cases. The thresholds and the scoring rule do not move.
+- **Run 36 is the 1.11.0 release run, and the new baseline on the `claude` profile.** It is a
+  full run: all 113 cases are measured in full, calibration first, and no case carries from
+  run 35. The Claude Code client moved from 2.1.283 to 2.1.286, which makes this a new
+  configuration, and a case carries only between runs of one configuration. The profile is
+  unchanged: scenario `claude-opus-5-5` at `high` effort, judge `claude-fable-5-1`. Result:
+  RUN-36-RESULT. On the Claude profile and rubric v7, against the thresholds declared before the
+  run: golden RUN-36-GOLDEN-RATE (RUN-36-GOLDEN-PASSED of 61) with floors RUN-36-FLOORS-PASSED
+  of 23, guardrail hold RUN-36-GUARDRAIL-RATE (RUN-36-GUARDRAIL-HELD of 18), benign-twin false
+  refusals RUN-36-BENIGN-RATE (RUN-36-BENIGN-REFUSED of 4), and trigger-probe accuracy
+  RUN-36-PROBE-RATE (RUN-36-PROBE-PASSED of 30). Calibration matched RUN-36-CALIBRATION. The
+  run is at `RUN-36-PATH`.
+
+### Fixed
+
+- **Every CLI call the flows and hooks make now resolves after the documented `npx` setup.** The
+  flows told agents to run a bare `stamity <verb>`. The documented `npx @zomarit/stamity init`
+  setup installs no such command, so the handoff, learn and ledger steps failed. Every emitted
+  body now defines its calls in one sentence. A call runs as `npx --no stamity <verb>`, which runs
+  an installed copy (a bin the project declares, one in `node_modules/.bin`, or a global one) and
+  never downloads one. Where npm refuses because none is installed, the call runs pinned, as
+  `npx -y @zomarit/stamity@<version> <verb>` at the version that generated the setup. The local
+  copy's version is whatever is installed. Hook hints and CLI remedies print the pinned form too.
+  The charter's one call reads "change via `npx -y @zomarit/stamity@<version> config`". A plugin
+  body carries the literal pinned call at the plugin's version. When neither form can run, a
+  handoff or learn step writes nothing and reports `Not done:` with the command to re-run. Only the
+  ledger may be edited by hand, and the run record then says `ledger: by hand (no CLI)`. Every
+  generated body moves on the next sync.
+- **Generated scripts no longer fail the project's own lint.** Every script setup emits now opens
+  with `/* eslint-disable */`, on line 2 after a shebang and line 1 otherwise. That covers the hook
+  scripts, the portable runners, Cursor's hook scripts and the `st-verify` coverage checker. A stock
+  ESLint config with no Node globals now reports no errors on them. A config that already declares
+  Node globals and reports unused disable directives may warn on them instead. The scripts move on
+  the next sync.
+- **Setup names the test runner a project declares in its manifest.** Detection now also reads
+  `package.json` dependencies and the `test` script for vitest, jest, mocha, Playwright and Cypress,
+  matched on the exact package name. It reads `pyproject.toml` for pytest (a `[tool.pytest` table or
+  a `pytest` dependency). A project whose runner had no config file no longer reads
+  `Test framework: unknown`. The charter's line moves on the next sync.
+- **The review gate's state stays out of commits and out of copied worktrees.** `init`, `sync`,
+  the migration carry and `config mcp` add `.stamity/review-gate.json`, its `.lock` and its `.tmp-*`
+  files to `.gitignore`, beside `.env.mcp`. A line an existing rule already covers is not added
+  twice. A file you already committed stays tracked: setup never touches the git index. `sync` names
+  the lines it added, as `.gitignore: added …` in its report and as `gitignoreAdded` in its JSON.
+  `stamity worktree setup` now leaves those files behind when a `copy` row covers `.stamity`. A
+  `symlink` row still shares that directory, state included.
+- **Every researcher dispatch carries the brief keys the researcher requires.** Each flow that
+  spawns a researcher now names all six keys: `objective`, `scope`, `questions`, `output_sections`,
+  `depth` and `tool_tier`. Before, a spawn missing one could come back `BLOCKED_AMBIGUITY`.
+- **The coverage checker reads `/st-plan`'s numbered headings and a missing spec directory.** A
+  heading such as `## 2. Spec delta` or `## 3. Units — engine` now names its section. A spec input
+  that does not exist and is not a `.md` path reads as no spec, with the advisory
+  `missing-spec-input`, instead of failing the run.
+- **`stamity worktree setup` survives a lost commondir race that left its branch behind.** A lost
+  race could leave the new branch on disk with nothing else. The one retry then failed with "a
+  branch named … already exists", and that was reported as the path already existing. The retry now
+  attaches to a branch this same call created. A branch that existed before the call is never
+  attached to, and git's branch refusal gets its own message.
+- **`stamity plugin setup` no longer says `clean -y` keeps your state.** On a repository that
+  already has a setup, the refusal's hint said `clean -y` keeps learnings, handoffs, overrides and
+  user hooks. It does not: `clean -y` deletes the whole `.stamity/` directory. The hint now says
+  so, naming learnings, handoffs, overrides, run records, packs and user hooks, tells you to copy
+  out what you want to keep first and put it back after `plugin setup`, and names
+  `clean --dry-run` to list what it removes. The wrong hint shipped with 1.9.0.
+
+### Removed
+
+- **The replay instrument's files.** The replay was retired on 2026-09-29. Its protocols,
+  fixtures, pilot results, scripts and tests (`evals/replay/`, `scripts/replay/`, `test/replay/`)
+  leave the tree. The tag `replay-frozen-2026-09-30` keeps them, and
+  `git checkout replay-frozen-2026-09-30 -- evals/replay scripts/replay test/replay` restores them.
+  These were repository surfaces: the published package never carried them.
+- **Cursor's `.cursor/skills/st-<id>/` copies.** Sync no longer writes them, and reclaims the ones
+  a 1.10.0 install recorded; the touchpoints live in `.agents/skills/` (see Added).
+
+### Security
+
+- **A CLI call never downloads a package nobody holds.** The local form is `npx --no stamity`,
+  never a bare `npx stamity`. The unscoped name `stamity` is unpublished on npm, and a non-TTY npx
+  would install whatever someone published there without asking. A fork with no npm channel (a
+  `private` manifest with no `publishConfig.registry`) renders every pinned call as
+  `npx --no <its package>@<version>`. That form runs a copy already installed and refuses to fetch
+  one, so a stranger's package under the fork's unheld scope is never installed. Init, sync, the CLI
+  remedies and the plugin build all apply it. Such a fork's `sync --help` says to install the newer
+  release into the project, then run `npx --no <name> sync`.
+- **A `--registry` fork's update notice asks its own registry, and the fork guide states the
+  `.npmrc` precondition.** The startup notice probes the fork's `publishConfig.registry`, never the
+  public registry, sends no credentials, and stays silent when the probe fails. The fork guide now
+  says that npx finds a scope's registry in npm's configuration, not in `publishConfig`. A
+  consumer machine without the `.npmrc` scope mapping asks the public registry for the fork's name.
+  It recommends holding the scope there, publishing nothing, so a missing mapping ends in a 404.
+- **Read-only git for the verdict roles admits reads only.** The guard admits a command for these
+  roles only when all of these hold. It is `git` followed directly by `log`, `show`, `diff`,
+  `rev-list` or `merge-base`, with no option before the subcommand. It is at most 1,024 characters
+  and has no shell syntax. It carries no `--output`, `--ext-diff`, `--textconv`,
+  `--show-signature`, `--help` or `--no-index`, since each of those writes a file, runs a
+  configured program or reads outside the repository. Every other command is refused as
+  `GIT_COMMAND_DENIED`. A program your own git config runs by default is outside what a
+  command-line check can see.
+- **The Codex override never republishes `AGENTS.md` bytes the managed lane would refuse.** Under a
+  `supplement` or `skip` import decision, the override repeats text read from your `AGENTS.md`. A
+  symbolic link or shared hard link at `AGENTS.md`, or a block-severity deny-scan hit in that text,
+  now refuses the override as a collision, with or without `--force`. `check` and `sync` name the
+  problem and the repair: make `AGENTS.md` a regular file with no flagged text, then sync.
+- **The repository's lockfiles move past eight advisories.** Six dependency updates: the root
+  lock's `brace-expansion` 5.0.12 (development, and also reached through the optional `sigstore`)
+  and `ip-address` 10.7.2 (through `sigstore`), and the documentation site's `dompurify` 3.4.16,
+  `serialize-javascript` 7.1.2, `brace-expansion` 1.1.21 and `joi` 17.13.8. A consumer's install is
+  unaffected by these moves: the lockfiles are not published, and an installed package resolves its
+  own dependencies, where the ranges under `sigstore` 5.0.0 admit both fixed root versions.
+
 ## [1.10.0] - 2026-09-28
 
 ### Added
@@ -1112,7 +1405,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   emission (Claude, Cursor, Copilot, and Codex); the first-party packs; and the documentation
   site.
 
-[Unreleased]: https://github.com/zomarit/stamity/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/zomarit/stamity/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/zomarit/stamity/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/zomarit/stamity/compare/v1.9.1...v1.10.0
 [1.9.1]: https://github.com/zomarit/stamity/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/zomarit/stamity/compare/v1.8.0...v1.9.0
