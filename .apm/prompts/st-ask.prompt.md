@@ -52,7 +52,10 @@ question from one bounded slice of the repository.
 A question that names one symbol or one file is answered directly: the orchestrator reads the
 named definition and at most its direct call sites found by one search, and cites every claim
 under the Citation rule. When that read would pass about 300 lines or a second file's body, one
-quick researcher answers it instead. Mechanism and impact questions keep their fan-out.
+quick researcher answers it instead. A symbol defined in more than one file is a mechanism
+question and fans out as one. A named symbol the one search does not find is an Unanswerable
+row that names the search it ran — the pattern and the paths it covered — in place of an
+`unread:` note. Mechanism and impact questions keep their fan-out.
 
 Dispatch every facet to `researcher`, all of them in one message. Serialize only on a
 dependency edge —

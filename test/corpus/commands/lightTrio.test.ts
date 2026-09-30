@@ -524,6 +524,32 @@ describe("ask — sized to the question (REQ-FLOW-020)", () => {
     expect(dispatch).toBeGreaterThan(sizing);
   });
 
+  it("REQ-FLOW-020 sends a symbol defined in more than one file to the mechanism fan-out", async () => {
+    const facets = section(await load("commands/st-ask.md"), "Facets").replace(/\s+/g, " ");
+
+    // Plan 013 edge case: two definitions are a mechanism question, not one quick researcher.
+    expect(facets).toContain(
+      "A symbol defined in more than one file is a mechanism question and fans out as one.",
+    );
+    const sizing = facets.indexOf("A question that names one symbol");
+    const twoDefs = facets.indexOf("A symbol defined in more than one file");
+    const dispatch = facets.indexOf("Dispatch every facet to `researcher`");
+    expect(sizing).toBeGreaterThanOrEqual(0);
+    expect(twoDefs).toBeGreaterThan(sizing);
+    expect(dispatch).toBeGreaterThan(twoDefs);
+  });
+
+  it("REQ-FLOW-020 returns a named symbol the search does not find as Unanswerable, naming the search", async () => {
+    const facets = section(await load("commands/st-ask.md"), "Facets").replace(/\s+/g, " ");
+
+    // Plan 013 edge case: the 0-facet path has no researcher and so no `unread:` note;
+    // the Unanswerable row carries the search that ran in its place.
+    expect(facets).toContain(
+      "A named symbol the one search does not find is an Unanswerable row that names the " +
+        "search it ran — the pattern and the paths it covered — in place of an `unread:` note.",
+    );
+  });
+
   it("REQ-FLOW-020 carves the named-target read out of the context budget, and only that", async () => {
     const text = flow(await load("commands/st-ask.md"));
 

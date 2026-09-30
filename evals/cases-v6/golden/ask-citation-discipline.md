@@ -2,7 +2,7 @@
 id: ask-citation-discipline
 class: golden
 claim: "Every claim cites path:line and carries a confidence band; a claim that cannot be cited is deleted rather than softened, and medium or low confidence names the unverified assumption in the same sentence."
-source: content/commands/st-ask.md:88-102
+source: content/commands/st-ask.md:91-105
 metric: rubric
 ---
 
