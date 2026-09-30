@@ -2,7 +2,7 @@
 id: board-write-back-four-channels
 class: golden
 claim: "Board write-back is read-only by default and has exactly four channels; anything needing a fifth stops and returns BLOCKED_DEPENDENCY, and the rest surfaces as proposals in the run report."
-source: content/commands/st-board.md:253-285
+source: content/commands/st-board.md:255-287
 metric: rubric
 ---
 

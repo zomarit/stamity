@@ -205,6 +205,8 @@ in for it, records a decision nobody made.
 Every REVISE finding is checked against current code before it can enter the plan. Spawn one
 `researcher` per file-disjoint cluster; they run in parallel and write nothing.
 
+Every `researcher` brief carries the six keys its schema requires — `objective`, `scope` with the task boundaries, `questions`, `output_sections`, `depth` (`quick`, `standard` or `deep`) and `tool_tier` (`codebase`, `+docs` or `+web`) — plus `handoff_to` when the consumer is not this flow.
+
 Each finding returns one of `confirmed` · `not reproducible` · `mislocated` (with the corrected
 `file:line`), its evidence as `file:line` at current HEAD, and a confidence with its basis —
 direct measurement, sampled observation, or inference from analogue.

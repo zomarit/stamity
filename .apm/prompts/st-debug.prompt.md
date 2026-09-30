@@ -50,6 +50,8 @@ residue count; a stop that waits on the user leaves it in progress.
    that separates it from its neighbours. A hypothesis with no discriminating observation is
    not testable: rewrite it or drop it. Brief a `researcher` when the suspect surface spans
    more than two files or is unfamiliar: symptom trace, introduction window, prior learnings.
+   Every `researcher` brief carries the six keys its schema requires — `objective`, `scope` with the task boundaries, `questions`,
+   `output_sections`, `depth` (`quick`, `standard` or `deep`) and `tool_tier` (`codebase`, `+docs` or `+web`) — plus `handoff_to` when the consumer is not this flow.
 2. **Instrumentation.** On the in-process route (step 3) this step runs only when the failing
    test alone cannot separate the hypotheses. Delegate the edit to `implementer` —
    instrumentation is a code mutation and is written where every other mutation is.

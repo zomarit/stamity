@@ -96,6 +96,8 @@ nothing, the run drafts every section from them, and the run also executes the p
 over its own draft. Naming the writer is what makes the single-writer rule checkable instead of
 an undeclared spawn write.
 
+Every `researcher` brief carries the six keys its schema requires — `objective`, `scope` with the task boundaries, `questions`, `output_sections`, `depth` (`quick`, `standard` or `deep`) and `tool_tier` (`codebase`, `+docs` or `+web`) — plus `handoff_to` when the consumer is not this flow.
+
 ## Feature
 
 Research questions: codebase impact (affected modules, integration points, coupling) · analogous

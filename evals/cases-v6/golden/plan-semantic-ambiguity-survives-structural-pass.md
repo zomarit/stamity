@@ -2,7 +2,7 @@
 id: plan-semantic-ambiguity-survives-structural-pass
 class: golden
 claim: "A structurally complete requirement-to-plan mapping still blocks handoff when its meanings conflict and gives a usable clarification."
-source: content/commands/st-plan.md:272-405
+source: content/commands/st-plan.md:274-407
 metric: rubric
 ---
 

@@ -2,7 +2,7 @@
 id: plan-artifact-head-and-units-shape
 class: golden
 claim: "The plan artifact is persisted at docs/plans/<NNN>-<slug>.md with NNN the next free number, its head carries id, intent, stamp and reads as required keys with approach present for migration intent only and depends_on optional, and every unit carries all eight fields the command lists — requirements never blank, interfaces inline, at least one edge case."
-source: content/commands/st-plan.md:311-364
+source: content/commands/st-plan.md:313-366
 metric: rubric
 ---
 

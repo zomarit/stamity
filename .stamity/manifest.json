@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.10.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-30T12:27:37.209Z",
+  "updatedAt": "2026-09-30T12:28:10.975Z",
   "tools": [
     "claude"
   ],
@@ -141,28 +141,28 @@
       "adapter": "claude",
       "artifactId": "cmd-board",
       "artifactType": "command",
-      "contentHash": "f87b2c527aec0193fd8b8c19560732e9922ebef0222d671cd71c063dd171fb75",
+      "contentHash": "de12f12d939e87921040b5ad3b619af1b37a95ff1015441c966a7b016a220c5c",
       "path": ".claude/commands/st-board.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-debug",
       "artifactType": "command",
-      "contentHash": "ca6607a9731a2af038ccb467810bcab7c3dfd39c9b2cd9cdb3abb4da9631494e",
+      "contentHash": "0a1b80cc4bc2ef9a7ee5710f8284255da2f7cfc804b8dd402f1c6ba18a8e7571",
       "path": ".claude/commands/st-debug.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-plan",
       "artifactType": "command",
-      "contentHash": "db4dbb2440147f3c07ae35d7b6f5b466908d5bdb6476329eaac666dd0f8784f0",
+      "contentHash": "c0b82ab3f58e78741610df25137fc228bf0161fb1779fe6af6d1d20eb0f51fbd",
       "path": ".claude/commands/st-plan.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-pr-resolve",
       "artifactType": "command",
-      "contentHash": "c706a8209ffd1e5b99fba490f3d8802a340b488f8d0c3a2e44a7f418e77acd38",
+      "contentHash": "433e12037e5b199da5d4c45df27231a54e80e80f0568dea388091cf89a01c8df",
       "path": ".claude/commands/st-pr-resolve.md"
     },
     {
@@ -176,7 +176,7 @@
       "adapter": "claude",
       "artifactId": "cmd-rework",
       "artifactType": "command",
-      "contentHash": "e3336335ded42b9044d4a8dabbc101d8d61b20bac2f5318584d82d8dee90ade0",
+      "contentHash": "4b57015c8766cd2ec983f7836207b36c2f369a0289890c006c16d322ccdc8a14",
       "path": ".claude/commands/st-rework.md"
     },
     {
@@ -288,7 +288,7 @@
       "adapter": "claude",
       "artifactId": "dep-audit",
       "artifactType": "skill",
-      "contentHash": "ae1f2eb3e77cf1153a27aca1852780a2c4779ba487e9c50db2107000bb3d4836",
+      "contentHash": "eec8b04ca6e68a50ddb64ee0d3d9ac3dc55a7c415ca40628705420bf7389fc90",
       "path": ".claude/skills/st-dep-audit/SKILL.md"
     },
     {

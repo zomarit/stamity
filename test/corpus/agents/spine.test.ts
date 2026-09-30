@@ -90,31 +90,62 @@ const BRIEF_KEY_SPELLINGS: Readonly<Record<string, RegExp>> = {
 };
 
 /**
- * The three commands that ENUMERATE a researcher brief, and the enumeration each carries.
- * The other spawn sites brief a researcher without listing keys, so they say nothing about
- * the schema's required set and are out of this comparison.
+ * The one line every spawning flow carries so its researcher briefs name every required key
+ * (REQ-FLOW-004). It holds no `|` and no internal period, so it fits a table cell and reads
+ * as a single sentence under {@link sentencesAndCells}.
  */
-const BRIEF_ENUMERATION_SITES: readonly {
-  relPath: string;
-  enumeration: RegExp;
-  suppliesHandoff: boolean;
-}[] = [
-  {
-    relPath: "commands/st-ask.md",
-    enumeration: /Each researcher brief carries:([^.]*)\./,
-    suppliesHandoff: true,
-  },
-  {
-    relPath: "commands/st-work.md",
-    enumeration: /Every brief carries([^.]*)\./,
-    suppliesHandoff: false,
-  },
-  {
-    relPath: "commands/st-spec.md",
-    enumeration: /\| `researcher` \|[^|]*\|([^|]*)\|/,
-    suppliesHandoff: false,
-  },
+const SHARED_BRIEF_LINE =
+  "Every `researcher` brief carries the six keys its schema requires — `objective`, `scope` with the task boundaries, `questions`, `output_sections`, `depth` (`quick`, `standard` or `deep`) and `tool_tier` (`codebase`, `+docs` or `+web`) — plus `handoff_to` when the consumer is not this flow.";
+
+/**
+ * The spawn sites that already enumerate the brief in their own words and keep them: `/st-ask`
+ * names all seven keys, `/st-work`'s Phase 1 and `/st-spec`'s spawn table name the six. They
+ * are held to the six keys like every other site, not to the shared line's wording.
+ */
+const OWN_ENUMERATION_SITES: readonly string[] = [
+  "commands/st-ask.md",
+  "commands/st-work.md",
+  "commands/st-spec.md",
 ];
+
+/**
+ * The floor under the derived site count, so the derivation cannot pass by finding nothing.
+ * Recompute: eight commands whose `spawns:` holds `researcher`, plus `st-dep-audit`, the one
+ * skill that names a `researcher` brief — nine, so the floor sits at its bound.
+ */
+const MIN_BRIEF_SITES = 9;
+
+/**
+ * Every site that briefs a researcher, derived rather than listed: each command whose
+ * `spawns:` holds `researcher`, plus each skill whose body names a `` `researcher` brief ``.
+ * A skill that mentions researchers without briefing one is not a site.
+ */
+async function researcherBriefSites(): Promise<CorpusFile[]> {
+  return (await corpus).filter((file) => {
+    if (file.relPath.startsWith("commands/")) {
+      const spawns = frontmatterField(file.parsed, "spawns");
+      return Array.isArray(spawns) && spawns.includes("researcher");
+    }
+    if (file.relPath.startsWith("skills/") && file.relPath.endsWith("/SKILL.md")) {
+      return flow(file).includes("`researcher` brief");
+    }
+    return false;
+  });
+}
+
+/**
+ * A body read as sentences and table cells: prose is flattened and split where a period ends
+ * a sentence, and each table row is split at its pipes, so one cell is one unit.
+ */
+function sentencesAndCells(file: CorpusFile): string[] {
+  const prose: string[] = [];
+  const cells: string[] = [];
+  for (const line of file.parsed.body.split("\n")) {
+    if (line.trimStart().startsWith("|")) cells.push(...line.split("|"));
+    else prose.push(line);
+  }
+  return [...prose.join(" ").replace(/\s+/g, " ").split(/\.(?=\s|$)/), ...cells];
+}
 
 interface SpineAgent {
   /** Bare frontmatter id, which is also the filename slug. */
@@ -316,12 +347,13 @@ describe("researcher — one brief-driven definition", () => {
     expect(schema).toContain("+web");
   });
 
-  it("requires exactly the keys every enumerating spawn site supplies", async () => {
-    // The schema declared seven keys and returned BLOCKED_AMBIGUITY on any omission, while
-    // two of the three commands that enumerate a brief stop at the tool tier — so a
-    // well-formed spawn from either one was contractually under-specified. The schema now
-    // splits the six they all supply from the one only `/st-ask` sends, and this case
-    // holds that split to the commands rather than to a number written twice.
+  it("requires exactly the keys every spawning site supplies (REQ-FLOW-004)", async () => {
+    // The schema requires six keys and returns BLOCKED_AMBIGUITY on any omission, so every
+    // flow that spawns a researcher has to supply all six or its spawn is contractually
+    // under-specified. The sites are derived from `spawns:` and from skills that name a
+    // `researcher` brief, never listed, so a new spawning flow is checked the day it lands.
+    // `handoff_to` stays defaulted: the schema rows below hold that, and no site is required
+    // to send it.
     const schema = section(await load("agents/stamity-researcher.md"), "Brief schema");
     const rows = tableRows(schema);
     expect(rows).toHaveLength(7);
@@ -334,25 +366,47 @@ describe("researcher — one brief-driven definition", () => {
     // A defaulted key without a stated default is the same under-specification one level down.
     expect(defaulted[0]).toMatch(/Absent, the consumer is the spawning flow itself/);
 
-    const sites = await Promise.all(
-      BRIEF_ENUMERATION_SITES.map(async (site) => ({ site, body: flow(await load(site.relPath)) })),
-    );
-    for (const { site, body } of sites) {
-      const enumeration = site.enumeration.exec(body)?.[1];
-      expect(enumeration, `${site.relPath}: no researcher-brief enumeration found`).toBeDefined();
+    // TEST CHANGE, justified (sw30-researcher-brief-keys, 2026-09-30): the hand-kept list of
+    // three enumerating commands became a derivation over every spawn site, and the check that
+    // `handoff_to` appeared at `/st-ask` alone is dropped — the shared line now names it at
+    // every site, so its presence no longer tells the sites apart. The defaulted half of that
+    // split is still asserted on the schema rows above.
+    const sites = await researcherBriefSites();
+    expect(
+      sites.length,
+      `researcher spawn sites derived: ${sites.map((site) => site.relPath).join(", ")}`,
+    ).toBeGreaterThanOrEqual(MIN_BRIEF_SITES);
 
-      for (const key of REQUIRED_BRIEF_KEYS) {
-        expect(
-          BRIEF_KEY_SPELLINGS[key]?.test(String(enumeration)),
-          `${site.relPath} never supplies required key \`${key}\``,
-        ).toBe(true);
-      }
-      // The other direction is what forces the default: the key two of these sites do not
-      // send may not be required, and the one that does send it keeps it meaningful.
+    for (const site of sites) {
+      // The sentence (or table cell) that names the most required keys; a site supplies the
+      // brief only when one sentence names all six.
+      const missing = sentencesAndCells(site)
+        .map((sentence) =>
+          REQUIRED_BRIEF_KEYS.filter((key) => BRIEF_KEY_SPELLINGS[key]?.test(sentence) !== true),
+        )
+        .reduce((fewest, next) => (next.length < fewest.length ? next : fewest));
+      expect(missing, `${site.relPath}: no sentence supplies every required brief key`).toEqual(
+        [],
+      );
+    }
+  });
+
+  it("carries the one shared brief line at every spawning site that has no enumeration of its own (REQ-FLOW-004)", async () => {
+    const sites = await researcherBriefSites();
+    const shared = sites.filter((site) => !OWN_ENUMERATION_SITES.includes(site.relPath));
+    // The three own-wording sites are spawn sites too; an exemption for a file that no longer
+    // spawns a researcher would be dead weight, so each one is required to still be derived.
+    for (const relPath of OWN_ENUMERATION_SITES) {
+      expect(sites.map((site) => site.relPath)).toContain(relPath);
+    }
+    expect(shared.length).toBeGreaterThanOrEqual(MIN_BRIEF_SITES - OWN_ENUMERATION_SITES.length);
+
+    for (const site of shared) {
+      // A boolean, so a failure names the file instead of printing the whole flattened body.
       expect(
-        BRIEF_KEY_SPELLINGS["handoff_to"]?.test(String(enumeration)),
-        `${site.relPath}: handoff_to presence changed`,
-      ).toBe(site.suppliesHandoff);
+        flow(site).includes(SHARED_BRIEF_LINE),
+        `${site.relPath}: the shared researcher-brief line is missing`,
+      ).toBe(true);
     }
   });
 

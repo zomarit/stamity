@@ -32,6 +32,8 @@ context scan for `fill`, collision census for `pickup`. Independent briefs go
 out in one parallel batch; results merge through this command, which is the
 single writer for every item it touches.
 
+Every `researcher` brief carries the six keys its schema requires — `objective`, `scope` with the task boundaries, `questions`, `output_sections`, `depth` (`quick`, `standard` or `deep`) and `tool_tier` (`codebase`, `+docs` or `+web`) — plus `handoff_to` when the consumer is not this flow.
+
 ### fill — intake to items
 
 1. **Collect sources.** Read the sources named in the invocation, then the

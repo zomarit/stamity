@@ -2,7 +2,7 @@
 id: debug-next-step-derived-from-run-state
 class: golden
 claim: "A /st-debug closing report ends on one recommended next step derived from that run's own state — a regression clause with no test, instrumentation held under a capture-later agreement, or a surviving hypothesis — rather than from the escalation table, and a run with none of those says so."
-source: content/commands/st-debug.md:192-206
+source: content/commands/st-debug.md:194-208
 metric: rubric
 ---
 

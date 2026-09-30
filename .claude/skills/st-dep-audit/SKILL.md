@@ -94,6 +94,8 @@ changed behavior — the detail is a research question: hand a `researcher` brie
 naming the package, the version span, and this repo's call sites, rather than
 inferring the change from the number.
 
+Every `researcher` brief carries the six keys its schema requires — `objective`, `scope` with the task boundaries, `questions`, `output_sections`, `depth` (`quick`, `standard` or `deep`) and `tool_tier` (`codebase`, `+docs` or `+web`) — plus `handoff_to` when the consumer is not this flow.
+
 ## Step 5 — Report and route out
 
 Nothing is applied here. Items the operator wants acted on now go to

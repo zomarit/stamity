@@ -2,7 +2,7 @@
 id: plugin-mode-invocation
 class: golden
 claim: "Running as the Claude Code plugin invoked at `/stamity:st-plan`, a plan run fans its research out under the namespaced agent form `@stamity:stamity-researcher`, reaches its coverage pass through the skill form `/stamity:st-verify` inside the root, keeps itself the single writer of the artifact, and cites the charter-reference phrase the root renders rather than an unresolved gate token."
-source: content/commands/st-plan.md:88-97,164-166,285-290
+source: content/commands/st-plan.md:88-97,166-168,287-292
 metric: rubric
 ---
 

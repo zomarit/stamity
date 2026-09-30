@@ -170,6 +170,8 @@ for each finding:
 | `causal_chain` | symptom → driver → root, at least 3 steps; required on every `ACCEPT` |
 | `counter_argument` | the strongest case for the opposite decision and why it loses; required on every `DECLINE` |
 
+Every `researcher` brief carries the six keys its schema requires — `objective`, `scope` with the task boundaries, `questions`, `output_sections`, `depth` (`quick`, `standard` or `deep`) and `tool_tier` (`codebase`, `+docs` or `+web`) — plus `handoff_to` when the consumer is not this flow.
+
 A finding whose `screened.action` is `dropped` enters no researcher brief — there is no text to
 evaluate. It carries `decision: SCREENED` straight into phase 3.
 
