@@ -425,6 +425,20 @@ describe("/st-work — Frame and Plan", () => {
     expect(frame).toContain("guaranteed on every run");
   });
 
+  it("lists an inbox row a persisted plan settles and asks nothing about it (REQ-FLOW-019)", async () => {
+    const frame = collapse(section(await body(), "## Phase 0 — Frame"));
+    // A row the persisted plan already disposed of is recorded with that disposition, not asked.
+    expect(frame).toContain("already settles");
+    expect(frame).toContain("not asked about");
+    // The unsettled rest ride the plan gate's one question and stay in the inbox by default.
+    expect(frame).toContain("ride the plan gate's question");
+    expect(frame).toContain("left in the inbox by default");
+    // The old per-item ask is gone.
+    expect(frame).not.toContain("the operator decides");
+    // The floor the trim leaves alone: a materially ambiguous request still asks at step 1.
+    expect(frame).toContain("ask ONLY when readings diverge materially");
+  });
+
   it("cites the inbox census owner's section instead of restating a reader count", async () => {
     const frame = collapse(section(await body(), "## Phase 0 — Frame"));
     const boardBody = (await corpusFile(BOARD_PATH)).parsed.body;
@@ -550,6 +564,20 @@ describe("/st-work — Frame and Plan", () => {
     expect(plan).toContain("ceiling, not a target");
     expect(plan).toContain("light: auto-continue");
     expect(plan).toContain("execute-now");
+  });
+
+  it("takes a fresh persisted plan as the go-ahead at standard and still asks on deep (REQ-FLOW-019)", async () => {
+    const plan = collapse(section(await body(), "## Phase 2 — Plan"));
+    const gate = plan.slice(plan.indexOf("- **Plan gate.**"));
+    expect(gate).toContain("passed the freshness guard is the go-ahead");
+    // The skipped ask leaves one record line naming the gate, the default and the plan path.
+    expect(gate).toContain("`Default applied: plan gate → option 1, execute now (persisted plan <path>)`");
+    // Standard still asks when the plan was made in-flow; deep always asks.
+    expect(gate).toContain("an in-flow plan is presented and asked");
+    expect(gate).toContain("deep: present the unit list and ask");
+    expect(gate).toContain("light: auto-continue");
+    // The old joint standard/deep ask is gone, so neither tier reads it by accident.
+    expect(gate).not.toContain("standard/deep");
   });
 
   it("carries the requirement id onto each decomposed unit, matching the plan artifact's field", async () => {
@@ -890,6 +918,20 @@ describe("/st-work — Prove", () => {
     expect(qaLine).toBeLessThan(proof.indexOf("decisions trace"));
   });
 
+  it("closes on one question that bundles the person's rows, the spec merge and the commit (REQ-FLOW-019)", async () => {
+    const qa = collapse(section(await body(), "### QA checkpoint"));
+    expect(qa).toContain("**The close asks once.**");
+    expect(qa).toContain("numbered options");
+    // The three parts the one question covers.
+    expect(qa).toContain("the rows no evidence proved, the spec delta merge and the commit");
+    // The declared default is the lowest-blast-radius one: nothing committed, merged or signed.
+    expect(qa).toContain("`Default if no response: leave uncommitted`");
+    expect(qa).toContain("those rows not signed and the delta unmerged");
+    expect(qa).toContain("with none left, there is no ask");
+    // It follows the row-states paragraph, whose rows it asks about.
+    expect(qa.indexOf("**The close asks once.**")).toBeGreaterThan(qa.indexOf("**Row states.**"));
+  });
+
   it("names the two optional ledger fields a report-appended row carries (REQ-CTX-006)", async () => {
     const proof = collapse(section(await body(), "### Proof block"));
     expect(proof).toContain("`report`, the repo-relative path of the report it came from");
@@ -1032,6 +1074,13 @@ describe("/st-work — Prove", () => {
     const effects = collapse(section(await body(), "### Side effects"));
     expect(effects).toContain("auto-proposed, confirm-gated, append/merge-only");
     expect(effects).toContain("spec-author");
+  });
+
+  it("takes the spec merge's confirmation from the close's one question (REQ-FLOW-019)", async () => {
+    const effects = collapse(section(await body(), "### Side effects"));
+    // Still confirm-gated; the confirmation is the close question's answer, not a second ask.
+    expect(effects).toContain("auto-proposed, confirm-gated, append/merge-only");
+    expect(effects).toContain("close's one question confirms it");
   });
 });
 
@@ -1177,6 +1226,13 @@ describe("/st-work — dials", () => {
     }
     // Model-Independence Contract: shipped content names no models or vendors.
     expect(await body()).not.toMatch(/\b(?:claude|gpt|gemini|sonnet|opus|haiku|codex|copilot)\b/i);
+  });
+
+  it("says the standard tier takes a persisted plan as the go-ahead (REQ-FLOW-019)", async () => {
+    const dials = section(await body(), "## Dials");
+    expect(intensityRow(dials, "standard")).toContain("takes a persisted one as the go-ahead");
+    expect(intensityRow(dials, "standard")).toContain("plan gate asks on an in-flow plan");
+    expect(intensityRow(dials, "standard")).toContain("specialist lens on a trigger match");
   });
 
   it("keeps the three intensity rows consistent about the specialist pass", async () => {

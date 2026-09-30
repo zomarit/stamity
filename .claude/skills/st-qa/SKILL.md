@@ -125,3 +125,5 @@ Return four facts to the caller: rows derived, rows auto-proven with their
 pointers, rows left for a person with each row's state and input hash, and
 the sign-off outcome. Inside a work run those four land in the proof block as
 the checkpoint's record; invoked on its own, the skill prints them and stops.
+Inside a work run the skill asks nothing itself: the rows left for a person
+ride the run's one close question.

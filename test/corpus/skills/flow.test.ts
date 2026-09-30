@@ -792,6 +792,15 @@ describe("qa — the human checkpoint", () => {
     expect(text).toMatch(/rows derived, rows auto-proven with their pointers/i);
     expect(text).toContain("proof block");
   });
+
+  it("asks nothing itself inside a work run: its open rows ride the close question (REQ-FLOW-019)", async () => {
+    const text = flow(await load("skills/st-qa/SKILL.md"));
+    const handback = text.slice(text.indexOf("## Handback"));
+
+    expect(handback).toContain(
+      "Inside a work run the skill asks nothing itself: the rows left for a person ride the run's one close question.",
+    );
+  });
 });
 
 describe("learn — the thin capture lane", () => {

@@ -25,10 +25,13 @@ Seconds, not ceremony. In order:
 3. **Model plan + cost preview.** Before any spawn, emit the spawn plan — role,
    class (Dials ladder), count per phase — with a cost order of magnitude.
 4. **Deferral inbox.** Read the deferral inbox and surface every item whose
-   paths overlap the files this change will touch. Present overlapping items as
-   fold-in candidates; the operator decides. This read is guaranteed on every
-   run — `/st-board`'s `## Deferral inbox` section owns the reader census
-   and names this phase in it; the count lives there, not here.
+   paths overlap the files this change will touch. An item a persisted plan
+   already settles — named in a unit, a follow-up or its out-of-scope text —
+   is listed with that disposition and not asked about; the rest ride the
+   plan gate's question, left in the inbox by default. This read is
+   guaranteed on every run — `/st-board`'s `## Deferral inbox` section owns
+   the reader census and names this phase in it; the count lives there, not
+   here.
 5. **Run record head.** Open `.stamity/runs/<run-id>/record.md` — `<run-id>` is
    `<UTC date>_<slug>` — with three lines among its first 15: `Status:`, reading
    `in progress` until the close; `Plan: <path>`, the `/st-plan` artifact or
@@ -73,8 +76,11 @@ into the plan, not silently dropped.
   coverage pass and semantic review, in-flow units the same bidirectional
   review against their requirement IDs; fix missing references and conflicting
   readings before handoff. A structural pass alone does not establish clarity.
-- **Plan gate.** light: auto-continue. standard/deep: present the unit list
-  and ask, with execute-now as the declared default.
+- **Plan gate.** light: auto-continue. standard: a persisted plan that
+  passed the freshness guard is the go-ahead — take execute-now and log
+  `Default applied: plan gate → option 1, execute now (persisted plan <path>)`;
+  an in-flow plan is presented and asked, execute-now the declared default.
+  deep: present the unit list and ask, with execute-now as the declared default.
 
 ### Contract census
 
@@ -319,6 +325,12 @@ input hash is not asked again, and when every row auto-proved there is no
 ask. An unattended run records `not signed`. An `H` row blocks release
 until it is walked or auto-proven.
 
+**The close asks once.** One question with numbered options covers what is
+left for the person: the rows no evidence proved, the spec delta merge and
+the commit. `Default if no response: leave uncommitted`, with those rows not
+signed and the delta unmerged. A part with nothing to decide drops out; with
+none left, there is no ask.
+
 ### Proof block
 
 Every run ends with a proof block, machine- and human-readable, doubling as an
@@ -398,8 +410,9 @@ Run after gates pass; each lands in the run report:
 
 - **Spec delta merge.** The change's `ADDED/MODIFIED/REMOVED` spec deltas
   merge into `docs/specs/` truth — auto-proposed, confirm-gated,
-  append/merge-only; the spec-author sub-agent applies the merge on
-  confirmation, and a converged spec is a byte-stable no-op.
+  append/merge-only; the spec-author sub-agent applies the merge once the
+  close's one question confirms it, and a converged spec is a byte-stable
+  no-op.
 - **Dependency-audit note.** Each new or bumped dependency gets a one-line
   note; the dep-audit skill owns its fields — advisories, licences, the path to
   a transitive package — so invoke it rather than derive them a second time.
@@ -420,7 +433,7 @@ Run after gates pass; each lands in the run report:
 | Tier | When | What changes |
 |---|---|---|
 | light | small diff, low risk, familiar ground | Skips: researcher fan-out (one inline context read instead), the plan-gate ASK (auto-continues), the `design-quality` and `performance` specialist lenses, and the whole-branch deep review. Keeps: unit decomposition, at least one reviewer round, the `security` specialist lens on a trigger-path match, every gate, the QA checkpoint, the proof block. |
-| standard | the default | Full spine: researcher fan-out sized to independent questions; plan gate asks (execute-now default); review loop to the cap; a specialist lens on a trigger match. |
+| standard | the default | Full spine: researcher fan-out sized to independent questions; plan gate asks on an in-flow plan and takes a persisted one as the go-ahead (execute-now default); review loop to the cap; a specialist lens on a trigger match. |
 | deep | high risk surface, novel territory, wide diff | standard plus the full specialist pass and a whole-branch multi-lens review on the frontier class, run once the review loop converges and before the QA checkpoint. |
 
 Auto-derived at Frame from three signals: expected diff size (against the

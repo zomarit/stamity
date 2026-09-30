@@ -86,6 +86,24 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-30, plan 013 file 2, unit work-asks-once (run
+ *     2026-09-30_optimization-sweep). ONE golden moved:
+ *
+ *     SUBSTITUTION moved on `commands/st-work.md` by +841 bytes, 463 -> 476
+ *     body lines: Frame's deferral-inbox step lists a row a persisted plan
+ *     already settles and asks nothing about it; the Plan gate takes a fresh
+ *     persisted plan as the go-ahead at standard and logs `Default applied:
+ *     plan gate → option 1, execute now (persisted plan <path>)`, while deep
+ *     and an in-flow plan still ask; the QA checkpoint gains "The close asks
+ *     once." after the Row states paragraph; the spec merge's confirmation is
+ *     the close's one question; the standard intensity row says so. The
+ *     golden's changed lines are the corpus diff's and nothing else; the
+ *     corpus source went 28618 -> 29459 bytes. The `st-qa` skill body also
+ *     changed (one handback sentence), but no golden here carries it.
+ *
+ *     NOTHING else moved here: no file under `src/` changed, so the charter,
+ *     every agent body and every script are byte-identical.
+ *
  *   - 2026-09-30, plan 013 file 2, unit work-qa-states (run
  *     2026-09-30_optimization-sweep). ONE golden moved:
  *
