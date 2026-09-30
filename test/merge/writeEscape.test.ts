@@ -544,7 +544,11 @@ describe.skipIf(process.platform === "win32")(
       const after = await lstat(target);
       expect(after.ino).toBe(before.ino);
       expect(after.nlink).toBe(2);
-      expect(await readdir(root)).toEqual(["AGENTS.md"]);
+      // TEST CHANGE 2026-09-30 (REQ-FLOW-016): a live sync writes the ignore rules
+      // before its write loop, so `.gitignore` is in the tree by the time this
+      // refusal lands. The listing proves no backup was made, so it is compared
+      // without that one file.
+      expect((await readdir(root)).filter((name) => name !== ".gitignore")).toEqual(["AGENTS.md"]);
       await expect(readFile(secretPath, "utf8")).resolves.toBe(SECRET);
     });
 
@@ -574,7 +578,11 @@ describe.skipIf(process.platform === "win32")(
       });
 
       // Refused ahead of the copy: no `.bak` landed and the twin is intact.
-      expect(await readdir(root)).toEqual(["settings.json"]);
+      // TEST CHANGE 2026-09-30 (REQ-FLOW-016): a live sync writes the ignore rules
+      // before its write loop, so `.gitignore` is in the tree by the time this
+      // refusal lands. The listing proves no backup was made, so it is compared
+      // without that one file.
+      expect((await readdir(root)).filter((name) => name !== ".gitignore")).toEqual(["settings.json"]);
       await expect(readFile(planted, "utf8")).resolves.toBe('{"v":0}\n');
       expect((await lstat(target)).nlink).toBe(2);
     });
@@ -805,7 +813,11 @@ describe.skipIf(process.platform === "win32")(
       await expect(readFile(cred, "utf8")).resolves.toBe(original);
       expect((await lstat(cred)).mode & 0o777).toBe(0o600);
       // No `.bak`, no temp residue: the link is the only entry in the tree.
-      expect(await readdir(root)).toEqual([".mcp.json"]);
+      // TEST CHANGE 2026-09-30 (REQ-FLOW-016): a live sync writes the ignore rules
+      // before its write loop, so `.gitignore` is in the tree by the time this
+      // refusal lands. The listing proves no backup was made, so it is compared
+      // without that one file.
+      expect((await readdir(root)).filter((name) => name !== ".gitignore")).toEqual([".mcp.json"]);
     });
 
     it("refuses to strip a hard-linked ledger candidate instead of rewriting it as a copy", async () => {
