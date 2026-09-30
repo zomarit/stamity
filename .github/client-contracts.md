@@ -52,11 +52,12 @@ they do not claim authenticated client sessions, native trust approval, or human
   `-c features.hooks=false`, which is a CLI override and never exercises the file. Second, the
   project must carry `projects.<path>.trust_level = "trusted"`. Third, each hook needs per-hook
   `/hooks` trust, or an invocation started with `--dangerously-bypass-hook-trust`. They do not consume
-  Stamity digests as approval. Neither page states a default for that key as read 2026-09-21 —
-  the config reference marks other `[features]` keys "on by default" in so many words and this one
-  not, and an earlier hooks-page read of 2026-09-17 did call it on by default — so this page states
-  the emitted key rather than a default, which is also what the 2026-09-15 measurement covers: it
-  never ran without the key. Headless `codex exec` on codex-cli 0.154.0 ran zero
+  Stamity digests as approval. The hooks page, read 2026-09-30, says "Hooks are enabled by
+  default." (its 2026-09-17 read said the same); the config reference states no default for this
+  key (read 2026-09-30), where its 2026-09-21 read marked other `[features]` keys "on by default"
+  in so many words. The adapter writes the key either way. The 2026-09-15 measurement covers the
+  emitted key only: it never ran without the key, and the 0.155.1 re-run below is the one that
+  measured the default. Headless `codex exec` on codex-cli 0.154.0 ran zero
   project hooks with the feature on, the project trusted and hook trust bypassed (measured
   2026-09-15; three runs, no observation file written, no hook-discovery line in the debug
   log). The re-run on codex-cli 0.155.1 (2026-09-30, the same fixture recipe, six runs) measured

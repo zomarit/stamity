@@ -243,8 +243,10 @@ session-start hook prints the card after a compaction or on a resume, when the c
 says so. `stamity ledger status` is the one you may run yourself — after a compaction on Cursor or
 Copilot, whose session-start hooks never print the card then: Cursor sends the hook no `source`, and
 Copilot's `source` is never `compact`. Run it on Codex too when its hooks are not running: Codex
-loads the project's hooks only with `[features] hooks = true` in `.codex/config.toml` (init writes
-it), the project trusted, and each hook trusted through `/hooks` — and `codex exec` runs no
+loads the project's hooks only with the hooks feature on, the project trusted, and each hook
+trusted through `/hooks`. The feature measured on by default on codex-cli 0.155.1 (2026-09-30);
+init still writes `[features] hooks = true` into `.codex/config.toml`, though no run has shown
+Codex reading that project-file key. And `codex exec` runs no
 project hook at all in any measured run (codex-cli 0.154.0 on 2026-09-15, and 3 of 3 runs on
 0.155.1 on 2026-09-30, the cause not isolated because both trusted the project only through a
 per-invocation override), so a headless run never prints the card.

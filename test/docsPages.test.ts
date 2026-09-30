@@ -1074,9 +1074,11 @@ describe("evidence pages", () => {
     // Dated, because an undated vendor fact is the shape this page keeps going stale in.
     expect(text, "the Codex measurement carries no date").toContain("2026-09-15");
     expect(text, "the vendor re-read carries no date").toContain("2026-09-17");
-    // The honest gap, kept in words: the hooks page states a default the measurement never
-    // tested, so the page must not assert one of its own.
-    expect(text, "the page asserts a `features.hooks` default it never measured").toMatch(
+    // The honest gap, kept as history: the 2026-09-15 measurement never ran without the key, so
+    // it measured no default. The 2026-09-30 re-run on 0.155.1 did, and the page states that
+    // default beside the hooks page's own line; this pin keeps the older run from being read as
+    // covering it.
+    expect(text, "the page no longer dates the 2026-09-15 run to the emitted key").toMatch(
       /never ran without the key/,
     );
   });
@@ -2369,10 +2371,22 @@ describe("the guides", () => {
         /measurably read|measured on 2026-09-15 to flip the feature/,
       );
     }
-    // No page tells a reader the vendor states no default, which 0.155.1 measured as on.
-    for (const site of [TROUBLESHOOTING, CUSTOMIZATION]) {
-      expect(read(site).replace(/\s+/g, " "), site).not.toContain("the vendor states no default");
+    // No page tells a reader the vendor states no default, which 0.155.1 measured as on and the
+    // hooks page read 2026-09-30 states ("Hooks are enabled by default.").
+    for (const site of [TROUBLESHOOTING, CUSTOMIZATION, CLIENT_CONTRACTS]) {
+      expect(read(site).replace(/\s+/g, " "), site).not.toMatch(
+        /the vendor states no default|Neither page states a default/,
+      );
     }
+    expect(read(CLIENT_CONTRACTS).replace(/\s+/g, " "), "the hooks page's default is not quoted").toContain(
+      "Hooks are enabled by default.",
+    );
+    // The 2026-09-30 exec probe was recorded for the hooks page only; the config reference's read
+    // that day covered the key, not exec, so no page credits it with the exec silence.
+    const hookRuns = read("scripts/qa/hook-runs.mjs").replace(/\s+/g, " ");
+    expect(hookRuns, "hook-runs credits every vendor page with the 2026-09-30 exec probe").not.toMatch(
+      /vendor pages read 2026-09-30|read 2026-09-15 and again 2026-09-30/,
+    );
   });
 
   it("says Claude Code reads AGENTS.md only through the bridge import, and never .agents/skills/", () => {

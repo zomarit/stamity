@@ -75,11 +75,11 @@ function redactLane(text, { repoRoot, fixturesDir } = {}) {
  * the project `.codex/` layer unloaded, so the cause is not isolated — `exec` itself, or a layer
  * that never loaded — and a run with the project trusted in the home `~/.codex/config.toml` is
  * unmeasured. The vendor pages — learn.chatgpt.com/docs/hooks and
- * learn.chatgpt.com/docs/config-file/config-reference, read 2026-09-15 and again 2026-09-30 —
- * document the flag, the project-trust requirement and the per-hook `/hooks` review, and do not
- * state whether `exec` loads the project hook layer at all. So the honest row is `not-run` with
- * that reason: driving `exec` here would record a `failed` row about the client's headless
- * behaviour and read as a defect in the emission.
+ * learn.chatgpt.com/docs/config-file/config-reference, read 2026-09-15 — document the flag, the
+ * project-trust requirement and the per-hook `/hooks` review, and do not state whether `exec`
+ * loads the project hook layer at all; the hooks page, read again 2026-09-30, still does not. So
+ * the honest row is `not-run` with that reason: driving `exec` here would record a `failed` row
+ * about the client's headless behaviour and read as a defect in the emission.
  * `cursor` and `copilot` NOW DRIVE, and both invocations are measured rather than read off a page.
  * Until 2026-09-20 neither carried an `args` entry, because this module had no measured
  * non-interactive invocation for either CLI and inventing flags would have guessed at a headless
@@ -132,8 +132,8 @@ export const CLIENT_RUNNERS = {
       'runs on 0.155.1 (2026-09-30) (features.hooks on, project trusted through a per-invocation ' +
       '-c override, hook trust bypassed; RUST_LOG=debug shows no hook discovery); the cause is ' +
       'not isolated, since that override may leave the project .codex/ layer unloaded, and a run ' +
-      'with the project trusted in the home config is unmeasured; the vendor pages read ' +
-      '2026-09-30 do not state whether exec runs hooks — the interactive /hooks trust and the TUI ' +
+      'with the project trusted in the home config is unmeasured; the hooks page read ' +
+      '2026-09-30 does not state whether exec runs hooks — the interactive /hooks trust and the TUI ' +
       'observation stay human',
   },
   cursor: {
