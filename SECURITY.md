@@ -232,8 +232,8 @@ where it depends on it.
   `features.hooks = true` in `.codex/config.toml`, which this engine writes explicitly, so the
   client's default does not decide it. The second is the project's trust level. The third is the
   per-hook review through the interactive `/hooks` command, or `--dangerously-bypass-hook-trust`
-  for automation that cannot take that step. Headless `codex exec` on codex-cli 0.154.0 loaded no
-  project hook layer at all in the 2026-09-15 measurement, and on 0.155.1 it again ran none in 3 of
+  for automation that cannot take that step. Headless `codex exec` on codex-cli 0.154.0 ran no
+  project hook in three runs in the 2026-09-15 measurement, and on 0.155.1 it again ran none in 3 of
   3 runs (2026-09-30). Both trusted the project only through a per-invocation override, so the
   cause is not isolated, and a run trusted in the home config is unmeasured. So a hook on that
   client is enforcement in the interactive session and nothing measured in the headless lane
