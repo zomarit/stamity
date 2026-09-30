@@ -1254,6 +1254,13 @@ const RUN_OF_RECORD_CLAIM =
 
 const collapsed = (text: string): string => text.replace(/\s+/g, " ");
 
+/**
+ * The prior complete run a composed run's RESULTS.md names in its composition section, or "" for a
+ * full run, whose results carry no composition section and so no such line.
+ */
+const priorCompleteRun = (results: string): string =>
+  /prior complete run is `([^`]+)`/.exec(results)?.[1] ?? "";
+
 describe("the eval run of record on the hand pages", () => {
   // Survives the release that runs the set: that release moves the generator's run and release,
   // and a hand page left naming the old pair fails here rather than going stale.
@@ -1282,11 +1289,27 @@ describe("the eval run of record on the hand pages", () => {
   // was FAIL on its own the three surfaces that state the composed PASS say so, naming the failing
   // floor cases, the Invariant 2 tightening between the two, and the re-measure. The run numbers
   // and case ids are read off both RESULTS.md files, so the sentence cannot drift from them.
+  //
+  // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut. The case read `prior complete run is `…``
+  // off the run of record and failed with "names no prior complete run" when there was none. Run 36,
+  // the 1.11.0 run of record, is a full baseline — every case measured, no composition, because the
+  // client moved to a new configuration — and a full run's RESULTS.md has no composition section and
+  // no such line (run 34's has none; run 35's names run 34 in its § 0), the same key the chain walk
+  // in test/cli/docs/measurements.test.ts ends on. When the line is there the checks are unchanged;
+  // when it is not there is no baseline to disclose, so the case asserts instead that no page still
+  // carries a stale "alone was FAIL" composition disclosure. The case name stays, because the spec
+  // cites it by name as this requirement's test evidence.
   it.each([README, DOCTRINE, "docs/measurements.md"])(
     "%s discloses a FAIL baseline behind the composed run of record",
     (page) => {
-      const record = read(RUN_OF_RECORD_PATH);
-      const baseline = /prior complete run is `([^`]+)`/.exec(record)?.[1] ?? "";
+      const baseline = priorCompleteRun(read(RUN_OF_RECORD_PATH));
+      if (baseline === "") {
+        expect(
+          collapsed(read(page)),
+          `${page} keeps a composition disclosure, but ${RUN_OF_RECORD_PATH} is a full run`,
+        ).not.toMatch(/alone was FAIL/);
+        return;
+      }
       const baselineResults = read(`evals/runs/${baseline}/RESULTS.md`);
       const failingList = /failing: ((?:`[^`]+`(?:, )?)+)/.exec(baselineResults)?.[1] ?? "";
       const failing = [...failingList.matchAll(/`([^`]+)`/g)].map((match) => match[1]);
@@ -1299,7 +1322,6 @@ describe("the eval run of record on the hand pages", () => {
           `Invariant 2 was then tightened \\(invariants 1\\.1\\.0\\), and run ${run} re-measured ` +
           `the two cases whose files moved, composed with run ${base}`,
       );
-      expect(baseline, `${RUN_OF_RECORD_PATH} names no prior complete run`).not.toBe("");
       expect(!failed || failing.length > 0, `${baseline} is FAIL but names no failing floor`).toBe(
         true,
       );
@@ -1314,6 +1336,17 @@ describe("the eval run of record on the hand pages", () => {
       }
     },
   );
+
+  // ADDED 2026-10-01 beside the TEST CHANGE above: the case branches on the prior-run line, so the
+  // key is held to real exports of both kinds — run 34 measured every case in full and names no
+  // prior run, run 35 composed with it and names it. A key that read both alike would send every
+  // run of record down one branch.
+  it("tells a full run's results from a composed run's by the prior-run line", () => {
+    expect(priorCompleteRun(read("evals/runs/2026-09-27-run-34/RESULTS.md"))).toBe("");
+    expect(priorCompleteRun(read("evals/runs/2026-09-27-run-35/RESULTS.md"))).toBe(
+      "2026-09-27-run-34",
+    );
+  });
 });
 
 describe("README corpus claims", () => {
