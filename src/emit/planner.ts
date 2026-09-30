@@ -23,9 +23,9 @@
  * path is a refused planner defect, never a silent last-write-wins. The one
  * sanctioned exception is the shared-path REPLACEMENT contract
  * (`AdapterOutput.replacesSharedPath`): a residue row may substitute its
- * content for a shared core row — owners unioned, still one write — which is
- * how the codex adapter delivers a root-appendix charter body without a
- * second writer on `AGENTS.md`.
+ * content for a shared core row — owners unioned, still one write. No shipped
+ * planner produces one today (the codex appendix moved to its own
+ * `AGENTS.override.md` row); the branch stays as a generic contract.
  *
  * MCP placement follows the same split: {@link CoreEmissionPlan.mcpFor}
  * exposes each tool's dialect documents for its adapter to place, and the
@@ -99,6 +99,7 @@ import {
   type AdapterOutput,
   type EmissionOwner,
   type EmissionPlan,
+  type SourceRefusal,
 } from "../types/content.ts";
 import { TOOLS, type Tool } from "../types/core.ts";
 import type { PackageEntry } from "../types/detect.ts";
@@ -765,6 +766,8 @@ interface PendingRow {
   path: string;
   content: string;
   owners: EmissionOwner[];
+  /** Carried from the residue row that set it; see `AdapterOutput.sourceRefusal`. */
+  sourceRefusal?: SourceRefusal;
 }
 
 /**
@@ -954,6 +957,7 @@ export function composeEmissionPlanner(
         // Key left absent (not `undefined`-valued) on single-owner rows, so
         // co-owner-unaware consumers see the pre-seam shape byte-for-byte.
         if (row.owners.length > 1) output.coOwners = row.owners.slice(1);
+        if (row.sourceRefusal !== undefined) output.sourceRefusal = row.sourceRefusal;
         return output;
       });
 
@@ -1151,6 +1155,9 @@ function mergeResidueRow(
   const owners = outputOwners(output);
   if (output.replacesSharedPath !== true) {
     addRow(rows, output.path, output.content, owners);
+    // A refusal travels with its row: dropping it here would hand the writers a
+    // row they cannot tell apart from an ordinary one.
+    if (output.sourceRefusal !== undefined) rows.get(output.path)!.sourceRefusal = output.sourceRefusal;
     return;
   }
   if (!sharedPaths.has(output.path)) {

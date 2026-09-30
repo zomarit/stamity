@@ -105,14 +105,20 @@ import type { GitRunner } from "../../../workspace/git.ts";
  *   its OWN gate — the managed lane inside `refusePreservedContent`, ahead of
  *   any backup; the whole-file lane inside `backupBeforeOverwrite`, which
  *   refuses the same file a second time; the merged-MCP lane ahead of its own
- *   read, where force plays no part.
+ *   merged-MCP lane ahead of its own read, where force plays no part.
+ * - `linked-source` — the output repeats ANOTHER file's bytes (the codex
+ *   `AGENTS.override.md` repeating the operator's `AGENTS.md`), and that file
+ *   is a symbolic or hard link. Declared by the producer on the row
+ *   (`AdapterOutput.sourceRefusal`), as is a `deny-scan` hit on those bytes;
+ *   both hold under `--force`, because {@link applySync} never attempts a row
+ *   that carries one.
  *
  * The per-lane account above is this file's only one. Every other comment here
  * defers to it or scopes itself to a single lane in its opening words, and
  * {@link COLLISION_REMEDY}'s `shared-name` sentence says the same thing to the
  * operator — a second, differently-worded mechanism is a defect, not a variant.
  */
-type CollisionKind = "unmanaged-name" | "deny-scan" | "shared-name";
+type CollisionKind = "unmanaged-name" | "deny-scan" | "shared-name" | "linked-source";
 
 /** One planned path and the disposition the apply run would give it. */
 export interface SyncPlanEntry {
@@ -295,6 +301,16 @@ export async function planOutputEntries(
       adapter: output.owner.adapter,
       artifactId: output.owner.artifactId,
     };
+    // A refusal the producer already made on the bytes this row republishes:
+    // the plan states it as the row's collision, so `check` and `sync` agree.
+    if (output.sourceRefusal !== undefined) {
+      return {
+        ...base,
+        action: "collision" as const,
+        collisionKind: output.sourceRefusal.kind,
+        detail: output.sourceRefusal.message,
+      };
+    }
     if (managedBody !== null) {
       // Only the managed lane preserves user bytes next to engine output, so
       // only it can be deny-refused — mirroring safeWriteFile branch for branch.
@@ -540,7 +556,7 @@ function tally(entries: readonly SyncPlanEntry[], action: SyncPlanEntry["action"
 }
 
 /** Fixed sentence order, so a mixed plan reads the same way every run. */
-const COLLISION_KIND_ORDER = ["unmanaged-name", "deny-scan", "shared-name"] as const;
+const COLLISION_KIND_ORDER = ["unmanaged-name", "deny-scan", "shared-name", "linked-source"] as const;
 
 /**
  * The remedy sentence each class earns. Only the classes actually present are
@@ -560,6 +576,10 @@ const COLLISION_REMEDY: Record<CollisionKind, (paths: readonly string[]) => stri
     `merged-MCP lane takes no backup at all, so force has nothing to unlock there. Replace each ` +
     `with a regular file (copy the contents to a new file and move that over the name), or ` +
     `delete it and re-run to regenerate it.`,
+  "linked-source": (paths) =>
+    `${paths.join(", ")} repeat(s) another file that is a symbolic or hard link: --force does not ` +
+    `clear it. Replace the linked file the plan entry's detail names with a regular file, then ` +
+    `re-run.`,
 };
 
 /**
@@ -705,7 +725,10 @@ export async function applySync(
   // result deterministic. Each refused path returns a `skipped` row carrying the
   // whole-plan remedy sentence, the report counts them, and the command exits
   // non-zero, so a CI probe still fails on a collision it has not resolved.
-  const refused = force ? new Set<string>() : new Set(plan.collisions);
+  // A row whose producer refused its source is never attempted, forced or not.
+  const refused = force
+    ? new Set(plan.outputs.filter((output) => output.sourceRefusal !== undefined).map((output) => output.path))
+    : new Set(plan.collisions);
   const refusalMessage = refused.size > 0 ? collisionRefusalMessage(plan) : null;
 
   // The ignore rules first (REQ-FLOW-016): the review gate writes its counter,
@@ -736,7 +759,7 @@ export async function applySync(
       wrote.push({
         path: output.path,
         action: "skipped",
-        warning: `Skipped ${output.path}. ${refusalMessage ?? ""}`.trim(),
+        warning: `Skipped ${output.path}. ${output.sourceRefusal?.message ?? refusalMessage ?? ""}`.trim(),
       });
       continue;
     }

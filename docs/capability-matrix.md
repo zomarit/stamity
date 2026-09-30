@@ -65,8 +65,13 @@ appendix goes to a codex-only root `AGENTS.override.md`, which codex reads inste
 `AGENTS.md` and no other client reads at all, so the shared root `AGENTS.md` is 5276 bytes with
 codex selected and 5276 without it. The override repeats that file — an operator's own text in
 it included — and adds the appendix: 25306 bytes, ≈4.8x the shared file, paid by codex alone.
-It is regenerated from `AGENTS.md` on every sync, so an edit to `AGENTS.md` reaches codex at
-the next sync, and `check` reports the difference as drift until then.
+It is regenerated from `AGENTS.md` as each sync leaves it. Under a `supplement` or `skip`
+import decision the operator's own text in `AGENTS.md` survives, so an edit to that text
+reaches codex at the next sync and `check` reports it as drift on the override until then. With
+no import decision, or `replace`, `AGENTS.md` is engine-owned whole: a hand edit to it is drift
+the next sync restores behind a `.bak`, and it never reaches the override. An `AGENTS.md` that
+is a symbolic or hard link, or whose operator text carries a block-severity injection pattern,
+is not repeated: `sync` and `check` report the override as a collision.
 
 **What codex folds, and what it pulls.** Under the delivery mode above, the appendix carries 3
 rules — `injection-screening`, `secrets`, `security-patterns` — and they are there for the

@@ -5,7 +5,6 @@
  * Current contract: https://learn.chatgpt.com/docs/hooks (2026-09-10).
  */
 
-import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE } from "../hooks/portableRunner.ts";
 import { buildContentIndex, typeIdKey, type CatalogItem } from "../content/catalog.ts";
@@ -40,6 +39,7 @@ import {
 } from "../hooks/model.ts";
 import { emitCodexToml } from "../mcp/emit.ts";
 import { splitAtManagedBlock } from "../merge/managedBlocks.ts";
+import { readRepublishSource, republishDenyRefusal } from "../merge/safeWrite.ts";
 import {
   grantableFootprint,
   resolveAgentGrant,
@@ -55,7 +55,7 @@ import {
 } from "../roster/modelLadder.ts";
 import { cliCallHint, pinnedCliCall } from "../shared/cliCall.ts";
 import { substituteCanonicalPlatformMarker, toCodexToolsFrontmatter } from "../tools/translator.ts";
-import type { AdapterOutput, EmissionOwner, RulePrecedence } from "../types/content.ts";
+import type { AdapterOutput, EmissionOwner, RulePrecedence, SourceRefusal } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX } from "../types/markers.ts";
 import { serializeTomlDocument, type TomlValue } from "./toml.ts";
@@ -115,7 +115,10 @@ export const CODEX_COMMANDS_DIR: string | null = null;
  * Engine-owned and written whole, with no managed block of its own: an edit
  * here is drift that the next sync regenerates behind a `.bak`, and an
  * operator's pre-existing file of this name is an unmanaged collision, refused
- * without `--force`. The text to change lives in `AGENTS.md`.
+ * without `--force`. Only the operator's own text in `AGENTS.md` — kept there
+ * by a `supplement` or `skip` import decision — is theirs to change and reaches
+ * this file at the next sync; with no decision or `replace`, `AGENTS.md` is
+ * engine-owned whole and an edit to it is reverted by that sync.
  */
 export const CODEX_AGENTS_OVERRIDE_FILE = "AGENTS.override.md";
 
@@ -450,9 +453,10 @@ export const codexResiduePlanner: ResiduePlanner = {
       renderedRules.push({ ...rule, body: render(rule.body) });
     }
 
+    const shared = await sharedCharterAsWritten(core, ctx);
     const downConverted = downConvertRules(
       renderedRules,
-      await sharedCharterAsWritten(core, ctx),
+      shared.text,
       core.agentsMd.nestedFor(TOOL).map((target) => target.outputPath),
       ruleSkillIds(core.skills),
     );
@@ -463,14 +467,17 @@ export const codexResiduePlanner: ResiduePlanner = {
     if (downConverted.rootReplacement !== null) {
       // A Codex-only row: the shared AGENTS.md stays the core charter, the same
       // bytes with or without this client selected.
-      rows.push(
-        emissionRow(
-          CODEX_AGENTS_OVERRIDE_FILE,
-          downConverted.rootReplacement,
-          AGENTS_OVERRIDE_ARTIFACT_ID,
-          "infra",
-        ),
+      const override = emissionRow(
+        CODEX_AGENTS_OVERRIDE_FILE,
+        downConverted.rootReplacement,
+        AGENTS_OVERRIDE_ARTIFACT_ID,
+        "infra",
       );
+      // A refused source rides on the row, so `sync` and `check` plan it as a
+      // collision and no writer lands it (`../types/content.ts::AdapterOutput`).
+      rows.push(shared.refusal === null ? override : { ...override, sourceRefusal: shared.refusal });
+      const overrideBytes = Buffer.byteLength(downConverted.rootReplacement, "utf8");
+      if (overrideBytes > CODEX_AGENTS_MD_BUDGET_BYTES) warnings.push(overrideOverBudgetWarning(overrideBytes));
     }
     if (downConverted.dropped.length > 0) warnings.push(droppedRulesWarning(downConverted.dropped));
 
@@ -529,28 +536,35 @@ function commandSurfaceWarning(): string {
  * back; the core render stands in for it, so an old appendix left in a block
  * by an earlier version is not carried into the new file.
  */
-async function sharedCharterAsWritten(core: CoreEmissionPlan, ctx: EmissionContext): Promise<string> {
+async function sharedCharterAsWritten(
+  core: CoreEmissionPlan,
+  ctx: EmissionContext,
+): Promise<{ text: string; refusal: SourceRefusal | null }> {
   const charter = core.agentsMd.root.content;
   const mode = (ctx.manifest.importChoice ?? []).findLast(
     (decision) => decision.path === AGENTS_MD_FILE,
   )?.mode;
-  if (mode !== "supplement" && mode !== "skip") return charter;
+  if (mode !== "supplement" && mode !== "skip") return { text: charter, refusal: null };
 
-  const onDisk = await readTextIfPresent(join(ctx.rootDir, AGENTS_MD_FILE));
-  if (mode === "skip") return onDisk ?? "";
-  if (onDisk === null) return charter;
-  const split = splitAtManagedBlock(onDisk, AGENTS_MD_FILE);
-  return joinedText(split === null ? [charter, onDisk] : [split.before, charter, split.after]);
-}
-
-/** A file's text, or `null` when it does not exist. Any other read failure propagates. */
-async function readTextIfPresent(path: string): Promise<string | null> {
-  try {
-    return await readFile(path, "utf8");
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException | null)?.code === "ENOENT") return null;
-    throw err;
-  }
+  // Operator bytes this file republishes meet the gates the merge lane puts on
+  // operator bytes it keeps: a linked source is refused unread, and the slice
+  // repeated here is deny-scanned. A refusal leaves the core render in the
+  // text, so the row carries none of the refused bytes even before the writers
+  // decline it.
+  const sourcePath = join(ctx.rootDir, AGENTS_MD_FILE);
+  const source = await readRepublishSource(sourcePath, CODEX_AGENTS_OVERRIDE_FILE);
+  if (source.refusal !== null) return { text: charter, refusal: source.refusal };
+  const onDisk = source.text;
+  if (mode !== "skip" && onDisk === null) return { text: charter, refusal: null };
+  const split = mode === "skip" || onDisk === null ? null : splitAtManagedBlock(onDisk, AGENTS_MD_FILE);
+  const operatorParts = split === null ? [onDisk ?? ""] : [split.before, split.after];
+  const denied = republishDenyRefusal(sourcePath, CODEX_AGENTS_OVERRIDE_FILE, operatorParts.join("\n"));
+  if (denied !== null) return { text: charter, refusal: denied };
+  if (mode === "skip") return { text: onDisk ?? "", refusal: null };
+  return {
+    text: joinedText(split === null ? [charter, onDisk ?? ""] : [split.before, charter, split.after]),
+    refusal: null,
+  };
 }
 
 /** Non-empty parts, trimmed, one blank line apart, with a final newline. */
@@ -577,6 +591,20 @@ function droppedRulesWarning(dropped: readonly string[]): string {
     `first: ${dropped.join(", ")}. They are named again in the emitted file that dropped them ` +
     `(the root ${CODEX_AGENTS_OVERRIDE_FILE} or a nested ${AGENTS_MD_FILE}). ` +
     `Narrow the content selection to bring them back.`
+  );
+}
+
+/**
+ * The override's head is the operator's own `AGENTS.md` under a `supplement`
+ * or `skip` decision, and no rule drop can shrink that: past the budget with
+ * every droppable section gone, Codex truncates the file without a message, so
+ * the run says so instead.
+ */
+function overrideOverBudgetWarning(bytes: number): string {
+  return (
+    `rules budget [${TOOL}]: ${CODEX_AGENTS_OVERRIDE_FILE} is ${bytes} bytes after shaping, over ` +
+    `this client's ${CODEX_AGENTS_MD_BUDGET_BYTES}-byte instruction budget, and Codex truncates ` +
+    `the rest without a message. Shorten the operator text in ${AGENTS_MD_FILE} that it repeats.`
   );
 }
 

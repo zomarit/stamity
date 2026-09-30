@@ -1050,6 +1050,12 @@ describe("always-on cost section", () => {
     expect(page.replace(/\s+/g, " ")).toContain(
       `the shared root \`AGENTS.md\` is ${LIVE_CAPABILITY_INPUTS.alwaysOn.sharedBytesWithCodex} bytes with codex selected`,
     );
+    // ADDED with sw18 review r1: an edit to AGENTS.md reaches the override only where an import
+    // decision keeps operator text there; with none or `replace` the next sync restores the file.
+    const folded = page.replace(/\s+/g, " ");
+    expect(folded).toContain("Under a `supplement` or `skip` import decision the operator's own text");
+    expect(folded).toContain("With no import decision, or `replace`, `AGENTS.md` is engine-owned whole");
+    expect(folded).not.toContain("on every sync, so an edit to `AGENTS.md` reaches codex");
   });
 
   it("names each client's delivery of a description-scoped rule in its own column", () => {

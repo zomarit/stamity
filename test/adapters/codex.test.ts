@@ -1765,6 +1765,32 @@ describe("residue planning", () => {
     expect(skipped).toContain(appendix);
   });
 
+  it("warns when the operator's own AGENTS.md alone leaves the override over budget", async () => {
+    // ADDED with sw18 review r1 (M-2): under `skip` the override's head is the operator's file,
+    // which no rule drop can shrink, so the overflow is named on the warning channel.
+    const contentRoot = await seedCorpus();
+    const temp = getTemp();
+    await temp.seedFiles({ "big/AGENTS.md": "Operator line QX-7781.\n".repeat(2_000) });
+    const base = ctxOf({ contentRoot, tools: ["codex"], ruleDelivery: "always-on", rootDir: temp.path("big") });
+    const core = await buildCoreEmissionPlan(base);
+    const planned = async (mode?: "skip"): Promise<{ bytes: number; warnings: readonly string[] }> => {
+      const ctx: EmissionContext =
+        mode === undefined ? base : { ...base, manifest: { ...base.manifest, importChoice: [{ path: "AGENTS.md", mode }] } };
+      const result = await codexResiduePlanner.planResidue(core, ctx);
+      const override = result.outputs.find((row) => row.path === CODEX_AGENTS_OVERRIDE_FILE)!;
+      return { bytes: Buffer.byteLength(override.content, "utf8"), warnings: result.warnings ?? [] };
+    };
+
+    const over = await planned("skip");
+    expect(over.bytes).toBeGreaterThan(CODEX_AGENTS_MD_BUDGET_BYTES);
+    expect(over.warnings.filter((line) => line.includes(`${CODEX_AGENTS_OVERRIDE_FILE} is ${over.bytes} bytes`))).toHaveLength(1);
+
+    // Non-degenerate: the same corpus with the file unread stays under budget and says nothing.
+    const under = await planned();
+    expect(under.bytes).toBeLessThanOrEqual(CODEX_AGENTS_MD_BUDGET_BYTES);
+    expect(under.warnings.some((line) => line.includes(`${CODEX_AGENTS_OVERRIDE_FILE} is `))).toBe(false);
+  });
+
   it("emits no root replacement under the default when every rule anchors or demotes", async () => {
     // ADDED 2026-09-15, the other half of the two cases above. Under
     // `on-demand` this fixture's glob-less and unanchorable rules are delivered

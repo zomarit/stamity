@@ -15,7 +15,7 @@ import {
   scanForDeniedPatterns,
 } from "../denyscan/denyScan.ts";
 import type { DenyHit } from "../denyscan/denyScan.ts";
-import type { MergeResult } from "../types/content.ts";
+import type { MergeResult, SourceRefusal } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
 import { MANAGED_BLOCK_VARIANTS, getMarkersForPath } from "../types/markers.ts";
 import {
@@ -358,9 +358,7 @@ function blockingDenyHits(userContent: string): DenyHit[] {
 function denyRefusalMessage(filePath: string, userContent: string): string | null {
   const hits = blockingDenyHits(userContent);
   if (hits.length === 0) return null;
-  const findings = hits
-    .map((hit) => `${hit.patternId} at offset ${hit.index} (${JSON.stringify(hit.snippet)})`)
-    .join("; ");
+  const findings = denyFindings(hits);
   return (
     `Refusing to write ${filePath}: ${hits.length} prompt-injection pattern(s) found in the ` +
     `content outside the managed block, which this write would preserve next to ` +
@@ -368,6 +366,13 @@ function denyRefusalMessage(filePath: string, userContent: string): string | nul
     `Do not move it inside the STAMITY:BEGIN/END markers — the managed block is regenerated on ` +
     `every sync, which deletes whatever is placed inside it.`
   );
+}
+
+/** The hit list every deny refusal in this module prints: pattern id, offset, snippet. */
+function denyFindings(hits: readonly DenyHit[]): string {
+  return hits
+    .map((hit) => `${hit.patternId} at offset ${hit.index} (${JSON.stringify(hit.snippet)})`)
+    .join("; ");
 }
 
 function refuseMergeIntoLink(filePath: string): EngineError {
@@ -506,6 +511,84 @@ export async function predictPreservedContentRefusal(
  */
 export async function predictDenyRefusal(filePath: string): Promise<string | null> {
   return (await predictPreservedContentRefusal(filePath))?.message ?? null;
+}
+
+// ── Republished sources ────────────────────────────────────────────────────
+
+/**
+ * What {@link readRepublishSource} found: the source's text, `null` when it
+ * does not exist, or the refusal that kept it unread.
+ */
+export type RepublishSource =
+  | { text: string | null; refusal: null }
+  | { text: null; refusal: SourceRefusal };
+
+/**
+ * Read `sourcePath` for an output (`targetName`) that REPUBLISHES its bytes
+ * under another name, refusing the two shapes {@link refusePreservedContent}
+ * refuses on the merge lane — and for the same reasons, since a whole-file
+ * write of `targetName` preserves nothing of its own and so meets none of that
+ * lane's gates. The codex override repeating the operator's `AGENTS.md` is the
+ * caller this exists for (`../adapters/codex.ts`).
+ *
+ * One `lstat`, before any read, and in the same order as the merge lane: a
+ * symbolic link names bytes the tree does not own, and a hard link is a second
+ * name for bytes that may sit outside it, so neither is read — the refusal
+ * carries the path and the remedy, never the linked bytes. What the caller
+ * then takes from a readable source goes through {@link republishDenyRefusal},
+ * over exactly the slice it republishes.
+ */
+export async function readRepublishSource(sourcePath: string, targetName: string): Promise<RepublishSource> {
+  let entry: Stats;
+  try {
+    entry = await lstat(sourcePath);
+  } catch (err) {
+    if (errnoCode(err) === "ENOENT") return { text: null, refusal: null };
+    throw mapFsErrno(err, sourcePath) ?? err;
+  }
+  if (entry.isSymbolicLink()) {
+    return { text: null, refusal: { kind: "linked-source", message: refuseRepublishFromLink(sourcePath, targetName, "symbolic") } };
+  }
+  if (isSharedRegularFile(entry)) {
+    return { text: null, refusal: { kind: "linked-source", message: refuseRepublishFromLink(sourcePath, targetName, "hard") } };
+  }
+  return { text: await readFile(sourcePath, "utf-8"), refusal: null };
+}
+
+/**
+ * The deny-scan half of {@link readRepublishSource}: `republished` is the
+ * slice of `sourcePath` that `targetName` would repeat next to
+ * engine-authored output, scanned with the same block-severity catalog the
+ * merge lane runs ({@link denyRefusalMessage}). `null` when it is clean.
+ */
+export function republishDenyRefusal(sourcePath: string, targetName: string, republished: string): SourceRefusal | null {
+  const hits = blockingDenyHits(republished);
+  if (hits.length === 0) return null;
+  return {
+    kind: "deny-scan",
+    message:
+      `Refusing to write ${targetName} from ${sourcePath}: ${hits.length} prompt-injection ` +
+      `pattern(s) found in the text of ${sourcePath} that ${targetName} would repeat next to ` +
+      `engine-authored output: ${denyFindings(hits)}. ${targetName} was not written. Remove or ` +
+      `rewrite the flagged text in ${sourcePath}, then re-run; --force does not clear this.`,
+  };
+}
+
+/** Link twin of {@link refuseMergeIntoLink} for the republish lane; names both files and the remedy, never the bytes. */
+function refuseRepublishFromLink(sourcePath: string, targetName: string, shape: "symbolic" | "hard"): string {
+  const what =
+    shape === "symbolic"
+      ? `it is a symbolic link, so its content is whatever the link points at, including a file ` +
+        `outside this tree that was never yours to publish`
+      : `it is a hard link, so its content carries a second name this tree cannot see, which may ` +
+        `sit outside it`;
+  return (
+    `Refusing to write ${targetName} from ${sourcePath}: ${what}. ${targetName} repeats that ` +
+    `file's text, and writing it would copy those bytes into the tree as a regular file, where ` +
+    `the next commit picks them up. ${targetName} was not written, and --force does not clear ` +
+    `this. Replace ${sourcePath} with a regular file (copy the contents to a new file and move ` +
+    `that over the name), then re-run.`
+  );
 }
 
 // ── Merge shaping ──────────────────────────────────────────────────────────

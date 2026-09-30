@@ -322,7 +322,11 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     // and the three MCP documents merge against what is already on disk, so
     // neither branch may interleave with another output's write.
     let result: MergeResult;
-    if (MERGED_MCP_JSON_PATHS.has(output.path)) {
+    if (output.sourceRefusal !== undefined) {
+      // The producer refused the bytes this row republishes; like sync, init
+      // never attempts it, forced or not, and reports the refusal as the skip.
+      result = { path: target, action: "skipped", warning: `Skipped ${output.path}. ${output.sourceRefusal.message}` };
+    } else if (MERGED_MCP_JSON_PATHS.has(output.path)) {
       // Destructured OFF the row: `wrote` is the caller's report, and the
       // written bytes are an internal hand-off to the ledger loop below —
       // `sync/engine.ts` keeps the same boundary for the same reason.

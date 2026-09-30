@@ -89,12 +89,30 @@ export interface AdapterOutput {
   /**
    * Marks a residue row that SUBSTITUTES its content for a shared core row at
    * the same path instead of colliding with it (owners are unioned; the write
-   * stays single). Consumed by the plan composer (`src/emit/planner.ts`) —
-   * e.g. the codex adapter delivering a root-appendix `AGENTS.md` body. A
-   * replacement for a path the core plan does not share, or a second
-   * replacement for one path, is a composer-refused planner defect.
+   * stays single). Consumed by the plan composer (`src/emit/planner.ts`). No
+   * shipped planner produces it today; the contract and its composer branch
+   * stay generic. A replacement for a path the core plan does not share, or a
+   * second replacement for one path, is a composer-refused planner defect.
    */
   replacesSharedPath?: boolean;
+  /**
+   * Present when this row's content would have repeated another file's bytes
+   * and the producer refused them — the source is a symbolic or hard link, or
+   * carries a block-severity injection pattern
+   * (`../merge/safeWrite.ts::readRepublishSource`). The row's `content` then
+   * carries none of those bytes, and no writer writes it: `sync` plans the path
+   * as a collision of this class, `--force` does not clear it, and `init`
+   * reports it as a skipped write. Absent on every ordinary row.
+   */
+  sourceRefusal?: SourceRefusal;
+}
+
+/** Why a row that republishes another file's bytes was refused; see {@link AdapterOutput.sourceRefusal}. */
+export interface SourceRefusal {
+  /** `linked-source`: the source is a symbolic or hard link. `deny-scan`: its text carries a block-severity pattern. */
+  kind: "linked-source" | "deny-scan";
+  /** The operator-facing refusal, naming the source, the refused output and the remedy. */
+  message: string;
 }
 
 /**
