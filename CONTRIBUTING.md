@@ -77,10 +77,10 @@ covers the mechanics.
 
 Two required status contexts gate a merge.
 
-`all-ci-checks` (`.github/workflows/ci.yml`) runs on every event. It passes when three lanes pass:
-the check matrix, the APM route lane, and the plugin route lane. The matrix has three legs: the
-declared Node floor, the LTS canonical, and one Windows leg. Beside the six steps you already ran,
-it adds six things:
+`all-ci-checks` (`.github/workflows/ci.yml`) runs on every event. A full run passes when three
+lanes pass: the check matrix, the APM route lane, and the plugin route lane. The matrix has three
+legs: the declared Node floor, the LTS canonical, and one Windows leg. Beside the six steps you
+already ran, it adds six things:
 
 - A generate-and-diff self-consistency step over every generated artifact class.
 - The dogfood check, `node dist/cli.js check`, which re-proves this repository's own generated setup
@@ -106,6 +106,14 @@ it adds six things:
   at the repository until the maintainer enables it and sets them — and on a maintainer's machine
   through the QA harness. A client CLI that will not install leaves its own legs skipped with a
   notice, never a red lane; a broken root is red.
+
+A change made only of records takes a records-only lane instead of those three. Records are run
+records under `.stamity/runs/`, `.stamity/inbox.md`, handoffs under `.stamity/handoffs/`, and plans
+under `docs/plans/`. `node scripts/ci/records-only.mjs` decides, and it answers `true` only when
+every changed path is one of them. The lane runs the suites that read the committed records, the
+generate-and-diff step, the leak gate and, on pull requests, the hygiene scan. A learnings change,
+a push with no earlier commit to compare, the weekly schedule and a manual run always get the full
+three lanes. `all-ci-checks` checks which side ran, so a records-only pass never reads as a full one.
 
 Run the APM smoke locally with `node scripts/apm-install-smoke.mjs --apm <path-to-apm>`, or point
 `STAMITY_APM_BIN` at that path instead. apm-cli is a Python package, and no step of `npm run check`

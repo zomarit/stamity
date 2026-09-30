@@ -17,7 +17,19 @@
 # them apart.
 #
 # MERGE-BLOCKING (required through the `all-ci-checks` aggregator):
-#   - `check`, three legs. ubuntu on the declared engines floor (22.22.2) and on the LTS
+#   - `changes`, one leg, first. It decides which of the two sides below runs.
+#     `scripts/ci/records-only.mjs` prints `records_only=true` only when EVERY path the push or
+#     pull request changes is a record: under `.stamity/runs/`, `.stamity/handoffs/` (the engine's
+#     `.gitkeep` excepted) or `docs/plans/`, or `.stamity/inbox.md` itself. A learnings change, a
+#     missing or all-zero base, a base git cannot find, the weekly schedule and a manual dispatch
+#     all read `false`, and `false` is full CI.
+#   - `records`, one leg, and ONLY when `changes` said `true`. It stands in for `check`,
+#     `apm-install` and `plugin-route`, which skip. A record feeds no build and no published byte,
+#     so what it can break is what reads the committed records: the suites that open them (the
+#     list is `RECORDS_SUITES` in the detector), the generate-and-diff step (the measurements page
+#     renders from the committed runs), the leak gate, and on pull requests the hygiene scan. The
+#     aggregator asserts which side ran, so a records-only pass can never stand in for a full one.
+#   - `check`, three legs, on every change that is not records-only. ubuntu on the declared engines floor (22.22.2) and on the LTS
 #     canonical (24), plus one windows leg on 24. Every leg installs, builds, runs the suite,
 #     re-proves the committed dogfood configs with the binary it just built, and runs the leak
 #     gate. The floor leg additionally packs and installs the tarball (`tarball-smoke`), because
@@ -109,8 +121,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Records-only or not: the one question every other lane in this file waits on. It runs on every
+  # trigger with no condition, so the answer always exists; a failure here skips every lane that
+  # needs it and the aggregator goes red, which is the fail-closed direction. The full history is
+  # fetched because the base can be many commits back (a push of several commits, or a pull
+  # request's base), and the base arrives as data through `env:`, never interpolated into the
+  # script body. On the schedule and a dispatch both halves of the expression are empty, and the
+  # detector reads that as full CI.
+  changes:
+    name: changes (records-only or full)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      records_only: ${{ steps.classify.outputs.records_only }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # No `cache: npm` and no install: the detector is plain ESM over Node built-ins and git.
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+
+      - name: Classify the change
+        id: classify
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/ci/records-only.mjs --base "$BASE_SHA"
+
   check:
     name: check (${{ matrix.label }}, node ${{ matrix.node }})
+    needs: changes
+    if: needs.changes.outputs.records_only != 'true'
     runs-on: ${{ matrix.os }}
     # 30, not the 15 this job carried while it was ubuntu-only: the windows leg installs, builds
     # and runs the whole suite on the slowest runner image in the matrix, and a ceiling that a
@@ -296,6 +344,8 @@ jobs:
   # stopped being able to fail would read exactly like a smoke that keeps passing.
   apm-install:
     name: apm route (${{ matrix.role }}, apm ${{ matrix.apm }})
+    needs: changes
+    if: needs.changes.outputs.records_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -404,6 +454,8 @@ jobs:
   # SKIPPED — so the structure claim still gates on every run.
   plugin-route:
     name: plugin route (structure and credential-free install)
+    needs: changes
+    if: needs.changes.outputs.records_only != 'true'
     runs-on: ubuntu-latest
     # 15, and derived rather than chosen. The three build lines were measured at ~20 s total on
     # 2026-09-20 with `time npm pack --pack-destination "$WORK"` (0.5 s), `time node
@@ -577,6 +629,62 @@ jobs:
           export PATH="$(dirname "$STAMITY_NODE_BIN"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
           "$STAMITY_NODE_BIN" scripts/plugin-route-smoke.mjs --dist dist/plugins --client claude,cursor,copilot,codex
 
+  # The short lane, for a push or pull request whose every changed path is a record. It replaces
+  # `check`, `apm-install` and `plugin-route` rather than running beside them, so its steps are
+  # exactly what a record can break: the suites that read the committed records (the list is
+  # `RECORDS_SUITES` in scripts/ci/records-only.mjs, held equal to the step below by
+  # test/ci/workflow.test.ts), the generate-and-diff step — the measurements page renders from the
+  # committed runs, so a record can make it drift, and the generators need no build — the leak
+  # gate over the whole tree, and on pull requests the same hygiene scan the `check` LTS leg runs.
+  records:
+    name: records (records-only changes)
+    needs: changes
+    if: needs.changes.outputs.records_only == 'true'
+    runs-on: ubuntu-latest
+    # 15, the ceiling of the other one-leg lanes. The records suites measured 85 s on 2026-09-30
+    # (`npx vitest run` over the five entries, darwin, no dist/); install and the generators come
+    # on top.
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The PR hygiene comparison needs its base; a push keeps the shallow checkout.
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Repository hygiene
+        if: github.event_name == 'pull_request'
+        env:
+          HYGIENE_BASE_REF: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/repo-hygiene.mjs --base "$HYGIENE_BASE_REF"
+
+      - name: Records suites
+        run: npx vitest run test/records test/docsPages.test.ts test/cli/docs/measurements.test.ts test/authoring/specPlanCoverage.test.ts test/ci/leakGate.test.ts
+
+      - name: Self-consistency (generate-and-diff)
+        run: >-
+          node scripts/generate-capability-matrix.mjs &&
+          node scripts/generate-docs.mjs &&
+          node scripts/generate-pack-manifests.mjs --check &&
+          node scripts/generate-plugin-manifests.mjs --check &&
+          node scripts/generate-apm-package.mjs --check &&
+          git diff --exit-code
+
+      - name: Leak gate
+        run: npm run gate
+
   # Currency, not integrity. The exact pins in the MCP catalog guarantee the bytes never
   # change, which is precisely why something has to go and ask whether those bytes are still
   # a good idea — a pinned version stays byte-identical on the day an advisory lands against
@@ -672,18 +780,34 @@ jobs:
   # and what it gates is a ROUTE — the four plugin roots' structure — that no byte-diff in `check`
   # can see. Its credential-bound legs are the ones it leaves SKIPPED, so requiring it never makes
   # the merge path depend on a secret this repository does not hold.
+  #
+  # The records-only lane splits the heavy three from `records`, and the split is ASSERTED here in
+  # both directions rather than inferred from which results happen to be green. `changes` must
+  # have succeeded, or neither side's answer means anything. When it said records-only, `records`
+  # must have passed AND the three heavy lanes must read `skipped` — so a green here always says
+  # which lane proved the change. Otherwise the three must have passed and `records` must read
+  # `skipped`, so a mis-wired condition that ran the short lane on a code change goes red.
   all-ci-checks:
     name: all-ci-checks
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
     if: always()
-    needs: [check, supply-chain, apm-install, plugin-route]
+    needs: [changes, check, records, supply-chain, apm-install, plugin-route]
     steps:
       - name: Report
         run: |
-          echo "check=${{ needs.check.result }} supply-chain=${{ needs.supply-chain.result }} apm-install=${{ needs.apm-install.result }} plugin-route=${{ needs.plugin-route.result }}"
+          echo "changes=${{ needs.changes.result }} records_only=${{ needs.changes.outputs.records_only }} check=${{ needs.check.result }} records=${{ needs.records.result }} supply-chain=${{ needs.supply-chain.result }} apm-install=${{ needs.apm-install.result }} plugin-route=${{ needs.plugin-route.result }}"
           # The advisory lane is non-blocking by design: it is reported, never required.
-          test "${{ needs.check.result }}" = "success"
-          test "${{ needs.apm-install.result }}" = "success"
-          test "${{ needs.plugin-route.result }}" = "success"
+          test "${{ needs.changes.result }}" = "success"
+          if [ "${{ needs.changes.outputs.records_only }}" = "true" ]; then
+            test "${{ needs.records.result }}" = "success"
+            test "${{ needs.check.result }}" = "skipped"
+            test "${{ needs.apm-install.result }}" = "skipped"
+            test "${{ needs.plugin-route.result }}" = "skipped"
+          else
+            test "${{ needs.check.result }}" = "success"
+            test "${{ needs.apm-install.result }}" = "success"
+            test "${{ needs.plugin-route.result }}" = "success"
+            test "${{ needs.records.result }}" = "skipped"
+          fi

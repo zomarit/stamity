@@ -50,7 +50,8 @@ check has one stable name, so a required check does not rotate when the matrix d
 ### What `all-ci-checks` covers
 
 `all-ci-checks` is the aggregator job in `.github/workflows/ci.yml`, and it runs on every event.
-It passes when three lanes pass: the check matrix, the APM route lane, and the plugin route lane.
+A full run passes when three lanes pass: the check matrix, the APM route lane, and the plugin
+route lane.
 
 The check matrix runs three legs: the pinned Node floor, the current LTS, and one Windows leg.
 Which step runs on which leg is not uniform.
@@ -80,6 +81,14 @@ merge-blocking job here holds, so they run nightly behind per-client secrets —
 disabled at the repository until the maintainer enables it and sets them — and in the manual QA
 walk-through. A client CLI that fails to install leaves its own legs skipped with a notice naming it,
 rather than reddening the lane; a broken root is red.
+
+A change made only of records — run records, the deferral inbox, handoffs and plans — takes a
+records-only lane in place of those three lanes. It runs what a record can break: the suites that
+read the committed records, the generate-and-diff step, the leak gate and, on pull requests, the
+hygiene scan. `scripts/ci/records-only.mjs` answers records-only only when every changed path is a
+record; anything else, including a learnings change, the weekly schedule and a manual run, gets the
+full three lanes. `all-ci-checks` asserts which side ran, so the short lane never reads as the full
+one. [CONTRIBUTING.md](CONTRIBUTING.md) lists the record paths.
 
 ### What `all-pr-checks` covers
 
