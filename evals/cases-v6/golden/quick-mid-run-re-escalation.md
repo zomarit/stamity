@@ -2,7 +2,7 @@
 id: quick-mid-run-re-escalation
 class: golden
 claim: "Scope found mid-run is re-measured at the moment it appears: applied items stay applied, the crossing item is reverted, the remainder moves to /st-work as one list, and the report names a disposition for every item."
-source: content/commands/st-quick.md:58-61,114-128
+source: content/commands/st-quick.md:66-69,122-136
 metric: rubric
 ---
 
@@ -17,7 +17,7 @@ Governing text — `content/commands/st-quick.md`, "Thresholds and refusal":
 ```text
 | Threshold | Fires when |
 |---|---|
-| Files | `>5 files` across the batch, or one item that cannot land in a single file |
+| Files | `>5 files` across the batch (every file counts), or one item whose source change cannot land in a single source file — a test that follows the change rides along, and a string correction may take two |
 | Size | `~200 lines` changed across the batch, counted as added plus removed |
 [...]
 ```

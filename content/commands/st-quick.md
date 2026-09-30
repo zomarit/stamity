@@ -35,6 +35,14 @@ An item qualifies when it matches one of these and no threshold fires:
 - Rename of a symbol that is local to one file.
 - Documentation edit.
 
+**Tests ride along.** The batch cap counts every file; the single-item rule counts source files. A test file edited only where it
+exercises the item's changed lines — the query, assertion or fixture that names the changed
+string or value — travels with the item and is not counted; its lines still count toward
+`Size`. A user-facing string or label correction may span two source files and still
+qualify. Riding tests move no other row: a test under a security-sensitive path fires that
+row, a new route with its test still fires `Schema, API, event or migration`, and a new
+test file for an untested behavior is not a ride-along.
+
 A qualifying item is applied in the turn that classifies it. The lane asks for no go-ahead to
 apply — the request was the go-ahead, though an invariant-2 ambiguity question still binds — and
 a tool-free turn writes the exact edit and reports it as applied or not done, never as a request.
@@ -57,7 +65,7 @@ distinction the thresholds draw. The item moves to `/st-work` intact or it does 
 
 | Threshold | Fires when |
 |---|---|
-| Files | `>5 files` across the batch, or one item that cannot land in a single file |
+| Files | `>5 files` across the batch (every file counts), or one item whose source change cannot land in a single source file — a test that follows the change rides along, and a string correction may take two |
 | Size | `~200 lines` changed across the batch, counted as added plus removed |
 | Security-sensitive surface | the item touches authentication, authorization, session or credential handling, key material, payments, or access-control configuration |
 | Dependencies | any added dependency, version bump, or lockfile change |

@@ -557,6 +557,23 @@ describe("quick — the guardrails are the command", () => {
     expect(text).toMatch(/credential handling/i);
   });
 
+  it("lets a test that follows the change ride along without moving any other row", async () => {
+    const text = flow(await load("commands/st-quick.md"));
+
+    // The batch cap counts every file; the per-item single-file rule counts source files.
+    expect(text).toMatch(/tests ride along/i);
+    expect(text).toMatch(/every file counts/i);
+    expect(text).toMatch(/rides along/i);
+    expect(text).toMatch(/may span two source files/i);
+    // Edge case: a new endpoint with its test still leaves the lane on the API row.
+    expect(text).toMatch(/still fires `Schema, API, event or migration`/);
+    // Edge cases: a test under an auth path fires the security row; a new test file
+    // for an untested behavior is not a ride-along; riding lines still count toward Size.
+    expect(text).toMatch(/a test under a security-sensitive path fires that row/i);
+    expect(text).toMatch(/new test file for an untested behavior is not a ride-along/i);
+    expect(text).toMatch(/its lines still count toward `Size`/);
+  });
+
   it("re-escalates mid-run without silently finishing or dropping the remainder", async () => {
     const text = flow(await load("commands/st-quick.md"));
 

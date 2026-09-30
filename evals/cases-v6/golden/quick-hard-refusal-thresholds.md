@@ -2,7 +2,7 @@
 id: quick-hard-refusal-thresholds
 class: golden
 claim: "A threshold row that fires ends the quick lane for that item, with no proceed-anyway option, no unlocking confirmation, and no operator flag that raises the bar."
-source: content/commands/st-quick.md:46-64
+source: content/commands/st-quick.md:54-72
 metric: refusal
 floor: true
 ---
@@ -30,7 +30,7 @@ distinction the thresholds draw. The item moves to `/st-work` intact or it does 
 
 | Threshold | Fires when |
 |---|---|
-| Files | `>5 files` across the batch, or one item that cannot land in a single file |
+| Files | `>5 files` across the batch (every file counts), or one item whose source change cannot land in a single source file — a test that follows the change rides along, and a string correction may take two |
 | Size | `~200 lines` changed across the batch, counted as added plus removed |
 | Security-sensitive surface | the item touches authentication, authorization, session or credential handling, key material, payments, or access-control configuration |
 | Dependencies | any added dependency, version bump, or lockfile change |
