@@ -44,7 +44,7 @@ import {
 import { TOOLS, type Tool } from "../../../types/core.ts";
 import type { DetectedSummary } from "../../../types/detect.ts";
 import { EngineError } from "../../../types/errors.ts";
-import type { SetupManifest } from "../../../types/manifest.ts";
+import type { LedgerEntry, SetupManifest } from "../../../types/manifest.ts";
 import { ensureStateScaffold } from "../../../emit/stateScaffold.ts";
 import { getEmissionPlanner } from "../../engine/emission.ts";
 import {
@@ -54,6 +54,7 @@ import {
   outputWriteOptions,
   predictMcpDocumentMerge,
   readIfExists,
+  sha256,
 } from "../../engine/emissionWrite.ts";
 import { readWorkingTreeStatus, type WorkingTreeStatus } from "../../engine/gitStatus.ts";
 import { hasNpmChannel, packageCommand, packageName } from "../../kit/packageName.ts";
@@ -125,9 +126,9 @@ export interface SyncPlanEntry {
   /** Repo-relative POSIX path of the planned output. */
   path: string;
   /**
-   * `collision` = an existing file the merge would refuse or skip. Which of the
-   * three refusal classes is in `collisionKind`; the operator-facing text is in
-   * `detail`.
+   * `collision` = an existing file the merge would refuse or skip, or a row
+   * whose producer refused the bytes it repeats. Which refusal class is in
+   * `collisionKind`; the operator-facing text is in `detail`.
    */
   action: "create" | "update" | "unchanged" | "collision";
   adapter: string;
@@ -135,8 +136,16 @@ export interface SyncPlanEntry {
   /** Present on collisions: the refusal class, for callers that branch. */
   collisionKind?: CollisionKind;
   /**
+   * `true` on a collision whose cause is the file this row repeats, refused by
+   * its producer (`AdapterOutput.sourceRefusal`): moving this path aside or
+   * `--force` does not clear it, and `detail` names the file to repair.
+   * Absent on every other entry.
+   */
+  refusedAtSource?: true;
+  /**
    * Present on collisions: why, and what unblocks the write. Carries the write
-   * lane's own refusal message verbatim for the two classes that have one.
+   * lane's own refusal message verbatim for the classes that have one, and the
+   * producer's for a source refusal.
    */
   detail?: string;
 }
@@ -309,6 +318,7 @@ export async function planOutputEntries(
         action: "collision" as const,
         collisionKind: output.sourceRefusal.kind,
         detail: output.sourceRefusal.message,
+        refusedAtSource: true as const,
       };
     }
     if (managedBody !== null) {
@@ -529,8 +539,9 @@ export interface SyncApplyReport {
   skipped: number;
   /**
    * Paths the collision gate refused to write, repo-relative and in plan order.
-   * Empty on a dry run, and empty under `--force`, which clears the one
-   * collision class force can clear and lets the writer judge the rest.
+   * Empty on a dry run. Under `--force` it holds only the rows refused at
+   * their source (`SyncPlanEntry.refusedAtSource`), which force does not
+   * clear; force clears the one class it can and lets the writer judge the rest.
    *
    * Non-empty means the run did real work AND left something undone, which is
    * a state the report had no way to express while a single collision threw the
@@ -553,6 +564,37 @@ export interface SyncApplyReport {
 
 function tally(entries: readonly SyncPlanEntry[], action: SyncPlanEntry["action"]): number {
   return entries.filter((entry) => entry.action === action).length;
+}
+
+/**
+ * The pre-run ledger rows for `path` whose recorded hash still matches the
+ * regular file on disk — the proof the engine wrote those bytes, carried into
+ * the rebuilt ledger for a row this run refused to rewrite. A link, a missing
+ * file, a pack row or a row with no hash proves nothing and is not kept.
+ */
+async function rowsStillProvenOnDisk(
+  rootDir: string,
+  ledger: readonly LedgerEntry[],
+  path: string,
+): Promise<EmittedArtifact[]> {
+  const rows = ledger.filter((row) => row.path === path && row.contentHash !== undefined);
+  if (rows.length === 0) return [];
+  const absPath = join(rootDir, path);
+  try {
+    const entry = await lstat(absPath);
+    if (!entry.isFile() || isSharedRegularFile(entry)) return [];
+  } catch {
+    return [];
+  }
+  const existing = await readIfExists(absPath);
+  if (existing === null) return [];
+  const hash = sha256(existing);
+  const kept: EmittedArtifact[] = [];
+  for (const row of rows) {
+    if (row.contentHash !== hash || !(TOOLS as readonly string[]).includes(row.adapter)) continue;
+    kept.push({ ...row, adapter: row.adapter as Tool });
+  }
+  return kept;
 }
 
 /** Fixed sentence order, so a mixed plan reads the same way every run. */
@@ -761,6 +803,12 @@ export async function applySync(
         action: "skipped",
         warning: `Skipped ${output.path}. ${output.sourceRefusal?.message ?? refusalMessage ?? ""}`.trim(),
       });
+      // A source refusal leaves the engine's own last write on disk, unlike an
+      // unmanaged-name skip, so the rows that prove it stay: the next sync after
+      // the source is repaired updates the file, and a deselection reclaims it.
+      if (output.sourceRefusal !== undefined) {
+        emitted.push(...(await rowsStillProvenOnDisk(rootDir, plan.manifest.ledger, output.path)));
+      }
       continue;
     }
     const absPath = join(rootDir, output.path);

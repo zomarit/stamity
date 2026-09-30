@@ -2,8 +2,10 @@ import { link, readFile, readdir, rm, symlink, writeFile } from "node:fs/promise
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { CODEX_AGENTS_OVERRIDE_FILE } from "../../src/adapters/codex.ts";
+import { checkCommand } from "../../src/cli/commands/check.ts";
 import { applyInit } from "../../src/cli/commands/init/apply.ts";
 import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
+import { syncClosingLines } from "../../src/cli/commands/sync.ts";
 import { applySync, planSync, type SyncPlan } from "../../src/cli/commands/sync/engine.ts";
 import { AGENTS_MD_FILE } from "../../src/emit/agentsMd.ts";
 import { readManifest, writeManifest } from "../../src/manifest/manifest.ts";
@@ -20,6 +22,7 @@ import {
   readEmittedTree,
   type GoldenRepo,
 } from "./goldenFixture.ts";
+import { runInProcess } from "../support/inProcess.ts";
 
 /**
  * The shared root `AGENTS.md` is the same file with and without Codex
@@ -379,6 +382,105 @@ describe("the override refuses the AGENTS.md bytes the managed lane would refuse
       expect(row?.action).toBe("skipped");
       expect(row?.warning).toContain("symbolic link");
       expect(await readFile(overridePath, "utf8")).toBe(before);
+    });
+  });
+});
+
+/**
+ * What the operator is told, and what the ledger keeps, after a source refusal
+ * (sw18 review r2): the remedy names the file to repair rather than "move it
+ * aside" or `--force`, and the override the engine wrote last stays the
+ * engine's, so a repaired source syncs without `--force` and a deselection
+ * still reclaims it.
+ */
+describe("after the override is refused at its source", () => {
+  const FOREIGN_LINE = "Foreign line ZK-5530: not this tree's to publish.\n";
+
+  /** A symlinked AGENTS.md under `skip`: the override is refused as `linked-source`. */
+  async function plantLinkedCharter(repo: GoldenRepo): Promise<void> {
+    const charterPath = join(repo.rootDir, AGENTS_MD_FILE);
+    const target = join(repo.rootDir, "outside-target.txt");
+    await writeFile(target, FOREIGN_LINE, "utf8");
+    await rm(charterPath);
+    await symlink(target, charterPath);
+    await decideCharter(repo, "skip");
+  }
+
+  it("check names the source repair, never moving the override aside or --force", async () => {
+    await withRepo(["claude", "codex"], async (repo) => {
+      await plantLinkedCharter(repo);
+
+      const human = await runInProcess([checkCommand], ["check"], { cwd: repo.rootDir });
+      expect(human.code).toBe(1);
+      const folded = human.stdout.replace(/\s+/g, " ");
+      expect(folded).toContain(`${CODEX_AGENTS_OVERRIDE_FILE} is not written because the file it repeats was refused`);
+      expect(folded).toContain("it is a symbolic link");
+      expect(folded).toContain("Replace ");
+      expect(folded).not.toContain("move each aside");
+      expect(folded).not.toContain("to overwrite them after a verified .bak");
+
+      const json = await runInProcess([checkCommand], ["check", "--json"], { cwd: repo.rootDir });
+      const doc = JSON.parse(json.stdout.trim()) as {
+        error?: { next?: string };
+        drift?: { changes?: { path: string; refusedAtSource?: boolean }[] };
+      };
+      expect(doc.error?.next).toContain("is not written because the file it repeats was refused");
+      expect(doc.error?.next).not.toContain("move each aside");
+      expect(doc.drift?.changes?.find((entry) => entry.path === CODEX_AGENTS_OVERRIDE_FILE)?.refusedAtSource).toBe(true);
+    });
+  });
+
+  it("a forced sync reports the row by its source remedy, never 're-run with --force'", async () => {
+    await withRepo(["claude", "codex"], async (repo) => {
+      await plantLinkedCharter(repo);
+
+      const forcedPlan = await plan(repo);
+      const report = await apply(repo, forcedPlan, true);
+      expect(report.refused).toEqual([CODEX_AGENTS_OVERRIDE_FILE]);
+      const lines = syncClosingLines(forcedPlan, report);
+      expect(lines.some((line) => line.includes("--force does not clear this"))).toBe(true);
+      expect(lines.some((line) => line.includes("re-run with --force"))).toBe(false);
+    });
+  });
+
+  it("keeps the override's ledger row, so a repaired AGENTS.md syncs without --force", async () => {
+    await withRepo(["claude", "codex"], async (repo) => {
+      await plantLinkedCharter(repo);
+
+      const refused = await apply(repo, await plan(repo));
+      expect(refused.refused).toEqual([CODEX_AGENTS_OVERRIDE_FILE]);
+      expect(refused.manifest?.ledger.some((row) => row.path === CODEX_AGENTS_OVERRIDE_FILE)).toBe(true);
+
+      // The operator follows the remedy: a regular file with their own text.
+      const charterPath = join(repo.rootDir, AGENTS_MD_FILE);
+      await rm(charterPath);
+      await writeFile(charterPath, "## Team notes\n\nRepaired line ZK-6611.\n", "utf8");
+
+      const repaired = await plan(repo);
+      expect(actionOf(repaired, CODEX_AGENTS_OVERRIDE_FILE)).toBe("update");
+      const report = await apply(repo, repaired);
+      expect(report.refused).toEqual([]);
+      const override = await readFile(join(repo.rootDir, CODEX_AGENTS_OVERRIDE_FILE), "utf8");
+      expect(override).toContain("ZK-6611");
+      expect(override).toContain(APPENDIX_HEADING);
+      const backups = (await readdir(repo.rootDir)).filter((name) => name.startsWith(`${CODEX_AGENTS_OVERRIDE_FILE}.`));
+      expect(backups).toEqual([]);
+    });
+  });
+
+  it("keeps the override reclaimable when codex is deselected after the refusal", async () => {
+    await withRepo(["claude", "codex"], async (repo) => {
+      await plantLinkedCharter(repo);
+      await apply(repo, await plan(repo));
+
+      const manifest = await readManifest(repo.rootDir);
+      if (manifest === null) throw new Error("fixture lost its manifest");
+      await writeManifest(repo.rootDir, { ...manifest, tools: ["claude"] }, { now: GOLDEN_NOW });
+      const report = await apply(repo, await plan(repo));
+
+      const after = await readEmittedTree(repo.rootDir);
+      expect(after[CODEX_AGENTS_OVERRIDE_FILE]).toBeUndefined();
+      expect(report.manifest?.ledger.some((row) => row.path === CODEX_AGENTS_OVERRIDE_FILE)).toBe(false);
     });
   });
 });

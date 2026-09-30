@@ -1443,7 +1443,31 @@ function renderProvenance(ctx: CliContext, provenance: ProvenanceRollup | null):
 
 /** Paths a sync would refuse to write because a user file already holds them. */
 function collidingPaths(report: DriftReport): string[] {
-  return report.changes.filter((entry) => entry.action === "collision").map((entry) => entry.path);
+  return report.changes
+    .filter((entry) => entry.action === "collision" && entry.refusedAtSource !== true)
+    .map((entry) => entry.path);
+}
+
+/**
+ * Collisions whose cause is ANOTHER file — the one the row repeats — which the
+ * engine refused to republish. Neither remedy {@link collisionStep} names
+ * clears them, so each is stated with its own detail instead.
+ */
+function sourceRefusedEntries(report: DriftReport): SyncPlanEntry[] {
+  return report.changes.filter((entry) => entry.action === "collision" && entry.refusedAtSource === true);
+}
+
+/**
+ * The step for a source-refused collision: the plan entry's own detail names the
+ * refused source and how to repair it; moving the output aside or forcing the
+ * sync leaves the refusal where it is.
+ */
+function sourceRefusalStep(entry: SyncPlanEntry): string {
+  return (
+    `${entry.path} is not written because the file it repeats was refused, so moving it aside or ` +
+    `running ${packageCommand("sync --force")} does not clear it. ${entry.detail ?? ""} Once that ` +
+    `file is repaired, run ${packageCommand("sync")}.`
+  );
 }
 
 /** Whether anything a plain sync CAN fix is drifted, collisions aside. */
@@ -1542,6 +1566,7 @@ function renderNextSteps(
     const collisions = collidingPaths(outcome.report);
     steps.push(
       ...(collisions.length > 0 ? [collisionStep(collisions)] : []),
+      ...sourceRefusedEntries(outcome.report).map(sourceRefusalStep),
       ...(hasNonCollisionDrift(outcome.report)
         ? [`${packageCommand("sync")} — regenerate the files that drifted`]
         : []),
@@ -1760,13 +1785,17 @@ function checkFailureDoc(doctor: readonly DoctorCheck[], drift: DriftOutcome): F
   // Same branch as the human next-steps, for the same reason: a JSON consumer
   // that automates `next` would have re-run a sync that refuses the plan.
   const collisions = drift.kind === "evaluated" ? collidingPaths(drift.report) : [];
+  const collisionSteps = [
+    ...(collisions.length > 0 ? [collisionStep(collisions)] : []),
+    ...(drift.kind === "evaluated" ? sourceRefusedEntries(drift.report).map(sourceRefusalStep) : []),
+  ];
   return {
     code: "INTEGRITY_ERROR",
     message: "check found drift between the repository and what a sync would write",
     why: "one or more generated files differ from the engine's output, are missing, or are queued for reclaim",
     next:
-      collisions.length > 0
-        ? collisionStep(collisions)
+      collisionSteps.length > 0
+        ? collisionSteps.join(" ")
         : `${packageCommand("sync")} — regenerate the files that drifted`,
   };
 }

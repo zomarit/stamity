@@ -104,11 +104,24 @@ export function syncClosingLines(plan: SyncPlan, report: SyncApplyReport): strin
   // Last line, because it is the one the exit code is about. A partial run
   // prints its successes above; without this the operator would read a report
   // full of written files and an exit 1 with nothing connecting them.
-  if (report.refused.length > 0) {
+  // Split by remedy: a row refused at its source is the engine's own file, and
+  // neither moving it aside nor --force clears it.
+  const atSource = new Set(plan.outputs.filter((output) => output.sourceRefusal !== undefined).map((output) => output.path));
+  const unproven = report.refused.filter((path) => !atSource.has(path));
+  const sourceRefused = report.refused.filter((path) => atSource.has(path));
+  if (unproven.length > 0) {
     lines.push(
-      `${report.refused.length} file(s) were NOT written — they collide with files the engine ` +
+      `${unproven.length} file(s) were NOT written — they collide with files the engine ` +
         `cannot prove it wrote (named above). Everything else in the plan is on disk. Move each ` +
         `aside and re-run, or re-run with --force to overwrite them after a verified .bak.`,
+    );
+  }
+  if (sourceRefused.length > 0) {
+    lines.push(
+      `${sourceRefused.length} file(s) were NOT written — ${sourceRefused.join(", ")} repeat(s) a ` +
+        `file the engine refused to republish (the reason is named above). Everything else in the ` +
+        `plan is on disk. --force does not clear this: repair that file as the warning says — a ` +
+        `regular, unlinked file with no flagged text — then run sync.`,
     );
   }
   return lines;
