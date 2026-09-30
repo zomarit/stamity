@@ -1102,6 +1102,27 @@ describe("/st-work — dispatch contract", () => {
     expect(dispatch).toContain("`stamity ledger status`");
     expect(dispatch).toContain("re-read this command's own file");
   });
+
+  it("briefs a verdict role with the range, cell, criteria and report path, never the implementer's account (REQ-CTX-017)", async () => {
+    const dispatch = collapse(section(await body(), "## Dispatch contract"));
+    expect(dispatch).toContain("**Verdict dispatch.**");
+    expect(dispatch).toContain("`<base>..<head>`");
+    expect(dispatch).toContain("the plan path and unit id (or `branch`)");
+    expect(dispatch).toContain("the report path");
+    expect(dispatch).toContain("never carries the implementer's or fixer's account");
+    expect(dispatch).toContain("reads the change itself");
+    // A client with no git grant: the orchestrator writes the diff as a patch the role reads.
+    expect(dispatch).toContain("`reports/<pass>-diff-r<N>.patch`");
+
+    // The bullet sits between the build brief and the resume step it precedes.
+    const verdictAt = dispatch.indexOf("**Verdict dispatch.**");
+    expect(verdictAt).toBeGreaterThan(dispatch.indexOf("**Pointer dispatch.**"));
+    expect(verdictAt).toBeLessThan(dispatch.indexOf("**Resume after a compaction.**"));
+
+    // The brief lists no digest or summary for the role to read in place of the change.
+    const bullet = dispatch.slice(verdictAt, dispatch.indexOf("- **Resume after a compaction.**"));
+    expect(bullet).not.toMatch(/digest|summary/i);
+  });
 });
 
 describe("/st-work — dials", () => {

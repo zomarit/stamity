@@ -6598,6 +6598,12 @@ Every spawn runs under these contracts:
   before it is dispatched, and when that unit touches a security trigger path
   or a shared contract the reviewer reads the amended cell first; an
   implementer whose cell no longer resolves at HEAD returns BLOCKED_DEPENDENCY.
+- **Verdict dispatch.** A reviewer or lens brief names the range
+  \`<base>..<head>\` (or worktree and base), the plan path and unit id (or
+  \`branch\`) whose criteria it judges, the report path; for a re-review, the
+  ledger ids. It never carries the implementer's or fixer's account; the
+  role reads the change itself, or with no git grant the orchestrator's
+  \`reports/<pass>-diff-r<N>.patch\`.
 - **Resume after a compaction.** Where the client re-runs its session-start
   hook after a compaction, the hook prints the resume card; elsewhere, run
   \`stamity ledger status\` by hand after one. Read the open rows and the listed

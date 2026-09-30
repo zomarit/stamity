@@ -178,6 +178,25 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-30, plan 013 file 2, unit work-verdict-brief (run
+  //     2026-09-30_optimization-sweep). ONE command body moved, plus the
+  //     manifest rows that record it. No emitted path was added or removed.
+  //
+  //     CHANGED `commands/st-work.md` 27307 -> 27702 in the claude and copilot
+  //       dialects (`.claude/commands/st-work.md`,
+  //       `.github/prompts/st-work.prompt.md`) and 27352 -> 27747 as the cursor
+  //       skill (`.cursor/skills/st-work/SKILL.md`) — one body, three heads, so
+  //       the same +395 in each, matching the corpus source's +395. The
+  //       Dispatch contract gains a Verdict dispatch bullet: a reviewer or lens
+  //       brief names the range, the plan cell and the report path, never the
+  //       implementer's or fixer's account.
+  //     CHANGED `.stamity/manifest.json` in the four selections that emit
+  //       commands — all-four, claude, copilot and cursor — each at UNCHANGED
+  //       byte length, the fixed-width sha256 row for that one command.
+  //
+  //     What did NOT move: every agent, rule, skill, hook script, guard,
+  //       charter, policy document and generated page, and every other command.
+  //
   //   - 2026-09-30, plan 013 file 2, unit work-gates-once (run
   //     2026-09-30_optimization-sweep). ONE command body moved, plus the
   //     manifest rows that record it. No emitted path was added or removed.

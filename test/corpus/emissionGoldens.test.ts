@@ -86,6 +86,21 @@ import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-30, plan 013 file 2, unit work-verdict-brief (run
+ *     2026-09-30_optimization-sweep). ONE golden moved:
+ *
+ *     SUBSTITUTION moved on `commands/st-work.md` by +395 bytes, 447 -> 453
+ *     body lines: the Dispatch contract gains a Verdict dispatch bullet after
+ *     Pointer dispatch — a reviewer or lens brief names the range, the plan
+ *     cell whose criteria it judges and the report path, never the
+ *     implementer's or fixer's account, and with no git grant points at the
+ *     orchestrator's patch file. The golden's added lines are the corpus
+ *     diff's six added lines and nothing else (none removed); the corpus
+ *     source went 27604 -> 27999 bytes.
+ *
+ *     NOTHING else moved here: no file under `src/` changed, so the charter,
+ *     every agent body and every script are byte-identical.
+ *
  *   - 2026-09-30, plan 013 file 2, unit work-gates-once (run
  *     2026-09-30_optimization-sweep). ONE golden moved:
  *
