@@ -21,6 +21,8 @@ Two targets. Detect before step 1 and state the detected target in the first res
 There is no separate doctor verb: `stamity check` is the install probe and its exit code is
 the signal — any failing probe or unclean drift exits non-zero, warnings alone exit 0.
 
+**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx stamity <verb>` where the project's `package.json` lists this package, and otherwise as `${STAMITY:CLI} <verb>` — the version this setup was generated with; never `@latest`, and never a bare `stamity` that only a global install provides. A `not-runnable` result on both names the install as the unresolved input.
+
 Every repo gate named here — the probe above, and the failing-test gate at step 6 — runs in a
 `test-runner` spawn, never in this command's own context. The runner returns a gate-by-gate
 result: the exact command, pass or fail, and the verbatim failing excerpt. Bare pass/fail is not

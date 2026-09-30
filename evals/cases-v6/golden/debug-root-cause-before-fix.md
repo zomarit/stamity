@@ -2,7 +2,7 @@
 id: debug-root-cause-before-fix
 class: golden
 claim: "Debug holds two gates before a fix — a cited causal chain, and a test failing on the current tree for that cause — and an edit to product code applied inside debug is a contract breach."
-source: content/commands/st-debug.md:116-130
+source: content/commands/st-debug.md:118-132
 metric: rubric
 floor: true
 ---

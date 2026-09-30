@@ -16,15 +16,18 @@ expiry screen, the transition table, the archive and the sweep. What is left
 here is the judgment it has no opinion about — when a boundary is worth a
 handoff, what the eight sections say, and how a drift report is read.
 
+**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx stamity <verb>` where the project's `package.json` lists this package, and otherwise as `${STAMITY:CLI} <verb>` — the version this setup was generated with; never `@latest`, and never a bare `stamity` that only a global install provides.
+When neither form runs, no handoff file is written by hand; the eight sections go into the closing message under `Not done: handoff not written — CLI unavailable`, with the exact `prepare` command to run once the CLI resolves.
+
 ## Quick Start
 
 | Mode | Use when | Run |
 |---|---|---|
-| `prepare` | work is in flight and the session or tool is about to change | `stamity handoff prepare --title … --summary … --from-tool <client>` |
-| `resume` | picking up work someone (or some other tool) left | `stamity handoff resume <id>` |
-| `list` | deciding what is resumable, and why something is not | `stamity handoff list` |
-| `complete` | the work a handoff described is finished | `stamity handoff complete <id>` |
-| `prune` | stale entries have accumulated | `stamity handoff prune` |
+| `prepare` | work is in flight and the session or tool is about to change | `${STAMITY:CLI} handoff prepare --title … --summary … --from-tool <client>` |
+| `resume` | picking up work someone (or some other tool) left | `${STAMITY:CLI} handoff resume <id>` |
+| `list` | deciding what is resumable, and why something is not | `${STAMITY:CLI} handoff list` |
+| `complete` | the work a handoff described is finished | `${STAMITY:CLI} handoff complete <id>` |
+| `prune` | stale entries have accumulated | `${STAMITY:CLI} handoff prune` |
 
 Every mode takes `--json` for one machine-readable document and `--dry-run` to
 run the gates without writing. A refusal names the rule it applied: fix that,
@@ -75,7 +78,7 @@ session-start index lists what verifies and silently omits the rest.
 3. **Write it through the verb**, with the body on stdin or in a file:
 
 ```bash
-stamity handoff prepare --title "cache warmup path" --from-tool claude \
+${STAMITY:CLI} handoff prepare --title "cache warmup path" --from-tool claude \
   --to-tool cursor --summary "<one line the next session reads first>" \
   --body-file <path>          # or pipe the body on stdin
 ```

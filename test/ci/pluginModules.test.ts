@@ -3,6 +3,7 @@
 /* oxlint-disable no-await-in-loop */
 
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { mkdtemp, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -97,6 +98,17 @@ const pluginCliToken = tokens.CLI_TOKEN as string;
  * the renderer copies whatever name it is handed, so a renamed fork runs these cases unedited.
  */
 const PACKAGE = canonical().name;
+
+/**
+ * The CLI identity the plugin build passes when it stages the real corpus: this checkout's
+ * package and its `package.json` version, the pair `scripts/generate-plugin-packages.mjs` hands
+ * to `stageSubstitutedCorpus`. The real corpus carries `${STAMITY:CLI}` (the CLI call form of
+ * `/st-debug`, `st-handoff` and `st-learn`), so a real-corpus stage without it is refused.
+ */
+const BUILD_CLI: PluginCli = {
+  packageName: PACKAGE,
+  version: (JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as { version: string }).version,
+};
 
 const disposals: Staged[] = [];
 const temps: string[] = [];
@@ -267,7 +279,11 @@ describe("charter-reference phrases (REQ-PLUGIN-004)", () => {
 
 describe("staging the substituted corpus over the real corpus (REQ-PLUGIN-004)", () => {
   it("resolves every class body, copies the charter byte-for-byte, and renders the gate phrase", async () => {
-    const staged = await stageFor({ contentRoot: CONTENT_ROOT });
+    // TEST CHANGE, justified (2026-09-30, sw26-cli-call-form): the real corpus now carries
+    // `${STAMITY:CLI}`, which the build resolves from the CLI identity it passes; staging it with
+    // no `cli` is refused by design. The case passes the build's own identity, and every
+    // assertion below is unchanged, plus one that the token rendered to the pinned call.
+    const staged = await stageFor({ contentRoot: CONTENT_ROOT, cli: BUILD_CLI });
 
     const files = await listFiles(staged.root);
     expect(files).toEqual(await listFiles(CONTENT_ROOT));
@@ -307,10 +323,15 @@ describe("staging the substituted corpus over the real corpus (REQ-PLUGIN-004)",
 
     const stWork = await readFile(join(staged.root, "commands/st-work.md"), "utf8");
     expect(stWork).toContain("the Full gate command listed under Verification gates in AGENTS.md");
+
+    const stLearn = await readFile(join(staged.root, "skills/st-learn/SKILL.md"), "utf8");
+    expect(stLearn).toContain(`${pinnedCliPrefix(BUILD_CLI.packageName, BUILD_CLI.version)} learn capture`);
   });
 
   it("copies every non-markdown companion byte-for-byte", async () => {
-    const staged = await stageFor({ contentRoot: CONTENT_ROOT });
+    // TEST CHANGE, justified (2026-09-30, sw26-cli-call-form): as above, the real corpus carries
+    // `${STAMITY:CLI}`, so the stage passes the build's CLI identity; the assertions are unchanged.
+    const staged = await stageFor({ contentRoot: CONTENT_ROOT, cli: BUILD_CLI });
     const companions = (await listFiles(CONTENT_ROOT)).filter((rel) => !rel.endsWith(".md"));
     expect(companions.length).toBeGreaterThan(0);
     for (const rel of companions) {

@@ -47,10 +47,13 @@ forgotten).
 
 ## Capture
 
+**Running the CLI.** Every `stamity <verb>` call in this file runs as `npx stamity <verb>` where the project's `package.json` lists this package, and otherwise as `${STAMITY:CLI} <verb>` — the version this setup was generated with; never `@latest`, and never a bare `stamity` that only a global install provides.
+When neither form runs, the finding is not written with a file tool; the closing message carries its title, summary, confidence and body under `Not done: learning not captured — CLI unavailable`, with the capture command to run once the CLI resolves.
+
 The CLI is the write path, and the only one:
 
 ```bash
-stamity learn capture \
+${STAMITY:CLI} learn capture \
   --title "cache warmup order" \
   --summary "<one index line>" \
   --confidence medium \

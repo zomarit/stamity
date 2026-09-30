@@ -14,7 +14,9 @@ import { composeEmissionPlanner } from "../../src/emit/planner.ts";
 import { CLAUDE_EVENT_NAMES } from "../../src/hooks/model.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
 import type { AdapterOutput, ContentSelection } from "../../src/types/content.ts";
+import { pinnedCliPrefix } from "../../src/shared/cliCall.ts";
 import { CORPUS_ROOT } from "../corpus/harness.ts";
+import { canonical } from "../support/identity.ts";
 
 /**
  * The GitHub Copilot CLI plugin root: `<out>/copilot` as the container reads it
@@ -158,14 +160,42 @@ const read = (rel: string): string => readFileSync(join(root, ...rel.split("/"))
 const sha = (bytes: Buffer): string => createHash("sha256").update(bytes).digest("hex");
 
 /**
- * The one skill body in the corpus carrying a `${STAMITY:*}` token, and the one file whose two
- * renderings differ on purpose. A REPOSITORY emission resolves that token from detected facts —
- * `vitest`, this repository's own gate commands — and a PLUGIN emission resolves it into a phrase
- * naming the row to read in `AGENTS.md`, because a plugin is built once for every repository
- * there will ever be. Pinned by name so a second token-bearing skill is a deliberate change
- * rather than a silently widened exception.
+ * The skill bodies in the corpus carrying a `${STAMITY:*}` token — the files whose two renderings
+ * differ on purpose — and which rendering each one carries.
+ *
+ *   - `phrase`: a repo-fact or gate token. A REPOSITORY emission resolves it from detected facts —
+ *     `vitest`, this repository's own gate commands — and a PLUGIN emission into a phrase naming the
+ *     row to read in `AGENTS.md`, because a plugin is built once for every repository there will
+ *     ever be.
+ *   - `cli`: the `${STAMITY:CLI}` token. Both emissions render the pinned call
+ *     `npx -y <package>@<version>`; the repository one at the engine version it planned at, the
+ *     plugin one at the plugin's own release. The version is the only byte allowed to differ.
+ *
+ * Pinned by name so another token-bearing skill is a deliberate change rather than a silently
+ * widened exception.
  */
-const SUBSTITUTED_SKILLS: readonly string[] = ["skills/st-onboard/SKILL.md"];
+// TEST CHANGE, justified (2026-09-30, sw26-cli-call-form): st-handoff and st-learn now carry the
+// CLI call form (`${STAMITY:CLI}`), so their plugin copies legitimately differ from the native
+// projection by the pinned call's version. The list became a map naming which rendering each file
+// carries, and each kind keeps a line-by-line rule as strict as the phrase rule it sits beside.
+const SUBSTITUTED_SKILLS: Readonly<Record<string, "phrase" | "cli">> = {
+  "skills/st-onboard/SKILL.md": "phrase",
+  "skills/st-handoff/SKILL.md": "cli",
+  "skills/st-learn/SKILL.md": "cli",
+};
+
+/** The engine version the native oracle plans at, and so the version its pinned CLI calls carry. */
+const NATIVE_ENGINE_VERSION = "0.0.0-test";
+
+/** The package both renderings name: this checkout's own, read from its manifest. */
+const PACKAGE = canonical().name;
+
+/** The pinned call as the native oracle renders it, and as the plugin build renders it at its release. */
+const NATIVE_CLI = pinnedCliPrefix(PACKAGE, NATIVE_ENGINE_VERSION);
+const PLUGIN_CLI = pinnedCliPrefix(
+  PACKAGE,
+  (JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as { version: string }).version,
+);
 
 /**
  * The copilot residue planner over the real corpus — the projection the container re-addresses.
@@ -203,7 +233,9 @@ async function planCopilotResidue(): Promise<AdapterOutput[]> {
       }),
       ruleDelivery: "on-demand",
     },
-    engineVersion: "0.0.0-test",
+    engineVersion: NATIVE_ENGINE_VERSION,
+    // The same package the generator builds from, so a pinned CLI call differs only by version.
+    packageName: PACKAGE,
     facts: { monorepoPackages: [], hookScriptsRoot: `\${${ROOT_VARIABLE}}/hooks` },
     contentRoot: CORPUS_ROOT,
   });
@@ -290,21 +322,36 @@ describe("the copilot root's carried classes", () => {
     expect([...expected.keys()].some((rel) => rel.startsWith("skills/stamity-ai-evals/"))).toBe(true);
 
     expect(under("skills/").toSorted()).toEqual([...expected.keys()].toSorted());
-    for (const rel of SUBSTITUTED_SKILLS) expect([...expected.keys()], rel).toContain(rel);
+    for (const rel of Object.keys(SUBSTITUTED_SKILLS)) expect([...expected.keys()], rel).toContain(rel);
 
     for (const [rel, content] of expected) {
       const carried = read(rel);
-      if (!SUBSTITUTED_SKILLS.includes(rel)) {
+      const kind = SUBSTITUTED_SKILLS[rel];
+      if (kind === undefined) {
         expect(sha(Buffer.from(carried, "utf8")), rel).toBe(sha(Buffer.from(content, "utf8")));
         continue;
       }
       // The two renderings must DIFFER, and the plugin's must be the repository-free one.
       expect(carried, rel).not.toBe(content);
       expect(carried, rel).not.toContain("${STAMITY:");
-      expect(carried, rel).toContain("in AGENTS.md");
-      const moved = carried.split("\n").filter((line, index) => line !== content.split("\n")[index]);
+      const nativeLines = content.split("\n");
+      const moved = carried
+        .split("\n")
+        .map((line, index) => ({ line, twin: nativeLines[index] }))
+        .filter(({ line, twin }) => line !== twin);
       expect(moved.length, rel).toBeGreaterThan(0);
-      for (const line of moved) expect(line, `${rel}: ${line}`).toContain("in AGENTS.md");
+      if (kind === "phrase") {
+        expect(carried, rel).toContain("in AGENTS.md");
+        for (const { line } of moved) expect(line, `${rel}: ${line}`).toContain("in AGENTS.md");
+        continue;
+      }
+      // A CLI-call line differs by the pinned call's version and by nothing else.
+      expect(carried, rel).toContain(PLUGIN_CLI);
+      expect(carried, rel).not.toContain(NATIVE_CLI);
+      for (const { line, twin } of moved) {
+        expect(line, `${rel}: ${line}`).toContain(PLUGIN_CLI);
+        expect(line.replaceAll(PLUGIN_CLI, NATIVE_CLI), `${rel}: ${line}`).toBe(twin);
+      }
     }
   }, ONE_ROOT_MS);
 

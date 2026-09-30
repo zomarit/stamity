@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.10.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-30T12:57:19.232Z",
+  "updatedAt": "2026-09-30T13:28:04.243Z",
   "tools": [
     "claude"
   ],
@@ -148,7 +148,7 @@
       "adapter": "claude",
       "artifactId": "cmd-debug",
       "artifactType": "command",
-      "contentHash": "5b8594c4125b32b82bf53a30ae4232eb414e532c11c669a18a37e1d448f31a58",
+      "contentHash": "4b9b6ba0d4cd98ed936ccee5c0175324b6a3531fbc72e4bad37ef897d8f74cd7",
       "path": ".claude/commands/st-debug.md"
     },
     {
@@ -323,7 +323,7 @@
       "adapter": "claude",
       "artifactId": "handoff",
       "artifactType": "skill",
-      "contentHash": "ae2dae8e15f9c758bf6090b9df2aa7f18c1169db55b12fe3341aca899b2da55c",
+      "contentHash": "80370b93158c39c8d14333a074df0897961d7ef140cd8531635d13d7fb1ef957",
       "path": ".claude/skills/st-handoff/SKILL.md"
     },
     {
@@ -337,7 +337,7 @@
       "adapter": "claude",
       "artifactId": "learn",
       "artifactType": "skill",
-      "contentHash": "975b9010dcfcbb6e059ab4965638754fef59c79cae3a4c7e6a3b8e975ffaca40",
+      "contentHash": "0bebb953974bbc11e495b943085408373ac19e74598344a90f33d235014982bb",
       "path": ".claude/skills/st-learn/SKILL.md"
     },
     {

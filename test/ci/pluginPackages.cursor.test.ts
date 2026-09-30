@@ -19,6 +19,7 @@ import { MANIFEST_VERSION } from "../../src/types/manifest.ts";
 import { stageSubstitutedCorpus } from "../../scripts/plugins/corpusStage.mjs";
 // @ts-expect-error — same reason as the import above.
 import * as tokens from "../../scripts/plugins/tokens.mjs";
+import { canonical } from "../support/identity.ts";
 import { downstreamCheckout } from "./downstreamFixture.ts";
 
 /**
@@ -195,6 +196,11 @@ beforeAll(async () => {
     contentRoot: join(REPO_ROOT, "content"),
     forkRoot: join(REPO_ROOT, "fork"),
     tokens,
+    // TEST CHANGE, justified (2026-09-30, sw26-cli-call-form): the corpus now carries
+    // `${STAMITY:CLI}`, which the generator resolves from the identity it builds at (this
+    // manifest's name and version) and staging refuses without one. The oracle stages with the
+    // same identity, so the byte comparisons below stay exact.
+    cli: { packageName: canonical().name, version },
   })) as { root: string; forkRoot: string; dispose: () => Promise<void> };
   try {
     const contentRoot = { root: staged.root, forkRoot: staged.forkRoot };
