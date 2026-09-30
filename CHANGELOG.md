@@ -110,7 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `warning: the <kind> gate cannot be resolved — the charter says "<value>"`. That happens when
   nothing configures the gate, or when the command's first word is not found in
   `node_modules/.bin/`, `.venv/bin/` or on `PATH`. The warnings never change the exit code, and
-  `--json` carries the same data under `gates`.
+  `--json` names the gates not run and the unresolved gate kinds under `gates`.
 - **First-run output says what setup did.** The init panel counts distinct files on disk: the
   generated files, the manifest and the state-directory keep files it created. It says when
   `.gitignore` changed and counts a file several clients share once. A client set that init
@@ -233,7 +233,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an installed copy (a bin the project declares, one in `node_modules/.bin`, or a global one) and
   never downloads one. Where npm refuses because none is installed, the call runs pinned, as
   `npx -y @zomarit/stamity@<version> <verb>` at the version that generated the setup. The local
-  copy's version is whatever is installed. Hook hints and CLI remedies print the pinned form too.
+  copy's version is whatever is installed. Hook hints, and the CLI remedies that render the package
+  call, print the pinned form too; about 60 refusal messages still name a bare `stamity <verb>`,
+  for a machine where the CLI is on `PATH`.
   The charter's one call reads "change via `npx -y @zomarit/stamity@<version> config`". A plugin
   body carries the literal pinned call at the plugin's version. When neither form can run, a
   handoff or learn step writes nothing and reports `Not done:` with the command to re-run. Only the
@@ -315,12 +317,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   symbolic link or shared hard link at `AGENTS.md`, or a block-severity deny-scan hit in that text,
   now refuses the override as a collision, with or without `--force`. `check` and `sync` name the
   problem and the repair: make `AGENTS.md` a regular file with no flagged text, then sync.
-- **The repository's lockfiles move past eight advisories.** Six dependency updates: the root
+- **The repository's lockfiles move past nine advisories.** Seven dependency updates: the root
   lock's `brace-expansion` 5.0.12 (development, and also reached through the optional `sigstore`)
-  and `ip-address` 10.7.2 (through `sigstore`), and the documentation site's `dompurify` 3.4.16,
-  `serialize-javascript` 7.1.2, `brace-expansion` 1.1.21 and `joi` 17.13.8. A consumer's install is
-  unaffected by these moves: the lockfiles are not published, and an installed package resolves its
-  own dependencies, where the ranges under `sigstore` 5.0.0 admit both fixed root versions.
+  and `ip-address` 10.7.2 (through `sigstore`), and the documentation site's `fast-uri` 3.1.8,
+  `dompurify` 3.4.16, `serialize-javascript` 7.1.2, `brace-expansion` 1.1.21 and `joi` 17.13.8. A
+  consumer's install is unaffected by these moves: the lockfiles are not published, and an
+  installed package resolves its own dependencies, where the ranges under `sigstore` 5.0.0 admit
+  both fixed root versions.
 
 ## [1.10.0] - 2026-09-28
 
