@@ -3,7 +3,7 @@ id: an-account-switch-mid-run-ends-an-eval-run
 title: an account switch mid-run ends an eval run
 date: 2026-09-28
 confidence: high
-reviewBy: 2026-12-01
+reviewBy: 2027-03-10
 validatedAgainst: "run 33's terminal record at call 269 of 617 on 2026-09-27 after a mid-run login switch, and run 34's full re-run of every case from the start"
 summary: a login switch changes the client's ambient text, so the route's ambient check ends a running or held eval run (run 33, 2026-09-27); switch accounts only between runs
 integrity: sha256:a703e39daf8ca342b208ba14e7950cfff15dd911df988f2235abc19b30a4463e

@@ -4,7 +4,7 @@ title: typed unicode escapes land as raw code points
 date: 2026-09-24
 confidence: high
 summary: a unicode escape typed into an Edit, Write or Bash call lands as the raw code point (build/103); a doubled backslash lands as two; write such lines by script, then prove them with an rg grep
-reviewBy: 2026-12-03
+reviewBy: 2027-04-19
 validatedAgainst: "the rg code-point grep over src/runs/ledgerStore.ts before and after 58312346 and over seven code points planted by script (U+061C and U+E0041 among them), and od -c reads of escapes typed through Write and Bash on 2026-09-24"
 integrity: sha256:76696e5a38341dcf1af5439e6a9037679d94f1a8ac2678b61beb35ed623ec9be
 ---

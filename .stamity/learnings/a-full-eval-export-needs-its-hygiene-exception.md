@@ -3,7 +3,7 @@ id: a-full-eval-export-needs-its-hygiene-exception
 title: a full eval export needs its hygiene exception
 date: 2026-09-28
 confidence: high
-reviewBy: 2026-12-01
+reviewBy: 2027-02-28
 validatedAgainst: "CI round 9's three red check legs on the release branch on 2026-09-28 from the two 3.5 MB summary.json files, green again after the exact-path exceptions in d9dff93e"
 summary: a full eval summary.json (3.5 MB) fails repo-hygiene's 1 MB budget unless its exact-path retention exception lands in the same commit (5ee87083, d9dff93e)
 integrity: sha256:228bba10e81c0f5be4cb14a1847952741c7c57dec7edb7281a778d221c4075e0

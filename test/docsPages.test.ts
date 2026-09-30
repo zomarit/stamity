@@ -543,8 +543,16 @@ const RELEASE_CUT_DATE = "2026-09-28";
  * from 14 to 16, so that page carries the commit form naming the learnings commit the real `check`
  * ran on plus `Re-attested 2026-09-28` — the same day as the cut, so this constant already names
  * the pass and the assertion's first branch now reads it.
+ *
+ * TEST CHANGE, justified: MOVED 2026-09-30, from 2026-09-28, by Package 17's learnings pass.
+ * Retiring four learnings and capturing two moved the learnings count in
+ * `docs/troubleshooting.md`'s sample `check` transcript from 16 to 14, re-read against a real
+ * `node dist/cli.js check` run. That page keeps the commit form, now naming the base commit the
+ * learnings commit was built on (b28d6a6b, since a commit cannot name its own sha) plus
+ * `Re-attested 2026-09-30`. A page re-read today can honestly carry only today's date, which the
+ * 2026-09-28 pin refused as later than the pass it ships in. Every other page keeps its cut date.
  */
-const REATTESTATION_DATE = "2026-09-28";
+const REATTESTATION_DATE = "2026-09-30";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");

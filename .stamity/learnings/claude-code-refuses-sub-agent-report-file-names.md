@@ -4,7 +4,7 @@ title: claude code refuses sub-agent report file names
 date: 2026-09-23
 confidence: high
 summary: Claude Code refuses a sub-agent's Write whose basename matches /^(REPORT|SUMMARY|FINDINGS|ANALYSIS).*\.md$/i (2.1.278, 2.1.280); name persisted reports <pass>-<role>-r<N>.md
-reviewBy: 2026-12-01
+reviewBy: 2027-02-18
 validatedAgainst: "six refused Write results in the plan-008 session-3 sub-agent transcripts, a refused write on Claude Code 2.1.280 on 2026-09-23, and the Write validateInput rule read from the 2.1.280 client binary"
 integrity: sha256:65afc694d8a95450629c3e57dfb99322944bd0bd75af4b259976be851d2449c0
 ---

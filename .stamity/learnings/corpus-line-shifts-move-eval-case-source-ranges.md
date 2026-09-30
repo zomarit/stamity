@@ -4,7 +4,7 @@ title: corpus line shifts move eval case source ranges
 date: 2026-09-24
 confidence: high
 summary: "an eval case's source: range is a typed line range; a corpus line insert shifts every later range (build/348, build/349) — run test/evals in the lane and move the ranges plus SET-v7"
-reviewBy: 2026-12-03
+reviewBy: 2027-04-09
 validatedAgainst: "npx vitest run test/evals/locators.test.ts red on two cases at the sixth batch sync (build/348) and green at bf5a8d3f, with the uncaught probe range checked by hand (build/349)"
 integrity: sha256:bbd155243ea8339d7a2f348f8c5453b8cc4a93e9d8b1751f617167b8227e28fd
 ---

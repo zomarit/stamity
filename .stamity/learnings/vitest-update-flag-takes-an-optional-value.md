@@ -4,7 +4,7 @@ title: vitest update flag takes an optional value
 date: 2026-09-24
 confidence: high
 summary: "vitest 5's -u is --update [type], an optional value: 'vitest run -u <file>' takes the path as the value and updates snapshots across the whole suite; name files first, --update last"
-reviewBy: 2026-12-03
+reviewBy: 2027-03-30
 validatedAgainst: "npx vitest --help and the update option in node_modules/vitest/dist/chunks/cac.*.js on vitest 5.0.1, and npx vitest list -u <file> --filesOnly (250 files) against npx vitest list <file> --update --filesOnly (1) on 2026-09-24"
 integrity: sha256:c13e52edab8aa82c10142c3923c40528a6f96cab0a5491a1941d775a629d15e0
 ---

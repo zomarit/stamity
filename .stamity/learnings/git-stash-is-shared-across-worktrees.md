@@ -3,7 +3,7 @@ id: git-stash-is-shared-across-worktrees
 title: git stash is shared across worktrees
 date: 2026-09-20
 confidence: high
-reviewBy: 2026-12-01
+reviewBy: 2027-02-08
 validatedAgainst: "git stash list run from two linked worktrees of this repository on 2026-09-20 showing one shared entry"
 summary: git stash is one stack per repository shared by every linked worktree, so parallel lanes stashing baselines can pop each other's work (2026-09-20); a patch file plus git restore is the safe baseline
 integrity: sha256:8ca344928633705ade87908817781ae131062218d7c962f72adaa32edd15da36
