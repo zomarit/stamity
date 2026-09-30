@@ -638,6 +638,9 @@ const COMMONDIR_RACE = /failed to read .*[\\/]commondir/;
  */
 const WORKTREE_ADD_RETRY_DELAY_MS = 250;
 
+/** Git's refusal of `-b` / `--track -b` when the branch is already there. */
+const BRANCH_EXISTS = /a branch named '[^']*' already exists/;
+
 /**
  * `git worktree add`, with its two operator-facing collisions classified.
  *
@@ -658,15 +661,27 @@ export async function addWorktree(
         ? ["worktree", "add", "--track", "-b", request.branch, request.path, `origin/${request.branch}`]
         : ["worktree", "add", "-b", request.branch, request.path];
 
+  // Read before the first attempt, so a branch this call did not make is never
+  // mistaken for one it did. `attach` names an existing branch by definition.
+  const branchBefore =
+    request.kind === "attach" ? true : await localBranchExists(run, repoRoot, request.branch);
+
   let outcome = await run({ args, cwd: repoRoot });
-  // The retry is the SAME command, once, and only for the race above. Every
-  // outcome below — including the retry's own — is then classified normally: a
-  // first attempt that created the directory before losing the race makes the
-  // re-run report "already exists", and that refusal is the operator's answer.
+  // One retry, and only for the race above. `-b` makes git create the branch
+  // in a child process BEFORE the parent reads the sibling's `commondir`, so
+  // a lost race leaves the branch behind and nothing on disk (prove/9: 20 of
+  // 20 losses on darwin, git 2.52.0). Re-running `-b` would then be refused
+  // for a branch this same call made, so when the branch was absent before and
+  // exists now, the retry attaches to it; otherwise it re-runs the same
+  // command. Every outcome below — the retry's included — is classified
+  // normally.
   let retriedAfterRace = false;
   if (outcome.status === 128 && COMMONDIR_RACE.test(outcome.stderr)) {
     await new Promise((wake) => setTimeout(wake, WORKTREE_ADD_RETRY_DELAY_MS));
-    outcome = await run({ args, cwd: repoRoot });
+    const attach =
+      !branchBefore && (await localBranchExists(run, repoRoot, request.branch));
+    const retryArgs = attach ? ["worktree", "add", request.path, request.branch] : args;
+    outcome = await run({ args: retryArgs, cwd: repoRoot });
     retriedAfterRace = true;
   }
   if (outcome.status === 0) return;
@@ -681,6 +696,14 @@ export async function addWorktree(
     refuse(
       `The branch ${JSON.stringify(request.branch)} is already checked out in the worktree at ${other}.`,
       `Work in ${other}, or run setup with a different name.`,
+    );
+  }
+  // Git refuses `-b` for a branch that exists with this sentence, which also
+  // says "already exists" — about the branch, not the path, so it is read first.
+  if (BRANCH_EXISTS.test(outcome.stderr)) {
+    refuse(
+      `The branch ${JSON.stringify(request.branch)} already exists, so this run cannot create it.`,
+      `Run setup again to attach a worktree to it, or set up under a different name.`,
     );
   }
   if (outcome.stderr.includes("already exists")) {
