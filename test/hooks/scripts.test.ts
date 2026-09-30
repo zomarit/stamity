@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
-import { link, rm, symlink, writeFile } from "node:fs/promises";
+import { link, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
@@ -31,7 +31,7 @@ import {
 } from "../../src/hooks/scripts.ts";
 import { cliCallHint } from "../../src/shared/cliCall.ts";
 import { formatLearningsIndex, loadValidatedLearnings } from "../../src/learnings/store.ts";
-import { computeLearningIntegrity } from "../../src/learnings/validation.ts";
+import { computeLearningIntegrity, REVIEW_WARNING_DAYS } from "../../src/learnings/validation.ts";
 import { RENAME_RETRY_COUNT } from "../../src/merge/atomicWrite.ts";
 import { AGENT_POLICY_ROSTER, isWritePathPattern, verdictReportWritePaths } from "../../src/roster/agentPolicies.ts";
 import { REPORT_NAME_PATTERN, REPORT_ROLES, UNPRINTABLE_CHARS } from "../../src/runs/layout.ts";
@@ -152,6 +152,11 @@ function handoff(fields: Record<string, string> = {}, body: string = HANDOFF_BOD
   };
   const lines = Object.entries(head).map(([key, value]) => `${key}: ${value}`);
   return `---\n${lines.join("\n")}\n---\n\n${body}`;
+}
+
+/** The UTC calendar day `days` from now, as a `reviewBy` value. */
+function dayFromNow(days: number): string {
+  return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 }
 
 /** Writes a script into the repo fixture and returns its absolute path. */
@@ -356,12 +361,18 @@ describe("buildSessionStartScript", () => {
 
     const result = run(script, { cwd: getRepo().dir });
 
+    const indexLines = [
+      "- [high] cache-warmup — Warm the query cache in bootstrap; first paint drops from 400ms to 30ms. (cache-warmup.md)",
+      "- skipped poisoned.md: injection-detected",
+    ];
     expect(result.code).toBe(0);
     expect(result.stdout).toBe(
       [
-        `Learnings: 1 loaded, 1 skipped, ${Buffer.byteLength(learning(), "utf8")} bytes.`,
-        "- [high] cache-warmup — Warm the query cache in bootstrap; first paint drops from 400ms to 30ms. (cache-warmup.md)",
-        "- skipped poisoned.md: injection-detected",
+        // TEST CHANGE, justified: the header's byte figure changed meaning (REQ-FLOW-021). It
+        // counts the index lines the banner prints, with the old on-disk sum beside it.
+        `Learnings: 1 loaded, 1 skipped, ${Buffer.byteLength(indexLines.join("\n"), "utf8")} bytes in this ` +
+          `index (${Buffer.byteLength(learning(), "utf8")} bytes on disk).`,
+        ...indexLines,
         // Header now carries the handoff skip count too: refusals used to be
         // filtered away inside the same expression that selected the resumable
         // entries, so two poisoned handoffs read as "none in this repo".
@@ -438,7 +449,13 @@ describe("buildSessionStartScript", () => {
 
     const lines = run(script, { cwd: getRepo().dir }).stdout.split("\n");
 
-    expect(lines[0]).toBe("Learnings: 0 loaded, 4 skipped, 0 bytes.");
+    // TEST CHANGE, justified: the header's byte figure changed meaning (REQ-FLOW-021). Nothing
+    // loaded is still 0 bytes on disk, and the index figure counts the four skip lines printed.
+    expect(lines[0]).toBe(
+      `Learnings: 0 loaded, 4 skipped, ${Buffer.byteLength(lines.slice(1, 5).join("\n"), "utf8")} ` +
+        "bytes in this index (0 bytes on disk).",
+    );
+    expect(lines[5]).toBe("Handoffs: 0 active, 0 skipped.");
     expect(lines).toContain("- skipped tampered.md: integrity-mismatch");
     expect(lines).toContain("- skipped stale.md: expired-review");
     expect(lines).toContain("- skipped huge.md: over-size");
@@ -527,6 +544,103 @@ describe("buildSessionStartScript", () => {
     expect(printed.split("\n").filter((line) => line.startsWith("- [")).length).toBe(1);
     expect(printed).toContain("- … and 2 more learnings not listed.");
     expect(buildSessionStartScript()).toContain(`const MAX_ITEM_LINES = ${DEFAULT_MAX_INDEX_LINES};`);
+  });
+
+  it("flags a learning whose review date falls inside the warning window, as the engine does", async () => {
+    const soon = dayFromNow(10);
+    await getRepo().seedFiles({
+      ".stamity/learnings/soon.md": learning({ id: "soon", reviewBy: soon }),
+      ".stamity/learnings/later.md": learning({ id: "later", reviewBy: dayFromNow(REVIEW_WARNING_DAYS + 6) }),
+    });
+    const script = await place("session-start.mjs", buildSessionStartScript());
+
+    const lines = run(script, { cwd: getRepo().dir }).stdout.split("\n");
+
+    expect(lines.find((line) => line.includes("] soon —"))).toMatch(
+      new RegExp(`\\(soon\\.md\\) \\[review due ${soon}\\]$`),
+    );
+    expect(lines.find((line) => line.includes("] later —"))).toMatch(/\(later\.md\)$/);
+    const engine = formatLearningsIndex(await loadValidatedLearnings({ rootDir: getRepo().dir }));
+    expect(lines.slice(0, lines.indexOf("Handoffs: 0 active, 0 skipped.")).join("\n")).toBe(engine);
+  });
+
+  it("orders the index by declared date, newest first, whatever the mtimes say", async () => {
+    await getRepo().seedFiles({
+      ".stamity/learnings/dated-early.md": learning({ id: "dated-early", date: "2026-09-01" }),
+      ".stamity/learnings/dated-late.md": learning({ id: "dated-late", date: "2026-09-28" }),
+      // No `date` at all: the hook falls back to the file's mtime as a calendar day.
+      ".stamity/learnings/undated.md": learning({ id: "undated" }).replace(/^date: .*\n/m, ""),
+    });
+    // The file dated earliest is the one touched last.
+    const stamp = async (name: string, iso: string): Promise<void> => {
+      const when = new Date(iso);
+      await utimes(getRepo().path(".stamity", "learnings", name), when, when);
+    };
+    await stamp("dated-early.md", "2026-09-29T12:00:00Z");
+    await stamp("dated-late.md", "2026-09-02T12:00:00Z");
+    await stamp("undated.md", "2026-09-15T12:00:00Z");
+    const script = await place("session-start.mjs", buildSessionStartScript());
+
+    const printed = run(script, { cwd: getRepo().dir }).stdout;
+
+    const at = (name: string): number => printed.indexOf(`(${name})`);
+    expect(at("dated-late.md")).toBeGreaterThan(-1);
+    expect(at("dated-late.md")).toBeLessThan(at("undated.md"));
+    expect(at("undated.md")).toBeLessThan(at("dated-early.md"));
+    // The engine agrees on the dated pair; the undated file is a schema skip there.
+    const engine = await loadValidatedLearnings({ rootDir: getRepo().dir });
+    expect(engine.learnings.map((entry) => entry.fileName)).toEqual(["dated-late.md", "dated-early.md"]);
+  });
+
+  it("prints the byte length of the index it printed, beside the bytes on disk", async () => {
+    const files: Record<string, string> = { ".stamity/learnings/poisoned.md": poisonedLearning() };
+    let onDisk = 0;
+    for (let n = 1; n <= 16; n += 1) {
+      const id = `note-${String(n).padStart(2, "0")}`;
+      const doc = learning({ id, summary: `Note ${n} — keep the queue lock first.` });
+      files[`.stamity/learnings/${id}.md`] = doc;
+      onDisk += Buffer.byteLength(doc, "utf8");
+    }
+    await getRepo().seedFiles(files);
+    const script = await place("session-start.mjs", buildSessionStartScript());
+
+    const lines = run(script, { cwd: getRepo().dir }).stdout.split("\n");
+    const section = lines.slice(1, lines.indexOf("Handoffs: 0 active, 0 skipped."));
+    const inIndex = Buffer.byteLength(section.join("\n"), "utf8");
+
+    expect(section).toHaveLength(17);
+    expect(lines[0]).toBe(`Learnings: 16 loaded, 1 skipped, ${inIndex} bytes in this index (${onDisk} bytes on disk).`);
+    // Bytes, not characters: every line carries a multi-byte dash. And the two figures differ.
+    expect(inIndex).toBeGreaterThan(section.join("\n").length);
+    expect(inIndex).not.toBe(onDisk);
+    // Up to the hook's cap the two twins print the same section, so the same figure.
+    const engine = formatLearningsIndex(await loadValidatedLearnings({ rootDir: getRepo().dir }));
+    expect(lines.slice(0, 1 + section.length).join("\n")).toBe(engine);
+  });
+
+  it("counts each twin's own printed section once the hook's cap cuts the list", async () => {
+    const files: Record<string, string> = {};
+    for (let n = 1; n <= 22; n += 1) {
+      const id = `note-${String(n).padStart(2, "0")}`;
+      files[`.stamity/learnings/${id}.md`] = learning({ id });
+    }
+    await getRepo().seedFiles(files);
+    const script = await place("session-start.mjs", buildSessionStartScript());
+
+    const lines = run(script, { cwd: getRepo().dir }).stdout.split("\n");
+    const section = lines.slice(1, lines.indexOf("Handoffs: 0 active, 0 skipped."));
+    const engine = formatLearningsIndex(await loadValidatedLearnings({ rootDir: getRepo().dir })).split("\n");
+    const engineSection = engine.slice(1);
+
+    // The hook prints 20 lines and the line accounting for the rest; the engine lists all 22.
+    expect(section).toHaveLength(DEFAULT_MAX_INDEX_LINES + 1);
+    expect(section.at(-1)).toBe("- … and 2 more learnings not listed.");
+    expect(engineSection).toHaveLength(22);
+    const hookBytes = Buffer.byteLength(section.join("\n"), "utf8");
+    const engineBytes = Buffer.byteLength(engineSection.join("\n"), "utf8");
+    expect(lines[0]).toMatch(new RegExp(`^Learnings: 22 loaded, 0 skipped, ${hookBytes} bytes in this index `));
+    expect(engine[0]).toMatch(new RegExp(`^Learnings: 22 loaded, 0 skipped, ${engineBytes} bytes in this index `));
+    expect(hookBytes).not.toBe(engineBytes);
   });
 
   it("keeps a hostile field to one bounded index line", async () => {

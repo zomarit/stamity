@@ -33,6 +33,7 @@ const MAX_ITEM_LINES = 20;
 const MAX_LEARNING_BYTES = 65536;
 const MAX_HANDOFF_BYTES = 61440;
 const MAX_FIELD_CHARS = 200;
+const REVIEW_WARNING_DAYS = 14;
 const RESUMABLE = ["active","in-progress"];
 const INVISIBLE = new RegExp("(?:[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u070F\\u0890-\\u0891\\u08E2\\u115F-\\u1160\\u17B4-\\u17B5\\u180B-\\u180F\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u206F\\u3164\\uFE00-\\uFE0F\\uFEFF\\uFFA0\\uFFF0-\\uFFFB]|\\uD804\\uDCBD|\\uD804\\uDCCD|\\uD80D[\\uDC30-\\uDC3F]|\\uD82F[\\uDCA0-\\uDCA3]|\\uD834[\\uDD73-\\uDD7A]|\\uDB40[\\uDC80-\\uDFFF]|[\\uDB41-\\uDB43][\\uDC00-\\uDFFF])", "g");
 const SCREEN = [
@@ -181,7 +182,7 @@ function inspect(dir, name, maxBytes, coversSummary) {
     return null;
   }
   if (!stats.isFile()) return null;
-  const doc = { name, size: stats.size, mtime: stats.mtimeMs, skip: "", head: null };
+  const doc = { name, size: stats.size, day: dayOf(stats.mtimeMs), skip: "", head: null };
   if (stats.size > maxBytes) return { ...doc, skip: "over-size" };
 
   let raw;
@@ -190,6 +191,8 @@ function inspect(dir, name, maxBytes, coversSummary) {
   } catch {
     return { ...doc, skip: "invalid-frontmatter" };
   }
+  // Keyed before any screen, as the engine keys a file before it examines it.
+  doc.day = declaredDay(raw) || doc.day;
   if (screened(raw)) return { ...doc, skip: "injection-detected" };
   const parsed = parseDocument(raw);
   if (parsed === null) return { ...doc, skip: "invalid-frontmatter" };
@@ -200,6 +203,22 @@ function inspect(dir, name, maxBytes, coversSummary) {
     return { ...doc, skip: "integrity-mismatch" };
   }
   return { ...doc, head: parsed.head };
+}
+
+/** A timestamp as a UTC calendar day. */
+function dayOf(ms) {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/**
+ * The `date` inside the opening fence, matched by line the way the engine's
+ * `orderingDay` matches it, or "" when there is none.
+ */
+function declaredDay(raw) {
+  if (!raw.startsWith("---")) return "";
+  const end = raw.indexOf("\n---", 3);
+  const found = /^[ \t]*date[ \t]*:[ \t]*["']?(\d{4}-\d{2}-\d{2})/m.exec(end === -1 ? raw : raw.slice(0, end));
+  return found === null ? "" : found[1];
 }
 
 /**
@@ -362,9 +381,10 @@ const learningsDir = join(STATE_ROOT, "learnings");
 const learnings = listMarkdown(learningsDir)
   .map((name) => inspect(learningsDir, name, MAX_LEARNING_BYTES, false))
   .filter((doc) => doc !== null)
-  // Newest first — a learning written today outranks one from six months ago —
-  // with a name tiebreak so equal timestamps still order deterministically.
-  .sort((a, b) => b.mtime - a.mtime || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  // Newest declared date first — a learning written today outranks one from six
+  // months ago, and a date survives a clone where an mtime does not — with a
+  // name tiebreak so one day's learnings still order deterministically.
+  .sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
 for (const doc of learnings) {
   if (doc.skip !== "") continue;
@@ -413,22 +433,31 @@ function render() {
   // reached the directory, and it is concatenated into a line an agent reads.
   const ids = loaded.map((doc) => text(doc.head.id, text(stem(doc.name), "(unnamed)")));
   const duplicated = new Set(ids.filter((id, index) => ids.indexOf(id) !== index));
-  const out = [
-    "Learnings: " + loaded.length + " loaded, " + skipped.length + " skipped, " + bytes + " bytes.",
-  ];
-
+  const section = [];
   append(
-    out,
+    section,
     loaded.map((doc, index) => {
       const id = ids[index];
       const confidence = text(doc.head.confidence, "unrated");
       const summary = text(doc.head.summary, "(no summary)");
       const flag = duplicated.has(id) ? " [duplicate id]" : "";
-      return "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag;
+      // Inside the warning window: re-verify before the read screen skips it.
+      const due =
+        Date.parse(doc.head.reviewBy + "T00:00:00Z") <= NOW + REVIEW_WARNING_DAYS * 86400000
+          ? " [review due " + text(doc.head.reviewBy, "") + "]"
+          : "";
+      return "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due;
     }),
     "learning",
   );
-  append(out, skipped.map(skipLine), "skipped file");
+  append(section, skipped.map(skipLine), "skipped file");
+  // Two figures: the bytes of the lines printed below, which is what this banner
+  // costs, and the loaded files' bytes on disk.
+  const out = [
+    "Learnings: " + loaded.length + " loaded, " + skipped.length + " skipped, " +
+      Buffer.byteLength(section.join("\n"), "utf8") + " bytes in this index (" + bytes + " bytes on disk).",
+    ...section,
+  ];
 
   out.push(
     "Handoffs: " + handoffs.length + " active, " + refusedHandoffs.length + " skipped.",

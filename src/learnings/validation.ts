@@ -86,6 +86,26 @@ export const MAX_LEARNING_FILE_COUNT = DEFAULT_LEARNING_FILE_COUNT * 10;
 /** Summary ceiling: the session-start index prints one line per learning. */
 export const MAX_LEARNING_SUMMARY_LENGTH = 200;
 
+/**
+ * How far ahead a review date is announced, in calendar days. Inside the window
+ * the write path warns and the session-start index marks the line, so the
+ * learning is re-verified before the read gate starts skipping it.
+ */
+export const REVIEW_WARNING_DAYS = 14;
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Whether `reviewBy` falls on or before the last day of the warning window:
+ * today (UTC) through day {@link REVIEW_WARNING_DAYS}. A passed date is due too;
+ * callers that report a passed date on its own ask that question first. An
+ * unparseable date is never due.
+ */
+export function reviewDueSoon(reviewBy: string, now: Date): boolean {
+  const start = Date.parse(`${reviewBy}T00:00:00Z`);
+  return !Number.isNaN(start) && start <= now.getTime() + REVIEW_WARNING_DAYS * DAY_MS;
+}
+
 /** Confidence levels, in ascending order of evidence. */
 export const LEARNING_CONFIDENCE_LEVELS = ["low", "medium", "high"] as const;
 
@@ -342,6 +362,11 @@ function checkTrustFields(
     // Stale, not wrong: the finding may well still hold, and refusing to read it
     // would delete knowledge on a calendar boundary. Re-verify and move the date.
     warnings.push(`${source}: \`reviewBy\` ${reviewBy} has passed. Re-verify the learning or retire it.`);
+  } else if (reviewDueSoon(reviewBy, now)) {
+    warnings.push(
+      `${source}: \`reviewBy\` ${reviewBy} is within ${REVIEW_WARNING_DAYS} days. Re-verify the learning ` +
+        `and move the date, or retire it.`,
+    );
   }
 
   const validatedAgainst = read(errors, () =>
@@ -591,8 +616,11 @@ async function orderOldestFirst(dir: string, names: string[]): Promise<string[]>
  */
 const HEAD_BYTES = 4096;
 
-/** The ordering key: declared calendar date, or the mtime rendered as one. */
-async function orderingDay(dir: string, name: string): Promise<string> {
+/**
+ * The ordering key: declared calendar date, or the mtime rendered as one. The
+ * session-start loader in `./store.ts` orders by the same key, newest first.
+ */
+export async function orderingDay(dir: string, name: string): Promise<string> {
   const path = join(dir, name);
   const declared = declaredDate(await readHead(path));
   if (declared !== null) return declared;

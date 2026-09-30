@@ -15,7 +15,9 @@ import {
   computeLearningIntegrity,
   LEARNINGS_SCREEN_PATTERNS,
   MAX_LEARNING_FILE_BYTES,
+  orderingDay,
   resolveLearningsCaps,
+  reviewDueSoon,
   sanitizeLearningsContent,
   validateLearningContent,
   verifyLearningIntegrity,
@@ -239,7 +241,7 @@ export interface LoaderSkip {
 }
 
 export interface LoaderResult {
-  /** Newest first, name-ascending on equal timestamps. */
+  /** Newest declared `date` first, name-ascending on the same day. */
   learnings: LoadedLearning[];
   /** Every refusal, in the same order the files were examined. */
   skips: LoaderSkip[];
@@ -258,8 +260,12 @@ export interface LoadValidatedLearningsOptions {
 /**
  * Read every learning cleared for this session.
  *
- * Files are examined newest first — a learning written today outranks one from
- * six months ago when the budget runs out — and each is checked in the order
+ * Files are examined newest first by their declared `date` — a learning written
+ * today outranks one from six months ago when the budget runs out. The date is
+ * read from each file's head before the sort (`orderingDay`, the key the
+ * directory validator orders by), because mtime does not survive a clone; a
+ * file with no readable date, or one past the per-file cap that is never read,
+ * falls back to its mtime as a calendar day. Each file is checked in the order
  * that keeps a refusal attributable: size before read (an oversized file is
  * never loaded into memory to be rejected), injection screen before schema (so
  * a poisoned file reports as poisoned rather than as malformed), integrity
@@ -321,7 +327,8 @@ export async function loadValidatedLearnings(
 
 interface Candidate {
   fileName: string;
-  mtimeMs: number;
+  /** Ordering key: the declared `date`, else the mtime as a calendar day. */
+  day: string;
   /** `null` when the entry could not be stat'd between the listing and now. */
   size: number | null;
 }
@@ -330,22 +337,34 @@ type Examined =
   | { ok: false; skip: LoaderSkip }
   | { ok: true; learning: LoadedLearning; bytes: number };
 
-/** Newest first, name-ascending on a tie so equal timestamps still order deterministically. */
+/**
+ * Newest declared day first, name-ascending on the same day so the order is a
+ * function of the corpus. A file past the per-file cap is keyed by its mtime:
+ * it is refused unread, here as in the session-start hook, so neither twin opens
+ * it just to sort a skip line.
+ */
 async function listCandidates(dir: string): Promise<Candidate[]> {
   const names = await listLearningFileNames(dir);
-  const stamped = await pLimit(READ_CONCURRENCY).map(names, async (fileName) => {
+  const stamped = await pLimit(READ_CONCURRENCY).map(names, async (fileName): Promise<Candidate> => {
     try {
       const stats = await stat(join(dir, fileName));
-      return { fileName, mtimeMs: stats.mtimeMs, size: stats.size };
+      const day =
+        stats.size > MAX_LEARNING_FILE_BYTES ? calendarDay(stats.mtimeMs) : await orderingDay(dir, fileName);
+      return { fileName, day, size: stats.size };
     } catch {
-      return { fileName, mtimeMs: 0, size: null };
+      return { fileName, day: calendarDay(0), size: null };
     }
   });
   stamped.sort(
     (a, b) =>
-      b.mtimeMs - a.mtimeMs || (a.fileName < b.fileName ? -1 : a.fileName > b.fileName ? 1 : 0),
+      (a.day < b.day ? 1 : a.day > b.day ? -1 : 0) ||
+      (a.fileName < b.fileName ? -1 : a.fileName > b.fileName ? 1 : 0),
   );
   return stamped;
+}
+
+function calendarDay(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
 }
 
 async function examine(dir: string, candidate: Candidate, now: Date): Promise<Examined> {
@@ -463,24 +482,38 @@ function expiredReview(parsed: ParsedFrontmatter, now: Date): string | null {
 
 // ── Index ────────────────────────────────────────────────────────
 
+/** Options for {@link formatLearningsIndex}. */
+export interface FormatLearningsIndexOptions {
+  /** Clock for the review-due mark. Defaults to now. */
+  now?: Date;
+}
+
 /**
  * Render the session-start index: a count line, one line per loaded learning
  * (confidence, id, summary, file), one line per skip.
  *
+ * The count line carries two byte figures: the bytes of the index lines printed
+ * under it — what this index costs to inline, which is what an operator reading
+ * the banner is judging — and, beside it, the loaded files' bytes on disk. The
+ * session-start hook prints the same shape; past its line cap it prints fewer
+ * lines than this full index, and each figure counts its own printed lines.
+ *
+ * A learning whose `reviewBy` falls inside the warning window
+ * (`REVIEW_WARNING_DAYS`) is marked `[review due <date>]`, so the re-verify
+ * lands before the read gate starts skipping the file.
+ *
  * Bodies never appear here, and neither does a skip's `detail`. This string is
  * written into a model's opening context, so it carries the parts a reader needs
  * to decide what to open — never the text a gate just refused. Deterministic for
- * a given result: the order is the loader's, which is the corpus order.
+ * a given result and clock: the order is the loader's, which is the corpus order.
  *
  * A repeated `id` across two files is flagged rather than collapsed. The file is
  * the unit of the corpus, so both load; the flag is what tells the operator two
  * notes are claiming one name.
  */
-export function formatLearningsIndex(result: LoaderResult): string {
-  const lines = [
-    `Learnings: ${result.learnings.length} loaded, ${result.skips.length} skipped, ` +
-      `${result.totalBytes} bytes.`,
-  ];
+export function formatLearningsIndex(result: LoaderResult, opts: FormatLearningsIndexOptions = {}): string {
+  const now = opts.now ?? new Date();
+  const lines: string[] = [];
 
   const duplicates = duplicateIds(result.learnings);
   for (const learning of result.learnings) {
@@ -488,14 +521,19 @@ export function formatLearningsIndex(result: LoaderResult): string {
     const confidence = fieldText(learning.frontmatter, "confidence") ?? "unrated";
     const summary = fieldText(learning.frontmatter, "summary") ?? "(no summary)";
     const flag = duplicates.has(id) ? " [duplicate id]" : "";
-    lines.push(`- [${confidence}] ${id} — ${summary} (${learning.fileName})${flag}`);
+    const reviewBy = fieldText(learning.frontmatter, REVIEW_BY_FIELD);
+    const due = reviewBy !== undefined && reviewDueSoon(reviewBy, now) ? ` [review due ${reviewBy}]` : "";
+    lines.push(`- [${confidence}] ${id} — ${summary} (${learning.fileName})${flag}${due}`);
   }
 
   for (const entry of result.skips) {
     lines.push(`- skipped ${entry.fileName}: ${entry.reason}`);
   }
 
-  return lines.join("\n");
+  const header =
+    `Learnings: ${result.learnings.length} loaded, ${result.skips.length} skipped, ` +
+    `${Buffer.byteLength(lines.join("\n"), "utf8")} bytes in this index (${result.totalBytes} bytes on disk).`;
+  return [header, ...lines].join("\n");
 }
 
 function duplicateIds(learnings: readonly LoadedLearning[]): Set<string> {

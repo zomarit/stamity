@@ -10,6 +10,7 @@ import {
   MAX_LEARNING_SUMMARY_LENGTH,
   MIN_LEARNING_FILE_COUNT,
   resolveLearningsCaps,
+  REVIEW_WARNING_DAYS,
   sanitizeLearningsContent,
   validateLearningContent,
   validateLearningFileName,
@@ -465,6 +466,29 @@ describe("validateLearningContent — trust fields", () => {
     });
 
     expect(joined(result.warnings)).not.toContain("has passed");
+  });
+
+  it("warns ahead of a review date inside the warning window and stays quiet outside it", () => {
+    const now = new Date("2026-08-12T09:00:00Z");
+    const check = (reviewBy: string): LearningValidationResult =>
+      validateLearningContent(FILE, learning({ reviewBy }), { now });
+
+    expect(REVIEW_WARNING_DAYS).toBe(14);
+    // 13 days ahead: inside the window, so the author hears about it now.
+    const within = check("2026-08-25");
+    expect(within.valid).toBe(true);
+    expect(joined(within.warnings)).toContain(
+      "`reviewBy` 2026-08-25 is within 14 days. Re-verify the learning and move the date, or retire it.",
+    );
+    // Day 14 itself is inside; day 15 is not.
+    expect(joined(check("2026-08-26").warnings)).toContain("is within 14 days");
+    expect(joined(check("2026-08-27").warnings)).not.toContain("is within");
+    // The last day is due, not passed.
+    const today = check("2026-08-12");
+    expect(joined(today.warnings)).toContain("`reviewBy` 2026-08-12 is within 14 days");
+    expect(joined(today.warnings)).not.toContain("has passed");
+    // A passed date keeps its own warning and does not also claim to be upcoming.
+    expect(joined(check("2026-08-11").warnings)).not.toContain("is within");
   });
 
   it("warns when a trust field is absent and refuses one that is malformed", () => {

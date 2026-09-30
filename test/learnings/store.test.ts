@@ -22,10 +22,11 @@ import { useTempDir } from "../support/tempDir.ts";
 
 /**
  * Real temp directories rather than the virtual-fs lane: the store writes through
- * the atomic temp+rename substrate and the loader orders by `mtime`, and both of
- * those are filesystem semantics rather than logic a volume can stand in for.
- * Timestamps are set with `utimes` so every ordering assertion is a function of
- * the fixture, not of how fast the writes landed.
+ * the atomic temp+rename substrate and the loader orders by the declared `date`
+ * with `mtime` as its fallback, and both of those are filesystem semantics rather
+ * than logic a volume can stand in for. Timestamps are set with `utimes` so every
+ * ordering assertion is a function of the fixture, not of how fast the writes
+ * landed.
  */
 const getRepo = useTempDir("learnings-store");
 
@@ -344,9 +345,13 @@ describe("loadValidatedLearnings", () => {
   });
 
   it("orders newest first and cuts the budget deterministically, keeping the newest", async () => {
-    const oldest = await seedPersisted("oldest-note.md", { id: "oldest-note" });
-    const middle = await seedPersisted("middle-note.md", { id: "middle-note" });
-    const newest = await seedPersisted("newest-note.md", { id: "newest-note" });
+    // TEST CHANGE, justified: the loader orders by the declared `date` now (REQ-FLOW-021), not
+    // by mtime, and every fixture shared one date, so the order fell to the name tiebreak. Each
+    // file now declares a date in the same order the stamps below age it, so the case still
+    // pins newest-first and the budget cut.
+    const oldest = await seedPersisted("oldest-note.md", { id: "oldest-note", date: "2026-07-01" });
+    const middle = await seedPersisted("middle-note.md", { id: "middle-note", date: "2026-07-02" });
+    const newest = await seedPersisted("newest-note.md", { id: "newest-note", date: "2026-07-03" });
     await stampOrder([oldest, middle, newest]);
 
     expect(fileNames(await load())).toEqual([
@@ -369,9 +374,15 @@ describe("loadValidatedLearnings", () => {
   });
 
   it("does not backfill a smaller learning past the first overflow", async () => {
-    const newest = await seedPersisted("newest-note.md", { id: "newest-note" });
-    const wide = await seedPersisted("wide-note.md", { id: "wide-note" }, `${BODY}\n\n${"z".repeat(600)}`);
-    const oldest = await seedPersisted("oldest-note.md", { id: "oldest-note" });
+    // TEST CHANGE, justified: ordered by the declared `date` now (REQ-FLOW-021); the dates
+    // follow the stamp order below, so the wide file still sits between the two small ones.
+    const newest = await seedPersisted("newest-note.md", { id: "newest-note", date: "2026-07-03" });
+    const wide = await seedPersisted(
+      "wide-note.md",
+      { id: "wide-note", date: "2026-07-02" },
+      `${BODY}\n\n${"z".repeat(600)}`,
+    );
+    const oldest = await seedPersisted("oldest-note.md", { id: "oldest-note", date: "2026-07-01" });
     await stampOrder([oldest, wide, newest]);
 
     // Room for the two small files exactly; the wide one in between does not fit.
@@ -389,6 +400,32 @@ describe("loadValidatedLearnings", () => {
       ["oldest-note.md", "over-size"],
     ]);
     expect(result.totalBytes + (oldestBytes ?? 0)).toBe(budget);
+  });
+
+  it("orders by the declared date, not the mtime, and cuts the budget in that order", async () => {
+    // Stamped AGAINST the declared dates: the file dated earliest is touched last, so an
+    // mtime order would list it first and cut the file dated latest.
+    const early = await seedPersisted("early-note.md", { id: "early-note", date: "2026-07-01" });
+    const mid = await seedPersisted("mid-note.md", { id: "mid-note", date: "2026-07-02" });
+    const late = await seedPersisted("late-note.md", { id: "late-note", date: "2026-07-03" });
+    await stampOrder([late, mid, early]);
+
+    expect(fileNames(await load())).toEqual(["late-note.md", "mid-note.md", "early-note.md"]);
+
+    const sizes = await Promise.all([late, mid].map(async (p) => (await stat(p)).size));
+    const cut = await load({ maxTotalBytes: sizes.reduce((sum, size) => sum + size, 0) });
+
+    expect(fileNames(cut)).toEqual(["late-note.md", "mid-note.md"]);
+    expect(cut.skips.map((skip) => [skip.fileName, skip.reason])).toEqual([["early-note.md", "over-size"]]);
+  });
+
+  it("breaks a tie on the declared date by file name", async () => {
+    const second = await seedPersisted("b-note.md", { id: "b-note" });
+    const first = await seedPersisted("a-note.md", { id: "a-note" });
+    // Same date; the mtimes put b first, and the name puts a first.
+    await stampOrder([first, second]);
+
+    expect(fileNames(await load())).toEqual(["a-note.md", "b-note.md"]);
   });
 
   it("throws a typed FS_ERROR when the learnings path exists but cannot be listed", async () => {
@@ -421,8 +458,11 @@ describe("formatLearningsIndex", () => {
     const lines = index.split("\n");
 
     expect(lines).toHaveLength(1 + result.learnings.length + result.skips.length);
+    // TEST CHANGE, justified: the header's byte figure changed meaning (REQ-FLOW-021). It
+    // counts the index lines it prints now, with the old on-disk sum beside it.
     expect(lines[0]).toBe(
-      `Learnings: 1 loaded, 1 skipped, ${result.totalBytes} bytes.`,
+      `Learnings: 1 loaded, 1 skipped, ${Buffer.byteLength(lines.slice(1).join("\n"), "utf8")} ` +
+        `bytes in this index (${result.totalBytes} bytes on disk).`,
     );
     expect(lines[1]).toBe(
       `- [high] cache-warmup-order — ${FIELDS.summary} (cache-warmup-order.md)`,
@@ -438,9 +478,13 @@ describe("formatLearningsIndex", () => {
   });
 
   it("loads both files claiming one id and flags the duplicate", async () => {
-    const first = await seedPersisted("cache-warmup-order.md");
+    // TEST CHANGE, justified: ordered by the declared `date` now (REQ-FLOW-021); under one shared
+    // date the name tiebreak would put the notes file first, so each file declares a date in
+    // the order the stamps below age it and the case still pins its own order.
+    const first = await seedPersisted("cache-warmup-order.md", { date: "2026-07-02" });
     const second = await seedPersisted("cache-warmup-notes.md", {
       summary: "A second note filed under the same id.",
+      date: "2026-07-01",
     });
     await stampOrder([second, first]);
 
@@ -467,5 +511,17 @@ describe("formatLearningsIndex", () => {
     expect(index).toContain(
       "- [high] folded-note — Warm the query cache in bootstrap; first paint drops to 30ms.",
     );
+  });
+
+  it("flags a learning whose review date falls inside the warning window", async () => {
+    await seedPersisted("soon-note.md", { id: "soon-note", reviewBy: "2026-08-22" });
+    await seedPersisted("later-note.md", { id: "later-note", reviewBy: "2026-09-01" });
+
+    const index = formatLearningsIndex(await load(), { now: NOW });
+
+    // Ten days ahead of NOW is inside the window; twenty days ahead is not.
+    expect(index).toContain("(soon-note.md) [review due 2026-08-22]");
+    expect(index).toContain("(later-note.md)");
+    expect(index).not.toContain("(later-note.md) [review due");
   });
 });
