@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 // Contributor storage helper. Importing it performs no I/O and changes no eval harness.
 import { lstatSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { basename, dirname, join, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { usageFromCalls } from './eval/usage.mjs'
 
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value)
+const PRICE_LIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'evals', 'price-list.json')
+const USAGE_KEYS = ['usage', 'listCostUsd']
 
 /** Preserve all summary facts, removing only the two archived copies of detailed samples. */
 export function compactSummary(summary, manifest = 'ARCHIVE.json') {
@@ -63,9 +66,9 @@ function main(args) {
   const options = {}
   for (let index = 0; index < args.length; index++) {
     const key = args[index].slice(2)
-    if (!args[index].startsWith('--') || !['source', 'output', 'manifest'].includes(key) ||
+    if (!args[index].startsWith('--') || !['source', 'output', 'manifest', 'calls'].includes(key) ||
         Object.hasOwn(options, key) || !args[index + 1] || args[index + 1].startsWith('--'))
-      throw new Error('usage: node scripts/evidence-summary.mjs --source FILE --output NEWFILE --manifest ARCHIVE.json')
+      throw new Error('usage: node scripts/evidence-summary.mjs --source FILE --output NEWFILE --manifest ARCHIVE.json [--calls calls.json]')
     options[key] = args[++index]
   }
   if (!options.source || !options.output || !options.manifest)
@@ -76,6 +79,12 @@ function main(args) {
   if (!validManifest(readJson(manifest, 'archive pointer')))
     throw new Error('invalid archive pointer: require source identity, safe paths, hash, counts and a published GitHub Release asset URL')
   const compact = compactSummary(readJson(source, 'source summary'))
+  if (options.calls) {
+    // Additive only: a key the summary already carries is never replaced.
+    const present = USAGE_KEYS.find(key => Object.hasOwn(compact, key))
+    if (present) throw new Error(`summary already has a ${present} key; it is never replaced`)
+    Object.assign(compact, usageFromCalls(readJson(resolve(options.calls), 'calls'), readJson(PRICE_LIST, 'price list')))
+  }
   const body = `${JSON.stringify(compact, null, 2)}\n`
   try { writeFileSync(output, body, { flag: 'wx', mode: 0o644 }) }
   catch {

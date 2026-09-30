@@ -135,6 +135,42 @@ describe("compact archived eval summaries", () => {
       expect(f.run().status).not.toBe(0); expect(existsSync(f.output)).toBe(false);
     });
 
+  it("adds usage and listCostUsd from --calls and leaves every pre-existing key byte-equal", () => {
+    const plain = fixture();
+    expect(plain.run().status).toBe(0);
+    const withCalls = fixture();
+    const calls = join(withCalls.source, "..", "calls.json");
+    // The recorded run 24 attempts: real usage fields, two models, every one priced by the committed list.
+    writeFileSync(calls, readFileSync("test/evals/fixtures/historical-replay/run-24/calls.json"));
+    const result = withCalls.run("--calls", calls);
+    expect(result.status, result.stderr).toBe(0);
+    const before = JSON.parse(readFileSync(plain.output, "utf8")), after = JSON.parse(readFileSync(withCalls.output, "utf8"));
+    expect(Object.keys(after)).toEqual([...Object.keys(before), "usage", "listCostUsd"]);
+    for (const key of Object.keys(before)) expect(JSON.stringify(after[key]), key).toBe(JSON.stringify(before[key]));
+    expect(after.usage).toMatchObject({ source: "calls.json", attempts: 55, notReported: 0 });
+    expect(after.usage.total.input).toBeGreaterThan(0);
+    expect(after.listCostUsd).toMatchObject({ prices: "evals/price-list.json", unpriced: [], notListPriced: 0 });
+    expect(after.listCostUsd.total).toBeGreaterThan(0);
+  });
+
+  it("fails with exit 1 and writes nothing when --calls names no file", () => {
+    const f = fixture();
+    const result = f.run("--calls", join(f.source, "..", "absent-calls.json"));
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("could not read valid JSON from the calls regular file");
+    expect(existsSync(f.output)).toBe(false);
+  });
+
+  it("refuses --calls over a summary that already carries a usage key rather than replace it", () => {
+    const f = fixture(), calls = join(f.source, "..", "calls.json");
+    writeFileSync(calls, "[]");
+    writeFileSync(f.source, JSON.stringify({ ...original(), usage: { kept: true } }));
+    const result = f.run("--calls", calls);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("already has a usage key");
+    expect(existsSync(f.output)).toBe(false);
+  });
+
   it("refuses a missing or malformed manifest without echoing its contents", () => {
     const f = fixture(); rmSync(f.manifest);
     expect(f.run().status).not.toBe(0); expect(existsSync(f.output)).toBe(false);

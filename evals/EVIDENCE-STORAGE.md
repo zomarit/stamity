@@ -117,6 +117,39 @@ Readers needing complete sample grades or coverage use the archived original.
 The compactor preserves unfamiliar fields rather than guessing that they are
 disposable. New bulky fields require a separate reader census and reviewed change.
 
+### Token usage and list cost
+
+Add `--calls evals/runs/RUN_ID/calls.json` to the command above to record what the
+run spent. The run's local, git-ignored `calls.json` holds one record per attempt,
+with its usage at `native.usage` (`input_tokens`, `output_tokens`,
+`cache_creation_input_tokens`, `cache_read_input_tokens`, and the cache-write split
+`cache_creation.ephemeral_1h_input_tokens` / `ephemeral_5m_input_tokens`). The
+compact view then gains two keys after `archiveStorage`; every other key stays
+byte-equal to the view made without the flag:
+
+- `usage`: `attempts`, `notReported` (attempts with no complete usage), and token
+  totals by role (`scenario`, `judge`, `calibration`, `isolation`; a role the run did
+  not use reads zero) and overall.
+- `listCostUsd`: the list-price estimate in USD — `total`, `byRole`, `byModel` — priced
+  from [`price-list.json`](price-list.json), whose `source` and `accessDate` are copied
+  in as `priceSource` and `priceAccessDate`. The list carries separate 5-minute and
+  1-hour cache-write rates, since the two bill differently. `clientReportedUsd` sums
+  the client's own `native.modelUsage[<model>].costUSD` figures; it sits beside the
+  estimate and never replaces it.
+
+The estimate is never guessed. A model missing from the price list is named in
+`unpriced` and its cost is `null`. An attempt the list cannot price exactly — usage
+spanning more than one model, a non-standard tier, fast mode, US-only routing, or
+cache writes without a matching TTL split — is counted in `notListPriced`. Either
+case makes its role's cost and the `total` `null`. Update the price list, with a new
+access date, before pricing a run on a model it does not name.
+
+The helper refuses a missing or malformed `calls.json`, and a summary that already
+has a `usage` or `listCostUsd` key, with exit 1 and no output. It also refuses an
+already compact summary, as above, so a run whose tracked summary is already compact
+— runs 34 and 35 included — cannot gain these keys through this tool; that needs
+the full original summary restored from its archive.
+
 ## Publishing new evidence
 
 1. Close the run and inventory its consumers. Keep compact summaries needed by
