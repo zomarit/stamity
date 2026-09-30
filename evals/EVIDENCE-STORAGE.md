@@ -141,7 +141,10 @@ The estimate is never guessed. A model missing from the price list is named in
 `unpriced` and its cost is `null`. An attempt the list cannot price exactly — usage
 spanning more than one model, a non-standard tier, fast mode, US-only routing, or
 cache writes without a matching TTL split — is counted in `notListPriced`. Either
-case makes its role's cost and the `total` `null`. Update the price list, with a new
+case makes its role's cost and the `total` `null`. An attempt with no complete usage
+is priced at nothing and counted in `listCostUsd.notReported` (the same count as
+`usage.notReported`); the `total` stays the sum over the reported attempts, so a
+non-zero `notReported` makes it a lower bound. Update the price list, with a new
 access date, before pricing a run on a model it does not name.
 
 The helper refuses a missing or malformed `calls.json`, and a summary that already

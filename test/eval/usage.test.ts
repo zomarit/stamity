@@ -42,10 +42,19 @@ describe("usageFromCalls", () => {
     // judge:     500*10 + 100*50 + 10000*0.25 = 12,500 micro-USD
     expect(result.listCostUsd).toEqual({
       total: 0.0753, byRole: { scenario: 0.0628, judge: 0.0125, calibration: 0, isolation: 0 },
-      byModel: { "model-a": 0.0628, "model-b": 0.0125 }, unpriced: [], notListPriced: 0,
+      byModel: { "model-a": 0.0628, "model-b": 0.0125 }, unpriced: [], notListPriced: 0, notReported: 1,
       clientReportedUsd: { total: 0.083, byRole: { scenario: 0.07, judge: 0.013, calibration: 0, isolation: 0 }, attempts: 2 },
       prices: "evals/price-list.json", priceSource: "https://example.invalid/pricing", priceAccessDate: "2026-09-30",
     });
+  });
+
+  it("counts an attempt with no usage in listCostUsd.notReported and keeps the total as the reported attempts' sum", () => {
+    const reported = usageFromCalls(threeAttempts().slice(0, 2), prices).listCostUsd;
+    const cost = usageFromCalls(threeAttempts(), prices).listCostUsd;
+    expect(reported.notReported).toBe(0);
+    expect(cost.notReported).toBe(1);
+    expect(cost.total).toBe(reported.total);
+    expect(cost.total).toBe(0.0753);
   });
 
   it("bills 1-hour cache writes above 5-minute ones rather than folding them into one rate", () => {

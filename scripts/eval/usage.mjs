@@ -103,6 +103,7 @@ export function usageFromCalls(calls, prices) {
       byModel: round(byModel),
       unpriced: [...unpriced].toSorted(),
       notListPriced,
+      notReported,
       clientReportedUsd: { total: micro(Object.values(clientByRole).reduce((sum, value) => sum + value, 0)),
         byRole: round(clientByRole), attempts: clientAttempts },
       prices: 'evals/price-list.json',
