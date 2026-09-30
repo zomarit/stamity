@@ -3,8 +3,11 @@
 // --base rejects new raw evidence and growth above the size budget. Existing large files
 // may stay unchanged or shrink; historical payload paths are grandfathered.
 // New archive pointers are checked from staged bytes, never an unstaged working-tree replacement.
+// --base also reads every added line for an email address, through the leak gate's own rule, and
+// names the path and line without the address.
 import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
+import { EMAIL_RULE, ruleHits } from './leak-gate.mjs'
 
 const MAX_FILE_BYTES = 1024 * 1024
 // Exact repository-relative paths only. An exception needs its reviewable reason here,
@@ -92,6 +95,44 @@ function validManifest(value) {
   }
 }
 
+/** Git's C-quoted path form (`"b/caf\303\251.md"`) back to the path, octal escapes as UTF-8 bytes. */
+function unquote(path) {
+  if (!path.startsWith('"')) return path
+  const named = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13, '"': 34, '\\': 92 }
+  const bytes = []
+  for (let i = 1; i < path.length - 1; i++) {
+    if (path[i] !== '\\') { bytes.push(...Buffer.from(path[i], 'utf8')); continue }
+    const octal = /^[0-7]{3}/.exec(path.slice(i + 1))
+    if (octal) { bytes.push(Number.parseInt(octal[0], 8)); i += 3 } else bytes.push(named[path[++i]] ?? path.charCodeAt(i))
+  }
+  return Buffer.from(bytes).toString('utf8')
+}
+
+/**
+ * `[path, line, text]` for every line `git diff -U0` adds. Hunk bodies are counted off their
+ * headers, so an added line that itself begins `+++` is content, never a file header.
+ */
+function addedLines(diff) {
+  const added = []
+  let path = null, oldLeft = 0, newLeft = 0, line = 0
+  for (const row of diff.split('\n')) {
+    if (oldLeft > 0 || newLeft > 0) {
+      if (row.startsWith('+')) { if (path !== null) added.push([path, line, row.slice(1)]); line++; newLeft-- }
+      else if (row.startsWith('-')) oldLeft--
+      continue
+    }
+    const hunk = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(row)
+    if (hunk) { oldLeft = Number(hunk[1] ?? 1); line = Number(hunk[2]); newLeft = Number(hunk[3] ?? 1) }
+    else if (row.startsWith('+++ ')) {
+      // Git ends a header whose path holds a space with a tab, so the name's end is unambiguous.
+      const target = unquote(row.slice(4).replace(/\t$/, ''))
+      path = target.startsWith('b/') ? target.slice(2) : null
+    }
+    else if (row.startsWith('diff --git ')) path = null
+  }
+  return added
+}
+
 function main(args) {
   const options = { repo: process.cwd(), base: null, kind: null }
   for (let i = 0; i < args.length; i++) {
@@ -140,6 +181,14 @@ function main(args) {
         valid = false
       }
       if (!valid) findings.push([path, 'invalid archive manifest; requires source identity, hash, counts and a GitHub Release asset URL'])
+    }
+    // Explicit prefixes and no external differ, so a contributor's diff settings cannot move the parse.
+    const diff = git('-c', 'core.quotePath=false', 'diff', '--cached', '-U0', '--no-color', '--no-ext-diff',
+      '--no-renames', '--diff-filter=AM', '--src-prefix=a/', '--dst-prefix=b/', base, '--')
+    for (const [path, line, text] of addedLines(diff)) {
+      if (EMAIL_RULE.allow.some(allowed => allowed(path))) continue
+      // The address itself is never printed: this output is a CI log, and printing it publishes it.
+      if (ruleHits(EMAIL_RULE, text).length > 0) findings.push([path, `line ${line}: email address added`])
     }
   }
   for (const [path, reason] of findings) console.error(`repo-hygiene: ${JSON.stringify(path)}: ${reason}`)

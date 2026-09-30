@@ -343,6 +343,95 @@ describe("repository hygiene over the Git index", () => {
   });
 });
 
+/**
+ * An address at a domain no reserved-domain drop covers, assembled at run time: the leak gate's
+ * email rule reads this file, so a literal would be a hit here. No part names a real mailbox.
+ */
+const PROBE_LOCAL = ["jane", ".roe"].join("");
+const PERSON = [PROBE_LOCAL, ["unreserved", "-probe.io"].join("")].join("@");
+const commit = (root: string, message: string): void => {
+  git(root, "add", ".");
+  git(root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+    "-c", "commit.gpgsign=false", "commit", "-qm", message);
+};
+
+describe("repository hygiene — email addresses in added lines", () => {
+  it("refuses an added address by path and line, and never prints it", () => {
+    const root = fixture();
+    write(root, "docs/contact.md", `line one\nwrite to ${PERSON} for access\n`);
+    // An added line that itself begins `++` shows as `+++` in the diff: content, not a header.
+    write(root, "docs/plus.md", `first\n++ ${PERSON}\n`);
+    // The fold: a fullwidth commercial at (U+FF20) renders as an address and is one.
+    write(root, "docs/wide.md", `${PERSON.replace("@", String.fromCharCode(0xff20))}\n`);
+    git(root, "add", ".");
+
+    const result = run(root, "--base", "HEAD");
+
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stderr).toContain('"docs/contact.md": line 2: email address added');
+    expect(result.stderr).toContain('"docs/plus.md": line 2: email address added');
+    expect(result.stderr).toContain('"docs/wide.md": line 1: email address added');
+    expect(result.stdout).toContain("FAIL");
+    expect(`${result.stdout}${result.stderr}`).not.toContain(PROBE_LOCAL);
+    // Without a base there are no added lines to read, as for the other --base checks.
+    expect(run(root).status).toBe(0);
+  });
+
+  it("passes reserved addresses and leaves lines the base already held alone", () => {
+    const root = fixture();
+    write(root, "docs/old.md", `kept from history: ${PERSON}\n`);
+    commit(root, "historical address");
+    write(root, "docs/old.md", `kept from history: ${PERSON}\nan edit below it\n`);
+    write(root, "docs/new.md", ["jane@probe.invalid", "noreply@example.com",
+      "git@github.com:owner/repo.git", "https://token@github.com/owner/repo"].join("\n"));
+    git(root, "add", ".");
+
+    const result = run(root, "--base", "HEAD");
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain("PASS");
+  });
+
+  it("reads added lines in a governance repository too", () => {
+    const root = fixture();
+    write(root, "CONSTITUTION.md");
+    write(root, "EVIDENCE.md");
+    commit(root, "governance root");
+    write(root, "runs/new/notes.md", `${PERSON}\n`);
+    git(root, "add", ".");
+
+    const result = run(root, "--base", "HEAD");
+
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stderr).toContain('"runs/new/notes.md": line 1: email address added');
+  });
+
+  it("names a path holding a space by its real name", () => {
+    // Git ends such a `+++` header with a tab; the finding names the file, not the header.
+    const root = fixture();
+    write(root, "docs/my notes.md", `${PERSON}\n`);
+    git(root, "add", ".");
+
+    const result = run(root, "--base", "HEAD");
+
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stderr).toContain('"docs/my notes.md": line 1: email address added');
+  });
+
+  it.skipIf(process.platform === "win32")("names a C-quoted path by its real name", () => {
+    // Git quotes a path holding a double quote even with core.quotePath off; the finding must
+    // name the file, not Git's escaped spelling of it. No such filename is legal on Windows.
+    const root = fixture();
+    write(root, 'docs/say "hi".md', `${PERSON}\n`);
+    git(root, "add", ".");
+
+    const result = run(root, "--base", "HEAD");
+
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stderr).toContain(`${JSON.stringify('docs/say "hi".md')}: line 1: email address added`);
+  });
+});
+
 function manifest(): string {
   return JSON.stringify({ schemaVersion: 1, format: "tar.gz",
     source: { repository: "zomarit/stamity", commit: "a".repeat(40), capture: "git", paths: ["evals/runs/new/calls"] },

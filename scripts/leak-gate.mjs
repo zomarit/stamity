@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Repository leak gate: reserved names, credential shapes, and private-layer references.
+// Repository leak gate: reserved names, credential shapes, private-layer references, and email
+// addresses.
 //
-// Three rule families, one traversal. The reserved-name family fails if a RESERVED name reaches the
+// Four rule families, one traversal. The reserved-name family fails if a RESERVED name reaches the
 // published tree — the names this project was built or considered under before the rename, and the
 // predecessor project whose name is legal only inside the migration-detection module that has to
 // spell it to find the old tree. A retired name in a public repository is a SECOND name for one
@@ -14,7 +15,9 @@
 // private governance layer reaches this tree — a row identifier out of one of its ledgers, or the
 // name of the repository that holds them. A committed run ledger in this tree carried both classes
 // until an audit found them by reading. The public tree carries neither by convention, and a
-// convention with no gate is a sweep that runs when somebody remembers.
+// convention with no gate is a sweep that runs when somebody remembers. The email family fails if
+// a person's address lands in the tree; its shape drops reserved documentation domains, no-reply
+// addresses, SSH remotes and URL userinfo, and a hit is reported without the address.
 //
 // Usage: node scripts/leak-gate.mjs [--root <dir>] [--include-build]
 //   --root           scan a tree other than this script's repository (the extracted publish
@@ -591,8 +594,97 @@ function secretRule(id, source, flags) {
   return { id, source, flags, allow: [...SECRET_SCANNER_SOURCES, ...(SHAPE_FIXTURES[id] ?? [])] }
 }
 
+/**
+ * Exact paths allowed to carry an address, one `[path, reason]` row each, printed with the files
+ * they dropped on every run. Empty is the steady state: an example address is spelled at a
+ * reserved domain, which the rule's shape drops; a row is for an address that has to be real.
+ */
+const EMAIL_FIXTURES = []
+
+/** Documentation and special-use domains, which deliver to nobody, plus the project's own. */
+const RESERVED_EMAIL_DOMAIN = new RegExp(
+  [
+    '(?:^|\\.)example(?:\\.[a-z0-9-]+)+$',
+    '\\.(?:invalid|test|local|localhost)$',
+    `(?:^|\\.)${['zom', 'arit'].join('')}\\.dev$`,
+  ].join('|'),
+)
+/** A local part that names no person, and the address host GitHub mints for private commits. */
+const NO_REPLY_LOCAL = /^(?:no[-_.]?reply|do[-_.]?not[-_.]?reply)$/
+const NO_REPLY_DOMAIN = /(?:^|\.)users\.noreply\.github\.com$/
+/** A URL scheme and whatever userinfo precedes the match: `scheme://` or `scheme://user:`. */
+const URL_USERINFO_BEFORE = /[a-z][a-z0-9+.-]*:\/\/[^\s/?#@"'<>]*$/i
+/** How far back the userinfo test reads. A userinfo longer than this is not one worth sparing. */
+const USERINFO_LOOKBACK = 256
+
+/**
+ * Whether an `email-address` match names no person. This NARROWS THE RULE'S SHAPE, as the
+ * credential shapes narrow theirs; it is not an exemption by content, since nothing a committer
+ * writes beside an address turns the rule off. It drops a reserved domain; a no-reply local part
+ * or GitHub's no-reply host; the SSH remote form (`git`, then `:` after the host); URL userinfo
+ * (`scheme://` before the match — a login, or a credential the credential shapes own); and, on a
+ * fold only, a match whose source spans whitespace. The fold drops line breaks with the other
+ * controls, so a word ending one line glues onto an `@` opening the next (a decorator, a mention).
+ * Each whitespace-free segment is re-read, so a real address on one of those lines, in a spelling
+ * only the fold reads, is kept.
+ */
+function isNotAnAddress({ match, text, index, source }) {
+  const lower = match.toLowerCase()
+  const at = lower.lastIndexOf('@')
+  const local = lower.slice(0, at)
+  const domain = lower.slice(at + 1)
+  if (RESERVED_EMAIL_DOMAIN.test(domain)) return true
+  if (NO_REPLY_LOCAL.test(local) || NO_REPLY_DOMAIN.test(domain)) return true
+  if (local === 'git' && text[index + match.length] === ':') return true
+  if (URL_USERINFO_BEFORE.test(text.slice(Math.max(0, index - USERINFO_LOOKBACK), index))) return true
+  if (source === null) return false
+
+  const from = source.map[index] ?? index
+  const to = (source.map[index + match.length - 1] ?? from) + 1
+  const span = source.text.slice(from, to)
+  if (!/\s/.test(span)) return false
+  // Glued across whitespace: keep it only when one segment holds an address of its own that the
+  // raw views could not read, because a plain one is already reported there at its true offset.
+  return !span.split(/\s+/).some((segment) => {
+    const folded = normalizeViews(segment).folded.text
+    return (
+      matchesAddress(folded, (hit) => isNotAnAddress({ ...hit, source: null })) &&
+      !matchesAddress(segment, (hit) => isNotAnAddress({ ...hit, source: null }))
+    )
+  })
+}
+
+/** The email shape, uncompiled: one source for the rule and for the segment re-read above. */
+const EMAIL_SOURCE = '(?<![a-z0-9._%+-])[a-z0-9._%+-]+@(?:[a-z0-9-]+\\.)+[a-z]{2,}(?![a-z0-9])'
+
+/** Whether `text` holds an address shape that `drop` keeps. */
+function matchesAddress(text, drop) {
+  const pattern = new RegExp(EMAIL_SOURCE, 'gi')
+  for (const found of text.matchAll(pattern)) {
+    if (!drop({ match: found[0], text, index: found.index })) return true
+  }
+  return false
+}
+
+/**
+ * A person's email address, which a public tree keeps in every fork and clone once it lands.
+ * Case-insensitive, so it reads the folded pass: a fullwidth or entity-spelled `@` is still an
+ * `@`. `redact` keeps the match out of the report, which is a CI log. The lookbehind starts a
+ * match only at the head of a local-part run, keeping the scan linear over a run with no `@`.
+ */
+const EMAIL_RULES = [
+  {
+    id: 'email-address',
+    source: EMAIL_SOURCE,
+    flags: 'gi',
+    allow: EMAIL_FIXTURES.map(([path]) => path),
+    drop: isNotAnAddress,
+    redact: true,
+  },
+]
+
 /** Every rule, each carrying its own compiled matcher and its own path exemptions. */
-export const RULES = [...NAME_RULES, ...PRIVATE_RULES, ...SECRET_RULES].map((rule) => ({
+export const RULES = [...NAME_RULES, ...PRIVATE_RULES, ...SECRET_RULES, ...EMAIL_RULES].map((rule) => ({
   id: rule.id,
   pattern: new RegExp(rule.source, rule.flags),
   // Which normalizing passes this rule reads, on top of every raw view. A case-insensitive rule
@@ -602,7 +694,17 @@ export const RULES = [...NAME_RULES, ...PRIVATE_RULES, ...SECRET_RULES].map((rul
   // for none — their alphabets are the issuer's, and a shape invented by a fold is noise.
   normalizedViews: rule.flags.includes('i') ? ['folded'] : (rule.normalized ?? []),
   allow: rule.allow.map(toMatcher),
+  // A narrowing of the rule's own shape, `(hit) => boolean`, true to drop the hit; `null` for a
+  // rule whose pattern is its whole shape. `hit` is `{ match, text, index, source }`, `source`
+  // being `{ text, map }` on a normalizing fold (the view it folded, and the fold's index map)
+  // and `null` on a raw view or a path.
+  drop: rule.drop ?? null,
+  // Whether a hit's matched text is withheld from the report.
+  redact: rule.redact === true,
 }))
+
+/** The email rule, for the hygiene check's scan of added lines. */
+export const EMAIL_RULE = RULES.find((rule) => rule.id === 'email-address')
 
 function toMatcher(glob) {
   if (glob.endsWith('/')) return (file) => file === glob.slice(0, -1) || file.startsWith(glob)
@@ -664,17 +766,49 @@ function listFromDisk(dir, acc) {
 
 // ── Scanning ─────────────────────────────────────────────────────────────────
 
-function collect(rule, text) {
+/**
+ * Every match of `rule` in `text` that its shape keeps. `source` is `{ text, map }` when `text` is
+ * a normalizing fold — the view it folded and the fold's index map — and `null` otherwise; only a
+ * rule's `drop` reads it.
+ */
+function collect(rule, text, source = null) {
   rule.pattern.lastIndex = 0
   const found = []
   let match
   while ((match = rule.pattern.exec(text)) !== null) {
-    found.push({ rule: rule.id, index: match.index, match: match[0] })
     // A zero-length match would spin forever; every rule here matches at least one character,
     // and this keeps that from being a silent assumption.
     if (match[0].length === 0) rule.pattern.lastIndex += 1
+    if (rule.drop !== null && rule.drop({ match: match[0], text, index: match.index, source })) continue
+    found.push({ rule: rule.id, index: match.index, match: match[0] })
   }
   return found
+}
+
+/**
+ * The source offsets in `text` where `rule` hits, read raw and through every fold the rule reads:
+ * the same reading `scanContent` gives one view of a file, for a caller holding a string rather
+ * than a tree — the hygiene check's added lines.
+ */
+export function ruleHits(rule, text) {
+  const offsets = new Set(collect(rule, text).map((hit) => hit.index))
+  const caseFolded = rule.normalizedViews.includes('folded')
+  const casePreserving = rule.normalizedViews.includes('case-preserving')
+  if (caseFolded || casePreserving) {
+    const folds = normalizeViews(text, { caseFolded, casePreserving })
+    for (const fold of [folds.folded, folds.preserving]) {
+      if (fold === null) continue
+      for (const hit of collect(rule, fold.text, { text, map: fold.map })) {
+        offsets.add(fold.map[hit.index] ?? hit.index)
+      }
+    }
+  }
+  return [...offsets].toSorted((left, right) => left - right)
+}
+
+/** What the report prints for a hit's matched text: the text, unless the rule withholds it. */
+function shownMatch(rule, match) {
+  return rule.redact ? '<withheld>' : match
 }
 
 function excerpt(text) {
@@ -712,7 +846,7 @@ const NORMALIZED_PASSES = [
  */
 function scanContent(file, bytes, rules, hits, seen) {
   const views = decodeCandidates(bytes)
-  const scannable = views.map((view) => ({ ...view, normalized: null }))
+  const scannable = views.map((view) => ({ ...view, normalized: null, source: null }))
   // Which folds this file's SURVIVING rules read — the allowlists run first, so a file where the
   // only rule wanting a fold was dropped never builds one. Asked once and answered for both
   // folds together: they come off a single walk of each view, so the walk is spent when either
@@ -741,6 +875,7 @@ function scanContent(file, bytes, rules, hits, seen) {
           label: `${view.label}, ${pass.label}`,
           text: fold.text,
           normalized: pass.kind,
+          source: { text: view.text, map: fold.map },
           byteAt: (index) => view.byteAt(fold.map[index] ?? index),
         })
       }
@@ -750,7 +885,7 @@ function scanContent(file, bytes, rules, hits, seen) {
   for (const view of scannable) {
     for (const rule of rules) {
       if (view.normalized !== null && !rule.normalizedViews.includes(view.normalized)) continue
-      for (const hit of collect(rule, view.text)) {
+      for (const hit of collect(rule, view.text, view.source)) {
         const offset = view.byteAt(hit.index)
         const key = `${rule.id}\0${file}\0${offset}`
         if (seen.has(key)) continue
@@ -762,9 +897,10 @@ function scanContent(file, bytes, rules, hits, seen) {
         hits.push({
           file,
           rule: rule.id,
-          match: hit.match,
+          match: shownMatch(rule, hit.match),
           where,
-          excerpt: excerpt(view.text.slice(Math.max(0, hit.index - 20), hit.index + 100)),
+          // A withheld match is withheld from its context too, which would print it whole.
+          excerpt: rule.redact ? '' : excerpt(view.text.slice(Math.max(0, hit.index - 20), hit.index + 100)),
         })
       }
     }
@@ -799,7 +935,7 @@ function run() {
     // anything can route the file elsewhere — the step the old skip's `continue` jumped over.
     for (const rule of rules) {
       for (const hit of collect(rule, file)) {
-        hits.push({ file, rule: rule.id, match: hit.match, where: `${file} (path)` })
+        hits.push({ file, rule: rule.id, match: shownMatch(rule, hit.match), where: `${file} (path)` })
       }
     }
 
@@ -841,9 +977,9 @@ function run() {
           hits.push({
             file,
             rule: rule.id,
-            match: hit.match,
+            match: shownMatch(rule, hit.match),
             where: `${file} (symlink target)`,
-            excerpt: excerpt(target),
+            excerpt: rule.redact ? '' : excerpt(target),
           })
         }
       }
@@ -913,6 +1049,9 @@ function run() {
     console.error('  may already be in history — then remove it and re-run.')
     console.error('  A private-layer hit: this tree refers to those rows and that checkout descriptively')
     console.error('  ("the intake decision", "the private layer"), so respell the reference.')
+    console.error('  An email-address hit: the address is withheld here. Respell it at a reserved domain')
+    console.error('  (a name under .invalid or example.com), or add an exact path with its reason to')
+    console.error('  EMAIL_FIXTURES if the address has to be real.')
     return 1
   }
 

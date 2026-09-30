@@ -178,8 +178,8 @@ function describeError(cause: unknown): string {
  *
  * `@sigstore/verify` matches the declared identity against the certificate's
  * SAN as a REGULAR EXPRESSION (`policy.ts` → `verifySubjectAlternativeName`),
- * so an address passed raw is a pattern rather than a value: `a@b.com` matches
- * `xa@b.comio` and pins nothing. Anchoring and escaping closes that, and
+ * so an address passed raw is a pattern rather than a value: `a@example.com` matches
+ * `xa@example.comio` and pins nothing. Anchoring and escaping closes that, and
  * {@link identityMismatch} re-compares the returned identity for exact string
  * equality afterwards, so the pin never rests on this transformation alone.
  */

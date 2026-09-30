@@ -7,7 +7,7 @@ import { SECRET_PATTERNS } from "../../src/mcp/secretScan.ts";
 // @ts-expect-error — the gate is a plain .mjs script with no type declarations, and it stays
 // that way on purpose: it must run standalone against an arbitrary `--root`, including an
 // extracted publish tarball with no TypeScript toolchain anywhere near it.
-import { RULES, decodeCandidates, normalizeWithMap } from "../../scripts/leak-gate.mjs";
+import { EMAIL_RULE, RULES, decodeCandidates, normalizeWithMap, ruleHits } from "../../scripts/leak-gate.mjs";
 
 /**
  * The name-and-credential leak gate, against the real repository — and writing NOTHING into it.
@@ -110,13 +110,15 @@ describe("leak-gate against the repository as it stands", () => {
     const ids = (RULES as { id: string }[]).map((rule) => rule.id);
     expect(ids).toContain("private-ledger-id");
     expect(ids).toContain("private-repo-name");
-    // 5 reserved names + 2 private-layer references + 11 credential shapes. A literal, because a
-    // count derived from the thing it counts would agree with any drift.
-    expect(RULES.length).toBe(18);
+    // 5 reserved names + 2 private-layer references + 11 credential shapes + 1 email address. A
+    // literal, because a count derived from the thing it counts would agree with any drift.
+    // TEST CHANGE 2026-09-30, justified — the behaviour moved, not the criterion: the email family
+    // (`email-address`) joined the gate, so the rule total and the PASS line move from 18 to 19.
+    expect(RULES.length).toBe(19);
 
     const summary = runGate().stdout;
 
-    expect(summary).toContain("PASS - 0 hits for 18 rule(s)");
+    expect(summary).toContain("PASS - 0 hits for 19 rule(s)");
   }, GATE_RUN_TIMEOUT_MS);
 
   it("scans its own file by its own rules, with no self-exemption", () => {
@@ -139,6 +141,10 @@ describe("credential-shape rules mirror the engine's scanner", () => {
     // including an extracted tarball with no `src/` at all. A mirror needs a drift guard, and
     // this is it: an id here that the engine does not define is a pattern nobody reviews.
     const engineIds = new Set(SECRET_PATTERNS.map((pattern) => pattern.id));
+    // TEST CHANGE 2026-09-30, justified — the behaviour moved, not the criterion: the email rule is
+    // a fourth family, not a credential shape, so it is filtered out by its own export, which is
+    // its home; every remaining id must still be one the engine defines.
+    expect((EMAIL_RULE as { id: string }).id).toBe("email-address");
     const gateIds = (RULES as { id: string }[])
       .map((rule) => rule.id)
       .filter(
@@ -146,7 +152,8 @@ describe("credential-shape rules mirror the engine's scanner", () => {
           !id.startsWith("candidate-name") &&
           !id.startsWith("predecessor-") &&
           !id.startsWith("private-") &&
-          id !== "retired-name",
+          id !== "retired-name" &&
+          id !== (EMAIL_RULE as { id: string }).id,
       );
 
     expect(gateIds.length).toBeGreaterThan(8);
@@ -168,6 +175,66 @@ describe("credential-shape rules mirror the engine's scanner", () => {
     ]) {
       expect(gateIds, `${id} is too noisy for a whole-tree scan`).not.toContain(id);
     }
+  });
+});
+
+/**
+ * Email addresses, ASSEMBLED at run time for the same reason the reserved names below are: this
+ * file is scanned by the rule it tests, so an address written out here would be a hit. No part
+ * names a real mailbox; the probe domain is one no reserved-domain drop covers.
+ */
+const AT = "@";
+const address = (local: string, domain: string, at = AT): string => `${local}${at}${domain}`;
+const PROBE_DOMAIN = ["unreserved", "-probe.io"].join("");
+
+describe("the email rule, directly", () => {
+  const rule = EMAIL_RULE as Parameters<typeof ruleHits>[0] & { redact: boolean };
+
+  it("hits an address at an unreserved domain, raw and through the fold, and withholds it", () => {
+    const plain = `write to ${address("jane.roe", PROBE_DOMAIN)} today`;
+    expect(ruleHits(rule, plain)).toEqual([9]);
+    // A fullwidth commercial at (U+FF20) renders as an address, so the folded pass reads it as one.
+    const fullwidth = `write to ${address("jane.roe", PROBE_DOMAIN, String.fromCharCode(0xff20))}`;
+    expect(ruleHits(rule, fullwidth)).toEqual([9]);
+    expect(ruleHits(rule, `write to ${address("jane.roe", PROBE_DOMAIN, "&#64;")}`)).toEqual([9]);
+    expect(rule.redact).toBe(true);
+  });
+
+  it("drops the shapes that name no person, and only those", () => {
+    for (const text of [
+      address("jane.roe", "example.com"),
+      address("jane.roe", "mail.example.org"),
+      address("jane.roe", "probe.invalid"),
+      address("jane.roe", "ci.test"),
+      address("jane.roe", "box.local"),
+      address("jane.roe", "dev.localhost"),
+      address("security", ["zom", "arit.dev"].join("")),
+      address("noreply", PROBE_DOMAIN),
+      address("do-not-reply", PROBE_DOMAIN),
+      address("12345+jane", "users.noreply.github.com"),
+      `${address("git", "github.com")}:owner/repo.git`,
+      `https://${address("token", "github.com")}/owner/repo`,
+      `ssh://${address("git", "github.com")}/owner/repo.git`,
+    ]) {
+      expect(ruleHits(rule, text), text).toEqual([]);
+    }
+    // The controls: the same person at a real-looking domain, a `git` login with no SSH colon,
+    // and an address that merely follows a URL on the same line, are all still addresses.
+    expect(ruleHits(rule, address("jane.roe", PROBE_DOMAIN))).toEqual([0]);
+    expect(ruleHits(rule, address("git", PROBE_DOMAIN))).toEqual([0]);
+    expect(ruleHits(rule, `see https://docs.example.com/x ${address("jane", PROBE_DOMAIN)}`)).toHaveLength(1);
+  });
+
+  it("does not glue one line onto an @ that opens the next", () => {
+    // The fold drops line breaks with the other controls, so a decorator under a line ending in a
+    // word read as an address nobody wrote.
+    // Joined at run time: written as one literal, the escaped break's `n` glues onto the `@` in
+    // this file's own raw bytes, and the gate reads that as an address here.
+    const decorated = ["return value", `${AT}contextlib.contextmanager`, "def wrapped():"].join("\n");
+    expect(ruleHits(rule, decorated)).toEqual([]);
+    // Yet an address that really is on one of those lines, in a spelling only the fold reads, is kept.
+    const glued = ["contact", address("jane.roe", PROBE_DOMAIN, String.fromCharCode(0xff20)), "thanks"].join("\n");
+    expect(ruleHits(rule, glued)).toHaveLength(1);
   });
 });
 

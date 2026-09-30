@@ -100,6 +100,16 @@ const FULLWIDTH_PREFIX = [0xff21, 0xff24].map((code) => String.fromCharCode(code
 const CYRILLIC_CAPITAL_A = "\u0410";
 const PRIVATE_REPO = ["stam", "ity", "-gov", "ernance"].join("");
 
+/**
+ * Email addresses, assembled the same way and for the same reason: the email rule reads this file
+ * too. No part names a real mailbox; the probe domain is one no reserved-domain drop covers.
+ */
+const AT = "@";
+const FULLWIDTH_AT = String.fromCharCode(0xff20);
+const address = (local: string, domain: string, at = AT): string => `${local}${at}${domain}`;
+const PROBE_LOCAL = ["jane", ".roe"].join("");
+const PERSON = address(PROBE_LOCAL, ["unreserved", "-probe.io"].join(""));
+
 /** PNG's 8-byte magic — a real signature, so the sniff has something true to find. */
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -719,5 +729,84 @@ describe("leak-gate — private-layer references", () => {
     const result = scratch.run();
 
     expect(result.status, result.stderr).toBe(0);
+  });
+});
+
+describe("leak-gate — email addresses", () => {
+  it("fails an address at a real-looking domain, names the rule and the file, and withholds it", () => {
+    const scratch = new Scratch();
+    const file = scratch.write("docs/contact.md", `write to ${PERSON} for access\n`);
+
+    const result = scratch.run();
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(file);
+    expect(result.stderr).toContain("[email-address]");
+    // A gate that printed the address would publish it in the CI log it keeps it out of.
+    expect(`${result.stdout}${result.stderr}`).not.toContain(PROBE_LOCAL);
+  });
+
+  it("passes the shapes that name no person, and fails the same file once a person is added", () => {
+    const scratch = new Scratch();
+    const lines = [
+      address("jane", "probe.invalid"),
+      address("jane", "example.com"),
+      address("noreply", ["unreserved", "-probe.io"].join("")),
+      address("12345+jane", "users.noreply.github.com"),
+      `remote: ${address("git", "github.com")}:owner/repo.git`,
+      `clone https://${address("token", "github.com")}/owner/repo`,
+    ];
+    const file = scratch.write("docs/shapes.md", `${lines.join("\n")}\n`);
+
+    const clean = scratch.run();
+    expect(clean.status, clean.stderr).toBe(0);
+
+    // The control: the file is read, so the pass above is the shape narrowing, not a skip.
+    scratch.write(file, `${lines.join("\n")}\n${PERSON}\n`);
+    const dirty = scratch.run();
+    expect(dirty.status).toBe(1);
+    expect(hitCount(dirty, file)).toBe(1);
+  });
+
+  it("reports a credentialed connection string as a credential, not as an address", () => {
+    // URL userinfo is a login or a secret, never a mailbox: the credential shape owns it.
+    const scratch = new Scratch();
+    scratch.write("src/db.ts", `const dsn = "${DSN}"\n`);
+
+    const result = scratch.run();
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("[credentialed-connection-string]");
+    expect(result.stderr).not.toContain("[email-address]");
+  });
+
+  it("catches a fullwidth @ through the folded view, even on a line glued to its neighbours", () => {
+    const scratch = new Scratch();
+    const spelled = address(PROBE_LOCAL, ["unreserved", "-probe.io"].join(""), FULLWIDTH_AT);
+    const alone = scratch.write("docs/alone.md", `${spelled}\n`);
+    const glued = scratch.write("docs/glued.md", `contact\n${spelled}\nthanks\n`);
+
+    const result = scratch.run();
+
+    expect(result.status).toBe(1);
+    expect(hitCount(result, alone)).toBe(1);
+    expect(hitCount(result, glued)).toBe(1);
+    expect(result.stderr).toContain("normalized");
+  });
+
+  it("does not read a decorator under a word-ending line as an address, nor report a plain one twice", () => {
+    const scratch = new Scratch();
+    scratch.write(
+      "scripts/tool.py",
+      ["    return value", `${AT}contextlib.contextmanager`, "def wrapped():", ""].join("\n"),
+    );
+    expect(scratch.run().status).toBe(0);
+
+    // A plain address after a word-ending line is found by the raw view at its true offset; the
+    // glued fold of the same bytes must not add a second report of it.
+    const file = scratch.write("docs/after.md", `contact\n${PERSON}\n`);
+    const result = scratch.run();
+    expect(result.status).toBe(1);
+    expect(hitCount(result, file)).toBe(1);
   });
 });
