@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.10.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-28T07:45:18.507Z",
+  "updatedAt": "2026-09-30T11:28:23.228Z",
   "tools": [
     "claude"
   ],
@@ -463,7 +463,7 @@
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
-      "contentHash": "3663df992ff3ecce84302b8a87cc0e7812bfe393b3cf82245e3780a9950d1ae1",
+      "contentHash": "a8b60b00489b34a446cea5adc5c64dbc84434d6ce21143edd7d0664c3e5fa9f8",
       "path": ".claude/skills/st-verify/scripts/spec-plan-coverage.mjs"
     },
     {

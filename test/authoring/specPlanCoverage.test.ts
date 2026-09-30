@@ -152,6 +152,63 @@ describe("REQ-FINISH-003 — structural spec/plan coverage", () => {
     });
   });
 
+  // `/st-plan` writes numbered and suffixed section headings (`## 2. Spec delta`, `## 3. Units — engine`),
+  // and a repository with no spec tree passes `docs/specs` that does not exist. Both used to stop the
+  // checker: the first read no unit at all, the second exited 2 before reading the plan.
+  describe("plans written by /st-plan and a repository with no spec tree", () => {
+    type Report = ReturnType<typeof check>;
+    function run(args: string[], planText = plan, specText?: string) {
+      const dir = mkdtempSync(join(tmpdir(), "stamity-plan-"));
+      dirs.push(dir);
+      writeFileSync(join(dir, "plan.md"), planText);
+      if (specText !== undefined) writeFileSync(join(dir, "spec.md"), specText);
+      try {
+        const stdout = execFileSync(process.execPath, [script, ...args], { cwd: dir, encoding: "utf8", stdio: "pipe" });
+        return { code: 0, report: JSON.parse(stdout) as Report };
+      } catch (error) {
+        const failed = error as { status?: number; stdout?: string };
+        const stdout = String(failed.stdout ?? "");
+        return { code: failed.status ?? -1, report: stdout ? JSON.parse(stdout) as Report : undefined };
+      }
+    }
+    const numbered = plan.replace("## Spec delta", "## 2. Spec delta").replace("## Units", "## 3. Units — engine");
+    const noIds = "## Spec delta\n\nNone: this plan changes no requirement.\n\n## Units\n\n### U1 — guard\n- **requirements**: spec carries no ids.\n- **depends_on**: none.\n";
+
+    it("reads numbered and suffixed Spec delta and Units headings", () => {
+      expect(check(numbered)).toMatchObject({ status: "pass", scope: ["REQ-DEMO-001", "REQ-DEMO-002"], units: ["U1", "U2"], findings: [] });
+      // The activated reading is distinguishable from the old one: an uncovered ID is now caught under the numbered heading.
+      expect(check(numbered.replace("- **requirements**: REQ-DEMO-002.", "- **requirements**: REQ-DEMO-001.")).findings.map((row) => row.code))
+        .toEqual(["missing-coverage"]);
+    });
+    it("matches `## 10. Units` but not a heading that only starts with the letters", () => {
+      expect(check(plan.replace("## Units", "## 10. Units"))).toMatchObject({ status: "pass", units: ["U1", "U2"] });
+      expect(check(plan.replace("## Units", "## Unitsafety")).findings.map((row) => row.code)).toContain("missing-units");
+    });
+    it("reads a missing spec directory as no spec and passes a plan whose units carry no ids", () => {
+      const { code, report } = run(["plan.md", "docs/specs"], noIds);
+      expect(code).toBe(0);
+      expect(report).toMatchObject({ status: "pass", scope: [], units: ["U1"] });
+      expect(report?.findings).toEqual([expect.objectContaining({ code: "missing-spec-input", path: "docs/specs", line: 1,
+        message: expect.stringContaining("docs/specs does not exist; read as no spec") })]);
+    });
+    it("still fails a unit citing an ID nothing defines when the spec directory is missing", () => {
+      const { code, report } = run(["plan.md", "docs/specs"], plan.replace("ADDED REQ-DEMO-001, REQ-DEMO-002.", "None.")
+        .replace("### U2 — retry\n- **requirements**: REQ-DEMO-002.\n- **depends_on**: U1.\n", ""));
+      expect(code).toBe(1);
+      expect(report?.findings.map((row) => row.code)).toEqual(["missing-spec-input", "dangling-requirement"]);
+    });
+    it("passes a provisional delta heading over a missing spec directory with both advisories", () => {
+      const provisional = "## Spec delta\n\n### REQ-NEW-001\nGiven a fresh plan, Then the heading defines it.\n\n## Units\n### U1\n- **requirements**: REQ-NEW-001.\n- **depends_on**: none.\n";
+      const { code, report } = run(["plan.md", "docs/specs"], provisional);
+      expect(code).toBe(0);
+      expect(report?.findings.map((row) => row.code).toSorted()).toEqual(["missing-spec-input", "provisional-definition"]);
+    });
+    it("keeps exit 2 for a missing Markdown spec and for a missing plan", () => {
+      expect(run(["plan.md", "missing.md"]).code).toBe(2);
+      expect(run(["absent-plan.md", "spec.md"], plan, spec).code).toBe(2);
+    });
+  });
+
   it("scopes all twenty-two requirements of the persisted Prove plan, not its range endpoints", () => {
     const result = check(readFileSync("docs/plans/007-prove-behavior-and-value.md", "utf8"),
       readFileSync("docs/specs/prove-behavior-and-value.md", "utf8"));

@@ -82,6 +82,8 @@ function references(text, report = () => {}) {
 
 /** `## Spec delta`, matched by prefix so a suffixed heading still names the section. */
 const isSpecDelta = (section) => section.startsWith("spec delta");
+/** `## Units`, `## 3. Units — engine`: a word match, so `## Unitsafety` is not a units section. */
+const isUnits = (section) => /^units\b/.test(section);
 /**
  * One line, split before each ADDED / MODIFIED / REMOVED so a line carrying two of them is
  * classified per keyword. A single sentence with an ADDED clause and a REMOVED clause used to
@@ -89,11 +91,16 @@ const isSpecDelta = (section) => section.startsWith("spec delta");
  */
 const deltaSegments = (text) => text.split(/(?=\b(?:ADDED|MODIFIED|REMOVED)\b)/).filter((part) => part.trim());
 /** Findings that record how the plan was read without condemning it. */
-const ADVISORY_CODES = new Set(["provisional-definition"]);
+const ADVISORY_CODES = new Set(["provisional-definition", "missing-spec-input"]);
 
 export function checkCoverage(plan, specs, options = {}) {
   const findings = [];
   const add = (code, path, line, message) => findings.push({ code, path, line, message });
+  // A spec directory that does not exist yet is read as no spec, never as a crash: the plan's own
+  // delta headings and `spec carries no ids` still decide whether each cited ID is defined.
+  for (const path of options.missingSpecInputs ?? []) {
+    add("missing-spec-input", path, 1, `${path} does not exist; read as no spec — every cited ID must be defined in this plan's delta or the unit must say spec carries no ids.`);
+  }
   // `quiet` suppresses a second report of findings the caller has already raised over the same
   // text — the removed branch re-reads the disposition-free half of a line it has already read.
   const refs = (text, path, line, quiet = false) => {
@@ -123,7 +130,7 @@ export function checkCoverage(plan, specs, options = {}) {
   let field;
   for (const row of linesOf(plan.text)) {
     const heading = /^## (.+?)\s*$/.exec(row.text);
-    if (heading) { section = heading[1].toLowerCase(); unit = undefined; field = undefined; sawSpecDelta ||= isSpecDelta(section); continue; }
+    if (heading) { section = heading[1].replace(/^\d+[.)]\s+/, "").toLowerCase(); unit = undefined; field = undefined; sawSpecDelta ||= isSpecDelta(section); continue; }
     if (isSpecDelta(section)) {
       // A `### REQ-` heading in the delta defines the requirement for a plan whose spec is not
       // written yet. It is read as a definition only where no spec supplies one — a spec always
@@ -148,7 +155,7 @@ export function checkCoverage(plan, specs, options = {}) {
         } else for (const id of ids) scoped.add(id);
       }
     }
-    if (section !== "units") continue;
+    if (!isUnits(section)) continue;
     // A trailing colon belongs to the heading's prose, not to the unit's ID: `### U1: guard`.
     const unitHeading = /^###\s+(\S+?):?(?:\s|$)/.exec(clean(row.text));
     if (unitHeading) {
@@ -235,10 +242,12 @@ export function main(args) {
   }
   try {
     const [planPath, ...inputs] = args;
-    const paths = inputs.flatMap((path) => statSync(path).isDirectory()
+    // Only a directory-shaped input may be absent; a named `.md` file that is missing is a typo.
+    const missingSpecInputs = inputs.filter((path) => !path.endsWith(".md") && !existsSync(path));
+    const paths = inputs.filter((path) => !missingSpecInputs.includes(path)).flatMap((path) => statSync(path).isDirectory()
       ? readdirSync(path).filter((name) => name.endsWith(".md") && name !== "manifest.md").toSorted().map((name) => join(path, name))
       : [path]);
-    const report = checkCoverage({ path: planPath, text: readFileSync(planPath, "utf8") }, paths.map((path) => ({ path, text: readFileSync(path, "utf8") })));
+    const report = checkCoverage({ path: planPath, text: readFileSync(planPath, "utf8") }, paths.map((path) => ({ path, text: readFileSync(path, "utf8") })), { missingSpecInputs });
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     return report.status === "pass" ? 0 : 1;
   } catch (error) {
