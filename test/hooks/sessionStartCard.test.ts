@@ -58,6 +58,7 @@ const COMPACT = JSON.stringify({ source: "compact" });
 const RESUME = JSON.stringify({ source: "resume" });
 const STARTUP = JSON.stringify({ source: "startup" });
 const CLOSED_NEXT = "next: this run is closed — do not resume its dispatch; its record names what came after it";
+const DEBUG_NEXT = "next: each open debug round's record names its probes and where it stopped";
 
 /** The UTC day `offset` days from now, as a run id's date prefix. */
 function utcDay(offset: number): string {
@@ -289,20 +290,67 @@ describe("the session-start resume card", () => {
 
   it("never names a debug round's record as the run, in progress or closed", async () => {
     const script = await placeScript();
-    const banner = start(script, STARTUP).stdout;
-    const alone = await onOneUtcDay(async () => {
+    const { day, alone } = await onOneUtcDay(async () => {
       await getRepo().seedFiles({
         [runFile(`${utcDay(0)}_debug-x`, "record.md")]: record({ status: "in progress", plan: "none — debug round" }),
         [runFile(`${utcDay(0)}_debug-y`, "record.md")]: record({ status: "closed — fixed", plan: "none — debug round" }),
       });
-      return start(script, RESUME).stdout;
+      return { day: utcDay(0), alone: cardOf(start(script, RESUME).stdout) };
     });
-    expect(alone).toBe(banner);
+    // TEST CHANGE, justified: sw07-card-debug-rounds (MODIFIED REQ-CTX-013)
+    // prints a card for open debug rounds alone. It still names no run: its
+    // first line says none is in progress, and only the open debug-x is listed.
+    expect(alone).toEqual([
+      expect.stringMatching(/^stamity resume card — no run in progress \(as of \d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z\)$/),
+      `debug rounds open: 1 (${day}_debug-x)`,
+      DEBUG_NEXT,
+    ]);
 
     await getRepo().seedFiles({ [runFile("2026-09-01_work", "record.md")]: record() });
     const card = cardOf(start(script, RESUME).stdout);
     expect(card[0]).toMatch(/^stamity resume card — run 2026-09-01_work \(as of /);
-    expect(card.join("\n")).not.toContain("_debug-");
+    // TEST CHANGE, justified: the same unit lists the open debug-x on its own
+    // line before next:; the run named is still the work run, and debug-y nowhere.
+    expect(card[0]).not.toContain("_debug-");
+    expect(card.slice(5)).toEqual([`debug rounds open: 1 (${day}_debug-x)`, NEXT]);
+    expect(card.join("\n")).not.toContain("_debug-y");
+  });
+
+  it("prints the same card as before when no debug round is open", async () => {
+    const script = await placeScript();
+    await seedDemo();
+    const before = cardOf(start(script, COMPACT).stdout);
+    await getRepo().seedFiles({
+      [runFile("2026-09-24_debug-y", "record.md")]: record({ status: "closed — fixed", plan: "none — debug round" }),
+      [runFile("2026-09-24_debug-z", "notes.md")]: "no record yet\n",
+    });
+    const after = cardOf(start(script, COMPACT).stdout);
+    expect(after).toHaveLength(6);
+    expect(after.slice(1)).toEqual(before.slice(1));
+  });
+
+  it("keeps a card with every list and 25 open debug rounds under the cap", async () => {
+    const script = await placeScript();
+    const files: Record<string, string> = {
+      [runFile(RUN, "record.md")]: record({ plan: `docs/plans/${"p".repeat(286)}.md` }),
+      [runFile(RUN, "ledger.jsonl")]: Array.from({ length: 25 }, (_, i) => row(`${RUN}/review/${i + 1}`, "open")).join("\n"),
+    };
+    for (let i = 1; i <= 25; i += 1) {
+      const n = String(i).padStart(2, "0");
+      files[runFile(RUN, `reports/u${n}-reviewer-r1.md`)] = reportWith([FINDING]);
+      files[`.git/worktrees/lane-${n}/gitdir`] = `${getRepo().path("lanes", `lane-${i}`, ".git")}\n`;
+      files[`.git/worktrees/lane-${n}/HEAD`] = `ref: refs/heads/lane/${i}\n`;
+      files[`lanes/lane-${i}/.git`] = "gitdir: (a lane that exists)\n";
+      files[runFile(`2026-09-23_debug-${"d".repeat(170)}-${n}`, "record.md")] = record({ status: "in progress", plan: "none — debug round" });
+    }
+    await getRepo().seedFiles(files);
+
+    const card = cardOf(start(script, COMPACT).stdout);
+    expect(card).toHaveLength(7);
+    expect(card.join("\n").length).toBeLessThanOrEqual(CARD_MAX_CHARS);
+    expect(card[0]).toMatch(/^stamity resume card — run 2026-09-23_demo \(as of /);
+    expect(card[5]).toMatch(/^debug rounds open: 25 \(.*… \+\d+ more\)$/);
+    expect(card[6]).toBe(NEXT);
   });
 
   it("withholds a closed card whose status line trips the screen", async () => {

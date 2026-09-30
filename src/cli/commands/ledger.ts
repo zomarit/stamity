@@ -487,7 +487,7 @@ async function runClose(ctx: CliContext, opts: Record<string, unknown>): Promise
   };
 }
 
-/** What `status` prints when there is no card: no run in progress, no recent closed run, or none named. */
+/** What `status` prints when there is no card: no run in progress, no recent closed run, no open debug round, or none named. */
 const NO_CARD = "stamity: no run in progress under .stamity/runs/ — no resume card.";
 
 /** The status JSON document with no card: the same keys, every count at zero. */
@@ -498,6 +498,7 @@ const NO_CARD_JSON = {
   card: null,
   counts: { openRows: 0, unledgeredReports: 0, lanes: 0 },
   ledgerStates: { fixed: 0, deferred: 0, rejected: 0, open: 0 },
+  debugRounds: [],
   withheld: null,
   listsWithheld: null,
   unreadableLedgerLines: 0,
@@ -511,6 +512,8 @@ const NO_CARD_JSON = {
  * each, the document would name all of them — and then flattened as the card
  * prints them; the counts are always there. The record's status is screened
  * with the lists (the in-progress card never prints it), so it is null on a hit.
+ * The open debug rounds' ids are always a key, for the no-card document's
+ * shape, and empty on a hit. `run` is null on the card of open debug rounds alone.
  */
 function statusJson(card: ResumeCard): Record<string, unknown> {
   const echo = card.withheld === null && card.listsWithheld === null;
@@ -525,6 +528,7 @@ function statusJson(card: ResumeCard): Record<string, unknown> {
       lanes: card.lanes.length,
     },
     ledgerStates: { ...card.ledgerStates },
+    debugRounds: echo ? [...card.debugRounds] : [],
     ...(echo
       ? {
           openRowIds: [...card.openRowIds],
@@ -542,7 +546,8 @@ function statusJson(card: ResumeCard): Record<string, unknown> {
 
 /**
  * `ledger status`: the resume card of the run in progress — with none, the
- * closed card of a run closed in the last two days — or of the run `--run`
+ * closed card of a run closed in the last two days; with neither, the card of
+ * the open debug rounds, which names no run — or of the run `--run`
  * names whether or not it is in progress, in the in-progress layout. The
  * card's lines go to stdout exactly as the session-start hook prints them, so a client whose hook never
  * prints the card (or that does not re-run it after a compaction) gets the same
@@ -568,16 +573,22 @@ async function runStatus(ctx: CliContext, opts: Record<string, unknown>): Promis
     ctx.io.out(`${NO_CARD}\n`);
     return {
       exitCode: 0,
-      json: { ...NO_CARD_JSON, counts: { ...NO_CARD_JSON.counts }, ledgerStates: { ...NO_CARD_JSON.ledgerStates } },
+      json: {
+        ...NO_CARD_JSON,
+        counts: { ...NO_CARD_JSON.counts },
+        ledgerStates: { ...NO_CARD_JSON.ledgerStates },
+        debugRounds: [],
+      },
     };
   }
 
-  if (card.ledgerUnreadable) {
+  // The card of open debug rounds alone names no run, and so no ledger to warn about.
+  if (card.runId !== null && card.ledgerUnreadable) {
     ctx.io.err(
       `warning: ${layout.runRelPath(card.runId, layout.LEDGER_FILE)} exists but could not be read; its open rows are not counted\n`,
     );
   }
-  if (card.unreadableLedgerLines > 0) {
+  if (card.runId !== null && card.unreadableLedgerLines > 0) {
     ctx.io.err(
       `warning: ${layout.runRelPath(card.runId, layout.LEDGER_FILE)} has ${card.unreadableLedgerLines} line(s) that are not ledger rows\n`,
     );

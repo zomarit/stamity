@@ -171,6 +171,17 @@ export const CARD_CLOSED_MAX_AGE_DAYS = 2;
 /** The ledger states the closed card counts by name; any other state is summed as `other`. */
 export const CARD_LEDGER_STATES = ["fixed", "deferred", "rejected", "open"] as const;
 
+/**
+ * The debug line's label: `debug rounds open: <n> (<run ids>)`, before the
+ * card's `next:` line and only when n > 0. It lists the debug records the run
+ * selection skips whose record head reads in progress, newest first.
+ */
+export const CARD_DEBUG_ROUNDS_LABEL = "debug rounds open";
+/** What the first line names instead of a run when only debug rounds are open. */
+export const CARD_NO_RUN = "no run in progress";
+/** The last line of the card that names no run, only open debug rounds. */
+export const CARD_DEBUG_NEXT_LINE = "next: each open debug round's record names its probes and where it stopped";
+
 /** The card's fixed words. */
 export const CARD_RECOVERY_NOTE = "the ledger is the recovery point";
 export const CARD_NEXT_LINE = "next: read the open rows and the listed reports before dispatching anything";

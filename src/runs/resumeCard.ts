@@ -5,6 +5,8 @@ import { SESSION_START_SCREEN } from "../hooks/scripts.ts";
 import {
   CARD_CLOSED_MAX_AGE_DAYS,
   CARD_CLOSED_NEXT_LINE,
+  CARD_DEBUG_NEXT_LINE,
+  CARD_DEBUG_ROUNDS_LABEL,
   CARD_FIELD_MAX,
   CARD_LEDGER_STATES,
   CARD_LEDGER_TOO_LARGE,
@@ -12,6 +14,7 @@ import {
   CARD_LIST_MAX,
   CARD_MAX_CHARS,
   CARD_NEXT_LINE,
+  CARD_NO_RUN,
   CARD_NOT_RECORDED,
   CARD_NOT_REPORT_NAMED,
   CARD_RECOVERY_NOTE,
@@ -72,7 +75,8 @@ export type LedgerStateCounts = { readonly [state in (typeof CARD_LEDGER_STATES)
 
 /** One run's card, with the lists behind its counts. */
 export interface ResumeCard {
-  readonly runId: string;
+  /** Null on the card of open debug rounds alone, which names no run. */
+  readonly runId: string | null;
   /** False on the closed card (and on a `runId` named that is not in progress). */
   readonly inProgress: boolean;
   /**
@@ -87,18 +91,21 @@ export interface ResumeCard {
    */
   readonly ledgerStates: LedgerStateCounts;
   /**
-   * The printed lines: the six card lines, the five closed-card lines, or the
-   * one withheld line.
+   * The printed lines: the six card lines, the five closed-card lines, the
+   * three lines of the card that names no run, or the one withheld line. The
+   * first two gain the debug line before `next:` while a debug round is open.
    */
   readonly lines: readonly string[];
   /** The three lists in full, each item flattened as the card prints it. */
   readonly openRowIds: readonly string[];
   readonly unledgeredReports: readonly string[];
   readonly lanes: readonly string[];
+  /** The open debug rounds' run ids in full, newest first. */
+  readonly debugRounds: readonly string[];
   /** The screen pattern id the card's text matched, or null when it printed. */
   readonly withheld: string | null;
   /**
-   * The screen pattern id the three full lists and the status matched, or
+   * The screen pattern id the four full lists and the status matched, or
    * null. The card names at most CARD_LIST_MAX items of each list, and the
    * in-progress card never prints the status, so an item past them is screened
    * here, never in `lines`; a caller that echoes the lists or the status checks
@@ -287,6 +294,23 @@ export function findCardRun(rootDir: string, now: Date): CardRun | null {
     if (closed === null && run.slice(0, 10) >= cutoff) closed = run;
   }
   return closed === null ? null : { runId: closed, closed: true };
+}
+
+/**
+ * Open debug rounds, newest first by code-unit order: the run folders whose id
+ * carries DEBUG_RUN_SEGMENT and whose record head reads in progress. Found by
+ * run id, never by the `Invocation:` spelling. A linked runs folder, a linked
+ * run folder and a record that is a link or cannot be read are passed over.
+ */
+function openDebugRounds(runsDir: string): string[] {
+  const entries = listDir(runsDir);
+  if (entries === null) return [];
+  return entries
+    .filter((entry) => entry.isDirectory() && RUN_ID_PATTERN.test(entry.name) && isDebugRunId(entry.name))
+    .map((entry) => entry.name)
+    .toSorted()
+    .toReversed()
+    .filter((run) => readRecordHeadFile(join(runsDir, run, RECORD_FILE))?.inProgress === true);
 }
 
 interface LedgerRead {
@@ -543,6 +567,30 @@ function listPart(items: readonly string[], k: number): string {
   return ` (${shown.join(", ")})`;
 }
 
+/** The debug line as a one-item array, or none when no debug round is open. */
+function debugLine(debugRounds: readonly string[], k: number): string[] {
+  return debugRounds.length === 0 ? [] : [`${CARD_DEBUG_ROUNDS_LABEL}: ${debugRounds.length}${listPart(debugRounds, k)}`];
+}
+
+/** Shrinks every list from CARD_LIST_MAX items down until the joined text fits CARD_MAX_CHARS. */
+function fitted(render: (k: number) => string[]): string[] {
+  let lines: string[] = [];
+  for (let k = CARD_LIST_MAX; k >= 0; k -= 1) {
+    lines = render(k);
+    if (lines.join("\n").length <= CARD_MAX_CHARS) break;
+  }
+  return lines;
+}
+
+/** The card of open debug rounds when no run is named: it names no run. */
+function renderDebugCard(debugRounds: readonly string[], now: Date): string[] {
+  return fitted((k) => [
+    `stamity resume card — ${CARD_NO_RUN} (as of ${now.toISOString().slice(0, 16)}Z)`,
+    ...debugLine(debugRounds, k),
+    CARD_DEBUG_NEXT_LINE,
+  ]);
+}
+
 function renderAt(
   parts: Parameters<typeof renderResumeCard>[0],
   now: Date,
@@ -563,13 +611,15 @@ function renderAt(
     `ledger: ${ledger}  ·  ${CARD_RECOVERY_NOTE}`,
     `reports without a ledger row: ${parts.unledgeredReports.length}${listPart(parts.unledgeredReports, k)}${notCheckedPart}${otherPart}`,
     `lanes: ${parts.lanes.length}${listPart(parts.lanes, k)}`,
+    ...debugLine(parts.debugRounds ?? [], k),
     CARD_NEXT_LINE,
   ];
 }
 
 /**
  * The closed card's five lines: the run's closing status and its ledger counted
- * by state, no lists. Every field is capped, so it always fits CARD_MAX_CHARS.
+ * by state; its one list is the debug line, shrunk like the others. Every field
+ * is capped, so with that list at zero it always fits CARD_MAX_CHARS.
  */
 function renderClosedCard(
   parts: {
@@ -580,6 +630,7 @@ function renderClosedCard(
     readonly states: LedgerRead["states"];
     readonly ledgerUnreadable: boolean;
     readonly ledgerTooLarge: boolean;
+    readonly debugRounds: readonly string[];
   },
   now: Date,
 ): string[] {
@@ -591,18 +642,20 @@ function renderClosedCard(
   let ledger = `${rows} rows — fixed ${fixed}, deferred ${deferred}, rejected ${rejected}, open ${open}${other > 0 ? `, other ${other}` : ""}`;
   if (parts.ledgerUnreadable) ledger = CARD_LEDGER_UNREADABLE;
   if (parts.ledgerTooLarge) ledger = CARD_LEDGER_TOO_LARGE;
-  return [
+  return fitted((k) => [
     `stamity resume card — run ${parts.runId} (closed; as of ${now.toISOString().slice(0, 16)}Z)`,
     `status: ${status === "" ? CARD_NOT_RECORDED : status}`,
     `plan: ${plan === "" ? CARD_NOT_RECORDED : plan}  ·  invocation: ${invocation === "" ? CARD_NOT_RECORDED : invocation}`,
     `ledger: ${ledger}  ·  ${CARD_RECOVERY_NOTE}`,
+    ...debugLine(parts.debugRounds, k),
     CARD_CLOSED_NEXT_LINE,
-  ];
+  ]);
 }
 
 /**
- * The six card lines, every list shrunk from CARD_LIST_MAX items down until the
- * joined text fits CARD_MAX_CHARS; with every list at zero it always does.
+ * The six card lines (seven with the debug line), every list shrunk from
+ * CARD_LIST_MAX items down until the joined text fits CARD_MAX_CHARS; with
+ * every list at zero it always does.
  */
 export function renderResumeCard(
   parts: {
@@ -620,15 +673,12 @@ export function renderResumeCard(
     readonly ledgerTooLarge?: boolean;
     /** Reports past REPORT_READS_MAX; the reports line appends `, not checked: <n>` after its list. */
     readonly reportsNotChecked?: number;
+    /** Open debug rounds' run ids: the debug line before `next:`, only when there is one. */
+    readonly debugRounds?: readonly string[];
   },
   now: Date,
 ): string[] {
-  let lines: string[] = [];
-  for (let k = CARD_LIST_MAX; k >= 0; k -= 1) {
-    lines = renderAt(parts, now, k);
-    if (lines.join("\n").length <= CARD_MAX_CHARS) break;
-  }
-  return lines;
+  return fitted((k) => renderAt(parts, now, k));
 }
 
 /**
@@ -652,9 +702,11 @@ export function screenCard(text: string): string {
 /**
  * The resume card of a run, recomputed from disk. With no `runId`, the run in
  * progress (the greatest by name), else the closed card of a run closed within
- * CARD_CLOSED_MAX_AGE_DAYS ({@link findCardRun}), or null when neither is;
+ * CARD_CLOSED_MAX_AGE_DAYS ({@link findCardRun}), else the card of the open
+ * debug rounds alone, which names no run, or null when none of the three is;
  * with one, that run's six-line card whether or not it is in progress, or null
- * when it is not a real run folder under a real runs folder.
+ * when it is not a real run folder under a real runs folder. Every card but the
+ * withheld one carries the debug line while a debug round is open.
  */
 export function collectResumeCard(opts: {
   readonly rootDir: string;
@@ -664,7 +716,9 @@ export function collectResumeCard(opts: {
   const runsDir = runsDirOf(opts.rootDir);
   if (!realDir(runsDir)) return null;
   const picked = opts.runId === undefined ? findCardRun(opts.rootDir, opts.now) : { runId: opts.runId, closed: false };
-  if (picked === null || !RUN_ID_PATTERN.test(picked.runId)) return null;
+  const debugRounds = openDebugRounds(runsDir);
+  if (picked === null) return debugRounds.length === 0 ? null : debugOnlyCard(debugRounds, opts.now);
+  if (!RUN_ID_PATTERN.test(picked.runId)) return null;
   const runId = picked.runId;
   const runDir = join(runsDir, runId);
   if (!realDir(runDir)) return null;
@@ -685,6 +739,7 @@ export function collectResumeCard(opts: {
           states: ledger.states,
           ledgerUnreadable: ledger.failed,
           ledgerTooLarge: ledger.tooLarge,
+          debugRounds,
         },
         opts.now,
       )
@@ -700,6 +755,7 @@ export function collectResumeCard(opts: {
           ledgerTooLarge: ledger.tooLarge,
           notReportNamed: reportsRead.other,
           reportsNotChecked: reportsRead.notChecked,
+          debugRounds,
         },
         opts.now,
       );
@@ -709,14 +765,10 @@ export function collectResumeCard(opts: {
   const laneItems = lanes.map(flat);
   const rawStatus = head?.status ?? null;
   const statusText = rawStatus === null ? null : flat(rawStatus);
-  const listsWithheld = screenCard([...openRowIds, ...reports, ...laneItems, statusText ?? ""].join("\n"));
+  const debugItems = debugRounds.map(flat);
+  const listsWithheld = screenCard([...openRowIds, ...reports, ...laneItems, ...debugItems, statusText ?? ""].join("\n"));
   const { fixed, deferred, rejected, open } = ledger.states;
-  const lines =
-    withheld === ""
-      ? card
-      : [
-          `stamity resume card — run ${runId} withheld: its text matched screen pattern ${withheld}; ${CARD_RECOVERY_NOTE}`,
-        ];
+  const lines = withheld === "" ? card : [withheldLine(`run ${runId}`, withheld)];
   return {
     runId,
     inProgress: head?.inProgress ?? false,
@@ -726,6 +778,7 @@ export function collectResumeCard(opts: {
     openRowIds,
     unledgeredReports: reports,
     lanes: laneItems,
+    debugRounds: debugItems,
     withheld: withheld === "" ? null : withheld,
     listsWithheld: listsWithheld === "" ? null : listsWithheld,
     unreadableLedgerLines: ledger.unreadable,
@@ -733,5 +786,39 @@ export function collectResumeCard(opts: {
     ledgerTooLarge: ledger.tooLarge,
     notReportNamed: reportsRead.other,
     reportsNotChecked: reportsRead.notChecked,
+  };
+}
+
+/** The one line a card whose text trips the screen prints in its place. */
+function withheldLine(label: string, id: string): string {
+  return `stamity resume card — ${label} withheld: its text matched screen pattern ${id}; ${CARD_RECOVERY_NOTE}`;
+}
+
+/**
+ * The card of open debug rounds alone, when no run is in progress and none
+ * closed recently: it names no run, and every run-side field is empty.
+ */
+function debugOnlyCard(debugRounds: readonly string[], now: Date): ResumeCard {
+  const card = renderDebugCard(debugRounds, now);
+  const debugItems = debugRounds.map(flat);
+  const withheld = screenCard(card.join("\n"));
+  const listsWithheld = screenCard(debugItems.join("\n"));
+  return {
+    runId: null,
+    inProgress: false,
+    status: null,
+    ledgerStates: { fixed: 0, deferred: 0, rejected: 0, open: 0 },
+    lines: withheld === "" ? card : [withheldLine(CARD_NO_RUN, withheld)],
+    openRowIds: [],
+    unledgeredReports: [],
+    lanes: [],
+    debugRounds: debugItems,
+    withheld: withheld === "" ? null : withheld,
+    listsWithheld: listsWithheld === "" ? null : listsWithheld,
+    unreadableLedgerLines: 0,
+    ledgerUnreadable: false,
+    ledgerTooLarge: false,
+    notReportNamed: 0,
+    reportsNotChecked: 0,
   };
 }
