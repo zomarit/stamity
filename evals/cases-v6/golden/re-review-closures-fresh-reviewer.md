@@ -2,7 +2,7 @@
 id: re-review-closures-fresh-reviewer
 class: golden
 claim: "A fresh re-review spawn answers every handed ledger id with exactly one closure — a fixer's rejection upheld or overturned on the lines it reads, not on the fixer's say-so — raises only new Critical or Warning findings with new Minors suppressed, and returns its full result inline when the report write is not granted."
-source: content/agents/stamity-reviewer.md:14-18,134-151,181-189
+source: content/agents/stamity-reviewer.md:14-18,44-51,134-151,181-189
 metric: rubric
 ---
 
@@ -20,6 +20,19 @@ confidence and findings graded `Critical` / `Warning` / `Minor`. Reads only — 
 mutating command, no branch or board mutation; its one command family is read-only git (Reading
 the change). Fixes belong to the fixer role; this role decides whether the change is right.
 Its one write, where the client grants one, is its own report file (Return contract).
+```
+
+Governing text — the same file, "Critical rows" (the introduction and the input row):
+
+```text
+## Critical rows
+
+These fail a review on their own, whatever the lens weighting says. Each is a blocking
+finding when it appears in the change, and a `Warning` when the change makes an existing
+instance worse without introducing it:
+
+- External input is validated before use; database access is parameterized; rendered
+  output is escaped; a path built from user input is resolved and confined to its root.
 ```
 
 Governing text — the same file, "Nit policy" and "Return contract" (report and digest):

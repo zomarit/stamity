@@ -2,7 +2,7 @@
 id: reviewer-brief-is-diff-and-criteria
 class: golden
 claim: "Briefed with a diff range, a plan cell, its criteria and a report path, the reviewer reads the change from the range with read-only git, treats an implementer's summary in the brief as a lead rather than evidence, runs no gate and nothing mutating, writes its full result to the named report and returns the digest."
-source: content/agents/stamity-reviewer.md:14-18,108-112,181-205
+source: content/agents/stamity-reviewer.md:14-18,44-48,71-72,108-112,181-205
 metric: rubric
 ---
 
@@ -20,6 +20,21 @@ confidence and findings graded `Critical` / `Warning` / `Minor`. Reads only — 
 mutating command, no branch or board mutation; its one command family is read-only git (Reading
 the change). Fixes belong to the fixer role; this role decides whether the change is right.
 Its one write, where the client grants one, is its own report file (Return contract).
+```
+
+Governing text — the same file, "Critical rows" (the introduction and the test row):
+
+```text
+## Critical rows
+
+These fail a review on their own, whatever the lens weighting says. Each is a blocking
+finding when it appears in the change, and a `Warning` when the change makes an existing
+instance worse without introducing it:
+
+[...]
+
+- Every changed behaviour has a test that fails without the change; a defect fix carries a
+  regression test; a deleted or weakened gating test is justified in the diff itself.
 ```
 
 Governing text — the same file, "Evidence and posting gates" (verdict and confidence),
