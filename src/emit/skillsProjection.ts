@@ -59,7 +59,7 @@
  * the only I/O.
  *
  * The context parameter is a structural subset of the CLI layer's
- * `EmissionContext` — this module reads `manifest` + `engineVersion` only, and
+ * `EmissionContext` — this module reads `manifest`, `engineVersion` and `packageName` only, and
  * declaring the subset here keeps the engine free of CLI imports (the
  * import-graph gate's "engine never imports the CLI" edge) while every
  * `EmissionContext` remains assignable as-is.
@@ -92,9 +92,12 @@ import { TOOLS, type Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import type { SetupManifest } from "../types/manifest.ts";
 import {
+  cliCallContextOf,
   detectionContextFromManifest,
+  substituteCliTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
+  type CliCallContext,
   type VerificationGateSet,
 } from "./substitution.ts";
 
@@ -178,8 +181,10 @@ export interface ProjectedSkillFile extends ProjectedFile {
 export interface SkillsEmissionContext {
   /** The manifest driving selection and token substitution. */
   manifest: SetupManifest;
-  /** Engine version, for generator stamps inside emitted content. */
+  /** Engine version, for generator stamps inside emitted content and the pinned CLI call. */
   engineVersion: string;
+  /** The package the pinned CLI call names (`${STAMITY:CLI}`); absent means the canonical one. */
+  packageName?: string;
 }
 
 /** Test seams; production callers pass nothing and read the bundled corpus. */
@@ -303,13 +308,14 @@ export async function projectSkills(
   // field, which is what keeps a skill body and the charter beside it from
   // naming two different test commands.
   const gates = verificationGatesFor(ctx.manifest.detected, readGates(ctx.manifest));
+  const cli = cliCallContextOf(ctx);
 
   const perSkill = await Promise.all(
     admitted.map((item) =>
       // The directory rule above: the replaced skill's directory when this
       // item took a shipped id, its own otherwise.
       projectOneSkill(fs, item, skillDirOf(replacedClaimantOf(index, item) ?? item), (raw, skillDir) =>
-        renderSkillBody(raw, skillDir, item.relativePath, detection, gates),
+        renderSkillBody(raw, skillDir, item.relativePath, detection, gates, cli),
       ),
     ),
   );
@@ -343,7 +349,7 @@ export async function projectSkills(
     ) {
       return [];
     }
-    return [projectRuleAsSkill(item, tools, detection, gates)];
+    return [projectRuleAsSkill(item, tools, detection, gates, cli)];
   });
 
   return [...perSkill.flat(), ...ruleRows].toSorted((a, b) =>
@@ -374,6 +380,7 @@ function projectRuleAsSkill(
   tools: readonly Tool[],
   detection: ReturnType<typeof detectionContextFromManifest>,
   gates: VerificationGateSet,
+  cli: CliCallContext,
 ): ProjectedSkillFile {
   const skillDir = `${RULE_SKILL_DIR_PREFIX}${item.id}`;
   assertSafePath(posix.join(skillDir, SKILL_FILE), `rule "${item.id}" projection`);
@@ -394,7 +401,7 @@ function projectRuleAsSkill(
   };
   return {
     path: posix.join(SKILLS_PROJECTION_DIR, skillDir, SKILL_FILE),
-    content: composeFrontmatter(head, substituteBody(item.body, detection, gates)),
+    content: composeFrontmatter(head, substituteBody(item.body, detection, gates, cli)),
     artifactId: item.id,
     artifactType: item.type,
     artifactPath: item.relativePath,
@@ -585,21 +592,27 @@ function renderSkillBody(
   source: string,
   detection: ReturnType<typeof detectionContextFromManifest>,
   gates: VerificationGateSet,
+  cli: CliCallContext,
 ): string {
-  return substituteBody(toSpecFrontmatter(raw, skillDir, source), detection, gates);
+  return substituteBody(toSpecFrontmatter(raw, skillDir, source), detection, gates, cli);
 }
 
 /**
  * Emission-time substitution over one document — shared by the skill lane and
  * the demoted-rule lane, so a rule delivered as a skill says what this
- * repository's gate commands actually are exactly as a skill does.
+ * repository's gate commands actually are — and names the same pinned CLI
+ * call — exactly as a skill does.
  */
 function substituteBody(
   raw: string,
   detection: ReturnType<typeof detectionContextFromManifest>,
   gates: VerificationGateSet,
+  cli: CliCallContext,
 ): string {
-  const substituted = substituteVerificationGateTokens(substituteRepoTokens(raw, detection), gates);
+  const substituted = substituteCliTokens(
+    substituteVerificationGateTokens(substituteRepoTokens(raw, detection), gates),
+    cli,
+  );
   if (!substituted.includes(PLATFORM_TOOL_MARKER)) return substituted;
   return substituted.split(PLATFORM_TOOL_MARKER).join(buildAskUserPlatformTable());
 }

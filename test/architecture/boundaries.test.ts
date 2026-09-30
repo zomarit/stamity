@@ -264,6 +264,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // and the wave-5 pack manifest reader — so it sits at its true depth with the
   // other shared leaves rather than at either consumer's wave.
   "src/shared/launcherAllowlist.ts": { unit: "s2d-08", wave: 1 },
+  // The pinned CLI call (sw26-cli-token): imports only the errors module, read
+  // by the wave-2 substitution pass, so it sits with the other shared leaves.
+  "src/shared/cliCall.ts": { unit: "sw26-cli-token", wave: 1 },
   "src/denyscan/denyScan.ts": { unit: "p1-04", wave: 1 },
   "src/mcp/secretScan.ts": { unit: "p1-05", wave: 1 },
   "src/roster/triggers.ts": { unit: "p1-06", wave: 1 },

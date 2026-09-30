@@ -2,6 +2,7 @@ import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   CI_PROVIDER_TOKEN,
+  CLI_TOKEN,
   DETECTION_UNKNOWN,
   INVARIANTS_VERSION_TOKEN,
   LINTER_TOKEN,
@@ -15,12 +16,15 @@ import {
   renderDetectionList,
   renderInvariantsVersion,
   substituteCharterTokens,
+  substituteCliTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
   type CharterInvariants,
+  type CliCallContext,
   type DetectedRepoContext,
   type VerificationGateSet,
 } from "../../src/emit/substitution.ts";
+import { pinnedCliPrefix } from "../../src/shared/cliCall.ts";
 import { DEFAULT_MATURITY_TIER, MATURITY_TIERS, type MaturityTier } from "../../src/types/core.ts";
 
 /**
@@ -165,15 +169,27 @@ const INVARIANTS: CharterInvariants = {
   amended: "2026-03-04",
 };
 
-/** All three passes, in emission order. */
+/**
+ * TEST CHANGE, justified (2026-09-30, sw26-cli-token): the pinned CLI call is a
+ * fourth family with a fourth pass, so "a full render" is now four passes. Its
+ * input is fixed for the reason the invariants' is: the package name and the
+ * engine version come from the emission context, not from anything a document
+ * or a detection generates, and the property is structural.
+ */
+const CLI: CliCallContext = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
+
+/** All four passes, in emission order. */
 const render = (
   document: string,
   ctx: DetectedRepoContext,
   gates: VerificationGateSet,
 ): string =>
-  substituteVerificationGateTokens(
-    substituteRepoTokens(substituteCharterTokens(document, INVARIANTS), ctx),
-    gates,
+  substituteCliTokens(
+    substituteVerificationGateTokens(
+      substituteRepoTokens(substituteCharterTokens(document, INVARIANTS), ctx),
+      gates,
+    ),
+    CLI,
   );
 
 /**
@@ -196,6 +212,8 @@ function expectedValues(
     [VERIFY_GATE_TYPECHECK_TOKEN, gates.typecheck],
     [VERIFY_GATE_ALL_TOKEN, gates.all],
     [INVARIANTS_VERSION_TOKEN, renderInvariantsVersion(INVARIANTS)],
+    // TEST CHANGE, justified (2026-09-30): the tenth wired token, resolved by the CLI pass.
+    [CLI_TOKEN, pinnedCliPrefix(CLI.packageName, CLI.version)],
   ]);
 }
 

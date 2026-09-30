@@ -65,7 +65,7 @@ function refuseName(name, named) {
   }
 }
 
-async function stageDirectory(sourceDir, targetDir, relative, label, tokens) {
+async function stageDirectory(sourceDir, targetDir, relative, label, tokens, cli) {
   const entries = (await readdir(sourceDir, { withFileTypes: true })).toSorted(byName)
   for (const entry of entries) {
     const rel = relative === '' ? entry.name : `${relative}/${entry.name}`
@@ -80,7 +80,7 @@ async function stageDirectory(sourceDir, targetDir, relative, label, tokens) {
     const to = join(targetDir, entry.name)
     if (entry.isDirectory()) {
       await mkdir(to, { recursive: true })
-      await stageDirectory(from, to, rel, label, tokens)
+      await stageDirectory(from, to, rel, label, tokens, cli)
       continue
     }
     if (!entry.isFile()) {
@@ -90,7 +90,7 @@ async function stageDirectory(sourceDir, targetDir, relative, label, tokens) {
       await writeFile(to, await readFile(from))
       continue
     }
-    const { text, unresolved } = tokens.substitute(await readFile(from, 'utf8'))
+    const { text, unresolved } = tokens.substitute(await readFile(from, 'utf8'), cli)
     if (unresolved.length > 0) {
       throw new Error(
         `${named}: ${unresolved.join(', ')} ${unresolved.length === 1 ? 'is' : 'are'} not resolvable in a plugin body — a plugin is built once for every repository, so a token here would reach the agent as a broken variable`,
@@ -100,14 +100,19 @@ async function stageDirectory(sourceDir, targetDir, relative, label, tokens) {
   }
 }
 
-async function stageLayer(sourceRoot, targetRoot, label, tokens) {
+async function stageLayer(sourceRoot, targetRoot, label, tokens, cli) {
   await mkdir(targetRoot, { recursive: true })
-  await stageDirectory(sourceRoot, targetRoot, '', label, tokens)
+  await stageDirectory(sourceRoot, targetRoot, '', label, tokens, cli)
 }
 
 /**
  * Copy `contentRoot` (and `forkRoot` when it exists) into a fresh temp tree, substituting every
  * plugin body on the way.
+ *
+ * `cli` (`{ packageName, version }`) is what `${STAMITY:CLI}` renders from — the package the
+ * plugin is built from and the version it ships at, so a body's CLI call is pinned to the
+ * plugin's own release. It is checked before anything is staged; absent, a body carrying the
+ * token is refused like any other unresolved one.
  *
  * Returns the staged roots and the `dispose()` that removes them; the caller owns the lifetime.
  * A refusal removes the partial tree before it throws, so a failed build leaves nothing behind.
@@ -115,12 +120,20 @@ async function stageLayer(sourceRoot, targetRoot, label, tokens) {
  * because "the fork layer adds nothing" and "there is no fork layer" are different inputs to the
  * planner and neither is a fault.
  */
-export async function stageSubstitutedCorpus({ contentRoot, forkRoot, tokens } = {}) {
+export async function stageSubstitutedCorpus({ contentRoot, forkRoot, tokens, cli } = {}) {
   if (typeof contentRoot !== 'string' || contentRoot === '') {
     throw new Error('stageSubstitutedCorpus: contentRoot must be the path of the canonical content directory')
   }
   if (tokens === null || typeof tokens !== 'object' || typeof tokens.substitute !== 'function') {
     throw new Error('stageSubstitutedCorpus: tokens must expose substitute(body) — pass scripts/plugins/tokens.mjs')
+  }
+  if (cli !== undefined) {
+    if (typeof tokens.pinnedCliPrefix !== 'function') {
+      throw new Error('stageSubstitutedCorpus: tokens must expose pinnedCliPrefix(cli) when a cli is passed — pass scripts/plugins/tokens.mjs')
+    }
+    // Before the temp tree exists: an unpinnable version is the build's input, not a corpus
+    // file, so it is refused once, by itself, with nothing to clean up.
+    tokens.pinnedCliPrefix(cli)
   }
   const temp = await mkdtemp(join(tmpdir(), 'stamity-plugin-corpus-'))
   const dispose = async () => {
@@ -128,11 +141,11 @@ export async function stageSubstitutedCorpus({ contentRoot, forkRoot, tokens } =
   }
   try {
     const root = join(temp, 'content')
-    await stageLayer(contentRoot, root, 'content', tokens)
+    await stageLayer(contentRoot, root, 'content', tokens, cli)
     const wantsFork = typeof forkRoot === 'string' && forkRoot !== '' && (await isDirectory(forkRoot))
     if (!wantsFork) return { root, dispose }
     const stagedFork = join(temp, 'fork')
-    await stageLayer(forkRoot, stagedFork, 'fork', tokens)
+    await stageLayer(forkRoot, stagedFork, 'fork', tokens, cli)
     return { root, forkRoot: stagedFork, dispose }
   } catch (error) {
     // The temp tree is this function's own; a refusal hands the caller a message, not a

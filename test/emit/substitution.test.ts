@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { ADAPTER_REGISTRY } from "../../src/adapters/registry.ts";
+import { composeEmissionPlanner, type EmissionContext } from "../../src/emit/planner.ts";
 import {
   CI_PROVIDER_TOKEN,
+  CLI_TOKEN,
   DETECTION_UNKNOWN,
   INVARIANTS_VERSION_TOKEN,
   LINTER_TOKEN,
@@ -11,18 +14,23 @@ import {
   VERIFY_GATE_LINT_TOKEN,
   VERIFY_GATE_TEST_TOKEN,
   VERIFY_GATE_TYPECHECK_TOKEN,
+  cliCallContextOf,
   detectionContextFromManifest,
   renderDetectionList,
   renderInvariantsVersion,
   substituteCharterTokens,
+  substituteCliTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
   type CharterInvariants,
+  type CliCallContext,
   type DetectedRepoContext,
   type VerificationGateSet,
 } from "../../src/emit/substitution.ts";
-import { DEFAULT_MATURITY_TIER, type MaturityTier } from "../../src/types/core.ts";
-import type { SetupManifest } from "../../src/types/manifest.ts";
+import { createManifest } from "../../src/manifest/manifest.ts";
+import { DEFAULT_MATURITY_TIER, TOOLS, type MaturityTier } from "../../src/types/core.ts";
+import type { RuleDelivery, SetupManifest } from "../../src/types/manifest.ts";
+import { useTempDir } from "../support/tempDir.ts";
 
 const ctx = (over: Partial<DetectedRepoContext> = {}): DetectedRepoContext => ({
   linters: [],
@@ -299,6 +307,14 @@ describe("token enumeration drift guard", () => {
   // three passes instead of two. Nothing was loosened: the same "every
   // enumerated token resolves" claim now has one more token and one more pass
   // to satisfy it with, and both count literals moved 8 -> 9 rather than away.
+  //
+  // TEST CHANGE, justified (2026-09-30, sw26-cli-token): CLI_TOKEN joined the
+  // set with a FOURTH pass of its own family — its input is the emission
+  // context (package name and engine version), neither detection, gates nor the
+  // charter's frontmatter. The list grows by one token at its end, both count
+  // literals move 9 -> 10, the wire-format pin gains `${STAMITY:CLI}`, and the
+  // wiring case composes four passes instead of three. No existing token or
+  // claim changed.
   const EXPECTED = [
     LINTER_TOKEN,
     TEST_FRAMEWORK_TOKEN,
@@ -309,7 +325,10 @@ describe("token enumeration drift guard", () => {
     VERIFY_GATE_TYPECHECK_TOKEN,
     VERIFY_GATE_ALL_TOKEN,
     INVARIANTS_VERSION_TOKEN,
+    CLI_TOKEN,
   ];
+
+  const CLI: CliCallContext = { packageName: "@zomarit/stamity", version: "1.11.0" };
 
   const INVARIANTS: CharterInvariants = {
     version: "2.3.4",
@@ -317,15 +336,17 @@ describe("token enumeration drift guard", () => {
     amended: "2026-03-04",
   };
 
-  it("enumerates exactly the nine exported tokens, without duplicates", () => {
+  it("enumerates exactly the ten exported tokens, without duplicates", () => {
     expect(REPO_SUBSTITUTION_TOKENS).toEqual(EXPECTED);
-    expect(new Set(REPO_SUBSTITUTION_TOKENS).size).toBe(9);
+    expect(new Set(REPO_SUBSTITUTION_TOKENS).size).toBe(10);
   });
 
   it("pins the wire format of every token", () => {
     expect([...REPO_SUBSTITUTION_TOKENS].toSorted()).toEqual(
       [
         "${STAMITY:CI_PROVIDER}",
+        // Justified extension (2026-09-30): wire format of the pinned CLI call token.
+        "${STAMITY:CLI}",
         // Justified extension: wire format of the new invariants token.
         "${STAMITY:INVARIANTS_VERSION}",
         "${STAMITY:LINTER}",
@@ -350,12 +371,15 @@ describe("token enumeration drift guard", () => {
     });
 
     for (const token of REPO_SUBSTITUTION_TOKENS) {
-      const resolved = substituteCharterTokens(
-        substituteVerificationGateTokens(
-          substituteRepoTokens(`prefix ${token} suffix`, detection),
-          gates(),
+      const resolved = substituteCliTokens(
+        substituteCharterTokens(
+          substituteVerificationGateTokens(
+            substituteRepoTokens(`prefix ${token} suffix`, detection),
+            gates(),
+          ),
+          INVARIANTS,
         ),
-        INVARIANTS,
+        CLI,
       );
       expect(resolved, token).not.toContain(token);
     }
@@ -392,5 +416,197 @@ describe("token enumeration drift guard", () => {
     );
     expect(others).toContain(INVARIANTS_VERSION_TOKEN);
     expect(others).toContain("eslint");
+  });
+});
+
+/** The pinned-call context the CLI-pass cases render against. */
+const CLI_CONTEXT: CliCallContext = { packageName: "@zomarit/stamity", version: "1.11.0" };
+
+describe("CLI-call token substitution (REQ-FLOW-002)", () => {
+  it("renders the token to the pinned npx call, so a body writes `${STAMITY:CLI} <verb>`", () => {
+    const out = substituteCliTokens(
+      `Run ${CLI_TOKEN} learn capture, then ${CLI_TOKEN} ledger status.`,
+      { packageName: "@zomarit/stamity", version: "1.0.0-golden" },
+    );
+    expect(out).toBe(
+      "Run npx -y @zomarit/stamity@1.0.0-golden learn capture, " +
+        "then npx -y @zomarit/stamity@1.0.0-golden ledger status.",
+    );
+    expect(out).not.toContain("${STAMITY:");
+  });
+
+  it("names a fork's own package when the context carries it", () => {
+    expect(
+      substituteCliTokens(`${CLI_TOKEN} sync`, { packageName: "@acme/stamity", version: "2.0.1" }),
+    ).toBe("npx -y @acme/stamity@2.0.1 sync");
+  });
+
+  it("builds its context from the emission context, defaulting to the canonical package", () => {
+    expect(cliCallContextOf({ engineVersion: "1.11.0" })).toEqual({
+      packageName: "@zomarit/stamity",
+      version: "1.11.0",
+    });
+    expect(cliCallContextOf({ engineVersion: "1.11.0", packageName: "@acme/stamity" })).toEqual({
+      packageName: "@acme/stamity",
+      version: "1.11.0",
+    });
+  });
+
+  it("refuses to render an unpinned call: `latest` or an empty version is a VALIDATION_ERROR", () => {
+    for (const version of ["latest", ""]) {
+      expect(() =>
+        substituteCliTokens(`${CLI_TOKEN} check`, { packageName: "@zomarit/stamity", version }),
+      ).toThrow(expect.objectContaining({ code: "VALIDATION_ERROR" }));
+    }
+  });
+
+  it("validates only when a body carries the token, so an unrelated body never fails on the context", () => {
+    const body = `Lint with ${LINTER_TOKEN}.`;
+    expect(substituteCliTokens(body, { packageName: "", version: "" })).toBe(body);
+  });
+
+  it("leaves every other family standing, and they leave it standing", () => {
+    const document = `${CLI_TOKEN} ${LINTER_TOKEN} ${VERIFY_GATE_TEST_TOKEN} ${INVARIANTS_VERSION_TOKEN}`;
+    const cliOnly = substituteCliTokens(document, CLI_CONTEXT);
+    expect(cliOnly).toBe(
+      `npx -y @zomarit/stamity@1.11.0 ${LINTER_TOKEN} ${VERIFY_GATE_TEST_TOKEN} ${INVARIANTS_VERSION_TOKEN}`,
+    );
+    const others = substituteCharterTokens(
+      substituteVerificationGateTokens(substituteRepoTokens(document, ctx({ linters: ["eslint"] })), gates()),
+      { version: "1.2.3", ratified: "2026-01-02", amended: "2026-03-04" },
+    );
+    expect(others.startsWith(CLI_TOKEN)).toBe(true);
+  });
+
+  it("inserts the value once — a rendered call is never rescanned", () => {
+    const once = substituteCliTokens(`${CLI_TOKEN} check`, CLI_CONTEXT);
+    expect(substituteCliTokens(once, CLI_CONTEXT)).toBe(once);
+  });
+});
+
+// ── The CLI pass at every emission call site ──────────────────────────────
+
+/** Every body in the fixture corpus carries this sentence; the pass must render it everywhere. */
+const CLI_SENTENCE = `Record it with \`${CLI_TOKEN} learn capture\`.`;
+
+const fixtureDoc = (head: readonly string[], title: string): string =>
+  ["---", ...head, "---", "", `# ${title}`, "", CLI_SENTENCE, ""].join("\n");
+
+/**
+ * A corpus with one artifact per class, each carrying the token: the charter
+ * (the `AGENTS.md` render), an agent and a command (every client's agent and
+ * command lanes), an always-on rule (the rule lanes, or the skills projection's
+ * demoted-rule lane under `on-demand`) and a skill (the skills projection).
+ */
+const CLI_CORPUS: Readonly<Record<string, string>> = {
+  "corpus/charter/stamity-charter.md": fixtureDoc(
+    [
+      "id: charter",
+      "type: charter",
+      "description: fixture charter",
+      "tags: [orchestration]",
+      "load: always",
+      "obsolete_when: fixture trigger",
+    ],
+    "Charter",
+  ),
+  "corpus/agents/stamity-reviewer.md": fixtureDoc(
+    [
+      "id: reviewer",
+      "type: agent",
+      'description: "Reviews a change set and returns a verdict."',
+      "tags: [review]",
+      "capabilities: [read]",
+      "model_class: advanced",
+    ],
+    "reviewer",
+  ),
+  "corpus/commands/st-work.md": fixtureDoc(
+    ["id: work", "type: command", 'description: "Execute a change end to end."', "tags: [orchestration]"],
+    "work",
+  ),
+  "corpus/rules/stamity-ask-first.md": fixtureDoc(
+    ["id: ask-first", "type: rule", 'description: "Ask before an irreversible action."', "tags: [implementation]"],
+    "Ask first",
+  ),
+  "corpus/skills/stamity-alpha/SKILL.md": fixtureDoc(
+    ["id: alpha", "type: skill", "description: fixture skill", "tags: [implementation]"],
+    "Alpha",
+  ),
+};
+
+/** Paths whose content carries the rendered call; asserts no row carries the raw token. */
+function renderedPaths(rows: readonly { path: string; content: string }[], call: string): string[] {
+  for (const row of rows) expect(row.content, row.path).not.toContain(CLI_TOKEN);
+  return rows.filter((row) => row.content.includes(call)).map((row) => row.path);
+}
+
+describe("the CLI pass runs at every emission call site (REQ-FLOW-002)", () => {
+  const getTemp = useTempDir("cli-token-emission");
+
+  async function planAll(
+    delivery: RuleDelivery,
+    packageName?: string,
+  ): Promise<{ path: string; content: string }[]> {
+    const temp = getTemp();
+    await temp.seedFiles({ ...CLI_CORPUS });
+    const emission: EmissionContext = {
+      rootDir: temp.path("repo"),
+      manifest: {
+        ...createManifest({
+          tools: [...TOOLS],
+          selection: {
+            items: { agent: ["reviewer"], skill: ["alpha"], rule: ["ask-first"], command: ["work"] },
+          },
+          generatorVersion: GOLDEN_VERSION,
+          now: new Date("2026-08-14T00:00:00.000Z"),
+        }),
+        ruleDelivery: delivery,
+      },
+      engineVersion: GOLDEN_VERSION,
+      ...(packageName === undefined ? {} : { packageName }),
+      facts: { monorepoPackages: [] },
+      contentRoot: temp.path("corpus"),
+    };
+    const rows = await composeEmissionPlanner(ADAPTER_REGISTRY).plan(emission);
+    return rows.map((row) => ({ path: row.path, content: row.content }));
+  }
+
+  const GOLDEN_VERSION = "1.0.0-golden";
+  const CANONICAL_CALL = "npx -y @zomarit/stamity@1.0.0-golden learn capture";
+
+  it("renders the pinned call in the charter, agent, command, rule and skill bodies of all four clients", async () => {
+    const paths = renderedPaths(await planAll("always-on"), CANONICAL_CALL);
+    // Every body-rendering lane, named by the call site that renders it:
+    expect(paths.toSorted()).toEqual(
+      [
+        "AGENTS.md", // src/emit/agentsMd.ts (codex's appendix re-uses this render)
+        ".agents/skills/stamity-alpha/SKILL.md", // src/emit/skillsProjection.ts
+        ".claude/agents/stamity-reviewer.md", // src/adapters/claude.ts — agent lane
+        ".claude/commands/st-work.md", // src/adapters/claude.ts — command lane
+        ".claude/rules/stamity-ask-first.md", // src/adapters/claude.ts — rule lane
+        ".claude/skills/stamity-alpha/SKILL.md", // the projection's native claude copy
+        ".cursor/agents/stamity-reviewer.md", // src/adapters/cursor.ts
+        ".cursor/rules/stamity-ask-first.mdc",
+        ".cursor/skills/st-work/SKILL.md",
+        ".github/agents/stamity-reviewer.agent.md", // src/adapters/copilot.ts
+        ".github/instructions/stamity-ask-first.instructions.md",
+        ".github/prompts/st-work.prompt.md",
+        ".codex/agents/stamity-reviewer.toml", // src/adapters/codex.ts
+      ].toSorted(),
+    );
+  });
+
+  it("renders the demoted rule through the skills projection under on-demand delivery", async () => {
+    const rows = await planAll("on-demand");
+    const paths = renderedPaths(rows, CANONICAL_CALL);
+    expect(paths.some((path) => path.startsWith(".agents/skills/") && path.includes("ask-first"))).toBe(true);
+  });
+
+  it("names a fork's own package when the context carries it", async () => {
+    const rows = await planAll("always-on", "@acme/stamity");
+    const forkPaths = renderedPaths(rows, "npx -y @acme/stamity@1.0.0-golden learn capture");
+    expect(forkPaths).toEqual(renderedPaths(await planAll("always-on"), CANONICAL_CALL));
+    for (const row of rows) expect(row.content, row.path).not.toContain("@zomarit/stamity@");
   });
 });

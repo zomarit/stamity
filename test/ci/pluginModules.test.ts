@@ -26,17 +26,19 @@ import * as copilotContainer from "../../scripts/plugins/clients/copilot.mjs";
 import * as cursorContainer from "../../scripts/plugins/clients/cursor.mjs";
 // @ts-expect-error — as above.
 import * as tokens from "../../scripts/plugins/tokens.mjs";
-import { INVARIANTS_VERSION_TOKEN, REPO_SUBSTITUTION_TOKENS } from "../../src/emit/substitution.ts";
+import { CLI_TOKEN, INVARIANTS_VERSION_TOKEN, REPO_SUBSTITUTION_TOKENS } from "../../src/emit/substitution.ts";
+import { pinnedCliPrefix } from "../../src/shared/cliCall.ts";
 
 /**
  * The four planner-independent halves of the plugin package emitter (REQ-PLUGIN-002, -003, -004).
  *
  * `tokens` and `corpusStage` answer one question together: a plugin body travels to a repository
  * this engine never detected, so an emission-time `${STAMITY:*}` token would reach the agent as a
- * broken template variable. The pair resolves every token this engine wires into a fixed phrase
- * naming the row to read in `AGENTS.md`, and REFUSES anything it cannot resolve rather than
- * shipping the token. The binding below against `REPO_SUBSTITUTION_TOKENS` is what makes a tenth
- * engine token fail here the day it lands instead of leaking into a published root.
+ * broken template variable. The pair resolves every repo-fact and gate token into a fixed phrase
+ * naming the row to read in `AGENTS.md`, the pinned CLI call token into the literal call at the
+ * plugin's own version, and REFUSES anything it cannot resolve rather than shipping the token.
+ * The binding below against `REPO_SUBSTITUTION_TOKENS` is what makes an eleventh engine token
+ * fail here the day it lands instead of leaking into a published root.
  *
  * `capability` is the two-halves shape of `scripts/plugins/releaseManifest.mjs`: a PROJECTOR that
  * lays `stamity-plugin.json` out in one fixed key order, and a JUDGE that names each defect by its
@@ -74,10 +76,21 @@ const stage = stageSubstitutedCorpus as (input: {
   contentRoot: string;
   forkRoot?: string;
   tokens: unknown;
+  cli?: PluginCli;
 }) => Promise<Staged>;
 
 const phrases = tokens.CHARTER_REFERENCE_PHRASES as Record<string, string>;
-const substitute = tokens.substitute as (body: string) => { text: string; unresolved: string[] };
+/** The plugin build's input to the CLI-call token: the package and the version the plugin ships at. */
+interface PluginCli {
+  packageName: string;
+  version: string;
+}
+
+const substitute = tokens.substitute as (
+  body: string,
+  cli?: PluginCli,
+) => { text: string; unresolved: string[] };
+const pluginCliToken = tokens.CLI_TOKEN as string;
 
 const disposals: Staged[] = [];
 const temps: string[] = [];
@@ -87,7 +100,7 @@ afterEach(async () => {
   for (const path of temps.splice(0)) await rm(path, { recursive: true, force: true });
 });
 
-const stageFor = async (input: { contentRoot: string; forkRoot?: string }): Promise<Staged> => {
+const stageFor = async (input: { contentRoot: string; forkRoot?: string; cli?: PluginCli }): Promise<Staged> => {
   const staged = await stage({ ...input, tokens });
   disposals.push(staged);
   return staged;
@@ -138,11 +151,56 @@ const syntheticCorpus = async (write: (root: string) => Promise<void>): Promise<
 
 describe("charter-reference phrases (REQ-PLUGIN-004)", () => {
   it("maps every repo-fact and gate token the emission layer wires, and only those", () => {
-    const wired = REPO_SUBSTITUTION_TOKENS.filter((token) => token !== INVARIANTS_VERSION_TOKEN);
+    // TEST CHANGE, justified (2026-09-30, sw26-cli-token): the engine's tenth token,
+    // `${STAMITY:CLI}`, is not a phrase — it renders to a LITERAL call at the plugin's own
+    // version, so it is accounted for here beside the charter-only token rather than in the
+    // phrase map, and its own cases below pin the literal. The phrase map is unchanged.
+    const literal = [INVARIANTS_VERSION_TOKEN, CLI_TOKEN];
+    const wired = REPO_SUBSTITUTION_TOKENS.filter((token) => !literal.includes(token));
     expect(Object.keys(phrases).toSorted()).toEqual([...wired].toSorted());
     // The charter-only token is absent on purpose: a plugin body is never the charter, so the
     // token has no input here and leaving it unmapped is what makes the staging refuse it.
     expect(Object.hasOwn(phrases, INVARIANTS_VERSION_TOKEN)).toBe(false);
+    expect(Object.hasOwn(phrases, CLI_TOKEN)).toBe(false);
+    // Every engine token is either a phrase or one of the two handled apart, so none is unmapped
+    // by omission.
+    expect([...Object.keys(phrases), ...literal].toSorted()).toEqual([...REPO_SUBSTITUTION_TOKENS].toSorted());
+    expect(pluginCliToken).toBe(CLI_TOKEN);
+  });
+
+  it("renders the CLI-call token to the pinned call at the plugin's own version", () => {
+    const cli = { packageName: "@zomarit/stamity", version: "1.11.0" };
+    const result = substitute(`Run \`${CLI_TOKEN} learn capture\` and ${CLI_TOKEN} check.\n`, cli);
+    expect(result).toEqual({
+      text: "Run `npx -y @zomarit/stamity@1.11.0 learn capture` and npx -y @zomarit/stamity@1.11.0 check.\n",
+      unresolved: [],
+    });
+    // The same literal the engine renders into a repository for the same package and version.
+    expect(result.text).toContain(`${pinnedCliPrefix(cli.packageName, cli.version)} learn capture`);
+    // A fork's plugin build names the fork's package.
+    expect(substitute(`${CLI_TOKEN} sync`, { packageName: "@acme/stamity", version: "2.0.0-rc.1" }).text).toBe(
+      "npx -y @acme/stamity@2.0.0-rc.1 sync",
+    );
+  });
+
+  it("reports the CLI-call token as unresolved when the build passed no version", () => {
+    const linter = "${STAMITY:LINTER}";
+    const result = substitute(`Run ${CLI_TOKEN} check and ${linter}.`);
+    expect(result.unresolved).toEqual([CLI_TOKEN]);
+    expect(result.text).toContain(CLI_TOKEN);
+    expect(result.text).toContain("the linter named under Repo facts in AGENTS.md");
+  });
+
+  it("refuses a CLI context that would render an unpinned or unrunnable call", () => {
+    for (const cli of [
+      { packageName: "@zomarit/stamity", version: "latest" },
+      { packageName: "@zomarit/stamity", version: "1.9.0+1" },
+      { packageName: "@zomarit/stamity", version: "" },
+      { packageName: "", version: "1.11.0" },
+      { packageName: "-y", version: "1.11.0" },
+    ]) {
+      expect(() => substitute(`${CLI_TOKEN} check`, cli), JSON.stringify(cli)).toThrow(/pinned CLI call/);
+    }
   });
 
   it("names the row of AGENTS.md an agent must read, one phrase per token", () => {
@@ -297,6 +355,28 @@ describe("staging refusals and companions (REQ-PLUGIN-003, REQ-PLUGIN-004)", () 
     expect(await readFile(join(staged.root, "skills/st-demo/references/note.md"), "utf8")).toBe(
       "Gate: the Tests command listed under Verification gates in AGENTS.md\n",
     );
+  });
+
+  it("renders the CLI-call token at the version the build passes, and refuses it when none is passed", async () => {
+    const contentRoot = await syntheticCorpus(async (root) => {
+      await writeFile(join(root, "agents", "recorder.md"), `Record with \`${CLI_TOKEN} learn capture\`.\n`);
+    });
+    const staged = await stageFor({ contentRoot, cli: { packageName: "@zomarit/stamity", version: "1.11.0" } });
+    expect(await readFile(join(staged.root, "agents/recorder.md"), "utf8")).toBe(
+      "Record with `npx -y @zomarit/stamity@1.11.0 learn capture`.\n",
+    );
+
+    await expect(stage({ contentRoot, tokens })).rejects.toThrow(/agents\/recorder\.md/);
+    await expect(stage({ contentRoot, tokens })).rejects.toThrow(/\$\{STAMITY:CLI\}/);
+  });
+
+  it("refuses an unpinnable CLI version before it stages anything", async () => {
+    const contentRoot = await syntheticCorpus(async () => {});
+    const before = await stagingTrees();
+    await expect(
+      stage({ contentRoot, tokens, cli: { packageName: "@zomarit/stamity", version: "latest" } }),
+    ).rejects.toThrow(/pinned CLI call/);
+    expect((await stagingTrees()).filter((name) => !before.includes(name))).toEqual([]);
   });
 
   it("stages the fork layer when it holds files and reports no fork root when it is absent", async () => {

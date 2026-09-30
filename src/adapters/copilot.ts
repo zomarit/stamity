@@ -28,7 +28,9 @@ import type {
   ResiduePlanner,
 } from "../emit/planner.ts";
 import {
+  cliCallContextOf,
   detectionContextFromManifest,
+  substituteCliTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
 } from "../emit/substitution.ts";
@@ -618,7 +620,7 @@ function mcpRow(emission: McpEmission): AdapterOutput {
 
 /**
  * The body transform every emitted artifact goes through: repo detection facts,
- * verification-gate commands, then the platform ask-user marker resolved for
+ * verification-gate commands, the pinned CLI call, then the platform ask-user marker resolved for
  * THIS client (the one substitution a once-emitted core file cannot make).
  *
  * The gate pass is not optional. Agent and command bodies carry
@@ -634,9 +636,13 @@ function mcpRow(emission: McpEmission): AdapterOutput {
 function bodyRenderer(ctx: EmissionContext): (raw: string) => string {
   const detection = detectionContextFromManifest(ctx.manifest);
   const gates = verificationGatesFromManifest(ctx.manifest);
+  const cli = cliCallContextOf(ctx);
   return (raw) =>
     substituteCanonicalPlatformMarker(
-      substituteVerificationGateTokens(substituteRepoTokens(raw, detection), gates),
+      substituteCliTokens(
+        substituteVerificationGateTokens(substituteRepoTokens(raw, detection), gates),
+        cli,
+      ),
       TOOL,
     );
 }

@@ -10,6 +10,7 @@ import {
   DETECTION_UNKNOWN,
   REPO_SUBSTITUTION_TOKENS,
   substituteCharterTokens,
+  substituteCliTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
   type CharterInvariants,
@@ -608,8 +609,11 @@ const INVARIANTS: CharterInvariants = {
   amended: "2026-04-05",
 };
 
+/** Fixed emission context for the pinned-CLI pass; the golden engine version, never `latest`. */
+const CLI = { packageName: "@zomarit/stamity", version: "1.0.0-golden" } as const;
+
 /**
- * All three substitution passes composed; the module contract makes the order
+ * All four substitution passes composed; the module contract makes the order
  * immaterial.
  *
  * TEST CHANGE, justified (2026-09-15): the charter gained a third token family
@@ -618,11 +622,19 @@ const INVARIANTS: CharterInvariants = {
  * and now cover one more token: a two-pass render of the current charter would
  * leave it standing, which is the failure this composition fixes rather than
  * the one it hides.
+ *
+ * TEST CHANGE, justified (2026-09-30, sw26-cli-token): a fourth family,
+ * `${STAMITY:CLI}` — the pinned CLI call, resolved from the emission context —
+ * now appears in the charter's maturity line, so the composition runs four
+ * passes. The residue assertions are unchanged and cover one more token.
  */
 function resolveBody(body: string, ctx: DetectedRepoContext): string {
-  return substituteVerificationGateTokens(
-    substituteRepoTokens(substituteCharterTokens(body, INVARIANTS), ctx),
-    GATES,
+  return substituteCliTokens(
+    substituteVerificationGateTokens(
+      substituteRepoTokens(substituteCharterTokens(body, INVARIANTS), ctx),
+      GATES,
+    ),
+    CLI,
   );
 }
 

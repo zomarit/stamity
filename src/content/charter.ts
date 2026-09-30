@@ -275,7 +275,14 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // invariants version line at 1.1.0. +55 bytes of charter, rewrapped inside the
 // three lines the invariant already had, so no line count moved; the same +55
 // lands in the charter-alone figure below. Ratio ≈4.81x.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 25_245;
+// 25_245 -> 25_274 on 2026-09-30, sw26-cli-token: the charter's maturity line
+// says "change via `${STAMITY:CLI} config`" where it said `stamity config`, and
+// the golden renders the token at its pinned engine version
+// (`npx -y @zomarit/stamity@1.0.0-golden config`), +29 bytes on one line that
+// did not wrap, so no line count moved. The same +29 lands in the charter-alone
+// figure below. A real release pins a shorter version (`1.11.0`: +23 bytes).
+// Ratio ≈4.79x.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 25_274;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
@@ -295,7 +302,9 @@ export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 25_245;
 // reaching. Re-measured off the refreshed golden, unchanged.
 // 5_192 -> 5_247 on 2026-09-27, plan 010 D5: invariant 2's amendment and the
 // 1.1.0 version line, the same +55 as above and the whole of the change here.
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_247;
+// 5_247 -> 5_276 on 2026-09-30, sw26-cli-token: the maturity line's pinned CLI
+// call, the same +29 as above and the whole of the change here.
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_276;
 
 /**
  * The composite always-on line count one client pays for a plan under a

@@ -27,7 +27,9 @@ import {
 import { withoutPluginOwnedRows } from "../emit/ownership.ts";
 import { SKILLS_PROJECTION_DIR } from "../emit/skillsProjection.ts";
 import {
+  cliCallContextOf,
   detectionContextFromManifest,
+  substituteCliTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
 } from "../emit/substitution.ts";
@@ -606,16 +608,20 @@ async function selectedItems(
 }
 
 /**
- * Emission-time body rendering: repo tokens, verification-gate commands, and
- * the platform ask-user marker resolved to THIS client's note — unlike the
+ * Emission-time body rendering: repo tokens, verification-gate commands, the
+ * pinned CLI call, and the platform ask-user marker resolved to THIS client's note — unlike the
  * once-emitted skills projection, a `.codex/` file has exactly one audience.
  */
 function bodyRenderer(ctx: EmissionContext): (raw: string) => string {
   const detection = detectionContextFromManifest(ctx.manifest);
   const gates = verificationGatesFromManifest(ctx.manifest);
+  const cli = cliCallContextOf(ctx);
   return (raw) =>
     substituteCanonicalPlatformMarker(
-      substituteVerificationGateTokens(substituteRepoTokens(raw, detection), gates),
+      substituteCliTokens(
+        substituteVerificationGateTokens(substituteRepoTokens(raw, detection), gates),
+        cli,
+      ),
       TOOL,
     );
 }

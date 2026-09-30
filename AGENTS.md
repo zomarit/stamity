@@ -12,7 +12,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint, oxlint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: solo — seeded from git history at init; change via `stamity config`.
+- Maturity tier: solo — seeded from git history at init; change via `npx -y @zomarit/stamity@1.10.0 config`.
 
 ### Verification gates
 

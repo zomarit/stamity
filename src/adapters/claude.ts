@@ -113,7 +113,9 @@ import { HOOKS_GENERATED_DIR } from "../emit/hooksInfra.ts";
 import { isPluginOwned, withoutPluginOwnedRows } from "../emit/ownership.ts";
 import { NATIVE_SKILL_DIRS, nativeSkillRows } from "../emit/skillsProjection.ts";
 import {
+  cliCallContextOf,
   detectionContextFromManifest,
+  substituteCliTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
 } from "../emit/substitution.ts";
@@ -1112,8 +1114,8 @@ function argvTail(row: HookInterchange): string {
 
 /**
  * The body transforms, split per contract. Rule bodies resolve repo detection
- * facts and the platform ask-user marker. Agent AND command bodies
- * additionally resolve the verification-gate tokens — both carry
+ * facts, the pinned CLI call and the platform ask-user marker. Agent AND
+ * command bodies additionally resolve the verification-gate tokens — both carry
  * `${STAMITY:VERIFY_GATE_*}` commands, and emitting one raw would hand the
  * model a broken template variable where a runnable command belongs. The two
  * share one function rather than each getting a near-copy: they need the same
@@ -1126,13 +1128,21 @@ function bodyRenderers(ctx: EmissionContext): {
 } {
   const detection = detectionContextFromManifest(ctx.manifest);
   const gates = verificationGatesFromManifest(ctx.manifest);
+  const cli = cliCallContextOf(ctx);
   const withGates = (raw: string): string =>
     substituteCanonicalPlatformMarker(
-      substituteVerificationGateTokens(substituteRepoTokens(raw, detection), gates),
+      substituteCliTokens(
+        substituteVerificationGateTokens(substituteRepoTokens(raw, detection), gates),
+        cli,
+      ),
       TOOL,
     );
   return {
-    rule: (raw) => substituteCanonicalPlatformMarker(substituteRepoTokens(raw, detection), TOOL),
+    rule: (raw) =>
+      substituteCanonicalPlatformMarker(
+        substituteCliTokens(substituteRepoTokens(raw, detection), cli),
+        TOOL,
+      ),
     agent: withGates,
     command: withGates,
   };

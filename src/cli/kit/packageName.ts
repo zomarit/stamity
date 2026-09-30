@@ -34,8 +34,12 @@ const OWN_DIR = dirname(fileURLToPath(import.meta.url));
  * has to name something runnable, and the only name we can assert without a
  * manifest is the one this source tree ships under; a fork that renamed its
  * manifest is, by definition, not in the failed-self-read case.
+ *
+ * Exported for one reader, a test: the wave-1 kernel `src/shared/cliCall.ts`
+ * keeps a literal twin (`DEFAULT_CLI_PACKAGE_NAME`) it cannot import from here,
+ * and `test/shared/cliCall.test.ts` holds the two equal.
  */
-const CANONICAL_PACKAGE_NAME = "@zomarit/stamity";
+export const CANONICAL_PACKAGE_NAME = "@zomarit/stamity";
 
 /** Fallback facts: unnamed and private, so the update notice stays silent. */
 const UNKNOWN_PACKAGE_FACTS = { name: "", version: "", isPrivate: true } as const;

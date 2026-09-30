@@ -19,6 +19,7 @@ import {
   DETECTION_UNKNOWN,
   REPO_SUBSTITUTION_TOKENS,
   substituteCharterTokens,
+  substituteCliTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
   type CharterInvariants,
@@ -185,7 +186,13 @@ describe("corpus charter", () => {
     expect(body.split("${STAMITY:").length - 1).toBe(tokens.length);
   });
 
-  it("exercises all nine wired tokens, and full substitution leaves none behind", async () => {
+  it("exercises all ten wired tokens, and full substitution leaves none behind", async () => {
+    // TEST CHANGE, justified (2026-09-30, sw26-cli-token): the charter gained a tenth token,
+    // `${STAMITY:CLI}`, on its maturity line — "change via `stamity config`" was the one bare
+    // call every user's AGENTS.md carried, and a bare `stamity` runs only where a global install
+    // put it. The token resolves from the emission context (package and engine version), so the
+    // render below composes a fourth pass as emission does. The claim is unchanged: every wired
+    // token appears in this body, and a full render leaves none behind.
     // TEST CHANGE, justified (2026-09-15): the charter gained a ninth token,
     // `${STAMITY:INVARIANTS_VERSION}`, and it resolves from the charter's OWN
     // frontmatter rather than from detection or gates — so the render below
@@ -200,15 +207,23 @@ describe("corpus charter", () => {
       expect(body).toContain(token);
     }
 
-    const rendered = substituteVerificationGateTokens(
-      substituteRepoTokens(substituteCharterTokens(body, invariants), {
-        linters: ["eslint"],
-        testFrameworks: ["vitest"],
-        ciProviders: ["gha"],
-      }),
-      { test: "npm test", lint: "npm run lint", typecheck: "npm run typecheck", all: "npm run check" },
+    const rendered = substituteCliTokens(
+      substituteVerificationGateTokens(
+        substituteRepoTokens(substituteCharterTokens(body, invariants), {
+          linters: ["eslint"],
+          testFrameworks: ["vitest"],
+          ciProviders: ["gha"],
+        }),
+        { test: "npm test", lint: "npm run lint", typecheck: "npm run typecheck", all: "npm run check" },
+      ),
+      { packageName: "@zomarit/stamity", version: "1.11.0" },
     );
     expect(rendered).not.toContain("${STAMITY:");
+    // The maturity line names the pinned call, never a bare `stamity`.
+    expect(rendered).toContain(
+      "- Maturity tier: solo — seeded from git history at init; change via `npx -y @zomarit/stamity@1.11.0 config`.",
+    );
+    expect(rendered).not.toMatch(/(?<![\w@/.-])stamity config/);
     expect(rendered).toContain("`npm test`");
     expect(rendered).toContain("Linter: eslint");
     // The version line renders as one line under the heading it versions.

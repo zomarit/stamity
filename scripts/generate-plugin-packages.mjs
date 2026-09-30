@@ -452,6 +452,8 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
         contentRoot: join(ROOT, 'content'),
         forkRoot: join(ROOT, 'fork'),
         tokens,
+        // `${STAMITY:CLI}` pins a body's CLI call to this build's own package and release.
+        cli: { packageName, version: releaseVersion },
       })
     } catch (err) {
       fail(err instanceof Error ? err.message : String(err))

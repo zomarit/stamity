@@ -179,8 +179,15 @@ export interface EmissionContext {
   rootDir: string;
   /** The manifest driving selection — tools, content selection, dials. */
   manifest: SetupManifest;
-  /** Engine version, for generator stamps inside emitted content. */
+  /** Engine version, for generator stamps inside emitted content and the pinned CLI call. */
   engineVersion: string;
+  /**
+   * The npm package the pinned CLI call names (`${STAMITY:CLI}` renders
+   * `npx -y <packageName>@<engineVersion>`). Absent means the canonical
+   * `@zomarit/stamity` (`DEFAULT_CLI_PACKAGE_NAME`); a fork that renamed its
+   * package passes its own name so the rendered call runs the fork.
+   */
+  packageName?: string;
   /** Live per-run detection decisions (see {@link EmissionFacts}). */
   facts: EmissionFacts;
   /**

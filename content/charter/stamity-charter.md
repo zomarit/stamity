@@ -23,7 +23,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: ${STAMITY:LINTER}
 - Test framework: ${STAMITY:TEST_FRAMEWORK}
 - CI provider: ${STAMITY:CI_PROVIDER}
-- Maturity tier: ${STAMITY:MATURITY_TIER} — seeded from git history at init; change via `stamity config`.
+- Maturity tier: ${STAMITY:MATURITY_TIER} — seeded from git history at init; change via `${STAMITY:CLI} config`.
 
 ### Verification gates
 

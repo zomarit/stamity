@@ -25,7 +25,9 @@ import type {
   ResiduePlanner,
 } from "../emit/planner.ts";
 import {
+  cliCallContextOf,
   detectionContextFromManifest,
+  substituteCliTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
 } from "../emit/substitution.ts";
@@ -373,7 +375,7 @@ export const cursorDialectFacts: AdapterDialectFacts = {
  * the core surface is tool-neutral by construction.
  *
  * Bodies get the same substitution pass the core applies to skills — repo
- * detection facts, verification-gate commands, then the platform ask-user
+ * detection facts, verification-gate commands, the pinned CLI call, then the platform ask-user
  * marker resolved for THIS client rather than to the neutral table. The
  * per-client resolution is the reason agent and rule bodies are emitted here
  * instead of once in the core.
@@ -388,9 +390,13 @@ export const cursorResiduePlanner: ResiduePlanner = {
     const allowlist = buildSelectionAllowlist(ctx.manifest.selection);
     const detection = detectionContextFromManifest(ctx.manifest);
     const gates = verificationGatesFromManifest(ctx.manifest);
+    const cli = cliCallContextOf(ctx);
     const render = (raw: string): string =>
       substituteCanonicalPlatformMarker(
-        substituteVerificationGateTokens(substituteRepoTokens(raw, detection), gates),
+        substituteCliTokens(
+          substituteVerificationGateTokens(substituteRepoTokens(raw, detection), gates),
+          cli,
+        ),
         "cursor",
       );
 

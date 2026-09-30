@@ -6,8 +6,10 @@ import type { SetupManifest } from "../types/manifest.ts";
 import type { Tool } from "../types/core.ts";
 import { planPerPackageOutputs } from "./monorepoPlan.ts";
 import {
+  cliCallContextOf,
   detectionContextFromManifest,
   substituteCharterTokens,
+  substituteCliTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
   type VerificationGateSet,
@@ -46,6 +48,15 @@ import {
 export const AGENTS_MD_FILE = "AGENTS.md";
 
 /**
+ * The version a charter render pins when its caller named none. Only a harness
+ * calling {@link renderAgentsMd} directly reaches it — the emission planner
+ * always passes the engine version. A pin at `0.0.0` names no published
+ * release, so a call copied out of such a render fails at `npx` instead of
+ * running whatever version `latest` would serve.
+ */
+const UNSTAMPED_ENGINE_VERSION = "0.0.0";
+
+/**
  * The slice of the CLI's emission context this renderer reads. Structurally
  * compatible with that context on purpose — the emission planner passes its
  * context through unchanged — but declared here as its own type because the
@@ -55,6 +66,14 @@ export const AGENTS_MD_FILE = "AGENTS.md";
 export interface AgentsMdEmissionContext {
   /** The manifest driving substitution — detection summary plus the maturity dial. */
   manifest: SetupManifest;
+  /**
+   * The engine version the pinned CLI call names (`${STAMITY:CLI}`). The
+   * planner always passes it; absent — a harness calling this renderer
+   * directly — the call pins {@link UNSTAMPED_ENGINE_VERSION}, never `latest`.
+   */
+  engineVersion?: string;
+  /** The package the pinned CLI call names; absent means the canonical one. */
+  packageName?: string;
   /** Live per-run detection decisions; only the monorepo layout is read here. */
   facts: {
     /** Workspace packages feeding the nested-copy plan; empty for single-package repos. */
@@ -105,11 +124,12 @@ export interface AgentsMdPlan {
  * Render the root `AGENTS.md` (and expose its nested monorepo targets) from
  * the charter template plus the manifest.
  *
- * Substitution runs all three token passes — the charter's own invariants
- * version, repo facts (detection lists plus the maturity dial), and
- * verification gates — so the emitted file carries a real version line, real
- * commands and real detections, never a template variable. The output ends
- * with exactly one trailing newline; beyond that normalisation the body is
+ * Substitution runs all four token passes — the charter's own invariants
+ * version, repo facts (detection lists plus the maturity dial), verification
+ * gates, and the pinned CLI call — so the emitted file carries a real version
+ * line, real commands, real detections and a runnable CLI call, never a
+ * template variable. The output ends with exactly one trailing newline;
+ * beyond that normalisation the body is
  * the substituted template body byte-for-byte, in whatever line-ending form
  * the template's parser returned it.
  *
@@ -120,7 +140,7 @@ export interface AgentsMdPlan {
 export async function renderAgentsMd(ctx: AgentsMdEmissionContext): Promise<AgentsMdPlan> {
   const template = await readCharterTemplate(ctx.contentRoot);
 
-  // Three passes, and the charter one runs HERE and nowhere else: the
+  // Four passes, and the charter one runs HERE and nowhere else: the
   // invariants version is declared by this template's own frontmatter, so no
   // other artifact has a value to resolve it from. A rule or skill body that
   // ever carried the token would keep it standing, visibly, rather than
@@ -130,9 +150,15 @@ export async function renderAgentsMd(ctx: AgentsMdEmissionContext): Promise<Agen
     template.invariants === null
       ? template.body
       : substituteCharterTokens(template.body, template.invariants);
-  const substituted = substituteVerificationGateTokens(
-    substituteRepoTokens(versioned, detectionContextFromManifest(ctx.manifest)),
-    verificationGatesFromManifest(ctx.manifest),
+  const substituted = substituteCliTokens(
+    substituteVerificationGateTokens(
+      substituteRepoTokens(versioned, detectionContextFromManifest(ctx.manifest)),
+      verificationGatesFromManifest(ctx.manifest),
+    ),
+    cliCallContextOf({
+      engineVersion: ctx.engineVersion ?? UNSTAMPED_ENGINE_VERSION,
+      ...(ctx.packageName === undefined ? {} : { packageName: ctx.packageName }),
+    }),
   );
   const content = withSingleTrailingNewline(substituted);
 

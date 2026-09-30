@@ -118,8 +118,15 @@ export interface EmissionContext {
   rootDir: string;
   /** The manifest driving selection — tools, content selection, dials. */
   manifest: SetupManifest;
-  /** Engine version, for generator stamps inside emitted content. */
+  /** Engine version, for generator stamps inside emitted content and the pinned CLI call. */
   engineVersion: string;
+  /**
+   * The npm package the pinned CLI call names (`${STAMITY:CLI}` renders
+   * `npx -y <packageName>@<engineVersion>`). Absent means the canonical
+   * `@zomarit/stamity` (`DEFAULT_CLI_PACKAGE_NAME`); a fork that renamed its
+   * package passes its own name so the rendered call runs the fork.
+   */
+  packageName?: string;
   /** Live per-run detection decisions. */
   facts: {
     /** Live monorepo package layout; empty for single-package repos. */
@@ -366,6 +373,8 @@ export async function buildCoreEmissionPlan(
   const [agentsMd, skillsPass, hooks, resolvedPacks] = await Promise.all([
     renderAgentsMd({
       manifest: ctx.manifest,
+      engineVersion: ctx.engineVersion,
+      ...(ctx.packageName === undefined ? {} : { packageName: ctx.packageName }),
       facts: { monorepoPackages: ctx.facts.monorepoPackages },
       ...contentRoot,
     }),
@@ -381,7 +390,11 @@ export async function buildCoreEmissionPlan(
       return {
         delivery,
         rows: await projectSkills(
-          { manifest: ctx.manifest, engineVersion: ctx.engineVersion },
+          {
+            manifest: ctx.manifest,
+            engineVersion: ctx.engineVersion,
+            ...(ctx.packageName === undefined ? {} : { packageName: ctx.packageName }),
+          },
           {
             contentRoot: skillsRoots,
             ruleItems: delivery.ruleItems,

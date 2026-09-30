@@ -663,7 +663,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`stamity config\`.
+- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
 
 ### Verification gates
 
@@ -1043,7 +1043,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`stamity config\`.
+- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
 
 ### Verification gates
 
@@ -1128,7 +1128,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`stamity config\`.
+- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
 
 ### Verification gates
 
@@ -1401,17 +1401,17 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "1290544829e1a452803d3e097cbae71f974962cfa749a7f398f274226fd726e8 71175 bytes",
+  ".stamity/manifest.json": "9a335cf7acdea2ec11f00cdcf74c496b6efdda67888089171aea3377587e8a28 71175 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "8ff1909d88fe0cc1f01e4aabc1fd49fa004f15cb59a23f6521e2a9e24885a0c8 25245 bytes",
+  "AGENTS.md": "1c0e297d53ec99f329de0d7dd5a8ac47e67c731a307ec89d1bd00040f7eb99a4 25274 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "c0f6c4417df86d9b69ee9e000faf2df95e3d6a30c8a8006476a268116a4294e3 5247 bytes",
+  "packages/alpha/AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "c0f6c4417df86d9b69ee9e000faf2df95e3d6a30c8a8006476a268116a4294e3 5247 bytes",
+  "packages/beta/AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -1540,7 +1540,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`stamity config\`.
+- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
 
 ### Verification gates
 
@@ -1691,8 +1691,8 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "ad9b354030089fa5b8bdf489b3bb314948a02b79ae9c357e1473efd522fe2a9d 18404 bytes",
-  "AGENTS.md": "c0f6c4417df86d9b69ee9e000faf2df95e3d6a30c8a8006476a268116a4294e3 5247 bytes",
+  ".stamity/manifest.json": "7965568189cc07b09f39a63c13da66652d9ba0802f09f6585780cd86423cb2ff 18404 bytes",
+  "AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
@@ -1815,7 +1815,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`stamity config\`.
+- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
 
 ### Verification gates
 
@@ -2191,7 +2191,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`stamity config\`.
+- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
 
 ### Verification gates
 
@@ -2276,7 +2276,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`stamity config\`.
+- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
 
 ### Verification gates
 
@@ -2411,14 +2411,14 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "ddc4f94d602dac3ac4a8ddefd5171e6543bcfbda81cafcfa68643e3fc2e236a1 15677 bytes",
-  "AGENTS.md": "8ff1909d88fe0cc1f01e4aabc1fd49fa004f15cb59a23f6521e2a9e24885a0c8 25245 bytes",
+  ".stamity/manifest.json": "a1a34b23d5374dd982d84ce1739162f1bfee68f718ab964a57229b9a6d371ef6 15677 bytes",
+  "AGENTS.md": "1c0e297d53ec99f329de0d7dd5a8ac47e67c731a307ec89d1bd00040f7eb99a4 25274 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "c0f6c4417df86d9b69ee9e000faf2df95e3d6a30c8a8006476a268116a4294e3 5247 bytes",
+  "packages/alpha/AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "c0f6c4417df86d9b69ee9e000faf2df95e3d6a30c8a8006476a268116a4294e3 5247 bytes",
+  "packages/beta/AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -2546,7 +2546,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`stamity config\`.
+- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
 
 ### Verification gates
 
@@ -2693,10 +2693,10 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "78946a5e26e79089f0983e0061bf95fd9d6239e37a676de55d732e0b04af84be 19055 bytes",
+  ".stamity/manifest.json": "735317bd2305dbe958c315fa484c95f5fc14a3f8770f43c11700230df30f6f76 19055 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "c0f6c4417df86d9b69ee9e000faf2df95e3d6a30c8a8006476a268116a4294e3 5247 bytes",
+  "AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
@@ -3076,7 +3076,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: team — seeded from git history at init; change via \`stamity config\`.
+- Maturity tier: team — seeded from git history at init; change via \`npx -y @zomarit/stamity@1.0.0-golden config\`.
 
 ### Verification gates
 
@@ -3225,8 +3225,8 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "f3432c3c99f92e21218f0c4eb567ac9546243b97619daf2bdc7222107ffed8ac 18677 bytes",
-  "AGENTS.md": "c0f6c4417df86d9b69ee9e000faf2df95e3d6a30c8a8006476a268116a4294e3 5247 bytes",
+  ".stamity/manifest.json": "25c732fbfbb9e99ed25c85c84cde8400148e01c66136e67a88d0309afdcbcb61 18677 bytes",
+  "AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
