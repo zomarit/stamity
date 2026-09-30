@@ -173,7 +173,13 @@ The CLI calls your setup writes follow the same split. `init`, `sync` and the pl
 every call they write into `AGENTS.md`, the generated bodies, the hook hints, the guard messages
 and `.codex/hooks.json` to your package at the version that wrote it, and the CLI's own remedies
 do the same. With `--registry` the call is `npx -y @<scope>/stamity@<version> <verb>`, and npx
-fetches that version from your registry when the project has none. Without it the call is
+fetches that version from your registry when the project has none, but only on a machine that
+maps your scope to that registry in its `.npmrc`, as **Consume the release** below shows. npx
+finds a scope's registry in npm's configuration; `publishConfig` in your manifest steers
+`npm publish` only. On a developer machine or CI runner without the mapping, the same call asks
+the public npm registry for your package name. Hold your scope on the public registry too, and
+publish nothing there, so a missing mapping ends with a 404 instead of fetching a package
+someone else published under your name. Without `--registry` the call is
 `npx --no @<scope>/stamity@<version> <verb>`. Your scope is a public, predictable name that
 nobody holds on the public npm registry, and a `-y` call would install whatever a third party
 published there under it, without asking. `--no` makes npm run a copy the project already has

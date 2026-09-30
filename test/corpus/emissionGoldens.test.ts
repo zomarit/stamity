@@ -93,6 +93,23 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  * Reviewed refreshes, newest first — each committed after reading the diff as
  * a file review, so a later reader can attribute every moved line:
  *
+ *   - 2026-09-30, plan 013 whole-branch review, fixer round 1 (run
+ *     2026-09-30_optimization-sweep, pass `branch`; review/162 signed off,
+ *     review/164). TWO goldens moved:
+ *
+ *     SUBSTITUTION moved on the charter by +8 bytes at an unchanged line
+ *     count (5687 -> 5695 in the corpus source, the same in the golden: no
+ *     token sits in the moved text). The Touchpoints paragraph's three lines
+ *     rewrap: a client that reads `.agents/skills/` gets the nine as skills,
+ *     started as any skill (`/st-<id>` or `$st-<id>`), where it gave only
+ *     `$st-<id>`.
+ *
+ *     SUBSTITUTION moved on commands/st-work.md by +5 bytes at an unchanged
+ *     line count: the "Resume after a compaction" bullet says the hook prints
+ *     the resume card after a compaction or on a resume; its four lines rewrap.
+ *
+ *     NOTHING else moved here; the sibling suite itemises the emitted copies.
+ *
  *   - 2026-09-30, plan 013 file 3, fixer round 1 of unit
  *     sw17-touchpoints-as-shared-skills (run 2026-09-30_optimization-sweep;
  *     review/157). ONE golden moved:

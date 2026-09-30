@@ -6983,9 +6983,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 
 ## Touchpoints
 
-Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command
-surface receives all nine as workflow files, invoked by name; one that reads \`.agents/skills/\` instead receives them
-there as skills, started as \`$st-<id>\`; with neither, ask for the outcome in plain words and run the gates yourself.
+Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command surface
+receives all nine as workflow files, invoked by name; one that reads \`.agents/skills/\` gets them as skills, started
+as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome in plain words and run the gates yourself.
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`; greenfield and brownfield auto-detected.
 - \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
@@ -7192,10 +7192,10 @@ Every spawn runs under these contracts:
   or fixer's account; the role reads the change itself, or with no git grant
   the orchestrator's \`reports/<pass>-diff-r<N>.patch\`.
 - **Resume after a compaction.** Where the client re-runs its session-start
-  hook after a compaction, the hook prints the resume card; elsewhere, run
-  \`stamity ledger status\` by hand after one. Read the open rows and the listed
-  reports before dispatching anything, and re-read this command's own file
-  for the sections past the part the client re-attached.
+  hook after a compaction or on a resume, the hook prints the resume card;
+  elsewhere, run \`stamity ledger status\` by hand. Read the open rows and
+  the listed reports before dispatching anything, and re-read this
+  command's own file for the sections past the part the client re-attached.
 
 ## Return contract
 

@@ -421,8 +421,13 @@ describe("corpus charter", () => {
     // route for a client that reads neither.
     expect(touchpoints).not.toMatch(/receives no command file at all/i);
     expect(touchpoints).not.toMatch(/this index is all that ships/i);
-    expect(touchpoints).toMatch(/reads `\.agents\/skills\/` instead receives them\s+there as skills/i);
-    expect(touchpoints).toContain("started as `$st-<id>`");
+    // TEST CHANGE, justified (branch review round 1, review/162, signed off): two clients read
+    // `.agents/skills/` and they spell a skill differently (`/st-<id>` and `$st-<id>`), so
+    // "started as `$st-<id>`" handed one of them the other's spelling. The paragraph now
+    // names both spellings, still no client, and the pins follow it.
+    expect(touchpoints).toMatch(/reads `\.agents\/skills\/` gets them as skills, started\s+as any skill/i);
+    expect(touchpoints).toContain("(`/st-<id>` or `$st-<id>`)");
+    expect(touchpoints).not.toContain("started as `$st-<id>`");
     expect(touchpoints).toMatch(/with neither, ask for the outcome in plain words/i);
     // The surface that DOES deliver them still says so, so the qualification
     // reads as a difference rather than as a blanket disclaimer.

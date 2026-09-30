@@ -54,9 +54,9 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 
 ## Touchpoints
 
-Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command
-surface receives all nine as workflow files, invoked by name; one that reads `.agents/skills/` instead receives them
-there as skills, started as `$st-<id>`; with neither, ask for the outcome in plain words and run the gates yourself.
+Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command surface
+receives all nine as workflow files, invoked by name; one that reads `.agents/skills/` gets them as skills, started
+as any skill (`/st-<id>` or `$st-<id>`); with neither, ask for the outcome in plain words and run the gates yourself.
 
 - `/st-spec` — create or maintain the project spec under `docs/specs/`; greenfield and brownfield auto-detected.
 - `/st-plan` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.

@@ -178,12 +178,12 @@ Amended 2026-09-30 (`docs/plans/013-optimization-sweep-03.md` § Spec delta D, u
 `sw18-codex-rules-leave-shared-charter`, with the charter edit of `sw17-touchpoints-as-shared-skills`; cited at
 `a9e94f06`). The shared root `AGENTS.md` is the same file with and without Codex (REQ-PROVE-003, amended
 2026-09-30), so the two shared-byte constants hold one figure: `ALWAYS_ON_SHARED_BYTES_WITH_CODEX` and
-`ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX` both read 5,296 bytes on the cross-client golden (`src/content/charter.ts:307`,
-`:331`). The appendix's bytes are Codex's own, counted in Codex's row as a third constant,
-`ALWAYS_ON_CODEX_OVERRIDE_BYTES`, which reads 25,326 (`:333-352`). It began at 25,306, the old with-Codex figure byte
-for byte, and took the same +20 bytes as the shared pair when the charter's touchpoint paragraph was reworded
-(`review/157`; the dated comments at `:301-306`, `:329-330` and `:350-351`). The line ceilings hold, cursor 95 ·
-claude 95 · copilot 95 · codex 407 (`:157-216`), and `composeAlwaysOnLoad` is at `:391-404`. The corpus suite requires one root `AGENTS.md` figure in the golden, equal to
+`ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX` both read 5,304 bytes on the cross-client golden (`src/content/charter.ts:313`,
+`:339`). The appendix's bytes are Codex's own, counted in Codex's row as a third constant,
+`ALWAYS_ON_CODEX_OVERRIDE_BYTES`, which reads 25,334 (`:341-362`). It began at 25,306, the old with-Codex figure byte
+for byte, and took the same +20 and then +8 bytes as the shared pair when the charter's touchpoint paragraph was
+reworded twice (`review/157`, `review/162`; the dated comments at `:301-312`, `:335-338` and `:358-361`). The line ceilings hold, cursor 95 ·
+claude 95 · copilot 95 · codex 407 (`:157-216`), and `composeAlwaysOnLoad` is at `:401-414`. The corpus suite requires one root `AGENTS.md` figure in the golden, equal to
 both shared constants, and every `AGENTS.override.md` figure equal to the third. The capability page's guard refuses
 two shared figures that differ, and an override figure not larger than the shared one
 (`src/emit/capabilityMatrix.ts:521-553`), and the page carries the override's bytes in Codex's row (the input, `codexOverrideBytes`, at `:363-368`). A

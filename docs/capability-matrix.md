@@ -44,7 +44,7 @@ delivery leaves in front of it.
 | `claude` | 95 | skill, on demand | the charter alone — a rule with no globs is delivered as a skill instead, and every other rule attaches on paths |
 | `cursor` | 95 | rule, pulled on relevance | the charter alone — a rule with no globs is pulled in when the conversation matches it |
 | `copilot` | 95 | skill, on demand | the charter alone — a rule with no globs is delivered as a skill instead, and every other rule attaches on paths |
-| `codex` | 407 | skill, on demand | the charter plus the rules that must be unconditional — critical, floor-tagged, or anchored to a nested instruction file; the rest are skills — 25326 bytes, in its own `AGENTS.override.md` |
+| `codex` | 407 | skill, on demand | the charter plus the rules that must be unconditional — critical, floor-tagged, or anchored to a nested instruction file; the rest are skills — 25334 bytes, in its own `AGENTS.override.md` |
 
 Measured under `ruleDelivery: on-demand`, the shipped default. A rule that carries no globs has
 no attach trigger, so under `always-on` claude and copilot load its whole body every session;
@@ -62,9 +62,9 @@ plan against, not a reading this page took as it rendered.
 
 **What co-selecting codex costs every other client: nothing at the root.** Codex's rules
 appendix goes to a codex-only root `AGENTS.override.md`, which codex reads instead of
-`AGENTS.md` and no other client reads at all, so the shared root `AGENTS.md` is 5296 bytes with
-codex selected and 5296 without it. The override repeats that file — an operator's own text in
-it included — and adds the appendix: 25326 bytes, ≈4.8x the shared file, paid by codex alone.
+`AGENTS.md` and no other client reads at all, so the shared root `AGENTS.md` is 5304 bytes with
+codex selected and 5304 without it. The override repeats that file — an operator's own text in
+it included — and adds the appendix: 25334 bytes, ≈4.8x the shared file, paid by codex alone.
 It is regenerated from `AGENTS.md` as each sync leaves it. Under a `supplement` or `skip`
 import decision the operator's own text in `AGENTS.md` survives, so an edit to that text
 reaches codex at the next sync and `check` reports it as drift on the override until then. With

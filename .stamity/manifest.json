@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.10.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-30T16:30:33.012Z",
+  "updatedAt": "2026-09-30T18:09:22.500Z",
   "tools": [
     "claude"
   ],
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "d7b046e1db777236d76c1656bab48bf4d1286d345731d586501142cba44bf16a",
+      "contentHash": "bb3bd45ccdb6cbad5b9117f8a8ac61193fa47b73600469f7b8963a7bad4d5876",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -519,7 +519,7 @@
       "adapter": "claude",
       "artifactId": "charter",
       "artifactType": "infra",
-      "contentHash": "6261803ba89a7abc407211f57a7302d2bde5998d10a173d7231ab2e724d00bdf",
+      "contentHash": "43c9eeba416a0d54b366d7653d59fe950e031375bae36a8f699feb45dbb02dcd",
       "path": "AGENTS.md",
       "stampedVersion": "1.10.0"
     },

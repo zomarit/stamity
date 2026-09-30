@@ -440,8 +440,9 @@ release notes and the vendor's CLI plugin reference, accessed 2026-09-30.*
 downloading newer versions of ITSELF — it is off by default in CI — and the CLI's own help names
 no effect on plugins. *From `copilot help environment` and `copilot help config` on Copilot CLI
 1.0.88, read 2026-09-27.* The plugin reference, though, ties the same two switches to the
-first-party plugin update: `autoUpdate` set to `false` or `COPILOT_AUTO_UPDATE=false` turns it
-off *(accessed 2026-09-30, from a fetched summary of the page rather than its verbatim text)*.
+first-party plugin update: "Disable this behavior with the autoUpdate setting (set to false) or the
+COPILOT_AUTO_UPDATE=false environment variable." *(Quoted verbatim from the vendor's CLI plugin
+reference, accessed 2026-09-30.)*
 
 **Cursor: no vendor-documented pin, update or rollback command on 2026-09-21. Codex: a pin is
 the marketplace's `--ref`, and there is no rollback command.** For

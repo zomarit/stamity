@@ -186,6 +186,31 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // to a named rework item. The sibling suite keeps the same ledger; a refresh
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
+  //   - 2026-09-30, plan 013 whole-branch review, fixer round 1 (run
+  //     2026-09-30_optimization-sweep, pass `branch`; review/162 signed off,
+  //     review/164). The charter and st-work moved, plus the manifest rows that
+  //     record them. No emitted path was added or removed.
+  //
+  //     CHANGED every emitted charter (`AGENTS.md`, and the monorepo
+  //       `packages/alpha/AGENTS.md` and `packages/beta/AGENTS.md`) by +8
+  //       bytes at an unchanged line count, 5296 -> 5304, and
+  //       `AGENTS.override.md` in the codex and all-four selections by the
+  //       same +8, 25326 -> 25334. The Touchpoints paragraph names both skill
+  //       spellings (`/st-<id>` or `$st-<id>`) where it gave one; rewrapped
+  //       inside its three lines. `ALWAYS_ON_SHARED_BYTES_WITH_CODEX`,
+  //       `..._WITHOUT_CODEX`, `ALWAYS_ON_CODEX_OVERRIDE_BYTES` and
+  //       `docs/capability-matrix.md` moved with the figures.
+  //     CHANGED the st-work touchpoint wherever it is emitted
+  //       (`.claude/commands/st-work.md` and `.github/prompts/st-work.prompt.md`
+  //       31002 -> 31007, `.agents/skills/st-work/SKILL.md` 31047 -> 31052):
+  //       the resume bullet names the resume trigger beside the compaction one,
+  //       at an unchanged line count.
+  //     CHANGED `.stamity/manifest.json` in all five selections at UNCHANGED
+  //       byte length — the fixed-width sha256 rows of the moved files.
+  //
+  //     What did NOT move: every agent, rule, other skill, other touchpoint,
+  //       companion, hook script, guard and policy document.
+  //
   //   - 2026-09-30, plan 013 file 3, fixer round 1 of unit
   //     sw17-touchpoints-as-shared-skills (run 2026-09-30_optimization-sweep;
   //     review/157). The charter moved, plus the manifest rows that record it.

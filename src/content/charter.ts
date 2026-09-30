@@ -304,7 +304,13 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // client got no command file at all, +20 bytes rewrapped inside the two lines
 // the sentence already had, so no line count moved. The same +20 lands in the
 // charter-alone figure below and in ALWAYS_ON_CODEX_OVERRIDE_BYTES.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_296;
+// 5_296 -> 5_304 on 2026-09-30, branch review round 1 (review/162, signed off):
+// the same Touchpoints sentence names both skill spellings a client reading
+// `.agents/skills/` uses (`/st-<id>` or `$st-<id>`) where it gave one, +8 bytes
+// rewrapped inside the three lines the paragraph already had, so no line count
+// moved. The same +8 lands in the charter-alone figure below and in
+// ALWAYS_ON_CODEX_OVERRIDE_BYTES.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_304;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
@@ -328,7 +334,9 @@ export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_296;
 // call, the same +29 as above and the whole of the change here.
 // 5_276 -> 5_296 on 2026-09-30, sw17 fix round 1 (review/157): the Touchpoints
 // paragraph's delivery sentence, the same +20 as above.
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_296;
+// 5_296 -> 5_304 on 2026-09-30, branch review round 1 (review/162): the
+// Touchpoints sentence's two skill spellings, the same +8 as above.
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_304;
 
 /**
  * Bytes of the Codex-only root `AGENTS.override.md` on the golden selection —
@@ -349,7 +357,9 @@ export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_296;
 // same bytes, now in a file only codex reads.
 // 25_306 -> 25_326 on 2026-09-30, sw17 fix round 1 (review/157): the charter
 // half of the override carries the Touchpoints paragraph's +20 bytes.
-export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_326;
+// 25_326 -> 25_334 on 2026-09-30, branch review round 1 (review/162): the
+// charter half of the override carries the Touchpoints sentence's +8 bytes.
+export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_334;
 
 /**
  * The composite always-on line count one client pays for a plan under a

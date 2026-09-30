@@ -184,10 +184,10 @@ Every spawn runs under these contracts:
   or fixer's account; the role reads the change itself, or with no git grant
   the orchestrator's `reports/<pass>-diff-r<N>.patch`.
 - **Resume after a compaction.** Where the client re-runs its session-start
-  hook after a compaction, the hook prints the resume card; elsewhere, run
-  `stamity ledger status` by hand after one. Read the open rows and the listed
-  reports before dispatching anything, and re-read this command's own file
-  for the sections past the part the client re-attached.
+  hook after a compaction or on a resume, the hook prints the resume card;
+  elsewhere, run `stamity ledger status` by hand. Read the open rows and
+  the listed reports before dispatching anything, and re-read this
+  command's own file for the sections past the part the client re-attached.
 
 ## Return contract
 
