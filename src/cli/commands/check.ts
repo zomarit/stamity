@@ -1206,7 +1206,7 @@ const CHARTER_GATE_ROWS = [
 ] as const;
 
 /** One charter gate this machine cannot resolve, and the value the charter carries for it. */
-export interface UnresolvedGate {
+interface UnresolvedGate {
   readonly kind: string;
   readonly value: string;
 }
