@@ -2,7 +2,7 @@
 id: agent-test-runner-return-contract
 class: golden
 claim: "A gate pass returns one row per gate carrying gate, exact command, status, exit code, duration and verbatim excerpt, closing with a verdict line that reads red and names the rows that caused it; a failing gate is graded Critical, a red verdict is still DONE, no row is classified against a baseline that was not supplied, and the runner applies no edit and proposes no patch."
-source: content/agents/stamity-test-runner.md:14-17,42-129
+source: content/agents/stamity-test-runner.md:14-17,42-134
 metric: rubric
 ---
 
@@ -34,9 +34,9 @@ output; the fixer receives the failing signal intact.
 |---|---|
 | gate | `test` \| `lint` \| `typecheck` \| `all` |
 | command | the exact command string executed, verbatim |
-| status | `pass` \| `fail` \| `not-run` \| `not-runnable` |
-| exit code | the process exit status, or `timeout` |
-| duration | wall-clock seconds for that gate |
+| status | `pass` \| `fail` \| `not-run` \| `not-runnable` \| `unknown` |
+| exit code | the process exit status as the tool reported it, `timeout`, or `unknown` when the tool showed none |
+| duration | wall-clock seconds as the tool reported them, or `not measured` |
 | excerpt | verbatim failure output; empty on `pass` |
 
 Excerpt rules:
@@ -53,8 +53,8 @@ Excerpt rules:
   the lines around it stay verbatim.
 
 Close with a verdict line: `green` only when every requested gate reported
-`pass`. Any `fail`, `not-run`, or `not-runnable` row makes the verdict `red`,
-and the verdict names the rows that caused it.
+`pass`. Any `fail`, `not-run`, or `not-runnable` row makes the verdict `red`, and so
+does an `unknown` one; the verdict names the rows that caused it.
 
 [...]
 

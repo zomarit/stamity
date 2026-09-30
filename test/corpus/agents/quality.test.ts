@@ -257,6 +257,8 @@ describe("test-runner — gate set", () => {
     expect(text).toMatch(/`&&` chain and stops at the first failing link/i);
     expect(text).toMatch(/never reached is reported `not-run`, not `pass`/i);
     expect(text).toMatch(/invoke the three narrow gates separately/i);
+    // A gate is run one way per pass: the chain or the three narrow gates, never both.
+    expect(text).toMatch(/each requested gate runs once per pass, and never both ways over one tree/i);
   });
 
   it("forbids altering the resolved command to produce a green result", async () => {
@@ -265,6 +267,7 @@ describe("test-runner — gate set", () => {
     expect(text).toMatch(/no flag added to the resolved command/i);
     expect(text).toMatch(/no filter narrowing the suite unless the brief supplied it/i);
     expect(text).toMatch(/altered to pass has measured nothing/i);
+    expect(text).toMatch(/no wrapper around it/i);
   });
 });
 
@@ -283,6 +286,10 @@ describe("test-runner — structured result", () => {
       );
     }
     expect(result).toContain("`pass` \\| `fail` \\| `not-run` \\| `not-runnable`");
+    // A result the tool gave no exit status for, or no timing for, has an honest value of its
+    // own rather than a guessed one (REQ-FLOW-013).
+    expect(mandate).toMatch(/`unknown` when the tool showed none/);
+    expect(mandate).toMatch(/or `not measured`/);
   });
 
   it("requires verbatim failure excerpts with the locations preserved under truncation", async () => {
@@ -302,6 +309,7 @@ describe("test-runner — structured result", () => {
 
     expect(text).toMatch(/`green` only when every requested gate reported `pass`/i);
     expect(text).toMatch(/any `fail`, `not-run`, or `not-runnable` row makes the verdict `red`/i);
+    expect(text).toMatch(/makes the verdict `red`, and so does an `unknown` one/i);
   });
 });
 
@@ -339,6 +347,17 @@ describe("test-runner — edge cases", () => {
     expect(edges).toContain("`exit code: timeout`");
     expect(edges).toMatch(/elapsed seconds/i);
     expect(edges).toMatch(/last 40 lines the process emitted before the kill/i);
+  });
+
+  it("reports an exit code the tool did not show as `unknown`, never as a pass", async () => {
+    const edges = section(await load("agents/stamity-test-runner.md"), "Edge cases").replace(
+      /\s+/g,
+      " ",
+    );
+
+    expect(edges).toMatch(/never from a second run, an `echo \$\?`, or a wrapper/i);
+    expect(edges).toContain("`exit code: unknown` and status `unknown`");
+    expect(edges).toMatch(/nothing about it is read as a pass/i);
   });
 
   it("isolates gates so one hung gate does not void the others' results", async () => {

@@ -2,7 +2,7 @@
 id: agent-implementer-return-contract
 class: golden
 claim: "A finished unit returns status DONE carrying files changed, tests, gate results, the spec delta and deferrals; every gate is reported as its exact command plus pass or fail with the verbatim failing excerpt, a failure that predates the unit is reported as pre-existing rather than adopted, fixed, or hidden behind a green claim, and the spec delta is returned as a proposal naming the spec file and the requirement id rather than written into the spec tree."
-source: content/agents/stamity-implementer.md:14-16,62-117
+source: content/agents/stamity-implementer.md:14-16,62-118
 metric: rubric
 ---
 
@@ -41,7 +41,8 @@ Run before returning, over the unit's surface:
 
 - `${STAMITY:VERIFY_GATE_TEST}`, `${STAMITY:VERIFY_GATE_LINT}`, and
   `${STAMITY:VERIFY_GATE_TYPECHECK}` for the targeted pass, or `${STAMITY:VERIFY_GATE_ALL}`
-  when the unit's blast radius is wider than its own files.
+  when the unit's blast radius is wider than its own files — each run once, as resolved,
+  its exit code read from the tool (Shell).
 - Report each gate as the exact command run plus pass or fail, and reproduce the verbatim
   failing excerpt — test name, assertion diff, compiler error. Bare pass/fail is not a
   gate result.

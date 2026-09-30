@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.10.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-30T11:38:48.977Z",
+  "updatedAt": "2026-09-30T11:40:53.286Z",
   "tools": [
     "claude"
   ],
@@ -78,14 +78,14 @@
       "adapter": "claude",
       "artifactId": "fixer",
       "artifactType": "agent",
-      "contentHash": "57e9e84cc426b5f73e996191b59cbdc11936feb708c0195b44e2fd2d2b65d5a6",
+      "contentHash": "6b3d974e00f392f859558b06cb5cf12c52b692dcca29e727a7648d22a4c06273",
       "path": ".claude/agents/stamity-fixer.md"
     },
     {
       "adapter": "claude",
       "artifactId": "implementer",
       "artifactType": "agent",
-      "contentHash": "d100998d0781d7cc4f258d81d2506a8eb1886e22d7051a094c17ec013bd07ec4",
+      "contentHash": "d4bb99edd5b1d1b1e26220f5fbdf24683f97e93af9c93ecfc06c84a6e43cd023",
       "path": ".claude/agents/stamity-implementer.md"
     },
     {
@@ -99,7 +99,7 @@
       "adapter": "claude",
       "artifactId": "researcher",
       "artifactType": "agent",
-      "contentHash": "9d34a351b81bfa1fc22066ce0b31065db197f79b69b2d86bea6aa26578a3c10c",
+      "contentHash": "1366aba84cbab8fab29ba59342778d2bb545c5166b72e7f76a8b54aa10cf99c7",
       "path": ".claude/agents/stamity-researcher.md"
     },
     {
@@ -127,7 +127,7 @@
       "adapter": "claude",
       "artifactId": "test-runner",
       "artifactType": "agent",
-      "contentHash": "b3f4e494af71d0f8688dd681e642a5da04ee028f97900631b68cf7ae1de02fb2",
+      "contentHash": "122f5f541bafe2a76980d45060f627b7326b24e6e688b4d9ed474a46de977d7e",
       "path": ".claude/agents/stamity-test-runner.md"
     },
     {

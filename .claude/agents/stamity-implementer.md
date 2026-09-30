@@ -74,7 +74,8 @@ Run before returning, over the unit's surface:
 
 - `npm run test`, `npm run lint`, and
   `npm run typecheck` for the targeted pass, or `npm run lint && npm run typecheck && npm run test`
-  when the unit's blast radius is wider than its own files.
+  when the unit's blast radius is wider than its own files — each run once, as resolved,
+  its exit code read from the tool (Shell).
 - Report each gate as the exact command run plus pass or fail, and reproduce the verbatim
   failing excerpt — test name, assertion diff, compiler error. Bare pass/fail is not a
   gate result.
@@ -112,3 +113,12 @@ Run before returning, over the unit's surface:
   changed and each gate's result. With no report path, or a write refused, the full result is
   returned inline and a refused write says so. A `BLOCKED_*` return writes no report and is
   returned in full.
+
+## Shell
+
+Where this role runs commands, it writes portable POSIX `sh`, so a command runs the same under
+`sh`, `bash`, `dash` or `zsh`: no `PIPESTATUS`, no `[[ … ]]`, no arrays, no `pipefail`, no
+`<( … )`. Each command runs once, as written — no `time`, no `{ …; }` grouping, no redirect
+into a temp file, no `echo $?`, no pipe into `tail` or `head` — and its exit code is read from
+the tool result. A code the tool did not show is `unknown`, never a pass. A long command is
+waited on in the foreground under the tool's own timeout, never polled with `sleep`.

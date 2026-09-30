@@ -18,8 +18,8 @@ Seven keys: six required, one defaulted. A spawn missing a required key is under
 return `BLOCKED_AMBIGUITY` naming the missing keys instead of inferring a subject.
 
 `handoff_to` is the defaulted one, and the reason is what the spawning flows actually send.
-Of the commands that enumerate the brief, `/st-ask` names all seven while `/st-work`
-and `/st-spec` stop at the tool tier. Blocking on a key most real spawns never carry
+Every spawning flow carries the six required keys through one shared line, and `/st-ask`
+names `handoff_to` too. Blocking on a key most real spawns never carry
 would turn the ambiguity gate into a gate on the flows themselves, so the default is written
 down here instead of being inferred per spawn.
 
@@ -117,3 +117,13 @@ security finding to fit a budget produces a result that reads clean and is not.
 - Sub-agents do not put questions to the operator. Ambiguity returns as
   `BLOCKED_AMBIGUITY` stating the specific question and the competing readings; the
   spawning flow runs the ambiguity gate and re-spawns with a sharpened brief.
+
+## Shell
+
+Where this role runs commands, it writes portable POSIX `sh`, so a command runs the same under
+`sh`, `bash`, `dash` or `zsh`: no `PIPESTATUS`, no `[[ … ]]`, no arrays, no `pipefail`, no
+`<( … )`. Each command runs once, as written — no `time`, no `{ …; }` grouping, no redirect
+into a temp file, no `echo $?`, no pipe into `tail` or `head` — and its exit code is read from
+the tool result. A code the tool did not show is `unknown`, never a pass. A long command is
+waited on in the foreground under the tool's own timeout, never polled with `sleep`.
+This role runs no verification gate; gate evidence is the test-runner's.

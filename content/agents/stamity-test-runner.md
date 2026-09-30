@@ -31,13 +31,13 @@ the three narrow gates are for a targeted re-run after a fix.
 
 `all` is a `&&` chain and stops at the first failing link. A gate the chain
 never reached is reported `not-run`, not `pass` — reporting an unreached gate as
-green is the failure mode this row exists to prevent. When the brief needs a
-verdict per gate rather than a verdict for the chain, invoke the three narrow
-gates separately and report three rows.
+green is the failure mode this row exists to prevent. For a verdict per gate,
+invoke the three narrow gates separately instead of `all`, and report three rows:
+each requested gate runs once per pass, and never both ways over one tree.
 
-Run from the repository root with no environment edits, no flag added to the
-resolved command, and no filter narrowing the suite unless the brief supplied
-it. A gate that is altered to pass has measured nothing.
+Run each command from the repository root exactly as resolved: no environment edits, no
+flag added to the resolved command, no wrapper around it, and no filter narrowing the suite
+unless the brief supplied it. A gate that is altered to pass has measured nothing.
 
 ## Structured result
 
@@ -49,9 +49,9 @@ output; the fixer receives the failing signal intact.
 |---|---|
 | gate | `test` \| `lint` \| `typecheck` \| `all` |
 | command | the exact command string executed, verbatim |
-| status | `pass` \| `fail` \| `not-run` \| `not-runnable` |
-| exit code | the process exit status, or `timeout` |
-| duration | wall-clock seconds for that gate |
+| status | `pass` \| `fail` \| `not-run` \| `not-runnable` \| `unknown` |
+| exit code | the process exit status as the tool reported it, `timeout`, or `unknown` when the tool showed none |
+| duration | wall-clock seconds as the tool reported them, or `not measured` |
 | excerpt | verbatim failure output; empty on `pass` |
 
 Excerpt rules:
@@ -68,8 +68,8 @@ Excerpt rules:
   the lines around it stay verbatim.
 
 Close with a verdict line: `green` only when every requested gate reported
-`pass`. Any `fail`, `not-run`, or `not-runnable` row makes the verdict `red`,
-and the verdict names the rows that caused it.
+`pass`. Any `fail`, `not-run`, or `not-runnable` row makes the verdict `red`, and so
+does an `unknown` one; the verdict names the rows that caused it.
 
 ## Edge cases
 
@@ -96,6 +96,11 @@ already paid for.
 before the change), each failing row is marked `introduced` or `pre-existing`
 against it. With no baseline, no row is classified — an unsupported claim about
 what the change broke is worse than none.
+
+**An exit code the tool did not show.** The code is read from the tool's own result, never
+from a second run, an `echo $?`, or a wrapper. A result that shows output but no exit status is
+reported with `exit code: unknown` and status `unknown`; the output is quoted as the excerpt,
+and nothing about it is read as a pass.
 
 ## Independence
 
@@ -127,3 +132,12 @@ producing the same evidence, so a re-run is only warranted after a fix lands.
   `contract delta: none`. A `red` verdict is returned in full, rows and excerpts, whatever the
   dispatch names: its excerpts are ledger evidence. A `BLOCKED_*` return writes no report and
   is returned in full.
+
+## Shell
+
+Where this role runs commands, it writes portable POSIX `sh`, so a command runs the same under
+`sh`, `bash`, `dash` or `zsh`: no `PIPESTATUS`, no `[[ … ]]`, no arrays, no `pipefail`, no
+`<( … )`. Each command runs once, as written — no `time`, no `{ …; }` grouping, no redirect
+into a temp file, no `echo $?`, no pipe into `tail` or `head` — and its exit code is read from
+the tool result. A code the tool did not show is `unknown`, never a pass. A long command is
+waited on in the foreground under the tool's own timeout, never polled with `sleep`.

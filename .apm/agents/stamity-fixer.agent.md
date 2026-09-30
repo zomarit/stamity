@@ -117,3 +117,12 @@ the economy class:
   at most 1,500 characters of prose naming the files changed and the tests added or
   modified. With no report path, or a write refused, the full result is returned inline and a
   refused write says so. A `BLOCKED_*` return writes no report and is returned in full.
+
+## Shell
+
+Where this role runs commands, it writes portable POSIX `sh`, so a command runs the same under
+`sh`, `bash`, `dash` or `zsh`: no `PIPESTATUS`, no `[[ … ]]`, no arrays, no `pipefail`, no
+`<( … )`. Each command runs once, as written — no `time`, no `{ …; }` grouping, no redirect
+into a temp file, no `echo $?`, no pipe into `tail` or `head` — and its exit code is read from
+the tool result. A code the tool did not show is `unknown`, never a pass. A long command is
+waited on in the foreground under the tool's own timeout, never polled with `sleep`.
