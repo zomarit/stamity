@@ -534,6 +534,47 @@ describe("debug — hard gates before any fix", () => {
     expect(text).toMatch(/`--diagnose` \(report only\)/i);
     expect(text).toMatch(/steps 6 and 7 do not run\. step 8 does/i);
   });
+
+  it("reproduces an exact bug in process with a failing test, keeps probes green, and keeps a record", async () => {
+    const file = await load("commands/st-debug.md");
+    const text = flow(file);
+
+    // Step 3 names both routes and the facts that choose between them: an exact input and
+    // expected output takes the in-process route (gate 2's failing test is the reproduction,
+    // no question to the user); anything needing the user's environment still stops.
+    expect(text).toMatch(/\*\*Reproduce\.\*\* Two routes/);
+    expect(text).toMatch(/in-process/i);
+    expect(text).toMatch(/exact input and the expected output/i);
+    expect(text).toMatch(/a failure for the stated reason is the reproduction: no stop, and no question to the user/i);
+    expect(text).toMatch(/needs the user's environment, data, traffic or access\. Stop and wait/);
+    // The user route keeps the words the existing stall case and the floor cases rely on.
+    expect(text).toMatch(/this step is not simulated/i);
+    // Edge case: instrumentation is skipped on the in-process route unless the test alone
+    // cannot separate the hypotheses.
+    expect(text).toMatch(/runs only when the failing test alone cannot separate the hypotheses/i);
+
+    // Probes keep the lint and typecheck gates green, and the implementer returns both results.
+    expect(text).toMatch(/keeps `\$\{STAMITY:VERIFY_GATE_LINT\}` and `\$\{STAMITY:VERIFY_GATE_TYPECHECK\}` green/);
+    expect(text).toMatch(/the instrumented sites and its lint and typecheck results as the whole return/);
+
+    // The debug record head (census S6): run id segment and three bare head lines.
+    expect(text).toContain("`<UTC date>_debug-<slug>`");
+    expect(text).toMatch(/Status: in progress/);
+    expect(text).toContain("`Plan: none — debug round`");
+    expect(text).toContain("`Invocation: <this command line, verbatim>`");
+    expect(text).toMatch(/bare at column 0, with no list marker and no bold/);
+    expect(text).not.toMatch(/writes no run record/i);
+
+    // The marker check at start, at every stop, and at the close. Edge case: exit 1 is zero hits.
+    expect(text).toMatch(/git grep -n -F '\[STAMITY-DEBUG\]'/);
+    expect(text).toMatch(/at the run's start, at every stop that waits on the user, and at the close/);
+    expect(text).toMatch(/exit code 1 means zero hits/i);
+
+    // The Hard gates table still sits after the Loop, byte-identical rows included.
+    expect(file.parsed.body.indexOf("**Reproduce.**")).toBeLessThan(
+      file.parsed.body.indexOf("## Hard gates"),
+    );
+  });
 });
 
 describe("quick — the guardrails are the command", () => {

@@ -37,31 +37,53 @@ app-code round unfalsifiable.
 Nine steps. Steps 1-4 form a round and repeat while the evidence lands short; steps 5-9 run
 once each.
 
+**Run record.** The run's first mutation — a probe or gate 2's test — opens
+`.stamity/runs/<run-id>/record.md`, `<run-id>` being `<UTC date>_debug-<slug>`, with
+`Status: in progress`, `Plan: none — debug round` and `Invocation: <this command line, verbatim>`
+among its first 15 lines, then one line per probe site as it lands and one per strip. The three
+head lines are written bare at column 0, with no list marker and no bold; the resume card finds
+the record by its `_debug-` segment. The close rewrites `Status:` to the exit taken and the
+residue count; a stop that waits on the user leaves it in progress.
+
 1. **Hypotheses.** From the symptom — expected, actual, reproduction path, frequency — write
    numbered hypotheses ranked by prior probability, each paired with the single observation
    that separates it from its neighbours. A hypothesis with no discriminating observation is
    not testable: rewrite it or drop it. Brief a `researcher` when the suspect surface spans
    more than two files or is unfamiliar: symptom trace, introduction window, prior learnings.
-2. **Instrumentation.** Delegate the edit to `implementer` — instrumentation is a code
-   mutation and is written where every other mutation is. Observation-only logging at the
-   discriminating points, every line
+2. **Instrumentation.** On the in-process route (step 3) this step runs only when the failing
+   test alone cannot separate the hypotheses. Delegate the edit to `implementer` —
+   instrumentation is a code mutation and is written where every other mutation is.
+   Observation-only logging at the discriminating points, every line
    prefixed `[STAMITY-DEBUG]` and naming its site (`[STAMITY-DEBUG] cart/total.ts:41 applyDiscount
    entry — subtotal, coupon id`). Use the logging mechanism the project already has; add no
    dependency. Control flow, state, and error handling stay byte-identical in behavior —
    instrumentation that changes behavior invalidates the round.
+   A probe keeps `npm run lint` and `npm run typecheck` green: it
+   uses a form the project's linter and type checker already accept, and a probe that turns
+   either red is rewritten before the round continues.
    The brief states the exception this spawn runs under, because the implementer's own
    contract mandates a unit with interfaces, a test delta and a spec delta, and observation-only
    logging produces none of the three: no unit, no interfaces, no test delta, no spec delta, and
-   the changed-file list plus the instrumented sites as the whole return. A brief that leaves
-   the exception unstated promises a unit it does not carry, and the spawn answers it with
-   `BLOCKED_AMBIGUITY`. The same exception covers the strip at step 8.
-3. **User reproduces.** Stop and wait. The user runs the scenario and returns the output.
+   the changed-file list, the instrumented sites and its lint and typecheck results as the whole
+   return. A brief that leaves the exception unstated promises a unit it does not carry, and the
+   spawn answers it with `BLOCKED_AMBIGUITY`. The same exception covers the strip at step 8.
+3. **Reproduce.** Two routes; the report decides which, and the first response names it
+   with the fact that chose it.
+   - **In-process** — the report states an exact input and the expected output, and the
+     code runs here. `implementer` writes gate 2's failing test — that input, that
+     expected output, nothing else — under step 2's exception with a test delta as its
+     only change; `test-runner` runs it. A failure for the stated reason is the
+     reproduction: no stop, and no question to the user. A test that passes on the
+     current tree reproduces nothing, and the round goes back to step 1.
+   - **User** — anything else, or a defect that needs the user's environment, data,
+     traffic or access. Stop and wait. The user runs the scenario and returns the output.
    This step is not simulated, not inferred from reading the code, and not passed over
    because the cause looks obvious.
 4. **Log analysis.** Order the tagged lines; state which instrumentation points did *not*
    fire, since a silent point is evidence; map every hypothesis to the lines that confirm or
    kill it; strike the killed ones. If no hypothesis survives with evidence, start another
-   round with instrumentation moved — bounded by the escape valve below.
+   round with instrumentation moved — bounded by the escape valve below. On the in-process
+   route the failing test's output is the evidence.
 5. **Root cause.** Gate `root-cause-before-fix` (see Hard gates).
 6. **Failing test.** Gate `failing-test-before-fix` (see Hard gates).
 7. **Fix through the work pipeline.** The diagnosis and the failing test become the plan
@@ -116,6 +138,13 @@ valve, user abort, and escalation to another command. No exit path leaves a tagg
 commented-out probe, or a helper that existed only to carry one. Search the repository for
 the tag before the closing report and state the resulting count in it.
 
+**The marker check.** `git grep -n -F '[STAMITY-DEBUG]'` runs at the run's start, at every stop
+that waits on the user, and at the close; its exit code 1 means zero hits, not an error. At the
+start, a hit with no in-progress debug record and no capture-later agreement is residue from an
+earlier run and is stripped before step 1; a hit under a recorded agreement is kept and its count
+stated. At a stop, the count and the sites go into the stop message and the record. At the
+close, the count is the Zero residue gate's number.
+
 One exception, and it is the gate table's own row: a capture-later agreement recorded with the
 user holds the instrumentation in place. That run reports its count rather than zero, and the
 next run over the same defect strips it first. No other path holds residue.
@@ -132,8 +161,8 @@ Steps 6 and 7 do not run. Step 8 does.
 A failed fix is one that reached step 7, landed, and left the symptom, brought it back, or
 broke a gate that had been green. Three failed fixes on one defect end the fix loop.
 
-The counter is **in-session**: debug keeps no workspace and writes no run record, so it counts
-the fixes attempted in this conversation and nothing earlier. A new session starts at zero, and
+The counter is **in-session**: the run record holds probes and the round's status, not fix
+attempts, so it counts the fixes attempted in this conversation and nothing earlier. A new session starts at zero, and
 the closing report states the count it is carrying so a user on the fourth attempt across two
 sessions can see that the valve did not fire and call it themselves.
 
