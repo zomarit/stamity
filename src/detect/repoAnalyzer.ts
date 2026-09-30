@@ -235,6 +235,50 @@ const TEST_FRAMEWORK_INDICATORS: readonly Indicator<string>[] = [
 const TEST_MANIFEST_KEYS: readonly { name: string; key: string }[] = [{ name: "jest", key: "jest" }];
 
 /**
+ * Test runners a root `package.json` declares as a dependency, matched on the
+ * exact package name: `jest-environment-jsdom` alone is not jest. Every name is
+ * one the gate resolver's Node runner table knows, so a hit resolves a gate.
+ */
+const TEST_DEP_INDICATORS: readonly { name: string; dep: string }[] = [
+  { name: "vitest", dep: "vitest" },
+  { name: "jest", dep: "jest" },
+  { name: "mocha", dep: "mocha" },
+  { name: "playwright", dep: "@playwright/test" },
+  { name: "cypress", dep: "cypress" },
+];
+
+/**
+ * Runners named inside a wired `scripts.test` body. The body is split on
+ * whitespace and the shell separators `;&|()`; a token equal to `command` —
+ * followed by `subcommand` when one is given — names the runner. `playwright
+ * install` and `cypress open` run no test, so they name nothing.
+ */
+const TEST_SCRIPT_RUNNERS: readonly { name: string; command: string; subcommand?: string }[] = [
+  { name: "vitest", command: "vitest" },
+  { name: "jest", command: "jest" },
+  { name: "mocha", command: "mocha" },
+  { name: "playwright", command: "playwright", subcommand: "test" },
+  { name: "cypress", command: "cypress", subcommand: "run" },
+];
+
+/**
+ * `pyproject.toml` evidence of pytest, read line by line with `#` comment lines
+ * skipped: a `[tool.pytest]` or `[tool.pytest.*]` table, a quoted dependency
+ * entry naming `pytest` exactly (`"pytest>=8"`, never `"pytest-cov"`), or a
+ * poetry-style `pytest = "^8"` key.
+ */
+const PYPROJECT_TEST_SIGNALS: readonly { name: string; patterns: readonly RegExp[] }[] = [
+  {
+    name: "pytest",
+    patterns: [
+      /^\[tool\.pytest[\].]/,
+      /["']pytest(?=["'\s<>=!~;@([])/i,
+      /^pytest\s*=/i,
+    ],
+  },
+];
+
+/**
  * Reported when a wired `lint` / `test` script is the only evidence of a
  * toolchain. The script body is not parsed, so the name says what is known —
  * something runs — without guessing which tool it runs.
@@ -585,11 +629,17 @@ export async function detectLinters(rootDir: string): Promise<string[]> {
   return [...detected];
 }
 
-/** Test frameworks, on the same evidence ladder as {@link detectLinters}. */
+/**
+ * Test frameworks, on the same evidence ladder as {@link detectLinters}, in
+ * evidence order: config file, embedded manifest key, declared dependency,
+ * the wired test script's body, `pyproject.toml`, and only when all of those
+ * are silent the unnamed {@link TEST_SCRIPT_FALLBACK}.
+ */
 export async function detectTestFrameworks(rootDir: string): Promise<string[]> {
-  const [byConfig, manifest] = await Promise.all([
+  const [byConfig, manifest, pyproject] = await Promise.all([
     presentIndicators(rootDir, TEST_FRAMEWORK_INDICATORS),
     readJsonObject(join(rootDir, "package.json")),
+    readText(join(rootDir, "pyproject.toml")),
   ]);
 
   const detected = new Set<string>(byConfig);
@@ -597,9 +647,43 @@ export async function detectTestFrameworks(rootDir: string): Promise<string[]> {
     for (const { name, key } of TEST_MANIFEST_KEYS) {
       if (manifest[key] !== undefined) detected.add(name);
     }
-    if (detected.size === 0 && hasWiredScript(manifest, "test")) detected.add(TEST_SCRIPT_FALLBACK);
+    const deps = dependencyNames(manifest);
+    for (const { name, dep } of TEST_DEP_INDICATORS) {
+      if (deps.has(dep)) detected.add(name);
+    }
+    for (const name of testScriptRunners(manifest)) detected.add(name);
+  }
+  if (pyproject != null) {
+    for (const name of pyprojectTestFrameworks(pyproject)) detected.add(name);
+  }
+  if (detected.size === 0 && manifest !== null && hasWiredScript(manifest, "test")) {
+    detected.add(TEST_SCRIPT_FALLBACK);
   }
   return [...detected];
+}
+
+/** Runners the wired `scripts.test` body invokes, per {@link TEST_SCRIPT_RUNNERS}. */
+function testScriptRunners(manifest: Record<string, unknown>): string[] {
+  const scripts = manifest.scripts;
+  const body = isPlainObject(scripts) ? scripts["test"] : undefined;
+  if (typeof body !== "string" || !hasWiredScript(manifest, "test")) return [];
+  const tokens = body.split(/[\s;&|()]+/).filter((token) => token.length > 0);
+  return TEST_SCRIPT_RUNNERS.filter(({ command, subcommand }) =>
+    tokens.some(
+      (token, index) => token === command && (subcommand === undefined || tokens[index + 1] === subcommand),
+    ),
+  ).map(({ name }) => name);
+}
+
+/** Frameworks `pyproject.toml` names, per {@link PYPROJECT_TEST_SIGNALS}; `#` comment lines are skipped. */
+function pyprojectTestFrameworks(pyproject: string): string[] {
+  const lines = pyproject
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
+  return PYPROJECT_TEST_SIGNALS.filter(({ patterns }) =>
+    lines.some((line) => patterns.some((pattern) => pattern.test(line))),
+  ).map(({ name }) => name);
 }
 
 /**

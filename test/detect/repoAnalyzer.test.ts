@@ -485,6 +485,108 @@ describe("toolchain probes", () => {
     await expect(detectTestFrameworks(embedded)).resolves.toEqual(["jest"]);
   });
 
+  // REQ-FLOW-006: the runner is named from the manifest and pyproject, not only a config file.
+  describe("REQ-FLOW-006 test framework evidence beyond a config file", () => {
+    it("names vitest from a devDependency when no config file exists", async () => {
+      const root = await seedRepo({
+        "package.json": json({ scripts: { test: "npm run unit" }, devDependencies: { vitest: "^3.0.0" } }),
+      });
+      await expect(detectTestFrameworks(root)).resolves.toEqual(["vitest"]);
+    });
+
+    it("names each runner a dependency declares, matched on the exact package name", async () => {
+      const root = await seedRepo({
+        "package.json": json({
+          dependencies: { "@playwright/test": "^1.50.0" },
+          devDependencies: { mocha: "^11.0.0", cypress: "^14.0.0" },
+        }),
+      });
+      await expect(detectTestFrameworks(root)).resolves.toEqual(["mocha", "playwright", "cypress"]);
+    });
+
+    it("does not read jest-environment-jsdom alone as jest", async () => {
+      const root = await seedRepo({
+        "package.json": json({
+          scripts: { test: "node --test" },
+          devDependencies: { "jest-environment-jsdom": "^30.0.0" },
+        }),
+      });
+      await expect(detectTestFrameworks(root)).resolves.toEqual(["test-script"]);
+    });
+
+    it("names the runner a wired test script invokes when nothing else declares it", async () => {
+      const vitest = await seedRepo({ "package.json": json({ scripts: { test: "vitest run" } }) });
+      await expect(detectTestFrameworks(vitest)).resolves.toEqual(["vitest"]);
+
+      const chained = await seedRepo({
+        "package.json": json({ scripts: { test: "tsc -b&&(jest --ci)" } }),
+      });
+      await expect(detectTestFrameworks(chained)).resolves.toEqual(["jest"]);
+
+      const playwright = await seedRepo({
+        "package.json": json({ scripts: { test: "npx playwright test --reporter=line" } }),
+      });
+      await expect(detectTestFrameworks(playwright)).resolves.toEqual(["playwright"]);
+
+      const cypress = await seedRepo({ "package.json": json({ scripts: { test: "cypress run" } }) });
+      await expect(detectTestFrameworks(cypress)).resolves.toEqual(["cypress"]);
+    });
+
+    it("does not read a runner name out of a longer token or a non-running subcommand", async () => {
+      const root = await seedRepo({
+        "package.json": json({ scripts: { test: "vitest-runner; playwright install; cypress open" } }),
+      });
+      await expect(detectTestFrameworks(root)).resolves.toEqual(["test-script"]);
+    });
+
+    it("reports vitest once when the config file and the dependency both name it", async () => {
+      const root = await seedRepo({
+        "vitest.config.ts": "export default {};\n",
+        "package.json": json({ scripts: { test: "vitest run" }, devDependencies: { vitest: "^3.0.0" } }),
+      });
+      await expect(detectTestFrameworks(root)).resolves.toEqual(["vitest"]);
+    });
+
+    it("names pytest from a [tool.pytest.ini_options] table without pytest.ini", async () => {
+      const root = await seedRepo({
+        "pyproject.toml": '[project]\nname = "app"\n\n[tool.pytest.ini_options]\naddopts = "-q"\n',
+      });
+      await expect(detectTestFrameworks(root)).resolves.toEqual(["pytest"]);
+    });
+
+    it("names pytest from a dependency-group entry and from a poetry table key", async () => {
+      const group = await seedRepo({
+        "pyproject.toml": '[project]\nname = "app"\n\n[dependency-groups]\ndev = ["ruff", "pytest>=8"]\n',
+      });
+      await expect(detectTestFrameworks(group)).resolves.toEqual(["pytest"]);
+
+      const poetry = await seedRepo({
+        "pyproject.toml": '[tool.poetry.group.dev.dependencies]\npytest = "^8"\n',
+      });
+      await expect(detectTestFrameworks(poetry)).resolves.toEqual(["pytest"]);
+    });
+
+    it("does not read pytest-cov alone or a commented-out pytest line as pytest", async () => {
+      const plugin = await seedRepo({
+        "pyproject.toml": '[project]\nname = "app"\ndependencies = ["pytest-cov>=5"]\n',
+      });
+      await expect(detectTestFrameworks(plugin)).resolves.toEqual([]);
+
+      const commented = await seedRepo({
+        "pyproject.toml": '[project]\nname = "app"\n# dev = ["pytest>=8"]\n# [tool.pytest.ini_options]\n',
+      });
+      await expect(detectTestFrameworks(commented)).resolves.toEqual([]);
+    });
+
+    it("keeps the config-file hit first when pyproject also names pytest", async () => {
+      const root = await seedRepo({
+        "conftest.py": "",
+        "pyproject.toml": '[project]\nname = "app"\n\n[tool.pytest.ini_options]\n',
+      });
+      await expect(detectTestFrameworks(root)).resolves.toEqual(["pytest"]);
+    });
+  });
+
   it("reports every CI provider with a pipeline in the repository", async () => {
     const root = await seedRepo({
       ".github/workflows/ci.yml": "name: CI\n",
