@@ -27,6 +27,7 @@ that is otherwise clean. On a repository whose gate commands detection could not
 `warning: the <gate> gate cannot be resolved` lines precede an `ok — 4 advisory warning(s) above`
 close instead of `setup green`; `config set gates.<name> "<command>"` settles each (`gates.all` for
 the full gate).
+
 ```text
 doctor
   ok    node-version         Node 22.22.3 satisfies >=22.22.2
