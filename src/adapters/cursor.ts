@@ -1036,7 +1036,7 @@ import { readFileSync } from "node:fs";
 
 const NAMESPACE = ${JSON.stringify(CONTENT_PREFIX)};
 const ROSTER = new Set(${JSON.stringify(ids, null, 2)});
-const SYNC_CALL = ${JSON.stringify(cliCallHint(cli.packageName, cli.version, "sync"))};
+const SYNC_CALL = ${JSON.stringify(cliCallHint(cli.packageName, cli.version, "sync", cli))};
 
 ${REASON_HELPER}
 
@@ -1140,8 +1140,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // one level up, and the operator's own file lives under the home directory.
 const MANIFESTS = [join(HERE, "..", "mcp.json"), join(homedir(), ".cursor", "mcp.json")];
 const TOOL_PREFIX = ${JSON.stringify(MCP_TOOL_PREFIX)};
-const SYNC_CALL = ${JSON.stringify(cliCallHint(cli.packageName, cli.version, "sync"))};
-const MCP_ADD_CALL = ${JSON.stringify(cliCallHint(cli.packageName, cli.version, "config mcp add <id>"))};
+const SYNC_CALL = ${JSON.stringify(cliCallHint(cli.packageName, cli.version, "sync", cli))};
+const MCP_ADD_CALL = ${JSON.stringify(cliCallHint(cli.packageName, cli.version, "config mcp add <id>", cli))};
 
 ${REASON_HELPER}
 

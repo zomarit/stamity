@@ -127,6 +127,13 @@ export interface EmissionContext {
    * package passes its own name so the rendered call runs the fork.
    */
   packageName?: string;
+  /**
+   * Whether that package has an npm channel. Absent means it does, and the
+   * call renders `npx -y`; `false` — a fork that never publishes (private, no
+   * `publishConfig.registry`) — renders `npx --no`, which runs a copy already
+   * installed in the project and refuses to fetch one (`../shared/cliCall.ts`).
+   */
+  npmChannel?: boolean;
   /** Live per-run detection decisions. */
   facts: {
     /** Live monorepo package layout; empty for single-package repos. */
@@ -375,6 +382,7 @@ export async function buildCoreEmissionPlan(
       manifest: ctx.manifest,
       engineVersion: ctx.engineVersion,
       ...(ctx.packageName === undefined ? {} : { packageName: ctx.packageName }),
+      ...(ctx.npmChannel === undefined ? {} : { npmChannel: ctx.npmChannel }),
       facts: { monorepoPackages: ctx.facts.monorepoPackages },
       ...contentRoot,
     }),
@@ -394,6 +402,7 @@ export async function buildCoreEmissionPlan(
             manifest: ctx.manifest,
             engineVersion: ctx.engineVersion,
             ...(ctx.packageName === undefined ? {} : { packageName: ctx.packageName }),
+            ...(ctx.npmChannel === undefined ? {} : { npmChannel: ctx.npmChannel }),
           },
           {
             contentRoot: skillsRoots,
@@ -411,6 +420,7 @@ export async function buildCoreEmissionPlan(
         // version the `${STAMITY:CLI}` token renders in every body.
         engineVersion: ctx.engineVersion,
         ...(ctx.packageName === undefined ? {} : { packageName: ctx.packageName }),
+        ...(ctx.npmChannel === undefined ? {} : { npmChannel: ctx.npmChannel }),
         packHooks: await packHookDefinitions(resolved.packs, ctx.rootDir),
         // The agent-class half of the same seam: without these rows the
         // emitted policy document carries the shipped roster alone and the

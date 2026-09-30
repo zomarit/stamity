@@ -82,10 +82,14 @@ const stage = stageSubstitutedCorpus as (input: {
 }) => Promise<Staged>;
 
 const phrases = tokens.CHARTER_REFERENCE_PHRASES as Record<string, string>;
-/** The plugin build's input to the CLI-call token: the package and the version the plugin ships at. */
+/**
+ * The plugin build's input to the CLI-call token: the package and the version the plugin ships at,
+ * and whether a registry serves the package (`false` renders `npx --no`; absent is `-y`).
+ */
 interface PluginCli {
   packageName: string;
   version: string;
+  npmChannel?: boolean;
 }
 
 const substitute = tokens.substitute as (
@@ -198,6 +202,20 @@ describe("charter-reference phrases (REQ-PLUGIN-004)", () => {
     // A fork's plugin build names the fork's package.
     expect(substitute(`${CLI_TOKEN} sync`, { packageName: "@acme/stamity", version: "2.0.0-rc.1" }).text).toBe(
       "npx -y @acme/stamity@2.0.0-rc.1 sync",
+    );
+  });
+
+  it("renders `npx --no` for a registry-less fork's build, as the engine does (review/94)", () => {
+    // `scripts/generate-plugin-packages.mjs` passes `npmChannel: false` for a manifest that is
+    // private with no `publishConfig.registry`; the call then runs an installed copy and never
+    // fetches one under a name nobody holds. The engine's kernel renders the same literal.
+    const cli = { packageName: "@acme/stamity", version: "2.0.0", npmChannel: false };
+    const result = substitute(`${CLI_TOKEN} sync`, cli);
+    expect(result.text).toBe("npx --no @acme/stamity@2.0.0 sync");
+    expect(result.text).toBe(`${pinnedCliPrefix(cli.packageName, cli.version, cli)} sync`);
+    // A channel, named or left out, keeps `-y`.
+    expect(substitute(`${CLI_TOKEN} sync`, { ...cli, npmChannel: true }).text).toBe(
+      "npx -y @acme/stamity@2.0.0 sync",
     );
   });
 

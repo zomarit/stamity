@@ -153,6 +153,13 @@ export interface CliCallContext {
   packageName: string;
   /** The engine version the setup is generated with; semver-shaped, never `latest`. */
   version: string;
+  /**
+   * Whether the package has an npm channel (`CliCallOptions` in
+   * `../shared/cliCall.ts`). Absent or `true` renders `npx -y`; `false` — a
+   * fork that never publishes — renders `npx --no`, which runs an installed
+   * copy and never fetches one.
+   */
+  npmChannel?: boolean;
 }
 
 /** Resolved verification commands that feed {@link substituteVerificationGateTokens}. */
@@ -289,17 +296,19 @@ export function substituteCharterTokens(
 /**
  * The CLI pass's input, read off an emission context: its `packageName` when
  * it carries one (a fork passes its own), else {@link DEFAULT_CLI_PACKAGE_NAME},
- * and its engine version. Structural, so every context shape the call sites
- * hold — the planner's, the skills projection's, the charter renderer's —
- * passes as it is.
+ * its engine version, and its `npmChannel` when it carries one. Structural, so
+ * every context shape the call sites hold — the planner's, the skills
+ * projection's, the charter renderer's — passes as it is.
  */
 export function cliCallContextOf(ctx: {
   readonly packageName?: string;
   readonly engineVersion: string;
+  readonly npmChannel?: boolean;
 }): CliCallContext {
   return {
     packageName: ctx.packageName ?? DEFAULT_CLI_PACKAGE_NAME,
     version: ctx.engineVersion,
+    ...(ctx.npmChannel === undefined ? {} : { npmChannel: ctx.npmChannel }),
   };
 }
 
@@ -317,6 +326,6 @@ export function substituteCliTokens(content: string, cli: CliCallContext): strin
   if (!content.includes(CLI_TOKEN)) return content;
   return substituteTokens(
     content,
-    new Map([[CLI_TOKEN, pinnedCliPrefix(cli.packageName, cli.version)]]),
+    new Map([[CLI_TOKEN, pinnedCliPrefix(cli.packageName, cli.version, cli)]]),
   );
 }

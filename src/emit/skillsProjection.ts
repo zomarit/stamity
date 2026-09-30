@@ -185,6 +185,8 @@ export interface SkillsEmissionContext {
   engineVersion: string;
   /** The package the pinned CLI call names (`${STAMITY:CLI}`); absent means the canonical one. */
   packageName?: string;
+  /** Whether that package has an npm channel; absent means it does (`npx -y`), `false` renders `npx --no`. */
+  npmChannel?: boolean;
 }
 
 /** Test seams; production callers pass nothing and read the bundled corpus. */

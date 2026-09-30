@@ -53,7 +53,7 @@ import {
 } from "../../../types/manifest.ts";
 import { STATE_DIR } from "../../../types/markers.ts";
 import { getEmissionPlanner } from "../../engine/emission.ts";
-import { packageName } from "../../kit/packageName.ts";
+import { hasNpmChannel, packageName } from "../../kit/packageName.ts";
 import {
   installedPackServers,
   ledgerRowsForOutput,
@@ -117,6 +117,12 @@ export interface InitApplyOptions {
    * a renamed fork's included, pins it as it pins `engineVersion`.
    */
   packageName?: string;
+  /**
+   * Whether that package has an npm channel. Absent means this installation's
+   * own answer (`hasNpmChannel()`); a fixture that pins `packageName` pins
+   * this beside it, so its bytes do not depend on the checkout's manifest.
+   */
+  npmChannel?: boolean;
   dryRun: boolean;
   force: boolean;
   now?: Date;
@@ -230,6 +236,9 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     // `sync` passes it, so init and the first `check` agree byte for byte and
     // a renamed fork's emission runs the fork rather than the canonical name.
     packageName: opts.packageName ?? packageName(),
+    // Read off the same manifest as the name: a registry-less fork renders
+    // `npx --no`, which runs an installed copy and never fetches one.
+    npmChannel: opts.npmChannel ?? hasNpmChannel(),
     facts: { monorepoPackages: decisions.monorepoPackages },
   });
 

@@ -169,6 +169,23 @@ has no npm channel, so the entry carries a `github` source naming your repositor
 npm package you never publish. With `--registry` the entry carries an `npm` source naming your
 package, which your developers fetch from your registry.
 
+The CLI calls your setup writes follow the same split. `init`, `sync` and the plugin build pin
+every call they write into `AGENTS.md`, the generated bodies, the hook hints, the guard messages
+and `.codex/hooks.json` to your package at the version that wrote it, and the CLI's own remedies
+do the same. With `--registry` the call is `npx -y @<scope>/stamity@<version> <verb>`, and npx
+fetches that version from your registry when the project has none. Without it the call is
+`npx --no @<scope>/stamity@<version> <verb>`. Your scope is a public, predictable name that
+nobody holds on the public npm registry, and a `-y` call would install whatever a third party
+published there under it, without asking. `--no` makes npm run a copy the project already has
+installed at that version and refuse to fetch one. Anywhere else the call stops with an npm error,
+a 404 while nothing is published under the name and `npx canceled due to missing packages` once
+something is, and no package is installed or run. The route to a
+runnable copy in this mode is your plugin distribution: each plugin root carries its own copy of
+the engine, and the root's `README.md` prints the locator line that runs it, as
+[the plugins guide](plugins.md) describes under **Set the repository up** and
+**Keep the runtime in step**. The hints also name the short `stamity <verb>` form, for a machine
+where the CLI is on `PATH`.
+
 The release and docs-deployment workflows you inherit also check the running repository's identity
 and visibility. Their public publication jobs run only in the public canonical repository. Preserve
 those guards when you review an upstream release. Private APM needs its generated tree and a

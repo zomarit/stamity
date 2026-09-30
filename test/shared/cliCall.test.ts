@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CANONICAL_PACKAGE_NAME } from "../../src/cli/kit/packageName.ts";
 import {
+  cliCallHint,
   DEFAULT_CLI_PACKAGE_NAME,
   pinnedCliCall,
   pinnedCliPrefix,
@@ -98,5 +99,41 @@ describe("DEFAULT_CLI_PACKAGE_NAME", () => {
     // kernel at wave 1, so the value is restated here and held equal by test.
     expect(DEFAULT_CLI_PACKAGE_NAME).toBe(CANONICAL_PACKAGE_NAME);
     expect(pinnedCliPrefix(DEFAULT_CLI_PACKAGE_NAME, "1.11.0")).toBe("npx -y @zomarit/stamity@1.11.0");
+  });
+});
+
+/**
+ * The npm-channel option (security review/94, fail closed): a package no
+ * registry serves renders `npx --no`, which runs a copy the project already
+ * has installed and refuses to fetch one. Absent or `true` keeps `-y`, so
+ * every caller that names no option renders what it always did.
+ */
+describe("the npm-channel option", () => {
+  it("renders `--no` for a package with no npm channel, on every entry point", () => {
+    const noChannel = { npmChannel: false };
+    expect(pinnedCliPrefix("@acme/stamity", "1.8.0", noChannel)).toBe("npx --no @acme/stamity@1.8.0");
+    expect(pinnedCliCall("@acme/stamity", "1.8.0", "sync", noChannel)).toBe(
+      "npx --no @acme/stamity@1.8.0 sync",
+    );
+    expect(cliCallHint("@acme/stamity", "1.8.0", "check", noChannel)).toBe(
+      "`stamity check` where the CLI is installed, else `npx --no @acme/stamity@1.8.0 check`",
+    );
+  });
+
+  it("keeps `-y` when the option is absent or names a channel", () => {
+    expect(pinnedCliCall("@acme/stamity", "1.8.0", "sync")).toBe("npx -y @acme/stamity@1.8.0 sync");
+    expect(pinnedCliCall("@acme/stamity", "1.8.0", "sync", {})).toBe("npx -y @acme/stamity@1.8.0 sync");
+    expect(pinnedCliCall("@acme/stamity", "1.8.0", "sync", { npmChannel: true })).toBe(
+      "npx -y @acme/stamity@1.8.0 sync",
+    );
+  });
+
+  it("validates the name and version the same way under `--no`", () => {
+    expect(validationMessage(() => pinnedCliPrefix("@acme/stamity", "latest", { npmChannel: false }))).toMatch(
+      /semver/,
+    );
+    expect(
+      validationMessage(() => pinnedCliPrefix("-acme", "1.8.0", { npmChannel: false })),
+    ).toMatch(/runnable npm package name/);
   });
 });

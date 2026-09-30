@@ -46,12 +46,19 @@ export interface RepositoryIdentity {
   readonly publisher: string;
   /** `package.json` `private` — `true` on a downstream that followed the guide. */
   readonly private: boolean;
+  /**
+   * Whether a registry serves the package: not `private`, or `publishConfig.registry`
+   * set (a fork made with `--registry`). `false` on the registry-less fork, whose
+   * pinned calls render `npx --no`.
+   */
+  readonly npmChannel: boolean;
 }
 
 interface Manifest {
   readonly name?: unknown;
   readonly version?: unknown;
   readonly private?: unknown;
+  readonly publishConfig?: { readonly registry?: unknown };
   readonly repository?: { readonly url?: unknown };
   readonly stamity?: { readonly publisher?: unknown };
 }
@@ -72,12 +79,14 @@ export function canonical(): RepositoryIdentity {
     const publisher =
       typeof manifest.stamity?.publisher === "string" ? manifest.stamity.publisher : DEFAULT_PUBLISHER;
     const isPrivate = manifest.private === true;
+    const registry = manifest.publishConfig?.registry;
     cached = {
       canonical: name === CANONICAL_NAME && publisher === CANONICAL_PUBLISHER && !isPrivate,
       name,
       version,
       publisher,
       private: isPrivate,
+      npmChannel: !isPrivate || (typeof registry === "string" && registry !== ""),
     };
   }
   return cached;
@@ -116,21 +125,34 @@ export function repositoryRoute(): RepositoryRoute {
 }
 
 /**
+ * A semver-shaped version, the shape `pinnedCliPrefix` (`src/shared/cliCall.ts`)
+ * pins; anything else — `next`, a range, an empty string — takes the unpinned
+ * fallback. Restated, not imported, for the reason {@link npxCommand} gives.
+ */
+const SEMVER_SHAPE =
+  /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+/**
  * The `npx` invocation this checkout's own remedies name: the pinned
- * `npx -y <own name>@<own version> <verb>`.
+ * `npx -y <own name>@<own version> <verb>`, or `npx --no …` when the package
+ * has no npm channel ({@link RepositoryIdentity.npmChannel}).
  *
  * The shape is the assertion — a remedy has to name a package a reader can run,
  * at the version that printed it — and the name and version are whatever this
  * manifest carries, so the canonical checkout keeps its exact literal and a fork
  * reads its own. `verb` is the whole tail, mirroring `packageCommand` in
  * `src/cli/kit/packageName.ts`, including its unpinned fallback for a manifest
- * with no version. Spelled out here rather than imported: a test that asked the
- * production helper for its expected string would agree with it by construction.
+ * whose version is missing or not semver-shaped. Spelled out here rather than
+ * imported: a test that asked the production helper for its expected string
+ * would agree with it by construction.
  */
 export function npxCommand(verb: string): string {
-  const { name, version } = canonical();
-  return version === "" ? `npx ${name} ${verb}` : `npx -y ${name}@${version} ${verb}`;
+  const { name, version, npmChannel } = canonical();
+  const flag = npmChannel ? "-y" : "--no";
+  if (SEMVER_SHAPE.test(version)) return `npx ${flag} ${name}@${version} ${verb}`;
+  return npmChannel ? `npx ${name} ${verb}` : `npx --no ${name} ${verb}`;
 }
+
 
 /**
  * A title for a canonical-only case that says out loud why it did not run.

@@ -4,12 +4,15 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type * as PackageNameApi from "../../../src/cli/kit/packageName.ts";
 import {
+  CANONICAL_PACKAGE_NAME,
+  hasNpmChannel,
   packageCommand,
   packageName,
   repositorySlug,
   resolveOwnPackageFacts,
 } from "../../../src/cli/kit/packageName.ts";
 import type * as PathsApi from "../../../src/shared/paths.ts";
+import { canonical, canonicalOnly } from "../../support/identity.ts";
 import { makeTempDir, useTempDir } from "../../support/tempDir.ts";
 
 /**
@@ -83,6 +86,14 @@ describe("packageCommand — the canonical checkout", () => {
     );
   });
 
+  it.skipIf(!canonical().canonical)(
+    canonicalOnly("has an npm channel, so its remedies keep `npx -y`"),
+    () => {
+      expect(hasNpmChannel()).toBe(true);
+      expect(packageCommand("sync").startsWith("npx -y ")).toBe(true);
+    },
+  );
+
   it("does not use the `st` bin alias — npx resolves a package name", () => {
     expect(packageCommand("sync").startsWith("npx ")).toBe(true);
     expect(packageCommand("sync")).not.toContain("npx st ");
@@ -118,7 +129,26 @@ describe("packageCommand — a renamed private downstream", () => {
     expect(kit.packageName()).toBe("@acme/stamity");
     // TEST CHANGE (sw26-engine-cli-call-form): the fork's own name AND its own
     // version, pinned.
-    expect(kit.packageCommand("init")).toBe("npx -y @acme/stamity@1.8.0 init");
+    // TEST CHANGE (sw26 fix round 1, review/94): `private: true` with no
+    // `publishConfig.registry` is the registry-less fork, whose name nobody holds
+    // on the public registry, so the call fails closed with `--no` in place of `-y`.
+    expect(kit.hasNpmChannel()).toBe(false);
+    expect(kit.packageCommand("init")).toBe("npx --no @acme/stamity@1.8.0 init");
+    expect(kit.packageCommand("sync")).toBe("npx --no @acme/stamity@1.8.0 sync");
+  });
+
+  // What `scripts/fork-identity.mjs --registry <url>` writes: `private` removed
+  // and `publishConfig.registry` set. Also the rare hand-kept shape that stays
+  // `private` and names a registry: a registry is a channel.
+  it.each([
+    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://npm.pkg.github.com" } },
+    { name: "@acme/stamity", version: "1.8.0", private: true, publishConfig: { registry: "https://npm.acme.example" } },
+  ])("keeps `-y` for a fork that names its own registry (%j)", async (manifest) => {
+    const fixture = getFixture();
+    await fixture.seedFiles({ "package.json": `${JSON.stringify(manifest)}\n` });
+    const kit = await loadKitRootedAt(fixture.dir);
+
+    expect(kit.hasNpmChannel()).toBe(true);
     expect(kit.packageCommand("sync")).toBe("npx -y @acme/stamity@1.8.0 sync");
   });
 
@@ -140,7 +170,10 @@ describe("packageCommand — a renamed private downstream", () => {
     });
     // Unchanged on purpose: a manifest with no string version has nothing to
     // pin, so the remedy keeps the unpinned form rather than inventing one.
-    expect(kit.packageCommand("init")).toBe("npx @acme/stamity init");
+    // TEST CHANGE (sw26 fix round 1, review/95): the manifest is private with no
+    // registry, so the unpinned remedy carries `--no` too and still never fetches.
+    expect(kit.hasNpmChannel()).toBe(false);
+    expect(kit.packageCommand("init")).toBe("npx --no @acme/stamity init");
   });
 
   it("keeps the unpinned form when the version is not semver-shaped, rather than throwing", async () => {
@@ -181,6 +214,10 @@ describe("packageCommand — the unnamed sentinel", () => {
 
     expect(kit.resolveOwnPackageFacts()).toEqual({ name: "", version: "", isPrivate: true });
     expect(kit.packageCommand("sync")).toBe("npx @zomarit/stamity sync");
+    // The private-marked fallback facts do not make the canonical name a
+    // registry-less package: the canonical package is published, so the
+    // fallback keeps its channel (and no `--no`).
+    expect(kit.hasNpmChannel()).toBe(true);
   });
 
   it("falls back when the manifest parses to something that is not an object", async () => {
@@ -259,6 +296,12 @@ describe("repositorySlug", () => {
  * the canonical `@zomarit/stamity` in a renamed fork — every emitted call then
  * sends the fork's operators at a package that is not theirs.
  *
+ * The npm-channel half (security review/94, fail closed): a fork with no npm
+ * channel — `private: true` and no `publishConfig.registry` — renders every
+ * pinned call as `npx --no`, so no emitted call ever installs a package a third
+ * party published under the fork's unheld name. A `--registry` fork and the
+ * canonical build keep `npx -y`.
+ *
  * Proved through the two production builders of the context, `applyInit`
  * (init and plugin setup) and `planSync` (sync, check's drift gate and
  * workspace sync), with the same one-seam redirect as above: only the kit's
@@ -266,11 +309,35 @@ describe("repositorySlug", () => {
  * `findPackageRoot` caller — the content index among them — keeps the real one.
  */
 describe("a renamed fork's emission", () => {
-  it("init and sync render the fork's own package into every pinned call", async () => {
+  const cases = [
+    {
+      label: "a registry-less fork (private, no publishConfig.registry) renders `npx --no`",
+      manifest: { name: "@acme/stamity", version: "1.8.0", private: true },
+      name: "@acme/stamity",
+      call: "npx --no @acme/stamity@1.8.0",
+      refused: "npx -y @acme/stamity",
+    },
+    {
+      label: "a fork made with --registry keeps `npx -y`",
+      manifest: { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://npm.pkg.github.com" } },
+      name: "@acme/stamity",
+      call: "npx -y @acme/stamity@1.8.0",
+      refused: "npx --no ",
+    },
+    {
+      label: "the canonical build keeps `npx -y`",
+      // The kit's own constant rather than a literal: the fixture manifest is
+      // canonical-shaped by construction, whatever checkout runs the suite.
+      manifest: { name: CANONICAL_PACKAGE_NAME, version: "1.8.0" },
+      name: CANONICAL_PACKAGE_NAME,
+      call: `npx -y ${CANONICAL_PACKAGE_NAME}@1.8.0`,
+      refused: "npx --no ",
+    },
+  ] as const;
+
+  it.each(cases)("$label, through init and sync", async ({ manifest, name, call, refused }) => {
     const install = getFixture();
-    await install.seedFiles({
-      "package.json": `${JSON.stringify({ name: "@acme/stamity", version: "1.8.0", private: true })}\n`,
-    });
+    await install.seedFiles({ "package.json": `${JSON.stringify(manifest)}\n` });
     const repo = await makeTempDir("stamity-fork-emission");
     try {
       await repo.seedFiles({
@@ -301,28 +368,42 @@ describe("a renamed fork's emission", () => {
         now: new Date("2026-09-30T00:00:00.000Z"),
       });
 
-      // Init: the charter's token, a hook hint, and the trusted Codex file.
+      // Init: the charter's token, a hook hint, the trusted Codex file (its
+      // starter's safe-character check admits the `--no` form), the Claude
+      // guard's fail-closed tail and a Cursor guard's refusal.
       const written = await Promise.all(
         [
           "AGENTS.md",
           ".codex/hooks.json",
           ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs",
+          ".claude/settings.json",
+          ".cursor/hooks/mcp-guard.mjs",
         ].map(async (path) => [path, await readFile(join(repo.dir, path), "utf8")] as const),
       );
       for (const [path, content] of written) {
-        expect(content, path).toContain("npx -y @acme/stamity@1.8.0");
-        expect(content, path).not.toContain("@zomarit/stamity");
+        expect(content, path).toContain(call);
+        expect(content, path).not.toContain(refused);
+        if (name !== CANONICAL_PACKAGE_NAME) expect(content, path).not.toContain("@zomarit/stamity");
       }
 
       // Sync: the same planner, reached through the other context builder.
       // A git-less fixture: the working-tree probe answers "clean".
       const plan = await planSync(repo.dir, "1.8.0", { runner: () => "" });
       const agents = plan.outputs.find((output) => output.path === "AGENTS.md");
-      expect(agents?.content).toContain("npx -y @acme/stamity@1.8.0");
-      const canonicalLeaks = plan.outputs
-        .filter((output) => output.content.includes("@zomarit/stamity"))
+      expect(agents?.content).toContain(call);
+      const carriers = plan.outputs.filter((output) => output.content.includes(`${name}@1.8.0`));
+      // Non-degenerate: the call reaches bodies, hooks and client files alike.
+      expect(carriers.length).toBeGreaterThan(5);
+      const wrongForm = plan.outputs
+        .filter((output) => output.content.includes(refused))
         .map((output) => output.path);
-      expect(canonicalLeaks).toEqual([]);
+      expect(wrongForm).toEqual([]);
+      if (name !== CANONICAL_PACKAGE_NAME) {
+        const canonicalLeaks = plan.outputs
+          .filter((output) => output.content.includes("@zomarit/stamity"))
+          .map((output) => output.path);
+        expect(canonicalLeaks).toEqual([]);
+      }
     } finally {
       await repo.cleanup();
     }

@@ -170,7 +170,13 @@ describe("the identity the CLI and CI suites assert against", () => {
       // ── test/cli ──
       // The FALLBACK the production helper uses when the self-read finds no manifest at
       // all: there is no other name it could give, so the literal IS the subject.
-      "test/cli/kit/packageName.test.ts": { name: 3, why: "proves the unnamed-manifest fallback" },
+      // TEST CHANGE (sw26-engine-cli-call-form fix round 1): was `name: 3`. The unit's fork
+      // emission case (75e18e5e) added two literals the census never moved: the canonical name
+      // must be ABSENT from a renamed fork's init and sync output, true in every checkout.
+      "test/cli/kit/packageName.test.ts": {
+        name: 5,
+        why: "proves the unnamed-manifest fallback, and that a renamed fork's emission never names the canonical package",
+      },
       // A renamed pseudo package root, asserting the canonical name does NOT leak into
       // its remedies. The literal is the thing that must be absent.
       "test/cli/commands/check.test.ts": { name: 1, why: "asserts the canonical fallback stays out of a renamed run" },
@@ -240,11 +246,16 @@ describe("the identity the CLI and CI suites assert against", () => {
     () => {
       // The other half of the same contract: the helper must not be so cautious that the
       // canonical tree reads as a fork and quietly stops checking things.
+      // TEST CHANGE (sw26-engine-cli-call-form fix round 1): `version` joined the record
+      // in 75e18e5e without this assertion moving, and `npmChannel` joins it now. The
+      // version is not what this case asserts, so it is matched by type.
       expect(canonical()).toEqual({
         canonical: true,
         name: "@zomarit/stamity",
+        version: expect.any(String),
         publisher: "zomarit",
         private: false,
+        npmChannel: true,
       });
     },
   );

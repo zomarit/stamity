@@ -250,6 +250,8 @@ export interface HooksPlanContext {
    * hook scripts name the fork (`./substitution.ts` → `cliCallContextOf`).
    */
   packageName?: string;
+  /** Whether that package has an npm channel; absent means it does (`npx -y`), `false` renders `npx --no`. */
+  npmChannel?: boolean;
   /**
    * Hook definitions supplied by installed packs, already read through THIS
    * lane's ingress (`../pack/projection.ts` → `packHookDefinitions`) — the

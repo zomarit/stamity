@@ -188,6 +188,13 @@ export interface EmissionContext {
    * package passes its own name so the rendered call runs the fork.
    */
   packageName?: string;
+  /**
+   * Whether that package has an npm channel. Absent means it does, and the
+   * call renders `npx -y`; `false` — a fork that never publishes (private, no
+   * `publishConfig.registry`) — renders `npx --no`, which runs a copy already
+   * installed in the project and refuses to fetch one (`../../shared/cliCall.ts`).
+   */
+  npmChannel?: boolean;
   /** Live per-run detection decisions (see {@link EmissionFacts}). */
   facts: EmissionFacts;
   /**

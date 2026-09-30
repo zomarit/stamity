@@ -325,6 +325,13 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
 
   const packageName = requirePkg('name', pkg.name, nonEmptyString)
   const releaseVersion = version ?? requirePkg('version', pkg.version, nonEmptyString)
+  // Whether a registry serves this package — the decision `hasNpmChannel()`
+  // (`src/cli/kit/packageName.ts`) makes for init and sync, over the same fields. A
+  // registry-less fork (private, no `publishConfig.registry`) renders every pinned call as
+  // `npx --no`, which runs an installed copy and never fetches one under a name nobody holds.
+  const npmChannel =
+    !(pkg.private === true || pkg.private === 'true') ||
+    (typeof pkg.publishConfig?.registry === 'string' && pkg.publishConfig.registry !== '')
   const description = requirePkg('description', pkg.description, nonEmptyString)
   const license = requirePkg('license', pkg.license, nonEmptyString)
   const homepageUrl = requirePkg('homepage', pkg.homepage, nonEmptyString)
@@ -453,7 +460,7 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
         forkRoot: join(ROOT, 'fork'),
         tokens,
         // `${STAMITY:CLI}` pins a body's CLI call to this build's own package and release.
-        cli: { packageName, version: releaseVersion },
+        cli: { packageName, version: releaseVersion, npmChannel },
       })
     } catch (err) {
       fail(err instanceof Error ? err.message : String(err))
@@ -500,6 +507,7 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
           engineVersion: releaseVersion,
           // The package the hook scripts' CLI hints pin, as the bodies' token does above.
           packageName,
+          npmChannel,
           facts: { monorepoPackages: [], hookScriptsRoot: `\${${rootVar}}/${HOOKS_DIR}` },
           contentRoot,
         })

@@ -38,13 +38,16 @@ export const CLI_TOKEN = '${STAMITY:CLI}'
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/
 
 /**
- * The value `${STAMITY:CLI}` takes in a plugin body: `npx -y <packageName>@<version>`.
+ * The value `${STAMITY:CLI}` takes in a plugin body: `npx -y <packageName>@<version>`, or
+ * `npx --no <packageName>@<version>` when `npmChannel` is `false` — a package no registry serves,
+ * whose call runs an installed copy and never fetches one (`CliCallOptions` in
+ * `src/shared/cliCall.ts`). An absent `npmChannel` is `-y`, as there.
  *
  * Throws on a name that is not a runnable package and on a version that is not a plugin version
  * (`scripts/plugins/version.mjs`): `latest`, a range or an empty string would publish an
  * unpinned call, and build metadata has nowhere to go in an npm install spec.
  */
-export function pinnedCliPrefix({ packageName, version } = {}) {
+export function pinnedCliPrefix({ packageName, version, npmChannel } = {}) {
   if (typeof packageName !== 'string' || !PACKAGE_NAME.test(packageName)) {
     throw new Error(
       `Cannot render the pinned CLI call: ${JSON.stringify(packageName)} is not a runnable npm package name.`,
@@ -55,7 +58,7 @@ export function pinnedCliPrefix({ packageName, version } = {}) {
       `Cannot render the pinned CLI call: version ${JSON.stringify(version)} is not a plugin version (major.minor.patch, an optional prerelease).`,
     )
   }
-  return `npx -y ${packageName}@${version}`
+  return `npx ${npmChannel === false ? '--no' : '-y'} ${packageName}@${version}`
 }
 
 /**
@@ -92,7 +95,7 @@ const TOKEN_PATTERN = /\$\{STAMITY:[^}\n]*\}/g
 
 /**
  * Replace every mapped token in `body` with its phrase — and `${STAMITY:CLI}` with the pinned
- * call when `cli` (`{ packageName, version }`) is given — and report the rest.
+ * call when `cli` (`{ packageName, version, npmChannel? }`) is given — and report the rest.
  *
  * Pure. An unmapped token is LEFT IN PLACE rather than blanked, so the caller's refusal message
  * can quote the body as it stands; `unresolved` lists each distinct token once, in order of first

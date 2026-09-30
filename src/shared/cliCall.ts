@@ -13,6 +13,10 @@ import { EngineError } from "../types/errors.ts";
  * all have moved. The version pinned is the one the setup was generated with.
  * `-y` is there because an agent's shell cannot answer npx's install prompt.
  *
+ * A package with no npm channel renders `npx --no` in place of `-y` (see
+ * {@link CliCallOptions}): npm then runs a copy the project already has
+ * installed at that version and refuses to fetch one.
+ *
  * A wave-1 kernel with no inputs but its arguments: the emission layer renders
  * the `${STAMITY:CLI}` token through {@link pinnedCliPrefix}, and the CLI's own
  * remedy text through {@link pinnedCliCall}, so both spell the call one way.
@@ -47,15 +51,49 @@ const SEMVER =
   /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 /**
+ * How the pinned call may obtain the package. Optional everywhere, and its
+ * absence is the canonical case, so every caller that names none renders the
+ * `npx -y` call it always did.
+ */
+export interface CliCallOptions {
+  /**
+   * Whether the package has an npm channel — a registry that serves it. `true`
+   * or absent: `npx -y`, which fetches the pinned version when the project has
+   * none. `false`: `npx --no`, which runs a copy already installed in the
+   * project and refuses to fetch one. A fork that never publishes (private, no
+   * `publishConfig.registry`) has a name nobody holds on the public registry,
+   * and a `-y` call would install whatever a third party published there under
+   * it; `--no` fails closed instead (`docs/enterprise-forks.md`).
+   */
+  readonly npmChannel?: boolean;
+}
+
+/**
+ * The npx flag an {@link CliCallOptions} selects. `--no` is npx's shorthand
+ * for `--no-yes`. npx's argument scan takes the package as that flag's value,
+ * so a flag between the package and the first plain word goes to npm, not to
+ * the package (`npx --no <pkg>@<v> --version` prints npm's own version). Every
+ * call here puts a verb right after the package, and a verb never opens with `-`.
+ */
+function npxFlag(opts: CliCallOptions): string {
+  return opts.npmChannel === false ? "--no" : "-y";
+}
+
+/**
  * `npx -y <packageName>@<version>` — the pinned call without a verb, which is
  * what the `${STAMITY:CLI}` token renders to so a body can write
- * `${STAMITY:CLI} <verb>` in prose.
+ * `${STAMITY:CLI} <verb>` in prose. `npx --no …` for a package with no npm
+ * channel ({@link CliCallOptions}).
  *
  * Throws `VALIDATION_ERROR` on an empty or unrunnable package name, and on a
  * version that is not semver-shaped: rendering either would emit a call that
  * fails, or one that silently runs a different version.
  */
-export function pinnedCliPrefix(packageName: string, version: string): string {
+export function pinnedCliPrefix(
+  packageName: string,
+  version: string,
+  opts: CliCallOptions = {},
+): string {
   if (!PACKAGE_NAME.test(packageName)) {
     throw new EngineError(
       `Cannot render the pinned CLI call: ${JSON.stringify(packageName)} is not a runnable npm package name.`,
@@ -69,7 +107,7 @@ export function pinnedCliPrefix(packageName: string, version: string): string {
       { code: "VALIDATION_ERROR" },
     );
   }
-  return `npx -y ${packageName}@${version}`;
+  return `npx ${npxFlag(opts)} ${packageName}@${version}`;
 }
 
 /**
@@ -77,8 +115,13 @@ export function pinnedCliPrefix(packageName: string, version: string): string {
  * multi-word call passes as one argument — `pinnedCliCall(name, v, "learn capture")`.
  * Throws as {@link pinnedCliPrefix} does.
  */
-export function pinnedCliCall(packageName: string, version: string, verb: string): string {
-  return `${pinnedCliPrefix(packageName, version)} ${verb}`;
+export function pinnedCliCall(
+  packageName: string,
+  version: string,
+  verb: string,
+  opts: CliCallOptions = {},
+): string {
+  return `${pinnedCliPrefix(packageName, version, opts)} ${verb}`;
 }
 
 /**
@@ -96,6 +139,11 @@ export function pinnedCliCall(packageName: string, version: string, verb: string
  * backtick is shell syntax (a double-quoted `node -e` program, say) takes
  * {@link pinnedCliCall} instead.
  */
-export function cliCallHint(packageName: string, version: string, verb: string): string {
-  return `\`stamity ${verb}\` where the CLI is installed, else \`${pinnedCliCall(packageName, version, verb)}\``;
+export function cliCallHint(
+  packageName: string,
+  version: string,
+  verb: string,
+  opts: CliCallOptions = {},
+): string {
+  return `\`stamity ${verb}\` where the CLI is installed, else \`${pinnedCliCall(packageName, version, verb, opts)}\``;
 }

@@ -607,8 +607,12 @@ describe("check — an un-initialised repository", () => {
       // TEST CHANGE (sw26-engine-cli-call-form, REQ-FLOW-002): the remedy is the
       // pinned call — the fork's name AND its version — and the negative widens
       // to any canonical spelling, pinned or not.
-      expect(result.stdout).toContain("npx -y @acme/stamity@1.8.0 init");
-      expect(result.stdout).toContain("npx -y @acme/stamity@1.8.0 init — this repository has no usable");
+      // TEST CHANGE (sw26 fix round 1, review/94): this fixture is the registry-less
+      // fork (private, no publishConfig.registry), so the remedy fails closed with
+      // `--no` — it runs an installed copy and never fetches one — and never `-y`.
+      expect(result.stdout).toContain("npx --no @acme/stamity@1.8.0 init");
+      expect(result.stdout).toContain("npx --no @acme/stamity@1.8.0 init — this repository has no usable");
+      expect(result.stdout).not.toContain("npx -y ");
       expect(result.stdout).not.toContain("@zomarit/stamity");
     } finally {
       vi.doUnmock("../../../src/shared/paths.ts");

@@ -56,7 +56,7 @@ import {
   readIfExists,
 } from "../../engine/emissionWrite.ts";
 import { readWorkingTreeStatus, type WorkingTreeStatus } from "../../engine/gitStatus.ts";
-import { packageCommand, packageName } from "../../kit/packageName.ts";
+import { hasNpmChannel, packageCommand, packageName } from "../../kit/packageName.ts";
 import type { GitRunner } from "../../../workspace/git.ts";
 
 /**
@@ -411,7 +411,7 @@ export async function planOutputEntries(
 export async function planSync(
   rootDir: string,
   engineVersion: string,
-  opts: { runner?: GitRunner; packageName?: string } = {},
+  opts: { runner?: GitRunner; packageName?: string; npmChannel?: boolean } = {},
 ): Promise<SyncPlan> {
   const manifest = await readManifest(rootDir);
   if (manifest === null) {
@@ -445,6 +445,9 @@ export async function planSync(
     // from its manifest, so a renamed fork's emission runs the fork. A caller
     // pins another only to render checkout-independent bytes (the goldens).
     packageName: opts.packageName ?? packageName(),
+    // Off the same manifest read as the name; a caller pinning the name pins
+    // this beside it. A registry-less fork renders `npx --no`.
+    npmChannel: opts.npmChannel ?? hasNpmChannel(),
     facts: {
       monorepoPackages: repoInfo.monorepoPackages,
     },

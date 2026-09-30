@@ -682,7 +682,7 @@ export function buildHooksJson(
   cli: CliCallContext,
   hookScriptsRoot?: string,
 ): string {
-  const syncCall = pinnedCliCall(cli.packageName, cli.version, "sync");
+  const syncCall = pinnedCliCall(cli.packageName, cli.version, "sync", cli);
   const hooks: Record<string, { matcher?: string; hooks: { type: string; command: string; commandWindows: string; timeout?: number }[] }[]> = {};
   for (const row of core.hooks.interchangeFor(TOOL)) {
     const event = CLAUDE_EVENT_NAMES[row.event]!;
@@ -716,7 +716,7 @@ export function buildHooksJson(
     `Stamity hooks. ${hookTrustSentence()} ` +
     "Trust is recorded against this file's hash only: the hook script bytes under " +
     `${scriptsDir}/ are outside it and can change without re-review, ` +
-    `so the check verb (${cliCallHint(cli.packageName, cli.version, "check")}) is the control ` +
+    `so the check verb (${cliCallHint(cli.packageName, cli.version, "check", cli)}) is the control ` +
     "for them and for emitted-file drift generally. " +
     "The role guard is telemetry because PreToolUse carries no agent identity.";
   return `${JSON.stringify({ description, hooks }, null, 2)}\n`;

@@ -22,6 +22,7 @@ import { STATE_DIR } from "../../src/types/markers.ts";
 import {
   GOLDEN_ENGINE_VERSION,
   GOLDEN_NOW,
+  GOLDEN_NPM_CHANNEL,
   GOLDEN_PACKAGE_NAME,
   GOLDEN_SEED_FILES,
   goldenGitRunner,
@@ -123,7 +124,11 @@ afterEach(async () => {
  * so the proof holds in a renamed fork's checkout too.
  */
 function plan(version: string = GOLDEN_ENGINE_VERSION): Promise<SyncPlan> {
-  return planSync(repo.rootDir, version, { runner: goldenGitRunner, packageName: GOLDEN_PACKAGE_NAME });
+  return planSync(repo.rootDir, version, {
+    runner: goldenGitRunner,
+    packageName: GOLDEN_PACKAGE_NAME,
+    npmChannel: GOLDEN_NPM_CHANNEL,
+  });
 }
 
 /** `applySync` for a plan, at the same pinned version and clock. */
@@ -200,6 +205,7 @@ describe("sync idempotency", () => {
       const replan = await planSync(noCi.rootDir, GOLDEN_ENGINE_VERSION, {
         runner: goldenGitRunner,
         packageName: GOLDEN_PACKAGE_NAME,
+        npmChannel: GOLDEN_NPM_CHANNEL,
       });
       expect(
         replan.entries.filter((entry) => entry.action !== "unchanged").map((entry) => entry.path),

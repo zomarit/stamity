@@ -348,7 +348,7 @@ const PROJECT_DIR_VARIABLE = "${CLAUDE_PROJECT_DIR}";
 function guardFailClosedTail(cli: CliCallContext): string {
   return (
     "|| { s=$?; [ \"$s\" -eq 2 ] && exit 2; " +
-    `echo 'stamity: the pre-tool-use guard could not run; run ${cliCallHint(cli.packageName, cli.version, "sync")}' >&2; exit 2; }`
+    `echo 'stamity: the pre-tool-use guard could not run; run ${cliCallHint(cli.packageName, cli.version, "sync", cli)}' >&2; exit 2; }`
   );
 }
 

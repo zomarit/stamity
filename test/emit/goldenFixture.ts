@@ -51,6 +51,14 @@ export const GOLDEN_ENGINE_VERSION = "1.0.0-golden";
  */
 export const GOLDEN_PACKAGE_NAME = "@zomarit/stamity";
 
+/**
+ * Whether {@link GOLDEN_PACKAGE_NAME} has an npm channel — pinned beside it for
+ * the same reason: init and sync otherwise read the RUNNING checkout's manifest,
+ * and a registry-less fork's checkout would render `npx --no` into the goldens.
+ * The canonical package has one, so the goldens carry `npx -y`.
+ */
+export const GOLDEN_NPM_CHANNEL = true;
+
 /** Injected clock for manifest timestamps — the only wall-clock input emission has. */
 export const GOLDEN_NOW = new Date("2026-08-14T00:00:00.000Z");
 
@@ -214,6 +222,7 @@ export async function makeGoldenRepo(opts: {
       defaults: { mcpServers: [GOLDEN_MCP_SERVER_ID] },
       engineVersion: GOLDEN_ENGINE_VERSION,
       packageName: GOLDEN_PACKAGE_NAME,
+      npmChannel: GOLDEN_NPM_CHANNEL,
       dryRun: false,
       force: false,
       now: GOLDEN_NOW,

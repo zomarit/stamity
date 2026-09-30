@@ -2814,13 +2814,14 @@ if (outcome !== null) {
  *
  * `opts` is the package the notice's check hint pins and the version it pins
  * it to — the emission context's package name and engine version, so a
- * renamed fork's notice names the fork. Throws `VALIDATION_ERROR` when either
+ * renamed fork's notice names the fork, plus its `npmChannel` (absent: `-y`;
+ * `false`: `--no`). Throws `VALIDATION_ERROR` when either
  * cannot be pinned (`../shared/cliCall.ts`).
  */
 export function planCoreHookScripts(
   policiesJsonPath: string,
   tool: Tool,
-  opts: { packageName: string; version: string },
+  opts: { packageName: string; version: string; npmChannel?: boolean },
 ): GeneratedHookScript[] {
   const failMode =
     CLIENT_HOOK_GUARANTEES.find((guarantee) => guarantee.tool === tool)?.failMode ?? "fail-closed";
@@ -2843,7 +2844,7 @@ export function planCoreHookScripts(
     {
       fileName: TAMPER_NOTICE_FILE,
       content: buildConfigTamperNoticeScript({
-        checkCall: cliCallHint(opts.packageName, opts.version, "check"),
+        checkCall: cliCallHint(opts.packageName, opts.version, "check", opts),
       }),
       event: "session_start",
     },

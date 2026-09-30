@@ -74,6 +74,8 @@ export interface AgentsMdEmissionContext {
   engineVersion?: string;
   /** The package the pinned CLI call names; absent means the canonical one. */
   packageName?: string;
+  /** Whether that package has an npm channel; absent means it does (`npx -y`), `false` renders `npx --no`. */
+  npmChannel?: boolean;
   /** Live per-run detection decisions; only the monorepo layout is read here. */
   facts: {
     /** Workspace packages feeding the nested-copy plan; empty for single-package repos. */
@@ -158,6 +160,7 @@ export async function renderAgentsMd(ctx: AgentsMdEmissionContext): Promise<Agen
     cliCallContextOf({
       engineVersion: ctx.engineVersion ?? UNSTAMPED_ENGINE_VERSION,
       ...(ctx.packageName === undefined ? {} : { packageName: ctx.packageName }),
+      ...(ctx.npmChannel === undefined ? {} : { npmChannel: ctx.npmChannel }),
     }),
   );
   const content = withSingleTrailingNewline(substituted);

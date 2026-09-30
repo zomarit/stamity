@@ -76,7 +76,15 @@ function readOwnManifest(): Record<string, unknown> | null {
  * safe direction for a self-read that decorates other output.
  */
 export function resolveOwnPackageFacts(): { name: string; version: string; isPrivate: boolean } {
-  const parsed = readOwnManifest();
+  return factsOf(readOwnManifest());
+}
+
+/** {@link resolveOwnPackageFacts} over a manifest already read. */
+function factsOf(parsed: Record<string, unknown> | null): {
+  name: string;
+  version: string;
+  isPrivate: boolean;
+} {
   if (parsed === null) return UNKNOWN_PACKAGE_FACTS;
   const { name, version, private: isPrivate } = parsed;
   return {
@@ -91,23 +99,57 @@ export function resolveOwnPackageFacts(): { name: string; version: string; isPri
 /**
  * Memoized because every remedy line asks again: the answer cannot change
  * inside one process (the manifest being read is the running package's own),
- * and the read is a directory walk plus a parse.
+ * and the read is a directory walk plus a parse. The name and the npm-channel
+ * decision come from ONE read, so the call can never name one manifest's
+ * package with another manifest's channel.
  */
-let cachedName: string | null = null;
+let cachedIdentity: { name: string; npmChannel: boolean } | null = null;
+
+function ownCallIdentity(): { name: string; npmChannel: boolean } {
+  if (cachedIdentity === null) {
+    const parsed = readOwnManifest();
+    const { name, isPrivate } = factsOf(parsed);
+    const publishConfig = parsed?.["publishConfig"];
+    const registry =
+      typeof publishConfig === "object" && publishConfig !== null
+        ? (publishConfig as Record<string, unknown>)["registry"]
+        : undefined;
+    cachedIdentity =
+      // The empty name is the unnamed sentinel above, and the only path to the
+      // canonical fallback: a manifest that WAS read answers with its own name,
+      // renamed or not. The canonical package is published, so it has a channel.
+      name === ""
+        ? { name: CANONICAL_PACKAGE_NAME, npmChannel: true }
+        : { name, npmChannel: !isPrivate || (typeof registry === "string" && registry !== "") };
+  }
+  return cachedIdentity;
+}
 
 /**
  * The package name `npx` resolves for this installation — the fork's scope in a
  * renamed private copy, the canonical name here.
  */
 export function packageName(): string {
-  if (cachedName === null) {
-    const { name } = resolveOwnPackageFacts();
-    // The empty name is the unnamed sentinel above, and the only path to the
-    // canonical fallback: a manifest that WAS read answers with its own name,
-    // renamed or not.
-    cachedName = name === "" ? CANONICAL_PACKAGE_NAME : name;
-  }
-  return cachedName;
+  return ownCallIdentity().name;
+}
+
+/**
+ * Whether this installation's package has an npm channel — a registry that
+ * serves it under {@link packageName}.
+ *
+ * `false` for exactly the registry-less fork `docs/enterprise-forks.md`
+ * describes: a manifest that is `private` (the boolean, or the hand-edited
+ * string {@link resolveOwnPackageFacts} also reads) and names no
+ * `publishConfig.registry`. Its name is a public, predictable scope nobody
+ * publishes, so a `npx -y` call would install whatever a third party put on
+ * the public registry under it. Every pinned call then renders `npx --no`,
+ * which runs a copy the project already has installed and refuses to fetch one
+ * (`../../shared/cliCall.ts`). The canonical build, a fork made with
+ * `--registry`, and the failed-self-read fallback (the canonical name) all
+ * answer `true` and keep `npx -y`.
+ */
+export function hasNpmChannel(): boolean {
+  return ownCallIdentity().npmChannel;
 }
 
 /**
@@ -154,7 +196,8 @@ let cachedVersion: string | null = null;
 /**
  * A runnable invocation of this package, pinned to the running version:
  * `npx -y <own name>@<own version> <verb>` (`../../shared/cliCall.ts`, the one
- * spelling the emitted bodies and hook hints use too).
+ * spelling the emitted bodies and hook hints use too); `npx --no …` when the
+ * package has no npm channel ({@link hasNpmChannel}).
  *
  * Pinned because a remedy names flags and state this version understands; an
  * unpinned `npx <name>` runs whatever the registry serves today. `-y` because
@@ -166,17 +209,19 @@ let cachedVersion: string | null = null;
  * With no pinnable version — the self-read found none, or one that is not
  * semver-shaped — the remedy keeps the unpinned `npx <name> <verb>`. A remedy
  * prints on an error path, and a rendering failure there would replace the
- * operator's real diagnosis; an unpinned call is the lesser defect.
+ * operator's real diagnosis; an unpinned call is the lesser defect. A package
+ * with no npm channel keeps `--no` there too (`npx --no <name> <verb>`), so
+ * the unpinned remedy still never fetches a copy.
  */
 export function packageCommand(verb: string): string {
   cachedVersion ??= resolveOwnPackageFacts().version;
-  const name = packageName();
+  const { name, npmChannel } = ownCallIdentity();
   if (cachedVersion !== "") {
     try {
-      return pinnedCliCall(name, cachedVersion, verb);
+      return pinnedCliCall(name, cachedVersion, verb, { npmChannel });
     } catch {
       // Unpinnable (see above): fall through to the unpinned form.
     }
   }
-  return `npx ${name} ${verb}`;
+  return npmChannel ? `npx ${name} ${verb}` : `npx --no ${name} ${verb}`;
 }
