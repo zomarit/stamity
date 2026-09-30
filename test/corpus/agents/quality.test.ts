@@ -358,6 +358,10 @@ describe("test-runner — edge cases", () => {
     expect(edges).toMatch(/never from a second run, an `echo \$\?`, or a wrapper/i);
     expect(edges).toContain("`exit code: unknown` and status `unknown`");
     expect(edges).toMatch(/nothing about it is read as a pass/i);
+    // Only a calibration that showed `false`'s status turns a missing status into `0`.
+    expect(edges).toContain(
+      "When the Shell calibration showed `false`'s status, a result with no status exited `0`.",
+    );
   });
 
   it("isolates gates so one hung gate does not void the others' results", async () => {

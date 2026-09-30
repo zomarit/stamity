@@ -20,13 +20,29 @@ import { corpusFileOf, walkAllMarkdown, type CorpusFile } from "../harness.ts";
  *     are exercised on fixtures and on a real body with the paragraph cut out.
  */
 
-/** The shared paragraph, flattened to single spaces — every executing body carries it. */
+/** The calibration that lets a status-on-failure-only tool report a pass (and nothing else). */
+const CALIBRATION =
+  "Before the first gate, `false` runs once as a calibration, not a gate and not a wrapper: " +
+  "if the tool shows its failing status, a later result showing no status exited `0`; " +
+  "otherwise a code the tool did not show is `unknown`, never a pass.";
+
+/**
+ * The shared paragraph, flattened to single spaces — every executing body carries it.
+ *
+ * TEST CHANGE, justified (2026-09-30): the paragraph gained the `false` calibration. On a
+ * client whose shell tool prints a status only for a failing command, "a code the tool did not
+ * show is `unknown`" made every passing gate `unknown`, so no run could close green. One
+ * `false` before the first gate tells the two tool shapes apart; the calibration is neither a
+ * gate nor a wrapper, and an uncalibrated missing status still never reads as a pass.
+ */
 const SHELL_PARAGRAPH =
   "Where this role runs commands, it writes portable POSIX `sh`, so a command runs the same under " +
   "`sh`, `bash`, `dash` or `zsh`: no `PIPESTATUS`, no `[[ … ]]`, no arrays, no `pipefail`, no " +
   "`<( … )`. Each command runs once, as written — no `time`, no `{ …; }` grouping, no redirect " +
   "into a temp file, no `echo $?`, no pipe into `tail` or `head` — and its exit code is read from " +
-  "the tool result. A code the tool did not show is `unknown`, never a pass. A long command is " +
+  "the tool result. " +
+  CALIBRATION +
+  " A long command is " +
   "waited on in the foreground under the tool's own timeout, never polled with `sleep`.";
 
 /** The one line only the researcher adds: it runs commands but never a gate. */
@@ -139,6 +155,14 @@ describe("shell discipline — every role that runs commands carries the Shell p
       .filter((defect) => defect !== undefined);
 
     expect(defects).toEqual([]);
+  });
+
+  it("carries the `false` calibration in every bound body, so a silent status can read `0`", async () => {
+    const missing = shellBoundAgents(await corpus)
+      .filter((file) => !flat(sectionOf(file, "Shell") ?? "").includes(CALIBRATION))
+      .map((file) => file.relPath);
+
+    expect(missing).toEqual([]);
   });
 
   it("gives the researcher its one extra line: no verification gate", async () => {

@@ -2,7 +2,7 @@
 id: agent-test-runner-return-contract
 class: golden
 claim: "A gate pass returns one row per gate carrying gate, exact command, status, exit code, duration and verbatim excerpt, closing with a verdict line that reads red and names the rows that caused it; a failing gate is graded Critical, a red verdict is still DONE, no row is classified against a baseline that was not supplied, and the runner applies no edit and proposes no patch."
-source: content/agents/stamity-test-runner.md:14-17,42-135
+source: content/agents/stamity-test-runner.md:14-17,42-136
 metric: rubric
 ---
 
@@ -35,7 +35,7 @@ output; the fixer receives the failing signal intact.
 | gate | `test` \| `lint` \| `typecheck` \| `all` |
 | command | the exact command string executed, verbatim |
 | status | `pass` \| `fail` \| `not-run` \| `not-runnable` \| `unknown` |
-| exit code | the process exit status as the tool reported it, `timeout`, or `unknown` when the tool showed none |
+| exit code | the process exit status as the tool reported it, `0` when it showed none after a calibration that showed one (Shell), `timeout`, or `unknown` when the tool showed none and the calibration did not either |
 | duration | wall-clock seconds as the tool reported them, or `not measured` |
 | excerpt | verbatim failure output; empty on `pass` |
 
