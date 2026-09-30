@@ -1,6 +1,6 @@
 ---
 id: worktree-lane
-# A design document, authored outside the spec command and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/013-optimization-sweep-02.md on 2026-09-30, and excluded from the site build.
 status: shipped-with-1.1.0
 obsolete_when: the managed worktree lane ships and the CLI reference plus the working-with page carry its behaviour, or a decision cuts the surface
 ---
@@ -82,7 +82,11 @@ is committed.
 `.gitignore` carries `node_modules/`, `dist/`, `coverage/`, `*.tsbuildinfo`, the
 docs site's build output, and `.env*` (`.gitignore:1-13`), and
 `REQUIRED_GITIGNORE_ENTRIES` has exactly one member, the credential file
-(`src/mcp/env.ts:180`, `src/mcp/env.ts:110`).
+(`src/mcp/env.ts:180`, `src/mcp/env.ts:110`). (Amended 2026-09-30,
+`docs/plans/013-optimization-sweep-02.md` unit `sw27-ignore-review-gate-state`: the list now has four members,
+the credential file and the review gate's runtime state — `.stamity/review-gate.json`, its `.lock` directory and its
+`.tmp-*` temp files (`src/mcp/env.ts:181-198` at `b855876a`) — and the lane refuses the three review-gate names by
+name, REQ-WORKTREE-003.)
 
 So the materialization set here is not a re-derivation of the reference's; it is
 two entries and a refusal rule. The reference's three-tier ordering model —
@@ -322,6 +326,15 @@ Rules, all of them refusals rather than resolutions:
   materializing it would leave the new worktree dirty at creation. Both
   conditions are answered by one `git check-ignore` / `git ls-files` pass over
   the resolved set, and the message names the path and which condition it failed.
+- **The review gate's runtime state is refused by name** (added 2026-09-30,
+  `docs/plans/013-optimization-sweep-02.md` unit `sw27-ignore-review-gate-state`). A
+  materializing row naming `.stamity/review-gate.json`, its `.lock` directory, a
+  path under that directory, or a `.tmp-*` file beside it is refused before git is
+  asked, since setup now ignores all three and git's answer would admit them; the
+  message says the state never travels between worktrees
+  (`src/worktree/policy.ts:534-562` at `b855876a`). A `skip` row naming them is
+  admitted, as every `skip` row is: it carries nothing across (ledger `build/54`,
+  closed rejected).
 - **Both admissibility refusals apply to MATERIALIZING rows only.** A `skip` row
   is exempt, and so is a row whose own path is owned by a deeper rule — the
   checked set is exactly the paths whose longest-prefix answer is themselves
@@ -380,7 +393,7 @@ absent by construction:
 
 | Path | Strategy | Why |
 |---|---|---|
-| `.env.mcp` | `copy`, `secret: true` | gitignored (`.gitignore:11-12`), the single member of `REQUIRED_GITIGNORE_ENTRIES` (`src/mcp/env.ts:180`); consent-gated per REQ-WORKTREE-008 |
+| `.env.mcp` | `copy`, `secret: true` | gitignored (`.gitignore:11-12`), a member of `REQUIRED_GITIGNORE_ENTRIES` (`src/mcp/env.ts:193-198` at `b855876a`; amended 2026-09-30, it read "the single member", `src/mcp/env.ts:180`); consent-gated per REQ-WORKTREE-008 |
 | `node_modules` | `skip` | present but deliberately not materialized; see below |
 
 Everything the reference tiered is settled here as **arrives with the checkout,
@@ -397,11 +410,22 @@ no entry**:
   the lane, not worked around (REQ-WORKTREE-015).
 - `.stamity/generated/`, `.stamity/packs/`, `AGENTS.md`, `.agents/`, and the
   client trees — committed (`docs/getting-started.md:170-180`).
-- `.stamity/review-gate.json` — untracked and un-ignored, so REQ-WORKTREE-003
-  refuses it as an entry. That is the right outcome: it is a per-run counter
-  whose absence means "the gate is open" (`src/hooks/scripts.ts:153`, and the
-  no-counter branch at `src/hooks/scripts.ts:1879`), and a review round counted
-  in one worktree must not gate another.
+- `.stamity/review-gate.json`, its `.lock` directory and its `.tmp-*` temp
+  files — review-gate runtime state, which never travels. Setup ignores all
+  three (REQ-FLOW-016), and REQ-WORKTREE-003 refuses a materializing row that
+  names any of them, or a path under the lock directory, by name. A `copy` walk
+  over an ignored parent such as `.stamity` skips them too: `resolveStrategy`
+  answers `skip` for the three names before any row is read
+  (`src/worktree/policy.ts:506-519` at `b855876a`). A `symlink` row over that
+  parent is the one exception, because the link shares the directory live,
+  state included, and setup cannot split it (`review/66`, signed off;
+  `docs/getting-started.md:353-358`). That is the right outcome: the counter is
+  per-run state whose absence means "the gate is open" (`src/hooks/scripts.ts:153`,
+  and the no-counter branch at `src/hooks/scripts.ts:1879`), and a review round
+  counted in one worktree must not gate another. (Amended 2026-09-30,
+  `docs/plans/013-optimization-sweep-02.md` unit `sw27-ignore-review-gate-state`;
+  it read "`.stamity/review-gate.json` — untracked and un-ignored, so
+  REQ-WORKTREE-003 refuses it as an entry.")
 - Build output (`dist/`, `coverage/`, `*.tsbuildinfo`, the docs site's build and
   cache, `.gitignore:1-9`) — regenerable, so not materialized and not listed.
 
@@ -997,7 +1021,9 @@ writes nothing anywhere until `setup` runs. Specifically: no
 `.stamity/worktree.json` is created by `init` or `sync`; no key is added to
 `.stamity/manifest.json` or to the `config` key registry
 (`src/cli/commands/config.ts:397-594`); no entry joins
-`REQUIRED_GITIGNORE_ENTRIES` (`src/mcp/env.ts:180`); no directory joins
+`REQUIRED_GITIGNORE_ENTRIES` (`src/mcp/env.ts:180`) on this lane's account — the
+review gate's three entries joined it on 2026-09-30 for the review gate's own
+state, not for this lane (REQ-FLOW-016); no directory joins
 `STATE_SUBDIRS` (`src/emit/stateScaffold.ts:32`); no ledger row is added; the
 emission plan is unchanged.
 
@@ -1126,9 +1152,17 @@ rather than counting by eye.)
   already supplies it. *(The moment is part of the criterion: admissibility
   needs git's answer about a path, so it runs at plan resolution and not at the
   read that parses the file.)*
-- GIVEN an entry naming `.stamity/review-gate.json` (neither tracked nor
-  ignored) WHEN **setup resolves its plan** THEN it fails with
-  `VALIDATION_ERROR` naming the path and both conditions.
+- GIVEN a materializing entry naming `.stamity/review-gate.json`,
+  `.stamity/review-gate.json.lock`, a path under the lock directory
+  (`.stamity/review-gate.json.lock/…`) or a `.stamity/review-gate.json.tmp-*`
+  path WHEN **setup resolves its plan** THEN it fails with `VALIDATION_ERROR`
+  naming the path as review-gate runtime state that never travels between
+  worktrees, before git is asked (amended 2026-09-30; it read "an entry naming
+  `.stamity/review-gate.json` (neither tracked nor ignored) … naming the path and
+  both conditions").
+- GIVEN a `copy` row over `.stamity`, ignored, WHEN setup materializes it THEN
+  the new worktree holds none of the three review-gate names (added
+  2026-09-30).
 - GIVEN a `skip` row naming a path git TRACKS — a repository that commits
   `node_modules`, under the built-in defaults — WHEN setup resolves its plan
   THEN it does NOT fail: the row writes nothing, so it is never checked, and the

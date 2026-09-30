@@ -116,7 +116,13 @@ symptom into a failure on its own.
   the declarative route (a clean export of the checkout by default, or `owner/repo[#ref]`),
   and verifies deployment per target for claude, copilot, cursor and codex.
 - REQ-APM-002 — `ci.yml` runs the smoke at 0.29.1 (minimum), 0.30.0 (current) and 0.29.0
-  (`--expect-failure`), required through `all-ci-checks`.
+  (`--expect-failure`), required through `all-ci-checks` on every change that is not records-only.
+  A change whose every path is a record — under `.stamity/runs/`, `.stamity/handoffs/` or
+  `docs/plans/`, or `.stamity/inbox.md` — skips `apm-install` beside `check` and `plugin-route`,
+  and the `records` job runs in their place; the aggregator asserts which side ran
+  (`.github/workflows/ci.yml:19-31` at `b855876a`). (Amended 2026-09-30,
+  `docs/plans/013-optimization-sweep-03.md` unit `sw06-records-only-ci-lane`, ledger `build/82`;
+  it read "required through `all-ci-checks`.")
 - REQ-APM-003 — `release.yml` runs the smoke against the canonical remote at the release SHA
   in its separate, credential-free `apm-route` job. That job runs independently of `gates`
   and cannot access its packed artifact; `publish` requires both jobs to pass. This is a

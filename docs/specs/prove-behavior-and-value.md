@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md on 2026-09-30, and excluded from the site build.
 status: shipped-with-1.8.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
@@ -14,7 +14,9 @@ The amendments dated 2026-09-26 to REQ-PROVE-009 and REQ-PROVE-020 come from the
 declared; they cite the tree at `e995fe02`, and they are not in a release yet. REQ-PROVE-020's
 as-built text, and the criterion added with it, were merged on 2026-09-28 from the unit
 `run-of-record-1-10-0`; they cite the tree at `0f018460`, as do the refreshed citations in that
-requirement's first paragraph.
+requirement's first paragraph. The amendment dated 2026-09-30 to REQ-PROVE-021 comes from the spec delta of
+`docs/plans/013-optimization-sweep-02.md` (D), merged at the Prove phase of its run; it cites the tree at `b855876a`
+and is not in a release yet.
 
 ## Intent
 
@@ -396,6 +398,31 @@ human-QA item carrying `automated`, `status`, `reason` and `inputHashes`, bound 
   browser launches, and a performed row carries forward on unchanged hashes and reopens on a changed one;
   GIVEN codex selected WHEN emission runs THEN `.codex/config.toml` carries `[features] hooks = true` and
   `hooks.json`'s description states the three trust steps (`src/adapters/codex.ts:164-177`, `:771-784`).
+
+Amended 2026-09-30 (`docs/plans/013-optimization-sweep-02.md`, unit `qa-harness-accepted-unwalked`; the census's S8;
+cited at `b855876a`). A person may sign a human row off without walking it, and the harness says so: the statuses
+gain `accepted-unwalked`, beside `performed` and `unperformed`, so `ROW_STATUSES` holds six values
+(`scripts/qa/bind.mjs:29-36`). `performed` stays the harness's spelling of walked, so older evidence files still read,
+and still carries forward, with its original date and name, while the row's hash is unchanged. `accepted-unwalked`
+never carries: every harness row is a release-QA row — its id starts with `H` for a human row, not the QA skill's
+High-risk letter — and a release row needs a walk or a fresh acceptance, so a prior acceptance reopens as
+`unperformed` on the next run, with a reason naming the acceptance, whatever its hash; the exception keys on the status,
+never on the id's letter (`:126-182`). A measured row outranks any signature: only a `not-run` or `unperformed` row
+takes a carried answer (`:89-99`). `scripts/qa/run.mjs` records a run's answers with `--walked <ids>`,
+`--accept-unwalked <ids>`, `--by <name>` and `--on <YYYY-MM-DD>` (`scripts/qa/run.mjs:190-231`); a measured row takes
+no human answer, and a fresh answer drops the reopen text (`scripts/qa/bind.mjs:191-249`). The form renders
+`ACCEPTED UNWALKED <date> by <name> (not walked; holds for this run only)` (`scripts/qa/form.mjs:172-187`), and its
+footer says an accepted row reopens on the next run whatever its hash (`:259-264`). No row reaches `performed` without
+a person's recorded answer. The QA skill's own row states and input hash are REQ-FLOW-017 and REQ-FLOW-018.
+
+**Expand/contract:** one status value is added. Its readers are `CARRYABLE` and the row-shape test; an older `form.mjs`
+reading a new file renders an accepted row as `UNPERFORMED`, the safe direction.
+
+- GIVEN a fixture evidence file with an `accepted-unwalked` row, any id, and unchanged hashes WHEN the binder runs THEN
+  the row reads `unperformed`, with a reason naming `accepted-unwalked`; GIVEN one changed input hash THEN it reads
+  `unperformed` and the reason names both hashes; GIVEN `ROW_STATUSES` THEN it holds exactly six values; GIVEN an
+  evidence file from before this change WHEN the form renders it THEN every row line is unchanged — the footer is the
+  one line that moved (`test/qa/bind.test.ts`, `test/qa/form.test.ts`, `test/qa/run.test.ts`; `review/9`).
 
 ### REQ-PROVE-022 — Table headers associated on the docs site
 

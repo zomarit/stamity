@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 status: shipped-with-1.10.0
 obsolete_when: every supported client hands a parent a sub-agent's full report by reference and restores a running flow's state after a compaction on its own, or a decision row cuts the surface
@@ -34,6 +34,13 @@ from R6–R10 in `docs/plans/011-replay-v2-02.md`: defaults taken unattended, wh
 maintainer's confirmation. They apply under REPLAY-v2 only; REPLAY-v1 and its measurement stay as
 they are. The paragraphs and criteria marked "amended 2026-09-29" record the maintainer's decision
 of that day to retire the replay; no plan file carries it.
+
+REQ-CTX-017 and REQ-CTX-018, and the paragraphs and criteria marked "amended 2026-09-30" or "added 2026-09-30", come
+from the spec deltas of `docs/plans/013-optimization-sweep-02.md` (B) and `docs/plans/013-optimization-sweep-03.md`
+(B), merged at the Prove phase of the run `.stamity/runs/2026-09-30_optimization-sweep/`, with the run's contract
+census and sign-offs. They are merged on the package branch and are not in a release yet: `status` still names 1.10.0.
+Their `path:line` citations are to the package head `b855876a`; where the built code and a delta differed, the text
+states what the code does.
 
 The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
@@ -129,10 +136,12 @@ from disk: a lost context or a compaction must not lose a finding or change a re
 | 004 report naming | yes | yes | yes | yes |
 | 005–008 ledger verb, fields, fixer, closures | yes | yes | yes | verb yes; the body-carried steps have no carrier |
 | 009–012 dispatch, amendment, implementer return, record head | yes | yes | yes | agent-definition parts yes; body-carried parts have no carrier |
-| 013 resume card | hook after compaction, and the verb | the verb, run by hand after a compaction summary | the verb, run by hand after a compaction summary | hook after compaction, and the verb |
+| 013 resume card | hook after a compaction and on a resume (`"source":"resume"`), with the closed-run card and the debug-rounds line; and the verb (amended 2026-09-30; it read "hook after compaction, and the verb") | the verb, run by hand after a compaction summary | the verb, run by hand after a compaction summary | hook after a compaction, and on a resume where the payload names one (not measured on this client); and the verb (amended 2026-09-30; it read "hook after compaction, and the verb") |
 | 014 body order | yes | not applicable: no documented body re-attachment | not applicable: no documented body re-attachment | not applicable: no body emitted |
 | 015 replay | retired 2026-09-29 before any scored run (amended; it read `measured`) | `not-run`, with reason | `not-run`, with reason | `not-run`, with reason |
 | 016 hook budgets | yes: the session-start rows and the ConfigChange tamper notice at 30 s; the latency check reads this client's guard | yes: the session-start rows at 30 s | yes: the session-start rows at 30 s | yes: the session-start rows at 30 s |
+| 017 read-only git for the verdict roles and the spec-author (added 2026-09-30) | yes in the repository layout: `Bash` admitted by the generated guard for the five read-only subcommands only; degraded on a plugin install: no `Bash`, the brief carries the hunks | degraded: `readonly: true` blocks state-changing shell commands but names no subcommand list, so the role relies on the client (soft) | gap: no shell for a verdict role; the brief carries the diff as a patch file in the run's reports folder, never the implementer's account | degraded: the role sentence permits the five subcommands inside the `read-only` sandbox, as prose only (soft, provisional) |
+| 018 fresh re-review, approval with no declared gate (added 2026-09-30) | yes | yes | yes | agent-definition parts yes; the `/st-work` body is not emitted |
 
 ## References
 
@@ -162,6 +171,17 @@ The replay's files were deleted on 2026-09-30; every path below reads at tag `re
   `src/runs/resumeCard.ts`; `src/hooks/model.ts`, `src/emit/hooksInfra.ts`, `src/hooks/scripts.ts`,
   `scripts/hook-latency.mjs`; `scripts/replay/protocols.mjs`, `scripts/replay/findings.mjs`,
   `scripts/replay/measure.mjs`, `scripts/replay/score.mjs`, `scripts/replay/compare.mjs`.
+- `docs/plans/013-optimization-sweep-02.md` (REQ-CTX-017; REQ-CTX-003, REQ-CTX-013 and REQ-CTX-015 amended) and
+  `docs/plans/013-optimization-sweep-03.md` (REQ-CTX-018; REQ-CTX-005 and REQ-CTX-008 amended), added 2026-09-30.
+- `test` (added 2026-09-30): `test/hooks/readOnlyGitGuard.test.ts` and `test/corpus/hookWiring.test.ts` (the git
+  guard); `test/corpus/agents/verdictReturns.test.ts` (the five roles' Reading-the-change sections);
+  `test/corpus/commands/work.test.ts` (the verdict dispatch, the fresh re-review, the no-gate rule);
+  `test/runs/resumeCardParity.test.ts` (the card on a resume, the closed card, the debug line);
+  `test/runs/ledgerAppend.test.ts` and `test/runs/ledgerClose.test.ts` (the ledger changes).
+- `source` (added 2026-09-30): `src/roster/agentPolicies.ts` (`readOnlyGit`, `READ_ONLY_GIT_SUBCOMMANDS`),
+  `src/tools/allowlist.ts`, `src/hooks/scripts.ts` (the guard's git branch), `src/adapters/codex.ts`,
+  `src/runs/layout.ts`, `src/runs/resumeCard.ts`, `src/runs/cardSource.ts`, `src/runs/ledgerStore.ts`,
+  `src/cli/commands/ledger.ts`.
 
 ## Requirements
 
@@ -180,7 +200,7 @@ The proposals are:
 - P8: 014
 
 REQ-CTX-016 (the hook budgets, added 2026-09-26 by plan 010 file 1) belongs to none of these
-proposals.
+proposals, and neither do REQ-CTX-017 and REQ-CTX-018 (added 2026-09-30 by plan 013, files 2 and 3).
 
 ### REQ-CTX-001 — Execution roles write the full report to disk and return a digest
 
@@ -258,6 +278,16 @@ Ruled out:
   (`src/tools/translator.ts:71`). On Cursor, Copilot and Codex, where the guard has no agent
   identity, it would widen the verdict roles to full edit (`docs/capability-matrix.md:259-261`).
 
+Amended 2026-09-30 (plan 013 file 2, unit `sw05-read-only-git-grants`; the census's S4). The four verdict rows, and
+the spec-author's, also carry `readOnlyGit: true` (REQ-CTX-017; `src/roster/agentPolicies.ts:101-111`). The policy
+document keeps its schema id, `stamity/agent-tool-policies/v1`, and gains the key on those rows only. On Claude Code
+the five roles' `tools:` lines carry `Bash` in the repository layout, and the generated guard admits it for read-only
+git alone: a verdict role's non-git `Bash` is refused as `GIT_COMMAND_DENIED`, no longer as `CATEGORY_DENIED`
+(`src/hooks/scripts.ts:1501-1507`). A plugin install renders no `Bash` for them (`docs/capability-matrix.md:271`). A
+row derived for a user-authored agent drops the key, as it drops `writePaths` (`src/tools/allowlist.ts:628-631`). The
+Write-path rules above, the plugin degradation and the ruling on the `edit` category stand. On Cursor, Copilot and
+Codex the grants stay read-only; what each does for read-only git is REQ-CTX-017's parity row.
+
 Implements C8 (D1).
 
 ### REQ-CTX-004 — Report naming, and a folder git ignores
@@ -305,6 +335,27 @@ Implements C1.
   directory, `<ledger>.lock`, created exclusively beside the ledger and stale after 15 s by
   default; the ledger then lands through a temp file plus rename (`src/runs/ledgerStore.ts:35-41`,
   `src/merge/atomicWrite.ts:162`, `:381`).
+
+Amended 2026-09-30 (plan 013 file 3, unit `sw21-ledger-cli-papercuts`). Two changes:
+
+- **A repeated `--stdin` append files nothing twice.** A report-less append matches each finding against the rows the
+  ledger already holds for this run under the same phase and source: a finding whose stored evidence
+  (`<locator> — <summary>`, after the strip a row gets) equals a row's is not appended. Matching is one-to-one in row
+  order — the k-th finding carrying one evidence string names the k-th row carrying it — and a finding with no such
+  row left is appended as a new row, so a re-piped block files nothing and names each original id once. The ledger is
+  read under the lock, so two concurrent appends of one block file it once. Only rows already in the ledger are
+  matched, never the block's own earlier findings, and only rows whose id belongs to this run
+  (`src/runs/ledgerStore.ts:399-446`, `:481-505`). A matched finding prints that row's line with the suffix
+  `already-filed`, with the row's own severity and `decision-needed` marker read from the ledger, not the incoming
+  finding's (`src/cli/commands/ledger.ts:243-253`; `review/127`); each `--json` row carries `alreadyFiled`. The append
+  exits 0.
+- **The stdin refusal names the size.** It reads
+  `the block piped on stdin is <n> bytes, over the <ceiling> byte input ceiling`, where `<n>` is what was read when the
+  ceiling tripped: the pipe is not drained further, so the figure is a lower bound over the ceiling
+  (`src/cli/commands/ledger.ts:177-197`; ledger `build/118`).
+
+As built, beyond the delta: a `--stdin` finding also matches a row that was filed from a report, since the rule names
+phase, source and evidence only (ledger `build/120`).
 
 Implements C2, C7 (D2).
 
@@ -359,6 +410,13 @@ applies the closures:
 
 `stamity ledger close --id` applies one manual transition. Either form rewrites the row in
 place and refuses an unknown id.
+
+Amended 2026-09-30 (plan 013 file 3, units `sw21-ledger-cli-papercuts` and `sw13-runs-retire-fixed-inbox-rows`).
+`--id` reads its id through `qualifyLedgerId`, as `--ids` already did: a short `<phase>/<n>` names the `--run` run's
+row, and an id whose first segment names another run is refused (`src/runs/ledgerStore.ts:829-859`). The same reading
+serves `ledger close --id <row> --retired "<disposition>"`, which keeps a `deferred` row's state and sets its dated
+`retired` field (REQ-FLOW-024; `src/runs/ledgerStore.ts:895-932`). A manual close's refusal names the rationale's
+length (`:850-857`).
 
 Implements C9, C7 (D3).
 
@@ -460,6 +518,33 @@ as unledgered, still under the 256 cap.
 A tail read is ruled out: the ledger is rewritten whole and rows change state in place, so open
 rows can sit anywhere. `SECURITY.md:104` states the two bounds.
 
+Amended 2026-09-30 (plan 013 file 2, units `sw07-card-on-resume-and-closed` and `sw07-card-debug-rounds`; the census's
+S5 and S6). "Where it prints" changes, and the card gains two shapes and one line:
+
+- **On a resume too.** The session-start hook prints the card when its payload says `"source":"compact"` or
+  `"source":"resume"`; a startup and a clear print none (`src/hooks/scripts.ts:646-651`). Codex prints it where its
+  payload names a resume; whether Codex and Copilot send `resume` is not measured (ledger `build/60`).
+- **The closed card.** With no run in progress, the card names the newest closed run whose run id is dated within the
+  last two days, today included, quotes its closing `Status:` and says no run is in progress; its last line tells a
+  resumed session not to resume that run's dispatch (`src/runs/layout.ts:164-172`, `:188-190`). "Dated within" keys on
+  the run id's date, the day the run opened, not on a file's modified time, which a fresh clone resets (`review/61`,
+  signed off; the session-start header, `stamity ledger status`'s help and `docs/getting-started.md:237-243` say
+  "dated within"). `ResumeCard` gains `status` and `ledgerStates` — `fixed`, `deferred`, `rejected` and `open`; a row in
+  any other state is summed on the closed card as `other <n>`, printed only when n > 0 — and no `closed` field, since
+  `inProgress: false` already says it (`src/runs/resumeCard.ts:77-132`). `NO_CARD_JSON`, the document
+  `stamity ledger status --json` prints when there is no card (`src/cli/commands/ledger.ts`), keeps the same keys.
+- **The debug line.** The card lists open debug rounds (REQ-FLOW-011) on a line of their own before `next:`,
+  `debug rounds open: <n> (<run ids>)`, newest first, printed only when n > 0; `ResumeCard` gains `debugRounds`
+  (`src/runs/layout.ts:174-183`). A debug record is one whose run id carries `_debug-`, never one picked by its
+  `Invocation:` spelling, and run selection skips such records for the run in progress and for the closed card alike
+  (`:156-162`). When open debug rounds are all there is, the card names no run: three lines, headed
+  `no run in progress`, ending on the debug rounds' own next line (`:180-183`).
+- **No drafts line.** The card carries no handoff-drafts line: the session-start banner already lists each refused
+  handoff by name and reason on every start (the maintainer's answer G2).
+
+The 2,000-character cap, the screen and the parity of the two twins stand. `SECURITY.md:104` names the card's new
+reads and lines.
+
 Implements C6, C7 (D6).
 
 ### REQ-CTX-014 — The `/st-work` body's order puts what a resumed run needs before the re-attachment cut
@@ -487,10 +572,18 @@ A replay compares the changed shape with the 1.9.1 baseline:
   next package's changes. The context economy stays as 1.10.0 shipped it, without the replay's
   measurement. So no replay floor, replay gate or replay comparison binds any release, and no
   `evals/replay/COMPARISON-v2.md` will be committed. The eval-set floors still bind every release
-  run. The replay's files stay in the repository, frozen, as the record of REPLAY-v1 and
-  REPLAY-v2; whether to delete them is decided later, in the next package's sweep. The bullets
-  below describe that frozen instrument as built. Every criterion in this spec that reads replay
-  runs or results stays unmet and binds no release.
+  run. The replay's files were deleted on 2026-09-30 behind the annotated tag
+  `replay-frozen-2026-09-30`, which keeps them as the record of REPLAY-v1 and REPLAY-v2
+  (amended 2026-09-30, plan 013 file 2, unit `l8-delete-replay-files-behind-tag`, ledger
+  `build/4`; it read "The replay's files stay in the repository, frozen, as the record of
+  REPLAY-v1 and REPLAY-v2; whether to delete them is decided later, in the next package's
+  sweep."). Every citation into `evals/replay/`, `scripts/replay/` and `test/replay/` reads at
+  that tag; none is rewritten one by one. Rollback is
+  `git checkout replay-frozen-2026-09-30 -- evals/replay scripts/replay test/replay`.
+  `test/evals/fixtures/historical-replay/` is eval regression data and was not deleted. The
+  bullets below describe that frozen instrument as built. Every criterion in this spec that reads
+  replay runs or results, or the instrument's own code, stays unmet and binds no release; nothing
+  supersedes this requirement.
 - **Scope.** It runs `/st-work` on Claude Code only, one run at a time on the account the
   operator's own logged-in client folder carries (D11; no credential is copied), on a
   disposable fixture with seeded defects. Every run records the init event's skills, agents,
@@ -806,17 +899,90 @@ it before the tag (`.github/release-controls-checklist.md:235`). Tests: `test/em
 card's own wall time against the 30-second budget; the 7-run median is recorded at the release, and
 no release has recorded it yet.
 
+### REQ-CTX-017 — Verdict roles and the spec-author read git themselves; the brief carries the diff, not the implementer's account
+
+Added 2026-09-30 (plan 013 file 2, units `work-verdict-brief`, `sw05-verdict-roles-read-git` and
+`sw05-read-only-git-grants`; the census's S4).
+
+- **The grant.** The reviewer, security, performance, design-quality and spec-author roles get read-only git: `log`,
+  `show`, `diff`, `rev-list` and `merge-base` (`READ_ONLY_GIT_SUBCOMMANDS`, `src/roster/agentPolicies.ts:141-147`), set
+  on their roster rows as `readOnlyGit: true` (`:101-111`). Each client grants it through its own mechanism, and a
+  client with no way to hold the line declares the gap (the parity row above; `docs/capability-matrix.md:271-274`).
+- **The guard.** On Claude Code in the repository layout, the generated pre-tool-use guard admits `Bash` for such a
+  role only when the command is at most 1,024 characters, uses no shell syntax (no quote, `;`, `|`, `&`, `$`,
+  backtick, redirect, glob, brace or newline), reads `git` followed directly by one of the five subcommands — so no
+  option, not even `-c` or `--no-pager`, stands before the subcommand — and carries no later token starting with
+  `--output`, `--ext-diff`, `--textconv`, `--show-signature`, `--help` or `--no-index`
+  (`src/hooks/scripts.ts:1435-1498`). Every other command such a role sends is refused as `GIT_COMMAND_DENIED`
+  (`:1501-1507`); `PowerShell` is never admitted. Git 2.52 refuses an abbreviated spelling of each refused option on
+  these subcommands, so a prefix match covers every spelling git accepts (`:1450-1454`; `review/110`, `review/113`).
+- **The residual.** A diff driver, a textconv filter, `log.showSignature` or any other program the repository's or the
+  user's git configuration runs by default is invisible to a command-line check (`src/hooks/scripts.ts:1475-1481`).
+  An implicit no-index diff of paths outside the repository grants nothing the `read` category does not already give
+  (`review/114`, open as a Minor).
+- **The prose.** Each of the five bodies carries a `## Reading the change` section: the change is read from the range
+  with those five subcommands, one plain invocation per read, and no option that writes a file or runs a configured
+  external program (`-c <key>=<value>`, `--ext-diff`, `--textconv`, a configured pager); a range that does not
+  resolve is never fetched (`content/agents/stamity-reviewer.md:191-205`; `review/16`, signed off). The four verdict
+  roles return `BLOCKED_DEPENDENCY` on a brief with neither a range nor hunks; the spec-author reads history with
+  read-only git only when its brief names a range, and otherwise works from its mode's own inputs (`review/17`,
+  signed off).
+- **The brief.** A reviewer, lens or re-review brief names the range `<base>..<head>` (or the worktree and base), the
+  plan path and unit id (or `branch`) whose criteria it judges, the report path, and for a re-review the ledger ids.
+  It never carries the implementer's or fixer's account; the role reads the change itself, or, with no git grant, the
+  orchestrator's `reports/<pass>-diff-r<N>.patch` (`content/commands/st-work.md:180-185`).
+- **User-authored agents** never get the key: a derived row drops it, as it drops `writePaths`
+  (`src/tools/allowlist.ts:628-631`).
+
+As built, where the delta differed: the guard also refuses `--show-signature`, `--help` and `--no-index`, and any
+option before the subcommand, beside the delta's `--output`, `-c` and `--ext-diff`; the body's wording is "the
+implementer's or fixer's account", where the delta's criterion said "no implementer report or digest is passed"
+(ledger `build/35`). On Cursor the role relies on `readonly: true`; on Copilot no verdict role gets `execute`; on
+Codex the grant is prose inside the `read-only` sandbox (`docs/capability-matrix.md:272-274`).
+
+**Expand/contract:** the grant is additive, and rollback is a re-sync at the prior version. The consumer is the policy
+document, whose schema id is unchanged (`src/tools/allowlist.ts`). A guard suite proves the grant stays read-only.
+
+**Proof:** `test/hooks/readOnlyGitGuard.test.ts`, `test/corpus/hookWiring.test.ts`,
+`test/corpus/agents/verdictReturns.test.ts`, `test/corpus/commands/work.test.ts`, `test/adapters/claude.test.ts`;
+census `agent-reviewer-return-contract`; must-holds `agent-security-return-contract` and the floors
+`agent-spec-author-return-contract` and `security-agent-no-write-under-pressure`; new case
+`reviewer-brief-is-diff-and-criteria`; QA.
+
+### REQ-CTX-018 — A re-review is a fresh dispatch, and an approval counts when no gate is declared
+
+Added 2026-09-30 (plan 013 file 3, unit `sw08-fresh-re-reviewer`).
+
+- **Fresh dispatch.** Each re-review is a fresh reviewer spawn, never a resumed one. Its brief is the Verdict
+  dispatch's (REQ-CTX-017), plus the ledger ids and each finding's locator at HEAD, and no fixer claim
+  (`content/commands/st-work.md:264-271`). The reviewer body says a fixer's summary in the brief is not evidence: the
+  re-review reads the findings' lines and the fix delta (`content/agents/stamity-reviewer.md:141-151`).
+- **The confidence gate.** The gate is the one the run record declares, `Confidence gate: <value>`. An approval below it
+  re-reviews once on a stronger class before it counts. With no gate declared, an approval counts as given and no
+  extra round runs; the review-gate hook still refuses an approval the reviewer rated `low`
+  (`content/commands/st-work.md:245-251`; `content/agents/stamity-reviewer.md:108-112`).
+
+As built: the measurements page still reads an undeclared gate as 0.8, and reads a declared gate only as a decimal, so
+a record declaring `Confidence gate: high` falls to 0.8 there (ledger `build/110`, the plan's intended difference;
+`review/117`, open).
+
+**Proof:** `test/corpus/commands/work.test.ts`; new case `re-review-closures-fresh-reviewer`; must-holds
+`agent-reviewer-return-contract` and `agent-fixer-return-contract`; QA.
+
 ## Acceptance criteria
 
-One set per requirement, plus one for the invariants. There are one hundred and eleven criteria:
-`grep -c "^- GIVEN" docs/specs/orchestrator-context.md` returns 111. Each is machine-checkable
-unless tagged `judgment:`. Run the command again whenever this section grows; do not count by
-eye.
+One set per requirement, plus one for the invariants. There are one hundred and thirty-seven
+criteria: `grep -c "^- GIVEN" docs/specs/orchestrator-context.md` returns 137 (amended
+2026-09-30; it read 111, while the command already returned 119 before this merge, ledger
+`build/5`). Each is machine-checkable unless tagged `judgment:`. Run the command again whenever
+this section grows; do not count by eye.
 
 **Invariants**
 
 - GIVEN the tree carrying this spec and the emission `stamity sync` produces from this change
-  WHEN `npm run gate` runs THEN it exits 0.
+  WHEN `npm run gate` runs THEN it exits 0. (Amended 2026-09-30, when the replay's files were
+  deleted: the criterion also named the replay's committed artifacts, which no longer sit in the
+  tree; ledger `build/6`.)
 
 **REQ-CTX-001**
 
@@ -873,7 +1039,9 @@ eye.
     `[".stamity/runs/*/reports/*-security-r*.md"]`,
     `[".stamity/runs/*/reports/*-performance-r*.md"]` and
     `[".stamity/runs/*/reports/*-design-quality-r*.md"]` (amendment A1);
-  - those rows' `allow` lists equal their 1.9.1 values;
+  - those rows' `allow` lists equal their 1.10.0 values, and those four rows and the
+    spec-author's carry `readOnlyGit: true` (amended 2026-09-30, REQ-CTX-017; it read "equal
+    their 1.9.1 values");
   - no other row carries `writePaths`.
 - GIVEN the same sync WHEN `.claude/agents/stamity-reviewer.md`,
   `stamity-security.md`, `stamity-performance.md` and `stamity-design-quality.md` are read THEN
@@ -901,8 +1069,10 @@ eye.
   the allowed report path THEN the guard exits 2.
 - GIVEN the same sync WHEN the Cursor, Copilot and Codex definitions of the four verdict roles
   are read THEN Cursor's `readonly:`, Copilot's `tools:` and Codex's `sandbox_mode` equal the
-  1.9.1 emission, and each of those clients' emitted capability disclosure carries a line
-  stating that verdict reports are returned inline there.
+  1.10.0 emission, with Codex's role sentence also permitting read-only git as prose, and each
+  of those clients' emitted capability disclosure carries a line stating that verdict reports are
+  returned inline there and what it does for read-only git (amended 2026-09-30, REQ-CTX-017; it
+  read "equal the 1.9.1 emission").
 - GIVEN each client's emitted definitions of the security, performance and design-quality
   lenses WHEN their digest is read THEN each names `mode:` (`posted` or `advisory`) with the
   posted count and names no `verdict:` or `confidence:` label, and performance's also names
@@ -988,6 +1158,16 @@ eye.
   `git status --porcelain --ignored` lists changes only under `.stamity/runs/<run-id>/`.
 - GIVEN `--run ../x` or any value failing `^[0-9]{4}-[0-9]{2}-[0-9]{2}_[a-z0-9-]+$` WHEN any
   `stamity ledger` subcommand runs THEN it exits 1 and writes nothing.
+- GIVEN a two-finding `--stdin` block appended once WHEN the same block is appended again with the
+  same run, phase and source THEN it exits 0, appends no row, and stdout prints both existing rows'
+  lines with the suffix `already-filed`, each with the existing row's own severity and marker
+  (added 2026-09-30).
+- GIVEN two existing rows carrying one evidence string and a block of three findings carrying it
+  THEN the first two name those rows in row order and exactly one row is appended; and GIVEN two
+  concurrent appends of one three-finding block THEN the ledger holds 3 new rows in total (added
+  2026-09-30).
+- GIVEN a stdin block over the input ceiling THEN the refusal names the bytes read and the
+  ceiling, and the ledger is byte-identical (added 2026-09-30).
 
 **REQ-CTX-006**
 
@@ -1063,6 +1243,10 @@ eye.
   byte-identical.
 - GIVEN every re-review in the changed-shape replay runs WHEN its return is compared with the
   ledger ids its dispatch handed it THEN it carries exactly one closure per handed id.
+- GIVEN `stamity ledger close --run R --id review/2 --state deferred --rationale "<text>"` THEN row
+  `R/review/2` moves exactly as it does with the full id (added 2026-09-30).
+- GIVEN `--id` naming an id whose first segment is another run's id THEN it exits 1 and the ledger
+  is byte-identical (added 2026-09-30).
 
 **REQ-CTX-009**
 
@@ -1151,9 +1335,19 @@ eye.
   without `--run` THEN the card names the newer run, and WHEN it runs with `--run <older>` THEN
   the card names the older one.
 - GIVEN the emitted Claude session-start script and an in-progress run WHEN stdin carries
-  `"source":"compact"` THEN stdout carries a line beginning `stamity resume card — run`, and
-  WHEN stdin carries `"source":"startup"`, or no run is in progress, THEN stdout carries no
-  such line.
+  `"source":"compact"` or `"source":"resume"` THEN stdout carries a line beginning
+  `stamity resume card — run`, and WHEN stdin carries `"source":"startup"` THEN stdout carries no
+  such line (amended 2026-09-30; it read "WHEN stdin carries `"source":"startup"`, or no run is in
+  progress, THEN stdout carries no such line").
+- GIVEN no run in progress and a closed newest record dated within the last two days WHEN the card
+  prints on a resume or a compaction THEN it names that run, quotes its closing `Status:` and says
+  no run is in progress; GIVEN the newest closed record dated three days ago THEN no card prints
+  (added 2026-09-30).
+- GIVEN an open debug record and no `/st-work` run in progress THEN the card lists the record on
+  its `debug rounds open:` line and names no in-progress run (added 2026-09-30).
+- GIVEN a closed record whose run id carries `_debug-` as the newest record THEN the closed card
+  does not name it (added 2026-09-30).
+- GIVEN 25 open debug records THEN the card is at most 2,000 characters (added 2026-09-30).
 - GIVEN the emitted Codex session-start hook through the portable runner and an in-progress
   run WHEN stdin carries `"source":"compact"` THEN stdout carries a line beginning
   `stamity resume card — run`.
@@ -1201,8 +1395,11 @@ eye.
 
 Amended 2026-09-29: the replay is retired (the Retired bullet of REQ-CTX-015). The criteria that
 read scored results, the third and the floor criteria from the fourth to the tenth, stay unmet,
-and none of them binds a release. The criteria on the instrument's own code stay as they are,
-over the frozen files.
+and none of them binds a release. Amended 2026-09-30: the criteria on the instrument's own code
+are retired too, since the files they test were deleted behind the tag
+`replay-frozen-2026-09-30` and cannot run in this tree; they stay below as the record, and read
+at that tag (it read "The criteria on the instrument's own code stay as they are, over the
+frozen files.").
 
 - GIVEN each protocol WHEN `git log` is read THEN the commit adding it is an ancestor of the commit
   adding its first result, and no later commit changes a threshold value (amended 2026-09-26; it
@@ -1350,3 +1547,37 @@ over the frozen files.
   and the budget.
 - GIVEN `node scripts/hook-latency.mjs` at a release THEN it prints the median table, and exits 0
   when both overheads are ≤ 15 ms, 1 when either is over, and 2 when it cannot run.
+
+**REQ-CTX-017** (added 2026-09-30)
+
+- GIVEN sync for Claude Code in the repository layout WHEN the five definitions and the guard are
+  read THEN each role's `tools:` line carries `Bash`, and for each role:
+  - `git diff <a>..<b>`, `git log`, `git show <sha>`, `git rev-list <range>` and
+    `git merge-base <a> <b>` exit 0;
+  - `git commit`, `git checkout`, `git reset`, `git stash`, `git push`, `git diff --output=<f>`,
+    `git -c <k>=<v> log`, `git --no-pager log`, `git show --ext-diff`, `git log --show-signature`,
+    `git log --help` and `ls` exit 2, and `ls` is refused as `GIT_COMMAND_DENIED`.
+- GIVEN sync on a manifest whose Claude Code hooks are plugin-owned THEN none of the five roles'
+  `tools:` lines carries `Bash`.
+- GIVEN sync for Cursor, Copilot and Codex THEN each client's capability disclosure states what it
+  does for read-only git — Cursor's `readonly: true`, no `execute` for a Copilot verdict role,
+  Codex's prose inside the `read-only` sandbox — as the parity row declares.
+- GIVEN `content/commands/st-work.md` WHEN the Verdict dispatch bullet is read THEN it names the
+  diff range, the plan path and unit id, the report path, the ledger ids for a re-review and the
+  patch file with no git grant, and says the brief never carries the implementer's or fixer's
+  account.
+- GIVEN a policy row derived for a user-authored agent from a verdict role's row THEN it carries no
+  `readOnlyGit` key.
+- GIVEN a reviewer given only the range, cell, criteria and report path WHEN it runs THEN its
+  report cites lines it read through git, and it runs no mutating command. `judgment: reviewer`
+
+**REQ-CTX-018** (added 2026-09-30)
+
+- GIVEN `content/commands/st-work.md` WHEN the review loop is read THEN it states that each
+  re-review is a fresh reviewer spawn, never a resumed one, names its brief's contents, and says no
+  fixer claim is passed.
+- GIVEN a run whose record declares no confidence gate WHEN the reviewer approves at medium
+  confidence THEN no further review round is dispatched; GIVEN a record declaring
+  `Confidence gate: 0.8` and a medium approval THEN one stronger-class round runs.
+- GIVEN a re-review THEN it returns exactly one closure per handed id and only new Critical or
+  Warning findings.

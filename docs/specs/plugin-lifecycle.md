@@ -1,6 +1,6 @@
 ---
 id: plugin-lifecycle
-# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26, and excluded from the site build.
+# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, and excluded from the site build.
 status: shipped-with-1.9.0
 obsolete_when: every supported client installs the corpus through its own plugin container and the generated-setup route is retired, or a decision row cuts the surface
 ---
@@ -174,6 +174,15 @@ to move for the literal clause to hold at all: `content/agents/stamity-test-runn
 bare `${STAMITY:` in prose with no closing brace, which survives substitution and shipped in the
 dogfood copy; it was reworded and landed with its dogfood copy, the APM agent and the golden digest
 rows in one change.
+
+Amended 2026-09-30 (`docs/plans/013-optimization-sweep-02.md`, units `sw26-cli-token` and
+`sw26-engine-cli-call-form`; cited at `b855876a`): the wired list holds ten tokens, and nine are mapped. The tenth,
+`${STAMITY:CLI}`, maps to a literal rather than a phrase: the pinned call `npx -y <package>@<plugin version>`, or
+`npx --no <package>@<plugin version>` for a package with no npm channel, from inputs the plugin build passes in, so
+the value is fixed at build time and never read off the consuming repository; a build that passes none leaves the
+token unresolved and the body is refused (`scripts/plugins/tokens.mjs:12-17`, `:50-62`, `:107-118`).
+`${STAMITY:INVARIANTS_VERSION}` is still refused. The call form itself is REQ-FLOW-002 in
+`docs/specs/everyday-flows.md`.
 
 ### REQ-PLUGIN-005 Plugin hooks resolve their roots and never write configuration
 
@@ -562,7 +571,10 @@ carries a manifest, so it REFUSES with `VALIDATION_ERROR` (exit 1) and writes no
 exiting 0 with 0 changed paths; the sha-256 stability the clause was reaching for is covered by
 that refusal writing no file. The refusal sentence names the clean-then-setup route through
 `packageCommand()`, the running package's own name, because a renamed fork's operator has no binary
-called `stamity`. Placement moved with the architecture gate: the setup engine is a CLI-layer
+called `stamity`. (Amended 2026-09-30, `docs/plans/013-optimization-sweep-02.md` unit
+`sw26-engine-cli-call-form`: `packageCommand()` now prints the pinned call at the running version,
+`npx -y <name>@<version> <verb>`, or `npx --no …` for a package with no npm channel, and keeps
+`--no` when it cannot pin; `src/cli/kit/packageName.ts:196-227` at `b855876a`.) Placement moved with the architecture gate: the setup engine is a CLI-layer
 module at `src/cli/commands/plugin/setup.ts` (wave 15) because it must import the CLI's
 `init/plan.ts` and `init/apply.ts`, and `status` is its CLI-layer sibling for the same reason one
 level removed (its duplicates remedy composes through the CLI's package-name kit); only the
@@ -798,7 +810,10 @@ case declares: Claude through `claude plugin validate --strict` exiting 0 and `c
 `STAMITY_<CLIENT>_BIN` names an executable and otherwise records `skipped: STAMITY_<CLIENT>_BIN unset`,
 which the proof summary counts apart from passes and never reports as green; and the QA form's
 rows `H4a`–`H4d` carry the same measurements with `performed`, `passed`, `failed` or `not-run` and
-a reason.
+a reason. (Amended 2026-09-30, `docs/plans/013-optimization-sweep-02.md` unit
+`qa-harness-accepted-unwalked`: a row may also read `accepted-unwalked`, a person's sign-off without
+a walk, which holds for its run only and reopens as `unperformed` on the next one;
+`scripts/qa/bind.mjs:29-36` at `b855876a`, REQ-PROVE-021.)
 
 Measured early (2026-09-20): this requirement is not built — its unit is file 3's V1 — but four of
 its measurements were already taken by the client roots' own suites on this machine, so V1's author
@@ -891,6 +906,13 @@ rather than a red job. Nightly's drive step carries the invocation legs behind f
 mapped to the variable its client honours as measured from the binaries, with one notice per absent
 secret, `--invoke` scoped to the armed clients, and a 45-minute ceiling derived from the measured
 distribution build.
+
+Amended 2026-09-30 (`docs/plans/013-optimization-sweep-03.md`, unit `sw06-records-only-ci-lane`, ledger
+`build/82`): "merge-blocking through `all-ci-checks`" holds on every change that is not records-only. A push or pull
+request whose every changed path is a record — under `.stamity/runs/`, `.stamity/handoffs/` or `docs/plans/`, or
+`.stamity/inbox.md` — skips `plugin-route`, `check` and `apm-install`, and runs the `records` job in their place; the
+aggregator asserts which side ran, so a records-only pass never stands in for a full one
+(`.github/workflows/ci.yml:19-31` at `b855876a`).
 
 Amended 2026-09-26 (plan 010 file 1, units `e3-codex-remote-walk` and `e3-codex-install-ref`): the
 Codex route now runs against a remote source, and its install line carries a ref. On codex-cli
