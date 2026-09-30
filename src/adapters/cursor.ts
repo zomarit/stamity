@@ -15,7 +15,11 @@ import {
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
 import { verificationGatesFromManifest } from "../emit/agentsMd.ts";
 import { HOOKS_GENERATED_DIR } from "../emit/hooksInfra.ts";
-import { SKILLS_PROJECTION_DIR, projectTouchpointSkills } from "../emit/skillsProjection.ts";
+import {
+  SKILLS_PROJECTION_DIR,
+  frontmatterScalar,
+  projectTouchpointSkills,
+} from "../emit/skillsProjection.ts";
 import { withoutPluginOwnedRows } from "../emit/ownership.ts";
 import type {
   AdapterDialectFacts,
@@ -458,11 +462,6 @@ export const cursorResiduePlanner: ResiduePlanner = {
       });
     }
 
-    // Absent surface, absent rows: a client that documents no home for an
-    // explicitly invoked body gets none invented for it, and the fact lives in
-    // this adapter's declared caps where the capability matrix renders it.
-
-    //
     // The touchpoints are the shared rows Codex emits too: rendered tool-neutral
     // by the core helper, so the composer finds the same bytes from both
     // adapters and writes each file once, owned by both.
@@ -1242,30 +1241,8 @@ if (allowed.size === 0 && faults.length > 0) {
 
 // ── Shared rendering ─────────────────────────────────────────────
 
-/**
- * Any operator- or corpus-supplied value as a single-line frontmatter scalar
- * that cannot escape its own line. Two callers: the artifact description, and
- * the model pin — both free text validated for shape rather than for YAML.
- *
- * A line break is the injection vector: a description carrying one would append
- * whatever follows as another frontmatter key, and an activation key smuggled
- * that way silently changes when the artifact loads. Runs of breaks collapse to
- * a space; a value that would then corrupt the plain-scalar parse — an interior
- * quote or backslash, a `: ` mapping indicator, a ` #` comment introducer, or a
- * leading YAML indicator — is emitted JSON-quoted, which is a valid YAML
- * double-quoted scalar. Well-formed one-line descriptions pass through
- * unchanged.
- */
-function frontmatterScalar(value: string): string {
-  const singleLine = value.replace(/\s*[\r\n]+\s*/g, " ").trim();
-  if (singleLine === "") return singleLine;
-  const needsQuoting =
-    /["\\]/.test(singleLine) ||
-    /:(\s|$)/.test(singleLine) ||
-    /\s#/.test(singleLine) ||
-    /^(?:[,[\]{}#&*!|>'%@`]|[-?:](?:\s|$))/.test(singleLine);
-  return needsQuoting ? JSON.stringify(singleLine) : singleLine;
-}
+// `frontmatterScalar` (the description and model-pin injection guard) has one
+// home, `src/emit/skillsProjection.ts`, which the touchpoint skills share.
 
 /**
  * Physical lines, `wc -l` style: a trailing newline terminates the last line

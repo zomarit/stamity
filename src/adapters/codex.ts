@@ -358,9 +358,10 @@ const CODEX_FACTS: AdapterDialectFacts = {
       name: "command-surface",
       value:
         `\`${SKILLS_PROJECTION_DIR}/st-<id>/SKILL.md\`, invoked as \`$st-<id>\` — the nine ` +
-        "touchpoint bodies ship as shared skills, one file each, read by Cursor too, with an " +
-        "`agents/openai.yaml` companion setting `policy.allow_implicit_invocation: false` so " +
-        "a touchpoint starts only when named. Custom prompts are not used: they live in the " +
+        "touchpoint bodies ship as shared skills, one file each, read by Cursor too, each with an " +
+        "`agents/openai.yaml` companion carrying `policy.allow_implicit_invocation: false`. " +
+        "Measured on codex-cli 0.155.1 (2026-09-30): `$st-work` loads the touchpoint. Whether a " +
+        "plain ask can still start one is unmeasured. Custom prompts are not used: they live in the " +
         "user's Codex home directory, not the repository, and are deprecated in favour of skills",
     },
     { name: "effort-scale", value: EFFORT_SCALE_CAP },

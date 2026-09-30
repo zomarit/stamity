@@ -936,6 +936,13 @@ describe("command surface", () => {
     expect(cap!.value).toContain(`${SKILLS_PROJECTION_DIR}/st-<id>/SKILL.md`);
     expect(cap!.value).toContain("$st-<id>");
     expect(cap!.value).toContain("allow_implicit_invocation: false");
+    // TEST CHANGE (sw17 review/156): the cap states only what is measured or cited — the
+    // key the companion carries and the 2026-09-30 live check that `$st-work` loads the
+    // touchpoint. No page in `citations` documents the key, and no run measured a plain ask,
+    // so the negative is named unmeasured rather than asserted.
+    expect(cap!.value).toContain("`$st-work` loads the touchpoint");
+    expect(cap!.value).toContain("unmeasured");
+    expect(cap!.value).not.toMatch(/starts only when named/);
     // Why not custom prompts: still stated, still cited.
     expect(cap!.value).toContain("home directory");
     expect(cap!.value).toContain("deprecated");

@@ -26,7 +26,11 @@
  *   authoring vocabulary verbatim therefore did not "stay spec-conformant as
  *   authored"; it produced files that fail packaging on the very paths the
  *   portability promise is about. The engine keys are not dropped — they move
- *   into `metadata`, the spec's own escape hatch for exactly this.
+ *   into `metadata`, the spec's own escape hatch for exactly this. One lane
+ *   is the exception: a touchpoint skill ({@link buildTouchpointSkill}) adds a
+ *   seventh key, `disable-model-invocation: true`, so the clients that read it
+ *   list the touchpoint as invoked-by-name only. It is still one render for
+ *   every reader, not a per-tool branch.
  * - **`SKILL.md` bodies** get emission-time token substitution (repo detection
  *   facts + verification-gate commands, from the manifest) so a skill that
  *   says "run the tests" names this repository's real command.
@@ -612,11 +616,22 @@ export function buildTouchpointSkill(item: CatalogItem, name: string, body: stri
 }
 
 /**
- * A one-line YAML scalar: newlines folded to spaces, then double-quoted only
- * where a plain scalar would misparse — a quote or backslash, a `: ` or ` #`
- * inside, or a leading indicator character.
+ * Any operator- or corpus-supplied value as a single-line frontmatter scalar
+ * that cannot escape its own line. The one home of this guard: the touchpoint
+ * skill's description here, and Cursor's rule and agent descriptions and model
+ * pin (`src/adapters/cursor.ts`) — all free text validated for shape rather
+ * than for YAML.
+ *
+ * A line break is the injection vector: a description carrying one would append
+ * whatever follows as another frontmatter key, and an activation key smuggled
+ * that way silently changes when the artifact loads. Runs of breaks collapse to
+ * a space; a value that would then corrupt the plain-scalar parse — an interior
+ * quote or backslash, a `: ` mapping indicator, a ` #` comment introducer, or a
+ * leading YAML indicator — is emitted JSON-quoted, which is a valid YAML
+ * double-quoted scalar. Well-formed one-line descriptions pass through
+ * unchanged.
  */
-function frontmatterScalar(value: string): string {
+export function frontmatterScalar(value: string): string {
   const singleLine = value.replace(/\s*[\r\n]+\s*/g, " ").trim();
   if (singleLine === "") return singleLine;
   const needsQuoting =

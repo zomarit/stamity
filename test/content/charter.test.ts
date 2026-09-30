@@ -413,9 +413,17 @@ describe("corpus charter", () => {
     // workflows and given a nine-line index. The claim now states the DELIVERED
     // difference and what to do instead of naming a touchpoint, and both halves
     // are asserted rather than the one.
-    expect(touchpoints).toMatch(/receives no command file at all/i);
-    expect(touchpoints).toMatch(/this index is all that ships/i);
-    expect(touchpoints).toMatch(/ask there for the outcome in plain words/i);
+    // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills review/157, signed off): the
+    // nine now ship to the client that takes no project command surface too — as skills
+    // under `.agents/skills/`, started as `$st-<id>` — so "receives no command file at all"
+    // and "this index is all that ships" became false. The paragraph states that delivery,
+    // named by capability because this file names no client, and keeps the plain-words
+    // route for a client that reads neither.
+    expect(touchpoints).not.toMatch(/receives no command file at all/i);
+    expect(touchpoints).not.toMatch(/this index is all that ships/i);
+    expect(touchpoints).toMatch(/reads `\.agents\/skills\/` instead receives them\s+there as skills/i);
+    expect(touchpoints).toContain("started as `$st-<id>`");
+    expect(touchpoints).toMatch(/with neither, ask for the outcome in plain words/i);
     // The surface that DOES deliver them still says so, so the qualification
     // reads as a difference rather than as a blanket disclaimer.
     expect(touchpoints).toMatch(/invoked by name/i);

@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CLAUDE_COMMANDS_DIR } from "../../src/adapters/claude.ts";
 import { COPILOT_PROMPTS_DIR } from "../../src/adapters/copilot.ts";
@@ -9,6 +12,7 @@ import {
   NATIVE_SKILL_DIRS,
   SKILLS_PROJECTION_DIR,
   TOUCHPOINT_POLICY_FILE,
+  frontmatterScalar,
 } from "../../src/emit/skillsProjection.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
 import { outputOwners, type AdapterOutput } from "../../src/types/content.ts";
@@ -105,5 +109,25 @@ describe("the nine touchpoints as shared skills", () => {
     }
     // The content skill still reaches copilot through the shared tree.
     expect(paths.has(`${SKILLS_PROJECTION_DIR}/st-onboard/SKILL.md`)).toBe(true);
+  });
+});
+
+// sw17 review/155: the frontmatter injection guard has one home. The touchpoint skill and
+// Cursor's rules and agents render descriptions through the same function, so a fix to the
+// guard cannot land in one copy and leave the other wide.
+describe("frontmatterScalar, the one frontmatter injection guard", () => {
+  const SRC = fileURLToPath(new URL("../../src/", import.meta.url));
+
+  it("is defined once under src/", () => {
+    const definers = readdirSync(SRC, { recursive: true, encoding: "utf8" })
+      .filter((file) => file.endsWith(".ts"))
+      .filter((file) => readFileSync(join(SRC, file), "utf8").includes("function frontmatterScalar("));
+    expect(definers).toEqual([join("emit", "skillsProjection.ts")]);
+  });
+
+  it("folds a line break and quotes a value a plain scalar would misparse", () => {
+    expect(frontmatterScalar("one line")).toBe("one line");
+    expect(frontmatterScalar("first\nalwaysApply: true")).toBe(JSON.stringify("first alwaysApply: true"));
+    expect(frontmatterScalar("- leading dash")).toBe(JSON.stringify("- leading dash"));
   });
 });

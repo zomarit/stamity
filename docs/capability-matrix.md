@@ -44,7 +44,7 @@ delivery leaves in front of it.
 | `claude` | 95 | skill, on demand | the charter alone — a rule with no globs is delivered as a skill instead, and every other rule attaches on paths |
 | `cursor` | 95 | rule, pulled on relevance | the charter alone — a rule with no globs is pulled in when the conversation matches it |
 | `copilot` | 95 | skill, on demand | the charter alone — a rule with no globs is delivered as a skill instead, and every other rule attaches on paths |
-| `codex` | 407 | skill, on demand | the charter plus the rules that must be unconditional — critical, floor-tagged, or anchored to a nested instruction file; the rest are skills — 25306 bytes, in its own `AGENTS.override.md` |
+| `codex` | 407 | skill, on demand | the charter plus the rules that must be unconditional — critical, floor-tagged, or anchored to a nested instruction file; the rest are skills — 25326 bytes, in its own `AGENTS.override.md` |
 
 Measured under `ruleDelivery: on-demand`, the shipped default. A rule that carries no globs has
 no attach trigger, so under `always-on` claude and copilot load its whole body every session;
@@ -62,9 +62,9 @@ plan against, not a reading this page took as it rendered.
 
 **What co-selecting codex costs every other client: nothing at the root.** Codex's rules
 appendix goes to a codex-only root `AGENTS.override.md`, which codex reads instead of
-`AGENTS.md` and no other client reads at all, so the shared root `AGENTS.md` is 5276 bytes with
-codex selected and 5276 without it. The override repeats that file — an operator's own text in
-it included — and adds the appendix: 25306 bytes, ≈4.8x the shared file, paid by codex alone.
+`AGENTS.md` and no other client reads at all, so the shared root `AGENTS.md` is 5296 bytes with
+codex selected and 5296 without it. The override repeats that file — an operator's own text in
+it included — and adds the appendix: 25326 bytes, ≈4.8x the shared file, paid by codex alone.
 It is regenerated from `AGENTS.md` as each sync leaves it. Under a `supplement` or `skip`
 import decision the operator's own text in `AGENTS.md` survives, so an edit to that text
 reaches codex at the next sync and `check` reports it as drift on the override until then. With
@@ -244,7 +244,7 @@ Declared caps:
 | `AGENTS.md budget` | 32768 bytes (32 KiB) |
 | `hook enforcement` | exit 2 denies supported tool calls after native /hooks trust; the core role guard is telemetry because PreToolUse has no agent identity. Hosted tools and specialized paths may bypass hooks; use native sandbox/permissions for enforcement. Three steps stand between the emitted hooks.json and a hook that runs — `features.hooks = true`, which this engine writes explicitly into .codex/config.toml, so the client's default does not decide it; `projects.<path>.trust_level = "trusted"` in the operator's own Codex home config; and a per-hook hash review through the interactive /hooks command, or --dangerously-bypass-hook-trust for automation that cannot take that step. Headless `codex exec` ran no project hook on codex-cli 0.154.0 in this repository's 2026-09-15 measurement, with the feature on, the project trusted through a per-invocation `-c` override and hook trust bypassed. On codex-cli 0.155.1 (measured 2026-09-30) the hooks feature is on by default, a project-file `hooks = false` did not turn it off under that same override, and `codex exec` again ran no project hook in 3 of 3 runs; because the override may leave the project `.codex/` layer unloaded, the cause is not isolated (exec itself, or a layer that never loaded), and a run with the project trusted in the home config is unmeasured. So a hook is enforcement in the interactive client, and nothing measured in the headless lane. |
 | `per-agent tool allowlist` | no native per-agent tools list is documented as of 2026-09-10; no placeholder key is emitted. sandbox_mode carries the supported filesystem boundary; the policy grant remains a prompt-level restriction. |
-| `command-surface` | `.agents/skills/st-<id>/SKILL.md`, invoked as `$st-<id>` — the nine touchpoint bodies ship as shared skills, one file each, read by Cursor too, with an `agents/openai.yaml` companion setting `policy.allow_implicit_invocation: false` so a touchpoint starts only when named. Custom prompts are not used: they live in the user's Codex home directory, not the repository, and are deprecated in favour of skills |
+| `command-surface` | `.agents/skills/st-<id>/SKILL.md`, invoked as `$st-<id>` — the nine touchpoint bodies ship as shared skills, one file each, read by Cursor too, each with an `agents/openai.yaml` companion carrying `policy.allow_implicit_invocation: false`. Measured on codex-cli 0.155.1 (2026-09-30): `$st-work` loads the touchpoint. Whether a plain ask can still start one is unmeasured. Custom prompts are not used: they live in the user's Codex home directory, not the repository, and are deprecated in favour of skills |
 | `effort-scale` | minimal, low, medium, high, xhigh — the levels this client's `model_reasoning_effort` key accepts; xhigh is model-dependent, so a model that does not offer it falls back to that model's own default (learn.chatgpt.com/docs/config-file/config-reference, accessed 2026-09-17). This is the only supported client documenting `minimal`, and the only one that cannot be asked for `max`: a `max` request is emitted as `xhigh` with a disclosure, never dropped |
 
 Sources:

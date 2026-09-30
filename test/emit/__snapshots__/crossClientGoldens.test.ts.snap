@@ -719,8 +719,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 ## Touchpoints
 
 Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command
-surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
-so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
+surface receives all nine as workflow files, invoked by name; one that reads \`.agents/skills/\` instead receives them
+there as skills, started as \`$st-<id>\`; with neither, ask for the outcome in plain words and run the gates yourself.
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`; greenfield and brownfield auto-detected.
 - \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
@@ -804,8 +804,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 ## Touchpoints
 
 Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command
-surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
-so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
+surface receives all nine as workflow files, invoked by name; one that reads \`.agents/skills/\` instead receives them
+there as skills, started as \`$st-<id>\`; with neither, ask for the outcome in plain words and run the gates yourself.
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`; greenfield and brownfield auto-detected.
 - \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
@@ -1184,8 +1184,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 ## Touchpoints
 
 Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command
-surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
-so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
+surface receives all nine as workflow files, invoked by name; one that reads \`.agents/skills/\` instead receives them
+there as skills, started as \`$st-<id>\`; with neither, ask for the outcome in plain words and run the gates yourself.
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`; greenfield and brownfield auto-detected.
 - \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
@@ -1269,8 +1269,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 ## Touchpoints
 
 Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command
-surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
-so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
+surface receives all nine as workflow files, invoked by name; one that reads \`.agents/skills/\` instead receives them
+there as skills, started as \`$st-<id>\`; with neither, ask for the outcome in plain words and run the gates yourself.
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`; greenfield and brownfield auto-detected.
 - \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
@@ -1508,18 +1508,18 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "2b20bb18ca5856d1399098266e771d074889e47d2526af64a7ad7c0089448450 78170 bytes",
+  ".stamity/manifest.json": "c15358488118eb018e9bdbd6a6baa9adba4326dc1acc1e60514b99d3a782eb44 78170 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
-  "AGENTS.override.md": "de316fa2ecd20351ecf1604d8b84a1a80b674b305c60804cb26c867aa11fc87d 25306 bytes",
+  "AGENTS.md": "44243125c58566c11c946d0954f4ac1bf4b08e7c69d64e4f70eb2a06efa55bea 5296 bytes",
+  "AGENTS.override.md": "4bc767b43660c9accce8240a1651cc57b51e11280d824fc922c27f8daa27ef88 25326 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
+  "packages/alpha/AGENTS.md": "44243125c58566c11c946d0954f4ac1bf4b08e7c69d64e4f70eb2a06efa55bea 5296 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
+  "packages/beta/AGENTS.md": "44243125c58566c11c946d0954f4ac1bf4b08e7c69d64e4f70eb2a06efa55bea 5296 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -1691,8 +1691,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 ## Touchpoints
 
 Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command
-surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
-so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
+surface receives all nine as workflow files, invoked by name; one that reads \`.agents/skills/\` instead receives them
+there as skills, started as \`$st-<id>\`; with neither, ask for the outcome in plain words and run the gates yourself.
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`; greenfield and brownfield auto-detected.
 - \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
@@ -1799,8 +1799,8 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "51bb9ccdafdb323c262852afad7df0fdbc4e37c017650399fec6d032223f7608 18404 bytes",
-  "AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
+  ".stamity/manifest.json": "34dfdac3289a9a7bba79293b7ecf3670e8ec03765cf8a7cd6a47197251610fc4 18404 bytes",
+  "AGENTS.md": "44243125c58566c11c946d0954f4ac1bf4b08e7c69d64e4f70eb2a06efa55bea 5296 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
@@ -1966,8 +1966,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 ## Touchpoints
 
 Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command
-surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
-so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
+surface receives all nine as workflow files, invoked by name; one that reads \`.agents/skills/\` instead receives them
+there as skills, started as \`$st-<id>\`; with neither, ask for the outcome in plain words and run the gates yourself.
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`; greenfield and brownfield auto-detected.
 - \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
@@ -2051,8 +2051,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 ## Touchpoints
 
 Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command
-surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
-so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
+surface receives all nine as workflow files, invoked by name; one that reads \`.agents/skills/\` instead receives them
+there as skills, started as \`$st-<id>\`; with neither, ask for the outcome in plain words and run the gates yourself.
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`; greenfield and brownfield auto-detected.
 - \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
@@ -2427,8 +2427,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 ## Touchpoints
 
 Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command
-surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
-so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
+surface receives all nine as workflow files, invoked by name; one that reads \`.agents/skills/\` instead receives them
+there as skills, started as \`$st-<id>\`; with neither, ask for the outcome in plain words and run the gates yourself.
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`; greenfield and brownfield auto-detected.
 - \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
@@ -2512,8 +2512,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 ## Touchpoints
 
 Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command
-surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
-so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
+surface receives all nine as workflow files, invoked by name; one that reads \`.agents/skills/\` instead receives them
+there as skills, started as \`$st-<id>\`; with neither, ask for the outcome in plain words and run the gates yourself.
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`; greenfield and brownfield auto-detected.
 - \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
@@ -2622,15 +2622,15 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "c02fe8d2a9d9ed05ef8e253739521aac5b670255fd8b88c96074acec5833bc8c 20384 bytes",
-  "AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
-  "AGENTS.override.md": "de316fa2ecd20351ecf1604d8b84a1a80b674b305c60804cb26c867aa11fc87d 25306 bytes",
+  ".stamity/manifest.json": "747bfd126720faa93f5a2806ea248e0f79fa96c7b143477dc595ce0728c62536 20384 bytes",
+  "AGENTS.md": "44243125c58566c11c946d0954f4ac1bf4b08e7c69d64e4f70eb2a06efa55bea 5296 bytes",
+  "AGENTS.override.md": "4bc767b43660c9accce8240a1651cc57b51e11280d824fc922c27f8daa27ef88 25326 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
+  "packages/alpha/AGENTS.md": "44243125c58566c11c946d0954f4ac1bf4b08e7c69d64e4f70eb2a06efa55bea 5296 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
+  "packages/beta/AGENTS.md": "44243125c58566c11c946d0954f4ac1bf4b08e7c69d64e4f70eb2a06efa55bea 5296 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -2801,8 +2801,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 ## Touchpoints
 
 Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command
-surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
-so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
+surface receives all nine as workflow files, invoked by name; one that reads \`.agents/skills/\` instead receives them
+there as skills, started as \`$st-<id>\`; with neither, ask for the outcome in plain words and run the gates yourself.
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`; greenfield and brownfield auto-detected.
 - \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
@@ -2905,10 +2905,10 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "f72ae1ec69110b6bebbcd1ccb6325d330b7641047309be136ee0d0643fe716ef 19055 bytes",
+  ".stamity/manifest.json": "ec1a256a0ff6573fc2179927b11218056de1e0106a2147eee146380c0675bf9f 19055 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
+  "AGENTS.md": "44243125c58566c11c946d0954f4ac1bf4b08e7c69d64e4f70eb2a06efa55bea 5296 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
@@ -3344,8 +3344,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
 ## Touchpoints
 
 Nine commands cover the SDLC; each orchestrates at least one sub-agent. A client with a project command
-surface receives all nine as workflow files, invoked by name; one with none receives no command file at all,
-so this index is all that ships — ask there for the outcome in plain words and run the gates yourself.
+surface receives all nine as workflow files, invoked by name; one that reads \`.agents/skills/\` instead receives them
+there as skills, started as \`$st-<id>\`; with neither, ask for the outcome in plain words and run the gates yourself.
 
 - \`/st-spec\` — create or maintain the project spec under \`docs/specs/\`; greenfield and brownfield auto-detected.
 - \`/st-plan\` — route an intent (feature, bug, refactor, migration, test, roadmap) into a persisted plan.
@@ -3459,8 +3459,8 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "e8d8ee2271c03a6e9a1b0850db63b9ba676f32e79dc5709b2cc7f85f486eb0ca 20965 bytes",
-  "AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
+  ".stamity/manifest.json": "c07705bd30fdf5096ee2e979953780be53751b02d01190cccd6a1a2fa3d10ec6 20965 bytes",
+  "AGENTS.md": "44243125c58566c11c946d0954f4ac1bf4b08e7c69d64e4f70eb2a06efa55bea 5296 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",

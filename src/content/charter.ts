@@ -298,7 +298,13 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // without codex, and this figure met the one below. The 25_306 bytes did not
 // vanish — they are the override's, byte for byte (same sha256 in the golden),
 // and the series continues on ALWAYS_ON_CODEX_OVERRIDE_BYTES.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_276;
+// 5_276 -> 5_296 on 2026-09-30, sw17 fix round 1 (review/157): the charter's
+// Touchpoints paragraph says the nine reach a client without a command surface
+// as skills under `.agents/skills/`, started as `$st-<id>`, where it said that
+// client got no command file at all, +20 bytes rewrapped inside the two lines
+// the sentence already had, so no line count moved. The same +20 lands in the
+// charter-alone figure below and in ALWAYS_ON_CODEX_OVERRIDE_BYTES.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_296;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
@@ -320,7 +326,9 @@ export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_276;
 // 1.1.0 version line, the same +55 as above and the whole of the change here.
 // 5_247 -> 5_276 on 2026-09-30, sw26-cli-token: the maturity line's pinned CLI
 // call, the same +29 as above and the whole of the change here.
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_276;
+// 5_276 -> 5_296 on 2026-09-30, sw17 fix round 1 (review/157): the Touchpoints
+// paragraph's delivery sentence, the same +20 as above.
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_296;
 
 /**
  * Bytes of the Codex-only root `AGENTS.override.md` on the golden selection —
@@ -339,7 +347,9 @@ export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_276;
 // 25_306 on 2026-09-30, sw18-codex-rules-leave-shared-charter: the figure
 // ALWAYS_ON_SHARED_BYTES_WITH_CODEX carried until the appendix moved here — the
 // same bytes, now in a file only codex reads.
-export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_306;
+// 25_306 -> 25_326 on 2026-09-30, sw17 fix round 1 (review/157): the charter
+// half of the override carries the Touchpoints paragraph's +20 bytes.
+export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_326;
 
 /**
  * The composite always-on line count one client pays for a plan under a
