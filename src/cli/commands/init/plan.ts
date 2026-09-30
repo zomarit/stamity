@@ -2,6 +2,7 @@ import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { ContentIndex } from "../../../content/catalog.ts";
 import { analyzeRepo, isGreenfield, summarizeDetection } from "../../../detect/repoAnalyzer.ts";
+import { gateLanguageFor, isPythonRunner } from "../../../detect/verificationGates.ts";
 import { CONTENT_CLASSES, type ContentSelection } from "../../../types/content.ts";
 import {
   DEFAULT_MATURITY_TIER,
@@ -13,6 +14,7 @@ import {
 } from "../../../types/core.ts";
 import type { DetectedSummary, PackageEntry, RepoInfo } from "../../../types/detect.ts";
 import { EngineError } from "../../../types/errors.ts";
+import type { GatesConfig } from "../../../types/manifest.ts";
 import {
   detectSubRepos,
   detectWorkspaceContext,
@@ -74,6 +76,17 @@ export interface InitDecisions {
   existingConfigPaths: string[];
   /** The manifest-persisted detection subset. */
   detected: DetectedSummary;
+  /**
+   * Gate pins init records ONCE, beside {@link detected}, when detection alone
+   * cannot spell a runnable gate (REQ-FLOW-007): Python gates win, no lock file
+   * declares a runner, and a plain virtual environment sits at `.venv/` (or
+   * `venv/`). Absent on every other repository, which keeps their manifest
+   * byte-identical. Only init decides this — `sync` never writes pins — so a
+   * checkout without the venv still renders the same charter and `check` stays
+   * drift-free. The pins use the POSIX `bin/python` layout; see
+   * {@link plainVenvGatePins}.
+   */
+  gatePins?: GatesConfig;
   /**
    * The full live analysis, for the disclosure panel.
    *
@@ -210,7 +223,11 @@ export async function buildInitDecisions(
   // ?? short-circuits: a flagged platform skips the git spawn entirely.
   const platform = overrides.platform ?? detectPlatform(rootDir);
 
-  const existingConfigPaths = await collectExistingConfigPaths(rootDir, detectedTools);
+  const detected = summarizeDetection(info);
+  const [existingConfigPaths, gatePins] = await Promise.all([
+    collectExistingConfigPaths(rootDir, detectedTools),
+    plainVenvGatePins(rootDir, detected),
+  ]);
 
   return {
     tools,
@@ -221,9 +238,51 @@ export async function buildInitDecisions(
     ...maturity,
     ...(platform === undefined ? {} : { platform }),
     existingConfigPaths,
-    detected: summarizeDetection(info),
+    detected,
+    ...(gatePins === undefined ? {} : { gatePins }),
     repoInfo: info,
     ...workspace,
+  };
+}
+
+/** Virtual-environment directories probed for the plain-venv pins, preferred in this order. */
+const VENV_DIRS: readonly string[] = [".venv", "venv"];
+
+/**
+ * The plain-venv gate pins (REQ-FLOW-007, decision 7), or `undefined`.
+ *
+ * Pinned only when all three hold: the Python row is the one the gate resolver
+ * ranks first ({@link gateLanguageFor}), detection recorded no lock-declared
+ * runner (a runner prefixes the gates itself, so a repository with both a lock
+ * file and a `.venv/` gets no pin), and `<dir>/pyvenv.cfg` exists — the file
+ * every `venv`-created environment writes, so a directory merely named `.venv`
+ * earns nothing. Each tool runs as a module of that interpreter, which needs no
+ * activated shell. The type-check target is `src` when a root `src/` exists,
+ * the layout mypy would otherwise miss from `.`.
+ *
+ * POSIX only: `<dir>/bin/python` is where a venv puts its interpreter on Linux
+ * and macOS. Windows lays the same environment out differently, and this
+ * function does not guess that path; the init panel says the pins will not run
+ * there.
+ */
+async function plainVenvGatePins(
+  rootDir: string,
+  detected: DetectedSummary,
+): Promise<GatesConfig | undefined> {
+  if (gateLanguageFor(detected) !== "python" || isPythonRunner(detected.packageManager)) {
+    return undefined;
+  }
+  const [present, hasSrc] = await Promise.all([
+    Promise.all(VENV_DIRS.map((dir) => fileExists(join(rootDir, dir, "pyvenv.cfg")))),
+    dirExists(join(rootDir, "src")),
+  ]);
+  const venv = VENV_DIRS.find((_dir, index) => present[index] === true);
+  if (venv === undefined) return undefined;
+  const python = `${venv}/bin/python -m`;
+  return {
+    test: `${python} pytest`,
+    lint: `${python} ruff check .`,
+    typecheck: `${python} mypy ${hasSrc ? "src" : "."}`,
   };
 }
 
@@ -354,6 +413,15 @@ async function collectExistingConfigPaths(
 async function fileExists(path: string): Promise<boolean> {
   try {
     return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** True when `path` names a directory. Any filesystem refusal reads as absent. */
+async function dirExists(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
   } catch {
     return false;
   }

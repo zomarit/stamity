@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { DETECTABLE_LANGUAGES } from "../../src/detect/repoAnalyzer.ts";
 import {
   DEFAULT_GATE_COMMANDS,
+  gateLanguageFor,
+  isPythonRunner,
   unresolvedGate,
   verificationCommandsFor,
   verificationGatesFor,
@@ -532,5 +534,99 @@ describe("verificationGatesFor — the operator's pinned gates", () => {
       );
     }
     expect(verificationGatesFor(undefined, {})).toEqual(DEFAULT_GATE_COMMANDS);
+  });
+});
+
+/**
+ * REQ-FLOW-007: a Python project's gates run from the repository root with no
+ * environment activated. A lock-declared runner, recorded by detection in the
+ * existing `packageManager` string, prefixes every Python row; nothing else
+ * moves.
+ */
+describe("REQ-FLOW-007 Python gates use the lock-declared runner", () => {
+  const RUNNERS = [
+    { name: "uv", prefix: "uv run" },
+    { name: "poetry", prefix: "poetry run" },
+    { name: "pdm", prefix: "pdm run" },
+    { name: "hatch", prefix: "hatch run" },
+  ] as const;
+
+  it("prefixes every Python gate with uv run when uv is the recorded runner", () => {
+    const gates = verificationGatesFor(detection({ languages: ["python"], packageManager: "uv" }));
+
+    expect(gates.test).toBe("uv run pytest");
+    expect(gates.lint).toBe("uv run ruff check .");
+    expect(gates.typecheck).toBe("uv run mypy .");
+    expect(gates.all).toBe("uv run ruff check . && uv run mypy . && uv run pytest");
+  });
+
+  it("uses each runner's own spelling", () => {
+    for (const { name, prefix } of RUNNERS) {
+      const gates = verificationGatesFor(detection({ languages: ["python"], packageManager: name }));
+      expect(gates.test, name).toBe(`${prefix} pytest`);
+      expect(gates.all, name).toBe(`${prefix} ruff check . && ${prefix} mypy . && ${prefix} pytest`);
+    }
+  });
+
+  it("renders a Python repository with no recorded runner exactly as before", () => {
+    const gates = verificationGatesFor(detection({ languages: ["python"] }));
+
+    expect(gates).toEqual({
+      test: "pytest",
+      lint: "ruff check .",
+      typecheck: "mypy .",
+      all: "ruff check . && mypy . && pytest",
+    });
+  });
+
+  it("leaves a Node package manager beside Python gates unprefixed", () => {
+    const gates = verificationGatesFor(detection({ languages: ["python"], packageManager: "npm" }));
+
+    expect(gates.test).toBe("pytest");
+    expect(gates.all).toBe("ruff check . && mypy . && pytest");
+  });
+
+  it("prefixes only the Python row: a ranked Rust repository keeps cargo", () => {
+    const gates = verificationGatesFor(
+      detection({ languages: ["python", "rust"], packageManager: "uv" }),
+    );
+
+    expect(gates.test).toBe("cargo test");
+  });
+
+  it("ignores an inherited prototype key as a runner name", () => {
+    const gates = verificationGatesFor(
+      detection({ languages: ["python"], packageManager: "constructor" }),
+    );
+
+    expect(gates.test).toBe("pytest");
+  });
+
+  it("lets a pinned gate outrank the runner-prefixed row, per key", () => {
+    const gates = verificationGatesFor(detection({ languages: ["python"], packageManager: "uv" }), {
+      test: ".venv/bin/python -m pytest",
+    });
+
+    expect(gates.test).toBe(".venv/bin/python -m pytest");
+    expect(gates.lint).toBe("uv run ruff check .");
+    expect(gates.all).toBe("uv run ruff check . && uv run mypy . && .venv/bin/python -m pytest");
+  });
+
+  it("names python as the gate language only when Python gates win", () => {
+    expect(gateLanguageFor(detection({ languages: ["python"] }))).toBe("python");
+    expect(gateLanguageFor(detection({ languages: ["python", "go"] }))).toBe("go");
+    // A declared Node script outranks the Python row.
+    expect(
+      gateLanguageFor(detection({ languages: ["python", "typescript"], packageScripts: ["test"] })),
+    ).toBe("typescript");
+    expect(gateLanguageFor(detection({ languages: [] }))).toBeNull();
+    expect(gateLanguageFor(undefined)).toBeNull();
+  });
+
+  it("answers whether a recorded name is a Python runner", () => {
+    for (const { name } of RUNNERS) expect(isPythonRunner(name), name).toBe(true);
+    expect(isPythonRunner("npm")).toBe(false);
+    expect(isPythonRunner("constructor")).toBe(false);
+    expect(isPythonRunner(undefined)).toBe(false);
   });
 });

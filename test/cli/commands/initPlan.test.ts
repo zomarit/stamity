@@ -1,9 +1,17 @@
-import { mkdir } from "node:fs/promises";
-import { describe, expect, it } from "vitest";
+import { mkdir, readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { applyInit } from "../../../src/cli/commands/init/apply.ts";
 import { buildInitDecisions, fullCoreSelection } from "../../../src/cli/commands/init/plan.ts";
+import { planSync } from "../../../src/cli/commands/sync/engine.ts";
 import type { HistoryFacts } from "../../../src/cli/engine/gitStatus.ts";
 import type { CatalogItem, ContentIndex } from "../../../src/content/catalog.ts";
+import {
+  __resetContentRootCacheForTests,
+  __setContentRootForTests,
+} from "../../../src/content/contentRoot.ts";
 import { suggestStackPacks } from "../../../src/detect/stackSupport.ts";
+import { readManifest } from "../../../src/manifest/manifest.ts";
 import type { ContentClass } from "../../../src/types/content.ts";
 import type { Tool } from "../../../src/types/core.ts";
 import { EngineError } from "../../../src/types/errors.ts";
@@ -315,5 +323,165 @@ describe("fullCoreSelection", () => {
 
     expect(selection.items.skill).toEqual(["plan"]);
     expect(selection.items.rule).toEqual(["plan"]);
+  });
+});
+
+/**
+ * REQ-FLOW-007, the plain-venv default (decision 7): a Python project whose
+ * tools live only in a committed-nowhere `.venv/` gets its gates pinned ONCE,
+ * at init, as `.venv/bin/python -m <tool>`. `sync` never writes pins, so the
+ * charter stays drift-free on a checkout without the venv.
+ */
+describe("buildInitDecisions — REQ-FLOW-007 plain-venv gate pins", () => {
+  const PYPROJECT = '[project]\nname = "app"\nversion = "0.1.0"\n';
+  const VENV_CFG = "home = /usr/bin\ninclude-system-site-packages = false\n";
+
+  it("pins the three gates through .venv/bin/python with src as the type-check target", async () => {
+    const root = await seedRepo({
+      "pyproject.toml": PYPROJECT,
+      ".venv/pyvenv.cfg": VENV_CFG,
+      "src/app/__init__.py": "",
+    });
+    const decisions = await buildInitDecisions(root, {}, { history: null });
+
+    expect(decisions.gatePins).toEqual({
+      test: ".venv/bin/python -m pytest",
+      lint: ".venv/bin/python -m ruff check .",
+      typecheck: ".venv/bin/python -m mypy src",
+    });
+  });
+
+  it("type-checks the root when there is no src directory", async () => {
+    const root = await seedRepo({ "pyproject.toml": PYPROJECT, ".venv/pyvenv.cfg": VENV_CFG });
+    const decisions = await buildInitDecisions(root, {}, { history: null });
+
+    expect(decisions.gatePins?.typecheck).toBe(".venv/bin/python -m mypy .");
+  });
+
+  it("pins through venv/ when that is the environment the repository holds", async () => {
+    const root = await seedRepo({ "requirements.txt": "pytest\n", "venv/pyvenv.cfg": VENV_CFG });
+    const decisions = await buildInitDecisions(root, {}, { history: null });
+
+    expect(decisions.gatePins?.test).toBe("venv/bin/python -m pytest");
+  });
+
+  it("writes no pin when a lock file declares the runner, even beside a .venv", async () => {
+    const root = await seedRepo({
+      "pyproject.toml": PYPROJECT,
+      "uv.lock": "version = 1\n",
+      ".venv/pyvenv.cfg": VENV_CFG,
+    });
+    const decisions = await buildInitDecisions(root, {}, { history: null });
+
+    expect(decisions.detected.packageManager).toBe("uv");
+    expect(decisions.gatePins).toBeUndefined();
+  });
+
+  it("writes no pin without a virtual environment", async () => {
+    const root = await seedRepo({ "pyproject.toml": PYPROJECT });
+    const decisions = await buildInitDecisions(root, {}, { history: null });
+
+    expect(decisions.gatePins).toBeUndefined();
+  });
+
+  it("writes no pin when a directory named .venv is not a virtual environment", async () => {
+    const root = await seedRepo({ "pyproject.toml": PYPROJECT, ".venv/notes.txt": "x\n" });
+    const decisions = await buildInitDecisions(root, {}, { history: null });
+
+    expect(decisions.gatePins).toBeUndefined();
+  });
+
+  it("writes no pin when Node gates win over the Python row", async () => {
+    const root = await seedRepo({
+      "pyproject.toml": PYPROJECT,
+      ".venv/pyvenv.cfg": VENV_CFG,
+      "tsconfig.json": "{}",
+      "package.json": JSON.stringify({ scripts: { test: "vitest run" } }),
+    });
+    const decisions = await buildInitDecisions(root, {}, { history: null });
+
+    expect(decisions.gatePins).toBeUndefined();
+  });
+});
+
+/**
+ * The pins land where the cell puts them: inside the manifest init composes,
+ * BEFORE the emission plan, so init's own charter names them and the first
+ * drift check (the sync plan `check` runs) finds nothing to rewrite — also on a
+ * checkout whose `.venv/` is gone. The real planner runs over a one-file corpus
+ * whose charter carries the four gate tokens.
+ */
+/** Paths a sync plan would rewrite — the drift `check` reports. */
+function drifted(plan: { entries: { path: string; action: string }[] }): string[] {
+  return plan.entries.filter((row) => row.action !== "unchanged").map((row) => row.path);
+}
+
+describe("applyInit — REQ-FLOW-007 pins reach the manifest and the charter", () => {
+  const CHARTER = [
+    "---",
+    "id: charter",
+    "type: charter",
+    "description: fixture charter",
+    "tags: [orchestration]",
+    "load: always",
+    "obsolete_when: fixture trigger",
+    "---",
+    "",
+    "# Test Charter",
+    "",
+    "- Tests: `${STAMITY:VERIFY_GATE_TEST}`",
+    "- Lint: `${STAMITY:VERIFY_GATE_LINT}`",
+    "- Typecheck: `${STAMITY:VERIFY_GATE_TYPECHECK}`",
+    "- Full gate: `${STAMITY:VERIFY_GATE_ALL}`",
+    "",
+  ].join("\n");
+
+  afterEach(() => {
+    __resetContentRootCacheForTests();
+  });
+
+  it("persists the pins, renders them in the charter, and plans no drift with or without .venv", async () => {
+    const corpus = await seedRepo({ "charter/stamity-charter.md": CHARTER });
+    __setContentRootForTests(corpus);
+    const root = await seedRepo({
+      "pyproject.toml": '[project]\nname = "app"\n',
+      ".venv/pyvenv.cfg": "home = /usr/bin\n",
+      "src/app/__init__.py": "",
+    });
+    const decisions = await buildInitDecisions(root, { tools: ["claude"] }, { history: null });
+    const engineVersion = "0.0.0-test";
+
+    await applyInit({ rootDir: root, decisions, engineVersion, dryRun: false, force: false });
+
+    const manifest = await readManifest(root);
+    expect(manifest?.gates).toEqual({
+      test: ".venv/bin/python -m pytest",
+      lint: ".venv/bin/python -m ruff check .",
+      typecheck: ".venv/bin/python -m mypy src",
+    });
+    const charter = await readFile(join(root, "AGENTS.md"), "utf8");
+    expect(charter).toContain("- Tests: `.venv/bin/python -m pytest`");
+    expect(charter).toContain(
+      "- Full gate: `.venv/bin/python -m ruff check . && .venv/bin/python -m mypy src && .venv/bin/python -m pytest`",
+    );
+
+    expect(drifted(await planSync(root, engineVersion, { runner: () => "" }))).toEqual([]);
+
+    // A clone without the venv: the pins still render, so nothing drifts.
+    await rm(join(root, ".venv"), { recursive: true });
+    expect(drifted(await planSync(root, engineVersion, { runner: () => "" }))).toEqual([]);
+  });
+
+  it("leaves the manifest unpinned for a repository that earns no pin", async () => {
+    const corpus = await seedRepo({ "charter/stamity-charter.md": CHARTER });
+    __setContentRootForTests(corpus);
+    const root = await seedRepo({ "pyproject.toml": '[project]\nname = "app"\n', "uv.lock": "" });
+    const decisions = await buildInitDecisions(root, { tools: ["claude"] }, { history: null });
+
+    await applyInit({ rootDir: root, decisions, engineVersion: "0.0.0-test", dryRun: false, force: false });
+
+    expect((await readManifest(root))?.gates).toBeUndefined();
+    const charter = await readFile(join(root, "AGENTS.md"), "utf8");
+    expect(charter).toContain("- Tests: `uv run pytest`");
   });
 });

@@ -16,7 +16,9 @@ import {
   detectTestFrameworks,
   formatRepoSummary,
   isGreenfield,
+  summarizeDetection,
 } from "../../src/detect/repoAnalyzer.ts";
+import { verificationGatesFor } from "../../src/detect/verificationGates.ts";
 import type { RepoInfo } from "../../src/types/detect.ts";
 import { STATE_DIR } from "../../src/types/markers.ts";
 import { useTempDir } from "../support/tempDir.ts";
@@ -766,5 +768,92 @@ describe("unreadable directories", () => {
 
     expect(info.monorepoPackages).toEqual([]);
     expect(info.languages).toContain("typescript");
+  });
+});
+
+/**
+ * REQ-FLOW-007: the runner a Python lock file declares is recorded in the
+ * existing `packageManager` string, and only when no Node package manager was
+ * observed — the Node spelling still owns the field in a mixed repository.
+ */
+describe("REQ-FLOW-007 the lock-declared Python runner", () => {
+  const PYPROJECT = '[project]\nname = "app"\nversion = "0.1.0"\n';
+
+  it("records uv from uv.lock beside pyproject.toml", async () => {
+    const info = await analyze({ "pyproject.toml": PYPROJECT, "uv.lock": "version = 1\n" });
+
+    expect(info.languages).toEqual(["python"]);
+    expect(info.packageManager).toBe("uv");
+  });
+
+  it("records poetry, pdm and hatch from their own evidence", async () => {
+    const poetry = await analyze({ "pyproject.toml": PYPROJECT, "poetry.lock": "# lock\n" });
+    const pdm = await analyze({ "pyproject.toml": PYPROJECT, "pdm.lock": "# lock\n" });
+    const hatch = await analyze({
+      "pyproject.toml": `${PYPROJECT}\n[tool.hatch.envs.default]\ndependencies = ["pytest"]\n`,
+    });
+
+    expect(poetry.packageManager).toBe("poetry");
+    expect(pdm.packageManager).toBe("pdm");
+    expect(hatch.packageManager).toBe("hatch");
+  });
+
+  it("takes the first runner in a fixed order when two lock files are present", async () => {
+    const info = await analyze({
+      "pyproject.toml": PYPROJECT,
+      "poetry.lock": "# lock\n",
+      "uv.lock": "version = 1\n",
+    });
+
+    expect(info.packageManager).toBe("uv");
+  });
+
+  it("keeps an observed Node package manager when uv.lock sits beside package-lock.json", async () => {
+    const info = await analyze({
+      "pyproject.toml": PYPROJECT,
+      "uv.lock": "version = 1\n",
+      "package.json": json({ name: "docs" }),
+      "package-lock.json": "{}",
+    });
+
+    expect(info.packageManager).toBe("npm");
+  });
+
+  it("records no runner for a lock file without a detected Python language", async () => {
+    const info = await analyze({ "uv.lock": "version = 1\n" });
+
+    expect(info.languages).toEqual([]);
+    expect(info.packageManager).toBeUndefined();
+  });
+
+  it("ignores a commented hatch table and a plain virtual environment", async () => {
+    const info = await analyze({
+      "pyproject.toml": `${PYPROJECT}# [tool.hatch.envs.default]\n`,
+      ".venv/pyvenv.cfg": "home = /usr/bin\n",
+    });
+
+    // A `.venv` is machine state, never committed evidence: sync and check
+    // re-detect live, so detection must not read it (init pins it instead).
+    expect(info.packageManager).toBeUndefined();
+  });
+
+  it("records a name the gate resolver prefixes, for every runner it can record", async () => {
+    const fixtures: Record<string, Record<string, string>> = {
+      uv: { "uv.lock": "version = 1\n" },
+      poetry: { "poetry.lock": "# lock\n" },
+      pdm: { "pdm.lock": "# lock\n" },
+      hatch: { "pyproject.toml": `${PYPROJECT}[tool.hatch.envs.test]\n` },
+    };
+    const analysed = await Promise.all(
+      Object.entries(fixtures).map(async ([runner, files]) => ({
+        runner,
+        info: await analyze({ "pyproject.toml": PYPROJECT, ...files }),
+      })),
+    );
+    for (const { runner, info } of analysed) {
+      expect(info.packageManager, runner).toBe(runner);
+      const gates = verificationGatesFor(summarizeDetection(info));
+      expect(gates.test, runner).toBe(`${runner} run pytest`);
+    }
   });
 });

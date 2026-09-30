@@ -723,3 +723,38 @@ describe("renderInitPanel — next steps", () => {
     expect(output).toContain("next steps:");
   });
 });
+
+/**
+ * REQ-FLOW-007: init's output names the plain-venv pins it recorded, and says
+ * they are POSIX-only rather than guessing another layout's path.
+ */
+describe("renderInitPanel — REQ-FLOW-007 gate pins", () => {
+  const PINS = {
+    test: ".venv/bin/python -m pytest",
+    lint: ".venv/bin/python -m ruff check .",
+    typecheck: ".venv/bin/python -m mypy src",
+  };
+
+  it("names each pinned gate, where it is recorded, and that it is POSIX-only", () => {
+    const output = renderInitPanel(panelInput({ decisions: decisionsFixture({ gatePins: PINS }) }));
+    const line = output.split("\n").find((row) => row.includes("gates pinned"));
+
+    expect(line).toBeDefined();
+    expect(line).toContain("test `.venv/bin/python -m pytest`");
+    expect(line).toContain("lint `.venv/bin/python -m ruff check .`");
+    expect(line).toContain("typecheck `.venv/bin/python -m mypy src`");
+    expect(line).toContain("gates.test");
+    expect(line).toContain("POSIX");
+    expect(line).toContain("Windows");
+    // Stated, never guessed: no Windows interpreter path is printed.
+    expect(line).not.toMatch(/Scripts|\\/);
+    // The pin line sits in the disclosure block, above the next steps.
+    expect(output.indexOf("gates pinned")).toBeLessThan(output.indexOf("next steps:"));
+  });
+
+  it("prints no pin line when init recorded none", () => {
+    const output = renderInitPanel(panelInput());
+
+    expect(output).not.toContain("gates pinned");
+  });
+});

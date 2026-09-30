@@ -299,6 +299,30 @@ export function emissionSummary(report: InitApplyReport, dryRun = report.dryRun)
 }
 
 /**
+ * The plain-venv gate pins init recorded (REQ-FLOW-007), in one line, or
+ * nothing when it recorded none. The pins are a decision the operator did not
+ * make, written into the manifest and every charter, so the panel names them,
+ * the manifest keys that hold them, and the one place they do not run: they
+ * call `<venv>/bin/python`, the POSIX layout, and no Windows path is guessed.
+ */
+function gatePinLine(decisions: InitDecisions): string | null {
+  const pins = decisions.gatePins;
+  if (pins === undefined) return null;
+  const pinned = (["test", "lint", "typecheck"] as const).flatMap((gate) => {
+    const command = pins[gate];
+    return command === undefined ? [] : [{ gate, command }];
+  });
+  const named = pinned.map(({ gate, command }) => `${gate} \`${command}\``).join(", ");
+  const keys = pinned.map(({ gate }) => `gates.${gate}`).join(", ");
+  return (
+    `gates pinned to the project's virtual environment, so they run with none activated: ` +
+    `${named} (recorded as ${keys} in the manifest; sync never rewrites ` +
+    `them). The pins use the POSIX interpreter path and will not run on Windows until those ` +
+    `keys are changed.`
+  );
+}
+
+/**
  * What landed: target tools plus what the writer did with the planned set.
  * Skipped rows are files the engine refused to claim (user-owned collisions),
  * so they never count as installed — and {@link emissionSummary} says which of
@@ -571,6 +595,8 @@ export function renderInitPanel(input: InitPanelInput): string {
     `  detected ${detectedLabel(input)} -> installed ${installedLabel(decisions, report)} ` +
       palette.dim(`(tier: ${decisions.maturityTier}, change with \`stamity config\`)`),
   );
+  const pinLine = gatePinLine(decisions);
+  if (pinLine !== null) lines.push(`  ${pinLine}`);
   if (carry !== null) {
     for (const line of migrationLines(carry, input.residue)) lines.push(`  ${line}`);
   }

@@ -628,11 +628,18 @@ async function composeManifest(
   // retro-edited through the manifest handed to the writer. `createManifest`
   // itself is untouched — a greenfield init passes neither field and gets the
   // identical document it did before.
+  //
+  // The plain-venv gate pins (REQ-FLOW-007) ride the same seam, and HERE rather
+  // than after the write: this manifest is what the emission plan below reads,
+  // so init's own charter already names the pinned commands and the first
+  // `check` finds nothing to rewrite. `sync` never writes pins; it only carries
+  // the ones this run persisted.
   const settled = {
     ...(defaults?.communicationStyle === undefined
       ? {}
       : { communicationStyle: defaults.communicationStyle }),
     ...(plugin === undefined ? {} : { plugin }),
+    ...(decisions.gatePins === undefined ? {} : { gates: decisions.gatePins }),
   };
   return Object.keys(settled).length === 0 ? fresh : applyPreservedManifestFields(fresh, settled);
 }

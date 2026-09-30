@@ -131,6 +131,46 @@ const LANGUAGE_GATES: Record<string, LanguageGate> = {
 };
 
 /**
+ * How each lock-declared Python runner spells "run this tool inside the
+ * project's environment" (REQ-FLOW-007).
+ *
+ * Detection records the runner in the existing `detected.packageManager`
+ * string (`./repoAnalyzer.ts`), beside the four Node names — so this table is
+ * keyed by string, not by {@link PackageManagerName}, and {@link RUN_PREFIX} and
+ * {@link EXEC_PREFIX} stay the Node-only tables they are. The bare `python` row
+ * above is right only in a shell with the environment already activated; a
+ * gate an agent runs from the repository root has none, so a repository that
+ * declared its runner gets every Python command through it. A plain `.venv/`
+ * with no lock is not evidence this module reads: it is machine state, and init
+ * pins it once instead (`../cli/commands/init/plan.ts`).
+ */
+const PYTHON_RUN_PREFIX: Record<string, string> = {
+  uv: "uv run",
+  poetry: "poetry run",
+  pdm: "pdm run",
+  hatch: "hatch run",
+};
+
+/** Whether `name` — a persisted `packageManager` value — is a lock-declared Python runner. */
+export function isPythonRunner(name: unknown): boolean {
+  return typeof name === "string" && Object.hasOwn(PYTHON_RUN_PREFIX, name);
+}
+
+/**
+ * A language's row as the repository runs it: the Python row through the
+ * recorded runner, every other row (and a Python row with no runner) as is.
+ */
+function runnerGate(language: string, gate: LanguageGate, packageManager: unknown): LanguageGate {
+  if (language !== "python" || !isPythonRunner(packageManager)) return gate;
+  const prefix = PYTHON_RUN_PREFIX[packageManager as string];
+  return {
+    test: `${prefix} ${gate.test}`,
+    lint: `${prefix} ${gate.lint}`,
+    ...(gate.typecheck === undefined ? {} : { typecheck: `${prefix} ${gate.typecheck}` }),
+  };
+}
+
+/**
  * Declared gate precedence over the languages detection can report — the whole
  * ranking, in one reviewable place, and total over {@link LANGUAGE_GATES}.
  *
@@ -269,7 +309,8 @@ const EXEC_PREFIX: Record<PackageManagerName, string> = {
  * 1. **No `detected` block** → {@link DEFAULT_GATE_COMMANDS}. Absence of the
  *    record is not a record of absence.
  * 2. **A ranked non-Node language** ({@link GATE_LANGUAGE_PRECEDENCE}) → that
- *    language's native row, whole.
+ *    language's native row, whole — the Python row through the lock-declared
+ *    runner when detection recorded one ({@link PYTHON_RUN_PREFIX}).
  * 3. **Node evidence** — a ranked Node language, a persisted package manager,
  *    or a persisted `scripts` block → {@link nodeCommands}: the script form for
  *    a script the repo declares, the detected runner's binary when it does not,
@@ -288,7 +329,9 @@ export function verificationCommandsFor(
   const languages = stringList(detected.languages) ?? [];
   const scripts = stringList(detected.packageScripts);
   const found = rankedLanguage(languages, scripts);
-  if (found !== null && !NODE_LANGUAGES.has(found.language)) return commandsFrom(found.gate);
+  if (found !== null && !NODE_LANGUAGES.has(found.language)) {
+    return commandsFrom(runnerGate(found.language, found.gate, detected.packageManager));
+  }
 
   const name = detected.packageManager;
   if (found === null && name === undefined && scripts === undefined) return {};
@@ -298,6 +341,18 @@ export function verificationCommandsFor(
       ? (name as PackageManagerName)
       : "npm";
   return nodeCommands(manager, found?.language ?? null, detected, scripts);
+}
+
+/**
+ * The language whose native gate row wins for this detection — the ranking
+ * {@link verificationCommandsFor} applies — or `null` when no detected language
+ * carries a row (and when there is no `detected` block at all). Init reads it
+ * to decide whether Python gates are the ones its plain-venv pins would replace.
+ */
+export function gateLanguageFor(detected: PersistedDetection | undefined): string | null {
+  if (detected === undefined) return null;
+  const languages = stringList(detected.languages) ?? [];
+  return rankedLanguage(languages, stringList(detected.packageScripts))?.language ?? null;
 }
 
 /**

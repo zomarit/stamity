@@ -280,8 +280,10 @@ const PYPROJECT_TEST_SIGNALS: readonly { name: string; patterns: readonly RegExp
 
 /**
  * Reported when a wired `lint` / `test` script is the only evidence of a
- * toolchain. The script body is not parsed, so the name says what is known —
- * something runs — without guessing which tool it runs.
+ * toolchain. A `lint` body is not parsed; a `test` body is scanned for the
+ * runners {@link TEST_SCRIPT_RUNNERS} names, so `test-script` means the body
+ * runs something none of those rows recognises. Either way the name says what
+ * is known — something runs — without guessing which tool it runs.
  */
 const LINT_SCRIPT_FALLBACK = "lint-script";
 const TEST_SCRIPT_FALLBACK = "test-script";
@@ -363,6 +365,26 @@ const AGENT_TOOL_INDICATORS: readonly Indicator<string>[] = [
   { name: "agents", files: ["AGENTS.md", "AGENT.md"] },
 ];
 
+/**
+ * Python runners a repository declares by committing their lock file, in the
+ * fixed order that decides a repository carrying two (REQ-FLOW-007). Hatch
+ * writes no lock file, so its evidence is an environment table in
+ * `pyproject.toml` ({@link HATCH_ENV_SECTION}). Each name is one the gate
+ * resolver prefixes (`./verificationGates.ts`, `PYTHON_RUN_PREFIX`).
+ *
+ * A `.venv/` is deliberately absent: it is machine state, never committed, and
+ * `sync` and `check` re-detect live, so reading it here would make the emitted
+ * gates differ between two checkouts of the same commit.
+ */
+const PYTHON_RUNNER_LOCKFILES: readonly { name: string; file: string }[] = [
+  { name: "uv", file: "uv.lock" },
+  { name: "poetry", file: "poetry.lock" },
+  { name: "pdm", file: "pdm.lock" },
+];
+
+/** A hatch environment table header; `[tool.hatch.envs` also matches `[tool.hatch.envs.test]`. */
+const HATCH_ENV_SECTION = "[tool.hatch.envs";
+
 /** Directory names never treated as workspace packages, whatever a glob matches. */
 const NON_PACKAGE_DIRS: ReadonlySet<string> = new Set(["node_modules"]);
 
@@ -377,7 +399,10 @@ const NON_PACKAGE_DIRS: ReadonlySet<string> = new Set(["node_modules"]);
  * `packageManager` is set only when the repository actually showed evidence of
  * one (a lockfile or a Corepack pin). The detector's npm fallback is a safe
  * default for running commands, not an observation, so recording it here would
- * put a guess into a field callers read as a fact.
+ * put a guess into a field callers read as a fact. When no Node manager was
+ * observed and Python was detected, the field carries the lock-declared Python
+ * runner instead ({@link PYTHON_RUNNER_LOCKFILES}): the same string field, so
+ * the manifest schema does not move, and a Node spelling always keeps it.
  */
 export async function analyzeRepo(rootDir: string): Promise<RepoInfo> {
   const [
@@ -393,6 +418,7 @@ export async function analyzeRepo(rootDir: string): Promise<RepoInfo> {
     hasDataArtifacts,
     existingTools,
     hasOwnState,
+    pythonRunner,
   ] = await Promise.all([
     detectLanguages(rootDir),
     detectPackageManager(rootDir),
@@ -406,9 +432,15 @@ export async function analyzeRepo(rootDir: string): Promise<RepoInfo> {
     detectDataArtifacts(rootDir),
     presentIndicators(rootDir, AGENT_TOOL_INDICATORS),
     dirExists(join(rootDir, STATE_DIR)),
+    detectPythonRunner(rootDir),
   ]);
 
   const observed = packageManager.lockfile !== null || packageManager.fromPackageJsonField;
+  const manager = observed
+    ? packageManager.name
+    : languages.includes("python")
+      ? pythonRunner
+      : null;
   return {
     rootDir,
     languages,
@@ -416,7 +448,7 @@ export async function analyzeRepo(rootDir: string): Promise<RepoInfo> {
     linters,
     testFrameworks,
     ciProviders,
-    ...(observed ? { packageManager: packageManager.name } : {}),
+    ...(manager === null ? {} : { packageManager: manager }),
     ...(packageScripts === null ? {} : { packageScripts }),
     monorepoPackages,
     hasDockerfile,
@@ -684,6 +716,24 @@ function pyprojectTestFrameworks(pyproject: string): string[] {
   return PYPROJECT_TEST_SIGNALS.filter(({ patterns }) =>
     lines.some((line) => patterns.some((pattern) => pattern.test(line))),
   ).map(({ name }) => name);
+}
+
+/**
+ * The Python runner the repository's committed files declare, per
+ * {@link PYTHON_RUNNER_LOCKFILES} and then {@link HATCH_ENV_SECTION}, or `null`.
+ * `#` comment lines in `pyproject.toml` are skipped, as the pytest probe does.
+ */
+async function detectPythonRunner(rootDir: string): Promise<string | null> {
+  const [locks, pyproject] = await Promise.all([
+    Promise.all(PYTHON_RUNNER_LOCKFILES.map(({ file }) => pathExists(join(rootDir, file)))),
+    readText(join(rootDir, "pyproject.toml")),
+  ]);
+  const locked = PYTHON_RUNNER_LOCKFILES.find((_row, index) => locks[index] === true);
+  if (locked !== undefined) return locked.name;
+  const hatch = pyproject
+    ?.split(/\r?\n/)
+    .some((line) => line.trim().startsWith(HATCH_ENV_SECTION));
+  return hatch === true ? "hatch" : null;
 }
 
 /**
