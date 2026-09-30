@@ -372,7 +372,7 @@ async function runSetup(ctx: CliContext, opts: Record<string, unknown>): Promise
       // the route is destructive: the hint says so and names the save-first step.
       next:
         `${packageCommand("clean -y")} deletes the whole ${STATE_DIR}/ directory ` +
-        `(learnings, handoffs, overrides and packs included): copy out what you want to keep first ` +
+        `(learnings, handoffs, overrides, run records, packs and user hooks included): copy out what you want to keep first ` +
         `and put it back after plugin setup; ${packageCommand("clean --dry-run")} lists what it removes`,
     });
   }

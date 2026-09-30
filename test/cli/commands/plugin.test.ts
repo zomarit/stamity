@@ -756,8 +756,10 @@ describe("plugin setup — what it refuses", () => {
     expect(next).toContain(npxCommand("clean -y"));
     expect(next).toContain("deletes");
     expect(next).toContain(".stamity/");
-    for (const kept of ["learnings", "handoffs", "overrides"]) expect(next).toContain(kept);
-    expect(next).toMatch(/copy out what you want to keep first/);
+    for (const kept of ["learnings", "handoffs", "overrides", "run records", "user hooks"]) {
+      expect(next).toContain(kept);
+    }
+    expect(next).toMatch(/\b(keep|save)\b.*\bfirst\b/i);
     expect(next).toContain(npxCommand("clean --dry-run"));
   });
 
