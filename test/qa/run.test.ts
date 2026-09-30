@@ -499,6 +499,16 @@ describe("parseArgs — the human-answer options", () => {
     expect(parseArgs(["--accept-unwalked", "H4b,,H5"]).acceptUnwalked).toEqual(["H4b", "H5"]);
   });
 
+  it("adds a repeated --walked or --accept-unwalked to the ids already given", async () => {
+    // @ts-expect-error — native ESM contributor tool, outside the product package.
+    const { parseArgs } = await import("../../scripts/qa/run.mjs");
+
+    const options = parseArgs(["--walked", "H1a", "--accept-unwalked", "H4b", "--walked", "H1b,H1c", "--accept-unwalked", "H5"]);
+
+    expect(options.walked).toEqual(["H1a", "H1b", "H1c"]);
+    expect(options.acceptUnwalked).toEqual(["H4b", "H5"]);
+  });
+
   it("names the four options in the usage banner", async () => {
     // @ts-expect-error — native ESM contributor tool, outside the product package.
     const { USAGE } = await import("../../scripts/qa/run.mjs");

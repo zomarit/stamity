@@ -324,6 +324,53 @@ describe("recordHumanAnswers", () => {
     expect(walked!.performedAt).toBe("2026-09-30");
   });
 
+  it("drops the reopen text when a person answers a reopened row, so a walk never carries 'walk it or accept it again'", () => {
+    const harness = { ...rows()[0]!, status: "not-run", reason: "the hook lane was skipped (--skip-hooks)" };
+    const prior: Row = { ...rows()[0]!, status: "accepted-unwalked", acceptedAt: "2026-09-13", acceptedBy: "the maintainer" };
+    const [reopened] = carryForward({ rows: [prior] }, [harness]) as Row[];
+    expect(reopened!.reason).toContain("walk it or accept it again");
+
+    const [walked] = recordHumanAnswers([reopened], { walked: ["H1c"], by: "the maintainer", on: "2026-09-30" }) as Row[];
+    expect(walked!.reason).toBe("the hook lane was skipped (--skip-hooks)");
+    const [accepted] = recordHumanAnswers([reopened], { accepted: ["H1c"], by: "the maintainer", on: "2026-09-30" }) as Row[];
+    expect(accepted!.reason).toBe("the hook lane was skipped (--skip-hooks)");
+
+    // The next run carries the walk with the harness's reason, not the reopen text.
+    const [carried] = carryForward({ rows: [walked] }, [harness]) as Row[];
+    expect(carried).toMatchObject({ status: "performed", reason: "the hook lane was skipped (--skip-hooks)" });
+
+    // A reopen with no harness reason behind it leaves an empty reason.
+    const [bare] = carryForward({ rows: [prior] }, [{ ...harness, reason: "" }]) as Row[];
+    const [bareWalked] = recordHumanAnswers([bare], { walked: ["H1c"], by: "the maintainer", on: "2026-09-30" }) as Row[];
+    expect(bareWalked!.reason).toBe("");
+  });
+
+  it("drops the moved-hash reopen text too when the reopened row is walked", () => {
+    const prior: Row = { ...rows()[0]!, status: "performed", performedAt: "2026-09-13", rowHash: "a".repeat(64) };
+    const harness = { ...rows()[0]!, status: "not-run", reason: "browser skipped", rowHash: "b".repeat(64) };
+    const [reopened] = carryForward({ rows: [prior] }, [harness]) as Row[];
+    expect(reopened!.reason).toContain("inputs hash to");
+
+    const [walked] = recordHumanAnswers([reopened], { walked: ["H1c"], by: "the maintainer", on: "2026-09-30" }) as Row[];
+    expect(walked!.reason).toBe("browser skipped");
+  });
+
+  it("keeps a reason carryForward did not write", () => {
+    const [walked] = recordHumanAnswers(rows(), { walked: ["H1c"], by: "the maintainer", on: "2026-09-30" }) as Row[];
+    expect(walked!.reason).toBe("reopened");
+  });
+
+  it("refuses a malformed --on or an empty --by even when no row is answered", () => {
+    expect(() => recordHumanAnswers(rows(), { on: "2026-13-01" })).toThrow(new Error("--on 2026-13-01 is not a YYYY-MM-DD date"));
+    for (const by of ["", "  "]) {
+      expect(() => recordHumanAnswers(rows(), { by, on: "2026-09-30" })).toThrow(
+        new Error("--by names nobody; give a name or leave the flag out"),
+      );
+    }
+    // A well-formed name with no answer is accepted, and nothing is recorded.
+    expect(recordHumanAnswers(rows(), { by: "the maintainer", on: "2026-09-30" })).toEqual(rows());
+  });
+
   it("returns the rows unchanged when nobody answered, and needs no --by then", () => {
     const input = rows();
     expect(recordHumanAnswers(input, { on: "2026-09-30" })).toEqual(input);

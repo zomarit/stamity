@@ -98,6 +98,31 @@ function rowsOf(value) {
  */
 const CARRYABLE = new Set(['not-run', 'unperformed'])
 
+/** The fixed tail of the reason an acceptance reopens with; {@link withoutReopenedReason} cuts on it. */
+const ACCEPTANCE_REOPEN_TAIL =
+  'does not carry to a new run — every harness row is a release-QA row; walk it or accept it again'
+
+/**
+ * A reason with the `reopened: …` prefix {@link carryForward} put in front of it removed, leaving the
+ * harness's own reason (or `''` when there was none). A fresh answer answers the reopen, so the reopen
+ * text — "walk it or accept it again" — must not sit beside the answer and then carry on every later
+ * run. A reason carryForward did not write passes through unchanged.
+ */
+function withoutReopenedReason(reason) {
+  if (typeof reason !== 'string' || !reason.startsWith('reopened: ')) return reason
+  const acceptance = reason.indexOf(ACCEPTANCE_REOPEN_TAIL)
+  let end
+  if (acceptance !== -1) {
+    end = acceptance + ACCEPTANCE_REOPEN_TAIL.length
+  } else {
+    const moved = /, and this run's inputs hash to [^;\s]+/.exec(reason)
+    if (moved === null) return reason
+    end = moved.index + moved[0].length
+  }
+  const rest = reason.slice(end)
+  return rest.startsWith('; ') ? rest.slice(2) : rest
+}
+
 /**
  * Carry a previous run's human answers into this run's rows.
  *
@@ -144,7 +169,7 @@ export function carryForward(previous, current) {
     const reopened =
       prior.rowHash === row.rowHash
         ? `reopened: accepted-unwalked${on}${prior.acceptedBy === undefined ? '' : ` by ${prior.acceptedBy}`} ` +
-          'does not carry to a new run — every harness row is a release-QA row; walk it or accept it again'
+          ACCEPTANCE_REOPEN_TAIL
         : `reopened: ${prior.status} against rowHash ${prior.rowHash}${on}, ` +
           `and this run's inputs hash to ${row.rowHash}`
     carried.push({
@@ -178,7 +203,14 @@ export function recordHumanAnswers(rows, { walked = [], accepted = [], by, on } 
   const current = rowsOf(rows)
   const walkedIds = new Set(walked)
   const acceptedIds = new Set(accepted)
-  if (walkedIds.size > 0 || acceptedIds.size > 0) {
+  const answering = walkedIds.size > 0 || acceptedIds.size > 0
+  // A given --by or --on is checked even when no row is answered, so a mistyped flag is refused
+  // rather than silently ignored.
+  if (by !== undefined && !answering && (typeof by !== 'string' || by.trim() === '')) {
+    throw new Error('--by names nobody; give a name or leave the flag out')
+  }
+  if (on !== undefined && !isCalendarDate(on)) throw new Error(`--on ${on} is not a YYYY-MM-DD date`)
+  if (answering) {
     if (typeof by !== 'string' || by.trim() === '') {
       throw new Error('--by is required when --walked or --accept-unwalked is given')
     }
@@ -199,7 +231,9 @@ export function recordHumanAnswers(rows, { walked = [], accepted = [], by, on } 
   for (const row of current) {
     const copy = { ...row }
     // A new answer replaces the old one whole: a walk drops a stale acceptance's date and name, and
-    // an acceptance drops a stale walk's, so no row carries two signatures that disagree.
+    // an acceptance drops a stale walk's, so no row carries two signatures that disagree. It also
+    // answers a reopen, so the reopen text leaves the reason and only the harness's own reason stays.
+    if (walkedIds.has(row.row) || acceptedIds.has(row.row)) copy.reason = withoutReopenedReason(copy.reason)
     if (walkedIds.has(row.row)) {
       delete copy.acceptedAt
       delete copy.acceptedBy

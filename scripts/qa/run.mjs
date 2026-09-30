@@ -190,7 +190,10 @@ export const USAGE =
   '                               [--skip-hooks] [--skip-browser] [--skip-plugins]\n' +
   '                               [--walked <ids>] [--accept-unwalked <ids>] [--by <name>] [--on <YYYY-MM-DD>]'
 
-/** A comma list of ids, with empty entries dropped. */
+/**
+ * A comma list of ids, with empty entries dropped. A repeated --walked or --accept-unwalked adds to
+ * the ids already given rather than replacing them, so `--walked H1a --walked H1b` answers both.
+ */
 function idList(value) {
   return (value ?? '').split(',').filter((id) => id !== '')
 }
@@ -218,8 +221,8 @@ export function parseArgs(argv) {
     else if (arg === '--skip-hooks') options.skipHooks = true
     else if (arg === '--skip-browser') options.skipBrowser = true
     else if (arg === '--skip-plugins') options.skipPlugins = true
-    else if (arg === '--walked') { options.walked = idList(next); i += 1 }
-    else if (arg === '--accept-unwalked') { options.acceptUnwalked = idList(next); i += 1 }
+    else if (arg === '--walked') { options.walked.push(...idList(next)); i += 1 }
+    else if (arg === '--accept-unwalked') { options.acceptUnwalked.push(...idList(next)); i += 1 }
     else if (arg === '--by') { options.by = next; i += 1 }
     else if (arg === '--on') { options.on = next; i += 1 }
     else throw new Error(`Unknown option ${arg}.\n${USAGE}`)
