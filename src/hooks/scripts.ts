@@ -25,6 +25,7 @@ import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, STATE_DIR } from "../types/markers.ts";
 import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
 import { UNPRINTABLE_CHARS } from "../runs/layout.ts";
+import { cliCallHint } from "../shared/cliCall.ts";
 import { CLIENT_HOOK_GUARANTEES, type CanonicalHookEvent, type HookFailMode } from "./model.ts";
 
 /**
@@ -1739,8 +1740,14 @@ function renderedNames(rendered: string): string[] {
  * event it fires per change and reads as an alert; where no such event exists
  * it rides session start and reads as drift guidance. Same body, so the two
  * cannot drift apart.
+ *
+ * `checkCall` is how the notice names the check verb — the planner hands it
+ * {@link cliCallHint}'s sentence, so the reader gets the installed form and
+ * the pinned `npx -y <package>@<version> check` fallback together, and never a
+ * bare `stamity check` the documented `npx` setup cannot run. It is embedded as
+ * a JSON string literal, so no character in it reaches the script as syntax.
  */
-export function buildConfigTamperNoticeScript(): string {
+export function buildConfigTamperNoticeScript(opts: { checkCall: string }): string {
   return `${header(
     [
       "stamity — configuration-change notice.",
@@ -1761,6 +1768,9 @@ import { readFileSync } from "node:fs";
 
 const MAX_PATH_CHARS = ${MAX_LEARNING_SUMMARY_LENGTH};
 
+/** How the check verb is named: the installed form and the pinned fallback. */
+const CHECK_CALL = ${JSON.stringify(opts.checkCall)};
+
 ${READ_STDIN}
 
 ${READ_FIELD}
@@ -1779,11 +1789,11 @@ const changed = clean(
 const lines =
   changed === ""
     ? [
-        "stamity: agent configuration is generated and managed. Run \`stamity check\` to diff the on-disk files against the engine's own output.",
+        "stamity: agent configuration is generated and managed. Run " + CHECK_CALL + " to diff the on-disk files against the engine's own output.",
       ]
     : [
         "stamity: agent configuration changed — " + changed + ".",
-        "That file is generated and managed. Run \`stamity check\` to diff it against the engine's own output before trusting the change.",
+        "That file is generated and managed. Run " + CHECK_CALL + " to diff it against the engine's own output before trusting the change.",
       ];
 
 process.stdout.write(lines.join("\\n") + "\\n");
@@ -2801,10 +2811,16 @@ if (outcome !== null) {
  * client with a native configuration-change event is wired to that instead at
  * emission time — a per-client extension the portable vocabulary deliberately
  * does not promise.
+ *
+ * `opts` is the package the notice's check hint pins and the version it pins
+ * it to — the emission context's package name and engine version, so a
+ * renamed fork's notice names the fork. Throws `VALIDATION_ERROR` when either
+ * cannot be pinned (`../shared/cliCall.ts`).
  */
 export function planCoreHookScripts(
   policiesJsonPath: string,
   tool: Tool,
+  opts: { packageName: string; version: string },
 ): GeneratedHookScript[] {
   const failMode =
     CLIENT_HOOK_GUARANTEES.find((guarantee) => guarantee.tool === tool)?.failMode ?? "fail-closed";
@@ -2826,7 +2842,9 @@ export function planCoreHookScripts(
     },
     {
       fileName: TAMPER_NOTICE_FILE,
-      content: buildConfigTamperNoticeScript(),
+      content: buildConfigTamperNoticeScript({
+        checkCall: cliCallHint(opts.packageName, opts.version, "check"),
+      }),
       event: "session_start",
     },
   ];

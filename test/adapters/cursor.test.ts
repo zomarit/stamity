@@ -38,6 +38,13 @@ import type { RuleDelivery, SetupManifest } from "../../src/types/manifest.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
+ * The package and version the core scripts' CLI hints pin (sw26-engine-cli-call-form,
+ * REQ-FLOW-002). Passed as a literal, not read from this checkout, so the bytes
+ * under test are the same in a renamed fork.
+ */
+const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
+
+/**
  * The Cursor residue planner. Assertions run through the real emission
  * pipeline — `composeEmissionPlanner` over a fixture corpus in a temp repo —
  * so what is checked is the bytes a run would write, not a builder's opinion
@@ -1087,8 +1094,8 @@ describe("subagent guard", () => {
   // failures that clause blocks on (cursor.com/docs/hooks, accessed
   // 2026-09-17), so an allow branch that writes nothing is a blocked action.
   it.each([
-    ["subagent", () => buildSubagentGuardScript(RUNTIME_AGENT_IDS)],
-    ["mcp", () => buildMcpGuardScript()],
+    ["subagent", () => buildSubagentGuardScript(RUNTIME_AGENT_IDS, CLI_PIN)],
+    ["mcp", () => buildMcpGuardScript(CLI_PIN)],
   ])("writes an explicit allow verdict in the %s guard body", (_name, build) => {
     const script = build();
     expect(script).toContain('JSON.stringify({ permission: "allow" })');
@@ -1096,7 +1103,7 @@ describe("subagent guard", () => {
   });
 
   it("embeds exactly the shipped roster", () => {
-    const script = buildSubagentGuardScript(RUNTIME_AGENT_IDS);
+    const script = buildSubagentGuardScript(RUNTIME_AGENT_IDS, CLI_PIN);
 
     expect(embeddedRoster(script)).toEqual([...RUNTIME_AGENT_IDS].toSorted());
     // Count moved 7 → 10 with the three specialist roles (security,
@@ -1184,8 +1191,8 @@ describe("mcp guard", () => {
   it("builds one deterministic body that resolves the manifest beside itself", () => {
     // Hash-stable bytes: a client that trusts a script by digest must see the
     // same digest until the emission actually changes.
-    expect(buildMcpGuardScript()).toBe(buildMcpGuardScript());
-    expect(buildMcpGuardScript()).toContain('join(HERE, "..", "mcp.json")');
+    expect(buildMcpGuardScript(CLI_PIN)).toBe(buildMcpGuardScript(CLI_PIN));
+    expect(buildMcpGuardScript(CLI_PIN)).toContain('join(HERE, "..", "mcp.json")');
   });
 
   it("denies every mcp__ call when no server is configured, and says why", async () => {
@@ -1335,9 +1342,14 @@ describe("mcp guard", () => {
       expect(message).not.toMatch(/remove this guard/i);
     }
     // The two that have a configuration answer name the durable one.
+    // Strengthened (sw26-engine-cli-call-form, REQ-FLOW-002): each call is the
+    // installed form AND the pinned npx fallback, so the remedy runs on the
+    // documented npx setup, which installs no `stamity` binary.
     for (const message of [messages[0], messages[2]]) {
       expect(message).toContain("stamity config mcp add <id>");
       expect(message).toContain("stamity sync");
+      expect(message).toContain("`npx -y @zomarit/stamity@0.0.0-test config mcp add <id>`");
+      expect(message).toContain("`npx -y @zomarit/stamity@0.0.0-test sync`");
     }
   });
 

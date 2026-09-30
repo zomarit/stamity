@@ -1,3 +1,10 @@
+
+/**
+ * The package and version the core scripts' CLI hints pin (sw26-engine-cli-call-form,
+ * REQ-FLOW-002). Passed as a literal, not read from this checkout, so the bytes
+ * under test are the same in a renamed fork.
+ */
+const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
 /**
  * Byte and line ceilings on the emitted core hook scripts (REQ-CTX-016).
  *
@@ -62,7 +69,7 @@ function lineCount(content: string): number {
  * (the cap is the only number in the body that varies with configuration).
  */
 function renderAll(tool: Tool, layout: HookScriptLayout): Rendered[] {
-  const core = planCoreHookScripts(POLICY_PATH_BY_LAYOUT[layout], tool).map((script) => ({
+  const core = planCoreHookScripts(POLICY_PATH_BY_LAYOUT[layout], tool, CLI_PIN).map((script) => ({
     tool,
     fileName: script.fileName,
     content: script.content,

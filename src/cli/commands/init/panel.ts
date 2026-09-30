@@ -8,6 +8,7 @@ import { ENV_MCP_FILE, getSourceEnvMcpCommand } from "../../../mcp/env.ts";
 import type { CarryReport } from "../../../migration/carry.ts";
 import type { Tool } from "../../../types/core.ts";
 import { STATE_DIR } from "../../../types/markers.ts";
+import { packageCommand } from "../../kit/packageName.ts";
 import type { Palette } from "../../kit/terminal.ts";
 import type { InitApplyReport } from "./apply.ts";
 import type { InitDecisions } from "./plan.ts";
@@ -412,13 +413,14 @@ function residueLines(residue: MigrationResidue | undefined, carry: CarryReport)
       `live. Removing them is the previous setup's own uninstall, run by you: this run knows the ` +
       `paths above but not that tool's verbs, so it names none — and each listed directory is a ` +
       `separate scope, so a workspace package holding its own state needs its own run. Then ` +
-      `re-run \`stamity check\`.`,
+      `re-run \`${packageCommand("check")}\`.`,
     `  eyes open on that uninstall: it finds what to remove by DIRECTORY rather than by name, ` +
       `and this setup writes into the same directories at the same paths — so it takes THIS ` +
       `setup's generated files with it. Run it in its own preview mode first, if it has one, and ` +
-      `read the list. Generated files come back afterwards: \`stamity check\` names each one and ` +
-      `\`stamity sync\` writes it back from the corpus. Your own prose outside a managed block ` +
-      `does not come back — nothing can regenerate it — so commit this repo before you run it. ` +
+      `read the list. Generated files come back afterwards: \`${packageCommand("check")}\` names each ` +
+      `one and \`${packageCommand("sync")}\` writes it back from the corpus. Your own prose outside a ` +
+      `managed block does not come back — nothing can regenerate it — so commit this repo before ` +
+      `you run it. ` +
       `And if it finishes by offering to reinstall the old setup, decline.`,
   ];
   if (residue.unownedSettingsPath !== undefined) {
@@ -426,7 +428,7 @@ function residueLines(residue: MigrationResidue | undefined, carry: CarryReport)
       `  one of those paths is live wiring: ${residue.unownedSettingsPath} was already here, so ` +
         `this run refused to claim it and installed none of its own hook or permission settings ` +
         `there — whatever that file wires is what still fires. If it is the previous setup's ` +
-        `rather than yours, remove it and run \`stamity sync\` to get this setup's.`,
+        `rather than yours, remove it and run \`${packageCommand("sync")}\` to get this setup's.`,
     );
   }
   if (carry.envMcpCarried) {
@@ -556,8 +558,10 @@ function mostSpecificFirst(suggestions: readonly StackSuggestion[]): StackSugges
  * Suggestions only — stack packs are never auto-installed, and no row here
  * invents an install instruction: the row prints the action the suggestion API
  * computed, which names a pack id only when the curated catalog actually
- * carries one. Empty input prints nothing at all, which is the state a repo
- * whose stacks are all covered reaches.
+ * carries one — and only then does the row append the install call, pinned
+ * like every other remedy on this panel ({@link packageCommand}). Empty input
+ * prints nothing at all, which is the state a repo whose stacks are all
+ * covered reaches.
  */
 function stackSuggestionLines(
   suggestions: readonly StackSuggestion[],
@@ -570,7 +574,10 @@ function stackSuggestionLines(
   const omitted = ordered.length - shown.length;
 
   const lines = [palette.bold("detected stacks with no dedicated guidance yet:")];
-  for (const row of shown) lines.push(`  ${row.name} (${row.kind}) — ${row.action}`);
+  for (const row of shown) {
+    const install = row.packId === undefined ? "" : `: ${packageCommand(`add ${row.packId}`)}`;
+    lines.push(`  ${row.name} (${row.kind}) — ${row.action}${install}`);
+  }
   if (omitted > 0) {
     lines.push(palette.dim(`  … and ${omitted} more in the same position.`));
   }
@@ -601,7 +608,7 @@ export function renderInitPanel(input: InitPanelInput): string {
   lines.push("");
   lines.push(
     `  detected ${detectedLabel(input)} -> installed ${installedLabel(decisions, report)} ` +
-      palette.dim(`(tier: ${decisions.maturityTier}, change with \`stamity config\`)`),
+      palette.dim(`(tier: ${decisions.maturityTier}, change with \`${packageCommand("config")}\`)`),
   );
   const pinLine = gatePinLine(decisions);
   if (pinLine !== null) lines.push(`  ${pinLine}`);

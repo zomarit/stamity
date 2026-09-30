@@ -44,6 +44,13 @@ import {
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
+ * The package and version the core scripts' CLI hints pin (sw26-engine-cli-call-form,
+ * REQ-FLOW-002). Passed as a literal, not read from this checkout, so the bytes
+ * under test are the same in a renamed fork.
+ */
+const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
+
+/**
  * The codex residue planner: hook config in the interchange shape with
  * trust-by-hash, TOML subagents carrying the ladder's allocation and the shared
  * grant resolver's verdict, the single-writer `config.toml`, and the lossy glob
@@ -327,7 +334,7 @@ function bulkyRule(id: string, options: RuleOptions = {}): CatalogItem {
 describe("hooks.json — native command strings and trust controls", () => {
   it("registers canonical events through a repository-root launcher without unsupported trust fields", async () => {
     const core = await buildCoreEmissionPlan(ctxOf({ contentRoot: await seedCorpus() }));
-    const document = JSON.parse(buildHooksJson(core));
+    const document = JSON.parse(buildHooksJson(core, CLI_PIN));
     expect(Object.keys(document.hooks)).toEqual(["SessionStart", "PreToolUse"]);
     expect(document.description).toContain("/hooks");
     expect(document).not.toHaveProperty("stamity");
@@ -341,7 +348,7 @@ describe("hooks.json — native command strings and trust controls", () => {
   });
   it("states all three loading steps in the one field JSON gives the operator", async () => {
     const core = await buildCoreEmissionPlan(ctxOf({ contentRoot: await seedCorpus() }));
-    const document = JSON.parse(buildHooksJson(core));
+    const document = JSON.parse(buildHooksJson(core, CLI_PIN));
 
     // JSON carries no comments, so `description` is the only channel this file
     // has to the person who opens it after a hook did not fire. Naming `/hooks`
@@ -364,7 +371,7 @@ describe("hooks.json — native command strings and trust controls", () => {
 
   it("preserves user argv, matcher and millisecond timeout behind the native seconds request", () => {
     const row: HookInterchange = { event: "pre_tool_use", command: ["node", "--enable-source-maps", "scripts/with space.mjs", "$(literal)"], matcher: "Bash", timeoutMs: 1501 };
-    const document = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], [row]))));
+    const document = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], [row])), CLI_PIN));
     const group = document.hooks.PreToolUse[0];
     expect(group.matcher).toBe("Bash");
     const entry = group.hooks[0];
@@ -377,11 +384,30 @@ describe("hooks.json — native command strings and trust controls", () => {
   // only meets in this one field. learn.chatgpt.com/docs/hooks, 2026-09-17.
   it("says in the description that the script bytes are outside the trust hash", async () => {
     const core = await buildCoreEmissionPlan(ctxOf({ contentRoot: await seedCorpus() }));
-    const description = JSON.parse(buildHooksJson(core)).description as string;
+    const description = JSON.parse(buildHooksJson(core, CLI_PIN)).description as string;
     expect(description).toContain("Trust is recorded against this file's hash only");
     expect(description).toContain(".stamity/generated/hooks/codex/");
-    expect(description).toContain("stamity check is the control");
+    // TEST CHANGE (sw26-engine-cli-call-form, G3): the control is named as the
+    // installed verb and the pinned npx call; this file is inside the trust
+    // hash, so the pinned version re-asks for approval after an upgrade.
+    expect(description).toContain(
+      "so the check verb (`stamity check` where the CLI is installed, else " +
+        "`npx -y @zomarit/stamity@1.0.0-golden check`) is the control",
+    );
     expect(description).not.toContain("\n");
+  });
+
+  it("pins the sync call into both command fields of every repository row, and the fork's name when given one", () => {
+    // G3: `.codex/hooks.json` carries the pinned form like every other client.
+    const row: HookInterchange = { event: "pre_tool_use", command: ["node", ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs"] };
+    const document = JSON.parse(
+      buildHooksJson(coreWithHooks(hooksPlan([], [row])), { packageName: "@acme/stamity", version: "1.8.0" }),
+    ) as { description: string; hooks: { PreToolUse: { hooks: { command: string; commandWindows: string }[] }[] } };
+    const [hook] = document.hooks.PreToolUse[0]!.hooks;
+    expect(hook!.command).toContain("run npx -y @acme/stamity@1.8.0 sync");
+    expect(hook!.commandWindows).toContain("run npx -y @acme/stamity@1.8.0 sync");
+    expect(document.description).toContain("npx -y @acme/stamity@1.8.0 check");
+    expect(JSON.stringify(document)).not.toContain("@zomarit/stamity");
   });
 
   it("launches the runner from the plugin root, with no cwd-walking starter, on both command fields", () => {
@@ -391,7 +417,7 @@ describe("hooks.json — native command strings and trust controls", () => {
       { event: "pre_tool_use", command: ["node", `${ROOT}/stamity-pre-tool-use-guard.mjs`] },
     ];
 
-    const document = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], rows))));
+    const document = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], rows)), CLI_PIN));
 
     const entries = (Object.values(document.hooks) as { hooks: { command: string; commandWindows: string }[] }[][])
       .flat()
@@ -417,21 +443,21 @@ describe("hooks.json — native command strings and trust controls", () => {
     const untimed: HookInterchange = { event: "session_end", command: ["node", ".stamity/hooks/close.mjs"] };
     const generous: HookInterchange = { event: "session_end", command: ["node", ".stamity/hooks/slow.mjs"], timeoutMs: 30_000 };
     const modest: HookInterchange = { event: "session_end", command: ["node", ".stamity/hooks/quick.mjs"], timeoutMs: 1200 };
-    const entries = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], [untimed, generous, modest]))))
+    const entries = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], [untimed, generous, modest])), CLI_PIN))
       .hooks.SessionEnd[0].hooks as { timeout: number }[];
     expect(entries.map((entry) => entry.timeout)).toEqual([3, 3, 2]);
 
     // Other events keep the absent-means-absent rule: only SessionEnd carries a
     // default this engine has to override.
     const startRow: HookInterchange = { event: "session_start", command: ["node", ".stamity/hooks/open.mjs"] };
-    const start = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], [startRow]))))
+    const start = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], [startRow])), CLI_PIN))
       .hooks.SessionStart[0].hooks[0] as Record<string, unknown>;
     expect(start).not.toHaveProperty("timeout");
   });
 
   it("resolves the hook script from the directory holding .codex/hooks.json, not the nearest one above the cwd", () => {
     const row: HookInterchange = { event: "pre_tool_use", command: ["node", ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs"] };
-    const command = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], [row])))).hooks.PreToolUse[0].hooks[0].command as string;
+    const command = JSON.parse(buildHooksJson(coreWithHooks(hooksPlan([], [row])), CLI_PIN)).hooks.PreToolUse[0].hooks[0].command as string;
     // The trusted definition is what identifies the project; the generated
     // directory is then read beside it rather than searched for on its own.
     expect(command).toContain("'.codex','hooks.json'");

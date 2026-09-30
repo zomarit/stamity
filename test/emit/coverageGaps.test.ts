@@ -229,6 +229,8 @@ describe("hooksInfra: a roster that fails its own validator", () => {
     const plan = await planHooksInfra({
       rootDir: getTemp().path("repo"),
       manifest: { tools: ["claude"] },
+      // Required since the core scripts' CLI hint pins it (sw26-engine-cli-call-form).
+      engineVersion: "1.0.0-test",
     });
 
     const rosterWarnings = plan.warnings.filter((w) => w.startsWith("agent-tool-policy roster: "));

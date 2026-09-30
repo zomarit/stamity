@@ -80,3 +80,22 @@ export function pinnedCliPrefix(packageName: string, version: string): string {
 export function pinnedCliCall(packageName: string, version: string, verb: string): string {
   return `${pinnedCliPrefix(packageName, version)} ${verb}`;
 }
+
+/**
+ * The CLI call as a hint a person or an agent reads:
+ * `` `stamity <verb>` where the CLI is installed, else `npx -y <package>@<version> <verb>` ``.
+ *
+ * For prose inside generated files — hook messages, guard refusals, the notes a
+ * client configuration document carries — where the reader may well have the
+ * binary on PATH, and the short form is what they would type. The pinned call
+ * rides beside it, so the hint still runs on the documented `npx` setup, which
+ * installs no binary. The bare verb is admitted in generated text only inside
+ * this sentence. Throws as {@link pinnedCliPrefix} does.
+ *
+ * The backticks are part of the sentence. A caller that embeds it where a
+ * backtick is shell syntax (a double-quoted `node -e` program, say) takes
+ * {@link pinnedCliCall} instead.
+ */
+export function cliCallHint(packageName: string, version: string, verb: string): string {
+  return `\`stamity ${verb}\` where the CLI is installed, else \`${pinnedCliCall(packageName, version, verb)}\``;
+}

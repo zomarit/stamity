@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { pinnedCliCall } from "../../shared/cliCall.ts";
 import { findPackageRoot } from "../../shared/paths.ts";
 
 /**
@@ -147,12 +148,35 @@ export function repositorySlug(): string | null {
   return cachedSlug;
 }
 
+/** Memoized like {@link cachedName}: the running package's version cannot change mid-process. */
+let cachedVersion: string | null = null;
+
 /**
- * A runnable invocation of this package: `npx <own name> <verb>`.
+ * A runnable invocation of this package, pinned to the running version:
+ * `npx -y <own name>@<own version> <verb>` (`../../shared/cliCall.ts`, the one
+ * spelling the emitted bodies and hook hints use too).
+ *
+ * Pinned because a remedy names flags and state this version understands; an
+ * unpinned `npx <name>` runs whatever the registry serves today. `-y` because
+ * the reader is as often an agent's shell, which cannot answer npx's prompt.
  *
  * `verb` is the whole tail, so a multi-word remedy passes as one argument —
  * `packageCommand("config mcp add <id>")`.
+ *
+ * With no pinnable version — the self-read found none, or one that is not
+ * semver-shaped — the remedy keeps the unpinned `npx <name> <verb>`. A remedy
+ * prints on an error path, and a rendering failure there would replace the
+ * operator's real diagnosis; an unpinned call is the lesser defect.
  */
 export function packageCommand(verb: string): string {
-  return `npx ${packageName()} ${verb}`;
+  cachedVersion ??= resolveOwnPackageFacts().version;
+  const name = packageName();
+  if (cachedVersion !== "") {
+    try {
+      return pinnedCliCall(name, cachedVersion, verb);
+    } catch {
+      // Unpinnable (see above): fall through to the unpinned form.
+    }
+  }
+  return `npx ${name} ${verb}`;
 }

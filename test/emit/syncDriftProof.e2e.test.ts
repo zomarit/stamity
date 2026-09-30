@@ -22,6 +22,7 @@ import { STATE_DIR } from "../../src/types/markers.ts";
 import {
   GOLDEN_ENGINE_VERSION,
   GOLDEN_NOW,
+  GOLDEN_PACKAGE_NAME,
   GOLDEN_SEED_FILES,
   goldenGitRunner,
   makeGoldenRepo,
@@ -116,9 +117,13 @@ afterEach(async () => {
   await repo.cleanup();
 });
 
-/** `planSync` at the fixture's pinned engine version, with the git seam stubbed. */
+/**
+ * `planSync` at the fixture's pinned engine version and package name, with the
+ * git seam stubbed. The package pin is the fixture's own (init wrote with it),
+ * so the proof holds in a renamed fork's checkout too.
+ */
 function plan(version: string = GOLDEN_ENGINE_VERSION): Promise<SyncPlan> {
-  return planSync(repo.rootDir, version, { runner: goldenGitRunner });
+  return planSync(repo.rootDir, version, { runner: goldenGitRunner, packageName: GOLDEN_PACKAGE_NAME });
 }
 
 /** `applySync` for a plan, at the same pinned version and clock. */
@@ -194,6 +199,7 @@ describe("sync idempotency", () => {
       const before = await readEmittedTree(noCi.rootDir);
       const replan = await planSync(noCi.rootDir, GOLDEN_ENGINE_VERSION, {
         runner: goldenGitRunner,
+        packageName: GOLDEN_PACKAGE_NAME,
       });
       expect(
         replan.entries.filter((entry) => entry.action !== "unchanged").map((entry) => entry.path),

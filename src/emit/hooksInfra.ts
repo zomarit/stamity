@@ -74,6 +74,7 @@ import {
 import { TOOLS, type Tool } from "../types/core.ts";
 import type { SetupManifest } from "../types/manifest.ts";
 import { GENERATED_DIR, HOOKS_GENERATED_DIR, STATE_DIR } from "../types/markers.ts";
+import { cliCallContextOf } from "./substitution.ts";
 
 // ── Layout ───────────────────────────────────────────────────────
 
@@ -237,6 +238,18 @@ export interface HooksPlanContext {
   rootDir: string;
   /** The manifest driving selection — tools and user-hook wiring are read here. */
   manifest: Pick<SetupManifest, "tools" | "hooks">;
+  /**
+   * The engine version — the version the core scripts' CLI hint pins
+   * (`npx -y <packageName>@<engineVersion> check`), as the `${STAMITY:CLI}`
+   * token pins it in every body.
+   */
+  engineVersion: string;
+  /**
+   * The npm package that hint names. Absent means the canonical
+   * `@zomarit/stamity`; a renamed fork's context carries its own name, so its
+   * hook scripts name the fork (`./substitution.ts` → `cliCallContextOf`).
+   */
+  packageName?: string;
   /**
    * Hook definitions supplied by installed packs, already read through THIS
    * lane's ingress (`../pack/projection.ts` → `packHookDefinitions`) — the
@@ -432,7 +445,7 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
     // already answers as an empty list.
     if (pluginOwnedHooks.has(tool)) continue;
     const rows: HookInterchange[] = [];
-    for (const script of planCoreHookScripts(policiesPathFor(ctx.hookScriptsRoot), tool)) {
+    for (const script of planCoreHookScripts(policiesPathFor(ctx.hookScriptsRoot), tool, cliCallContextOf(ctx))) {
       const path = `${HOOKS_GENERATED_DIR}/${tool}/${script.fileName}`;
       scripts.push({ path, content: script.content, tool });
       rows.push({

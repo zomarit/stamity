@@ -53,6 +53,7 @@ import {
 } from "../../../types/manifest.ts";
 import { STATE_DIR } from "../../../types/markers.ts";
 import { getEmissionPlanner } from "../../engine/emission.ts";
+import { packageName } from "../../kit/packageName.ts";
 import {
   installedPackServers,
   ledgerRowsForOutput,
@@ -109,6 +110,13 @@ export interface InitApplyOptions {
    */
   plugin?: PluginConfig;
   engineVersion: string;
+  /**
+   * The package every pinned CLI call in the emission names. Absent means this
+   * installation's own (`packageName()`), which is what the command passes by
+   * leaving it out; a fixture that must render the same bytes in any checkout,
+   * a renamed fork's included, pins it as it pins `engineVersion`.
+   */
+  packageName?: string;
   dryRun: boolean;
   force: boolean;
   now?: Date;
@@ -218,6 +226,10 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     rootDir,
     manifest,
     engineVersion,
+    // The package every pinned CLI call names — this installation's own, as
+    // `sync` passes it, so init and the first `check` agree byte for byte and
+    // a renamed fork's emission runs the fork rather than the canonical name.
+    packageName: opts.packageName ?? packageName(),
     facts: { monorepoPackages: decisions.monorepoPackages },
   });
 

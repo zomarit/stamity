@@ -32,6 +32,7 @@ import {
   substituteCliTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
+  type CliCallContext,
 } from "../emit/substitution.ts";
 import {
   CLAUDE_EVENT_NAMES,
@@ -49,6 +50,7 @@ import {
   type EffortMap,
   type ModelPinMap,
 } from "../roster/modelLadder.ts";
+import { cliCallHint, pinnedCliCall } from "../shared/cliCall.ts";
 import { substituteCanonicalPlatformMarker, toCodexToolsFrontmatter } from "../tools/translator.ts";
 import type { AdapterOutput, EmissionOwner, RulePrecedence } from "../types/content.ts";
 import type { Tool } from "../types/core.ts";
@@ -331,7 +333,7 @@ export const codexResiduePlanner: ResiduePlanner = {
     };
 
     const rows: AdapterOutput[] = [
-      emissionRow(CODEX_HOOKS_FILE, buildHooksJson(core, ctx.facts.hookScriptsRoot), HOOKS_ARTIFACT_ID, "infra"),
+      emissionRow(CODEX_HOOKS_FILE, buildHooksJson(core, cliCallContextOf(ctx), ctx.facts.hookScriptsRoot), HOOKS_ARTIFACT_ID, "infra"),
       emissionRow(`.stamity/generated/hooks/codex/${PORTABLE_RUNNER_FILE}`, buildPortableHookRunner("codex"), "codex-portable-hook", "infra"),
       emissionRow(CODEX_CONFIG_FILE, composeConfigToml(core, ctx), CONFIG_ARTIFACT_ID, "infra"),
     ];
@@ -667,8 +669,20 @@ const SESSION_END_TIMEOUT_SECONDS = 3;
  * from inside an installed plugin points them at a directory their checkout may
  * not even have. The default is that repository path verbatim, so a repository
  * emission's bytes are the same before and after this parameter existed.
+ *
+ * `cli` is the package and version the file's two CLI mentions pin: the
+ * starter's missing-script message (`pinnedCliCall`, inside a shell-quoted
+ * `node -e` program) and the description's check hint (`cliCallHint`). Both
+ * live inside the hash Codex keys its trust to, so a new stamity version
+ * re-asks every operator for hook approval — accepted, and said in the release
+ * notes, over a bare `stamity` the documented `npx` setup cannot run.
  */
-export function buildHooksJson(core: CoreEmissionPlan, hookScriptsRoot?: string): string {
+export function buildHooksJson(
+  core: CoreEmissionPlan,
+  cli: CliCallContext,
+  hookScriptsRoot?: string,
+): string {
+  const syncCall = pinnedCliCall(cli.packageName, cli.version, "sync");
   const hooks: Record<string, { matcher?: string; hooks: { type: string; command: string; commandWindows: string; timeout?: number }[] }[]> = {};
   for (const row of core.hooks.interchangeFor(TOOL)) {
     const event = CLAUDE_EVENT_NAMES[row.event]!;
@@ -680,8 +694,8 @@ export function buildHooksJson(core: CoreEmissionPlan, hookScriptsRoot?: string)
     }
     group.hooks.push({
       type: "command",
-      command: portableHookCommand("codex", row),
-      commandWindows: portableHookCommand("codex", row),
+      command: portableHookCommand("codex", row, { syncCall }),
+      commandWindows: portableHookCommand("codex", row, { syncCall }),
       // SessionEnd is written explicitly even when the row requests nothing:
       // leaving it out inherits this client's one-second default, which is not
       // the budget the shipped session-end scripts were sized against.
@@ -695,14 +709,15 @@ export function buildHooksJson(core: CoreEmissionPlan, hookScriptsRoot?: string)
   // The trust boundary, said where the operator meets it: Codex records trust
   // against the hash of THIS file, and nothing else. The scripts these commands
   // run live in the workspace an agent can write, so their bytes are outside
-  // that hash and `stamity check` is the control that notices them changing.
+  // that hash and the check verb is the control that notices them changing.
   // https://learn.chatgpt.com/docs/hooks (accessed 2026-09-17)
   const scriptsDir = hookScriptsRoot ?? `.stamity/generated/hooks/${TOOL}`;
   const description =
     `Stamity hooks. ${hookTrustSentence()} ` +
     "Trust is recorded against this file's hash only: the hook script bytes under " +
     `${scriptsDir}/ are outside it and can change without re-review, ` +
-    "so stamity check is the control for them and for emitted-file drift generally. " +
+    `so the check verb (${cliCallHint(cli.packageName, cli.version, "check")}) is the control ` +
+    "for them and for emitted-file drift generally. " +
     "The role guard is telemetry because PreToolUse carries no agent identity.";
   return `${JSON.stringify({ description, hooks }, null, 2)}\n`;
 }

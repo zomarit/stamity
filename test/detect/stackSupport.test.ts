@@ -322,7 +322,13 @@ describe("suggestStackPacks", () => {
     const [next, express] = suggestions;
 
     expect(next?.packId).toBe("next-stack");
-    expect(next?.action).toBe("Install the next-stack pack: stamity add next-stack");
+    // TEST CHANGE (sw26-engine-cli-call-form, REQ-FLOW-002): the action names the
+    // pack and no command — detection cannot know the package or the version the
+    // pinned `npx -y <package>@<version> add` call needs, so the init panel
+    // appends it from `packId` (pinned in test/cli/commands/initPanel.test.ts).
+    // The row is still an install line, never a bare `stamity add`.
+    expect(next?.action).toBe("Install the next-stack pack");
+    expect(next?.action).not.toMatch(/stamity add/);
     expect(express?.packId).toBeUndefined();
     // MODIFIED from /add project rules/i: the uncatalogued row now prints its
     // own support note, which names the subject and the floor that does apply.
@@ -347,9 +353,8 @@ describe("suggestStackPacks", () => {
       ["python", "python-stack"],
     ]);
     for (const suggestion of suggestions) {
-      expect(suggestion.action, suggestion.name).toBe(
-        "Install the python-stack pack: stamity add python-stack",
-      );
+      // TEST CHANGE (sw26-engine-cli-call-form): the pack, without a bare call.
+      expect(suggestion.action, suggestion.name).toBe("Install the python-stack pack");
     }
   });
 });

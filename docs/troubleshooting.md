@@ -213,8 +213,11 @@ The emitted command anchors the script on the client's own project root and turn
 launch into a block:
 
 ```json
-"command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }"
+"command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@<version> sync`' >&2; exit 2; }"
 ```
+
+`<version>` is the stamity version the setup was generated with, and a renamed fork's package
+stands in place of `@zomarit/stamity`.
 
 Two things reach that branch. The generated tree is gone — `clean` removed it, a fresh checkout
 has not synced, or the file was deleted by hand:

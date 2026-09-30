@@ -411,7 +411,13 @@ describe("validate — user hooks", () => {
     const manifest = await readManifest(repo.dir);
     expect(manifest?.hooks?.userHooksDir).toBeUndefined();
 
-    const plan = await planHooksInfra({ rootDir: repo.dir, manifest: manifest as SetupManifest });
+    // `engineVersion` is required since the core scripts' CLI hint pins it
+    // (sw26-engine-cli-call-form); the warnings under test do not depend on it.
+    const plan = await planHooksInfra({
+      rootDir: repo.dir,
+      manifest: manifest as SetupManifest,
+      engineVersion: "1.0.0-test",
+    });
     const emissionSaw = plan.warnings.filter((warning) =>
       warning.includes("user hook .stamity/hooks/broken.json"),
     );

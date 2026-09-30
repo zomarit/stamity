@@ -1,6 +1,7 @@
 import type { HookInterchange } from "./model.ts";
 import type { Tool } from "../types/core.ts";
 import { GENERATED_SCRIPT_LINT_DIRECTIVE } from "../types/markers.ts";
+import { EngineError } from "../types/errors.ts";
 
 /** Repository-owned launcher; the interchange remains exec-form argv. */
 export const PORTABLE_RUNNER_FILE = "stamity-portable-hook.mjs";
@@ -25,10 +26,31 @@ export const PORTABLE_RUNNER_FILE = "stamity-portable-hook.mjs";
  */
 export const ROOT_VARIABLE_PATH = /^\$\{[A-Z_][A-Z0-9_]*\}(?:\/[A-Za-z0-9_@%+=:,.-]+)+$/;
 
-/** Shell syntax appears only at the native boundary, never in the child argv. */
+/**
+ * The characters a pinned CLI call (`npx -y <package>@<version> sync`) may carry
+ * into the Codex starter: the runnable package-name and semver alphabets
+ * (`../shared/cliCall.ts`) plus the separating space. None of them is syntax
+ * inside the starter's double-quoted `node -e` argument under `sh` or `cmd`, or
+ * inside the single-quoted JavaScript string it lands in — no quote, no `$`, no
+ * backtick, no `%`, no `\\`.
+ */
+const STARTER_SAFE_CALL = /^[A-Za-z0-9@/._~+ -]+$/;
+
+/**
+ * Shell syntax appears only at the native boundary, never in the child argv.
+ *
+ * `opts.syncCall` is the pinned call the Codex starter names when the hook
+ * script is missing (`pinnedCliCall(<package>, <version>, "sync")`). Codex is
+ * the one client whose rendering carries it, and it is required there: the
+ * starter lives in `.codex/hooks.json`, and a bare `stamity sync` in the file
+ * Codex keys its trust to would send the operator at a binary the documented
+ * `npx` setup never installs. Throws `VALIDATION_ERROR` for a Codex row without
+ * it, or with a character outside {@link STARTER_SAFE_CALL}.
+ */
 export function portableHookCommand(
   tool: Tool,
   row: HookInterchange,
+  opts: { syncCall?: string } = {},
 ): string {
   const path = `.stamity/generated/hooks/${tool}/${PORTABLE_RUNNER_FILE}`;
   const data = Buffer.from(JSON.stringify(row)).toString("base64url");
@@ -64,8 +86,16 @@ export function portableHookCommand(
   // nearest `.stamity/generated/hooks/codex/` above the session cwd instead
   // would let an unrelated nearer checkout supply the executable for this
   // project's trusted definition.
-  // This static Node program contains no shell expansions or authored values.
-  const starter = `const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'${path}');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}`;
+  // This static Node program contains no shell expansions. Its one variable
+  // part is the pinned sync call, held to {@link STARTER_SAFE_CALL} first.
+  const syncCall = opts.syncCall;
+  if (syncCall === undefined || !STARTER_SAFE_CALL.test(syncCall)) {
+    throw new EngineError(
+      `The Codex hook starter needs a pinned sync call of plain characters; got ${JSON.stringify(syncCall)}.`,
+      { code: "VALIDATION_ERROR" },
+    );
+  }
+  const starter = `const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'${path}');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run ${syncCall}');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}`;
   return `node -e "${starter}" ${data}`;
 }
 

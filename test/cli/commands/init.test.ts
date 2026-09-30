@@ -20,6 +20,7 @@ import type { Tool } from "../../../src/types/core.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import { readWorkspaceManifest } from "../../../src/workspace/manifest.ts";
 import { WORKSPACE_MANIFEST_FILE } from "../../../src/workspace/model.ts";
+import { npxCommand } from "../../support/identity.ts";
 import { runInProcess, type InProcessResult } from "../../support/inProcess.ts";
 import { MENU_KEYS, MenuTtyInput, waitForOutput } from "../../support/menuTty.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -320,7 +321,9 @@ describe("init — fresh repo", () => {
     // carries the maturity tier alongside the change instruction, so the
     // parenthetical it asserts grew a leading `tier: …` field. The claim is
     // strictly stronger — the tier is asserted as well as the hint.
-    expect(result.stdout).toContain("(tier: solo, change with `stamity config`)");
+    // TEST CHANGE (sw26-engine-cli-call-form, REQ-FLOW-002): the panel names the
+    // pinned npx call rather than a bare verb only a global install provides.
+    expect(result.stdout).toContain(`(tier: solo, change with \`${npxCommand("config")}\`)`);
   });
 
   it("-y with zero traces: no prompts, claude default, panel printed", async () => {
@@ -1241,7 +1244,8 @@ describe("init --dry-run", () => {
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("one of those paths is live wiring");
     expect(result.stdout).toContain(CLAUDE_SETTINGS_PATH);
-    expect(result.stdout).toContain("remove it and run `stamity sync`");
+    // TEST CHANGE (sw26-engine-cli-call-form): the pinned remedy, as above.
+    expect(result.stdout).toContain(`remove it and run \`${npxCommand("sync")}\``);
     // The premise of that line, proven against the tree: the run did not write
     // this file. A byte moving here would make the sentence false.
     expect(await readFile(settingsPath, "utf8")).toBe(PRED_SETTINGS);

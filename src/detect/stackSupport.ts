@@ -293,8 +293,13 @@ export interface StackSuggestion {
   readonly tier: StackSupportTier;
   /**
    * The row's single printed line: THIS row's support note when nothing is
-   * installable, or the install command when a pack backs it. Never names a
-   * pack that is not installable.
+   * installable, or `Install the <packId> pack` when a pack backs it. Never
+   * names a pack that is not installable.
+   *
+   * The install COMMAND is not in it: the call runs this package pinned to its
+   * version (`npx -y <package>@<version> add <packId>`), which detection has no
+   * way to know. The init panel appends it from {@link packId}, beside every
+   * other remedy it prints in that form.
    *
    * It is the tier's own note rather than a constant because the panel prints
    * one line per row and nothing else: a shared sentence made a three-stack
@@ -326,8 +331,9 @@ function subjectOf(stack: UnsupportedStack): string | undefined {
  * design, so every install today produces this branch, and a constant here made
  * an N-stack repo read the same instruction N times while the per-tier and
  * per-subject wording was computed and thrown away one line later. A subject
- * the catalog does carry is named by its pack id instead, so the suggestion
- * becomes copy-pasteable the moment a pack backs it.
+ * the catalog does carry is named by its pack id instead, and the panel turns
+ * that id into the pinned install call, so the suggestion becomes
+ * copy-pasteable the moment a pack backs it.
  *
  * Order is {@link classifyDetectedStacks}'s: frameworks before languages, each
  * in detection order — most-specific first, so a panel that prints only the
@@ -346,6 +352,6 @@ export function suggestStackPacks(
 
     return packId === undefined
       ? { name, kind, tier, action: stack.support.notes }
-      : { name, kind, tier, action: `Install the ${packId} pack: stamity add ${packId}`, packId };
+      : { name, kind, tier, action: `Install the ${packId} pack`, packId };
   });
 }

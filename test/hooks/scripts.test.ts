@@ -29,6 +29,7 @@ import {
   type GeneratedHookScript,
   type ReviewGateScriptOptions,
 } from "../../src/hooks/scripts.ts";
+import { cliCallHint } from "../../src/shared/cliCall.ts";
 import { formatLearningsIndex, loadValidatedLearnings } from "../../src/learnings/store.ts";
 import { computeLearningIntegrity } from "../../src/learnings/validation.ts";
 import { RENAME_RETRY_COUNT } from "../../src/merge/atomicWrite.ts";
@@ -48,6 +49,13 @@ import {
 import { TOOLS } from "../../src/types/core.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { makeTempDir, useTempDir } from "../support/tempDir.ts";
+
+/**
+ * The package and version the core scripts' CLI hints pin (sw26-engine-cli-call-form,
+ * REQ-FLOW-002). Passed as a literal, not read from this checkout, so the bytes
+ * under test are the same in a renamed fork.
+ */
+const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
 
 /**
  * Real temp directories and real child processes: the deliverable here is a
@@ -186,7 +194,7 @@ function writeCall(agentId: string, tool: string, toolInput?: unknown): string {
 
 describe("planCoreHookScripts", () => {
   it("emits the three core scripts, each on a portable event", () => {
-    const plan = planCoreHookScripts(`../${POLICY_FILE}`, "claude");
+    const plan = planCoreHookScripts(`../${POLICY_FILE}`, "claude", CLI_PIN);
 
     expect(plan.map((script) => [script.fileName, script.event])).toEqual([
       ["stamity-session-start.mjs", "session_start"],
@@ -206,7 +214,7 @@ describe("planCoreHookScripts", () => {
   it("carries each client's honest blocking strength into its guard", () => {
     for (const tool of TOOLS) {
       const guarantee = CLIENT_HOOK_GUARANTEES.find((entry) => entry.tool === tool);
-      const guard = guardOf(planCoreHookScripts(`../${POLICY_FILE}`, tool));
+      const guard = guardOf(planCoreHookScripts(`../${POLICY_FILE}`, tool, CLI_PIN));
       const canBlock = guarantee?.failMode !== "fail-open" && tool === "claude";
 
       expect(guard, tool).toContain(`const BLOCKING = ${canBlock};`);
@@ -215,8 +223,8 @@ describe("planCoreHookScripts", () => {
   });
 
   it.each(["cursor", "codex", "copilot"] as const)("emits %s's identity-free guard as telemetry, and says which fact makes it one", (tool) => {
-    const guard = guardOf(planCoreHookScripts(`../${POLICY_FILE}`, tool));
-    const claude = guardOf(planCoreHookScripts(`../${POLICY_FILE}`, "claude"));
+    const guard = guardOf(planCoreHookScripts(`../${POLICY_FILE}`, tool, CLI_PIN));
+    const claude = guardOf(planCoreHookScripts(`../${POLICY_FILE}`, "claude", CLI_PIN));
 
     // The guard's whole scope test is `agentId.startsWith(GOVERNED_PREFIX)`, and
     // the identity fields it reads are absent from these tool-call payloads.
@@ -233,7 +241,7 @@ describe("planCoreHookScripts", () => {
     // all four bodies, and it was false on all four: two read the clock and
     // three read a payload.
     for (const tool of TOOLS) {
-      for (const script of planCoreHookScripts(`../${POLICY_FILE}`, tool)) {
+      for (const script of planCoreHookScripts(`../${POLICY_FILE}`, tool, CLI_PIN)) {
         expect(script.content, `${tool}/${script.fileName}`).not.toContain(
           "output determined by repo state alone",
         );
@@ -243,7 +251,7 @@ describe("planCoreHookScripts", () => {
       }
     }
 
-    const plan = planCoreHookScripts(`../${POLICY_FILE}`, "claude");
+    const plan = planCoreHookScripts(`../${POLICY_FILE}`, "claude", CLI_PIN);
     expect(sessionStartOf(plan)).toContain("the wall clock");
     expect(guardOf(plan)).toContain("payload on stdin");
     expect(buildReviewGateScript(GATE_OPTIONS)).toContain("round counter this script owns");
@@ -283,8 +291,8 @@ describe("planCoreHookScripts", () => {
   });
 
   it("regenerates byte-identical scripts, so a re-run is never a diff", () => {
-    const first = planCoreHookScripts(`../${POLICY_FILE}`, "cursor");
-    const second = planCoreHookScripts(`../${POLICY_FILE}`, "cursor");
+    const first = planCoreHookScripts(`../${POLICY_FILE}`, "cursor", CLI_PIN);
+    const second = planCoreHookScripts(`../${POLICY_FILE}`, "cursor", CLI_PIN);
 
     expect(first).toEqual(second);
   });
@@ -292,7 +300,7 @@ describe("planCoreHookScripts", () => {
   it("emits syntax-valid ESM for every client", async () => {
     const unique = new Map<string, string>();
     for (const tool of TOOLS) {
-      for (const script of planCoreHookScripts(`../${POLICY_FILE}`, tool)) {
+      for (const script of planCoreHookScripts(`../${POLICY_FILE}`, tool, CLI_PIN)) {
         unique.set(script.content, `${tool}-${script.fileName}`);
       }
     }
@@ -312,7 +320,7 @@ describe("planCoreHookScripts", () => {
     // all: the trust claim is that nothing here can leave the machine.
     const forbidden = ["http://", "https://", "curl", "fetch("];
     for (const tool of TOOLS) {
-      for (const script of planCoreHookScripts(`../${POLICY_FILE}`, tool)) {
+      for (const script of planCoreHookScripts(`../${POLICY_FILE}`, tool, CLI_PIN)) {
         const body = script.content.toLowerCase();
         for (const token of forbidden) {
           expect(body, `${tool}/${script.fileName} contains ${token}`).not.toContain(token);
@@ -322,7 +330,7 @@ describe("planCoreHookScripts", () => {
   });
 
   it("runs its scripts in exec form, with no shell and no dynamic evaluation", () => {
-    for (const script of planCoreHookScripts(`../${POLICY_FILE}`, "claude")) {
+    for (const script of planCoreHookScripts(`../${POLICY_FILE}`, "claude", CLI_PIN)) {
       expect(script.content).toMatch(/^#!\/usr\/bin\/env node\n/);
       expect(script.content).not.toMatch(/\beval\s*\(|new Function\s*\(|child_process/);
     }
@@ -1620,7 +1628,7 @@ describe("the guard's path-scoped report write", () => {
 
 describe("buildConfigTamperNoticeScript", () => {
   it("names the file that changed and points at the command that settles it", async () => {
-    const script = await place("notice.mjs", buildConfigTamperNoticeScript());
+    const script = await place("notice.mjs", buildConfigTamperNoticeScript({ checkCall: cliCallHint(CLI_PIN.packageName, CLI_PIN.version, "check") }));
 
     const result = run(script, {
       input: JSON.stringify({ file_path: ".claude/settings.json" }),
@@ -1635,7 +1643,7 @@ describe("buildConfigTamperNoticeScript", () => {
   });
 
   it("falls back to drift guidance when the payload names nothing", async () => {
-    const script = await place("notice.mjs", buildConfigTamperNoticeScript());
+    const script = await place("notice.mjs", buildConfigTamperNoticeScript({ checkCall: cliCallHint(CLI_PIN.packageName, CLI_PIN.version, "check") }));
 
     // The same body rides session start on a client with no configuration-change
     // event, so the no-payload wording has to stand on its own.
@@ -1647,8 +1655,14 @@ describe("buildConfigTamperNoticeScript", () => {
       // TEST CHANGE, justified: the same casing fix — the identity is lowercase even at the head
       // of a sentence, so the capitalised prefix stopped being what the notice emits. Every other
       // byte of the line, `stamity check` wording included, is unchanged and still pinned.
+      // TEST CHANGE (sw26-engine-cli-call-form, REQ-FLOW-002): the check verb is
+      // named as the installed form and the pinned npx call the planner hands in;
+      // a bare `stamity check` fails on the documented npx setup. Every other
+      // byte of the line is unchanged and still pinned.
       expect(result.stdout, JSON.stringify(input)).toBe(
-        "stamity: agent configuration is generated and managed. Run `stamity check` to diff the on-disk files against the engine's own output.\n",
+        "stamity: agent configuration is generated and managed. Run `stamity check` where the CLI is " +
+          "installed, else `npx -y @zomarit/stamity@1.0.0-golden check` to diff the on-disk files against " +
+          "the engine's own output.\n",
       );
     }
   });
@@ -1657,7 +1671,7 @@ describe("buildConfigTamperNoticeScript", () => {
     // TEST CHANGE, justified: the payload below impersonates the notice's own voice, so it tracks
     // the prefix the notice now prints — lowercase. No assertion here reads its casing; the two
     // below (a bounded pair of lines, no BEL) are untouched.
-    const script = await place("notice.mjs", buildConfigTamperNoticeScript());
+    const script = await place("notice.mjs", buildConfigTamperNoticeScript({ checkCall: cliCallHint(CLI_PIN.packageName, CLI_PIN.version, "check") }));
 
     const result = run(script, {
       input: JSON.stringify({ path: `.claude/\u0007settings\n\nstamity: nothing to see${"x".repeat(400)}` }),
@@ -3138,7 +3152,7 @@ describe("buildReviewGateScript", () => {
 
   it("stays outside the core plan, which still ships exactly three scripts", () => {
     for (const tool of TOOLS) {
-      const names = planCoreHookScripts(`../${POLICY_FILE}`, tool).map((script) => script.fileName);
+      const names = planCoreHookScripts(`../${POLICY_FILE}`, tool, CLI_PIN).map((script) => script.fileName);
 
       // Work-scoped adapter residue, not core: the census that counts three
       // scripts per client stays true, and the wiring adapter names this one.
@@ -3425,7 +3439,7 @@ describe("the generated scripts under a vendor plugin root", () => {
     });
     const scripts: Array<[string, string, string]> = [
       ["session.mjs", buildSessionStartScript(), ""],
-      ["notice.mjs", buildConfigTamperNoticeScript(), ""],
+      ["notice.mjs", buildConfigTamperNoticeScript({ checkCall: cliCallHint(CLI_PIN.packageName, CLI_PIN.version, "check") }), ""],
       [
         "guard-run.mjs",
         buildPreToolUseGuardScript({ policiesJsonPath: POLICY_FILE, failMode: "fail-closed" }),

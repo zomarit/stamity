@@ -56,7 +56,7 @@ import {
   readIfExists,
 } from "../../engine/emissionWrite.ts";
 import { readWorkingTreeStatus, type WorkingTreeStatus } from "../../engine/gitStatus.ts";
-import { packageCommand } from "../../kit/packageName.ts";
+import { packageCommand, packageName } from "../../kit/packageName.ts";
 import type { GitRunner } from "../../../workspace/git.ts";
 
 /**
@@ -411,7 +411,7 @@ export async function planOutputEntries(
 export async function planSync(
   rootDir: string,
   engineVersion: string,
-  opts: { runner?: GitRunner } = {},
+  opts: { runner?: GitRunner; packageName?: string } = {},
 ): Promise<SyncPlan> {
   const manifest = await readManifest(rootDir);
   if (manifest === null) {
@@ -441,6 +441,10 @@ export async function planSync(
     rootDir,
     manifest: planningManifest,
     engineVersion,
+    // The package every pinned CLI call names: this installation's own, read
+    // from its manifest, so a renamed fork's emission runs the fork. A caller
+    // pins another only to render checkout-independent bytes (the goldens).
+    packageName: opts.packageName ?? packageName(),
     facts: {
       monorepoPackages: repoInfo.monorepoPackages,
     },

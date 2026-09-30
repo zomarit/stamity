@@ -118,6 +118,7 @@ import {
   substituteCliTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
+  type CliCallContext,
 } from "../emit/substitution.ts";
 import {
   CANONICAL_HOOK_EVENTS,
@@ -146,6 +147,7 @@ import {
   resolveEffortValue,
   resolveModelValue,
 } from "../roster/modelLadder.ts";
+import { cliCallHint } from "../shared/cliCall.ts";
 import type { ToolCategory } from "../tools/categories.ts";
 import {
   substituteCanonicalPlatformMarker,
@@ -335,10 +337,20 @@ const PROJECT_DIR_VARIABLE = "${CLAUDE_PROJECT_DIR}";
  * repository-emitted hooks and has no Git Bash where the client looks, naming
  * the consequence and the fix. That host is otherwise UNMEASURED, and
  * `docs/troubleshooting.md` states the residual as a possible regression.
+ *
+ * The remedy names the sync verb as {@link cliCallHint} does — the installed
+ * form and the pinned `npx -y <package>@<version> sync` together — because
+ * the documented `npx` setup installs no `stamity` binary, and a bare verb
+ * would send the reader at a command that is not there. The sentence sits
+ * inside single quotes, where its backticks are literal: the package name and
+ * the version admit no quote (`../shared/cliCall.ts` refuses one).
  */
-const GUARD_FAIL_CLOSED_TAIL =
-  "|| { s=$?; [ \"$s\" -eq 2 ] && exit 2; " +
-  "echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }";
+function guardFailClosedTail(cli: CliCallContext): string {
+  return (
+    "|| { s=$?; [ \"$s\" -eq 2 ] && exit 2; " +
+    `echo 'stamity: the pre-tool-use guard could not run; run ${cliCallHint(cli.packageName, cli.version, "sync")}' >&2; exit 2; }`
+  );
+}
 
 /**
  * Access date carried by every platform citation in {@link CLAUDE_DIALECT_FACTS}.
@@ -576,7 +588,7 @@ export const claudeResiduePlanner: ResiduePlanner = {
       // this engine owns under either install mode, and only the `hooks` object
       // moves to the plugin — so the document is always written and the key is
       // absent when a plugin carries the wiring (REQ-PLUGIN-016).
-      content: buildSettingsJson(core, ctx.facts.hookScriptsRoot, {
+      content: buildSettingsJson(core, cliCallContextOf(ctx), ctx.facts.hookScriptsRoot, {
         hooks: !isPluginOwned(ctx.manifest, TOOL, "hooks"),
       }),
       owner: owner("claude-settings", "infra"),
@@ -858,6 +870,7 @@ interface ClaudeHookEntry {
  */
 function buildSettingsJson(
   core: CoreEmissionPlan,
+  cli: CliCallContext,
   hookScriptsRoot?: string,
   emit: { hooks: boolean } = { hooks: true },
 ): string {
@@ -881,6 +894,8 @@ function buildSettingsJson(
       : `${hookScriptsRoot}/${REVIEW_GATE_FILE}`;
 
   const hooks: Record<string, ClaudeHookEntry[]> = {};
+  const failClosedTail = guardFailClosedTail(cli);
+  const hookEntry = (row: HookInterchange): ClaudeHookEntry => hookEntryWith(row, failClosedTail);
   for (const event of CANONICAL_HOOK_EVENTS) {
     const entries = rows.filter((row) => row.event === event).map(hookEntry);
     if (entries.length > 0) hooks[CLAUDE_EVENT_NAMES[event]] = entries;
@@ -907,16 +922,25 @@ function buildSettingsJson(
   return `${JSON.stringify({ permissions: { allow: CLAUDE_PERMISSION_ROWS }, hooks }, null, 2)}\n`;
 }
 
-/** One interchange row as a client config entry. */
-function hookEntry(row: HookInterchange): ClaudeHookEntry {
+/**
+ * One interchange row as a client config entry; `failClosedTail` is appended
+ * to the one row {@link failsClosedOnLaunchFailure} picks, and to no other.
+ */
+function hookEntryWith(row: HookInterchange, failClosedTail: string): ClaudeHookEntry {
   return {
     ...(row.matcher === undefined ? {} : { matcher: row.matcher }),
-    hooks: [commandHook(row.command, row.timeoutMs, failsClosedOnLaunchFailure(row))],
+    hooks: [
+      commandHook(
+        row.command,
+        row.timeoutMs,
+        failsClosedOnLaunchFailure(row) ? failClosedTail : undefined,
+      ),
+    ],
   };
 }
 
 /**
- * Whether this row is the one the {@link GUARD_FAIL_CLOSED_TAIL} belongs to: the
+ * Whether this row is the one the {@link guardFailClosedTail} belongs to: the
  * CORE pre-tool-use guard, in repository mode, as the core planned it.
  *
  * Identified by the whole script path rather than by {@link argvTail}'s
@@ -933,19 +957,19 @@ function failsClosedOnLaunchFailure(row: HookInterchange): boolean {
 /**
  * One exec-form argv as the client's `type: "command"` handler.
  *
- * `failClosed` appends {@link GUARD_FAIL_CLOSED_TAIL} AFTER the join, so the
- * tail's own `||`, braces and redirection reach the shell as syntax while every
- * element of the argv stays quoted as data.
+ * `failClosedTail` ({@link guardFailClosedTail}) is appended AFTER the join, so
+ * the tail's own `||`, braces and redirection reach the shell as syntax while
+ * every element of the argv stays quoted as data.
  */
 function commandHook(
   argv: readonly string[],
   timeoutMs?: number,
-  failClosed = false,
+  failClosedTail?: string,
 ): ClaudeHookCommand {
   const line = anchorScriptArgument(argv).map(shellWord).join(" ");
   return {
     type: "command",
-    command: failClosed ? `${line} ${GUARD_FAIL_CLOSED_TAIL}` : line,
+    command: failClosedTail === undefined ? line : `${line} ${failClosedTail}`,
     // The client's `timeout` is whole seconds (code.claude.com/docs/en/hooks,
     // accessed 2026-08-17); the interchange request is milliseconds. Ceil, so
     // a sub-second request rounds up to the nearest second the client can

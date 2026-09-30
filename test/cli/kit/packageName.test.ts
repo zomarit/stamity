@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type * as PackageNameApi from "../../../src/cli/kit/packageName.ts";
@@ -9,7 +10,7 @@ import {
   resolveOwnPackageFacts,
 } from "../../../src/cli/kit/packageName.ts";
 import type * as PathsApi from "../../../src/shared/paths.ts";
-import { useTempDir } from "../../support/tempDir.ts";
+import { makeTempDir, useTempDir } from "../../support/tempDir.ts";
 
 /**
  * The fork-identity seam: every remedy the CLI prints names the package the
@@ -63,20 +64,29 @@ describe("packageCommand — the canonical checkout", () => {
     const own = await ownPackageManifest();
 
     expect(packageName()).toBe(own.name);
-    expect(packageCommand("init")).toBe(`npx ${own.name} init`);
+    // TEST CHANGE (sw26-engine-cli-call-form, REQ-FLOW-002): the remedy is the
+    // pinned call — `-y` for a shell that cannot answer npx's prompt, and the
+    // version that printed it, so the remedy runs the CLI whose flags it names.
+    expect(packageCommand("init")).toBe(`npx -y ${own.name}@${own.version} init`);
     expect(resolveOwnPackageFacts()).toMatchObject({ name: own.name, version: own.version });
   });
 
   it("passes a multi-word remedy through as one tail", async () => {
     const own = await ownPackageManifest();
 
-    expect(packageCommand("config mcp add <id>")).toBe(`npx ${own.name} config mcp add <id>`);
-    expect(packageCommand("clean --pack <id>")).toBe(`npx ${own.name} clean --pack <id>`);
+    // TEST CHANGE (sw26-engine-cli-call-form): the pinned form, as above.
+    expect(packageCommand("config mcp add <id>")).toBe(
+      `npx -y ${own.name}@${own.version} config mcp add <id>`,
+    );
+    expect(packageCommand("clean --pack <id>")).toBe(
+      `npx -y ${own.name}@${own.version} clean --pack <id>`,
+    );
   });
 
   it("does not use the `st` bin alias — npx resolves a package name", () => {
     expect(packageCommand("sync").startsWith("npx ")).toBe(true);
     expect(packageCommand("sync")).not.toContain("npx st ");
+    expect(packageCommand("sync")).not.toContain("npx -y st@");
   });
 });
 
@@ -106,8 +116,10 @@ describe("packageCommand — a renamed private downstream", () => {
       isPrivate: true,
     });
     expect(kit.packageName()).toBe("@acme/stamity");
-    expect(kit.packageCommand("init")).toBe("npx @acme/stamity init");
-    expect(kit.packageCommand("sync")).toBe("npx @acme/stamity sync");
+    // TEST CHANGE (sw26-engine-cli-call-form): the fork's own name AND its own
+    // version, pinned.
+    expect(kit.packageCommand("init")).toBe("npx -y @acme/stamity@1.8.0 init");
+    expect(kit.packageCommand("sync")).toBe("npx -y @acme/stamity@1.8.0 sync");
   });
 
   it("reads `private` in its hand-edited string form, and drops a non-string version", async () => {
@@ -126,7 +138,22 @@ describe("packageCommand — a renamed private downstream", () => {
       version: "",
       isPrivate: true,
     });
+    // Unchanged on purpose: a manifest with no string version has nothing to
+    // pin, so the remedy keeps the unpinned form rather than inventing one.
     expect(kit.packageCommand("init")).toBe("npx @acme/stamity init");
+  });
+
+  it("keeps the unpinned form when the version is not semver-shaped, rather than throwing", async () => {
+    const fixture = getFixture();
+    // A remedy is printed on an error path: a pin that throws there would
+    // replace the operator's real diagnosis with a rendering failure.
+    await fixture.seedFiles({
+      "package.json": `${JSON.stringify({ name: "@acme/stamity", version: "next" })}\n`,
+    });
+
+    const kit = await loadKitRootedAt(fixture.dir);
+
+    expect(kit.packageCommand("sync")).toBe("npx @acme/stamity sync");
   });
 });
 
@@ -141,7 +168,9 @@ describe("packageCommand — the unnamed sentinel", () => {
     // The fallback is a canonical-source constant, not a pin on the running
     // manifest: a fork inherits this source unchanged, and a fork whose manifest
     // WAS read never reaches this branch.
-    expect(kit.packageCommand("init")).toBe("npx @zomarit/stamity init");
+    // TEST CHANGE (sw26-engine-cli-call-form): the canonical name, pinned to
+    // the version the manifest did carry.
+    expect(kit.packageCommand("init")).toBe("npx -y @zomarit/stamity@1.8.0 init");
   });
 
   it("falls back when the manifest is unreadable, and reports private so the notice stays silent", async () => {
@@ -220,4 +249,82 @@ describe("repositorySlug", () => {
       expect(kit.repositorySlug()).toBeNull();
     },
   );
+});
+
+/**
+ * The emission half of the fork seam (ledger rows build/20 and review/15): the
+ * `${STAMITY:CLI}` token, the hook hints and Codex's `hooks.json` all render
+ * `npx -y <package>@<version>`, and the package they name is the emission
+ * context's `packageName`. A command that builds the context without it renders
+ * the canonical `@zomarit/stamity` in a renamed fork — every emitted call then
+ * sends the fork's operators at a package that is not theirs.
+ *
+ * Proved through the two production builders of the context, `applyInit`
+ * (init and plugin setup) and `planSync` (sync, check's drift gate and
+ * workspace sync), with the same one-seam redirect as above: only the kit's
+ * own root walk answers with the fork's manifest, and every other
+ * `findPackageRoot` caller — the content index among them — keeps the real one.
+ */
+describe("a renamed fork's emission", () => {
+  it("init and sync render the fork's own package into every pinned call", async () => {
+    const install = getFixture();
+    await install.seedFiles({
+      "package.json": `${JSON.stringify({ name: "@acme/stamity", version: "1.8.0", private: true })}\n`,
+    });
+    const repo = await makeTempDir("stamity-fork-emission");
+    try {
+      await repo.seedFiles({
+        "package.json": `${JSON.stringify({ name: "fork-user", version: "0.0.0" })}\n`,
+      });
+
+      const kitDir = join("src", "cli", "kit");
+      vi.resetModules();
+      vi.doMock(PATHS_MODULE, async (importOriginal) => {
+        const actual = await importOriginal<typeof PathsApi>();
+        return {
+          ...actual,
+          findPackageRoot: (from: string): string =>
+            from.endsWith(kitDir) ? install.dir : actual.findPackageRoot(from),
+        };
+      });
+      const { buildInitDecisions } = await import("../../../src/cli/commands/init/plan.ts");
+      const { applyInit } = await import("../../../src/cli/commands/init/apply.ts");
+      const { planSync } = await import("../../../src/cli/commands/sync/engine.ts");
+
+      const decisions = await buildInitDecisions(repo.dir, { maturityTier: "team" }, { history: null });
+      await applyInit({
+        rootDir: repo.dir,
+        decisions: { ...decisions, tools: ["claude", "codex", "cursor", "copilot"], toolsSource: "flag" },
+        engineVersion: "1.8.0",
+        dryRun: false,
+        force: false,
+        now: new Date("2026-09-30T00:00:00.000Z"),
+      });
+
+      // Init: the charter's token, a hook hint, and the trusted Codex file.
+      const written = await Promise.all(
+        [
+          "AGENTS.md",
+          ".codex/hooks.json",
+          ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs",
+        ].map(async (path) => [path, await readFile(join(repo.dir, path), "utf8")] as const),
+      );
+      for (const [path, content] of written) {
+        expect(content, path).toContain("npx -y @acme/stamity@1.8.0");
+        expect(content, path).not.toContain("@zomarit/stamity");
+      }
+
+      // Sync: the same planner, reached through the other context builder.
+      // A git-less fixture: the working-tree probe answers "clean".
+      const plan = await planSync(repo.dir, "1.8.0", { runner: () => "" });
+      const agents = plan.outputs.find((output) => output.path === "AGENTS.md");
+      expect(agents?.content).toContain("npx -y @acme/stamity@1.8.0");
+      const canonicalLeaks = plan.outputs
+        .filter((output) => output.content.includes("@zomarit/stamity"))
+        .map((output) => output.path);
+      expect(canonicalLeaks).toEqual([]);
+    } finally {
+      await repo.cleanup();
+    }
+  }, 60_000);
 });

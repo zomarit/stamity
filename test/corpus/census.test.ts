@@ -14,6 +14,13 @@ import { useTempDir } from "../support/tempDir.ts";
 import { CORPUS_ROOT, loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
 
 /**
+ * The package and version the core scripts' CLI hints pin (sw26-engine-cli-call-form,
+ * REQ-FLOW-002). Passed as a literal, not read from this checkout, so the bytes
+ * under test are the same in a renamed fork.
+ */
+const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
+
+/**
  * The final census: the shipped corpus holds EXACTLY the rosters below —
  * 1 charter, 9 commands, 10 agents, 8 skills, 12 rules, 3 core hook scripts —
  * and nothing the engine cannot address. This is framework CI for canonical
@@ -217,7 +224,7 @@ describe("census — shipped corpus", () => {
 
   it("plans exactly the three core hook scripts, for every client", () => {
     for (const tool of TOOLS) {
-      const plan = planCoreHookScripts(`../${AGENT_TOOL_POLICIES_FILE}`, tool);
+      const plan = planCoreHookScripts(`../${AGENT_TOOL_POLICIES_FILE}`, tool, CLI_PIN);
       const names = plan.map((script) => script.fileName);
 
       expect(plan, tool).toHaveLength(3);

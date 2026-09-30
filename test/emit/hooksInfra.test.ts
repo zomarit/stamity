@@ -181,6 +181,9 @@ function ctxFor(rootDir: string, tools: readonly Tool[], userHooksDir?: string):
       tools: [...tools],
       ...(userHooksDir === undefined ? {} : { hooks: { userHooksDir } }),
     },
+    // Required since the core scripts' CLI hint pins the engine version
+    // (sw26-engine-cli-call-form); any semver-shaped value plans the same rows.
+    engineVersion: "1.0.0-test",
   };
 }
 

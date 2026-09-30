@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "generatedBy": "1.10.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-09-30T13:28:37.454Z",
+  "updatedAt": "2026-09-30T13:35:39.934Z",
   "tools": [
     "claude"
   ],
@@ -267,7 +267,7 @@
       "adapter": "claude",
       "artifactId": "claude-settings",
       "artifactType": "infra",
-      "contentHash": "efa72782a40b18f740a5685886898eb636e25c5e28e83804fca70f366144eb33",
+      "contentHash": "861e7f21e6cd4d6c5a46d10ca9aaf9f0e797a0422dd1b6164f6fa726399dfc05",
       "path": ".claude/settings.json"
     },
     {
@@ -491,7 +491,7 @@
       "adapter": "claude",
       "artifactId": "stamity-config-tamper-notice",
       "artifactType": "infra",
-      "contentHash": "9d62b6f1657a7424b5a48ff583bd4035ef59d059b902874ad9d8937dd015ccfc",
+      "contentHash": "0054c752e74ae752012a80311f920cb3cacdcef9d0f750e118ff3d98a0e2137b",
       "path": ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs"
     },
     {

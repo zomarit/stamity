@@ -36,6 +36,13 @@ import { useTempDir } from "../support/tempDir.ts";
 import { walkAllMarkdown } from "./harness.ts";
 
 /**
+ * The package and version the core scripts' CLI hints pin (sw26-engine-cli-call-form,
+ * REQ-FLOW-002). Passed as a literal, not read from this checkout, so the bytes
+ * under test are the same in a renamed fork.
+ */
+const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
+
+/**
  * Wiring parity: the hook facts the content design states, asserted against
  * what the engine actually emits for the shipped roster.
  *
@@ -141,7 +148,7 @@ function guardOf(plan: readonly GeneratedHookScript[]): GeneratedHookScript {
 
 /** Guard for one client plus the policy document built from the shipped roster. */
 async function placeGuardFor(tool: Tool): Promise<string> {
-  const guard = guardOf(planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, tool));
+  const guard = guardOf(planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, tool, CLI_PIN));
   await getRepo().seedFiles({
     [AGENT_TOOL_POLICIES_FILE]: buildAgentToolPoliciesJson(AGENT_POLICY_ROSTER),
     [`${SCRIPT_DIR}/${guard.fileName}`]: guard.content,
@@ -160,7 +167,7 @@ function call(agentId: string, tool: string): string {
  * names its own repository root and so can scope a report `Write`.
  */
 async function placeEmittedClaudeGuard(): Promise<string> {
-  const guard = guardOf(planCoreHookScripts(`../../${AGENT_TOOL_POLICIES_FILE}`, "claude"));
+  const guard = guardOf(planCoreHookScripts(`../../${AGENT_TOOL_POLICIES_FILE}`, "claude", CLI_PIN));
   await getRepo().seedFiles({
     [`${GENERATED_DIR}/${AGENT_TOOL_POLICIES_FILE}`]: buildAgentToolPoliciesJson(AGENT_POLICY_ROSTER),
     [`${HOOKS_GENERATED_DIR}/claude/${guard.fileName}`]: guard.content,
@@ -195,7 +202,7 @@ function policyDocument(): PolicyDocument {
 describe("core hook script set", () => {
   it("plans three scripts for every client, on the portable events they ride", () => {
     for (const tool of TOOLS) {
-      const plan = planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, tool);
+      const plan = planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, tool, CLI_PIN);
 
       expect(plan, tool).toHaveLength(3);
       expect(plan.map((script) => script.event), tool).toEqual([...CORE_EVENTS]);
@@ -209,7 +216,7 @@ describe("core hook script set", () => {
 
   it("gives each client's guard that client's real blocking strength, not a uniform promise", () => {
     for (const guarantee of CLIENT_HOOK_GUARANTEES) {
-      const guard = guardOf(planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, guarantee.tool)).content;
+      const guard = guardOf(planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, guarantee.tool, CLI_PIN)).content;
       // Two determinants, not one. `failMode` says whether the client honours a
       // blocking exit status; payload identity says whether the guard's scope
       // test can ever match, and a guard that cannot name the caller reaches no
@@ -456,7 +463,7 @@ describe("the work-scoped review gate beside the core set", () => {
 
   it("rides beside the core plan rather than in it, on every client", () => {
     for (const tool of TOOLS) {
-      const names = planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, tool).map((script) => script.fileName);
+      const names = planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, tool, CLI_PIN).map((script) => script.fileName);
 
       // Work-command-scoped adapter residue, not one of the three things every
       // generated setup does at runtime — the census stays at three.

@@ -40,6 +40,8 @@ export interface RepositoryIdentity {
   readonly canonical: boolean;
   /** `package.json` `name`, whatever it is. */
   readonly name: string;
+  /** `package.json` `version`; empty when the manifest carries none as a string. */
+  readonly version: string;
   /** `stamity.publisher`, defaulted the way `scripts/distribution-identity.mjs` defaults it. */
   readonly publisher: string;
   /** `package.json` `private` — `true` on a downstream that followed the guide. */
@@ -48,6 +50,7 @@ export interface RepositoryIdentity {
 
 interface Manifest {
   readonly name?: unknown;
+  readonly version?: unknown;
   readonly private?: unknown;
   readonly repository?: { readonly url?: unknown };
   readonly stamity?: { readonly publisher?: unknown };
@@ -65,12 +68,14 @@ export function canonical(): RepositoryIdentity {
   if (cached === null) {
     const manifest = readManifest();
     const name = typeof manifest.name === "string" ? manifest.name : "";
+    const version = typeof manifest.version === "string" ? manifest.version : "";
     const publisher =
       typeof manifest.stamity?.publisher === "string" ? manifest.stamity.publisher : DEFAULT_PUBLISHER;
     const isPrivate = manifest.private === true;
     cached = {
       canonical: name === CANONICAL_NAME && publisher === CANONICAL_PUBLISHER && !isPrivate,
       name,
+      version,
       publisher,
       private: isPrivate,
     };
@@ -111,15 +116,20 @@ export function repositoryRoute(): RepositoryRoute {
 }
 
 /**
- * The `npx` invocation this checkout's own remedies name: `npx <own name> <verb>`.
+ * The `npx` invocation this checkout's own remedies name: the pinned
+ * `npx -y <own name>@<own version> <verb>`.
  *
- * The shape is the assertion — a remedy has to name a package a reader can run —
- * and the name is whatever this manifest carries, so the canonical checkout keeps
- * its exact literal and a fork reads its own. `verb` is the whole tail, mirroring
- * `packageCommand` in `src/cli/kit/packageName.ts`.
+ * The shape is the assertion — a remedy has to name a package a reader can run,
+ * at the version that printed it — and the name and version are whatever this
+ * manifest carries, so the canonical checkout keeps its exact literal and a fork
+ * reads its own. `verb` is the whole tail, mirroring `packageCommand` in
+ * `src/cli/kit/packageName.ts`, including its unpinned fallback for a manifest
+ * with no version. Spelled out here rather than imported: a test that asked the
+ * production helper for its expected string would agree with it by construction.
  */
 export function npxCommand(verb: string): string {
-  return `npx ${canonical().name} ${verb}`;
+  const { name, version } = canonical();
+  return version === "" ? `npx ${name} ${verb}` : `npx -y ${name}@${version} ${verb}`;
 }
 
 /**

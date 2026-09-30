@@ -42,6 +42,15 @@ import { makeTempDir } from "../support/tempDir.ts";
 /** Engine version stamped into managed blocks and version fields. Pinned, never `package.json`'s. */
 export const GOLDEN_ENGINE_VERSION = "1.0.0-golden";
 
+/**
+ * The package every pinned CLI call in the golden emission names. Pinned for
+ * the reason the version is: init and sync otherwise name the RUNNING
+ * checkout's own package, so a renamed fork would render different golden
+ * bytes and fail a gate it changed nothing in (`docs/enterprise-forks.md`: a
+ * rename needs no test edit). Every `planSync` over a golden repo passes it too.
+ */
+export const GOLDEN_PACKAGE_NAME = "@zomarit/stamity";
+
 /** Injected clock for manifest timestamps — the only wall-clock input emission has. */
 export const GOLDEN_NOW = new Date("2026-08-14T00:00:00.000Z");
 
@@ -204,6 +213,7 @@ export async function makeGoldenRepo(opts: {
       // fresh manifest, so the fixture reaches the MCP substrate through it.
       defaults: { mcpServers: [GOLDEN_MCP_SERVER_ID] },
       engineVersion: GOLDEN_ENGINE_VERSION,
+      packageName: GOLDEN_PACKAGE_NAME,
       dryRun: false,
       force: false,
       now: GOLDEN_NOW,

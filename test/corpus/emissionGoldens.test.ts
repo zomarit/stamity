@@ -30,6 +30,13 @@ import { TOOLS, type Tool } from "../../src/types/core.ts";
 import { loadCorpusIndex, walkAllMarkdown } from "./harness.ts";
 
 /**
+ * The package and version the core scripts' CLI hints pin (sw26-engine-cli-call-form,
+ * REQ-FLOW-002). Passed as a literal, not read from this checkout, so the bytes
+ * under test are the same in a renamed fork.
+ */
+const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
+
+/**
  * Emission goldens: the byte-level regression net over the kernel builders —
  * the catalog walk, the `.mdc` companions, the frontmatter round-trip,
  * substitution, the policy document, and the core hook scripts.
@@ -990,8 +997,8 @@ describe("emission goldens — hook scripts", () => {
   };
 
   it.each(TOOLS)("plans three deterministic scripts for %s on the portable event triple", (tool) => {
-    const scripts = planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, tool);
-    const again = planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, tool);
+    const scripts = planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, tool, CLI_PIN);
+    const again = planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, tool, CLI_PIN);
     // Determinism first: two plans produce byte-identical script bodies.
     expect(again.map((script) => script.content)).toEqual(scripts.map((script) => script.content));
 
@@ -1017,13 +1024,13 @@ describe("emission goldens — hook scripts", () => {
   });
 
   it("gives Claude the exit-2 role gate and identity-free clients explicit telemetry", () => {
-    const claudeGuard = at(planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, "claude"), 1);
+    const claudeGuard = at(planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, "claude", CLI_PIN), 1);
     expect(claudeGuard.content).toContain("Blocking client: a refusal exits 2 and the action stops.");
     expect(claudeGuard.content).toContain("const BLOCK_EXIT = 2;");
     expect(claudeGuard.content).toContain("const BLOCKING = true;");
 
     for (const tool of ["cursor", "copilot", "codex"] as const) {
-      const guard = at(planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, tool), 1);
+      const guard = at(planCoreHookScripts(POLICY_PATH_FROM_SCRIPT, tool, CLI_PIN), 1);
       expect(guard.content).toContain("its hook payload carries no calling-agent");
       expect(guard.content).toContain("this script does not enforce a role grant");
       expect(guard.content).toContain("const BLOCKING = false;");

@@ -36,7 +36,7 @@ exports[`emitted tree for all-four > matches the residue-document golden byte fo
         "hooks": [
           {
             "type": "command",
-            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\\" || { s=$?; [ \\"$s\\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }"
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\\" || { s=$?; [ \\"$s\\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run \`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`' >&2; exit 2; }"
           }
         ]
       },
@@ -132,21 +132,21 @@ args = ["-y", "mcp-remote@0.1.16", "https://api.githubcopilot.com/mcp/", "--head
 env_vars = ["GITHUB_PAT"]
 ",
   ".codex/hooks.json": "{
-  "description": "Stamity hooks. Three steps stand between this file and a hook the client runs. 1. Feature flag: \`features.hooks = true\` (deprecated alias \`features.codex_hooks\`); this file is not read while it is off. .codex/config.toml writes it explicitly, so the client's default does not decide it. The per-invocation equivalent is \`codex exec --enable hooks\`, which is shorthand for \`-c features.hooks=true\`. 2. Project trust: a project \`.codex/\` layer loads only when it is trusted. Record \`projects.<path>.trust_level = \\"trusted\\"\` in the Codex home config (\`~/.codex/config.toml\`), which is the operator's file and not one this engine writes. 3. Per-hook review: each hook is trusted by hash through the interactive \`/hooks\` command. Automation that cannot take that step runs \`--dangerously-bypass-hook-trust\`, which runs enabled hooks with no persisted trust. Key set: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15). Trust is recorded against this file's hash only: the hook script bytes under .stamity/generated/hooks/codex/ are outside it and can change without re-review, so stamity check is the control for them and for emitted-file drift generally. The role guard is telemetry because PreToolUse carries no agent identity.",
+  "description": "Stamity hooks. Three steps stand between this file and a hook the client runs. 1. Feature flag: \`features.hooks = true\` (deprecated alias \`features.codex_hooks\`); this file is not read while it is off. .codex/config.toml writes it explicitly, so the client's default does not decide it. The per-invocation equivalent is \`codex exec --enable hooks\`, which is shorthand for \`-c features.hooks=true\`. 2. Project trust: a project \`.codex/\` layer loads only when it is trusted. Record \`projects.<path>.trust_level = \\"trusted\\"\` in the Codex home config (\`~/.codex/config.toml\`), which is the operator's file and not one this engine writes. 3. Per-hook review: each hook is trusted by hash through the interactive \`/hooks\` command. Automation that cannot take that step runs \`--dangerously-bypass-hook-trust\`, which runs enabled hooks with no persisted trust. Key set: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15). Trust is recorded against this file's hash only: the hook script bytes under .stamity/generated/hooks/codex/ are outside it and can change without re-review, so the check verb (\`stamity check\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden check\`) is the control for them and for emitted-file drift generally. The role guard is telemetry because PreToolUse carries no agent identity.",
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
-            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
+            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
+            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
             "timeout": 30
           },
           {
             "type": "command",
-            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXSwidGltZW91dE1zIjozMDAwMH0",
-            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXSwidGltZW91dE1zIjozMDAwMH0",
+            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXSwidGltZW91dE1zIjozMDAwMH0",
+            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXSwidGltZW91dE1zIjozMDAwMH0",
             "timeout": 30
           }
         ]
@@ -157,8 +157,8 @@ env_vars = ["GITHUB_PAT"]
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jb2RleC9zdGFtaXR5LXByZS10b29sLXVzZS1ndWFyZC5tanMiXX0",
-            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jb2RleC9zdGFtaXR5LXByZS10b29sLXVzZS1ndWFyZC5tanMiXX0"
+            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jb2RleC9zdGFtaXR5LXByZS10b29sLXVzZS1ndWFyZC5tanMiXX0",
+            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jb2RleC9zdGFtaXR5LXByZS10b29sLXVzZS1ndWFyZC5tanMiXX0"
           }
         ]
       },
@@ -167,8 +167,8 @@ env_vars = ["GITHUB_PAT"]
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2hvb2tzL2d1YXJkLm1qcyJdLCJtYXRjaGVyIjoiQmFzaCIsInRpbWVvdXRNcyI6NTAwMH0",
-            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2hvb2tzL2d1YXJkLm1qcyJdLCJtYXRjaGVyIjoiQmFzaCIsInRpbWVvdXRNcyI6NTAwMH0",
+            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2hvb2tzL2d1YXJkLm1qcyJdLCJtYXRjaGVyIjoiQmFzaCIsInRpbWVvdXRNcyI6NTAwMH0",
+            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2hvb2tzL2d1YXJkLm1qcyJdLCJtYXRjaGVyIjoiQmFzaCIsInRpbWVvdXRNcyI6NTAwMH0",
             "timeout": 5
           }
         ]
@@ -227,9 +227,9 @@ env_vars = ["GITHUB_PAT"]
 //
 // A manifest that exists but does not parse is reported as its own refusal,
 // naming the path and the parser message — not folded into the absent case.
-// To stop the guard, change the selection (stamity config mcp add <id>, then
-// stamity sync) or deselect this client; editing .cursor/hooks.json does not
-// stick.
+// To stop the guard, change the selection — the refusals below name the two
+// calls, adding a server and then re-syncing — or deselect this client;
+// editing .cursor/hooks.json does not stick.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network
@@ -245,6 +245,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // one level up, and the operator's own file lives under the home directory.
 const MANIFESTS = [join(HERE, "..", "mcp.json"), join(homedir(), ".cursor", "mcp.json")];
 const TOOL_PREFIX = "mcp__";
+const SYNC_CALL = "\`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`";
+const MCP_ADD_CALL = "\`stamity config mcp add <id>\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden config mcp add <id>\`";
 
 function reasonOf(err) {
   if (err === null || err === undefined) return "unknown error";
@@ -366,15 +368,20 @@ if (allowed.size === 0 && faults.length > 0) {
     "Blocked every MCP call: no MCP manifest could be read, so there is no " +
       "allowlist to match against. Fix " +
       faultLine(faults) +
-      ", then re-run \`stamity sync\`.",
+      ", then re-run " +
+      SYNC_CALL +
+      ".",
   );
 } else if (allowed.size === 0) {
   deny(
     HOOK,
     { reasonCode: "NO_MCP_SERVERS_CONFIGURED", ...event },
     "Blocked every MCP call: this setup configured no MCP servers, so there is " +
-      "no allowlist to match against. Add one with \`stamity config mcp add <id>\` " +
-      "and re-run \`stamity sync\`.",
+      "no allowlist to match against. Add one with " +
+      MCP_ADD_CALL +
+      " and re-run " +
+      SYNC_CALL +
+      ".",
   );
 } else if (identity === "") {
   deny(
@@ -394,7 +401,10 @@ if (allowed.size === 0 && faults.length > 0) {
     'Blocked an MCP call to "' +
       identity +
       '": it is absent from the resolved .cursor/mcp.json set. Add it with ' +
-      "\`stamity config mcp add <id>\` and re-run \`stamity sync\`.",
+      MCP_ADD_CALL +
+      " and re-run " +
+      SYNC_CALL +
+      ".",
   );
 } else if (faults.length > 0) {
   // Allowed on the manifests that DID load. The broken one still cost the
@@ -440,6 +450,7 @@ const ROSTER = new Set([
   "stamity-spec-author",
   "stamity-test-runner"
 ]);
+const SYNC_CALL = "\`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`";
 
 function reasonOf(err) {
   if (err === null || err === undefined) return "unknown error";
@@ -500,7 +511,7 @@ if (agentId === "") {
     'Blocked the spawn of "' +
       agentId +
       '": no agent with that id ships in this setup, so it holds no tool policy. ' +
-      "Re-run \`stamity sync\` if the roster changed, or spawn one of: " +
+      "Re-run " + SYNC_CALL + " if the roster changed, or spawn one of: " +
       [...ROSTER].join(", ") +
       ".",
   );
@@ -1271,7 +1282,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/rules/stamity-security-patterns.md": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes",
   ".claude/rules/stamity-testing.md": "7481e2488317f64c22152c4e40011bf01bf2e941ae7d9eb7b28339040093bbe9 4246 bytes",
   ".claude/rules/stamity-ui-states.md": "07974fae66dbff2fff850084ff17447faa1cc3ce0a79fd128fbac77d47e69306 4512 bytes",
-  ".claude/settings.json": "2fb40f0d8b8a4628df339be64b8d29dd9c704ded9af9e4463dd4a7569faa6aa0 1991 bytes",
+  ".claude/settings.json": "a04f897f653a3b3970519dec33d71dc6ed9759c97fce4439952513058c0c5771 2070 bytes",
   ".claude/skills/st-browser-evidence/SKILL.md": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes",
   ".claude/skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760 177 bytes",
   ".claude/skills/st-dep-audit/SKILL.md": "eec8b04ca6e68a50ddb64ee0d3d9ac3dc55a7c415ca40628705420bf7389fc90 6757 bytes",
@@ -1312,7 +1323,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".codex/agents/stamity-spec-author.toml": "307fa2a37203ca01b5486e13713a852cc064cbd30f6db0a679c00ac65221e40b 12436 bytes",
   ".codex/agents/stamity-test-runner.toml": "7306436fce19f849ae8314bcf9ce15139147e4c408b1ab73d687318df8eebfbe 8477 bytes",
   ".codex/config.toml": "1599271aa6c95c63e3aaa3766ff1cf69c524432b2facf8eaab5dfc44287f2050 3328 bytes",
-  ".codex/hooks.json": "f4e70bf9c8fc6dc22e1897d2e27decc170e10dcbd5529f87469441abe98b8080 8424 bytes",
+  ".codex/hooks.json": "d928729cf95e643258b688adcb2565e12dfe6825de0f77e83a20cca20b4d3293 8753 bytes",
   ".cursor/agents/stamity-creator.md": "9cb2a22b302f230ad36e5c6b82fc703e2e5d5b510f4ed5771dd700e268391bbd 13732 bytes",
   ".cursor/agents/stamity-design-quality.md": "8d15885020c924ec59dfae77de3e3c542ba06236c2252a4b5f8100088c03e968 10497 bytes",
   ".cursor/agents/stamity-fixer.md": "80ddfa4c22088d6756d20ea2990465798cb95442bdc7e7694da153126422adf4 8367 bytes",
@@ -1324,8 +1335,8 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".cursor/agents/stamity-spec-author.md": "7f6bbe7cfa3a6f33f921eea7c138f6d6324c9a0bf91cd6466339b6e3197334da 11706 bytes",
   ".cursor/agents/stamity-test-runner.md": "73ccc6754c6586164663f4d89998152de901a531561286cb7fabb20494fe2039 7747 bytes",
   ".cursor/hooks.json": "5031f7452e229cdd728ee389a90c9b4d5d084a72294155e08b9f7273a2d13ac0 1505 bytes",
-  ".cursor/hooks/mcp-guard.mjs": "38ee2e45136fe56be2caeebbcc13825ee4190f3a30286f8dfbbd3d0e516c8982 7315 bytes",
-  ".cursor/hooks/subagent-guard.mjs": "e78bb0ab3c72b4ed4647ae7c21ad67c16623f455bfd5714c9481d3decb608eea 3617 bytes",
+  ".cursor/hooks/mcp-guard.mjs": "fb202a8a79c1792612e4827084ad7b0bc66f7eec8f49c042d0078c4f7432a3a9 7637 bytes",
+  ".cursor/hooks/subagent-guard.mjs": "6424c46bf5e3a390b26af88a8201fcebc7083aec40ca096e8e4d7efd7369d31a 3733 bytes",
   ".cursor/mcp.json": "3bd0d234eb9a7ee4eff8351d4236a3c22a03ef445538c411f68b9d1267bd3a8d 395 bytes",
   ".cursor/rules/stamity-ai-evals.mdc": "402253ef486f95a09da3f1d9fd1ee4147b90db1e742566fbd5c38f6170d6938b 4148 bytes",
   ".cursor/rules/stamity-api-versioning.mdc": "5f582c602434db96d06f806d24bc6e5b4c0b28542dba322c08c0b10db6aaa34f 5083 bytes",
@@ -1383,19 +1394,19 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".gitignore": "68e1915eebd166319591b48c27e069a555032539e8a3205aef245ac486a7e2c2 98 bytes",
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "d423255807751afda5b131b6c205e538ae966a05a31e51e4e45a40b2c39f908d 4426 bytes",
-  ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "9d62b6f1657a7424b5a48ff583bd4035ef59d059b902874ad9d8937dd015ccfc 2404 bytes",
+  ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs": "87fa5a6074083287304063b094c6319ad9ef1e84df9ee290f112d546368c8f7d 19146 bytes",
   ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "484205da3f598551e7ea16e6ca63cf9c3d555d4de52f0ff051e42d5d785dd2fc 40761 bytes",
   ".stamity/generated/hooks/claude/stamity-session-start.mjs": "a68274c9aa816fcf31d2ea265c08c7644690721992e88774443cbd538f8ea1a3 45395 bytes",
-  ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "9d62b6f1657a7424b5a48ff583bd4035ef59d059b902874ad9d8937dd015ccfc 2404 bytes",
+  ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "a3d56a00148160fab0ba2a681e7a1707c3a927c4d591e3191780275afc10bcb4 16979 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "a68274c9aa816fcf31d2ea265c08c7644690721992e88774443cbd538f8ea1a3 45395 bytes",
-  ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "9d62b6f1657a7424b5a48ff583bd4035ef59d059b902874ad9d8937dd015ccfc 2404 bytes",
+  ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "ffd7e07712ebe30b15499095cd630be5955bb338dde83d5b866be5855403eb67 16981 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "a68274c9aa816fcf31d2ea265c08c7644690721992e88774443cbd538f8ea1a3 45395 bytes",
-  ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "9d62b6f1657a7424b5a48ff583bd4035ef59d059b902874ad9d8937dd015ccfc 2404 bytes",
+  ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "e31a1895208126af91ff3519d5fa80c359b2fda69414c9ccb91680ff37f1d4cd 16980 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "a68274c9aa816fcf31d2ea265c08c7644690721992e88774443cbd538f8ea1a3 45395 bytes",
@@ -1403,7 +1414,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "1dbb511c900d995427803f75516ff66a6bd569820b49f15152770c0bfb127a48 71175 bytes",
+  ".stamity/manifest.json": "993c72989621f2e8f0eb0f3adc155d14f95c74ac9d0a080593d784f2410e9482 71175 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "de316fa2ecd20351ecf1604d8b84a1a80b674b305c60804cb26c867aa11fc87d 25306 bytes",
@@ -1459,7 +1470,7 @@ exports[`emitted tree for claude > matches the residue-document golden byte for 
         "hooks": [
           {
             "type": "command",
-            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\\" || { s=$?; [ \\"$s\\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }"
+            "command": "node \\"\${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\\" || { s=$?; [ \\"$s\\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run \`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`' >&2; exit 2; }"
           }
         ]
       },
@@ -1651,7 +1662,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/rules/stamity-security-patterns.md": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes",
   ".claude/rules/stamity-testing.md": "7481e2488317f64c22152c4e40011bf01bf2e941ae7d9eb7b28339040093bbe9 4246 bytes",
   ".claude/rules/stamity-ui-states.md": "07974fae66dbff2fff850084ff17447faa1cc3ce0a79fd128fbac77d47e69306 4512 bytes",
-  ".claude/settings.json": "2fb40f0d8b8a4628df339be64b8d29dd9c704ded9af9e4463dd4a7569faa6aa0 1991 bytes",
+  ".claude/settings.json": "a04f897f653a3b3970519dec33d71dc6ed9759c97fce4439952513058c0c5771 2070 bytes",
   ".claude/skills/st-browser-evidence/SKILL.md": "a4a40651590d8e03ae621c8a5ee7f71e904aeb87e54cff23ae1b2a4d26fd21c7 7343 bytes",
   ".claude/skills/st-browser-evidence/agents/openai.yaml": "b448baafcaa2f1b0d6c396b1ba98d733fd4424c546b545797ade81ab87efe760 177 bytes",
   ".claude/skills/st-dep-audit/SKILL.md": "eec8b04ca6e68a50ddb64ee0d3d9ac3dc55a7c415ca40628705420bf7389fc90 6757 bytes",
@@ -1685,7 +1696,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".gitignore": "68e1915eebd166319591b48c27e069a555032539e8a3205aef245ac486a7e2c2 98 bytes",
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "d423255807751afda5b131b6c205e538ae966a05a31e51e4e45a40b2c39f908d 4426 bytes",
-  ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "9d62b6f1657a7424b5a48ff583bd4035ef59d059b902874ad9d8937dd015ccfc 2404 bytes",
+  ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs": "87fa5a6074083287304063b094c6319ad9ef1e84df9ee290f112d546368c8f7d 19146 bytes",
   ".stamity/generated/hooks/claude/stamity-review-gate.mjs": "484205da3f598551e7ea16e6ca63cf9c3d555d4de52f0ff051e42d5d785dd2fc 40761 bytes",
   ".stamity/generated/hooks/claude/stamity-session-start.mjs": "a68274c9aa816fcf31d2ea265c08c7644690721992e88774443cbd538f8ea1a3 45395 bytes",
@@ -1693,7 +1704,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "a9cc95f4dbe6b0f18235612415ae672fa2aea121af2f52659139c989929c4ad2 18404 bytes",
+  ".stamity/manifest.json": "196073e423b282fd333b845bcdfc8cde0d0e5e22bee452933148493f90cb8cf1 18404 bytes",
   "AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -1758,21 +1769,21 @@ args = ["-y", "mcp-remote@0.1.16", "https://api.githubcopilot.com/mcp/", "--head
 env_vars = ["GITHUB_PAT"]
 ",
   ".codex/hooks.json": "{
-  "description": "Stamity hooks. Three steps stand between this file and a hook the client runs. 1. Feature flag: \`features.hooks = true\` (deprecated alias \`features.codex_hooks\`); this file is not read while it is off. .codex/config.toml writes it explicitly, so the client's default does not decide it. The per-invocation equivalent is \`codex exec --enable hooks\`, which is shorthand for \`-c features.hooks=true\`. 2. Project trust: a project \`.codex/\` layer loads only when it is trusted. Record \`projects.<path>.trust_level = \\"trusted\\"\` in the Codex home config (\`~/.codex/config.toml\`), which is the operator's file and not one this engine writes. 3. Per-hook review: each hook is trusted by hash through the interactive \`/hooks\` command. Automation that cannot take that step runs \`--dangerously-bypass-hook-trust\`, which runs enabled hooks with no persisted trust. Key set: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15). Trust is recorded against this file's hash only: the hook script bytes under .stamity/generated/hooks/codex/ are outside it and can change without re-review, so stamity check is the control for them and for emitted-file drift generally. The role guard is telemetry because PreToolUse carries no agent identity.",
+  "description": "Stamity hooks. Three steps stand between this file and a hook the client runs. 1. Feature flag: \`features.hooks = true\` (deprecated alias \`features.codex_hooks\`); this file is not read while it is off. .codex/config.toml writes it explicitly, so the client's default does not decide it. The per-invocation equivalent is \`codex exec --enable hooks\`, which is shorthand for \`-c features.hooks=true\`. 2. Project trust: a project \`.codex/\` layer loads only when it is trusted. Record \`projects.<path>.trust_level = \\"trusted\\"\` in the Codex home config (\`~/.codex/config.toml\`), which is the operator's file and not one this engine writes. 3. Per-hook review: each hook is trusted by hash through the interactive \`/hooks\` command. Automation that cannot take that step runs \`--dangerously-bypass-hook-trust\`, which runs enabled hooks with no persisted trust. Key set: learn.chatgpt.com/docs/config-file/config-reference (accessed 2026-09-15). Trust is recorded against this file's hash only: the hook script bytes under .stamity/generated/hooks/codex/ are outside it and can change without re-review, so the check verb (\`stamity check\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden check\`) is the control for them and for emitted-file drift generally. The role guard is telemetry because PreToolUse carries no agent identity.",
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
-            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
+            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
+            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1zZXNzaW9uLXN0YXJ0Lm1qcyJdLCJ0aW1lb3V0TXMiOjMwMDAwfQ",
             "timeout": 30
           },
           {
             "type": "command",
-            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXSwidGltZW91dE1zIjozMDAwMH0",
-            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXSwidGltZW91dE1zIjozMDAwMH0",
+            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXSwidGltZW91dE1zIjozMDAwMH0",
+            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InNlc3Npb25fc3RhcnQiLCJjb21tYW5kIjpbIm5vZGUiLCIuc3RhbWl0eS9nZW5lcmF0ZWQvaG9va3MvY29kZXgvc3RhbWl0eS1jb25maWctdGFtcGVyLW5vdGljZS5tanMiXSwidGltZW91dE1zIjozMDAwMH0",
             "timeout": 30
           }
         ]
@@ -1783,8 +1794,8 @@ env_vars = ["GITHUB_PAT"]
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jb2RleC9zdGFtaXR5LXByZS10b29sLXVzZS1ndWFyZC5tanMiXX0",
-            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jb2RleC9zdGFtaXR5LXByZS10b29sLXVzZS1ndWFyZC5tanMiXX0"
+            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jb2RleC9zdGFtaXR5LXByZS10b29sLXVzZS1ndWFyZC5tanMiXX0",
+            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2dlbmVyYXRlZC9ob29rcy9jb2RleC9zdGFtaXR5LXByZS10b29sLXVzZS1ndWFyZC5tanMiXX0"
           }
         ]
       },
@@ -1793,8 +1804,8 @@ env_vars = ["GITHUB_PAT"]
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2hvb2tzL2d1YXJkLm1qcyJdLCJtYXRjaGVyIjoiQmFzaCIsInRpbWVvdXRNcyI6NTAwMH0",
-            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run stamity sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2hvb2tzL2d1YXJkLm1qcyJdLCJtYXRjaGVyIjoiQmFzaCIsInRpbWVvdXRNcyI6NTAwMH0",
+            "command": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2hvb2tzL2d1YXJkLm1qcyJdLCJtYXRjaGVyIjoiQmFzaCIsInRpbWVvdXRNcyI6NTAwMH0",
+            "commandWindows": "node -e \\"const fs=require('node:fs'),p=require('node:path'),cp=require('node:child_process');let d=process.cwd();for(;;){if(fs.existsSync(p.join(d,'.codex','hooks.json'))){const f=p.join(d,'.stamity/generated/hooks/codex/stamity-portable-hook.mjs');if(!fs.existsSync(f)){process.stderr.write('Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync');process.exitCode=1;break;}const r=cp.spawnSync(process.execPath,[f,...process.argv.slice(1)],{stdio:'inherit'});process.exitCode=r.status??1;break;}const up=p.dirname(d);if(up===d){process.stderr.write('Stamity hook project root not found');process.exitCode=1;break;}d=up;}\\" eyJldmVudCI6InByZV90b29sX3VzZSIsImNvbW1hbmQiOlsibm9kZSIsIi5zdGFtaXR5L2hvb2tzL2d1YXJkLm1qcyJdLCJtYXRjaGVyIjoiQmFzaCIsInRpbWVvdXRNcyI6NTAwMH0",
             "timeout": 5
           }
         ]
@@ -2401,11 +2412,11 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".codex/agents/stamity-spec-author.toml": "307fa2a37203ca01b5486e13713a852cc064cbd30f6db0a679c00ac65221e40b 12436 bytes",
   ".codex/agents/stamity-test-runner.toml": "7306436fce19f849ae8314bcf9ce15139147e4c408b1ab73d687318df8eebfbe 8477 bytes",
   ".codex/config.toml": "1599271aa6c95c63e3aaa3766ff1cf69c524432b2facf8eaab5dfc44287f2050 3328 bytes",
-  ".codex/hooks.json": "f4e70bf9c8fc6dc22e1897d2e27decc170e10dcbd5529f87469441abe98b8080 8424 bytes",
+  ".codex/hooks.json": "d928729cf95e643258b688adcb2565e12dfe6825de0f77e83a20cca20b4d3293 8753 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".gitignore": "68e1915eebd166319591b48c27e069a555032539e8a3205aef245ac486a7e2c2 98 bytes",
   ".stamity/generated/agent-tool-policies.json": "d423255807751afda5b131b6c205e538ae966a05a31e51e4e45a40b2c39f908d 4426 bytes",
-  ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "9d62b6f1657a7424b5a48ff583bd4035ef59d059b902874ad9d8937dd015ccfc 2404 bytes",
+  ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "a3d56a00148160fab0ba2a681e7a1707c3a927c4d591e3191780275afc10bcb4 16979 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "a68274c9aa816fcf31d2ea265c08c7644690721992e88774443cbd538f8ea1a3 45395 bytes",
@@ -2413,7 +2424,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "df83617a7dfc6eca30a7f582e3eee9a1d32c812d22f222a369ab45f509bc329c 15677 bytes",
+  ".stamity/manifest.json": "372be211234e1d4d1e19080744f398917632c40f7d07aee00597181cecf4ce2a 15677 bytes",
   "AGENTS.md": "de316fa2ecd20351ecf1604d8b84a1a80b674b305c60804cb26c867aa11fc87d 25306 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
@@ -2687,7 +2698,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".github/workflows/copilot-setup-steps.yml": "ecbfbddf199468b9cb2bad4e811b6d1b9eef4d810dfb64267a9ec3f4edc4fc9f 881 bytes",
   ".gitignore": "68e1915eebd166319591b48c27e069a555032539e8a3205aef245ac486a7e2c2 98 bytes",
   ".stamity/generated/agent-tool-policies.json": "d423255807751afda5b131b6c205e538ae966a05a31e51e4e45a40b2c39f908d 4426 bytes",
-  ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "9d62b6f1657a7424b5a48ff583bd4035ef59d059b902874ad9d8937dd015ccfc 2404 bytes",
+  ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "ffd7e07712ebe30b15499095cd630be5955bb338dde83d5b866be5855403eb67 16981 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "a68274c9aa816fcf31d2ea265c08c7644690721992e88774443cbd538f8ea1a3 45395 bytes",
@@ -2695,7 +2706,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "ef8495abf18a34e8a961cc6bb47b62ad5a6c578b877b1d5a61f1de3339c52549 19055 bytes",
+  ".stamity/manifest.json": "7b1dcaf5425d54d5be9e7cfc316cf443bed8facbce3f5881d5ea03ba593bc10b 19055 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
@@ -2764,9 +2775,9 @@ exports[`emitted tree for cursor > matches the residue-document golden byte for 
 //
 // A manifest that exists but does not parse is reported as its own refusal,
 // naming the path and the parser message — not folded into the absent case.
-// To stop the guard, change the selection (stamity config mcp add <id>, then
-// stamity sync) or deselect this client; editing .cursor/hooks.json does not
-// stick.
+// To stop the guard, change the selection — the refusals below name the two
+// calls, adding a server and then re-syncing — or deselect this client;
+// editing .cursor/hooks.json does not stick.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network
@@ -2782,6 +2793,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // one level up, and the operator's own file lives under the home directory.
 const MANIFESTS = [join(HERE, "..", "mcp.json"), join(homedir(), ".cursor", "mcp.json")];
 const TOOL_PREFIX = "mcp__";
+const SYNC_CALL = "\`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`";
+const MCP_ADD_CALL = "\`stamity config mcp add <id>\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden config mcp add <id>\`";
 
 function reasonOf(err) {
   if (err === null || err === undefined) return "unknown error";
@@ -2903,15 +2916,20 @@ if (allowed.size === 0 && faults.length > 0) {
     "Blocked every MCP call: no MCP manifest could be read, so there is no " +
       "allowlist to match against. Fix " +
       faultLine(faults) +
-      ", then re-run \`stamity sync\`.",
+      ", then re-run " +
+      SYNC_CALL +
+      ".",
   );
 } else if (allowed.size === 0) {
   deny(
     HOOK,
     { reasonCode: "NO_MCP_SERVERS_CONFIGURED", ...event },
     "Blocked every MCP call: this setup configured no MCP servers, so there is " +
-      "no allowlist to match against. Add one with \`stamity config mcp add <id>\` " +
-      "and re-run \`stamity sync\`.",
+      "no allowlist to match against. Add one with " +
+      MCP_ADD_CALL +
+      " and re-run " +
+      SYNC_CALL +
+      ".",
   );
 } else if (identity === "") {
   deny(
@@ -2931,7 +2949,10 @@ if (allowed.size === 0 && faults.length > 0) {
     'Blocked an MCP call to "' +
       identity +
       '": it is absent from the resolved .cursor/mcp.json set. Add it with ' +
-      "\`stamity config mcp add <id>\` and re-run \`stamity sync\`.",
+      MCP_ADD_CALL +
+      " and re-run " +
+      SYNC_CALL +
+      ".",
   );
 } else if (faults.length > 0) {
   // Allowed on the manifests that DID load. The broken one still cost the
@@ -2977,6 +2998,7 @@ const ROSTER = new Set([
   "stamity-spec-author",
   "stamity-test-runner"
 ]);
+const SYNC_CALL = "\`stamity sync\` where the CLI is installed, else \`npx -y @zomarit/stamity@1.0.0-golden sync\`";
 
 function reasonOf(err) {
   if (err === null || err === undefined) return "unknown error";
@@ -3037,7 +3059,7 @@ if (agentId === "") {
     'Blocked the spawn of "' +
       agentId +
       '": no agent with that id ships in this setup, so it holds no tool policy. ' +
-      "Re-run \`stamity sync\` if the roster changed, or spawn one of: " +
+      "Re-run " + SYNC_CALL + " if the roster changed, or spawn one of: " +
       [...ROSTER].join(", ") +
       ".",
   );
@@ -3194,8 +3216,8 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".cursor/agents/stamity-spec-author.md": "7f6bbe7cfa3a6f33f921eea7c138f6d6324c9a0bf91cd6466339b6e3197334da 11706 bytes",
   ".cursor/agents/stamity-test-runner.md": "73ccc6754c6586164663f4d89998152de901a531561286cb7fabb20494fe2039 7747 bytes",
   ".cursor/hooks.json": "5031f7452e229cdd728ee389a90c9b4d5d084a72294155e08b9f7273a2d13ac0 1505 bytes",
-  ".cursor/hooks/mcp-guard.mjs": "38ee2e45136fe56be2caeebbcc13825ee4190f3a30286f8dfbbd3d0e516c8982 7315 bytes",
-  ".cursor/hooks/subagent-guard.mjs": "e78bb0ab3c72b4ed4647ae7c21ad67c16623f455bfd5714c9481d3decb608eea 3617 bytes",
+  ".cursor/hooks/mcp-guard.mjs": "fb202a8a79c1792612e4827084ad7b0bc66f7eec8f49c042d0078c4f7432a3a9 7637 bytes",
+  ".cursor/hooks/subagent-guard.mjs": "6424c46bf5e3a390b26af88a8201fcebc7083aec40ca096e8e4d7efd7369d31a 3733 bytes",
   ".cursor/mcp.json": "3bd0d234eb9a7ee4eff8351d4236a3c22a03ef445538c411f68b9d1267bd3a8d 395 bytes",
   ".cursor/rules/stamity-ai-evals.mdc": "402253ef486f95a09da3f1d9fd1ee4147b90db1e742566fbd5c38f6170d6938b 4148 bytes",
   ".cursor/rules/stamity-api-versioning.mdc": "5f582c602434db96d06f806d24bc6e5b4c0b28542dba322c08c0b10db6aaa34f 5083 bytes",
@@ -3221,7 +3243,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
   ".gitignore": "68e1915eebd166319591b48c27e069a555032539e8a3205aef245ac486a7e2c2 98 bytes",
   ".stamity/generated/agent-tool-policies.json": "d423255807751afda5b131b6c205e538ae966a05a31e51e4e45a40b2c39f908d 4426 bytes",
-  ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "9d62b6f1657a7424b5a48ff583bd4035ef59d059b902874ad9d8937dd015ccfc 2404 bytes",
+  ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "ea716f5885658bbac0993fb5b260290e7d55609cf0718c5bff634cfd8885600d 2607 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "e31a1895208126af91ff3519d5fa80c359b2fda69414c9ccb91680ff37f1d4cd 16980 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "a68274c9aa816fcf31d2ea265c08c7644690721992e88774443cbd538f8ea1a3 45395 bytes",
@@ -3229,7 +3251,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "fadc840d8d5143996574f675a732e2a9684699ba2059b9105ddc9bca4bc5f908 18677 bytes",
+  ".stamity/manifest.json": "da5cd58ef90291dfe12d743f788152ad8b6f846abda0080bf3205773a0d629b5 18677 bytes",
   "AGENTS.md": "6d985b9140e107db4df0a236a0d1830f102c24bea15836872301ab23bdff5067 5276 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

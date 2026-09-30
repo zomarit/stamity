@@ -12,6 +12,7 @@ import {
   type InitPanelInput,
 } from "../../../src/cli/commands/init/panel.ts";
 import { REQUIRED_GITIGNORE_ENTRIES } from "../../../src/mcp/env.ts";
+import { npxCommand } from "../../support/identity.ts";
 import type { InitDecisions } from "../../../src/cli/commands/init/plan.ts";
 import { makePalette } from "../../../src/cli/kit/terminal.ts";
 import { suggestStackPacks, type StackSuggestion } from "../../../src/detect/stackSupport.ts";
@@ -273,7 +274,10 @@ describe("renderInitPanel — disclosure line", () => {
       }),
     );
     expect(output).toContain("detected typescript, claude traces -> installed claude (2 file(s))");
-    expect(output).toContain("(tier: solo, change with `stamity config`)");
+    // TEST CHANGE (sw26-engine-cli-call-form, REQ-FLOW-002): the change
+    // instruction names the pinned npx call instead of a bare `stamity config`
+    // that only a global install provides. Same claim, the runnable spelling.
+    expect(output).toContain(`(tier: solo, change with \`${npxCommand("config")}\`)`);
   });
 
   it("carries the maturity tier as a fact with its change instruction", () => {
@@ -281,7 +285,8 @@ describe("renderInitPanel — disclosure line", () => {
       panelInput({ decisions: decisionsFixture({ maturityTier: "team" }) }),
     );
 
-    expect(output).toContain("(tier: team, change with `stamity config`)");
+    // TEST CHANGE (sw26-engine-cli-call-form): the pinned call, as above.
+    expect(output).toContain(`(tier: team, change with \`${npxCommand("config")}\`)`);
     // The tier is a calibration dial, never a gate on content admission: the
     // line may not suggest it selected, filtered, or withheld anything.
     expect(output).not.toMatch(/tier[^\n]*\b(?:selected|filtered|withheld|excluded)\b/i);
@@ -475,7 +480,9 @@ describe("renderInitPanel — migration summary", () => {
     // regenerate after, and the one thing no regeneration reaches — which is why
     // the commit instruction is stated rather than left implied.
     expect(output).toContain("preview mode first");
-    expect(output).toContain("`stamity sync` writes it back from the corpus");
+    // TEST CHANGE (sw26-engine-cli-call-form): the regenerate step names the
+    // pinned npx call; the ordering claim is unchanged.
+    expect(output).toContain(`\`${npxCommand("sync")}\` writes it back from the corpus`);
     expect(output).toContain("commit this repo before you run it");
     expect(output).toContain("offering to reinstall the old setup, decline");
     // Same discipline the residue line established: no predecessor verb is
@@ -504,7 +511,9 @@ describe("renderInitPanel — migration summary", () => {
     expect(output).toContain("left in place: 2 predecessor path(s)");
     expect(output).toContain("one of those paths is live wiring: .claude/settings.json");
     expect(output).toContain("installed none of its own hook or permission settings");
-    expect(output).toContain("remove it and run `stamity sync`");
+    // TEST CHANGE (sw26-engine-cli-call-form): the remedy names the pinned
+    // npx call instead of a bare verb.
+    expect(output).toContain(`remove it and run \`${npxCommand("sync")}\``);
     // The half this run cannot verify stays conditional: it knows the file
     // predates the run and that the run did not write it, not who authored it.
     expect(output).toContain("If it is the previous setup's rather than yours");
@@ -680,12 +689,18 @@ describe("renderInitPanel — stack suggestions", () => {
 
   it("names the installable pack once one exists, and keeps the block above next steps", () => {
     const withPack: StackSuggestion[] = [
-      { name: "next", kind: "framework", tier: "partial", action: "Install the nextjs pack: stamity add nextjs", packId: "nextjs" },
+      { name: "next", kind: "framework", tier: "partial", action: "Install the nextjs pack", packId: "nextjs" },
     ];
 
     const output = renderInitPanel(panelInput({ stackSuggestions: withPack }));
 
-    expect(suggestionBlock(output)[0]).toContain("stamity add nextjs");
+    // TEST CHANGE (sw26-engine-cli-call-form): the suggestion's action no longer
+    // carries a bare `stamity add` — detection cannot know the package or its
+    // version — and the panel appends the pinned install call from the packId.
+    // Same claim: an installable pack prints a copy-pasteable install line.
+    expect(suggestionBlock(output)[0]).toBe(
+      `  next (framework) — Install the nextjs pack: ${npxCommand("add nextjs")}`,
+    );
     // Ordering: the last thing on screen stays the first thing to do.
     expect(output.indexOf("detected stacks with no dedicated")).toBeLessThan(
       output.indexOf("next steps:"),
@@ -734,7 +749,10 @@ describe("renderInitPanel — next steps", () => {
     // A new section must not displace the ones a user has to read: a skipped
     // write under a "ready" headline is how a repo goes quietly red.
     expect(output).toContain("-> installed");
-    expect(output).toContain("(tier: solo, change with `stamity config`)");
+    // TEST CHANGE (sw26-engine-cli-call-form, REQ-FLOW-002): the change
+    // instruction names the pinned npx call instead of a bare `stamity config`
+    // that only a global install provides. Same claim, the runnable spelling.
+    expect(output).toContain(`(tier: solo, change with \`${npxCommand("config")}\`)`);
     expect(output).toContain("migrated: 2 learning(s) carried");
     expect(output).toContain("security:");
     expect(output).toContain("warning: b.md is user-owned - left alone");
@@ -775,5 +793,38 @@ describe("renderInitPanel — REQ-FLOW-007 gate pins", () => {
     const output = renderInitPanel(panelInput());
 
     expect(output).not.toContain("gates pinned");
+  });
+});
+
+describe("renderInitPanel — the CLI call form (REQ-FLOW-002)", () => {
+  /** A bare call: `stamity <verb>` not preceded by a word, scope, path or version character. */
+  const BARE_CALL =
+    /(?<![\w@/.:-])stamity (init|sync|check|add|clean|config|learn|handoff|ledger|validate|workspace|worktree|plugin)\b/;
+
+  it("prints no bare CLI call on its fullest render", () => {
+    // Every branch that names a verb: the tier line, the predecessor residue
+    // with its live-wiring line, and an installable stack suggestion. The
+    // panel prints before the operator's first agent turn, and a bare verb
+    // there fails on the documented `npx` setup, which installs no binary.
+    const output = renderInitPanel(
+      panelInput({
+        carry: carryFixture(),
+        residue: {
+          paths: ["/repo/.prior", ".claude/settings.json"],
+          unownedSettingsPath: ".claude/settings.json",
+        },
+        stackSuggestions: [
+          { name: "next", kind: "framework", tier: "partial", action: "Install the nextjs pack", packId: "nextjs" },
+        ],
+      }),
+    );
+
+    // Activated: every verb-bearing branch rendered, each with the pinned call.
+    expect(output).toContain(npxCommand("config"));
+    expect(output).toContain(npxCommand("check"));
+    expect(output).toContain(npxCommand("sync"));
+    expect(output).toContain(npxCommand("add nextjs"));
+    const bare = output.split("\n").filter((line) => BARE_CALL.test(line));
+    expect(bare).toEqual([]);
   });
 });

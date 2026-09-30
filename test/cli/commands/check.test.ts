@@ -604,9 +604,12 @@ describe("check — an un-initialised repository", () => {
 
       expect(result.code).toBe(1);
       // Both seams: the manifest doctor row and the closing next-steps block.
-      expect(result.stdout).toContain("npx @acme/stamity init");
-      expect(result.stdout).toContain("npx @acme/stamity init — this repository has no usable");
-      expect(result.stdout).not.toContain("npx @zomarit/stamity");
+      // TEST CHANGE (sw26-engine-cli-call-form, REQ-FLOW-002): the remedy is the
+      // pinned call — the fork's name AND its version — and the negative widens
+      // to any canonical spelling, pinned or not.
+      expect(result.stdout).toContain("npx -y @acme/stamity@1.8.0 init");
+      expect(result.stdout).toContain("npx -y @acme/stamity@1.8.0 init — this repository has no usable");
+      expect(result.stdout).not.toContain("@zomarit/stamity");
     } finally {
       vi.doUnmock("../../../src/shared/paths.ts");
       vi.resetModules();
@@ -1205,7 +1208,9 @@ describe("check — installed pack integrity", () => {
 
     // The next-step block must not send the operator to the verb that spreads it.
     const nextBlock = human.stdout.slice(human.stdout.indexOf("next:"));
-    expect(nextBlock).toContain("stamity clean --pack");
+    // TEST CHANGE (sw26-engine-cli-call-form): the remedy is `packageCommand`'s
+    // pinned call, so `stamity clean` no longer reads as one substring.
+    expect(nextBlock).toContain(npxCommand("clean --pack"));
     expect(nextBlock).toContain("do not run sync first");
   });
 
@@ -1267,7 +1272,8 @@ describe("check — a drift gate that cannot run", () => {
     const error = doc.error as { code: string; message: string; why: string; next: string };
     expect(error.message).toContain("could not evaluate drift");
     expect(error.why.length).toBeGreaterThan(0);
-    expect(error.next).toContain("stamity check");
+    // TEST CHANGE (sw26-engine-cli-call-form): the pinned re-run call.
+    expect(error.next).toContain(npxCommand("check"));
   });
 
   it("never prints `all green` while the run exits non-zero, and names the stopped mechanism", async () => {

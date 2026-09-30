@@ -7,6 +7,12 @@ import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE } fr
 import type { HookInterchange } from "../../src/hooks/model.ts";
 import type { Tool } from "../../src/types/core.ts";
 
+/**
+ * The pinned sync call the Codex starter names when the hook script is missing
+ * (sw26-engine-cli-call-form, REQ-FLOW-002): Codex's rendering requires one.
+ */
+const SYNC = { syncCall: "npx -y @zomarit/stamity@1.0.0-golden sync" };
+
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
 
@@ -137,7 +143,7 @@ describe("portable native hook boundary", () => {
     const f = await fixture("codex", output({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny" } }));
     const nested = join(f.root, "packages", "deep directory");
     await mkdir(nested, { recursive: true });
-    const result = spawnSync(portableHookCommand("codex", f.hook), { cwd: nested, shell: true, input: "{}", encoding: "utf8" });
+    const result = spawnSync(portableHookCommand("codex", f.hook, SYNC), { cwd: nested, shell: true, input: "{}", encoding: "utf8" });
     expect(result.stderr).toBe("");
     expect(result.status).toBe(0);
     expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe("deny");
@@ -165,7 +171,7 @@ describe("portable native hook boundary", () => {
     await writeFile(join(decoyRunner, PORTABLE_RUNNER_FILE), buildPortableHookRunner("codex"));
 
     // shell: false and node:path composition, so the Windows leg runs this too.
-    const starter = portableHookCommand("codex", f.hook);
+    const starter = portableHookCommand("codex", f.hook, SYNC);
     const program = /^node -e "(.*)" ([A-Za-z0-9_-]+)$/s.exec(starter);
     expect(program, starter).not.toBeNull();
     const nested = join(project, "packages", "deep directory");
@@ -183,7 +189,7 @@ describe("portable native hook boundary", () => {
     const f = await fixture("codex", output({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny" } }));
     const orphan = await mkdtemp(join(tmpdir(), "stamity-hook-orphan-"));
     roots.push(orphan);
-    const starter = portableHookCommand("codex", f.hook);
+    const starter = portableHookCommand("codex", f.hook, SYNC);
     const program = /^node -e "(.*)" ([A-Za-z0-9_-]+)$/s.exec(starter);
     const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!], {
       cwd: orphan, shell: false, input: "{}", encoding: "utf8",
@@ -191,6 +197,36 @@ describe("portable native hook boundary", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Stamity hook project root not found");
     expect(result.stdout).toBe("");
+  });
+
+  it("names the pinned sync call when the script beside .codex/hooks.json is missing", async () => {
+    // G3: the starter lives in `.codex/hooks.json`, so its remedy is the pinned
+    // call — a bare `stamity sync` there fails on the documented npx setup.
+    const project = await mkdtemp(join(tmpdir(), "stamity-hook-missing-"));
+    roots.push(project);
+    await mkdir(join(project, ".codex"), { recursive: true });
+    await writeFile(join(project, ".codex", "hooks.json"), "{}\n");
+    const hook: HookInterchange = { event: "pre_tool_use", command: ["node", "check.mjs"] };
+    const starter = portableHookCommand("codex", hook, SYNC);
+    const program = /^node -e "(.*)" ([A-Za-z0-9_-]+)$/s.exec(starter);
+    expect(program, starter).not.toBeNull();
+    const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!], {
+      cwd: project, shell: false, input: "{}", encoding: "utf8",
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toBe(
+      "Stamity hook script missing beside .codex/hooks.json; run npx -y @zomarit/stamity@1.0.0-golden sync",
+    );
+  });
+
+  it("refuses to render the Codex starter without a pinned sync call, or with one carrying shell syntax", () => {
+    const hook: HookInterchange = { event: "pre_tool_use", command: ["node", "check.mjs"] };
+    expect(() => portableHookCommand("codex", hook)).toThrow(/pinned sync call/);
+    for (const syncCall of ['npx -y "x" sync', "npx -y $(touch pwned) sync", "npx -y `id` sync", "npx -y %PATH% sync"]) {
+      expect(() => portableHookCommand("codex", hook, { syncCall }), syncCall).toThrow(/pinned sync call/);
+    }
+    // The other clients never render the starter, so they need no call.
+    expect(portableHookCommand("cursor", hook)).toContain(".stamity/generated/hooks/cursor/");
   });
 
   it.each(["cursor", "copilot", "codex"] as const)("%s preserves denial exits and reports child errors", async (tool) => {
@@ -354,7 +390,7 @@ describe("portable native hook boundary", () => {
 
   it("keeps shell metacharacters inside encoded argv and locates Codex's initialized project", () => {
     const hook: HookInterchange = { event: "pre_tool_use", command: ["node", "path with space.mjs", "$(touch should-not-exist)"] };
-    const command = portableHookCommand("codex", hook);
+    const command = portableHookCommand("codex", hook, SYNC);
     expect(command).toContain("process.cwd()");
     expect(command).not.toContain("touch should-not-exist");
   });
@@ -370,7 +406,8 @@ describe("plugin-rooted rows", () => {
     (tool) => {
       const row: HookInterchange = { event: "session_start", command: ["node", `${REF}/stamity-session-start.mjs`] };
 
-      const command = portableHookCommand(tool, row);
+      // SYNC is required for Codex only; a plugin row never reaches the starter.
+      const command = portableHookCommand(tool, row, SYNC);
 
       // The root variable already locates the script, so Codex's project walk —
       // the one thing that differs between the clients in repository mode — has
@@ -387,7 +424,7 @@ describe("plugin-rooted rows", () => {
   it("leaves a repository-rooted row on the repository runner for every client", () => {
     const row: HookInterchange = { event: "session_start", command: ["node", ".stamity/hooks/run.mjs"] };
     expect(portableHookCommand("cursor", row)).toContain(".stamity/generated/hooks/cursor/");
-    expect(portableHookCommand("codex", row)).toContain("node -e ");
+    expect(portableHookCommand("codex", row, SYNC)).toContain("node -e ");
   });
 
   it.each([

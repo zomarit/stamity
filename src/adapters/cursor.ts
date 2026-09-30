@@ -30,6 +30,7 @@ import {
   substituteCliTokens,
   substituteRepoTokens,
   substituteVerificationGateTokens,
+  type CliCallContext,
 } from "../emit/substitution.ts";
 import { CANONICAL_HOOK_EVENTS, type CanonicalHookEvent, type HookInterchange } from "../hooks/model.ts";
 import { IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS } from "../hooks/scripts.ts";
@@ -45,6 +46,7 @@ import {
   type EffortMap,
   type ModelPinMap,
 } from "../roster/modelLadder.ts";
+import { cliCallHint } from "../shared/cliCall.ts";
 import {
   substituteCanonicalPlatformMarker,
   toCursorReadonlyFrontmatter,
@@ -483,12 +485,12 @@ export const cursorResiduePlanner: ResiduePlanner = {
         // roster row would otherwise be denied at the spawn guard while its own
         // file sits in `.cursor/agents/` inviting the spawn — a refusal the
         // operator cannot act on, since the id IS installed.
-        content: buildSubagentGuardScript(spawnable),
+        content: buildSubagentGuardScript(spawnable, cliCallContextOf(ctx)),
         owner: { adapter: "cursor", artifactId: ARTIFACT_IDS.subagentGuard, artifactType: "infra" },
       },
       {
         path: MCP_GUARD_PATH,
-        content: buildMcpGuardScript(),
+        content: buildMcpGuardScript(cliCallContextOf(ctx)),
         owner: { adapter: "cursor", artifactId: ARTIFACT_IDS.mcpGuard, artifactType: "infra" },
       },
       {
@@ -1010,8 +1012,12 @@ const ALLOW_HELPER = `function allow() {
  * the reason. Silent was the defect: `failClosed: true` covers a crash, and a
  * guard that returned an empty payload never crashed, so the allowlist became a
  * no-op with no signal anywhere while the header claimed the opposite.
+ *
+ * `cli` is the package and version the refusal's re-sync hint pins
+ * ({@link cliCallHint}): a bare `stamity sync` in a refusal the model reads
+ * back fails on the documented `npx` setup, which installs no binary.
  */
-export function buildSubagentGuardScript(roster: readonly string[]): string {
+export function buildSubagentGuardScript(roster: readonly string[], cli: CliCallContext): string {
   const ids = [...new Set(roster)].toSorted();
   return `${guardHeader([
     "stamity — sub-agent spawn guard.",
@@ -1030,6 +1036,7 @@ import { readFileSync } from "node:fs";
 
 const NAMESPACE = ${JSON.stringify(CONTENT_PREFIX)};
 const ROSTER = new Set(${JSON.stringify(ids, null, 2)});
+const SYNC_CALL = ${JSON.stringify(cliCallHint(cli.packageName, cli.version, "sync"))};
 
 ${REASON_HELPER}
 
@@ -1061,7 +1068,7 @@ if (agentId === "") {
     'Blocked the spawn of "' +
       agentId +
       '": no agent with that id ships in this setup, so it holds no tool policy. ' +
-      "Re-run \`stamity sync\` if the roster changed, or spawn one of: " +
+      "Re-run " + SYNC_CALL + " if the roster changed, or spawn one of: " +
       [...ROSTER].join(", ") +
       ".",
   );
@@ -1100,12 +1107,14 @@ if (agentId === "") {
  *
  * NEXT STEPS ARE DURABLE ONES. The refusals name what an operator can change
  * and keep: the selection (`stamity config mcp add <id>`) followed by
- * `stamity sync`. Deleting the entry from `.cursor/hooks.json` is not on that
- * list — the next sync rewrites the file and `stamity check` reports the edit as
- * drift until it does, which is the advice the generated header four lines
- * above already gives.
+ * `stamity sync`, each as {@link cliCallHint} spells it for `cli` — the
+ * installed form and the pinned npx fallback — because the documented `npx`
+ * setup installs no binary for a bare verb to reach. Deleting the entry from
+ * `.cursor/hooks.json` is not on that list — the next sync rewrites the file
+ * and `stamity check` reports the edit as drift until it does, which is the
+ * advice the generated header four lines above already gives.
  */
-export function buildMcpGuardScript(): string {
+export function buildMcpGuardScript(cli: CliCallContext): string {
   return `${guardHeader([
     "stamity — MCP server allowlist guard.",
     "",
@@ -1116,9 +1125,9 @@ export function buildMcpGuardScript(): string {
     "",
     "A manifest that exists but does not parse is reported as its own refusal,",
     "naming the path and the parser message — not folded into the absent case.",
-    "To stop the guard, change the selection (stamity config mcp add <id>, then",
-    "stamity sync) or deselect this client; editing .cursor/hooks.json does not",
-    "stick.",
+    "To stop the guard, change the selection — the refusals below name the two",
+    "calls, adding a server and then re-syncing — or deselect this client;",
+    "editing .cursor/hooks.json does not stick.",
   ])}
 
 import { readFileSync } from "node:fs";
@@ -1131,6 +1140,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // one level up, and the operator's own file lives under the home directory.
 const MANIFESTS = [join(HERE, "..", "mcp.json"), join(homedir(), ".cursor", "mcp.json")];
 const TOOL_PREFIX = ${JSON.stringify(MCP_TOOL_PREFIX)};
+const SYNC_CALL = ${JSON.stringify(cliCallHint(cli.packageName, cli.version, "sync"))};
+const MCP_ADD_CALL = ${JSON.stringify(cliCallHint(cli.packageName, cli.version, "config mcp add <id>"))};
 
 ${REASON_HELPER}
 
@@ -1223,15 +1234,20 @@ if (allowed.size === 0 && faults.length > 0) {
     "Blocked every MCP call: no MCP manifest could be read, so there is no " +
       "allowlist to match against. Fix " +
       faultLine(faults) +
-      ", then re-run \`stamity sync\`.",
+      ", then re-run " +
+      SYNC_CALL +
+      ".",
   );
 } else if (allowed.size === 0) {
   deny(
     HOOK,
     { reasonCode: "NO_MCP_SERVERS_CONFIGURED", ...event },
     "Blocked every MCP call: this setup configured no MCP servers, so there is " +
-      "no allowlist to match against. Add one with \`stamity config mcp add <id>\` " +
-      "and re-run \`stamity sync\`.",
+      "no allowlist to match against. Add one with " +
+      MCP_ADD_CALL +
+      " and re-run " +
+      SYNC_CALL +
+      ".",
   );
 } else if (identity === "") {
   deny(
@@ -1251,7 +1267,10 @@ if (allowed.size === 0 && faults.length > 0) {
     'Blocked an MCP call to "' +
       identity +
       '": it is absent from the resolved .cursor/mcp.json set. Add it with ' +
-      "\`stamity config mcp add <id>\` and re-run \`stamity sync\`.",
+      MCP_ADD_CALL +
+      " and re-run " +
+      SYNC_CALL +
+      ".",
   );
 } else if (faults.length > 0) {
   // Allowed on the manifests that DID load. The broken one still cost the

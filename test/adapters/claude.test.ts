@@ -110,10 +110,21 @@ const PROJECT_DIR = "${CLAUDE_PROJECT_DIR}";
  */
 const GUARD_TAIL =
   "|| { s=$?; [ \"$s\" -eq 2 ] && exit 2; " +
-  "echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }";
+  "echo 'stamity: the pre-tool-use guard could not run; run " +
+  "`stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@0.0.0-test sync`' >&2; exit 2; }";
 
-/** The one sentence the tail prints, and the one a legitimate refusal must not carry. */
-const GUARD_REPAIR_LINE = "the pre-tool-use guard could not run; run stamity sync";
+/**
+ * The one sentence the tail prints, and the one a legitimate refusal must not carry.
+ *
+ * TEST CHANGE (sw26-engine-cli-call-form, REQ-FLOW-002): the repair names the
+ * sync verb as the installed form AND the pinned npx call — the context here
+ * carries no package name, so the canonical one, at {@link ENGINE_VERSION}.
+ * A bare `stamity sync` fails on the documented npx setup, which installs no
+ * binary. Same tail, same classification; only the remedy's spelling moved.
+ */
+const GUARD_REPAIR_LINE =
+  "the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, " +
+  "else `npx -y @zomarit/stamity@0.0.0-test sync`";
 
 /**
  * The generated hook script commands, as the settings transform renders them.
@@ -135,7 +146,9 @@ const HOOK_COMMANDS = {
   guard:
     'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs" ' +
     '|| { s=$?; [ "$s" -eq 2 ] && exit 2; ' +
-    "echo 'stamity: the pre-tool-use guard could not run; run stamity sync' >&2; exit 2; }",
+    // TEST CHANGE (sw26-engine-cli-call-form): the repair's pinned spelling, as GUARD_REPAIR_LINE.
+    "echo 'stamity: the pre-tool-use guard could not run; run " +
+    "`stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@0.0.0-test sync`' >&2; exit 2; }",
   tamper:
     'node "${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs"',
   reviewGate:

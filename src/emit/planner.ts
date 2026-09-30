@@ -407,6 +407,10 @@ export async function buildCoreEmissionPlan(
       planHooksInfra({
         rootDir: ctx.rootDir,
         manifest: ctx.manifest,
+        // The pinned CLI hint in the core scripts: the same package and
+        // version the `${STAMITY:CLI}` token renders in every body.
+        engineVersion: ctx.engineVersion,
+        ...(ctx.packageName === undefined ? {} : { packageName: ctx.packageName }),
         packHooks: await packHookDefinitions(resolved.packs, ctx.rootDir),
         // The agent-class half of the same seam: without these rows the
         // emitted policy document carries the shipped roster alone and the

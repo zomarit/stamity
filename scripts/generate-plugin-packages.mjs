@@ -498,6 +498,8 @@ if (prepareNativeTypescriptCli(import.meta.url)) {
           rootDir: clientPlanRoot,
           manifest,
           engineVersion: releaseVersion,
+          // The package the hook scripts' CLI hints pin, as the bodies' token does above.
+          packageName,
           facts: { monorepoPackages: [], hookScriptsRoot: `\${${rootVar}}/${HOOKS_DIR}` },
           contentRoot,
         })
