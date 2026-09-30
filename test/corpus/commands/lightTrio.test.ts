@@ -597,6 +597,17 @@ describe("quick — the guardrails are the command", () => {
     expect(text).toMatch(/reporting a red gate as done is a contract breach/i);
   });
 
+  it("runs the gate once and never counts an unknown exit code as green", async () => {
+    const text = flow(await load("commands/st-quick.md"));
+
+    // The runner runs the charter's full gate once, as spelled, not a second time to confirm.
+    expect(text).toMatch(/runs `\$\{STAMITY:VERIFY_GATE_ALL\}` once, as the charter spells it/);
+    // Edge case: a tool result with no exit status reads as an `unknown` row, which is not
+    // green, so the batch it belongs to cannot be reported done.
+    expect(text).toMatch(/a row whose exit code the runner could not read is `unknown`/i);
+    expect(text).toMatch(/an unknown row is never green/i);
+  });
+
   it("fixes the commit prefix and differs from work by contract", async () => {
     const text = flow(await load("commands/st-quick.md"));
 

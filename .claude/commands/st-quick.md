@@ -133,9 +133,10 @@ of 5 growing past a threshold stops the batch there:
 
 Gates run on every batch, a one-line typo fix included.
 
-- Spawn `test-runner` with the changed-file list. It runs `npm run lint && npm run typecheck && npm run test` and
-  returns a gate-by-gate result: exact commands, verbatim failing excerpts, never a bare
-  pass/fail.
+- Spawn `test-runner` with the changed-file list. It runs `npm run lint && npm run typecheck && npm run test` once,
+  as the charter spells it, and returns a gate-by-gate result: exact commands, verbatim failing
+  excerpts, never a bare pass/fail. A row whose exit code the runner could not read is `unknown`,
+  and an unknown row is never green.
 - No flag, tier, or batch size turns this step off. A batch whose gates are red is not done —
   fix inside the same Tier-1 envelope, or revert the batch and escalate. Reporting a red gate
   as done is a contract breach.
