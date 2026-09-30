@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { canonical } from "../support/identity.ts";
 import { FORK_PUBLISHER, FORK_REPOSITORY } from "./downstreamFixture.ts";
 
 /**
@@ -149,7 +150,7 @@ beforeAll(() => {
   symlinkSync(join(REPO_ROOT, "node_modules"), join(checkout, "node_modules"), "junction");
   const runtime = stubRuntime();
 
-  // Canonical first: this repository's manifest, published, so a channel serves it.
+  // The checkout's own manifest first: on the canonical tree, published, so a channel serves it.
   writeFileSync(join(checkout, "package.json"), readFileSync(join(REPO_ROOT, "package.json")));
   canonicalOut = join(work, "canonical");
   build(checkout, runtime, canonicalOut);
@@ -183,16 +184,21 @@ describe("a registry-less fork's plugin build (private, no publishConfig.registr
     }
   });
 
-  it("flips every call site the canonical build pins with `npx -y`, file by file and count by count", () => {
-    const canonical = pinnedCalls(canonicalOut);
+  it("pins the same call sites as the checkout's own build, whose flag follows its own channel (`-y` on the canonical tree)", () => {
+    const own = pinnedCalls(canonicalOut);
     const fork = pinnedCalls(forkOut);
-    const canonicalCall = `npx -y ${CANONICAL_PACKAGE}@${VERSION}`;
+    // Derived, not spelled: the canonical tree has a channel and renders `-y` (pinned by
+    // `test/ci/forkIdentity.test.ts`'s canonical-identity case), while a registry-less fork
+    // running its inherited gate builds its own manifest without one and renders `--no`, as
+    // `docs/enterprise-forks.md` promises it may with no test edit.
+    const ownFlag = canonical().npmChannel ? "-y" : "--no";
+    const ownCall = `npx ${ownFlag} ${CANONICAL_PACKAGE}@${VERSION}`;
 
-    // The canonical build of the same checkout keeps `-y`: the channel, not the corpus, decides.
-    expect(new Set([...canonical.values()].flat())).toEqual(new Set([canonicalCall]));
-    expect(canonical.size).toBeGreaterThan(0);
+    // The checkout's own build keeps its channel's flag: the channel, not the corpus, decides.
+    expect(new Set([...own.values()].flat())).toEqual(new Set([ownCall]));
+    expect(own.size).toBeGreaterThan(0);
 
-    expect(callCounts(fork)).toEqual(callCounts(canonical));
+    expect(callCounts(fork)).toEqual(callCounts(own));
   });
 
   it("names the fork's own package as each root's companion", () => {

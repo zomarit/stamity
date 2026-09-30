@@ -33,7 +33,7 @@ import { downstreamCheckout } from "./downstreamFixture.ts";
  *                            source forms are proven against each other rather than one
  *                            of them being asserted alone.
  *   the inherited gate       opt-in. A whole second checkout running a second vitest over
- *                            the eighteen identity-sensitive suites; the reason it is not
+ *                            the nineteen identity-sensitive suites; the reason it is not
  *                            on by default is on the group itself.
  *
  * A third group comes first, because it is the cheapest: the CLI and CI suites are read as
@@ -311,7 +311,7 @@ describe("a private fork's regenerated marketplace", () => {
  *
  * OPT-IN (`STAMITY_FORK_SUITE=1`). Not for its wall time — measured at about 25 seconds on
  * a warm POSIX machine, 2026-09-19 — but for what it does to get there: it copies the whole
- * working tree and starts a second vitest inside the first, over eighteen suites. A nested
+ * working tree and starts a second vitest inside the first, over nineteen suites. A nested
  * runner is charged differently by the coverage leg and by the Windows leg, and neither is
  * a cost the default gate should carry for a property the group above already proves in
  * under a second. This group is the end-to-end witness a reviewer or a release run asks
@@ -329,6 +329,7 @@ const IDENTITY_SUITES = [
   "test/ci/pluginDistribution.test.ts",
   "test/ci/pluginManifests.test.ts",
   "test/ci/pluginPackages.claude.test.ts",
+  "test/ci/pluginPackages.registryless.test.ts",
   "test/ci/releaseManifest.test.ts",
   "test/cli/binMap.test.ts",
   "test/cli/commands/add.test.ts",
