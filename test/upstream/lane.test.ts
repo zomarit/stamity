@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CONTENT_CLASSES } from "../../src/types/content.ts";
+import { lazyCleanup } from "../support/lazyCleanup.ts";
 import { contentPrefixFor, ENGINE_CONTENT_PREFIXES } from "../../src/types/markers.ts";
 import {
   BRANCH_PREFIX,
@@ -750,7 +751,10 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
   }, CASE_TIMEOUT_MS);
 
   afterAll(() => {
-    scratch.cleanup();
+    // Deferred, not skipped: the tree moves into the run's private temp root and the global teardown
+    // removes it after the last test. Removed in place, it outlasted the 20s hook timeout under
+    // concurrent full-suite load with no assertion failed (test/support/lazyCleanup.ts).
+    lazyCleanup(scratch.dir);
   });
 
   it("builds the upstream the criteria describe: four releases, a prerelease, a side-branch maintenance release, a generator that derives", () => {

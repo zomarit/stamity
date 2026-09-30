@@ -1,14 +1,17 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { parseFrontmatter } from "../../src/content/frontmatter.ts";
 import { canonical as repositoryIdentity } from "../support/identity.ts";
+import { lazyCleanup } from "../support/lazyCleanup.ts";
 import { downstreamCheckout, EXPECTED_PRIMITIVES, write } from "./downstreamFixture.ts";
 
 const work = mkdtempSync(join(tmpdir(), "stamity-apm-downstream-"));
-afterAll(() => rmSync(work, { recursive: true, force: true }));
+// Deferred to the global teardown (test/support/lazyCleanup.ts): removed in place, this tree
+// outlasted the 20s hook timeout under concurrent full-suite load with no assertion failed.
+afterAll(() => lazyCleanup(work));
 
 function checkout(): string {
   const root = mkdtempSync(join(work, "checkout-"));

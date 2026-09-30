@@ -32,7 +32,7 @@ import { evaluateWorkflowExpression, type ExpressionContext } from "./workflowEx
  * here as DATA — parsed the way GitHub parses them, from YAML bytes — and the properties that make
  * them gates are pinned:
  *
- *   ci.yml        the three-leg matrix and the per-leg step split, step order (Build before Test,
+ *   ci.yml        the four-leg matrix (windows in two shards) and the per-leg step split, step order (Build before Test,
  *                 so dist/ exists for everything after it), the generate-and-diff triple, the
  *                 aggregator's needs and its result assertion, the concurrency grouping, and the
  *                 lane map that promises to name every lane this repository does not run.
@@ -77,6 +77,7 @@ interface WorkflowStep {
   readonly if?: string;
   readonly with?: Readonly<Record<string, unknown>>;
   readonly env?: Readonly<Record<string, string>>;
+  readonly shell?: string;
   readonly "continue-on-error"?: boolean;
 }
 
@@ -92,6 +93,7 @@ interface MatrixInclude {
   readonly coverage?: boolean;
   readonly toolchain?: boolean;
   readonly tarball_smoke?: boolean;
+  readonly shard?: string;
   readonly apm?: string;
   readonly role?: string;
   readonly expect_failure?: boolean;
@@ -278,9 +280,13 @@ describe("ci.yml — the merge-blocking gate", () => {
     expect(jobOf(ci, "dependency-review").if).toBe("github.event_name == 'pull_request'");
   });
 
-  it("pins the three legs and the per-leg flags that drive the step split", () => {
+  it("pins the four legs and the per-leg flags that drive the step split", () => {
     const strategy = jobs["check"]?.strategy;
     expect(strategy?.["fail-fast"]).toBe(false);
+    // TEST CHANGE, justified (plan 013 file 3, unit sw12-flake-unit): the one windows leg runs
+    // the suite in two shards. It was the slowest leg in the matrix and ran the whole suite on its
+    // own; two half-suites halve the wall time a load timeout has to land in, and the aggregator
+    // still needs every leg of `check` (asserted below), so both shards are merge-blocking.
     expect(strategy?.matrix?.include).toEqual([
       {
         os: "ubuntu-latest",
@@ -290,7 +296,8 @@ describe("ci.yml — the merge-blocking gate", () => {
         tarball_smoke: true,
       },
       { os: "ubuntu-latest", node: "24", label: "lts", coverage: true, toolchain: true },
-      { os: "windows-latest", node: "24", label: "windows" },
+      { os: "windows-latest", node: "24", label: "windows-1", shard: "1/2" },
+      { os: "windows-latest", node: "24", label: "windows-2", shard: "2/2" },
     ]);
     // The job name has to carry the leg, or three rows report under one name.
     expect(jobs["check"]?.name).toContain("matrix.label");
@@ -320,7 +327,7 @@ describe("ci.yml — the merge-blocking gate", () => {
     expect(readFileSync(attributes, "utf8")).toMatch(/^\*\s+text=auto\s+eol=lf$/m);
   });
 
-  it("keeps the toolchain steps on one leg and the runtime gates on all three", () => {
+  it("keeps the toolchain steps on one leg and the runtime gates on one leg per OS and Node pair", () => {
     // None of these four answers a question that depends on the OS or the Node version, so a
     // second copy of them buys no coverage. The older reason — tsdown declares ^22.18.0 and
     // eslint ^22.13.0, both above the 22.12.0 floor this matrix used to run — retired with the
@@ -329,8 +336,18 @@ describe("ci.yml — the merge-blocking gate", () => {
       expect(conditionOf(check, step), step).toBe("matrix.toolchain");
     }
     // Runtime verification stays on every leg — that is what the floor and windows legs are for.
-    for (const step of ["Install", "Build", "Dogfood check", "Leak gate"]) {
+    for (const step of ["Install", "Build"]) {
       expect(conditionOf(check, step), step).toBe("");
+    }
+    // TEST CHANGE, justified (plan 013 file 3, unit sw12-flake-unit): the dogfood check and the
+    // leak gate answer about the checkout and the binary, not about which half of the suite a
+    // shard ran, so the second windows shard skips them and the first keeps the windows proof.
+    // Evaluated per leg rather than string-matched: exactly one leg skips them.
+    for (const step of ["Dogfood check", "Leak gate"]) {
+      expect(conditionOf(check, step), step).toBe("matrix.shard != '2/2'");
+      const legs = jobs["check"]?.strategy?.matrix?.include ?? [];
+      const running = legs.filter((leg) => evaluateWorkflowExpression(conditionOf(check, step), { matrix: leg }));
+      expect(running.map((leg) => leg.label), step).toEqual(["floor", "lts", "windows-1"]);
     }
     expect(conditionOf(check, "Tarball smoke (publish shape)")).toBe("matrix.tarball_smoke");
   });
@@ -358,10 +375,19 @@ describe("ci.yml — the merge-blocking gate", () => {
     // leg skips the mode- and symlink-dependent cases by platform guard, so a coverage run there
     // would report a shortfall that belongs to the platform. The floors are untouched: they still
     // gate, on both ubuntu legs, and windows runs the same suite without the instrument.
-    expect(runOf(check, "Test with coverage floors")).toBe("npm test -- --coverage");
+    // TEST CHANGE, justified (plan 013 file 3, unit sw12-flake-unit): both steps run the suite
+    // through scripts/ci/test-run.mjs, which re-runs a timeout-only failure once — the whole
+    // suite again on a coverage leg, so the floors are measured on a complete run — and annotates
+    // a green re-run as flaky. What each step runs is unchanged: coverage on the ubuntu legs, the
+    // plain suite (now one shard of it) on windows. test/ci/testRun.test.ts proves the re-run.
+    expect(runOf(check, "Test with coverage floors")).toBe("node scripts/ci/test-run.mjs --coverage");
     expect(conditionOf(check, "Test with coverage floors")).toBe("matrix.coverage");
-    expect(runOf(check, "Test")).toBe("npm test");
+    expect(runOf(check, "Test")).toBe('node scripts/ci/test-run.mjs --shard="$TEST_SHARD"');
     expect(conditionOf(check, "Test")).toBe("${{ !matrix.coverage }}");
+    // The shard arrives as data through `env:`, and bash reads it on every runner (the windows
+    // default shell, pwsh, would read `$TEST_SHARD` as an unset PowerShell variable).
+    expect(stepOf(check, "Test").env?.["TEST_SHARD"]).toBe("${{ matrix.shard }}");
+    expect(stepOf(check, "Test").shell).toBe("bash");
     // Mutually exclusive, so exactly one Test step runs per leg.
     const legs = jobs["check"]?.strategy?.matrix?.include ?? [];
     for (const leg of legs) {
@@ -371,6 +397,28 @@ describe("ci.yml — the merge-blocking gate", () => {
         leg.label,
       ).toBe(true);
     }
+  });
+
+  it("splits every leg without coverage into shards that cover the suite exactly once", () => {
+    const legs = jobs["check"]?.strategy?.matrix?.include ?? [];
+    const sharded = legs.filter((leg) => leg.coverage !== true);
+    // A leg without coverage runs the Test step; with no shard it would run the whole suite, and
+    // a shard missing from the set would leave part of the suite unrun on that OS.
+    expect(sharded.length).toBeGreaterThan(1);
+    const total = new Set(sharded.map((leg) => leg.shard?.split("/")[1]));
+    expect(total.size).toBe(1);
+    const count = Number([...total][0]);
+    expect(count).toBe(sharded.length);
+    expect(sharded.map((leg) => leg.shard).toSorted()).toEqual(
+      Array.from({ length: count }, (_, index) => `${index + 1}/${count}`),
+    );
+    expect(new Set(sharded.map((leg) => leg.os)).size).toBe(1);
+    // The coverage legs are never sharded: a floor can only be met by a whole run.
+    for (const leg of legs.filter((row) => row.coverage === true)) expect(leg.shard, leg.label).toBeUndefined();
+    // Every shard is a leg of `check`, and the aggregator requires `check` to succeed as a whole.
+    expect(jobOf(ci, "all-ci-checks").needs).toContain("check");
+    expect(stepsOf(ci, "all-ci-checks").map((step) => step.run ?? "").join("\n"))
+      .toContain('test "${{ needs.check.result }}" = "success"');
   });
 
   it("runs Build before either Test step, so the dist journey sees the fresh CI build", () => {

@@ -1,4 +1,25 @@
+import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { configDefaults, defineConfig, type TestUserConfig } from "vitest/config";
+
+/**
+ * A private temp root per run, `<os temp>/stamity-vitest-<pid>`, handed to every worker and every
+ * process a test spawns through the three variables Node's `os.tmpdir()` reads (TMPDIR on POSIX,
+ * TEMP and TMP on Windows). `test/support/globalSetup.ts` creates it, sweeps what killed runs left,
+ * warns on a nearly full temp volume, and removes it after the last test, which is where the trees
+ * `lazyCleanup` defers are removed — outside every hook timeout.
+ *
+ * Both halves ride on the setup file being present. A partial copy of this config (the downstream
+ * fixtures copy it without the support tree) runs on the shared temp root, as before, rather than
+ * failing to load a setup it does not carry or pointing at a root nothing creates.
+ */
+export function privateTempRoot(setupFile: string, base: string, pid: number): Pick<TestUserConfig, "env" | "globalSetup"> {
+  if (!existsSync(setupFile)) return {};
+  const root = join(base, `stamity-vitest-${pid}`);
+  return { env: { TMPDIR: root, TEMP: root, TMP: root }, globalSetup: ["test/support/globalSetup.ts"] };
+}
 
 /**
  * 2026-09-11: Windows CI first showed overlapping stalls in three real-disk
@@ -53,6 +74,11 @@ export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
     ...fixtureScheduling(process.platform),
+    ...privateTempRoot(
+      fileURLToPath(new URL("./test/support/globalSetup.ts", import.meta.url)),
+      tmpdir(),
+      process.pid,
+    ),
     environment: "node",
     // Child-process cases shell out to the CLI entry; 20s is generous for a cold start
     // and still fails fast if a spawn hangs.

@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import { collectManifestErrors } from "../../src/manifest/manifest.ts";
 import { MANIFEST_VERSION, type SetupManifest } from "../../src/types/manifest.ts";
+import { lazyCleanup } from "../support/lazyCleanup.ts";
 import { branchHead, commitAll, createFork, createUpstream, git, gitAvailable, makeScratch, runLane, type ForkOptions, type UpstreamFixture } from "./fixtures.ts";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -35,7 +36,9 @@ describe.skipIf(!SHELL_AVAILABLE)("upstream publish recovery — executable GitH
   let upstream: UpstreamFixture;
   let ordinal = 0;
   beforeAll(() => { upstream = createUpstream(scratch.dir); });
-  afterAll(() => { scratch.cleanup(); });
+  // Deferred to the global teardown (test/support/lazyCleanup.ts): removed in place, this tree
+  // outlasted the 20s hook timeout under concurrent full-suite load with no assertion failed.
+  afterAll(() => { lazyCleanup(scratch.dir); });
 
   function fixture(options: ForkOptions = {}) {
     const dir = join(scratch.dir, `case-${ordinal++}`);

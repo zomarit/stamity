@@ -24,6 +24,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // @ts-expect-error — the distribution modules ship as plain .mjs with no type declarations: they
 // run under bare Node in a release job, with no TypeScript nearby.
 import { CATALOG_PATHS } from "../../scripts/plugins/catalogs.mjs";
+import { lazyCleanup } from "../support/lazyCleanup.ts";
 import { document } from "./downstreamFixture.js";
 
 /**
@@ -178,12 +179,14 @@ const BUILT = existsSync(join(REPO_ROOT, "dist", "cli.js"));
 
 const work = realpathSync(mkdtempSync(join(tmpdir(), "stamity-plugin-lifecycle-")));
 /**
- * The removal is given the step budget explicitly: an armed run leaves two distribution trees per
- * fixture, a real bundled runtime inside each of their four roots and a clone per client — tens of
- * thousands of files, which is well past vitest's 20s default hook timeout (measured: the default
- * fired on the first armed run of this suite).
+ * An armed run leaves two distribution trees per fixture, a real bundled runtime inside each of
+ * their four roots and a clone per client — tens of thousands of files, which is well past vitest's
+ * 20s default hook timeout (measured: the default fired on the first armed run of this suite). So
+ * the removal is deferred: `lazyCleanup` moves the tree into the run's private temp root, which the
+ * global teardown removes after the last test. The step budget stays for the one path that still
+ * removes in place, a rename the platform refuses.
  */
-afterAll(() => rmSync(work, { recursive: true, force: true }), STEP_MS);
+afterAll(() => lazyCleanup(work), STEP_MS);
 
 function tempDir(prefix: string): string {
   return mkdtempSync(join(work, `${prefix}-`));

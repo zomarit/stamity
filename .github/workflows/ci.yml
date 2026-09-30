@@ -29,12 +29,19 @@
 #     list is `RECORDS_SUITES` in the detector), the generate-and-diff step (the measurements page
 #     renders from the committed runs), the leak gate, and on pull requests the hygiene scan. The
 #     aggregator asserts which side ran, so a records-only pass can never stand in for a full one.
-#   - `check`, three legs, on every change that is not records-only. ubuntu on the declared engines floor (22.22.2) and on the LTS
-#     canonical (24), plus one windows leg on 24. Every leg installs, builds, runs the suite,
-#     re-proves the committed dogfood configs with the binary it just built, and runs the leak
-#     gate. The floor leg additionally packs and installs the tarball (`tarball-smoke`), because
-#     the published SHAPE is a different tree from the repository. On pull requests the LTS
-#     leg also rejects tracked runtime files, new raw evidence, and growth beyond file budgets.
+#   - `check`, four legs, on every change that is not records-only. ubuntu on the declared engines floor (22.22.2) and on the LTS
+#     canonical (24), plus windows on 24 as two legs that each run one half of the suite
+#     (`--shard=1/2`, `--shard=2/2`). Every leg installs, builds and runs its tests through
+#     `scripts/ci/test-run.mjs`; the floor, the LTS and the first windows shard also re-prove the
+#     committed dogfood configs with the binary they just built and run the leak gate. The test
+#     step re-runs a failure ONCE, and only when every failure is a vitest timeout: the failed
+#     files on a windows shard, the whole suite with coverage on an ubuntu leg (a partial run
+#     cannot meet the floors). A green re-run passes with a `flaky test` warning per file and a
+#     step-summary line, never silently; an assertion failure, a timeout beside anything else, a
+#     coverage floor, or any failure on the re-run is red. The floor leg additionally packs and
+#     installs the tarball (`tarball-smoke`), because the published SHAPE is a different tree
+#     from the repository. On pull requests the LTS leg also rejects tracked runtime files, new
+#     raw evidence, and growth beyond file budgets.
 #   - `apm-install`, three legs. The APM route, proven by what a real consumer's tree HOLDS after
 #     an install rather than by the exit code — the routing failure this lane exists for exited 0
 #     and deployed nothing. Two legs install the package with a fixed client (0.29.1, the minimum
@@ -160,16 +167,17 @@ jobs:
     needs: changes
     if: needs.changes.outputs.records_only != 'true'
     runs-on: ${{ matrix.os }}
-    # 30, not the 15 this job carried while it was ubuntu-only: the windows leg installs, builds
-    # and runs the whole suite on the slowest runner image in the matrix, and a ceiling that a
-    # healthy run brushes against is a flake generator rather than a hang detector.
+    # 30, not the 15 this job carried while it was ubuntu-only: a windows leg installs, builds
+    # and runs its half of the suite on the slowest runner image in the matrix, a timeout-only
+    # failure can run its files a second time, and a ceiling that a healthy run brushes against
+    # is a flake generator rather than a hang detector.
     timeout-minutes: 30
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        # Three legs, each earning its place. `label` names the leg in the job title; the boolean
+        # Four legs, each earning its place. `label` names the leg in the job title; the boolean
         # flags below are the per-leg step split, declared here rather than repeated as
         # `matrix.os == ... && matrix.node == ...` on every conditional step.
         include:
@@ -193,15 +201,23 @@ jobs:
             label: lts
             coverage: true
             toolchain: true
-          # One windows leg, on the LTS canonical. Path separators, the absence of POSIX file
-          # modes, and CRLF are the three things a POSIX-only matrix cannot see; the suite
+          # Windows, on the LTS canonical, as two shards. Path separators, the absence of POSIX
+          # file modes, and CRLF are the three things a POSIX-only matrix cannot see; the suite
           # already carries `skipIf(process.platform === "win32")` guards for the mode- and
-          # symlink-dependent cases, so what runs here is the portable majority of the suite
-          # plus the two runtime gates (`check`, the leak gate) that matter most to a Windows
-          # user.
+          # symlink-dependent cases, so what runs here is the portable majority of the suite,
+          # split in two so neither half runs the whole of it on the slowest runner image, plus
+          # the two runtime gates (`check`, the leak gate) that matter most to a Windows user —
+          # on the first shard only, since they read the checkout and the binary, not the half
+          # of the suite a shard ran. Both shards are legs of `check`, so the aggregator needs
+          # both.
           - os: windows-latest
             node: '24'
-            label: windows
+            label: windows-1
+            shard: '1/2'
+          - os: windows-latest
+            node: '24'
+            label: windows-2
+            shard: '2/2'
 
     steps:
       # BEFORE checkout, and only on windows. Three layers hold LF here, and this step is the
@@ -266,18 +282,28 @@ jobs:
         run: npm run build
 
       # Coverage runs on the legs whose floors it can meet. vitest.config.ts holds the merge and
-      # emit core at 100% and those floors are BLOCKING; the windows leg skips the mode- and
+      # emit core at 100% and those floors are BLOCKING; the windows legs skip the mode- and
       # symlink-dependent cases under test/merge/ and test/mcp/ by platform guard, so a coverage
       # run there would report a shortfall that is a property of the platform, not of the change.
       # The floors are unchanged and still gate — on both ubuntu legs. Windows runs the same
-      # suite without the coverage instrument.
+      # suite, one shard per leg, without the coverage instrument.
+      #
+      # Both steps run vitest through scripts/ci/test-run.mjs, which re-runs a timeout-only
+      # failure once and reports a green re-run as a flaky test (see the lane map above). On a
+      # coverage leg the re-run is the whole suite with coverage again, so a floor is never read
+      # off a partial run.
       - name: Test with coverage floors
         if: matrix.coverage
-        run: npm test -- --coverage
+        run: node scripts/ci/test-run.mjs --coverage
 
+      # The shard arrives as data through `env:`. bash, not the windows default pwsh, because
+      # pwsh would read `$TEST_SHARD` as an unset PowerShell variable and run the whole suite.
       - name: Test
         if: ${{ !matrix.coverage }}
-        run: npm test
+        shell: bash
+        env:
+          TEST_SHARD: ${{ matrix.shard }}
+        run: node scripts/ci/test-run.mjs --shard="$TEST_SHARD"
 
       # Every generated artifact class, regenerated and byte-diffed: the capability
       # matrix, the CLI/config/reference/llms pages, the catalog pins, the four
@@ -301,12 +327,15 @@ jobs:
       # The committed self-configs — AGENTS.md and the generated client trees — re-proven
       # drift-clean by the binary this job just built. The living integration test. `check` reads
       # the committed manifest at the repository root and needs no branch, so it runs on CI's
-      # detached HEAD as-is. Every leg: this is runtime verification of the shipped binary, which
-      # is exactly what the floor and windows legs exist to prove.
+      # detached HEAD as-is. One leg per OS and Node pair: this is runtime verification of the
+      # shipped binary, which is exactly what the floor and windows legs exist to prove, and the
+      # second windows shard's checkout and binary are the first one's.
       - name: Dogfood check
+        if: matrix.shard != '2/2'
         run: node dist/cli.js check
 
       - name: Leak gate
+        if: matrix.shard != '2/2'
         run: npm run gate
 
       # Engine floor calls for knip in CI, not only as a local script.
@@ -766,8 +795,11 @@ jobs:
 
   # One stable context name to require, whatever the matrix does.
   #
-  # The jobs above name themselves per leg (`check (floor, node 22.22.2)`), so a required-status
-  # rule written against them binds context names that rotate the moment the matrix changes.
+  # The jobs above name themselves per leg (`check (floor, node 22.22.2)`, `check (windows-1,
+  # node 24)`), so a required-status rule written against them binds context names that rotate
+  # the moment the matrix changes — as they did when the windows leg became two shards.
+  # `needs.check.result` is the whole matrix's result, so both shards must pass for it to read
+  # `success`.
   # This job's name does not move. It fails when anything it needs failed OR was cancelled —
   # `needs` alone treats a cancelled dependency as "did not succeed" and would otherwise let a
   # skipped aggregator read as green.
