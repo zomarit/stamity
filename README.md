@@ -68,9 +68,9 @@ projection under `.agents/skills/`. Cursor, Copilot and Codex read those where t
 the root `AGENTS.override.md` instead where it has a rules appendix: `AGENTS.md` as sync writes it,
 plus the appendix). Claude Code reads the managed block in `CLAUDE.md` and takes a skills copy.
 
-Four adapters add what a client cannot read without help: agents, rules, MCP documents, hook wiring
-and a command surface. Both reach all four clients. Codex and Cursor share the nine touchpoints as
-skills under `.agents/skills/`: Codex starts one as `$st-<id>`, Cursor as `/st-<id>`.
+Four adapters add what a client cannot read without help: agents, rules, MCP documents, hook wiring and a
+command surface. Hook wiring and a command surface both reach all four clients. Codex and Cursor share the
+nine touchpoints as skills under `.agents/skills/`: Codex starts one as `$st-<id>`, Cursor as `/st-<id>`.
 Your setup state lives in `.stamity/`: a manifest, a per-file ledger, learnings and handoffs.
 
 ## Commands

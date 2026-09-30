@@ -6,8 +6,9 @@ title: Migrating from hatch3r
 <!-- Re-open when: hatch3r's own `clean` semantics change, or when what `src/migration/` detects, carries or
      strips changes (`src/migration/detect.ts` and `src/migration/carry.ts` are the code this page describes).
      `test/docsPages.test.ts` holds this page to the hand-page contract, pins two claims no other check can reach —
-     Path B names the manifest a plain clean deletes, the last step names `.env.mcp` before the uninstall — and needs
-     one hand page stamped at the release cut for its `RELEASE_CUT_DATE` pin: this is that page, so the stamp's release-cut form is load-bearing and moves only at a cut. -->
+     Path B names the manifest a plain clean deletes, the last step names `.env.mcp` before the uninstall — and reads
+     every hand page's stamp for its `RELEASE_CUT_DATE` pin, so the stamp's release-cut form is load-bearing and moves
+     only at a cut. -->
 
 # Migrating from hatch3r
 
@@ -22,7 +23,7 @@ npx @zomarit/stamity init
 ```
 
 Init finds hatch3r before it writes anything, and asks what to do about it. Answer `full` and
-the run prints its decision, then reports what moved:
+the run prints its decision, then opens its report of what moved with these two lines:
 
 ```text
 migrate: full — .hatch3r is being carried over
@@ -130,7 +131,7 @@ A plain clean removes hatch3r's adapter outputs and its manifest, `.hatch3r/hatc
 also removes three more of its own outputs: `.worktreeinclude`, the `.hatch3r-archive/`
 directory, and any `.bak` file it left beside a file it sweeps.
 
-It keeps the rest of `.hatch3r/`: learnings, handoffs, overrides, snapshots and customizations.
+It keeps the rest of `.hatch3r/`: learnings, handoffs, overrides, mcp, snapshots and customizations.
 It keeps `.env.mcp` too. Add `--dry-run` to preview the sweep, and `--yes` to skip its prompt.
 
 How it decides which files are its adapter outputs matters, because it is not by name. It walks

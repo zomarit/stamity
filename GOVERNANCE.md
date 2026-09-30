@@ -7,7 +7,7 @@
 
 # Governance
 
-> Last updated: 2026-09-23
+> Last updated: 2026-10-01
 
 This page is for a contributor or a reviewer who wants to know who runs stamity and how a change
 gets in. It answers four questions: who decides, the two required checks a change passes to land,
@@ -60,8 +60,8 @@ shards, each shard running half of the test suite. Which step runs on which leg 
 - **Every leg but the second Windows shard** runs the dogfood check and the leak gate, so on
   Windows they run on the first shard only: they read the checkout and the built binary, which
   are the same on both shards. The dogfood check re-proves that this repository's own generated
-  setup is drift-clean. The leak gate refuses a retired name, a credential shape, or a reference
-  to the private layer anywhere in the tree.
+  setup is drift-clean. The leak gate refuses a retired name, a credential shape, a reference to
+  the private layer, or a person's email address anywhere in the tree.
 - **The LTS toolchain leg only** runs typecheck, lint, the repository-hygiene scan, the
   self-consistency generate-and-diff over every derived page, and the unused-code scan. Their
   answers turn on neither the operating system nor the Node version, and their vendors do not
@@ -180,8 +180,8 @@ What that layer produces is public and checkable, and that is the half that shou
 anyone depends on stamity:
 
 - the required checks above
-- the leak gate, which refuses a retired name, a credential shape, or a reference to the private
-  layer anywhere in the tree
+- the leak gate, which refuses a retired name, a credential shape, a reference to the private
+  layer, or a person's email address anywhere in the tree
 - the capability matrix, rendered from adapter code rather than typed by hand
 - this repository running its own generated setup, so an emission regression fails a check here
   before it reaches anyone

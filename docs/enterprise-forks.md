@@ -162,33 +162,36 @@ naming each file that differs from its target.
 The script moves the two Renovate presets because they carry the identity as data rather than
 deriving it: `renovate/plugins.json` names the repository its tag manager watches, and
 `renovate/companion.json` names the npm package it pins. Everything else follows your manifest on
-its own. The runtime's own remedies (`run: npx <your package> init`) and `scripts/tarball-smoke.mjs`
-read `name` from `package.json`, and the four plugin manifests are projected from it. The
-regenerated marketplace entry follows the package. Without `--registry` the package is private and
-has no npm channel, so the entry carries a `github` source naming your repository instead of an
-npm package you never publish. With `--registry` the entry carries an `npm` source naming your
-package and version but no registry, so a developer's client fetches it from your registry only
-on a machine that maps your scope to that registry in its `.npmrc`, the same precondition the
-CLI calls below carry. Without the mapping it asks the public npm registry for your package name.
+its own. The runtime's own remedies (`run: npx -y <your package>@<version> init`, `npx --no` without
+`--registry`) and `scripts/tarball-smoke.mjs` read `name` from `package.json`, and the four plugin
+manifests are projected from it. The regenerated marketplace entry follows the package. Without
+`--registry` the package is private and has no npm channel, so the entry carries a `github` source
+naming your repository instead of an npm package you never publish. With `--registry` the entry
+carries an `npm` source naming your package and version but no registry, so a developer's client
+fetches it from your registry only on a machine that maps your scope to that registry in its
+`.npmrc`, the same precondition the CLI calls below carry. Without the mapping it asks the public
+npm registry for your package name.
 
 The CLI calls your setup writes follow the same split. `init`, `sync` and the plugin build pin
 every call they write into `AGENTS.md`, the generated bodies, the hook hints, the guard messages
 and `.codex/hooks.json` to your package at the version that wrote it, and the CLI's own remedies
-do the same. With `--registry` the call is `npx -y @<scope>/stamity@<version> <verb>`, and npx
-fetches that version from your registry when the project has none, but only on a machine that
-maps your scope to that registry in its `.npmrc`, as **Consume the release** below shows. npx
-finds a scope's registry in npm's configuration; `publishConfig` in your manifest steers
-`npm publish` only. On a developer machine or CI runner without the mapping, the same call asks
-the public npm registry for your package name. Hold your scope on the public registry too, and
-publish nothing there, so a missing mapping ends with a 404 instead of fetching a package
-someone else published under your name. The startup update notice asks your registry, never the
-public one, whether a newer version exists. It sends no credentials, so a registry that needs them
-leaves the notice silent. Without `--registry` the call is
-`npx --no @<scope>/stamity@<version> <verb>`. Your scope is a public, predictable name that
-nobody holds on the public npm registry, and a `-y` call would install whatever a third party
+do the same. A touchpoint body tries `npx --no stamity <verb>` first — the `stamity` bin of a copy
+the project already has installed, whatever package name that copy carries, and never a download —
+and falls back to the pinned call only where npm refuses because no copy is installed. With
+`--registry` the call is `npx -y @<scope>/stamity@<version> <verb>`, and npx fetches that version
+from your registry when the project has none, but only on a machine that maps your scope to that
+registry in its `.npmrc`, as **Consume the release** below shows. npx finds a scope's registry in
+npm's configuration; `publishConfig` in your manifest steers `npm publish` only. On a developer
+machine or CI runner without the mapping, the same call asks the public npm registry for your
+package name. Hold your scope on the public registry too, and publish nothing there, so a missing
+mapping ends with a 404 instead of fetching a package someone else published under your name. The
+startup update notice asks your registry, never the public one, whether a newer version exists. It
+sends no credentials, so a registry that needs them leaves the notice silent. Without `--registry`
+the call is `npx --no @<scope>/stamity@<version> <verb>`. Your scope is a public, predictable name
+that nobody holds on the public npm registry, and a `-y` call would install whatever a third party
 published there under it, without asking. `--no` makes npm run a copy the project already has
-installed at that version and refuse to fetch one. Anywhere else the call stops with an npm error,
-a 404 while nothing is published under the name and `npx canceled due to missing packages` once
+installed at that version and refuse to fetch one. Anywhere else the call stops with an npm error, a
+404 while nothing is published under the name and `npx canceled due to missing packages` once
 something is, and no package is installed or run. The route to a
 runnable copy in this mode is your plugin distribution: each plugin root carries its own copy of
 the engine, and the root's `README.md` prints the locator line that runs it, as
@@ -218,14 +221,15 @@ the workflow tests to match your deliberate customization. This repository's
 assertion for your own filters and your full gate still checks the policy you intended.
 
 Your rename needs no test edit at all. Every suite that has to know who this package is reads
-`test/support/identity.ts`, which answers from your own `package.json`: the name, the publisher,
-whether the package is private and the `<owner>/<repository>` route your `repository.url` names.
-So a test asserts the remedy string, the marketplace source or the Renovate pin that YOUR identity
-implies, and the inherited gate is green on your tree for the same reason it is green upstream. Two
-things are still yours to keep true, and both are data rather than tests: the identity step above
-(the manifest and the two Renovate presets), and the branch filters in the paragraph before this
-one. Run the regenerate list in the same commit as the rename, because the generated trees are
-compared byte for byte and a skipped regeneration reads as drift.
+`test/support/identity.ts`, which answers from your own `package.json`: the name, the version, the
+publisher, whether the package is private, whether a registry serves it, and the
+`<owner>/<repository>` route your `repository.url` names. So a test asserts the remedy string, the
+marketplace source or the Renovate pin that YOUR identity implies, and the inherited gate is green
+on your tree for the same reason it is green upstream. Two things are still yours to keep true, and
+both are data rather than tests: the identity step above (the manifest and the two Renovate
+presets), and the branch filters in the paragraph before this one. Run the regenerate list in the
+same commit as the rename, because the generated trees are compared byte for byte and a skipped
+regeneration reads as drift.
 
 Only then enable the approved CI, upstream and private-release workflows and repository Actions,
 after the organisation owner has verified the bot permissions and the real required pull-request
@@ -377,7 +381,7 @@ merge commit itself**. It carries:
 - the release and its commit, the merge base, and the target head the branch was cut from;
 - every gate with its command, exit code and duration, and the regeneration commands;
 - every conflicted path with its kind and its `resolvedBy`, which is `human` or `regeneration`;
-- the drift rows, the tool version and the timestamp.
+- the drift rows, the record format's version and the timestamp.
 
 The record is evidence, never authority. Delete every record and `status` is still correct, only
 less detailed, because **history is the marker**.
@@ -944,8 +948,8 @@ Set `version` in `package.json`, commit it on the release branch, and push the t
 `v<version>`. A suffix keeps a fork's releases apart from upstream's, and the tag carries it too:
 
 ```sh
-git tag v1.10.0-acme.1
-git push origin v1.10.0-acme.1
+git tag v1.11.0-acme.1
+git push origin v1.11.0-acme.1
 ```
 
 A dispatch of the workflow is a rehearsal unless you say otherwise. Its `dry_run` input starts at
@@ -1010,10 +1014,11 @@ developer who installs the CLI from your registry maps your scope to it once, in
 
 ### Know how the workflow reaches your fork
 
-The workflow ships with the 1.10.0 upstream release. The upstream lane never pushes a release that
-touches `.github/workflows/`, so that update arrives as the `Upstream <tag> needs a reviewed push`
-issue. A person reads the workflow diff and pushes it, as **Turn on the GitHub workflow** below
-describes. A fork on an earlier release has no release workflow until that push lands.
+The workflow first shipped with the 1.10.0 upstream release. The upstream lane never pushes a
+release that touches `.github/workflows/`, so that update arrives as the
+`Upstream <tag> needs a reviewed push` issue. A person reads the workflow diff and pushes it, as
+**Turn on the GitHub workflow** below describes. A fork on an earlier release has no release
+workflow until that push lands.
 
 ## Roll the plugin out to your organization
 
@@ -1038,7 +1043,7 @@ is the file the renderer writes for this repository at the tag its `ref` names:
       "source": {
         "source": "github",
         "repo": "zomarit/stamity",
-        "ref": "plugins/v1.10.0"
+        "ref": "plugins/v1.11.0"
       }
     }
   },
@@ -1049,7 +1054,7 @@ is the file the renderer writes for this repository at the tag its `ref` names:
     {
       "source": "github",
       "repo": "zomarit/stamity",
-      "ref": "plugins/v1.10.0"
+      "ref": "plugins/v1.11.0"
     }
   ],
   "requiredMinimumVersion": "2.1.277"

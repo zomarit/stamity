@@ -23,8 +23,10 @@ npx @zomarit/stamity check
 A healthy repository answers like this. Every row reads `ok`, `plugin-runtime` included: a
 repository that records no plugin and has no plugin root in its environment has nothing to report
 and nothing to act on, so the row passes quietly rather than parking a standing advisory on a run
-that is otherwise clean.
-
+that is otherwise clean. On a repository whose gate commands detection could not resolve, four
+`warning: the <gate> gate cannot be resolved` lines precede an `ok — 4 advisory warning(s) above`
+close instead of `setup green`; `config set gates.<name> "<command>"` settles each (`gates.all` for
+the full gate).
 ```text
 doctor
   ok    node-version         Node 22.22.3 satisfies >=22.22.2
@@ -198,22 +200,23 @@ Three steps stand between the emitted `.codex/hooks.json` and a hook the client 
 3. A per-hook review through the interactive `/hooks` command. Automation that cannot take that
    step uses `--dangerously-bypass-hook-trust` instead.
 
-Headless `codex exec` has never run a project hook in a measured run here. On codex-cli 0.154.0
-it loaded no project hook layer at all, measured on 2026-09-15. On codex-cli 0.155.1
-(2026-09-30) it again ran none in 3 of 3 runs. Both measurements trusted the project through a
-per-invocation `-c` override, which may leave the project `.codex/` layer unloaded, and on
-0.155.1 a project-file `hooks = false` did not turn the feature off under it. So the cause is
-not isolated: `exec` itself, or a layer that never loaded. A run with the project trusted in
-your home `~/.codex/config.toml` is unmeasured. Treat a Codex hook as enforcement in the
-interactive client, and as nothing measured in the headless one.
+Headless `codex exec` has never run a project hook in a measured run here. On codex-cli 0.154.0 it
+ran none in three runs, measured on 2026-09-15. On codex-cli 0.155.1 (2026-09-30) it again ran none
+in 3 of 3 runs. Both measurements trusted the project through a per-invocation `-c` override, which
+may leave the project `.codex/` layer unloaded, and on 0.155.1 a project-file `hooks = false` did
+not turn the feature off under it. So the cause is not isolated: `exec` itself, or a layer that
+never loaded. A run with the project trusted in your home `~/.codex/config.toml` is unmeasured.
+Treat a Codex hook as enforcement in the interactive client, and as nothing measured in the headless
+one.
 
 ### Claude Code blocks every tool call with "the pre-tool-use guard could not run"
 
-That line is the guard failing CLOSED, and it says the guard could not LAUNCH — not that a call
-was refused. The two never arrive together: a refusal names the agent and the tool it denied and
-nothing else, because the tail below re-raises the guard's own exit 2 in silence and prints only
-when the status is neither 0 nor 2. If you see both, the emitted command is not the one this
-version writes — re-sync and compare.
+That line is the guard failing CLOSED, and it says the guard could not LAUNCH — not that a call was
+refused. The two never arrive together: a refusal names the agent and what it denied — a tool by
+name, a write outside its report path, or a shell command that is not read-only git — and never that
+line, because the tail below re-raises the guard's own exit 2 in silence and prints only when the
+status is neither 0 nor 2. If you see both, the emitted command is not the one this version writes —
+re-sync and compare.
 
 The emitted command anchors the script on the client's own project root and turns a failure to
 launch into a block:
@@ -222,8 +225,8 @@ launch into a block:
 "command": "node \"${CLAUDE_PROJECT_DIR}/.stamity/generated/hooks/claude/stamity-pre-tool-use-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@<version> sync`' >&2; exit 2; }"
 ```
 
-`<version>` is the stamity version the setup was generated with, and a renamed fork's package
-stands in place of `@zomarit/stamity`.
+`<version>` is the stamity version the setup was generated with, and a renamed fork's package stands
+in place of `@zomarit/stamity`. A fork no registry serves prints `npx --no` in place of `npx -y`.
 
 Two things reach that branch. The generated tree is gone — `clean` removed it, a fresh checkout
 has not synced, or the file was deleted by hand:

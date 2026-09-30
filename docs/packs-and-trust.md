@@ -184,9 +184,11 @@ own remote (`src/worktree/git.ts::fetchBranch`). A transport failure refuses wit
 and a `--dry-run` never runs the fetch at all.
 
 One further path is network-capable and is no part of any command's work. The startup update
-notice asks the public npm registry whether a newer version exists. It is a GET at most once a
-day. `STAMITY_NO_UPDATE_CHECK=1` turns it off, and so do `NO_UPDATE_NOTIFIER` and `CI` on any
-non-empty value. [`SECURITY.md`](../SECURITY.md) states the same boundary as a control, and lists
+notice asks the npm registry the running package publishes to — the public one for
+`@zomarit/stamity`, and for a fork made with `scripts/fork-identity.mjs --registry` that registry and
+never the public one — whether a version newer than the running one exists. It is a GET at most
+once a day. `STAMITY_NO_UPDATE_CHECK=1` turns it off, and so do `NO_UPDATE_NOTIFIER` and `CI` on
+any non-empty value. [`SECURITY.md`](../SECURITY.md) states the same boundary as a control, and lists
 both exceptions.
 
 ### Nothing waives a failed signature check
@@ -437,7 +439,8 @@ its rows are gone. Plain `stamity clean` with no flag removes the whole setup, p
 Read [`packs/ops/`](../packs/ops/) as the worked example. It is a `pack.json` manifest beside
 class directories such as `agents/`, `skills/` and `commands/`, which hold the content itself. The
 manifest declares the pack's name, version, description, an integrity map with a digest per file,
-and its declared scope. The scope says which tools the pack targets and what it touches.
+and its declared scope: the `declaredTools` and `permissions` fields, which `add` prints under
+`scope`. The scope says which tools the pack targets and what it touches.
 
 Three constraints shape what you can ship. Lifecycle scripts are banned outright, so a pack never
 runs code at install time. Total content is measured against a footprint cap, which is 5 MiB

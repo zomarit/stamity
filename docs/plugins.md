@@ -518,7 +518,7 @@ copy it out of `.stamity/` before `clean -y`, and put it back after `plugin setu
 one uninstall command line per client the manifest recorded, so the plugin side can be removed
 the same way it was added.
 
-No release through 1.10.0 ships a migration engine. Detecting a generated setup, previewing the removals and
+No release through 1.11.0 ships a migration engine. Detecting a generated setup, previewing the removals and
 refusing on a conflict were planned and cut: the clean-then-setup route above is the documented
 one, and it is the one this page will describe until a later minor ships the engine.
 

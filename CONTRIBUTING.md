@@ -28,7 +28,7 @@ npm run check
 | Typecheck | `npm run typecheck` | TypeScript 7, strict: zero errors across `src/`, `test/` and the root `*.config.ts` files |
 | Lint | `npm run lint` | oxlint over the TypeScript surface, ESLint over the JavaScript surface |
 | Test | `npm run test` | The whole suite, all three lanes |
-| Build | `npm run build` | tsdown produces `dist/cli.js` and `dist/index.js` |
+| Build | `npm run build` | tsdown produces `dist/cli.js`, `dist/index.js` and their shared chunk `dist/src.js`, plus the declarations under `dist/types/` |
 | Unused code | `npm run knip` | No orphan file, export or dependency |
 
 CI runs the same six steps on your pull request.
@@ -97,10 +97,11 @@ suite between them. Beside the six steps you already ran, it adds six things:
   client, and on 0.30.0, the current one. It runs once more on 0.29.0 with `--expect-failure`, so
   the check keeps proving it can still see the routing failure that shipped zero primitives while
   exiting 0.
-- The plugin route gate, `node scripts/plugin-route-smoke.mjs`. It builds the four client plugin
-  roots the release builds, then asks the clients about them. It runs without `--invoke`, so what it
-  proves is the credential-free half of the route: each root's structure, plus — where that client's
-  CLI installs on the runner — the install leg and the discovery legs a listing command can answer
+- The plugin route gate. Its lane builds the four client plugin roots the release builds, with the
+  release's own three build lines, then `node scripts/plugin-route-smoke.mjs` asks the clients about
+  them. It runs without `--invoke`, so what it proves is the credential-free half of the route: each
+  root's structure, plus — where that client's CLI installs on the runner — the install leg and the
+  discovery legs a listing command can answer
   without an account. The other half needs a credential and runs elsewhere: discovery wherever the
   only listing of a plugin's ids is what a driven session prints, and every invocation leg. Those run
   nightly (`.github/workflows/nightly.yml`) behind per-client secrets — a workflow armed but disabled
@@ -277,10 +278,10 @@ Thresholds, the run-artifact contract and the case index live in `evals/SET-v7.m
 profile grades against `evals/rubric-v7.md`. Runs are manual, in a harness session, on the
 operator's word.
 
-Select the model pair through `evals/MODEL-PROFILES-v1.md`. The original Claude profile remains the
-default, while `codex-astra` and `codex-astra-judge` support Astra in either role. Calibrate the
-selected judge and rubric, and record the full profile. Never pool results from different profiles
-into one baseline.
+Select the model pair through `evals/MODEL-PROFILES-v1.md`. The Claude profile remains the default,
+while `codex-astra` and `codex-astra-judge` support Astra in either role. Calibrate the selected
+judge and rubric, and record the full profile. Never pool results from different profiles into one
+baseline.
 
 The manual Codex transport is one shell command. Replace `YYYY-MM-DD-run-N` with the run id:
 

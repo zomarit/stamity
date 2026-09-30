@@ -146,7 +146,8 @@ private-catalog route are [the plugins guide](plugins.md)'s to state.
 ## What init writes for each client
 
 `AGENTS.md` is written for every client. It is the charter: your repository's facts, the floor
-invariants, and the index of touchpoints. Three of the four clients read it natively.
+invariants, and the index of touchpoints. Cursor and Copilot read it natively; Codex reads its own
+`AGENTS.override.md`, which repeats it.
 
 `.agents/skills/` is the skills projection. It is written for the clients that read that tree,
 and only when one of them is selected. Claude Code keeps its own copy in `.claude/skills/`
@@ -287,7 +288,9 @@ matters more than the rest: **would a sync change anything?**
 
 If the answer is yes, disk and the engine's output disagree. Something was hand-edited, a
 generated file was deleted, or a pack's content no longer matches what was installed. A failing
-probe or any drift exits 1. Warnings alone exit 0, so `check` works as a CI step unchanged.
+probe or any drift exits 1. Warnings alone exit 0, so `check` works as a CI step unchanged. `check`
+runs no verification gate itself: its last line names the gates it did not run, and a gate the
+charter cannot resolve is a warning naming it.
 
 For a missing generated file, run `stamity sync`, then `stamity check` again. If you hand-edited
 managed content, move your edits to the documented [override path](customization.md) before you
@@ -312,7 +315,9 @@ Everything the setup knows about itself lives under `.stamity/`:
 | `.stamity/generated/` | hook scripts and the agent tool policy, written from code |
 | `.stamity/mcp/` | `copilot-repo-settings.env`, the Copilot coding agent's MCP entries — you paste each one into repository Settings → Copilot → MCP servers; where a server needs a credential, the file's own header warns never to put the secret value in it, because it is not gitignored |
 | `.stamity/packs/` | content installed by `add`, one directory per pack |
+| `.stamity/policy.json` | the pack source policy `config policy init` writes; `add` evaluates it before any install |
 | `.stamity/overrides/` | agents, rules, commands and skills of your own, merged above the bundled content |
+| `.stamity/hooks/` | hook declarations of your own, which `validate` checks |
 | `.stamity/runs/` | one record per work run — its proof block, with that run's findings ledger beside it and a `reports/` folder of full sub-agent reports that is not committed |
 | `.stamity/verify/` | one artifact per quality axis per commit, written by the verify skill |
 | `.stamity/evidence/` | browser and QA evidence bundles, one per commit that captured them |

@@ -328,7 +328,8 @@ capabilities require the packaged CLI.
 The [Client capability matrix](capability-matrix.md) is the generated, per-client reference. The
 limits below are the ones an override author meets most often. The dated
 [client contract evidence](../.github/client-contracts.md) links the official sources and records
-which guarantees the local fixtures exercise. It was last re-attested on 2026-09-22.
+which guarantees the local fixtures exercise. Its Codex hook paragraph was last re-attested on
+2026-09-30, every other bullet on 2026-09-22.
 
 Bundled skills declare `license: MIT` and their runtime prerequisites in `compatibility`. Both
 fields pass through the skill projection untouched, and so does `allowed-tools`, so a skill

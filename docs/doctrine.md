@@ -173,8 +173,10 @@ Three of the four clients pay the charter alone today, for two different reasons
 rule layer already defers a rule that declares no globs until the conversation matches it. Claude
 and copilot get those same rules projected as skills instead, opened on description. Codex is the
 fourth. It has no per-rule attach mechanism, so it loads the charter plus the rules that have to
-stay unconditional, and the rest reach it as skills too. The ceiling counts whatever the client
-is handed, because a rule silently dropped is a floor that stopped binding.
+stay unconditional, and the rest reach it as skills too. That slice is a Codex-only root
+`AGENTS.override.md`; the shared `AGENTS.md` stays the charter alone whether or not Codex is
+selected. The ceiling counts whatever the client is handed, because a rule silently dropped is a
+floor that stopped binding.
 
 Do not read the figures off this page. `ALWAYS_ON_BUDGET_LINES` in
 [`src/content/charter.ts`](../src/content/charter.ts) holds the per-client ceilings. The corpus
