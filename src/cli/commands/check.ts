@@ -1,12 +1,12 @@
-import { existsSync, statSync } from "node:fs";
+import { accessSync, constants as fsConstants, existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { delimiter, join, relative, sep } from "node:path";
+import { delimiter, join, relative, resolve, sep } from "node:path";
 import type { App, EngineRegistry } from "../../index.ts";
 import { CLAUDE_SETTINGS_PATH } from "../../adapters/claude.ts";
 import { readCharterTemplate } from "../../content/charter.ts";
 import { isPluginOwned } from "../../emit/ownership.ts";
 import { renderInvariantsVersion } from "../../emit/substitution.ts";
-import { readInstallMode } from "../../manifest/manifest.ts";
+import { readGates, readInstallMode } from "../../manifest/manifest.ts";
 import {
   extractManagedBlock,
   hasManagedBlock,
@@ -74,11 +74,14 @@ import { provenanceFromManifest, type ProvenanceRollup } from "./sync/report.ts"
  * a generated file being tampered with — had stopped, and nothing on screen
  * said so in those terms.
  *
- * Second, `all green — nothing to do` prints only when the run is actually
- * green. It used to print alongside exit 1 whenever every doctor row passed and
- * the drift gate had been swallowed, so a human reading the terminal and a CI
- * job reading `$?` reached opposite conclusions — and the human's was the wrong
- * one. The closing block is derived from the same `ok` the exit code is.
+ * Second, the green close prints only when the run is actually green. It used
+ * to print alongside exit 1 whenever every doctor row passed and the drift gate
+ * had been swallowed, so a human reading the terminal and a CI job reading `$?`
+ * reached opposite conclusions — and the human's was the wrong one. The closing
+ * block is derived from the same `ok` the exit code is. And the close never
+ * claims more than check did: it reads `setup green` and names the lint, type
+ * check and test gates it did not run, because the old `all green — nothing to
+ * do` was taken for a verified tree when no gate had run (REQ-FLOW-008).
  *
  * Nothing here writes. The two probes that could — the orphan temp-file sweep
  * and the pack-integrity re-hash — are read-only by construction: the sweep
@@ -1181,6 +1184,157 @@ function driftReportOf(outcome: DriftOutcome): DriftReport | null {
   return outcome.kind === "evaluated" ? outcome.report : null;
 }
 
+// ── Gates ──────────────────────────────────────────────────────────────────
+
+/**
+ * The charter's three gate rows, in the order the close names them. `check`
+ * runs none of them: it answers about the setup, and a green close that did not
+ * say so read as a verified tree (REQ-FLOW-008).
+ */
+const NOT_RUN_GATES = ["lint", "typecheck", "test"] as const;
+
+/**
+ * Every row the charter prints, keyed as the manifest's `gates` block is and
+ * named as `unresolvedGate` names it — the full gate's kind is `full-gate`
+ * (`../../detect/verificationGates.ts`).
+ */
+const CHARTER_GATE_ROWS = [
+  { key: "lint", kind: "lint" },
+  { key: "typecheck", kind: "typecheck" },
+  { key: "test", kind: "test" },
+  { key: "all", kind: "full-gate" },
+] as const;
+
+/** One charter gate this machine cannot resolve, and the value the charter carries for it. */
+export interface UnresolvedGate {
+  readonly kind: string;
+  readonly value: string;
+}
+
+/** What the close says about gates: the ones not run, and the ones that could not run here. */
+export interface CharterGateReport {
+  readonly notRun: readonly string[];
+  readonly unresolved: readonly UnresolvedGate[];
+}
+
+/**
+ * The charter's gates as this repository resolves them, and which of them
+ * could not run on this machine.
+ *
+ * A gate is unresolved on either of two grounds:
+ *
+ * 1. **Nothing to run.** For the three single gates this is `plugin status`'s
+ *    definition (`./plugin/status.ts`, `unconfiguredFacts`): no pin, and
+ *    detection resolved nothing. It is not read off the rendered value's
+ *    `unknown — no` prefix, because a pinned command is the operator's answer
+ *    whatever it spells. The full gate is where that definition does not fit:
+ *    a pin on any single gate recomposes the chain, so the full gate is absent
+ *    only when it is not pinned and all three single gates are absent.
+ * 2. **Its first word finds nothing.** A word with a path separator is a path
+ *    relative to the root (a pinned `.venv/bin/python` is one); any other word
+ *    is looked up as an executable file in `node_modules/.bin/`, `.venv/bin/`
+ *    and each `PATH` entry, in that order. On Windows each lookup tries the
+ *    `PATHEXT` extensions, `node_modules/.bin/<x>.cmd` always, and the word as
+ *    written only when it already carries an extension — `cmd.exe` runs no
+ *    extensionless file.
+ *
+ * Nothing is spawned: every probe is a file-system read, so a gate whose
+ * command has side effects, or hangs, cannot be triggered by the read-only
+ * verb. Pure and exported for the reason `checkClaudeHookShell` is: the Windows
+ * branch cannot be reached in-process on a POSIX host, so platform and env are
+ * injected.
+ */
+export function resolveCharterGates(
+  rootDir: string,
+  manifest: SetupManifest,
+  gates: EngineRegistry["detect"]["verificationGates"],
+  host: {
+    readonly platform: NodeJS.Platform;
+    readonly env: Readonly<Record<string, string | undefined>>;
+  },
+): CharterGateReport {
+  const pinned = readGates(manifest);
+  const detected = gates.verificationCommandsFor(manifest.detected);
+  const values = gates.verificationGatesFor(manifest.detected, pinned);
+  const absent = (key: (typeof NOT_RUN_GATES)[number]): boolean =>
+    pinned[key] === undefined && detected[key] === undefined;
+  const unresolved = CHARTER_GATE_ROWS.filter(({ key }) => {
+    const missing =
+      key === "all" ? pinned.all === undefined && NOT_RUN_GATES.every(absent) : absent(key);
+    return missing || !commandResolves(values[key], rootDir, host);
+  }).map(({ key, kind }) => ({ kind, value: values[key] }));
+  return { notRun: [...NOT_RUN_GATES], unresolved };
+}
+
+/** Whether the first word of `command` names something this machine could execute. */
+function commandResolves(
+  command: string,
+  rootDir: string,
+  host: {
+    readonly platform: NodeJS.Platform;
+    readonly env: Readonly<Record<string, string | undefined>>;
+  },
+): boolean {
+  const word = firstCommandWord(command);
+  if (word === null) return false;
+  if (/[\\/]/.test(word)) return existsSync(resolve(rootDir, word));
+
+  const windows = host.platform === "win32";
+  // Windows spells the key `Path`; POSIX keys are case-sensitive, so only there
+  // is the match loosened (the same rule `checkClaudeHookShell` reads PATH by).
+  const pathKey = Object.keys(host.env).find((name) =>
+    windows ? /^path$/i.test(name) : name === "PATH",
+  );
+  const pathEntries = (pathKey === undefined ? "" : (host.env[pathKey] ?? ""))
+    .split(windows ? ";" : ":")
+    // A quoted entry is legal on Windows; libuv strips the pair when it walks PATH.
+    .map((entry) => entry.replace(/^"(.*)"$/, "$1"))
+    .filter((entry) => entry !== "");
+  const nodeBin = join(rootDir, "node_modules", ".bin");
+  const dirs = [nodeBin, join(rootDir, ".venv", "bin"), ...pathEntries];
+
+  if (!windows) return dirs.some((dir) => isExecutableFile(join(dir, word), fsConstants.X_OK));
+  const extensions = (host.env["PATHEXT"] ?? ".COM;.EXE;.BAT;.CMD")
+    .split(";")
+    .filter((extension) => extension !== "")
+    // Both spellings: PATHEXT is upper case by convention, the files rarely are,
+    // and a case-sensitive file system (a Linux CI leg) tells them apart.
+    .flatMap((extension) => [extension, extension.toLowerCase()]);
+  const asWritten = /\.[^.]+$/.test(word) ? [word] : [];
+  return dirs.some((dir) => {
+    const names = [
+      ...asWritten,
+      ...extensions.map((extension) => `${word}${extension}`),
+      ...(dir === nodeBin ? [`${word}.cmd`] : []),
+    ];
+    // Existence, not X_OK: Windows has no execute bit (Node's X_OK answers
+    // existence there), and the extension is what makes a file runnable.
+    return names.some((name) => isExecutableFile(join(dir, name), fsConstants.F_OK));
+  });
+}
+
+/**
+ * The program a gate command starts with: the first word, unquoted, after any
+ * leading `NAME=value` assignments. `null` for a blank command.
+ */
+function firstCommandWord(command: string): string | null {
+  const words = command.match(/"[^"]*"|'[^']*'|\S+/g) ?? [];
+  const program = words.find((word) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(word));
+  if (program === undefined) return null;
+  const unquoted = program.replace(/^(["'])(.*)\1$/, "$2");
+  return unquoted === "" ? null : unquoted;
+}
+
+/** A regular file at `candidate` that passes the `mode` access check. */
+function isExecutableFile(candidate: string, mode: number): boolean {
+  try {
+    accessSync(candidate, mode);
+    return statSync(candidate).isFile();
+  } catch {
+    return false;
+  }
+}
+
 // ── Rendering ──────────────────────────────────────────────────────────────
 
 /** Fixed-width status tokens; ASCII renders on every terminal the CLI targets. */
@@ -1322,7 +1476,8 @@ function collisionStep(paths: readonly string[]): string {
 }
 
 /**
- * The closing block: what to run next, or that there is nothing to run.
+ * The closing block: what to run next, or that the setup is green and which
+ * gates this run did not run.
  *
  * `ok` is passed in rather than re-derived, because it is the same value the
  * exit code is computed from. A closing line computed independently is exactly
@@ -1331,12 +1486,18 @@ function collisionStep(paths: readonly string[]): string {
  * `ok` false this block always prints a `next:` list — and if no specific step
  * matched, it says the run is not green and names the rows to read, which is
  * still an instruction rather than a contradiction.
+ *
+ * The gate lines print only on the green close: a run that is not green ends
+ * on what to fix, and a gate warning beside it would bury the instruction. Each
+ * unresolved gate counts toward the advisory total the close states, since it
+ * is one more warning printed above it.
  */
 function renderNextSteps(
   ctx: CliContext,
   doctor: readonly DoctorCheck[],
   outcome: DriftOutcome,
   ok: boolean,
+  gates: CharterGateReport | null,
 ): void {
   const steps: string[] = [];
   if (doctor.some((row) => row.id === "manifest" && row.status === "fail")) {
@@ -1374,11 +1535,20 @@ function renderNextSteps(
     );
   }
   if (steps.length === 0 && ok) {
-    const warnings = doctor.filter((row) => row.status === "warn").length;
+    const unresolved = gates?.unresolved ?? [];
+    if (unresolved.length > 0) ctx.io.out("\n");
+    for (const gate of unresolved) {
+      ctx.io.out(
+        `${ctx.palette.yellow(`warning: the ${gate.kind} gate cannot be resolved`)} — the charter ` +
+          `says "${gate.value}"\n`,
+      );
+    }
+    const warnings = doctor.filter((row) => row.status === "warn").length + unresolved.length;
+    const notRun = `gates not run: ${NOT_RUN_GATES.join(", ")} (check runs no gate)`;
     ctx.io.out(
       warnings === 0
-        ? `\n${ctx.palette.green("all green")} — nothing to do\n`
-        : `\n${ctx.palette.green("ok")} — ${warnings} advisory warning(s) above, nothing to do\n`,
+        ? `\n${ctx.palette.green("setup green")} — ${notRun}\n`
+        : `\n${ctx.palette.green("ok")} — ${warnings} advisory warning(s) above; ${notRun}\n`,
     );
     return;
   }
@@ -1498,10 +1668,20 @@ export const checkCommand: CommandModule = {
       drift.kind === "evaluated" &&
       drift.report.clean;
 
+    // From the manifest already read above. No manifest, no charter gates to
+    // name: the `manifest` row fails and the close is the `init` step.
+    const gates =
+      manifestState.manifest === null
+        ? null
+        : resolveCharterGates(rootDir, manifestState.manifest, ctx.engine.detect.verificationGates, {
+            platform: process.platform,
+            env: ctx.app.runtime.env,
+          });
+
     renderDoctor(ctx, doctor);
     renderDrift(ctx, drift);
     renderProvenance(ctx, provenance);
-    renderNextSteps(ctx, doctor, drift, ok);
+    renderNextSteps(ctx, doctor, drift, ok, gates);
 
     const report = driftReportOf(drift);
     return {
@@ -1522,6 +1702,17 @@ export const checkCommand: CommandModule = {
         // from "the plan is broken", and those need different responses.
         driftStatus: drift.kind,
         provenance,
+        // Data about the charter, so present whether or not the run is green;
+        // absent only when there is no manifest to read it from. The exit code
+        // never reads it: an unresolved gate is advisory.
+        ...(gates === null
+          ? {}
+          : {
+              gates: {
+                notRun: [...gates.notRun],
+                unresolved: gates.unresolved.map((gate) => gate.kind),
+              },
+            }),
         ok,
         // A returned exit-1 result owes an error document. It is the drift
         // gate's failure when there is one — that is the cause a machine

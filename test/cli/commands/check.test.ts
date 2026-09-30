@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { delimiter, join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -9,6 +9,7 @@ import {
   checkClaudeHookShell,
   checkCommand,
   checkNodeVersion,
+  resolveCharterGates,
   runDoctor,
   runDriftGate,
   type DoctorCheck,
@@ -28,9 +29,15 @@ import {
 } from "../../../src/manifest/manifest.ts";
 import type { Tool } from "../../../src/types/core.ts";
 import { EngineError } from "../../../src/types/errors.ts";
-import { packOwner, type LedgerEntry, type SetupManifest } from "../../../src/types/manifest.ts";
+import {
+  packOwner,
+  type GatesConfig,
+  type LedgerEntry,
+  type SetupManifest,
+} from "../../../src/types/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
 import type * as PathsApi from "../../../src/shared/paths.ts";
+import type * as ChildProcessApi from "node:child_process";
 import { canonical, npxCommand } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
@@ -204,6 +211,8 @@ interface Envelope {
   drift: DriftDoc | null;
   driftStatus: "evaluated" | "no-manifest" | "failed";
   provenance: ProvenanceDoc | null;
+  /** Absent when there is no readable manifest to read the charter's gates from. */
+  gates?: { notRun: string[]; unresolved: string[] };
   error?: unknown;
 }
 
@@ -220,6 +229,14 @@ interface SeedOptions {
   files?: Record<string, string>;
   /** The manifest's plugin record, as `stamity plugin setup` persists it. */
   plugin?: SetupManifest["plugin"];
+  /**
+   * Files seeded BEFORE the fixture sync. Sync re-detects the repository and persists what it
+   * found as the manifest's `detected` block, so this is how a fixture chooses what detection
+   * records; `files` lands after the sync and is never read by it.
+   */
+  repoFiles?: Record<string, string>;
+  /** The manifest's `gates` pins, as `config set gates.<key>` persists them. */
+  gates?: GatesConfig;
 }
 
 /**
@@ -260,7 +277,11 @@ async function seedRepo(handle: TempDirHandle, opts: SeedOptions = {}): Promise<
     now: T0,
     ...(opts.mcpServers === undefined ? {} : { mcp: { servers: opts.mcpServers } }),
   });
+  // Pinned before the sync, so the emitted files are rendered against the same
+  // gates the manifest carries and the drift gate reads clean.
+  if (opts.gates !== undefined) base.gates = opts.gates;
   await writeManifest(handle.dir, base, { now: T0 });
+  if (opts.repoFiles !== undefined) await handle.seedFiles(opts.repoFiles);
 
   if (opts.stateDirs !== false) {
     await Promise.all(
@@ -309,8 +330,14 @@ async function hashTree(root: string): Promise<Record<string, string>> {
 }
 
 /** Runs `check --json` and parses the single document the funnel emits. */
-async function runJson(cwd: string): Promise<{ code: number; doc: Envelope }> {
-  const result = await runInProcess([checkCommand], ["check", "--json"], { cwd });
+async function runJson(
+  cwd: string,
+  env?: Record<string, string | undefined>,
+): Promise<{ code: number; doc: Envelope }> {
+  const result = await runInProcess([checkCommand], ["check", "--json"], {
+    cwd,
+    ...(env === undefined ? {} : { env }),
+  });
   const lines = result.stdout.trim().split("\n");
   // One run, one document: a second line would mean human output leaked past
   // the funnel's JSON suppression.
@@ -318,8 +345,11 @@ async function runJson(cwd: string): Promise<{ code: number; doc: Envelope }> {
   return { code: result.code, doc: JSON.parse(lines[0] ?? "") as Envelope };
 }
 
-function runHuman(cwd: string): Promise<{ code: number; stdout: string; stderr: string }> {
-  return runInProcess([checkCommand], ["check"], { cwd });
+function runHuman(
+  cwd: string,
+  env?: Record<string, string | undefined>,
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  return runInProcess([checkCommand], ["check"], { cwd, ...(env === undefined ? {} : { env }) });
 }
 
 function row(doc: Envelope, id: string): DoctorCheck {
@@ -414,7 +444,12 @@ describe("check — a healthy repository", () => {
     expect(result.stdout).toContain("node-version");
     expect(result.stdout).toContain("drift: clean");
     expect(result.stdout).toContain("provenance (the manifest is the record)");
-    expect(result.stdout).toContain("nothing to do");
+    // TEST CHANGE, justified (REQ-FLOW-008, plan 013 sw04-check-names-unrun-gates): the
+    // closing line's contract moved. It said "nothing to do", which read as "all verified"
+    // while check runs no gate at all; it now names the three charter gates it did not run.
+    // The assertion still pins that a green run ends on its closing line.
+    expect(result.stdout).toContain("gates not run: lint, typecheck, test (check runs no gate)");
+    expect(result.stdout).not.toMatch(/all green/);
     expect(result.stderr).toBe("");
   });
 
@@ -1360,7 +1395,7 @@ describe("check — a drift gate that cannot run", () => {
     expect(human.stdout).not.toContain("all green");
   });
 
-  it("keeps printing the nothing-to-do close for a genuinely green run", async () => {
+  it("keeps printing the green close, naming the unrun gates, for a genuinely green run", async () => {
     // The temp fixture is not a git repository, so `git-available` warns — the
     // green close is therefore the advisory variant, and the exit is still 0.
     // Both halves matter: the honesty rule must not have made a passing run
@@ -1370,7 +1405,11 @@ describe("check — a drift gate that cannot run", () => {
     const result = await runHuman(root);
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("nothing to do");
+    // TEST CHANGE, justified (REQ-FLOW-008, plan 013 sw04-check-names-unrun-gates): the
+    // advisory close no longer says "nothing to do" — check runs no gate, so it names the
+    // three it did not run. What this case guards is unchanged: a green run exits 0 on the
+    // advisory close and never prints a `next:` list.
+    expect(result.stdout).toMatch(/ok — \d+ advisory warning\(s\) above; gates not run: lint, typecheck, test/);
     expect(result.stdout).not.toContain("next:");
   });
 });
@@ -2188,6 +2227,361 @@ const agentRow = (id: string): LedgerEntry => ({
 
 const duplicatesRow = (root: string): Promise<DoctorCheck> =>
   doctorRow(root, "plugin-duplicates");
+
+/**
+ * A Node repository as detection reads it: a `package.json` declaring the three scripts, so
+ * the charter's gates are `npm run lint`, `npm run typecheck` and `npm run test`. Without it
+ * the fixture detects nothing and every gate renders as the `unknown` sentence.
+ */
+const NODE_REPO = {
+  "package.json": `${JSON.stringify({
+    name: "fixture",
+    private: true,
+    scripts: { lint: "eslint .", typecheck: "tsc --noEmit", test: "vitest run" },
+  })}\n`,
+};
+
+/**
+ * A directory holding runnable stand-ins for `names`: the bare POSIX script, executable,
+ * and the `.cmd` twin a Windows leg resolves through `PATHEXT`. Their bodies never run —
+ * `check` only looks for them.
+ */
+async function toolDir(
+  handle: TempDirHandle,
+  dir: string,
+  names: readonly string[],
+): Promise<string> {
+  await handle.seedFiles(
+    Object.fromEntries(
+      names.flatMap((name) => [
+        [`${dir}/${name}`, "#!/bin/sh\nexit 0\n"],
+        [`${dir}/${name}.cmd`, "@exit /b 0\r\n"],
+      ]),
+    ),
+  );
+  await Promise.all(names.map((name) => chmod(handle.path(dir, name), 0o755)));
+  return handle.path(dir);
+}
+
+/** An env whose PATH holds exactly `dirs`, in the host's own list syntax. */
+const pathEnv = (...dirs: string[]): Record<string, string> => ({ PATH: dirs.join(delimiter) });
+
+/** A Node fixture that pins the test gate to a bare `pytest`. */
+async function pinnedPytest(handle: TempDirHandle): Promise<SetupManifest> {
+  const root = await seedRepo(handle, { repoFiles: NODE_REPO, gates: { test: "pytest" } });
+  const manifest = await readManifest(root);
+  if (manifest === null) throw new Error("the fixture wrote no manifest");
+  return manifest;
+}
+
+/**
+ * The gates `check` does not run (REQ-FLOW-008, plan 013 sw04-check-names-unrun-gates).
+ *
+ * `check` answers about the SETUP, and its green close used to read "all green — nothing to
+ * do": an operator took that for a verified tree while no lint, type check or test had run.
+ * The close now names the three charter gates it did not run, and a gate the charter names
+ * but this machine cannot resolve gets its own warning line — resolved by reading the file
+ * system, never by spawning.
+ *
+ * Every command-level case pins `PATH` in the injected env, so a gate's verdict is a
+ * statement about the fixture rather than about the shell the suite was started from.
+ */
+describe("check — the gates it did not run (REQ-FLOW-008)", () => {
+  /** Kinds in the order `check` reports them; `all` reads as `full-gate` (verificationGates.ts). */
+  const ALL_KINDS = ["lint", "typecheck", "test", "full-gate"];
+
+  it("names the three gates it did not run on a clean repo, never says all green, and exits 0", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { repoFiles: NODE_REPO });
+    const env = pathEnv(await toolDir(handle, "tools", ["npm"]));
+
+    const human = await runHuman(root, env);
+    const { code, doc } = await runJson(root, env);
+
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain("gates not run: lint, typecheck, test (check runs no gate)");
+    expect(human.stdout).not.toMatch(/all green/);
+    expect(human.stdout).not.toContain("cannot be resolved");
+    expect(code).toBe(0);
+    expect(doc.ok).toBe(true);
+    expect(doc.gates).toEqual({ notRun: ["lint", "typecheck", "test"], unresolved: [] });
+  });
+
+  it("closes on `setup green` when nothing is advisory, as the troubleshooting sample shows", async () => {
+    // The sample transcript's closing line is a claim about output, held to a real run the
+    // way the page's plugin-runtime line is below. The fixture is a git repository so the
+    // `git-available` row passes, which is what makes the close the no-warning variant.
+    const handle = getRepo();
+    const root = await seedRepo(handle, { repoFiles: NODE_REPO });
+    await new Promise<void>((settle, reject) => {
+      execFile("git", ["init", "-q"], { cwd: root }, (error) =>
+        error === null ? settle() : reject(error),
+      );
+    });
+    const env = pathEnv(await toolDir(handle, "tools", ["npm"]));
+
+    const result = await runHuman(root, env);
+    const closing = result.stdout.trimEnd().split("\n").at(-1);
+
+    expect(result.code).toBe(0);
+    expect(closing).toBe("setup green — gates not run: lint, typecheck, test (check runs no gate)");
+    const page = await readFile(
+      fileURLToPath(new URL("../../../docs/troubleshooting.md", import.meta.url)),
+      "utf8",
+    );
+    expect(page.split("\n")).toContain(closing);
+  });
+
+  it("names every gate unresolved when detection recorded nothing, and still exits 0", async () => {
+    // The bare fixture has no manifest file of any stack, so sync persisted an empty
+    // `detected` block — the first-run repository the onboarding guide is written for.
+    const handle = getRepo();
+    const root = await seedRepo(handle);
+    expect((await readManifest(root))?.detected).toEqual({
+      languages: [],
+      linters: [],
+      testFrameworks: [],
+      ciProviders: [],
+    });
+    const env = pathEnv(await toolDir(handle, "tools", ["npm"]));
+
+    const human = await runHuman(root, env);
+    const { code, doc } = await runJson(root, env);
+
+    expect(human.code).toBe(0);
+    for (const kind of ALL_KINDS) {
+      expect(human.stdout).toContain(
+        `warning: the ${kind} gate cannot be resolved — the charter says ` +
+          `"unknown — no ${kind} command detected; ask the user"`,
+      );
+    }
+    // The four gate warnings count toward the advisory total the close states.
+    const doctorWarnings = doc.doctor.filter((entry) => entry.status === "warn").length;
+    expect(human.stdout).toContain(
+      `ok — ${doctorWarnings + 4} advisory warning(s) above; gates not run: lint, typecheck, test`,
+    );
+    expect(code).toBe(0);
+    expect(doc.gates).toEqual({ notRun: ["lint", "typecheck", "test"], unresolved: ALL_KINDS });
+  });
+
+  it("names a pinned test gate whose command is nowhere, and resolves it once .venv/bin holds it", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { repoFiles: NODE_REPO, gates: { test: "pytest" } });
+    const env = pathEnv(await toolDir(handle, "tools", ["npm"]));
+
+    const missing = await runHuman(root, env);
+    expect(missing.code).toBe(0);
+    expect(missing.stdout).toContain(
+      'warning: the test gate cannot be resolved — the charter says "pytest"',
+    );
+    // The recomposed full gate ends on the same unresolved-looking word, but it LEADS with
+    // `npm`, which resolves: only the first word is looked up.
+    expect(missing.stdout).not.toContain("the full-gate gate cannot be resolved");
+    expect((await runJson(root, env)).doc.gates?.unresolved).toEqual(["test"]);
+
+    await toolDir(handle, ".venv/bin", ["pytest"]);
+    const found = await runJson(root, env);
+    expect(found.doc.gates?.unresolved).toEqual([]);
+  });
+
+  it("resolves a first word under node_modules/.bin and ignores the empty PATH it is not on", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { gates: { lint: "eslint .", typecheck: "tsc --noEmit" } });
+    await toolDir(handle, "node_modules/.bin", ["eslint"]);
+
+    const { code, doc } = await runJson(root, { PATH: "" });
+
+    expect(code).toBe(0);
+    // eslint resolves from the repo's own bin, and so does the full gate, which is recomposed
+    // from the pins and leads with it; tsc is nowhere, and the fixture detected no test gate.
+    expect(doc.gates?.unresolved).toEqual(["typecheck", "test"]);
+  });
+
+  it("resolves a pinned relative interpreter path against the root, not against PATH", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, {
+      repoFiles: NODE_REPO,
+      gates: { test: ".venv/bin/python -m pytest" },
+    });
+    const env = pathEnv(await toolDir(handle, "tools", ["npm"]));
+
+    const absent = await runHuman(root, env);
+    expect(absent.stdout).toContain(
+      'warning: the test gate cannot be resolved — the charter says ".venv/bin/python -m pytest"',
+    );
+
+    await toolDir(handle, ".venv/bin", ["python"]);
+    expect((await runJson(root, env)).doc.gates?.unresolved).toEqual([]);
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "does not take a file that is present but not executable",
+    async () => {
+      // POSIX only: Windows has no execute bit, and X_OK there answers existence.
+      const handle = getRepo();
+      const root = await seedRepo(handle, { repoFiles: NODE_REPO, gates: { test: "pytest" } });
+      const env = pathEnv(await toolDir(handle, "tools", ["npm"]));
+      await handle.seedFiles({ ".venv/bin/pytest": "#!/bin/sh\n" });
+      await chmod(handle.path(".venv/bin/pytest"), 0o644);
+
+      expect((await runJson(root, env)).doc.gates?.unresolved).toEqual(["test"]);
+    },
+  );
+
+  it("names a pinned full gate as pinned, never recomposed from the three", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { repoFiles: NODE_REPO, gates: { all: "make verify" } });
+    const env = pathEnv(await toolDir(handle, "tools", ["npm"]));
+
+    const human = await runHuman(root, env);
+
+    expect(human.stdout).toContain(
+      'warning: the full-gate gate cannot be resolved — the charter says "make verify"',
+    );
+    expect((await runJson(root, env)).doc.gates?.unresolved).toEqual(["full-gate"]);
+
+    await toolDir(handle, "tools", ["npm", "make"]);
+    expect((await runJson(root, env)).doc.gates?.unresolved).toEqual([]);
+  });
+
+  it("prints no gate line on a run that is not green, and keeps the next: list", async () => {
+    // Drift makes `ok` false. The gates are still in the payload (they are data about the
+    // charter), but the screen ends on what to run next, as it did before.
+    const handle = getRepo();
+    const root = await seedRepo(handle, {
+      ledger: [
+        { path: "docs/gone.md", adapter: packOwner("demo"), artifactId: "gone", artifactType: "skill" },
+      ],
+    });
+
+    const human = await runHuman(root, pathEnv());
+    const { code, doc } = await runJson(root, pathEnv());
+
+    expect(human.code).toBe(1);
+    expect(human.stdout).toContain("next:");
+    expect(human.stdout).not.toContain("gates not run");
+    expect(human.stdout).not.toContain("cannot be resolved");
+    expect(code).toBe(1);
+    expect(doc.gates?.unresolved).toEqual(ALL_KINDS);
+  });
+
+  it("omits the gates without a manifest, and the init step still prints", async () => {
+    const handle = getRepo();
+    __setContentRootForTests(handle.path("corpus"));
+
+    const human = await runHuman(handle.dir, pathEnv());
+    const { doc } = await runJson(handle.dir, pathEnv());
+
+    expect(human.stdout).toContain(`${npxCommand("init")} — this repository has no usable manifest`);
+    expect(human.stdout).not.toContain("gates not run");
+    expect(doc).not.toHaveProperty("gates");
+  });
+
+  it("resolves the gates without spawning: check still exits 0 with every child_process entry throwing", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { repoFiles: NODE_REPO, gates: { test: "pytest" } });
+    const env = pathEnv(await toolDir(handle, "tools", ["npm", "pytest"]));
+
+    // A double, because the claim is about the ABSENCE of a call: the real module cannot
+    // report that nobody reached for it. Every spawning entry point records the program it
+    // was asked for and throws, so a gate probe that ran `which pytest` or `npm --version`
+    // would show in `attempted`. The fresh module graph re-pins the content root, because
+    // `vi.resetModules` gives check a new `contentRoot` module with no seam set.
+    const attempted: string[] = [];
+    vi.resetModules();
+    vi.doMock("node:child_process", async (importOriginal) => {
+      const actual = await importOriginal<typeof ChildProcessApi>();
+      const refuse =
+        (name: string) =>
+        (file: unknown): never => {
+          attempted.push(String(file));
+          throw new Error(`child_process.${name} is stubbed to throw`);
+        };
+      return {
+        ...actual,
+        spawn: refuse("spawn"),
+        spawnSync: refuse("spawnSync"),
+        exec: refuse("exec"),
+        execSync: refuse("execSync"),
+        execFile: refuse("execFile"),
+        execFileSync: refuse("execFileSync"),
+        fork: refuse("fork"),
+      };
+    });
+    try {
+      const fresh = await import("../../../src/cli/commands/check.ts");
+      const { __setContentRootForTests: pinFreshCorpus } = await import(
+        "../../../src/content/contentRoot.ts"
+      );
+      pinFreshCorpus(handle.path("corpus"));
+      const result = await runInProcess([fresh.checkCommand], ["check"], { cwd: root, env });
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain("gates not run: lint, typecheck, test");
+      expect(result.stdout).not.toContain("cannot be resolved");
+      // The doctor's own git probe is the one spawner check has; nothing else was asked for.
+      expect(attempted.filter((file) => file !== "git")).toEqual([]);
+    } finally {
+      vi.doUnmock("node:child_process");
+      vi.resetModules();
+    }
+  });
+
+  it("looks up the program past leading NAME=value assignments and quotes, and a bare assignment names none", async () => {
+    const handle = getRepo();
+    const manifest = await pinnedPytest(handle);
+    const tools = await toolDir(handle, "tools", ["npm", "pytest"]);
+    const gates = createEngine().detect.verificationGates;
+    const kindsFor = (test: string): string[] =>
+      resolveCharterGates(handle.dir, { ...manifest, gates: { test } }, gates, {
+        platform: "linux",
+        env: { PATH: tools },
+      }).unresolved.map((gate) => gate.kind);
+
+    expect(kindsFor('CI=1 PYTHONPATH=src "pytest" -q')).toEqual([]);
+    expect(kindsFor("CI=1")).toEqual(["test"]);
+  });
+
+  describe("resolveCharterGates on a Windows host", () => {
+    // The Windows branch cannot be reached through `check` on a POSIX host, so the platform
+    // is injected, as `checkClaudeHookShell`'s is.
+    it("takes node_modules/.bin/<x>.cmd through PATHEXT, and the same file is no answer on POSIX", async () => {
+      const handle = getRepo();
+      const manifest = await pinnedPytest(handle);
+      await handle.seedFiles({ "node_modules/.bin/pytest.cmd": "@exit /b 0\r\n" });
+      const gates = createEngine().detect.verificationGates;
+
+      const windows = resolveCharterGates(handle.dir, manifest, gates, {
+        platform: "win32",
+        env: { PATH: "", PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+      });
+      const posix = resolveCharterGates(handle.dir, manifest, gates, {
+        platform: "linux",
+        env: { PATH: "" },
+      });
+
+      expect(windows.unresolved.map((gate) => gate.kind)).not.toContain("test");
+      expect(posix.unresolved.map((gate) => gate.kind)).toContain("test");
+    });
+
+    it("walks a `Path` entry with each PATHEXT extension, and misses a name no extension completes", async () => {
+      const handle = getRepo();
+      const manifest = await pinnedPytest(handle);
+      await handle.seedFiles({ "win-bin/npm.CMD": "@exit /b 0\r\n", "win-bin/pytest": "" });
+      const gates = createEngine().detect.verificationGates;
+
+      const report = resolveCharterGates(handle.dir, manifest, gates, {
+        platform: "win32",
+        // Windows spells the key `Path`, and a quoted entry is legal there.
+        env: { Path: `"${handle.path("win-bin")}"`, PATHEXT: ".EXE;.CMD" },
+      });
+
+      // npm resolves as npm.CMD; a bare `pytest` is not something cmd.exe would run.
+      expect(report.unresolved.map((gate) => gate.kind)).toEqual(["test"]);
+      expect(report.notRun).toEqual(["lint", "typecheck", "test"]);
+    });
+  });
+});
 
 /**
  * The doctor sample on the troubleshooting page, pinned to the row `check`
