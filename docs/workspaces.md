@@ -2,7 +2,7 @@
 title: Workspaces
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.10.0 release cut (2026-09-28). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.11.0 release cut (2026-10-01). -->
 <!-- Re-open when: a workspace subcommand joins or leaves, the three member-manifest fields the
      cascade patches change, selection deltas or locked content start changing emitted files, or an
      ordinary verb starts reading `workspace.json`. `test/docsPages.test.ts` holds this page to the

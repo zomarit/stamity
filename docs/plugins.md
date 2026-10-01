@@ -2,7 +2,7 @@
 title: Plugins
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit bb565dfa. Re-attested 2026-09-30 for the claims the client currency pass moved (the Codex hooks line on codex-cli 0.155.1, and the Copilot plugin auto-update paragraph); the rest stands as verified at the 1.10.0 release cut, 2026-09-28, whose re-attestation commit this names. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.11.0 release cut (2026-10-01). -->
 <!-- Re-open when: the capability-file schema changes shape, the locator's exit codes or its
      candidate order move, or a vendor page behind a command block is re-read on a later access
      date than the newest this page carries, 2026-09-30. `test/docsPages.test.ts` holds this

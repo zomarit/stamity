@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit cb215fb3. Re-attested 2026-09-30 against that commit, the integrated learnings commit (four retired, two captured), whose own `check` prints the 14 learnings the sample transcript shows, down from 16; the client currency pass of the same day moved the Codex hook section to the codex-cli 0.155.1 measurement. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.11.0 release cut (2026-10-01). -->
 <!-- Re-open when: a `check` probe is added or removed, an error code starts or stops being
      thrown, or a remedy below stops working. `test/docsPages.test.ts` holds this page to the
      hand-page contract and reads the probe rows out of `src/cli/commands/check.ts`;
