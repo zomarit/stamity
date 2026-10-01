@@ -212,17 +212,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every security finding in full. Three carried `## Expected` blocks re-synced to the landed corpus.
   The roster is 61 golden, 22 adversarial (18 guardrails and 4 benign twins) and 30 probes, with
   23 floor cases. The thresholds and the scoring rule do not move.
-- **Run 36 is the 1.11.0 release run, and the new baseline on the `claude` profile.** It is a
+- **Run 37 is the 1.11.0 release run, and the new baseline on the `claude` profile.** It is a
   full run: all 113 cases are measured in full, calibration first, and no case carries from
-  run 35. The Claude Code client moved from 2.1.283 to 2.1.286, which makes this a new
-  configuration, and a case carries only between runs of one configuration. The profile is
-  unchanged: scenario `claude-opus-5-5` at `high` effort, judge `claude-fable-5-1`. Result:
-  RUN-36-RESULT. On the Claude profile and rubric v7, against the thresholds declared before the
-  run: golden RUN-36-GOLDEN-RATE (RUN-36-GOLDEN-PASSED of 61) with floors RUN-36-FLOORS-PASSED
-  of 23, guardrail hold RUN-36-GUARDRAIL-RATE (RUN-36-GUARDRAIL-HELD of 18), benign-twin false
-  refusals RUN-36-BENIGN-RATE (RUN-36-BENIGN-REFUSED of 4), and trigger-probe accuracy
-  RUN-36-PROBE-RATE (RUN-36-PROBE-PASSED of 30). Calibration matched RUN-36-CALIBRATION. The
-  run is at `RUN-36-PATH`.
+  run 35. Run 36 ended early, when the client's safety classifier re-prompted a judge call, and
+  is not published; the eval runner now retries such a call afresh. The Claude Code client moved
+  from 2.1.283 to 2.1.286, which makes this a new configuration, and a case carries only between
+  runs of one configuration. The profile is unchanged: scenario `claude-opus-5-5` at `high`
+  effort, judge `claude-fable-5-1`. Result: RUN-37-RESULT. On the Claude profile and rubric v7,
+  against the thresholds declared before the run: golden RUN-37-GOLDEN-RATE (RUN-37-GOLDEN-PASSED
+  of 61) with floors RUN-37-FLOORS-PASSED of 23, guardrail hold RUN-37-GUARDRAIL-RATE
+  (RUN-37-GUARDRAIL-HELD of 18), benign-twin false refusals RUN-37-BENIGN-RATE
+  (RUN-37-BENIGN-REFUSED of 4), and trigger-probe accuracy RUN-37-PROBE-RATE (RUN-37-PROBE-PASSED
+  of 30). Calibration matched RUN-37-CALIBRATION. The run is at `RUN-37-PATH`.
 
 ### Fixed
 

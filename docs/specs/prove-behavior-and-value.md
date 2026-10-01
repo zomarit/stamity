@@ -486,10 +486,11 @@ chain `2026-09-27-run-35 -> 2026-09-27-run-34`: run 35 names run 34 as its prior
 ends there. Its matcher reads `runs?`, so a one-link chain passes (`:487-492`). The page case
 (`:515-525`) and the hand-page case (`test/docsPages.test.ts:1225-1229`) refuse a carried clause.
 
-Amended 2026-10-01 (the 1.11.0 cut; cited at `108c57e0`). The 1.11.0 run of record is to be run 36,
-a full baseline: the client moved to a new version, a new configuration, so there is no prior
-complete run for it to compose with (the TEST CHANGE note above the renamed case named below).
-1.10.0's run of record was composed, run 35 with run 34. The page now admits both kinds.
+Amended 2026-10-01 (the 1.11.0 cut; cited at `108c57e0`). The 1.11.0 run of record is to be run 37
+(run 36 ended early on the client's classifier re-prompt and is not published), a full baseline:
+the client moved to a new version, a new configuration, so there is no prior complete run for it
+to compose with (the TEST CHANGE note above the renamed case named below). 1.10.0's run of record
+was composed, run 35 with run 34. The page now admits both kinds.
 
 - **What the page renders for a full run.** When the run of record's `RESULTS.md` has no
   `## 0. Composition` section, the corpus section renders the full-baseline paragraph in place of
@@ -519,7 +520,7 @@ complete run for it to compose with (the TEST CHANGE note above the renamed case
   from the runs it names, or in full" (renamed from "says the run of record is composed, and names
   the runs it was composed from"), and the describe "a full run of record" with its case "renders a
   full baseline's prose from a full results file, and the composition from a composed one", run on
-  run 34's real results file before run 36 exists.
+  run 34's real results file before run 37 exists.
 - GIVEN a section-less results file carrying either composed marker, or a composition section that
   names no prior run, WHEN `priorCompleteRun` reads it THEN it throws `EngineError`; GIVEN a full
   run whose prose names a prior run outside that section THEN it still reads as full. Test evidence:

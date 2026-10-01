@@ -365,7 +365,7 @@ function compositionChain(
 
 /**
  * What the page must say when its run of record is a full run — ADDED 2026-10-01, the 1.11.0 cut,
- * whose run of record (run 36) measured every case itself with nothing composed.
+ * whose run of record (run 37) measured every case itself with nothing composed.
  *
  * The chain is the run alone, the results file carries no composition section, and the page says
  * the run is a full baseline that measured every case in full in place of the composition
@@ -492,13 +492,13 @@ describe("the restated figures are held to the artifacts they come from", () => 
 
   // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut. The case was named "says the run of record
   // is composed, and names the runs it was composed from" and demanded a composition section and a
-  // chain longer than one of every run of record. Run 36, the 1.11.0 run of record, is a full
+  // chain longer than one of every run of record. Run 37, the 1.11.0 run of record, is a full
   // baseline (the client moved to a new version, a new configuration), and its RESULTS.md names
   // no prior complete run, as run 34's does not. The case now branches on the generator's own
   // parser: a composed run of record keeps every assertion below unchanged (the
   // scoring-rule check moved above the branch, since it holds for both kinds); a full one is held
   // by expectFullRunOfRecord, which "a full run of record" below exercises today on run 34's real
-  // RESULTS.md, before run 36 exists.
+  // RESULTS.md, before run 37 exists.
   it("says how the run of record was measured: composed from the runs it names, or in full", () => {
     const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
     const page = renderMeasurements();
@@ -597,10 +597,10 @@ describe("the restated figures are held to the artifacts they come from", () => 
   });
 });
 
-// ADDED 2026-10-01, the 1.11.0 cut. Run 36, the 1.11.0 run of record, is a full baseline — the
+// ADDED 2026-10-01, the 1.11.0 cut. Run 37, the 1.11.0 run of record, is a full baseline — the
 // client moved to a new version, a new configuration — and the generator used to
 // render "composed rather than measured end to end" for every run of record. These cases drive the
-// full branch now, on run 34's real RESULTS.md (a full run: no `## 0. Composition`), before run 36
+// full branch now, on run 34's real RESULTS.md (a full run: no `## 0. Composition`), before run 37
 // exists, and hold the composed branch beside it on run 35's so the two renders are told apart.
 describe("a full run of record", () => {
   const FULL_RUN = "2026-09-27-run-34";

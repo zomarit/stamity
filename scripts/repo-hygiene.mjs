@@ -25,7 +25,7 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // close (05cb4ef).
   // Verify: git cat-file -s 95addb30:evals/runs/2026-09-27-run-34/summary.json
   //
-  // The 1.11.0 window holds one entry. Run 36 is a full baseline — every case measured, no prior
+  // The 1.11.0 window holds one entry. Run 37 is a full baseline — every case measured, no prior
   // run and no composition, because the client moved to a new version, a new configuration; the
   // claude profile itself is unchanged (scenario claude-opus-5-5 at high effort, judge
   // claude-fable-5-1) — and it is the 1.11.0 run of record; the next release's incremental run
@@ -37,7 +37,7 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // An entry may precede its artifact: the map is consulted only for paths Git reports as changed
   // (the `has` below), is never iterated and never stat'd, so an entry for a path not yet in the
   // tree is inert rather than a false pass.
-  ['evals/runs/2026-09-30-run-36/summary.json', 'run 36, the full 1.11.0 baseline on the claude profile, whose summary the next increment reads from the retention commit; retained for the 1.11.0 release window until the 1.11.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
+  ['evals/runs/2026-10-01-run-37/summary.json', 'run 37, the full 1.11.0 baseline on the claude profile, whose summary the next increment reads from the retention commit; retained for the 1.11.0 release window until the 1.11.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/

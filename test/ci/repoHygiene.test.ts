@@ -215,16 +215,22 @@ describe("repository hygiene over the Git index", () => {
   });
 
   // TEST CHANGE, justified (2026-10-01): the case asserted an empty map after the 1.10.0 close
-  // retired run 34's and run 35's entries. The 1.11.0 window opens one entry — run 36, the full
+  // retired run 34's and run 35's entries. The 1.11.0 window opens one entry — run 37, the full
   // 1.11.0 baseline, whose summary the next increment reads from the retention commit — so the
   // expected list is that one path, and the case exercises it the way d9dff93e did: the exempted
   // path passes over budget while its same-directory neighbour is refused. The retirement proof
   // stays: the 1.9.0 and 1.10.0 pairs are still staged over budget and must be refused like any
   // other file. exemptedPaths still throws if the declaration moves.
-  it("exempts exactly the run 36 summary and refuses its neighbour and the retired summaries", () => {
+  //
+  // TEST CHANGE, justified (2026-10-01, later the same day): the window's one entry moved from
+  // run 36 to run 37. Run 36 ended early, when the client's safety classifier re-prompted a judge
+  // call, and is never published; run 37, a full baseline on the same configuration, is the 1.11.0
+  // run of record. The pinned path is run 37's summary; the neighbour and retired-summary refusals
+  // are unchanged.
+  it("exempts exactly the run 37 summary and refuses its neighbour and the retired summaries", () => {
     const exempt = exemptedPaths();
-    expect(exempt, "the size-exception map's paths are not the 1.11.0 window's run 36 summary").toEqual([
-      "evals/runs/2026-09-30-run-36/summary.json",
+    expect(exempt, "the size-exception map's paths are not the 1.11.0 window's run 37 summary").toEqual([
+      "evals/runs/2026-10-01-run-37/summary.json",
     ]);
 
     const root = fixture();

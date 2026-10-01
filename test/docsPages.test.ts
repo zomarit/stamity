@@ -1312,7 +1312,7 @@ describe("the eval run of record on the hand pages", () => {
   // and case ids are read off both RESULTS.md files, so the sentence cannot drift from them.
   //
   // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut. The case read `prior complete run is `…``
-  // off the run of record and failed with "names no prior complete run" when there was none. Run 36,
+  // off the run of record and failed with "names no prior complete run" when there was none. Run 37,
   // the 1.11.0 run of record, is a full baseline — every case measured, no composition, because the
   // client moved to a new configuration — and a full run's RESULTS.md has no composition section and
   // no such line (run 34's has none; run 35's names run 34 in its § 0), the same key the chain walk
