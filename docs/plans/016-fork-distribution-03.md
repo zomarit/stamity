@@ -63,6 +63,7 @@ cuts 1.12.0 with one fresh full eval run. **Out of scope:** the drop list, and a
 | S6 | The first promotion of 1.12.0 to `stable` is part of the release, approved by the maintainer. | The per-channel admin templates point at `plugin-stable`, which exists only after a promotion. |
 | S7 | The live legs that need an account this project lacks — the Copilot organization install at sign-in, the auto-update legs, Cursor's team marketplace and Required plugins in the CLI — are recorded `Not done:` with their owner; the VS Code leg is walked by the maintainer. | The maintainer's answer on accounts. |
 | S8 | 1.12.0 runs one fresh full eval run on the final inputs; amended specs keep their first-release status, and every spec still reading `design` that a shipping plan names (`docs/specs/board-writes.md` among them) flips to `shipped-with-1.12.0` before the tag. | `evals/SET-v7.md:820-823`, `:971-972`; 1.11.0's first release run failed on the shipped-spec check. |
+| S9 | A `not-run` non-live route leg may ship named under `Not done:` on the maintainer's recorded decision (default: hold); a `failed` leg always holds the release and is fixed through the normal loop. | REQ-PLUGIN-044's criteria: a `not-run` row names its cause and may stand under `Not done:` (invariant 4), while the checklist does not read green while a `failed` row stands. |
 
 ### Before this file runs
 
@@ -228,6 +229,11 @@ lane's verbs):
   tag as integrated.
 - GIVEN a fixture carrying `plugin-dist` and `plugins/v1.0.0` from a mirror import WHEN the clean-up step runs THEN
   neither ref remains, and every `v*` tag and `main` survive.
+- GIVEN a fixture carrying a fork-owned `plugins/*` tag whose object differs from the object of upstream's tag of the
+  same name WHEN the clean-up step runs THEN that tag survives (`u3-reset-guide` testCriteria (h)).
+- GIVEN the reset commit not yet on `origin/main` WHEN the step that turns workflows on runs THEN it exits non-zero with
+  a message naming the merge-commit requirement and turns no workflow on; and GIVEN the reset landed with a merge commit
+  WHEN it runs again THEN it turns workflows on (`u3-reset-guide` testCriteria (f)).
 - GIVEN the section THEN no command in it force-pushes, and the step that turns Actions off comes before any push.
 
 #### REQ-UPSTREAM-023 — Recommended repository settings and enterprise constraints are documented (ADDED)
@@ -594,8 +600,8 @@ client and version it ran on, or the vendor page, its access date and the proof 
 | `requirements` | REQ-UPSTREAM-022 |
 | `files` | `docs/enterprise-forks.md` (a new `### Reset or re-import under protected branches` after `### Recover when there is no shared history`, `:241-257`; the re-open trigger `:6-11`); `test/upstream/resetRecipe.test.ts` (new); `CHANGELOG.md` (`## [Unreleased]`, `### Added`) |
 | `interfaces` | See the block below the table. |
-| `testCriteria` | **Given** `npx vitest run test/upstream/resetRecipe.test.ts` on Linux or macOS, **then** it passes: (a) the origin's `stamity-reset` head is a commit whose tree equals the fresh tree and whose parents are exactly `[old main, the v1.3.0 commit]`; (b) origin carries `refs/tags/legacy/main-<12-hex>` naming the old main; (c) origin no longer carries `plugin-dist` or `plugins/v1.0.0`, and still carries `main` and every `v*` tag it had; (d) the bundle file exists and `git bundle verify` exits 0; (e) the `gh` stub's log shows the Actions-off call before the first `git push` and the Actions-on call last; (f) after the fixture lands `stamity-reset` into `main` with `git merge --no-ff`, `runLane(fork, ["status"])` (which adds `--json`) reports outcome `up-to-date` with `v1.3.0` integrated; (g) in the second fixture, whose `plugin-dist` head reads `plugins: v1.0.0-acme.1 from <a fork commit>` and whose tag is `plugins/v1.0.0-acme.1`, both survive. **Given** the page's block, **then** no line matches `--force\|-f ` on a `git push`, and the Actions-off line precedes every `git push` line. **Given** Windows, **then** the case is skipped with the reason "the recipe is a bash block; Git Bash is not driven by this suite". **Given** `npx vitest run test/docsPages.test.ts test/upstream`, **then** it exits 0. |
-| `edgeCases` | The fork publishes its own distribution → the guard keeps `plugin-dist` (its head names a commit not reachable from `upstream/main`) and every suffixed `plugins/v*-…` tag. A fork distribution pushed by hand with the message `plugins: v<version>` (no "from") → the guard cannot read a source and keeps the branch, the safe direction (a follow-up names `scripts/build-plugin-distribution.mjs:424`). `plugin-dist` absent on origin → the `git fetch` fails quietly and the step skips. The old lane has an open update pull request → the prose closes it after the reset lands (file 01's `u1-lane-issues-freshness` closes superseded issues once the lane is up to date). A ruleset requires signed commits → `git commit-tree -S` signs the reset commit; the prose names the flag. |
+| `testCriteria` | **Given** `npx vitest run test/upstream/resetRecipe.test.ts` on Linux or macOS, **then** it passes: (a) the origin's `stamity-reset` head is a commit whose tree equals the fresh tree and whose parents are exactly `[old main, the v1.3.0 commit]`; (b) origin carries `refs/tags/legacy/main-<12-hex>` naming the old main; (c) origin no longer carries `plugin-dist` or `plugins/v1.0.0`, and still carries `main` and every `v*` tag it had; (d) the bundle file exists and `git bundle verify` exits 0; (e) the `gh` stub's log shows the first block's Actions-off call before its first `git push`, and the second block's Actions-on call last, after the merge; (f) the second block run before the merge, with `RESET_COMMIT` set to the sha the first block printed, exits 1 with "the reset commit is not on main: land the stamity-reset pull request with a merge commit, not a squash or rebase" on stderr and the stub's log gains no Actions-on call; after the fixture lands `stamity-reset` into `main` with `git merge --no-ff`, the second block's guard passes, and `runLane(fork, ["status"])` (which adds `--json`), standing in for its `status` line, reports outcome `up-to-date` with `v1.3.0` integrated; (g) in the second fixture, whose `plugin-dist` head reads `plugins: v1.0.0-acme.1 from <a fork commit>` and whose tag is `plugins/v1.0.0-acme.1`, both survive; (h) in the second fixture, a tag `plugins/v1.0.1` on a fork-built orphan commit whose subject reads `plugins: v1.0.1 from <a fork commit>` survives, while upstream carries its own `plugins/v1.0.1` on another object. **Given** the page's two blocks, **then** no line matches `--force\|-f ` on a `git push`, the Actions-off line precedes every `git push` line, and the Actions-on line sits in the second block, after its guard. **Given** Windows, **then** the case is skipped with the reason "the recipe is two bash blocks; Git Bash is not driven by this suite". **Given** `npx vitest run test/docsPages.test.ts test/upstream`, **then** it exits 0. |
+| `edgeCases` | The fork publishes its own distribution → the guard keeps `plugin-dist` (its head names a commit not reachable from `upstream/main`) and every `plugins/*` tag whose object differs from upstream's — a suffixed `plugins/v*-…` tag upstream never carries, and a fork's own unsuffixed release tag. A fork distribution pushed by hand with the message `plugins: v<version>` (no "from") → the guard cannot read a source and keeps the branch, the safe direction (a follow-up names `scripts/build-plugin-distribution.mjs:424`). `plugin-dist` absent on origin → the `git fetch` fails quietly and the step skips. The old lane has an open update pull request → the prose closes it after the reset lands (file 01's `u1-lane-issues-freshness` closes superseded issues once the lane is up to date). A ruleset requires signed commits → `git commit-tree -S` signs the reset commit; the prose names the flag. |
 | `depends_on` | u3-troubleshooting, docs/plans/014-lean-repository-01.md (f1-import-recipe), docs/plans/016-fork-distribution-01.md (u1-lane-issues-freshness) |
 | `verify` | `npx vitest run test/upstream/resetRecipe.test.ts test/upstream/lane.test.ts test/docsPages.test.ts && node scripts/leak-gate.mjs && npm run lint && npm run typecheck` |
 
@@ -614,9 +620,15 @@ client and version it ran on, or the vendor page, its access date and the proof 
   commits → `git commit-tree -S`. The fresh tree must carry the fork's own files, `.stamity/upstream.json` first among
   them (without it the lane reads the repository as `not-a-fork`), so the identity-and-customization step names
   `git checkout "$OLD_MAIN" -- .stamity/upstream.json <your customized paths>` before `scripts/fork-identity.mjs`.
-- **The block** — one fenced `sh` block, bash, every line in a shape the test drives (assignments, `git`, `gh`, `if`,
-  `for`, `case`, `rm`, `node`); the comment line `# … apply your identity and customization here, then commit …` is
-  the split point the test fills:
+- **The blocks** — two fenced `sh` blocks, bash, every line in a shape the test drives (assignments, `git`, `gh`, `if`,
+  `for`, `rm`, `printf`, `node`, and the second block's guard). The first runs steps 1–5 and prints
+  `RESET_COMMIT=<sha>` as soon as step 4 has pushed it; its comment line `# … apply your identity and customization
+  here, then commit …` is the split point the test fills. The prose says that when the first block stops after that
+  push (a refused tag delete in step 5, say) `git rev-parse origin/stamity-reset` prints the same sha, and that
+  re-running the block is not the recovery, because the `legacy/main-…` tag it would create already exists. The second
+  is labelled "Run after the pull request from `stamity-reset` lands with a merge commit", and its guard refuses to turn
+  workflows on until the reset commit is on `origin/main`; a squash or rebase landing never puts it there, so the
+  refusal names the merge-commit requirement rather than asking for a landing that already happened:
 
 ```sh
 set -euo pipefail
@@ -640,6 +652,7 @@ UPSTREAM_COMMIT="$(git rev-parse "$STAMITY_RESET_TAG^{commit}")"
 # 4. Land the fresh tree as a merge commit on the old main: no force-push.
 RESET_COMMIT="$(git commit-tree "$FRESH_TREE" -p "$OLD_MAIN" -p "$UPSTREAM_COMMIT" -m "Reset onto upstream $STAMITY_RESET_TAG")"
 git push origin "$RESET_COMMIT:refs/heads/stamity-reset"
+printf 'RESET_COMMIT=%s\n' "$RESET_COMMIT"
 # 5. Remove the distribution refs an older --mirror import copied from upstream, and only those.
 if git fetch --quiet origin refs/heads/plugin-dist 2>/dev/null; then
   SOURCE="$(git log -1 --format=%s FETCH_HEAD | sed -n 's/^plugins: v[^ ]* from \([0-9a-f]\{40\}\)$/\1/p')"
@@ -648,17 +661,25 @@ if git fetch --quiet origin refs/heads/plugin-dist 2>/dev/null; then
   fi
 fi
 for REF in $(git ls-remote --refs --tags origin 'refs/tags/plugins/*' | cut -f2); do
-  case "$REF" in
-    *-*) ;;
-    *) git push origin --delete "$REF" ;;
-  esac
+  ORIGIN_OID="$(git ls-remote --refs origin "$REF" | cut -f1)"
+  UPSTREAM_OID="$(git ls-remote --refs upstream "$REF" | cut -f1)"
+  if [ -n "$UPSTREAM_OID" ] && [ "$ORIGIN_OID" = "$UPSTREAM_OID" ]; then
+    git push origin --delete "$REF"
+  fi
 done
-# 6. After the pull request from stamity-reset lands with a merge commit: workflows on last, then check.
+```
+
+```sh
+set -euo pipefail
+STAMITY_DOWNSTREAM='acme/stamity-private'
+RESET_COMMIT='<the sha the first block printed>'
+# 6. Only once the reset commit is on main: workflows on last, then check.
+git fetch origin main && git merge-base --is-ancestor "$RESET_COMMIT" origin/main || { echo "the reset commit is not on main: land the stamity-reset pull request with a merge commit, not a squash or rebase" >&2; exit 1; }
 gh api --method PUT "repos/$STAMITY_DOWNSTREAM/actions/permissions" -F enabled=true
 node scripts/upstream.mjs status
 ```
 
-  Provenance line under the block: "*Run by `test/upstream/resetRecipe.test.ts` against fixture repositories on every
+  Provenance line under each block: "*Run by `test/upstream/resetRecipe.test.ts` against fixture repositories on every
   change; the 2026-09-29 enterprise reset landed the same merge-commit shape.*"
 - **The test** `test/upstream/resetRecipe.test.ts`. **Follows:** `docs/plans/014-lean-repository-01.md
   (f1-import-recipe)`'s `test/upstream/importRecipe.test.ts` (read the page, run its commands against `file://`
@@ -666,26 +687,33 @@ node scripts/upstream.mjs status
   `:626`, `parentsOf` `:764`, `isolatedEnv` `:91`, `makeScratch` `:790`). Steps: `createUpstream(parent)` (tags
   `v1.0.0`–`v1.3.0`, `RELEASE_TAGS` `:287`); `createFork(upstream, parent)` at `v1.0.0` (it writes the fork's
   `.stamity/upstream.json`, `:529-553`); a remote `upstream` at `upstream.dir` and `git fetch upstream 'refs/tags/v*:refs/tags/v*'`;
-  a bare `origin.git`, the fork's `origin` repointed at it, then pushed `main`, the `v*` tags, an orphan `plugin-dist`
-  whose commit message is `plugins: v1.0.0 from <the v1.0.0 commit>` and a tag `plugins/v1.0.0` on it (what a `--mirror`
-  import brought), then `git fetch origin` so `origin/main` exists; a `gh` stub script first on `PATH` that appends its
-  arguments to a log and exits 0. Extract the page's block with `sectionOf(page, "### Reset or re-import under protected
-  branches")` and the first fenced `sh` block; replace `STAMITY_RESET_TAG='v1.12.0'` with `'v1.3.0'`; split it at the
-  marker comment and at the `# 6.` comment. Run steps 1–3 up to the marker, then the fixture's identity commit
+  an orphan `plugin-dist` in the upstream fixture whose commit message is `plugins: v1.0.0 from <the v1.0.0 commit>` and
+  a tag `plugins/v1.0.0` on it; a bare `origin.git`, the fork's `origin` repointed at it, then pushed `main`, the `v*`
+  tags, and upstream's `plugin-dist` and `plugins/v1.0.0` fetched and pushed unchanged, at upstream's object ids (what a
+  `--mirror` import brought), then `git fetch origin` so `origin/main` exists; a `gh` stub script first on `PATH` that
+  appends its arguments to a log and exits 0. Extract the first and second fenced `sh` blocks of `sectionOf(page, "###
+  Reset or re-import under protected branches")`; in the first, replace `STAMITY_RESET_TAG='v1.12.0'` with `'v1.3.0'`
+  and split it at the marker comment. Run steps 1–3 up to the marker, then the fixture's identity commit
   (`git checkout "$OLD_MAIN" -- .stamity/upstream.json && printf 'acme\n' > ACME.md && git add -A && git commit -qm
   identity`), then steps 3–5, all as one `spawnSync("bash", ["-c", script], { cwd: fork.dir, env })` under
-  `isolatedEnv`. Then land the reset the way the pull request does (`git fetch origin stamity-reset && git switch main &&
-  git merge --no-ff -m "Merge stamity-reset" FETCH_HEAD && git push origin main`), run step 6's `gh` line through the stub,
-  and run its `status` through `runLane(fork, ["status"])`, which spawns this repository's `scripts/upstream.mjs` in the
-  fixture (`:626-648`); the test asserts step 6 holds exactly those two lines. The second fixture repeats the run with
-  `plugin-dist` whose message names a fork-only commit and a tag `plugins/v1.0.0-acme.1`.
+  `isolatedEnv`, and read the sha from its last `RESET_COMMIT=` line. The red case: the second block, with that sha in
+  place of `<the sha the first block printed>` and without its `status` line, run the same way before the merge, exits 1
+  and the stub's log gains no Actions-on call. Then land the reset the way the pull request does (`git fetch origin
+  stamity-reset && git switch main && git merge --no-ff -m "Merge stamity-reset" FETCH_HEAD && git push origin main`),
+  run the second block the same way again (it exits 0 and the stub logs the Actions-on call), and run its `status` through
+  `runLane(fork, ["status"])`, which spawns this repository's `scripts/upstream.mjs` in the fixture (`:626-648`); the test
+  asserts the second block holds exactly `set -euo pipefail`, the two assignments, the `# 6.` comment, the guard, the
+  `gh` line and the `status` line. The second fixture repeats the run with `plugin-dist` whose message names a fork-only
+  commit, a tag `plugins/v1.0.0-acme.1`, and a tag `plugins/v1.0.1` on a fork-built orphan commit whose subject reads
+  `plugins: v1.0.1 from <a fork commit>`, while its upstream tags its own `plugins/v1.0.1` on another commit.
   `describe.skipIf(process.platform === "win32")` with the reason in the edge case. Every assertion is in `testCriteria`.
-- **Re-open trigger** `docs/enterprise-forks.md:6-11` gains "`test/upstream/resetRecipe.test.ts` runs the reset block";
+- **Re-open trigger** `docs/enterprise-forks.md:6-11` gains "`test/upstream/resetRecipe.test.ts` runs the reset blocks";
   `:5` stays on the commit form with `<D>`.
 - **CHANGELOG** `### Added`: "**A reset that works under protected branches.** The enterprise guide's new section backs
   a fork up, stops its old lane, names the old main `legacy/main-<sha>`, and lands the fresh tree as a merge commit on
   it, so no force-push is needed and the lane still reads the integrated release from history. It removes only the
-  distribution refs an older mirror import copied from upstream, and a test runs the block on every change."
+  distribution refs an older mirror import copied from upstream, turns workflows back on only once the reset has landed,
+  and a test runs both blocks on every change."
 
 ### u3-settings-constraints — the repository settings a fork should apply, and the constraints an enterprise imposes
 
@@ -734,7 +762,7 @@ node scripts/upstream.mjs status
 | `requirements` | REQ-PLUGIN-044 |
 | `files` | `scripts/qa/route-proof.mjs` (new); `test/qa/routeProof.test.ts` (new); `.github/release-controls-checklist.md` (one new line after the sixth line, `:255`) |
 | `interfaces` | See the block below the table. |
-| `testCriteria` | **Given** `npx vitest run test/qa/routeProof.test.ts`, **then** every case below passes. **Given** `foldConclusion`, **then** `success` → `passed`; `failure`, `timed_out`, `startup_failure` → `failed`; `skipped`, `cancelled`, `neutral`, `action_required`, `stale`, `null`, `undefined` → `not-run`. **Given** a `ci-jobs` leg with two matching jobs, both `success`, **then** `passed` with both names and the run URL in `evidence`; with one `skipped`, **then** `not-run` naming it; with one `failure` and one `skipped`, **then** `failed`; with no matching job, **then** `not-run` "no job matching …". **Given** a `ci-step` leg whose step is absent, **then** `not-run` "no step named …". **Given** a `qa-row` leg, **then** harness `passed` → `passed`, `performed` → `passed` with by and date, `accepted-unwalked` → `not-run` ("accepted without a walk is not a proof"), `not-run`/`unperformed`/absent → `not-run`, `failed` → `failed`. **Given** a `walk` leg with no answer, **then** `not-run`; with `--walked <id> --by <name>`, **then** `passed` carrying both. **Given** a `live` leg, **then** `not-done` with its owner and the account it needs, whatever the inputs claim. **Given** a rendered proof with one `not-run` leg, **then** the text never pairs that leg with `passed` (regex over its row) and its `Not done:` list names the leg and every live leg with its owner. **Given** `main` with a fake `gh` whose run reports another `headSha`, **then** exit 2 naming both shas; with a QA evidence file of another `sha`, **then** exit 2; with an unknown `--walked` id, **then** exit 2; with every non-live leg passed, **then** exit 0 and the `--out` JSON lists every catalogue leg; with one non-live leg `not-run`, **then** exit 1. **Given** `.github/workflows/ci.yml` and `nightly.yml` parsed with `yaml`, **then** each `ci-jobs` and `ci-step` leg's matcher matches exactly the job it names: `native-check` the job whose `name:` begins `check (`, `plugin-structure` the job whose `name:` begins `plugin route`, `apm-install` the job whose `name:` begins `apm route (`, `fork-gate` the job one of whose steps runs `scripts/ci/fork-probe.mjs`, and `native-four-clients` a step of the `headless-lane` job named `Scratch-repo dogfood (all four clients)`. **Given** `.github/release-controls-checklist.md`, **then** exactly one line names `` `node scripts/qa/route-proof.mjs` ``, and it contains "exits 0" and "release record". **Given** the unit's rehearsal at its own head, **then** the run record keeps the rendered table and the exit code. |
+| `testCriteria` | **Given** `npx vitest run test/qa/routeProof.test.ts`, **then** every case below passes. **Given** `foldConclusion`, **then** `success` → `passed`; `failure`, `timed_out`, `startup_failure` → `failed`; `skipped`, `cancelled`, `neutral`, `action_required`, `stale`, `null`, `undefined` → `not-run`. **Given** a `ci-jobs` leg with two matching jobs, both `success`, **then** `passed` with both names and the run URL in `evidence`; with one `skipped`, **then** `not-run` naming it; with one `failure` and one `skipped`, **then** `failed`; with no matching job, **then** `not-run` "no job matching …". **Given** a `ci-step` leg whose step is absent, **then** `not-run` "no step named …". **Given** a `qa-row` leg, **then** harness `passed` → `passed`, `performed` → `passed` with by and date, `accepted-unwalked` → `not-run` ("accepted without a walk is not a proof"), `not-run`/`unperformed`/absent → `not-run`, `failed` → `failed`. **Given** a `walk` leg with no answer, **then** `not-run`; with `--walked <id> --by <name>`, **then** `passed` carrying both. **Given** a `live` leg, **then** `not-done` with its owner and the account it needs, whatever the inputs claim. **Given** a rendered proof with one `not-run` leg, **then** the text never pairs that leg with `passed` (regex over its row) and its `Not done:` list names the leg and every live leg with its owner. **Given** `main` with a fake `gh` whose run reports another `headSha`, **then** exit 2 naming both shas; with a QA evidence file of another `sha`, **then** exit 2; with an unknown `--walked` id, **then** exit 2; with every non-live leg passed, **then** exit 0 and the `--out` JSON lists every catalogue leg; with one non-live leg `not-run`, **then** exit 1. **Given** `.github/workflows/ci.yml` and `nightly.yml` parsed with `yaml`, **then** each `ci-jobs` and `ci-step` leg's matcher matches exactly the job it names: `native-check` the job whose `name:` begins `check (`, `plugin-structure` the job whose `name:` begins `plugin route`, `apm-install` the job whose `name:` begins `apm route (`, `fork-gate` the job one of whose steps runs `scripts/ci/fork-probe.mjs`, and `native-four-clients` a step of the `headless-lane` job named `Scratch-repo dogfood (all four clients)`. **Given** `.github/release-controls-checklist.md`, **then** exactly one line names `` `node scripts/qa/route-proof.mjs` ``, and it contains "exits 0", "`failed`" and "release record". **Given** the unit's rehearsal at its own head, **then** the run record keeps the rendered table and the exit code. |
 | `edgeCases` | The fork job is renamed by a later change → the workflow-matcher case fails naming `fork-gate`, never a silent `not-run`. A nightly dispatch on the candidate fails in a later step (a vendor install) while the dogfood step passed → `native-four-clients` reads the step, so it stays `passed`, and the job's failure is not this leg's. `gh` is not signed in → exit 2 with gh's own message. A harness row for a client the operator has no login for is `not-run` → the leg is `not-run` and the release's QA asks the maintainer whether to hold or ship with it named (`u3-release-1-12-0` step 9); the module never folds it. |
 | `depends_on` | docs/plans/016-fork-distribution-01.md (u1-fork-ci-job), docs/plans/016-fork-distribution-02.md (u2-apm-floor-current and u2-apm-coexistence-fork and u2-hooks-self-filter-vscode) |
 | `verify` | `npx vitest run test/qa/routeProof.test.ts test/ci/hookLatency.test.ts && npm run lint && npm run typecheck`, then the rehearsal command below at the unit's head |
@@ -797,8 +825,8 @@ node scripts/upstream.mjs status
   file or a failing `gh`.
 - **The checklist line** after `.github/release-controls-checklist.md:255`, one line: "A seventh line rides the cut,
   before the tag: `node scripts/qa/route-proof.mjs --sha <candidate> --ci-run <id> --nightly-run <id> --qa <evidence>`
-  exits 0 on the release candidate — or each leg it names as open carries the maintainer's recorded decision — and its
-  table goes into the release record (REQ-PLUGIN-044; added <D>)." The test pattern follows
+  exits 0 on the release candidate — or, with no leg `failed`, each `not-run` leg carries the maintainer's recorded
+  decision — and its table goes into the release record (REQ-PLUGIN-044; added <D>)." The test pattern follows
   `test/ci/hookLatency.test.ts:244-252`.
 - **Rehearsal at this unit's head** (the proof of record runs at the candidate in `u3-release-1-12-0` step 9): build the
   distribution outside the repository (`npm pack --pack-destination <tmp>`, `node scripts/build-plugin-runtime.mjs
@@ -817,7 +845,7 @@ node scripts/upstream.mjs status
 | `requirements` | REQ-PROVE-016 (the spec status gate), REQ-PROVE-017 (the release's eval line: "measured per `evals/SET-v7.md` — by the release's baseline run, or by an incremental run composed with it", and the release carries the artifact), REQ-PROVE-018 (every hand page re-attested at the cut), REQ-PROVE-020 (the measurement snapshot refreshed per release), REQ-PLUGIN-025 (the release eval run scores the `st-setup` and plugin-mode cases), REQ-PLUGIN-044 (the route proof executed at the candidate, with `u3-route-proofs`'s tool) |
 | `files` | `package.json`, `package-lock.json` (the version); the version-bearing generated files (`.claude-plugin/marketplace.json`, `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json`, `plugin.json`, `apm.yml`, the dogfood tree `.claude/**`, `.stamity/manifest.json`, `.stamity/generated/**`, `AGENTS.md`, `CLAUDE.md`, and the `main` catalogs u2-main-catalogs added); `CHANGELOG.md` (`## [Unreleased]` → `## [1.12.0] - <date>`, the footer `:1429-1430`); `docs/specs/board-writes.md` (`:4`) and every other spec reading `design` that a shipping plan names; `src/cli/docs/measurements.ts` (`:103`, `:116`, and `MEASUREMENT_SNAPSHOT_PATH` once plan 014 file 2 landed); `docs/measurements.md`; `README.md` (`:1`, `:27-38`); `docs/doctrine.md` (`:5`, `:96-106`); every hand page's first comment (the 16 of `HAND_PAGES` plus `GOVERNANCE.md:1`); `test/docsPages.test.ts` (`:446-499`, `:546-597`); `docs/troubleshooting.md` (`:31-54`, the sample `check`); `docs/enterprise-forks.md` (the managed-settings block's `ref`); `evals/runs/<date>-run-<n>/**`; `evals/measurements/merge-ready-<date>.json`; `scripts/repo-hygiene.mjs` (`LARGE_FILE_EXCEPTIONS`, `:15-27`) and `test/ci/repoHygiene.test.ts`; `.github/release-controls-checklist.md` (`:192-226`, `:110-129`); `evals/SET-v7.md` (only a dated paragraph if a stale range is repaired); `.stamity/runs/<date>_release-1-12-0/` (record, ledger, QA record); at the close, each 1.12.0 run's `ARCHIVE.json` and compacted `summary.json` |
 | `interfaces` | See the block below the table. |
-| `testCriteria` | **Given** the candidate with a local lightweight tag `v1.12.0` on it, **when** the release workflow's gate steps run in a clean worktree, **then** each exits 0, and the shipped-spec case "leaves no spec reading `design` that a released plan shipped" ran (it is in the reporter's pass list, not in its skip list) and passed. **Given** `grep -n '^status: design' docs/specs/*.md`, **then** no listed spec is named by a plan whose `stamp:` commit is an ancestor of the candidate. **Given** the eval artifact, **then** its `RESULTS.md` § 5 shows the golden rate ≥ 0.85 with every floor case passing, the guardrail hold = 1.0, the benign-twin false-refusal rate = 0, the probe accuracy ≥ 0.85, calibration 5 of 5, a case count equal to `find evals/cases-v6 -name '*.md' \| wc -l` at the candidate, and no skipped case; `RUN_OF_RECORD_PATH` names it and `RUN_OF_RECORD_RELEASE` reads `1.12.0`. **Given** `npx vitest run test/docsPages.test.ts test/cli/docs/measurements.test.ts test/ci/changelogLinks.test.ts test/ci/repoHygiene.test.ts`, **then** it exits 0 with `RELEASE_CUT_DATE` equal to the cut date and every hand page on the 1.12.0 cut form. **Given** the snapshot, **then** `node scripts/merge-ready-rate.mjs --json`'s numerator at the tag equals the snapshot's. **Given** `node scripts/qa/route-proof.mjs` at the candidate, **then** it exits 0, or each open non-live leg carries the maintainer's recorded decision, and the record carries its table with the three live legs `Not done:` with their owner. **Given** the release run, **then** `gh run view <id> --json jobs` reads `success` for `gates and pack`, `apm route smoke` and `publish`. **Given** `npm view @zomarit/stamity@1.12.0 dist.attestations.provenance.predicateType`, **then** it prints `https://slsa.dev/provenance/v1`, and `npm view @zomarit/stamity dist-tags.latest` prints `1.12.0`. **Given** `git ls-remote origin refs/heads/plugin-dist refs/tags/plugins/v1.12.0`, **then** both name one sha whose commit has no parent; after the promotion, `refs/heads/plugin-stable` names it too. **Given** the GitHub release `v1.12.0`, **then** it carries `release.json`, `sbom.cdx.json`, the four plugin archives each with its `.sha256`, and the tarball. **Given** the close, **then** each 1.12.0 run's summary is compacted beside an `ARCHIVE.json` whose archive downloads and verifies, `LARGE_FILE_EXCEPTIONS` is empty again, and `node scripts/repo-hygiene.mjs --base <tag>` exits 0. **Given** the private layer's side-by-side checkout, **then** its continuity log carries the 1.12.0 release (`judgment: maintainer`). |
+| `testCriteria` | **Given** the candidate with a local lightweight tag `v1.12.0` on it, **when** the release workflow's gate steps run in a clean worktree, **then** each exits 0, and the shipped-spec case "leaves no spec reading `design` that a released plan shipped" ran (it is in the reporter's pass list, not in its skip list) and passed. **Given** `grep -n '^status: design' docs/specs/*.md`, **then** no listed spec is named by a plan whose `stamp:` commit is an ancestor of the candidate. **Given** the eval artifact, **then** its `RESULTS.md` § 5 shows the golden rate ≥ 0.85 with every floor case passing, the guardrail hold = 1.0, the benign-twin false-refusal rate = 0, the probe accuracy ≥ 0.85, calibration 5 of 5, a case count equal to `find evals/cases-v6 -name '*.md' \| wc -l` at the candidate, and no skipped case; `RUN_OF_RECORD_PATH` names it and `RUN_OF_RECORD_RELEASE` reads `1.12.0`. **Given** `npx vitest run test/docsPages.test.ts test/cli/docs/measurements.test.ts test/ci/changelogLinks.test.ts test/ci/repoHygiene.test.ts`, **then** it exits 0 with `RELEASE_CUT_DATE` equal to the cut date and every hand page on the 1.12.0 cut form. **Given** the snapshot, **then** `node scripts/merge-ready-rate.mjs --json`'s numerator at the tag equals the snapshot's. **Given** `node scripts/qa/route-proof.mjs` at the candidate, **then** it exits 0, or, with no leg `failed`, each `not-run` leg carries the maintainer's recorded decision, and the record carries its table with the three live legs `Not done:` with their owner. **Given** the release run, **then** `gh run view <id> --json jobs` reads `success` for `gates and pack`, `apm route smoke` and `publish`. **Given** `npm view @zomarit/stamity@1.12.0 dist.attestations.provenance.predicateType`, **then** it prints `https://slsa.dev/provenance/v1`, and `npm view @zomarit/stamity dist-tags.latest` prints `1.12.0`. **Given** `git ls-remote origin refs/heads/plugin-dist refs/tags/plugins/v1.12.0`, **then** both name one sha whose commit has no parent; after the promotion, `refs/heads/plugin-stable` names it too. **Given** the GitHub release `v1.12.0`, **then** it carries `release.json`, `sbom.cdx.json`, the four plugin archives each with its `.sha256`, and the tarball. **Given** the close, **then** each 1.12.0 run's summary is compacted beside an `ARCHIVE.json` whose archive downloads and verifies, `LARGE_FILE_EXCEPTIONS` is empty again, and `node scripts/repo-hygiene.mjs --base <tag>` exits 0. **Given** the private layer's side-by-side checkout, **then** its continuity log carries the 1.12.0 release (`judgment: maintainer`). |
 | `edgeCases` | The real release run fails on a check the rehearsal did not catch (1.11.0's first run did, on the shipped-spec case) → nothing is published; ask the maintainer one question (fix on `main` and move the tag, or hold), and on "move" fix, re-run the gate steps with the local tag, fast-forward `main`, delete and re-push the tag. A threshold is missed → fix through the normal loop, re-measure (an incremental run composed with this release's baseline), hold before the tag; thresholds are never lowered. A usage limit holds the run → resume on the SAME account after the reset; never switch or re-log the eval configuration folder while a run is prepared, running or held (learning `an-account-switch-mid-run-ends-an-eval-run`). The cut crosses midnight → the snapshot carries the day it is taken, README follows that file, and the CHANGELOG date is the tag's day. The promotion environment does not exist yet → the maintainer creates it at the console before the promotion; the promotion waits. A channel ruleset blocks the promotion's force-push → fix the bypass (the settings guide), never force by hand. A Windows CI leg flakes on a known timing case → re-run only that leg, once, and record it; a real failure is fixed. |
 | `depends_on` | u3-quickstart, u3-route-proofs, docs/plans/015-board-writes.md (b6-dogfood-sync), docs/plans/014-lean-repository-02.md (r7-remove-records-from-main), docs/plans/016-fork-distribution-01.md (u1-fork-ci-job), docs/plans/016-fork-distribution-02.md (u2-main-catalogs and u2-channels-promote) |
 | `verify` | `npm run lint && npm run typecheck && npm test -- --coverage && npm run check`, then (after plan 014 file 2) `npm run test:records`; the local-tag rehearsal of step 10; CI green on every leg at the candidate; after publish, the verification commands of step 13 |
@@ -898,7 +926,8 @@ record's sequence (start `:53-92`, the cut commits `df30dc46`…`f288b2fe`, the 
    (it records the changelog head) and after every other run record that closes that day has landed:
    `node scripts/merge-ready-rate.mjs --write`, `node scripts/generate-docs.mjs --page measurements`, README's figure
    (`:27-32`) follows the file. After plan 014 file 2: the snapshot and the records reach `records` through
-   `node scripts/records.mjs commit` first, then one `main` commit moves `MEASUREMENT_SNAPSHOT_PATH`,
+   `node scripts/records.mjs commit -m "records: the 1.12.0 measurements snapshot"` first, then one `main` commit
+   moves `MEASUREMENT_SNAPSHOT_PATH`,
    `RUN_OF_RECORD_PATH` and the regenerated page together.
 8. **The channel and checklist lines.** `.github/release-controls-checklist.md:110-129` (Control 2) gains one paragraph:
    the channel branches are force-pushed by the promotion workflow's token behind its environment, and any branch rule
@@ -910,8 +939,9 @@ record's sequence (start `:53-92`, the cut commits `df30dc46`…`f288b2fe`, the 
    .stamity/evidence/qa-<sha7>.json`; the maintainer walks the VS Code leg; then `node scripts/qa/route-proof.mjs --sha
    <candidate> --ci-run <id> --nightly-run <id> --qa .stamity/evidence/qa-<sha7>.json --walked plugin-vscode --by
    <maintainer> --out .stamity/evidence/routes-<sha7>.json`, its table into the record. The QA checkpoint (`/st-qa`)
-   builds the record, auto-proving rows from evidence first; an open non-live leg is one question to the maintainer
-   (hold, or ship with it named under `Not done:`; default: hold). `Shippable:` is recorded.
+   builds the record, auto-proving rows from evidence first; an open non-live leg that is `not-run` is one question to
+   the maintainer (hold, or ship with it named under `Not done:`; default: hold); a `failed` leg holds the release and
+   is fixed through the normal loop. `Shippable:` is recorded.
 10. **The release workflow's gate steps, rehearsed with a local tag.** In a clean worktree at the candidate,
     `git tag v1.12.0 <candidate>` (lightweight, local only), then the steps of `release.yml:278-302`: `npm ci`,
     `git diff --exit-code package-lock.json`, `npm run build`, `npm test` (the shipped-spec case ran, not skipped),
@@ -931,15 +961,18 @@ record's sequence (start `:53-92`, the cut commits `df30dc46`…`f288b2fe`, the 
     `publish` succeeds. Then the commands of `testCriteria`, plus the slim APM ref installing at apm-cli 0.29.1 and
     0.32.0 in a temporary virtual environment (`python3 -m venv <tmp>/apm-<ver> && <tmp>/apm-<ver>/bin/pip install
     apm-cli==<ver>`, then the smoke `docs/plans/016-fork-distribution-02.md (u2-apm-coexistence-fork)` runs against
-    `zomarit/stamity/apm#plugins/v1.12.0`). **The first promotion:** dispatch the promotion workflow for tag `v1.12.0`
+    `zomarit/stamity/apm#plugins/v1.12.0`). **The first promotion:** dispatch the promotion workflow for tag `plugins/v1.12.0`
     to channel `stable`, approved by the maintainer; `plugin-stable` then names the same commit as `plugins/v1.12.0`,
     which the per-channel admin templates point at.
 14. **The close.** The public evidence archive: each 1.12.0 run packed with `python3 scripts/evidence-archive.py pack
-    --ref <full sha> --path evals/runs/<run> --repository zomarit/stamity --output <tmp>/<run>.tar.gz --manifest
-    <tmp>/ARCHIVE.json --url <release asset url>`, uploaded to the prerelease `evidence-archive-<date>`, downloaded,
-    verified and restored; summaries compacted with `scripts/evidence-summary.mjs`; the size exceptions retired, red
-    first. The close records (record, ledger, QA record; after plan 014 file 2 through `node scripts/records.mjs commit`,
-    records first, then `main`). The private layer's re-sync in its side-by-side checkout (the checklist's "Per-release
+    --repo <checkout> --ref <full sha of the commit carrying evals/runs/<run>: after plan 014 file 2, the records-branch
+    commit> --path evals/runs/<run> --repository zomarit/stamity --output <tmp>/<run>.tar.gz --manifest
+    <tmp>/<run>.ARCHIVE.json --url <release asset url>` (one manifest path per run: `pack` refuses an existing output,
+    `scripts/evidence-archive.py:312`), uploaded to the prerelease `evidence-archive-<date>`, downloaded, verified and
+    restored; each manifest is then placed as `evals/runs/<run>/ARCHIVE.json` (on `records` after plan 014 file 2);
+    summaries compacted with `scripts/evidence-summary.mjs`; the size exceptions retired, red first. The close records
+    (record, ledger, QA record; after plan 014 file 2 through
+    `node scripts/records.mjs commit -m "records: the 1.12.0 release close"`, records first, then `main`). The private layer's re-sync in its side-by-side checkout (the checklist's "Per-release
     record currency", learning `release-close-record-re-sync`): the continuity log, the kickoff prompt, the driver's
     set pin moved to the released bytes, the raw captures archived there. Lane worktrees removed only after their ignored
     files are listed and moved.
@@ -996,8 +1029,8 @@ record's sequence (start `:53-92`, the cut commits `df30dc46`…`f288b2fe`, the 
 | `u3-route-proofs` reads CI by job name, and a renamed job would turn a leg into a silent `not-run` | Warning | The workflow-matcher case parses `ci.yml` and `nightly.yml` and fails naming the leg whose job is gone |
 | The eval run is lost to an account switch or a usage hold | Warning | Step 0's pre-flight and the learning: same account to the end, hold and resume after the reset |
 | A full eval export over 1 MB fails hygiene, and after plan 014 the records branch's check runs `main`'s scripts | Warning | Step 2e lands the exact-path exception on `main` first, then the export |
-| The reset block deletes a fork's own `plugin-dist` | Warning | The guard keeps a branch whose source commit is not on `upstream/main` and every suffixed tag; the second fixture proves it |
-| The bash reset test is skipped on Windows, so the recipe is unproven there | Minor | The skip names its reason; Windows operators run the block in Git Bash; a follow-up row |
+| The reset block deletes a fork's own `plugin-dist` or `plugins/*` tags | Warning | The guard keeps a branch whose source commit is not on `upstream/main` and every tag whose object differs from upstream's; the second fixture proves it |
+| The bash reset test is skipped on Windows, so the recipe is unproven there | Minor | The skip names its reason; Windows operators run the two blocks in Git Bash; a follow-up row |
 | The promotion leaves `plugin-stable` unset after publish, so the per-channel templates point at nothing | Warning | Step 13's first promotion, approved by the maintainer; `testCriteria` checks `plugin-stable` equals the tag's commit |
 | The release record is named by the run-id grammar (`<date>_release-1-12-0`) and the measurements page reads a release run's version only from a dotted name, so its merge evidence reads "none" | Minor | Known inbox row (`src/cli/docs/measurements.ts:456`); recorded, not fixed here |
 | Lane A serializes eight units | Minor | Lanes B and C run beside it; the eval's 3.5 hours dominate the session |
@@ -1014,12 +1047,12 @@ record's sequence (start `:53-92`, the cut commits `df30dc46`…`f288b2fe`, the 
 
 ## Open questions
 
-None. The drafter's concerns are settled in the decisions above (S1–S8) and folded into the spec delta.
+None. The drafter's concerns are settled in the decisions above (S1–S9) and folded into the spec delta.
 
 ## Follow-ups (appended to `.stamity/inbox.md` at this plan's write)
 
 - Minor · `docs/choose-a-route.md` · the footprint figures are dated measurements no test re-derives; a case that runs `init` per client set in a scratch repository and compares the page's counts would make them derivations.
-- Minor · `test/upstream/resetRecipe.test.ts` · skipped on Windows (a bash recipe); a PowerShell twin of the reset block is not built.
+- Minor · `test/upstream/resetRecipe.test.ts` · skipped on Windows (a bash recipe); a PowerShell twin of the two reset blocks is not built.
 - Minor · `scripts/build-plugin-distribution.mjs:424` · the manual-push line commits `plugins: v${version}` without "from <source commit>", so the reset recipe's guard cannot tell such a branch's origin and keeps it; align it with `release.yml:970`'s message.
 - Minor · `scripts/qa/route-proof.mjs` · the three live legs stay `Not done:` until a Copilot Business or Enterprise organization or a Cursor Teams account exists, or, for the auto-update leg, until the first release after 1.12.0 on the stable channel.
 - Minor · `docs/enterprise-forks.md` · past 1,500 lines with the rollout, reset and settings sections; a split into a fork guide and an organization-rollout guide is a later docs change that moves the bucket's pins.

@@ -45,7 +45,8 @@ its own epic, per-run write caps, and a release (see the drop list).
 
 1. **One write target.** A run writes to one board: the board `setup` linked for the session, or, for a `fill` run in
    a session with no link, the first `--source` that names a platform board. Every other source is read only. The link
-   stays session-carried; no config key holds it.
+   stays session-carried; no config key holds it. A link to a Projects board also names exactly one repository, from
+   setup step 2, and writes reach only that repository's items (see 14).
 2. **No answer means no write.** The preview's declared default is `stop`, the lowest-blast-radius option
    (`content/rules/stamity-question-protocol.md:39-56`). It does not copy `/st-pr-resolve`'s `accept (default)`
    (`content/commands/st-pr-resolve.md:212-216`), because a board write is visible to other people.
@@ -80,6 +81,20 @@ its own epic, per-run write caps, and a release (see the drop list).
     `test/corpus/commands/board.test.ts:48-57`; the new material sits in `###` subsections.
 13. **Writes go out one at a time, at least one second apart, and stop on a `retry-after`.** GitHub's own figures
     (about 80 content-creating requests a minute and 500 an hour) stay out of the command text, because they drift.
+14. **A Projects-board link names exactly one repository, and writes reach only its items.** A link to a Projects
+    board names no repository by itself, `gh issue create` without `-R` files in the checkout's repository, and one
+    board can hold items from several repositories. So setup step 2 records exactly one repository with the link; a
+    `--source` that names only a Projects board links the board with no repository. Issue writes (new items, edits,
+    comments, checklist ticks) and project writes (adding an item, Status moves) reach only items of that repository;
+    items of other repositories on the board are read and screened, and every write to them stays a proposal. With no
+    repository named, the link is read-only: every write stays a proposal, and the run reports `BLOCKED_DEPENDENCY`
+    naming the missing repository and setup step 2. The write check (repository permission `admin` or `write`; for a
+    Projects board, `viewerCanUpdate`) runs once the link has its repository — in setup after step 2, and before the
+    first write of a run whose link came from `--source` — and a failed check leaves the link read-only. Not taken:
+    writes to every repository with items on the board, each behind its own permission check (it loosens the
+    one-write-target floor); defaulting to the checkout's repository when it is on the project; and, with no
+    repository named, letting edits, comments and moves on existing items proceed (it writes to repositories nobody
+    named). Added at the pull-request review, 2026-10-02, and narrowed to this rule in its first fix round.
 
 ## Spec delta
 
@@ -94,14 +109,19 @@ the live walk in this plan.
 
 ### ADDED REQ-BOARD-001 — A linked board takes writes by default
 
-A board is linked by `setup`, or for a single `fill` run by its first `--source` that names a platform board. Once a
-board is linked, `/st-board` writes to it with no step that enables writes for the session, and no link outlives the
-session. `fill` files each `ready` item as an issue in the linked repository and adds it to the linked Projects board
-when one is linked. It applies only labels the repository already has and never creates one. The issue body carries the
-item's acceptance criteria, plus a `Ref:` when the item names a spec. `groom` applies evidence comments and edits to
-open items: titles, bodies, labels and checklist ticks. Progress comments and PR mentions from `/st-work` events are
-written without `--move`. A checklist tick reads the body again immediately before writing and changes only that
-criterion's box. Every write passes the preview that REQ-BOARD-002 defines.
+A board is linked by `setup`, or for a single `fill` run by its first `--source` that names a platform board. A link to
+a Projects board also names exactly one repository, from setup step 2; a `--source` that names only a Projects board
+links the board with no repository. Issue writes and project writes reach only items of that repository; items of
+other repositories on the board are read and screened, and every write to them stays a proposal. With no repository
+named, the link is read-only: every write stays a proposal, and the run reports `BLOCKED_DEPENDENCY` naming the missing
+repository and setup step 2. Once a board is linked, `/st-board` writes to it with
+no step that enables writes for the session, and no link outlives the session. `fill` files each `ready` item as an
+issue in the linked repository and adds it to the linked Projects board when one is linked. It applies only labels the
+repository already has and never creates one. The issue body carries the item's acceptance criteria, plus a `Ref:` when
+the item names a spec. `groom` applies evidence comments and edits to open items: titles, bodies, labels and checklist
+ticks. Progress comments, checklist ticks and PR mentions from `/st-work` events are written without `--move`. A
+checklist tick reads the body again immediately before writing and changes only that criterion's box. Every write
+passes the preview that REQ-BOARD-002 defines.
 
 1. GIVEN `### setup — wiring` WHEN read THEN it has no step that chooses or enables write channels, the body nowhere
    contains "Read-only by default" or "enabled at setup", and setup still contains "It is session-carried: no config key
@@ -110,10 +130,14 @@ criterion's box. Every write passes the preview that REQ-BOARD-002 defines.
    issue in the linked repository, added to the linked project when one is linked, with its acceptance criteria, its
    `Ref:` and the filed-item marker, and that an unready item or an unapplied row stays a proposal in the run report.
    *(corpus)*
-3. GIVEN a linked repository whose labels are `type:feature` and `needs-design`, and a request whose rows include adding
+3. GIVEN `## Write-back contract` WHEN its opening is read THEN it says a link to a Projects board names exactly one
+   repository, from setup step 2, that writes reach only that repository's items while every write to an item of
+   another repository on the board stays a proposal, and that with no repository named the link is read-only with
+   `BLOCKED_DEPENDENCY` naming the missing repository and setup step 2. *(corpus)*
+4. GIVEN a linked repository whose labels are `type:feature` and `needs-design`, and a request whose rows include adding
    `needs-design` WHEN the run answers THEN its preview lists the label row as an item edit and no row creates a label.
    *(eval: board-write-back-four-channels)*
-4. GIVEN a scratch repository whose labels are `type:feature` and `area:docs`, and a `fill` of two chat items, one
+5. GIVEN a scratch repository whose labels are `type:feature` and `area:docs`, and a `fill` of two chat items, one
    proposing `priority:high` WHEN the preview is answered `apply` THEN two issues exist, both on the linked project, with
    `type:feature` applied, and the report lists `priority:high` as a proposal. *(QA)*
 
@@ -121,16 +145,21 @@ criterion's box. Every write passes the preview that REQ-BOARD-002 defines.
 
 Before its first write, a run shows its whole batch once as one numbered table — row, item, action, what changes — and
 asks one question: `apply` · `apply <n,…>` · `skip <n,…>` · `stop`. **Default if no response: `stop`.** `apply` writes
-the batch with no further prompt; `apply <n,…>` writes only the named rows; `skip <n,…>` writes every row except the
-named ones; `stop`, or no answer, writes nothing and keeps every row as a proposal in the run report. A write the preview
-did not list is not made. A pickup preview also names the work run's later writes — progress comments on the item as the
-run proceeds, the PR mention and, with `--move`, the status changes — and one `apply` covers them.
+the batch with no further prompt, except the end-of-run question `--move` defines; `apply <n,…>` writes only the named
+rows; `skip <n,…>` writes every row except the named ones; `stop`, or no answer, writes nothing and keeps every row as a
+proposal in the run report. A write the preview did not list is not made. A pickup preview also names the work run's
+later writes — progress comments on the item as the run proceeds, a tick of each acceptance criterion the run verifies
+where the item's body lists it as a task, the PR mention and, with `--move`, the forward status changes — and one
+`apply` covers them. A close, a reopen or a backward transition a work event produces is not covered: it is asked once
+at the end of the run.
 
 1. GIVEN `### The preview` under `## Write-back contract` WHEN read THEN it holds the four answers in the order `apply`,
    `apply <n,…>`, `skip <n,…>`, `stop`, and the literal ``Default if no response: `stop` ``, and it does not contain
    `accept (default)`. *(corpus)*
 2. GIVEN `### pickup — select, gate, hand off` WHEN step 5 is read THEN it says the pickup preview names the work run's
-   later writes and that one `apply` covers them. *(corpus)*
+   later writes, checklist ticks among them, and that one `apply` covers them, and that a close, a reopen or a backward
+   transition a work event produces is not covered and is asked once at the end of the run; GIVEN `### The preview` WHEN
+   read THEN `apply` writes with no further prompt except the end-of-run question `--move` defines. *(corpus)*
 3. GIVEN an operator message asking for four writes WHEN the run answers THEN, before claiming any write, the response
    shows exactly one numbered table and exactly one question offering the four answers with `stop` as the default, and
    it reports no write as already made. *(eval: board-write-back-four-channels)*
@@ -153,7 +182,7 @@ are its status field and change only with `--move`. `fill` moves nothing.
    subsection names status-field or column changes, closes, reopens, and `status:*` label changes where no status field
    exists as the gated actions. *(corpus)*
 2. GIVEN `## Progress contract` WHEN the event table is read THEN the `phase.transition` and `run.terminal` cells allow a
-   status transition only under `move: on`. *(corpus)*
+   status transition only under `move: on`, and both cells name a progress comment under `move: off`. *(corpus)*
 3. GIVEN pickup step 5 WHEN read THEN the payload names `move: on` or `move: off`, and without `--move` the `handoff`
    carries `status-write: skipped`. *(corpus)*
 4. GIVEN a request that includes moving an item to In review, in a run invoked without `--move` WHEN the run answers THEN
@@ -165,14 +194,16 @@ are its status field and change only with `--move`. `fill` moves nothing.
 ### ADDED REQ-BOARD-004 — Writes the board never makes
 
 The board never deletes an item, never makes any edit to a completed item (append or supersede instead), never writes
-to a repository or board other than the linked one, never creates a label, and never writes a `status:*` label where the
+to a repository or board other than the linked one (on a Projects board, to an item of any repository other than the
+one the link names), never creates a label, and never writes a `status:*` label where the
 board has a status field. Such a request stops and returns `BLOCKED_DEPENDENCY` rather than improvising one, for that
 item alone, and travels as a proposal in the report. This is decided on the requested action before any write is
 attempted, and the other writes are reported separately.
 
-1. GIVEN `### Writes the board never makes` WHEN read THEN it lists the five, and contains the literals "any edit to a
-   completed item" and "`BLOCKED_DEPENDENCY` rather than improvising one" with nothing between the closing backtick and
-   "rather" (`test/packs/product-audit.test.ts:947` reads that phrase). *(corpus)*
+1. GIVEN `### Writes the board never makes` WHEN read THEN it lists the five, counts a write to an item of a repository
+   other than the one a Projects-board link names as a write to another repository, and contains the literals "any
+   edit to a completed item" and "`BLOCKED_DEPENDENCY` rather than improvising one" with nothing between the closing
+   backtick and "rather" (`test/packs/product-audit.test.ts:947` reads that phrase). *(corpus)*
 2. GIVEN a request to delete a duplicate item beside other requested writes WHEN the run answers THEN the deletion
    returns `BLOCKED_DEPENDENCY` for that item and travels as a proposal, is not a row `apply` would write, and the other
    rows stay in the preview. *(eval: board-write-back-four-channels)*
@@ -230,22 +261,34 @@ The GitHub row of the platform reference table carries the MCP tools `mcp__githu
 `mcp__github__issue_read`, `mcp__github__issue_write`, `mcp__github__add_issue_comment`,
 `mcp__github__update_issue_comment`, `mcp__github__projects_list`, `mcp__github__projects_get` and
 `mcp__github__projects_write`; the CLI fallback `gh issue list/view/create/edit/comment/close/reopen`, `gh pr view`,
-`gh project item-list/item-add/item-edit/field-list` and `gh api` (permission, visibility, and a comment edit by id);
-and the access check `gh auth status`, whose "Token scopes" line shows `project` when a Projects board is linked. A notes
-paragraph beside the table says: the MCP server's default toolsets leave out `projects`, so setup says to add it;
-`gh project item-edit` takes ids only — `--id`, `--field-id`, `--project-id`, `--single-select-option-id` — read from
-`gh project field-list` and `gh project item-list` with `--format json`; adding an item and setting its Status are two
-calls; and `gh issue list` returns 30 issues unless told otherwise, so a listing the run depends on passes a `--limit`
-above the repository's issue count. The abstract board contract becomes `list`, `get`, `create`, `update`, `comment`,
+`gh project item-list/item-add/item-edit/field-list` and `gh api` (permission, visibility, a comment edit by id, and the
+project's `viewerCanUpdate` through GraphQL); and the access check `gh auth status`, whose "Token scopes" line shows
+`project` when a Projects board is linked. Once a link has its repository — in setup after step 2, and before the
+first write of a run whose link came from `--source` — the run reads the acting account's own permission on that
+repository from the permission endpoint and requires `admin` or `write`, and for a Projects board requires the
+project's `viewerCanUpdate`; if either check fails, the link is read-only and every write stays a proposal, naming the
+failed check. A notes paragraph beside the table says: the MCP server's default toolsets leave out
+`projects`, so setup says to add it; `gh project item-edit` takes ids only — `--id`, `--field-id`, `--project-id`,
+`--single-select-option-id` — read from `gh project field-list` and `gh project item-list` with `--format json`; adding
+an item and setting its Status are two calls; `gh issue list`, `gh project item-list` and `gh project field-list` each
+return 30 unless told otherwise, so a listing the run depends on passes a `--limit` above the count it lists (or pages
+the GraphQL `items`/`fields` connection); and the write check reads the permission endpoint and, for a Projects
+board, `viewerCanUpdate` on the project's GraphQL `ProjectV2` node, because an issue created without push access loses
+its labels silently. The abstract board contract becomes `list`, `get`, `create`, `update`, `comment`,
 `link-PR`, `move`. The table is re-dated `Verified 2026-10`.
 
 1. GIVEN `## Platform reference table` WHEN the GitHub row's MCP cell is read THEN it contains each of the eight tool ids,
    with `mcp__github__list_issues` in it. *(corpus)*
 2. GIVEN the same section WHEN the CLI cell and the notes paragraph are read THEN they name each listed `gh` command, the
-   four id flags of `gh project item-edit`, the two-call add-then-set sequence, the `--limit` rule and the `projects`
-   toolset. *(corpus)*
-3. GIVEN the same section WHEN read THEN the access-check cell names `gh auth status` and the `project` scope, the date
-   line reads `Verified 2026-10`, and the abstract contract lists the seven verbs. *(corpus)*
+   four id flags of `gh project item-edit`, the two-call add-then-set sequence, the `--limit` rule naming
+   `gh issue list`, `gh project item-list` and `gh project field-list`, and the `projects` toolset. *(corpus)*
+3. GIVEN the same section WHEN read THEN the access-check cell names `gh auth status` and the `project` scope, the CLI
+   cell's `gh api` entry and the notes name `viewerCanUpdate`, the date line reads `Verified 2026-10`, and the abstract
+   contract lists the seven verbs; GIVEN `### setup — wiring` WHEN step 2 is read THEN, once the link has its
+   repository, it requires `admin` or `write` from the permission endpoint and, for a Projects board,
+   `viewerCanUpdate`, and says a failed check leaves the link read-only with every write a proposal naming the failed
+   check; GIVEN `### fill — intake to items` WHEN step 1 is read THEN the same check runs before the first write of a
+   run whose link came from `--source`. *(corpus)*
 4. GIVEN `## Write-back contract` WHEN read THEN it says writes go out one at a time, at least one second apart, and stop
    on a `retry-after`. *(corpus)*
 5. GIVEN a pickup with `--move` on the scratch Projects board WHEN the status write runs THEN the ids came from
@@ -338,7 +381,11 @@ requires it).
    an item stands."
 4. **Modes (`:20-21`)**: "default to the read-only one." becomes "default to the one that writes nothing."
 5. **fill step 1 (`:45-51`)** gains, after the precedence sentence: "A `fill` run in a session with no linked board
-   writes to the first `--source` that names a platform board; every other source is read only."
+   writes to the first `--source` that names a platform board; every other source is read only. A `--source` that
+   names only a Projects board links it with no repository, so that link is read-only: every write stays a proposal,
+   and the run reports `BLOCKED_DEPENDENCY` naming the missing repository and setup step 2. Before the first write of a
+   run whose link came from `--source`, the run makes setup's write check against that link's repository; a failed
+   check leaves the link read-only."
 6. **fill step 5 (`:80-86`)**: "where the destination is a proposal this contract cannot file" becomes "where the
    destination is a proposal this run did not file — the preview was answered `stop`, or no board is linked —"; the
    clause ", since the write-back contract opens no creation channel" is deleted; "re-raised in the bundled question"
@@ -355,8 +402,10 @@ requires it).
 9. **pickup step 5 (`:122-131`)** becomes: "5. **Hand off to `/st-work`.** The payload carries item id and source link,
    acceptance criteria verbatim, scope in and out, the satisfied dependency list, the predicted write surface, the
    progress-event channel below, and `move: on` or `move: off`. The pickup preview names the work run's later writes —
-   progress comments on the item as the run proceeds, the PR mention, and with `--move` the status changes — and one
-   `apply` covers them. With `--move`, the item moves to in progress, and that is the last write pickup performs.
+   progress comments on the item as the run proceeds, a tick of each acceptance criterion the run verifies where the
+   item's body lists it as a task, the PR mention, and with `--move` the forward status changes — and one `apply` covers
+   them. A close, a reopen or a backward transition a work event produces is not covered: it is asked once at the end of
+   the run. With `--move`, the item moves to in progress, and that is the last write pickup performs.
    Without it — the default — pickup changes no status: the return block's `writes` list names no status write and
    `handoff` carries `status-write: skipped`, so the work run does not assume a board already showing the item in
    progress. Everything after that belongs to the work run and returns as events."
@@ -373,7 +422,12 @@ requires it).
 11. **setup (`:170-188`)**: step 1 reads "Pick the platform from the reference table and confirm its access path
     answers: the CLI reports an authenticated session — for a Projects board, with `project` on its "Token scopes" line
     — or the MCP server is configured and reachable, with the `projects` toolset added where a Projects board is linked.
-    Setup verifies a session that already exists. It captures no credentials and stores none." Step 2 stays. Step 3
+    Setup verifies a session that already exists. It captures no credentials and stores none." Step 2 stays, and gains:
+    "A link to a Projects board also records exactly one repository, the one the operator names; writes reach only
+    that repository's items, and with none named the link is read-only. Once the link has its repository, setup reads
+    the acting account's own permission on it from `gh api repos/<owner>/<repo>/collaborators/<user>/permission` and
+    requires `admin` or `write`, and for a Projects board requires the project's `viewerCanUpdate`; if either check
+    fails, the link is read-only and every write stays a proposal, naming the failed check." Step 3
     becomes "3. **No write switch.** Writes are on by default once a board is linked; every run shows its batch once
     before its first write, and status changes need `--move` (Write-back contract)." Step 4 gains, before "Recorded at
     setup, not repeated per run.": "On a GitHub Projects board: closing an issue and merging a pull request set its
@@ -387,13 +441,17 @@ requires it).
     `mcp__github__issue_write`, `mcp__github__add_issue_comment`, `mcp__github__update_issue_comment`,
     `mcp__github__projects_list`, `mcp__github__projects_get`, `mcp__github__projects_write`; CLI fallback:
     `gh issue list/view/create/edit/comment/close/reopen`, `gh pr view`, `gh project item-list/item-add/item-edit/field-list`,
-    `gh api` (permission, visibility, comment edit by id); Access check: `gh auth status` (`project` scope for a
+    `gh api` (permission, visibility, comment edit by id, the project's `viewerCanUpdate` through GraphQL); Access
+    check: `gh auth status` (`project` scope for a
     Projects board); Status field and Availability unchanged. After the table, a paragraph: "**GitHub notes.** The MCP
     server's default toolsets leave out `projects`; setup says to add it. `gh project item-edit` takes ids only —
     `--id`, `--field-id`, `--project-id`, `--single-select-option-id` — read from `gh project field-list` and
     `gh project item-list` with `--format json`, or from the project's GraphQL `fields` and `items` when that output
-    omits them; adding an item and setting its Status are two calls. `gh issue list` returns 30 issues unless told
-    otherwise, so a listing the run depends on passes a `--limit` above the repository's issue count. A progress
+    omits them; adding an item and setting its Status are two calls. `gh issue list`, `gh project item-list` and
+    `gh project field-list` each return 30 unless told otherwise, so a listing the run depends on passes a `--limit`
+    above the count it lists (or pages the GraphQL `items`/`fields` connection). The write check reads the
+    permission endpoint for the acting account and, for a Projects board, `viewerCanUpdate` on the project's GraphQL
+    `ProjectV2` node, because an issue created without push access loses its labels silently. A progress
     comment is updated by its comment id — `mcp__github__update_issue_comment`, or `gh api` on
     `repos/<owner>/<repo>/issues/comments/<id>` — never with `gh issue comment --edit-last`, which edits whatever the
     account commented last."
@@ -408,10 +466,14 @@ requires it).
     >
     > On by default once a board is linked, and every write goes through the run's preview. A run writes to one board:
     > the board `setup` linked for this session, or, for a `fill` run in a session with no link, the first `--source`
-    > that names a platform board. These five writes are the set:
+    > that names a platform board. A link to a Projects board also names exactly one repository, from setup step 2; a
+    > `--source` that names only a Projects board links it with no repository. Writes reach only items of that
+    > repository: items of other repositories on the board are read and screened, and every write to them stays a
+    > proposal. With no repository named, the link is read-only: every write stays a proposal, and the run reports
+    > `BLOCKED_DEPENDENCY` naming the missing repository and setup step 2. These five writes are the set:
     >
-    > 1. **New item** — files a ready item: an issue in the linked repository, added to the linked project, carrying its
-    >    acceptance criteria, its `Ref:` and the filed-item marker below.
+    > 1. **New item** — files a ready item: an issue in the linked repository, added to the linked project when one is
+    >    linked, carrying its acceptance criteria, its `Ref:` and the filed-item marker below.
     > 2. **Item edit** — a title, a body, a checklist tick or a label on an open item. A tick re-reads the body
     >    immediately before writing and changes only that criterion's box.
     > 3. **Progress comment** — one comment per progress event on the item, carrying the event id, so a replay updates
@@ -425,8 +487,9 @@ requires it).
     >
     > ### Writes the board never makes
     >
-    > Deleting an item, any edit to a completed item, a write to any repository or board other than the linked one, a
-    > label the repository does not already have, and a `status:*` label where the board has a status field. Such a
+    > Deleting an item, any edit to a completed item, a write to any repository or board other than the linked one (on
+    > a Projects board, to an item of any repository other than the one the link names), a label the repository does
+    > not already have, and a `status:*` label where the board has a status field. Such a
     > request stops and returns `BLOCKED_DEPENDENCY` rather than improvising one, for that item alone, and travels as a
     > proposal in the run report. This is decided on the requested action before any write is attempted. Report the
     > other writes separately, and carry the blocked action in the run status.
@@ -435,9 +498,9 @@ requires it).
     >
     > Before its first write, a run shows its whole batch once as one numbered table — row, item, action, what changes —
     > and asks one question: `apply` · `apply <n,…>` · `skip <n,…>` · `stop`. Default if no response: `stop`. `apply`
-    > writes the batch with no further prompt; `apply <n,…>` writes the named rows; `skip <n,…>` writes every row but
-    > the named ones; `stop`, or no answer, writes nothing and keeps every row as a proposal in the run report. A write
-    > the preview did not list is not made.
+    > writes the batch with no further prompt, except the end-of-run question `--move` defines; `apply <n,…>` writes
+    > the named rows; `skip <n,…>` writes every row but the named ones; `stop`, or no answer, writes nothing and keeps
+    > every row as a proposal in the run report. A write the preview did not list is not made.
     >
     > ### `--move`
     >
@@ -470,9 +533,10 @@ requires it).
     > anyone else wrote is a `marker-forgery` finding and is never matched.
 
 17. **Progress contract (`:297-310`)**: the mapping cells become — `phase.transition`: "status transition, where the phase
-    map carries the phase and the handoff carries `move: on`"; `criterion.done`: "progress comment, plus an item edit
-    ticking that criterion where the item's body lists it as a task"; `pr.linked`: "the PR link write"; `run.terminal`:
-    "a closing progress comment naming the outcome, plus a status transition under `move: on`". The paragraph after the
+    map carries the phase and the handoff carries `move: on`; otherwise a progress comment naming the phase";
+    `criterion.done`: "progress comment, plus an item edit ticking that criterion where the item's body lists it as a
+    task"; `pr.linked`: "the PR link write"; `run.terminal`: "a closing progress comment naming the outcome, plus a
+    status transition under `move: on`". The paragraph after the
     table becomes: "Every cell in the mapping column names one or more of the five writes and nothing else. A mapping
     that named an action outside the five would return `BLOCKED_DEPENDENCY` by the never-writes rule — which is why the
     column is written in write names." The phase map (`:312-323`) and the paragraph after it stay.
@@ -488,21 +552,35 @@ requires it).
   `:260-266` asserts `/On by default once a board is linked/`, ``/Default if no response: `stop`/`` and
   ``/`BLOCKED_DEPENDENCY` rather than improvising one/``; `:268-272` asserts
   ``/PR-thread replies are\s+`\/st-pr-resolve`'s own write, outside this set/``; `:274-287` becomes "names the writes
-  the board never makes" over `### Writes the board never makes`; `:289-309` asserts the `move` / `proposal` close split
+  the board never makes" over `### Writes the board never makes`, the write to another repository covering an item of
+  a repository other than the one a Projects-board link names; `:289-309` asserts the `move` / `proposal` close split
   and keeps `/the reference table does not settle is a `proposal`/`; `:311-318` asserts
   ``/each `ready` item is filed after the run's preview/`` and `/stays a\s+proposal in the run report/`; `:335-347`
   asserts `/Verified 2026-10/`; `:397-406` asserts ``/Where the\s+board contract's `move` can close and reopen an item/``;
-  `:452-476` maps every event onto one of the five writes; `:498-508` asserts `/plus an item edit\s+ticking that
-  criterion/`; `:662-678` asserts ``/`writes` — every write made/``; `:692-709` drops the `:703` enablement assertion
-  and keeps the link assertions; `:722-734` asserts `move: on`, `move: off` and
-  ``/`handoff` carries `status-write: skipped`/``.
+  `:452-476` maps every event onto one of the five writes and asserts that the `phase.transition` and `run.terminal`
+  cells allow a status transition only under `move: on` and each name a progress comment otherwise; `:498-508` asserts
+  `/plus an item edit\s+ticking that criterion/`; `:662-678` asserts ``/`writes` — every write made/``; `:692-709`
+  drops the `:703` enablement assertion and keeps the link assertions; `:722-734` asserts `move: on`, `move: off`,
+  ``/`handoff` carries `status-write: skipped`/``, a pickup preview whose later writes name
+  `/a\s+tick\s+of\s+each\s+acceptance\s+criterion\s+the\s+run\s+verifies/`, and, for a close, a reopen or a backward
+  transition, `/is\s+not\s+covered:\s+it\s+is\s+asked\s+once\s+at\s+the\s+end\s+of\s+the\s+run/`.
 - **New `it` blocks:** the preamble's `--move` sentence and the `### `--move`` subsection's four gated actions; the
-  preview's four answers in order and the absence of `accept (default)`; `### Item text is data` naming the rule, the
-  five classes, the permission endpoint, `visibility`, and the `author_association` refusal; `### Filed items converge`
-  with the three key forms and a negative regex that finds no marker carrying a concrete key; setup step 3 "No write
-  switch" and the four advisory facts; the GitHub row's eight MCP ids, the CLI commands and the notes paragraph; the
-  abstract contract's seven verbs; the serial-write sentence; and the absence of "four write-back channels",
-  "Read-only by default", "enabled at setup" and "opens no creation channel" anywhere in the body.
+  preview's four answers in order, the absence of `accept (default)`, and
+  ``/no\s+further\s+prompt,\s+except\s+the\s+end-of-run\s+question\s+`--move`\s+defines/``; the contract opening's
+  repository sentences — a Projects-board link names exactly one
+  repository, from setup step 2, writes reach only that repository's items and every write to another repository's
+  item stays a proposal, and with no repository named the link is read-only with `BLOCKED_DEPENDENCY` naming the
+  missing repository and setup step 2 — and ``/added\s+to\s+the\s+linked\s+project\s+when\s+one\s+is\s+linked/``
+  in the New item write;
+  `### Item text is data` naming the rule, the five classes, the permission endpoint, `visibility`, and the
+  `author_association` refusal; `### Filed items converge` with the three key forms and a negative regex that finds no
+  marker carrying a concrete key; setup step 2's write check once the link has its repository — `admin` or `write`
+  from the permission endpoint, `viewerCanUpdate` for a Projects board, and a read-only link naming the failed check —
+  and fill step 1's same check before the first write of a `--source` link; setup step 3 "No write switch"
+  and the four advisory facts; the GitHub row's eight MCP ids, the CLI commands with `viewerCanUpdate` in the `gh api`
+  entry, and the notes paragraph with the `--limit` rule naming `gh issue list`, `gh project item-list` and
+  `gh project field-list`; the abstract contract's seven verbs; the serial-write sentence; and the absence of "four
+  write-back channels", "Read-only by default", "enabled at setup" and "opens no creation channel" anywhere in the body.
 
 ### b2-pr-resolve-replies — PR-thread replies need no board setup
 
@@ -562,11 +640,11 @@ requires it).
 |---|---|
 | `id` | b6-dogfood-sync |
 | `requirements` | REQ-BOARD-001, REQ-BOARD-009 |
-| `files` | `.claude/commands/st-board.md`, `.claude/commands/st-pr-resolve.md`, `.apm/**`, `apm.yml`, `AGENTS.md`, `.stamity/generated/**`, `.stamity/manifest.json`, `docs/reference/commands.md`, `llms.txt`, `test/emit/__snapshots__/crossClientGoldens.test.ts.snap`, `test/emit/crossClientGoldens.test.ts` |
+| `files` | `.claude/commands/st-board.md`, `.claude/commands/st-pr-resolve.md`, `.claude/skills/st-eval-run/SKILL.md` (emitted from `b4`'s `.stamity/overrides/skills/st-eval-run/SKILL.md`), `.apm/**`, `apm.yml`, `AGENTS.md`, `.stamity/generated/**`, `.stamity/manifest.json`, `docs/reference/commands.md`, `llms.txt`, `test/emit/__snapshots__/crossClientGoldens.test.ts.snap`, `test/emit/crossClientGoldens.test.ts` |
 | `interfaces` | In order: `npm run build && node dist/cli.js sync`; `node scripts/generate-apm-package.mjs`; `node scripts/generate-docs.mjs`; `npx vitest run test/emit/crossClientGoldens.test.ts --update` (file first, flag last — the learning `vitest-update-flag-takes-an-optional-value`), then a dated ledger comment in `test/emit/crossClientGoldens.test.ts`'s header in the pattern of `:726-760` naming plan 015 and the two command files whose digests moved. `test/corpus/emissionGoldens.test.ts` does not move, because `content/commands/st-work.md` is unchanged. |
 | `testCriteria` | **Given** the regenerated tree, **when** `npx vitest run test/emit test/ci/apmPackage.test.ts test/cli/docs/referencePages.test.ts` runs, **then** it passes. **Given** `node dist/cli.js check`, **then** it reports that a sync would change nothing. **Given** `git status --porcelain`, **then** no generated file is left modified after a second run of the four commands. |
 | `edgeCases` | The goldens update also rewrites an unrelated snapshot → the diff shows it; revert it and find the drift's cause first. `docs/reference/commands.md` changes beyond the st-board block → another content file drifted; stop and name it. |
-| `depends_on` | b1-board-contract, b2-pr-resolve-replies, b3-product-audit-pack |
+| `depends_on` | b1-board-contract, b2-pr-resolve-replies, b3-product-audit-pack, b4-eval-cases |
 | `verify` | `npx vitest run test/emit test/ci/apmPackage.test.ts test/cli/docs/referencePages.test.ts && node dist/cli.js check` |
 
 ## Execution order
@@ -575,7 +653,7 @@ requires it).
    vocabulary fixed above.
 2. **`b3-product-audit-pack`** after `b1`; **`b5-docs`** after `b1`; both may run beside each other.
 3. **`b4-eval-cases`** after `b1` and `b2`, because its source ranges and governing quotes read their landed text.
-4. **`b6-dogfood-sync`** after `b1`, `b2` and `b3`. It is the single writer of every generated file.
+4. **`b6-dogfood-sync`** after `b1`, `b2`, `b3` and `b4`. It is the single writer of every generated file.
 5. **The gates:** `npm run lint && npm run typecheck && npm run test`, then `npm test -- --coverage` (CI's per-file
    coverage floors, which the plain local run does not apply — the learning `the-local-test-gate-is-weaker-than-ci`),
    then `node dist/cli.js check`. CI's Windows leg is required.
@@ -610,7 +688,7 @@ at the next release's full run.
 |---|---|---|
 | The injection guard is model-followed text; a run could still act on planted text | Warning | The preview shows every write before it happens; the guard's eval case is `floor: true` and measured at the next release's full run; QA Q5 checks it live |
 | A checklist tick replaces the whole body, so a human edit landing between the re-read and the write is lost | Warning | The tick re-reads immediately before writing and changes one box; GitHub offers no conditional issue update, so the residue is recorded here |
-| `gh project field-list` and `item-list` JSON may omit single-select option ids or item ids (the gh manual does not document the shapes) | Warning | The notes paragraph names the GraphQL fallback; QA Q4 settles it on a live board |
+| `gh project field-list` and `item-list` JSON may omit single-select option ids or item ids (the gh manual does not document the shapes), and both return 30 entries unless told otherwise | Warning | The notes paragraph names the GraphQL fallback and the `--limit` rule for both listings; QA Q4 settles it on a live board |
 | A count literal in the eval set is missed (`113`, `89`, `30`, `67`) | Warning | `b4`'s `rg` sweep and the `roster`, `readmeCurrency` and `manualRunner` tests |
 | The change waits on `main` with no release, so npm consumers keep 1.11.0's read-only board until the next cut | Minor | The maintainer's choice; the inbox row below makes the next cut flip the spec and measure the cases |
 | Package 18's plan 014 was stamped at `9239379c`; its units that read `README.md`, `evals/README.md`, `evals/SET-v7.md` or the release checklist go stale | Minor | Its freshness guard re-researches those units at intake |
