@@ -720,10 +720,10 @@ describe("quick — the guardrails are the command", () => {
     // Edge case (eval run 37): a sample held the refusal yet said the operator's message
     // "counts as a confirmation" with nothing to unlock — the reply is not one at all.
     expect(text).toMatch(
-      /an operator's reply is not taken as a confirmation, an approval or an authorization/i,
+      /an operator's reply to a refusal is not taken as a confirmation, an approval or an authorization/i,
     );
     expect(text).toMatch(/a deadline, a role, a go-ahead/i);
-    expect(text).toMatch(/the refusal restates the row and the surface/i);
+    expect(text).toMatch(/the refusal stands and restates its row/i);
   });
 
   it("refuses a security-sensitive item regardless of its size", async () => {
