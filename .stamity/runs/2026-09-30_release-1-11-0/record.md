@@ -1,10 +1,16 @@
 # Package 17, session 3 — test and release 1.11.0
 
-Status: in progress — opened 2026-09-30T21:36Z on the kickoff "Package 17, session 3 of 3: test and release 1.11.0"; runs
-unattended overnight on the maintainer's instruction, after a start phase with the maintainer present; held before
-the tag since 2026-10-01T08:01Z for the maintainer's yes (Q4).
+Status: **closed** — opened 2026-09-30T21:36Z on the kickoff "Package 17, session 3 of 3: test and release 1.11.0";
+ran unattended overnight on the maintainer's instruction, after a start phase with the maintainer present; held
+before the tag at 2026-10-01T08:01Z (Q4); released on the maintainer's yes (08:31Z): `main` fast-forwarded to
+`3fd0db4b` (#71, 08:33Z); the first release run failed on the shipped-spec check, so the fix `3980aac6` landed on
+`main` and the tag `v1.11.0` was re-pointed to it (Q9); npm 1.11.0 with provenance (09:02Z), `plugin-dist` =
+`plugins/v1.11.0` = `533771ea`.
 
 ## Morning note
+
+**Superseded at the close.** The maintainer said yes at 08:31Z and 1.11.0 is released: the Log's entries from
+08:31Z and the Proof block below. The note as written at the stop:
 
 Written at 2026-10-01T08:01Z, when the session stopped. It stopped where your answer said to: held before the tag (Q4).
 Nothing is tagged, published or merged into `main`.
@@ -77,6 +83,10 @@ confirmation; a morning note at the top of this record at the stop.
 | Q6 | 2026-09-30T21:57Z | A Dependabot security PR fails my check or breaks CI beyond a quick fix: what then? (Default if no answer: the recommended option.) | "Skip it, keep going (Recommended)" | That PR stays open with the findings in this record; the others merge; the release goes on without it; small fixes are made and reviewed as usual. |
 | Q7 | 2026-09-30T21:57Z | The eval run stops on its own (usage limit or an early end): what then? (Default if no answer: the recommended option.) | "Wait, or restart once (Recommended)" | A usage limit: the run holds and resumes after the reset on the same account, never switched. An early end: one fresh run; if that fails too, stop, hold before the tag, write down the cause. |
 | Q8 | 2026-09-30T21:57Z | Remove the 23 finished session-2 worktree folders (and tonight's own at the close)? (Default if no answer: the recommended option.) | "Remove, saving ignored files (Recommended)" | Per folder: list the ignored files, move all but `node_modules` into the main checkout (verified by `diff -r`), then remove the folder and its merged local branch. |
+| Q9 | 2026-10-01T08:39Z | How should I get 1.11.0 out after this failed release run? (If you don't answer, I hold: nothing more is pushed.) | "Move the tag (Recommended)" | The one status line fixed (`3980aac6`); the release workflow's gate steps re-run green at it with the tag in place locally; `main` fast-forwarded to it; the remote tag deleted and re-pushed on it (nothing had been released from `3fd0db4b`); the release re-run. Answered 08:45Z. |
+
+After the stop, at 2026-10-01T08:31Z, the maintainer answered the morning note: "yesssss go on! release it :)".
+That opened Q4's hold; Q9 was asked with the maintainer present.
 
 From 21:59Z the session asks nothing until the stop. Every later decision takes the recommended option and is recorded
 below as "Sign-off, unattended" for the maintainer's morning confirmation.
@@ -721,3 +731,53 @@ Node v22.22.3, npm 10.9.8; `command -v stamity` printed nothing; a scratch folde
   review, 7 prove; 46 fixed, 6 rejected, 10 deferred — 6 with inbox rows, 4 retired with a dated note),
   its QA record and the inbox are committed on the release branch on top of `3bee4987`; the overnight guard and the
   backup caffeinate stop after the push.
+- 08:31Z — the maintainer, verbatim: "yesssss go on! release it :)".
+- 08:33Z — merged and tagged. The main checkout's untracked copies of this record and its QA record were removed
+  first (byte-identical to `3fd0db4b`'s), and PR #71 was marked ready. `main` was fast-forwarded `cd1fc56e..3fd0db4b`
+  under the admin bypass at 08:33:12Z, and #71 reads MERGED (08:33:13Z). The annotated tag `v1.11.0` (tag object
+  `202c6b6f`) on `3fd0db4b` was pushed at 08:33:28Z.
+- 08:36Z — the close's public archive step, started beside the release run: runs 37, 38 and 39 were packed from
+  `3fd0db4b` into the public prerelease `evidence-archive-2026-10-01` (470,790, 467,695 and 489,845 bytes), downloaded
+  back and verified against their pointers (sha256 match). Their summaries were compacted beside the `ARCHIVE.json`
+  pointers (4,025,777 → 71,246, 4,025,492 → 74,047 and 4,037,478 → 129,000 bytes: only `coverage` and
+  `aggregate.rows` dropped, every other key deep-equal), and the three size exceptions were retired, red first. The
+  targeted tests (1,572), repo-hygiene, the leak gate, lint, typecheck and knip exit 0, and the measurements page
+  regenerates byte-stable.
+- 08:37Z — the release run 36837053878 failed. `apm route smoke` passed; `gates and pack` failed at its Test step on 1 of
+  10,661 tests: `test/records/specStatus.test.ts` > "leaves no spec reading `design` that a released plan shipped" —
+  "docs/specs/everyday-flows.md shipped with v1.11.0 through docs/plans/013-optimization-sweep-02.md and still reads
+  design" (and the same through `-03.md`). `publish` was skipped, so nothing was published: no npm version, no GitHub
+  release, no `plugin-dist`. The cause: the cut did not flip the shipped spec's status before the tag. 1.10.0 flipped
+  `orchestrator-context.md` on 2026-09-27, before its tag (`2e2c3212`), and this spec's own head said "the 1.11.0 close
+  moves it". The check runs only once a `v1.11.0` tag exists, so the gate of record, CI and every run before the tag
+  skipped it (ledger rows `prove/8` and `frame/7`; an inbox row for the checklist).
+- 08:39Z — Q9 asked (the table above); answered at 08:45Z: "Move the tag (Recommended)".
+- 08:47Z — `3980aac6` (implementer, Opus 5.5): `docs/specs/everyday-flows.md` reads `status: shipped-with-1.11.0`, and
+  its head says REQ-FLOW-025's allowlist sentence did not ship. The shipped-spec test ran (not skipped) and passed
+  against the local tag; `test/docsPages.test.ts` and `test/authoring` (115 tests), lint and the leak gate exit 0.
+- 08:53Z — the private layer's four driver commits pushed (the private archive's release needs its target commit on
+  the server); that layer's hygiene check exit 0.
+- 08:55Z — the release workflow's gate steps at `3980aac6`, with the local tag re-created there (test-runner, Opus 5.5):
+  the lockfile check, the build, `npm test` (262 files, 10,649 passed, 0 failed, 12 skipped; the shipped-spec check
+  live), `npm run gate` (the leak gate PASS), `check` (setup green) and the tarball smoke, every one exit 0. `main` was
+  fast-forwarded `3fd0db4b..3980aac6` (08:55:32Z), and the remote tag deleted and pushed again (08:55:41Z): `v1.11.0` is
+  tag object `57b75f2d` on `3980aac6`. The first tag stood for 22 minutes, and nothing was released from it.
+- 08:56Z — the private archive: the raw `calls/` and driver state of runs 36–39 were screened first (no credential
+  shape; every authorization value is the redaction marker), packed by working-tree capture into the private layer's
+  prerelease, downloaded back, verified and restored byte-identical (35,265 files, 296,861,142 payload bytes). The raw
+  files stay on disk. List-price cost: run 36 $88.61, run 37 $98.66, run 38 $96.34, run 39 $2.06. This is where the
+  changelog's call record of run 38 is archived.
+- 08:57Z — the close lane rebased onto `3980aac6`: the archive commit `8f54b262` and the retirement `6f7a7bf4`, with the
+  same tree. Both messages, and the public prerelease's notes, now name `3fd0db4b` as #71's merge commit, with the tag
+  on its child `3980aac6`, where the run files are identical.
+- 09:03Z — **1.11.0 released and verified.** Release run 36839412318 on `v1.11.0` at `3980aac6`: `apm route smoke`
+  success (08:56:28Z) and `gates and pack` success (09:01:56Z). `publish` waited on `npm-publish` and was approved from
+  this session at 09:02:19Z under the maintainer's yes; `publish` succeeded at 09:03:05Z. Verified from here:
+  - the publish log prints `+ @zomarit/stamity@1.11.0` (09:02:49Z), after "Signed provenance statement" and a
+    transparency-log entry (sigstore logIndex 3033289103);
+  - `npm view` reads `latest` 1.11.0 at 09:07Z, with `dist.attestations.provenance.predicateType`
+    `https://slsa.dev/provenance/v1`;
+  - `plugin-dist` and `refs/tags/plugins/v1.11.0` are one sha, `533771ea` ("plugins: v1.11.0 from 3980aac6…"), an
+    orphan commit with no parent;
+  - the GitHub release `v1.11.0` (published 09:03:01Z, Latest, not a draft, not a prerelease) carries `release.json`,
+    `sbom.cdx.json`, the four plugin zips, each with its `.sha256`, and `zomarit-stamity-1.11.0.tgz`.

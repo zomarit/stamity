@@ -621,3 +621,5 @@ Added by the orchestrator, not by the QA checkpoint agent; nothing above is chan
   maintainer to walk them or confirm the acceptance (sign-off S13).
 - **Finding 3 (the resume card names this run as closed):** settled at 07:42Z. The run record's head now reads
   `Status: in progress — …` until the close, so a resume reads this run as running (ledger row `frame/6`).
+- **After the release:** the close retired the three size exceptions (`6f7a7bf4`). Row X11 describes the candidate
+  `3bee4987`, where it held (ledger row `review/46`).
