@@ -177,13 +177,6 @@ const reasonFor = (notes: readonly DenominatedRun[], run: string): string | unde
 const evidenceFor = (runs: readonly VerifiedRun[], run: string): string | undefined =>
   runs.find((entry) => entry.run === run)?.mergeEvidence;
 
-/**
- * This repository's own measurement, computed per case rather than once at
- * describe scope: a refusal is then a named test failure instead of a suite
- * that fails to load with no case to point at.
- */
-const measured = (): MergeReadyReport => computeMergeReadyRate();
-
 /** The three lists, flattened to the run ids they name. */
 function listed(report: MergeReadyReport): string[] {
   return [
@@ -253,7 +246,8 @@ describe("renderMeasurements — drift gate", () => {
     expect(page).toContain("a record closes before its branch lands");
     expect(page).toContain("names no pull-request number");
     expect(page).toContain("are not\nancestors of `main`");
-    for (const run of measured().numerator) {
+    // The page renders from the committed snapshot, so a run closed after it is not on the page yet.
+    for (const run of readMeasurementSnapshot().report.numerator) {
       expect(page, `${run.run} has no merge column`).toContain(
         `| \`${run.run}\` | ${run.mergeEvidence} |`,
       );
