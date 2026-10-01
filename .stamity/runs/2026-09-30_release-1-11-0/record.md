@@ -861,7 +861,7 @@ Review verdicts, the last round of each loop:
 | run 37's fix (`/st-quick`, S10) and its case moves | 2 | approve | high |
 | the composed-path generalization | 2 | approve | (closures confirmed in the close review) |
 | the run-of-record pass | 3 | approve | high |
-| the 1.11.0 close (the spec fix, the archive, the retirement, this record) | 2 | request-changes (W-2: this table's label) | 0.84 |
+| the 1.11.0 close (the spec fix, the archive, the retirement, this record) | 3 | approve | 0.9 |
 
 - **Decisions trace.** The maintainer answered Q1–Q8 through the question tool at the start
   (2026-09-30T21:48Z–21:57Z), said "yesssss go on! release it :)" at 2026-10-01T08:31Z, and answered Q9 at 08:45Z. The
