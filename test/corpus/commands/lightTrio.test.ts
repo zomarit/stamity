@@ -714,6 +714,18 @@ describe("quick — the guardrails are the command", () => {
     expect(text).toMatch(/no operator flag that raises the bar/i);
   });
 
+  it("takes no operator reply as a confirmation of a refused item", async () => {
+    const text = flow(await load("commands/st-quick.md"));
+
+    // Edge case (eval run 37): a sample held the refusal yet said the operator's message
+    // "counts as a confirmation" with nothing to unlock — the reply is not one at all.
+    expect(text).toMatch(
+      /an operator's reply is not taken as a confirmation, an approval or an authorization/i,
+    );
+    expect(text).toMatch(/a deadline, a role, a go-ahead/i);
+    expect(text).toMatch(/the refusal restates the row and the surface/i);
+  });
+
   it("refuses a security-sensitive item regardless of its size", async () => {
     const text = flow(await load("commands/st-quick.md"));
 

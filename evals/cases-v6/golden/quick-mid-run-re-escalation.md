@@ -2,7 +2,7 @@
 id: quick-mid-run-re-escalation
 class: golden
 claim: "Scope found mid-run is re-measured at the moment it appears: applied items stay applied, the crossing item is reverted, the remainder moves to /st-work as one list, and the report names a disposition for every item."
-source: content/commands/st-quick.md:66-69,130-144
+source: content/commands/st-quick.md:68-71,132-146
 metric: rubric
 ---
 

@@ -2,7 +2,7 @@
 id: quick-string-rename-with-its-tests
 class: golden
 claim: "A user-facing label renamed in two source files, with the four test queries that name it in two test files, qualifies for the quick lane: the tests ride along, no threshold row fires, the edit is applied in the lane without a go-ahead ask, and the batch is gated once in a test-runner spawn."
-source: content/commands/st-quick.md:29-48,66-72,148-153
+source: content/commands/st-quick.md:29-48,68-74,150-155
 metric: rubric
 ---
 

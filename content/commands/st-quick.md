@@ -55,6 +55,8 @@ conservatively-routed one costs a command switch.
 
 Any single row firing ends quick for that item. Hard refusal: there is no proceed-anyway
 option, no confirmation prompt that unlocks it, and no operator flag that raises the bar.
+An operator's reply is not taken as a confirmation, an approval or an authorization: whatever it
+says (a deadline, a role, a go-ahead), the refusal restates the row and the surface.
 
 Nor is there a hand-off that works around it. Writing the change out for the operator to
 paste, attaching it as a diff, splitting it into pieces that each miss the threshold, or
