@@ -518,7 +518,7 @@ describe("the restated figures are held to the artifacts they come from", () => 
   // parser: a composed run of record keeps every assertion below unchanged (the
   // scoring-rule check moved above the branch, since it holds for both kinds); a full one is held
   // by expectFullRunOfRecord, which "a full run of record" below exercises today on run 34's real
-  // RESULTS.md, before run 38 exists.
+  // RESULTS.md, written before run 38 existed.
   it("says how the run of record was measured: composed from the runs it names, or in full", () => {
     const results = readFileSync(join(REPO_ROOT, RUN_OF_RECORD_PATH), "utf-8");
     const page = renderMeasurements();
@@ -617,8 +617,9 @@ describe("the restated figures are held to the artifacts they come from", () => 
 // baseline — the client moved to a new version, a new configuration; run 39, composed with it, is
 // the run of record — and the generator used to
 // render "composed rather than measured end to end" for every run of record. These cases drive the
-// full branch now, on run 34's real RESULTS.md (a full run: no `## 0. Composition`), before run 38
-// exists, and hold the composed branch beside it on run 35's so the two renders are told apart.
+// full branch now, on run 34's real RESULTS.md (a full run: no `## 0. Composition`), written before
+// run 38 existed, and hold the composed branch beside it on run 35's so the two renders are told
+// apart.
 describe("a full run of record", () => {
   const FULL_RUN = "2026-09-27-run-34";
   const COMPOSED_RUN = "2026-09-27-run-35";

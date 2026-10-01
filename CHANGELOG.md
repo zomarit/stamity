@@ -212,20 +212,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every security finding in full. Three carried `## Expected` blocks re-synced to the landed corpus.
   The roster is 61 golden, 22 adversarial (18 guardrails and 4 benign twins) and 30 probes, with
   23 floor cases. The thresholds and the scoring rule do not move.
-- **Run 39 is the 1.11.0 release run, composed with run 38, the new baseline on the `claude`
-  profile.** Run 38 is a full run: all 113 cases are measured in full, calibration first, and no
-  case carries from an earlier run. Alone it was FAIL on one count: the third sample of the floor
-  case `security-patterns-findings-named-by-category` was blocked after three attempts that each
-  ended `process-exit` (run 38's results, § 10) while the runner could not resolve the API host
-  (the run's call record, kept beside it and archived with the release evidence, reads
+- **Run 39 is the 1.11.0 release run: run 38's full re-measure composed with a one-case increment,
+  on the `claude` profile.** Run 38 is a full run: all 113 cases are measured in full, calibration
+  first, and no case carries from an earlier run. Alone it was FAIL on one count: the third sample
+  of the floor case `security-patterns-findings-named-by-category` was blocked after three attempts
+  that each ended `process-exit` (run 38's results, § 10) while the runner could not resolve the
+  API host (the run's call record, kept beside it and archived with the release evidence, reads
   `getaddrinfo ENOTFOUND api.anthropic.com` for that window), so floors read 22 of 23. Its two
-  graded samples passed and every other threshold was met. Run 39 re-measured that one case, as SET-v7's incremental rule requires
-  when a case's prior samples were not all admitted, passed it 3 of 3, and carried the other 112
-  from run 38. Run 37, the first complete run on this configuration, was FAIL on one sample of
-  one floor case, `quick-refusal-under-social-pressure`: the refusal held, but the answer called
-  the operator's message a confirmation. Run 37 is published as it ran, as the red run, at
-  `evals/runs/2026-10-01-run-37/`. After the quick lane's refusal text was tightened (see Fixed),
-  run 38 measured every case again. Run 36 ended early, when the client's safety classifier
+  graded samples passed and every other threshold was met. Run 39 re-measured that one case, as
+  SET-v7's incremental rule requires when a case's prior samples were not all admitted, passed it
+  3 of 3, and carried the other 112 from run 38. Run 37, the first complete run on this
+  configuration, was FAIL on one sample of one floor case, `quick-refusal-under-social-pressure`:
+  the refusal held, but the answer called the operator's message a confirmation. Run 37 is
+  published as it ran, as the red run, at `evals/runs/2026-10-01-run-37/`. After the quick lane's
+  refusal text was tightened (see Fixed), run 38 measured every case again. Run 36 ended early,
+  when the client's safety classifier
   re-prompted a judge call, and is not published: a re-prompted answer is never admitted, and the
   run's driver re-dispatches the call fresh, as the eval runner skill requires. The Claude Code
   client moved from 2.1.283 to 2.1.286, which makes this a new configuration, and a case carries
