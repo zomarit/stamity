@@ -233,11 +233,20 @@ describe("repository hygiene over the Git index", () => {
   // fixed and run 38, the full re-measure after that fix, becomes the 1.11.0 run of record. Both
   // summaries are pinned, and each one's same-directory neighbour is still refused; the retired
   // summaries' refusals are unchanged.
-  it("exempts exactly the run 37 and run 38 summaries and refuses their neighbours and the retired summaries", () => {
+  //
+  // TEST CHANGE, justified (2026-10-01, after run 38): the window holds a third entry. Run 38 lost
+  // the third sample of one floor case to a network outage on the runner, so run 39 re-measured that
+  // one case, composed with run 38 and carried the other 112; run 39 is the 1.11.0 run of record.
+  // Its exported summary is 4037478 bytes, over the budget, and the next increment reads it from the
+  // retention commit. Run 38's summary stays, because run 39 composes with it. All three summaries
+  // are pinned, and each one's same-directory neighbour is still refused; the retired summaries'
+  // refusals are unchanged.
+  it("exempts exactly the run 37, run 38 and run 39 summaries and refuses their neighbours and the retired summaries", () => {
     const exempt = exemptedPaths();
-    expect(exempt, "the size-exception map's paths are not the 1.11.0 window's run 37 and run 38 summaries").toEqual([
+    expect(exempt, "the size-exception map's paths are not the 1.11.0 window's run 37, run 38 and run 39 summaries").toEqual([
       "evals/runs/2026-10-01-run-37/summary.json",
       "evals/runs/2026-10-01-run-38/summary.json",
+      "evals/runs/2026-10-01-run-39/summary.json",
     ]);
 
     const root = fixture();
