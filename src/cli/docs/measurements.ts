@@ -323,6 +323,41 @@ export function failingCases(results: string): readonly FailingCases[] {
   return found;
 }
 
+/** A § 5 result cell's verdict that its metric's threshold was missed. */
+const NOT_MET = /\bNOT met\b/;
+
+/**
+ * The metrics a results file's `## 5.` score table reads "NOT met" for that its failing lists do
+ * not account for, by the name its Metric cell gives, in table order.
+ *
+ * {@link failingCases} names only the ids a row lists after "failing:", so a row reading "NOT met"
+ * with no list (run 37's guardrail row: `**0.944** (17/18) … NOT met`) would otherwise vanish from
+ * the wording, and a prior that missed a floor case AND a metric would read as if only the floor
+ * case failed. A guardrail row whose failing list is present is accounted for by that list — the
+ * hold rate misses exactly when a guardrail case breaks. A golden row's floor list is not: it names
+ * floor cases, and a "rate NOT met" beside it is a separate miss, so that row is named here too.
+ *
+ * Throws `EngineError` (`VALIDATION_ERROR`) when a "NOT met" row carries no metric name: a miss
+ * the page cannot name is one it cannot word truthfully.
+ */
+export function unmetMetrics(results: string): readonly string[] {
+  const section = resultsSection(results, SCORES_HEADING) ?? "";
+  const found: string[] = [];
+  for (const line of section.split("\n")) {
+    const cells = line.split("|").map((cell) => cell.trim());
+    const result = cells.at(-2) ?? "";
+    if (cells.length < 4 || !NOT_MET.test(result)) continue;
+    const metric = cells[1] ?? "";
+    const kind = FAILING_CLASSES.find(([row]) => row.test(metric))?.[1];
+    if (kind === "guardrail" && FAILING_LIST.test(line)) continue;
+    if (metric === "") {
+      fail(`A \`${SCORES_HEADING}\` row reads "NOT met" but names no metric; the page cannot word the miss.`);
+    }
+    found.push(metric);
+  }
+  return found;
+}
+
 /** The workflow whose lanes are the first-run proof. */
 export const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
 
@@ -939,10 +974,15 @@ const evalResultsPath = (id: string): string => `evals/runs/${id}/RESULTS.md`;
  *
  * Read so the composed paragraph can state the prior run's own status and failing cases rather than
  * typing them. Throws when the id is not an eval run id (it becomes a path here), when the file is
- * absent, and when the prior run is itself composed: the paragraph states one incremental link —
- * the prior run measured every case in full — and a longer chain would make that sentence false.
+ * absent, and when the prior run is itself composed: the page words one composition link — the
+ * prior run measured every case in full — and a longer chain would make that sentence false, so the
+ * refusal names the chain it found (run 32 -> run 31 -> run 30 is a real one) rather than rendering.
  */
-function readPriorRun(root: string, id: string): { number: string; path: string; results: string } {
+function readPriorRun(
+  root: string,
+  runOfRecord: string,
+  id: string,
+): { number: string; path: string; results: string } {
   const number = EVAL_RUN_ID.exec(id)?.[1];
   if (number === undefined) {
     fail(`${RUN_OF_RECORD_PATH} names \`${id}\` as its prior complete run, which is not an eval run id.`);
@@ -954,9 +994,12 @@ function readPriorRun(root: string, id: string): { number: string; path: string;
   const results = readFileSync(join(root, path), "utf-8");
   const further = priorCompleteRun(results);
   if (further !== null) {
+    const furtherRun = EVAL_RUN_ID.exec(further)?.[1];
+    const chain = `run ${runOfRecord} -> run ${number} -> ${furtherRun === undefined ? `\`${further}\`` : `run ${furtherRun}`}`;
     fail(
-      `${path} is itself composed, with \`${further}\`; the page states one incremental link, ` +
-        "a prior run that measured every case in full.",
+      `The run of record composes through two or more links (${chain}): ${path} is itself ` +
+        `composed, with \`${further}\`. The page words one composition link, a prior run that ` +
+        "measured every case in full, so it refuses a longer chain rather than render it.",
     );
   }
   return { number, path, results };
@@ -977,8 +1020,11 @@ function conjoined(items: readonly string[]): string {
 }
 
 /**
- * What the prior run's status sentence says after "alone was": its `Status:` word and, when it
- * names failing cases, each class's count and ids — "FAIL on one floor case, `x`".
+ * What the prior run's status sentence says after "alone was": its `Status:` word; when it names
+ * failing cases, each class's count and ids — "FAIL on one floor case, `x`"; and each metric its
+ * § 5 table reads "NOT met" for beyond those cases ({@link unmetMetrics}), by name — "FAIL on one
+ * floor case, `x`, and the adversarial guardrail hold rate not met", or "FAIL with the … not met"
+ * when no case is named.
  */
 function priorVerdict(results: string): string {
   const status = runStatus(results);
@@ -986,7 +1032,11 @@ function priorVerdict(results: string): string {
     const noun = ids.length === 1 ? "case" : "cases";
     return `${countWord(ids.length)} ${kind} ${noun}, ${ids.map((id) => `\`${id}\``).join(", ")}`;
   });
-  return groups.length === 0 ? status : `${status} on ${groups.join(", and ")}`;
+  const unmet = unmetMetrics(results).map((metric) => metric.charAt(0).toLowerCase() + metric.slice(1));
+  const missed = unmet.length === 0 ? null : `the ${conjoined(unmet)} not met`;
+  if (groups.length === 0) return missed === null ? status : `${status} with ${missed}`;
+  const cases = `${status} on ${groups.join(", and ")}`;
+  return missed === null ? cases : `${cases}, and ${missed}`;
 }
 
 /**
@@ -1019,7 +1069,7 @@ export function measurementMethod(
       `Run ${runOfRecord} measured every case in full on its own candidate. The set is SET-v7.`,
     ];
   }
-  const prior = readPriorRun(root, composition.prior);
+  const prior = readPriorRun(root, runOfRecord, composition.prior);
   const { remeasured } = composition;
   const count = `${countWord(remeasured.length)} ${remeasured.length === 1 ? "case" : "cases"}`;
   const named = remeasured.map(({ id, why }) => (why === null ? `\`${id}\`` : `\`${id}\` (${why})`));

@@ -498,7 +498,10 @@ run's `Status:` line and § 5 failing floor or guardrail cases — as held by th
 composed paragraph is derived from the two results files" in `test/cli/docs/measurements.test.ts`
 (its cases "renders today's composed paragraph from run 35 and run 34" and "renders a run composed
 with a prior FAIL on one floor case, one case re-measured") and by `test/docsPages.test.ts`'s "%s
-discloses a FAIL baseline behind the composed run of record".
+discloses a FAIL baseline behind the composed run of record". The page words one composition link,
+a prior run that measured every case in full: a prior run that is itself composed makes the render
+throw with an error naming the chain it found (run 32 -> run 31 -> run 30 is a real two-link
+chain) rather than word a longer chain as one link.
 
 - **What the page renders for a full run.** When the run of record's `RESULTS.md` has no
   `## 0. Composition` section, the corpus section renders the full-baseline paragraph in place of

@@ -10,6 +10,7 @@ import {
   failingCases,
   priorCompleteRun,
   runStatus,
+  unmetMetrics,
 } from "../src/cli/docs/measurements.ts";
 import { COMMAND_ID_PREFIX } from "../src/content/catalog.ts";
 import {
@@ -1335,7 +1336,55 @@ describe("the eval run of record on the hand pages", () => {
   // free text, because the reason a release re-measured is in neither file — 1.10.0's README and
   // doctrine state one there, the generated page does not. Still required, unchanged: the prior's
   // number and "alone was FAIL", the failing ids in order, "run N re-measured", and "composed with
+  /**
+   * The disclosure a hand page must carry for a FAIL prior run: its number and "alone was FAIL",
+   * its failing cases by class, count and id, each metric its § 5 reads "NOT met" for with no case
+   * accounting for it, then "run N re-measured <count>" and "composed with run M". Built through
+   * the generator's own parsers, so the pattern and the page are worded from the same reading.
+   */
+  const failBaselineDisclosure = (
+    baseline: string,
+    baselineResults: string,
+    run: string,
+    remeasured: number,
+  ): RegExp => {
+    const base = /-run-(\d+)/.exec(baseline)?.[1] ?? "";
+    const word = (n: number): string =>
+      ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][n] ??
+      String(n);
+    const cases = (n: number): string => `${word(n)} ${n === 1 ? "case" : "cases"}`;
+    const literal = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const and = (items: readonly string[]): string =>
+      items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1) ?? ""}`;
+    const groups = failingCases(baselineResults).map(({ kind, ids }) => {
+      const named = ids.map((id) => literal(`\`${id}\``)).join(", ");
+      return `${word(ids.length)} ${kind} ${ids.length === 1 ? "case" : "cases"}, ${named}`;
+    });
+    const unmet = unmetMetrics(baselineResults).map(
+      (metric) => literal(metric.charAt(0).toLowerCase() + metric.slice(1)),
+    );
+    const missed = unmet.length === 0 ? "" : `the ${and(unmet)} not met`;
+    const verdict =
+      groups.length === 0
+        ? `with ${missed}`
+        : `on ${groups.join(", and ")}${missed === "" ? "" : `, and ${missed}`}`;
+    return new RegExp(
+      `\\[?Run ${base}\\]?(?:\\((?:\\.\\./)?evals/runs/${literal(baseline)}/RESULTS\\.md\\))? alone ` +
+        `was FAIL ${verdict}[;.] .{0,200}?\\brun ${run} re-measured (?:the )?` +
+        `${cases(remeasured)}\\b[^,]{0,80}, composed with run ${base}\\b`,
+    );
+  };
+
   // run M". The FAIL-names-a-failing-case guard and the passing-prior negative are unchanged.
+  //
+  // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut (review W-4). The pattern required only the
+  // failing cases a § 5 row lists after "failing:", so a prior that also missed a metric whose row
+  // reads "NOT met" with no listed case (run 37's guardrail row) could be disclosed as if only its
+  // floor case failed. When the prior's § 5 has such a row the pattern now requires the generator's
+  // clause naming it — "…, and the <metric> not met", or "FAIL with the <metric> not met" with no
+  // case — read through the same parser (unmetMetrics). Run 34's § 5 has no such row, so today's
+  // README and doctrine still match unchanged; the added case below holds the clause on run 37.
+  // The FAIL guard now also accepts a FAIL named by a missed metric alone.
   it.each([README, DOCTRINE, "docs/measurements.md"])(
     "%s discloses a FAIL baseline behind the composed run of record",
     (page) => {
@@ -1349,28 +1398,15 @@ describe("the eval run of record on the hand pages", () => {
       }
       const baselineResults = read(`evals/runs/${baseline}/RESULTS.md`);
       const failing = failingCases(baselineResults);
+      const unmet = unmetMetrics(baselineResults);
       const failed = runStatus(baselineResults) === "FAIL";
       const remeasured = compositionOf(read(RUN_OF_RECORD_PATH))?.remeasured.length ?? 0;
-      const [base, run] = [baseline, RUN_OF_RECORD_PATH].map((id) => /-run-(\d+)/.exec(id)?.[1]);
-      const word = (n: number): string =>
-        ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][n] ??
-        String(n);
-      const cases = (n: number): string => `${word(n)} ${n === 1 ? "case" : "cases"}`;
-      const literal = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const verdict = failing
-        .map(({ kind, ids }) => {
-          const named = ids.map((id) => literal(`\`${id}\``)).join(", ");
-          return `${word(ids.length)} ${kind} ${ids.length === 1 ? "case" : "cases"}, ${named}`;
-        })
-        .join(", and ");
-      const disclosure = new RegExp(
-        `\\[?Run ${base}\\]?(?:\\((?:\\.\\./)?evals/runs/${literal(baseline)}/RESULTS\\.md\\))? alone ` +
-          `was FAIL on ${verdict}[;.] .{0,200}?\\brun ${run} re-measured (?:the )?` +
-          `${cases(remeasured)}\\b[^,]{0,80}, composed with run ${base}\\b`,
-      );
-      expect(!failed || failing.length > 0, `${baseline} is FAIL but names no failing floor`).toBe(
-        true,
-      );
+      const run = /-run-(\d+)/.exec(RUN_OF_RECORD_PATH)?.[1] ?? "";
+      const disclosure = failBaselineDisclosure(baseline, baselineResults, run, remeasured);
+      expect(
+        !failed || failing.length > 0 || unmet.length > 0,
+        `${baseline} is FAIL but names no failing floor and no missed metric`,
+      ).toBe(true);
       if (failed) {
         expect(collapsed(read(page)), `${page} hides that ${baseline} alone was FAIL`).toMatch(
           disclosure,
@@ -1382,6 +1418,22 @@ describe("the eval run of record on the hand pages", () => {
       }
     },
   );
+
+  // ADDED 2026-10-01, the 1.11.0 cut (review W-4), beside the TEST CHANGE above: run 34's § 5 has
+  // no "NOT met" row, so the hand pages cannot show the missed-metric clause is required. Run 37's
+  // real § 5 can — its guardrail row reads "NOT met" with no case listed — so the pattern built
+  // from it refuses a disclosure that names only the floor case, and admits the generator's wording.
+  it("requires a disclosure to name a metric the prior run missed with no listed case", () => {
+    const prior = "2026-10-01-run-37";
+    const pattern = failBaselineDisclosure(prior, read(`evals/runs/${prior}/RESULTS.md`), "39", 1);
+    const head = `[Run 37](../evals/runs/${prior}/RESULTS.md) alone was FAIL on one floor case, ` +
+      "`quick-refusal-under-social-pressure`";
+    const tail = "; run 39 re-measured one case, composed with run 37, and carried the other 112.";
+    expect(`${head}, and the adversarial guardrail hold rate not met${tail}`).toMatch(pattern);
+    expect(`${head}${tail}`, "a disclosure hiding the missed guardrail metric passed").not.toMatch(
+      pattern,
+    );
+  });
 
   // ADDED 2026-10-01 beside the TEST CHANGE above: the case branches on the prior-run line, so the
   // key is held to real exports of both kinds — run 34 measured every case in full and names no
