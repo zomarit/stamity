@@ -749,8 +749,9 @@ Node v22.22.3, npm 10.9.8; `command -v stamity` printed nothing; a scratch folde
   design" (and the same through `-03.md`). `publish` was skipped, so nothing was published: no npm version, no GitHub
   release, no `plugin-dist`. The cause: the cut did not flip the shipped spec's status before the tag. 1.10.0 flipped
   `orchestrator-context.md` on 2026-09-27, before its tag (`2e2c3212`), and this spec's own head said "the 1.11.0 close
-  moves it". The check runs only once a `v1.11.0` tag exists, so the gate of record, CI and every run before the tag
-  skipped it (ledger rows `prove/8` and `frame/7`; an inbox row for the checklist).
+  moves it". The check flags a spec only once a release tag reaches its plan's stamp: before `v1.11.0` existed it read
+  plans 013-02 and 013-03 as unshipped against `v1.10.0`, so the gate of record, CI and every run before the tag
+  passed it (ledger rows `prove/8` and `frame/7`; an inbox row for the checklist).
 - 08:39Z — Q9 asked (the table above); answered at 08:45Z: "Move the tag (Recommended)".
 - 08:47Z — `3980aac6` (implementer, Opus 5.5): `docs/specs/everyday-flows.md` reads `status: shipped-with-1.11.0`, and
   its head says REQ-FLOW-025's allowlist sentence did not ship. The shipped-spec test ran (not skipped) and passed
@@ -781,3 +782,85 @@ Node v22.22.3, npm 10.9.8; `command -v stamity` printed nothing; a scratch folde
     orphan commit with no parent;
   - the GitHub release `v1.11.0` (published 09:03:01Z, Latest, not a draft, not a prerelease) carries `release.json`,
     `sbom.cdx.json`, the four plugin zips, each with its `.sha256`, and `zomarit-stamity-1.11.0.tgz`.
+
+## Proof block (2026-10-01T09:19Z — the 1.11.0 close)
+
+- **Candidate and merge.** The QA'd candidate is `3bee4987`. `3fd0db4b` adds this run's records and is PR #71's head:
+  it was fast-forwarded onto `main` at 08:33Z, and #71 reads MERGED. The release commit is `3980aac6`, one spec status
+  line on top, carrying the tag `v1.11.0` (tag object `57b75f2d`). The tag was re-pointed there on the maintainer's
+  answer (Q9) after the first release run stopped on the shipped-spec check. After it, only the close lands: the
+  archive pointers and compact summaries (`8f54b262`), the retired size exceptions (`6f7a7bf4`), and this record.
+
+Gate results (the gate of record at `a91f0f7f`, test-runner, Opus 5.5, 07:29Z):
+
+| Gate | Command | Result |
+|---|---|---|
+| build | `npm run build` | pass |
+| lint | `npm run lint` | pass (the one standing warning) |
+| typecheck | `npm run typecheck` | pass |
+| tests with coverage | `node scripts/ci/test-run.mjs --coverage` | pass (262 files; 10,649 passed, 12 skipped, none failing; 96.72 / 90.21 / 98.96 / 97.65; every per-file floor met) |
+| unused code | `npx knip` | pass |
+| leak gate | `node scripts/leak-gate.mjs` | pass (0 hits, 1,688 files) |
+| setup | `node dist/cli.js check` | pass (setup green) |
+| repo hygiene | `node scripts/repo-hygiene.mjs --base cd1fc56e` | pass |
+| hook latency | `node scripts/hook-latency.mjs` | pass (node start 28.0 ms; overheads 3.6 and 4.5 ms, within 15 ms) |
+
+  The later commits change docs text and comments (to `3bee4987`), this run's records (to `3fd0db4b`) and one spec
+  status line (`3980aac6`). CI is green at `3bee4987` and at `3fd0db4b` on every leg (four `check` legs including both
+  Windows shards, Build, the APM routes, the plugin route, both aggregators). The release workflow's gate steps are
+  green at `3980aac6` in run 36839412318, and locally with the tag in place (10,649 passed).
+
+Gate results (the close lane at `b9aa272f`, test-runner, Opus 5.5):
+
+| Gate | Command | Result |
+|---|---|---|
+| build | `npm run build` | pass |
+| lint | `npm run lint` | pass (the one standing warning) |
+| typecheck | `npm run typecheck` | pass |
+| tests with coverage | `node scripts/ci/test-run.mjs --coverage` | pass (262 files; 10,649 passed, 12 skipped, none failing; 96.72 / 90.21 / 98.96 / 97.65) |
+| unused code | `npx knip` | pass |
+| leak gate | `node scripts/leak-gate.mjs` | pass (0 hits, 1,694 files) |
+| setup | `node dist/cli.js check` | pass (setup green) |
+| repo hygiene | `node scripts/repo-hygiene.mjs --base 3980aac6` | pass |
+| measurements page | `node scripts/generate-docs.mjs --page measurements`, then `git diff --exit-code docs/measurements.md` | pass (byte-stable) |
+
+- **The release.** Run 36839412318 on `v1.11.0` at `3980aac6`: `gates and pack` success; `npm-publish` approved at
+  09:02:19Z under the maintainer's yes; `publish` success. Results:
+  - npm `latest` is 1.11.0, with SLSA provenance (sigstore logIndex 3033289103);
+  - `plugin-dist` equals `plugins/v1.11.0`, `533771ea`, an orphan commit;
+  - the GitHub release carries its eleven assets.
+
+  The first run, 36837053878 on `3fd0db4b`, stopped at its Test step on the shipped-spec check, and nothing was
+  published from it (`prove/8`). These network facts (both runs, the release, npm) were verified by the orchestrator
+  with `gh` and `npm`; the close's reviewer read git only.
+- **The eval run of record.** Run 39, composed with run 38, passes every SET-v7 threshold: golden 0.918 (56 of 61)
+  with floors 23/23, guardrail hold 1.000 (18/18), benign twins 0/4, probes 30/30, calibration 5 of 5. Run 37 is the
+  published red run, and run 36 ended terminal and is unpublished. Five golden misses inside the thresholds are in the
+  inbox (S13).
+- **QA.** `qa.md` at `3bee4987` has 101 rows: 78 auto-proven, and 23 accepted unwalked on the maintainer's answer (16
+  M, 7 L). No H row is unwalked, and the record reads `Shippable: YES`.
+- **Archive.** The public prerelease `evidence-archive-2026-10-01` holds runs 37–39, packed from `3fd0db4b` and
+  verified. Their summaries are compacted, the size exceptions retired, and the measurements page is byte-stable. The
+  private layer archived runs 36–39's raw captures, verified and restored them byte-identical, and keeps the raw files
+  on disk.
+- **Review verdicts, the last round of each loop.** No confidence gate is declared here, so the measurements rule's
+  default (0.8) applies. Tonight's reviewers stated their confidence in words, except where a number shows:
+
+| Loop | Last round | Verdict | Confidence |
+|---|---|---|---|
+| the eval driver's pins and canary plan (rev 18) | 1 | approve | medium |
+| the P01 test | 3 | approve | medium |
+| the `plugin setup` hint | 2 | approve | high |
+| docs round 1 (the hand pages) | 2 | approve | high |
+| the 1.11.0 changelog | 2 | approve | high |
+| the full-baseline measurements units | 2 | approve | not stated |
+| the cut docs | 1 | approve | high |
+| the classifier re-prompt (the driver, S8) | 1 | approve | high |
+| run 37's fix (`/st-quick`, S10) and its case moves | 2 | approve | high |
+| the composed-path generalization | 2 | approve | (closures confirmed in the close review) |
+| the run-of-record pass | 3 | approve | high |
+| the 1.11.0 close (the spec fix, the archive, the retirement, this record) | 1 | request-changes (W-1: this block was missing; four Minors) | 0.82 |
+
+- **Decisions trace.** The maintainer answered Q1–Q8 through the question tool at the start
+  (2026-09-30T21:48Z–21:57Z), said "yesssss go on! release it :)" at 2026-10-01T08:31Z, and answered Q9 at 08:45Z. The
+  sign-offs S1–S13 wait for the maintainer's confirmation.
