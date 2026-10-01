@@ -227,10 +227,17 @@ describe("repository hygiene over the Git index", () => {
   // call, and is never published; run 37, a full baseline on the same configuration, is the 1.11.0
   // run of record. The pinned path is run 37's summary; the neighbour and retired-summary refusals
   // are unchanged.
-  it("exempts exactly the run 37 summary and refuses its neighbour and the retired summaries", () => {
+  //
+  // TEST CHANGE, justified (2026-10-01, after run 37): the window holds a second entry. Run 37
+  // failed one sample of one floor case and stays published as the red run; the product text was
+  // fixed and run 38, the full re-measure after that fix, becomes the 1.11.0 run of record. Both
+  // summaries are pinned, and each one's same-directory neighbour is still refused; the retired
+  // summaries' refusals are unchanged.
+  it("exempts exactly the run 37 and run 38 summaries and refuses their neighbours and the retired summaries", () => {
     const exempt = exemptedPaths();
-    expect(exempt, "the size-exception map's paths are not the 1.11.0 window's run 37 summary").toEqual([
+    expect(exempt, "the size-exception map's paths are not the 1.11.0 window's run 37 and run 38 summaries").toEqual([
       "evals/runs/2026-10-01-run-37/summary.json",
+      "evals/runs/2026-10-01-run-38/summary.json",
     ]);
 
     const root = fixture();
