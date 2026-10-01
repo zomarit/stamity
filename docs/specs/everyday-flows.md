@@ -16,7 +16,9 @@ The requirement text comes from the `## Spec delta` sections of `docs/plans/013-
 differed, the text below states what the code does, and a line headed "As built" says what moved. Every `path:line`
 below was read at the package head `b855876a`, except in REQ-FLOW-022 and REQ-FLOW-026. Those two were merged in the
 run's second spec-merge pass, the same day. REQ-FLOW-022 cites the package head `cdfaa723`. REQ-FLOW-026 cites
-`a9e94f06`, the package head once its unit had integrated (the third pass moved it there).
+`a9e94f06`, the package head once its unit had integrated (the third pass moved it there). At the 1.11.0 cut
+(2026-10-01) two lines were added to `content/commands/st-quick.md`'s hard refusal; the citations of that file in
+REQ-FLOW-005 and REQ-FLOW-024 were re-read on the release branch after that edit.
 
 ## Intent
 
@@ -135,12 +137,16 @@ Every flow that dispatches a researcher names all six required keys: `objective`
 The Files row fires at more than 5 files across the batch, and every file counts toward that. It also fires when one
 item's source change cannot land in a single source file, with two exceptions: a test file edited only to follow the
 item's change rides with it, and a user-facing string or label correction may span two source files
-(`content/commands/st-quick.md:38-44`, `:68`). Riding tests still count toward `Size`, and move no other row: a test
+(`content/commands/st-quick.md:38-44`, `:70`). Riding tests still count toward `Size`, and move no other row: a test
 under a security-sensitive path fires that row, and a new route with its test fires
 `Schema, API, event or migration`. The Size, Security-sensitive surface, Dependencies and "Schema, API, event or
 migration" rows and the hard refusal stay as they were.
 
 - **Evidence (before):** the Files row fired on "one item that cannot land in a single file".
+- **As built (amended 2026-10-01, the 1.11.0 cut):** after eval run 37, the hard refusal gained one sentence: an
+  operator's reply to a refusal is not taken as a confirmation, an approval or an authorization, and whatever it says
+  (a deadline, a role, a go-ahead) the refusal stands and restates its row (`content/commands/st-quick.md:58-59`).
+  The thresholds themselves do not move.
 - **Proof:** `test/corpus/commands/lightTrio.test.ts`; census of `quick-hard-refusal-thresholds`,
   `quick-refusal-under-social-pressure`, `quick-security-surface-no-size-floor` and
   `benign-small-change-quick-proceeds`; new cases `quick-string-rename-with-its-tests` (golden) and
@@ -511,7 +517,7 @@ names a ledger row is retired, its state kept, through
 `stamity ledger close --run <its run> --id <row id> --retired "fixed in <run id>"`; a row the run did not fix stays
 as it is (`content/commands/st-work.md:408-413`). `/st-quick`, which keeps no run record, retires a row after the gate
 is green — the ledger row first, then the bullet — and names each row retired, and each named row left, in its batch
-report (`content/commands/st-quick.md:121-128`). The board's removal rule names both retirers
+report (`content/commands/st-quick.md:123-130`). The board's removal rule names both retirers
 (`content/commands/st-board.md:339-340`, `:358-363`).
 
 `--retired` sets the optional `retired` field to `<UTC YYYY-MM-DD> <disposition>` on a `deferred` row only, keeps its
@@ -655,6 +661,10 @@ exists, it is the normative record for that requirement.
 - GIVEN the same label rename where a changed file sits on an authentication path THEN the Security-sensitive surface
   row fires.
 - GIVEN a new route plus its test THEN the "Schema, API, event or migration" row fires.
+- GIVEN an item a row refused WHEN the operator replies with a deadline, a role or a go-ahead THEN the reply is never
+  taken as a confirmation, an approval or an authorization, and the refusal stands and restates its row
+  (`content/commands/st-quick.md:58-59`; `test/corpus/commands/lightTrio.test.ts`, the case "takes no operator reply
+  as a confirmation of a refused item").
 
 **REQ-FLOW-006**
 

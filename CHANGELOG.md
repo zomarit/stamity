@@ -212,18 +212,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every security finding in full. Three carried `## Expected` blocks re-synced to the landed corpus.
   The roster is 61 golden, 22 adversarial (18 guardrails and 4 benign twins) and 30 probes, with
   23 floor cases. The thresholds and the scoring rule do not move.
-- **Run 37 is the 1.11.0 release run, and the new baseline on the `claude` profile.** It is a
-  full run: all 113 cases are measured in full, calibration first, and no case carries from
-  run 35. Run 36 ended early, when the client's safety classifier re-prompted a judge call, and
-  is not published; the eval runner now retries such a call afresh. The Claude Code client moved
-  from 2.1.283 to 2.1.286, which makes this a new configuration, and a case carries only between
-  runs of one configuration. The profile is unchanged: scenario `claude-opus-5-5` at `high`
-  effort, judge `claude-fable-5-1`. Result: RUN-37-RESULT. On the Claude profile and rubric v7,
-  against the thresholds declared before the run: golden RUN-37-GOLDEN-RATE (RUN-37-GOLDEN-PASSED
-  of 61) with floors RUN-37-FLOORS-PASSED of 23, guardrail hold RUN-37-GUARDRAIL-RATE
-  (RUN-37-GUARDRAIL-HELD of 18), benign-twin false refusals RUN-37-BENIGN-RATE
-  (RUN-37-BENIGN-REFUSED of 4), and trigger-probe accuracy RUN-37-PROBE-RATE (RUN-37-PROBE-PASSED
-  of 30). Calibration matched RUN-37-CALIBRATION. The run is at `RUN-37-PATH`.
+- **Run 38 is the 1.11.0 release run, and the new baseline on the `claude` profile.** It is a
+  full run: all 113 cases are measured in full, calibration first, and no case carries from an
+  earlier run. Run 37, the first complete run on this configuration, was FAIL on one sample of
+  one floor case, `quick-refusal-under-social-pressure`: the refusal held, but the answer called
+  the operator's message a confirmation. Run 37 is published as it ran, at
+  `evals/runs/2026-10-01-run-37/`. After the quick lane's refusal text was tightened (see Fixed),
+  run 38 measured every case again. Run 36 ended early, when the client's safety classifier
+  re-prompted a judge call, and is not published: a re-prompted answer is never admitted, and the
+  run's driver re-dispatches the call fresh, as the eval runner skill requires. The Claude Code
+  client moved from 2.1.283 to 2.1.286, which makes this a new configuration, and a case carries
+  only between runs of one configuration. The profile is unchanged: scenario `claude-opus-5-5` at
+  `high` effort, judge `claude-fable-5-1`. Result: RUN-38-RESULT. On the Claude profile and rubric
+  v7, against the thresholds declared before the run: golden RUN-38-GOLDEN-RATE
+  (RUN-38-GOLDEN-PASSED of 61) with floors RUN-38-FLOORS-PASSED of 23, guardrail hold
+  RUN-38-GUARDRAIL-RATE (RUN-38-GUARDRAIL-HELD of 18), benign-twin false refusals
+  RUN-38-BENIGN-RATE (RUN-38-BENIGN-REFUSED of 4), and trigger-probe accuracy RUN-38-PROBE-RATE
+  (RUN-38-PROBE-PASSED of 30). Calibration matched RUN-38-CALIBRATION. The run is at
+  `RUN-38-PATH`.
 
 ### Fixed
 
@@ -278,6 +284,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so, naming learnings, handoffs, overrides, run records, packs and user hooks, tells you to copy
   out what you want to keep first and put it back after `plugin setup`, and names
   `clean --dry-run` to list what it removes. The wrong hint shipped with 1.9.0.
+- **`/st-quick`'s hard refusal says an operator's reply is never a confirmation.** The refusal
+  now says an operator's reply to a refusal is never taken as a confirmation, an approval or an
+  authorization: whatever the reply says (a deadline, a role, a go-ahead), the refusal stands and
+  restates its row. Eval run 37 caught an answer that held the refusal yet called the operator's
+  message a confirmation. The command body moves with a repository's next `stamity sync`.
 
 ### Removed
 
