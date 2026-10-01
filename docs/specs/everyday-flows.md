@@ -1,14 +1,15 @@
 ---
 id: everyday-flows
 # A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, and excluded from the site build.
-status: design
+status: shipped-with-1.11.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
 # Everyday flows
 
 What the nine commands and the setup that serves them do for a user day to day: calls resolve, gates run and report
 honestly, records say what happened, and the person is asked only what needs the person. The area code is `FLOW`.
-`status: design` until these requirements ship; the 1.11.0 close moves it to `shipped-with-1.11.0`.
+The requirements ship with 1.11.0, and `status: shipped-with-1.11.0` records that. REQ-FLOW-025's allowlist sentence
+did not ship with them; `## Concerns` says so, and an inbox row follows it up.
 
 The requirement text comes from the `## Spec delta` sections of `docs/plans/013-optimization-sweep-02.md` (A) and
 `docs/plans/013-optimization-sweep-03.md` (A), merged on 2026-09-30 at the Prove phase of the run
