@@ -1,0 +1,1023 @@
+#!/usr/bin/env node
+/* eslint-disable */
+// stamity — session-start context load.
+//
+// Prints the learnings index and the resumable handoffs for this repo by
+// reading the state directory directly: no agent is spawned and nothing is
+// written. Every file clears a size, injection, integrity and review screen
+// before it is LISTED; a file that fails one is named in a skip line with its
+// reason, and every field printed — the file name included — is flattened to
+// one bounded line first. Bodies and matched spans are never printed.
+//
+// After a compaction or a resume (a start whose stdin payload says source
+// "compact" or "resume") it appends the resume card of the run in progress, or
+// of a closed run dated within the last two days: counts and pointers, never finding text.
+//
+// Generated file — regenerate it rather than editing; local edits are overwritten.
+// Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
+// Reads outside repo state: the wall clock, which decides whether a learning's
+// review horizon has passed, whether a handoff has expired and whether a closed
+// run is recent enough for the card, and the source field of the stdin payload,
+// which decides whether the resume card is appended, after a compaction or a
+// resume. Same repo, two different days or two different starts, two different
+// banners.
+
+import { createHash } from "node:crypto";
+import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
+import { isatty } from "node:tty";
+
+const STATE_SEGMENTS = [".stamity"];
+const MAX_ITEM_LINES = 20;
+const MAX_LEARNING_BYTES = 65536;
+const MAX_HANDOFF_BYTES = 61440;
+const MAX_FIELD_CHARS = 200;
+const REVIEW_WARNING_DAYS = 14;
+const ORDERING_HEAD_BYTES = 4096;
+const RESUMABLE = ["active","in-progress"];
+const INVISIBLE = new RegExp("(?:[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u070F\\u0890-\\u0891\\u08E2\\u115F-\\u1160\\u17B4-\\u17B5\\u180B-\\u180F\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u206F\\u3164\\uFE00-\\uFE0F\\uFEFF\\uFFA0\\uFFF0-\\uFFFB]|\\uD804\\uDCBD|\\uD804\\uDCCD|\\uD80D[\\uDC30-\\uDC3F]|\\uD82F[\\uDCA0-\\uDCA3]|\\uD834[\\uDD73-\\uDD7A]|\\uDB40[\\uDC80-\\uDFFF]|[\\uDB41-\\uDB43][\\uDC00-\\uDFFF])", "g");
+const SCREEN = [
+  { id: "fake-instruction-header", re: new RegExp("^#{1,2}\\s*(?:system\\s+prompt|instructions|you\\s+are|role)\\s*:", "im") },
+  { id: "frontmatter-config-override", re: new RegExp("^---[ \\t]*\\n[\\s\\S]{0,2000}?(?:protected|scope|model)\\s*:", "m") },
+  { id: "cross-agent-override", re: new RegExp("(?:override|replace|ignore)\\s+(?:agent|rule|skill)\\s+", "i") },
+  { id: "managed-block-forgery", re: new RegExp("STAMITY:(?:BEGIN|END)", "") },
+  { id: "tool-invocation-markup", re: new RegExp("<(?:tool_use|function_call|antml\\x3ainvoke)\\b", "i") },
+  { id: "skip-security-review", re: new RegExp("skip\\s+(?:security|review|audit)", "i") },
+  { id: "ignore-findings", re: new RegExp("ignore\\s+(?:all\\s+)?(?:findings|errors|warnings|vulnerabilities)", "i") },
+  { id: "disable-security-controls", re: new RegExp("disable\\s+(?:security|review|audit|test)", "i") },
+  { id: "exfiltrate", re: new RegExp("exfiltrate", "i") },
+  { id: "bypass-security", re: new RegExp("bypass\\s+(?:security|auth|permission|review)", "i") },
+  { id: "delete-everything", re: new RegExp("delete\\s+(?:all|everything|repo)", "i") },
+  { id: "never-verify", re: new RegExp("never\\s+(?:review|test|check|audit|scan)", "i") },
+  { id: "override-security", re: new RegExp("override\\s+(?:all\\s+)?security", "i") },
+  { id: "encoded-eval", re: new RegExp("(?:atob|Buffer\\.from)\\s*\\([^)]*(?:eval|exec|require)", "i") },
+  { id: "permission-mutation", re: new RegExp("(?:chmod|chown)\\s+[0-7]{3,4}", "i") },
+  { id: "inline-secret-assignment", re: new RegExp("(?:api[_-]?key|password|token|secret)\\s*[:=]\\s*.{8,}", "i") },
+  { id: "ignore-previous-instructions", re: new RegExp("ignore\\s+(?:all\\s+)?previous\\s+instructions", "i") },
+  { id: "disregard-previous", re: new RegExp("disregard\\s+(?:all\\s+)?(?:previous|prior|above)", "i") },
+  { id: "role-reassignment", re: new RegExp("you\\s+are\\s+now\\s+(?:a|an|the)\\s", "i") },
+  { id: "new-instructions-header", re: new RegExp("new\\s+instructions\\s*:", "i") },
+  { id: "system-prompt-header", re: new RegExp("system\\s+prompt\\s*:", "i") },
+  { id: "forget-previous", re: new RegExp("forget\\s+(?:all\\s+)?(?:previous|prior|above)\\s+(?:instructions|rules|context)", "i") },
+  { id: "act-as-jailbroken", re: new RegExp("act\\s+as\\s+(?:a|an)\\s+(?:unrestricted|unfiltered|jailbroken)", "i") },
+  { id: "do-not-follow-previous", re: new RegExp("do\\s+not\\s+follow\\s+(?:any|the|your)\\s+(?:previous|prior|above|original)\\s", "i") },
+  { id: "remove-safety-checks", re: new RegExp("remove\\s+(?:all\\s+)?(?:security|safety)\\s+(?:checks|guards|measures)", "i") },
+  { id: "execute-untrusted-code", re: new RegExp("(?:execute|run)\\s+(?:arbitrary|untrusted|remote)\\s+(?:code|commands?)", "i") },
+  { id: "phone-home", re: new RegExp("(?:connect|phone)\\s+home", "i") },
+  { id: "reverse-shell", re: new RegExp("(?:reverse|bind)\\s+shell", "i") },
+  { id: "upload-exfil", re: new RegExp("(?:upload|exfil)\\s+(?:to|data|credentials|keys)", "i") },
+  { id: "disable-logging", re: new RegExp("(?:disable|turn\\s+off|remove)\\s+(?:logging|monitoring|audit)", "i") },
+  { id: "hardcoded-credentials", re: new RegExp("(?:hardcoded|embedded)\\s+(?:credentials?|secrets?|passwords?)", "i") },
+  { id: "from-now-on-ignore", re: new RegExp("(?:from\\s+now\\s+on|going\\s+forward),?\\s+(?:ignore|disregard|forget)\\s", "i") },
+  { id: "pretend-role", re: new RegExp("pretend\\s+(?:you\\s+are|to\\s+be)\\s+(?:a|an|the)\\s", "i") },
+  { id: "reveal-system-prompt", re: new RegExp("(?:reveal|show|display|output)\\s+(?:your|the)\\s+(?:system\\s+)?(?:prompt|instructions|rules)", "i") },
+  { id: "jailbreak-mode", re: new RegExp("(?:jailbreak|dan\\s+mode|developer\\s+mode)", "i") },
+  { id: "print-system-prompt", re: new RegExp("(?:output|print|write)\\s+(?:the|your)\\s+(?:initial|original|system)\\s+(?:prompt|instructions)", "i") },
+  { id: "authority-tier-escalation", re: new RegExp("(?:takes?\\s+precedence\\s+over|overrides?|supersedes?|superc[ei]des?)\\s+(?:the\\s+|all\\s+|any\\s+|your\\s+)*(?:system|developer|project|framework|security|agent|prior|above|previous)\\s+(?:instruction|rule|prompt|polic|setting|requirement|directive|config|context)", "i") },
+  { id: "treat-as-system-authority", re: new RegExp("treat\\s+(?:this|that|the\\s+following|it|these)\\s+(?:as\\s+)?(?:a\\s+|an\\s+)?(?:system|developer|higher[\\s-]?(?:tier|priority|authority|trust)|elevated|privileged)\\s+(?:instruction|prompt|rule|command|message|directive|authority|tier)", "i") },
+  { id: "role-must-always", re: new RegExp("\\b(?:implementer|reviewer|planner|orchestrator|fixer|researcher|loader|the\\s+(?:agent|assistant|model|llm|ai|bot|system))\\b[^.\\n]{0,40}\\bmust\\s+always\\b", "i") },
+  { id: "cross-agent-directive", re: new RegExp("\\bwhen\\s+(?:the\\s+)?(?:implementer|reviewer|planner|orchestrator|fixer|researcher|agent|assistant|model|llm|ai)\\b[^.\\n]{0,30}\\b(?:runs?|reads?|loads?|sees?|processes?|executes?)\\b[^.\\n]{0,40}\\b(?:ignore|skip|disable|bypass|delete|remove|overrides?|exfiltrate|reveal|forget|disregard|never|do\\s+not|must\\s+always)\\b", "i") },
+  { id: "role-colon-injection", re: new RegExp("(?:^|\\n)\\s*(?:system|assistant|user)\\s*:\\s*$", "im") },
+  { id: "chat-template-tokens", re: new RegExp("\\[INST\\]|\\[\\/INST\\]|<\\|im_start\\|>|<\\|im_end\\|>", "i") },
+  { id: "template-injection", re: new RegExp("<%[-=]?\\s|%>(?!%)|\\{\\{[^{}]*\\}\\}", "") },
+  { id: "html-comment-role-escalation", re: new RegExp("<!--\\s*(?:SYSTEM|ADMIN|ROOT)\\s*-->", "i") },
+  { id: "control-char-injection", re: new RegExp("\\x00|\\x1b\\[", "") },
+  { id: "tool-call-injection", re: new RegExp("(?:tool_call|function_call)\\s*\\(", "i") },
+  { id: "tool-delimiter-token", re: new RegExp("<\\|(?:tool|function|plugin)\\|>", "i") },
+  { id: "unicode-tag-smuggling", re: new RegExp("\\uDB40[\\uDC00-\\uDC7F]", "") },
+  { id: "base64-instruction-override", re: new RegExp("(?:SWdub3JlIGFsbCBwcmV2aW91cyBpbnN0cnVjdGlvbnM|aWdub3JlIGFsbCBwcmV2aW91cyBpbnN0cnVjdGlvbnM|SWdub3JlIHByZXZpb3VzIGluc3RydWN0aW9ucw|aWdub3JlIHByZXZpb3VzIGluc3RydWN0aW9ucw|RGlzcmVnYXJkIHByZXZpb3VzIGluc3RydWN0aW9ucw|ZGlzcmVnYXJkIHByZXZpb3VzIGluc3RydWN0aW9ucw|U3lzdGVtIHByb21wdDo|c3lzdGVtIHByb21wdDo|WW91IGFyZSBub3c|eW91IGFyZSBub3c|Rm9yZ2V0IGFsbCBwcmV2aW91cw|Zm9yZ2V0IGFsbCBwcmV2aW91cw|QWN0IGFzIGFu|YWN0IGFzIGFu)", "") },
+  { id: "error-frame-override", re: new RegExp("(?:error|exception|warning|debug|stderr|traceback|panic)[\\s:=-]{1,4}[^\\n]{0,80}(?:reveal|print|output|dump|show|leak|expose|display)\\s+(?:the\\s+|your\\s+)?(?:system\\s+prompt|prompt|instructions?|context|secrets?|tokens?|keys?)", "i") },
+];
+
+const CONFUSABLES = {"304":"I","305":"i","593":"a","603":"e","609":"g","611":"y","617":"i","618":"I","628":"N","640":"R","651":"v","655":"Y","665":"B","668":"H","671":"L","895":"J","913":"A","914":"B","917":"E","918":"Z","919":"H","921":"I","922":"K","924":"M","925":"N","927":"O","929":"P","932":"T","933":"Y","935":"X","945":"a","946":"b","947":"y","949":"e","950":"z","951":"n","953":"i","954":"k","957":"v","959":"o","961":"p","962":"c","964":"t","965":"u","967":"x","969":"w","1011":"j","1029":"S","1030":"I","1032":"J","1040":"A","1042":"B","1045":"E","1050":"K","1052":"M","1053":"H","1054":"O","1056":"P","1057":"C","1058":"T","1059":"Y","1061":"X","1068":"b","1072":"a","1074":"b","1075":"r","1077":"e","1082":"k","1084":"m","1086":"o","1088":"p","1089":"c","1090":"t","1091":"y","1093":"x","1100":"b","1109":"s","1110":"i","1112":"j","1140":"V","1141":"v","1198":"Y","1210":"H","1211":"h","1216":"I","1231":"l","1280":"D","1281":"d","1292":"G","1293":"g","1306":"Q","1307":"q","1308":"W","1309":"w","1340":"L","1357":"U","1365":"O","1379":"q","1382":"q","1386":"d","1388":"l","1392":"h","1397":"j","1400":"n","1405":"u","1409":"g","1413":"o"};
+const NON_ASCII = /[\u0080-\uFFFF]/;
+const WORD_ADJACENT_MASK = /(?<=[A-Za-z])[\u0080-\uFFFF]+|[\u0080-\uFFFF]+(?=[A-Za-z])/g;
+
+/** Cross-script lookalikes mapped to ASCII, over the NFKC form. */
+function foldConfusables(text) {
+  if (!NON_ASCII.test(text)) return text;
+  const normalized = text.normalize("NFKC");
+  let out = "";
+  let cursor = 0;
+  for (let index = 0; index < normalized.length; index += 1) {
+    const key = String(normalized.charCodeAt(index));
+    if (!Object.hasOwn(CONFUSABLES, key)) continue;
+    out += normalized.slice(cursor, index) + CONFUSABLES[key];
+    cursor = index + 1;
+  }
+  return cursor === 0 ? normalized : out + normalized.slice(cursor);
+}
+
+/** Rejoin a keyword split by a mask the fold table does not carry. */
+function joinMaskedWords(text) {
+  if (!NON_ASCII.test(text)) return text;
+  return text.normalize("NFKD").replace(WORD_ADJACENT_MASK, "");
+}
+
+/** Fold first, then join: the join inherits the fold's substitutions. */
+function normalizeForScreen(text) {
+  return joinMaskedWords(foldConfusables(text));
+}
+
+const NOW = Date.now();
+
+function repoRoot() {
+  const cwd = resolve(process.cwd());
+  const declared = process.env.STAMITY_REPO_ROOT;
+  if (typeof declared !== "string" || declared === "") return cwd;
+  const candidate = resolve(cwd, declared);
+  const prefix = candidate.endsWith(sep) ? candidate : candidate + sep;
+  if (candidate !== cwd && !cwd.startsWith(prefix)) return cwd;
+  try {
+    if (!statSync(join(candidate, STATE_SEGMENTS[0])).isDirectory()) return cwd;
+  } catch {
+    return cwd;
+  }
+  return candidate;
+}
+
+const STATE_ROOT = join(repoRoot(), ...STATE_SEGMENTS);
+
+/** `.md` entries in a directory. Absent or unreadable both read as empty. */
+function listMarkdown(dir) {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+      .map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * One document, screened. Checks run in the order that keeps a refusal
+ * attributable: size before read, injection before shape, then shape, then
+ * integrity — so a poisoned file reports as poisoned rather than as malformed.
+ */
+function inspect(dir, name, maxBytes, coversSummary) {
+  let stats;
+  try {
+    stats = statSync(join(dir, name));
+  } catch {
+    return null;
+  }
+  if (!stats.isFile()) return null;
+  const doc = { name, size: stats.size, day: dayOf(stats.mtimeMs), skip: "", head: null };
+  if (stats.size > maxBytes) return { ...doc, skip: "over-size" };
+
+  let bytes;
+  try {
+    bytes = readFileSync(join(dir, name));
+  } catch {
+    return { ...doc, skip: "invalid-frontmatter" };
+  }
+  const raw = bytes.toString("utf8");
+  // Keyed before any screen, as the engine keys a file before it examines it, and
+  // from the same head bytes the engine's `orderingDay` reads.
+  doc.day = declaredDay(bytes.subarray(0, ORDERING_HEAD_BYTES).toString("utf8")) || doc.day;
+  if (screened(raw)) return { ...doc, skip: "injection-detected" };
+  const parsed = parseDocument(raw);
+  if (parsed === null) return { ...doc, skip: "invalid-frontmatter" };
+  const covered = coversSummary
+    ? String(parsed.head.summary ?? "").trim() + "\n" + parsed.body.trim()
+    : parsed.body.trim();
+  if (!integrityHolds(parsed.head.integrity, covered)) {
+    return { ...doc, skip: "integrity-mismatch" };
+  }
+  return { ...doc, head: parsed.head };
+}
+
+/** A timestamp as a UTC calendar day. */
+function dayOf(ms) {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/**
+ * The `date` inside the opening fence of a file's head bytes, matched by line
+ * the way the engine's `orderingDay` matches it, or "" when there is none.
+ */
+function declaredDay(raw) {
+  if (!raw.startsWith("---")) return "";
+  const end = raw.indexOf("\n---", 3);
+  const found = /^[ \t]*date[ \t]*:[ \t]*["']?(\d{4}-\d{2}-\d{2})/m.exec(end === -1 ? raw : raw.slice(0, end));
+  return found === null ? "" : found[1];
+}
+
+/**
+ * The screen, run over every copy the engine's own gates run it over: the raw
+ * text, the invisible-stripped copy, and the composed normalization of that
+ * copy. A union, never a replacement — the normalized copy adds the refusals a
+ * lookalike or a combining mark hid, and the raw copy keeps the ones NFKC
+ * destroys by composing a trailing mark into the letter before it.
+ *
+ * Returns the first matching pattern id in SCREEN order, or "" when none
+ * matches: a refusal that names its pattern is one somebody can attribute.
+ */
+function screenHit(raw) {
+  const stripped = raw.replace(INVISIBLE, "");
+  const copies = [raw, stripped];
+  const normalized = normalizeForScreen(stripped);
+  if (normalized !== stripped) copies.push(normalized);
+  const hit = SCREEN.find((entry) =>
+    copies.some((copy) => {
+      // A `g`-flagged row carries `lastIndex` between calls, and this now tests
+      // three copies per row: without the reset the second copy would resume
+      // mid-string and a hit could fall through.
+      entry.re.lastIndex = 0;
+      return entry.re.test(copy);
+    }),
+  );
+  return hit === undefined ? "" : hit.id;
+}
+
+/** Whether any screen pattern matches. */
+function screened(raw) {
+  return screenHit(raw) !== "";
+}
+
+/**
+ * Fenced head plus body. Top-level scalars only — nested keys are indented and
+ * ignored — but every SCALAR SHAPE the engine's own writer emits is read, not
+ * just the bare one.
+ *
+ * The writer serializes through a YAML library, so a value carrying a newline
+ * comes back as a block scalar and a value carrying a quote or a leading
+ * indicator comes back double-quoted with escapes. A per-line regex that took
+ * the raw remainder read a block scalar's own indicator (`|-`) as the value:
+ * a garbage banner line for a learning, and for a handoff a SILENT DROP,
+ * because the summary is inside the span the integrity digest covers and the
+ * mis-parse failed it.
+ */
+function parseDocument(raw) {
+  const text = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+  const match = /^---[ \t]*\r?\n(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n([\s\S]*))?$/.exec(text);
+  if (match === null) return null;
+  const head = Object.create(null);
+  const lines = (match[1] ?? "").split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const pair = /^([A-Za-z][A-Za-z0-9_-]*)[ \t]*:[ \t]*(.*)$/.exec(lines[index]);
+    if (pair === null) continue;
+    const rest = pair[2].trim();
+    const block = /^([|>])([0-9]*)([-+]?)$|^([|>])([-+]?)([0-9]*)$/.exec(rest);
+    if (block === null) {
+      head[pair[1]] = unquote(rest);
+      continue;
+    }
+    const style = block[1] ?? block[4];
+    const chomp = block[3] || block[5] || "";
+    const collected = [];
+    while (index + 1 < lines.length) {
+      const next = lines[index + 1];
+      // A blank line belongs to the block; anything at column 0 ends it.
+      if (next.trim() !== "" && !/^[ \t]/.test(next)) break;
+      collected.push(next);
+      index += 1;
+    }
+    head[pair[1]] = blockScalar(collected, style, chomp);
+  }
+  return { head, body: match[2] ?? "" };
+}
+
+/**
+ * A block scalar's value: strip the block's own indentation (the first
+ * non-empty line sets it), join literal style with newlines and folded style by
+ * the fold rule, then apply chomping — strip, keep, or the default clip.
+ */
+function blockScalar(collected, style, chomp) {
+  const first = collected.find((line) => line.trim() !== "");
+  if (first === undefined) return "";
+  const indent = (/^[ \t]*/.exec(first) ?? [""])[0].length;
+  const rows = collected.map((line) => (line.trim() === "" ? "" : line.slice(indent)));
+  let value = "";
+  if (style === "|") {
+    value = rows.join("\n");
+  } else {
+    // Folded: a single break between two non-empty lines becomes a space; a
+    // blank line stays a break.
+    for (let index = 0; index < rows.length; index += 1) {
+      if (index === 0) value = rows[index];
+      else if (rows[index] === "" || rows[index - 1] === "") value += "\n" + rows[index];
+      else value += " " + rows[index];
+    }
+  }
+  if (chomp === "-") return value.replace(/\n+$/, "");
+  if (chomp === "+") return value + "\n";
+  return value.replace(/\n+$/, "") + "\n";
+}
+
+/** One quoted scalar, unescaped the way the writer escaped it. */
+function unquote(value) {
+  if (value.length > 1 && value.startsWith('"') && value.endsWith('"')) {
+    return value
+      .slice(1, -1)
+      .replace(/\\u([0-9a-fA-F]{4})/g, (whole, code) => String.fromCharCode(parseInt(code, 16)))
+      .replace(/\\([\s\S])/g, (whole, char) =>
+        char === "n" ? "\n" : char === "t" ? "\t" : char === "r" ? "\r" : char === "0" ? "\u0000" : char,
+      );
+  }
+  if (value.length > 1 && value.startsWith("'") && value.endsWith("'")) {
+    return value.slice(1, -1).replaceAll("''", "'");
+  }
+  return value;
+}
+
+/**
+ * The digest vouches for the bytes it covers; an absent or stale one is a
+ * refusal. The covered span arrives already trimmed and assembled, because the
+ * two document kinds cover different spans: a handoff's digest includes its
+ * summary (the first line the resuming agent reads is content, not metadata),
+ * a learning's does not.
+ */
+function integrityHolds(declared, covered) {
+  if (typeof declared !== "string" || !/^sha256:[0-9a-f]{64}$/i.test(declared)) return false;
+  return (
+    declared.toLowerCase() === "sha256:" + createHash("sha256").update(covered, "utf8").digest("hex")
+  );
+}
+
+/**
+ * One field as a single index-safe line: control characters and newlines
+ * collapse, so a forged summary cannot manufacture index lines of its own.
+ */
+function text(value, fallback) {
+  if (typeof value !== "string") return fallback;
+  const flat = value.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+  if (flat === "") return fallback;
+  return flat.length > MAX_FIELD_CHARS ? flat.slice(0, MAX_FIELD_CHARS - 1) + "…" : flat;
+}
+
+function stem(name) {
+  return name.slice(0, -3);
+}
+
+/** Appends at most MAX_ITEM_LINES items, then one line accounting for the rest. */
+function append(out, items, noun) {
+  for (const item of items.slice(0, MAX_ITEM_LINES)) out.push(item);
+  const rest = items.length - MAX_ITEM_LINES;
+  if (rest > 0) {
+    out.push("- … and " + rest + " more " + noun + (rest === 1 ? "" : "s") + " not listed.");
+  }
+}
+
+const learningsDir = join(STATE_ROOT, "learnings");
+const learnings = listMarkdown(learningsDir)
+  .map((name) => inspect(learningsDir, name, MAX_LEARNING_BYTES, false))
+  .filter((doc) => doc !== null)
+  // Newest declared date first — a learning written today outranks one from six
+  // months ago, and a date survives a clone where an mtime does not — with a
+  // name tiebreak so one day's learnings still order deterministically.
+  .sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+
+for (const doc of learnings) {
+  if (doc.skip !== "") continue;
+  const reviewBy = doc.head.reviewBy;
+  // The write gate only warns on a passed horizon; reading refuses. Nobody
+  // re-verified the claim, and the digest vouches for the bytes, not the finding.
+  if (typeof reviewBy === "string" && Date.parse(reviewBy + "T23:59:59.999Z") < NOW) {
+    doc.skip = "expired-review";
+  }
+}
+
+const loaded = learnings.filter((doc) => doc.skip === "");
+const skipped = learnings.filter((doc) => doc.skip !== "");
+
+const handoffsDir = join(STATE_ROOT, "handoffs");
+const handoffDocs = listMarkdown(handoffsDir)
+  .map((name) => inspect(handoffsDir, name, MAX_HANDOFF_BYTES, true))
+  .filter((doc) => doc !== null);
+
+// Partitioned, not filtered away. A refusal and a handoff that is merely
+// finished or expired are different facts: the first is a file that failed a
+// trust screen and has to be reported, the second is ordinary lifecycle and is
+// silent. Folding both into the selection expression left two poisoned handoffs
+// reported as "none in this repo".
+const refusedHandoffs = handoffDocs.filter((doc) => doc.skip !== "");
+const handoffs = handoffDocs
+  .filter(
+    (doc) => doc.skip === "" && RESUMABLE.includes(doc.head.status) && Date.parse(doc.head.expires) > NOW,
+  )
+  .map((doc) => ({
+    id: text(doc.head.id, text(stem(doc.name), "(unnamed)")),
+    summary: text(doc.head.summary, "(no summary)"),
+    expires: text(doc.head.expires, ""),
+    from: text(doc.head.fromTool, ""),
+  }))
+  // Soonest expiry first: the entry that goes stale next is the one to resume.
+  .sort((a, b) => Date.parse(a.expires) - Date.parse(b.expires) || (a.id < b.id ? -1 : 1));
+
+function render() {
+  if (learnings.length === 0 && handoffDocs.length === 0) {
+    return ["stamity: no learnings and no resumable handoffs in this repo yet."];
+  }
+
+  const bytes = loaded.reduce((total, doc) => total + doc.size, 0);
+  // The file name is payload too: it is attacker-chosen on any file that
+  // reached the directory, and it is concatenated into a line an agent reads.
+  const ids = loaded.map((doc) => text(doc.head.id, text(stem(doc.name), "(unnamed)")));
+  const duplicated = new Set(ids.filter((id, index) => ids.indexOf(id) !== index));
+  const section = [];
+  append(
+    section,
+    loaded.map((doc, index) => {
+      const id = ids[index];
+      const confidence = text(doc.head.confidence, "unrated");
+      const summary = text(doc.head.summary, "(no summary)");
+      const flag = duplicated.has(id) ? " [duplicate id]" : "";
+      // Inside the warning window: re-verify before the read screen skips it.
+      const due =
+        Date.parse(doc.head.reviewBy + "T00:00:00Z") <= NOW + REVIEW_WARNING_DAYS * 86400000
+          ? " [review due " + text(doc.head.reviewBy, "") + "]"
+          : "";
+      return "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due;
+    }),
+    "learning",
+  );
+  append(section, skipped.map(skipLine), "skipped file");
+  // Two figures: the bytes of the lines printed below, which is what this banner
+  // costs, and the loaded files' bytes on disk.
+  const out = [
+    "Learnings: " + loaded.length + " loaded, " + skipped.length + " skipped, " +
+      Buffer.byteLength(section.join("\n"), "utf8") + " bytes in this index (" + bytes + " bytes on disk).",
+    ...section,
+  ];
+
+  out.push(
+    "Handoffs: " + handoffs.length + " active, " + refusedHandoffs.length + " skipped.",
+  );
+  append(
+    out,
+    handoffs.map((entry) => {
+      const origin = entry.from === "" ? "" : "from " + entry.from + ", ";
+      return "- " + entry.id + " — " + entry.summary + " (" + origin + "expires " + entry.expires + ")";
+    }),
+    "handoff",
+  );
+  append(out, refusedHandoffs.map(skipLine), "skipped file");
+
+  return out;
+}
+
+/** One skip line: the file by name, the reason by id. The span is never echoed. */
+function skipLine(doc) {
+  return "- skipped " + fileName(doc) + ": " + doc.skip;
+}
+
+/** A file name as one bounded, control-character-free line. */
+function fileName(doc) {
+  return text(doc.name, "(unnamed file)");
+}
+
+function readPayload() {
+  let raw = "";
+  try {
+    raw = readFileSync(0, "utf8");
+  } catch {
+    return {};
+  }
+  if (raw.trim() === "") return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed !== null && typeof parsed === "object" ? parsed : {};
+  } catch {
+    // An unparseable payload names no agent and no tool, so it attributes to
+    // nothing this script governs — treated as out of scope, never as a
+    // finding, so a client's payload change cannot brick a session.
+    return {};
+  }
+}
+
+function field(payload, names) {
+  for (const name of names) {
+    const value = Object.hasOwn(payload, name) ? payload[name] : undefined;
+    if (typeof value === "string" && value !== "") return value;
+  }
+  return "";
+}
+
+const CARD_RUNS_DIR = "runs";
+const CARD_RUNS_REL = ".stamity/runs";
+const CARD_RUN_ID = new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}_[a-z0-9-]+$", "");
+const CARD_REPORTS_DIR = "reports";
+const CARD_REPORT_NAME = new RegExp("^(?!(?:report|summary|findings|analysis))[a-z0-9][a-z0-9-]*-(?:implementer|fixer|reviewer|security|performance|design-quality|test-runner|spec-author)-r[1-9][0-9]*\\.md$", "");
+const CARD_LEDGER_FILE = "ledger.jsonl";
+const CARD_RECORD_FILE = "record.md";
+const CARD_FINDINGS_OPEN = new RegExp("^ {0,3}```stamity-findings[ \\t]*$", "");
+const CARD_FENCE_CLOSE = new RegExp("^ {0,3}```[ \\t]*$", "");
+const CARD_STATUS = new RegExp("^status:\\s*(.*)$", "i");
+const CARD_PLAN = new RegExp("^plan:\\s*(.+)$", "i");
+const CARD_INVOCATION = new RegExp("^invocation:\\s*(.+)$", "i");
+const CARD_IN_PROGRESS = new RegExp("\\bin progress\\b", "i");
+const CARD_HEAD_LINES = 15;
+const CARD_HEAD_READ_BYTES = 65536;
+const CARD_REPORT_MAX_BYTES = 1048576;
+const CARD_REPORT_READS_MAX = 256;
+const CARD_LEDGER_MAX_BYTES = 4194304;
+const CARD_GIT_MAX_BYTES = 4096;
+const CARD_MAX_CHARS = 2000;
+const CARD_LIST_MAX = 10;
+const CARD_FIELD_MAX = 200;
+const CARD_UNPRINTABLE = new RegExp("[\\u0000-\\u001F\\u007F-\\u009F\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]", "gu");
+const CARD_RECOVERY_NOTE = "the ledger is the recovery point";
+const CARD_NEXT_LINE = "next: read the open rows and the listed reports before dispatching anything";
+const CARD_NOT_RECORDED = "(not recorded)";
+const CARD_LEDGER_UNREADABLE = "could not be read";
+const CARD_LEDGER_TOO_LARGE = "too large to read (over 4 MiB)";
+const CARD_REPORTS_NOT_CHECKED = "not checked";
+const CARD_NOT_REPORT_NAMED = "not report-named";
+const CARD_DEBUG_SEGMENT = "_debug-";
+const CARD_CLOSED_MAX_AGE_DAYS = 2;
+const CARD_CLOSED_NEXT_LINE = "next: this run is closed — do not resume its dispatch; its record names what came after it";
+const CARD_LEDGER_STATES = ["fixed","deferred","rejected","open"];
+const CARD_DEBUG_ROUNDS_LABEL = "debug rounds open";
+const CARD_NO_RUN = "no run in progress";
+const CARD_DEBUG_NEXT_LINE = "next: each open debug round's record names its probes and where it stopped";
+
+/** A regular file, never through a link. Absent or unreadable reads as not one. */
+function cardRegularFile(path) {
+  try {
+    return lstatSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** A real directory, never through a link. Absent or unreadable reads as not one. */
+function cardRealDir(path) {
+  try {
+    return lstatSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** Whether anything, a dangling link included, sits at path. */
+function cardExists(path) {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A git metadata file's text, trimmed: only a regular file (never through a
+ * link) of at most CARD_GIT_MAX_BYTES bytes. Null otherwise, or when unreadable.
+ */
+function cardGitText(path) {
+  try {
+    const stats = lstatSync(path);
+    if (!stats.isFile() || stats.size > CARD_GIT_MAX_BYTES) return null;
+    return readFileSync(path, "utf8").trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The record's head: its first CARD_HEAD_LINES lines, from at most
+ * CARD_HEAD_READ_BYTES bytes, BOM stripped. The first status, plan and
+ * invocation line each win. Null when the record is absent, a link, or
+ * unreadable.
+ */
+function cardRecordHead(path) {
+  if (!cardRegularFile(path)) return null;
+  let raw = "";
+  let fd = -1;
+  try {
+    fd = openSync(path, "r");
+    const buffer = Buffer.alloc(CARD_HEAD_READ_BYTES);
+    let filled = 0;
+    while (filled < buffer.length) {
+      const read = readSync(fd, buffer, filled, buffer.length - filled, filled);
+      if (read === 0) break;
+      filled += read;
+    }
+    raw = buffer.toString("utf8", 0, filled);
+  } catch {
+    return null;
+  } finally {
+    if (fd !== -1) {
+      try {
+        closeSync(fd);
+      } catch {
+        // The bytes are already read; a failed close changes nothing printed.
+      }
+    }
+  }
+  const text = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+  const head = { status: null, plan: "", invocation: "" };
+  for (const line of text.split(/\r?\n/).slice(0, CARD_HEAD_LINES)) {
+    const status = CARD_STATUS.exec(line);
+    if (status !== null && head.status === null) head.status = status[1];
+    const plan = CARD_PLAN.exec(line);
+    if (plan !== null && head.plan === "") head.plan = plan[1];
+    const invocation = CARD_INVOCATION.exec(line);
+    if (invocation !== null && head.invocation === "") head.invocation = invocation[1];
+  }
+  return {
+    status: head.status,
+    inProgress: head.status !== null && CARD_IN_PROGRESS.test(head.status),
+    plan: head.plan,
+    invocation: head.invocation,
+  };
+}
+
+/**
+ * Open row ids in file order, every report path a row carries, and the rows
+ * counted by state: the CARD_LEDGER_STATES by name, any other (or none) as
+ * other. Bad lines are skipped. "failed" when a ledger is there but is not read — a link, anything
+ * else that is not a regular file, one over CARD_LEDGER_MAX_BYTES ("tooLarge"
+ * too), or a read that fails — so the card never counts it as empty; an absent
+ * ledger is a run with no rows yet. An unread ledger ledgers no report.
+ */
+function cardLedger(path) {
+  const open = [];
+  const ledgered = new Set();
+  const states = { fixed: 0, deferred: 0, rejected: 0, open: 0, other: 0 };
+  let stats;
+  try {
+    stats = lstatSync(path);
+  } catch (error) {
+    // ENOENT is no ledger yet; any other lstat failure is one that cannot be read.
+    return { open, ledgered, states, failed: !(error && error.code === "ENOENT"), tooLarge: false };
+  }
+  if (!stats.isFile()) return { open, ledgered, states, failed: true, tooLarge: false };
+  // Too large to read whole, and no part of it can stand for the rest: not read at all.
+  if (stats.size > CARD_LEDGER_MAX_BYTES) return { open, ledgered, states, failed: true, tooLarge: true };
+  let raw;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch {
+    // EACCES, EBUSY and the rest: there, but not read.
+    return { open, ledgered, states, failed: true, tooLarge: false };
+  }
+  for (const line of raw.split(/\r?\n/)) {
+    if (line.trim() === "") continue;
+    let row;
+    try {
+      row = JSON.parse(line);
+    } catch {
+      // One torn or hand-mangled line; the rows around it still count.
+      continue;
+    }
+    if (row === null || typeof row !== "object" || Array.isArray(row)) continue;
+    if (typeof row.id === "string" && row.state === "open") open.push(row.id);
+    if (typeof row.report === "string") ledgered.add(row.report);
+    states[CARD_LEDGER_STATES.includes(row.state) ? row.state : "other"] += 1;
+  }
+  return { open, ledgered, states, failed: false, tooLarge: false };
+}
+
+/** Whether the first findings block holds at least one non-blank line before it closes. */
+function cardHasFindings(raw) {
+  const lines = raw.split(/\r?\n/);
+  const start = lines.findIndex((line) => CARD_FINDINGS_OPEN.test(line));
+  if (start === -1) return false;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (CARD_FENCE_CLOSE.test(lines[index])) return false;
+    if (lines[index].trim() !== "") return true;
+  }
+  return false;
+}
+
+/**
+ * Reports that hold findings no ledger row points at, as repo-relative paths,
+ * the count of .md files whose names are not report names, and the count of
+ * reports past the first CARD_REPORT_READS_MAX that were not checked. A report
+ * too large to read, or one that cannot be read, is listed: its findings cannot
+ * be ruled out. Any other name is counted and never listed, because its text is
+ * whatever the writer chose. A linked reports folder is not read at all.
+ */
+function cardUnledgered(runDir, run, ledgered) {
+  const none = { listed: [], other: 0, notChecked: 0 };
+  const reportsDir = join(runDir, CARD_REPORTS_DIR);
+  if (!cardRealDir(reportsDir)) return none;
+  let entries;
+  try {
+    entries = readdirSync(reportsDir, { withFileTypes: true });
+  } catch {
+    return none;
+  }
+  const names = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+    .map((entry) => entry.name)
+    .sort();
+  const out = [];
+  let other = 0;
+  let checked = 0;
+  let notChecked = 0;
+  for (const name of names) {
+    if (!CARD_REPORT_NAME.test(name)) {
+      other += 1;
+      continue;
+    }
+    const rel = CARD_RUNS_REL + "/" + run + "/" + CARD_REPORTS_DIR + "/" + name;
+    if (ledgered.has(rel)) continue;
+    // Past the cap a report is counted, never read, and never taken as clean.
+    if (checked >= CARD_REPORT_READS_MAX) {
+      notChecked += 1;
+      continue;
+    }
+    checked += 1;
+    const path = join(runDir, CARD_REPORTS_DIR, name);
+    let size;
+    try {
+      const stats = lstatSync(path);
+      if (!stats.isFile()) continue;
+      size = stats.size;
+    } catch {
+      continue;
+    }
+    if (size > CARD_REPORT_MAX_BYTES) {
+      out.push(rel);
+      continue;
+    }
+    let raw;
+    try {
+      raw = readFileSync(path, "utf8");
+    } catch {
+      // Unreadable is not empty: what it holds cannot be ruled out.
+      out.push(rel);
+      continue;
+    }
+    if (cardHasFindings(raw)) out.push(rel);
+  }
+  return { listed: out, other, notChecked };
+}
+
+/** A worktree HEAD as the branch it names. */
+function cardBranch(head) {
+  if (head.startsWith("ref: refs/heads/")) return head.slice("ref: refs/heads/".length);
+  if (head.startsWith("ref: ")) return head.slice("ref: ".length);
+  if (/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(head)) return "detached " + head.slice(0, 7);
+  return "unknown";
+}
+
+/**
+ * The git common dir: .git itself when it is a directory, or, when .git is the
+ * pointer file a linked worktree carries, the directory it names followed
+ * through its commondir. Null when neither holds, or when the pointer or the
+ * commondir is a link, too large, or unreadable.
+ */
+function cardCommonDir(rootDir) {
+  const dotGit = join(rootDir, ".git");
+  try {
+    const stats = lstatSync(dotGit);
+    if (stats.isDirectory()) return dotGit;
+    if (!stats.isFile()) return null;
+    const text = cardGitText(dotGit);
+    if (text === null) return null;
+    const pointer = /^gitdir:[ \t]*(.+)$/.exec(text.split(/\r?\n/)[0].trim());
+    if (pointer === null) return null;
+    const target = pointer[1].trim();
+    // Git resolves a relative pointer against the directory holding .git.
+    const gitDir = isAbsolute(target) ? target : resolve(dirname(dotGit), target);
+    // No commondir: the pointer names the common dir itself.
+    let common = "";
+    const commondir = join(gitDir, "commondir");
+    if (cardExists(commondir)) {
+      const named = cardGitText(commondir);
+      if (named === null) return null;
+      common = named;
+    }
+    return resolve(gitDir, common);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Linked worktrees as "<path> [<branch>]", sorted. The main checkout is not a
+ * lane, and neither is one whose gitdir is empty or names nothing on disk any
+ * more: git calls that lane prunable, and it holds no work to resume. A linked
+ * worktrees folder is not listed at all.
+ */
+function cardLanes(rootDir) {
+  const common = cardCommonDir(rootDir);
+  if (common === null) return [];
+  const worktrees = join(common, "worktrees");
+  if (!cardRealDir(worktrees)) return [];
+  let admins;
+  try {
+    admins = readdirSync(worktrees, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return [];
+  }
+  const out = [];
+  for (const name of admins) {
+    const admin = join(worktrees, name);
+    const gitdir = cardGitText(join(admin, "gitdir"));
+    if (gitdir === null || gitdir === "") continue;
+    const target = isAbsolute(gitdir) ? gitdir : resolve(admin, gitdir);
+    if (!cardExists(target)) continue;
+    const located = target.replace(/[\\/]\.git$/, "").replaceAll("\\", "/");
+    const head = cardGitText(join(admin, "HEAD"));
+    out.push(located + " [" + (head === null ? "unknown" : cardBranch(head)) + "]");
+  }
+  return out.sort();
+}
+
+/**
+ * One field as one bounded line: control characters to spaces, then the C1
+ * controls, bidi controls and zero-width marks dropped (never the tag block,
+ * which the screen must still see), whitespace collapsed, capped.
+ */
+function cardFlat(value) {
+  const flat = String(value)
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(CARD_UNPRINTABLE, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return flat.length > CARD_FIELD_MAX ? flat.slice(0, CARD_FIELD_MAX - 1) + "…" : flat;
+}
+
+/** " (<first k>, … +<rest> more)", or "" for an empty list. */
+function cardList(items, k) {
+  if (items.length === 0) return "";
+  const shown = items.slice(0, k).map(cardFlat);
+  if (items.length > k) shown.push("… +" + (items.length - k) + " more");
+  return " (" + shown.join(", ") + ")";
+}
+
+/** The debug line as a one-item array, or none when no debug round is open. */
+function cardDebugLine(debug, k) {
+  return debug.length === 0 ? [] : [CARD_DEBUG_ROUNDS_LABEL + ": " + debug.length + cardList(debug, k)];
+}
+
+/**
+ * Open debug rounds, newest first: the debug records whose head reads in
+ * progress, found by run id. A folder that is a link, or a record that is a
+ * link or cannot be read, is passed over.
+ */
+function cardDebugRounds(runsDir, names) {
+  const out = [];
+  for (const run of names) {
+    const head = cardRecordHead(join(runsDir, run, CARD_RECORD_FILE));
+    if (head !== null && head.inProgress) out.push(run);
+  }
+  return out;
+}
+
+/** The card of open debug rounds when no run is named: it names no run. */
+function cardRenderDebug(debug, nowMs, k) {
+  return [
+    "stamity resume card — " + CARD_NO_RUN + " (as of " + new Date(nowMs).toISOString().slice(0, 16) + "Z)",
+    ...cardDebugLine(debug, k),
+    CARD_DEBUG_NEXT_LINE,
+  ];
+}
+
+function cardRender(run, head, ledger, reports, lanes, debug, nowMs, k) {
+  const plan = cardFlat(head.plan);
+  const invocation = cardFlat(head.invocation);
+  const open = ledger.open;
+  const unledgered = reports.listed;
+  return [
+    "stamity resume card — run " + run + " (as of " + new Date(nowMs).toISOString().slice(0, 16) + "Z)",
+    "plan: " + (plan === "" ? CARD_NOT_RECORDED : plan) +
+      "  ·  invocation: " + (invocation === "" ? CARD_NOT_RECORDED : invocation),
+    "ledger: " +
+      (ledger.tooLarge
+        ? CARD_LEDGER_TOO_LARGE
+        : ledger.failed
+          ? CARD_LEDGER_UNREADABLE
+          : open.length + " open rows" + cardList(open, k)) +
+      "  ·  " + CARD_RECOVERY_NOTE,
+    "reports without a ledger row: " + unledgered.length + cardList(unledgered, k) +
+      (reports.notChecked > 0 ? ", " + CARD_REPORTS_NOT_CHECKED + ": " + reports.notChecked : "") +
+      (reports.other > 0 ? "  ·  " + CARD_NOT_REPORT_NAMED + ": " + reports.other : ""),
+    "lanes: " + lanes.length + cardList(lanes, k),
+    ...cardDebugLine(debug, k),
+    CARD_NEXT_LINE,
+  ];
+}
+
+/**
+ * The closed card: a run's closing status and its ledger counted by state; its
+ * one list is the debug line. Five lines of capped fields, so with that list at
+ * zero it always fits CARD_MAX_CHARS.
+ */
+function cardRenderClosed(run, head, ledger, debug, nowMs, k) {
+  const status = cardFlat(head.status === null ? "" : head.status);
+  const plan = cardFlat(head.plan);
+  const invocation = cardFlat(head.invocation);
+  const s = ledger.states;
+  const rows = s.fixed + s.deferred + s.rejected + s.open + s.other;
+  return [
+    "stamity resume card — run " + run + " (closed; as of " + new Date(nowMs).toISOString().slice(0, 16) + "Z)",
+    "status: " + (status === "" ? CARD_NOT_RECORDED : status),
+    "plan: " + (plan === "" ? CARD_NOT_RECORDED : plan) +
+      "  ·  invocation: " + (invocation === "" ? CARD_NOT_RECORDED : invocation),
+    "ledger: " +
+      (ledger.tooLarge
+        ? CARD_LEDGER_TOO_LARGE
+        : ledger.failed
+          ? CARD_LEDGER_UNREADABLE
+          : rows + " rows — fixed " + s.fixed + ", deferred " + s.deferred + ", rejected " + s.rejected +
+            ", open " + s.open + (s.other > 0 ? ", other " + s.other : "")) +
+      "  ·  " + CARD_RECOVERY_NOTE,
+    ...cardDebugLine(debug, k),
+    CARD_CLOSED_NEXT_LINE,
+  ];
+}
+
+/**
+ * The resume card of the newest run in progress; with none, of the newest run
+ * dated within CARD_CLOSED_MAX_AGE_DAYS whose record head reads (the closed
+ * card); with neither, of the open debug rounds alone, naming no run; else
+ * null. A debug round's record is never the run: the open ones are listed on
+ * the debug line. Lists shrink until the card fits CARD_MAX_CHARS; with every
+ * list at zero it always does. A card whose text trips the screen is withheld whole.
+ */
+function resumeCardLines(rootDir, stateRoot, nowMs) {
+  const runsDir = join(stateRoot, CARD_RUNS_DIR);
+  // A linked runs folder is not this repo's runs: nothing in it is read.
+  if (!cardRealDir(runsDir)) return null;
+  let entries;
+  try {
+    entries = readdirSync(runsDir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  // Newest first by code-unit order, stopping at the first run in progress: the
+  // same run the greatest in-progress name picks, for fewer record heads read.
+  // The first closed head on the way, dated at or after the cutoff day, is the
+  // fallback. A debug round's record is passed over by its run id.
+  // A link to a directory is not a directory here: a run is never followed out of the tree.
+  const names = entries
+    .filter((entry) => entry.isDirectory() && CARD_RUN_ID.test(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+    .reverse();
+  const runs = names.filter((name) => !name.includes(CARD_DEBUG_SEGMENT));
+  const debug = cardDebugRounds(runsDir, names.filter((name) => name.includes(CARD_DEBUG_SEGMENT)));
+  const cutoff = new Date(nowMs - (CARD_CLOSED_MAX_AGE_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
+  const today = new Date(nowMs).toISOString().slice(0, 10);
+  let chosen = null;
+  let closed = null;
+  for (const run of runs) {
+    const head = cardRecordHead(join(runsDir, run, CARD_RECORD_FILE));
+    if (head === null) continue;
+    if (head.inProgress) {
+      chosen = { run, head };
+      break;
+    }
+    // A folder dated after today (a clock skew or a hand-made name) is never the closed run.
+    const day = run.slice(0, 10);
+    if (closed === null && day >= cutoff && day <= today) closed = { run, head };
+  }
+  const pick = chosen === null ? closed : chosen;
+  if (pick === null && debug.length === 0) return null;
+
+  let render;
+  if (pick === null) {
+    render = (k) => cardRenderDebug(debug, nowMs, k);
+  } else {
+    const runDir = join(runsDir, pick.run);
+    const ledger = cardLedger(join(runDir, CARD_LEDGER_FILE));
+    if (chosen === null) {
+      render = (k) => cardRenderClosed(pick.run, pick.head, ledger, debug, nowMs, k);
+    } else {
+      const reports = cardUnledgered(runDir, pick.run, ledger.ledgered);
+      const lanes = cardLanes(rootDir);
+      render = (k) => cardRender(pick.run, pick.head, ledger, reports, lanes, debug, nowMs, k);
+    }
+  }
+  let lines = [];
+  for (let k = CARD_LIST_MAX; k >= 0; k -= 1) {
+    lines = render(k);
+    if (lines.join("\n").length <= CARD_MAX_CHARS) break;
+  }
+  const hit = screenHit(lines.join("\n"));
+  if (hit !== "") {
+    return [
+      "stamity resume card — " + (pick === null ? CARD_NO_RUN : "run " + pick.run) +
+        " withheld: its text matched screen pattern " + hit + "; " + CARD_RECOVERY_NOTE,
+    ];
+  }
+  return lines;
+}
+
+// Which start this is. A person running the script at a terminal sends no
+// payload, so a TTY is never read — reading it would wait for input nobody is
+// going to type. The check asks fd 0 directly: touching process.stdin would
+// open it as a non-blocking stream, and the read below would then fail with
+// EAGAIN whenever the client had not finished writing yet. Only a start after
+// a compaction or on a resume appends the card: a fresh session has no run
+// state to lose, and a client that sends no source (or neither "compact" nor
+// "resume") gets the banner it always got.
+const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);
+
+// Written once, then the process ends on its own. `process.exit` would race
+// the write: stdout is asynchronous when it is a pipe on macOS and the BSDs,
+// which is exactly how a client runs a hook.
+const lines = render();
+if (SOURCE === "compact" || SOURCE === "resume") {
+  const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW);
+  if (card !== null) lines.push("", ...card);
+}
+process.stdout.write(lines.join("\n") + "\n");

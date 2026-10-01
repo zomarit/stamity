@@ -1,0 +1,40 @@
+{
+  "name": "scaffold",
+  "version": "0.1.0",
+  "description": "Greenfield generators built to the repo's quality floor — the implementer writes, a specialist lens gates, and a failed gate buys exactly one regeneration.",
+  "integrity": {
+    "commands/st-auth-scaffold.md": "8ffa680375b07221c7d426cd30ef5c852636e497822e5bc360c63d9ca7b96cd1",
+    "commands/st-design-system-create.md": "3f3e9b0a9945708657cbac8f10c761bec9d80a9def1324bd6ec949a16879251e",
+    "commands/st-slo-scaffold.md": "9efbec1c028a144495b7f2219d1fcafea2f7924636d12b69c7566881e36c1ebb"
+  },
+  "declaredTools": [
+    "claude",
+    "cursor",
+    "copilot",
+    "codex"
+  ],
+  "permissions": {
+    "toolFootprint": [
+      "read",
+      "edit",
+      "execute",
+      "spawn"
+    ],
+    "touchedPaths": [
+      "src/**",
+      "lib/**",
+      "app/**",
+      "test/**",
+      "tests/**",
+      "spec/**",
+      "config/**",
+      "docs/**",
+      "tokens/**",
+      "styles/**",
+      "slo/**",
+      ".env.example",
+      ".stamity/verify/**"
+    ]
+  },
+  "maxFootprintBytes": 262144
+}

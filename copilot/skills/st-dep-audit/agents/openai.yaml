@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dep audit"
+  short_description: "Use the Stamity dep audit workflow"
+  default_prompt: "Use $st-dep-audit for this repository."
