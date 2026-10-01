@@ -783,13 +783,28 @@ Node v22.22.3, npm 10.9.8; `command -v stamity` printed nothing; a scratch folde
   - the GitHub release `v1.11.0` (published 09:03:01Z, Latest, not a draft, not a prerelease) carries `release.json`,
     `sbom.cdx.json`, the four plugin zips, each with its `.sha256`, and `zomarit-stamity-1.11.0.tgz`.
 
+- 09:26Z — the close review's three rounds (Fable 5.1): round 1 request-changes, 0.82 (W-1: the proof block was not
+  yet written; four Minors: the shipped-spec check's trigger stated exactly, the X11 note a build row, the inbox
+  header, and a post-release Minor on `unmetMetrics`); round 2 request-changes, 0.84 (W-2: the review table's label
+  sat in a wrapped bullet, so the measurements rule would read every verdict line); round 3 approve, 0.9. It also
+  confirmed last night's composed-path fix round `b25aec61` (both findings closed). The close lane's full gate at
+  `b9aa272f` was green. Recording the approval turned one test red: `test/cli/docs/measurements.test.ts`'s
+  merge-evidence case looped over the LIVE numerator while the page renders from the committed snapshot, the file's
+  own design (`:70-76`). This run, now a numerator run, closed after today's snapshot, which cannot be rewritten the
+  same day, so it was not on the page (`prove/10`). Nothing had been pushed.
+- 09:34Z — `f489ca60` (implementer, Opus 5.5): the case reads the committed snapshot's numerator, and the helper it
+  left unused is gone; red first, then 179 targeted tests, lint, typecheck and the leak gate exit 0. Reviewed (Fable
+  5.1): approve, 0.88, the case still able to fail on purpose; three test-tidiness Minors to the inbox (`review/47`).
+  The full gate at `f489ca60` is green (the proof block's last gate table).
+
 ## Proof block (2026-10-01T09:19Z — the 1.11.0 close)
 
 - **Candidate and merge.** The QA'd candidate is `3bee4987`. `3fd0db4b` adds this run's records and is PR #71's head:
   it was fast-forwarded onto `main` at 08:33Z, and #71 reads MERGED. The release commit is `3980aac6`, one spec status
   line on top, carrying the tag `v1.11.0` (tag object `57b75f2d`). The tag was re-pointed there on the maintainer's
   answer (Q9) after the first release run stopped on the shipped-spec check. After it, only the close lands: the
-  archive pointers and compact summaries (`8f54b262`), the retired size exceptions (`6f7a7bf4`), and this record.
+  archive pointers and compact summaries (`8f54b262`), the retired size exceptions (`6f7a7bf4`), a test fix the close
+  exposed (`f489ca60`), and this record.
 
 Gate results (the gate of record at `a91f0f7f`, test-runner, Opus 5.5, 07:29Z):
 
@@ -810,7 +825,7 @@ Gate results (the gate of record at `a91f0f7f`, test-runner, Opus 5.5, 07:29Z):
   Windows shards, Build, the APM routes, the plugin route, both aggregators). The release workflow's gate steps are
   green at `3980aac6` in run 36839412318, and locally with the tag in place (10,649 passed).
 
-Gate results (the close lane at `b9aa272f`, test-runner, Opus 5.5):
+Gate results (the close lane at `f489ca60`, test-runner, Opus 5.5; the same at `b9aa272f`):
 
 | Gate | Command | Result |
 |---|---|---|
@@ -862,6 +877,7 @@ Review verdicts, the last round of each loop:
 | the composed-path generalization | 2 | approve | (closures confirmed in the close review) |
 | the run-of-record pass | 3 | approve | high |
 | the 1.11.0 close (the spec fix, the archive, the retirement, this record) | 3 | approve | 0.9 |
+| the merge-evidence test the close exposed (`f489ca60`) | 1 | approve | 0.88 |
 
 - **Decisions trace.** The maintainer answered Q1–Q8 through the question tool at the start
   (2026-09-30T21:48Z–21:57Z), said "yesssss go on! release it :)" at 2026-10-01T08:31Z, and answered Q9 at 08:45Z. The
