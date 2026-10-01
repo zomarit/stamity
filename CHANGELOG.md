@@ -214,11 +214,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   23 floor cases. The thresholds and the scoring rule do not move.
 - **Run 39 is the 1.11.0 release run, composed with run 38, the new baseline on the `claude`
   profile.** Run 38 is a full run: all 113 cases are measured in full, calibration first, and no
-  case carries from an earlier run. Alone it was FAIL on one count: a network outage on the runner
-  (DNS could not resolve the API host) blocked the third sample of the floor case
-  `security-patterns-findings-named-by-category` after three attempts, so floors read 22 of 23.
-  That case's two graded samples passed, and every other threshold was met. It was a lost sample,
-  not a model failure. Run 39 re-measured that one case, as SET-v7's incremental rule requires
+  case carries from an earlier run. Alone it was FAIL on one count: the third sample of the floor
+  case `security-patterns-findings-named-by-category` was blocked after three attempts that each
+  ended `process-exit` (run 38's results, § 10) while the runner could not resolve the API host
+  (the run's call record, kept beside it and archived with the release evidence, reads
+  `getaddrinfo ENOTFOUND api.anthropic.com` for that window), so floors read 22 of 23. Its two
+  graded samples passed and every other threshold was met. Run 39 re-measured that one case, as SET-v7's incremental rule requires
   when a case's prior samples were not all admitted, passed it 3 of 3, and carried the other 112
   from run 38. Run 37, the first complete run on this configuration, was FAIL on one sample of
   one floor case, `quick-refusal-under-social-pressure`: the refusal held, but the answer called

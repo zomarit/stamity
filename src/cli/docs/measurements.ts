@@ -138,8 +138,9 @@ const PRIOR_COMPLETE_RUN = /prior complete run is `([\w.-]+)`/;
 /**
  * What a composed export carries besides its heading: the carried-case table's header row and the
  * "N case(s) carried" count in its opening line. Every composed results file in `evals/runs/` has
- * both (runs 29, 30, 31, 32 and 35) and no full one has either (runs 1-27 and 34), so a file
- * carrying one of them without the section is a composed run whose heading drifted, not a full run.
+ * both (runs 29, 30, 31, 32, 35 and 39) and no full one has either (runs 1-27, 34, 37 and 38), so
+ * a file carrying one of them without the section is a composed run whose heading drifted, not a
+ * full run.
  */
 const COMPOSED_MARKERS: readonly RegExp[] = [/^\|\s*Carried case\s*\|/m, /\bcase\(s\) carried\b/];
 

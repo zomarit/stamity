@@ -487,11 +487,13 @@ ends there. Its matcher reads `runs?`, so a one-link chain passes (`:487-492`). 
 (`:515-525`) and the hand-page case (`test/docsPages.test.ts:1225-1229`) refuse a carried clause.
 
 Amended 2026-10-01 (the 1.11.0 cut; cited at `63306fac`). The 1.11.0 run of record is run 39,
-composed with run 38 under SET-v7's incremental rule. Run 38 is the full baseline: the client moved
-to a new version, a new configuration, so no case carries into it from an earlier run. Run 38 alone
-was FAIL on one floor case, `security-patterns-findings-named-by-category`
-(`evals/runs/2026-10-01-run-38/RESULTS.md:48`), because a network outage on the runner blocked that
-case's third sample (`evals/runs/2026-10-01-run-39/RESULTS.md:161`). Run 39 re-measured that one
+composed with run 38 under SET-v7's incremental rule. Run 38 measured every case in full, carrying
+nothing from run 37 (the first complete run on the new client version, 2.1.286) because it was a
+full re-measure after the quick lane's refusal fix. Run 38 alone was FAIL on one floor case,
+`security-patterns-findings-named-by-category` (`evals/runs/2026-10-01-run-38/RESULTS.md:48`),
+because a network outage on the runner blocked that case's third sample: its three attempts each
+ended `process-exit` (`evals/runs/2026-10-01-run-38/RESULTS.md` § 10, `:239-241`), and run 39
+records the cause (`evals/runs/2026-10-01-run-39/RESULTS.md:161`). Run 39 re-measured that one
 case, "prior samples not all admitted", and carried the other 112
 (`evals/runs/2026-10-01-run-39/RESULTS.md:12-16`). Run 37, the first complete run on that
 configuration, is published as the FAIL run; run 36 ended early on the client's classifier

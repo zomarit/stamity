@@ -14,7 +14,7 @@ const MAX_FILE_BYTES = 1024 * 1024
 // never a broad extension exemption or an automatically raised size ceiling.
 const LARGE_FILE_EXCEPTIONS = new Map([
   // Empty between release windows: an entry buys one retention window and retires at the release
-  // close that ends it. The map now holds the 1.11.0 window's two entries, below. The last pair — run
+  // close that ends it. The map now holds the 1.11.0 window's three entries, below. The last pair — run
   // 34's and run 35's public summaries, run 35 the 1.10.0 run of record composing with run 34 and
   // reading its summary from the retention commit (composition.priorSummaryCommit 95addb30) —
   // retired at the 1.10.0 close, whose archive step replaced both with compact summaries beside an
@@ -42,7 +42,7 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // An entry may precede its artifact: the map is consulted only for paths Git reports as changed
   // (the `has` below), is never iterated and never stat'd, so an entry for a path not yet in the
   // tree is inert rather than a false pass.
-  ['evals/runs/2026-10-01-run-37/summary.json', 'run 37, the full 1.11.0 baseline on the claude profile, published as the red run beside run 38, the 1.11.0 run of record; retained for the 1.11.0 release window until the 1.11.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
+  ['evals/runs/2026-10-01-run-37/summary.json', 'run 37, the full 1.11.0 baseline on the claude profile, published as the red run beside run 38, the full re-measure that run 39, the 1.11.0 run of record, composes with; retained for the 1.11.0 release window until the 1.11.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
   ['evals/runs/2026-10-01-run-38/summary.json', 'run 38, the full 1.11.0 re-measure on the claude profile after the product-text fix for the one floor case run 37 failed, and the prior complete run that run 39, the 1.11.0 run of record, composes with; retained for the 1.11.0 release window until the 1.11.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
   ['evals/runs/2026-10-01-run-39/summary.json', 'run 39, the incremental 1.11.0 run on the claude profile that re-measured the one floor case run 38 lost a sample of and composed with run 38, and the 1.11.0 run of record whose summary the next increment reads from the retention commit; retained for the 1.11.0 release window until the 1.11.0 close evidence-archive step compacts it beside an ARCHIVE.json pointer'],
 ])

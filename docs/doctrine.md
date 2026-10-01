@@ -99,8 +99,8 @@ A claim about behaviour is worth what its instrument is worth.
   declared threshold. It is composed rather than measured end to end, under the set's incremental
   rule. Run 38 measured every case in full.
   [Run 38](../evals/runs/2026-10-01-run-38/RESULTS.md) alone was FAIL on one floor case,
-  `security-patterns-findings-named-by-category`; a network outage on the runner, not a model
-  failure, lost that case's third sample, so run 39 re-measured one case, composed with run 38,
+  `security-patterns-findings-named-by-category`; a runner-side DNS failure (`process-exit`,
+  run 38 § 10), not a graded answer, lost that case's third sample, so run 39 re-measured one case, composed with run 38,
   and carried the other 112 with their hashes.
   [Run 37](../evals/runs/2026-10-01-run-37/RESULTS.md), the first complete run on this
   configuration, was FAIL on one floor case, and the quick lane's refusal text was then fixed.
