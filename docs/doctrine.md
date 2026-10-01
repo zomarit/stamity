@@ -95,13 +95,15 @@ A claim about behaviour is worth what its instrument is worth.
 - The corpus is prose executed by a model, so a test suite cannot decide it. The
   [eval set](../evals/README.md) decides it instead. Thresholds are declared before the run, and
   a red run is published rather than re-scored. The run of record is
-  [run 35](../evals/runs/2026-09-27-run-35/RESULTS.md), the 1.10.0 release run, which passed every
+  [run 39](../evals/runs/2026-10-01-run-39/RESULTS.md), the 1.11.0 release run, which passed every
   declared threshold. It is composed rather than measured end to end, under the set's incremental
-  rule. Run 34 measured every case in full on the new model pair.
-  [Run 34](../evals/runs/2026-09-27-run-34/RESULTS.md) alone was FAIL on one floor case,
-  `question-shape-and-default-charter-only`; Invariant 2 was then tightened (invariants 1.1.0),
-  and run 35 re-measured the two cases whose files moved, composed with run 34, and carried the
-  rest with their hashes.
+  rule. Run 38 measured every case in full.
+  [Run 38](../evals/runs/2026-10-01-run-38/RESULTS.md) alone was FAIL on one floor case,
+  `security-patterns-findings-named-by-category`; a network outage on the runner, not a model
+  failure, lost that case's third sample, so run 39 re-measured one case, composed with run 38,
+  and carried the other 112 with their hashes.
+  [Run 37](../evals/runs/2026-10-01-run-37/RESULTS.md), the first complete run on this
+  configuration, was FAIL on one floor case, and the quick lane's refusal text was then fixed.
   [The measurements page](measurements.md) rolls an eval run of record up beside the verified
   merge-ready rate.
 - Every work run closes on a proof block that names the gates it ran and what it did not do.

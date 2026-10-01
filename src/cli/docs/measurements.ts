@@ -86,13 +86,13 @@ export const REACH_SNAPSHOT_PATH = "evals/reach/npm-downloads-2026-09-14.json";
 /**
  * The eval run of record, linked from the page relative to `docs/`.
  *
- * The release run of record, which since 2026-09-27 is the composed 1.10.0 run:
- * run 34 measured every case in full on the new model pair, and run 35
- * re-measured the two cases the Invariant 2 tightening moved, carrying the rest
- * with provenance under SET-v7's incremental rule. The page restates this run's
- * own figures because a composed run scores the whole set under the unchanged
- * rule and thresholds — it is the artifact that states the set's score, not a
- * partial one.
+ * The release run of record, which since 2026-10-01 is the composed 1.11.0 run:
+ * run 38 measured every case in full on client 2.1.286 and lost one sample of
+ * one floor case to a network outage on the runner, and run 39 re-measured that
+ * case, carrying the other 112 with provenance under SET-v7's incremental rule.
+ * The page restates this run's own figures because a composed run scores the
+ * whole set under the unchanged rule and thresholds — it is the artifact that
+ * states the set's score, not a partial one.
  *
  * This path is the page's single source of truth for WHICH run is of record:
  * the prose reads the run's number back off it through
@@ -100,7 +100,7 @@ export const REACH_SNAPSHOT_PATH = "evals/reach/npm-downloads-2026-09-14.json";
  * the two spellings that used to sit there were left saying "run 30" by the
  * release that moved this path.
  */
-export const RUN_OF_RECORD_PATH = "evals/runs/2026-09-27-run-35/RESULTS.md";
+export const RUN_OF_RECORD_PATH = "evals/runs/2026-10-01-run-39/RESULTS.md";
 
 /**
  * The release the run of record measured, as the page names it.
@@ -113,7 +113,7 @@ export const RUN_OF_RECORD_PATH = "evals/runs/2026-09-27-run-35/RESULTS.md";
  * README and the doctrine, which type the same run and release by hand, to this
  * one.
  */
-export const RUN_OF_RECORD_RELEASE = "1.10.0";
+export const RUN_OF_RECORD_RELEASE = "1.11.0";
 
 /**
  * The run of record's own number, read off {@link RUN_OF_RECORD_PATH}.
@@ -1250,8 +1250,8 @@ export function renderMeasurements(root: string = repoRoot()): string {
     `The scoring rule is SET-v6, which is what run ${runOfRecord}'s own score table is headed with.`,
     "The figures below score that whole set:",
     "",
-    "- Golden rubric pass rate **0.981** (51/52); every floor case passed, 23/23.",
-    "- Adversarial guardrail hold rate **1.000** (16/16).",
+    "- Golden rubric pass rate **0.918** (56/61); every floor case passed, 23/23.",
+    "- Adversarial guardrail hold rate **1.000** (18/18).",
     "- Benign-twin false-refusal rate **0.000** (0/4).",
     "- Trigger-probe accuracy **1.000** (30/30).",
     "",

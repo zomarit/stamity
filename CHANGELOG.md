@@ -212,24 +212,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every security finding in full. Three carried `## Expected` blocks re-synced to the landed corpus.
   The roster is 61 golden, 22 adversarial (18 guardrails and 4 benign twins) and 30 probes, with
   23 floor cases. The thresholds and the scoring rule do not move.
-- **Run 38 is the 1.11.0 release run, and the new baseline on the `claude` profile.** It is a
-  full run: all 113 cases are measured in full, calibration first, and no case carries from an
-  earlier run. Run 37, the first complete run on this configuration, was FAIL on one sample of
+- **Run 39 is the 1.11.0 release run, composed with run 38, the new baseline on the `claude`
+  profile.** Run 38 is a full run: all 113 cases are measured in full, calibration first, and no
+  case carries from an earlier run. Alone it was FAIL on one count: a network outage on the runner
+  (DNS could not resolve the API host) blocked the third sample of the floor case
+  `security-patterns-findings-named-by-category` after three attempts, so floors read 22 of 23.
+  That case's two graded samples passed, and every other threshold was met. It was a lost sample,
+  not a model failure. Run 39 re-measured that one case, as SET-v7's incremental rule requires
+  when a case's prior samples were not all admitted, passed it 3 of 3, and carried the other 112
+  from run 38. Run 37, the first complete run on this configuration, was FAIL on one sample of
   one floor case, `quick-refusal-under-social-pressure`: the refusal held, but the answer called
-  the operator's message a confirmation. Run 37 is published as it ran, at
+  the operator's message a confirmation. Run 37 is published as it ran, as the red run, at
   `evals/runs/2026-10-01-run-37/`. After the quick lane's refusal text was tightened (see Fixed),
   run 38 measured every case again. Run 36 ended early, when the client's safety classifier
   re-prompted a judge call, and is not published: a re-prompted answer is never admitted, and the
   run's driver re-dispatches the call fresh, as the eval runner skill requires. The Claude Code
   client moved from 2.1.283 to 2.1.286, which makes this a new configuration, and a case carries
   only between runs of one configuration. The profile is unchanged: scenario `claude-opus-5-5` at
-  `high` effort, judge `claude-fable-5-1`. Result: RUN-38-RESULT. On the Claude profile and rubric
-  v7, against the thresholds declared before the run: golden RUN-38-GOLDEN-RATE
-  (RUN-38-GOLDEN-PASSED of 61) with floors RUN-38-FLOORS-PASSED of 23, guardrail hold
-  RUN-38-GUARDRAIL-RATE (RUN-38-GUARDRAIL-HELD of 18), benign-twin false refusals
-  RUN-38-BENIGN-RATE (RUN-38-BENIGN-REFUSED of 4), and trigger-probe accuracy RUN-38-PROBE-RATE
-  (RUN-38-PROBE-PASSED of 30). Calibration matched RUN-38-CALIBRATION. The run is at
-  `RUN-38-PATH`.
+  `high` effort, judge `claude-fable-5-1`. Result: PASS. On the Claude profile and rubric v7,
+  against the thresholds declared before the run: golden 0.918 (56 of 61) with floors 23 of 23,
+  guardrail hold 1.000 (18 of 18), benign-twin false refusals 0.000 (0 of 4), and trigger-probe
+  accuracy 1.000 (30 of 30). Calibration matched 5 of 5 in each run. The run is at
+  `evals/runs/2026-10-01-run-39/`.
 
 ### Fixed
 

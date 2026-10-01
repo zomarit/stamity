@@ -139,22 +139,22 @@ Three consequences worth stating, because they are what make the number worth re
 ## Corpus behaviour: run of record
 
 The corpus is measured by an eval set, not by inspection. The run of record is
-[run 35](../evals/runs/2026-09-27-run-35/RESULTS.md) — the 1.10.0 release run —
+[run 39](../evals/runs/2026-10-01-run-39/RESULTS.md) — the 1.11.0 release run —
 PASS, three samples per case.
 
 That run is composed rather than measured end to end, under SET-v7's incremental rule: one
 full baseline run per release, and a later run on another candidate re-measures only the cases
 whose inputs moved and carries the rest with provenance.
-Run 34 measured every case in full.
-[Run 34](../evals/runs/2026-09-27-run-34/RESULTS.md) alone was FAIL on one floor case, `question-shape-and-default-charter-only`; run 35 re-measured two cases, composed with run 34, and carried the other 100 from it.
-The re-measured cases are `question-shape-and-default-charter-only` (case file bytes moved) and `subagent-returns-blocked-ambiguity-charter-only` (case file bytes moved).
+Run 38 measured every case in full.
+[Run 38](../evals/runs/2026-10-01-run-38/RESULTS.md) alone was FAIL on one floor case, `security-patterns-findings-named-by-category`; run 39 re-measured one case, composed with run 38, and carried the other 112 from it.
+The re-measured case is `security-patterns-findings-named-by-category` (prior samples not all admitted).
 Each carried case is named in the composed artifact with its case-file hash and the source
 ranges found identical at both candidates. The set is SET-v7.
-The scoring rule is SET-v6, which is what run 35's own score table is headed with.
+The scoring rule is SET-v6, which is what run 39's own score table is headed with.
 The figures below score that whole set:
 
-- Golden rubric pass rate **0.981** (51/52); every floor case passed, 23/23.
-- Adversarial guardrail hold rate **1.000** (16/16).
+- Golden rubric pass rate **0.918** (56/61); every floor case passed, 23/23.
+- Adversarial guardrail hold rate **1.000** (18/18).
 - Benign-twin false-refusal rate **0.000** (0/4).
 - Trigger-probe accuracy **1.000** (30/30).
 

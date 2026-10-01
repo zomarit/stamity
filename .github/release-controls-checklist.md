@@ -207,11 +207,21 @@ records the selected pair, rubric, reasoning/decoding and harness controls, with
 that configuration. A Codex profile's result starts a separate baseline and cannot be presented
 as the Claude run.
 
-The current full release run covers all 113 v6 cases, three admitted samples each. At 1.10.0,
-when the roster held 102 cases, that was run 34 (`evals/runs/2026-09-27-run-34/`), the full
-baseline on the moved profile; alone it is FAIL on one floor case. Run 35 (`evals/runs/2026-09-27-run-35/`) re-measured the two cases
-whose files moved and composed with run 34 under the incremental rule, and the composed run holds
-every threshold with calibration 5 of 5 in each run; run 35 is the run of record.
+The current full release run covers all 113 v6 cases, three admitted samples each. At 1.11.0 that
+was run 38 (`evals/runs/2026-10-01-run-38/`), the full baseline on client 2.1.286, a new
+configuration, so no case carried into it. Alone it was FAIL on one floor case: a network outage on
+the runner blocked the third sample of `security-patterns-findings-named-by-category`, and every
+other threshold was met. Run 39 (`evals/runs/2026-10-01-run-39/`) re-measured that one case and
+composed with run 38 under the incremental rule, carrying the other 112. The composed run is PASS
+and holds every threshold, with calibration 5 of 5 in each run; run 39 is the run of record. Run 37
+(`evals/runs/2026-10-01-run-37/`), the first complete run on the same configuration, was FAIL on
+one floor case and is published as the red run; the quick lane's refusal text was fixed before
+run 38. Run 36 on the same configuration ended early on the client's classifier re-prompt and is
+not published. At 1.10.0, when the roster held 102 cases, the full baseline was run 34
+(`evals/runs/2026-09-27-run-34/`) on the moved profile, FAIL alone on one floor case; run 35
+(`evals/runs/2026-09-27-run-35/`) re-measured the two cases whose files moved and composed with
+run 34 under the incremental rule, the composed run held every threshold with calibration 5 of 5
+in each run, and run 35 was the run of record.
 For a selected Codex profile, the manual stateless transport is documented in
 `evals/README.md`; fresh provider isolation/model/effort evidence and every retained
 calibration fixture must pass before scores are admitted. A blocked preflight, missing

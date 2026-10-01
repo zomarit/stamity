@@ -517,7 +517,7 @@ names a ledger row is retired, its state kept, through
 `stamity ledger close --run <its run> --id <row id> --retired "fixed in <run id>"`; a row the run did not fix stays
 as it is (`content/commands/st-work.md:408-413`). `/st-quick`, which keeps no run record, retires a row after the gate
 is green — the ledger row first, then the bullet — and names each row retired, and each named row left, in its batch
-report (`content/commands/st-quick.md:123-130`). The board's removal rule names both retirers
+report (`content/commands/st-quick.md:120-127`). The board's removal rule names both retirers
 (`content/commands/st-board.md:339-340`, `:358-363`).
 
 `--retired` sets the optional `retired` field to `<UTC YYYY-MM-DD> <disposition>` on a `deferred` row only, keeps its

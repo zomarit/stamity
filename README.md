@@ -31,11 +31,11 @@ never counts. The frozen snapshot is
 [`evals/measurements/merge-ready-2026-10-01.json`](evals/measurements/merge-ready-2026-10-01.json),
 and [Measurements](docs/measurements.md) shows the working and names every run left out.
 
-**Eval run of record: [run 35](evals/runs/2026-09-27-run-35/RESULTS.md), the 1.10.0 release run.**
-Golden rubric pass rate 0.981 (51/52), floors 23/23. Guardrail hold 1.000 (16/16). Benign-twin
-false-refusal 0.000 (0/4). Trigger-probe accuracy 1.000 (30/30). Run 34 alone was FAIL on one
-floor case, `question-shape-and-default-charter-only`; Invariant 2 was then tightened
-(invariants 1.1.0), and run 35 re-measured the two cases whose files moved, composed with run 34.
+**Eval run of record: [run 39](evals/runs/2026-10-01-run-39/RESULTS.md), the 1.11.0 release run: PASS.**
+Golden 0.918 (56/61), floors 23/23, guardrail hold 18/18, benign-twin false refusals 0/4, trigger probes
+30/30. Run 38 alone was FAIL on one floor case, `security-patterns-findings-named-by-category`; a network
+outage on the runner, not the model, lost a sample, so run 39 re-measured one case, composed with run 38,
+and carried the other 112. Run 37, the first complete run, failed a floor case before the quick-lane fix.
 
 **Reach is a proxy, and real use is unmeasured.** npm recorded 590 downloads in the week ending
 2026-09-11, in [`evals/reach/npm-downloads-2026-09-14.json`](evals/reach/npm-downloads-2026-09-14.json).

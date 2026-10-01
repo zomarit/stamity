@@ -486,15 +486,26 @@ chain `2026-09-27-run-35 -> 2026-09-27-run-34`: run 35 names run 34 as its prior
 ends there. Its matcher reads `runs?`, so a one-link chain passes (`:487-492`). The page case
 (`:515-525`) and the hand-page case (`test/docsPages.test.ts:1225-1229`) refuse a carried clause.
 
-Amended 2026-10-01 (the 1.11.0 cut; cited at `108c57e0`). The 1.11.0 run of record is to be run 38
-(run 37 is published as the FAIL run; run 36 ended early on the client's classifier re-prompt and is
-not published), a full baseline: the client moved to a new version, a new configuration, so there
-is no prior complete run for it to compose with (the TEST CHANGE note above the renamed case named
-below). 1.10.0's run of record was composed, run 35 with run 34. The page now admits both kinds.
+Amended 2026-10-01 (the 1.11.0 cut; cited at `63306fac`). The 1.11.0 run of record is run 39,
+composed with run 38 under SET-v7's incremental rule. Run 38 is the full baseline: the client moved
+to a new version, a new configuration, so no case carries into it from an earlier run. Run 38 alone
+was FAIL on one floor case, `security-patterns-findings-named-by-category`
+(`evals/runs/2026-10-01-run-38/RESULTS.md:48`), because a network outage on the runner blocked that
+case's third sample (`evals/runs/2026-10-01-run-39/RESULTS.md:161`). Run 39 re-measured that one
+case, "prior samples not all admitted", and carried the other 112
+(`evals/runs/2026-10-01-run-39/RESULTS.md:12-16`). Run 37, the first complete run on that
+configuration, is published as the FAIL run; run 36 ended early on the client's classifier
+re-prompt and is not published. For 1.11.0 this supersedes the 2026-09-26 criterion above that
+README, the doctrine and the page name run 35 as the 1.10.0 release run: they name run 39 as the
+1.11.0 release run, composed with run 38, and run 38 as the run that measured every case in full,
+and that criterion's FAIL-baseline disclosure binds through the derived pattern below. 1.10.0's run
+of record was composed too, run 35 with run 34. The page admits both kinds, a composed run and a
+full one (the TEST CHANGE note above the renamed case named below).
 The composed paragraph and the hand pages' FAIL-baseline disclosure are derived from the two runs'
 results files rather than typed for one composition — the run of record's `## 0. Composition`
 (the prior run, each re-measured case with its stated reason, the carried count) and the prior
-run's `Status:` line and § 5 failing floor or guardrail cases — as held by the describe "the
+run's `Status:` line, its § 5 failing floor or guardrail cases, and each metric its § 5 reads NOT
+met for — as held by the describe "the
 composed paragraph is derived from the two results files" in `test/cli/docs/measurements.test.ts`
 (its cases "renders today's composed paragraph from run 35 and run 34" and "renders a run composed
 with a prior FAIL on one floor case, one case re-measured") and by `test/docsPages.test.ts`'s "%s
@@ -507,14 +518,15 @@ chain) rather than word a longer chain as one link.
   `## 0. Composition` section, the corpus section renders the full-baseline paragraph in place of
   the composed one: "That run is a full baseline: its results file names no prior complete run, so
   no case is carried from an earlier run. Run N measured every case in full on its own candidate.
-  The set is SET-v7." (`src/cli/docs/measurements.ts:801-808`). It makes no composed, re-measure or
-  carry claim. The scoring-rule sentence after the paragraph is the same for both kinds (`:980`).
-- **The one reading.** `priorCompleteRun` (`src/cli/docs/measurements.ts:166-186`) decides the kind,
-  and the page branches on it (read at `:854`, branched at `:802`). It reads the prior-run line
-  only inside the `## 0. Composition` section, down to the next `## ` heading (`:133-136`, `:168`,
-  `:178-181`), and returns `null` for a full run. It throws `VALIDATION_ERROR` on a section-less file that still
+  The set is SET-v7." (`src/cli/docs/measurements.ts:1065-1070`). It makes no composed, re-measure or
+  carry claim. The scoring-rule sentence after the paragraph is the same for both kinds (`:1250`).
+- **The one reading.** `priorCompleteRun` (`src/cli/docs/measurements.ts:166-182`) decides the kind,
+  and the page branches on it (the results file read at `:1124`, the branch at `:1064-1065` through
+  `compositionOf`, which calls it at `:241-242`). It reads the prior-run line only inside the
+  `## 0. Composition` section, down to the next `## ` heading (`:133-136`, `:167`, `:177-181`,
+  `:188-195`), and returns `null` for a full run. It throws `VALIDATION_ERROR` on a section-less file that still
   carries a composed marker, the `| Carried case |` table header or the "case(s) carried" count
-  (`:144`, `:169-175`), and on a section that names no prior run (`:181-184`). The composition-chain
+  (`:144`, `:169-174`), and on a section that names no prior run (`:177-180`). The composition-chain
   walk in `test/cli/docs/measurements.test.ts` and the hand-page case in `test/docsPages.test.ts`
   read the fact through this export rather than through regexes of their own.
 - **No disclosure without a composed run.** With a full-baseline run of record, none of README, the
