@@ -144,13 +144,12 @@ PASS, three samples per case.
 
 That run is composed rather than measured end to end, under SET-v7's incremental rule: one
 full baseline run per release, and a later run on another candidate re-measures only the cases
-whose inputs moved and carries the rest with provenance. Run 34 measured every case in full on
-the new model pair. [Run 34](../evals/runs/2026-09-27-run-34/RESULTS.md) alone was FAIL on one
-floor case, `question-shape-and-default-charter-only`; Invariant 2 was then tightened
-(invariants 1.1.0), and run 35 re-measured the two cases whose files moved, composed with
-run 34, and carried the rest from it. Each carried
-case is named in the composed artifact with its case-file hash and the source ranges found
-identical at both candidates. The set is SET-v7.
+whose inputs moved and carries the rest with provenance.
+Run 34 measured every case in full.
+[Run 34](../evals/runs/2026-09-27-run-34/RESULTS.md) alone was FAIL on one floor case, `question-shape-and-default-charter-only`; run 35 re-measured two cases, composed with run 34, and carried the other 100 from it.
+The re-measured cases are `question-shape-and-default-charter-only` (case file bytes moved) and `subagent-returns-blocked-ambiguity-charter-only` (case file bytes moved).
+Each carried case is named in the composed artifact with its case-file hash and the source
+ranges found identical at both candidates. The set is SET-v7.
 The scoring rule is SET-v6, which is what run 35's own score table is headed with.
 The figures below score that whole set:
 

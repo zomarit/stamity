@@ -491,6 +491,14 @@ Amended 2026-10-01 (the 1.11.0 cut; cited at `108c57e0`). The 1.11.0 run of reco
 not published), a full baseline: the client moved to a new version, a new configuration, so there
 is no prior complete run for it to compose with (the TEST CHANGE note above the renamed case named
 below). 1.10.0's run of record was composed, run 35 with run 34. The page now admits both kinds.
+The composed paragraph and the hand pages' FAIL-baseline disclosure are derived from the two runs'
+results files rather than typed for one composition — the run of record's `## 0. Composition`
+(the prior run, each re-measured case with its stated reason, the carried count) and the prior
+run's `Status:` line and § 5 failing floor or guardrail cases — as held by the describe "the
+composed paragraph is derived from the two results files" in `test/cli/docs/measurements.test.ts`
+(its cases "renders today's composed paragraph from run 35 and run 34" and "renders a run composed
+with a prior FAIL on one floor case, one case re-measured") and by `test/docsPages.test.ts`'s "%s
+discloses a FAIL baseline behind the composed run of record".
 
 - **What the page renders for a full run.** When the run of record's `RESULTS.md` has no
   `## 0. Composition` section, the corpus section renders the full-baseline paragraph in place of

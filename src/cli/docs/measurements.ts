@@ -164,9 +164,8 @@ const COMPOSED_MARKERS: readonly RegExp[] = [/^\|\s*Carried case\s*\|/m, /\bcase
  * only off a file that shows no sign of carried samples, not off a heading's absence alone.
  */
 export function priorCompleteRun(results: string): string | null {
-  const lines = results.split("\n");
-  const start = lines.findIndex((line) => line.trimEnd() === COMPOSITION_HEADING);
-  if (start === -1) {
+  const section = resultsSection(results, COMPOSITION_HEADING);
+  if (section === null) {
     if (COMPOSED_MARKERS.some((marker) => marker.test(results))) {
       fail(
         `The results file carries no \`${COMPOSITION_HEADING}\` section but still carries ` +
@@ -175,14 +174,153 @@ export function priorCompleteRun(results: string): string | null {
     }
     return null;
   }
-  const rest = lines.slice(start + 1);
-  const end = rest.findIndex((line) => line.startsWith("## "));
-  const section = (end === -1 ? rest : rest.slice(0, end)).join("\n");
   const prior = PRIOR_COMPLETE_RUN.exec(section)?.[1];
   if (prior === undefined) {
     fail(`The results file carries a \`${COMPOSITION_HEADING}\` section that names no prior complete run.`);
   }
   return prior;
+}
+
+/**
+ * One `## ` section of a results file, heading excluded, down to the next `## ` heading, or `null`
+ * when the file carries no line that is exactly `heading`.
+ */
+function resultsSection(results: string, heading: string): string | null {
+  const lines = results.split("\n");
+  const start = lines.findIndex((line) => line.trimEnd() === heading);
+  if (start === -1) return null;
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => line.startsWith("## "));
+  return (end === -1 ? rest : rest.slice(0, end)).join("\n");
+}
+
+/** The composition section's count of re-measured cases: "2 case(s) re-measured in this run". */
+const REMEASURED_COUNT = /\b(\d+) case\(s\) re-measured\b/;
+
+/** The composition section's count of carried cases: "100 case(s) carried with …". */
+const CARRIED_COUNT = /\b(\d+) case\(s\) carried\b/;
+
+/** The re-measured-case table's header row, which the exporter writes as `| Re-measured case | Why |`. */
+const REMEASURED_HEADER = /^\|\s*Re-measured case\s*\|\s*Why\s*\|\s*$/;
+
+/** One re-measured-case table row: the case id in a code span, then the reason cell. */
+const REMEASURED_ROW = /^\|\s*`([^`]+)`\s*\|(.*)\|\s*$/;
+
+/** One case a composed run measured again, with the reason its results file states for it. */
+interface RemeasuredCase {
+  /** The case id, as the re-measured-case table names it. */
+  readonly id: string;
+  /** The table's "Why" cell, verbatim, or `null` when the cell is empty. */
+  readonly why: string | null;
+}
+
+/** What a composed run's `## 0. Composition` section states about how it was put together. */
+export interface Composition {
+  /** The prior complete run's directory id, as {@link priorCompleteRun} reads it. */
+  readonly prior: string;
+  /** The cases this run measured again, in the order its table lists them. */
+  readonly remeasured: readonly RemeasuredCase[];
+  /** How many cases it carried from the prior run, as its opening line counts them. */
+  readonly carried: number;
+}
+
+/**
+ * The composition a results file states, or `null` for a full run.
+ *
+ * Read off the `## 0. Composition` section only, the same section {@link priorCompleteRun} reads:
+ * the prior run's id, the "N case(s) re-measured" and "M case(s) carried" counts of its opening
+ * line, and the `| Re-measured case | Why |` table's rows. The page's composed paragraph and the
+ * hand pages' disclosure are worded from these values, so a release that composes another pair of
+ * runs moves the page by moving its run of record, not by retyping the paragraph.
+ *
+ * Throws `EngineError` (`VALIDATION_ERROR`) when the section states no re-measured or carried
+ * count, or when the re-measured count and the table's rows disagree: the paragraph would state one
+ * of the two, and a reader checking the artifact would find the other.
+ */
+export function compositionOf(results: string): Composition | null {
+  const prior = priorCompleteRun(results);
+  if (prior === null) return null;
+  const section = resultsSection(results, COMPOSITION_HEADING) ?? "";
+  const count = REMEASURED_COUNT.exec(section)?.[1];
+  const carried = CARRIED_COUNT.exec(section)?.[1];
+  if (count === undefined || carried === undefined) {
+    fail(
+      `The results file's \`${COMPOSITION_HEADING}\` section states no re-measured or carried ` +
+        "case count; the page cannot say how the run was composed.",
+    );
+  }
+  const lines = section.split("\n");
+  const header = lines.findIndex((line) => REMEASURED_HEADER.test(line));
+  const remeasured: RemeasuredCase[] = [];
+  if (header !== -1) {
+    // Past the header and its separator row, down to the first line that is not a case row.
+    for (const line of lines.slice(header + 2)) {
+      const row = REMEASURED_ROW.exec(line);
+      if (row === null) break;
+      const why = (row[2] ?? "").trim();
+      remeasured.push({ id: row[1] ?? "", why: why === "" ? null : why });
+    }
+  }
+  if (remeasured.length !== Number(count)) {
+    fail(
+      `The results file's \`${COMPOSITION_HEADING}\` section counts ${count} case(s) re-measured ` +
+        `but its re-measured-case table lists ${remeasured.length}.`,
+    );
+  }
+  return { prior, remeasured, carried: Number(carried) };
+}
+
+/** A results file's verdict line: `Status: **PASS**`. */
+const STATUS_LINE = /^Status: \*\*(\w+)\*\*\s*$/m;
+
+/**
+ * A results file's own status — `PASS` or `FAIL` as its `Status:` line states it.
+ *
+ * Throws `EngineError` (`VALIDATION_ERROR`) when the file states none.
+ */
+export function runStatus(results: string): string {
+  const status = STATUS_LINE.exec(results)?.[1];
+  if (status === undefined) fail("The results file states no `Status: **…**` line.");
+  return status;
+}
+
+/** The heading a results file states its per-metric scores under. */
+const SCORES_HEADING = "## 5. Per-metric scores beside their declared thresholds";
+
+/** A result cell's list of failing cases: "failing: `a`, `b`". */
+const FAILING_LIST = /failing: ((?:`[^`]+`(?:, )?)+)/;
+
+/** The case classes a failing list is attributed to, by the metric row that carries it. */
+const FAILING_CLASSES: readonly (readonly [RegExp, FailingCases["kind"]])[] = [
+  [/^Golden rubric pass rate\b/, "floor"],
+  [/^Adversarial guardrail hold rate\b/, "guardrail"],
+];
+
+/** The cases one § 5 row names as failing, with the class that row scores. */
+export interface FailingCases {
+  /** `floor` for the golden row's floor list, `guardrail` for the guardrail row's. */
+  readonly kind: "floor" | "guardrail";
+  /** The failing case ids, in the order the row lists them. */
+  readonly ids: readonly string[];
+}
+
+/**
+ * The failing floor and guardrail cases a results file's `## 5.` score table names, golden row
+ * first. A row that states no "failing: `…`" list contributes nothing, so a PASS run reads `[]`,
+ * and so does a FAIL run whose rows name no case.
+ */
+export function failingCases(results: string): readonly FailingCases[] {
+  const section = resultsSection(results, SCORES_HEADING) ?? "";
+  const found: FailingCases[] = [];
+  for (const line of section.split("\n")) {
+    const cells = line.split("|").map((cell) => cell.trim());
+    const metric = cells[1] ?? "";
+    const kind = FAILING_CLASSES.find(([row]) => row.test(metric))?.[1];
+    const list = FAILING_LIST.exec(line)?.[1];
+    if (kind === undefined || list === undefined) continue;
+    found.push({ kind, ids: [...list.matchAll(/`([^`]+)`/g)].map((match) => match[1] ?? "") });
+  }
+  return found;
 }
 
 /** The workflow whose lanes are the first-run proof. */
@@ -789,33 +927,115 @@ function readRunOfRecordResults(root: string): string {
   return readFileSync(path, "utf-8");
 }
 
+/** An eval run's directory id, `<date>-run-<n>`, capturing its number. */
+const EVAL_RUN_ID = /^\d{4}-\d{2}-\d{2}-run-(\d+)$/;
+
+/** Repo-relative path of an eval run's results file, by its directory id. */
+const evalResultsPath = (id: string): string => `evals/runs/${id}/RESULTS.md`;
+
+/**
+ * The prior complete run a composed run of record names: its number, its results path, and its
+ * results file, read under the checkout being rendered.
+ *
+ * Read so the composed paragraph can state the prior run's own status and failing cases rather than
+ * typing them. Throws when the id is not an eval run id (it becomes a path here), when the file is
+ * absent, and when the prior run is itself composed: the paragraph states one incremental link —
+ * the prior run measured every case in full — and a longer chain would make that sentence false.
+ */
+function readPriorRun(root: string, id: string): { number: string; path: string; results: string } {
+  const number = EVAL_RUN_ID.exec(id)?.[1];
+  if (number === undefined) {
+    fail(`${RUN_OF_RECORD_PATH} names \`${id}\` as its prior complete run, which is not an eval run id.`);
+  }
+  const path = evalResultsPath(id);
+  if (!existsSync(join(root, path))) {
+    fail(`No results file at ${path}; the page cannot state how the run of record's prior run ended.`);
+  }
+  const results = readFileSync(join(root, path), "utf-8");
+  const further = priorCompleteRun(results);
+  if (further !== null) {
+    fail(
+      `${path} is itself composed, with \`${further}\`; the page states one incremental link, ` +
+        "a prior run that measured every case in full.",
+    );
+  }
+  return { number, path, results };
+}
+
+/** A count as the page words it: "one" through "ten", then digits. */
+function countWord(count: number): string {
+  return (
+    ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][count] ??
+    String(count)
+  );
+}
+
+/** `a`, `a and b`, `a, b and c`. */
+function conjoined(items: readonly string[]): string {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} and ${items.at(-1) ?? ""}`;
+}
+
+/**
+ * What the prior run's status sentence says after "alone was": its `Status:` word and, when it
+ * names failing cases, each class's count and ids — "FAIL on one floor case, `x`".
+ */
+function priorVerdict(results: string): string {
+  const status = runStatus(results);
+  const groups = failingCases(results).map(({ kind, ids }) => {
+    const noun = ids.length === 1 ? "case" : "cases";
+    return `${countWord(ids.length)} ${kind} ${noun}, ${ids.map((id) => `\`${id}\``).join(", ")}`;
+  });
+  return groups.length === 0 ? status : `${status} on ${groups.join(", and ")}`;
+}
+
 /**
  * How the run of record was measured, as the corpus section's second paragraph states it.
  *
- * Two shapes, chosen by {@link priorCompleteRun}. A composed run keeps the paragraph that names its
- * composition — which runs measured in full, which re-measured, and what was carried. A full run
- * composes with nothing, so the page says it measured every case itself and makes no claim of
- * composition, re-measuring or carrying: any such sentence would describe samples the run did not
- * carry. The scoring-rule sentence after this paragraph is shared by both.
+ * Two shapes, chosen by {@link priorCompleteRun}. A composed run names its composition, every
+ * clause read off the two results files: the prior run measured every case in full, its own status
+ * and failing floor or guardrail cases (its `Status:` line and § 5 rows), and how many cases the run
+ * of record re-measured — by id, with the reason its `## 0. Composition` table gives — and how many
+ * it carried. The reason a release had to re-measure (a rule tightened, a sample lost) is in neither
+ * file, so the paragraph does not state one. A full run composes with nothing, so the page says it
+ * measured every case itself and makes no claim of composition, re-measuring or carrying: any such
+ * sentence would describe samples the run did not carry. The scoring-rule sentence after this
+ * paragraph is shared by both.
+ *
+ * Exported so the suite can drive the composed branch with a run number and a pair of results files
+ * the release has not produced yet; {@link renderMeasurements} is its one production caller. The
+ * prior run is read under `root`, the way the page reads every other input.
  */
-function measurementMethod(runOfRecord: string, prior: string | null): readonly string[] {
-  if (prior === null) {
+export function measurementMethod(
+  root: string,
+  runOfRecord: string,
+  results: string,
+): readonly string[] {
+  const composition = compositionOf(results);
+  if (composition === null) {
     return [
       "That run is a full baseline: its results file names no prior complete run, so no case is",
       "carried from an earlier run.",
       `Run ${runOfRecord} measured every case in full on its own candidate. The set is SET-v7.`,
     ];
   }
+  const prior = readPriorRun(root, composition.prior);
+  const { remeasured } = composition;
+  const count = `${countWord(remeasured.length)} ${remeasured.length === 1 ? "case" : "cases"}`;
+  const named = remeasured.map(({ id, why }) => (why === null ? `\`${id}\`` : `\`${id}\` (${why})`));
   return [
     "That run is composed rather than measured end to end, under SET-v7's incremental rule: one",
     "full baseline run per release, and a later run on another candidate re-measures only the cases",
-    "whose inputs moved and carries the rest with provenance. Run 34 measured every case in full on",
-    "the new model pair. [Run 34](../evals/runs/2026-09-27-run-34/RESULTS.md) alone was FAIL on one",
-    "floor case, `question-shape-and-default-charter-only`; Invariant 2 was then tightened",
-    "(invariants 1.1.0), and run 35 re-measured the two cases whose files moved, composed with",
-    "run 34, and carried the rest from it. Each carried",
-    "case is named in the composed artifact with its case-file hash and the source ranges found",
-    "identical at both candidates. The set is SET-v7.",
+    "whose inputs moved and carries the rest with provenance.",
+    `Run ${prior.number} measured every case in full.`,
+    `[Run ${prior.number}](../${prior.path}) alone was ${priorVerdict(prior.results)}; ` +
+      `run ${runOfRecord} re-measured ${count}, composed with run ${prior.number}, ` +
+      `and carried the other ${composition.carried} from it.`,
+    ...(remeasured.length === 0
+      ? []
+      : [`The re-measured ${remeasured.length === 1 ? "case is" : "cases are"} ${conjoined(named)}.`]),
+    "Each carried case is named in the composed artifact with its case-file hash and the source",
+    "ranges found identical at both candidates. The set is SET-v7.",
   ];
 }
 
@@ -851,7 +1071,7 @@ export function renderMeasurements(root: string = repoRoot()): string {
   const snapshot = readMeasurementSnapshot(root);
   const report = snapshot.report;
   const reach = readReachSnapshot(root);
-  const prior = priorCompleteRun(readRunOfRecordResults(root));
+  const results = readRunOfRecordResults(root);
   const daily = reach.daily.downloads;
   const total = daily.reduce((sum, row) => sum + row.downloads, 0);
   const peak = daily.reduce((best, row) => (row.downloads > best.downloads ? row : best), {
@@ -976,7 +1196,7 @@ export function renderMeasurements(root: string = repoRoot()): string {
     `[run ${runOfRecord}](../${RUN_OF_RECORD_PATH}) — the ${RUN_OF_RECORD_RELEASE} release run —`,
     "PASS, three samples per case.",
     "",
-    ...measurementMethod(runOfRecord, prior),
+    ...measurementMethod(root, runOfRecord, results),
     `The scoring rule is SET-v6, which is what run ${runOfRecord}'s own score table is headed with.`,
     "The figures below score that whole set:",
     "",

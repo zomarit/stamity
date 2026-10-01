@@ -6,7 +6,10 @@ import { describe, expect, it } from "vitest";
 import {
   RUN_OF_RECORD_PATH,
   RUN_OF_RECORD_RELEASE,
+  compositionOf,
+  failingCases,
   priorCompleteRun,
+  runStatus,
 } from "../src/cli/docs/measurements.ts";
 import { COMMAND_ID_PREFIX } from "../src/content/catalog.ts";
 import {
@@ -1320,6 +1323,19 @@ describe("the eval run of record on the hand pages", () => {
   // when it is not there is no baseline to disclose, so the case asserts instead that no page still
   // carries a stale "alone was FAIL" composition disclosure. The case name stays, because the spec
   // cites it by name as this requirement's test evidence.
+  //
+  // TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut. The disclosure pattern hard-coded 1.10.0's
+  // composition: "Invariant 2 was then tightened (invariants 1.1.0)" and "the two cases whose files
+  // moved". The 1.11.0 run of record is likely composed again (run 39 re-measuring the one case run
+  // 38 lost a sample of), with no rule change between the runs and one case re-measured, so the
+  // pattern would have refused a true disclosure. Every required clause is now read off the two
+  // results files through the generator's parsers: the prior run's number and status, its failing
+  // floor or guardrail cases by class, count and id (its § 5 rows), and the run of record's
+  // re-measured count (its § 0). Between the failing cases and the re-measure the pattern admits
+  // free text, because the reason a release re-measured is in neither file — 1.10.0's README and
+  // doctrine state one there, the generated page does not. Still required, unchanged: the prior's
+  // number and "alone was FAIL", the failing ids in order, "run N re-measured", and "composed with
+  // run M". The FAIL-names-a-failing-case guard and the passing-prior negative are unchanged.
   it.each([README, DOCTRINE, "docs/measurements.md"])(
     "%s discloses a FAIL baseline behind the composed run of record",
     (page) => {
@@ -1332,16 +1348,25 @@ describe("the eval run of record on the hand pages", () => {
         return;
       }
       const baselineResults = read(`evals/runs/${baseline}/RESULTS.md`);
-      const failingList = /failing: ((?:`[^`]+`(?:, )?)+)/.exec(baselineResults)?.[1] ?? "";
-      const failing = [...failingList.matchAll(/`([^`]+)`/g)].map((match) => match[1]);
-      const failed = /^Status: \*\*FAIL\*\*/m.test(baselineResults);
+      const failing = failingCases(baselineResults);
+      const failed = runStatus(baselineResults) === "FAIL";
+      const remeasured = compositionOf(read(RUN_OF_RECORD_PATH))?.remeasured.length ?? 0;
       const [base, run] = [baseline, RUN_OF_RECORD_PATH].map((id) => /-run-(\d+)/.exec(id)?.[1]);
-      const count = ["one", "two", "three"][failing.length - 1] ?? String(failing.length);
+      const word = (n: number): string =>
+        ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][n] ??
+        String(n);
+      const cases = (n: number): string => `${word(n)} ${n === 1 ? "case" : "cases"}`;
+      const literal = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const verdict = failing
+        .map(({ kind, ids }) => {
+          const named = ids.map((id) => literal(`\`${id}\``)).join(", ");
+          return `${word(ids.length)} ${kind} ${ids.length === 1 ? "case" : "cases"}, ${named}`;
+        })
+        .join(", and ");
       const disclosure = new RegExp(
-        `\\[?Run ${base}\\]?(?:\\((?:\\.\\./)?evals/runs/${baseline}/RESULTS\\.md\\))? alone was ` +
-          `FAIL on ${count} floor cases?, ${failing.map((id) => `\`${id}\``).join(", ")}; ` +
-          `Invariant 2 was then tightened \\(invariants 1\\.1\\.0\\), and run ${run} re-measured ` +
-          `the two cases whose files moved, composed with run ${base}`,
+        `\\[?Run ${base}\\]?(?:\\((?:\\.\\./)?evals/runs/${literal(baseline)}/RESULTS\\.md\\))? alone ` +
+          `was FAIL on ${verdict}[;.] .{0,200}?\\brun ${run} re-measured (?:the )?` +
+          `${cases(remeasured)}\\b[^,]{0,80}, composed with run ${base}\\b`,
       );
       expect(!failed || failing.length > 0, `${baseline} is FAIL but names no failing floor`).toBe(
         true,

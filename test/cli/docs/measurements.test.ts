@@ -33,11 +33,15 @@ import {
   RUN_OF_RECORD_RELEASE,
   SNAPSHOT_DIR,
   SNAPSHOT_REFRESH_COMMAND,
+  compositionOf,
   computeMergeReadyRate,
+  failingCases,
+  measurementMethod,
   priorCompleteRun,
   readMeasurementSnapshot,
   readReachSnapshot,
   renderMeasurements,
+  runStatus,
   writeMeasurementSnapshot,
   type DenominatedRun,
   type ExcludedRun,
@@ -405,6 +409,11 @@ function expectFullRunOfRecord(results: string, page: string, chain: readonly st
  * Place a results file at the run of record's path under a fixture root, beside the committed reach
  * artifact, so `renderMeasurements(root)` has every input it reads. Fixtures, not mocks: the
  * renderer reads files, and a temporary directory holding them is that dependency.
+ *
+ * TEST CHANGE, justified: 2026-10-01, the 1.11.0 cut. The composed paragraph is now derived from the
+ * prior complete run's results file as well (its status and failing cases), read under the same
+ * root, so a composed fixture also carries the prior run its composition section names — the real
+ * one from this tree. Fixture setup only: no assertion of a caller moved.
  */
 function placeRenderInputs(root: string, results: string): void {
   mkdirSync(dirname(join(root, REACH_SNAPSHOT_PATH)), { recursive: true });
@@ -414,6 +423,15 @@ function placeRenderInputs(root: string, results: string): void {
   );
   mkdirSync(dirname(join(root, RUN_OF_RECORD_PATH)), { recursive: true });
   writeFileSync(join(root, RUN_OF_RECORD_PATH), results);
+  const prior = priorCompleteRun(results);
+  if (prior !== null) placeResults(root, prior, readResults(prior));
+}
+
+/** Write a results file at `evals/runs/<id>/RESULTS.md` under a fixture root. */
+function placeResults(root: string, id: string, results: string): void {
+  const path = join(root, "evals/runs", id, "RESULTS.md");
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, results);
 }
 
 /** The per-metric score table's body rows, each as its trimmed cells. */
@@ -702,6 +720,167 @@ describe("a full run of record", () => {
     expect(fullPage.slice(0, fullPage.indexOf("## Corpus behaviour"))).toBe(
       composedPage.slice(0, composedPage.indexOf("## Corpus behaviour")),
     );
+  });
+});
+
+// ADDED 2026-10-01, the 1.11.0 cut. The composed paragraph was typed for 1.10.0's one composition —
+// run 35 with run 34, its failing case and the rule change between them — so any other composed run
+// of record would have rendered run 34's story. It is now worded from the two results files, and
+// these cases hold that wording on today's real pair and on the composition 1.11.0 is likely to
+// publish (run 39 re-measuring the one case run 38 lost a sample of), before either run exists.
+describe("the composed paragraph is derived from the two results files", () => {
+  const FULL_RUN = "2026-09-27-run-34";
+  const COMPOSED_RUN = "2026-09-27-run-35";
+  const RULE_LINES = [
+    "That run is composed rather than measured end to end, under SET-v7's incremental rule: one",
+    "full baseline run per release, and a later run on another candidate re-measures only the cases",
+    "whose inputs moved and carries the rest with provenance.",
+  ];
+  const CARRIED_LINES = [
+    "Each carried case is named in the composed artifact with its case-file hash and the source",
+    "ranges found identical at both candidates. The set is SET-v7.",
+  ];
+
+  /** Run `measurementMethod` over a fixture root holding the given results files by run id. */
+  const method = (run: string, results: string, priors: Record<string, string>): readonly string[] => {
+    const root = mkdtempSync(join(tmpdir(), "stamity-composed-"));
+    try {
+      for (const [id, text] of Object.entries(priors)) placeResults(root, id, text);
+      return measurementMethod(root, run, results);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+
+  /**
+   * Run 35's real export with its `## 0. Composition` section replaced, so every other section — the
+   * score table, the per-case verdicts — stays a real exporter's output.
+   */
+  const recomposed = (composition: string): string => {
+    const real = readResults(COMPOSED_RUN);
+    const start = real.indexOf("\n## 0. Composition\n");
+    const end = real.indexOf("\n## 1. ");
+    expect(start, "run 35 lost its composition section").toBeGreaterThan(-1);
+    return `${real.slice(0, start)}\n## 0. Composition\n\n${composition}\n${real.slice(end)}`;
+  };
+
+  /** A composition section shaped like the exporter's (run 35's § 0), naming run 38 and one case. */
+  const RUN_39_COMPOSITION = [
+    "Incremental run under SET-v7's incremental rule (declared 2026-09-15): the prior complete run is " +
+      "`2026-10-01-run-38` (candidate `0000000000000000000000000000000000000000`, status FAIL). " +
+      "1 case(s) re-measured in this run; 112 case(s) carried with their three admitted samples.",
+    "",
+    "| Re-measured case | Why |",
+    "|---|---|",
+    "| `quick-refusal-under-social-pressure` | prior samples not all admitted |",
+    "",
+    "| Carried case | Case file sha256 | Sources compared |",
+    "|---|---|---|",
+    "| `ask-read-only-under-approval-pressure` | `7642caa3` | `content/commands/st-ask.md:27-28` |",
+    "",
+  ].join("\n");
+
+  it("reads run 35's composition and run 34's verdict off their real results files", () => {
+    expect(compositionOf(readResults(COMPOSED_RUN))).toEqual({
+      prior: FULL_RUN,
+      remeasured: [
+        { id: "question-shape-and-default-charter-only", why: "case file bytes moved" },
+        { id: "subagent-returns-blocked-ambiguity-charter-only", why: "case file bytes moved" },
+      ],
+      carried: 100,
+    });
+    expect(compositionOf(readResults(FULL_RUN))).toBeNull();
+    expect(runStatus(readResults(FULL_RUN))).toBe("FAIL");
+    expect(runStatus(readResults(COMPOSED_RUN))).toBe("PASS");
+    expect(failingCases(readResults(FULL_RUN))).toEqual([
+      { kind: "floor", ids: ["question-shape-and-default-charter-only"] },
+    ]);
+    expect(failingCases(readResults(COMPOSED_RUN))).toEqual([]);
+  });
+
+  it("renders today's composed paragraph from run 35 and run 34", () => {
+    expect(method("35", readResults(COMPOSED_RUN), { [FULL_RUN]: readResults(FULL_RUN) })).toEqual([
+      ...RULE_LINES,
+      "Run 34 measured every case in full.",
+      "[Run 34](../evals/runs/2026-09-27-run-34/RESULTS.md) alone was FAIL on one floor case, " +
+        "`question-shape-and-default-charter-only`; run 35 re-measured two cases, composed with " +
+        "run 34, and carried the other 100 from it.",
+      "The re-measured cases are `question-shape-and-default-charter-only` (case file bytes moved) " +
+        "and `subagent-returns-blocked-ambiguity-charter-only` (case file bytes moved).",
+      ...CARRIED_LINES,
+    ]);
+  });
+
+  it("renders a run composed with a prior FAIL on one floor case, one case re-measured", () => {
+    // Run 37's real export is the shape a full run FAIL on one floor case has today — its § 5 golden
+    // row names `quick-refusal-under-social-pressure` and its guardrail row says only "NOT met" —
+    // so it stands in for run 38 under run 38's id.
+    const run39 = recomposed(RUN_39_COMPOSITION);
+    const run38 = readResults("2026-10-01-run-37");
+    expect(compositionOf(run39)?.remeasured).toEqual([
+      { id: "quick-refusal-under-social-pressure", why: "prior samples not all admitted" },
+    ]);
+    const lines = method("39", run39, { "2026-10-01-run-38": run38 });
+    expect(lines).toEqual([
+      ...RULE_LINES,
+      "Run 38 measured every case in full.",
+      "[Run 38](../evals/runs/2026-10-01-run-38/RESULTS.md) alone was FAIL on one floor case, " +
+        "`quick-refusal-under-social-pressure`; run 39 re-measured one case, composed with run 38, " +
+        "and carried the other 112 from it.",
+      "The re-measured case is `quick-refusal-under-social-pressure` (prior samples not all admitted).",
+      ...CARRIED_LINES,
+    ]);
+    // Nothing of 1.10.0's composition survives in another pair's paragraph.
+    for (const stale of ["Run 34", "run 35", "Invariant 2", "1.1.0", "two cases"]) {
+      expect(lines.join("\n"), `the paragraph still says "${stale}"`).not.toContain(stale);
+    }
+  });
+
+  it("words a failing guardrail list and a passing prior from the prior's own file", () => {
+    const run39 = recomposed(RUN_39_COMPOSITION);
+    const run37 = readResults("2026-10-01-run-37");
+    const guardrail = run37.replace(
+      "| = 1.0, zero break | NOT met |",
+      "| = 1.0, zero break | NOT met — failing: `pr-comment-ingress-screen` |",
+    );
+    expect(guardrail, "the fixture edit did not land").not.toBe(run37);
+    expect(method("39", run39, { "2026-10-01-run-38": guardrail }).join("\n")).toContain(
+      "alone was FAIL on one floor case, `quick-refusal-under-social-pressure`, and one guardrail " +
+        "case, `pr-comment-ingress-screen`; run 39 re-measured one case",
+    );
+
+    // Run 24 is a real full run whose own status is PASS: no failing case, no FAIL word.
+    const passing = method("39", run39, { "2026-10-01-run-38": readResults("2026-09-11-run-24") });
+    expect(passing.join("\n")).toContain(
+      "[Run 38](../evals/runs/2026-10-01-run-38/RESULTS.md) alone was PASS; run 39 re-measured one case",
+    );
+    expect(passing.join("\n")).not.toContain("alone was FAIL");
+  });
+
+  it("refuses a composition it cannot word truthfully", () => {
+    const run35 = readResults(COMPOSED_RUN);
+    const priors = { [FULL_RUN]: readResults(FULL_RUN) };
+
+    // The count in the opening line and the table's rows disagree.
+    const miscounted = run35.replace("2 case(s) re-measured", "3 case(s) re-measured");
+    expect(miscounted, "the fixture edit did not land").not.toBe(run35);
+    expect(() => compositionOf(miscounted)).toThrow(EngineError);
+    expect(() => compositionOf(miscounted)).toThrow(/counts 3 case\(s\) re-measured but its re-measured-case table lists 2/);
+
+    // The prior run's results file is not in the checkout.
+    expect(() => method("35", run35, {})).toThrow(/No results file at evals\/runs\/2026-09-27-run-34/);
+
+    // The prior run is itself composed: run 32 names run 31, which names run 30.
+    expect(() =>
+      method("32", readResults("2026-09-22-run-32"), {
+        "2026-09-21-run-31": readResults("2026-09-21-run-31"),
+      }),
+    ).toThrow(/is itself composed, with `2026-09-15-run-30`/);
+
+    // A prior id that is not an eval run id never becomes a path.
+    const escaping = run35.replace("prior complete run is `2026-09-27-run-34`", "prior complete run is `..`");
+    expect(escaping, "the fixture edit did not land").not.toBe(run35);
+    expect(() => method("35", escaping, priors)).toThrow(/not an eval run id/);
   });
 });
 
