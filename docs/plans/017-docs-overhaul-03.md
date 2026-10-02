@@ -63,20 +63,20 @@ passes in light and dark. After that, the live site serves the new docs.
 | **Tasks** | T1 set up for Claude Code and check health · T2 make the reviewer insist on tests without copying it · T3 add a rule for SQL files only · T4 make a failing `check` pass without deleting the setup · T5 add the ops pack, then remove it without a trace · T6 name the touchpoint for pull-request comments and cite the docs · T7 make `npm run verify` the test gate · T8 name two things the engine does not defend and cite the docs |
 | **Reserves** | R1 undo the reviewer change · R2 share the client choice through a workspace |
 | **Condition A** | The CLI only (`--help` allowed). No docs, no repository source, no web. |
-| **Condition B** | A read-only copy of the published pages (`docs/**/*.md`, `README.md`, `llms.txt`). No repository source, no web. |
-| **Trials** | B: 3 per task. A: 1 per task, plus 2 more when the first passes. In total, 32 to 48 sessions. |
+| **Condition B** | a read-only copy of the published pages: every file `llms.txt` links, which is what the site serves as Markdown (the step `a4` adds), plus `llms.txt` itself. `docs/specs/` and `docs/plans/` are not in it, because the site build excludes them and `llms.txt` names neither. No repository source, no web. The grader refuses a copy that holds a `plans/` or `specs/` folder. |
+| **Trials** | B gets 3 tries per task. A gets tries 1 and 2 per task: if both pass, the task is contaminated; if both fail, it is clean; if they split, try 3 decides. That is 40 to 48 sessions, plus the A tries of each reserve that is tested. |
 | **The bar** | B passes at least 7 of the 8 tasks in at least 2 of 3 tries. Every passing B try cites at least one `page#section` that exists in the copy. |
-| **Contamination** | A task that A passes in at least 2 of 3 tries is swapped for R1, then R2, before scoring. |
+| **Contamination** | A task that A passes in at least 2 of 3 tries is swapped for reserve R1, then R2, before scoring. A reserve gets the same A baseline before it is swapped in. Once the reserves run out, each further contaminated task leaves the scored set, and the bar becomes one fewer than the number of scored tasks, each in at least 2 of 3 tries. Fewer than 6 scored tasks make the bar `invalid`, which is recorded as `Not done:`. |
 | **Triage** | Each failing B try is labelled `docs-gap` or `agent-error`, with one sentence of reason. |
 | **Model** | Opus 5.5 (`opus`) for every agent. No judge: the graders in `scripts/docs-reader/grade.mjs` read end state only. |
-| **Records** | `reader-test/results.md` in this session's run record. |
+| **Records** | Results go to the running package's run record, as `reader-test/results.md`. Each result names the commit its docs copy was built from. |
 
 ### Settled by this plan (declared defaults; reversible before the run)
 
 | # | Default | Why |
 |---|---|---|
 | S24 | **The reader agents run as sub-agents of this session**, each given only its task text, its fixture path and, for B, the docs copy. They are told not to use web tools or the repository, and their tool calls are listed in the results. | Repeatable without new infrastructure. The baseline and the citation rule catch leakage. |
-| S25 | **At most two fix rounds.** After a fix round, only the tasks that failed are re-run (3 B tries each). If the bar still fails after round two, the run records `Not done:` with the per-task results, and the maintainer decides whether to publish. | A bounded loop, with the decision left to the person. |
+| S25 | **At most two fix rounds.** After a fix round, only the tasks that failed are re-run (3 B tries each). If the bar still fails after round two, or is `invalid`, the run records `Not done:` with the per-task results. The default holds the publish. A publish then happens only on the maintainer's recorded override, which names the bar line, and the close keeps G8 open. | A bounded loop, with the decision left to the person. |
 | S26 | **Fixes are docs-only edits** to the pages a `docs-gap` names, under the contract. A gap that needs CLI behaviour becomes an inbox row, not a code change here. | This is a docs package. |
 | S27 | **The deploy is a `workflow_dispatch` of `docs-site.yml` with `deploy: true` from `main`,** run only after the maintainer's "publish" in this session. | It is an outward-facing act; the maintainer confirms it. |
 
@@ -114,19 +114,24 @@ passes in light and dark. After that, the live site serves the new docs.
 | `requirements` | spec carries no ids (package goal G8) |
 | `files` | `reader-test/results.md` and `reader-test/transcripts/` in the run record; nothing in the product tree |
 | `interfaces` | See **c1 interfaces** below the table. |
-| `testCriteria` | **Given** `reader-test/results.md`, **then** it states:<ul><li>every try's verdict and grader reason;</li><li>every B pass's citation, checked to exist;</li><li>every swap, with its A results;</li><li>every failing B try's label;</li><li>the bar's outcome in one line, `Bar met: yes` or `Bar met: no — <n> of 8`.</li></ul>**Given** a grader run again on a kept fixture, **then** it gives the same verdict. |
+| `testCriteria` | **Given** `reader-test/results.md`, **then** it states:<ul><li>every try's verdict and grader reason;</li><li>every B pass's citation, checked to exist;</li><li>every swap, with its A results;</li><li>every failing B try's label;</li><li>the bar's outcome in one line: `Bar met: yes`, `Bar met: no — <n> of <scored>` or `Bar met: invalid`.</li></ul>**Given** a grader run again on a kept fixture, **then** it gives the same verdict. |
 | `edgeCases` | **An agent uses a web tool or reads the repository:** that try is void and re-run once. Two voids on one task make it `agent-error` for that try. **A grader fails for a reason outside the task** (the CLI crashed): that is not a docs gap; record it, and open an inbox row if it reproduces. **T5 hits a pack-sync defect on Claude Code:** an inbox row, and the task is scored as run. **An agent asks a question:** sub-agents do not ask (`BLOCKED_AMBIGUITY`); the try fails as `agent-error`, with the readings it named. |
 | `depends_on` | `c0-intake` |
 | `verify` | `node scripts/docs-reader/grade.mjs <task> <fixture-dir> --docs <docs-copy>` for each kept fixture; it reproduces the recorded verdicts |
 
 **c1 interfaces.**
 
-1. **Build the CLI tarball once.** Run `npm pack` on `main`, so the fixtures install exactly what `main` ships.
-2. **Build the docs copy once.** A read-only folder outside the repository holding `docs/**/*.md`, `README.md` and
-   `llms.txt` as `main` has them.
+1. **Build the CLI tarball once.** On `main` at c0's recorded sha, run `npm ci && npm run build && npm pack`. Record
+   the tarball's file name and sha256, and pass that tarball to every fixture (`fixture.mjs setup … --tarball <path>`).
+2. **Build the docs copy outside the repository,** as the Condition B row describes. Condition B: a read-only copy
+   of the published pages: every file `llms.txt` links, which is what the site serves as Markdown (the step `a4`
+   adds), plus `llms.txt` itself. `docs/specs/` and `docs/plans/` are not in it, because the site build excludes them
+   and `llms.txt` names neither. No repository source, no web. The grader refuses a copy that holds a `plans/` or
+   `specs/` folder. Build the docs copy from a named commit (round 0: c0's `main` sha), record that sha in
+   `results.md`, and never edit a copy.
 3. **Run each try as a fresh `opus` sub-agent:**
-   - set up its own fixture with `node scripts/docs-reader/fixture.mjs setup <task> <dir>`, in its own scratch folder
-     outside the repository;
+   - set up its own fixture with `node scripts/docs-reader/fixture.mjs setup <task> <dir> --tarball <path>`, in its own
+     scratch folder outside the repository;
    - give it only the task's goal text, the fixture path and, for B, the docs copy's path, with the instruction to use
      no web tool and no other folder;
    - when it returns, run `node scripts/docs-reader/grade.mjs <task> <dir> --docs <copy>` and record the verdict.
@@ -142,8 +147,8 @@ passes in light and dark. After that, the live site serves the new docs.
 |---|---|
 | `id` | `c2-gap-fixes` |
 | `requirements` | spec carries no ids (package goals G8, G4, G3) |
-| `files` | Only the pages a `docs-gap` names, their test files under `test/docs/pages/`, and any diagram spec whose text twin changes. Plus the Warnings from `c0`'s audit. |
-| `interfaces` | One fix per `docs-gap`, under the contract: the smallest edit that would have let the reader finish (a missing step, a missing example, a link, a clearer heading). After each fix round, re-run only the failed tasks' B tries (3 each) through `c1`'s procedure. At most two rounds (S25). Fixes are reviewed by one fresh `opus` reviewer per round, with the truth and journey lenses. |
+| `files` | Only the pages a `docs-gap` names, their test files under `test/docs/pages/`, and any diagram spec under `scripts/visuals/specs/` whose text twin changes, with its `docs/visuals/<slug>.svg` regenerated by `node scripts/visuals.mjs --write <slug>`. Plus the Warnings from `c0`'s audit. |
+| `interfaces` | One fix per `docs-gap`, under the contract: the smallest edit that would have let the reader finish (a missing step, a missing example, a link, a clearer heading). After each fix round, re-run only the failed tasks' B tries (3 each) through `c1`'s procedure. Each round's reruns use a fresh copy built from that round's fix-branch head commit, with its sha recorded beside the round's results; every copy is kept for re-grading. At most two rounds (S25). Fixes are reviewed by one fresh `opus` reviewer per round, with the truth and journey lenses. |
 | `testCriteria` | **Given** the fix PR, **then** `npm run lint && npm run typecheck && npm run test`, `node scripts/visuals.mjs --check`, `node scripts/leak-gate.mjs` and the site build exit 0. **Given** `reader-test/results.md` after the last round, **then** the bar line reads `Bar met: yes`, or the run records `Not done:` (S25) with the per-task results and the gaps that stayed. |
 | `edgeCases` | **A gap needs a CLI change** (for example the config reset Package 20 may not have shipped): an inbox row; the page states the limit plainly (S26). **A fix pushes a page over its budget:** cut elsewhere on that page along the one-home table, never the fix. |
 | `depends_on` | `c1-reader-test` |
@@ -188,16 +193,26 @@ recorded; a new violation on a rewritten page is fixed in `c2` before sign-off.
 | `requirements` | spec carries no ids (package goals G7, G8) |
 | `files` | the run record; `.stamity/inbox.md` (rows this package retires, and follow-ups); the roadmap's Package 21 section (the maintainer's local file) |
 | `interfaces` | See **c4 interfaces** below the table. |
-| `testCriteria` | **Given** the deploy run, **then** it completed with `success`. **Given** the live checks, **then** every route answers 200 with the new text, every `.md` copy answers 200 with Markdown, and search returns a hit. **Given** the run record, **then** it names the deploy run id, the live-check table, the reader-test outcome, the QA sign-off and every `Not done:` with its owner. |
-| `edgeCases` | **The deploy job is skipped** (the repository-identity guard, `.github/workflows/docs-site.yml:153-156`): it must run in the canonical public repository from `main`; record and stop. **A live route returns 404 while the build had it:** wait for the Pages cache (a few minutes), re-check once, then open an inbox row. **The maintainer says "not yet":** close without the deploy, and the kickoff for Package 12 carries the deploy as its first step. |
+| `testCriteria` | **Given** the deploy run, **then** it completed with `success`, and the deploy run's `headSha` equals S. **Given** the live checks, **then** every route answers 200 with the new text, every `.md` copy answers 200 with Markdown, and search returns a hit. **Given** the run record, **then** it names the deploy run id, the live-check table, the reader-test outcome, the QA sign-off and every `Not done:` with its owner. **Given** a deploy after a bar line other than `Bar met: yes`, **then** the run record holds the maintainer's override, which names that line. |
+| `edgeCases` | **The deploy job is skipped** (the repository-identity guard, `.github/workflows/docs-site.yml:153-156`): it must run in the canonical public repository from `main`; record and stop. **A live route returns 404 while the build had it:** wait for the Pages cache (a few minutes), re-check once, then open an inbox row. **The maintainer says "not yet":** close without the deploy, and the kickoff for Package 12 carries the deploy as its first step. **`Bar met:` is not `yes`** (the bar failed or is `invalid`): step 2 asks whether to override. With no recorded override, close without the deploy. |
 | `depends_on` | `c3-qa-walkthrough` |
-| `verify` | `gh run view <deploy-run-id> --json conclusion --jq .conclusion` prints `success`, and the live-check script prints `ok` for every row |
+| `verify` | `gh run view <deploy-run-id> --json conclusion,headSha` shows `success`, and the deploy run's `headSha` equals S; the live-check script prints `ok` for every row |
 
 **c4 interfaces.**
 
 1. **Merge the fix PR,** if one exists, by fast-forward. Wait for `main`'s push run to be green.
-2. **Ask the maintainer:** "publish the new docs to stamity.dev now?" (S27). On yes, run
-   `gh workflow run docs-site.yml --ref main -f deploy=true`, then watch it to completion.
+2. **Read the bar, then ask the maintainer.** First read the `Bar met:` line in `reader-test/results.md`.
+   - If it reads `yes`, ask: "publish the new docs to stamity.dev now?" (S27).
+   - If it reads anything else, ask whether to override the hold, quoting that line (S25). Only the maintainer's
+     recorded override, which names that line, allows the deploy. Without it, skip the rest of this step and step 3,
+     and go to the close.
+
+   Record S, the sha c3 signed off. Before the dispatch, run `git fetch origin`; then `git rev-parse origin/main` must
+   equal S. On yes, note the time in UTC and run `gh workflow run docs-site.yml --ref main -f deploy=true`. Then take
+   the dispatched run, not the newest one: list the runs with
+   `gh run list --workflow docs-site.yml --event workflow_dispatch --json databaseId,headSha,createdAt`, and pick the
+   run whose `createdAt` is after the dispatch. Poll until it appears. If its `headSha` differs from S, cancel it
+   (`gh run cancel <id>`) before its deploy job starts, and stop. Otherwise watch it to completion.
 3. **Check the live site.** A short script in the run record fetches each route and asserts status 200 and one
    expected heading:
    - `/`;
@@ -209,7 +224,7 @@ recorded; a new violation on a rewritten page is fixed in `c2` before sign-off.
 
    Also confirm that search finds "overlay", and that the hero diagram loads.
 4. **Close.**
-   - Tick the roadmap's Package 21 boxes with evidence.
+   - Tick the roadmap's Package 21 boxes with evidence, leaving G8's box unticked while `Bar met:` is not `yes`.
    - Retire the inbox rows the package folded in.
    - Re-sync the private layer's record with its close row.
    - Write Package 12's kickoff (it moves from Package 20's close to this package's).
@@ -223,7 +238,8 @@ recorded; a new violation on a rewritten page is fixed in `c2` before sign-off.
 4. `c3-qa-walkthrough`.
 5. `c4-publish-close`.
 
-**Size:** about 5–7 h wall-clock, 32 to 48 reader sessions and one or two fix rounds. **Maintainer touchpoints:** W1
+**Size:** about 5–7 h wall-clock, 40 to 48 reader sessions, plus the A tries of each reserve that is tested, and one
+or two fix rounds. **Maintainer touchpoints:** W1
 to W3 (about 35 minutes), the fix PR's merge, the publish answer, and the QA sign-off.
 
 ## Shared contracts touched

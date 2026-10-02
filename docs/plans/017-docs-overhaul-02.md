@@ -38,7 +38,7 @@ page boundary, so these problems survived (research of 2026-10-02):
 
 | Goal | What it means |
 |---|---|
-| **G1 Shorter** | The user-facing hand set ends at no more than 60% of its words at file 1's intake. Every hand page fits its kind's budget. Every page stays under 50,000 characters. |
+| **G1 Shorter** | The user-facing hand set ends at no more than 60% of its words at file 1's intake. Every hand page fits its kind's budget. Every published page stays under 50,000 characters. |
 | **G2 One home per fact** | A fact lives on one page; others link. |
 | **G3 Journey-led** | Goal-named groups, a docs home at `/docs/`, one to five next links per guide, and README as a front door. |
 | **G4 The customization journey** | It reaches every mechanism, with verify and undo. |
@@ -53,7 +53,7 @@ page boundary, so these problems survived (research of 2026-10-02):
 | Tool | Where | Use here |
 |---|---|---|
 | The docs contract | `.stamity/overrides/rules/docs-contract.md` | Every writer reads it first. Agents load it on every docs page. |
-| Prose checks | `test/docs/prose.test.ts` | A hand page is "rewritten" once it declares `kind:`; from then on its budget, sentence, paragraph and next-link rules apply. The 60% total check switches on once every page in the baseline set has a `kind:`. The baseline is `test/docs/baseline.ts`. |
+| Prose checks | `test/docs/prose.test.ts` | A hand page is "rewritten" once it declares `kind:`; from then on its budget, sentence, paragraph and next-link rules apply. The 60% total check switches on once no page of the baseline set under `docs/` lacks `kind:` (`README.md` and `SECURITY.md` carry no frontmatter and are exempt from this switch; their words still count toward the total). The baseline is `test/docs/baseline.ts`. |
 | Per-page tests | `test/docs/pages/<page>.test.ts` | Each writer owns the test files of its own pages. `test/docsPages.test.ts` keeps the cross-page contract. |
 | The roster | `test/docs/roster.ts` | Derived from the page headers and the sidebar, so a new page needs no hand-kept list. |
 | The diagram kit | `scripts/visuals.mjs`, `scripts/visuals/` | Six templates; three pilot diagrams already approved (QA row K1). |
@@ -168,7 +168,7 @@ Every row cites its source on the base commit `81b71b09`. Re-locate each one at 
 | The generators refuse hosts other than github.com | `docs/enterprise-forks.md:1272-1280` | `fork-setup.md` |
 | A script-written DCO trailer is not a certification | `docs/enterprise-forks.md:505-510` | `enterprise-forks.md` (one sentence); its exemption logic goes to `CONTRIBUTING.md` |
 | Renovate semver versus regex versioning; `apm` and `GITHUB_APM_PAT` on Renovate's PATH | `docs/enterprise-forks.md:726-764` | `fork-release.md` |
-| Token precedence `GITHUB_APM_PAT_<ORG>` > `GITHUB_APM_PAT` > `GITHUB_TOKEN` | `docs/enterprise-forks.md:806-808` | `fork-release.md` |
+| Token precedence `GITHUB_APM_PAT_<ORG>` > `GITHUB_APM_PAT`, which precedes `GITHUB_TOKEN` and `GH_TOKEN` (the source sets no order between those two) | `docs/enterprise-forks.md:806-808` | `fork-release.md` |
 | Six practices that keep downstream upgrades cheap | `docs/enterprise-forks.md:1339-1355` | `CONTRIBUTING.md` |
 | Fork-layer specifics: `dist/fork` staging, `validate`'s `— fork layer` rows, APM excludes patch control files | `docs/enterprise-forks.md:594-597`, `:646-680` | `overrides-and-overlays.md` `## The fork layer` |
 | **SEC** Learnings are a security surface; the CLI is their one write path | `docs/getting-started.md:255-262` | `security-mapping.md` |
@@ -287,7 +287,8 @@ also runs the site build (`cd website && npm run build`, where `onBrokenLinks: '
 route).
 
 A content unit declares `kind:` on a page only when the page meets its rules. A page left without `kind:` is reported,
-not failed, and `b10` fails the run if any remains.
+not failed, and `b10` fails the run if any page of the baseline set under `docs/` remains without it. `README.md` and
+`SECURITY.md` carry no frontmatter and are exempt.
 
 ### b0-intake — freshness, the date, and the checklists
 
@@ -367,10 +368,10 @@ not failed, and `b10` fails the run if any remains.
 |---|---|
 | `id` | `b2-front-door` |
 | `requirements` | spec carries no ids (package goals G3, G1, G6, G7) |
-| `files` | `README.md`; `docs/overview.md`; `docs/glossary.md`; `website/src/pages/index.tsx`; `test/docs/pages/readme.test.ts`; `test/docs/pages/overview.test.ts` and `test/docs/pages/glossary.test.ts` (new); `test/docs/runOfRecord.test.ts`, only where the README line moves; `scripts/visuals/specs/hero-one-corpus.mjs` and its SVG, if the host text needs a label change |
+| `files` | `README.md`; `docs/overview.md`; `docs/glossary.md`; `website/src/pages/index.tsx`; `test/docs/pages/readme.test.ts`; `test/docs/pages/overview.test.ts` and `test/docs/pages/glossary.test.ts` (new); `scripts/visuals/specs/hero-one-corpus.mjs` and its SVG, if the host text needs a label change |
 | `interfaces` | The page specs below. |
 | `testCriteria` | **Given** `npx vitest run test/docs test/docsPages.test.ts test/ci/visuals.test.ts`, **then** it exits 0, with these new cases:<ul><li>README has at most 700 prose words (`countProseWords`) and at most 120 lines;</li><li>README's merge-ready figure equals the frozen snapshot's (inbox row `README.md:27-32`);</li><li>README's install section names the APM route with its install command (REQ-APM-004, `docs/specs/apm-canonical-distribution.md:132-133`);</li><li>the overview links the six journey pages;</li><li>the glossary has one `###` per term in alphabetical order, and each definition has one to three sentences.</li></ul>**Given** `cd website && npm run build`, **then** `/docs/` renders the overview, and the landing page's calls to action point at `/docs/getting-started/`, `/docs/choose-a-route/` and `/docs/enterprise-quickstart/`. |
-| `edgeCases` | **npm renders README's relative image and links differently from GitHub:** file 3's QA checks the npm page at the next release; nothing changes here. **Showing the hero on the landing page needs a second copy of the SVG:** skip it, keep the calls to action, and record why (S14). **A glossary term has no home page:** the definition stands alone, and the term goes on the drop list only if no page uses it. |
+| `edgeCases` | **npm renders README's relative image and links differently from GitHub:** file 3's QA checks the npm page at the next release; nothing changes here. **Showing the hero on the landing page needs a second copy of the SVG:** skip it, keep the calls to action, and record why (S14). **A glossary term has no home page:** the definition stands alone, and the term goes on the drop list only if no page uses it. **The run-of-record line has to move:** keep it on the page (the one-home row pins it there); if it must move, return the needed `RUN_OF_RECORD_PAGES` edit to `b10`. |
 | `depends_on` | `b1-skeleton` |
 | `verify` | `npx vitest run test/docs test/docsPages.test.ts test/ci/visuals.test.ts && node scripts/visuals.mjs --check && cd website && npm run build` |
 
@@ -629,7 +630,7 @@ What moves out, and where:
 | `files` | `docs/customization.md`, `docs/customization-recipes.md`, `docs/overrides-and-overlays.md`, `docs/hooks.md`; their files under `test/docs/pages/`; `scripts/visuals/specs/overlay-merge.mjs`, `scripts/visuals/specs/hook-events.mjs` and their SVGs (new); the two pilot specs `customize-ladder` and `precedence-stack`, only if a label changes |
 | `interfaces` | The page specs below. |
 | `testCriteria` | See **b5 test criteria** below the table. |
-| `edgeCases` | **Package 20 file 1 shipped a config reset:** the undo table and R6 use it. **It did not:** the undo row says plainly that a key can only be set again, never cleared, and links the inbox decision's outcome in `CHANGELOG.md`. **The user-hook matcher syntax or exit-code contract differs per client:** read `src/hooks/userHooks.ts` in full and the adapters' hook renderers, write what is common, and link the matrix for the rest. **An overlay on a pack skill** (an open inbox probe): state only what the planner states (`src/emit/planner.ts:444-458`, `:600-603`), that a pack skill cannot be replaced. |
+| `edgeCases` | **Package 20 file 1 shipped a config reset:** the undo table and R6 use it. **It did not:** the undo row says plainly that a key can only be set again, never cleared, and links the inbox decision's outcome in `CHANGELOG.md`. **The user-hook matcher syntax or exit-code contract differs per client:** read `src/hooks/userHooks.ts` in full and the adapters' hook renderers, write what is common, and link the matrix for the rest. **An overlay on a pack skill** (an open inbox probe): state only what the planner states (`src/emit/planner.ts:444-458`, `:600-603`), as hub item 9 does: a pack skill cannot be replaced, and an overlay on one changes nothing that lane emits. |
 | `depends_on` | `b1-skeleton` |
 | `verify` | `npm run build && npx vitest run test/docs test/docsPages.test.ts test/ci/visuals.test.ts && node scripts/visuals.mjs --check && cd website && npm run build` |
 
@@ -682,8 +683,8 @@ What moves out, and where:
    - `check`.
 7. `## Undo a customization`: one table, one row per mechanism.
 8. `## What reaches each client on each route?`: Package 20's section, kept and trimmed.
-9. `## What you cannot customize`: the charter body (only in a fork), pack artifacts (they add ids only), and any
-   recorded-but-unread key as 1.12.0 reads it.
+9. `## What you cannot customize`: the charter body (only in a fork), a pack's skills (a pack skill cannot be replaced
+   or patched; a pack's rules, agents and commands can be), and any recorded-but-unread key as 1.12.0 reads it.
 10. `## Where to go next`.
 
 **`docs/customization-recipes.md`** (how-to; named budget 2,600; target 2,200). Twelve recipes. Each is
@@ -863,7 +864,9 @@ What moves out, and where:
 3. `## Arm the release workflow`: the **SEC** environment secret, and creating the environment before the first tag.
 4. `## Cut a release`.
 5. `## Ship the plugin distribution`.
-6. `## Ship the APM package`: the private APM release and its consumer, plus the token precedence.
+6. `## Ship the APM package`: the private APM release and its consumer, plus the token precedence as the source states it:
+   `GITHUB_APM_PAT_<ORG>` before `GITHUB_APM_PAT`, which precedes `GITHUB_TOKEN` and `GH_TOKEN`. The page sets no order
+   between those two.
 7. `## Consume the release`: Package 20's `#### Pin the CLI` and `#### Take an update`.
 8. `## Keep Renovate in step`.
 9. `## Where to go next`.
@@ -891,9 +894,9 @@ under their exact texts.
 |---|---|
 | `id` | `b8-security` |
 | `requirements` | spec carries no ids (package goals G2, G3, G5, G6) |
-| `files` | `docs/security-mapping.md`; `SECURITY.md`; `.github/release-controls-checklist.md` (only the lines that name `SECURITY.md`'s "Publishing this package" section); `test/docs/pages/security.test.ts`; `test/docs/pages/security-mapping.test.ts`; the test that holds the checklist's reserved sentence (find it at intake with `rg -n "release-controls-checklist" test`); `scripts/visuals/specs/security-surfaces.mjs` and its SVG (new) |
+| `files` | `docs/security-mapping.md`; `SECURITY.md`; `.github/release-controls-checklist.md` (only the lines that name `SECURITY.md`'s "Publishing this package" section); `test/docs/pages/security.test.ts`; `test/docs/pages/security-mapping.test.ts` (with a new case that holds the checklist's reserved sentence); `scripts/visuals/specs/security-surfaces.mjs` and its SVG (new) |
 | `interfaces` | See **b8 interfaces** below the table. |
-| `testCriteria` | **Given** `npx vitest run test/docs test/docsPages.test.ts test/ci/visuals.test.ts` plus the checklist's test, **then** it exits 0. Every security pin that held `SECURITY.md` or the mapping before now passes on the page that holds the fact:<ul><li>the `file::symbol` minimums and their resolution;</li><li>the section-bounded symbol references;</li><li>the unwired symbols after `## What it does not defend`;</li><li>the 250 000-character and 250 000-byte sentences;</li><li>the resume-card literals;</li><li>the install-route and hook-caveat proximity regexes;</li><li>seven `###` under `## The surfaces`;</li><li>`## Gaps`;</li><li>every catalogue id and edition string.</li></ul>**Given** `SECURITY.md`, **then** it has at most 900 prose words, keeps the advisory URL, the "do not open a public issue" sentence, CVE and the `1.x` row, and links `docs/security-mapping.md`. **Given** the facts-at-risk table, **then** every **SEC** row's literal text is found on the security page or on its named home. |
+| `testCriteria` | **Given** `npx vitest run test/docs test/docsPages.test.ts test/ci/visuals.test.ts`, **then** it exits 0. **Given** the reserved-sentence blockquote in `.github/release-controls-checklist.md` (`:171-175` on `ef598f49`, under its label at `:169`, opening 'Each of those is now in force'), **then** its whitespace-collapsed text appears under `## Publishing this package` in `docs/security-mapping.md`. Changing one word on the page makes the case fail (proved red first). Every security pin that held `SECURITY.md` or the mapping before now passes on the page that holds the fact:<ul><li>the `file::symbol` minimums and their resolution;</li><li>the section-bounded symbol references;</li><li>the unwired symbols after `## What it does not defend`;</li><li>the 250 000-character and 250 000-byte sentences;</li><li>the resume-card literals;</li><li>the install-route and hook-caveat proximity regexes;</li><li>seven `###` under `## The surfaces`;</li><li>`## Gaps`;</li><li>every catalogue id and edition string.</li></ul>**Given** `SECURITY.md`, **then** it has at most 900 prose words, keeps the advisory URL, the "do not open a public issue" sentence, CVE and the `1.x` row, and links `docs/security-mapping.md`. **Given** the facts-at-risk table, **then** every **SEC** row's literal text is found on the security page or on its named home. |
 | `edgeCases` | **A proximity pin breaks because a long sentence is split:** keep the two phrases inside the same sentence, never weaken the regex. **A pinned literal reads poorly:** keep it; wording is a later decision. **The checklist's reserved sentence changes meaning when moved:** move it verbatim, and keep "Publishing this package" as the heading on the security page. |
 | `depends_on` | `b1-skeleton` |
 | `verify` | `npx vitest run test/docs test/docsPages.test.ts test/ci/visuals.test.ts && node scripts/visuals.mjs --check && node scripts/leak-gate.mjs && cd website && npm run build` |
@@ -901,7 +904,11 @@ under their exact texts.
 **b8 interfaces.** The page specs below, plus two rules:
 - every pin that held `SECURITY.md`'s moved sections moves, verbatim in what it asserts, from
   `test/docs/pages/security.test.ts` to `test/docs/pages/security-mapping.test.ts`;
-- the release checklist's reserved sentence now names the security page.
+- the release checklist's reserved sentence now names the security page, and the checklist's own note (`:177-181`)
+  names `test/docs/pages/security-mapping.test.ts` as the suite that holds it.
+
+No test holds the reserved sentence today. `rg -n "release-controls-checklist" test` finds only
+`test/ci/hookLatency.test.ts:245-251`, which b8 does not own; that is evidence, not a file of this lane.
 
 #### b8 pages
 
@@ -945,10 +952,10 @@ The image-size history leaves for `CHANGELOG.md` (`b10`).
 |---|---|
 | `id` | `b9-about-project` |
 | `requirements` | spec carries no ids (package goals G2, G1) |
-| `files` | `docs/doctrine.md`, `CONTRIBUTING.md`, `GOVERNANCE.md`; `test/docs/pages/doctrine.test.ts`, `test/docs/pages/contributing.test.ts`; `test/docs/runOfRecord.test.ts` (only the doctrine line) |
+| `files` | `docs/doctrine.md`, `CONTRIBUTING.md`, `GOVERNANCE.md`; `test/docs/pages/doctrine.test.ts`, `test/docs/pages/contributing.test.ts` |
 | `interfaces` | The page specs below. |
 | `testCriteria` | **Given** `npx vitest run test/docs test/docsPages.test.ts test/content/invariantsVersion.test.ts test/corpus/invariants.test.ts test/ci/workflow.test.ts`, **then** it exits 0, with these cases:<ul><li>doctrine keeps `## Amendments` (pinned) and one run-of-record line (pinned);</li><li>the count sentences are gone, along with their derived pin (test change, justified because counts drift and the sidebar shows the set);</li><li>CONTRIBUTING holds README's moved contributor sections, the six practices and the DCO logic;</li><li>its regeneration table lists six commands (pinned);</li><li>GOVERNANCE names the two required checks and links CONTRIBUTING for the lanes, with `all-pr-checks`, `pr-checks.yml` and `all-ci-checks` kept (pinned).</li></ul> |
-| `edgeCases` | **`test/content/invariantsVersion.test.ts` reads the amendments table's shape:** keep it byte-for-byte. **GOVERNANCE's lane text is pinned by `test/ci/workflow.test.ts`:** keep each pinned literal where the test reads it. |
+| `edgeCases` | **`test/content/invariantsVersion.test.ts` reads the amendments table's shape:** keep it byte-for-byte. **GOVERNANCE's lane text is pinned by `test/ci/workflow.test.ts`:** keep each pinned literal where the test reads it. **The run-of-record line has to move:** keep it on the page (the one-home row pins it there); if it must move, return the needed `RUN_OF_RECORD_PAGES` edit to `b10`. |
 | `depends_on` | `b1-skeleton` |
 | `verify` | `npx vitest run test/docs test/docsPages.test.ts test/content/invariantsVersion.test.ts test/corpus/invariants.test.ts test/ci/workflow.test.ts && cd website && npm run build` |
 
@@ -988,7 +995,7 @@ checks, plus a link to CONTRIBUTING's lanes. Every literal `test/ci/workflow.tes
 | `requirements` | spec carries no ids (package goals G1, G2, G3, G6, G7) |
 | `files` | See **b10 files** below the table. |
 | `interfaces` | See **b10 interfaces** below the table. |
-| `testCriteria` | **Given** the full gate, **then** it exits 0:<ul><li>`npm run lint && npm run typecheck && npm run test`;</li><li>`npm test -- --coverage`;</li><li>`node scripts/visuals.mjs --check`;</li><li>`node scripts/leak-gate.mjs`;</li><li>`cd website && npm run typecheck && npm run build`, with zero broken anchors under `throw`;</li><li>`node scripts/site-markdown-twins.mjs website/build`.</li></ul>**Given** `test/docs/prose.test.ts`, **then** every page in the baseline set declares `kind:`, and the total is at most 60% of `BASELINE.total`. Print the share. **Given** `test/ci/visuals.test.ts`, **then** every SVG is referenced by a page and its facts are in that page's text. **Given** `test/docs/oneHome.test.ts`, **then** it passes. |
+| `testCriteria` | **Given** the full gate, **then** it exits 0:<ul><li>`npm run lint && npm run typecheck && npm run test`;</li><li>`npm test -- --coverage`;</li><li>`node scripts/visuals.mjs --check`;</li><li>`node scripts/leak-gate.mjs`;</li><li>`cd website && npm run typecheck && npm run build`, with zero broken anchors under `throw`;</li><li>`node scripts/site-markdown-twins.mjs website/build`.</li></ul>**Given** `test/docs/prose.test.ts`, **then** no page of the baseline set under `docs/` lacks `kind:` (`README.md` and `SECURITY.md` carry no frontmatter and are exempt from this switch; their words still count toward the total), and the total is at most 60% of `BASELINE.total`. Print the share. **Given** `test/ci/visuals.test.ts`, **then** every SVG is referenced by a page and its facts are in that page's text. **Given** `test/docs/oneHome.test.ts`, **then** it passes. |
 | `edgeCases` | **The total is over 60% with every page within its own budget:** cut along the one-home table first. If that still fails, S23 applies: record `Not done:` with the measured share, and do not drop a needed fact. **`onBrokenAnchors: 'throw'` fails on an anchor in a generated page:** fix its generator, never the generated file. **A content unit returned no fragments for `.github/client-contracts.md`:** check the facts-at-risk rows routed there, and record it. |
 | `depends_on` | `b2-front-door`, `b3-start-routes`, `b4-daily-use`, `b5-customize`, `b6-teams`, `b7-enterprise`, `b8-security`, `b9-about-project` |
 | `verify` | `npm run lint && npm run typecheck && npm run test && npm test -- --coverage && node scripts/visuals.mjs --check && node scripts/leak-gate.mjs && cd website && npm run typecheck && npm run build && cd .. && node scripts/site-markdown-twins.mjs website/build` |
@@ -1003,6 +1010,7 @@ checks, plus a link to CONTRIBUTING's lanes. Every literal `test/ci/workflow.tes
 - `.github/client-contracts.md` and `test/docs/evidencePages.test.ts`.
 - `CHANGELOG.md` (`## [Unreleased]`).
 - `scripts/qa/run.mjs`, if a route moved.
+- `test/docs/runOfRecord.test.ts` (only for an edit a content lane returned).
 
 **b10 interfaces.**
 - **`llmsIndex.ts`** reads each hand page's description from its `description:` frontmatter. Only the root pages keep
@@ -1065,7 +1073,8 @@ every Minor fixed or recorded.
 2. Eight parallel lanes: `b2` to `b9`. Each runs in its own worktree with its own scratch folder and reads sources on
    the base commit (S18). The lanes are file-disjoint by the units' `files`:
    - the shared files (`website/sidebars.ts`, `src/cli/docs/llmsIndex.ts`, `llms.txt`, `test/docs/shared.ts`,
-     `scripts/qa/run.mjs`, `CHANGELOG.md`, `.github/client-contracts.md`) belong to `b1` and `b10` only;
+     `scripts/qa/run.mjs`, `CHANGELOG.md`, `.github/client-contracts.md`, `test/docs/runOfRecord.test.ts`) belong to
+     `b1` and `b10` only;
    - each diagram spec and SVG belongs to the unit in the visual inventory;
    - never use `git stash`.
 3. `b10-integration` merges the lanes in the order `b2` → `b9` and writes the shared files.
@@ -1085,6 +1094,7 @@ and any question a reviewer escalates.
 | The fork contract (`generatedPaths` in the fork guide) | `b7` | Gains `docs/visuals/`; the CHANGELOG says so (`b10`). |
 | Notices printed in fork CI and in the distribution README | `b7` | Their pins move with them. |
 | `.github/client-contracts.md` | `b10` | From the fragments the content units return (S22). |
+| `test/docs/runOfRecord.test.ts` | `b10` | Content units keep the run-of-record line on their pages and return any needed `RUN_OF_RECORD_PAGES` edit. |
 | `docs/visuals/` | the units in the visual inventory | One owner per slug. |
 
 ## QA walk

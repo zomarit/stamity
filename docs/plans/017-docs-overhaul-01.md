@@ -73,7 +73,7 @@ The package carries no spec (S1). These nine goals are its acceptance, and every
     every `docs/*.md` page with the hand-page header except `docs/migration.md`, plus `README.md` and `SECURITY.md`.
     One counter measures both ends.
   - Every hand page fits the budget of its kind.
-  - Every page stays under 50,000 characters.
+  - Every published page stays under 50,000 characters.
 - **G2 One home per fact.** Each fact in file 2's one-home table lives on one page; every other page links to it.
 - **G3 A journey-led structure.** It has four parts:
   - sidebar groups named by reader goal;
@@ -222,7 +222,7 @@ All accessed 2026-10-02:
 | S8 | **`README.md` becomes a front door** of at most 700 words. Its contributor material moves to `CONTRIBUTING.md` (file 2). | About 60% of today's README serves contributors (`README.md:84-155`). |
 | S9 | **Every rewritten hand page declares `kind:` and `description:`** in its frontmatter, and its budget follows the kind. | Agents read the type, the site uses `description` as its meta description, and the check reads the kind. |
 | S10 | **Three sessions, one PR each, no release.** File 3 publishes the site with `workflow_dispatch` (`deploy: true`). | Docs-only. Every release needs a fresh full eval run, which a docs change does not warrant. |
-| S11 | **Reader-test trials.** Condition B (docs only) gets 3 tries per task. Condition A (no docs) gets 1 try per task, plus 2 more when the first passes. That is 32 to 48 agent sessions. | The baseline catches answers from training data at the least cost. |
+| S11 | **Reader-test trials.** Condition B (docs only) gets 3 tries per task. Condition A (no docs) gets tries 1 and 2 per task, and try 3 only when the first two split. That is 40 to 48 agent sessions, plus the A tries of each reserve that is tested. | The baseline catches answers from training data at the least cost. |
 | S12 | **Models.** Opus 5.5 (`opus`) for every role: writers, editor, reviewers and reader-test agents. Fable 5.1 (`fable`) only for file 2's final whole-branch review. | The current model mix. The reader test has deterministic graders, so it needs no judge. |
 | S13 | **Stamps.** An edited page moves to the commit form `verified against the tree at commit <sha7>. Re-attested <YYYY-MM-DD>.` and `REATTESTATION_DATE` moves with it. | The hand-page date contract in `test/docsPages.test.ts`. |
 | S14 | **The landing page** (`website/src/pages/index.tsx`) changes only its calls to action and may show the hero diagram. Its redesign stays out. | The maintainer's to-do list carries the redesign separately. |
@@ -320,7 +320,7 @@ Read this before you write or move a page under `docs/`, `README.md` or `SECURIT
 ## Budgets
 - Words of prose and table text, code not counted: hub 1,500 · tutorial 1,000 · how-to 1,800 ·
   reference 2,500 · explanation 1,500. Named exceptions live in `test/docs/prose.ts`, each with a reason.
-- Every page stays under 50,000 characters.
+- Every published page stays under 50,000 characters.
 - A sentence has at most 30 words. A paragraph has at most 5 sentences and 150 words.
 - Use a list for three or more parallel items, a table only when every row shares the columns.
 - Rare detail goes inside `<details>`. Never nest disclosure deeper than two levels.
@@ -385,9 +385,9 @@ page. `test/docsPages.test.ts` and `test/docs/` hold the parts a check can hold.
 | `requirements` | spec carries no ids (package goals G1, G3, G6, G7) |
 | `files` | `scripts/docs-words.mjs` (new: the one counter, plus a command that prints the per-page table); `test/docs/prose.ts` (new: budgets and constants, re-exporting the counter); `test/docs/prose.test.ts` (new); `test/docs/baseline.ts` (new) |
 | `interfaces` | See **a2 interfaces** below the table. |
-| `testCriteria` | **Given** the fixtures inside `test/docs/prose.test.ts`, **when** the rules run over them, **then** each fixture fails naming its page and its rule:<ul><li>a hub of 1,501 words;</li><li>a 31-word sentence;</li><li>a six-sentence paragraph;</li><li>a page with six next links;</li><li>a page with no `## Where to go next`;</li><li>an image with an empty alt;</li><li>an alt of 156 characters;</li><li>a Mermaid fence without `accDescr`;</li><li>two Mermaid fences on one page;</li><li>a `:::note` line;</li><li>a rewritten page without `description`.</li></ul>**And** the real tree passes. **Given** `node scripts/docs-words.mjs`, **then** it prints one row per page of the baseline set and a total equal to `BASELINE.total` at `BASELINE.commit`. **Given** `npx vitest run test/docs/prose.test.ts`, **then** it exits 0 and prints the current share of the baseline. |
+| `testCriteria` | **Given** the fixtures inside `test/docs/prose.test.ts`, **when** the rules run over them, **then** each fixture fails naming its page and its rule:<ul><li>a hub of 1,501 words;</li><li>a 31-word sentence;</li><li>a six-sentence paragraph;</li><li>a page with six next links;</li><li>a page with no `## Where to go next`;</li><li>an image with an empty alt;</li><li>an alt of 156 characters;</li><li>a Mermaid fence without `accDescr`;</li><li>two Mermaid fences on one page;</li><li>a callout in the syntax `a4` did not keep;</li><li>a rewritten page without `description`.</li></ul>**And** the real tree passes. **Given** `node scripts/docs-words.mjs`, **then** it prints one row per page of the baseline set and a total equal to `BASELINE.total` at `BASELINE.commit`. **Given** `npx vitest run test/docs/prose.test.ts`, **then** it exits 0 and prints the current share of the baseline. |
 | `edgeCases` | **Abbreviations and versions** (`e.g.`, `i.e.`, `1.12.0`): a full stop followed by a digit, a lowercase letter or another full stop does not end a sentence. **A table cell:** counts as its own sentence unit. **A list item without a full stop:** one sentence. **A GitHub alert marker** (`[!NOTE]`): counts no word. **`<details>` and `<summary>` text:** counts. **Inline code:** each span counts as one word. **CRLF line endings:** normalized before counting. **A page with no frontmatter** (`README.md`, `SECURITY.md`): never "rewritten" here; its budget lives in its own page test (file 2). |
-| `depends_on` | `a0-intake`, `a3-docs-test-split` |
+| `depends_on` | `a0-intake`, `a3-docs-test-split`, `a4-site-foundations` |
 | `verify` | `npx vitest run test/docs/prose.test.ts && node scripts/docs-words.mjs` |
 
 **a2 interfaces.**
@@ -426,6 +426,7 @@ export const MAX_NEXT_LINKS = 5;
 export const MAX_ALT_CHARS = 155;
 export const MAX_DESCRIPTION_CHARS = 200;
 export const TOTAL_SHARE = 0.6;
+export const CALLOUT_SYNTAX: "gfm-alert" | "directive" = "gfm-alert"; // set to "directive" when a4 dropped the alerts plugin
 /** The baseline set: the hand guides of test/docs/roster.ts minus docs/migration.md, plus README.md and SECURITY.md. */
 export function baselineSet(): readonly string[];
 ```
@@ -449,16 +450,21 @@ shared exemption list.
 3. **Sentences and paragraphs on a rewritten page.** No sentence over 30 words. No paragraph over five sentences or 150
    words.
 4. **A rewritten page ends with `## Where to go next`,** holding one to five links.
-5. **Every page under `docs/` is under 50,000 characters,** whether rewritten or generated. Hand pages not yet
-   rewritten are exempt; on the base commit `docs/enterprise-forks.md` holds about 59,000.
+5. **Every published page under `docs/` is under 50,000 characters:** every `.md` the site build does not exclude (the
+   `exclude` list in `website/docusaurus.config.ts`, read the way `test/ci/docsRoster.test.ts` reads it), whether
+   rewritten or generated. Hand pages not yet rewritten are exempt; on the base commit `docs/enterprise-forks.md` holds
+   about 59,000. Plans and specs are records, not pages; on the base commit `docs/specs/plugin-lifecycle.md` is 119,275
+   bytes and `docs/plans/016-fork-distribution-02.md` is 340,632.
 6. **Images on every hand page.** Every `![alt](src)` and every `<img … alt="…">` has a non-empty alt of at most 155
    characters.
 7. **Mermaid on every page.** Every Mermaid fence carries `accTitle:` and `accDescr`, and a page holds at most one
    fence.
-8. **No `:::` line on a hand page.** Callouts are GitHub alerts (S5).
-9. **The total.** Once no page of the baseline set lacks `kind:`, the sum of `countProseWords` over the set is at most
-   `TOTAL_SHARE × BASELINE.total`. `README.md` and `SECURITY.md` count toward the total, and their own page tests hold
-   their budgets. Until then the test prints the current share.
+8. **Callouts use the syntax `a4` kept** (`CALLOUT_SYNTAX`): with the alerts plugin landed (S5), no `:::` line on a
+   hand page; with it dropped, no `> [!` alert line.
+9. **The total.** Once no page of the baseline set under `docs/` lacks `kind:` (`README.md` and `SECURITY.md` carry no
+   frontmatter and are exempt from this switch; their words still count toward the total), the sum of
+   `countProseWords` over the set is at most `TOTAL_SHARE × BASELINE.total`. The page tests of `README.md` and
+   `SECURITY.md` hold their budgets. Until then the test prints the current share.
 
 There is one counter. `scripts/docs-words.mjs` holds it and prints the table; `test/docs/prose.ts` re-exports it. So the
 baseline, the check and a human's count can never disagree.
@@ -471,7 +477,7 @@ baseline, the check and a human's count can never disagree.
 | `requirements` | spec carries no ids (package goals G9, G2) |
 | `files` | See **a3 files** below the table. |
 | `interfaces` | See **a3 interfaces** below the table. |
-| `testCriteria` | **Given** the tree, **when** `npx vitest run test/docsPages.test.ts test/docs` runs, **then** it exits 0. **Given** the inventory recorded before and after the split (each `it(` name and its `expect(` count, by `node -e` over the files), **then** every old case name appears exactly once in the new files. The only exceptions are the cases whose literal was replaced by a derivation, each listed in the run record with its reason; no case is dropped silently. **Given** a scratch guide `docs/zz-probe.md` with the hand-page header and no sidebar entry, **then** the sidebar case fails naming it; the probe is deleted afterwards. **Given** a scratch verb registered in a scratch copy of the program, **then** the README verb case fails naming it. |
+| `testCriteria` | **Given** the tree, **when** `npx vitest run test/docsPages.test.ts test/docs` runs, **then** it exits 0. **Given** the inventory recorded before and after the split (each `it(` name and its `expect(` count, by `node -e` over the files), **then** every old case name appears exactly once in the new files. The only exceptions are the cases whose literal was replaced by a derivation, each listed in the run record with its reason; no case is dropped silently. **Given** a scratch guide `docs/zz-probe.md` with the hand-page header and no sidebar entry, **then** the sidebar case fails naming it; the probe is deleted afterwards. **Given** a scratch page listed in a scratch copy of the sidebar with neither header, **then** the one-header case fails naming it; the probe is deleted afterwards. **Given** a scratch verb registered in a scratch copy of the program, **then** the README verb case fails naming it. |
 | `edgeCases` | **Package 18 already moved** the run-of-record disclosure case to `test/records/docsPages.test.ts` (plan 014 file 2, `r3`): leave it there and move only what is still in this file. **Deriving the verbs from `src/cli.ts`** means importing the program, which registers side effects. If so, read the `##` verb headings of the generated `docs/cli-reference.md` instead; it renders from the program. **A case reads two pages:** it moves to `crossPage.test.ts`. **Windows:** compose every path with `node:path` and display it POSIX. |
 | `depends_on` | `a0-intake` |
 | `verify` | `npx vitest run test/docsPages.test.ts test/docs && npm run typecheck && npm run lint` |
@@ -499,13 +505,17 @@ baseline, the check and a human's count can never disagree.
   phrase and the Codex `$st-<id>` sentence.
 - `test/docs/evidencePages.test.ts` (new) holds `.github/client-contracts.md`.
 
-**a3 interfaces.** Four literals become derivations. Everything else moves verbatim, one `describe` per file, under its
-old name.
+**a3 interfaces.** Four literals become derivations, plus one new check. Everything else moves verbatim, one `describe`
+per file, under its old name.
 
 - **`HAND_GUIDES`** is every `docs/*.md` whose first comment after the frontmatter is the `HAND-WRITTEN PAGE` header,
   sorted. It replaces the literal `GUIDES` (`test/docsPages.test.ts:152-174`).
 - **`MAPPED_GUIDES`** is every id `website/sidebars.ts` lists (the existing `/'([a-z0-9/-]+)'/g` read), mapped to
   `docs/<id>.md`, hand pages only. It replaces `:187`.
+- **Every published page under `docs/` carries exactly one header:** the `HAND-WRITTEN PAGE` header or the
+  `GENERATED FILE` banner. A page with neither, or with both, fails, named. Every sidebar id resolves to a page in one
+  of the two sets. This check is independent of `HAND_GUIDES`, so a guide that loses its header fails instead of
+  leaving the roster.
 - **The advertised verbs** are the commands the program registers, in registration order. They replace both literal
   verb arrays (README `:1175-1222`, getting started `:2438-2490`).
 - **The doctrine count sentences** compare the roster sizes, spelled through `COUNT_WORDS`, with the page's words. They
@@ -520,9 +530,9 @@ deliberate test change, justified because README links the published docs home (
 |---|---|
 | `id` | `a4-site-foundations` |
 | `requirements` | spec carries no ids (package goals G3, G7, G6) |
-| `files` | `website/package.json`; `website/package-lock.json`; `website/docusaurus.config.ts`; `website/src/css/custom.css` (only if the search box fails contrast in either theme); `.github/workflows/docs-site.yml`; `scripts/site-markdown-twins.mjs` (new); `test/ci/docsSite.test.ts`; `test/ci/workflow.test.ts` (only where it pins the docs-site steps) |
+| `files` | `website/package.json`; `website/package-lock.json`; `website/docusaurus.config.ts`; `website/src/css/custom.css` (only if the search box fails contrast in either theme); `.github/workflows/docs-site.yml`; `scripts/site-markdown-twins.mjs` (new); `test/ci/docsSite.test.ts`; `test/ci/workflow.test.ts` (where it pins the docs-site steps and path filters) |
 | `interfaces` | See **a4 interfaces** below the table. |
-| `testCriteria` | **Given** `cd website && npm ci --ignore-scripts && npm run typecheck && npm run build`, **then** every step exits 0. **Given** a probe page with `> [!NOTE]`, built in a scratch copy of the site, **then** the HTML holds an admonition of type note. **Given** the built site, **then** the search plugin's index file exists under `website/build/`. **Given** `node scripts/site-markdown-twins.mjs website/build` after a build, **then** it exits 0 and every `llms.txt` target exists under `website/build/`. **Given** a scratch `llms.txt` naming a missing file, **then** it exits 1 naming that file. **Given** `npx vitest run test/ci/docsSite.test.ts test/ci/workflow.test.ts`, **then** it exits 0, including new cases: the twins step runs after the `llms.txt` copy, `look: 'classic'` is set, and the site type-check step exists. |
+| `testCriteria` | **Given** `cd website && npm ci --ignore-scripts && npm run typecheck && npm run build`, **then** every step exits 0. **Given** a probe page with `> [!NOTE]`, built in a scratch copy of the site, **then** the HTML holds an admonition of type note (skipped, with the run record's reason, when the alerts plugin was dropped). **Given** the built site, **then** the search plugin's index file exists under `website/build/` (skipped, with the run record's reason, when `a4` dropped the plugin under S6). **Given** `node scripts/site-markdown-twins.mjs website/build` after a build, **then** it exits 0 and every `llms.txt` target exists under `website/build/`. **Given** a scratch `llms.txt` naming a missing file, **then** it exits 1 naming that file. **Given** `npx vitest run test/ci/docsSite.test.ts test/ci/workflow.test.ts`, **then** it exits 0, including new cases: the twins step runs after the `llms.txt` copy, `look: 'classic'` is set, the site type-check step exists, and the workflow test asserts the new path-filter entries. |
 | `edgeCases` | **The search plugin's peer range excludes Docusaurus 3.10.2 or React 19:** drop it (S6), record why, keep the rest. **The alerts plugin does not turn an alert into an admonition under `format: 'detect'` for `.md`:** drop it; the contract's callout line then names `:::` admonitions (`a1` follows), and the run record says why. **The dependency audit reports an advisory:** stop and ask. **`exclude` breaks onto several lines:** keep it on one line, because `test/ci/docsSite.test.ts:146-176` reads it by a single-line regex. **A Markdown twin path collides with a site route** (`docs/<page>.md` against `docs/<page>/`): none does, since the route has no `.md` suffix; the test asserts both exist. |
 | `depends_on` | `a0-intake` |
 | `verify` | `cd website && npm ci --ignore-scripts && npm run typecheck && npm run build && cd .. && node scripts/site-markdown-twins.mjs website/build && npx vitest run test/ci/docsSite.test.ts test/ci/workflow.test.ts` |
@@ -546,7 +556,10 @@ deliberate test change, justified because README links the published docs home (
   that "the published site mirrors the same paths" (`src/cli/docs/llmsIndex.ts:24-28`) becomes true.
 - **`.github/workflows/docs-site.yml`.** The build job runs `npm run typecheck` in `website/` before `npm run build`.
   The site's `tsc` never runs in CI today. Then `node scripts/site-markdown-twins.mjs website/build` runs right after
-  `cp llms.txt website/build/llms.txt` (`:119-120`).
+  `cp llms.txt website/build/llms.txt` (`:119-120`). Both the `pull_request` and the `push` `paths:` lists gain
+  `llms.txt`, `scripts/site-markdown-twins.mjs`, `SECURITY.md`, `CONTRIBUTING.md`, `GOVERNANCE.md`,
+  `CODE_OF_CONDUCT.md` and `content/charter/**`, the inputs the twins step copies (`llms.txt:16-19`, `:51` on the base
+  commit).
 - **Dependency audit.** Run the dependency audit skill over `website/`, with the two new packages, and record it.
 
 ### a5-generated-reference — the generated pages say what each key does and how each artifact is customized
@@ -557,8 +570,8 @@ deliberate test change, justified because README links the published docs home (
 | `requirements` | spec carries no ids (package goals G4, G5, G2) |
 | `files` | See **a5 files** below the table. |
 | `interfaces` | See **a5 interfaces** below the table. |
-| `testCriteria` | **Given** `npx vitest run test/cli/docs test/emit/capabilityMatrix.test.ts`, **then** it exits 0, with these new cases:<ul><li>every `KEY_SPECS` row has a `meaning` of 1 to 100 characters;</li><li>`docs/configuration.md` has a `What it does` column;</li><li>the reviewer agent's line names `.stamity/overrides/agents/reviewer.customize.md` and `.stamity/overrides/agents/reviewer.md`;</li><li>the `st-qa` skill's line names `skills/qa/SKILL.customize.md`;</li><li>the migrations rule shows `**/*.sql`;</li><li>a pack-supplied artifact reads "cannot be replaced or patched".</li></ul>**Given** `node scripts/generate-docs.mjs && node scripts/generate-capability-matrix.mjs && git diff --exit-code docs/ llms.txt` after the commit, **then** it exits 0. **Given** `npm test -- --coverage`, **then** `src/cli/commands/config.ts` and the generators keep their per-file floors. |
-| `edgeCases` | **Package 20 changed `KEY_SPECS`** (the config reset and `hooks.userHooksDir`, its file 1): write meanings for the rows as landed. **A key Package 20 did not fix still reports a wrong unset value:** the page states what the engine uses, and an inbox row stays open. **A pack manifest states no trust tier:** the line says "tier: not stated". **A skill override keeps the bundled spelling at emission** (`docs/customization.md:61-74`): the line names the file the user writes, not the emitted copy. |
+| `testCriteria` | **Given** `npx vitest run test/cli/docs test/emit/capabilityMatrix.test.ts`, **then** it exits 0, with these new cases:<ul><li>every `KEY_SPECS` row has a `meaning` of 1 to 100 characters;</li><li>`docs/configuration.md` has a `What it does` column;</li><li>the reviewer agent's line names `.stamity/overrides/agents/reviewer.customize.md` and `.stamity/overrides/agents/reviewer.md`;</li><li>the `st-qa` skill's line names `skills/qa/SKILL.customize.md`;</li><li>the migrations rule shows `**/*.sql`;</li><li>a pack skill reads "cannot be replaced or patched"; a pack rule carries the ordinary `Customize` line;</li><li>the ops pack's line reads `curator-verified`.</li></ul>**Given** `node scripts/generate-docs.mjs && node scripts/generate-capability-matrix.mjs && git diff --exit-code docs/ llms.txt` after the commit, **then** it exits 0. **Given** `npm test -- --coverage`, **then** `src/cli/commands/config.ts` and the generators keep their per-file floors. |
+| `edgeCases` | **Package 20 changed `KEY_SPECS`** (the config reset and `hooks.userHooksDir`, its file 1): write meanings for the rows as landed. **A key Package 20 did not fix still reports a wrong unset value:** the page states what the engine uses, and an inbox row stays open. **A pack not in the curated catalog:** its line says the tier resolves at install from its signing (`src/pack/trust.ts`). **A skill override keeps the bundled spelling at emission** (`docs/customization.md:61-74`): the line names the file the user writes, not the emitted copy. |
 | `depends_on` | `a0-intake` |
 | `verify` | `npx vitest run test/cli/docs test/emit/capabilityMatrix.test.ts && node scripts/generate-docs.mjs && node scripts/generate-capability-matrix.mjs && git diff --exit-code docs/ llms.txt && npm test -- --coverage` |
 
@@ -568,7 +581,8 @@ deliberate test change, justified because README links the published docs home (
 - `src/cli/docs/configReference.ts`: a `What it does` column, and the lowercase product name at `:266`.
 - `docs/configuration.md`: regenerated.
 - `src/cli/docs/referencePages.ts`: a `Customize` line per artifact, scope and globs on the rules page, and the trust
-  tier per pack where its manifest states one.
+  tier per pack, read from the curated catalog pin (`lookupCatalogEntry(id)?.pin.tier`, `src/pack/curated.ts`;
+  already imported by `src/cli/docs/referencePages.ts`). The manifest carries no tier (`src/pack/manifest.ts:461-473`).
 - `docs/reference/*.md`: regenerated.
 - `src/emit/capabilityMatrix.ts`: the at-a-glance hook row states where a hook is enforced, and the Copilot facts gain
   the default-branch line.
@@ -584,8 +598,10 @@ deliberate test change, justified because README links the published docs home (
   `; replace with` `` `.stamity/overrides/<class>/<id>.md` ``.
   - `<id>` is the declared `id`. For a command, drop the internal `cmd-` prefix.
   - A skill reads `skills/<id>/SKILL.customize.md` and `skills/<id>/SKILL.md`.
-  - A pack-supplied artifact reads "cannot be replaced or patched; packs add new ids only"
-    (`src/emit/planner.ts:600-603`).
+  - A pack-supplied **skill** reads "cannot be replaced or patched; packs add new skill ids only"
+    (`src/emit/planner.ts:600-603`, `:444-450`). Any other pack-supplied artifact (a rule, agent or command) takes the
+    ordinary `Customize` line, because the user layer outranks a pack (`src/content/catalog.ts:51`) and the planner
+    resolves overlays on pack rules, agents and commands (`src/emit/planner.ts:335-343`).
 - **Rules page.** Each rule gets `- **Applies to:**` followed by its globs, or by "every session" or "when a task needs
   it", read from `scope` and `load`.
 - **Capability matrix.** In `## Coverage at a glance` (`src/emit/capabilityMatrix.ts:743`), each client's
@@ -653,8 +669,9 @@ export default {
 | `DASH` | `'6 4'` |
 | `GROUNDS` | `#FBFBFD`, `#09090C` (the site's two backgrounds), `#FFFFFF`, `#0D1117`, `#22272E` (GitHub's light, dark and dimmed grounds) |
 
-A test holds `FILL.primary`, `FILL.deep` and `STROKE` equal to the brand scale in `website/src/css/custom.css`, so the
-kit follows the brand.
+A test holds `FILL.primary`, `FILL.deep` and `STROKE` equal to the brand scale in `website/src/css/custom.css`, and the
+two site grounds in `GROUNDS` equal to `--ifm-background-color` in its light and dark blocks, so the kit and its
+contrast check follow the brand.
 
 **The six templates** (`scripts/visuals/templates.mjs`):
 - `flow`: boxes and arrows, left to right, with optional edge labels on filled chips.
@@ -691,9 +708,13 @@ kit follows the brand.
    and a non-empty `<desc>`.
 6. **Private-id shape.** No letter is immediately followed by a hyphen and two to four digits. The private-id rule at
    `scripts/leak-gate.mjs:550-560` would read a curve command glued to a negative two-digit number as a ledger id.
-7. **Same facts.** For every page that references `visuals/<slug>.svg`, each `spec.facts` string appears in that page's
-   text, compared case-insensitively with whitespace normalized. In this file `ORPHANS_ALLOWED = true`. File 2's
-   integration unit sets it to `false`, and from then on every SVG must be referenced by a page.
+7. **Same facts.** For every page that references `visuals/<slug>.svg`, each `spec.facts` string appears in the section
+   that holds the reference. The section is everything from the heading above the reference to the next heading of
+   the same or a higher level. `test/ci/visuals.test.ts` implements this rule itself and does not import `a3`'s
+   `sectionOf`, which lands in a parallel lane; `sectionOf` in `test/docs/shared.ts` follows the same rule. Image
+   syntax and alt text are removed before matching, which is case-insensitive with whitespace normalized. In this
+   file `ORPHANS_ALLOWED = true`. File 2's integration unit sets it to `false`, and from then on every SVG must be
+   referenced by a page.
 8. **Determinism.** Every template renders a test-only fixture spec twice, byte for byte the same. This covers the
    templates the pilots do not use.
 
@@ -714,7 +735,7 @@ kit follows the brand.
 | `files` | `.github/docs-reader-test.md` (new); `scripts/docs-reader/tasks.mjs` (new); `scripts/docs-reader/fixture.mjs` (new); `scripts/docs-reader/grade.mjs` (new); `test/ci/docsReader.test.ts` (new) |
 | `interfaces` | See **a7 interfaces** below the table. |
 | `testCriteria` | **Given** `npm run build && npx vitest run test/ci/docsReader.test.ts`, **then** it exits 0. For each of T1–T8 and R1–R2, the untouched fixture fails its grader with a named reason, and the scripted golden solution passes. **Given** `.github/docs-reader-test.md`, **then** it states the bar "7 of 8 tasks in at least 2 of 3 tries" and the contamination rule, and the test asserts both strings. |
-| `edgeCases` | **T5 needs the ops pack to sync cleanly on Claude Code:** the 1.11.0 regression hit Cursor and Codex, and the fixture selects Claude Code only. If T5's golden fails, report it instead of changing the task. **No network in the test:** use the wrapper, never `npx`. **The security page's heading moves in file 2:** T8's grader follows the heading `## What it does not defend`, which file 2 keeps on the security page, and the security page's test pins it. **A grader needs real output wording** (T2's `patches` row): read it from a real `validate` run when the fixture is built, never from memory. |
+| `edgeCases` | **T5 needs the ops pack to sync cleanly on Claude Code:** the 1.11.0 regression hit Cursor and Codex, and the fixture selects Claude Code only. If T5's golden fails, report it instead of changing the task. **No network in the test:** use the wrapper, never `npx`. **The security page's heading moves in file 2:** T8's grader follows the heading `## What it does not defend`, which file 2 keeps on the security page, and the security page's test pins it. **A grader needs real output wording** (T2's `patches` row): read it from a real `validate` run when the fixture is built, never from memory. **An agent runs the CLI by a path the shim does not cover:** T5 fails with the reason "no call log", and triage labels it `agent-error`. |
 | `depends_on` | `a0-intake` |
 | `verify` | `npm run build && npx vitest run test/ci/docsReader.test.ts` |
 
@@ -726,40 +747,53 @@ kit follows the brand.
 2. **Tasks.** The table below, with the goal text exactly as an agent receives it.
 3. **Conditions.**
    - **A:** the CLI only. `--help` is allowed. No docs, no repository source, no web.
-   - **B:** a read-only copy of the published pages (`docs/**/*.md`, `README.md`, `llms.txt`). No repository source, no
-     web.
-4. **Trials.** B gets 3 tries per task. A gets 1 try per task, plus 2 more when the first passes.
+   - **B:** a read-only copy of the published pages: every file `llms.txt` links, which is what the site serves as
+     Markdown (the step `a4` adds), plus `llms.txt` itself. `docs/specs/` and `docs/plans/` are not in it, because the
+     site build excludes them and `llms.txt` names neither. No repository source, no web. The grader refuses a copy
+     that holds a `plans/` or `specs/` folder.
+4. **Trials.** B gets 3 tries per task. A gets tries 1 and 2 per task: if both pass, the task is contaminated; if both
+   fail, it is clean; if they split, try 3 decides. That is 40 to 48 sessions, plus the A tries of each reserve that is
+   tested.
 5. **The bar, declared now.** B passes at least 7 of 8 tasks in at least 2 of 3 tries. Every passing B try cites at
    least one existing `page#section`.
 6. **Contamination.** A task that A passes in at least 2 of 3 tries is swapped for reserve R1, then R2, before scoring.
+   A reserve gets the same A baseline before it is swapped in. Once the reserves run out, each further contaminated
+   task leaves the scored set, and the bar becomes one fewer than the number of scored tasks, each in at least 2 of 3
+   tries. Fewer than 6 scored tasks make the bar `invalid`, which is recorded as `Not done:`.
 7. **Triage.** Each failing B try is labelled `docs-gap` or `agent-error`, with one sentence of reason.
 8. **Model.** Opus 5.5 for every agent. There is no judge, because the graders are deterministic.
-9. **Records.** Results go to the running package's run record, as `reader-test/results.md`.
+9. **Records.** Results go to the running package's run record, as `reader-test/results.md`. Each result names the
+   commit its docs copy was built from.
 10. **Cadence.** Once at Package 21's close. After that, on demand after a change to getting started, customization or
     `llms.txt`. It is never part of the release eval set.
 
 **The tasks** (`scripts/docs-reader/tasks.mjs`). Every fixture is a small git repository with a `package.json` whose
-`test` script exits 0. Every grader reads end state only.
+`test` script exits 0. Every grader reads end state only, apart from T5's call log.
 
-| Id | Goal text the agent receives | Fixture | Grader (end state only) |
+| Id | Goal text the agent receives | Fixture | Grader (end state; T5 also reads the call log) |
 |---|---|---|---|
 | T1 | "Set stamity up in this repository for Claude Code, and make sure the setup is healthy." | empty sample project | `.stamity/manifest.json` exists with `tools` equal to `["claude"]`; `check` exits 0; `CLAUDE.md` holds the managed-block markers |
-| T2 | "Make the reviewer agent insist that every behaviour change comes with a test, without copying the whole agent." | T1's end state | `.stamity/overrides/agents/reviewer.customize.md` exists with no `---` fence; no `.stamity/overrides/agents/reviewer.md`; `validate` exits 0 and prints the reviewer's `patches` row; after `sync`, `.claude/agents/stamity-reviewer.md` ends with the patch text |
-| T3 | "Add a team rule that applies only to SQL files: every migration must be reversible." | T1's end state | a `.stamity/overrides/rules/<id>.md` with `scope: conditional` and a glob that matches `db/001.sql`; `validate` exits 0; after `sync`, the emitted rule exists under `.claude/rules/` |
-| T4 | "`stamity check` fails in this repository. Make it pass without deleting the setup." | T1's end state with one generated file hand-edited | `check` exits 0; `.stamity/manifest.json` still exists; the edited file equals a fresh render |
-| T5 | "Add the ops pack, then remove it again, leaving no trace of it." | T1's end state | after the task, no ops artifact is emitted, the ledger holds no ops entry, and `check` exits 0 |
-| T6 | "A reviewer left comments on your pull request. Which stamity touchpoint handles them, and where do the docs say so? Write the answer to answer.md." | T1's end state | `answer.md` names `/st-pr-resolve` and cites a `docs/<page>.md#<anchor>` that exists in the docs copy |
+| T2 | "Make the reviewer agent insist that every behaviour change comes with a test, without copying the whole agent." | T1's end state | `.stamity/overrides/agents/reviewer.customize.md` exists with no `---` fence; no `.stamity/overrides/agents/reviewer.md`; `validate` exits 0 and prints the reviewer's `patches` row; after `sync`, `.claude/agents/stamity-reviewer.md` ends with the patch text; and the patch body matches `/\btests?\b/i` |
+| T3 | "Add a team rule that applies only to SQL files: every migration must be reversible." | T1's end state | a `.stamity/overrides/rules/<id>.md` with `scope: conditional` and a glob that matches `db/001.sql`; `validate` exits 0; after `sync`, the emitted rule exists under `.claude/rules/`; and the rule body matches `/reversib/i` in both the override and the emitted copy |
+| T4 | "`stamity check` fails in this repository. Make it pass without deleting the setup." | T1's end state, then `config set gates.lint "echo t4-sentinel"`, then one generated file hand-edited | `check` exits 0; `.stamity/manifest.json` still exists; the edited file equals a fresh render; and `config get gates.lint` still prints `echo t4-sentinel`. A `clean` followed by `init` resets the manifest and fails this. |
+| T5 | "Add the ops pack, then remove it again, leaving no trace of it." | T1's end state | after the task, no ops artifact is emitted, the ledger holds no ops entry, and `check` exits 0; and the call log holds an `add` naming ops before a removal of it |
+| T6 | "A reviewer left comments on your pull request. Which stamity touchpoint handles them, and where do the docs say so? Write the answer to answer.md." | T1's end state | `answer.md` names `/st-pr-resolve` and cites a `docs/<page>.md#<anchor>` in the docs copy whose section (by the section rule below) contains `/st-pr-resolve` |
 | T7 | "Make the agents use `npm run verify` as the test gate in this repository." | T1's end state | `config get gates.test` prints `npm run verify`; after `sync` the generated gate text shows it |
-| T8 | "Name two things stamity's engine does not defend against, and cite where the docs say so. Write the answer to answer.md." | T1's end state | `answer.md` holds at least two items listed under the security page's `## What it does not defend`, read from the docs copy, plus a citation that exists |
+| T8 | "Name two things stamity's engine does not defend against, and cite where the docs say so. Write the answer to answer.md." | T1's end state | `answer.md` holds at least two items listed under the security page's `## What it does not defend`, read from the docs copy, plus a citation that resolves to the security page's `## What it does not defend` section (by the section rule below) |
 | R1 | "Undo the reviewer change in this repository." | T2's end state | the patch is gone; `validate` shows no reviewer `patches` row; the emitted reviewer equals the bundled render |
-| R2 | "Share this repository's client choice with a second repository through a workspace." | two sample projects | the workspace file names both members; `workspace status` lists both |
+| R2 | "Share this repository's client choice with a second repository through a workspace." | T1's end state as repository A, plus a second sample project B | the workspace file names both members, `workspace status` lists both, and B's `.stamity/manifest.json` has `tools` equal to A's (`["claude"]`) |
 
 **The commands:**
-- `node scripts/docs-reader/fixture.mjs setup <task> <dir> [--cli <path-to-dist/cli.js>]` builds the fixture. With
-  `--cli`, it puts a `stamity` wrapper on the fixture's PATH that runs that build, so no network is needed. Without it,
-  the fixture installs the packed tarball with npm.
+- `node scripts/docs-reader/fixture.mjs setup <task> <dir> [--cli <path-to-dist/cli.js> | --tarball <path>]` builds
+  the fixture. With `--cli`, it puts a `stamity` wrapper on the fixture's PATH that runs that build, so no network is
+  needed. Without `--cli`, it installs the tarball given by `--tarball <path>`, and refuses to run without one. In both
+  modes, the fixture's `stamity` shim (the wrapper on PATH, or the shim the fixture writes over
+  `node_modules/.bin/stamity`) appends each call's argv to `<dir>/.git/stamity-calls.log`.
 - `node scripts/docs-reader/grade.mjs <task> <dir> [--docs <dir>]` prints `PASS` or `FAIL <reason>` lines and exits
-  0 or 1.
+  0 or 1. `grade.mjs` refuses a `--docs` folder that holds `plans/` or `specs/`.
+- **The section rule** (T6 and T8): a section is everything from the heading an anchor names to the next heading of
+  the same or a higher level. `grade.mjs` implements this rule itself and does not import `a3`'s `sectionOf`, which
+  lands in a parallel lane; `sectionOf` in `test/docs/shared.ts` follows the same rule.
 - `test/ci/docsReader.test.ts` runs, for each task, the untouched fixture (expect FAIL) and a scripted golden solution
   (expect PASS) through the wrapper.
 
@@ -770,7 +804,7 @@ kit follows the brand.
 | `id` | `a8-close-file-1` |
 | `requirements` | spec carries no ids (package goals G1, G6, G7, G8, G9) |
 | `files` | `CHANGELOG.md` (`## [Unreleased]`); the run record; `.stamity/inbox.md` (only rows this file retires) |
-| `interfaces` | **CHANGELOG lines.**<ul><li>Added: a docs contract and prose checks; the diagram kit; the docs reader-test kit; local search on stamity.dev; Markdown copies of every `llms.txt` target on stamity.dev.</li><li>Changed: the configuration page says what each key does; reference pages say how to customize each artifact; the capability matrix's at-a-glance hook row says where a hook is enforced.</li></ul>**Review rounds** on the PR until it is approved, with every Minor fixed or recorded:<ul><li>a correctness and tests lens;</li><li>a security lens over the SVG allowlist, the site's new dependencies and the twins script;</li><li>a docs lens over the contract text.</li></ul> |
+| `interfaces` | **CHANGELOG lines.**<ul><li>Added: a docs contract and prose checks; the diagram kit; the docs reader-test kit; local search on stamity.dev (unless `a4` dropped it under S6); Markdown copies of every `llms.txt` target on stamity.dev.</li><li>Changed: the configuration page says what each key does; reference pages say how to customize each artifact; the capability matrix's at-a-glance hook row says where a hook is enforced.</li></ul>**Review rounds** on the PR until it is approved, with every Minor fixed or recorded:<ul><li>a correctness and tests lens;</li><li>a security lens over the SVG allowlist, the site's new dependencies and the twins script;</li><li>a docs lens over the contract text.</li></ul> |
 | `testCriteria` | **Given** the PR head, **then** all of these pass, read by exit code:<ul><li>`npm run lint && npm run typecheck && npm run test`;</li><li>`npm test -- --coverage`;</li><li>`node scripts/leak-gate.mjs`;</li><li>`node scripts/repo-hygiene.mjs --base <base>`;</li><li>the site's `npm run typecheck && npm run build`;</li><li>CI green on every leg, Windows included.</li></ul>**And** QA row K1 has passed. **Given** the merge, **then** `main` is fast-forwarded and its push run is green. |
 | `edgeCases` | **The known Windows fixture flake** (`test/ci/pluginLifecycle.test.ts`, an inbox Warning): re-run only its failed job, and record both runs. **The merge reads `BLOCKED` while green, up to date and approved:** use the repository's admin merge convention, recorded. |
 | `depends_on` | `a1-docs-contract`, `a2-prose-checks`, `a3-docs-test-split`, `a4-site-foundations`, `a5-generated-reference`, `a6-visual-kit`, `a7-reader-test-kit` |
@@ -790,8 +824,8 @@ kit follows the brand.
    - `a7`: `.github/docs-reader-test.md`, `scripts/docs-reader/**` and `test/ci/docsReader.test.ts`.
 
    Never use `git stash`; take a patch file and `git restore` instead (the learning `git-stash-is-shared-across-worktrees`).
-3. **`a2-prose-checks`** runs after `a3`, because it reads the roster, and measures the baseline on the base commit's
-   pages.
+3. **`a2-prose-checks`** runs after `a3`, because it reads the roster, and after `a4`, because it reads the callout
+   syntax `a4` kept. It measures the baseline on the base commit's pages.
 4. **`a1-docs-contract`** runs after `a3`, `a4` and `a6`.
 5. **`a8-close-file-1`** closes the file.
 
@@ -808,7 +842,7 @@ merge, and any dependency advisory.
 | `KEY_SPECS` (`src/cli/commands/config.ts`) | `a5` | Data only; Package 20 also changed this registry. |
 | `docs/visuals/` and its spec format | `a6` | File 2 adds specs in the same format. |
 | `CONTRIBUTING.md`'s regeneration table | `a1` | Gains the visuals command. |
-| The docs-site workflow's step list | `a4` | `test/ci/workflow.test.ts` pins its least-privilege split and deploy condition. |
+| The docs-site workflow's step list and path filters | `a4` | `test/ci/workflow.test.ts` pins its least-privilege split and deploy condition. |
 
 ## QA walk
 
