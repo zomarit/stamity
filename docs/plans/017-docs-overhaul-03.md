@@ -193,10 +193,10 @@ recorded; a new violation on a rewritten page is fixed in `c2` before sign-off.
 | `requirements` | spec carries no ids (package goals G7, G8) |
 | `files` | the run record; `.stamity/inbox.md` (rows this package retires, and follow-ups); the roadmap's Package 21 section (the maintainer's local file) |
 | `interfaces` | See **c4 interfaces** below the table. |
-| `testCriteria` | **Given** the deploy run, **then** it completed with `success`, and the deploy run's `headSha` equals S. **Given** the live checks, **then** every route answers 200 with the new text, every `.md` copy answers 200 with Markdown, and search returns a hit. **Given** the run record, **then** it names the deploy run id, the live-check table, the reader-test outcome, the QA sign-off and every `Not done:` with its owner. **Given** a deploy after a bar line other than `Bar met: yes`, **then** the run record holds the maintainer's override, which names that line. |
-| `edgeCases` | **The deploy job is skipped** (the repository-identity guard, `.github/workflows/docs-site.yml:153-156`): it must run in the canonical public repository from `main`; record and stop. **A live route returns 404 while the build had it:** wait for the Pages cache (a few minutes), re-check once, then open an inbox row. **The maintainer says "not yet":** close without the deploy, and the kickoff for Package 12 carries the deploy as its first step. **`Bar met:` is not `yes`** (the bar failed or is `invalid`): step 2 asks whether to override. With no recorded override, close without the deploy. |
+| `testCriteria` | **Given** the deploy run, **then** it completed with `success`, and the deploy run's `headSha` equals S. **Given** the live checks, **then** every route answers 200 with the new text, every `.md` copy answers 200 with Markdown, and search returns a hit. **Given** the run record, **then** it names the deploy run id, the live-check table, the reader-test outcome, the QA sign-off and every `Not done:` with its owner. **Given** a deploy after a bar line other than `Bar met: yes`, **then** the run record holds the maintainer's override, which names that line. **Given** more than one candidate dispatch run, **then** no run is cancelled, and the run record holds the maintainer's choice. |
+| `edgeCases` | **The deploy job is skipped** (the repository-identity guard, `.github/workflows/docs-site.yml:153-156`): it must run in the canonical public repository from `main`; record and stop. **A live route returns 404 while the build had it:** wait for the Pages cache (a few minutes), re-check once, then open an inbox row. **The maintainer says "not yet":** close without the deploy, and the kickoff for Package 12 carries the deploy as its first step. **`Bar met:` is not `yes`** (the bar failed or is `invalid`): step 2 asks whether to override. With no recorded override, close without the deploy. **Several dispatch runs match,** at the first list or at the list again before a cancel: stop and ask; never cancel. |
 | `depends_on` | `c3-qa-walkthrough` |
-| `verify` | `gh run view <deploy-run-id> --json conclusion,headSha` shows `success`, and the deploy run's `headSha` equals S; the live-check script prints `ok` for every row |
+| `verify` | `gh run view <deploy-run-id> --json conclusion,headSha,event` shows `success`, event `workflow_dispatch`, and `headSha` equal to S; the run id came from the printed URL or from exactly one actor-filtered match; the live-check script prints `ok` for every row |
 
 **c4 interfaces.**
 
@@ -209,10 +209,17 @@ recorded; a new violation on a rewritten page is fixed in `c2` before sign-off.
 
    Record S, the sha c3 signed off. Before the dispatch, run `git fetch origin`; then `git rev-parse origin/main` must
    equal S. On yes, note the time in UTC and run `gh workflow run docs-site.yml --ref main -f deploy=true`. Then take
-   the dispatched run, not the newest one: list the runs with
-   `gh run list --workflow docs-site.yml --event workflow_dispatch --json databaseId,headSha,createdAt`, and pick the
-   run whose `createdAt` is after the dispatch. Poll until it appears. If its `headSha` differs from S, cancel it
-   (`gh run cancel <id>`) before its deploy job starts, and stop. Otherwise watch it to completion.
+   the dispatched run, never the newest one. If `gh workflow run` printed a run URL, its last path segment is the run
+   id; use it. Otherwise note T, the UTC time one minute before the dispatch, read your login with
+   `gh api user --jq .login`, and list the candidates with
+   `gh api -X GET repos/zomarit/stamity/actions/workflows/docs-site.yml/runs -f event=workflow_dispatch -f created='>=<T>' --jq '.workflow_runs[] | select(.actor.login == "<login>") | {id, head_sha, created_at, status}'`.
+   If exactly one run matches, that is the run. If none does, poll until one appears. If more than one does, stop and
+   ask the maintainer which run is theirs; never cancel while the run is in doubt. If the identified run's `head_sha`
+   differs from S, cancel it (`gh run cancel <id>`) before its deploy job starts, and stop. When the id came from the
+   list, first list the candidates again with the same query. Cancel only while exactly one run still matches and it
+   is the identified run; otherwise stop and ask the maintainer, and never cancel. If it ends `cancelled`
+   without a cancel from this step (a newer dispatch replaced it in the concurrency queue), record that and stop.
+   Otherwise watch it to completion.
 3. **Check the live site.** A short script in the run record fetches each route and asserts status 200 and one
    expected heading:
    - `/`;
