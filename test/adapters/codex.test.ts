@@ -12,6 +12,7 @@ import {
   codexResiduePlanner,
   composeConfigToml,
   downConvertRules,
+  shownSkillRows,
   skillsListCharacters,
 } from "../../src/adapters/codex.ts";
 import { buildContentIndex, type CatalogItem } from "../../src/content/catalog.ts";
@@ -992,7 +993,14 @@ describe("command surface", () => {
     expect((residue.warnings ?? []).join("\n")).not.toContain("touchpoints [codex]");
   });
 
-  it("counts the touchpoints in the skills list it refuses past the cap", async () => {
+  // TEST CHANGE, justified (u3-codex-shown-rows, run 2026-10-03_pack-engine-defects):
+  // this case used to assert the touchpoint WAS counted and the run refused. codex-cli
+  // 0.160.0 (`codex debug prompt-input`, measured 2026-10-03) shows its model none of
+  // the nine touchpoints — each carries `policy.allow_implicit_invocation: false` in
+  // its `agents/openai.yaml` — so the count moved to the rows Codex shows, and the same
+  // touchpoint-heavy setup now plans. The over-cap description is kept, so the case
+  // still proves the touchpoint row is present and would have been past the cap.
+  it("leaves the touchpoints out of the skills list: their policy hides them from the model", async () => {
     const temp = getTemp();
     const long = "d".repeat(CODEX_SKILLS_LIST_BUDGET_CHARS);
     await temp.seedFiles({
@@ -1003,16 +1011,17 @@ describe("command surface", () => {
       ),
     });
     const over = ctxOf({ contentRoot: temp.path("corpus"), rules: [], commands: ["cmd-work"] });
-    const under = ctxOf({ contentRoot: temp.path("corpus"), rules: [], commands: [] });
 
-    // The same corpus with the command deselected plans; selected, its listing line alone
-    // is past the cap, so the refusal proves the touchpoint was counted.
-    await expect(
-      codexResiduePlanner.planResidue(await buildCoreEmissionPlan(under), under),
-    ).resolves.toBeDefined();
-    await expect(
-      codexResiduePlanner.planResidue(await buildCoreEmissionPlan(over), over),
-    ).rejects.toThrow(/codex skills list is \d+ characters/);
+    const residue = await codexResiduePlanner.planResidue(await buildCoreEmissionPlan(over), over);
+
+    // Non-degenerate: the touchpoint shipped, its listing line alone is past the cap,
+    // and its companion is the policy that hides it — so planning is the exclusion.
+    const touchpoint = residue.outputs.filter((row) => row.owner.artifactType === "command");
+    expect(skillsListCharacters(touchpoint)).toBeGreaterThan(CODEX_SKILLS_LIST_BUDGET_CHARS);
+    expect(touchpoint.map((row) => row.content).join("\n")).toContain(
+      "allow_implicit_invocation: false",
+    );
+    expect(shownSkillRows(touchpoint)).toEqual([]);
   });
 });
 
@@ -2106,7 +2115,14 @@ describe("the shipped Codex emission under ruleDelivery: on-demand", () => {
         .filter((row) => row.path.startsWith(`${SKILLS_PROJECTION_DIR}/`))
         .map((row) => ({ path: row.path, content: row.content, artifactType: row.owner.artifactType })),
     ];
-    const total = skillsListCharacters(listed);
+    // TEST CHANGE, justified (u3-codex-shown-rows, run 2026-10-03_pack-engine-defects):
+    // the pin now measures the rows Codex SHOWS its model. codex-cli 0.160.0
+    // (`codex debug prompt-input`, measured 2026-10-03) lists the 8 shipped skills and
+    // the 9 rule-skills, and none of the nine touchpoints, whose `agents/openai.yaml`
+    // sets `policy.allow_implicit_invocation: false`. `listed` still holds all three
+    // kinds, so the non-degenerate checks below keep proving the projection is whole.
+    const shown = shownSkillRows(listed);
+    const total = skillsListCharacters(shown);
 
     // Non-degenerate: the full selection carries all THREE kinds of skill, so a
     // projection that lost the rules, the content skills or the touchpoints
@@ -2121,6 +2137,14 @@ describe("the shipped Codex emission under ruleDelivery: on-demand", () => {
       .map((row) => row.path.split("/").at(-2) ?? "");
     expect(touchpointDirs).toHaveLength(9);
     expect(new Set(dirs).size).toBe(dirs.length);
+    // What the client shows: the 17 rows of the 2026-10-03 measurement, no touchpoint
+    // among them, and a total strictly below the whole tree's.
+    const shownDirs = shown
+      .filter((row) => row.path.endsWith("/SKILL.md"))
+      .map((row) => row.path.split("/").at(-2) ?? "");
+    expect(shownDirs).toHaveLength(17);
+    for (const dir of touchpointDirs) expect(shownDirs, dir).not.toContain(dir);
+    expect(total).toBeLessThan(skillsListCharacters(listed));
 
     expect(
       LIVE_CAPABILITY_INPUTS.alwaysOn.codexSkillsListChars,
@@ -2198,6 +2222,206 @@ describe("the skills-list budget", () => {
     const ctx = ctxOf({ contentRoot: await seedCorpus(), ruleDelivery: "on-demand" });
 
     await expect(codexResiduePlanner.planResidue(core, ctx)).resolves.toBeDefined();
+  });
+
+  it("drops a folder whose agents/openai.yaml hides it, and keeps display-only and malformed companions", () => {
+    const companion = (index: number, content: string) => ({
+      path: `.agents/skills/st-fixture-${index}/agents/openai.yaml`,
+      content,
+      artifactId: `fixture-${index}`,
+      artifactType: "skill" as const,
+    });
+    const rows = [
+      skillRow(1, 100),
+      companion(1, "policy:\n  allow_implicit_invocation: false\n"),
+      skillRow(2, 200),
+      // The shape the bundled skills ship: display fields only, so the client lists it.
+      companion(2, 'interface:\n  display_name: "Two"\n'),
+      skillRow(3, 300),
+      // A companion that does not parse: counted, because a budget never under-counts
+      // on a parse failure.
+      companion(3, "policy: [unclosed\n"),
+      skillRow(4, 400),
+      // An explicit `true` is not the hiding policy.
+      companion(4, "policy:\n  allow_implicit_invocation: true\n"),
+      skillRow(5, 500),
+    ];
+
+    const shown = shownSkillRows(rows);
+
+    expect(shown.map((row) => row.path)).not.toContain(".agents/skills/st-fixture-1/SKILL.md");
+    expect(shown.map((row) => row.path)).not.toContain(
+      ".agents/skills/st-fixture-1/agents/openai.yaml",
+    );
+    // Folders 2 to 5 stay listed: 4 SKILL.md rows of name 12 + description + 3.
+    expect(skillsListCharacters(shown)).toBe(
+      12 + 200 + 3 + (12 + 300 + 3) + (12 + 400 + 3) + (12 + 500 + 3),
+    );
+    expect(skillsListCharacters(rows) - skillsListCharacters(shown)).toBe(12 + 100 + 3);
+  });
+
+  /** One corpus-shaped skill or command, with a description of `length` characters. */
+  function listedArtifact(id: string, type: "skill" | "command", length: number): string {
+    return [
+      "---",
+      `id: ${id}`,
+      `type: ${type}`,
+      `description: "${"d".repeat(length)}"`,
+      "tags: [orchestration]",
+      "load: on-demand",
+      `obsolete_when: fixture ${id} trigger`,
+      "---",
+      "",
+      `# ${id}`,
+      "",
+      "Fixture body.",
+      "",
+    ].join("\n");
+  }
+
+  /**
+   * A corpus with one core skill, plus the given pack roots, selected whole, and the
+   * core plan those packs would produce. The pack skills' `.agents/skills/` rows are
+   * added to the core plan by hand: `buildCoreEmissionPlan` reads pack skills only
+   * from INSTALLED packs (receipts under the repo), which a residue-level suite has no
+   * install verb to write; the shape built here is the one `projectOnePackSkill`
+   * emits — `name` from the directory, every file of the folder as its own row. The
+   * pack roots still reach the residue context, which is where the attribution reads.
+   */
+  async function packedPlan(
+    packs: Record<string, Record<string, string>>,
+    selected: { skills: string[]; commands?: string[] },
+  ): Promise<{ ctx: EmissionContext; core: CoreEmissionPlan }> {
+    const temp = getTemp();
+    const files: Record<string, string> = {
+      "corpus/charter/stamity-charter.md": CHARTER_FIXTURE,
+      "corpus/skills/st-core-one/SKILL.md": listedArtifact("core-one", "skill", 100),
+    };
+    const packRows: CoreEmissionPlan["skills"] = [];
+    for (const [pack, packFiles] of Object.entries(packs)) {
+      for (const [rel, body] of Object.entries(packFiles)) {
+        files[`packs/${pack}/${rel}`] = body;
+        const [kind, dir, ...rest] = rel.split("/");
+        if (kind !== "skills" || dir === undefined) continue;
+        const id = dir.slice("st-".length);
+        const description = /^description: "(.*)"$/mu.exec(body)?.[1];
+        packRows.push({
+          path: `${SKILLS_PROJECTION_DIR}/${dir}/${rest.join("/")}`,
+          content:
+            rest.join("/") === "SKILL.md"
+              ? `---\nname: ${dir}\ndescription: ${description ?? ""}\n---\n\nFixture body.\n`
+              : body,
+          artifactId: id,
+          artifactType: "skill",
+        });
+      }
+    }
+    await temp.seedFiles(files);
+    const ctx = ctxOf({
+      contentRoot: temp.path("corpus"),
+      rules: [],
+      skills: ["core-one", ...selected.skills],
+      commands: selected.commands ?? [],
+    });
+    ctx.contentRoot = {
+      root: temp.path("corpus"),
+      packRoots: Object.keys(packs).map((pack) => ({ pack, root: temp.path(`packs/${pack}`) })),
+    };
+    const plan = await buildCoreEmissionPlan(ctx);
+    return { ctx, core: { ...plan, skills: [...plan.skills, ...packRows] } };
+  }
+
+  /** `count` pack skills `st-<prefix>-<n>`, each with a 900-character description. */
+  function packSkills(prefix: string, count: number, companion?: string): Record<string, string> {
+    const files: Record<string, string> = {};
+    for (let n = 1; n <= count; n += 1) {
+      files[`skills/st-${prefix}-${n}/SKILL.md`] = listedArtifact(`${prefix}-${n}`, "skill", 900);
+      if (companion !== undefined) files[`skills/st-${prefix}-${n}/agents/openai.yaml`] = companion;
+    }
+    return files;
+  }
+
+  it("names each installed pack's share and the core's in the refusal, keeping the pinned total", async () => {
+    // Two packs, so the attribution is per pack and not one lump: acme-demo's eight
+    // 900-character skills and beta-tools' one take the list past 8,000 together.
+    const { ctx, core } = await packedPlan(
+      { "acme-demo": packSkills("acme-skill", 8), "beta-tools": packSkills("beta-skill", 1) },
+      {
+        skills: [
+          ...Array.from({ length: 8 }, (_, index) => `acme-skill-${index + 1}`),
+          "beta-skill-1",
+        ],
+      },
+    );
+    const total = skillsListCharacters(shownSkillRows(core.skills));
+    const shareOf = (prefix: string): number =>
+      skillsListCharacters(core.skills.filter((row) => row.artifactId.startsWith(prefix)));
+    // Non-degenerate: every share is non-zero, and the three add up to the total.
+    const acme = shareOf("acme-skill-");
+    const beta = shareOf("beta-skill-");
+    const coreShare = shareOf("core-one");
+    expect(acme).toBe(8 * (15 + 900 + 3));
+    expect(beta).toBe(15 + 900 + 3);
+    expect(coreShare).toBe(11 + 100 + 3);
+    expect(acme + beta + coreShare).toBe(total);
+    expect(total).toBeGreaterThan(CODEX_SKILLS_LIST_BUDGET_CHARS);
+
+    const refusal = await codexResiduePlanner.planResidue(core, ctx).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(refusal).toBeInstanceOf(EngineError);
+    const message = (refusal as EngineError).message;
+    expect(message).toContain(`is ${total} characters; this setup caps it at ${CODEX_SKILLS_LIST_BUDGET_CHARS}`);
+    expect(message).toContain(`the core selection takes ${coreShare} characters (1 skill)`);
+    expect(message).toContain(
+      `installed packs add: acme-demo ${acme} characters (8 skills), ` +
+        `beta-tools ${beta} characters (1 skill)`,
+    );
+    expect(message).toContain("`stamity clean --pack <id>`");
+    expect(message).toContain('`ruleDelivery: "always-on"`');
+  });
+
+  it("names the core's share only when no pack is installed", async () => {
+    const rows = Array.from({ length: 20 }, (_, index) => skillRow(index, 435));
+    const total = skillsListCharacters(rows);
+    const core: CoreEmissionPlan = { ...coreWithHooks(hooksPlan([], [])), skills: rows };
+    const ctx = ctxOf({ contentRoot: await seedCorpus(), ruleDelivery: "on-demand" });
+
+    const refusal = await codexResiduePlanner.planResidue(core, ctx).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    const message = (refusal as EngineError).message;
+    expect(message).toContain(`the core selection takes ${total} characters (20 skills)`);
+    expect(message).not.toContain("installed packs add");
+    expect(message).not.toContain("clean --pack");
+    expect(message).toContain("Narrow the content selection");
+  });
+
+  it("does not count a pack skill that ships its own hiding policy, nor a pack's commands", async () => {
+    const hidden = "policy:\n  allow_implicit_invocation: false\n";
+    const commands: Record<string, string> = {};
+    for (let n = 1; n <= 3; n += 1) {
+      commands[`commands/st-acme-cmd-${n}.md`] = listedArtifact(`acme-cmd-${n}`, "command", 900);
+    }
+    const { ctx, core } = await packedPlan(
+      { "acme-demo": { ...packSkills("acme-skill", 9, hidden), ...commands } },
+      {
+        skills: Array.from({ length: 9 }, (_, index) => `acme-skill-${index + 1}`),
+        commands: ["acme-cmd-1", "acme-cmd-2", "acme-cmd-3"],
+      },
+    );
+    // Non-degenerate: counted whole, the pack skills alone are past the cap.
+    expect(skillsListCharacters(core.skills)).toBeGreaterThan(CODEX_SKILLS_LIST_BUDGET_CHARS);
+
+    const residue = await codexResiduePlanner.planResidue(core, ctx);
+
+    const listed = [...core.skills, ...residue.outputs.filter((row) => row.path.startsWith(`${SKILLS_PROJECTION_DIR}/`))];
+    expect(listed.filter((row) => row.path.endsWith("/SKILL.md"))).toHaveLength(1 + 9 + 3);
+    expect(skillsListCharacters(shownSkillRows(listed))).toBe(11 + 100 + 3);
   });
 });
 

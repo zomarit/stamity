@@ -92,10 +92,12 @@ skills directory carries only the rules it demoted itself.
 
 That trade is paid in a second budget, so it is measured too. The client holds every skill's
 name and description for the whole session in order to decide when to open one, and caps that
-list at 8000 characters when the context window is unknown. The full selection measures 6909 —
-the shipped skills, the projected rules and the nine touchpoints — and emission refuses
-outright rather than truncating past the cap, the same way it refuses an oversized instruction
-file. The remaining headroom is what a repository's own skills spend into.
+list at 8000 characters when the context window is unknown. The full selection measures 5570 —
+the shipped skills and the projected rules, the rows the client shows its model; a touchpoint
+is left out of that list by its `agents/openai.yaml` policy and counts for nothing — and
+emission refuses outright rather than truncating past the cap, the same way it refuses an
+oversized instruction file. The remaining headroom is what a repository's own skills, and an
+installed pack's, spend into.
 
 The appendix is shaped to the client's own 32 KiB ceiling, lowest risk first — rules marked
 critical are kept longest, then floor-tagged rules, then declared precedence, then id. On the

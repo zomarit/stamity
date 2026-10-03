@@ -8,6 +8,7 @@
 import { join } from "node:path";
 import { buildPortableHookRunner, portableHookCommand, PORTABLE_RUNNER_FILE } from "../hooks/portableRunner.ts";
 import { buildContentIndex, typeIdKey, type CatalogItem } from "../content/catalog.ts";
+import { isPlainObject, parseYamlStrict } from "../config/parse.ts";
 import { parseFrontmatter } from "../content/frontmatter.ts";
 import { buildSelectionAllowlist, classifySelection } from "../content/selection.ts";
 import {
@@ -25,7 +26,12 @@ import {
   type ResiduePlanner,
 } from "../emit/planner.ts";
 import { withoutPluginOwnedRows } from "../emit/ownership.ts";
-import { SKILLS_PROJECTION_DIR, projectTouchpointSkills } from "../emit/skillsProjection.ts";
+import {
+  SKILLS_PROJECTION_DIR,
+  TOUCHPOINT_POLICY_FILE,
+  projectTouchpointSkills,
+  type ProjectedFile,
+} from "../emit/skillsProjection.ts";
 import {
   cliCallContextOf,
   detectionContextFromManifest,
@@ -165,9 +171,17 @@ export const CODEX_AGENTS_MD_BUDGET_BYTES = 32_768;
  * most 2% of the model's context window, or 8,000 characters when the context
  * window is unknown" (learn.chatgpt.com/docs/build-skills, accessed
  * 2026-09-14). The engine takes the character bound because the context size
- * is not known at emission, and it measures the WHOLE projection, content
- * skills included, because the client does not distinguish where a skill came
- * from. Re-read the page per release; the figure moves with the client.
+ * is not known at emission.
+ *
+ * It measures the rows Codex SHOWS its model ({@link shownSkillRows}), content
+ * skills, rule-skills and pack skills alike, because the client does not
+ * distinguish where a skill came from — and only those: on codex-cli 0.160.0
+ * (`codex debug prompt-input`, measured 2026-10-03) the listing held the 8
+ * content skills and the 9 rule-skills, and none of the nine touchpoints, whose
+ * `agents/openai.yaml` sets `policy.allow_implicit_invocation: false`. A hidden
+ * row costs the model's context nothing, so counting it refused setups the
+ * client would have run. Re-read the page and re-measure per release; the
+ * figure and the listing move with the client.
  */
 export const CODEX_SKILLS_LIST_BUDGET_CHARS = 8_000;
 
@@ -400,21 +414,19 @@ export const codexResiduePlanner: ResiduePlanner = {
     // them is selected content — so the honest answer is to name the total and
     // stop.
     //
-    // The touchpoints count too: they sit in the same `.agents/skills/` tree and
-    // the client lists them by name and description like any other skill.
-    const { agents, rules, commands } = await selectedItems(ctx);
+    // The count covers the rows Codex shows its model, measured on codex-cli
+    // 0.160.0 (2026-10-03): the touchpoints sit in the same `.agents/skills/`
+    // tree, but each one's `agents/openai.yaml` turns implicit invocation off and
+    // the client leaves it out of the listing, so it costs the list nothing. The
+    // same policy shipped by a pack skill hides that skill too.
+    const { agents, rules, commands, packOf } = await selectedItems(ctx);
     const touchpoints = projectTouchpointSkills(commands, ctx);
-    const skillsListChars = skillsListCharacters([...core.skills, ...touchpoints]);
+    const shown = shownSkillRows([...core.skills, ...touchpoints]);
+    const skillsListChars = skillsListCharacters(shown);
     if (skillsListChars > CODEX_SKILLS_LIST_BUDGET_CHARS) {
-      throw new EngineError(
-        `codex skills list is ${skillsListChars} characters; this setup caps it at ` +
-          `${CODEX_SKILLS_LIST_BUDGET_CHARS}. Every skill's name and description sits in the ` +
-          `client's context for the whole session, and nothing here can choose which skill to ` +
-          `leave out of that listing, so the run refuses instead of shipping a list past the ` +
-          `bound. Narrow the content selection, or set \`ruleDelivery: "always-on"\` to deliver ` +
-          `rules as instruction text instead of as skills.`,
-        { code: "VALIDATION_ERROR" },
-      );
+      throw new EngineError(skillsListRefusal(skillsListChars, shown, packOf), {
+        code: "VALIDATION_ERROR",
+      });
     }
 
     const render = bodyRenderer(ctx);
@@ -619,17 +631,119 @@ function droppedRuleLabel(id: string, onDemandIds: ReadonlySet<string>): string 
  * actually ships with. A row whose head does not parse contributes nothing
  * rather than throwing: this is a budget measurement, and the frontmatter
  * validity of a skill is the projection's refusal to make, not this one's.
+ *
+ * It sums whatever rows it is handed. The emission hands it
+ * {@link shownSkillRows}' answer, the rows Codex shows its model.
  */
 export function skillsListCharacters(skills: readonly { path: string; content: string }[]): number {
   let total = 0;
-  for (const row of skills) {
-    if (!row.path.endsWith(`/${SKILL_FILE}`)) continue;
-    const head = parseFrontmatter(row.content, row.path).frontmatter;
-    const name = typeof head["name"] === "string" ? head["name"] : "";
-    const description = typeof head["description"] === "string" ? head["description"] : "";
-    total += name.length + description.length + 3;
-  }
+  for (const row of skills) total += listedCharacters(row);
   return total;
+}
+
+/** One row's share of {@link skillsListCharacters}: zero for anything but a `SKILL.md`. */
+function listedCharacters(row: { path: string; content: string }): number {
+  if (!row.path.endsWith(`/${SKILL_FILE}`)) return 0;
+  const head = parseFrontmatter(row.content, row.path).frontmatter;
+  const name = typeof head["name"] === "string" ? head["name"] : "";
+  const description = typeof head["description"] === "string" ? head["description"] : "";
+  return name.length + description.length + 3;
+}
+
+/**
+ * The rows Codex shows its model: every row of `rows` except those of a skill
+ * folder whose `agents/openai.yaml` ({@link TOUCHPOINT_POLICY_FILE}) sets
+ * `policy.allow_implicit_invocation: false`.
+ *
+ * On codex-cli 0.160.0 (`codex debug prompt-input`, measured 2026-10-03) the
+ * client left every such folder out of the skills list it hands the model, and
+ * listed the rest with their descriptions unshortened. The predicate reads the
+ * policy, never a name: it drops the nine touchpoints and every pack command
+ * because their companion says so, and drops a pack skill that ships the same
+ * companion for the same reason.
+ *
+ * A companion that does not parse, or that says anything else, hides nothing:
+ * the budget never under-counts on a parse failure, and a malformed companion
+ * is the client's to reject, not this measurement's to guess at.
+ */
+export function shownSkillRows<Row extends { path: string; content: string }>(
+  rows: readonly Row[],
+): Row[] {
+  const byPath = new Map(rows.map((row) => [row.path, row.content]));
+  const hidden = new Set<string>();
+  for (const row of rows) {
+    if (!row.path.endsWith(`/${SKILL_FILE}`)) continue;
+    const folder = row.path.slice(0, -SKILL_FILE.length);
+    const policy = byPath.get(`${folder}${TOUCHPOINT_POLICY_FILE}`);
+    if (policy !== undefined && hidesFromModel(policy, `${folder}${TOUCHPOINT_POLICY_FILE}`)) {
+      hidden.add(folder);
+    }
+  }
+  return rows.filter((row) => ![...hidden].some((folder) => row.path.startsWith(folder)));
+}
+
+/** Whether an `agents/openai.yaml` body sets `policy.allow_implicit_invocation: false`. */
+function hidesFromModel(content: string, source: string): boolean {
+  let doc: unknown;
+  try {
+    doc = parseYamlStrict(content, source);
+  } catch {
+    // Counted, not hidden: a budget that dropped a row it could not read would
+    // under-count exactly when the file is wrong.
+    return false;
+  }
+  const policy = isPlainObject(doc) ? doc["policy"] : undefined;
+  return isPlainObject(policy) && policy["allow_implicit_invocation"] === false;
+}
+
+/**
+ * The refusal past {@link CODEX_SKILLS_LIST_BUDGET_CHARS}: the measured total,
+ * then who spent it — the core selection's share and each installed pack's,
+ * largest first, with its skill count — then the remedies.
+ *
+ * A row belongs to a pack when the catalog item it was rendered from (matched
+ * by class and artifact id) carries pack provenance; everything else, corpus,
+ * fork and override content, is the core selection. The pack remedy is named
+ * only when a pack holds a share, so a setup with none is not told to remove
+ * one.
+ */
+function skillsListRefusal(
+  total: number,
+  shown: readonly Pick<ProjectedFile, "path" | "content" | "artifactId" | "artifactType">[],
+  packOf: ReadonlyMap<string, string>,
+): string {
+  const core = { characters: 0, skills: 0 };
+  const packs = new Map<string, { characters: number; skills: number }>();
+  for (const row of shown) {
+    if (!row.path.endsWith(`/${SKILL_FILE}`)) continue;
+    const pack =
+      row.artifactType === "infra"
+        ? undefined
+        : packOf.get(typeIdKey(row.artifactType, row.artifactId));
+    const share = pack === undefined ? core : (packs.get(pack) ?? { characters: 0, skills: 0 });
+    share.characters += listedCharacters(row);
+    share.skills += 1;
+    if (pack !== undefined) packs.set(pack, share);
+  }
+  const count = (skills: number): string => `${skills} skill${skills === 1 ? "" : "s"}`;
+  const packShares = [...packs]
+    .toSorted(([a, x], [b, y]) => y.characters - x.characters || (a < b ? -1 : a > b ? 1 : 0))
+    .map(([pack, share]) => `${pack} ${share.characters} characters (${count(share.skills)})`);
+  const shares =
+    `Of that, the core selection takes ${core.characters} characters (${count(core.skills)})` +
+    (packShares.length === 0 ? "." : `; installed packs add: ${packShares.join(", ")}.`);
+  const remedies =
+    packShares.length === 0
+      ? `Narrow the content selection, or set`
+      : `Remove a pack with \`stamity clean --pack <id>\`, narrow the content selection, or set`;
+  return (
+    `codex skills list is ${total} characters; this setup caps it at ` +
+    `${CODEX_SKILLS_LIST_BUDGET_CHARS}. Codex holds the name and description of every skill ` +
+    `it shows its model for the whole session, and nothing here can choose which skill to ` +
+    `leave out of that listing, so the run refuses instead of shipping a list past the ` +
+    `bound. ${shares} ${remedies} \`ruleDelivery: "always-on"\` to deliver rules as ` +
+    `instruction text instead of as skills.`
+  );
 }
 
 /** The rule ids that reach this client as a projected skill instead of as appendix text. */
@@ -707,9 +821,12 @@ function grantFor(item: CatalogItem): ResolvedAgentGrant {
  * duplicate bytes for no reader. Commands are selected here because their
  * shared-skill rows ({@link CODEX_COMMANDS_DIR}) are this adapter's to emit.
  */
-async function selectedItems(
-  ctx: EmissionContext,
-): Promise<{ agents: CatalogItem[]; rules: CatalogItem[]; commands: CatalogItem[] }> {
+async function selectedItems(ctx: EmissionContext): Promise<{
+  agents: CatalogItem[];
+  rules: CatalogItem[];
+  commands: CatalogItem[];
+  packOf: ReadonlyMap<string, string>;
+}> {
   const index = await buildContentIndex(ctx.contentRoot);
   const allowlist = buildSelectionAllowlist(ctx.manifest.selection);
   const admitted = index.items.filter(
@@ -725,10 +842,20 @@ async function selectedItems(
       // leaked into a document other clients read.
       (item.tools === undefined || item.tools.includes(TOOL)),
   );
+  // Which installed pack supplied each reachable item, keyed by class and id —
+  // the skills-list refusal attributes its rows through this, by artifact id.
+  const packOf = new Map<string, string>();
+  for (const item of index.items) {
+    const key = typeIdKey(item.type, item.id);
+    if (index.byKey.get(key) === item && item.provenance !== undefined) {
+      packOf.set(key, item.provenance.pack);
+    }
+  }
   return {
     agents: admitted.filter((item) => item.type === "agent"),
     rules: admitted.filter((item) => item.type === "rule"),
     commands: admitted.filter((item) => item.type === "command"),
+    packOf,
   };
 }
 

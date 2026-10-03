@@ -376,12 +376,15 @@ const LIVE_ALWAYS_ON: AlwaysOnDisclosure = {
   ruleDelivery: RULE_DELIVERY_DEFAULT,
   codexFoldedRuleIds: ["injection-screening", "secrets", "security-patterns"],
   codexRuleSkillCount: 9,
-  // 6_909 characters over the 26 skills of the full selection — the 8 shipped
-  // skills, the 9 projected rules and the 9 touchpoints that ship as shared
-  // skills — measured against the real emission by `test/adapters/codex.test.ts`,
-  // which fails when this number stops matching it. 86% of the ceiling, and the
-  // remainder is the headroom a repository adding its own skills spends into.
-  codexSkillsListChars: 6_909,
+  // 5_570 characters over the 17 skills of the full selection that Codex shows
+  // its model — the 8 shipped skills and the 9 projected rules; the touchpoints
+  // in the same tree are hidden by their `agents/openai.yaml` policy and cost the
+  // list nothing (codex-cli 0.160.0's listing, the measurement the adapter's
+  // budget comment dates) — measured against the real emission by
+  // `test/adapters/codex.test.ts`, which fails when this number stops matching it.
+  // About 70% of the ceiling, and the remainder is the headroom a repository
+  // adding its own skills, or a pack adding its own, spends into.
+  codexSkillsListChars: 5_570,
   codexSkillsListCap: CODEX_SKILLS_LIST_BUDGET_CHARS,
   // Measured on the full four-client selection. `cursor` demotes nothing of its
   // own, so all nine rule-skills in the shared tree duplicate an `.mdc` rule it
@@ -1057,9 +1060,11 @@ function alwaysOnSection(alwaysOn: AlwaysOnDisclosure): string[] {
         "skill's name and description for the whole session in order to decide when to open " +
         `one, and caps that list at ${alwaysOn.codexSkillsListCap} characters when the context ` +
         `window is unknown. The full selection measures ${alwaysOn.codexSkillsListChars} — ` +
-        "the shipped skills, the projected rules and the nine touchpoints — and emission refuses outright rather " +
-        "than truncating past the cap, the same way it refuses an oversized instruction file. " +
-        "The remaining headroom is what a repository's own skills spend into.",
+        "the shipped skills and the projected rules, the rows the client shows its model; a " +
+        "touchpoint is left out of that list by its `agents/openai.yaml` policy and counts for " +
+        "nothing — and emission refuses outright rather than truncating past the cap, the same " +
+        "way it refuses an oversized instruction file. The remaining headroom is what a " +
+        "repository's own skills, and an installed pack's, spend into.",
     ),
     "",
     ...paragraph(
