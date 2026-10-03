@@ -85,7 +85,7 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
  * `fork/...` path, a patched row carries `layer: "fork"` and the fork's halves,
  * and the human rendering marks each with "fork layer". The merged artifact a
  * fork patch produces goes through the same gate a repo's own patch does — the
- * layer relaxes no floor — with the finding addressed to the fork file. Two
+ * layer relaxes no floor — with the finding addressed to the fork file. Three
  * fork patches are NOT `patched` rows, because nothing was merged. One whose
  * id this repo's override tree REPLACED is inert — a fork patch lands on the
  * item the corpus or a pack supplies, and an override that took the id whole
@@ -96,8 +96,11 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
  * rather than refused (the fork layer is package-global, so refusing it would
  * fail every consumer without the pack that supplies the base) and reported
  * here as a warning naming the artifact it waits for — exit 0, because the
- * consumer can fix nothing about it. This repository ships no `fork/`, so here
- * the block reads exactly as it did.
+ * consumer can fix nothing about it. One whose base is an installed pack's
+ * SKILL is skipped by the walk the same way and for the same reason — a pack
+ * skill projects from the pack's own files, so the patch would reach no client
+ * — and reported here as a warning naming the pack and the skill, at exit 0.
+ * This repository ships no `fork/`, so here the block reads exactly as it did.
  *
  * Non-mutating: no `--dry-run`, nothing written, nothing created to find out
  * that it is absent. Exit 1 iff a finding is an error; warnings alone exit 0 —
@@ -687,7 +690,10 @@ interface ForkOverlayOutcomes {
    * `replaced` row as `shadowedOverlays`.
    */
   readonly shadowedByKey: ReadonlyMap<string, string[]>;
-  /** One warning per half the walk skipped for want of a base, in the walk's own words. */
+  /**
+   * One warning per half the walk skipped — for want of a base, or because the
+   * base is a pack skill — in the walk's own words.
+   */
   readonly waiting: readonly ValidateFinding[];
 }
 
@@ -696,10 +702,12 @@ interface ForkOverlayOutcomes {
  *
  * Three outcomes, read off the walk rather than re-derived. A half the walk
  * SKIPPED is in `index.skipped` with its reason — the fork stage found no
- * base in the corpus, a pack or the fork layer, and skips rather than refuses
- * because the fork layer is package-global (`../../content/catalog.ts`, the
- * overlay-layer header) — and passes through here as a warning in the engine's
- * own words, at exit 0: nothing in this repository can fix it. A pair whose
+ * base in the corpus, a pack or the fork layer, or found the base to be a pack
+ * skill (which projects from the pack's own files and is never patched), and
+ * skips rather than refuses because the fork layer is package-global
+ * (`../../content/catalog.ts`, the overlay-layer header) — and passes through
+ * here as a warning in the engine's own words, at exit 0: nothing in this
+ * repository can fix it. A pair whose
  * id resolves to a USER artifact was made inert by that override — the fork
  * patch landed on the shipped item in stage one and the override then took
  * the id whole — so it is neither judged (the artifact in force is the

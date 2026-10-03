@@ -1558,16 +1558,19 @@ describe("overlay content layer", () => {
   });
 
   /**
-   * The skill-class half of the same regression, held to the design's other
-   * requirement: a pack skill projects exactly once. Fixing the orphan
-   * refusal by widening the skills-index lookup to the pack layer must not
-   * ALSO widen what that lookup admits into the projection — `resolvedPacks`
-   * (`../../src/pack/projection.ts`) is still the only lane that emits a pack
-   * skill's own rows, and it never reads the override tree, so the overlay
-   * resolves without being reflected in what gets projected. The plan simply
-   * has to stop throwing and keep the pack skill single-sourced.
+   * TEST CHANGE, justified: this case used to assert that an overlay on a
+   * pack-supplied skill "resolves … without throwing" while the projection
+   * ignored it — the pack lane (`../../src/pack/projection.ts`) reads the pack's
+   * raw bytes and never the override tree, so the patch was reported as applied
+   * (`validate` listed it `patched`) and reached no client. That assertion
+   * encoded the defect (the debug run's defect 4). The behaviour moved: the
+   * walk now refuses a user overlay on a pack skill, naming the overlay and the
+   * skill, so the plan throws. Single-sourcing a pack skill with no overlay in
+   * play stays pinned by the next case; the orphan-refusal regression this case
+   * guarded stays fixed, because the refusal is the pack-skill one, not the
+   * orphan one.
    */
-  it("resolves an overlay on a PACK-supplied skill without throwing or double-projecting it", async () => {
+  it("refuses an overlay on a PACK-supplied skill, naming the overlay and the skill, instead of dropping it", async () => {
     const repo = getRepo();
     const packFiles = {
       "skills/stamity-triage/SKILL.md": [
@@ -1627,19 +1630,15 @@ describe("overlay content layer", () => {
     expect(applied.result.installed).toBe(true);
 
     const ctx = { ...base, manifest: applied.manifest };
-    // Pre-fix, this call itself throws `refuseOrphanOverlay` — the discovered
-    // carrier-directory overlay is what forces the orphan lookup, and every
-    // assertion below is unreached until the call resolves.
-    const rows = await getEmissionPlanner().plan(ctx);
+    const refusal = await rejectionOf(getEmissionPlanner().plan(ctx));
 
-    const projected = rows.filter((row) => row.path.endsWith("stamity-triage/SKILL.md"));
-    // Exactly one projection per target tree (`.agents/skills`, and the
-    // Claude native retarget) — never two rows racing for the same path.
-    expect(projected.map((row) => row.path).toSorted()).toEqual([
-      ".agents/skills/stamity-triage/SKILL.md",
-      ".claude/skills/stamity-triage/SKILL.md",
-    ]);
-    expect(projected.every((row) => row.content.includes("Triage the report."))).toBe(true);
+    expect(refusal?.code).toBe("VALIDATION_ERROR");
+    const message = refusal?.message ?? "";
+    expect(message).toContain("Overlays on pack skills are not applied");
+    expect(message).toContain(".stamity/overrides/skills/triage/SKILL.customize.md");
+    expect(message).toContain('patches pack "triagepack" skill "triage"');
+    // The pack-skill refusal, not the orphan one this case first guarded.
+    expect(message).not.toContain("no artifact of that id exists");
   });
 
   /**

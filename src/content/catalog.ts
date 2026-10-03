@@ -1218,6 +1218,13 @@ function claimantOf(existing: CatalogItem): string {
  * — over a file inside their `node_modules` that they can fix nothing about.
  * The fork author still sees the skip: `stamity validate` prints it as a
  * warning naming the artifact the patch waits for.
+ *
+ * A pair whose base is a PACK SKILL is judged by stage the same way. A pack
+ * skill projects from the pack's own files, never from this index's merge, so
+ * a patch on one would be reported as applied and reach no client: the user
+ * stage refuses it ({@link refusePackSkillOverlay}), the fork stage skips and
+ * reports it ({@link forkPackSkillSkipReason}). A pack's agents, commands and
+ * rules emit from the merge and are patched as any other base is.
  */
 
 /** Which half of a pair an overlay file is. */
@@ -1464,11 +1471,74 @@ function refuseOrphanOverlay(paths: readonly string[], type: ContentClass, id: s
  * validate` prints it verbatim as `<fork file>  <reason>`.
  */
 function forkOrphanSkipReason(type: ContentClass, id: string): string {
+  // Class-aware: a pack skill is never patched ({@link forkPackSkillSkipReason}),
+  // so for a skill no pack can make this patch apply, and the text must not say so.
+  const outlook =
+    type === "skill"
+      ? `it does not apply even once a pack supplies skill "${id}", because overlays on pack ` +
+        `skills are not applied. If a pack is meant to supply it, carry the change in the ` +
+        `pack's own source; otherwise the filename is a typo in the fork: correct it there, ` +
+        `or remove the file.`
+      : `it applies when a pack supplies ${type} "${id}". If no pack ever will, the filename ` +
+        `is a typo in the fork: correct it there, or remove the file.`;
   return (
     `waits for an artifact no installed layer supplies — neither the corpus, an installed ` +
     `pack nor the fork layer holds ${type} "${id}", so this fork patch is skipped and nothing ` +
-    `in it reaches emission; it applies when a pack supplies ${type} "${id}". If no pack ` +
-    `ever will, the filename is a typo in the fork: correct it there, or remove the file.`
+    `in it reaches emission; ${outlook}`
+  );
+}
+
+/** How a refusal or a skip names the pack a pack skill came from. */
+function packSkillLabel(packId: string | undefined, id: string): string {
+  return `${packId === undefined ? "an installed pack's" : `pack "${packId}"`} skill "${id}"`;
+}
+
+/**
+ * A USER-stage overlay whose base is a pack SKILL.
+ *
+ * Refused rather than merged: a pack skill projects from the pack's own files
+ * (`../pack/projection.ts`, which reads raw bytes and never the override tree),
+ * so a merge here was reported as `patched` by `validate` and never reached a
+ * client. Phrased after the full-override refusal for the same identity
+ * (`../emit/planner.ts`, "Pack-skill overrides are unsupported today"), so a
+ * pack skill's base can be neither replaced nor patched and both say so. The
+ * remedy is NOT the full-override refusal's: removing the pack unblocks a full
+ * override (it then stands as a skill of its own), but it leaves an overlay an
+ * orphan that {@link refuseOrphanOverlay} refuses on the next sync, so only
+ * removing or renaming the overlay is offered. Every half is named by its POSIX
+ * path, which is how `validate` attributes the refusal to an overlay file
+ * (`../cli/commands/validate.ts` → `overlayFailure`).
+ * Overlays on a pack's agents, commands and rules are untouched: those classes
+ * emit from this index's merge.
+ */
+function refusePackSkillOverlay(
+  paths: readonly string[],
+  packId: string | undefined,
+  id: string,
+): never {
+  const quoted = paths.map((path) => `"${toPosixDisplayPath(path)}"`).join(" and ");
+  const bare = paths.map(toPosixDisplayPath).join(" and ");
+  throw new EngineError(
+    `Overlays on pack skills are not applied today: the overlay at ${quoted} patches ` +
+      `${packSkillLabel(packId, id)}, whose files ship byte-for-byte from the installed pack. ` +
+      `Remove or rename ${bare}; a change to that skill belongs in the pack's own source.`,
+    { code: "VALIDATION_ERROR" },
+  );
+}
+
+/**
+ * Why a FORK-stage overlay whose base is a pack skill was passed over — the
+ * fork stage's answer to {@link refusePackSkillOverlay}, skipped and reported
+ * for the reason {@link forkOrphanSkipReason} is: the fork layer is
+ * package-global, and refusing would break `sync` in every consumer that
+ * installed the pack over a file in their `node_modules`. Phrased after the
+ * file path, so `stamity validate` prints it verbatim as a warning.
+ */
+function forkPackSkillSkipReason(packId: string | undefined, id: string): string {
+  return (
+    `patches ${packSkillLabel(packId, id)}, whose files ship byte-for-byte from the installed ` +
+    `pack — overlays on pack skills are not applied, so this fork patch is skipped and nothing ` +
+    `in it reaches emission. Carry the change in the pack's own source, or remove the file.`
   );
 }
 
@@ -1689,10 +1759,10 @@ async function scanSkillOverlays(
  * removal is only judgeable against its base, since `description:` is a no-op
  * alone and a missing required field once merged.
  *
- * A pair with no base is the one place the two layers part: the user stage
- * refuses it, the fork stage skips it and answers the skipped halves in
- * `skipped` (the overlay-layer header states why). `skipped` is therefore
- * always empty for the user layer.
+ * The two layers part in two places, a pair with no base and a pair whose base
+ * is a pack skill: the user stage refuses each, the fork stage skips each and
+ * answers the skipped halves in `skipped` (the overlay-layer header states
+ * why). `skipped` is therefore always empty for the user layer.
  */
 async function applyOverlays(
   fs: CatalogFs,
@@ -1739,6 +1809,19 @@ async function applyOverlays(
     // Both halves vanished between the listing and the read. Nothing to apply,
     // and nothing an author can act on — the same non-event an absent file is.
     if (halves === null) continue;
+
+    // A pack SKILL is never patched: its files ship byte-for-byte from the
+    // installed pack, whose lane never reads this index's merge, so a merge
+    // here would be reported as applied and reach no client. Judged by stage
+    // like an orphan, and after both exclusivity checks so a replacement
+    // beside the patch is still told as that defect.
+    if (base.type === "skill" && originOf(base) === "pack") {
+      const packId = base.provenance?.pack;
+      if (layer === "user") refusePackSkillOverlay(overlayPaths, packId, base.id);
+      const reason = forkPackSkillSkipReason(packId, base.id);
+      skipped.push(...overlayPaths.map((filePath) => ({ type: overlay.type, filePath, reason })));
+      continue;
+    }
 
     const merged = mergeOverlay(base, halves);
     const built = buildItem({
