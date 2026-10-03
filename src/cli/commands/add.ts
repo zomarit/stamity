@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import pLimit from "p-limit";
+import type { InvocableNameClash } from "../../content/catalog.ts";
 import { lookupCatalogEntry, resolveBundledPackRoot, type CatalogEntry } from "../../pack/curated.ts";
 import type { PackInstallPlan, PackWriteSetEntry } from "../../pack/install.ts";
 import type { OrgPolicyDecision } from "../../pack/orgPolicy.ts";
@@ -111,6 +112,12 @@ interface AddPayload {
     files: string[];
     checks: Record<string, "pass" | "n/a">;
     collisions: string[];
+    /**
+     * One line per invocable name this pack would share with an artifact of
+     * another class (`PackInstallPlan.nameClashes`), in the refusal's own
+     * words; empty when the pack's names are free.
+     */
+    nameClashes: string[];
   };
   trustTier: TrustTier;
   tierBasis: string;
@@ -470,8 +477,8 @@ async function readPlannedBodies(plan: PackInstallPlan): Promise<Map<string, str
 }
 
 /** The engine's refusal strings, verbatim, under a heading. */
-function renderReasons(ctx: CliContext, reasons: readonly string[]): void {
-  ctx.io.out(`\n  ${ctx.palette.red("collisions")}\n`);
+function renderReasons(ctx: CliContext, reasons: readonly string[], heading = "collisions"): void {
+  ctx.io.out(`\n  ${ctx.palette.red(heading)}\n`);
   for (const reason of reasons) ctx.io.out(`    ${reason}\n`);
 }
 
@@ -498,6 +505,44 @@ function collisionRefusal(packId: string, reasons: readonly string[]): FailureDo
     next:
       "resolve the collisions, then re-run — uninstall a stale pack with `stamity clean --pack <id>`, " +
       "or move the listed paths yourself",
+  };
+}
+
+/**
+ * Name-clash refusal: a command and a skill (or a rule delivered as one) that
+ * would install under one name. Distinct from {@link collisionRefusal}, which
+ * is about paths — here every path is free and the NAME is taken, so the
+ * remedy is a rename in the pack's source, and, when the other owner is an
+ * installed pack, removing that pack first.
+ */
+function nameClashRefusal(
+  packId: string,
+  clashes: readonly InvocableNameClash[],
+): FailureDoc {
+  const otherPacks = [
+    ...new Set(
+      clashes.flatMap((clash) =>
+        clash.owners.flatMap((owner) =>
+          owner.layer === "pack" && owner.packId !== undefined && owner.packId !== packId
+            ? [owner.packId]
+            : [],
+        ),
+      ),
+    ),
+  ].toSorted();
+  const removeFirst =
+    otherPacks.length === 0
+      ? ""
+      : `; the other owner is an installed pack, so remove it first with ${otherPacks
+          .map((id) => `\`stamity clean --pack ${id}\``)
+          .join(", ")}`;
+  return {
+    code: "VALIDATION_ERROR",
+    message: `pack "${packId}" was not installed: ${clashes.length} name(s) it would emit are taken`,
+    why:
+      "a command and a skill of one name install into one folder — on Cursor and Codex they " +
+      "overwrite each other's files, and on Claude the skill hides the command",
+    next: `rename the listed artifact(s) in the pack's source, then re-run${removeFirst}`,
   };
 }
 
@@ -616,12 +661,18 @@ export const addCommand: CommandModule = {
       readExecutableCommands(plan),
     ]);
 
+    const nameClashes = plan.nameClashes ?? [];
+    const nameClashLines = nameClashes.map((clash) =>
+      ctx.engine.content.catalog.describeInvocableNameClash(clash),
+    );
+
     const payload: AddPayload = {
       packId: plan.manifest.name,
       planned: {
         files: plan.writeSet.map((entry) => entry.targetPath),
         checks: plan.checks,
         collisions: plan.collisions,
+        nameClashes: nameClashLines,
       },
       trustTier: plan.trustTier,
       tierBasis: plan.tierBasis,
@@ -646,9 +697,18 @@ export const addCommand: CommandModule = {
     if (plan.trustTier === "pinned-unsigned") renderCaution(ctx);
     if (bodies !== null) renderPreview(ctx, plan, bodies);
 
-    if (plan.collisions.length > 0) {
-      renderReasons(ctx, plan.collisions);
-      return refuse(ctx, payload, collisionRefusal(plan.manifest.name, plan.collisions));
+    // Paths first, unchanged; a pack that also clashes on names lists those
+    // lines too, so one re-run is not spent discovering the second refusal.
+    if (plan.collisions.length > 0 || nameClashes.length > 0) {
+      if (plan.collisions.length > 0) renderReasons(ctx, plan.collisions);
+      if (nameClashes.length > 0) renderReasons(ctx, nameClashLines, "name clashes");
+      return refuse(
+        ctx,
+        payload,
+        plan.collisions.length > 0
+          ? collisionRefusal(plan.manifest.name, plan.collisions)
+          : nameClashRefusal(plan.manifest.name, nameClashes),
+      );
     }
 
     if (ctx.dryRun) {

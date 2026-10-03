@@ -569,6 +569,232 @@ export function emittedIdFor(item: Pick<CatalogItem, "id" | "type">): string {
 }
 
 /**
+ * Which door an artifact is invoked through, for the cross-class name check:
+ * a command (projected as a touchpoint skill on Cursor and Codex), a skill, or
+ * a rule delivered as a skill.
+ */
+export type InvocableNameKind = "command" | "skill" | "rule-skill";
+
+/** One claimant of an invocable name ({@link findInvocableNameClashes}). */
+export interface InvocableNameOwner {
+  kind: InvocableNameKind;
+  /** The authored id: the catalog id with the command namespacing removed. */
+  id: string;
+  /** The layer that supplies the artifact. */
+  layer: ContentOrigin;
+  /** The supplying pack's id; present exactly when `layer` is `pack`. */
+  packId?: string;
+  /** The artifact's readable file, in POSIX form for display. */
+  path: string;
+}
+
+/** One invocable name claimed by artifacts of more than one class. */
+export interface InvocableNameClash {
+  /** The folder name every owner would install under (`st-drill`). */
+  name: string;
+  /**
+   * Every claimant, ordered by layer (corpus, pack, fork, user), then class
+   * (command, skill, rule-skill), then pack id — so a refusal reads the same
+   * whatever order the files were enumerated in.
+   */
+  owners: InvocableNameOwner[];
+}
+
+/**
+ * The name a client invokes `item` by — the folder it lands in under the
+ * shared `.agents/skills/` tree and Claude's `.claude/skills/` — or
+ * `undefined` for an artifact that is never invoked by a skill-folder name.
+ *
+ * - A command → {@link emittedIdFor}: the touchpoint projection names its
+ *   folder that way (`../emit/skillsProjection.ts` → `projectTouchpointSkills`),
+ *   and an id authored with `st-` already on it does not double.
+ * - A skill → the basename of its `SKILL.md`'s directory, which is what both the
+ *   corpus lane and the pack lane name the projected folder after
+ *   (`../emit/skillsProjection.ts` → `skillDirOf`, `../pack/projection.ts` →
+ *   `projectOnePackSkill`). A directory that disagrees with the declared id is
+ *   reported by the walk as `filename-mismatch`; the directory is what ships.
+ *   The one exception: a fork or user skill that REPLACED a shipped one lands
+ *   in the replaced skill's directory, not its own (`projectSkills` →
+ *   `skillDirOf(replacedClaimantOf(index, item) ?? item)`), so an override at
+ *   `skills/verify/` installs as `st-verify`. Pass that claimant as `replaced`
+ *   ({@link replacedClaimantOf}); it is read for skills only, because every
+ *   other class is named by its id, which a replacement shares.
+ * - A rule → `stamity-<id>`, the folder a rule demoted to a skill lands in
+ *   (`./ruleDelivery.ts` → `RULE_SKILL_DIR_PREFIX`, the same `stamity-` this
+ *   module reads off {@link contentPrefixFor}: the catalog sits a wave below
+ *   the delivery module and cannot import it, and
+ *   `test/content/invocableNames.test.ts` pins that the two spellings agree).
+ *   Answered for every corpus, fork and override rule rather than for the ones
+ *   demoted today, because demotion follows the client set and the
+ *   `ruleDelivery` setting, both of which change after the check has run. A
+ *   pack rule answers `undefined`: the demotion lane reads the core index only
+ *   (`../emit/planner.ts`), so a pack rule never reaches a skill folder.
+ * - An agent → `undefined`: agents land in their own per-client directories.
+ */
+export function invocableNameOf(
+  item: Pick<CatalogItem, "type" | "id" | "relativePath" | "origin">,
+  replaced?: Pick<CatalogItem, "relativePath">,
+): string | undefined {
+  switch (item.type) {
+    case "command":
+      return emittedIdFor(item);
+    case "skill":
+      return posix.basename(posix.dirname((replaced ?? item).relativePath));
+    case "rule":
+      return originOf(item) === "pack" ? undefined : `${contentPrefixFor(item)}${item.id}`;
+    default:
+      return undefined;
+  }
+}
+
+/** The kind word of one owner, from its class. */
+const INVOCABLE_KIND_OF: Partial<Record<ContentClass, InvocableNameKind>> = {
+  command: "command",
+  skill: "skill",
+  rule: "rule-skill",
+};
+
+/** Owner order inside one clash ({@link InvocableNameClash.owners}). */
+const INVOCABLE_KIND_RANK: Readonly<Record<InvocableNameKind, number>> = {
+  command: 0,
+  skill: 1,
+  "rule-skill": 2,
+};
+
+function compareInvocableNameOwners(a: InvocableNameOwner, b: InvocableNameOwner): number {
+  const key = (owner: InvocableNameOwner): readonly [number, number, string, string] => [
+    LAYER_RANK[owner.layer],
+    INVOCABLE_KIND_RANK[owner.kind],
+    owner.packId ?? "",
+    owner.path,
+  ];
+  const [left, right] = [key(a), key(b)];
+  for (const [index, value] of left.entries()) {
+    const other = right[index] as typeof value;
+    if (value !== other) return value < other ? -1 : 1;
+  }
+  return 0;
+}
+
+/**
+ * Every invocable name ({@link invocableNameOf}) that artifacts of more than one
+ * class would install under, sorted by name.
+ *
+ * The catalog keys identity by class (`typeIdKey`), so a command `drill` and a
+ * skill `drill` are two artifacts to it — and both land in one
+ * `.agents/skills/st-drill/` folder on Cursor and Codex, while on Claude the
+ * skill silently hides the command. Nothing per class can see that, so this
+ * check reads every class at once.
+ *
+ * A name claimed twice within ONE class is not reported here: that is a
+ * same-class duplicate, which the walk already reports or refuses (and the
+ * pack install gate names as a shadow). Pure: items in, groups out, nothing
+ * read — the caller decides which layers to pass and what a clash means.
+ *
+ * `options.replacedOf` answers the shipped claimant a customizing item
+ * replaced — over a resolved index, `(item) => replacedClaimantOf(index, item)`
+ * — so a replacing skill is named by the folder it lands in
+ * ({@link invocableNameOf}). Left out, every skill is named by its own folder.
+ *
+ * Names are compared case-folded. Corpus, fork and pack artifacts take their
+ * folder and file names as authored — only the override tree's ids are held to
+ * a lower-case slug (`./userContent.ts` → `SLUG_PATTERN`) — and on a
+ * case-insensitive filesystem (the macOS and Windows defaults) `st-Drill` and
+ * `st-drill` are one folder. A clash reports the spelling of its first owner.
+ */
+export function findInvocableNameClashes(
+  items: readonly Pick<
+    CatalogItem,
+    "type" | "id" | "relativePath" | "filePath" | "origin" | "provenance"
+  >[],
+  options: {
+    replacedOf?: (
+      item: Pick<CatalogItem, "type" | "id" | "relativePath" | "filePath" | "origin" | "provenance">,
+    ) => Pick<CatalogItem, "relativePath"> | undefined;
+  } = {},
+): InvocableNameClash[] {
+  const ownersByName = new Map<string, { name: string; owner: InvocableNameOwner }[]>();
+  for (const item of items) {
+    const name = invocableNameOf(item, options.replacedOf?.(item));
+    const kind = INVOCABLE_KIND_OF[item.type];
+    if (name === undefined || kind === undefined) continue;
+    const layer = originOf(item);
+    const owner: InvocableNameOwner = {
+      kind,
+      id:
+        item.type === "command" && item.id.startsWith(COMMAND_ID_PREFIX)
+          ? item.id.slice(COMMAND_ID_PREFIX.length)
+          : item.id,
+      layer,
+      ...(layer === "pack" && item.provenance !== undefined
+        ? { packId: item.provenance.pack }
+        : {}),
+      path: toPosixDisplayPath(item.filePath),
+    };
+    const folded = foldInvocableName(name);
+    ownersByName.set(folded, [...(ownersByName.get(folded) ?? []), { name, owner }]);
+  }
+  return [...ownersByName.entries()]
+    .filter(([, claims]) => new Set(claims.map((claim) => claim.owner.kind)).size > 1)
+    .map(([folded, claims]) => {
+      const sorted = claims.toSorted((a, b) => compareInvocableNameOwners(a.owner, b.owner));
+      return { name: sorted.at(0)?.name ?? folded, owners: sorted.map((claim) => claim.owner) };
+    })
+    .toSorted((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
+/**
+ * The comparison key of an invocable name: NFC, then lower case — the two
+ * spellings a case- and normalization-insensitive filesystem (APFS, NTFS)
+ * treats as one folder. Kept local rather than shared with the pack signer's
+ * path fold (`../pack/sign.ts`), which sits a wave above this module.
+ */
+function foldInvocableName(name: string): string {
+  return name.normalize("NFC").toLowerCase();
+}
+
+/**
+ * One clash as the line every refusal prints, e.g.
+ * `st-drill — pack "acme-demo" command "drill" and pack "acme-demo" skill
+ * "drill" both install as st-drill (one folder on Cursor and Codex; on Claude
+ * the skill hides the command)`. Shared by `add` and `sync` so the two
+ * refusals read alike. Paths are POSIX, so the line reads the same on Windows.
+ */
+export function describeInvocableNameClash(clash: InvocableNameClash): string {
+  const owners = clash.owners.map((owner) => describeInvocableNameOwner(owner, clash.name));
+  const listed =
+    owners.length <= 2
+      ? owners.join(" and ")
+      : `${owners.slice(0, -1).join(", ")} and ${owners.at(-1) ?? ""}`;
+  const verb = owners.length === 2 ? "both install" : "all install";
+  const kinds = new Set(clash.owners.map((owner) => owner.kind));
+  const where = kinds.has("command")
+    ? "one folder on Cursor and Codex; on Claude the skill hides the command"
+    : "one skill folder on every client";
+  return `${clash.name} — ${listed} ${verb} as ${clash.name} (${where})`;
+}
+
+/**
+ * One owner as a refusal names it: the layer, the class word, the id. A core
+ * owner is named by the name it installs under (`the core skill "st-verify"`),
+ * which is the spelling a user types; the customizing layers add the file,
+ * because renaming it is the remedy.
+ */
+function describeInvocableNameOwner(owner: InvocableNameOwner, name: string): string {
+  const kind = owner.kind === "rule-skill" ? "rule (delivered as a skill)" : owner.kind;
+  switch (owner.layer) {
+    case "pack":
+      return `${owner.packId === undefined ? "a pack" : `pack "${owner.packId}"`} ${kind} "${owner.id}"`;
+    case "fork":
+      return `the fork-layer ${kind} "${owner.id}" at ${owner.path}`;
+    case "user":
+      return `the override ${kind} "${owner.id}" at ${owner.path}`;
+    default:
+      return `the core ${kind} "${name}"`;
+  }
+}
+
+/**
  * Walk the corpus — plus any installed-pack roots, plus the package's fork
  * layer, plus the repo's override tree — and index it. `contentRoot` defaults
  * to the package-bundled corpus, resolved lazily so a caller that supplies its

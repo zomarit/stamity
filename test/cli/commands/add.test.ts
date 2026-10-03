@@ -1403,3 +1403,178 @@ describe("add — collisions", () => {
     expect(result.stderr).toContain("stamity clean --pack");
   });
 });
+
+describe("add — name clashes", () => {
+  /** A command and a skill of one id: both would install as `st-drill`. */
+  const DRILL_CONTENT: Record<string, string> = {
+    "commands/st-drill.md": "---\nid: drill\ntype: command\n---\nRun the drill.\n",
+    "skills/st-drill/SKILL.md": "---\nid: drill\ntype: skill\n---\nSteps for one drill.\n",
+  };
+
+  it("carries the clash lines into the --json refusal and writes nothing", async () => {
+    await initProject();
+    await seedPack({ content: DRILL_CONTENT });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(1);
+    const doc = parseDoc(result.stdout);
+    expect(doc.ok).toBe(false);
+    expect(doc.installed).toBe(false);
+    expect(writtenOf(doc)).toEqual([]);
+    const planned = doc.planned as { collisions: string[]; nameClashes: string[] };
+    // Paths are free; the name is what is taken.
+    expect(planned.collisions).toEqual([]);
+    expect(planned.nameClashes).toEqual([
+      `st-drill — pack "${PACK_ID}" command "drill" and pack "${PACK_ID}" skill "drill" both ` +
+        "install as st-drill (one folder on Cursor and Codex; on Claude the skill hides the command)",
+    ]);
+    expect(errorOf(doc).code).toBe("VALIDATION_ERROR");
+    expect(errorOf(doc).message).toBe(
+      `pack "${PACK_ID}" was not installed: 1 name(s) it would emit are taken`,
+    );
+    expect(errorOf(doc).next).toContain("rename the listed artifact(s) in the pack's source");
+    // The clash rides the plan, not the gate chain: no gate row was added.
+    expect(Object.keys(checksOf(doc)).toSorted()).toEqual(Object.keys(GATE_OUTCOMES).toSorted());
+    expect(packRows(await readProjectManifest())).toEqual([]);
+    expect(await pathExists(getProject().path(PACK_DIR))).toBe(false);
+  });
+
+  it("names the core owner on its own line under a name-clashes heading", async () => {
+    await initProject();
+    await seedPack({
+      content: { "commands/st-verify.md": "---\nid: verify\ntype: command\n---\nVerify it.\n" },
+    });
+
+    const result = await run(installArgs());
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain("name clashes");
+    expect(result.stdout).toContain(
+      `st-verify — the core skill "st-verify" and pack "${PACK_ID}" command "verify" both install as st-verify`,
+    );
+    // Not the path refusal: nothing was in the way on disk.
+    expect(result.stderr).not.toContain("path(s) it would write are not free");
+    expect(result.stderr).toContain("1 name(s) it would emit are taken");
+    expect(packRows(await readProjectManifest())).toEqual([]);
+  });
+
+  it("reads the repo's override tree: an override command takes the name a pack skill wants", async () => {
+    await initProject();
+    await getProject().seedFiles({
+      ".stamity/overrides/commands/st-triage.md": "---\nid: triage\ntype: command\n---\nOur triage.\n",
+    });
+    await seedPack({
+      content: { "skills/st-triage/SKILL.md": "---\nid: triage\ntype: skill\n---\nTriage steps.\n" },
+    });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(1);
+    const [line] = (parseDoc(result.stdout).planned as { nameClashes: string[] }).nameClashes;
+    expect(line).toContain(`pack "${PACK_ID}" skill "triage" and the override command "triage" at `);
+    // POSIX on every platform: the override's path is printed with forward slashes.
+    expect(line).toContain("/.stamity/overrides/commands/st-triage.md both install as st-triage");
+  });
+
+  it("names an override that replaced a core skill by the folder it lands in", async () => {
+    await initProject();
+    // Saved bare (the override save gate refuses the prefix), yet it replaces the
+    // core st-verify and so installs as st-verify.
+    await getProject().seedFiles({
+      ".stamity/overrides/skills/verify/SKILL.md": "---\nid: verify\ntype: skill\n---\nOur verify.\n",
+    });
+    await seedPack({
+      content: { "commands/st-verify.md": "---\nid: verify\ntype: command\n---\nVerify it.\n" },
+    });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(1);
+    const [line, ...rest] = (parseDoc(result.stdout).planned as { nameClashes: string[] }).nameClashes;
+    expect(rest).toEqual([]);
+    expect(line).toContain(`st-verify — pack "${PACK_ID}" command "verify" and the override skill "verify" at `);
+    expect(line).toContain("/.stamity/overrides/skills/verify/SKILL.md both install as st-verify");
+    expect(packRows(await readProjectManifest())).toEqual([]);
+  });
+
+  it("refuses a name clash under --dry-run, before the dry-run preview, writing nothing", async () => {
+    await initProject();
+    await seedPack({ content: DRILL_CONTENT });
+    const before = await readProjectManifest();
+
+    const result = await run(installArgs("--dry-run"));
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain("name clashes");
+    expect(result.stdout).toContain(`st-drill — pack "${PACK_ID}" command "drill"`);
+    expect(result.stdout).not.toContain("nothing written (--dry-run)");
+    expect(result.stderr).toContain("1 name(s) it would emit are taken");
+    expect(await pathExists(getProject().path(PACK_DIR))).toBe(false);
+    expect(await readProjectManifest()).toEqual(before);
+  });
+
+  it("shows the path collision and the name clash together, the path refusal leading", async () => {
+    await initProject();
+    await seedPack({ content: DRILL_CONTENT });
+    await getProject().seedFiles({ [`${PACK_DIR}/commands/st-drill.md`]: "hand-written\n" });
+
+    const human = await run(installArgs());
+
+    expect(human.code).toBe(1);
+    expect(human.stdout).toContain("collisions");
+    expect(human.stdout).toContain(
+      `${PACK_DIR}/commands/st-drill.md: a file already exists there that pack "${PACK_ID}" does not own`,
+    );
+    expect(human.stdout).toContain("name clashes");
+    expect(human.stdout).toContain(`st-drill — pack "${PACK_ID}" command "drill" and pack "${PACK_ID}" skill "drill"`);
+    // The paths refusal is the one the error carries; the clash rides beside it.
+    expect(human.stderr).toContain("resolve the collisions, then re-run");
+
+    const machine = await run(installArgs("--json"));
+
+    expect(machine.code).toBe(1);
+    const doc = parseDoc(machine.stdout);
+    const planned = doc.planned as { collisions: string[]; nameClashes: string[] };
+    expect(planned.collisions).toHaveLength(1);
+    expect(planned.nameClashes).toHaveLength(1);
+    expect(errorOf(doc).next).toContain("resolve the collisions");
+    expect(writtenOf(doc)).toEqual([]);
+    expect(await readFile(getProject().path(PACK_DIR, "commands", "st-drill.md"), "utf8")).toBe("hand-written\n");
+    expect(packRows(await readProjectManifest())).toEqual([]);
+  });
+
+  it("tells the operator to remove an installed pack that owns the other half", async () => {
+    await initProject();
+    await seedPack({
+      content: { "commands/st-shared.md": "---\nid: shared\ntype: command\n---\nShared.\n" },
+    });
+    expect((await run(installArgs())).code).toBe(0);
+    // A second pack, from its own directory, whose skill takes the first pack's name.
+    const skill = "---\nid: shared\ntype: skill\n---\nShared steps.\n";
+    await getProject().seedFiles({
+      "packs/two/skills/st-shared/SKILL.md": skill,
+      [`packs/two/${PACK_MANIFEST_FILE}`]: JSON.stringify({
+        name: "acme-two",
+        version: "1.0.0",
+        integrity: { "skills/st-shared/SKILL.md": digest(skill) },
+        declaredTools: ["claude"],
+      }),
+    });
+
+    const result = await runInProcess(
+      [addCommand],
+      ["add", "./packs/two", "--allow-untrusted", "--json"],
+      { cwd: getProject().dir },
+    );
+
+    expect(result.code).toBe(1);
+    const doc = parseDoc(result.stdout);
+    expect((doc.planned as { nameClashes: string[] }).nameClashes).toEqual([
+      `st-shared — pack "${PACK_ID}" command "shared" and pack "acme-two" skill "shared" both ` +
+        "install as st-shared (one folder on Cursor and Codex; on Claude the skill hides the command)",
+    ]);
+    expect(errorOf(doc).next).toContain(`\`stamity clean --pack ${PACK_ID}\``);
+    expect(packRows(await readProjectManifest(), "acme-two")).toEqual([]);
+  });
+});

@@ -2,8 +2,18 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, rm, rmdir } from "node:fs/promises";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import pLimit from "p-limit";
-import { applyCommandPrefix, slugOf, typeIdKey } from "../content/catalog.ts";
+import {
+  applyCommandPrefix,
+  buildContentIndex,
+  findInvocableNameClashes,
+  replacedClaimantOf,
+  slugOf,
+  typeIdKey,
+  type CatalogItem,
+  type InvocableNameClash,
+} from "../content/catalog.ts";
 import { parseFrontmatter } from "../content/frontmatter.ts";
+import { userContentRoot } from "../content/userContent.ts";
 import { CONTENT_CLASSES, type ContentClass } from "../types/content.ts";
 import { estimateTokens } from "../guard/tokenEstimate.ts";
 import { readHookDefinitions } from "../hooks/userHooks.ts";
@@ -14,6 +24,8 @@ import { grantableFootprint, resolveAgentGrant } from "../roster/agentGrants.ts"
 import type { GrantableToolCategory } from "../roster/agentPolicies.ts";
 import { EngineError } from "../types/errors.ts";
 import {
+  isPackOwner,
+  PACK_OWNER_PREFIX,
   packOwner,
   type LedgerEntry,
   type PackOwner,
@@ -186,6 +198,21 @@ export interface PackInstallPlan {
   agentGrants?: PackAgentGrant[];
   /** Reasons this install may not proceed; a non-empty list refuses the apply. */
   collisions: string[];
+  /**
+   * Every invocable name this pack would install under that an artifact of
+   * ANOTHER class already takes — or that two of the pack's own artifacts of
+   * different classes share — across every layer the next `sync` projects:
+   * the corpus, the fork layer, the repo's overrides and the installed packs
+   * (`../content/catalog.ts` → `findInvocableNameClashes`). Only clashes with
+   * an owner from this pack are listed. A non-empty list refuses the install
+   * at the CLI before any write (`../cli/commands/add.ts`); it is not a gate
+   * row, so the gate chain and the receipt's `checks` are unchanged.
+   *
+   * Optional so the field stays ADDITIVE, the rule {@link agentGrants}
+   * follows: plan literals from before it (receipt-builder fixtures) remain
+   * valid. {@link planPackInstall} always populates it.
+   */
+  nameClashes?: InvocableNameClash[];
   /** Gate name -> outcome, in run order. `"n/a"` marks a waived or absent gate. */
   checks: Record<string, "pass" | "n/a">;
   /** Resolved trust tier (`./trust.ts` ladder). */
@@ -796,6 +823,103 @@ async function collectCollisions(
   return [...collisions];
 }
 
+/**
+ * The invocable-name clashes installing this pack would create
+ * ({@link PackInstallPlan.nameClashes}).
+ *
+ * The layers already in the repo are indexed by the catalog walk `sync` runs:
+ * the bundled corpus and the fork layer beside it, the repo's override tree,
+ * and every other installed pack the ledger records — never this pack's own
+ * rows, so a re-install is judged against everything but the copy it replaces.
+ * The installed packs are read from their directories, so a command whose
+ * declared `id:` differs from its filename is named by the id it emits under.
+ * A recorded pack whose directory is gone is skipped rather than refused: that
+ * is a pruned install `sync` already refuses by name (`./projection.ts` →
+ * `discoverInstalledPacks`), and its ids are still covered here by the ledger
+ * gate ({@link collectCollisions}). Packs the org policy denies are walked too
+ * — re-allowing the source restores them with no re-install, and their names
+ * come back with them.
+ *
+ * The incoming pack is NOT walked a second time. Its items come from the
+ * artifacts the plan already read, keyed by the catalog's own rule
+ * ({@link catalogIdOf}), so a pack id the walk would refuse — a same-class
+ * shadow — still reaches the operator as the ledger gate's collision line
+ * rather than as a walk error thrown ahead of it.
+ */
+async function collectNameClashes(
+  rootDir: string,
+  packId: string,
+  packRoot: string,
+  artifacts: readonly PackArtifactFile[],
+  projectManifest: SetupManifest | null,
+): Promise<InvocableNameClash[]> {
+  const owner = packOwner(packId);
+  const otherIds = [
+    ...new Set(
+      (projectManifest?.ledger ?? [])
+        .filter((entry) => isPackOwner(entry.adapter) && !isOwnedByPack(entry, owner))
+        .map((entry) => entry.adapter.slice(PACK_OWNER_PREFIX.length)),
+    ),
+  ].toSorted();
+  const others = (
+    await Promise.all(
+      otherIds.map(async (id) => {
+        const root = underRoot(rootDir, packLedgerRelPath(id));
+        return (await pathExists(root)) ? [{ pack: id, root }] : [];
+      }),
+    )
+  ).flat();
+  // Two walks rather than one with `overrideRoot`: that walk also applies the
+  // override tree's overlays, and an overlay authored ahead of this install
+  // for one of the incoming pack's artifacts would be refused there as an
+  // orphan. An overlay patches and never names, so the override tree is read
+  // for its full artifacts alone (a pinned root walks no overlay), and each
+  // one replaces the shipped item of its class and id, as the user stage does.
+  const [shipped, overrides] = await Promise.all([
+    buildContentIndex({ packRoots: others }),
+    buildContentIndex({ root: userContentRoot(rootDir) }),
+  ]);
+  const overridden = new Set(overrides.items.map((item) => typeIdKey(item.type, item.id)));
+  const existing = [
+    ...shipped.items.filter((item) => !overridden.has(typeIdKey(item.type, item.id))),
+    // Restamped in place: the walk read the tree as a pinned root, so its items
+    // say `corpus`; this index is private to the check and is dropped after it.
+    ...overrides.items.map((item) => Object.assign(item, { origin: "user" as const })),
+  ];
+  const incoming = artifacts.flatMap((artifact) => {
+    if (artifact.catalogKey === null) return [];
+    const [type, id] = splitKey(artifact.catalogKey);
+    return [
+      {
+        type: type as ContentClass,
+        id,
+        filePath: join(packRoot, ...artifact.relPath.split("/")),
+        relativePath: artifact.relPath,
+        origin: "pack" as const,
+        provenance: { pack: packId, declaredTools: [] },
+      },
+    ];
+  });
+  // A replacing skill lands in the folder of the skill it replaced
+  // (`../emit/skillsProjection.ts` → `projectSkills`), so each one is named
+  // through that claimant: a fork item through the shipped walk's own shadow
+  // row, an override through the lowest claimant of the key it took there.
+  const replaced = new Map<object, CatalogItem>();
+  for (const item of shipped.items) {
+    const claimant = replacedClaimantOf(shipped, item);
+    if (claimant !== undefined) replaced.set(item, claimant);
+  }
+  for (const item of overrides.items) {
+    const holder = shipped.byKey.get(typeIdKey(item.type, item.id));
+    if (holder !== undefined) replaced.set(item, replacedClaimantOf(shipped, holder) ?? holder);
+  }
+  return findInvocableNameClashes([...existing, ...incoming], {
+    replacedOf: (item) => replaced.get(item),
+  }).filter((clash) =>
+    clash.owners.some((claimant) => claimant.layer === "pack" && claimant.packId === packId),
+  );
+}
+
 /** A `type:id` key split back into its two halves. */
 function splitKey(key: string): [string, string] {
   const colon = key.indexOf(":");
@@ -1044,6 +1168,13 @@ export async function planPackInstall(
     projectManifest?.ledger ?? [],
     artifacts,
   );
+  const nameClashes = await collectNameClashes(
+    rootDir,
+    packManifest.name,
+    source.packRoot,
+    artifacts,
+    projectManifest,
+  );
 
   return {
     manifest: packManifest,
@@ -1052,6 +1183,7 @@ export async function planPackInstall(
     writeSet,
     agentGrants: describeAgentGrants(agents, packManifest),
     collisions,
+    nameClashes,
     checks,
     trustTier: tier,
     tierBasis:
