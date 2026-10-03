@@ -1,5 +1,5 @@
 ---
-id: release
+id: release-runbook
 type: skill
 description: "Executes the release procedure for a single version — version bump, changelog section, gate run, SBOM and provenance emission, and the typed confirmation each irreversible publish step takes. Triggers when a version is cut, when supply-chain artifacts precede a publish, or when the irreversible steps want their gates stated."
 tags: [devops]

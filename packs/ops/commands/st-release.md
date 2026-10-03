@@ -110,7 +110,7 @@ Delegated to the devops sub-agent, which runs the project's build, produces the
 artifacts beside its output, and reports what it could not produce. Skipping a
 row silently is the failure this step exists to prevent; an unproduced artifact
 is named in the handoff, and a failing build stops the cut as a red gate does.
-The artifact set and its command shapes are the `st-release` skill's Step 5
+The artifact set and its command shapes are the `st-release-runbook` skill's Step 5
 — cited, not restated, because two copies of one table drift. The floor:
 
 every release carries build provenance signed through a transparency log plus

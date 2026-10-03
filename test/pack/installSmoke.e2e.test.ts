@@ -963,7 +963,9 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       expect(synced.code, synced.stderr).toBe(0);
       // Claude-only fixture, so the live skills surface is this client's
       // own native root rather than the vendor-neutral tree it does not read.
-      const packSkill = ".claude/skills/st-release/SKILL.md";
+      // TEST CHANGE, justified: ops's release skill folder was renamed to st-release-runbook
+      // so it no longer shares the st-release name with the pack's command.
+      const packSkill = ".claude/skills/st-release-runbook/SKILL.md";
       expect(await exists(repoPath(fixture, packSkill))).toBe(true);
 
       await writeOrgPolicy(fixture, { version: 1, packs: { deny: ["*"] } });

@@ -67,8 +67,11 @@ const SHIPPED_FILES: readonly string[] = [
   "skills/st-ci-pipeline/SKILL.md",
   "skills/st-containerize/SKILL.md",
   "skills/st-gh-agentic-workflows/SKILL.md",
-  "skills/st-incident-response/SKILL.md",
-  "skills/st-release/SKILL.md",
+  // TEST CHANGE, justified: the two skill halves were renamed from st-incident-response and
+  // st-release so they no longer share an emitted name with the pack's commands of the same id
+  // (one folder on Cursor and Codex); the shipped set is otherwise unchanged.
+  "skills/st-incident-runbook/SKILL.md",
+  "skills/st-release-runbook/SKILL.md",
 ];
 
 /**
@@ -106,12 +109,22 @@ const DEGREASE_CEILING = Math.floor(PREDECESSOR_MOVER_LINES * 0.6);
  * that starts writing somewhere new has no row to hide behind.
  */
 const WRITE_CLAIMS: readonly { path: string; body: string; claim: string }[] = [
-  { path: "CHANGELOG.md", body: "skills/st-release/SKILL.md", claim: "`CHANGELOG.md`" },
-  { path: "package.json", body: "skills/st-release/SKILL.md", claim: "`package.json` or the stack's" },
-  { path: "package-lock.json", body: "skills/st-release/SKILL.md", claim: "`package-lock.json`" },
-  { path: "pnpm-lock.yaml", body: "skills/st-release/SKILL.md", claim: "`pnpm-lock.yaml`" },
-  { path: "yarn.lock", body: "skills/st-release/SKILL.md", claim: "`yarn.lock`" },
-  { path: "dist/**", body: "skills/st-release/SKILL.md", claim: "dist/sbom.cdx.json" },
+  // TEST CHANGE, justified: the release skill moved out of the st-release folder into
+  // skills/st-release-runbook/ (distinct from the st-release command); body and claims unchanged.
+  { path: "CHANGELOG.md", body: "skills/st-release-runbook/SKILL.md", claim: "`CHANGELOG.md`" },
+  {
+    path: "package.json",
+    body: "skills/st-release-runbook/SKILL.md",
+    claim: "`package.json` or the stack's",
+  },
+  {
+    path: "package-lock.json",
+    body: "skills/st-release-runbook/SKILL.md",
+    claim: "`package-lock.json`",
+  },
+  { path: "pnpm-lock.yaml", body: "skills/st-release-runbook/SKILL.md", claim: "`pnpm-lock.yaml`" },
+  { path: "yarn.lock", body: "skills/st-release-runbook/SKILL.md", claim: "`yarn.lock`" },
+  { path: "dist/**", body: "skills/st-release-runbook/SKILL.md", claim: "dist/sbom.cdx.json" },
   {
     path: ".github/workflows/**",
     body: "skills/st-gh-agentic-workflows/SKILL.md",
@@ -132,14 +145,16 @@ const WRITE_CLAIMS: readonly { path: string; body: string; claim: string }[] = [
   },
   { path: "compose.yaml", body: "skills/st-containerize/SKILL.md", claim: "`compose.yaml`" },
   { path: "k8s/**", body: "skills/st-containerize/SKILL.md", claim: "`k8s/`" },
+  // TEST CHANGE, justified: the incident skill moved out of the st-incident-response folder into
+  // skills/st-incident-runbook/ (distinct from the st-incident-response command); claims unchanged.
   {
     path: "docs/incidents/**",
-    body: "skills/st-incident-response/SKILL.md",
+    body: "skills/st-incident-runbook/SKILL.md",
     claim: "`docs/incidents/`",
   },
   {
     path: "docs/runbooks/**",
-    body: "skills/st-incident-response/SKILL.md",
+    body: "skills/st-incident-runbook/SKILL.md",
     claim: "`docs/runbooks/`",
   },
   {
@@ -806,7 +821,8 @@ describe("ops pack — cross-references resolve", () => {
    * This assertion REPLACES a membership check against
    * REPO_SUBSTITUTION_TOKENS (a token had to be wired). That check was
    * strictly weaker and gave false assurance: it passed green while
-   * skills/st-release/SKILL.md shipped `${STAMITY:VERIFY_GATE_ALL}` into
+   * the release skill (then in the st-release folder, now st-release-runbook — TEST CHANGE,
+   * justified: comment-only, the skill folder was renamed) shipped `${STAMITY:VERIFY_GATE_ALL}` into
    * every install. The wired list is still read, to name in the failure
    * message that being wired is no defence here.
    */

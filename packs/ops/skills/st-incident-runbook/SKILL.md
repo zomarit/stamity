@@ -1,5 +1,5 @@
 ---
-id: incident-response
+id: incident-runbook
 type: skill
 description: "Executes the on-call runbook for an open production event — severity table, telemetry reading, upstream and downstream topology capture, mitigation verification, and the blameless post-mortem template. Triggers when an incident is open and unstabilized, when a severity call rests on confirmed impact, or when a post-mortem follows recovery."
 tags: [devops]

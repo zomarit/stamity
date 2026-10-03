@@ -45,14 +45,14 @@ everything it would write:
   files              9
   footprint          53.9 KiB of 5.0 MiB allowed
   target             .stamity/packs/ops
-  trust              curator-verified — catalog pin verified: aggregate content SHA 90f6a36e3c96… matches and the catalog grants "curator-verified"
+  trust              curator-verified — catalog pin verified: aggregate content SHA 3e11beecbb12… matches and the catalog grants "curator-verified"
 
   will install
     agents
       agents/stamity-devops.md                   4.4 KiB  ~1134 tok
       …
     skills
-      skills/st-release/SKILL.md                 7.0 KiB  ~1777 tok
+      skills/st-release-runbook/SKILL.md         7.0 KiB  ~1779 tok
       …
 
   context cost  ~13725 tokens across 9 file(s)

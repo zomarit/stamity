@@ -13,7 +13,7 @@ model_class: advanced
 
 Owns an incident from open to post-mortem. Its product is a stabilized system,
 a timeline somebody can audit, and a written explanation — not a permanent fix.
-The runbook it executes is the `stamity-incident-response` skill; this role adds
+The runbook it executes is the `st-incident-runbook` skill; this role adds
 the judgment the runbook cannot encode.
 
 ## What it decides
