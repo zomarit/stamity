@@ -39,7 +39,9 @@ import type { InitDecisions } from "./plan.ts";
  * names the target tools plus the emitted file count, and Z is the maturity
  * tier. Y is keyed off what the writer actually did, per {@link emissionSummary}
  * — a zero written count has two very different causes and used to render one
- * sentence for both.
+ * sentence for both. The hosting platform init detected from the origin remote
+ * is the third settled value, and it rides a line of its own below the
+ * disclosure line rather than a fourth field inside it.
  *
  * Section order is reading order, and next steps come LAST on purpose: the last
  * thing on screen is the first thing to do.
@@ -369,6 +371,22 @@ function gatePinLine(decisions: InitDecisions): string | null {
     `them). The pins use the POSIX interpreter path and will not run on Windows until those ` +
     `keys are changed.`
   );
+}
+
+/**
+ * The hosting platform init wrote into the manifest (REQ-FLOW-022), on a line
+ * of its own: the tools and the tier are disclosed, and the platform is the
+ * third value init settles without asking.
+ *
+ * Its one source is the origin remote (`./plan.ts::detectPlatform`); no flag
+ * sets it at init. An absent value covers both "no origin remote" and "an
+ * origin on a host the engine has no mapping for", so the fallback names the
+ * config key that sets it rather than guessing which of the two this was.
+ */
+function platformLine(decisions: InitDecisions): string {
+  return decisions.platform === undefined
+    ? `platform: none detected — set it with ${packageCommand("config set platform <name>")}`
+    : `platform: ${decisions.platform} (from the origin remote)`;
 }
 
 /**
@@ -734,7 +752,8 @@ function stackSuggestionLines(
 
 /**
  * The ready-state panel. Sections in reading order: ready header, the
- * detected->installed disclosure, the migration summary (when a carry ran),
+ * detected->installed disclosure, the defaulted-clients line (when the client
+ * set was defaulted), the detected platform, the migration summary (when a carry ran),
  * the gitignore disclosure (whenever the rule was put in place) and the
  * credential disclosure (when MCP servers exist), merge warnings, the
  * stack-suggestion block (when detection found an uncovered stack), then
@@ -759,6 +778,9 @@ export function renderInitPanel(input: InitPanelInput): string {
   );
   const defaulted = defaultClientsLine(decisions, false);
   if (defaulted !== null) lines.push(`  ${defaulted}`);
+  // After the `clients:` line, which qualifies the disclosure line directly
+  // above it and so must stay its next line.
+  lines.push(`  ${platformLine(decisions)}`);
   const pinLine = gatePinLine(decisions);
   if (pinLine !== null) lines.push(`  ${pinLine}`);
   if (carry !== null) {

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { link, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -23,6 +24,7 @@ import { WORKSPACE_MANIFEST_FILE } from "../../../src/workspace/model.ts";
 import { npxCommand } from "../../support/identity.ts";
 import { runInProcess, type InProcessResult } from "../../support/inProcess.ts";
 import { MENU_KEYS, MenuTtyInput, waitForOutput } from "../../support/menuTty.ts";
+import { carriedProcessEnv, NO_GIT_CONFIG, seedGitRepo } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
 /**
@@ -571,6 +573,90 @@ describe("init — --tools flag", () => {
     expect(result.stderr).toContain("Valid tools: claude, cursor, copilot, codex");
     expect(countQuestions(result.stdout)).toBe(0);
     expect(existsSync(join(root, STATE_DIR))).toBe(false);
+  });
+});
+
+// ── --maturity flag ────────────────────────────────────────────────
+
+describe("init — --maturity flag", () => {
+  it("writes the flagged tier into the manifest and names it on the panel's tier line", async () => {
+    // A non-git directory seeds `solo`, so `enterprise` can only come from the flag.
+    const root = await makeRepo();
+
+    const result = await runInit(root, ["-y", "--maturity", "enterprise"]);
+
+    expect(result.code).toBe(0);
+    expect((await readManifest(root))?.maturityTier).toBe("enterprise");
+    expect(result.stdout).toContain(`(tier: enterprise, change with \`${npxCommand("config")}\`)`);
+    expect(result.stdout).not.toContain("(tier: solo,");
+  });
+
+  it("refuses a tier the engine does not know, before anything is written", async () => {
+    const root = await makeRepo();
+
+    const result = await runInit(root, ["-y", "--maturity", "galactic"]);
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("galactic");
+    expect(existsSync(join(root, STATE_DIR))).toBe(false);
+  });
+});
+
+// ── The detected platform ──────────────────────────────────────────
+
+/**
+ * A git repository whose origin points at `url`, or a skip on a machine
+ * without git. `git remote add` runs with config isolated the way the shared
+ * seeder isolates it, which keeps user-level config out of that write only.
+ * Init reads origin in-process with `git remote get-url`, under this process's
+ * own environment and global config, and that command applies any
+ * `url.<base>.insteadOf` rewrite at read time. So the GitHub case relies on the
+ * machine running the suite having no rewrite that maps `https://github.com/`
+ * to another host; isolation here gives no protection against one.
+ */
+async function seedRepoWithOrigin(root: string, url: string, skip: () => void): Promise<void> {
+  try {
+    await seedGitRepo(root);
+  } catch (error) {
+    if (error instanceof Error && error.name === "GitUnavailableError") skip();
+    throw error;
+  }
+  execFileSync("git", ["remote", "add", "origin", url], {
+    cwd: root,
+    env: {
+      ...carriedProcessEnv(),
+      HOME: root,
+      USERPROFILE: root,
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: NO_GIT_CONFIG,
+    },
+    windowsHide: true,
+  });
+}
+
+describe("init — the detected platform (REQ-FLOW-022)", () => {
+  it("names the platform it read off a GitHub origin and writes it to the manifest", async (ctx) => {
+    const root = await makeRepo();
+    await seedRepoWithOrigin(root, "https://github.com/acme/demo.git", () => ctx.skip());
+
+    const result = await runInit(root, ["-y"]);
+
+    expect(result.code).toBe(0);
+    expect((await readManifest(root))?.platform).toBe("github");
+    expect(result.stdout).toContain("  platform: github (from the origin remote)\n");
+    expect(result.stdout).not.toContain("none detected");
+  });
+
+  it("says none was detected, and how to set it, where there is no origin", async () => {
+    const root = await makeRepo();
+
+    const result = await runInit(root, ["-y"]);
+
+    expect(result.code).toBe(0);
+    expect((await readManifest(root))?.platform).toBeUndefined();
+    expect(result.stdout).toContain(
+      `  platform: none detected — set it with ${npxCommand("config set platform <name>")}\n`,
+    );
   });
 });
 

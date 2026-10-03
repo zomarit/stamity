@@ -199,12 +199,14 @@ describe("buildInitDecisions — platform and edge repos", () => {
     expect(decisions.maturityTier).toBe("solo");
   });
 
-  it("lets a platform flag stand without any git evidence", async () => {
-    const root = await seedRepo();
-    const decisions = await buildInitDecisions(root, { platform: "gitlab" }, { history: null });
-
-    expect(decisions.platform).toBe("gitlab");
-  });
+  // TEST CHANGE, justified: the case "lets a platform flag stand without any git
+  // evidence" is removed with the field it exercised. `InitOverrides.platform`
+  // was filled by no flag (`init` never had a `--platform` option, and
+  // `readOverrides` in src/cli/commands/init.ts sets only tools and the tier),
+  // so the test asserted plumbing no user could reach. The platform's one
+  // source at init is the origin remote, covered by the case above (absent
+  // outside a repository) and by the CLI case in ./init.test.ts that adds a
+  // GitHub origin; `config set platform` changes it after init.
 
   it("plans a fresh empty directory as greenfield with an all-empty detected summary", async () => {
     const root = await seedRepo();

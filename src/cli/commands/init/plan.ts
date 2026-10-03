@@ -41,11 +41,15 @@ import { readHistoryFacts, type HistoryFacts } from "../../engine/gitStatus.ts";
  * wrong targets.
  */
 
-/** Flag-supplied overrides. A present field wins over every detected value. */
+/**
+ * Flag-supplied overrides (`--tools`, `--maturity`). A present field wins over
+ * every detected value. The hosting platform has no override: init takes it
+ * from the origin remote, and `config set platform` or `config detect` change
+ * it after init.
+ */
 export interface InitOverrides {
   tools?: Tool[];
   maturityTier?: MaturityTier;
-  platform?: Platform;
 }
 
 /** Everything the init flow decided, each decision tagged with where it came from. */
@@ -220,8 +224,7 @@ export async function buildInitDecisions(
   const history = deps.history === undefined ? readHistoryFacts(rootDir) : deps.history;
   const maturity = resolveMaturity(overrides, history);
 
-  // ?? short-circuits: a flagged platform skips the git spawn entirely.
-  const platform = overrides.platform ?? detectPlatform(rootDir);
+  const platform = detectPlatform(rootDir);
 
   const detected = summarizeDetection(info);
   const [existingConfigPaths, gatePins] = await Promise.all([

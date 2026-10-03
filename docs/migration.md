@@ -75,11 +75,23 @@ the migration question.
 
 Answering `full` does three things in one pass.
 
-**1. It reads `hatch.json` as defaults.** Target tools, maturity tier, communication style and
-MCP server ids become the defaults this init offers you. They are offered, never adopted
-wholesale. Each field is read on its own, and tolerantly. A manifest that cannot be parsed
-costs you the old defaults, not the migration. A field that does not map is dropped rather
-than guessed, and detection fills the gap.
+**1. It carries four settings over from `hatch.json`.** Target tools, maturity tier,
+communication style and MCP server ids are read from it and written into the stamity manifest.
+A `--tools` or `--maturity` flag on the init line wins over the carried value. Each field is
+read on its own, and tolerantly. A manifest that cannot be parsed costs you the old settings,
+not the migration. A field that does not map is dropped rather than guessed, and detection
+fills the gap.
+
+Init asks no question about the tier, the style or the servers. It asks which tools to target
+only at a terminal, and only when it finds no client's files in the repository. That question
+preselects claude, never the old tools, and your answer replaces the old list. On a run that
+asks nothing, such as `-y` with `--migrate full`, the old list stands.
+
+The end-of-init panel shows what landed. The tools are on its `-> installed` line, and the tier
+is in that line's `(tier: …)` note. The MCP server ids are on its `credentials:` line, which
+names `.env.mcp` as the file holding their credentials. The communication style is carried over
+but shown nowhere: neither the panel nor `init --json` reports it. Run
+`npx @zomarit/stamity config get communicationStyle` to print it.
 
 **2. It carries learnings and `.env.mcp`.** Learnings are re-persisted through stamity's own
 store. Each one is re-validated, re-sanitized and re-stamped on the way in, rather than
@@ -160,10 +172,13 @@ enough. A plain clean leaves the state directory standing, so init still finds `
 still reports a predecessor, and still offers the migration.
 
 What is gone is the file inside it that the first carry step opens. With no `hatch.json` left
-to read, the defaults read comes back empty. Init then offers you no old values for target
-tools, maturity tier, communication style or MCP server ids. That is the "Config choices" row
-of the table below. Each of those comes from detection and from your answers instead. Nothing
-flags the difference at the time, because init reports "a predecessor setup" either way.
+to read, nothing is carried over: target tools, maturity tier, communication style and MCP
+server ids all start fresh. That is the "Config choices" row of the table below. The tools come
+from detection. When no client's files are left, they come from the tools question, or are
+claude on a run that asks nothing. The tier comes from your git history: `team` at two or more
+contributors, `solo` otherwise. There is no maturity question, so `--maturity` is the way to set
+another tier at init. Nothing flags the difference at the time, because init reports "a
+predecessor setup" either way.
 
 The other two carry surfaces never went through the manifest, so they still work. Learnings are
 read out of `.hatch3r/learnings/`, and `.env.mcp` off the repository root. Neither lookup asks
@@ -200,10 +215,11 @@ across, and the MCP credentials it would have kept. It is irreversible. `.hatch3
 goes with the directory, so the pre-clean rollback point is gone too. There is no undo and no
 re-import.
 
-So a plain clean costs you the defaults transfer. It also costs whatever unmarked file of yours
-the sweep happens to reach. Path B is fine when two things are true. Answering the tools and
-maturity questions again is cheaper for you than reading a manifest first. And the preview list
-names nothing you want to keep. If either half is not true, take Path A.
+So a plain clean costs you the config defaults, the four settings Path A carries over. It also
+costs whatever unmarked file of yours the sweep happens to reach. Path B is fine when two
+things are true. Setting the tools and the tier again yourself is cheaper for you than reading
+a manifest first. And the preview list names nothing you want to keep. If either half is not
+true, take Path A.
 
 ## What transfers, and what starts fresh
 
@@ -211,7 +227,7 @@ names nothing you want to keep. If either half is not true, take Path A.
 |---|---|
 | Learnings | re-persisted through stamity's store, so each one passes the current write gates on the way in |
 | `.env.mcp` | left in place, bytes unchanged, mode tightened to owner-only where it was loose, and gitignored |
-| Config choices | read out of `hatch.json` as *defaults offered at init* — **Path A only**: a plain clean removes that manifest |
+| Config choices | read out of `hatch.json` and *carried over at init* — **Path A only**: a plain clean removes that manifest |
 | Your own content | anything outside a managed block survives the strip byte for byte — **Path A only**: on Path B what survives is hatch3r's own trim of it |
 
 | Starts fresh | Why |

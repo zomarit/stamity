@@ -878,6 +878,47 @@ describe("renderInitPanel — a defaulted client set (REQ-FLOW-022)", () => {
   });
 });
 
+/**
+ * REQ-FLOW-022: init writes the hosting platform it detected from the origin
+ * remote into the manifest, so the panel names it beside the tools and the
+ * tier — and says how to set it when nothing was detected.
+ */
+describe("renderInitPanel — the detected platform (REQ-FLOW-022)", () => {
+  it("names the platform detected from a GitHub origin on a line of its own", () => {
+    const output = renderInitPanel(
+      panelInput({ decisions: decisionsFixture({ platform: "github", toolsSource: "default" }) }),
+    );
+    const lines = output.split("\n");
+
+    expect(lines).toContain("  platform: github (from the origin remote)");
+    expect(output).not.toContain("none detected");
+    // Its own line, never folded into the disclosure line, and never between
+    // the disclosure line and the `clients:` line that qualifies it.
+    const installed = lines.findIndex((line) => line.includes("-> installed"));
+    expect(lines[installed]).not.toContain("platform");
+    expect(lines[installed + 1]).toContain("clients:");
+    expect(lines.findIndex((line) => line.includes("platform:"))).toBeGreaterThan(installed + 1);
+    expect(output.indexOf("platform:")).toBeLessThan(output.indexOf("next steps:"));
+  });
+
+  it("names the same line for each platform init can detect", () => {
+    for (const platform of ["gitlab", "azure-devops"] as const) {
+      expect(renderInitPanel(panelInput({ decisions: decisionsFixture({ platform }) }))).toContain(
+        `  platform: ${platform} (from the origin remote)\n`,
+      );
+    }
+  });
+
+  it("falls back to the set-it instruction, in the pinned call form, when none was detected", () => {
+    const output = renderInitPanel(panelInput());
+
+    expect(output).toContain(
+      `  platform: none detected — set it with ${npxCommand("config set platform <name>")}\n`,
+    );
+    expect(output).not.toContain("(from the origin remote)");
+  });
+});
+
 describe("renderInitPanel — next steps", () => {
   it("numbers the steps for a single tool under one heading", () => {
     const output = renderInitPanel(panelInput());
