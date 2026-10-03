@@ -71,10 +71,15 @@ import {
 import {
   buildContentIndex,
   contentRootsOf,
+  describeInvocableNameClash,
+  findInvocableNameClashes,
   layerRankOf,
+  replacedClaimantOf,
   typeIdKey,
   type CatalogItem,
+  type ContentIndex,
   type ContentRoots,
+  type InvocableNameOwner,
 } from "../content/catalog.ts";
 import {
   NO_DEMOTED_RULES,
@@ -446,8 +451,9 @@ export async function buildCoreEmissionPlan(
   // override ones — this filter is what keeps it from reaching emission
   // twice. `mergeSkillProjections` is the one place a pack skill projects,
   // and it still runs against `resolvedPacks`, whose own index never saw the
-  // override tree — an overlay on a pack skill resolves (no orphan refusal)
-  // without changing what that lane emits.
+  // override tree — which is why an overlay on a pack skill never reaches this
+  // lane: `applyOverlays` (`../content/catalog.ts`) refuses it at the override
+  // stage, rather than resolving it here into a patch the pack lane ignores.
   // The filter is about pack SKILLS, not about pack origin as such: a demoted
   // rule supplied by an installed pack is projected by the lane above (the pack
   // skill lane knows nothing about rules), so filtering it out here would skip
@@ -557,7 +563,11 @@ async function planRuleDelivery(
  * introduced the directory, and two remedies (make the emissions byte-identical,
  * flag one with `replacesSharedPath`) an operator cannot act on and an adapter
  * author should not. The refusal below names the pack, the corpus skill it
- * collides with, and the two things the operator can actually do.
+ * collides with, and the two things the operator can actually do. The
+ * cross-class form of the same clash — a command and a skill of one name — is
+ * one this function cannot see (a command's folder is a residue row), and is
+ * refused before planning starts, for the same reason, by
+ * {@link refuseInvocableNameClashes}.
  *
  * Byte-identical content is refused too, and on purpose: the clash is the
  * shared directory, not the bytes. Two skills merged into one tree by
@@ -759,6 +769,76 @@ function customizingSkillFilePath(row: ProjectedSkillFile): string {
     : `${STATE_DIR}/overrides/${row.artifactPath}`;
 }
 
+/**
+ * Refuse a content set in which artifacts of two classes would install under
+ * one invocable name — a command and a skill (or a rule delivered as a skill)
+ * whose folders are both `st-<x>`.
+ *
+ * The catalog keys identity by class, so nothing per class sees it: on Cursor
+ * and Codex the command's touchpoint folder and the skill's folder are one
+ * path, which surfaced only as the composer's "two planners emitted different
+ * content" with four adapters named and no owner; on Claude no path is shared
+ * and the skill silently hides the command. `add` refuses such a pack before
+ * writing it, but a repository can already hold one — a pack installed by an
+ * engine without that check, an override, a fork artifact — and `sync`,
+ * `check`, `init` and `plugin setup` all plan through here.
+ *
+ * `index` is the residue context's full walk: the corpus with its fork and
+ * override layers applied, plus the installed packs. A replacing skill is named
+ * through the claimant it replaced, because it lands in that claimant's folder
+ * (`./skillsProjection.ts` → `projectSkills`) — leaving `replacedOf` out lets an
+ * override that took a core skill's id slip past beside a pack command of that
+ * name. Every clash is listed in one refusal, then one remedy per owner that
+ * can move: the corpus cannot, so a core owner adds none.
+ */
+function refuseInvocableNameClashes(index: ContentIndex): void {
+  const clashes = findInvocableNameClashes(index.items, {
+    replacedOf: (item) => replacedClaimantOf(index, item),
+  });
+  if (clashes.length === 0) return;
+  const remedies = [...new Set(clashes.flatMap((clash) => clash.owners.flatMap(remedyOf)))];
+  throw new EngineError(
+    [
+      `${clashes.length} name(s) are claimed by artifacts of more than one class, so nothing ` +
+        `was planned:`,
+      ...clashes.map((clash) => `  ${describeInvocableNameClash(clash)}`),
+      "Move one owner of each name:",
+      ...remedies.map((remedy) => `  - ${remedy}`),
+    ].join("\n"),
+    {
+      code: "VALIDATION_ERROR",
+      why:
+        "every artifact listed installs into the one folder its name gives it, so on Cursor " +
+        "and Codex they overwrite each other's files, and on Claude a skill hides the command " +
+        "of its name",
+      next: "apply one remedy per name listed above, then re-run `stamity sync`",
+    },
+  );
+}
+
+/** The remedy for one owner of a clashing name, or none for a core owner. */
+function remedyOf(owner: InvocableNameOwner): string[] {
+  switch (owner.layer) {
+    case "pack": {
+      const packId = owner.packId ?? "<pack-id>";
+      return [
+        `pack "${packId}": run \`stamity clean --pack ${packId}\`, then ` +
+          `\`stamity add ${packId}\` once the pack ships distinct names, then \`stamity sync\``,
+      ];
+    }
+    case "user":
+      return [`the override at ${owner.path}: rename or remove ${owner.path}`];
+    case "fork":
+      return [
+        `the fork-layer file at ${owner.path}: rename or remove it in the fork's source, then ` +
+          `publish the package again — a defect in the package's fork layer, not in this ` +
+          `repository`,
+      ];
+    default:
+      return [];
+  }
+}
+
 // ── Composition ──────────────────────────────────────────────────
 
 /** One path being assembled: content plus its owner list (one per adapter). */
@@ -805,8 +885,12 @@ export function composeEmissionPlanner(
       ctx.manifest,
       contentRootsOf(ctx.contentRoot).root,
     );
-    const core = await buildCoreEmissionPlan(ctx, packs);
     const residueCtx = residueContext(ctx, packs);
+    // Before any row exists: a cross-class name clash is refused with its
+    // owners named, rather than reaching the single-writer check below as two
+    // planners writing one path (or, on Claude, as nothing at all).
+    refuseInvocableNameClashes(await buildContentIndex(residueCtx.contentRoot));
+    const core = await buildCoreEmissionPlan(ctx, packs);
     const tools = TOOLS.filter((tool) => ctx.manifest.tools.includes(tool));
 
     const rows = new Map<string, PendingRow>();
