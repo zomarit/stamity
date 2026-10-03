@@ -21,6 +21,7 @@ import {
 } from "../../../src/content/contentRoot.ts";
 import { applySync, planSync } from "../../../src/cli/commands/sync/engine.ts";
 import { createApp, createEngine } from "../../../src/index.ts";
+import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
 import {
   createManifest,
   manifestPath,
@@ -2902,6 +2903,202 @@ describe("check — plugin-duplicates", () => {
 
     const duplicates = await duplicatesRow(root);
 
+    expect(duplicates.status).toBe("pass");
+    expect(duplicates.detail).toBe("no duplicated classes");
+  });
+
+  /**
+   * A pack skill is repository-installed content no plugin ships, so emission
+   * keeps writing it under a plugin that carries `skill` (run
+   * 2026-10-03_pack-engine-defects, defect 3). Its client rows are recorded
+   * exactly like a core skill's — the client as owner, class `skill`, the
+   * catalog id — and only the pack's own install rows say which files they
+   * are. Two phases, one repository: the core skill's leftover rows beside the
+   * plugin still fail the row while the pack skill's rows sit in the same
+   * ledger, and once emission re-runs under the plugin only the pack skill's
+   * rows remain and the row passes.
+   */
+  it.each([
+    ["cursor", ["cursor"]],
+    ["claude", ["claude"]],
+    ["all four", ["claude", "cursor", "copilot", "codex"]],
+  ] as const)(
+    "exempts an installed pack skill's rows and still fails a core skill beside the plugin (%s)",
+    async (_label, toolSet) => {
+      const tools: Tool[] = [...toolSet];
+      const handle = getRepo();
+      const packFiles: Record<string, string> = {
+        "skills/st-acme-skill/SKILL.md": SKILL_FIXTURE.replace("id: verify", "id: acme-skill"),
+        "skills/st-acme-skill/references/notes.md": "Acme reference notes.\n",
+      };
+      await handle.seedFiles({
+        "corpus/skills/st-verify/SKILL.md": SKILL_FIXTURE,
+        ...Object.fromEntries(
+          Object.entries(packFiles).map(([rel, body]) => [`pack-src/acme/${rel}`, body]),
+        ),
+        "pack-src/acme/pack.json": `${JSON.stringify({
+          name: "acme",
+          version: "1.0.0",
+          integrity: Object.fromEntries(
+            Object.entries(packFiles).map(([rel, body]) => [
+              rel,
+              createHash("sha256").update(body, "utf8").digest("hex"),
+            ]),
+          ),
+        })}\n`,
+      });
+      const root = await seedRepo(handle, { tools });
+      const engineVersion = createApp().version;
+      const resync = async (): Promise<void> => {
+        await applySync(root, await planSync(root, engineVersion), {
+          engineVersion,
+          force: false,
+          dryRun: false,
+          now: T0,
+        });
+      };
+
+      const plan = await planPackInstall(root, handle.path("pack-src/acme"), {
+        allowUntrusted: true,
+      });
+      expect(plan.collisions).toEqual([]);
+      const seeded = await readManifest(root);
+      if (seeded === null) throw new Error("fixture lost its manifest");
+      const installed = await applyPackInstall(root, plan, seeded, { engineVersion, now: T0 });
+      expect(installed.result.installed).toBe(true);
+      await writeManifest(root, installed.manifest, { now: T0 });
+      await resync();
+
+      const generated = await readManifest(root);
+      if (generated === null) throw new Error("fixture lost its manifest");
+      await writeManifest(
+        root,
+        {
+          ...generated,
+          plugin: {
+            mode: "plugin-backed",
+            clients: Object.fromEntries(
+              tools.map((tool) => [tool, { version: "1.11.0", classes: ["skill"] }]),
+            ),
+          },
+        },
+        { now: T0 },
+      );
+
+      // Phase 1: the generated sync's rows, under the new plugin record.
+      const skillsDirOf = (tool: Tool): string =>
+        tool === "claude" ? ".claude/skills" : ".agents/skills";
+      const before = await duplicatesRow(root);
+      expect(before.status).toBe("fail");
+      for (const tool of tools) {
+        expect(before.detail).toContain(
+          `${tool}: skill (1 file(s), ledger) at ${skillsDirOf(tool)}/st-verify/SKILL.md — `,
+        );
+      }
+      expect(before.detail).not.toContain("st-acme-skill");
+
+      // Phase 2: emission re-run under the plugin, as `plugin setup` does.
+      await resync();
+      const after = await duplicatesRow(root);
+      expect(after.status).toBe("pass");
+      expect(after.detail).toBe("no duplicated classes");
+      // Not vacuous: every client still holds both pack skill files as its own
+      // `skill` rows, and the core skill's rows are gone.
+      const ledger = (await readManifest(root))?.ledger ?? [];
+      for (const tool of tools) {
+        expect(
+          ledger
+            .filter((entry) => entry.adapter === tool && entry.artifactType === "skill")
+            .map((entry) => entry.path)
+            .toSorted(),
+        ).toEqual([
+          `${skillsDirOf(tool)}/st-acme-skill/SKILL.md`,
+          `${skillsDirOf(tool)}/st-acme-skill/references/notes.md`,
+        ]);
+      }
+    },
+  );
+
+  /**
+   * The projection walks an installed pack skill's folder as it sits on disk,
+   * so a support file with no `pack:<id>` row — one a re-install's newer
+   * version dropped (`add` deletes nothing), or one added by hand — is still
+   * emitted to every client under the plugin. The exemption keys on the
+   * folder, so that file's client rows do not fail the row (review W-1 of run
+   * 2026-10-03_pack-engine-defects, unit u4a-pack-skill-origin).
+   */
+  it("exempts a support file in an installed pack skill's folder that no pack row records", async () => {
+    const tools: Tool[] = ["claude", "cursor"];
+    const handle = getRepo();
+    const packFiles: Record<string, string> = {
+      "skills/st-acme-skill/SKILL.md": SKILL_FIXTURE.replace("id: verify", "id: acme-skill"),
+    };
+    await handle.seedFiles({
+      ...Object.fromEntries(
+        Object.entries(packFiles).map(([rel, body]) => [`pack-src/acme/${rel}`, body]),
+      ),
+      "pack-src/acme/pack.json": `${JSON.stringify({
+        name: "acme",
+        version: "1.0.0",
+        integrity: Object.fromEntries(
+          Object.entries(packFiles).map(([rel, body]) => [
+            rel,
+            createHash("sha256").update(body, "utf8").digest("hex"),
+          ]),
+        ),
+      })}\n`,
+    });
+    const root = await seedRepo(handle, { tools });
+    const engineVersion = createApp().version;
+    const plan = await planPackInstall(root, handle.path("pack-src/acme"), {
+      allowUntrusted: true,
+    });
+    const seeded = await readManifest(root);
+    if (seeded === null) throw new Error("fixture lost its manifest");
+    const installed = await applyPackInstall(root, plan, seeded, { engineVersion, now: T0 });
+    expect(installed.result.installed).toBe(true);
+    await writeManifest(
+      root,
+      {
+        ...installed.manifest,
+        plugin: {
+          mode: "plugin-backed",
+          clients: Object.fromEntries(
+            tools.map((tool) => [tool, { version: "1.11.0", classes: ["skill"] }]),
+          ),
+        },
+      },
+      { now: T0 },
+    );
+    // The unrecorded support file, beside the recorded SKILL.md on disk.
+    const installedSkillDir = join(root, STATE_DIR, "packs", "acme", "skills", "st-acme-skill");
+    await mkdir(join(installedSkillDir, "references"), { recursive: true });
+    await writeFile(join(installedSkillDir, "references", "stale.md"), "Left behind.\n", "utf8");
+    await applySync(root, await planSync(root, engineVersion), {
+      engineVersion,
+      force: false,
+      dryRun: false,
+      now: T0,
+    });
+
+    const ledger = (await readManifest(root))?.ledger ?? [];
+    // No pack row records the support file …
+    expect(
+      ledger.filter((entry) => entry.adapter === "pack:acme").map((entry) => entry.artifactId),
+    ).not.toContain("acme/skills/st-acme-skill/references/stale.md");
+    // … yet every client holds it as its own `skill` row.
+    for (const tool of tools) {
+      const skillsDir = tool === "claude" ? ".claude/skills" : ".agents/skills";
+      expect(
+        ledger.some(
+          (entry) =>
+            entry.adapter === tool &&
+            entry.artifactType === "skill" &&
+            entry.path === `${skillsDir}/st-acme-skill/references/stale.md`,
+        ),
+      ).toBe(true);
+    }
+    const duplicates = await duplicatesRow(root);
     expect(duplicates.status).toBe("pass");
     expect(duplicates.detail).toBe("no duplicated classes");
   });

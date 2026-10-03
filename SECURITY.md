@@ -71,9 +71,10 @@ checks that route is not the pack gate chain: it is the client's own install, pl
 the provenance attestation the release attaches to each archive, plus the corpus this repository
 publishes being the corpus the root was built from. So a plugin root is content you trust the way
 you trust the marketplace that served it. The engine's own contribution is that `sync` writes
-nothing under a class the installed root declares it carries, and that `stamity check` fails its
-`plugin-runtime` row — and `plugin status` reports the compatibility state — when the resolved
-runtime's major differs from the one that wrote your `.stamity/` state
+nothing under a class the installed root declares it carries (an installed pack's skills excepted:
+no plugin ships them, and they came in through the pack gate chain above), and that `stamity check`
+fails its `plugin-runtime` row — and `plugin status` reports the compatibility state — when the
+resolved runtime's major differs from the one that wrote your `.stamity/` state
 (`src/cli/commands/check.ts::checkPluginRuntime`,
 `src/cli/commands/plugin/status.ts::compatibilityOf`); the locator itself refuses only a missing
 runtime or a Node below the floor (`scripts/plugins/locate.mjs`). [The plugins

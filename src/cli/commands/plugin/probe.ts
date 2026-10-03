@@ -39,7 +39,10 @@ import { PLUGIN_ROOT_VARIABLES } from "../../../plugins/capabilityFile.ts";
 import { findPackageRoot } from "../../../shared/paths.ts";
 import { TOOLS, type Tool } from "../../../types/core.ts";
 import {
+  isPackOwner,
+  PACK_OWNER_PREFIX,
   PLUGIN_OWNED_CLASSES,
+  type LedgerEntry,
   type PluginOwnedClass,
   type SetupManifest,
 } from "../../../types/manifest.ts";
@@ -723,6 +726,59 @@ function apmDuplicates(
   }));
 }
 
+/**
+ * Every skill folder an installed pack ships under its `skills/` class, by
+ * its authored name — the segment that follows a client's skills directory in
+ * each row emission writes for that skill.
+ *
+ * Why the ledger needs this. A pack skill is repository-installed content no
+ * plugin ships, so emission writes it whatever the plugin carries (the
+ * `origin: "pack"` exemptions in `../../../emit/planner.ts` and
+ * `../../../adapters/claude.ts`). Its client rows are recorded like a core
+ * skill's — the client as owner, class `skill`, the skill's catalog id — and
+ * `origin` never reaches the ledger. What does is the install's own record:
+ * one `pack:<id>` row per shipped file, its artifact id `<id>/<class dir>/…`
+ * (`../../../pack/install.ts`). The skill directory keeps its authored name
+ * on the way out (`../../../pack/projection.ts`), so those rows name the
+ * client folders a pack skill was written to.
+ *
+ * The folder, not each recorded file, is the key: the projection walks the
+ * installed folder as it sits on disk, so a support file with no pack row —
+ * one a re-install's newer version dropped (`add` deletes nothing), or one an
+ * operator added by hand — is emitted under the plugin all the same, and
+ * matching file by file failed it with a remedy that only wrote it again. A
+ * pack row outside that layout (a hand-written fixture row, or a file sitting
+ * directly under `skills/`) names no folder and exempts nothing.
+ */
+function packSkillDirs(ledger: readonly LedgerEntry[]): ReadonlySet<string> {
+  const dirs = new Set<string>();
+  for (const row of ledger) {
+    if (!isPackOwner(row.adapter)) continue;
+    const prefix = `${row.adapter.slice(PACK_OWNER_PREFIX.length)}/skills/`;
+    if (!row.artifactId.startsWith(prefix)) continue;
+    const rest = row.artifactId.slice(prefix.length);
+    const slash = rest.indexOf("/");
+    if (slash > 0) dirs.add(rest.slice(0, slash));
+  }
+  return dirs;
+}
+
+/**
+ * True when a client's `skill` row at `path` sits in an installed pack
+ * skill's folder: under the client's own skills directory, in a folder
+ * {@link packSkillDirs} names. A selected core skill cannot share that folder
+ * — the catalog and the projection merge both refuse the clash before
+ * anything is written.
+ */
+function isPackSkillRow(tool: Tool, path: string, packSkills: ReadonlySet<string>): boolean {
+  return NATIVE_CONTENT_DIRS[tool].some(([dir, cls]) => {
+    if (cls !== "skill" || !path.startsWith(`${dir}/`)) return false;
+    const rest = path.slice(dir.length + 1);
+    const slash = rest.indexOf("/");
+    return slash > 0 && packSkills.has(rest.slice(0, slash));
+  });
+}
+
 /** One recorded client's duplicates, from all three sources. */
 async function duplicatesForClient(
   rootDir: string,
@@ -732,6 +788,7 @@ async function duplicatesForClient(
   matchedApm: readonly string[],
   ledgerPaths: ReadonlySet<string>,
   carriedIds: CarriedIdIndex,
+  packSkills: ReadonlySet<string>,
 ): Promise<DuplicateFinding[]> {
   const findings: DuplicateFinding[] = [];
   // Source 1 — rows this engine wrote and still owns. A hook row is any row
@@ -749,6 +806,9 @@ async function duplicatesForClient(
           : null
         : row.artifactType;
     if (cls === null || !classes.has(cls)) continue;
+    // An installed pack skill is written under any plugin, by design, so it
+    // duplicates nothing the plugin carries (see `packSkillDirs`).
+    if (cls === "skill" && isPackSkillRow(tool, row.path, packSkills)) continue;
     byClass.set(cls, [...(byClass.get(cls) ?? []), row.path]);
   }
   for (const cls of PLUGIN_OWNED_CLASSES) {
@@ -837,6 +897,7 @@ export async function collectPluginDuplicates(
   if (tools.length === 0) return [];
 
   const ledgerPaths = new Set((manifest?.ledger ?? []).map((row) => row.path));
+  const packSkills = packSkillDirs(manifest?.ledger ?? []);
   // The two repository-level reads happen ONCE, ahead of the fan-out: `apm.yml`
   // is one file whose matched dependency lines are the same for every client,
   // and the content catalog is one corpus walk whose answer is the same for
@@ -862,6 +923,7 @@ export async function collectPluginDuplicates(
         matchedApm,
         ledgerPaths,
         carriedIds,
+        packSkills,
       );
     }),
   );

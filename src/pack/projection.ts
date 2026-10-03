@@ -600,11 +600,17 @@ async function projectOnePackSkill(item: CatalogItem): Promise<ProjectedFile[]> 
       const raw = await readFile(join(sourceDir, ...relative.split("/")), "utf8");
       const content =
         relative === SKILL_FILE ? toSpecFrontmatter(raw, skillDir, item.relativePath) : raw;
+      // `origin: "pack"` is what the two plugin-mode exemptions read — the
+      // shared tree's (`../emit/planner.ts`) and Claude's native copy
+      // (`../adapters/claude.ts`). Without it every pack skill row looked like
+      // a core skill row, so a plugin carrying the skill class took its owners
+      // away and the installed skill reached no client at all.
       return {
         path: posix.join(SKILLS_PROJECTION_DIR, skillDir, relative),
         content,
         artifactId: item.id,
         artifactType: "skill" as const,
+        origin: "pack" as const,
       };
     }),
   );

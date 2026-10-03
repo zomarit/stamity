@@ -489,6 +489,49 @@ describe("live-emission wiring: installed packs join the emission corpus", () =>
     expect([...rows.keys()].filter((path) => path.startsWith(".stamity/packs/"))).toEqual([]);
   });
 
+  it("stamps every pack skill row origin pack, so a plugin carrying skills still lets it reach the client", async () => {
+    // Defect 3 of run 2026-10-03_debug-pack-defects: the pack lane built its
+    // rows without `origin`, so both plugin-mode exemptions (the shared tree's
+    // and Claude's native copy) read them as core rows and dropped them.
+    const fixture = await seedFixture();
+    const installed = await installPack(fixture.repoRoot, fixture.packDir, fixture.manifest);
+
+    const resolved = await resolveInstalledPackContent(
+      fixture.repoRoot,
+      installed,
+      fixture.corpusRoot,
+    );
+    // Two rows — the skill and its support file — so a stamp on `SKILL.md`
+    // alone would not pass.
+    expect(resolved.skillRows.map((row) => [row.path, row.origin])).toEqual([
+      [".agents/skills/stamity-runbook/SKILL.md", "pack"],
+      [".agents/skills/stamity-runbook/references/notes.md", "pack"],
+    ]);
+
+    // Both readers' plugins carry the skill class: the corpus skill leaves
+    // both trees, and the pack skill stays in both.
+    const pluginBacked: SetupManifest = {
+      ...installed,
+      plugin: {
+        mode: "plugin-backed",
+        clients: {
+          claude: { version: "1.11.0", classes: ["skill"] },
+          copilot: { version: "1.11.0", classes: ["skill"] },
+        },
+      },
+    };
+    const paths = [...byPath(await planAll(ctxOf(fixture, pluginBacked))).keys()];
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        ".agents/skills/stamity-runbook/SKILL.md",
+        ".agents/skills/stamity-runbook/references/notes.md",
+        ".claude/skills/stamity-runbook/SKILL.md",
+        ".claude/skills/stamity-runbook/references/notes.md",
+      ]),
+    );
+    expect(paths.filter((path) => path.includes("/stamity-alpha/"))).toEqual([]);
+  });
+
   it("projects pack rules, agents and commands through each tool's own residue surface", async () => {
     const fixture = await seedFixture();
     const manifest = await installPack(fixture.repoRoot, fixture.packDir, fixture.manifest);

@@ -36,6 +36,12 @@ your repository, exactly as `init` would.
 | hooks | carried | carried | carried | carried |
 | mcp | repository-owned | repository-owned | repository-owned | repository-owned |
 
+Installed packs are the one exception to the skill row. A pack is content you installed into this
+repository and no plugin ships it, so its skills are written even where the plugin carries
+`skill`: into `.claude/skills/` for Claude Code and into the shared `.agents/skills/` for the
+other three. `check`'s `plugin-duplicates` row does not count them. A pack's commands, agents,
+rules and hooks get no such exception: wherever the plugin carries their class, they are dropped.
+
 The reasons, one line each, are the ones each container declares in its own capability file:
 
 - **Claude Code, rule** — the plugin manifest has no `rules` field, so a glob-scoped rule cannot
@@ -352,9 +358,10 @@ Each of those runs `stamity plugin setup` through the plugin's own runtime. What
 - MCP documents, when you select servers
 - `.stamity/` — the manifest, the ledger, and the state directories
 
-What it never writes: a single file of a class the installed root declares `carried`. That is the
-whole of the boundary, and `sync` honours it afterwards — it writes nothing under a plugin-owned
-class and prints one `plugin-owned` line per client naming the classes it skipped.
+What it never writes: a single file of a class the installed root declares `carried`, apart from
+an installed pack's skills, which no plugin ships (see [Who owns what](#who-owns-what)). That is
+the whole of the boundary, and `sync` honours it afterwards — it writes nothing else under a
+plugin-owned class and prints one `plugin-owned` line per client naming the classes it skipped.
 
 Two refusals worth knowing before you run it. On a repository that already carries a generated
 setup it writes nothing and exits 1, naming the two-step route (see
