@@ -50,7 +50,7 @@ Replacement is not the only lane and it is the expensive one: a full override is
 a copy of the whole artifact, so every later upstream improvement stops
 arriving and nothing reports the divergence. An overlay states the delta and
 nothing else. The base keeps flowing from the corpus or the pack that supplies
-it, and the patch survives an upstream rewrite of everything it did not name.
+it — any but a pack skill — and the patch survives upstream rewrites of the rest.
 
 An overlay is two halves, either one alone or both together, filed where the
 full override would have gone:
@@ -69,8 +69,8 @@ patched as `qa`). A command is addressed by its bare slug, not its `cmd-` id.
 The effective precedence chain is declared rather than counted, and exactly one
 of the two applies to any `(class, id)`:
 
-- corpus-or-pack → `.customize.yaml` → `.customize.md`
-- corpus-or-pack → full override (`<slug>.md` in the override tree)
+- corpus-or-pack → `.customize.yaml` → `.customize.md` — not on a pack skill
+- corpus-or-pack → full override (`<slug>.md` in the override tree) — not on a pack skill
 
 An overlay and a full override of one id are refused together, naming both
 files: an artifact is either replaced or patched, never both. A full override is
@@ -100,8 +100,8 @@ applied, and the offending field in one line.
 - a `---` frontmatter fence at the head of a `.customize.md` — those keys belong
   in the other half;
 - YAML that does not parse, or whose root is not a map;
-- an overlay whose slug matches no artifact in any layer, which is almost always
-  a typo in the filename;
+- an overlay whose slug matches no artifact in any layer (almost always a typo),
+  or whose base is a pack skill — a pack agent, command or rule can be patched;
 - an overlay sitting beside a full override of the same id;
 - a `.customize.md` body past the same length ceiling a full override's body is
   held to — an author hits this by accident on a large paste, not by design;
@@ -123,7 +123,7 @@ source file under `.stamity/overrides/` is never regenerated, never wrapped in a
 managed block, and never reclaimed; the per-client copies are, and one stops
 being emitted when its override stops existing. Agent, skill, rule and command
 overrides all emit wherever their class reaches a selected client, in a repo with
-packs installed exactly as in one without.
+packs installed exactly as in one without; `sync` refuses both lanes on a pack skill.
 
 A skill override carries its whole directory: the `SKILL.md` and every support
 file under it, the override's files rather than those of the skill whose id it
