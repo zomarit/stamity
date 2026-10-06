@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { createHash, generateKeyPairSync, sign, verify as verifySignature } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse } from "yaml";
 import { describe, expect, it } from "vitest";
 import type { Bundle } from "sigstore";
@@ -32,6 +32,49 @@ const env = {
 };
 const digest = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex");
 
+/**
+ * The local cryptographic witness: real ECDSA over the real signed payload, with only the remote
+ * trust service substituted. Fulcio, Rekor and the TUF root are reachable from the rehearsal's own
+ * `sign` and `verify` jobs and from no unit test, so the bundle and its check are made here.
+ * TEST CHANGE, justified: lifted unchanged out of the round-trip case below so the bounded-tree
+ * case signs and verifies with the same witness; no assertion moved.
+ */
+function localWitness() {
+  const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const signFn = async (payload: Buffer): Promise<Bundle> => ({
+    mediaType: "application/vnd.dev.sigstore.bundle.v0.3+json",
+    verificationMaterial: { publicKey: { hint: "offline-rehearsal-witness" }, certificate: undefined,
+      x509CertificateChain: undefined, tlogEntries: [], timestampVerificationData: undefined },
+    dsseEnvelope: undefined,
+    messageSignature: { messageDigest: { algorithm: "SHA2_256", digest: Buffer.from(digest(payload), "hex").toString("base64") },
+      signature: sign("sha256", payload, privateKey).toString("base64") },
+  });
+  const verifyFn: SigstoreVerifyFn = async (bundle, payload) => {
+    if (!bundle.messageSignature || !verifySignature("sha256", payload, publicKey, Buffer.from(bundle.messageSignature.signature, "base64"))) {
+      throw new Error("Invalid local cryptographic witness");
+    }
+    return { identity: { subjectAlternativeName: `https://github.com/${env.GITHUB_WORKFLOW_REF}`,
+      extensions: { issuer: "https://token.actions.githubusercontent.com" } } };
+  };
+  const options = { sigstoreVerifier: {
+    verify: (bytes: Buffer, sha: string, signer?: string) => verifySigstoreBundle(bytes, sigstoreSignedPayload(sha), {
+      ...(signer === undefined ? {} : { signer }), verifyFn,
+    }),
+  } };
+  return { signFn, verifyFn, options };
+}
+
+/** Signs both prepared revisions with the witness and writes the `sign` job's receipt. */
+async function signRevisions(root: string, context: object, witness: ReturnType<typeof localWitness>): Promise<void> {
+  const { signFn, verifyFn } = witness;
+  const results = await Promise.all(["revision1", "revision2"].map(async (revision) => {
+    const pack = join(root, "packs", revision);
+    const result = await signPack(pack, { signFn, verifyFn });
+    return Object.assign({ revision }, result, { bundleSha256: digest(await readFile(join(pack, result.bundlePath))) });
+  }));
+  await writeFile(join(root, "signing.json"), JSON.stringify({ ...context, complete: true, results }));
+}
+
 describe("nonpublishing remote signing rehearsal", () => {
   it("refuses mismatched repository, ref and unresolved source identity", () => {
     expect(signingContext(env).sourceSha).toBe(env.SIGNING_SOURCE_SHA);
@@ -58,33 +101,11 @@ describe("nonpublishing remote signing rehearsal", () => {
     const root = join(getDir().dir, "rehearsal");
     const context = signingContext(env);
     await prepareFixtures(root, context);
-    const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
-    const signFn = async (payload: Buffer): Promise<Bundle> => ({
-      mediaType: "application/vnd.dev.sigstore.bundle.v0.3+json",
-      verificationMaterial: { publicKey: { hint: "offline-rehearsal-witness" }, certificate: undefined,
-        x509CertificateChain: undefined, tlogEntries: [], timestampVerificationData: undefined },
-      dsseEnvelope: undefined,
-      messageSignature: { messageDigest: { algorithm: "SHA2_256", digest: Buffer.from(digest(payload), "hex").toString("base64") },
-        signature: sign("sha256", payload, privateKey).toString("base64") },
-    });
-    const verifyFn: SigstoreVerifyFn = async (bundle, payload) => {
-      if (!bundle.messageSignature || !verifySignature("sha256", payload, publicKey, Buffer.from(bundle.messageSignature.signature, "base64"))) {
-        throw new Error("Invalid local cryptographic witness");
-      }
-      return { identity: { subjectAlternativeName: `https://github.com/${env.GITHUB_WORKFLOW_REF}`,
-        extensions: { issuer: "https://token.actions.githubusercontent.com" } } };
-    };
-    const results = await Promise.all(["revision1", "revision2"].map(async (revision) => {
-      const pack = join(root, "packs", revision);
-      const result = await signPack(pack, { signFn, verifyFn });
-      return Object.assign({ revision }, result, { bundleSha256: digest(await readFile(join(pack, result.bundlePath))) });
-    }));
-    await writeFile(join(root, "signing.json"), JSON.stringify({ ...context, complete: true, results }));
-    await verify(root, context, { sigstoreVerifier: {
-      verify: (bytes: Buffer, sha: string, signer?: string) => verifySigstoreBundle(bytes, sigstoreSignedPayload(sha), {
-        ...(signer === undefined ? {} : { signer }), verifyFn,
-      }),
-    } });
+    // TEST CHANGE, justified: the witness and the signing loop moved into localWitness() and
+    // signRevisions() above, unchanged, so the bounded-tree case shares them.
+    const witness = localWitness();
+    await signRevisions(root, context, witness);
+    await verify(root, context, witness.options);
     const receipt = JSON.parse(await readFile(join(root, "verification.json"), "utf8"));
     expect(receipt.passed).toBe(true);
     expect(receipt.results.filter((row: { refused?: boolean }) => row.refused)).toHaveLength(5);
@@ -232,6 +253,89 @@ describe("the rehearsal signs the code that ships", () => {
   });
 });
 
+const page = (path: string) => readFileSync(fileURLToPath(new URL(`../../${path}`, import.meta.url)), "utf8");
+
+/**
+ * The `verify` job checks nothing out. It extracts the archive `prepare` built and runs the script
+ * from that tree, so every file the planning API reads has to be on the archive step's list. Since
+ * the cross-class name check, `planPackInstall` reads the bundled corpus, and an archive without
+ * `content/` failed every push run at revision 1's plan with "Bundled content not found" while the
+ * round-trip case above, run from the full checkout, stayed green.
+ */
+const ARCHIVE_STEP = "Archive only reviewed input paths";
+const ARCHIVE_COMMAND = /^tar -czf signing-input\.tgz -C source (\S+(?: \S+)*)$/;
+/** Archived, but not source: the dependencies `npm ci` installs, and the fixtures `prepare` writes. */
+const NOT_SOURCE = ["node_modules", "rehearsal"];
+const scriptText = page("scripts/pack-signing-rehearsal.mjs");
+
+/** The archive step's path list, read out of the workflow; a renamed step or a reshaped command fails here. */
+function archivedPaths(): string[] {
+  const run = workflow.jobs.prepare?.steps.find((step) => step.name === ARCHIVE_STEP)?.run;
+  if (run === undefined) throw new Error(`the prepare job has no "${ARCHIVE_STEP}" step with a command`);
+  const commands = run.split("\n").map((line) => ARCHIVE_COMMAND.exec(line.trim())).filter((match) => match !== null);
+  if (commands.length !== 1) {
+    throw new Error(`"${ARCHIVE_STEP}" no longer runs exactly one \`tar -czf signing-input.tgz -C source <paths>\``);
+  }
+  return commands[0]![1]!.split(" ");
+}
+
+/** The paths `prepare` hashes into `inputs.json`: its `git ls-files` list, plus the script itself. */
+function hashedPaths(): string[] {
+  const listed = /execFileSync\('git', \['ls-files', '-z', ([^\]]+)\]/.exec(scriptText);
+  const self = /inputs\.push\(\{ path: '([^']+)'/.exec(scriptText);
+  if (listed === null || self === null) {
+    throw new Error("prepare no longer hashes `git ls-files -z <paths>` plus its own script; re-read it before this test");
+  }
+  const paths = listed[1]!.split(",").map((entry) => entry.trim());
+  for (const entry of paths) {
+    if (!/^'[^']+'$/.test(entry)) throw new Error(`prepare's ls-files list holds ${entry}, not a quoted literal`);
+  }
+  return [...paths.map((entry) => entry.slice(1, -1)), self[1]!];
+}
+
+/** The rehearsal script's exports this file calls on a copy that lives outside the checkout. */
+interface RehearsalScript {
+  signingContext: typeof signingContext;
+  prepareFixtures: typeof prepareFixtures;
+  verify: typeof verify;
+}
+
+describe("the rehearsal's bounded input carries what verify reads", () => {
+  it("archives exactly the source prepare hashes into its receipt", () => {
+    const archived = archivedPaths();
+    for (const path of NOT_SOURCE) expect(archived, `the archive no longer carries ${path}`).toContain(path);
+    expect(
+      hashedPaths().toSorted(),
+      "inputs.json and the archive disagree on the source a run signs and verifies",
+    ).toEqual(archived.filter((path) => !NOT_SOURCE.includes(path)).toSorted());
+  });
+
+  it("verifies install, update and every negative from a tree holding only the archived paths", async () => {
+    // Built with node:fs rather than tar: the archive step is POSIX shell on ubuntu-latest, and
+    // this case runs on every CI leg, Windows included.
+    const tree = join(getDir().dir, "source");
+    await mkdir(tree);
+    await Promise.all(archivedPaths().map(async (path) => {
+      if (path === "rehearsal") return; // written below by the copy's own prepareFixtures
+      // Never installed: the copy borrows the checkout's dependency tree, as `npm ci` provides one.
+      if (path === "node_modules") return symlink(join(REPO_ROOT, "node_modules"), join(tree, "node_modules"), "junction");
+      return cp(join(REPO_ROOT, path), join(tree, path), { recursive: true });
+    }));
+    // The tree's own copy, so `../src/...` and the corpus probe resolve inside the tree.
+    const copy = (await import(pathToFileURL(join(tree, "scripts", "pack-signing-rehearsal.mjs")).href)) as RehearsalScript;
+    const root = join(tree, "rehearsal");
+    const context = copy.signingContext(env);
+    await copy.prepareFixtures(root, context);
+    const witness = localWitness();
+    await signRevisions(root, context, witness);
+    await copy.verify(root, context, witness.options);
+    const receipt = JSON.parse(await readFile(join(root, "verification.json"), "utf8"));
+    expect(receipt.passed).toBe(true);
+    expect(receipt.results.filter((row: { refused?: boolean }) => row.refused)).toHaveLength(5);
+    expect(receipt.results.filter((row: { installed?: boolean }) => row.installed)).toHaveLength(2);
+  }, 60_000);
+});
+
 describe("scripts/sign-pack.mjs failure reporting", () => {
   const signPackCli = (packPath: string) =>
     spawnSync(process.execPath, [join(REPO_ROOT, "scripts/sign-pack.mjs"), packPath], { encoding: "utf8" });
@@ -266,8 +370,6 @@ describe("scripts/sign-pack.mjs failure reporting", () => {
     expect(result.stderr).not.toContain(missing);
   });
 });
-
-const page = (path: string) => readFileSync(fileURLToPath(new URL(`../../${path}`, import.meta.url)), "utf8");
 
 describe("what the pages promise about signing", () => {
   it("tells an author where an identity comes from, because the client has no interactive flow", () => {

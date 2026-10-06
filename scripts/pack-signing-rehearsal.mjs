@@ -55,7 +55,7 @@ export async function prepareFixtures(root, context) {
 async function prepare(root, context) {
   assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: SOURCE, encoding: 'utf8' }).trim(), context.sourceSha)
   await prepareFixtures(root, context)
-  const paths = execFileSync('git', ['ls-files', '-z', 'src', 'package.json', 'package-lock.json',
+  const paths = execFileSync('git', ['ls-files', '-z', 'src', 'content', 'package.json', 'package-lock.json',
     'scripts/sign-pack.mjs', 'scripts/native-typescript.mjs'], { cwd: SOURCE, encoding: 'utf8' }).split('\0').filter(Boolean)
   const inputs = await Promise.all(paths.map(async (path) => ({ path, sha256: sha256(await readFile(join(SOURCE, path))) })))
   inputs.push({ path: 'scripts/pack-signing-rehearsal.mjs', sha256: sha256(await readFile(fileURLToPath(import.meta.url))) })
