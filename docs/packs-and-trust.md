@@ -117,14 +117,15 @@ under them. An installed pack's skills are the exception: no plugin ships them, 
 written anyway. A pack's commands, agents, rules and hooks get no exception, and wherever the
 client's plugin carries their class they are dropped. [Plugins](plugins.md) has the table, under
 Who owns what. `stamity check` reports the result in its `pack-reach` row. The row fails for an
-installed pack none of whose artifacts reaches a selected client. It warns instead in three
-cases: a pack whose only delivery left is an MCP server you have not selected, naming
-`stamity config mcp add <id>`; a pack with some artifacts dropped, naming each one; and a pack
-with nothing a client loads. Otherwise it passes. Remove a pack that reaches nothing with
+installed pack none of whose artifacts reaches a selected client. It warns instead in four cases:
+a pack whose only delivery left is an MCP server you have not selected, naming
+`stamity config mcp add <id>`; a pack with some artifacts dropped, naming each one; a pack with
+nothing a client loads; and a pack the organisation's trust policy denies, which is installed and
+projects nothing. Otherwise it passes. Remove a pack that reaches nothing with
 `stamity clean --pack <id>`, or, where its `tools:` list names a client, add that client with
 `stamity config set tools <list>`, then `stamity sync`. While a client's plugin carries a class,
-this repository writes none of that class for it; only a pack's skills are exempt. [Plugins](plugins.md) lists every status of the row with its remedy,
-under Troubleshooting.
+this repository writes none of that class for it; only a pack's skills are exempt.
+[Plugins](plugins.md) lists every status of the row with its remedy, under Troubleshooting.
 
 ## Which rung of the trust ladder a pack lands on
 
