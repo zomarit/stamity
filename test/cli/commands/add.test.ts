@@ -1341,10 +1341,13 @@ describe("add — collisions", () => {
     expect(result.stderr).toContain("resolve the collisions, then re-run");
     // The next step names the uninstall verb this wave shipped (the previous
     // copy said v1 had no remove-pack verb — stale once clean --pack landed).
-    // TEST CHANGE, justified (review/42): the refusal names this step in the
-    // pinned npx form, as every other `clean --pack` remedy does, so one joined
-    // refusal never prints two spellings of it.
-    expect(result.stderr).toContain(npxCommand("clean --pack <id>"));
+    // TEST CHANGE, justified (review/57): 2026-10-06. The pack is not
+    // installed here, so `clean --pack <id>` would exit 1 ("no pack is
+    // installed"); the remedy names the stray as the operator's to move or
+    // delete, and offers no clean --pack step for a pack with no rows.
+    expect(result.stderr).not.toContain(npxCommand("clean --pack"));
+    expect(result.stderr).toContain(`pack "${PACK_ID}" is not installed`);
+    expect(result.stderr).toContain("move it out of the way or delete it, then re-run");
     // No partial write: the second file never appeared and the stray is intact.
     expect(await pathExists(project.path(PACK_DIR, "rules", "naming.md"))).toBe(false);
     expect(await readFile(project.path(PACK_DIR, "agents", "reviewer.md"), "utf8")).toBe(
@@ -1369,19 +1372,17 @@ describe("add — collisions", () => {
     expect((doc.planned as { collisions: string[] }).collisions).toHaveLength(1);
     expect(errorOf(doc).code).toBe("VALIDATION_ERROR");
     expect(errorOf(doc).next).toContain("resolve the collisions");
-    // TEST CHANGE, justified (review/42): the refusal names this step in the
-    // pinned npx form, as every other `clean --pack` remedy does, so one joined
-    // refusal never prints two spellings of it.
-    expect(errorOf(doc).next).toContain(npxCommand("clean --pack <id>"));
-    // TEST CHANGE, justified (prove/5): 2026-10-06. "Uninstall a stale pack
-    // with clean --pack" alone looped for a synced pack: its projected client
-    // copies stay owned until a sync, so the re-add met this refusal again.
-    // The remedy now gives the working order (upgradeRemedy.test.ts runs it).
-    expect(errorOf(doc).next).toContain(
-      `for a stale pack that owns them, run \`${npxCommand("clean --pack <id>")}\`, then ` +
-        `\`${npxCommand("sync")}\` to remove its client copies, then ` +
-        `\`${npxCommand(`add ${PACK_SPEC}`)}\`, then \`${npxCommand("sync")}\`; or move the listed ` +
-        "paths yourself",
+    // TEST CHANGE, justified (review/57): 2026-10-06. The prove/5 wording led
+    // with `clean --pack <id>`, which exits 1 for a pack with no rows — this
+    // one's state. Not installed, the remedy is sync (for claims a client copy
+    // left), then add, then sync, and the stray is the operator's to move;
+    // the installed branch is pinned in upgradeRemedy.test.ts, which runs it.
+    expect(errorOf(doc).next).toBe(
+      `resolve the collisions, then re-run — pack "${PACK_ID}" is not installed: for a path or ` +
+        `id a client copy still claims (left by an earlier sync), run \`${npxCommand("sync")}\` ` +
+        `to remove those copies, then \`${npxCommand(`add ${PACK_SPEC}`)}\`, then ` +
+        `\`${npxCommand("sync")}\`; for a file no ledger row owns ("a file already exists ` +
+        `there"), move it out of the way or delete it, then re-run`,
     );
   });
 
@@ -1421,10 +1422,13 @@ describe("add — collisions", () => {
     expect(result.stdout).toContain("does not own");
     // The stale "v1 has no remove-pack verb" copy is gone; the ledger-driven
     // uninstall is the named way out.
-    // TEST CHANGE, justified (review/42): the refusal names this step in the
-    // pinned npx form, as every other `clean --pack` remedy does, so one joined
-    // refusal never prints two spellings of it.
-    expect(result.stderr).toContain(npxCommand("clean --pack <id>"));
+    // TEST CHANGE, justified (review/57): 2026-10-06. With no rows left the
+    // ledger-driven uninstall exits 1 ("no pack is installed"), so the remedy
+    // no longer names it here: the files no row owns are the operator's to
+    // move out of the way or delete.
+    expect(result.stderr).not.toContain(npxCommand("clean --pack"));
+    expect(result.stderr).toContain(`pack "${PACK_ID}" is not installed`);
+    expect(result.stderr).toContain("move it out of the way or delete it, then re-run");
   });
 });
 

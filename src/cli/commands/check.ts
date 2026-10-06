@@ -19,6 +19,7 @@ import {
 } from "../../pack/projection.ts";
 import {
   describePackIntegrityFinding,
+  packReinstallSteps,
   verifyInstalledPacks,
 } from "../../pack/verifyInstalled.ts";
 import type { PackArtifactReach, PackReach } from "../../types/content.ts";
@@ -1824,13 +1825,23 @@ function renderNextSteps(
     // rather than correcting it. Re-installing is what restores the recorded
     // content. After `clean --pack` the pack is gone, so a sync there only
     // reclaims its projected client copies — without it, `add` finds their
-    // paths still owned and refuses (prove/6).
+    // paths still owned and refuses (prove/6). An edited file is moved out
+    // first, since `clean --pack` keeps it and `add` would refuse it
+    // (review/56). The order is `packReinstallSteps`', the one each finding
+    // line in the row prints too (review/58). `<source>` is the one value
+    // that differs per pack, so each finding line spells it from the pack's
+    // receipt and this block says where to find it (review/59).
     steps.push(
-      `${packageCommand("clean --pack <id>")}, then ${packageCommand("sync")}, then ` +
-        `${packageCommand("add <id>")}, then ${packageCommand("sync")} — re-install the pack ` +
-        `whose installed files no longer match; do not run sync first: it would carry the ` +
-        `current bytes into the generated setup; after clean, sync only removes the pack's ` +
-        `client copies, which add would otherwise find still owned`,
+      `${packReinstallSteps(
+        "<id>",
+        "any edited file the pack-integrity row names",
+        "<source>",
+        packageCommand,
+      )} — re-install the pack whose installed files no longer match, where <source> is the ` +
+        `catalog id, local path or package name its install receipt records, as the row's ` +
+        `finding line for that pack prints it; do not run sync first: ` +
+        `it would carry the current bytes into the generated setup; after clean, sync only ` +
+        `removes the pack's client copies, which add would otherwise find still owned`,
     );
   }
   if (outcome.kind === "failed") {

@@ -516,18 +516,37 @@ interface RefusalPart {
 
 /**
  * Collision part. `add` has no override, so the next step is about clearing
- * the paths: a stale installed pack is replaced in {@link replaceSteps}' four
- * steps — its `sync` after `clean --pack` reclaims the client copies an earlier
- * `sync` projected, which are what an `add` right after `clean --pack` still
- * finds owned — and anything else at the listed paths is the operator's to move.
+ * the paths, and which steps clear them depends on whether the pack being
+ * added is still installed (`installed`, read from its `pack:<id>` rows):
+ *
+ * - installed: the stale copy is replaced in {@link replaceSteps}' four steps —
+ *   its `sync` after `clean --pack` reclaims the client copies an earlier
+ *   `sync` projected, which are what the `add` would otherwise find owned;
+ * - not installed (a `clean --pack` already ran): `clean --pack` would refuse,
+ *   since the ledger holds no row of the pack, and the claims left are client
+ *   copies only a `sync` reclaims — so `sync`, then `add`, then `sync`.
+ *
+ * Either way a file no ledger row owns (a stray, or an edited pack file
+ * `clean --pack` kept as salvage) is never removed by a verb: it is the
+ * operator's to move out of the way or delete (review/57).
  */
-function collisionPart(spec: string, reasons: readonly string[]): RefusalPart {
+function collisionPart(
+  packId: string,
+  spec: string,
+  installed: boolean,
+  reasons: readonly string[],
+): RefusalPart {
+  const claims = installed
+    ? `pack "${packId}" is installed: to replace it, ${replaceSteps(packId, spec)}`
+    : `pack "${packId}" is not installed: for a path or id a client copy still claims (left by an ` +
+      `earlier sync), run \`${packageCommand("sync")}\` to remove those copies, then ` +
+      `\`${packageCommand(`add ${spec}`)}\`, then \`${packageCommand("sync")}\``;
   return {
     message: `${reasons.length} path(s) it would write are not free`,
     why: "a pack never overwrites a file it does not own, and add has no --force",
     next:
-      `resolve the collisions, then re-run — for a stale pack that owns them, ` +
-      `${replaceSteps("<id>", spec)}; or move the listed paths yourself`,
+      `resolve the collisions, then re-run — ${claims}; for a file no ledger row owns ` +
+      `("a file already exists there"), move it out of the way or delete it, then re-run`,
   };
 }
 
@@ -662,9 +681,10 @@ function planRefusal(packId: string, parts: readonly RefusalPart[]): FailureDoc 
 function collisionRefusal(
   packId: string,
   spec: string,
+  installed: boolean,
   reasons: readonly string[],
 ): FailureDoc {
-  return planRefusal(packId, [collisionPart(spec, reasons)]);
+  return planRefusal(packId, [collisionPart(packId, spec, installed, reasons)]);
 }
 
 // ── Command ────────────────────────────────────────────────────
@@ -823,10 +843,14 @@ export const addCommand: CommandModule = {
     // Paths first, then names, then the installed copy's leftovers: every
     // kind the plan carries is listed and carried by the one error document,
     // so one re-run is not spent discovering the next refusal.
+    // Whether the pack being added is installed decides which steps clear a
+    // collision: `clean --pack` refuses a pack the ledger holds no row of.
+    const installed =
+      packEngine.install.planPackRemoval(projectManifest, plan.manifest.name).length > 0;
     const parts: RefusalPart[] = [];
     if (plan.collisions.length > 0) {
       renderReasons(ctx, plan.collisions);
-      parts.push(collisionPart(spec, plan.collisions));
+      parts.push(collisionPart(plan.manifest.name, spec, installed, plan.collisions));
     }
     if (nameClashes.length > 0) {
       renderReasons(ctx, nameClashLines, "name clashes");
@@ -863,7 +887,7 @@ export const addCommand: CommandModule = {
       return refuse(
         ctx,
         { ...payload, planned: { ...payload.planned, collisions: applied.result.errors } },
-        collisionRefusal(plan.manifest.name, spec, applied.result.errors),
+        collisionRefusal(plan.manifest.name, spec, installed, applied.result.errors),
       );
     }
 

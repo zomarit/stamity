@@ -1249,9 +1249,12 @@ describe("check — installed pack integrity", () => {
     // failed at add for a synced pack: its client copies stay owned until a
     // sync. Sync still never runs before clean; after clean it runs, then add,
     // then sync.
+    // TEST CHANGE, justified (review/59): 2026-10-06. `add <id>` re-adds only a
+    // catalog pack; the step names the source the pack's receipt records,
+    // which each finding line spells and this block calls <source>.
     expect(nextBlock).toContain(
       `${npxCommand("clean --pack <id>")}, then ${npxCommand("sync")}, then ` +
-        `${npxCommand("add <id>")}, then ${npxCommand("sync")}`,
+        `${npxCommand("add <source>")}, then ${npxCommand("sync")}`,
     );
   });
 

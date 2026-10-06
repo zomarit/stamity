@@ -3,7 +3,14 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import pLimit from "p-limit";
 import { EngineError } from "../types/errors.ts";
-import { isPackOwner, PACK_OWNER_PREFIX, type SetupManifest } from "../types/manifest.ts";
+import {
+  isPackOwner,
+  PACK_OWNER_PREFIX,
+  type LedgerEntry,
+  type SetupManifest,
+} from "../types/manifest.ts";
+import { lookupCatalogEntry } from "./curated.ts";
+import { receiptRelPath } from "./receipt.ts";
 
 /**
  * Post-install re-verification of pack content: the read half of a promise the
@@ -54,6 +61,13 @@ export interface PackIntegrityFinding {
   expected: string;
   /** SHA-256 of the bytes on disk now, or `null` when the file is gone. */
   actual: string | null;
+  /**
+   * The arguments that re-add this pack from the source its install receipt
+   * records ({@link reAddArgsOf}), or `null`/absent when the receipt is
+   * missing, edited or unreadable — the re-install order then names the pack
+   * and says to add it from where it came from (review/59).
+   */
+  reAdd?: string | null;
 }
 
 /** What one verification pass looked at, and what it found. */
@@ -101,10 +115,91 @@ export async function verifyInstalledPacks(
     };
   });
 
-  return {
-    checked: rows.length,
-    findings: results.filter((finding): finding is PackIntegrityFinding => finding !== null),
-  };
+  const findings = results.filter((finding): finding is PackIntegrityFinding => finding !== null);
+  const packIds = [...new Set(findings.map((finding) => finding.packId))];
+  const reAdds = new Map(
+    await Promise.all(
+      packIds.map(async (packId) => [packId, await readReAddArgs(root, packId, rows)] as const),
+    ),
+  );
+  for (const finding of findings) finding.reAdd = reAdds.get(finding.packId) ?? null;
+  return { checked: rows.length, findings };
+}
+
+/** The tiers only a verified catalog pin grants (`./trust.ts`). */
+const CATALOG_TIERS: ReadonlySet<string> = new Set(["curator-verified", "scanned"]);
+
+/**
+ * `packId`'s re-add arguments, read from its install receipt — or `null` when
+ * the receipt cannot be trusted to name them: absent, unreadable, not the
+ * bytes its own ledger row recorded (an edited receipt could otherwise make the
+ * remedy print any command), or missing the fields read here.
+ */
+async function readReAddArgs(
+  root: string,
+  packId: string,
+  rows: readonly LedgerEntry[],
+): Promise<string | null> {
+  let rel: string;
+  try {
+    rel = receiptRelPath(packId);
+  } catch {
+    return null;
+  }
+  const row = rows.find((entry) => entry.path === rel);
+  if (row === undefined) return null;
+  let text: Buffer;
+  try {
+    text = await readFile(join(root, ...rel.split("/")));
+  } catch {
+    return null;
+  }
+  if (createHash("sha256").update(text).digest("hex") !== row.contentHash?.toLowerCase()) {
+    return null;
+  }
+  let receipt: unknown;
+  try {
+    receipt = JSON.parse(text.toString("utf8"));
+  } catch {
+    return null;
+  }
+  return reAddArgsOf(packId, receipt);
+}
+
+/**
+ * The `add` arguments that re-install `packId` from the source `receipt`
+ * records, or `null` when it names none this can spell.
+ *
+ * - A catalog-granted tier came through the curated catalog, whose receipt
+ *   spec is the resolved bundled directory or package — so the step names the
+ *   catalog id, which re-applies the pin.
+ * - A local path or an npm package is re-added by the spec the operator typed;
+ *   at the unsigned floor `add` refuses without `--allow-untrusted`, so the
+ *   step carries it, as the original install had to.
+ */
+export function reAddArgsOf(packId: string, receipt: unknown): string | null {
+  if (typeof receipt !== "object" || receipt === null) return null;
+  const { source, trustTier } = receipt as { source?: unknown; trustTier?: unknown };
+  if (typeof source !== "object" || source === null || typeof trustTier !== "string") return null;
+  const { kind, spec } = source as { kind?: unknown; spec?: unknown };
+  if (typeof kind !== "string" || typeof spec !== "string" || spec === "") return null;
+  if (CATALOG_TIERS.has(trustTier) || kind === "catalog-pinned") {
+    const entry = lookupCatalogEntry(packId) ?? lookupCatalogEntry(spec);
+    return entry === undefined ? null : shellWord(entry.id);
+  }
+  if (kind !== "local-path" && kind !== "npm-package") return null;
+  return `${shellWord(spec)}${trustTier === "pinned-unsigned" ? " --allow-untrusted" : ""}`;
+}
+
+/**
+ * `word` as one POSIX shell word: bare when it holds only characters no shell
+ * reads specially, single-quoted otherwise, control characters dropped — the
+ * receipt is repository data, and a printed remedy is pasted into a shell.
+ */
+function shellWord(word: string): string {
+  // oxlint-disable-next-line no-control-regex -- stripping control characters is the point
+  const clean = word.replace(/[\u0000-\u001f\u007f-\u009f]/g, "");
+  return /^[A-Za-z0-9@%+=:,./_-]+$/.test(clean) ? clean : `'${clean.replace(/'/g, "'\\''")}'`;
 }
 
 /**
@@ -131,13 +226,57 @@ async function hashIfPresent(absPath: string): Promise<string | null> {
 }
 
 /**
+ * The order that re-installs pack `packId`, worded once for every surface that
+ * prints it — each finding line below and `check`'s next-steps block, which
+ * passes its own `call` for the pinned command form — so one `check` run never
+ * prints two orders (review/58).
+ *
+ * `edited` names the edited file(s) to deal with first, or is `null` when
+ * there are none. An edited file is the case the bare order missed
+ * (review/56): `clean --pack` keeps a file whose bytes no longer match its row
+ * rather than deleting it, so the edit is not lost, and drops the row — so the
+ * later `add` meets a file its pack does not own at its own path and refuses.
+ * Moving it out of the pack's directory (or deleting it) first is what lets
+ * the four steps run. `sync` never runs before `clean --pack`: it would carry
+ * the current bytes into the generated setup.
+ *
+ * `reAdd` is what follows `add`: the source the pack's receipt records
+ * ({@link reAddArgsOf}), or a placeholder the caller explains. `null` means
+ * no receipt could name it, and the step says so in words rather than print
+ * an `add` that would not run (review/59).
+ */
+export function packReinstallSteps(
+  packId: string,
+  edited: string | null,
+  reAdd: string | null,
+  call: (args: string) => string = (args) => `\`${args}\``,
+): string {
+  const first =
+    edited === null
+      ? ""
+      : `move ${edited} out of the pack's directory or delete it first — clean --pack keeps an ` +
+        `edited pack file rather than deleting it, so the edit is not lost, and add would refuse ` +
+        `it as a file the pack does not own; then `;
+  const add =
+    reAdd === null
+      ? `add pack "${packId}" again from the source you installed it from (its install receipt ` +
+        `is missing or unreadable, so that source cannot be named here)`
+      : call(`add ${reAdd}`);
+  return (
+    `${first}run ${call(`clean --pack ${packId}`)}, then ${call("sync")}, then ` +
+    `${add}, then ${call("sync")}`
+  );
+}
+
+/**
  * One finding as a diagnostic line, in integrity vocabulary rather than drift
  * vocabulary.
  *
  * The distinction is the point of the whole module and belongs here rather
  * than at each caller: "regeneration drift" invites `sync`, which for an
  * edited pack body LAUNDERS the edit into the emitted setup. An integrity
- * mismatch invites re-installing the pack, and the line says so by name.
+ * mismatch invites re-installing the pack, in {@link packReinstallSteps}'
+ * order, and the line says so by name.
  */
 export function describePackIntegrityFinding(finding: PackIntegrityFinding): string {
   const state =
@@ -147,7 +286,11 @@ export function describePackIntegrityFinding(finding: PackIntegrityFinding): str
   return (
     `${finding.relPath} ${state} — installed pack "${finding.packId}" no longer matches what was ` +
     `verified at install. This is not regeneration drift: \`sync\` would carry the current bytes ` +
-    `into the generated setup. Re-install the pack (\`clean --pack ${finding.packId}\`, then \`add\`) ` +
-    `or restore the file.`
+    `into the generated setup. Restore the file, or re-install the pack: ` +
+    `${packReinstallSteps(
+      finding.packId,
+      finding.actual === null ? null : "this file",
+      finding.reAdd ?? null,
+    )}.`
   );
 }

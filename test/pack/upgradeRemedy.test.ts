@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -13,7 +13,9 @@ import {
   receiptRelPath,
   serializeReceipt,
 } from "../../src/pack/receipt.ts";
+import { describePackIntegrityFinding, reAddArgsOf } from "../../src/pack/verifyInstalled.ts";
 import { packOwner, type LedgerEntry } from "../../src/types/manifest.ts";
+import { npxCommand } from "../support/identity.ts";
 import { runInProcess, type InProcessResult } from "../support/inProcess.ts";
 import { seedGitRepo } from "../support/repoFixtures.ts";
 import { makeTempDir, type TempDirHandle } from "../support/tempDir.ts";
@@ -268,19 +270,34 @@ function remedyVerbs(output: string, id: string): string[] {
   );
 }
 
-/**
- * The commands `add`'s path-collision refusal names for a stale pack, in
- * order, with the pinned prefix taken off: the span between "for a stale pack
- * that owns them," and "; or move the listed paths yourself".
- */
-function collisionVerbs(output: string): string[] {
-  const start = output.indexOf("for a stale pack that owns them,");
-  if (start < 0) return [];
-  const end = output.indexOf("; or move the listed paths yourself", start);
-  const span = output.slice(start, end < 0 ? undefined : end);
+/** The backtick-quoted commands in `span`, with the pinned prefix taken off. */
+function quotedVerbs(span: string): string[] {
   return [...span.matchAll(/`([^`]+)`/g)].map((match) =>
     (match[1] ?? "").replace(/^npx -y \S+ /, "").replace(/^stamity /, ""),
   );
+}
+
+/**
+ * The commands `add`'s path-collision refusal names for pack `id`, in order:
+ * the span between `pack "<id>" is` (installed or not installed — the two
+ * states take different steps, review/57) and the stray clause after it.
+ */
+function collisionVerbs(output: string, id: string): string[] {
+  const start = output.indexOf(`pack "${id}" is `);
+  if (start < 0) return [];
+  const end = output.indexOf("; for a file no ledger row owns", start);
+  return quotedVerbs(output.slice(start, end < 0 ? undefined : end));
+}
+
+/** Runs `steps` in order in `repo`, each one exiting 0; -y for the verbs that ask. */
+async function runSteps(repo: string, steps: readonly string[]): Promise<void> {
+  for (const step of steps) {
+    const argv = step.split(" ");
+    if (argv[0] === "clean" || argv[0] === "add") argv.push("-y");
+    // oxlint-disable-next-line no-await-in-loop -- sequential: each step reads the state the one before it left
+    const result = await cli(repo, argv);
+    expect(result.code, `remedy step \`${argv.join(" ")}\` must exit 0 — ${said(result)}`).toBe(0);
+  }
 }
 
 describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal prints", () => {
@@ -352,27 +369,187 @@ describe("the 1.11.0 ops upgrade on Claude, by the remedy the sync refusal print
       expect(refused.output).toContain("path(s) it would write are not free");
       expect(refused.output).toContain(".claude/agents/stamity-devops.md");
 
-      const steps = collisionVerbs(refused.output);
+      // TEST CHANGE, justified (review/57): 2026-10-06. The prove/5 remedy led
+      // with `clean --pack <id>`, which exits 1 here — the pack has no rows
+      // left — so this case skipped it by hand. Not installed, the printed
+      // steps are sync, add, sync, and every one of them runs.
+      expect(refused.output).toContain('pack "ops" is not installed');
+      const steps = collisionVerbs(refused.output, "ops");
       expect(steps, `the collision refusal's printed remedy — ${said(refused)}`).toEqual([
-        "clean --pack <id>",
         "sync",
         "add ops",
         "sync",
       ]);
-
-      // Its first step is the clean --pack already run above; the rest run in
-      // the printed order, each reading the state the one before it left.
-      for (const step of steps.slice(1)) {
-        const argv = step.split(" ");
-        if (argv[0] === "add") argv.push("-y");
-        // oxlint-disable-next-line no-await-in-loop -- sequential by design (above)
-        const result = await cli(repo, argv);
-        expect(result.code, `remedy step \`${argv.join(" ")}\` must exit 0 — ${said(result)}`).toBe(0);
-      }
+      await runSteps(repo, steps);
 
       const checked = await cli(repo, ["check"]);
       expect(checked.code, `check after the remedy must exit 0 — ${said(checked)}`).toBe(0);
     },
     CASE_TIMEOUT,
   );
+
+  it(
+    "add over the installed 1.11.0 ops is refused on its client copies, and the installed-state remedy runs to exit 0 (review/57)",
+    async () => {
+      const repo = await syncedAt1110("collision-installed");
+
+      const refused = await cli(repo, ["add", "ops", "-y"]);
+      expect(refused.code, `add over the synced old pack must refuse — ${said(refused)}`).toBe(1);
+      expect(refused.output).toContain("path(s) it would write are not free");
+      expect(refused.output).toContain('pack "ops" is installed: to replace it');
+
+      const steps = collisionVerbs(refused.output, "ops");
+      expect(steps, `the collision refusal's printed remedy — ${said(refused)}`).toEqual([
+        "clean --pack ops",
+        "sync",
+        "add ops",
+        "sync",
+      ]);
+      await runSteps(repo, steps);
+
+      const checked = await cli(repo, ["check"]);
+      expect(checked.code, `check after the remedy must exit 0 — ${said(checked)}`).toBe(0);
+    },
+    CASE_TIMEOUT,
+  );
+});
+
+/**
+ * The integrity remedy, run as printed (review/56, review/58, review/59): the
+ * pack is installed by `install` (argv for `add`) and synced, one of its files
+ * is edited, and `check`'s finding line must give the four steps with an `add`
+ * that names the source the receipt recorded — `addStep` — while the
+ * next-steps block prints the same order. Following it, the edited file moved
+ * out first, exits 0 at each step and leaves `check` green.
+ */
+async function integrityRemedyRuns(
+  name: string,
+  install: readonly string[],
+  addStep: string,
+  before?: (repo: string) => Promise<void>,
+): Promise<void> {
+  const repo = await claudeRepo(name);
+  await before?.(repo);
+  const added = await cli(repo, [...install, "-y"]);
+  expect(added.code, `fixture: ${install.join(" ")} — ${said(added)}`).toBe(0);
+  const synced = await cli(repo, ["sync"]);
+  expect(synced.code, `fixture: sync — ${said(synced)}`).toBe(0);
+
+  const edited = ".stamity/packs/ops/agents/stamity-devops.md";
+  const editedAbs = join(repo, ...edited.split("/"));
+  const body = `${await readFile(editedAbs, "utf8")}\nA local edit.\n`;
+  await writeFile(editedAbs, body, "utf8");
+
+  const json = await cli(repo, ["check", "--json"]);
+  expect(json.code, `check must fail the edited pack — ${said(json)}`).toBe(1);
+  const doc = JSON.parse(json.stdout) as { doctor: { id: string; detail: string }[] };
+  const detail = doc.doctor.find((entry) => entry.id === "pack-integrity")?.detail ?? "";
+  expect(detail).toContain(edited);
+  expect(detail).toContain("move this file out of the pack's directory or delete it first");
+  const steps = quotedVerbs(detail.slice(detail.indexOf("re-install the pack:")));
+  expect(steps, `the finding line's order — ${detail}`).toEqual([
+    "clean --pack ops",
+    "sync",
+    addStep,
+    "sync",
+  ]);
+
+  // The next-steps block prints the same order and the same first step.
+  const human = await cli(repo, ["check"]);
+  const next = human.output.slice(human.output.indexOf("next:"));
+  expect(next).toContain(
+    "move any edited file the pack-integrity row names out of the pack's directory or delete it first",
+  );
+  expect(next).toContain(
+    `${npxCommand("clean --pack <id>")}, then ${npxCommand("sync")}, then ` +
+      `${npxCommand("add <source>")}, then ${npxCommand("sync")}`,
+  );
+
+  // The printed first step, by hand: move the edited file out of the pack.
+  const keep = join(repo, "kept-devops.md");
+  await rename(editedAbs, keep);
+  await runSteps(repo, steps);
+
+  const checked = await cli(repo, ["check"]);
+  expect(checked.code, `check after the remedy must exit 0 — ${said(checked)}`).toBe(0);
+  expect(await readFile(keep, "utf8"), "the moved copy keeps the edit").toBe(body);
+  expect(await readFile(editedAbs, "utf8")).not.toBe(body);
+}
+
+describe("an edited pack file, by the remedy check's pack-integrity row prints", () => {
+  it(
+    "a catalog pack: the step re-adds it by its catalog id, and the printed order runs to exit 0 (review/56, review/58, review/59)",
+    async () => {
+      await integrityRemedyRuns("integrity-catalog", ["add", "ops"], "add ops");
+    },
+    CASE_TIMEOUT,
+  );
+
+  it(
+    "a local-path pack: the step re-adds it from the recorded path, with --allow-untrusted as its install needed, and runs to exit 0 (review/59)",
+    async () => {
+      await integrityRemedyRuns(
+        "integrity-local",
+        ["add", "./vendor/ops", "--allow-untrusted"],
+        "add ./vendor/ops --allow-untrusted",
+        async (repo) => {
+          await cp(OPS_ROOT, join(repo, "vendor", "ops"), { recursive: true });
+        },
+      );
+    },
+    CASE_TIMEOUT,
+  );
+});
+
+describe("the re-add source a pack's receipt records (review/59)", () => {
+  const receipt = (kind: string, spec: string, trustTier: string): unknown => ({
+    source: { kind, spec },
+    trustTier,
+  });
+
+  it("names a catalog pack by its catalog id, whatever resolved path the receipt holds", () => {
+    expect(
+      reAddArgsOf("ops", receipt("local-path", "/somewhere/packs/ops", "curator-verified")),
+    ).toBe("ops");
+  });
+
+  it("names an npm package by its name, with --allow-untrusted only at the unsigned floor", () => {
+    expect(reAddArgsOf("@acme/ops", receipt("npm-package", "@acme/ops", "pinned-unsigned"))).toBe(
+      "@acme/ops --allow-untrusted",
+    );
+    expect(reAddArgsOf("@acme/ops", receipt("npm-package", "@acme/ops", "publisher-signed"))).toBe(
+      "@acme/ops",
+    );
+  });
+
+  it("quotes a path a shell would split or read, and drops control characters", () => {
+    expect(reAddArgsOf("demo", receipt("local-path", "./my packs/demo", "publisher-signed"))).toBe(
+      "'./my packs/demo'",
+    );
+    expect(reAddArgsOf("demo", receipt("local-path", "./it's", "publisher-signed"))).toBe(
+      "'./it'\\''s'",
+    );
+    expect(reAddArgsOf("demo", receipt("local-path", "./demo\u0007", "publisher-signed"))).toBe(
+      "./demo",
+    );
+  });
+
+  it("names nothing for a receipt it cannot read, and the line then says so in words", () => {
+    expect(reAddArgsOf("demo", null)).toBeNull();
+    expect(reAddArgsOf("demo", { source: { kind: "local-path" }, trustTier: "scanned" })).toBeNull();
+    expect(reAddArgsOf("unlisted", receipt("local-path", "/x", "curator-verified"))).toBeNull();
+    const line = describePackIntegrityFinding({
+      packId: "demo",
+      relPath: ".stamity/packs/demo/agents/a.md",
+      expected: "a".repeat(64),
+      actual: null,
+      reAdd: null,
+    });
+    expect(line).toContain('add pack "demo" again from the source you installed it from');
+    expect(quotedVerbs(line.slice(line.indexOf("re-install the pack:")))).toEqual([
+      "clean --pack demo",
+      "sync",
+      "sync",
+    ]);
+  });
 });
