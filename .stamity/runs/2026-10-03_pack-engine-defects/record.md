@@ -563,7 +563,7 @@ The settled rows left the inbox, the reworded row was updated, and the run's dat
 - inbox retired: `.stamity/inbox.md:421` (an `init --maturity` CLI test) — fixed in 2026-10-03_pack-engine-defects
 - inbox retired: `.stamity/inbox.md:462` (the overlay-on-a-pack-skill probe) — fixed in 2026-10-03_pack-engine-defects
 - `:407` reworded: "a PowerShell twin of the reset block" is now "of the two reset blocks", matching plan 016 file 3.
-- appended: 27 rows. 18 of them are this ledger's deferred rows, each with its `Ref:`. The other 9 are the Copilot
+- appended: 28 rows. 19 of them are this ledger's deferred rows, each with its `Ref:`. The other 9 are the Copilot
   touchpoint gap, the plugin-mode pack classes, and the audit's carry-overs:
   - the `gh` 2.102.0 fact;
   - two plan-017 observations;
@@ -605,6 +605,8 @@ This repository writes a release's section at its cut. This run merges without o
   - Pack skills reach plugin-backed clients.
   - An overlay on a pack skill is refused by `sync` and `validate`, where it was silently dropped. A fork overlay on
     one is skipped and reported.
+  - A fork skill that collides with an installed pack's skill is no longer told to patch the pack skill, which the fork
+    stage skips. It is told to ship the fork's skill under another id.
 - **Added**
   - The `check` row `pack-reach`.
   - The end-of-init panel shows the detected hosting platform.
@@ -622,3 +624,64 @@ This repository writes a release's section at its cut. This run merges without o
   - The capability matrix's Codex core figure is 5,570 of 8,000 characters.
 - **Removed**
   - The unwired `InitOverrides.platform`.
+
+## Close (2026-10-06)
+
+- **The spec amendments** (`ee2fe9a5`), on the maintainer's "Merge them (Recommended)". The spec-author, at Opus 5.5,
+  wrote dated 2026-10-06 amendments into five specs:
+  - REQ-PROVE-004 and REQ-FLOW-026: the Codex count, 5,570;
+  - REQ-FLOW-022: the platform line;
+  - REQ-PLUGIN-016 and REQ-PLUGIN-019: pack skills in plugin mode, and the `pack-reach` row;
+  - REQ-OVERLAY-003, REQ-OVERLAY-009 and REQ-OVERLAY-014, with REQ-FORK-004 and REQ-FORK-005: the overlay refusal and
+    the fork-stage skip.
+
+  No requirement's text was rewritten and no `status:` changed. Where a unit report and the code disagreed, the
+  amendment follows the code at `eb4f0727`. The spec-author's four Minors are `close/1`–`close/4`: one deferred to the
+  inbox, three rejected with reasons.
+- **The narrow gate on `ee2fe9a5`** (test-runner): all pass.
+  - the build;
+  - the records, learnings, QA, authoring and docs suites: 594 passed, 1 skipped;
+  - the leak gate;
+  - knip;
+  - lint.
+- **CI on `ee2fe9a5`** (run 37447199068): green on every leg, and both aggregators pass.
+- **The amendments' review** (`close-specs`, round 1, Opus 5.5, 10:09Z–10:16Z): request changes, confidence high. Its
+  findings went to the ledger as `review/60`–`review/66`.
+  - `review/60`, a Warning: the fork-layer spec's Invariant 3, REQ-FORK-003 and one criterion still offered fork authors
+    a patch of a pack skill. So did `refusePackShadow`'s text (`src/content/catalog.ts`) and
+    `docs/enterprise-forks.md`. The fork stage now skips such a patch.
+  - Six Minors, all in the amendments: a stale criteria count, two citation ranges, one wording, one overclaiming lead,
+    and the name check's fork-side behaviour with no line in the fork-layer spec.
+  - Every behaviour claim and citation otherwise matched the code. The 8 deleted lines are re-wrapped header sentences
+    and comment lines.
+- **Sign-off** (orchestrator):
+  - `review/60` is fixed in the code and in the spec. The text predates this branch: before it, a fork patch of a pack
+    skill was reported as applied and reached no client. But it now contradicts the skip this branch ships.
+  - `review/61`–`review/65` are fixed in the same files.
+  - `review/66`'s fork half is recorded under REQ-FORK-005. Its pack half has no spec home, as the plan declares.
+- **The fix** (`697fce11`, fixer at Opus 5.5, report 10:22Z).
+  - When the shadowed pack artifact is a skill, the fork-side remedy names shipping the fork's skill under another id.
+    The consumer's two remedies stay, and every other class keeps its text, which a test now pins.
+  - The skill test fails on the old code (`test/content/catalog.test.ts:1644`, a justified test change).
+  - Dated notes went into the fork-layer spec, with one dated criterion. Two sentences went into
+    `docs/enterprise-forks.md`.
+  - The fixer's gates: build, lint, typecheck, the leak gate, and `catalog.ts` coverage (92.24% branches) pass. The
+    scoped suites passed 637 tests. The one red test was the records gate, reading `review/60`–`review/66` while they
+    were still open.
+  - Pushed to PR #77 at 10:24Z.
+- **The re-review** (`close-specs`, round 2, Fable 5.1, the last review before the merge; report 10:27Z): approve,
+  confidence high.
+  - All seven ids closed fixed, with no new Critical or Warning.
+  - It read every surface that names a remedy for a pack collision.
+  - Its guard refused a tree-wide search, so the orchestrator ran one at `697fce11`. Every hit says a pack skill cannot
+    be patched.
+
+  Closed through `ledger close`.
+- **QA addendum.** `697fce11` changes an error path, so it adds one row: a fork skill that shadows a pack skill is
+  refused with no patch remedy (M).
+  - The row is auto-proven by `test/content/catalog.test.ts:1644` and `:1600`, in the final gate below.
+  - Rows 1 and 2 keep their input hashes at `697fce11` (recomputed, `356288c6…` and `d04ef1d4…`), so they stay
+    `accepted-unwalked`.
+  - The sign-off stands: 18 rows, 16 auto-proven, no H row unwalked.
+- Inbox correction: the `pluginLifecycle.test.ts:1432` row now reads Warning, matching its ledger row `build/20`. The
+  Inbox section's counts now read 28 and 19.
