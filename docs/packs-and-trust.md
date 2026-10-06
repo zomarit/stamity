@@ -121,7 +121,9 @@ installed pack none of whose artifacts reaches a selected client. It warns inste
 cases: a pack whose only delivery left is an MCP server you have not selected, naming
 `stamity config mcp add <id>`; a pack with some artifacts dropped, naming each one; and a pack
 with nothing a client loads. Otherwise it passes. Remove a pack that reaches nothing with
-`stamity clean --pack <id>`. [Plugins](plugins.md) lists every status of the row with its remedy,
+`stamity clean --pack <id>`, or, where its `tools:` list names a client, add that client with
+`stamity config set tools <list>`, then `stamity sync`. While a client's plugin carries a class,
+this repository writes none of that class for it; only a pack's skills are exempt. [Plugins](plugins.md) lists every status of the row with its remedy,
 under Troubleshooting.
 
 ## Which rung of the trust ladder a pack lands on

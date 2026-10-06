@@ -524,7 +524,7 @@ function collisionPart(reasons: readonly string[]): RefusalPart {
     message: `${reasons.length} path(s) it would write are not free`,
     why: "a pack never overwrites a file it does not own, and add has no --force",
     next:
-      "resolve the collisions, then re-run — uninstall a stale pack with `stamity clean --pack <id>`, " +
+      `resolve the collisions, then re-run — uninstall a stale pack with \`${packageCommand("clean --pack <id>")}\`, ` +
       "or move the listed paths yourself",
   };
 }
@@ -581,7 +581,7 @@ function nameClashRemedyOf(packId: string, owner: InvocableNameOwner, name: stri
       const other = withoutControlCharacters(owner.packId);
       return [
         `pack "${other}" is installed and keeps ${shown}: remove it with ` +
-          `\`stamity clean --pack ${other}\` only to replace it with pack "${packId}" on ` +
+          `\`${packageCommand(`clean --pack ${other}`)}\` only to replace it with pack "${packId}" on ` +
           `purpose, which then takes the name`,
       ];
     }
@@ -617,7 +617,9 @@ function leftBehindPart(packId: string, spec: string, paths: readonly string[]):
       "add writes the new version over the installed one and deletes nothing, so a file this " +
       "version dropped would stay on disk with no ledger row — sync would still read it, and " +
       "clean --pack could no longer remove it",
-    next: `run \`stamity clean --pack ${packId}\` first, then \`stamity add ${spec}\` again`,
+    next:
+      `run \`${packageCommand(`clean --pack ${packId}`)}\` first, then ` +
+      `\`${packageCommand(`add ${spec}`)}\` again`,
   };
 }
 

@@ -1341,7 +1341,10 @@ describe("add — collisions", () => {
     expect(result.stderr).toContain("resolve the collisions, then re-run");
     // The next step names the uninstall verb this wave shipped (the previous
     // copy said v1 had no remove-pack verb — stale once clean --pack landed).
-    expect(result.stderr).toContain("stamity clean --pack");
+    // TEST CHANGE, justified (review/42): the refusal names this step in the
+    // pinned npx form, as every other `clean --pack` remedy does, so one joined
+    // refusal never prints two spellings of it.
+    expect(result.stderr).toContain(npxCommand("clean --pack <id>"));
     // No partial write: the second file never appeared and the stray is intact.
     expect(await pathExists(project.path(PACK_DIR, "rules", "naming.md"))).toBe(false);
     expect(await readFile(project.path(PACK_DIR, "agents", "reviewer.md"), "utf8")).toBe(
@@ -1366,7 +1369,10 @@ describe("add — collisions", () => {
     expect((doc.planned as { collisions: string[] }).collisions).toHaveLength(1);
     expect(errorOf(doc).code).toBe("VALIDATION_ERROR");
     expect(errorOf(doc).next).toContain("resolve the collisions");
-    expect(errorOf(doc).next).toContain("stamity clean --pack");
+    // TEST CHANGE, justified (review/42): the refusal names this step in the
+    // pinned npx form, as every other `clean --pack` remedy does, so one joined
+    // refusal never prints two spellings of it.
+    expect(errorOf(doc).next).toContain(npxCommand("clean --pack <id>"));
   });
 
   it("re-adding an installed pack overwrites its own rows instead of colliding", async () => {
@@ -1405,7 +1411,10 @@ describe("add — collisions", () => {
     expect(result.stdout).toContain("does not own");
     // The stale "v1 has no remove-pack verb" copy is gone; the ledger-driven
     // uninstall is the named way out.
-    expect(result.stderr).toContain("stamity clean --pack");
+    // TEST CHANGE, justified (review/42): the refusal names this step in the
+    // pinned npx form, as every other `clean --pack` remedy does, so one joined
+    // refusal never prints two spellings of it.
+    expect(result.stderr).toContain(npxCommand("clean --pack <id>"));
   });
 });
 
@@ -1595,11 +1604,15 @@ describe("add — name clashes", () => {
     // "remove it first" about the installed pack, which a newcomer could provoke
     // on purpose to take an established name. Removal is now offered only as a
     // deliberate replacement, naming both packs and who then takes the name.
+    // TEST CHANGE, justified (review/42): the removal step is printed in the
+    // pinned `npx -y <package>@<version>` form the sync refusal and the
+    // pack-reach row print for the same `clean --pack`; the bare `stamity …`
+    // form is not on PATH for an operator who runs this package through npx.
     const next = errorOf(doc).next ?? "";
     expect(next).toContain(`rename the listed artifact(s) in the incoming pack's source (pack "acme-two")`);
     expect(next).toContain(
       `pack "${PACK_ID}" is installed and keeps st-shared: remove it with ` +
-        `\`stamity clean --pack ${PACK_ID}\` only to replace it with pack "acme-two" on purpose, ` +
+        `\`${npxCommand(`clean --pack ${PACK_ID}`)}\` only to replace it with pack "acme-two" on purpose, ` +
         "which then takes the name",
     );
     expect(next).not.toContain("remove it first");
@@ -1699,8 +1712,11 @@ describe("add — a re-add that would leave the installed copy's files behind", 
     expect(human.stdout).toContain("left behind by this version");
     expect(human.stdout).toContain(`    ${PACK_DIR}/rules/naming.md\n`);
     expect(human.stderr).toContain("1 file(s) of the installed copy would be left behind");
+    // TEST CHANGE, justified (review/42): the refusal names this step in the
+    // pinned npx form, as every other `clean --pack` remedy does, so one joined
+    // refusal never prints two spellings of it.
     expect(human.stderr).toContain(
-      `run \`stamity clean --pack ${PACK_ID}\` first, then \`stamity add ${PACK_SPEC}\` again`,
+      `run \`${npxCommand(`clean --pack ${PACK_ID}`)}\` first, then \`${npxCommand(`add ${PACK_SPEC}`)}\` again`,
     );
     // Nothing written: the ledger, the receipt and the dropped file are as they were.
     expect(await readProjectManifest()).toEqual(before);
@@ -1712,7 +1728,10 @@ describe("add — a re-add that would leave the installed copy's files behind", 
     expect(machine.code).toBe(1);
     const doc = parseDoc(machine.stdout);
     expect((doc.planned as { leftBehind: string[] }).leftBehind).toEqual([`${PACK_DIR}/rules/naming.md`]);
-    expect(errorOf(doc).next).toContain(`stamity clean --pack ${PACK_ID}`);
+    // TEST CHANGE, justified (review/42): the refusal names this step in the
+    // pinned npx form, as every other `clean --pack` remedy does, so one joined
+    // refusal never prints two spellings of it.
+    expect(errorOf(doc).next).toContain(npxCommand(`clean --pack ${PACK_ID}`));
     expect(writtenOf(doc)).toEqual([]);
   });
 
@@ -1785,7 +1804,12 @@ describe("add — a re-add that would leave the installed copy's files behind", 
     expect(refused.stdout).toContain("left behind by this version");
     expect(refused.stdout).toContain(".stamity/packs/ops/skills/st-release/SKILL.md");
     expect(refused.stdout).toContain(".stamity/packs/ops/skills/st-incident-response/SKILL.md");
-    expect(refused.stderr).toContain("run `stamity clean --pack ops` first, then `stamity add ops` again");
+    // TEST CHANGE, justified (review/42): the refusal names this step in the
+    // pinned npx form, as every other `clean --pack` remedy does, so one joined
+    // refusal never prints two spellings of it.
+    expect(refused.stderr).toContain(
+      `run \`${npxCommand("clean --pack ops")}\` first, then \`${npxCommand("add ops")}\` again`,
+    );
     expect(await readProjectManifest()).toEqual(before);
     expect(await pathExists(project.path(".stamity", "packs", "ops", "skills", "st-release-runbook"))).toBe(false);
 
