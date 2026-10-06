@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, and excluded from the site build.
 status: shipped-with-1.8.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
@@ -22,7 +22,9 @@ and `sw17-touchpoints-as-shared-skills`, merged in the same run's second and thi
 to REQ-PROVE-003 cites the tree at `cdfaa723`; those to REQ-PROVE-004 and REQ-PROVE-005 cite `a9e94f06`, the package
 head once `sw17-touchpoints-as-shared-skills` had integrated. They are not in a release yet. The
 amendment dated 2026-10-01 to REQ-PROVE-020 was written at the 1.11.0 cut, on the release branch; it
-cites the tree at `108c57e0` and is not in a release yet.
+cites the tree at `108c57e0` and is not in a release yet. The amendment dated 2026-10-06 to REQ-PROVE-004 comes from
+the spec delta the unit `u3-codex-shown-rows` declared in run `2026-10-03_pack-engine-defects`, merged at that run's
+close; it cites the tree at `eb4f0727` and is not in a release yet.
 
 ## Intent
 
@@ -164,6 +166,51 @@ nine touchpoints now ship as shared skills under REQ-FLOW-026 and sit in the sam
 (`src/adapters/codex.ts:397-418`) and the figure reads 6,909 characters over 26 skills (8 content skills, 9 rules and
 9 touchpoints), 86% of the 8,000 cap. The full-selection pin in `test/adapters/codex.test.ts` holds the constant to
 the real emission.
+
+Amended 2026-10-06 (run `2026-10-03_pack-engine-defects`, unit `u3-codex-shown-rows`, integrated as `0da30714`;
+cited at `eb4f0727`). The count covers only the rows Codex shows its model. `shownSkillRows` keeps every row except
+those of a skill folder whose `agents/openai.yaml` sets `policy.allow_implicit_invocation: false`
+(`src/adapters/codex.ts:653-683`, the policy read at `:685-697`). It reads the policy, never a name, so it drops the
+nine touchpoints, every pack command, and any pack skill that ships the same companion. A companion that does not
+parse, sets `true`, or carries only display fields hides nothing, so a parse failure never under-counts
+(`:690-694`). Emission sums `skillsListCharacters` over the shown rows, `name` plus `description` plus 3 per
+`SKILL.md` (`:638-651`), and refuses past the unchanged 8,000 cap (`:422-430`). On codex-cli 0.160.0
+(`codex debug prompt-input`, 2026-10-03) the listing held the 8 content skills and the 9 rule-skills and none of the
+touchpoints (the dated comment at `:176-184`); 0.160.1 gave the same result on 2026-10-06: seventeen rows shown, the
+nine touchpoints hidden, nothing shortened (`.stamity/runs/2026-10-03_pack-engine-defects/record.md:298-299`).
+
+- **The refusal names who spent the list.** It keeps the substring `codex skills list is <total> characters; this
+  setup caps it at 8000`, then names the core selection's share, `Of that, the core selection takes N characters
+  (k skills)`, and, when an installed pack holds a share, `; installed packs add: <pack> N characters (k skills), …`,
+  largest first, ties broken by pack id. The remedies follow: `` `stamity clean --pack <id>` `` first, only when a pack
+  holds a share, then narrowing the content selection, then `ruleDelivery: "always-on"` (`skillsListRefusal`,
+  `src/adapters/codex.ts:699-747`). A row is a pack's when the catalog item it was rendered from, matched by class and
+  artifact id, carries pack provenance (`packOf`, `:845-853`); corpus, fork and override rows are the core's share.
+  The planner's `ADAPTER_ERROR` re-wrap above is unchanged.
+- **The figure.** `codexSkillsListChars` reads 5,570 characters over the 17 shown skills, the 8 content skills and the
+  9 projected rules, about 70% of the cap (`src/emit/capabilityMatrix.ts:379-387`). This supersedes the 6,909 over 26
+  skills of the 2026-09-30 amendment: the nine touchpoints still sit in the same tree, and the client does not list
+  them. The full-selection pin ("holds the matrix's published skills-list total to the FULL selection",
+  `test/adapters/codex.test.ts:2087`) now measures the shown rows, and holds them to 17 with no touchpoint among them.
+- **Open.** The policy reader accepts YAML merge keys, so a pack could hide a row from this count through a key a Codex
+  parser might not honour. The direction is an under-count against this setup's own cap; the row is deferred
+  (`review/2`, `.stamity/runs/2026-10-03_pack-engine-defects/record.md:131-134`).
+
+- GIVEN shown skill rows summing past the cap, with two installed packs holding shares, WHEN emission runs for codex
+  THEN the refusal keeps `is <total> characters; this setup caps it at 8000`, names the core share and each pack's
+  share with its skill count after `installed packs add:`, largest first, the shares summing to the total, and names
+  `` `stamity clean --pack <id>` ``; GIVEN no pack holding a share THEN it names the core share only, and neither
+  `installed packs add` nor `clean --pack` (`test/adapters/codex.test.ts`, "names each installed pack's share and the
+  core's in the refusal, keeping the pinned total" and "names the core's share only when no pack is installed";
+  `test/pack/packEngineDefects.test.ts:604`, C2).
+- GIVEN a commands-heavy pack, or pack skills that each ship `policy.allow_implicit_invocation: false`, whose rows
+  counted whole would pass the cap WHEN sync runs for codex THEN it succeeds, and the shown total counts neither
+  (`packEngineDefects.test.ts:575`, C1; `codex.test.ts`, "leaves the touchpoints out of the skills list: their policy
+  hides them from the model" and "does not count a pack skill that ships its own hiding policy, nor a pack's
+  commands").
+- GIVEN companions that hide, carry display fields only, do not parse, or set `true` WHEN `shownSkillRows` runs THEN
+  only the hiding folder's rows drop (`codex.test.ts`, "drops a folder whose agents/openai.yaml hides it, and keeps
+  display-only and malformed companions").
 
 ### REQ-PROVE-005 — Always-on composite re-measured
 

@@ -164,9 +164,10 @@ Each clause names the test that holds it. No clause is without a test.
 3. `sync`, and so `check`, `init` and `plugin setup`, shall continue to refuse an installed cross-class clash with the
    clash named and a remedy that works, never the composer's generic collision. (Group B5;
    `test/emit/plannerNameClash.test.ts`)
-4. A re-add that would leave the installed copy's files behind shall continue to be refused before writing, naming
-   `clean --pack <id>` first, so that remedy cannot loop. (`test/cli/commands/add.test.ts`, the re-add cases;
-   `test/pack/install.test.ts`, `leftBehind`)
+4. A re-add that would leave the installed copy's files behind shall continue to be refused before writing. Every
+   remedy that replaces a pack shall continue to print the order that works on a synced repository: `clean --pack`,
+   then `sync`, then `add`, then `sync`. (`test/cli/commands/add.test.ts`, the re-add cases;
+   `test/pack/install.test.ts`, `leftBehind`; `test/pack/upgradeRemedy.test.ts`)
 5. The Codex skills list shall continue to count only the rows Codex shows its model, to refuse above 8,000
    characters, and to name each installed pack's share. (Group C; `test/adapters/codex.test.ts`)
 6. A pack skill shall continue to reach a plugin-backed client. (Group D1; `test/pack/projection.test.ts`)

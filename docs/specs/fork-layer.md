@@ -1,6 +1,6 @@
 ---
 id: fork-layer
-# A design document, authored outside the spec command and excluded from the site build.
+# A design document, authored outside the spec command, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, and excluded from the site build.
 status: shipped-with-1.5.0
 obsolete_when: the enterprise-forks guide and the customization page stop carrying the fork layer's behaviour, or a decision cuts the surface
 ---
@@ -16,7 +16,10 @@ those edits. The 1.4.0 guide named it as a non-goal with a trigger; the maintain
 trigger on 2026-09-10.
 
 Every claim about existing behaviour below carries a `path:line` citation taken from the tree
-at `f62d526` (main after the 1.4.0 release and the post-release cleanup).
+at `f62d526` (main after the 1.4.0 release and the post-release cleanup). The paragraphs headed
+"Amended 2026-10-06" come from the spec delta the unit `u5a-overlay-refusal` declared in run
+`2026-10-03_pack-engine-defects`, merged at its close; they cite `eb4f0727` and are not in a release
+yet.
 
 ## Intent
 
@@ -150,6 +153,19 @@ not an orphan error but a patch that waits — skipped in that repository and re
 `validate` as a warning that names the artifact it waits for — while a consumer's
 own orphan patch stays the error it is today, because the consumer can fix the file.
 
+Amended 2026-10-06 (run `2026-10-03_pack-engine-defects`, unit `u5a-overlay-refusal`, integrated as
+`8484b70a`; cited at `eb4f0727`): a second asymmetry of the same kind. A fork patch whose base is an
+installed pack's SKILL is skipped in that repository, each half recorded in `ContentIndex.skipped`
+with a reason naming the pack and the skill, and `validate` prints that reason as a warning at exit 0
+(`forkPackSkillSkipReason`, `src/content/catalog.ts:1562-1576`, applied at `:1851-1857`;
+`classifyForkOverlays`, `src/cli/commands/validate.ts:700-748`). A consumer's own patch of a pack
+skill is an error (REQ-OVERLAY-009's pack-skill row, amended 2026-10-06). A pack skill projects from
+the pack's own files and is never patched, so the waiting rule above does not reach skills: the skip
+reason for a fork skill patch with no base says it will not apply even once a pack supplies the
+skill, and names the pack's own source as the place for the change (`forkOrphanSkipReason`,
+`src/content/catalog.ts:1496-1522`). A fork patch of a pack's agent, command or rule still applies.
+`test/content/overlayPackSkill.test.ts` holds each case.
+
 ### REQ-FORK-005 — Selection, emission, skills
 
 Fork items are admitted by presence, as user items are (`selection.ts:182`): a fork ships what
@@ -162,6 +178,14 @@ under its own bare directory. A fork skill claiming a pack skill's id is refused
 override of a pack skill is (`planner.ts:457-473`); the directory-clash refusal treats a fork
 skill as it treats a user skill (`:524-546`). The per-file coverage floors on
 `src/emit/planner.ts` and `src/emit/skillsProjection.ts` hold.
+
+Amended 2026-10-06 (run `2026-10-03_pack-engine-defects`, the stale citations named by unit
+`u5a-overlay-refusal`; cited at `eb4f0727`): the two `planner.ts` line ranges above date from
+`f62d526` and have moved. The refusal a fork skill claiming a pack skill's id or directory meets is
+the one whose message opens "Pack-skill overrides are unsupported today", in `mergeSkillProjections`
+(`src/emit/planner.ts:653-658`, the function at `:634-673`, whose doc names the fork skill's side at
+`:626-632`); the directory-clash refusal is `refuseOverrideDirectoryClash` (`:708-742`). The names
+are the durable address; the line ranges drift.
 
 ### REQ-FORK-006 — Validate names the fork
 
@@ -254,6 +278,10 @@ gates remain necessary. See REQ-APM-006 through -009 in the APM distribution spe
 - GIVEN `fork/rules/ops.customize.yaml` where only a pack supplies `ops` WHEN the pack is not
   installed THEN the index builds, the patch is skipped, and `validate` shows a warning that it
   waits for the pack; WHEN the pack is installed THEN the patch applies.
+- GIVEN `fork/skills/acme-lint/SKILL.customize.md` and an installed pack supplying skill `acme-lint`
+  WHEN the index is built THEN the pack skill is unchanged and each half is skipped with a reason
+  naming the pack and the skill, and `validate` reports it as a warning and exits 0 (added 2026-10-06;
+  `test/content/overlayPackSkill.test.ts:185`, `:273`).
 - GIVEN `fork/rules/security.customize.yaml` and a consumer override of `security` THEN the
   index carries the override, and `validate` reports the fork patch as inert under it.
 - GIVEN `fork/rules/stamity-security.md` THEN the index refuses, naming `security.md`.

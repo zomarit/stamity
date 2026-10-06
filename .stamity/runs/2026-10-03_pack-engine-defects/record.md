@@ -436,6 +436,123 @@ whole suite run one at a time on this machine.
 
   The final tree, `5df34f7c` plus this run's records, adds one docs paragraph and the records to that tree. It gets
   its own runs: the records, docs and leak checks below, and CI's full run on every leg.
+- **Records committed** as `75b17919`. The narrow gate on it passed: the records, learnings, QA and docs suites (558
+  passed), the leak gate, knip and lint.
+- **PR #77 opened as a draft** at `75b17919`. CI was green on every leg: `check` on Node 22.22.2 and 24 and on both
+  Windows shards, the coverage legs, the plugin and APM routes and the size budget. Both aggregators, `all-ci-checks`
+  and `all-pr-checks`, read `pass`. The review bot posted nothing on the draft.
+- **The candidate reproduction** (the proof bar's scratch run, `node <lane>/dist/cli.js` at `75b17919`), in fresh
+  repositories outside both checkouts:
+  - A fresh install: `init`, `add ops`, `sync` and `check` all exit 0 on Cursor and on Codex alone. The reported
+    regression is gone.
+  - The real upgrade on Cursor: ops installed by the published 1.11.0, whose `sync` fails. The candidate's `sync`
+    refuses, naming both clashes and the remedy. A plain re-add is refused, naming the two files it would leave
+    behind. Then `clean --pack ops`, `add ops`, `sync` and `check` all exit 0.
+  - The real upgrade on Claude, where 1.11.0's `sync` passed silently: the candidate's `sync` refuses as it should,
+    but the printed remedy failed at `add` (exit 1, "7 path(s) it would write are not free"). `clean --pack` removes
+    only the pack's own files, and the copies a `sync` projected into `.claude/` stay until the next `sync`. That is
+    `prove/3`.
+  - The remedies printed `@1.11.0`. That is `prove/4`, closed as not a defect: every remedy pins the running engine
+    (`ctx.app.version`), and the unreleased candidate still reads 1.11.0 in `package.json`.
+- **`prove/3`, `prove/5` and `prove/6` fixed** (`ff854b2a`). Every remedy that replaces a pack prints the order that
+  works: `clean --pack`, then `sync`, then `add`, then `sync`. That covers:
+  - the sync clash refusal;
+  - `add`'s left-behind, replace-on-purpose and path-collision refusals;
+  - `check`'s `pack-integrity` row, which still says not to sync before clean;
+  - both pages.
+
+  `test/pack/upgradeRemedy.test.ts` walks a synced 1.11.0-shaped ops on Claude through the printed steps to a clean
+  `check`, and fails under the old order. Pushed to PR #77.
+- **Whole-branch review, round 4, at Fable 5.1** (`75b17919..ff854b2a`). `prove/3`, `/5` and `/6` closed fixed. Three
+  new Warnings, `review/56`–`review/58`, are remedies that still did not run as printed in their own state:
+  - an edited pack file survives `clean` as salvage, then `add` refuses it;
+  - after a clean, the collision remedy's first step is `clean --pack`, which says "no pack is installed";
+  - one `check` run prints two orders.
+- **Full gate on `ff854b2a`.** Green as written: 10,783 passed, no floor miss, `check`, knip and the leak gate pass.
+  One variant coverage run, with a reporter flag the brief did not ask for, exited 1 with its output cut. The run as
+  written exited 0. CI on `ff854b2a` was green on every leg.
+- **Round-4 fix.** A fresh fixer fixed `review/56`–`review/58` and found `review/59`: the re-install step's `add <id>`
+  only works for a catalog pack.
+- **The review cap.** The loop sat at its 4-round cap. The maintainer's answer (2026-10-06): "One more round
+  (Recommended)".
+- **Round-5 fix.** The re-install step names the source the receipt records. The receipt is trusted only when its
+  bytes match its ledger row, and the spec is printed as one quoted word. Committed `94f348e5`.
+- **Whole-branch review, round 5, at Fable 5.1.** Approve, confidence medium. `review/56`–`review/59` closed fixed,
+  with no new finding. The loop converged.
+- **Full gate on `94f348e5`.** Red on one test: `test/architecture/boundaries.test.ts:1040`. Round 5 added the imports
+  `src/pack/verifyInstalled.ts → src/pack/curated.ts` and `→ src/pack/receipt.ts`, which the wave layering forbids
+  (`prove/7`, Critical). The fixer's narrower runs did not include `test/architecture`. Everything else passed:
+  10,789 tests, the 34 defect cases, the 9 upgrade-remedy cases, `check`, knip and the leak gate. A fixer is moving
+  the receipt read without a waiver.
+- **Candidate reproduction on `94f348e5`'s build** (the four-step remedy, from real 1.11.0 installs):
+  - Fresh: `add ops`, `sync` and `check` exit 0 on Cursor and on Codex alone.
+  - Upgrade on Cursor and on Claude: the candidate's `sync` refuses, and a plain re-add refuses. Then
+    `clean --pack ops`, `sync`, `add ops`, `sync` and `check` all exit 0.
+  - The refusal printed exactly those four steps.
+
+- **The layering fix** (`prove/7`): the receipt read moved verbatim into `src/cli/commands/check.ts`, at wave 15, which
+  may import both modules. `verifyInstalled.ts` is back to its plain re-hash. No waiver. Committed `eb4f0727`. The
+  Fable closure check approved at confidence high: `prove/7` fixed, and the printed remedy is byte-identical.
+- **Final full gate on `eb4f0727`** (`pd-gate`, alone, each gate once as written; `STAMITY_CLAUDE_BIN` unset as
+  recorded): every gate passes.
+  - Build, lint and typecheck.
+  - The suite: 10,790 passed, 0 failed. `test/architecture/boundaries.test.ts` 32/32, the defect file 34/34,
+    `upgradeRemedy` 9/9. The Cursor, Copilot and Codex walks pass.
+  - The coverage run: no "does not meet" line; statements 96.77%, branches 90.31%.
+  - `check`: 15 rows ok, drift clean.
+  - knip, and the leak gate (0 hits across 1,734 files).
+- **CI on `eb4f0727`:** green on every leg (Node 22.22.2, Node 24, both Windows shards); `all-ci-checks` and
+  `all-pr-checks` pass.
+
+## QA checkpoint (2026-10-06)
+
+The walk-through, built by the qa skill. The change has no graphical surface, so browser evidence does not apply.
+Seventeen rows were derived. Fifteen are auto-proven by existing evidence (the appendix below); two needed a person.
+
+| # | Scenario | Steps | Expected | Risk | Minutes | Proof |
+|---|---|---|---|---|---|---|
+| 1 | A plugin-backed Claude Code session lists a pack's skill | In a repository where Claude Code runs Stamity as a plugin: `node <candidate>/dist/cli.js add ops -y`, `… sync`, then type `/` in Claude Code | ops's skills (e.g. `st-release-runbook`) are listed; `… check` shows `pack-reach` warn, naming ops's commands and agents the plugin carries | M | 6 | accepted-unwalked · `356288c64581913def8e16d9f5a840a38df13c5c5d9302ec5364fd2bc295ac98` |
+| 2 | The changed docs pages render | Open PR #77 → Files changed → view `docs/packs-and-trust.md`, `plugins.md`, `troubleshooting.md`, `migration.md` and `customization.md` rendered | tables, lists and code render intact | L | 3 | accepted-unwalked · `d04ef1d467698dcef2089b2b5109131daf9cc36d1ccf2ce04bc1a6f146665818` |
+
+Input hashes are the sha256 of the sorted `<path> <git hash-object>` lines at `eb4f0727`:
+- row 1 over `src/pack/projection.ts`, `src/cli/commands/plugin/probe.ts`, `src/cli/commands/check.ts` and
+  `src/emit/planner.ts`;
+- row 2 over the five pages.
+
+**Appendix: auto-proven rows.** Each rests on the final gate on `eb4f0727`
+(`env -u STAMITY_CLAUDE_BIN npx vitest run`, pass, 10,790 passed) and on CI on every leg. Line numbers are at
+`eb4f0727`.
+
+| # | Scenario | Risk | Evidence |
+|---|---|---|---|
+| H1 | Upgrading a repository that installed ops with 1.11.0 reaches a clean `check` through the printed remedy | H | `test/pack/upgradeRemedy.test.ts:304`, `:357`, `:391`; the candidate reproduction from real 1.11.0 installs on Cursor and Claude (session scratch, `repro-candidate-94f348e5.out`) |
+| H2 | A pack cannot shadow a core touchpoint or core skill | H | `test/pack/packEngineDefects.test.ts:516` (B3, skill `work`), `:494` (B2, command `verify`) |
+| 3 | Control characters in a pack's id never reach the terminal | M | `test/cli/commands/add.test.ts:1696`; the ESC cases in `test/content/invocableNames.test.ts` and `test/cli/commands/check.test.ts` |
+| 4 | `add ops`, then `sync` and `check`, work on Cursor and on Codex in a fresh repository | M | `test/pack/packEngineDefects.test.ts:401` (A); the candidate reproduction's fresh runs |
+| 5 | `add` refuses a clashing pack, names both owners, writes nothing | M | `packEngineDefects.test.ts:429` (B1, five client sets), `:538` (B4) |
+| 6 | `sync` refuses an installed clash with a remedy that works | M | `packEngineDefects.test.ts:458` (B5); `upgradeRemedy.test.ts:304` |
+| 7 | Codex: a commands-heavy pack syncs; an oversized skills pack is refused, naming its share | M | `packEngineDefects.test.ts:575` (C1), `:604` (C2) |
+| 8 | A pack skill's file lands where each plugin-backed client reads skills | M | `packEngineDefects.test.ts:680` (D1, five client sets) |
+| 9 | `check` fails a pack that reaches nothing, and warns for partial, inert, denied or awaiting | M | `packEngineDefects.test.ts:705` (D2); the `pack-reach` cases in `test/cli/commands/check.test.ts` |
+| 10 | An overlay on a pack skill is refused (user stage) or skipped and reported (fork stage) | M | `packEngineDefects.test.ts:745` (E); `test/content/overlayPackSkill.test.ts:143`, `:185`, `:273` |
+| 11 | A re-add that would leave files behind is refused, and its printed remedy runs | M | `upgradeRemedy.test.ts:357`, `:391`; the re-add cases in `add.test.ts` |
+| 12 | An edited pack file's integrity remedy runs as printed, catalog and local path | M | `upgradeRemedy.test.ts:480`, `:488` |
+| 13 | The init panel shows the detected platform | L | `test/cli/commands/initPanel.test.ts:887`, `:904`; `test/cli/commands/init.test.ts:655` |
+| 14 | `init --maturity <tier>` writes and shows the tier | L | the `--maturity` cases in `test/cli/commands/init.test.ts`; `initPanel.test.ts:307` |
+| 15 | The changed pages' links resolve | L | `test/docsPages.test.ts` (in the gate) |
+
+**Sign-off** — the four 1.11.0 pack-engine defects and the three init rows, 2026-10-06:
+
+- [x] Every H row walked or auto-proven, and passing: H1 and H2 are auto-proven.
+- [x] Every failing M row has a filed follow-up, linked: none fails.
+- L failures are recorded, not blocking: none.
+- Rollback: a revert pull request of this branch's commits on `main`. They land by fast-forward, so
+  `git revert --no-edit c0eb1100..<merged head>`.
+- Shippable: YES. No H row is accepted-unwalked.
+
+The maintainer's answer (2026-10-06): "Accept both unwalked (Recommended)". Rows 1 and 2 are recorded
+`accepted-unwalked` with their input hashes. The same answer round: the spec amendments, "Merge them
+(Recommended)"; the merge, "Yes, fast-forward (Recommended)".
 
 ## Inbox
 
@@ -493,11 +610,13 @@ This repository writes a release's section at its cut. This run merges without o
   - The end-of-init panel shows the detected hosting platform.
 - **Changed**
   - ops's skills are renamed: `st-release` → `st-release-runbook`, `st-incident-response` → `st-incident-runbook`.
-    A repository that installed ops with 1.11.0 runs `stamity clean --pack ops`, then `stamity add ops`, then
-    `stamity sync`. That includes Claude-only and Copilot-only repositories, where the first `sync` after the upgrade
-    refuses until then.
-  - `add` refuses a re-add whose new version would leave files of the installed copy behind; the remedy is
-    `clean --pack <id>` first.
+    A repository that installed ops with 1.11.0 runs `stamity clean --pack ops`, then `stamity sync` (which reclaims
+    the old copies), then `stamity add ops`, then `stamity sync`. That includes Claude-only and Copilot-only
+    repositories, where the first `sync` after the upgrade refuses until then.
+  - `add` refuses a re-add whose new version would leave files of the installed copy behind. The remedy is the same
+    four steps.
+  - The `pack-integrity` remedy is now `clean --pack`, then `sync`, then `add`, then `sync`, still never a `sync`
+    before the clean.
   - Name clashes are found ignoring case, as macOS and Windows compare names.
   - `docs/migration.md` says what a full migration carries and shows.
   - The capability matrix's Codex core figure is 5,570 of 8,000 characters.

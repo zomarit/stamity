@@ -1,6 +1,6 @@
 ---
 id: overlay-layers
-# A design document, authored outside the spec command and excluded from the site build.
+# A design document, authored outside the spec command, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, and excluded from the site build.
 status: shipped-with-1.1.0
 obsolete_when: the published customization page stops carrying the overlay behaviour this spec designed, or a decision cuts the surface
 ---
@@ -14,6 +14,11 @@ Every claim about existing behaviour below carries a `path:line` citation taken
 from the tree at the time of writing. Citations are code spans rather than
 links: they address lines, which no link form can resolve, and a spec that
 cannot be checked against the code is prose.
+
+Paragraphs headed "Amended 2026-10-06", the table row and the criteria marked
+"added 2026-10-06" come from the spec delta the unit `u5a-overlay-refusal`
+declared in run `2026-10-03_pack-engine-defects`, merged at its close. They cite
+the tree at `eb4f0727` and are not in a release yet.
 
 ## Intent
 
@@ -305,6 +310,23 @@ report on an overlay carries the same roots, for the same reason.
 wrong the first time a pack legitimately supplies the id: the author would patch
 a body nobody emits, and the report would say the patch applied.
 
+**Amended 2026-10-06 (run `2026-10-03_pack-engine-defects`, unit
+`u5a-overlay-refusal`, integrated as `8484b70a`; cited at `eb4f0727`): one
+resolved base is never patched.** When the base the walk resolves is a pack
+SKILL, the pair is not merged. A pack skill projects from the pack's own files,
+read as raw bytes by a lane that never sees this index's merge
+(`src/pack/projection.ts:612-636`), so the merge used to be reported as
+`patched` by `validate` and reach no client — the outcome the "Dropped" line
+above names. `applyOverlays` now judges such a pair by stage, after both
+exclusivity checks (`src/content/catalog.ts:1846-1857`): the user stage refuses
+it with `VALIDATION_ERROR` (`refusePackSkillOverlay`, `:1529-1560`), and the fork
+stage skips it, recording each half in `ContentIndex.skipped` with a reason
+naming the pack and the skill (`forkPackSkillSkipReason`, `:1562-1576`); the
+overlay-layer header states the rule (`:1255-1260`). Overlays on a pack's
+agents, commands and rules still apply. The "Landed" paragraph's line citations
+(`catalog.ts:526-580`) date from the design; the merge's durable address is
+`applyOverlays` in `src/content/catalog.ts`.
+
 ### REQ-OVERLAY-004 — An overlay and a full override of one id are refused together
 
 **Decision.** An overlay whose resolved base came from the override tree is
@@ -475,11 +497,27 @@ reports `drift: not evaluated` — decision-13 parity — for each of:
 | an overlay coexists with a full override | both absolute paths |
 | the overlay is an orphan | absolute path, the id looked for |
 | the merged artifact fails any `buildItem` check | composite label, the field |
+| the overlay's base is a pack skill (user stage; added 2026-10-06) | every half's absolute path in POSIX form, the pack, the skill |
 
 The ceiling row is the one addition this table took after the design was
 settled, and it earned its place at the walk rather than only at `validate`:
 the two gates were failing closed in opposite directions, so a repo could sync
 a body patch its own validator rejects (`src/content/catalog.ts:794-821`).
+
+**Amended 2026-10-06 (run `2026-10-03_pack-engine-defects`, unit
+`u5a-overlay-refusal`; cited at `eb4f0727`).** The pack-skill row is a second
+addition, for the reason REQ-OVERLAY-003's amendment gives. The refusal reads
+`Overlays on pack skills are not applied today: the overlay at "<path>" patches
+pack "<pack>" skill "<skill>", whose files ship byte-for-byte from the installed
+pack. Remove or rename <path>; a change to that skill belongs in the pack's own
+source.` (`src/content/catalog.ts:1547-1560`). It offers no `clean --pack`:
+removing the pack would leave the overlay an orphan, refused again by the
+REQ-OVERLAY-010 row (`review/18` of that run). `validate` reports it as an error
+against the overlay file and exits 1, matching a half's POSIX path in the
+message (`overlayFailure`, `src/cli/commands/validate.ts:635-637`). At the fork
+stage the same pair is a skip, not a refusal, for the package-global reason
+REQ-FORK-004 gives; `validate` prints its reason as a warning at exit 0
+(`classifyForkOverlays`, `src/cli/commands/validate.ts:700-748`).
 
 **Rationale.** Parity with the settled posture for a malformed override, and
 with the reason it was settled: a walk that carries on past a defective artifact
@@ -651,6 +689,15 @@ shipped — the wording the `replaced` row used for that case.
 second class carve-out, at the index, beside the one at emission — and the two
 would then have to be kept in agreement.
 
+**Amended 2026-10-06 (run `2026-10-03_pack-engine-defects`, unit
+`u5a-overlay-refusal`; cited at `eb4f0727`).** "All four classes" holds for a
+corpus, fork or user skill and for a pack's agent, rule or command. It does not
+hold for a pack skill: an overlay on one is refused at the user stage and skipped
+at the fork stage (REQ-OVERLAY-003 and REQ-OVERLAY-009, amended 2026-10-06), so no
+patched pack skill reaches a client. That is a refusal, not an emission carve-out
+of the kind dropped above: no `patched` row with `emits: false` is produced for
+it.
+
 ### REQ-OVERLAY-015 — The pinned negative test and the four comments migrate with the implementation
 
 **Decision.** `test/corpus/commands/lightTrio.test.ts:765-807` asserts that the
@@ -709,6 +756,17 @@ REQ-OVERLAY-009 table.
   id, and `agents/my-agent.customize.yaml` WHEN the index is built THEN the
   overlay applies to the pack item and the merged item keeps that pack's
   `provenance`.
+- GIVEN an installed pack supplying skill `my-skill` and
+  `skills/my-skill/SKILL.customize.md` in the override tree WHEN the index is
+  built THEN the walk throws `VALIDATION_ERROR` naming the overlay's POSIX path,
+  the pack and the skill, with the remedy to remove or rename the overlay and no
+  `clean --pack` (added 2026-10-06; `test/content/overlayPackSkill.test.ts`).
+- GIVEN the same pair under `fork/` WHEN the index is built THEN the pack skill's
+  description and body are unchanged and each half is in `skipped`, with a reason
+  naming the pack and the skill (added 2026-10-06; the same file).
+- GIVEN overlays on a pack agent, command and rule, at the user or the fork stage,
+  WHEN the index is built THEN each applies and `skipped` stays empty (added
+  2026-10-06; the same file).
 
 **REQ-OVERLAY-004**
 
@@ -819,6 +877,10 @@ REQ-OVERLAY-009 table.
   selected client that receives the skill class — both the vendor-neutral
   `.agents/skills/` tree and each client-native re-target of those same bytes —
   and the `patched` row carries `emits: true`.
+- GIVEN an overlay on a skill whose base is an installed pack's skill WHEN sync
+  runs THEN it exits non-zero, naming the overlay's path and the pack skill, and
+  WHEN validate runs THEN it exits non-zero too (added 2026-10-06;
+  `test/pack/packEngineDefects.test.ts:745`, E, on every client set).
 
 **REQ-OVERLAY-015**
 

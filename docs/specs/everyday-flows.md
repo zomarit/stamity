@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, and excluded from the site build.
 status: shipped-with-1.11.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
@@ -19,7 +19,10 @@ below was read at the package head `b855876a`, except in REQ-FLOW-022 and REQ-FL
 run's second spec-merge pass, the same day. REQ-FLOW-022 cites the package head `cdfaa723`. REQ-FLOW-026 cites
 `a9e94f06`, the package head once its unit had integrated (the third pass moved it there). At the 1.11.0 cut
 (2026-10-01) two lines were added to `content/commands/st-quick.md`'s hard refusal; the citations of that file in
-REQ-FLOW-005 and REQ-FLOW-024 were re-read on the release branch after that edit.
+REQ-FLOW-005 and REQ-FLOW-024 were re-read on the release branch after that edit. The paragraphs headed "Amended
+2026-10-06" in REQ-FLOW-022 and REQ-FLOW-026, and the criteria marked "added 2026-10-06", come from the spec deltas the
+units `u6-init-fixes` and `u3-codex-shown-rows` declared in run `2026-10-03_pack-engine-defects`, merged at its close.
+They cite `eb4f0727` and are not in a release yet.
 
 ## Intent
 
@@ -495,6 +498,20 @@ From `docs/plans/013-optimization-sweep-03.md` § Spec delta A, the unit `sw10-f
     call, `npx -y <name>@<version> sync`, as the cell's census amendment says.
   - The Copilot workflow step also reaches `init --json`, and prints on no dry run (`review/138`, `review/141`). The
     banner's version line prints the normalized version, not the raw registry answer (`review/142`).
+- **Amended 2026-10-06** (run `2026-10-03_pack-engine-defects`, unit `u6-init-fixes`, integrated as `68d62843`, the
+  fallback's value list from `review/40`; cited at `eb4f0727`):
+  - **The detected platform.** The init panel prints the hosting platform init wrote into the manifest on a line of
+    its own, after the `clients:` line when that line prints, and never inside the disclosure line
+    (`src/cli/commands/init/panel.ts:784-788`). It reads `platform: <name> (from the origin remote)`, or, when none was
+    detected, `platform: none detected — set it with <the pinned config set platform <name> call>, <name> one of
+    github, azure-devops, gitlab`; the values are the keys of `PLATFORM_MCP_SERVER` (`platformLine`, `:377-395`).
+  - **One source.** At init the origin remote is the platform's only source: `buildInitDecisions` calls
+    `detectPlatform` with no override (`src/cli/commands/init/plan.ts:227`), and `InitOverrides` holds only `tools`
+    and `maturityTier`, its doc naming `config set platform` and `config detect` as the routes after init (`:44-53`).
+    The unwired `InitOverrides.platform` field is removed.
+  - **`--maturity` has a CLI case.** `init -y --maturity enterprise` writes `maturityTier: enterprise` and the panel's
+    disclosure line reads `(tier: enterprise, …)`; an unknown tier is refused before anything is written
+    (`test/cli/commands/init.test.ts:581-603`).
 - **Proof:** `test/cli/commands/initPanel.test.ts`, `test/cli/commands/init.test.ts`,
   `test/cli/commands/initApply.test.ts`, `test/cli/commands/check.test.ts`, `test/cli/notice/updateNotice.test.ts`,
   `test/cli/commands/sync.test.ts`, `test/adapters/copilot.test.ts`; the Codex pins in `test/adapters/codex.test.ts`
@@ -595,6 +612,14 @@ integrated. Before the unit, `CODEX_COMMANDS_DIR` was `null` and Codex received 
 - **Expand/contract:** the shared rows are added and the `.cursor/skills/st-<id>/` rows reclaimed in the same sync,
   which the live Cursor check gated. Rollback is a re-sync at the prior version. The Codex cells of the parity table in
   `docs/specs/orchestrator-context.md` moved with the unit (amended 2026-09-30).
+- **Amended 2026-10-06** (run `2026-10-03_pack-engine-defects`, unit `u3-codex-shown-rows`, integrated as `0da30714`;
+  cited at `eb4f0727`). The skills-list bullet above is superseded: Codex's skills-list check leaves the touchpoints
+  out. Each touchpoint's `agents/openai.yaml` sets `policy.allow_implicit_invocation: false`, and codex-cli 0.160.0
+  (2026-10-03) and 0.160.1 (2026-10-06) keep such folders out of the skills list they show the model
+  (`.stamity/runs/2026-10-03_pack-engine-defects/record.md:298-299`). The full selection measures 5,570 characters
+  over 17 shown skills against the 8,000 cap (`codexSkillsListChars`, `src/emit/capabilityMatrix.ts:379-387`; the
+  count at `src/adapters/codex.ts:417-430`; REQ-PROVE-004, amended 2026-10-06). Whether a plain ask that names no
+  touchpoint can start one on Codex is still unmeasured: those checks cover the listing only.
 - **Proof:** `test/emit/touchpointSkills.test.ts`, `test/emit/skillsProjection.test.ts`,
   `test/adapters/codex.test.ts`, `test/adapters/cursor.test.ts`, `test/adapters/copilot.test.ts`,
   `test/cli/commands/initPanel.test.ts`, `test/cli/commands/syncEngine.test.ts` (the 1.10.0 reclaim case),
@@ -836,6 +861,14 @@ exists, it is the normative record for that requirement.
   MCP server THEN no line says "the credential file this setup uses".
 - GIVEN a live `init -y --tools copilot` THEN the panel and the `nextSteps` of `--json` name the setup workflow. GIVEN a
   dry run THEN neither does.
+- GIVEN `init -y` in a repository whose origin is `https://github.com/acme/demo.git` THEN the manifest's `platform` is
+  `github` and the panel prints `platform: github (from the origin remote)` on its own line. GIVEN no origin THEN the
+  manifest has no `platform`, and the panel prints the `none detected` line with the pinned `config set platform
+  <name>` call and the values `github, azure-devops, gitlab` (added 2026-10-06; `test/cli/commands/init.test.ts:654`,
+  `test/cli/commands/initPanel.test.ts:886`).
+- GIVEN `init -y --maturity enterprise` on a directory that would seed `solo` THEN the manifest's `maturityTier` is
+  `enterprise` and the panel reads `(tier: enterprise, …)`. GIVEN `--maturity galactic` THEN init exits non-zero naming
+  the value, and no `.stamity/` is created (added 2026-10-06; `test/cli/commands/init.test.ts:581`).
 
 **REQ-FLOW-024**
 
@@ -870,6 +903,9 @@ exists, it is the normative record for that requirement.
   `/st-onboard`.
 - `judgment: maintainer` · GIVEN a live Codex session WHEN the user types `$st-work` THEN the body loads; GIVEN a live
   Cursor session WHEN the user types `/st-work` THEN it loads there too.
+- GIVEN the full selection with Codex WHEN its skills list is measured THEN the nine touchpoints are not counted, 17
+  rows are shown, and the shown total equals `codexSkillsListChars` (added 2026-10-06;
+  `test/adapters/codex.test.ts:2087`).
 
 ## References
 

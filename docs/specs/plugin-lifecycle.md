@@ -1,6 +1,6 @@
 ---
 id: plugin-lifecycle
-# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, and excluded from the site build.
+# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, and excluded from the site build.
 status: shipped-with-1.9.0
 obsolete_when: every supported client installs the corpus through its own plugin container and the generated-setup route is retired, or a decision row cuts the surface
 ---
@@ -21,6 +21,11 @@ from the deltas its units' reports declared. They are merged on the package bran
 a release yet: `status` still names 1.9.0, the release that shipped REQ-PLUGIN-001 to 026. Their
 `path:line` citations are to the tree at `e995fe02`, re-pointed to the package head `0a251039`
 where the cited file changed since.
+
+The paragraphs headed "Amended 2026-10-06" under REQ-PLUGIN-016 and REQ-PLUGIN-019 come from the
+spec deltas the units `u4a-pack-skill-origin` and `u4b-pack-reach-row` declared in run
+`2026-10-03_pack-engine-defects`, merged at its close, measured against the code where a report and
+the code differ. They cite the tree at `eb4f0727` and are not in a release yet.
 
 ## Intent
 
@@ -711,6 +716,67 @@ pins the warning, and `:1918` runs the real locator into the row and reads `pass
 of 2026-09-24 reproduced the old warning on a 1.9.0 root, where it named the Claude variable on a
 Codex-only consumer (`.stamity/runs/2026-09-17_plugin-lifecycle/private-chain.md:302`).
 
+Amended 2026-10-06 (run `2026-10-03_pack-engine-defects`, units `u4a-pack-skill-origin` and
+`u4b-pack-reach-row`, integrated as `efc7b79d` and `778c9ef0` with their fix rounds; cited at
+`eb4f0727`). Two facts about installed packs under the boundary.
+
+- **Pack skills reach plugin-backed clients; nothing else of a pack does.** The 2026-09-20 sentence
+  "a pack skill row is exempt" held for no row: the pack skill lane built its rows without `origin`,
+  so both exemptions read them as core rows and dropped them. `projectOnePackSkill` now stamps
+  `origin: "pack"` on every row it builds, `SKILL.md` and support files alike
+  (`src/pack/projection.ts:623-634`). The shared tree keeps every reader as an owner of a pack row
+  (`src/emit/planner.ts:1016-1023`), and Claude's native copy keeps a pack row when its plugin
+  carries `skill` (`src/adapters/claude.ts:548-562`). So an installed pack's skill directory is
+  written into each selected client's skills tree (`.claude/skills/` for Claude Code, the shared
+  `.agents/skills/` for Cursor, Copilot and Codex) even where that client's plugin carries the
+  `skill` class. The exemption is for skills only: pack commands, agents, rules and hooks are still
+  dropped wherever the client's plugin carries their class, and the `pack-reach` row names each one.
+- **The doctor rows gain `pack-reach`,** printed after `plugin-duplicates` and before `invariants`,
+  so `check` prints fifteen rows (`src/cli/commands/check.ts:1415-1437`, `:1458-1463`). Its judgment
+  is the emission plan's own `packReach` (`src/types/content.ts:146-201`; set at
+  `src/emit/planner.ts:1131-1133` by `packReachOf`, `:1146-1258`), read off each artifact's `tools:`
+  list and `isPluginOwned` rather than off the planned rows, because a pack rule reaches Codex as
+  text inside the composite appendix, which no per-rule row owns. A pack skill reaches every selected
+  client; an agent, rule or command reaches every client its `tools:` list admits whose plugin does
+  not carry its class; each accepted pack hook file reaches every client whose hooks this repository
+  wires; an MCP server reaches every selected client once `manifest.mcp.servers` selects it, and
+  none, dropped as `not selected`, until then. The row (`checkPackReach`,
+  `src/cli/commands/check.ts:1143-1294`) reads:
+  - `pass` with no readable manifest, and with no `pack:` row in the ledger, planning nothing
+    (`:1188-1193`); otherwise `pass` when no pack is in a state below, naming the artifact counts and
+    any artifact that reaches no client for a reason of its own (`:1280-1293`);
+  - `fail`, so `check` exits 1, for an installed pack none of whose artifacts reaches a selected
+    client and that supplies no unselected MCP server (`:1231-1234`, `:1266-1276`). It names the
+    pack, each artifact and why (the plugin that carries its class, or its own `tools:` list), then
+    the remedies that run: `clean --pack <id>` in the pinned call form, and, where an artifact's
+    `tools:` list names a client, the `config set tools` call that adds it, then `sync`
+    (`describeSilentPack`, `:1336-1360`);
+  - `warn`, exit 0, for a pack that reaches some client while a plugin drops one of its artifacts for
+    another, each named; a pack whose only remaining delivery is an MCP server nobody selected,
+    naming `config mcp add <id>`; a pack the organisation's trust policy denies; and a pack that
+    ships nothing a client loads, every hook row it ships rejected (`:1235-1262`, `:1277-1279`);
+  - `warn` "not evaluated" when the plan cannot be built, the drift gate carrying the failure
+    (`:1216-1224`).
+
+  With a pack installed the row runs one emission plan of its own beside the drift gate's, and keeps
+  that plan's policy-denial lines off stderr so each prints once (`withoutPolicyWarningPrint`,
+  `src/pack/projection.ts:463-478`). Every pack-supplied id it prints passes through `sanitizeLabel`.
+
+- GIVEN `plugin.mode: "plugin-backed"` with every selected client's plugin carrying `skill` and an
+  installed pack skill WHEN `stamity sync` runs THEN the pack skill's files are written into each
+  client's skills tree and no corpus skill is (`test/pack/projection.test.ts:492`;
+  `test/pack/packEngineDefects.test.ts:680`, D1).
+- GIVEN an installed command-only pack and a plugin that carries `command` for the only selected
+  client WHEN `stamity check` runs THEN `pack-reach` is `fail`, names the pack, the command and the
+  plugin, and `check` exits 1 with drift clean; GIVEN a second selected client whose plugin does not
+  carry `command` THEN it is `warn`, naming the dropped command and the client it reaches; GIVEN no
+  pack installed THEN it is `pass` and nothing is planned (`test/cli/commands/check.test.ts`,
+  describe "check — pack-reach", `:3452`; `packEngineDefects.test.ts:705`, D2).
+- GIVEN a pack whose only artifact is an MCP server the manifest does not select THEN `pack-reach` is
+  `warn`, naming `config mcp add <id>`; GIVEN a pack the trust policy denies, or one whose every hook
+  row was rejected, THEN it is `warn`; GIVEN a plan that cannot be built THEN it is `warn` "not
+  evaluated" and the drift gate fails (the same describe; `test/emit/plannerPackReach.test.ts`).
+
 ### REQ-PLUGIN-017 Explicit facts and gates replace placeholders
 
 Given `stamity config set gates.test "npm run test:unit"`, When the charter is rendered, Then its
@@ -796,6 +862,27 @@ beside their paths — the same three sources and three remedies `check`'s `plug
 prints, read off the same finding — so the paragraph's "with the same list" clause holds field by
 field rather than by count, and a JSON consumer reaches the remedy without re-deriving it from the
 source.
+
+Amended 2026-10-06 (run `2026-10-03_pack-engine-defects`, unit `u4a-pack-skill-origin` and its
+`review/5` fix, integrated as `efc7b79d`; cited at `eb4f0727`). The companion of REQ-PLUGIN-016's
+pack-skill exemption: a client's `skill` ledger row inside an installed pack skill's folder is not a
+duplicate and is not counted. A pack skill's client rows are recorded like a core skill's, and
+`origin` never reaches the ledger, so the folder is read off the install's own `pack:<id>` rows,
+whose artifact ids are `<id>/skills/<folder>/…` (`packSkillDirs`,
+`src/cli/commands/plugin/probe.ts:729-764`); a row is skipped when its path is under that client's
+own skills directory, in one of those folders (`isPackSkillRow`, `:766-780`, applied to the ledger
+source at `:809-811`). The key is the folder, not each recorded file, so a support file no pack row
+records is exempt too. A core skill is never skipped: the catalog and the projection merge refuse a
+core skill that shares a pack skill's folder before anything is written. Every other row of a
+carried class, a pack command's or agent's included, is still reported.
+
+- GIVEN a core skill's ledger rows and an installed pack skill's rows beside a plugin that carries
+  `skill` WHEN `stamity check` runs THEN `plugin-duplicates` is `fail` naming the core skill's path
+  and not the pack skill's; once emission re-runs under the plugin THEN it is `pass`, while each
+  client's ledger still holds the pack skill's files (`test/cli/commands/check.test.ts:2942`, and the
+  unrecorded support-file case at `:3051`).
+- GIVEN a stale pack command and agent beside a plugin that carries their classes THEN
+  `plugin-duplicates` is `fail` naming both, and not the pack skill beside them (`:3134`).
 
 ### REQ-PLUGIN-020 Per-client install, discovery and invocation proof
 
