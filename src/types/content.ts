@@ -195,7 +195,7 @@ export interface PackArtifactReach {
  * does not select — installing a pack makes its servers selectable, and only
  * `config mcp add <id>` makes one emitted, so it reaches no client until then.
  */
-export type PackArtifactDrop =
+type PackArtifactDrop =
   | { reason: "plugin-owned"; tool: Tool; cls: ContentClass | "hooks" }
   | { reason: "declares no selected client"; declared: Tool[] }
   | { reason: "not selected" };

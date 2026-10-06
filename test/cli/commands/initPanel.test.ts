@@ -912,8 +912,13 @@ describe("renderInitPanel — the detected platform (REQ-FLOW-022)", () => {
   it("falls back to the set-it instruction, in the pinned call form, when none was detected", () => {
     const output = renderInitPanel(panelInput());
 
+    // TEST CHANGE, justified: 2026-10-06, run 2026-10-03_pack-engine-defects
+    // review/40. The fallback named `<name>` without the values it takes, while
+    // the `clients:` line beside it lists its own; it now lists the closed set.
+
     expect(output).toContain(
-      `  platform: none detected — set it with ${npxCommand("config set platform <name>")}\n`,
+      `  platform: none detected — set it with ${npxCommand("config set platform <name>")}, ` +
+        "<name> one of github, azure-devops, gitlab\n",
     );
     expect(output).not.toContain("(from the origin remote)");
   });

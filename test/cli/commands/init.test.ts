@@ -4,7 +4,7 @@ import { link, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { stripVTControlCharacters } from "node:util";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CLAUDE_SETTINGS_PATH } from "../../../src/adapters/claude.ts";
 import { initCommand } from "../../../src/cli/commands/init.ts";
 import { buildInitDecisions } from "../../../src/cli/commands/init/plan.ts";
@@ -608,11 +608,9 @@ describe("init — --maturity flag", () => {
  * A git repository whose origin points at `url`, or a skip on a machine
  * without git. `git remote add` runs with config isolated the way the shared
  * seeder isolates it, which keeps user-level config out of that write only.
- * Init reads origin in-process with `git remote get-url`, under this process's
- * own environment and global config, and that command applies any
- * `url.<base>.insteadOf` rewrite at read time. So the GitHub case relies on the
- * machine running the suite having no rewrite that maps `https://github.com/`
- * to another host; isolation here gives no protection against one.
+ * Init reads origin in-process with `git remote get-url`, which inherits this
+ * process's environment and applies any `url.<base>.insteadOf` rewrite at read
+ * time — so the read is isolated too, by {@link withIsolatedGitConfig}.
  */
 async function seedRepoWithOrigin(root: string, url: string, skip: () => void): Promise<void> {
   try {
@@ -634,12 +632,32 @@ async function seedRepoWithOrigin(root: string, url: string, skip: () => void): 
   });
 }
 
+/**
+ * Run `body` with this process's git reading no global and no system config,
+ * restored after. The in-process init spawns git with `process.env`, so this is
+ * what keeps a host's `url.<base>.insteadOf` rewrite (or any other user-level
+ * git setting) from changing the origin init reads. The case relies only on
+ * git honouring `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_NOSYSTEM`, as the shared
+ * seeder does; the repository's own `.git/config`, which holds the origin
+ * under test, is still read.
+ */
+async function withIsolatedGitConfig<T>(body: () => Promise<T>): Promise<T> {
+  vi.stubEnv("GIT_CONFIG_GLOBAL", NO_GIT_CONFIG);
+  vi.stubEnv("GIT_CONFIG_NOSYSTEM", "1");
+  try {
+    return await body();
+  } finally {
+    vi.unstubAllEnvs();
+  }
+}
+
 describe("init — the detected platform (REQ-FLOW-022)", () => {
   it("names the platform it read off a GitHub origin and writes it to the manifest", async (ctx) => {
     const root = await makeRepo();
     await seedRepoWithOrigin(root, "https://github.com/acme/demo.git", () => ctx.skip());
 
-    const result = await runInit(root, ["-y"]);
+    // review/51: isolated, so a host `insteadOf` rewrite cannot turn this red.
+    const result = await withIsolatedGitConfig(() => runInit(root, ["-y"]));
 
     expect(result.code).toBe(0);
     expect((await readManifest(root))?.platform).toBe("github");
@@ -647,6 +665,9 @@ describe("init — the detected platform (REQ-FLOW-022)", () => {
     expect(result.stdout).not.toContain("none detected");
   });
 
+  // TEST CHANGE, justified: 2026-10-06, run 2026-10-03_pack-engine-defects
+  // review/40. The fallback now lists the values `<name>` takes, as the
+  // `clients:` line lists its own; the pinned call is unchanged.
   it("says none was detected, and how to set it, where there is no origin", async () => {
     const root = await makeRepo();
 
@@ -655,7 +676,8 @@ describe("init — the detected platform (REQ-FLOW-022)", () => {
     expect(result.code).toBe(0);
     expect((await readManifest(root))?.platform).toBeUndefined();
     expect(result.stdout).toContain(
-      `  platform: none detected — set it with ${npxCommand("config set platform <name>")}\n`,
+      `  platform: none detected — set it with ${npxCommand("config set platform <name>")}, ` +
+        "<name> one of github, azure-devops, gitlab\n",
     );
   });
 });

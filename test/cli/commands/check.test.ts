@@ -3499,11 +3499,17 @@ describe("check — pack-reach", () => {
     const reach = row(doc, "pack-reach");
 
     expect(reach.status).toBe("fail");
+    // TEST CHANGE, justified: 2026-10-06, run 2026-10-03_pack-engine-defects
+    // review/38. The second remedy, "run claude on the CLI's generated mode",
+    // named no command and none exists; the row now gives only the remedy that
+    // runs and states the plugin boundary as a fact.
     expect(reach.detail).toBe(
       'pack "acme" reaches no selected client: command st-acme-cmd — the claude plugin ' +
-        `carries the command class. Remove it with ${npxCommand("clean --pack acme")}, or run ` +
-        "claude on the CLI's generated mode, where this repository writes every class",
+        `carries the command class. Remove it with ${npxCommand("clean --pack acme")}. While a ` +
+        "client's plugin carries a class, this repository writes none of that class for it; " +
+        "only a pack's skills are exempt",
     );
+    expect(reach.detail).not.toContain("generated mode");
     // The row alone decides the exit: drift is clean once the sync ran under the plugin.
     expect(doc.driftStatus).toBe("evaluated");
     expect(doc.drift?.clean).toBe(true);
@@ -3549,8 +3555,15 @@ describe("check — pack-reach", () => {
     expect(reach.detail).toContain(
       'pack "acme" reaches no selected client: command st-acme-cmd — its tools: list names only copilot.',
     );
-    expect(reach.detail).toContain(", or select a client its artifacts name");
+    // TEST CHANGE, justified: 2026-10-06, run 2026-10-03_pack-engine-defects
+    // review/38. "or select a client its artifacts name" named no command; the
+    // row now prints the pinned `config set tools` call that adds the client.
+    expect(reach.detail).toContain(
+      `, or add a client its tools: list names with ${npxCommand("config set tools claude,copilot")}, ` +
+        `then ${npxCommand("sync")}`,
+    );
     expect(reach.detail).not.toContain("generated mode");
+    expect(reach.detail).not.toContain("plugin carries a class");
   });
 
   it("warns on a pack whose every hook row was rejected, noting it ships nothing a client loads", async () => {
@@ -3688,6 +3701,91 @@ describe("check — pack-reach", () => {
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it("warns, naming the policy, on an installed pack the organisation's trust policy denies", async () => {
+    // review/47: the plan leaves a denied pack out of its reach, so the row read
+    // "no installed pack resolved" and passed for a pack installed and inert.
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude"] });
+    await installAcmePack(handle, root, { "commands/st-acme-cmd.md": ACME_CMD });
+    await resyncAt(root);
+    await writeFile(
+      join(root, STATE_DIR, "policy.json"),
+      JSON.stringify({ version: 1, packs: { deny: ["*"] } }),
+      "utf8",
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      const reach = await doctorRow(root, "pack-reach");
+
+      expect(reach).toEqual({
+        id: "pack-reach",
+        status: "warn",
+        detail:
+          'pack "acme" is denied by the organisation\'s trust policy (matched rule: "*"), so none ' +
+          `of its content reaches a client. Remove it with ${npxCommand("clean --pack acme")}, or ` +
+          "change .stamity/policy.json",
+      });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("flattens a control character in a pack-supplied id before printing it", async () => {
+    // review/43 (CWE-150): a YAML double-quoted `\e` puts a real ESC in the
+    // frontmatter id while the bytes on disk stay printable, and the row prints
+    // that id. Pack ids themselves are shape-checked at install; the artifact
+    // id is the pack-supplied name that reaches this row.
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude"] });
+    await installAcmePack(handle, root, {
+      "commands/st-acme-cmd.md": COMMAND_FIXTURE.replace(
+        "id: cmd-work",
+        'id: "acme\\e[2K\\rcmd"',
+      ),
+    });
+    await goPluginBacked(root, { claude: { version: "1.11.0", classes: ["command"] } });
+
+    const reach = await doctorRow(root, "pack-reach");
+
+    expect(reach.status).toBe("fail");
+    // ESC dropped, the carriage return spaced, as `sanitizeLabel` does everywhere.
+    expect(reach.detail).toContain('pack "acme" reaches no selected client: command st-acme[2K cmd —');
+    // oxlint-disable-next-line no-control-regex -- the control byte IS the subject
+    expect(reach.detail).not.toMatch(/[\u0000-\u001F\u007F-\u009F]/u);
+  });
+
+  it("puts each further line under the detail column, and no padding in the --json detail", async () => {
+    // review/41: continuation lines were joined with a fixed 25-space indent,
+    // four columns left of the detail column, and the spaces shipped in --json.
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude", "codex"] });
+    await installAcmePack(handle, root, {
+      "commands/st-acme-cmd.md": ACME_CMD,
+      "agents/stamity-acme-agent.md": AGENT_FIXTURE.replace("id: reviewer", "id: acme-agent"),
+    });
+    await goPluginBacked(root, {
+      claude: { version: "1.11.0", classes: ["command", "agent"] },
+      codex: { version: "1.11.0", classes: ["skill"] },
+    });
+
+    const { doc } = await runJson(root);
+    const reach = row(doc, "pack-reach");
+    expect(reach.status).toBe("warn");
+    const lines = reach.detail.split("\n");
+    expect(lines).toHaveLength(2);
+    expect(lines.every((line) => line.startsWith('pack "acme": '))).toBe(true);
+
+    const human = await runHuman(root);
+    const width = Math.max(...doc.doctor.map((entry) => entry.id.length));
+    const column = 2 + 4 + 2 + width + 2;
+    const out = human.stdout.split("\n");
+    const first = out.findIndex((line) => line.includes(lines[0]!));
+    expect(first).toBeGreaterThan(-1);
+    expect(out[first]!.indexOf(lines[0]!)).toBe(column);
+    expect(out[first + 1]).toBe(`${" ".repeat(column)}${lines[1]!}`);
   });
 
   it("warns 'not evaluated' when the plan cannot be built, leaving the failure to the drift gate", async () => {

@@ -9,6 +9,7 @@ import { COPILOT_PROMPTS_DIR, COPILOT_SETUP_STEPS_PATH } from "../../../adapters
 import { CURSOR_COMMANDS_DIR } from "../../../adapters/cursor.ts";
 import type { StackSuggestion } from "../../../detect/stackSupport.ts";
 import { NATIVE_SKILL_DIRS, SKILLS_PROJECTION_DIR } from "../../../emit/skillsProjection.ts";
+import { PLATFORM_MCP_SERVER } from "../../../mcp/catalog.ts";
 import { ENV_MCP_FILE, getSourceEnvMcpCommand } from "../../../mcp/env.ts";
 import type { CarryReport } from "../../../migration/carry.ts";
 import { TOOLS, type Tool } from "../../../types/core.ts";
@@ -381,11 +382,15 @@ function gatePinLine(decisions: InitDecisions): string | null {
  * Its one source is the origin remote (`./plan.ts::detectPlatform`); no flag
  * sets it at init. An absent value covers both "no origin remote" and "an
  * origin on a host the engine has no mapping for", so the fallback names the
- * config key that sets it rather than guessing which of the two this was.
+ * config key that sets it rather than guessing which of the two this was, and
+ * lists the values it takes, as the `clients:` line lists its own. The values
+ * come from the catalog's total `Record<Platform, string>`, as `config`'s own
+ * hint does, so a new platform cannot go missing from this line.
  */
 function platformLine(decisions: InitDecisions): string {
   return decisions.platform === undefined
-    ? `platform: none detected — set it with ${packageCommand("config set platform <name>")}`
+    ? `platform: none detected — set it with ${packageCommand("config set platform <name>")}, ` +
+        `<name> one of ${Object.keys(PLATFORM_MCP_SERVER).join(", ")}`
     : `platform: ${decisions.platform} (from the origin remote)`;
 }
 

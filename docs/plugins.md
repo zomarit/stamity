@@ -615,11 +615,15 @@ row in [the troubleshooting guide](troubleshooting.md):
   its commands, agents, rules and hooks do not reach a client whose plugin carries their class. It
   fails for a pack none of whose artifacts reaches any client — a command-only pack on Claude Code,
   Cursor or Copilot CLI, or a hooks-only pack on any of the four — naming the pack, each artifact
-  and the plugin that dropped it: remove the pack with `stamity clean --pack <id>`, or run that
-  client on the CLI's generated mode. A pack's MCP server reaches a client only once
+  and the plugin that dropped it. Remove the pack with `stamity clean --pack <id>`, or, where its
+  `tools:` list names a client, add that client with `stamity config set tools <list>`, then
+  `stamity sync`. While a
+  client's plugin carries a class, this repository writes none of that class for it; only a pack's
+  skills are exempt. A pack's MCP server reaches a client only once
   `stamity config mcp add <id>` selects it, so a pack whose only remaining delivery is an
-  unselected server warns with that command instead of failing. It also warns when a pack reaches
-  some client and a plugin drops some of its artifacts for another, and when a pack ships nothing
-  a client loads; it passes when no pack is installed.
+  unselected server warns with that command instead of failing. It warns on a pack the
+  organisation's trust policy denies, which is installed and projects nothing. It also warns when a
+  pack reaches some client and a plugin drops some of its artifacts for another, and when a pack
+  ships nothing a client loads; it passes when no pack is installed.
 
 No row removes anything. Every remedy is a step you run.

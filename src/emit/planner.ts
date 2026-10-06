@@ -100,6 +100,8 @@ import {
   type ResolvedPackContent,
 } from "../pack/projection.ts";
 import { hasManagedBlock, wrapInManagedBlock } from "../merge/managedBlocks.ts";
+import { pinnedCliCall } from "../shared/cliCall.ts";
+import { cliCallContextOf, type CliCallContext } from "./substitution.ts";
 import {
   outputOwners,
   type AdapterOutput,
@@ -800,18 +802,26 @@ function customizingSkillFilePath(row: ProjectedSkillFile): string {
  * name. Every clash is listed in one refusal, then one remedy per owner that
  * can move: the corpus cannot, so a core owner adds none, and a name only core
  * owners claim is named as a defect of the package instead.
+ *
+ * `cli` pins every command the refusal names to this run's package and
+ * version (`npx -y <package>@<version> <verb>`), the form `check`'s
+ * `pack-reach` row prints for the same `clean --pack` step: a bare `stamity`
+ * resolves only where a global install put it on PATH, which the documented
+ * `npx` setup never does.
  */
-function refuseInvocableNameClashes(index: ContentIndex): void {
+function refuseInvocableNameClashes(index: ContentIndex, cli: CliCallContext): void {
   const clashes = findInvocableNameClashes(index.items, {
     replacedOf: (item) => replacedClaimantOf(index, item),
   });
   if (clashes.length === 0) return;
-  const remedies = [...new Set(clashes.flatMap((clash) => clash.owners.flatMap(remedyOf)))];
+  const remedies = [
+    ...new Set(clashes.flatMap((clash) => clash.owners.flatMap((owner) => remedyOf(owner, cli)))),
+  ];
   // A name every owner of which is shipped core content has no remedy here: no
   // file in this repository can move. Said so by name, rather than left under a
   // "Move one owner" heading that offers nothing for it.
   const coreOnly = clashes
-    .filter((clash) => clash.owners.every((owner) => remedyOf(owner).length === 0))
+    .filter((clash) => clash.owners.every((owner) => remedyOf(owner, cli).length === 0))
     .map((clash) => clash.name);
   // The fixed text has to fit every clash it can carry: a skill against a rule
   // delivered as a skill involves no command, so nothing is hidden on Claude.
@@ -850,19 +860,21 @@ function refuseInvocableNameClashes(index: ContentIndex): void {
           ? "report the clash to the package's maintainers; no file in this repository can " +
             "resolve it"
           : "apply one remedy per name listed above, then re-run the command that stopped " +
-            "here (`stamity sync`, `stamity check`, `stamity init` or `stamity plugin setup`)",
+            `here (\`${remedyCall(cli, "sync")}\`, \`${remedyCall(cli, "check")}\`, ` +
+            `\`${remedyCall(cli, "init")}\` or \`${remedyCall(cli, "plugin setup")}\`)`,
     },
   );
 }
 
 /** The remedy for one owner of a clashing name, or none for a core owner. */
-function remedyOf(owner: InvocableNameOwner): string[] {
+function remedyOf(owner: InvocableNameOwner, cli: CliCallContext): string[] {
   switch (owner.layer) {
     case "pack": {
       const packId = owner.packId ?? "<pack-id>";
       return [
-        `pack "${packId}": run \`stamity clean --pack ${packId}\`, then ` +
-          `\`stamity add ${packId}\` once the pack ships distinct names, then \`stamity sync\``,
+        `pack "${packId}": run \`${remedyCall(cli, `clean --pack ${packId}`)}\`, then ` +
+          `\`${remedyCall(cli, `add ${packId}`)}\` once the pack ships distinct names, then ` +
+          `\`${remedyCall(cli, "sync")}\``,
       ];
     }
     case "user":
@@ -875,6 +887,21 @@ function remedyOf(owner: InvocableNameOwner): string[] {
       ];
     default:
       return [];
+  }
+}
+
+/**
+ * One command a refusal names, pinned as `pinnedCliCall` spells it. A refusal
+ * prints on an error path, so a context that cannot be pinned (a version that
+ * is not semver-shaped) keeps the unpinned `npx <package> <verb>` rather than
+ * replacing the operator's diagnosis with a rendering failure — the fallback
+ * the CLI's own `packageCommand` takes.
+ */
+function remedyCall(cli: CliCallContext, verb: string): string {
+  try {
+    return pinnedCliCall(cli.packageName, cli.version, verb, cli);
+  } catch {
+    return `npx ${cli.npmChannel === false ? "--no " : ""}${cli.packageName} ${verb}`;
   }
 }
 
@@ -928,7 +955,7 @@ export function composeEmissionPlanner(
     // Before any row exists: a cross-class name clash is refused with its
     // owners named, rather than reaching the single-writer check below as two
     // planners writing one path (or, on Claude, as nothing at all).
-    refuseInvocableNameClashes(await buildContentIndex(residueCtx.contentRoot));
+    refuseInvocableNameClashes(await buildContentIndex(residueCtx.contentRoot), cliCallContextOf(ctx));
     const core = await buildCoreEmissionPlan(ctx, packs);
     const tools = TOOLS.filter((tool) => ctx.manifest.tools.includes(tool));
 

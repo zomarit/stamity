@@ -122,9 +122,16 @@ const DRILL_LINE =
   'st-drill — pack "acme-demo" command "drill" and pack "acme-demo" skill "drill" both install ' +
   "as st-drill (one folder on Cursor and Codex; on Claude the skill hides the command)";
 
+/** This suite's pinned call: `ctxOf` names no package, so the canonical one at {@link ENGINE_VERSION}. */
+const call = (verb: string): string => `npx -y @zomarit/stamity@${ENGINE_VERSION} ${verb}`;
+
+// TEST CHANGE, justified: 2026-10-06, run 2026-10-03_pack-engine-defects
+// review/42. The remedy printed a bare `stamity <verb>`, which the documented
+// `npx` setup cannot run; it now prints the pinned call `check`'s `pack-reach`
+// row prints for the same `clean --pack` step. Same three steps, same order.
 const ACME_REMEDY =
-  'pack "acme-demo": run `stamity clean --pack acme-demo`, then `stamity add acme-demo` once ' +
-  "the pack ships distinct names, then `stamity sync`";
+  `pack "acme-demo": run \`${call("clean --pack acme-demo")}\`, then ` +
+  `\`${call("add acme-demo")}\` once the pack ships distinct names, then \`${call("sync")}\``;
 
 describe("composeEmissionPlanner — an installed cross-class name clash", () => {
   it.each<[string, Tool[]]>([
@@ -145,7 +152,9 @@ describe("composeEmissionPlanner — an installed cross-class name clash", () =>
       expect(refusal.message.split("\n")).toContain(`  ${DRILL_LINE}`);
       expect(refusal.message).toContain(ACME_REMEDY);
       expect(refusal.why).toContain("one folder");
-      expect(refusal.next).toContain("stamity sync");
+      expect(refusal.next).toContain(`\`${call("sync")}\``);
+      expect(refusal.next).toContain(`\`${call("plugin setup")}\``);
+      expect(refusal.next).not.toMatch(/`stamity /u);
     },
   );
 
@@ -166,6 +175,30 @@ describe("composeEmissionPlanner — an installed cross-class name clash", () =>
     expect(lines.filter((line) => line.startsWith("  st-probe — "))).toHaveLength(1);
     expect(lines.filter((line) => line.includes(ACME_REMEDY))).toHaveLength(1);
   });
+
+  it.each<[string, boolean | undefined, string]>([
+    ["an npm channel", undefined, "npx @zomarit/stamity"],
+    ["no npm channel", false, "npx --no @zomarit/stamity"],
+  ])(
+    "keeps the unpinned call when the version cannot be pinned (%s), rather than failing the refusal",
+    async (_, npmChannel, prefix) => {
+      const packDir = await stagePack("acme-demo", {
+        "commands/st-drill.md": artifact("drill", "command"),
+        "skills/st-drill/SKILL.md": artifact("drill", "skill"),
+      });
+      const manifest = await installPack(packDir, manifestFor(["cursor"]));
+
+      // Not semver-shaped, so `pinnedCliCall` throws; the refusal still names the step.
+      const refusal = await refusalOf({
+        ...ctxOf(manifest),
+        engineVersion: "dev",
+        ...(npmChannel === undefined ? {} : { npmChannel }),
+      });
+
+      expect(refusal.message).toContain(`run \`${prefix} clean --pack acme-demo\``);
+      expect(refusal.next).toContain(`\`${prefix} sync\``);
+    },
+  );
 
   it("refuses an override command that installs as a core skill's name, with no pack installed", async () => {
     await getRepo().seedFiles({

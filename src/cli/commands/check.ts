@@ -12,7 +12,11 @@ import {
   hasManagedBlock,
   splitAtManagedBlock,
 } from "../../merge/managedBlocks.ts";
-import { withoutPolicyWarningPrint } from "../../pack/projection.ts";
+import { ORG_POLICY_REL_PATH } from "../../pack/orgPolicy.ts";
+import {
+  discoverInstalledPacksWithPolicy,
+  withoutPolicyWarningPrint,
+} from "../../pack/projection.ts";
 import {
   describePackIntegrityFinding,
   verifyInstalledPacks,
@@ -20,12 +24,18 @@ import {
 import type { PackArtifactReach, PackReach } from "../../types/content.ts";
 import { TOOLS, type Tool } from "../../types/core.ts";
 import { EngineError, type ErrorCode } from "../../types/errors.ts";
-import { isPackOwner, MANIFEST_FILE, type SetupManifest } from "../../types/manifest.ts";
+import {
+  isPackOwner,
+  MANIFEST_FILE,
+  PACK_OWNER_PREFIX,
+  type SetupManifest,
+} from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import { getEmissionPlanner } from "../engine/emission.ts";
 import { readWorkingTreeStatus } from "../engine/gitStatus.ts";
 import type { FailureDoc } from "../kit/output.ts";
 import { packageCommand } from "../kit/packageName.ts";
+import { sanitizeLabel } from "../kit/prompts.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { Palette } from "../kit/terminal.ts";
 import {
@@ -1013,7 +1023,9 @@ async function checkPluginDuplicates(
   return {
     id,
     status: readInstallMode(manifest) === "plugin-backed" ? "fail" : "warn",
-    detail: lines.join("\n                         "),
+    // Plain newlines: the renderer indents each continuation line under the
+    // detail column, so `--json` carries no layout whitespace.
+    detail: lines.join("\n"),
   };
 }
 
@@ -1034,7 +1046,8 @@ async function checkPluginDuplicates(
  *   client and that supplies no unselected MCP server, named with why and
  *   with its remedies.
  * - `warn` — a pack whose only remaining delivery is an MCP server nobody has
- *   selected yet, named with `config mcp add <id>`; artifacts of a pack that
+ *   selected yet, named with `config mcp add <id>`; a pack the organisation's
+ *   trust policy denies, which is installed and projects nothing; artifacts of a pack that
  *   does reach somewhere, dropped for a client whose plugin carries their
  *   class, each one named; and a pack that ships nothing deliverable (every
  *   hook row rejected — `sync` names why), which is inert though no plugin
@@ -1045,6 +1058,10 @@ async function checkPluginDuplicates(
  *   selected — in a pack that reaches elsewhere.
  * - `warn` "not evaluated" — the plan could not be built. The drift gate fails
  *   on the same cause and prints it whole, so this row does not fail twice.
+ *
+ * Every id a pack supplies goes through `sanitizeLabel` before it is printed:
+ * a frontmatter `id:` can carry an escape sequence (a YAML double-quoted `\e`),
+ * which would otherwise rewrite the operator's terminal or a CI log.
  *
  * Bounded like `pack-integrity`: a ledger with no pack row answers from the
  * ledger alone and plans nothing. With a pack installed it runs one emission
@@ -1064,6 +1081,7 @@ async function checkPackReach(
     return { id, status: "pass", detail: "no installed pack is recorded in the ledger" };
   }
   let reach: readonly PackReach[];
+  let denied: readonly { id: string; matchedRule?: string }[] = [];
   try {
     // The drift gate's plan, in the same run, prints any policy-denied pack;
     // this second plan would print each denial again.
@@ -1076,8 +1094,17 @@ async function checkPackReach(
       }),
     );
     reach = plan.packReach ?? [];
+    // The plan leaves out a pack the organisation's policy denies (it prints
+    // the denial and projects nothing), so a ledger pack missing from the
+    // reach is asked about by name rather than passing as "none resolved".
+    const resolved = new Set(reach.map((pack) => pack.packId));
+    const missing = manifest.ledger.some(
+      (row) => isPackOwner(row.adapter) && !resolved.has(row.adapter.slice(PACK_OWNER_PREFIX.length)),
+    );
+    if (missing) denied = (await discoverInstalledPacksWithPolicy(rootDir, manifest)).denied;
   } catch (cause) {
-    const reason = messageOf(cause).split("\n")[0] ?? "";
+    // The cause can quote a pack-supplied id, so it is flattened like the rest.
+    const reason = sanitizeLabel(messageOf(cause).split("\n")[0] ?? "");
     return {
       id,
       status: "warn",
@@ -1107,22 +1134,33 @@ async function checkPackReach(
   const unreached = reaching.flatMap((pack) =>
     pack.artifacts
       .filter((artifact) => !reachesAClient(artifact) && pluginDropsOf(artifact).length === 0)
-      .map((artifact) => `pack "${pack.packId}": ${describeUnreached(artifact)}`),
+      .map((artifact) => `pack "${sanitizeLabel(pack.packId)}": ${describeUnreached(artifact)}`),
   );
   const inert = reach
     .filter((pack) => pack.artifacts.length === 0)
     .map(
       (pack) =>
-        `pack "${pack.packId}" ships nothing a client loads (no skill, agent, rule, command, ` +
+        `pack "${sanitizeLabel(pack.packId)}" ships nothing a client loads (no skill, agent, rule, command, ` +
         `accepted hook or MCP server)`,
     );
-  const warnings = [...awaiting.map(describeAwaitingPack), ...partial, ...inert];
-  const separator = "\n                         ";
+  const warnings = [
+    ...denied.map(describeDeniedPack),
+    ...awaiting.map(describeAwaitingPack),
+    ...partial,
+    ...inert,
+  ];
+  // Plain newlines: the renderer indents each continuation line under the
+  // detail column, so `--json` carries no layout whitespace.
+  const separator = "\n";
   if (failing.length > 0) {
     return {
       id,
       status: "fail",
-      detail: [...failing.map(describeSilentPack), ...warnings, ...unreached].join(separator),
+      detail: [
+        ...failing.map((pack) => describeSilentPack(pack, manifest.tools)),
+        ...warnings,
+        ...unreached,
+      ].join(separator),
     };
   }
   if (warnings.length > 0) {
@@ -1167,30 +1205,60 @@ function isUnselected(artifact: PackArtifactReach): boolean {
 
 /** Why one artifact reaches no client: its plugin drops, its selection, or its own `tools:` list. */
 function describeUnreached(artifact: PackArtifactReach): string {
-  const name = `${artifact.kind} ${artifact.id}`;
+  const id = sanitizeLabel(artifact.id);
+  const name = `${artifact.kind} ${id}`;
   const plugins = pluginDropsOf(artifact);
   if (plugins.length > 0) return `${name} — ${pluginOwnersPhrase(plugins)} the ${artifact.kind} class`;
   if (isUnselected(artifact)) {
-    return `${name} — not selected; ${packageCommand(`config mcp add ${artifact.id}`)} selects it`;
+    return `${name} — not selected; ${packageCommand(`config mcp add ${id}`)} selects it`;
   }
-  const declared = artifact.dropped.flatMap((drop) =>
-    drop.reason === "declares no selected client" ? drop.declared : [],
-  );
-  return `${name} — its tools: list names only ${declared.join(", ")}`;
+  return `${name} — its tools: list names only ${declaredToolsOf(artifact).join(", ")}`;
 }
 
-function describeSilentPack(pack: PackReach): string {
-  const why = pack.artifacts.map(describeUnreached).join("; ");
-  const plugins = [...new Set(pack.artifacts.flatMap(pluginDropsOf))].toSorted(
-    (a, b) => TOOLS.indexOf(a) - TOOLS.indexOf(b),
+/** The clients an artifact's own `tools:` list names, when none of them is selected. */
+function declaredToolsOf(artifact: PackArtifactReach): Tool[] {
+  return artifact.dropped.flatMap((drop) =>
+    drop.reason === "declares no selected client" ? drop.declared : [],
   );
-  const alternative =
-    plugins.length > 0
-      ? `, or run ${plugins.join(", ")} on the CLI's generated mode, where this repository writes every class`
-      : ", or select a client its artifacts name";
+}
+
+/**
+ * A pack that reaches no selected client, with only remedies that run: remove
+ * it, or — when an artifact's own `tools:` list names a client — add that
+ * client. A class a client's plugin carries has no command that writes it from
+ * here, so that cause is stated as the fact it is, not offered as a step.
+ */
+function describeSilentPack(pack: PackReach, selected: readonly Tool[]): string {
+  const packId = sanitizeLabel(pack.packId);
+  const why = pack.artifacts.map(describeUnreached).join("; ");
+  const declared = new Set(pack.artifacts.flatMap(declaredToolsOf));
+  const widened = TOOLS.filter((tool) => selected.includes(tool) || declared.has(tool));
+  const addClient =
+    declared.size > 0
+      ? `, or add a client its tools: list names with ` +
+        `${packageCommand(`config set tools ${widened.join(",")}`)}, then ${packageCommand("sync")}`
+      : "";
+  const pluginNote = pack.artifacts.some((artifact) => pluginDropsOf(artifact).length > 0)
+    ? ". While a client's plugin carries a class, this repository writes none of that class " +
+      "for it; only a pack's skills are exempt"
+    : "";
   return (
-    `pack "${pack.packId}" reaches no selected client: ${why}. Remove it with ` +
-    `${packageCommand(`clean --pack ${pack.packId}`)}${alternative}`
+    `pack "${packId}" reaches no selected client: ${why}. Remove it with ` +
+    `${packageCommand(`clean --pack ${packId}`)}${addClient}${pluginNote}`
+  );
+}
+
+/** A pack the organisation's trust policy denies: installed, and projected nowhere. */
+function describeDeniedPack(pack: { id: string; matchedRule?: string }): string {
+  const id = sanitizeLabel(pack.id);
+  const rule =
+    pack.matchedRule === undefined
+      ? ""
+      : ` (matched rule: ${sanitizeLabel(JSON.stringify(pack.matchedRule))})`;
+  return (
+    `pack "${id}" is denied by the organisation's trust policy${rule}, so none of its content ` +
+    `reaches a client. Remove it with ${packageCommand(`clean --pack ${id}`)}, or change ` +
+    ORG_POLICY_REL_PATH
   );
 }
 
@@ -1198,8 +1266,8 @@ function describeSilentPack(pack: PackReach): string {
 function describeAwaitingPack(pack: PackReach): string {
   const why = pack.artifacts.map(describeUnreached).join("; ");
   return (
-    `pack "${pack.packId}" reaches no selected client until a server it supplies is ` +
-    `selected: ${why}. Or remove it with ${packageCommand(`clean --pack ${pack.packId}`)}`
+    `pack "${sanitizeLabel(pack.packId)}" reaches no selected client until a server it supplies is ` +
+    `selected: ${why}. Or remove it with ${packageCommand(`clean --pack ${sanitizeLabel(pack.packId)}`)}`
   );
 }
 
@@ -1208,7 +1276,7 @@ function describePartialDrop(packId: string, artifact: PackArtifactReach): strin
   const reached =
     artifact.reachedBy.length > 0 ? `reaches ${artifact.reachedBy.join(", ")}` : "reaches no client";
   return (
-    `pack "${packId}": ${artifact.kind} ${artifact.id} is not written for ${plugins.join(", ")} ` +
+    `pack "${sanitizeLabel(packId)}": ${artifact.kind} ${sanitizeLabel(artifact.id)} is not written for ${plugins.join(", ")} ` +
     `(${pluginOwnersPhrase(plugins)} the ${artifact.kind} class); it ${reached}`
   );
 }
@@ -1570,11 +1638,16 @@ function paintStatus(status: DoctorCheck["status"], palette: Palette): string {
 
 function renderDoctor(ctx: CliContext, doctor: readonly DoctorCheck[]): void {
   const width = Math.max(...doctor.map((row) => row.id.length));
+  // A multi-line detail (`plugin-duplicates`, `pack-reach`) carries plain
+  // newlines; each continuation line starts under the detail column —
+  // two spaces, the four-column status token, two, the padded id, two.
+  const continuation = `\n${" ".repeat(2 + 4 + 2 + width + 2)}`;
   ctx.io.out(`${ctx.palette.bold("doctor")}\n`);
   for (const row of doctor) {
     // Pad before painting: escape codes would otherwise count toward the width.
     ctx.io.out(
-      `  ${paintStatus(row.status, ctx.palette)}  ${row.id.padEnd(width)}  ${row.detail}\n`,
+      `  ${paintStatus(row.status, ctx.palette)}  ${row.id.padEnd(width)}  ` +
+        `${row.detail.replaceAll("\n", continuation)}\n`,
     );
   }
 }
