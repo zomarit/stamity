@@ -1,6 +1,6 @@
 # Run 2026-10-03_pack-engine-defects — the four 1.11.0 pack-engine defects, the three init rows, the session's records
 
-Status: in progress
+Status: closed — merged to `main` by fast-forward as PR #77 (`1fa55344`, 2026-10-06T10:36:55Z), without a release; ledger 108 rows, 0 open; QA signed, shippable
 Plan: .stamity/runs/2026-10-03_pack-engine-defects/plan.md
 Invocation: /st-work Fix the four pack-engine defects the /st-debug run 2026-10-03_debug-pack-defects diagnosed (diagnosis and root cause in .stamity/runs/2026-10-03_debug-pack-defects/record.md; the failing tests in test/pack/packEngineDefects.test.ts, 34 cases, red twice), on branch fix/pack-engine-defects at 40371e1b: (1) a cross-class emitted-name check at add and at sync that names both owners, with ops's two clashing skill halves renamed to st-release-runbook and st-incident-runbook so add ops still syncs; (2) the Codex skills list counting only the rows Codex shows its model, still refusing above 8,000 characters with a message naming the packs and the size; (3) origin "pack" on pack skill rows so they reach plugin-backed clients, plus a check row pack-reach that fails for an installed pack reaching no client; (4) an overlay on a pack skill refused by validate and sync, naming the overlay's path. In the same pull request: the three init rows of .stamity/inbox.md (source: /st-ask) — the detected platform on the end-of-init panel with the unwired InitOverrides.platform removed, docs/migration.md reworded to what init carries and shows, an init --maturity CLI test — and the records: inbox rows retired with their fixes plus the new rows this session found, dated notes on the three PR #73 records, the #73 round-1 brief and triage copied into their run folder. Merged to main without a release.
 Intensity: deep — public CLI contracts (the `add` refusal, a new `check` row, `sync` errors), the pack trust boundary, all four clients, seven units; the full specialist pass and a whole-branch review on the frontier class (Fable 5.1) before the merge
@@ -685,3 +685,221 @@ This repository writes a release's section at its cut. This run merges without o
   - The sign-off stands: 18 rows, 16 auto-proven, no H row unwalked.
 - Inbox correction: the `pluginLifecycle.test.ts:1432` row now reads Warning, matching its ledger row `build/20`. The
   Inbox section's counts now read 28 and 19.
+- **The final full gate on `697fce11`** (test-runner, `pd-gate`, alone, each gate once as written; `STAMITY_CLAUDE_BIN`
+  unset as `prove/2` records): every gate passes (`reports/prove-final-test-runner-r2.md`).
+  - The suite: 10,790 passed, none failing, 14 skipped. The Cursor, Copilot and Codex walks are among them.
+  - Coverage meets every floor.
+  - `check`, knip and the leak gate pass.
+- **CI on `1fa55344`** (run 37450071746): green on every leg.
+  - `check` on Node 22.22.2, Node 24 and both Windows shards;
+  - the plugin route, the three APM routes, the size budget and DCO.
+
+  `all-ci-checks` and `all-pr-checks` pass.
+- **The merge.** `main` was fast-forwarded from `c0eb1100` to `1fa55344` under the admin bypass at 10:36:54Z
+  (`git push origin 1fa55344:main`). PR #77 reads MERGED at 10:36:55Z, with `1fa55344` as its merge commit, and GitHub
+  deleted the branch.
+
+## Proof block (2026-10-06 — merged to `main` by fast-forward, without a release)
+
+- **Candidate and merge.** `1fa55344` on `fix/pack-engine-defects` (PR #77) carries 22 commits and 65 files over `main`
+  `c0eb1100` (+8,451 / −297).
+  - The code, tests, pages and specs at `697fce11`, without `.stamity/`: 57 files, +6,902 / −284.
+  - `1fa55344` adds only this run's records to `697fce11`.
+
+  `main` was fast-forwarded to `1fa55344` under the admin bypass at 10:36:54Z, after CI passed on that head. PR #77
+  reads MERGED at 10:36:55Z, with `1fa55344` as its merge commit. This was the maintainer's answer "Yes, fast-forward
+  (Recommended)", given for the final head once CI passes (record.md:553-555).
+
+  There is no tag, no npm publish and no CHANGELOG edit. The change list for the next release's section is in this
+  record (record.md:594-626).
+- **Build isolation.** Manual worktree lanes outside the checkout, declared before the first Phase 3 dispatch
+  (record.md:92-96):
+  - one lane per parallel unit, with `node_modules` symlinked;
+  - each unit committed in its lane, DCO-signed, then cherry-picked onto the integration branch;
+  - engine units that share a file ran serially in the integration lane;
+  - never `git stash`.
+- **Gates.** The gate of record for the code is the full gate on `697fce11`, the last commit that changes anything
+  outside `.stamity/`. `STAMITY_CLAUDE_BIN` was unset, as `prove/2` records (record.md:391-395); the Cursor, Copilot
+  and Codex walks were armed.
+
+  Gate results (the full gate of record on `697fce11`):
+
+  | Gate | Command | Result |
+  |---|---|---|
+  | build | `npm run build` | pass |
+  | lint | `npm run lint` | pass (the one known warning, `content/skills/st-verify/scripts/spec-plan-coverage.mjs:1`) |
+  | typecheck | `npm run typecheck` | pass |
+  | suite | `env -u STAMITY_CLAUDE_BIN npx vitest run` (JSON reporter) | pass: 10,790 passed, none failing, 14 skipped; `packEngineDefects` 34, `upgradeRemedy` 9, `boundaries` 32, `catalog` 136; the Cursor, Copilot and Codex walks pass |
+  | coverage | `env -u STAMITY_CLAUDE_BIN npm test -- --coverage` | pass: no "does not meet" line; 96.76% statements, 90.31% branches, 98.97% functions, 97.66% lines |
+  | drift | `node dist/cli.js check` | pass: setup green, drift clean |
+  | unused code | `npx knip` | pass |
+  | leak gate | `node scripts/leak-gate.mjs` | pass: 0 hits for 19 rules across 1,734 files |
+
+  The final tree, `1fa55344`, adds only records to `697fce11`. Its gate of record is CI (class 1, native), plus the
+  close commit's own records gate on `main` (below).
+
+  Gate results (the final tree `1fa55344`, CI run 37450071746):
+
+  | Gate | Command | Result |
+  |---|---|---|
+  | check, floor | CI `check (floor, node 22.22.2)` | pass |
+  | check, lts | CI `check (lts, node 24)` | pass |
+  | check, Windows | CI `check (windows-1, node 24)`, `check (windows-2, node 24)` | pass |
+  | plugin route | CI `plugin route (structure and credential-free install)` | pass |
+  | APM routes | CI `apm route` (current, minimum, regression-witness) | pass |
+  | size budget | CI `dist size budget` | pass |
+  | aggregators | CI `all-ci-checks`, `all-pr-checks` | pass |
+
+  The earlier runs:
+  - The integrated gate of `68d62843`: red on exactly the 15 cases that waves 2 and 3 then fixed (record.md:234-235).
+  - The full gate on `8cc796b8`: red on `prove/1` (knip) and `prove/2`, the Claude walk (record.md:359-366).
+  - The full gates on `a983db7d` and `ff854b2a`: green (record.md:423-435, :471-473).
+  - The full gate on `94f348e5`: red on `prove/7`, the layering test (record.md:482-486).
+  - The full gate on `eb4f0727`: green (record.md:496-503).
+  - The narrow gate on `ee2fe9a5`: green (record.md:641-646).
+  - CI: green at `75b17919` (record.md:441-443), `ff854b2a` (record.md:473), `eb4f0727` (record.md:504-505) and
+    `ee2fe9a5` (record.md:647).
+- **The proof bar** (the kickoff's):
+  - **The reproduction.** The published 1.11.0 fails `sync` and `check` after `add ops` on Cursor and on Codex alone,
+    and 1.10.0 is clean on both (the debug run's record, lines 14-24).
+  - **The candidate.** Fresh installs on Cursor and on Codex alone are clean. Real 1.11.0 ops installs on Cursor and
+    on Claude reach a clean `check` through the printed four-step remedy (record.md:444-456, :487-491).
+  - **The failing tests.** The made-up pack's 34 cases (groups A to E, on each client set and on all four together)
+    were red twice on `40371e1b`, the failing-test commit, and pass in the full gate above.
+  - **The full local gate, CI on every leg, QA, the leak gate:** above and below. The hygiene check belongs to the
+    private close.
+  - **The live Cursor walk was read:** its intermittent miss was re-run and compared, and filed as the Warning
+    `build/20` (record.md:248-252).
+- **Review verdicts.** The record declares `Confidence gate: medium` (record.md:7), and every approval below meets it.
+  The reviewers state confidence in words, not numbers, so the measurements page counts this run in its denominator
+  only.
+
+  Review verdicts, per round (each round a fresh spawn):
+
+  | Pass | Round | Model | Verdict | Confidence | Where |
+  |---|---|---|---|---|---|
+  | u2-ops-rename | 1 | Opus 5.5 | approve | medium | record.md:122-129 |
+  | u3-codex-shown-rows | 1 | Opus 5.5 | approve | medium | record.md:131-134 |
+  | u5b-creator-text | 1 | Opus 5.5 | approve | high | record.md:150-152 |
+  | u4a-pack-skill-origin | 1 | Opus 5.5 | approve, one Warning routed to a fixer | medium | record.md:154-160 |
+  | u4a-pack-skill-origin | 2 | Opus 5.5 | approve | medium | record.md:161-163 |
+  | u6-init-fixes | 1 | Opus 5.5 | approve, three Minors routed to a fixer | medium | record.md:173-178 |
+  | u6-init-fixes | 2 | Opus 5.5 | approve | high | record.md:179 |
+  | u1a-name-detector-add | 1 | Opus 5.5 | request-changes | medium | record.md:205-213 |
+  | u1a-name-detector-add | 2 | Opus 5.5 | approve | medium | record.md:218-219 |
+  | u5a-overlay-refusal | 1 | Opus 5.5 | request-changes | medium | record.md:253-257 |
+  | u5a-overlay-refusal | 2 | Opus 5.5 | approve | high | record.md:258 |
+  | u1b-sync-refusal | 1 | Opus 5.5 | approve | medium | record.md:266-272 |
+  | u4b-pack-reach-row | 1, re-dispatched after a capacity stop | Opus 5.5 | request-changes | medium | record.md:293-295, :300-309 |
+  | u4b-pack-reach-row | 2 | Opus 5.5 | approve | medium | record.md:324-325 |
+  | u7-packs-docs | 1 | Opus 5.5 | request-changes; its rows closed in the branch's round 2 | medium | record.md:333-338 |
+  | whole branch | 1 | Fable 5.1 | request-changes | medium | record.md:354-358 |
+  | whole branch | 2 | Fable 5.1 | approve | medium | record.md:413-418 |
+  | whole branch, `review/52` | 3 | Opus 5.5 | approve | high | record.md:419-420 |
+  | whole branch | 4 | Fable 5.1 | request-changes | medium | record.md:466-470 |
+  | whole branch, the cap raised by one on the maintainer's answer | 5 | Fable 5.1 | approve | medium | record.md:476-481 |
+  | whole branch, the `prove/7` closure check | 6 | Fable 5.1 | approve | high | record.md:493-495 |
+  | close-specs, the spec amendments | 1 | Opus 5.5 | request-changes | high | record.md:648-656 |
+  | close-specs, the last review before the merge | 2 | Fable 5.1 | approve | high | record.md:672-679 |
+
+- **The specialist pass.** The deep tier ran all three lenses at Opus 5.5 on `c0eb1100..8cc796b8` (record.md:339-353):
+  - **Security:** 2 Minors.
+  - **Performance:** 1 Warning and 1 Minor, advisory because no budget is declared.
+  - **Design-quality:** 2 Warnings and 4 Minors.
+
+  Every lens Warning was fixed except `review/35`, the performance Warning, which is deferred with an inbox row. The
+  later deltas touched no new security surface. Each was read by the whole-branch rounds and the `close-specs` loop.
+- **Security.** Every security-relevant finding is closed:
+  - `review/43`: a pack's id and names are printed with control characters stripped (fixed; QA row 3).
+  - `review/44`: `add`'s refusal never advises removing an installed pack (fixed as signed off, record.md:370-372).
+  - The case fold: NFC, then upper case, then lower case, as NTFS and APFS compare names (record.md:373-374).
+  - `review/59`, round 5: a receipt's recorded source is trusted only when its bytes match its ledger row, and the spec
+    is printed as one quoted word (record.md:478-479).
+  - `review/2`: the policy reader's YAML merge keys can only under-count against Stamity's own cap. Deferred with an
+    inbox row (record.md:131-134).
+
+  The trust gates are unchanged (record.md:205-206).
+- **QA checkpoint.** Built with st-qa by name (record.md:507-555, the addendum at :680-685):
+  - 18 rows. 16 are auto-proven, each with its gate and assertion lines; the two H rows, H1 and H2, are among them.
+  - Two rows are `accepted-unwalked` with their input hashes, unchanged through `697fce11`:
+    - row 1 (M): a plugin-backed Claude Code session lists a pack skill;
+    - row 2 (L): the pages render.
+  - **Shippable: YES.** No H row is accepted unwalked.
+  - Browser evidence does not apply: the CLI is the only surface.
+- **Live checks.** They ran one at a time on this machine, since all four `STAMITY_*_BIN` are set (record.md:244-247):
+  - the candidate reproduction from real 1.11.0 installs (record.md:444-456, :487-491);
+  - Codex 0.160.1's model listing (record.md:298-299);
+  - the Cursor walk re-run after an intermittent miss (record.md:248-252);
+  - the Claude walk on `main`, which fails on Claude Code 2.1.291 as it does on this branch (record.md:391-395).
+- **Decisions trace.** The maintainer answered through the question tool and took the recommended option every time:
+  - 2026-10-03, at the start:
+    - "Same pull request": the init rows share #77 (record.md:89-90);
+    - "Each package reads its own": #73's late comments go to Packages 19 and 20 (record.md:587-590);
+    - "Add the dated notes" (record.md:577).
+  - 2026-10-06:
+    - "Refuse that re-add" (record.md:367-369);
+    - "One more round" (record.md:476-477);
+    - "Accept both unwalked", "Merge them" and "Yes, fast-forward" (record.md:553-555).
+
+  The orchestrator signed off on its own lines:
+  - `review/25`, the MCP reach rule (record.md:310-319);
+  - `review/44` (record.md:370-372);
+  - the fold (record.md:373-374);
+  - `prove/4`, closed as not a defect (record.md:455-456);
+  - `review/60`–`review/66` (record.md:657-661).
+
+  The plan's two declared defaults stand (record.md:85-87).
+- **Ledger.** `ledger.jsonl` has 108 rows and 0 open:
+  - 69 fixed;
+  - 20 rejected with reasons;
+  - 19 deferred, each with a row in the inbox block dated 2026-10-06.
+
+  By severity: 1 Critical (`prove/7`, fixed), 30 Warnings (25 fixed, 3 deferred, 2 rejected) and 77 Minors.
+- **Inbox.** Retired: `:359`, `:419`–`:421` and `:462`. Reworded: `:407`. Appended: 28 rows, 19 of them deferred ledger
+  rows (record.md:557-573, :686-687).
+- **Learnings.** Three are captured in this close through `learn capture`, each with `reviewBy` and
+  `validatedAgainst`:
+  - `a-fresh-worktree-lane-builds-before-its-full-suite`;
+  - `verdict-roles-read-lanes-through-a-diff-file`;
+  - `a-new-import-runs-the-architecture-test`.
+
+  `check` reads 17 learnings, all valid.
+- **Artifacts touched** (path, then its owner):
+
+  | Path | Owner |
+  |---|---|
+  | `test/pack/packEngineDefects.test.ts` | the debug run's implementer (gate 2), unedited since `40371e1b` |
+  | `src/`, `content/agents/stamity-creator.md`, `packs/ops/`, `test/` | one implementer per unit, then its fixers |
+  | the generated files and dogfood copies (`.claude/`, `.apm/`, the manifest, the goldens) | the unit that moved them, regenerated by `sync` |
+  | `docs/` pages and `SECURITY.md` | u7's spec-author and the fixers |
+  | `docs/specs/` (five specs) | the close's spec-author, then the `close-specs` fixer |
+  | `src/content/catalog.ts`, `test/content/catalog.test.ts`, `docs/enterprise-forks.md` (`697fce11`) | the `close-specs` fixer |
+  | `record.md`, `plan.md`, `ledger.jsonl`, `.stamity/inbox.md`, `evidence/` | the orchestrator, through the file tools and the ledger CLI |
+  | `.stamity/learnings/` (three files), `evals/measurements/`, `docs/measurements.md` | the orchestrator, through `learn capture` and the measurement scripts |
+
+- **Per-action attribution.** The model mix of 2026-10-01 (record.md:47-49).
+
+  | Role | Model | Tool and surface | Outcome |
+  |---|---|---|---|
+  | researchers (2) | Opus 5.5 | read-only | the plan's inputs and the contract census (record.md:66-87) |
+  | implementers | Opus 5.5 | one lane each | nine units built; u1a and u7 returned BLOCKED_DEPENDENCY once each, then were unblocked (record.md:193-198, :279-287) |
+  | spec-authors | Opus 5.5 | file tools, read-only git | u7's pages; the spec amendments |
+  | fixers | Opus 5.5 | the unit's lane, `pd-fix1`, `pd-fix2`, or the integration lane | every fixed row above |
+  | unit reviewers, the three lenses, `close-specs` round 1 | Opus 5.5 | read-only; reports in the main checkout | verdicts above |
+  | whole-branch reviewer, `close-specs` round 2 | Fable 5.1 | read-only | rounds 1, 2, 4, 5 and 6, and the last review |
+  | test-runners | Opus 5.5 | `pd-gate` or the lane, each gate once | the gates above |
+  | orchestrator | the session, Opus 5.5 | integration, `stamity ledger`, the question tool, st-qa | sign-offs, QA, pushes, the merge |
+
+  One capacity stop: the u4b reviewer hit a weekly limit and was re-dispatched fresh on another account
+  (record.md:293-295).
+- **Process slips, recorded:**
+  - The spawn plan was written after the first two researchers were dispatched (record.md:47-49).
+  - The census report landed after four dispatches had named it (record.md:146-149).
+  - Implementers' findings blocks came back as YAML (record.md:105-107, :118-121).
+  - u1a's `verify` could not pass in wave 1 (record.md:197-198).
+  - Fix runs left out `test/architecture` (`prove/7`, record.md:482-486).
+  - A variant coverage run used a reporter flag the brief did not ask for (record.md:471-473).
+  - The inbox block first filed `build/20` as a Minor, and the Inbox section first counted 27 rows (record.md:686-687).
+  - Several time stamps were written ahead of the clock and corrected from `date -u` before commit.
+- **Recommended next step.** Package 19, plan 015: `/st-board` writes by default. Its intake reads the four
+  post-merge #73 comments on plan 015 (record.md:587-590) and the inbox rows marked `source: pr-resolve #73`.

@@ -6,19 +6,19 @@ title: Measurements
 
 # Measurements
 
-What this repository can prove about its own output, as of 2026-09-30 — the newest
+What this repository can prove about its own output, as of 2026-10-03 — the newest
 closed run record's date, which is what this page is stamped with rather than the day it was
 rendered. Every number below is computed from a committed artifact, so a claim here can be
 checked rather than believed.
 
-The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-10-01.json`](../evals/measurements/merge-ready-2026-10-01.json), the frozen
+The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-10-06.json`](../evals/measurements/merge-ready-2026-10-06.json), the frozen
 measurement committed beside this page. Refreshed per release by `node scripts/merge-ready-rate.mjs --write`
 (the release checklist's record-currency line); the snapshot named above is the input, and a
 run record written after it is not on this page until the next refresh.
 
 ## Verified merge-ready rate
 
-**6 of 10 runs** (0.600).
+**7 of 12 runs** (0.583).
 
 The rule: verified merge-ready = the final gate table all pass, the last review verdict an approval at or above the record's stated confidence gate (0.8 when unstated), and a findings ledger with no open row; merge evidence is reported per run, never a clause; self-declared wording never counts.
 
@@ -47,6 +47,7 @@ runs to their merge, and scoring on one would measure the bookkeeping instead of
 | `2026-09-04_package-8-closeout` | none in committed artifacts |
 | `2026-09-07_package-4` | none in committed artifacts |
 | `2026-09-17_plugin-lifecycle` | none in committed artifacts |
+| `2026-09-30_release-1-11-0` | none in committed artifacts |
 
 ### Denominator, less the numerator
 
@@ -59,6 +60,7 @@ is the first clause each one missed.
 | `2026-09-10_release-1.4.0` | the last review verdict is not an approval | released version 1.4.0 in CHANGELOG |
 | `2026-09-23_orchestrator-context` | the approval states no confidence to compare to the gate | none in committed artifacts |
 | `2026-09-28_replay-v2` | the approval states no confidence to compare to the gate | none in committed artifacts |
+| `2026-10-03_pack-engine-defects` | the approval states no confidence to compare to the gate | none in committed artifacts |
 
 ### Excluded, with the evidence each one lacks
 
@@ -87,10 +89,21 @@ the number is: an exclusion nobody can see is a number nobody can check.
 - `2026-09-17_codex-astra-audit` — no record
 - `2026-09-24_enterprise-release` — gates in prose only — no gate row carries a pass or fail
 - `2026-09-30_optimization-sweep` — gates in prose only — no gate row carries a pass or fail
+- `2026-10-01_pr73-pr-resolve-r1` — no proof block
+- `2026-10-01_pr73-review-round-1` — gates in prose only — no gate row carries a pass or fail
+- `2026-10-02_pr73-pr-resolve-r2` — no proof block
+- `2026-10-02_pr74-pr-resolve-r1` — no proof block
+- `2026-10-02_pr74-review-round-1` — gates in prose only — no gate row carries a pass or fail
+- `2026-10-02_pr75-pr-resolve-r1` — no proof block
+- `2026-10-02_pr75-review-round-1` — gates in prose only — no gate row carries a pass or fail
+- `2026-10-02_pr76-pr-resolve-r1` — no proof block
+- `2026-10-02_pr76-pr-resolve-r2` — no proof block
+- `2026-10-02_pr76-review-round-1` — gates in prose only — no gate row carries a pass or fail
+- `2026-10-03_debug-pack-defects` — no proof block
 
 ### What the number is limited by, stated rather than tuned away
 
-21 run directories are outside the measure and every one of them is named
+32 run directories are outside the measure and every one of them is named
 above. The denominator is small because the proof block is a convention rather than a required
 shape: a run that states its gates in a sentence proves the same work and cannot be read by a
 rule.
