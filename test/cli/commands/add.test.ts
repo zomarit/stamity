@@ -1373,6 +1373,16 @@ describe("add — collisions", () => {
     // pinned npx form, as every other `clean --pack` remedy does, so one joined
     // refusal never prints two spellings of it.
     expect(errorOf(doc).next).toContain(npxCommand("clean --pack <id>"));
+    // TEST CHANGE, justified (prove/5): 2026-10-06. "Uninstall a stale pack
+    // with clean --pack" alone looped for a synced pack: its projected client
+    // copies stay owned until a sync, so the re-add met this refusal again.
+    // The remedy now gives the working order (upgradeRemedy.test.ts runs it).
+    expect(errorOf(doc).next).toContain(
+      `for a stale pack that owns them, run \`${npxCommand("clean --pack <id>")}\`, then ` +
+        `\`${npxCommand("sync")}\` to remove its client copies, then ` +
+        `\`${npxCommand(`add ${PACK_SPEC}`)}\`, then \`${npxCommand("sync")}\`; or move the listed ` +
+        "paths yourself",
+    );
   });
 
   it("re-adding an installed pack overwrites its own rows instead of colliding", async () => {
@@ -1610,10 +1620,14 @@ describe("add — name clashes", () => {
     // form is not on PATH for an operator who runs this package through npx.
     const next = errorOf(doc).next ?? "";
     expect(next).toContain(`rename the listed artifact(s) in the incoming pack's source (pack "acme-two")`);
+    // TEST CHANGE, justified (prove/3): 2026-10-06. `clean --pack` leaves the
+    // copies an earlier sync projected, so an `add` straight after it finds
+    // their paths "already owned"; the remedy now runs `sync` between them.
     expect(next).toContain(
-      `pack "${PACK_ID}" is installed and keeps st-shared: remove it with ` +
-        `\`${npxCommand(`clean --pack ${PACK_ID}`)}\` only to replace it with pack "acme-two" on purpose, ` +
-        "which then takes the name",
+      `pack "${PACK_ID}" is installed and keeps st-shared: remove it only to replace it with ` +
+        `pack "acme-two" on purpose, which then takes the name — ` +
+        `run \`${npxCommand(`clean --pack ${PACK_ID}`)}\`, then \`${npxCommand("sync")}\` to remove ` +
+        `its client copies, then \`${npxCommand("add ./packs/two")}\`, then \`${npxCommand("sync")}\``,
     );
     expect(next).not.toContain("remove it first");
     expect(packRows(await readProjectManifest(), "acme-two")).toEqual([]);
@@ -1715,8 +1729,12 @@ describe("add — a re-add that would leave the installed copy's files behind", 
     // TEST CHANGE, justified (review/42): the refusal names this step in the
     // pinned npx form, as every other `clean --pack` remedy does, so one joined
     // refusal never prints two spellings of it.
+    // TEST CHANGE, justified (prove/3): 2026-10-06. `clean --pack` leaves the
+    // copies an earlier sync projected, so an `add` straight after it finds
+    // their paths "already owned"; the remedy now runs `sync` between them.
     expect(human.stderr).toContain(
-      `run \`${npxCommand(`clean --pack ${PACK_ID}`)}\` first, then \`${npxCommand(`add ${PACK_SPEC}`)}\` again`,
+      `run \`${npxCommand(`clean --pack ${PACK_ID}`)}\`, then \`${npxCommand("sync")}\` to remove its ` +
+        `client copies, then \`${npxCommand(`add ${PACK_SPEC}`)}\`, then \`${npxCommand("sync")}\``,
     );
     // Nothing written: the ledger, the receipt and the dropped file are as they were.
     expect(await readProjectManifest()).toEqual(before);
@@ -1807,8 +1825,13 @@ describe("add — a re-add that would leave the installed copy's files behind", 
     // TEST CHANGE, justified (review/42): the refusal names this step in the
     // pinned npx form, as every other `clean --pack` remedy does, so one joined
     // refusal never prints two spellings of it.
+    // TEST CHANGE, justified (prove/3): 2026-10-06. The remedy now runs `sync`
+    // between `clean --pack` and `add`; this repository never synced, so the
+    // `clean` then `add` below still clears it (upgradeRemedy.test.ts covers
+    // the synced repository).
     expect(refused.stderr).toContain(
-      `run \`${npxCommand("clean --pack ops")}\` first, then \`${npxCommand("add ops")}\` again`,
+      `run \`${npxCommand("clean --pack ops")}\`, then \`${npxCommand("sync")}\` to remove its client ` +
+        `copies, then \`${npxCommand("add ops")}\`, then \`${npxCommand("sync")}\``,
     );
     expect(await readProjectManifest()).toEqual(before);
     expect(await pathExists(project.path(".stamity", "packs", "ops", "skills", "st-release-runbook"))).toBe(false);

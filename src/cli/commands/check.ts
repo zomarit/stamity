@@ -1819,13 +1819,18 @@ function renderNextSteps(
     steps.push(`${packageCommand("init")} — this repository has no usable manifest`);
   }
   if (doctor.some((row) => row.id === "pack-integrity" && row.status === "fail")) {
-    // Deliberately NOT sync: for an edited pack body sync copies the current
-    // bytes into the generated setup, which propagates the change rather than
-    // correcting it. Re-installing is what restores the recorded content.
+    // Deliberately NOT sync first: for an edited pack body sync copies the
+    // current bytes into the generated setup, which propagates the change
+    // rather than correcting it. Re-installing is what restores the recorded
+    // content. After `clean --pack` the pack is gone, so a sync there only
+    // reclaims its projected client copies — without it, `add` finds their
+    // paths still owned and refuses (prove/6).
     steps.push(
-      `${packageCommand("clean --pack <id>")} then ${packageCommand("add <id>")} — re-install ` +
-        `the pack whose installed files no longer match; do not run sync first, it would carry ` +
-        `the current bytes into the generated setup`,
+      `${packageCommand("clean --pack <id>")}, then ${packageCommand("sync")}, then ` +
+        `${packageCommand("add <id>")}, then ${packageCommand("sync")} — re-install the pack ` +
+        `whose installed files no longer match; do not run sync first: it would carry the ` +
+        `current bytes into the generated setup; after clean, sync only removes the pack's ` +
+        `client copies, which add would otherwise find still owned`,
     );
   }
   if (outcome.kind === "failed") {

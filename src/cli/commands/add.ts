@@ -516,16 +516,18 @@ interface RefusalPart {
 
 /**
  * Collision part. `add` has no override, so the next step is about clearing
- * the paths: a stale installed pack is uninstalled with `clean --pack`, and
- * anything else at the listed paths is the operator's to move.
+ * the paths: a stale installed pack is replaced in {@link replaceSteps}' four
+ * steps — its `sync` after `clean --pack` reclaims the client copies an earlier
+ * `sync` projected, which are what an `add` right after `clean --pack` still
+ * finds owned — and anything else at the listed paths is the operator's to move.
  */
-function collisionPart(reasons: readonly string[]): RefusalPart {
+function collisionPart(spec: string, reasons: readonly string[]): RefusalPart {
   return {
     message: `${reasons.length} path(s) it would write are not free`,
     why: "a pack never overwrites a file it does not own, and add has no --force",
     next:
-      `resolve the collisions, then re-run — uninstall a stale pack with \`${packageCommand("clean --pack <id>")}\`, ` +
-      "or move the listed paths yourself",
+      `resolve the collisions, then re-run — for a stale pack that owns them, ` +
+      `${replaceSteps("<id>", spec)}; or move the listed paths yourself`,
   };
 }
 
@@ -536,12 +538,16 @@ function collisionPart(reasons: readonly string[]): RefusalPart {
  * `sync` refusal keeps (`../../emit/planner.ts` → `remedyOf`), seen from the
  * incoming pack's side ({@link nameClashRemedyOf}).
  */
-function nameClashPart(packId: string, clashes: readonly InvocableNameClash[]): RefusalPart {
+function nameClashPart(
+  packId: string,
+  spec: string,
+  clashes: readonly InvocableNameClash[],
+): RefusalPart {
   const remedies = [
     `rename the listed artifact(s) in the incoming pack's source (pack "${packId}"), then re-run`,
     ...new Set(
       clashes.flatMap((clash) =>
-        clash.owners.flatMap((owner) => nameClashRemedyOf(packId, owner, clash.name)),
+        clash.owners.flatMap((owner) => nameClashRemedyOf(packId, spec, owner, clash.name)),
       ),
     ),
   ];
@@ -569,20 +575,24 @@ function nameClashPart(packId: string, clashes: readonly InvocableNameClash[]): 
  * this repository can move them, and the clash is the incoming pack's to fix.
  * Another installed pack is never advised away: a newcomer could clash with an
  * established name on purpose to provoke exactly that advice, so its removal
- * is offered only as a deliberate replacement, saying who then takes the name.
- * Every name, id and path is printed without control characters, as the clash
- * lines are.
+ * is offered only as a deliberate replacement, saying who then takes the name,
+ * in the four steps that replacement takes ({@link replaceSteps}). Every name,
+ * id and path is printed without control characters, as the clash lines are.
  */
-function nameClashRemedyOf(packId: string, owner: InvocableNameOwner, name: string): string[] {
+function nameClashRemedyOf(
+  packId: string,
+  spec: string,
+  owner: InvocableNameOwner,
+  name: string,
+): string[] {
   const shown = withoutControlCharacters(name);
   switch (owner.layer) {
     case "pack": {
       if (owner.packId === undefined || owner.packId === packId) return [];
       const other = withoutControlCharacters(owner.packId);
       return [
-        `pack "${other}" is installed and keeps ${shown}: remove it with ` +
-          `\`${packageCommand(`clean --pack ${other}`)}\` only to replace it with pack "${packId}" on ` +
-          `purpose, which then takes the name`,
+        `pack "${other}" is installed and keeps ${shown}: remove it only to replace it with ` +
+          `pack "${packId}" on purpose, which then takes the name — ${replaceSteps(other, spec)}`,
       ];
     }
     case "user": {
@@ -604,11 +614,27 @@ function nameClashRemedyOf(packId: string, owner: InvocableNameOwner, name: stri
 }
 
 /**
+ * The four steps that replace an installed pack: `clean --pack` removes only
+ * the pack's own files, so the copies an earlier `sync` projected into the
+ * clients stay ledgered until a `sync` reclaims them, and an `add` run before
+ * that finds those paths "already owned" and refuses. Then `add`, then `sync`
+ * to project what it installed.
+ */
+function replaceSteps(removed: string, spec: string): string {
+  return (
+    `run \`${packageCommand(`clean --pack ${removed}`)}\`, then ` +
+    `\`${packageCommand("sync")}\` to remove its client copies, then ` +
+    `\`${packageCommand(`add ${spec}`)}\`, then \`${packageCommand("sync")}\``
+  );
+}
+
+/**
  * Left-behind part: a re-add whose version dropped files the installed copy
  * holds. The apply deletes nothing and replaces the pack's ledger rows, so
  * those files would stay with no row — still read by `sync`, out of `clean
  * --pack`'s reach — which is why the remedy runs `clean --pack` FIRST, while
- * the rows still name them.
+ * the rows still name them, and then {@link replaceSteps}' `sync` before the
+ * `add`.
  */
 function leftBehindPart(packId: string, spec: string, paths: readonly string[]): RefusalPart {
   return {
@@ -617,9 +643,7 @@ function leftBehindPart(packId: string, spec: string, paths: readonly string[]):
       "add writes the new version over the installed one and deletes nothing, so a file this " +
       "version dropped would stay on disk with no ledger row — sync would still read it, and " +
       "clean --pack could no longer remove it",
-    next:
-      `run \`${packageCommand(`clean --pack ${packId}`)}\` first, then ` +
-      `\`${packageCommand(`add ${spec}`)}\` again`,
+    next: replaceSteps(packId, spec),
   };
 }
 
@@ -635,8 +659,12 @@ function planRefusal(packId: string, parts: readonly RefusalPart[]): FailureDoc 
 }
 
 /** Collision refusal on its own: the apply's re-check, which can name only paths. */
-function collisionRefusal(packId: string, reasons: readonly string[]): FailureDoc {
-  return planRefusal(packId, [collisionPart(reasons)]);
+function collisionRefusal(
+  packId: string,
+  spec: string,
+  reasons: readonly string[],
+): FailureDoc {
+  return planRefusal(packId, [collisionPart(spec, reasons)]);
 }
 
 // ── Command ────────────────────────────────────────────────────
@@ -798,11 +826,11 @@ export const addCommand: CommandModule = {
     const parts: RefusalPart[] = [];
     if (plan.collisions.length > 0) {
       renderReasons(ctx, plan.collisions);
-      parts.push(collisionPart(plan.collisions));
+      parts.push(collisionPart(spec, plan.collisions));
     }
     if (nameClashes.length > 0) {
       renderReasons(ctx, nameClashLines, "name clashes");
-      parts.push(nameClashPart(plan.manifest.name, nameClashes));
+      parts.push(nameClashPart(plan.manifest.name, spec, nameClashes));
     }
     if (leftBehind.length > 0) {
       // Pack-supplied path segments: printed as the clash lines are.
@@ -835,7 +863,7 @@ export const addCommand: CommandModule = {
       return refuse(
         ctx,
         { ...payload, planned: { ...payload.planned, collisions: applied.result.errors } },
-        collisionRefusal(plan.manifest.name, applied.result.errors),
+        collisionRefusal(plan.manifest.name, spec, applied.result.errors),
       );
     }
 

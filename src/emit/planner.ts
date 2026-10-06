@@ -866,13 +866,20 @@ function refuseInvocableNameClashes(index: ContentIndex, cli: CliCallContext): v
   );
 }
 
-/** The remedy for one owner of a clashing name, or none for a core owner. */
+/**
+ * The remedy for one owner of a clashing name, or none for a core owner. A
+ * pack's remedy runs `sync` between `clean --pack` and `add`: `clean --pack`
+ * removes only the pack's own files, and the copies an earlier `sync`
+ * projected into the clients stay ledgered until a `sync` reclaims them — an
+ * `add` before that finds its paths "already owned" and refuses.
+ */
 function remedyOf(owner: InvocableNameOwner, cli: CliCallContext): string[] {
   switch (owner.layer) {
     case "pack": {
       const packId = owner.packId ?? "<pack-id>";
       return [
         `pack "${packId}": run \`${remedyCall(cli, `clean --pack ${packId}`)}\`, then ` +
+          `\`${remedyCall(cli, "sync")}\` to remove its client copies, then ` +
           `\`${remedyCall(cli, `add ${packId}`)}\` once the pack ships distinct names, then ` +
           `\`${remedyCall(cli, "sync")}\``,
       ];

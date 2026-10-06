@@ -108,7 +108,10 @@ Adding again deletes nothing, so a new version that drops a file is refused. The
 would stay on disk with no ledger row: `sync` would still read it, and `clean --pack` could no
 longer remove it. `add` lists those files under `left behind by this version` and writes nothing.
 Run `stamity clean --pack <id>` first, while the ledger still names every file of the installed
-copy, then add the pack again.
+copy. Then run `stamity sync`: `clean --pack` removes only the pack's own files, and the copies an
+earlier `sync` wrote into your clients stay until a `sync` removes them. Adding before that is
+refused, because those paths are still owned. Then add the pack again with `stamity add <id>`, and
+run `stamity sync`.
 
 ### Packs in a plugin-backed repository
 
@@ -341,17 +344,20 @@ owner:
 - Your override: rename or remove the override instead.
 - The core or the fork layer: nothing in your repository can move it, so report the clash to the
   incoming pack's maintainers.
-- Another installed pack: keep it. Remove it with `stamity clean --pack <id>` only to replace it
-  with the incoming pack on purpose, which then takes the name.
+- Another installed pack: keep it. Remove it only to replace it with the incoming pack on
+  purpose, which then takes the name: run `stamity clean --pack <id>`, then `stamity sync`, then
+  add the incoming pack, then `stamity sync`.
 
 A clash can also arise after a pack is installed. The pack may come from an earlier version that
 never ran that check, or a later core upgrade, a new override or a fork-layer artifact may take
 one of its names. `sync` refuses any of these, and so do `check`, `init` and `plugin setup`, which
 plan the same way. The refusal lists every clashing name with its owners, then one remedy per
-owner that can move. For a pack, run `stamity clean --pack <id>`, then `stamity add <id>` once the
-pack ships distinct names, then `stamity sync`. For an override, rename or remove it. Adding the
-pack again before cleaning is refused when the new version would leave the clashing files behind,
-as described under [Update a pack by adding it again](#update-a-pack-by-adding-it-again).
+owner that can move. For a pack, run `stamity clean --pack <id>`, then `stamity sync` to remove
+its client copies, then `stamity add <id>` once the pack ships distinct names, then
+`stamity sync`. For an override, rename or remove it. Adding the pack again before cleaning is
+refused when the new version would leave the clashing files behind, and adding it before that
+`sync` is refused because its client copies still own their paths, as described under
+[Update a pack by adding it again](#update-a-pack-by-adding-it-again).
 
 An overlay cannot patch a pack's skill either: its files ship byte-for-byte from the pack, so the
 overlay is refused. [Customization](customization.md) says which pack artifacts can be patched.

@@ -128,9 +128,15 @@ const call = (verb: string): string => `npx -y @zomarit/stamity@${ENGINE_VERSION
 // TEST CHANGE, justified: 2026-10-06, run 2026-10-03_pack-engine-defects
 // review/42. The remedy printed a bare `stamity <verb>`, which the documented
 // `npx` setup cannot run; it now prints the pinned call `check`'s `pack-reach`
-// row prints for the same `clean --pack` step. Same three steps, same order.
+// row prints for the same `clean --pack` step.
+// TEST CHANGE, justified (prove/3): 2026-10-06. The three-step order failed at
+// `add` when the pack had been synced: `clean --pack` leaves the client copies,
+// so `add` found their paths "already owned". A `sync` between `clean --pack`
+// and `add` reclaims them; the remedy is now four steps
+// (test/pack/upgradeRemedy.test.ts runs them).
 const ACME_REMEDY =
   `pack "acme-demo": run \`${call("clean --pack acme-demo")}\`, then ` +
+  `\`${call("sync")}\` to remove its client copies, then ` +
   `\`${call("add acme-demo")}\` once the pack ships distinct names, then \`${call("sync")}\``;
 
 describe("composeEmissionPlanner — an installed cross-class name clash", () => {

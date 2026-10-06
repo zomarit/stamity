@@ -1245,6 +1245,14 @@ describe("check — installed pack integrity", () => {
     // pinned call, so `stamity clean` no longer reads as one substring.
     expect(nextBlock).toContain(npxCommand("clean --pack"));
     expect(nextBlock).toContain("do not run sync first");
+    // TEST CHANGE, justified (prove/6): 2026-10-06. "clean --pack then add"
+    // failed at add for a synced pack: its client copies stay owned until a
+    // sync. Sync still never runs before clean; after clean it runs, then add,
+    // then sync.
+    expect(nextBlock).toContain(
+      `${npxCommand("clean --pack <id>")}, then ${npxCommand("sync")}, then ` +
+        `${npxCommand("add <id>")}, then ${npxCommand("sync")}`,
+    );
   });
 
   it("reports a pack file that was deleted after install", async () => {
