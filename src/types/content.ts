@@ -143,7 +143,62 @@ export interface EmissionPlan {
    * the row exists to break.
    */
   warnings: string[];
+  /**
+   * Per installed pack, sorted by pack id, which selected clients each of its
+   * artifacts reaches — and, for each client it misses, why. `check`'s
+   * `pack-reach` doctor row reads it (`src/cli/commands/check.ts`): a pack none
+   * of whose artifacts reaches a selected client fails that row, because it is
+   * installed and does nothing — unless a server it supplies is only waiting to
+   * be selected, which warns.
+   *
+   * A fact about the plan, not about a file, for the reason {@link warnings}
+   * is: an artifact a client's plugin drops has no row to hang a finding on.
+   * Empty when no pack is installed. Optional on the type only so a planner
+   * with no pack surface (the no-op planner, a hand-built fixture) need not
+   * state it; the composed planner (`src/emit/planner.ts`) always sets it.
+   */
+  packReach?: PackReach[];
 }
+
+/** One installed pack's artifacts, each judged against the selected clients. */
+export interface PackReach {
+  /** The installed pack's id, as its `pack:<id>` ledger owner spells it. */
+  packId: string;
+  /** Content items in catalog order, then hook files, then MCP servers. */
+  artifacts: PackArtifactReach[];
+}
+
+/** One pack artifact and the selected clients it reaches. */
+export interface PackArtifactReach {
+  /**
+   * The content class; `hooks` for one hook definition file the hook lane
+   * accepted; `mcp-server` for one server definition.
+   */
+  kind: ContentClass | "hooks" | "mcp-server";
+  /**
+   * The name a person finds it by: a content item's emitted id (`st-<id>`,
+   * `stamity-<id>`), a hook file's repo-relative POSIX path, a server's id.
+   */
+  id: string;
+  /** The selected clients it reaches, in canonical tool order. Empty means it reaches none. */
+  reachedBy: Tool[];
+  /** Why it misses each selected client it does not reach. */
+  dropped: PackArtifactDrop[];
+}
+
+/**
+ * Why a pack artifact misses a client. `plugin-owned`: the client's installed
+ * plugin carries the artifact's class, so this repository writes none of it
+ * for that client. `declares no selected client`: the artifact's own `tools:`
+ * list names none of the selected clients (`add` already says so at install).
+ * `not selected`: an MCP server the pack supplies that `manifest.mcp.servers`
+ * does not select — installing a pack makes its servers selectable, and only
+ * `config mcp add <id>` makes one emitted, so it reaches no client until then.
+ */
+export type PackArtifactDrop =
+  | { reason: "plugin-owned"; tool: Tool; cls: ContentClass | "hooks" }
+  | { reason: "declares no selected client"; declared: Tool[] }
+  | { reason: "not selected" };
 
 /**
  * Every owner of an output — `owner` first, then `coOwners` — deduplicated by

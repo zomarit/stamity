@@ -472,7 +472,10 @@ describe("check — a healthy repository", () => {
     expect(result.stderr).toBe("");
   });
 
-  it("returns the fourteen doctor rows in a fixed order", async () => {
+  // TEST CHANGE, justified (2026-10-03, REQ-PLUGIN-016, run 2026-10-03_pack-engine-defects
+  // unit u4b-pack-reach-row): the title's count moved from fourteen to fifteen with the
+  // `pack-reach` row below; the assertion is the array, which names every row.
+  it("returns the fifteen doctor rows in a fixed order", async () => {
     const root = await seedRepo(getRepo());
 
     const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root, env: {} }));
@@ -516,6 +519,13 @@ describe("check — a healthy repository", () => {
       // stays a literal array so the next one has to be placed here too.
       "plugin-runtime",
       "plugin-duplicates",
+      // TEST CHANGE, justified (2026-10-03, REQ-PLUGIN-016, run 2026-10-03_pack-engine-defects
+      // unit u4b-pack-reach-row): `pack-reach` joined the doctor after the plugin rows. It reads
+      // the same plugin boundary from the other side — not what the repository holds twice, but
+      // what an installed pack ships that no selected client receives — and it answers about
+      // this repository, so it sits before `invariants`, which alone reads the installed corpus.
+      // No other row moved.
+      "pack-reach",
       "invariants",
     ]);
   });
@@ -3103,6 +3113,49 @@ describe("check — plugin-duplicates", () => {
     expect(duplicates.detail).toBe("no duplicated classes");
   });
 
+  /**
+   * The pack exemption is skill-only (review/7 of run 2026-10-03_pack-engine-defects).
+   * A pack command or agent is written by emission like any other row of its class, and
+   * under a plugin that carries the class emission stops writing it — so a copy a
+   * generated sync left behind is a stale duplicate the client loads beside the plugin's,
+   * exactly as a core command's would be, and `plugin-duplicates` must still count it.
+   */
+  it("still counts a stale pack command and agent under a plugin that carries their classes", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude"] });
+    await installAcmePack(handle, root, {
+      "commands/st-acme-cmd.md": COMMAND_FIXTURE.replace("id: cmd-work", "id: acme-cmd"),
+      "agents/stamity-acme-agent.md": AGENT_FIXTURE.replace("id: reviewer", "id: acme-agent"),
+      "skills/st-acme-skill/SKILL.md": SKILL_FIXTURE.replace("id: verify", "id: acme-skill"),
+    });
+    await resyncAt(root);
+    const generated = await readManifest(root);
+    if (generated === null) throw new Error("fixture lost its manifest");
+    await writeManifest(
+      root,
+      {
+        ...generated,
+        plugin: {
+          mode: "plugin-backed",
+          clients: { claude: { version: "1.11.0", classes: ["agent", "skill", "command"] } },
+        },
+      },
+      { now: T0 },
+    );
+
+    const duplicates = await duplicatesRow(root);
+
+    expect(duplicates.status).toBe("fail");
+    expect(duplicates.detail).toContain(
+      "claude: agent (1 file(s), ledger) at .claude/agents/stamity-acme-agent.md — ",
+    );
+    expect(duplicates.detail).toContain(
+      "claude: command (1 file(s), ledger) at .claude/commands/st-acme-cmd.md — ",
+    );
+    // The pack skill beside them is the exemption, and stays one.
+    expect(duplicates.detail).not.toContain("st-acme-skill");
+  });
+
   it("names a copilot agent and prompt whose double extensions no ledger row owns", async () => {
     // `<id>.agent.md` and `<id>.prompt.md` are what the copilot adapter writes.
     // A single-extension strip leaves `stamity-reviewer.agent` and
@@ -3316,6 +3369,343 @@ describe("check — plugin-duplicates", () => {
 
     expect(probe.status).toBe("pass");
     expect(probe.detail).toBe("no client records a plugin, so nothing can duplicate");
+  });
+});
+
+/**
+ * Install a made-up pack `acme` from `pack-src/acme/` through the engine's own
+ * plan/apply path and persist the manifest it returns — what `add` does, minus
+ * the CLI. Emission is left to the caller ({@link resyncAt}).
+ */
+async function installAcmePack(
+  handle: TempDirHandle,
+  root: string,
+  files: Record<string, string>,
+  declaredTools?: readonly Tool[],
+): Promise<void> {
+  await handle.seedFiles({
+    ...Object.fromEntries(
+      Object.entries(files).map(([rel, body]) => [`pack-src/acme/${rel}`, body]),
+    ),
+    "pack-src/acme/pack.json": `${JSON.stringify({
+      name: "acme",
+      version: "1.0.0",
+      integrity: Object.fromEntries(
+        Object.entries(files).map(([rel, body]) => [
+          rel,
+          createHash("sha256").update(body, "utf8").digest("hex"),
+        ]),
+      ),
+      ...(declaredTools === undefined ? {} : { declaredTools }),
+    })}\n`,
+  });
+  const engineVersion = createApp().version;
+  const plan = await planPackInstall(root, handle.path("pack-src/acme"), { allowUntrusted: true });
+  expect(plan.collisions).toEqual([]);
+  const seeded = await readManifest(root);
+  if (seeded === null) throw new Error("fixture lost its manifest");
+  const installed = await applyPackInstall(root, plan, seeded, { engineVersion, now: T0 });
+  expect(installed.result.installed).toBe(true);
+  await writeManifest(root, installed.manifest, { now: T0 });
+}
+
+/** One real sync, as `sync` (or `plugin setup`) runs it. */
+async function resyncAt(root: string): Promise<void> {
+  const engineVersion = createApp().version;
+  await applySync(root, await planSync(root, engineVersion), {
+    engineVersion,
+    force: false,
+    dryRun: false,
+    now: T0,
+  });
+}
+
+/** Record a plugin-backed client set on the manifest, then sync under it. */
+async function goPluginBacked(
+  root: string,
+  clients: NonNullable<NonNullable<SetupManifest["plugin"]>["clients"]>,
+): Promise<void> {
+  const manifest = await readManifest(root);
+  if (manifest === null) throw new Error("fixture lost its manifest");
+  await writeManifest(root, { ...manifest, plugin: { mode: "plugin-backed", clients } }, { now: T0 });
+  await resyncAt(root);
+}
+
+/**
+ * `pack-reach` (REQ-PLUGIN-016; run 2026-10-03_pack-engine-defects, unit
+ * u4b-pack-reach-row): an installed pack none of whose artifacts reaches a
+ * selected client fails the row — in plugin-backed mode, a command-only pack
+ * on a client whose plugin carries commands installs, syncs green and does
+ * nothing. The judgment is the emission plan's own `packReach`.
+ */
+describe("check — pack-reach", () => {
+  const ACME_CMD = COMMAND_FIXTURE.replace("id: cmd-work", "id: acme-cmd");
+  /** A pack-supplied MCP definition that clears the install gate (`test/pack/install.test.ts`). */
+  const PACK_SERVER = `${JSON.stringify(
+    {
+      id: "packtel",
+      description: "Telemetry queries against the team's own collector.",
+      command: "npx",
+      args: ["-y", "@acme/telemetry-mcp@1.4.2"],
+      transport: "stdio",
+      pinnedVersion: "1.4.2",
+      packageNameLock: "@acme/telemetry-mcp",
+      blastRadius: "Low — read-only queries against a staging collector.",
+      docsUrl: "https://example.invalid/telemetry-mcp",
+    },
+    null,
+    2,
+  )}\n`;
+
+  it("passes with no pack installed, without planning anything", async () => {
+    const root = await seedRepo(getRepo());
+
+    const reach = await doctorRow(root, "pack-reach");
+
+    expect(reach).toEqual({
+      id: "pack-reach",
+      status: "pass",
+      detail: "no installed pack is recorded in the ledger",
+    });
+  });
+
+  it("passes a pack every artifact of which reaches a client, naming the counts", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude", "cursor"] });
+    await installAcmePack(handle, root, {
+      "commands/st-acme-cmd.md": ACME_CMD,
+      "agents/stamity-acme-agent.md": AGENT_FIXTURE.replace("id: reviewer", "id: acme-agent"),
+      "skills/st-acme-skill/SKILL.md": SKILL_FIXTURE.replace("id: verify", "id: acme-skill"),
+    });
+    await resyncAt(root);
+
+    const { code, doc } = await runJson(root);
+
+    expect(row(doc, "pack-reach")).toEqual({
+      id: "pack-reach",
+      status: "pass",
+      detail: "1 installed pack(s), 3 artifact(s), each reaching a selected client",
+    });
+    expect(code).toBe(0);
+  });
+
+  it("fails a command-only pack on a plugin that carries commands, naming why and the way out", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude"] });
+    await installAcmePack(handle, root, { "commands/st-acme-cmd.md": ACME_CMD });
+    await goPluginBacked(root, { claude: { version: "1.11.0", classes: ["command"] } });
+
+    const { code, doc } = await runJson(root);
+    const reach = row(doc, "pack-reach");
+
+    expect(reach.status).toBe("fail");
+    expect(reach.detail).toBe(
+      'pack "acme" reaches no selected client: command st-acme-cmd — the claude plugin ' +
+        `carries the command class. Remove it with ${npxCommand("clean --pack acme")}, or run ` +
+        "claude on the CLI's generated mode, where this repository writes every class",
+    );
+    // The row alone decides the exit: drift is clean once the sync ran under the plugin.
+    expect(doc.driftStatus).toBe("evaluated");
+    expect(doc.drift?.clean).toBe(true);
+    expect(code).toBe(1);
+  });
+
+  it("warns, naming each dropped artifact, when the pack still reaches another client", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude", "codex"] });
+    await installAcmePack(handle, root, { "commands/st-acme-cmd.md": ACME_CMD });
+    // Codex's plugin carries no commands, so the pack's command still reaches it.
+    await goPluginBacked(root, {
+      claude: { version: "1.11.0", classes: ["command"] },
+      codex: { version: "1.11.0", classes: ["skill"] },
+    });
+
+    const { code, doc } = await runJson(root);
+
+    expect(row(doc, "pack-reach")).toEqual({
+      id: "pack-reach",
+      status: "warn",
+      detail:
+        'pack "acme": command st-acme-cmd is not written for claude (the claude plugin carries ' +
+        "the command class); it reaches codex",
+    });
+    expect(code).toBe(0);
+  });
+
+  it("fails a pack whose only artifact names no selected client in its tools: list", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude"] });
+    await installAcmePack(
+      handle,
+      root,
+      { "commands/st-acme-cmd.md": ACME_CMD.replace("load: on-demand", "load: on-demand\ntools: [copilot]") },
+      ["copilot"],
+    );
+    await resyncAt(root);
+
+    const reach = await doctorRow(root, "pack-reach");
+
+    expect(reach.status).toBe("fail");
+    expect(reach.detail).toContain(
+      'pack "acme" reaches no selected client: command st-acme-cmd — its tools: list names only copilot.',
+    );
+    expect(reach.detail).toContain(", or select a client its artifacts name");
+    expect(reach.detail).not.toContain("generated mode");
+  });
+
+  it("warns on a pack whose every hook row was rejected, noting it ships nothing a client loads", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude"] });
+    await handle.seedFiles({ ".stamity/hooks/acme-probe.mjs": "process.exit(0)\n" });
+    await installAcmePack(handle, root, {
+      "hooks/hooks.json": `${JSON.stringify({
+        hooks: [{ event: "pre_tool_use", command: ["node", ".stamity/hooks/acme-probe.mjs"] }],
+      })}\n`,
+    });
+    // The hook lane refuses a hook whose script is gone, so the file yields no row.
+    await rm(handle.path(".stamity/hooks/acme-probe.mjs"));
+
+    const reach = await doctorRow(root, "pack-reach");
+
+    // TEST CHANGE, justified: 2026-10-06, run 2026-10-03_pack-engine-defects
+    // review/27. This pinned `pass` for a pack the row itself calls inert; it now
+    // warns — still exit 0, since no plugin took anything (the hook lane's own
+    // warning, printed by sync, names the rejection) — so the inert pack is flagged.
+    expect(reach).toEqual({
+      id: "pack-reach",
+      status: "warn",
+      detail:
+        'pack "acme" ships nothing a client loads (no skill, agent, rule, command, accepted ' +
+        "hook or MCP server)",
+    });
+  });
+
+  it("passes a pack that reaches a client, naming an artifact whose tools: list names none", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude"] });
+    await installAcmePack(
+      handle,
+      root,
+      {
+        "commands/st-acme-cmd.md": ACME_CMD.replace("load: on-demand", "load: on-demand\ntools: [copilot]"),
+        "agents/stamity-acme-agent.md": AGENT_FIXTURE.replace("id: reviewer", "id: acme-agent"),
+      },
+      ["copilot"],
+    );
+    await resyncAt(root);
+
+    const reach = await doctorRow(root, "pack-reach");
+
+    expect(reach).toEqual({
+      id: "pack-reach",
+      status: "pass",
+      detail:
+        '1 installed pack(s), 1 of 2 artifact(s) reaching a selected client; pack "acme": ' +
+        "command st-acme-cmd — its tools: list names only copilot",
+    });
+  });
+
+  it("warns on a pack whose only delivery is an MCP server nobody selected, naming config mcp add", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude"] });
+    await installAcmePack(handle, root, { "mcp_servers/telemetry.json": PACK_SERVER });
+    await resyncAt(root);
+
+    const { code, doc } = await runJson(root);
+
+    expect(row(doc, "pack-reach")).toEqual({
+      id: "pack-reach",
+      status: "warn",
+      detail:
+        'pack "acme" reaches no selected client until a server it supplies is selected: ' +
+        `mcp-server packtel — not selected; ${npxCommand("config mcp add packtel")} selects it. ` +
+        `Or remove it with ${npxCommand("clean --pack acme")}`,
+    });
+    expect(code).toBe(0);
+  });
+
+  it("passes a pack whose MCP server the manifest selects", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude"] });
+    await installAcmePack(handle, root, { "mcp_servers/telemetry.json": PACK_SERVER });
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("fixture lost its manifest");
+    await writeManifest(root, { ...manifest, mcp: { servers: ["packtel"] } }, { now: T0 });
+    await resyncAt(root);
+
+    const { code, doc } = await runJson(root);
+
+    expect(row(doc, "pack-reach")).toEqual({
+      id: "pack-reach",
+      status: "pass",
+      detail: "1 installed pack(s), 1 artifact(s), each reaching a selected client",
+    });
+    expect(code).toBe(0);
+  });
+
+  it("warns, naming both, on a plugin-dropped command beside an unselected server", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude"] });
+    await installAcmePack(handle, root, {
+      "commands/st-acme-cmd.md": ACME_CMD,
+      "mcp_servers/telemetry.json": PACK_SERVER,
+    });
+    await goPluginBacked(root, { claude: { version: "1.11.0", classes: ["command"] } });
+
+    const { code, doc } = await runJson(root);
+
+    expect(row(doc, "pack-reach")).toEqual({
+      id: "pack-reach",
+      status: "warn",
+      detail:
+        'pack "acme" reaches no selected client until a server it supplies is selected: ' +
+        "command st-acme-cmd — the claude plugin carries the command class; " +
+        `mcp-server packtel — not selected; ${npxCommand("config mcp add packtel")} selects it. ` +
+        `Or remove it with ${npxCommand("clean --pack acme")}`,
+    });
+    expect(code).toBe(0);
+  });
+
+  it("prints a policy-denied pack's warning once per check run, not once per plan", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude"] });
+    await installAcmePack(handle, root, { "commands/st-acme-cmd.md": ACME_CMD });
+    await resyncAt(root);
+    await writeFile(
+      join(root, STATE_DIR, "policy.json"),
+      JSON.stringify({ version: 1, packs: { deny: ["*"] } }),
+      "utf8",
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      await runHuman(root);
+      const denials = warn.mock.calls.filter((call) =>
+        String(call[0]).includes('Installed pack "acme" is denied by the org trust policy'),
+      );
+      // Two plans read the packs in one run — the drift gate's and this row's.
+      expect(denials).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("warns 'not evaluated' when the plan cannot be built, leaving the failure to the drift gate", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude"] });
+    await installAcmePack(handle, root, { "commands/st-acme-cmd.md": ACME_CMD });
+    await resyncAt(root);
+    // A pack directory the ledger records and the filesystem has lost: the plan refuses it.
+    await rm(join(root, STATE_DIR, "packs", "acme"), { recursive: true, force: true });
+
+    const { code, doc } = await runJson(root);
+    const reach = row(doc, "pack-reach");
+
+    expect(reach.status).toBe("warn");
+    expect(reach.detail).toMatch(/^not evaluated: the emission plan could not be built \(/);
+    expect(reach.detail).toContain("the drift gate below reports the cause in full");
+    expect(doc.driftStatus).toBe("failed");
+    expect(code).toBe(1);
   });
 });
 

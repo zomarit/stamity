@@ -283,7 +283,7 @@ two touchpoints' `gh` calls.
 npx @zomarit/stamity check
 ```
 
-`check` is the diagnosis. It runs fourteen environment probes. Then it asks the one question that
+`check` is the diagnosis. It runs fifteen environment probes. Then it asks the one question that
 matters more than the rest: **would a sync change anything?**
 
 If the answer is yes, disk and the engine's output disagree. Something was hand-edited, a

@@ -12,14 +12,17 @@ import {
   hasManagedBlock,
   splitAtManagedBlock,
 } from "../../merge/managedBlocks.ts";
+import { withoutPolicyWarningPrint } from "../../pack/projection.ts";
 import {
   describePackIntegrityFinding,
   verifyInstalledPacks,
 } from "../../pack/verifyInstalled.ts";
-import { TOOLS } from "../../types/core.ts";
+import type { PackArtifactReach, PackReach } from "../../types/content.ts";
+import { TOOLS, type Tool } from "../../types/core.ts";
 import { EngineError, type ErrorCode } from "../../types/errors.ts";
-import { MANIFEST_FILE, type SetupManifest } from "../../types/manifest.ts";
+import { isPackOwner, MANIFEST_FILE, type SetupManifest } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
+import { getEmissionPlanner } from "../engine/emission.ts";
 import { readWorkingTreeStatus } from "../engine/gitStatus.ts";
 import type { FailureDoc } from "../kit/output.ts";
 import { packageCommand } from "../kit/packageName.ts";
@@ -43,7 +46,7 @@ import { provenanceFromManifest, type ProvenanceRollup } from "./sync/report.ts"
  *
  * Three parts, one exit code:
  *
- * 1. **DOCTOR** — fourteen environment and state probes, each a
+ * 1. **DOCTOR** — fifteen environment and state probes, each a
  *    {@link DoctorCheck} row. Every probe is total: it answers, or it warns
  *    about why it could not, but it never takes the command down with it.
  * 2. **DRIFT** — {@link runDriftGate} runs the sync engine's read-only PLAN
@@ -1015,9 +1018,205 @@ async function checkPluginDuplicates(
 }
 
 /**
+ * Installed packs, judged by whether what they ship reaches a selected client
+ * (REQ-PLUGIN-016).
+ *
+ * The state this row exists for is plugin-backed mode: a client whose plugin
+ * carries a class receives none of that class from this repository, pack
+ * content included, so a command-only pack on Claude, Cursor or Copilot — or a
+ * hooks-only pack on any of the four — installs, syncs green, and does
+ * nothing. Pack skills are the one exception and always reach. The judgment is
+ * the emission plan's own (`EmissionPlan.packReach`, `../../emit/planner.ts`),
+ * read rather than restated here, so this row and what `sync` writes cannot
+ * disagree about which classes a plugin owns.
+ *
+ * - `fail` — an installed pack none of whose artifacts reaches any selected
+ *   client and that supplies no unselected MCP server, named with why and
+ *   with its remedies.
+ * - `warn` — a pack whose only remaining delivery is an MCP server nobody has
+ *   selected yet, named with `config mcp add <id>`; artifacts of a pack that
+ *   does reach somewhere, dropped for a client whose plugin carries their
+ *   class, each one named; and a pack that ships nothing deliverable (every
+ *   hook row rejected — `sync` names why), which is inert though no plugin
+ *   took anything.
+ * - `pass` — no pack is installed, or no pack is in any state above. The line
+ *   counts the artifacts that reach a client and names any that reach none —
+ *   an artifact whose `tools:` list names no selected client, a server not
+ *   selected — in a pack that reaches elsewhere.
+ * - `warn` "not evaluated" — the plan could not be built. The drift gate fails
+ *   on the same cause and prints it whole, so this row does not fail twice.
+ *
+ * Bounded like `pack-integrity`: a ledger with no pack row answers from the
+ * ledger alone and plans nothing. With a pack installed it runs one emission
+ * plan of its own beside the drift gate's (`planSync` returns the rows, not
+ * the plan's reach).
+ */
+async function checkPackReach(
+  rootDir: string,
+  manifest: SetupManifest | null,
+  engineVersion: string,
+): Promise<DoctorCheck> {
+  const id = "pack-reach";
+  if (manifest === null) {
+    return { id, status: "pass", detail: "no readable manifest, so no installed pack to judge" };
+  }
+  if (!manifest.ledger.some((row) => isPackOwner(row.adapter))) {
+    return { id, status: "pass", detail: "no installed pack is recorded in the ledger" };
+  }
+  let reach: readonly PackReach[];
+  try {
+    // The drift gate's plan, in the same run, prints any policy-denied pack;
+    // this second plan would print each denial again.
+    const plan = await withoutPolicyWarningPrint(() =>
+      getEmissionPlanner().planWithWarnings({
+        rootDir,
+        manifest,
+        engineVersion,
+        facts: { monorepoPackages: [] },
+      }),
+    );
+    reach = plan.packReach ?? [];
+  } catch (cause) {
+    const reason = messageOf(cause).split("\n")[0] ?? "";
+    return {
+      id,
+      status: "warn",
+      detail: `not evaluated: the emission plan could not be built (${reason}) — the drift gate below reports the cause in full`,
+    };
+  }
+
+  // A pack that reaches no client fails — unless a server it supplies is only
+  // waiting on `config mcp add`, an operator's opt-in rather than a defect, which
+  // warns with that command. A pack with nothing deliverable (every hook row it
+  // ships rejected, which sync names) has no artifact to judge, so it warns as
+  // inert rather than failing: no plugin took anything from it.
+  const silent = reach.filter(
+    (pack) => pack.artifacts.length > 0 && !pack.artifacts.some(reachesAClient),
+  );
+  const failing = silent.filter((pack) => !pack.artifacts.some(isUnselected));
+  const awaiting = silent.filter((pack) => pack.artifacts.some(isUnselected));
+  const reaching = reach.filter((pack) => pack.artifacts.some(reachesAClient));
+  const partial = reaching.flatMap((pack) =>
+    pack.artifacts
+      .filter((artifact) => pluginDropsOf(artifact).length > 0)
+      .map((artifact) => describePartialDrop(pack.packId, artifact)),
+  );
+  // In a pack that reaches elsewhere, an artifact that reaches no client for a
+  // reason of its own — its `tools:` list, a server not selected — is named, so
+  // no line claims it reaches.
+  const unreached = reaching.flatMap((pack) =>
+    pack.artifacts
+      .filter((artifact) => !reachesAClient(artifact) && pluginDropsOf(artifact).length === 0)
+      .map((artifact) => `pack "${pack.packId}": ${describeUnreached(artifact)}`),
+  );
+  const inert = reach
+    .filter((pack) => pack.artifacts.length === 0)
+    .map(
+      (pack) =>
+        `pack "${pack.packId}" ships nothing a client loads (no skill, agent, rule, command, ` +
+        `accepted hook or MCP server)`,
+    );
+  const warnings = [...awaiting.map(describeAwaitingPack), ...partial, ...inert];
+  const separator = "\n                         ";
+  if (failing.length > 0) {
+    return {
+      id,
+      status: "fail",
+      detail: [...failing.map(describeSilentPack), ...warnings, ...unreached].join(separator),
+    };
+  }
+  if (warnings.length > 0) {
+    return { id, status: "warn", detail: [...warnings, ...unreached].join(separator) };
+  }
+  if (reaching.length === 0) {
+    return { id, status: "pass", detail: "no installed pack resolved for this plan" };
+  }
+  const total = reaching.reduce((sum, pack) => sum + pack.artifacts.length, 0);
+  const delivered = reaching.reduce(
+    (sum, pack) => sum + pack.artifacts.filter(reachesAClient).length,
+    0,
+  );
+  const counts =
+    delivered === total
+      ? `${reaching.length} installed pack(s), ${total} artifact(s), each reaching a selected client`
+      : `${reaching.length} installed pack(s), ${delivered} of ${total} artifact(s) reaching a ` +
+        `selected client`;
+  return { id, status: "pass", detail: [counts, ...unreached].join("; ") };
+}
+
+function reachesAClient(artifact: PackArtifactReach): boolean {
+  return artifact.reachedBy.length > 0;
+}
+
+/** The clients a plugin took an artifact from, in the plan's (canonical) order. */
+function pluginDropsOf(artifact: PackArtifactReach): Tool[] {
+  return artifact.dropped.flatMap((drop) => (drop.reason === "plugin-owned" ? [drop.tool] : []));
+}
+
+/** `the claude plugin carries` · `the claude and cursor plugins carry` — a sentence's subject and verb. */
+function pluginOwnersPhrase(tools: readonly Tool[]): string {
+  return tools.length === 1
+    ? `the ${tools[0]} plugin carries`
+    : `the ${tools.slice(0, -1).join(", ")} and ${tools.at(-1)} plugins carry`;
+}
+
+/** A pack-supplied MCP server `manifest.mcp.servers` does not select. */
+function isUnselected(artifact: PackArtifactReach): boolean {
+  return artifact.dropped.some((drop) => drop.reason === "not selected");
+}
+
+/** Why one artifact reaches no client: its plugin drops, its selection, or its own `tools:` list. */
+function describeUnreached(artifact: PackArtifactReach): string {
+  const name = `${artifact.kind} ${artifact.id}`;
+  const plugins = pluginDropsOf(artifact);
+  if (plugins.length > 0) return `${name} — ${pluginOwnersPhrase(plugins)} the ${artifact.kind} class`;
+  if (isUnselected(artifact)) {
+    return `${name} — not selected; ${packageCommand(`config mcp add ${artifact.id}`)} selects it`;
+  }
+  const declared = artifact.dropped.flatMap((drop) =>
+    drop.reason === "declares no selected client" ? drop.declared : [],
+  );
+  return `${name} — its tools: list names only ${declared.join(", ")}`;
+}
+
+function describeSilentPack(pack: PackReach): string {
+  const why = pack.artifacts.map(describeUnreached).join("; ");
+  const plugins = [...new Set(pack.artifacts.flatMap(pluginDropsOf))].toSorted(
+    (a, b) => TOOLS.indexOf(a) - TOOLS.indexOf(b),
+  );
+  const alternative =
+    plugins.length > 0
+      ? `, or run ${plugins.join(", ")} on the CLI's generated mode, where this repository writes every class`
+      : ", or select a client its artifacts name";
+  return (
+    `pack "${pack.packId}" reaches no selected client: ${why}. Remove it with ` +
+    `${packageCommand(`clean --pack ${pack.packId}`)}${alternative}`
+  );
+}
+
+/** A pack whose only remaining delivery is a server nobody selected yet. */
+function describeAwaitingPack(pack: PackReach): string {
+  const why = pack.artifacts.map(describeUnreached).join("; ");
+  return (
+    `pack "${pack.packId}" reaches no selected client until a server it supplies is ` +
+    `selected: ${why}. Or remove it with ${packageCommand(`clean --pack ${pack.packId}`)}`
+  );
+}
+
+function describePartialDrop(packId: string, artifact: PackArtifactReach): string {
+  const plugins = pluginDropsOf(artifact);
+  const reached =
+    artifact.reachedBy.length > 0 ? `reaches ${artifact.reachedBy.join(", ")}` : "reaches no client";
+  return (
+    `pack "${packId}": ${artifact.kind} ${artifact.id} is not written for ${plugins.join(", ")} ` +
+    `(${pluginOwnersPhrase(plugins)} the ${artifact.kind} class); it ${reached}`
+  );
+}
+
+/**
  * Every doctor probe, in report order.
  *
- * The manifest is read once, up front, because nine probes are conditioned on
+ * The manifest is read once, up front, because ten probes are conditioned on
  * it; the rest are independent reads issued together, and the destructuring
  * order below — not whichever probe finished first — is what makes the report
  * deterministic.
@@ -1043,6 +1242,7 @@ export async function runDoctor(
     packIntegrity,
     pluginRuntime,
     pluginDuplicates,
+    packReach,
     invariants,
   ] = await Promise.all([
     requiredNodeRange(),
@@ -1053,6 +1253,7 @@ export async function runDoctor(
     guarded("pack-integrity", () => checkPackIntegrity(rootDir, manifest)),
     guarded("plugin-runtime", () => checkPluginRuntime(app.runtime.env, manifest)),
     guarded("plugin-duplicates", () => checkPluginDuplicates(rootDir, manifest)),
+    guarded("pack-reach", () => checkPackReach(rootDir, manifest, app.version)),
     guarded("invariants", checkInvariants),
   ]);
 
@@ -1077,6 +1278,10 @@ export async function runDoctor(
     // second about the repository beside it.
     pluginRuntime,
     pluginDuplicates,
+    // After the plugin rows, because it reads the same boundary from the other
+    // side: not what the repository holds twice, but what an installed pack
+    // ships that no selected client receives.
+    packReach,
     // Last, and read off the installed corpus rather than the repo: every row
     // above answers about THIS repository's state, and this one answers about
     // the engine's own content — the version of the floors a sync would write.
@@ -1152,7 +1357,7 @@ type DriftOutcome =
  * them was being reported as "the manifest has to be readable first".
  *
  * Everything else is CAPTURED, not swallowed and not re-thrown. Capturing keeps
- * the doctor's fourteen probes on screen, which a diagnostic command exists to
+ * the doctor's fifteen probes on screen, which a diagnostic command exists to
  * produce, while the message — the engine's own, naming the pack and the cause,
  * the same sentence `sync` prints in this state — becomes the drift verdict and
  * gates the exit. Re-throwing would have replaced the whole report with one
@@ -1611,7 +1816,7 @@ interface ManifestState {
 /**
  * Read the manifest once for the probes that need it. A defective manifest is
  * carried as a message rather than thrown: it is one row's verdict, and the
- * other thirteen probes still have work to do.
+ * other fourteen probes still have work to do.
  */
 async function readManifestState(
   rootDir: string,
@@ -1644,7 +1849,7 @@ async function readProvenance(
 /**
  * Run one probe, converting anything it throws into a warn row for that probe.
  * A sealed directory or an unreadable file is worth saying out loud; it is not
- * worth losing the other thirteen verdicts over.
+ * worth losing the other fourteen verdicts over.
  */
 async function guarded(id: string, run: () => Promise<DoctorCheck>): Promise<DoctorCheck> {
   try {

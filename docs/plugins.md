@@ -40,7 +40,8 @@ Installed packs are the one exception to the skill row. A pack is content you in
 repository and no plugin ships it, so its skills are written even where the plugin carries
 `skill`: into `.claude/skills/` for Claude Code and into the shared `.agents/skills/` for the
 other three. `check`'s `plugin-duplicates` row does not count them. A pack's commands, agents,
-rules and hooks get no such exception: wherever the plugin carries their class, they are dropped.
+rules and hooks get no such exception: wherever the plugin carries their class, they are dropped,
+and `check`'s `pack-reach` row names each one.
 
 The reasons, one line each, are the ones each container declares in its own capability file:
 
@@ -581,8 +582,8 @@ at all, whatever its client settings say.
 
 ## Troubleshooting
 
-`stamity check` carries two rows for this route, and both are described with every other row in
-[the troubleshooting guide](troubleshooting.md):
+`stamity check` carries three rows for this route, and all three are described with every other
+row in [the troubleshooting guide](troubleshooting.md):
 
 - **`plugin-runtime`** — the locator's resolved kind, path and version. It passes with a note
   when the manifest records no plugin client and no plugin root is in the environment — the
@@ -610,5 +611,15 @@ at all, whatever its client settings say.
   row too, because the client loads it beside the plugin's hooks: remove the key, or keep personal
   rows in `.claude/settings.local.json`; `sync` removes a stale repository-mode rendering by itself
   (`clean` does not — it strips only the keys the mode owns).
+- **`pack-reach`** — whether each installed pack reaches a client. A pack's skills always do;
+  its commands, agents, rules and hooks do not reach a client whose plugin carries their class. It
+  fails for a pack none of whose artifacts reaches any client — a command-only pack on Claude Code,
+  Cursor or Copilot CLI, or a hooks-only pack on any of the four — naming the pack, each artifact
+  and the plugin that dropped it: remove the pack with `stamity clean --pack <id>`, or run that
+  client on the CLI's generated mode. A pack's MCP server reaches a client only once
+  `stamity config mcp add <id>` selects it, so a pack whose only remaining delivery is an
+  unselected server warns with that command instead of failing. It also warns when a pack reaches
+  some client and a plugin drops some of its artifacts for another, and when a pack ships nothing
+  a client loads; it passes when no pack is installed.
 
-Neither row removes anything. Every remedy is a step you run.
+No row removes anything. Every remedy is a step you run.

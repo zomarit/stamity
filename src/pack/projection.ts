@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { dirname, join, posix, relative as pathRelative, resolve, sep } from "node:path";
 import { parseJsonStrict } from "../config/parse.ts";
@@ -459,6 +460,23 @@ export interface ResolvedPackContent {
  * `corpusRoot` pins the corpus half of the merged walk; production callers
  * leave it absent and get the bundled corpus.
  */
+/** Set inside {@link withoutPolicyWarningPrint}; read by {@link resolveInstalledPackContent}. */
+const policyWarningPrintMuted = new AsyncLocalStorage<true>();
+
+/**
+ * Run `plan` with {@link resolveInstalledPackContent}'s policy-denial lines
+ * kept off stderr — for a caller that plans a second time in a run where
+ * another plan already prints them. `check` is that caller: its `pack-reach`
+ * row plans beside the drift gate's plan, and each plan resolves the installed
+ * packs, so without this every denial printed twice in one run. The lines
+ * still arrive on `policyWarnings`; only the print is skipped. Scoped by async
+ * context, not by a module flag, so a probe running concurrently in the same
+ * process keeps its own prints.
+ */
+export function withoutPolicyWarningPrint<T>(plan: () => Promise<T>): Promise<T> {
+  return policyWarningPrintMuted.run(true, plan);
+}
+
 export async function resolveInstalledPackContent(
   rootDir: string,
   manifest: SetupManifest,
@@ -471,7 +489,9 @@ export async function resolveInstalledPackContent(
   // installing gets a setup missing that pack's content, and silence about it
   // is the state this filter exists to end. `console.warn` writes to stderr, so a
   // `--format json` invocation's single stdout document is untouched.
-  for (const warning of policyWarnings) console.warn(warning);
+  if (policyWarningPrintMuted.getStore() !== true) {
+    for (const warning of policyWarnings) console.warn(warning);
+  }
 
   // The two reads are independent — the catalog walk covers the four canonical
   // classes, `mcp_servers/` is its own lane — so they run together rather than

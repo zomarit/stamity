@@ -72,6 +72,7 @@ import {
   buildContentIndex,
   contentRootsOf,
   describeInvocableNameClash,
+  emittedIdFor,
   findInvocableNameClashes,
   layerRankOf,
   replacedClaimantOf,
@@ -102,8 +103,11 @@ import { hasManagedBlock, wrapInManagedBlock } from "../merge/managedBlocks.ts";
 import {
   outputOwners,
   type AdapterOutput,
+  type ContentClass,
   type EmissionOwner,
   type EmissionPlan,
+  type PackArtifactReach,
+  type PackReach,
   type SourceRefusal,
 } from "../types/content.ts";
 import { TOOLS, type Tool } from "../types/core.ts";
@@ -342,18 +346,21 @@ export async function buildCoreEmissionPlan(
   // override tree holds, not only the class this call cares about, and
   // `applyOverlays` refuses any overlay whose base it cannot find in `byKey`.
   // Leaving pack roots out of this index — as an earlier revision did — made
-  // an overlay on ANY pack-supplied artifact (a rule, an agent, a command; not
-  // only a skill) an orphan by this index's lights alone, throwing here and
-  // blocking sync before the residue planners (whose own indexes already carry
-  // both roots) ever got a chance to resolve it correctly.
+  // an overlay on a pack agent, command or rule an orphan by this index's
+  // lights alone, throwing here and blocking sync before the residue planners
+  // (whose own indexes already carry both roots) ever got a chance to resolve
+  // it correctly. An overlay on a pack SKILL is the one that never resolves:
+  // see the end of this comment.
   //
   // Admitting pack roots to the LOOKUP does not admit pack skills to the
   // PROJECTION: `corpusSkills` below is filtered back down to non-pack rows
   // before it reaches `mergeSkillProjections`, so a pack skill still reaches
   // `.agents/skills/` exactly once, through `resolveInstalledPackContent` and
-  // that merge — which is also why a pack skill overlay is resolved (no more
-  // false refusal) without being reflected in what gets projected: the
-  // pack-skill lane below never sees the override tree, only this lookup does.
+  // that merge. The pack-skill lane below never sees the override tree, only
+  // this lookup does, so an overlay on a pack skill could not be reflected in
+  // what gets projected — which is why it never resolves here at all:
+  // `applyOverlays` (`../content/catalog.ts`) refuses it at the user stage and
+  // skips and reports it at the fork stage, before this index is built.
   // The fork root rides along on the same terms as the override root: named
   // when the caller named it, and otherwise left to the walk, which pairs the
   // bundled fork layer with the bundled corpus it also resolves for itself.
@@ -579,9 +586,11 @@ async function planRuleDelivery(
  * output over the corpus root, the repo's override tree AND the installed
  * pack roots (`buildCoreEmissionPlan`'s `skillsContentRoot`), filtered back
  * down to non-pack rows before it reaches this function — the pack roots ride
- * along so that index can resolve an overlay addressed at a pack artifact
- * (any class, not only a skill; see `buildCoreEmissionPlan`'s comment), not so
- * a pack skill projects from here. A row that survives the filter can still be
+ * along so that index can resolve an overlay addressed at a pack agent,
+ * command or rule (see `buildCoreEmissionPlan`'s comment), not so a pack skill
+ * projects from here. An overlay on a pack skill never resolves in that index:
+ * `applyOverlays` (`../content/catalog.ts`) refuses it at the user stage and
+ * skips and reports it at the fork stage. A row that survives the filter can still be
  * `origin: "user"`, and because the lookup DID see the pack roots, an override
  * claiming a pack skill's id or directory was already resolved (shadow or
  * collision) inside that index — but the PROJECTION check below is still what
@@ -789,7 +798,8 @@ function customizingSkillFilePath(row: ProjectedSkillFile): string {
  * (`./skillsProjection.ts` → `projectSkills`) — leaving `replacedOf` out lets an
  * override that took a core skill's id slip past beside a pack command of that
  * name. Every clash is listed in one refusal, then one remedy per owner that
- * can move: the corpus cannot, so a core owner adds none.
+ * can move: the corpus cannot, so a core owner adds none, and a name only core
+ * owners claim is named as a defect of the package instead.
  */
 function refuseInvocableNameClashes(index: ContentIndex): void {
   const clashes = findInvocableNameClashes(index.items, {
@@ -797,21 +807,50 @@ function refuseInvocableNameClashes(index: ContentIndex): void {
   });
   if (clashes.length === 0) return;
   const remedies = [...new Set(clashes.flatMap((clash) => clash.owners.flatMap(remedyOf)))];
+  // A name every owner of which is shipped core content has no remedy here: no
+  // file in this repository can move. Said so by name, rather than left under a
+  // "Move one owner" heading that offers nothing for it.
+  const coreOnly = clashes
+    .filter((clash) => clash.owners.every((owner) => remedyOf(owner).length === 0))
+    .map((clash) => clash.name);
+  // The fixed text has to fit every clash it can carry: a skill against a rule
+  // delivered as a skill involves no command, so nothing is hidden on Claude.
+  const hidesCommand = clashes.some((clash) =>
+    clash.owners.some((owner) => owner.kind === "command"),
+  );
   throw new EngineError(
     [
       `${clashes.length} name(s) are claimed by artifacts of more than one class, so nothing ` +
         `was planned:`,
       ...clashes.map((clash) => `  ${describeInvocableNameClash(clash)}`),
-      "Move one owner of each name:",
-      ...remedies.map((remedy) => `  - ${remedy}`),
+      ...(remedies.length === 0
+        ? []
+        : ["Move one owner of each name:", ...remedies.map((remedy) => `  - ${remedy}`)]),
+      ...(coreOnly.length === 0
+        ? []
+        : [
+            `${coreOnly.join(", ")}: every owner is core content shipped with this package, so ` +
+              `nothing in this repository can move — a defect of the package, to report to its ` +
+              `maintainers`,
+          ]),
     ].join("\n"),
     {
       code: "VALIDATION_ERROR",
-      why:
-        "every artifact listed installs into the one folder its name gives it, so on Cursor " +
-        "and Codex they overwrite each other's files, and on Claude a skill hides the command " +
-        "of its name",
-      next: "apply one remedy per name listed above, then re-run `stamity sync`",
+      why: hidesCommand
+        ? "every artifact listed installs into the one folder its name gives it, so on Cursor " +
+          "and Codex they overwrite each other's files, and on Claude a skill hides the command " +
+          "of its name"
+        : "every artifact listed would share the one skill folder its name gives it wherever " +
+          "it is delivered as a skill — a rule is, on a client that demotes it — so there " +
+          "they overwrite each other's files",
+      // `sync`, `check`, `init` and `plugin setup` all plan through here, so the
+      // step names the command that stopped rather than assuming it was sync.
+      next:
+        remedies.length === 0
+          ? "report the clash to the package's maintainers; no file in this repository can " +
+            "resolve it"
+          : "apply one remedy per name listed above, then re-run the command that stopped " +
+            "here (`stamity sync`, `stamity check`, `stamity init` or `stamity plugin setup`)",
     },
   );
 }
@@ -1055,6 +1094,9 @@ export function composeEmissionPlanner(
     return {
       outputs,
       warnings: [...core.hooks.warnings, ...effortDisclosures(ctx.manifest), ...residueWarnings],
+      // Judged against the same selection and the same ownership boundary the
+      // rows above were built under, so `check` reads the reach of THIS plan.
+      packReach: await packReachOf(ctx, packs, tools),
     };
   };
 
@@ -1062,6 +1104,122 @@ export function composeEmissionPlanner(
     id: `core+residue[${registered.join(",")}]`,
     plan: async (ctx) => (await planWithWarnings(ctx)).outputs,
     planWithWarnings,
+  };
+}
+
+// ── Pack reach ───────────────────────────────────────────────────
+
+/**
+ * Per installed pack, which selected clients each artifact it ships reaches,
+ * and why it misses the ones it does not — the plan's `packReach`, which
+ * `check`'s `pack-reach` row reads (`../cli/commands/check.ts`). A pack none of
+ * whose artifacts reaches a client is installed and does nothing; in
+ * plugin-backed mode that is the ordinary fate of a command-only pack on
+ * Claude, Cursor and Copilot, and nothing else on any surface said so.
+ *
+ * Read off the two filters every adapter applies to pack content, not off the
+ * planned rows: the artifact's own `tools:` list, and the ownership boundary
+ * ({@link isPluginOwned}, the one place a plugin's classes are decided). The
+ * rows cannot answer it — a pack rule reaches Codex as text inside the
+ * down-conversion appendix, a composite document no per-rule row owns, so a
+ * join on row owners would call a delivered rule dropped. Per class:
+ *
+ * - **skill** — every selected client: pack skills are the documented
+ *   exception to plugin ownership (above, `projectionOwners`) and are
+ *   projected verbatim, `tools:` unread, like the pack skill lane projects them;
+ * - **agent, rule, command** — every client its `tools:` list admits whose
+ *   plugin does not carry the class;
+ * - **hooks** — one artifact per pack hook file the hook lane accepted, reaching
+ *   every client whose hooks this repository wires: a client whose plugin
+ *   carries `hooks` takes its configuration from the plugin root, which is
+ *   the hooks planner's "not wired" warning. A file every row of which was
+ *   rejected is not an artifact here; that planner's warning names it. Read
+ *   per pack, because the core pass reads all packs' hooks as one lane;
+ * - **mcp-server** — every selected client when `manifest.mcp.servers` selects
+ *   it (no plugin carries `mcp`; Claude, Cursor and Copilot place it through
+ *   {@link CoreEmissionPlan.mcpFor}, Codex composes it into its own config),
+ *   and none, dropped as `not selected`, when it does not: installing a pack
+ *   makes its servers selectable, never selected (`../mcp/emit.ts` →
+ *   `McpRenderOptions.packServers`), so it reaches nothing until
+ *   `config mcp add <id>`.
+ */
+async function packReachOf(
+  ctx: EmissionContext,
+  packs: ResolvedPackContent,
+  tools: readonly Tool[],
+): Promise<PackReach[]> {
+  const selectedServers = new Set(ctx.manifest.mcp?.servers ?? []);
+  return Promise.all(
+    packs.packs.map(async (pack) => {
+      const hookFiles = pack.classesPresent.includes("hooks")
+        ? (await packHookDefinitions([pack], ctx.rootDir)).hooks.map((hook) =>
+            hook.sourceFile.replaceAll("\\", "/"),
+          )
+        : [];
+      return {
+        packId: pack.id,
+        artifacts: [
+          ...packs.items
+            .filter((item) => item.provenance?.pack === pack.id)
+            .map((item) => contentReachOf(ctx.manifest, tools, item)),
+          ...[...new Set(hookFiles)]
+            .toSorted()
+            .map((file) => classReachOf(ctx.manifest, tools, "hooks", file)),
+          ...packs.mcpServers
+            .filter((server) => server.sourcePackId === pack.id)
+            .map(
+              (server): PackArtifactReach =>
+                selectedServers.has(server.id)
+                  ? { kind: "mcp-server", id: server.id, reachedBy: [...tools], dropped: [] }
+                  : {
+                      kind: "mcp-server",
+                      id: server.id,
+                      reachedBy: [],
+                      dropped: [{ reason: "not selected" }],
+                    },
+            ),
+        ],
+      };
+    }),
+  );
+}
+
+/** One pack content item's reach: see {@link packReachOf}. */
+function contentReachOf(
+  manifest: SetupManifest,
+  tools: readonly Tool[],
+  item: CatalogItem,
+): PackArtifactReach {
+  const id = emittedIdFor(item);
+  if (item.type === "skill") return { kind: "skill", id, reachedBy: [...tools], dropped: [] };
+  const declared = item.tools;
+  if (declared !== undefined && !tools.some((tool) => declared.includes(tool))) {
+    return {
+      kind: item.type,
+      id,
+      reachedBy: [],
+      dropped: [{ reason: "declares no selected client", declared: [...declared] }],
+    };
+  }
+  const targeted =
+    declared === undefined ? tools : tools.filter((tool) => declared.includes(tool));
+  return classReachOf(manifest, targeted, item.type, id);
+}
+
+/** Split `targeted` into the clients that reach a `cls` artifact and the ones whose plugin owns it. */
+function classReachOf(
+  manifest: SetupManifest,
+  targeted: readonly Tool[],
+  cls: Exclude<ContentClass, "skill"> | "hooks",
+  id: string,
+): PackArtifactReach {
+  return {
+    kind: cls,
+    id,
+    reachedBy: targeted.filter((tool) => !isPluginOwned(manifest, tool, cls)),
+    dropped: targeted
+      .filter((tool) => isPluginOwned(manifest, tool, cls))
+      .map((tool) => ({ reason: "plugin-owned" as const, tool, cls })),
   };
 }
 

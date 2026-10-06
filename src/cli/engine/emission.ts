@@ -70,11 +70,13 @@ import type { SetupManifest } from "../../types/manifest.ts";
  * Pack roots join that index too, but a pack skill still projects exactly
  * once, through its own resolution lane, merged under a directory-collision
  * check (`mergeSkillProjections`, `../../emit/planner.ts`). The pack roots
- * ride along on the LOOKUP so an overlay addressed at any pack-supplied
- * artifact — not only a skill — resolves against it instead of throwing an
- * orphan refusal; `buildCoreEmissionPlan` filters pack-origin rows back out
- * of what that lookup admits before merging, so the second, pack-aware lane
- * stays the only one that emits a pack skill's own rows.
+ * ride along on the LOOKUP so an overlay addressed at a pack-supplied agent,
+ * rule or command resolves against it instead of throwing an orphan refusal.
+ * An overlay on a pack SKILL never resolves: `applyOverlays`
+ * (`../../content/catalog.ts`) refuses it at the user stage and skips and
+ * reports it at the fork stage. `buildCoreEmissionPlan` filters pack-origin
+ * rows back out of what that lookup admits before merging, so the second,
+ * pack-aware lane stays the only one that emits a pack skill's own rows.
  *
  * The pinned cases in `test/cli/engine/emission.test.ts` hold the text and the
  * mechanism together: one asserts the three residue classes arrive, one asserts
