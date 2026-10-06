@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { accessSync, constants as fsConstants, existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { delimiter, join, relative, resolve, sep } from "node:path";
@@ -12,14 +13,17 @@ import {
   hasManagedBlock,
   splitAtManagedBlock,
 } from "../../merge/managedBlocks.ts";
+import { lookupCatalogEntry } from "../../pack/curated.ts";
 import { ORG_POLICY_REL_PATH } from "../../pack/orgPolicy.ts";
 import {
   discoverInstalledPacksWithPolicy,
   withoutPolicyWarningPrint,
 } from "../../pack/projection.ts";
+import { receiptRelPath } from "../../pack/receipt.ts";
 import {
   describePackIntegrityFinding,
   packReinstallSteps,
+  type PackIntegrityFinding,
   verifyInstalledPacks,
 } from "../../pack/verifyInstalled.ts";
 import type { PackArtifactReach, PackReach } from "../../types/content.ts";
@@ -27,6 +31,7 @@ import { TOOLS, type Tool } from "../../types/core.ts";
 import { EngineError, type ErrorCode } from "../../types/errors.ts";
 import {
   isPackOwner,
+  type LedgerEntry,
   MANIFEST_FILE,
   PACK_OWNER_PREFIX,
   type SetupManifest,
@@ -853,6 +858,7 @@ async function checkPackIntegrity(
       detail: `${report.checked} installed pack file(s) still match the hashes recorded at install`,
     };
   }
+  await withReAddArgs(rootDir, manifest, report.findings);
   const shown = report.findings.slice(0, MAX_NAMES_INLINE).map(describePackIntegrityFinding);
   const overflow =
     report.findings.length > MAX_NAMES_INLINE
@@ -865,6 +871,110 @@ async function checkPackIntegrity(
       `${report.findings.length} of ${report.checked} installed pack file(s) no longer match ` +
       `what was verified at install${overflow}: ${shown.join(" ")}`,
   };
+}
+
+/**
+ * Fill each finding's `reAdd` from its pack's install receipt, so the finding
+ * line names the source the remedy's `add` re-installs from (review/59).
+ *
+ * This lives here rather than in `../../pack/verifyInstalled.ts` because it
+ * reads the receipt and the curated catalog, both of which sit above that
+ * module's layer; the integrity pass stays a pure re-hash and `check` passes
+ * the source in as data. The rows read are the same ones that pass reads —
+ * pack-owned rows carrying a recorded hash.
+ */
+async function withReAddArgs(
+  rootDir: string,
+  manifest: SetupManifest,
+  findings: PackIntegrityFinding[],
+): Promise<void> {
+  const root = resolve(rootDir);
+  const rows = manifest.ledger.filter(
+    (entry) => isPackOwner(entry.adapter) && entry.contentHash !== undefined,
+  );
+  const packIds = [...new Set(findings.map((finding) => finding.packId))];
+  const reAdds = new Map(
+    await Promise.all(
+      packIds.map(async (packId) => [packId, await readReAddArgs(root, packId, rows)] as const),
+    ),
+  );
+  for (const finding of findings) finding.reAdd = reAdds.get(finding.packId) ?? null;
+}
+
+/** The tiers only a verified catalog pin grants (`../../pack/trust.ts`). */
+const CATALOG_TIERS: ReadonlySet<string> = new Set(["curator-verified", "scanned"]);
+
+/**
+ * `packId`'s re-add arguments, read from its install receipt — or `null` when
+ * the receipt cannot be trusted to name them: absent, unreadable, not the
+ * bytes its own ledger row recorded (an edited receipt could otherwise make the
+ * remedy print any command), or missing the fields read here.
+ */
+async function readReAddArgs(
+  root: string,
+  packId: string,
+  rows: readonly LedgerEntry[],
+): Promise<string | null> {
+  let rel: string;
+  try {
+    rel = receiptRelPath(packId);
+  } catch {
+    return null;
+  }
+  const row = rows.find((entry) => entry.path === rel);
+  if (row === undefined) return null;
+  let text: Buffer;
+  try {
+    text = await readFile(join(root, ...rel.split("/")));
+  } catch {
+    return null;
+  }
+  if (createHash("sha256").update(text).digest("hex") !== row.contentHash?.toLowerCase()) {
+    return null;
+  }
+  let receipt: unknown;
+  try {
+    receipt = JSON.parse(text.toString("utf8"));
+  } catch {
+    return null;
+  }
+  return reAddArgsOf(packId, receipt);
+}
+
+/**
+ * The `add` arguments that re-install `packId` from the source `receipt`
+ * records, or `null` when it names none this can spell.
+ *
+ * - A catalog-granted tier came through the curated catalog, whose receipt
+ *   spec is the resolved bundled directory or package — so the step names the
+ *   catalog id, which re-applies the pin.
+ * - A local path or an npm package is re-added by the spec the operator typed;
+ *   at the unsigned floor `add` refuses without `--allow-untrusted`, so the
+ *   step carries it, as the original install had to.
+ */
+export function reAddArgsOf(packId: string, receipt: unknown): string | null {
+  if (typeof receipt !== "object" || receipt === null) return null;
+  const { source, trustTier } = receipt as { source?: unknown; trustTier?: unknown };
+  if (typeof source !== "object" || source === null || typeof trustTier !== "string") return null;
+  const { kind, spec } = source as { kind?: unknown; spec?: unknown };
+  if (typeof kind !== "string" || typeof spec !== "string" || spec === "") return null;
+  if (CATALOG_TIERS.has(trustTier) || kind === "catalog-pinned") {
+    const entry = lookupCatalogEntry(packId) ?? lookupCatalogEntry(spec);
+    return entry === undefined ? null : shellWord(entry.id);
+  }
+  if (kind !== "local-path" && kind !== "npm-package") return null;
+  return `${shellWord(spec)}${trustTier === "pinned-unsigned" ? " --allow-untrusted" : ""}`;
+}
+
+/**
+ * `word` as one POSIX shell word: bare when it holds only characters no shell
+ * reads specially, single-quoted otherwise, control characters dropped — the
+ * receipt is repository data, and a printed remedy is pasted into a shell.
+ */
+function shellWord(word: string): string {
+  // oxlint-disable-next-line no-control-regex -- stripping control characters is the point
+  const clean = word.replace(/[\u0000-\u001f\u007f-\u009f]/g, "");
+  return /^[A-Za-z0-9@%+=:,./_-]+$/.test(clean) ? clean : `'${clean.replace(/'/g, "'\\''")}'`;
 }
 
 /**

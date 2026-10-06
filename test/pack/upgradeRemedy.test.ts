@@ -13,7 +13,8 @@ import {
   receiptRelPath,
   serializeReceipt,
 } from "../../src/pack/receipt.ts";
-import { describePackIntegrityFinding, reAddArgsOf } from "../../src/pack/verifyInstalled.ts";
+import { reAddArgsOf } from "../../src/cli/commands/check.ts";
+import { describePackIntegrityFinding } from "../../src/pack/verifyInstalled.ts";
 import { packOwner, type LedgerEntry } from "../../src/types/manifest.ts";
 import { npxCommand } from "../support/identity.ts";
 import { runInProcess, type InProcessResult } from "../support/inProcess.ts";

@@ -3,14 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import pLimit from "p-limit";
 import { EngineError } from "../types/errors.ts";
-import {
-  isPackOwner,
-  PACK_OWNER_PREFIX,
-  type LedgerEntry,
-  type SetupManifest,
-} from "../types/manifest.ts";
-import { lookupCatalogEntry } from "./curated.ts";
-import { receiptRelPath } from "./receipt.ts";
+import { isPackOwner, PACK_OWNER_PREFIX, type SetupManifest } from "../types/manifest.ts";
 
 /**
  * Post-install re-verification of pack content: the read half of a promise the
@@ -63,9 +56,11 @@ export interface PackIntegrityFinding {
   actual: string | null;
   /**
    * The arguments that re-add this pack from the source its install receipt
-   * records ({@link reAddArgsOf}), or `null`/absent when the receipt is
-   * missing, edited or unreadable — the re-install order then names the pack
-   * and says to add it from where it came from (review/59).
+   * records, or `null`/absent when the receipt is missing, edited or
+   * unreadable — the re-install order then names the pack and says to add it
+   * from where it came from (review/59). This pass leaves it absent: reading
+   * the receipt and the curated catalog sits above this module's layer, so
+   * the caller fills it (`check`'s `withReAddArgs`).
    */
   reAdd?: string | null;
 }
@@ -115,91 +110,10 @@ export async function verifyInstalledPacks(
     };
   });
 
-  const findings = results.filter((finding): finding is PackIntegrityFinding => finding !== null);
-  const packIds = [...new Set(findings.map((finding) => finding.packId))];
-  const reAdds = new Map(
-    await Promise.all(
-      packIds.map(async (packId) => [packId, await readReAddArgs(root, packId, rows)] as const),
-    ),
-  );
-  for (const finding of findings) finding.reAdd = reAdds.get(finding.packId) ?? null;
-  return { checked: rows.length, findings };
-}
-
-/** The tiers only a verified catalog pin grants (`./trust.ts`). */
-const CATALOG_TIERS: ReadonlySet<string> = new Set(["curator-verified", "scanned"]);
-
-/**
- * `packId`'s re-add arguments, read from its install receipt — or `null` when
- * the receipt cannot be trusted to name them: absent, unreadable, not the
- * bytes its own ledger row recorded (an edited receipt could otherwise make the
- * remedy print any command), or missing the fields read here.
- */
-async function readReAddArgs(
-  root: string,
-  packId: string,
-  rows: readonly LedgerEntry[],
-): Promise<string | null> {
-  let rel: string;
-  try {
-    rel = receiptRelPath(packId);
-  } catch {
-    return null;
-  }
-  const row = rows.find((entry) => entry.path === rel);
-  if (row === undefined) return null;
-  let text: Buffer;
-  try {
-    text = await readFile(join(root, ...rel.split("/")));
-  } catch {
-    return null;
-  }
-  if (createHash("sha256").update(text).digest("hex") !== row.contentHash?.toLowerCase()) {
-    return null;
-  }
-  let receipt: unknown;
-  try {
-    receipt = JSON.parse(text.toString("utf8"));
-  } catch {
-    return null;
-  }
-  return reAddArgsOf(packId, receipt);
-}
-
-/**
- * The `add` arguments that re-install `packId` from the source `receipt`
- * records, or `null` when it names none this can spell.
- *
- * - A catalog-granted tier came through the curated catalog, whose receipt
- *   spec is the resolved bundled directory or package — so the step names the
- *   catalog id, which re-applies the pin.
- * - A local path or an npm package is re-added by the spec the operator typed;
- *   at the unsigned floor `add` refuses without `--allow-untrusted`, so the
- *   step carries it, as the original install had to.
- */
-export function reAddArgsOf(packId: string, receipt: unknown): string | null {
-  if (typeof receipt !== "object" || receipt === null) return null;
-  const { source, trustTier } = receipt as { source?: unknown; trustTier?: unknown };
-  if (typeof source !== "object" || source === null || typeof trustTier !== "string") return null;
-  const { kind, spec } = source as { kind?: unknown; spec?: unknown };
-  if (typeof kind !== "string" || typeof spec !== "string" || spec === "") return null;
-  if (CATALOG_TIERS.has(trustTier) || kind === "catalog-pinned") {
-    const entry = lookupCatalogEntry(packId) ?? lookupCatalogEntry(spec);
-    return entry === undefined ? null : shellWord(entry.id);
-  }
-  if (kind !== "local-path" && kind !== "npm-package") return null;
-  return `${shellWord(spec)}${trustTier === "pinned-unsigned" ? " --allow-untrusted" : ""}`;
-}
-
-/**
- * `word` as one POSIX shell word: bare when it holds only characters no shell
- * reads specially, single-quoted otherwise, control characters dropped — the
- * receipt is repository data, and a printed remedy is pasted into a shell.
- */
-function shellWord(word: string): string {
-  // oxlint-disable-next-line no-control-regex -- stripping control characters is the point
-  const clean = word.replace(/[\u0000-\u001f\u007f-\u009f]/g, "");
-  return /^[A-Za-z0-9@%+=:,./_-]+$/.test(clean) ? clean : `'${clean.replace(/'/g, "'\\''")}'`;
+  return {
+    checked: rows.length,
+    findings: results.filter((finding): finding is PackIntegrityFinding => finding !== null),
+  };
 }
 
 /**
@@ -241,7 +155,7 @@ async function hashIfPresent(absPath: string): Promise<string | null> {
  * the current bytes into the generated setup.
  *
  * `reAdd` is what follows `add`: the source the pack's receipt records
- * ({@link reAddArgsOf}), or a placeholder the caller explains. `null` means
+ * (`check`'s `reAddArgsOf`), or a placeholder the caller explains. `null` means
  * no receipt could name it, and the step says so in words rather than print
  * an `add` that would not run (review/59).
  */
