@@ -627,8 +627,14 @@ export interface InvocableNameClash {
  *   Answered for every corpus, fork and override rule rather than for the ones
  *   demoted today, because demotion follows the client set and the
  *   `ruleDelivery` setting, both of which change after the check has run. A
- *   pack rule answers `undefined`: the demotion lane reads the core index only
- *   (`../emit/planner.ts`), so a pack rule never reaches a skill folder.
+ *   pack rule answers `undefined`, which is a known gap rather than a claim
+ *   that one never reaches a skill folder: the demotion lane
+ *   (`../emit/planner.ts` → `planRuleDelivery`) reads the pack roots too and
+ *   keeps a pack rule whenever the manifest's selection lists no rule ids or
+ *   lists that rule's id, and a rule it keeps is projected as a skill (the
+ *   planner's skill filter lets it through for that reason). In that narrow
+ *   case this check does not see the rule; an exact-name collision is still
+ *   refused later, by the skill merge or the composer's single-writer check.
  * - An agent → `undefined`: agents land in their own per-client directories.
  */
 export function invocableNameOf(
@@ -744,13 +750,33 @@ export function findInvocableNameClashes(
 }
 
 /**
- * The comparison key of an invocable name: NFC, then lower case — the two
- * spellings a case- and normalization-insensitive filesystem (APFS, NTFS)
- * treats as one folder. Kept local rather than shared with the pack signer's
- * path fold (`../pack/sign.ts`), which sits a wave above this module.
+ * The comparison key of an invocable name: NFC, then upper case, then lower
+ * case — the spellings a case- and normalization-insensitive filesystem (APFS,
+ * NTFS) treats as one folder. Lower case alone is not enough: NTFS compares
+ * names through an upper-case table, and the dotless `ı` (U+0131) and the long
+ * `ſ` (U+017F) lower-case to themselves but upper-case to ASCII `I` and `S`,
+ * so `st-ſync` and `st-sync` would be one folder there; the round trip through
+ * upper case joins them. The Kelvin sign (U+212A) joins `k` through the final
+ * lower case, as Unicode case folding on APFS joins them. The
+ * fold can also join a pair no filesystem joins (`ß` upper-cases to `SS`); the
+ * cost of that is a refusal that names both owners, never an overwrite. Kept
+ * local rather than shared with the pack signer's path fold (`../pack/sign.ts`),
+ * which sits a wave above this module.
  */
 function foldInvocableName(name: string): string {
-  return name.normalize("NFC").toLowerCase();
+  return name.normalize("NFC").toUpperCase().toLowerCase();
+}
+
+/**
+ * A third-party string as it may be printed: every control character flattened
+ * to a space, as `add` flattens a pack's argv rows (`../cli/commands/add.ts` →
+ * `commandLine`). A pack's frontmatter `id:` is held to no character set — a
+ * YAML double-quoted scalar can spell ESC as an escape, so the bytes on disk
+ * stay printable and the body scan has nothing to match — and a control
+ * sequence in a refusal line would rewrite the line the operator is reading.
+ */
+export function withoutControlCharacters(text: string): string {
+  return text.replace(/\p{Cc}+/gu, " ");
 }
 
 /**
@@ -759,9 +785,12 @@ function foldInvocableName(name: string): string {
  * "drill" both install as st-drill (one folder on Cursor and Codex; on Claude
  * the skill hides the command)`. Shared by `add` and `sync` so the two
  * refusals read alike. Paths are POSIX, so the line reads the same on Windows.
+ * Every name, id and path in it can come from a pack, so each is passed
+ * through {@link withoutControlCharacters} before it is printed.
  */
 export function describeInvocableNameClash(clash: InvocableNameClash): string {
-  const owners = clash.owners.map((owner) => describeInvocableNameOwner(owner, clash.name));
+  const name = withoutControlCharacters(clash.name);
+  const owners = clash.owners.map((owner) => describeInvocableNameOwner(owner, name));
   const listed =
     owners.length <= 2
       ? owners.join(" and ")
@@ -771,7 +800,7 @@ export function describeInvocableNameClash(clash: InvocableNameClash): string {
   const where = kinds.has("command")
     ? "one folder on Cursor and Codex; on Claude the skill hides the command"
     : "one skill folder on every client";
-  return `${clash.name} — ${listed} ${verb} as ${clash.name} (${where})`;
+  return `${name} — ${listed} ${verb} as ${name} (${where})`;
 }
 
 /**
@@ -782,13 +811,17 @@ export function describeInvocableNameClash(clash: InvocableNameClash): string {
  */
 function describeInvocableNameOwner(owner: InvocableNameOwner, name: string): string {
   const kind = owner.kind === "rule-skill" ? "rule (delivered as a skill)" : owner.kind;
+  const [id, path] = [withoutControlCharacters(owner.id), withoutControlCharacters(owner.path)];
   switch (owner.layer) {
-    case "pack":
-      return `${owner.packId === undefined ? "a pack" : `pack "${owner.packId}"`} ${kind} "${owner.id}"`;
+    case "pack": {
+      const pack =
+        owner.packId === undefined ? "a pack" : `pack "${withoutControlCharacters(owner.packId)}"`;
+      return `${pack} ${kind} "${id}"`;
+    }
     case "fork":
-      return `the fork-layer ${kind} "${owner.id}" at ${owner.path}`;
+      return `the fork-layer ${kind} "${id}" at ${path}`;
     case "user":
-      return `the override ${kind} "${owner.id}" at ${owner.path}`;
+      return `the override ${kind} "${id}" at ${path}`;
     default:
       return `the core ${kind} "${name}"`;
   }

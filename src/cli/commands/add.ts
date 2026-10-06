@@ -1,7 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import pLimit from "p-limit";
-import type { InvocableNameClash } from "../../content/catalog.ts";
+import {
+  withoutControlCharacters,
+  type InvocableNameClash,
+  type InvocableNameOwner,
+} from "../../content/catalog.ts";
 import { lookupCatalogEntry, resolveBundledPackRoot, type CatalogEntry } from "../../pack/curated.ts";
 import type { PackInstallPlan, PackWriteSetEntry } from "../../pack/install.ts";
 import type { OrgPolicyDecision } from "../../pack/orgPolicy.ts";
@@ -118,6 +122,12 @@ interface AddPayload {
      * words; empty when the pack's names are free.
      */
     nameClashes: string[];
+    /**
+     * Files the installed copy of this pack holds that this version would
+     * leave behind (`PackInstallPlan.leftBehind`); empty on a first install
+     * and on a re-add that replaces every file.
+     */
+    leftBehind: string[];
   };
   trustTier: TrustTier;
   tierBasis: string;
@@ -493,14 +503,25 @@ function refuse(ctx: CliContext, payload: AddPayload, doc: FailureDoc): CommandR
 }
 
 /**
- * Collision refusal. `add` has no override, so the next step is about clearing
+ * One kind of refusal a plan can carry: what is in the way (counted), why it
+ * blocks the install, and the step that clears it. A plan carrying several
+ * kinds is refused once, with every part ({@link planRefusal}), so following
+ * the error's `next` clears all of them rather than only the first.
+ */
+interface RefusalPart {
+  message: string;
+  why: string;
+  next: string;
+}
+
+/**
+ * Collision part. `add` has no override, so the next step is about clearing
  * the paths: a stale installed pack is uninstalled with `clean --pack`, and
  * anything else at the listed paths is the operator's to move.
  */
-function collisionRefusal(packId: string, reasons: readonly string[]): FailureDoc {
+function collisionPart(reasons: readonly string[]): RefusalPart {
   return {
-    code: "VALIDATION_ERROR",
-    message: `pack "${packId}" was not installed: ${reasons.length} path(s) it would write are not free`,
+    message: `${reasons.length} path(s) it would write are not free`,
     why: "a pack never overwrites a file it does not own, and add has no --force",
     next:
       "resolve the collisions, then re-run — uninstall a stale pack with `stamity clean --pack <id>`, " +
@@ -509,41 +530,111 @@ function collisionRefusal(packId: string, reasons: readonly string[]): FailureDo
 }
 
 /**
- * Name-clash refusal: a command and a skill (or a rule delivered as one) that
- * would install under one name. Distinct from {@link collisionRefusal}, which
- * is about paths — here every path is free and the NAME is taken, so the
- * remedy is a rename in the pack's source, and, when the other owner is an
- * installed pack, removing that pack first.
+ * Name-clash part: a command and a skill (or a rule delivered as one) that
+ * would install under one name. Here every path is free and the NAME is taken,
+ * so the remedy depends on who the other owner is — the per-owner table the
+ * `sync` refusal keeps (`../../emit/planner.ts` → `remedyOf`), seen from the
+ * incoming pack's side ({@link nameClashRemedyOf}).
  */
-function nameClashRefusal(
-  packId: string,
-  clashes: readonly InvocableNameClash[],
-): FailureDoc {
-  const otherPacks = [
+function nameClashPart(packId: string, clashes: readonly InvocableNameClash[]): RefusalPart {
+  const remedies = [
+    `rename the listed artifact(s) in the incoming pack's source (pack "${packId}"), then re-run`,
     ...new Set(
       clashes.flatMap((clash) =>
-        clash.owners.flatMap((owner) =>
-          owner.layer === "pack" && owner.packId !== undefined && owner.packId !== packId
-            ? [owner.packId]
-            : [],
-        ),
+        clash.owners.flatMap((owner) => nameClashRemedyOf(packId, owner, clash.name)),
       ),
     ),
-  ].toSorted();
-  const removeFirst =
-    otherPacks.length === 0
-      ? ""
-      : `; the other owner is an installed pack, so remove it first with ${otherPacks
-          .map((id) => `\`stamity clean --pack ${id}\``)
-          .join(", ")}`;
+  ];
+  // The fixed text has to fit every clash it carries: a skill against a rule
+  // delivered as a skill involves no command, so nothing is hidden on Claude.
+  const hidesCommand = clashes.some((clash) =>
+    clash.owners.some((owner) => owner.kind === "command"),
+  );
+  return {
+    message: `${clashes.length} name(s) it would emit are taken`,
+    why: hidesCommand
+      ? "a command and a skill of one name install into one folder — on Cursor and Codex they " +
+        "overwrite each other's files, and on Claude the skill hides the command"
+      : "artifacts of one name share one skill folder wherever they are delivered as skills, " +
+        "and there they overwrite each other's files",
+    next: remedies.join("; "),
+  };
+}
+
+/**
+ * The remedy one owner of a clashing name adds, beside renaming in the
+ * incoming pack's source, which applies to every clash. The incoming pack's
+ * own owners add nothing more. An override is the operator's own file, so it
+ * can move. The core and the fork layer ship with this package, so nothing in
+ * this repository can move them, and the clash is the incoming pack's to fix.
+ * Another installed pack is never advised away: a newcomer could clash with an
+ * established name on purpose to provoke exactly that advice, so its removal
+ * is offered only as a deliberate replacement, saying who then takes the name.
+ * Every name, id and path is printed without control characters, as the clash
+ * lines are.
+ */
+function nameClashRemedyOf(packId: string, owner: InvocableNameOwner, name: string): string[] {
+  const shown = withoutControlCharacters(name);
+  switch (owner.layer) {
+    case "pack": {
+      if (owner.packId === undefined || owner.packId === packId) return [];
+      const other = withoutControlCharacters(owner.packId);
+      return [
+        `pack "${other}" is installed and keeps ${shown}: remove it with ` +
+          `\`stamity clean --pack ${other}\` only to replace it with pack "${packId}" on ` +
+          `purpose, which then takes the name`,
+      ];
+    }
+    case "user": {
+      const path = withoutControlCharacters(owner.path);
+      return [`or rename or remove your override at ${path}`];
+    }
+    case "fork":
+      return [
+        `the fork-layer file at ${withoutControlCharacters(owner.path)} ships with this ` +
+          `package and cannot move here: report the clash to the maintainers of pack "${packId}"`,
+      ];
+    default:
+      return [
+        `the core ${owner.kind === "rule-skill" ? "rule" : owner.kind} "${shown}" ships with ` +
+          `this package and cannot move here: report the clash to the maintainers of pack ` +
+          `"${packId}"`,
+      ];
+  }
+}
+
+/**
+ * Left-behind part: a re-add whose version dropped files the installed copy
+ * holds. The apply deletes nothing and replaces the pack's ledger rows, so
+ * those files would stay with no row — still read by `sync`, out of `clean
+ * --pack`'s reach — which is why the remedy runs `clean --pack` FIRST, while
+ * the rows still name them.
+ */
+function leftBehindPart(packId: string, spec: string, paths: readonly string[]): RefusalPart {
+  return {
+    message: `${paths.length} file(s) of the installed copy would be left behind`,
+    why:
+      "add writes the new version over the installed one and deletes nothing, so a file this " +
+      "version dropped would stay on disk with no ledger row — sync would still read it, and " +
+      "clean --pack could no longer remove it",
+    next: `run \`stamity clean --pack ${packId}\` first, then \`stamity add ${spec}\` again`,
+  };
+}
+
+/** One error document over every part, in the order the parts are listed. */
+function planRefusal(packId: string, parts: readonly RefusalPart[]): FailureDoc {
+  const each = (pick: (part: RefusalPart) => string): string => parts.map(pick).join("; ");
   return {
     code: "VALIDATION_ERROR",
-    message: `pack "${packId}" was not installed: ${clashes.length} name(s) it would emit are taken`,
-    why:
-      "a command and a skill of one name install into one folder — on Cursor and Codex they " +
-      "overwrite each other's files, and on Claude the skill hides the command",
-    next: `rename the listed artifact(s) in the pack's source, then re-run${removeFirst}`,
+    message: `pack "${packId}" was not installed: ${each((part) => part.message)}`,
+    why: each((part) => part.why),
+    next: each((part) => part.next),
   };
+}
+
+/** Collision refusal on its own: the apply's re-check, which can name only paths. */
+function collisionRefusal(packId: string, reasons: readonly string[]): FailureDoc {
+  return planRefusal(packId, [collisionPart(reasons)]);
 }
 
 // ── Command ────────────────────────────────────────────────────
@@ -662,6 +753,7 @@ export const addCommand: CommandModule = {
     ]);
 
     const nameClashes = plan.nameClashes ?? [];
+    const leftBehind = plan.leftBehind ?? [];
     const nameClashLines = nameClashes.map((clash) =>
       ctx.engine.content.catalog.describeInvocableNameClash(clash),
     );
@@ -673,6 +765,7 @@ export const addCommand: CommandModule = {
         checks: plan.checks,
         collisions: plan.collisions,
         nameClashes: nameClashLines,
+        leftBehind,
       },
       trustTier: plan.trustTier,
       tierBasis: plan.tierBasis,
@@ -697,19 +790,24 @@ export const addCommand: CommandModule = {
     if (plan.trustTier === "pinned-unsigned") renderCaution(ctx);
     if (bodies !== null) renderPreview(ctx, plan, bodies);
 
-    // Paths first, unchanged; a pack that also clashes on names lists those
-    // lines too, so one re-run is not spent discovering the second refusal.
-    if (plan.collisions.length > 0 || nameClashes.length > 0) {
-      if (plan.collisions.length > 0) renderReasons(ctx, plan.collisions);
-      if (nameClashes.length > 0) renderReasons(ctx, nameClashLines, "name clashes");
-      return refuse(
-        ctx,
-        payload,
-        plan.collisions.length > 0
-          ? collisionRefusal(plan.manifest.name, plan.collisions)
-          : nameClashRefusal(plan.manifest.name, nameClashes),
-      );
+    // Paths first, then names, then the installed copy's leftovers: every
+    // kind the plan carries is listed and carried by the one error document,
+    // so one re-run is not spent discovering the next refusal.
+    const parts: RefusalPart[] = [];
+    if (plan.collisions.length > 0) {
+      renderReasons(ctx, plan.collisions);
+      parts.push(collisionPart(plan.collisions));
     }
+    if (nameClashes.length > 0) {
+      renderReasons(ctx, nameClashLines, "name clashes");
+      parts.push(nameClashPart(plan.manifest.name, nameClashes));
+    }
+    if (leftBehind.length > 0) {
+      // Pack-supplied path segments: printed as the clash lines are.
+      renderReasons(ctx, leftBehind.map(withoutControlCharacters), "left behind by this version");
+      parts.push(leftBehindPart(plan.manifest.name, spec, leftBehind));
+    }
+    if (parts.length > 0) return refuse(ctx, payload, planRefusal(plan.manifest.name, parts));
 
     if (ctx.dryRun) {
       ctx.io.out(`\n  ${ctx.palette.dim("nothing written (--dry-run)")}\n`);

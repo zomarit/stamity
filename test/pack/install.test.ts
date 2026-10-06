@@ -509,6 +509,60 @@ function agentBody(id: string, capabilities: readonly string[]): string {
   ].join("\n");
 }
 
+describe("planPackInstall leftBehind", () => {
+  it("lists the installed copy's files this version drops, never the receipt", async () => {
+    const project = getProject();
+    await seedPack();
+    const first = await apply(await plan(), projectManifest());
+    await writeManifest(project.dir, first.manifest, { now: FIXED_NOW });
+    await rm(project.path("packs", "ops"), { recursive: true });
+    await seedPack({ content: { "agents/reviewer.md": AGENT_BODY } });
+
+    const next = await plan();
+
+    expect(next.leftBehind).toEqual([`${PACK_ROOT}/rules/naming.md`]);
+    expect(next.collisions).toEqual([]);
+  });
+
+  it("is empty on a first install and on a version that replaces every file", async () => {
+    const project = getProject();
+    await seedPack();
+    expect((await plan()).leftBehind).toEqual([]);
+    const first = await apply(await plan(), projectManifest());
+    await writeManifest(project.dir, first.manifest, { now: FIXED_NOW });
+
+    expect((await plan()).leftBehind).toEqual([]);
+  });
+
+  it("skips a recorded file that is already gone from disk", async () => {
+    const project = getProject();
+    await seedPack();
+    const first = await apply(await plan(), projectManifest());
+    await writeManifest(project.dir, first.manifest, { now: FIXED_NOW });
+    await rm(project.path(PACK_ROOT, "rules", "naming.md"));
+    await rm(project.path("packs", "ops"), { recursive: true });
+    await seedPack({ content: { "agents/reviewer.md": AGENT_BODY } });
+
+    expect((await plan()).leftBehind).toEqual([]);
+  });
+
+  it("ignores another pack's rows", async () => {
+    const project = getProject();
+    await seedPack();
+    const other: LedgerEntry = {
+      path: ".stamity/packs/other/rules/naming.md",
+      adapter: packOwner("other"),
+      artifactId: "other/rules/naming.md",
+      artifactType: "infra",
+      contentHash: digest(RULE_BODY),
+    };
+    await project.seedFiles({ [other.path]: RULE_BODY });
+    await writeManifest(project.dir, projectManifest([other]), { now: FIXED_NOW });
+
+    expect((await plan()).leftBehind).toEqual([]);
+  });
+});
+
 describe("planPackInstall agent capability gate", () => {
   it("refuses an agent asking for a capability its pack never disclosed, and writes nothing", async () => {
     await seedPack({

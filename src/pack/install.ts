@@ -213,6 +213,23 @@ export interface PackInstallPlan {
    * valid. {@link planPackInstall} always populates it.
    */
   nameClashes?: InvocableNameClash[];
+  /**
+   * Files a previous install of THIS pack left on disk that this version's
+   * write set does not replace: repo-relative POSIX paths its `pack:<id>`
+   * ledger rows record, the receipt excepted (every install rewrites it).
+   *
+   * The apply writes the new set over the old one and deletes nothing, then
+   * replaces the pack's rows, so each of these would stay on disk with no row:
+   * `sync` still reads it, because it walks the pack directory, and `clean
+   * --pack`, which removes ledgered files only, could no longer reach it. A
+   * non-empty list refuses the install at the CLI before any write
+   * (`../cli/commands/add.ts`), naming `clean --pack <id>` first; it is not a
+   * gate row, so the gate chain and the receipt's `checks` are unchanged.
+   *
+   * Optional so the field stays ADDITIVE, the rule {@link nameClashes}
+   * follows. {@link planPackInstall} always populates it.
+   */
+  leftBehind?: string[];
   /** Gate name -> outcome, in run order. `"n/a"` marks a waived or absent gate. */
   checks: Record<string, "pass" | "n/a">;
   /** Resolved trust tier (`./trust.ts` ladder). */
@@ -831,6 +848,9 @@ async function collectCollisions(
  * the bundled corpus and the fork layer beside it, the repo's override tree,
  * and every other installed pack the ledger records — never this pack's own
  * rows, so a re-install is judged against everything but the copy it replaces.
+ * That is sound because a re-install replaces the whole copy or is refused:
+ * one that would leave any of the copy's files behind is
+ * {@link PackInstallPlan.leftBehind}, refused before any write.
  * The installed packs are read from their directories, so a command whose
  * declared `id:` differs from its filename is named by the id it emits under.
  * A recorded pack whose directory is gone is skipped rather than refused: that
@@ -891,6 +911,9 @@ async function collectNameClashes(
     const [type, id] = splitKey(artifact.catalogKey);
     return [
       {
+        // `catalogKey` is minted by `catalogIdOf`, whose type half is always a
+        // value of `CLASS_OF_PACK_DIR`, so the cast restates what that function
+        // guarantees rather than trusting input.
         type: type as ContentClass,
         id,
         filePath: join(packRoot, ...artifact.relPath.split("/")),
@@ -918,6 +941,30 @@ async function collectNameClashes(
   }).filter((clash) =>
     clash.owners.some((claimant) => claimant.layer === "pack" && claimant.packId === packId),
   );
+}
+
+/**
+ * The installed copy's files a re-install of this version would leave behind
+ * ({@link PackInstallPlan.leftBehind}), sorted.
+ *
+ * Only a file still on disk counts: a row whose file is already gone leaves
+ * nothing for `sync` to read, and the apply drops the row with the others.
+ */
+async function collectLeftBehind(
+  rootDir: string,
+  packId: string,
+  writeSet: readonly PackWriteSetEntry[],
+  ledger: readonly LedgerEntry[],
+): Promise<string[]> {
+  const owner = packOwner(packId);
+  const replaced = new Set([...writeSet.map((entry) => entry.targetPath), receiptRelPath(packId)]);
+  const candidates = ledger
+    .filter((entry) => isOwnedByPack(entry, owner) && !replaced.has(entry.path))
+    .map((entry) => entry.path);
+  const present = await Promise.all(
+    candidates.map(async (path) => await pathExists(underRoot(rootDir, path))),
+  );
+  return candidates.filter((_, index) => present[index] === true).toSorted();
 }
 
 /** A `type:id` key split back into its two halves. */
@@ -1175,6 +1222,12 @@ export async function planPackInstall(
     artifacts,
     projectManifest,
   );
+  const leftBehind = await collectLeftBehind(
+    rootDir,
+    packManifest.name,
+    writeSet,
+    projectManifest?.ledger ?? [],
+  );
 
   return {
     manifest: packManifest,
@@ -1184,6 +1237,7 @@ export async function planPackInstall(
     agentGrants: describeAgentGrants(agents, packManifest),
     collisions,
     nameClashes,
+    leftBehind,
     checks,
     trustTier: tier,
     tierBasis:

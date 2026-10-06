@@ -1,10 +1,13 @@
 import { createHash } from "node:crypto";
-import { lstat, readFile, readdir } from "node:fs/promises";
+import { lstat, readFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addCommand } from "../../../src/cli/commands/add.ts";
+import { cleanCommand } from "../../../src/cli/commands/clean.ts";
 import { estimateTokens } from "../../../src/guard/tokenEstimate.ts";
 import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
+import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
 import { PACK_MANIFEST_FILE } from "../../../src/pack/manifest.ts";
 import { computeAggregateContentSha, type TrustTier } from "../../../src/pack/trust.ts";
 import type { Tool } from "../../../src/types/core.ts";
@@ -1283,21 +1286,23 @@ describe("add — curated catalog", () => {
     expect((parseDoc(viaPath.stdout).trustTier as string)).toBe("pinned-unsigned");
     expect(await pathExists(getProject().path(OPS_DIR, "rules", "local.md"))).toBe(true);
 
-    // Bare `ops` prefers the catalog: curator-verified, no waiver, and the
-    // re-install (same pack id) replaces the pack's ledger rows with the
-    // catalog content's.
+    // Bare `ops` prefers the catalog: curator-verified, no waiver.
+    //
+    // TEST CHANGE, justified (review/45, the maintainer's answer of 2026-10-06):
+    // this half used to pin that the re-install succeeded and left the local
+    // copy's `rules/local.md` on disk with no ledger row. That stray is what
+    // made the `clean --pack` remedy loop (sync still reads it, clean --pack
+    // cannot reach it), so a re-add that would leave a file behind is now
+    // refused before any write. The catalog-over-path resolution this case is
+    // about is still proved: the plan resolved the catalog entry's tier.
     const viaCatalog = await run(["ops", "--json"]);
-    expect(viaCatalog.code).toBe(0);
-    expect((parseDoc(viaCatalog.stdout).trustTier as string)).toBe("curator-verified");
-    expect(await pathExists(getProject().path(OPS_DIR, OPS_SKILL_PATH))).toBe(true);
-    // Re-install replaces rows and overwrites its own write set; it does not
-    // sweep prior-install files absent from the new set — the stale file stays
-    // on disk, now unowned (reclaiming strays is clean's job, not add's).
-    const rows = packRows(await readProjectManifest(), "ops");
-    expect(rows.map((row) => row.path)).toEqual([
-      `${OPS_DIR}/receipt.json`,
-      `${OPS_DIR}/${OPS_SKILL_PATH}`,
+    expect(viaCatalog.code).toBe(1);
+    const doc = parseDoc(viaCatalog.stdout);
+    expect(doc.trustTier as string).toBe("curator-verified");
+    expect((doc.planned as { leftBehind: string[] }).leftBehind).toEqual([
+      `${OPS_DIR}/rules/local.md`,
     ]);
+    expect(await pathExists(getProject().path(OPS_DIR, OPS_SKILL_PATH))).toBe(false);
     expect(await pathExists(getProject().path(OPS_DIR, "rules", "local.md"))).toBe(true);
   });
 });
@@ -1433,7 +1438,11 @@ describe("add — name clashes", () => {
     expect(errorOf(doc).message).toBe(
       `pack "${PACK_ID}" was not installed: 1 name(s) it would emit are taken`,
     );
-    expect(errorOf(doc).next).toContain("rename the listed artifact(s) in the pack's source");
+    // TEST CHANGE, justified (review/37, review/44): the remedy names the
+    // incoming pack, because another installed pack can be the other owner.
+    expect(errorOf(doc).next).toContain(
+      `rename the listed artifact(s) in the incoming pack's source (pack "${PACK_ID}")`,
+    );
     // The clash rides the plan, not the gate chain: no gate row was added.
     expect(Object.keys(checksOf(doc)).toSorted()).toEqual(Object.keys(GATE_OUTCOMES).toSorted());
     expect(packRows(await readProjectManifest())).toEqual([]);
@@ -1539,12 +1548,20 @@ describe("add — name clashes", () => {
     expect(planned.collisions).toHaveLength(1);
     expect(planned.nameClashes).toHaveLength(1);
     expect(errorOf(doc).next).toContain("resolve the collisions");
+    // One error document over both kinds (review/39): following its `next`
+    // clears the names too, not only the paths.
+    expect(errorOf(doc).message).toBe(
+      `pack "${PACK_ID}" was not installed: 1 path(s) it would write are not free; ` +
+        "1 name(s) it would emit are taken",
+    );
+    expect(errorOf(doc).next).toContain("rename the listed artifact(s) in the incoming pack's source");
+    expect(human.stderr).toContain("1 name(s) it would emit are taken");
     expect(writtenOf(doc)).toEqual([]);
     expect(await readFile(getProject().path(PACK_DIR, "commands", "st-drill.md"), "utf8")).toBe("hand-written\n");
     expect(packRows(await readProjectManifest())).toEqual([]);
   });
 
-  it("tells the operator to remove an installed pack that owns the other half", async () => {
+  it("names an installed pack that owns the other half without advising its removal", async () => {
     await initProject();
     await seedPack({
       content: { "commands/st-shared.md": "---\nid: shared\ntype: command\n---\nShared.\n" },
@@ -1574,7 +1591,216 @@ describe("add — name clashes", () => {
       `st-shared — pack "${PACK_ID}" command "shared" and pack "acme-two" skill "shared" both ` +
         "install as st-shared (one folder on Cursor and Codex; on Claude the skill hides the command)",
     ]);
-    expect(errorOf(doc).next).toContain(`\`stamity clean --pack ${PACK_ID}\``);
+    // TEST CHANGE, justified (review/44, signed off): the refusal used to say
+    // "remove it first" about the installed pack, which a newcomer could provoke
+    // on purpose to take an established name. Removal is now offered only as a
+    // deliberate replacement, naming both packs and who then takes the name.
+    const next = errorOf(doc).next ?? "";
+    expect(next).toContain(`rename the listed artifact(s) in the incoming pack's source (pack "acme-two")`);
+    expect(next).toContain(
+      `pack "${PACK_ID}" is installed and keeps st-shared: remove it with ` +
+        `\`stamity clean --pack ${PACK_ID}\` only to replace it with pack "acme-two" on purpose, ` +
+        "which then takes the name",
+    );
+    expect(next).not.toContain("remove it first");
     expect(packRows(await readProjectManifest(), "acme-two")).toEqual([]);
+  });
+});
+
+describe("add — per-owner remedies for a name clash", () => {
+  it("offers renaming or removing the operator's own override", async () => {
+    await initProject();
+    await getProject().seedFiles({
+      ".stamity/overrides/commands/st-triage.md": "---\nid: triage\ntype: command\n---\nOur triage.\n",
+    });
+    await seedPack({
+      content: { "skills/st-triage/SKILL.md": "---\nid: triage\ntype: skill\n---\nTriage steps.\n" },
+    });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(1);
+    const next = errorOf(parseDoc(result.stdout)).next ?? "";
+    expect(next).toContain(`rename the listed artifact(s) in the incoming pack's source (pack "${PACK_ID}")`);
+    expect(next).toMatch(/or rename or remove your override at \S*\/\.stamity\/overrides\/commands\/st-triage\.md/);
+    expect(next).not.toContain("clean --pack");
+  });
+
+  it("sends a clash with the core to the incoming pack's maintainers", async () => {
+    await initProject();
+    await seedPack({
+      content: { "commands/st-verify.md": "---\nid: verify\ntype: command\n---\nVerify it.\n" },
+    });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(1);
+    const next = errorOf(parseDoc(result.stdout)).next ?? "";
+    expect(next).toContain(
+      `the core skill "st-verify" ships with this package and cannot move here: report the ` +
+        `clash to the maintainers of pack "${PACK_ID}"`,
+    );
+    expect(next).not.toContain("clean --pack");
+  });
+
+  it("says a skill-against-rule clash hides no command", async () => {
+    await initProject();
+    // The core rule `question-protocol` demotes into `stamity-question-protocol/`;
+    // a pack skill folder of that name takes it, and no command is involved.
+    await seedPack({
+      content: {
+        "skills/stamity-question-protocol/SKILL.md":
+          "---\nid: question-protocol\ntype: skill\n---\nSteps.\n",
+      },
+    });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(1);
+    const why = (errorOf(parseDoc(result.stdout)) as { why?: string }).why ?? "";
+    expect(why).toContain("share one skill folder");
+    expect(why).not.toContain("hides the command");
+  });
+
+  it("prints a pack-declared id with an ESC in it as plain text", async () => {
+    await initProject();
+    // A YAML double-quoted `\e` is ESC once parsed, while the bytes on disk stay
+    // printable: the folder takes the core st-plan name, the id carries the escape.
+    await seedPack({
+      content: {
+        "skills/st-plan/SKILL.md": '---\nid: "plan\\e[2J"\ntype: skill\n---\nPlan steps.\n',
+      },
+    });
+
+    const human = await run(installArgs());
+
+    expect(human.code).toBe(1);
+    expect(human.stdout).toContain("name clashes");
+    expect(human.stdout).toContain(`pack "${PACK_ID}" skill "plan [2J"`);
+    expect(human.stdout).not.toContain("\u001b");
+    expect(human.stderr).not.toContain("\u001b");
+  });
+});
+
+describe("add — a re-add that would leave the installed copy's files behind", () => {
+  it("refuses a version that drops a file, naming it and clean --pack, and writes nothing", async () => {
+    await initProject();
+    await seedPack();
+    expect((await run(installArgs())).code).toBe(0);
+    const before = await readProjectManifest();
+    const receiptBefore = await readFile(getProject().path(RECEIPT_PATH), "utf8");
+    // The next version ships the agent only: `rules/naming.md` is dropped.
+    await rm(getProject().path("packs", "ops"), { recursive: true });
+    await seedPack({ content: { "agents/reviewer.md": AGENT_BODY } });
+
+    const human = await run(installArgs());
+
+    expect(human.code).toBe(1);
+    expect(human.stdout).toContain("left behind by this version");
+    expect(human.stdout).toContain(`    ${PACK_DIR}/rules/naming.md\n`);
+    expect(human.stderr).toContain("1 file(s) of the installed copy would be left behind");
+    expect(human.stderr).toContain(
+      `run \`stamity clean --pack ${PACK_ID}\` first, then \`stamity add ${PACK_SPEC}\` again`,
+    );
+    // Nothing written: the ledger, the receipt and the dropped file are as they were.
+    expect(await readProjectManifest()).toEqual(before);
+    expect(await readFile(getProject().path(RECEIPT_PATH), "utf8")).toBe(receiptBefore);
+    expect(await readFile(getProject().path(PACK_DIR, "rules", "naming.md"), "utf8")).toBe(RULE_BODY);
+
+    const machine = await run(installArgs("--json"));
+
+    expect(machine.code).toBe(1);
+    const doc = parseDoc(machine.stdout);
+    expect((doc.planned as { leftBehind: string[] }).leftBehind).toEqual([`${PACK_DIR}/rules/naming.md`]);
+    expect(errorOf(doc).next).toContain(`stamity clean --pack ${PACK_ID}`);
+    expect(writtenOf(doc)).toEqual([]);
+  });
+
+  it("lets a version that ships every installed file proceed, new files included", async () => {
+    await initProject();
+    await seedPack();
+    expect((await run(installArgs())).code).toBe(0);
+    await rm(getProject().path("packs", "ops"), { recursive: true });
+    await seedPack({ content: { ...DEFAULT_CONTENT, "rules/extra.md": "---\nid: extra\ntype: rule\n---\nMore.\n" } });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(0);
+    const doc = parseDoc(result.stdout);
+    expect((doc.planned as { leftBehind: string[] }).leftBehind).toEqual([]);
+    expect(packRows(await readProjectManifest()).map((row) => row.path).toSorted()).toEqual(
+      [...CONTENT_WRITTEN, `${PACK_DIR}/rules/extra.md`, RECEIPT_PATH].toSorted(),
+    );
+  });
+
+  it("refuses the renamed ops over a 1.11.0 copy, and clean --pack then add clears it", async () => {
+    const project = getProject();
+    await initProject();
+    // The 1.11.0 ops shape: skills and commands sharing st-release and
+    // st-incident-response. Installed bypassing `add`, as 1.11.0 did — the
+    // engine's plan and apply, which do not refuse a name clash themselves.
+    const old: Record<string, string> = {
+      "commands/st-release.md": "---\nid: release\ntype: command\n---\nCut a release.\n",
+      "commands/st-incident-response.md":
+        "---\nid: incident-response\ntype: command\n---\nRun the incident.\n",
+      "skills/st-release/SKILL.md": "---\nid: release\ntype: skill\n---\nRelease steps.\n",
+      "skills/st-incident-response/SKILL.md":
+        "---\nid: incident-response\ntype: skill\n---\nIncident steps.\n",
+    };
+    await project.seedFiles({
+      ...Object.fromEntries(Object.entries(old).map(([rel, text]) => [`old/ops/${rel}`, text])),
+      [`old/ops/${PACK_MANIFEST_FILE}`]: JSON.stringify({
+        name: "ops",
+        version: "0.0.9",
+        integrity: Object.fromEntries(Object.entries(old).map(([rel, text]) => [rel, digest(text)])),
+        declaredTools: ["claude"],
+      }),
+    });
+    const oldPlan = await planPackInstall(project.dir, "./old/ops", { allowUntrusted: true });
+    expect(oldPlan.nameClashes).toHaveLength(2);
+    const installed = await applyPackInstall(project.dir, oldPlan, await readProjectManifest(), {
+      now: FIXED_NOW,
+    });
+    await writeManifest(project.dir, installed.manifest, { now: FIXED_NOW });
+
+    // The renamed ops this package ships, through the catalog seam at its pin.
+    const opsRoot = fileURLToPath(new URL("../../../packs/ops", import.meta.url));
+    const shipped = JSON.parse(await readFile(join(opsRoot, PACK_MANIFEST_FILE), "utf8")) as {
+      integrity: Record<string, string>;
+    };
+    catalogSeam.bundledRoots.set("ops", opsRoot);
+    catalogSeam.entries.set("ops", {
+      id: "ops",
+      description: "first-party ops pack",
+      source: { kind: "bundled" },
+      pin: { sha256: computeAggregateContentSha(shipped.integrity), tier: "curator-verified" },
+      notAudited: false,
+      disclaimer: "",
+    });
+    const before = await readProjectManifest();
+
+    const refused = await run(["ops"]);
+
+    expect(refused.code).toBe(1);
+    expect(refused.stdout).toContain("left behind by this version");
+    expect(refused.stdout).toContain(".stamity/packs/ops/skills/st-release/SKILL.md");
+    expect(refused.stdout).toContain(".stamity/packs/ops/skills/st-incident-response/SKILL.md");
+    expect(refused.stderr).toContain("run `stamity clean --pack ops` first, then `stamity add ops` again");
+    expect(await readProjectManifest()).toEqual(before);
+    expect(await pathExists(project.path(".stamity", "packs", "ops", "skills", "st-release-runbook"))).toBe(false);
+
+    // Following the remedy closes the loop: clean --pack removes every ledgered
+    // file of the old copy, and the re-add then lands with nothing left behind.
+    const cleaned = await runInProcess([cleanCommand], ["clean", "--pack", "ops", "-y"], {
+      cwd: project.dir,
+    });
+    expect(cleaned.code).toBe(0);
+    const added = await run(["ops"]);
+    expect(added.code).toBe(0);
+    expect(await pathExists(project.path(".stamity", "packs", "ops", "skills", "st-release"))).toBe(false);
+    expect(
+      await pathExists(project.path(".stamity", "packs", "ops", "skills", "st-incident-response")),
+    ).toBe(false);
+    expect(await pathExists(project.path(".stamity", "packs", "ops", "skills", "st-release-runbook"))).toBe(true);
   });
 });

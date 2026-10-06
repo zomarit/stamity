@@ -218,6 +218,46 @@ describe("findInvocableNameClashes", () => {
     expect(describeInvocableNameClash(clashes[0]!)).toContain('pack "acme" skill "drill"');
   });
 
+  it("folds through upper case too: dotless i, long s and the Kelvin sign join their ASCII twins", () => {
+    // NTFS compares names through an upper-case table, where \u0131 (dotless i)
+    // and \u017F (long s) become ASCII I and S; lower case alone leaves them
+    // apart. The Kelvin sign \u212A lower-cases to k, as APFS folds it.
+    const pairs: [string, string][] = [
+      ["st-l\u0131nt", "lint"],
+      ["st-\u017Fync", "sync"],
+      ["st-\u212Ait", "kit"],
+    ];
+    for (const [folder, id] of pairs) {
+      const clashes = findInvocableNameClashes([packSkill("acme", folder, id), packCommand("acme", id)]);
+
+      expect(clashes.map((clash) => clash.owners.map((owner) => owner.kind))).toEqual([
+        ["command", "skill"],
+      ]);
+    }
+  });
+
+  it("joins an NFD spelling with its NFC twin", () => {
+    const clashes = findInvocableNameClashes([
+      packSkill("acme", "st-cafe\u0301", "cafe"),
+      packCommand("acme", "caf\u00e9"),
+    ]);
+
+    expect(clashes).toHaveLength(1);
+  });
+
+  it("prints a pack-declared id carrying an ESC as plain text", () => {
+    // A YAML double-quoted scalar can spell ESC as an escape, so the parsed id
+    // carries the control character while the file's bytes stay printable.
+    const [clash] = findInvocableNameClashes([
+      packSkill("ac\u001bme", "st-drill", "dr\u001b[2Jill"),
+      packCommand("acme", "drill"),
+    ]);
+    const line = describeInvocableNameClash(clash!);
+
+    expect(line).toContain('pack "ac me" skill "dr [2Jill"');
+    expect(line).not.toMatch(/\p{Cc}/u);
+  });
+
   it("prints every owner path in POSIX form, whatever separator the walk joined it with", () => {
     const windows: Item = {
       ...item("command", "cmd-drill", "commands/st-drill.md", "user"),

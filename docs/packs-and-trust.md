@@ -100,8 +100,15 @@ The three first-party packs, and what each one ships, are on
 ### Update a pack by adding it again
 
 **Updating a pack means adding it again.** There is no auto-update path for any source.
-Re-running the install line re-runs every install gate against the new content and replaces what
-was landed. So re-add is the update, and it is the only way to pick up a change.
+Re-running the install line re-runs every install gate against the new content and writes the new
+version over the installed one. So re-add is the update, and it is the only way to pick up a
+change.
+
+Adding again deletes nothing, so a new version that drops a file is refused. The dropped file
+would stay on disk with no ledger row: `sync` would still read it, and `clean --pack` could no
+longer remove it. `add` lists those files under `left behind by this version` and writes nothing.
+Run `stamity clean --pack <id>` first, while the ledger still names every file of the installed
+copy, then add the pack again.
 
 ### Packs in a plugin-backed repository
 
@@ -110,9 +117,12 @@ under them. An installed pack's skills are the exception: no plugin ships them, 
 written anyway. A pack's commands, agents, rules and hooks get no exception, and wherever the
 client's plugin carries their class they are dropped. [Plugins](plugins.md) has the table, under
 Who owns what. `stamity check` reports the result in its `pack-reach` row. The row fails for an
-installed pack none of whose artifacts reaches a selected client, and warns, naming each one, for
-a pack with some artifacts dropped. Remove a pack that reaches nothing with
-`stamity clean --pack <id>`, or run that client from the CLI route instead of its plugin.
+installed pack none of whose artifacts reaches a selected client. It warns instead in three
+cases: a pack whose only delivery left is an MCP server you have not selected, naming
+`stamity config mcp add <id>`; a pack with some artifacts dropped, naming each one; and a pack
+with nothing a client loads. Otherwise it passes. Remove a pack that reaches nothing with
+`stamity clean --pack <id>`. [Plugins](plugins.md) lists every status of the row with its remedy,
+under Troubleshooting.
 
 ## Which rung of the trust ladder a pack lands on
 
@@ -321,15 +331,24 @@ Cursor and Codex they overwrite each other's files, and on Claude the skill hide
 `add` also refuses a pack whose command or skill would install under a name an artifact of
 another class already takes. That artifact can be in the same pack, another installed pack, the
 core, the fork layer or your overrides. Each line under `name clashes` names every owner, and
-`add` refuses before it writes anything, under `--dry-run` too. Rename the artifact in the pack's
-source and add it again. When the other owner is an installed pack, remove that one first with
-`stamity clean --pack <id>`.
+`add` refuses before it writes anything, under `--dry-run` too. The remedy depends on the other
+owner:
 
-A pack installed by an earlier version never met that check. `sync` refuses it, and so do `check`,
-`init` and `plugin setup`, which plan the same way. The refusal lists every clashing name with
-its owners, then the remedy: `stamity clean --pack <id>`, then `stamity add <id>` once the pack
-ships distinct names, then `stamity sync`. Adding it again alone does not clear the clash, because
-`add` writes the new version's files and deletes none the new version dropped.
+- Every clash: rename the artifact in the incoming pack's source, then add it again.
+- Your override: rename or remove the override instead.
+- The core or the fork layer: nothing in your repository can move it, so report the clash to the
+  incoming pack's maintainers.
+- Another installed pack: keep it. Remove it with `stamity clean --pack <id>` only to replace it
+  with the incoming pack on purpose, which then takes the name.
+
+A clash can also arise after a pack is installed. The pack may come from an earlier version that
+never ran that check, or a later core upgrade, a new override or a fork-layer artifact may take
+one of its names. `sync` refuses any of these, and so do `check`, `init` and `plugin setup`, which
+plan the same way. The refusal lists every clashing name with its owners, then one remedy per
+owner that can move. For a pack, run `stamity clean --pack <id>`, then `stamity add <id>` once the
+pack ships distinct names, then `stamity sync`. For an override, rename or remove it. Adding the
+pack again before cleaning is refused when the new version would leave the clashing files behind,
+as described under [Update a pack by adding it again](#update-a-pack-by-adding-it-again).
 
 An overlay cannot patch a pack's skill either: its files ship byte-for-byte from the pack, so the
 overlay is refused. [Customization](customization.md) says which pack artifacts can be patched.
