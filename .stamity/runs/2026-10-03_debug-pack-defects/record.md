@@ -1,6 +1,6 @@
 # Run 2026-10-03_debug-pack-defects — the 1.11.0 pack-engine defects, widened to four
 
-Status: in progress
+Status: closed — fixed through the work pipeline (run 2026-10-03_pack-engine-defects, branch fix/pack-engine-defects); residue 0 lines carrying this run's id; failed fixes this session 0
 Plan: none — debug round
 Invocation: /st-debug Fix the four pack-engine defects behind the inbox's ops-pack row (src/emit/skillsProjection.ts, plan 016's block): (1) the command/skill name clash on Cursor and Codex — a check at add and sync naming both owners, with ops's two clashing skill halves renamed so add ops still syncs; (2) the Codex skills list counting only the rows Codex shows its model, still refusing above 8,000 characters with a message naming the pack and the size; (3) pack skills inert in plugin mode — the origin stamp, plus a check row for an installed pack that reaches no client; (4) an overlay on a pack skill refused loudly instead of reported then ignored. Regression tests on a made-up pack on each of the four clients and on all four together. The three init rows (source: /st-ask) ride in the same pull request; merged to main without a release.
 Target: app code — wrong user-visible behaviour in the engine: `sync` exits 1, pack files never reach a client, an overlay is dropped. This checkout's generated files are not implicated; the test-runner's baseline includes the install probe.
@@ -144,3 +144,44 @@ cases, red twice for the stated causes. The fix may start.
 
 Recorded at 2026-10-03T12:19Z: the diagnosis above and the failing tests go to `/st-work` as its plan, together with
 the three init rows (`source: /st-ask`) that ride in the same pull request.
+
+## Cleanup (step 8)
+
+No instrumentation was placed: the failing tests separated the hypotheses, so there was nothing to strip. The marker
+check at the close (2026-10-06T08:13Z, on the branch at `5df34f7c`) found two hits, the same two QA-table rows that
+quote scenario P24's planted probe. Zero hits carry this run's id, so the zero-residue gate holds.
+
+## Regression clauses (step 9)
+
+Each clause names the test that holds it. No clause is without a test.
+
+1. `add ops`, then `sync` and `check`, shall continue to exit 0 on Cursor and on Codex alone.
+   (`test/pack/packEngineDefects.test.ts`, group A)
+2. `add` shall continue to refuse, before any write, a pack whose command or skill would install under a name an
+   artifact of the other class already takes: in the same pack, another installed pack, the core, the fork layer or
+   an override. It names both owners and gives a remedy for each. (Group B1–B4; `test/content/invocableNames.test.ts`;
+   `test/cli/commands/add.test.ts`)
+3. `sync`, and so `check`, `init` and `plugin setup`, shall continue to refuse an installed cross-class clash with the
+   clash named and a remedy that works, never the composer's generic collision. (Group B5;
+   `test/emit/plannerNameClash.test.ts`)
+4. A re-add that would leave the installed copy's files behind shall continue to be refused before writing, naming
+   `clean --pack <id>` first, so that remedy cannot loop. (`test/cli/commands/add.test.ts`, the re-add cases;
+   `test/pack/install.test.ts`, `leftBehind`)
+5. The Codex skills list shall continue to count only the rows Codex shows its model, to refuse above 8,000
+   characters, and to name each installed pack's share. (Group C; `test/adapters/codex.test.ts`)
+6. A pack skill shall continue to reach a plugin-backed client. (Group D1; `test/pack/projection.test.ts`)
+7. `check` shall continue to fail an installed pack that reaches no selected client, and to warn for one partly
+   dropped, inert, denied by policy, or waiting on an unselected MCP server. (Group D2;
+   `test/cli/commands/check.test.ts`; `test/emit/plannerPackReach.test.ts`)
+8. An overlay on a pack skill shall continue to be refused by `sync` and `validate` at the user stage, and to be
+   skipped and reported at the fork stage. (Group E; `test/content/overlayPackSkill.test.ts`)
+
+## Closing report
+
+- **The four defects:** fixed through the work pipeline and reviewed. See run `2026-10-03_pack-engine-defects`.
+- **The failing tests:** they went red twice on `40371e1b` and pass on the branch. `test/pack/packEngineDefects.test.ts`
+  is unedited since `40371e1b`.
+- **Escape valve:** zero failed fixes this session, so it did not fire.
+
+Recommended next step: none from this run's own state. Every clause has a test, no instrumentation is held, and no
+hypothesis survives unconfirmed.
