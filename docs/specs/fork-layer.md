@@ -19,7 +19,8 @@ Every claim about existing behaviour below carries a `path:line` citation taken 
 at `f62d526` (main after the 1.4.0 release and the post-release cleanup). The paragraphs headed
 "Amended 2026-10-06" come from the spec delta the unit `u5a-overlay-refusal` declared in run
 `2026-10-03_pack-engine-defects`, merged at its close; they cite `eb4f0727` and are not in a release
-yet.
+yet. Those that name a review row (`review/60`, `review/66`) come from the same run's
+close review and cite the commit that carries them.
 
 ## Intent
 
@@ -94,6 +95,11 @@ corpus or pack → fork (a full replacement or a patch) → user (a full replace
    arrived first, the rule packs already meet against the corpus, and a fork that wants to change
    a pack's artifact patches it or ships its own under another id. Precedence is user > fork >
    pack > corpus, decided in the one loop that decides it today.
+
+   Amended 2026-10-06 (run `2026-10-03_pack-engine-defects`, review row `review/60`): the patch
+   remedy does not hold for a pack's skill. A pack skill is never patched — a fork patch of one is
+   skipped (REQ-FORK-004's amendment) — so a fork that wants to change a pack's skill ships its own
+   under another id, and that is the only remedy the refusal names on the fork's side for a skill.
 4. **The same gate.** A fork artifact passes the index-time contract the corpus passes and
    the safety screen user content passes; nothing about the layer relaxes a floor.
 5. **Same emission, same ownership.** A fork artifact reaches every client location its class
@@ -139,6 +145,15 @@ another id); a user item claiming a fork id takes the slot as it takes any lower
 "user"`, and every reader the union's doc block enumerates (`catalog.ts:96-113`) is updated
 or verified.
 
+Amended 2026-10-06 (run `2026-10-03_pack-engine-defects`, review row `review/60`): the fork
+author's patch remedy is named for every class but skill. A fork patch of a pack skill is skipped
+(REQ-FORK-004's amendment), so following it would ship the fork's change nowhere. When the pack's
+artifact is a skill, the refusal keeps the consumer's two remedies and says, on the fork's side,
+that a pack skill cannot be patched and that the fork's skill ships under another id; it names no
+`SKILL.customize.*` file (`refusePackShadow`, `src/content/catalog.ts:1111-1145`, the skill arm at
+`:1123-1129`). An agent, command or rule keeps the text above unchanged.
+`test/content/catalog.test.ts:1600` pins the rule's text whole, and `:1644` the skill's.
+
 ### REQ-FORK-004 — Patches from the fork layer
 
 Overlay discovery runs over `<forkRoot>` as it runs over the override root; a fork patch
@@ -158,7 +173,7 @@ Amended 2026-10-06 (run `2026-10-03_pack-engine-defects`, unit `u5a-overlay-refu
 installed pack's SKILL is skipped in that repository, each half recorded in `ContentIndex.skipped`
 with a reason naming the pack and the skill, and `validate` prints that reason as a warning at exit 0
 (`forkPackSkillSkipReason`, `src/content/catalog.ts:1562-1576`, applied at `:1851-1857`;
-`classifyForkOverlays`, `src/cli/commands/validate.ts:700-748`). A consumer's own patch of a pack
+`classifyForkOverlays`, `src/cli/commands/validate.ts:700-753`, the warning mapping at `:749-751`). A consumer's own patch of a pack
 skill is an error (REQ-OVERLAY-009's pack-skill row, amended 2026-10-06). A pack skill projects from
 the pack's own files and is never patched, so the waiting rule above does not reach skills: the skip
 reason for a fork skill patch with no base says it will not apply even once a pack supplies the
@@ -186,6 +201,15 @@ the one whose message opens "Pack-skill overrides are unsupported today", in `me
 (`src/emit/planner.ts:653-658`, the function at `:634-673`, whose doc names the fork skill's side at
 `:626-632`); the directory-clash refusal is `refuseOverrideDirectoryClash` (`:708-742`). The names
 are the durable address; the line ranges drift.
+
+Amended 2026-10-06 (run `2026-10-03_pack-engine-defects`, review row `review/66`): the cross-class
+name check covers fork artifacts too. Before any row is planned, `sync` — and `check`, `init` and
+`plugin setup`, which plan through the same seam — refuses when one invocable name is claimed by
+artifacts of more than one class, and a fork-layer file is an owner like any other
+(`refuseInvocableNameClashes`, `src/emit/planner.ts:812-867`, run at `:965`). For a fork owner
+the remedy printed is to rename or remove the file in the fork's source and publish the package
+again, named as a defect in the package's fork layer rather than in the consumer's repository
+(`remedyOf`, `:889-894`). `test/emit/plannerNameClash.test.ts:256` holds the case.
 
 ### REQ-FORK-006 — Validate names the fork
 
@@ -275,6 +299,10 @@ gates remain necessary. See REQ-APM-006 through -009 in the APM distribution spe
   lists both lower claimants.
 - GIVEN a pack and a fork item claiming one id, in either install order, THEN the pack is
   refused on contact and the message names the fork file and both remedies.
+- GIVEN a pack skill and a fork skill claiming one id THEN the pack is refused on contact, the
+  message names the consumer's two remedies, and on the fork's side it says a pack skill cannot be
+  patched and names shipping the fork's skill under another id, with no `SKILL.customize.*` file
+  (added 2026-10-06, review row `review/60`; `test/content/catalog.test.ts:1644`).
 - GIVEN `fork/rules/ops.customize.yaml` where only a pack supplies `ops` WHEN the pack is not
   installed THEN the index builds, the patch is skipped, and `validate` shows a warning that it
   waits for the pack; WHEN the pack is installed THEN the patch applies.

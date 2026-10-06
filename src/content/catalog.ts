@@ -1103,7 +1103,10 @@ function resolveLayerInto(state: ResolutionState, claimants: readonly CatalogIte
  * collision has an author on each side: the consumer can remove the pack or
  * ask for a rename, and the fork can patch the pack's artifact instead of
  * replacing it, or ship its own under another id. Both are named, because
- * the reader may be either party.
+ * the reader may be either party. A pack SKILL is the exception on the fork's
+ * side: overlays on pack skills are not applied ({@link forkPackSkillSkipReason}),
+ * so a fork patch of one is skipped and the patch remedy would be a dead end;
+ * for a skill the fork is offered only another id.
  */
 function refusePackShadow(packItem: CatalogItem, other: CatalogItem): never {
   const pack = packItem.provenance?.pack ?? "<pack-id>";
@@ -1113,17 +1116,22 @@ function refusePackShadow(packItem: CatalogItem, other: CatalogItem): never {
     `not shadow existing content`;
   if (originOf(other) === "fork") {
     // The fork's patch spelling for this id: the fork file's own path with the
-    // overlay suffix in place of the artifact extension, which is the layout for
-    // a file class (`rules/ops.customize.yaml`) and a skill (`skills/ops/SKILL.customize.yaml`) alike.
+    // overlay suffix in place of the artifact extension (`rules/ops.customize.yaml`).
+    // A pack skill is never patched — the fork stage skips the patch — so for a
+    // skill the patch remedy is withheld and only another id is offered.
     const patch = `fork/${other.relativePath.slice(0, -ARTIFACT_EXTENSION.length)}`;
+    const forkRemedy =
+      packItem.type === "skill"
+        ? `From the fork, a pack skill cannot be patched: overlays on pack skills are not ` +
+          `applied, so a fork patch of it is skipped. Ship the fork's skill under another id.`
+        : `From the fork, patch the pack's artifact with ${patch}${OVERLAY_FRONTMATTER_SUFFIX} ` +
+          `or ${patch}${OVERLAY_BODY_SUFFIX} instead of replacing it, or ship the fork's ` +
+          `artifact under another id.`;
     throw new EngineError(
       `${supplies}, and a pack and the fork layer never share an id: the pack is refused on ` +
         `contact whichever arrived first, so a fork file that came with a package upgrade ` +
         `refuses a pack that was installed before it. From this repository, remove the pack ` +
-        `(clean --pack ${pack}) or ask the pack's author to rename the artifact. From the ` +
-        `fork, patch the pack's artifact with ${patch}${OVERLAY_FRONTMATTER_SUFFIX} or ` +
-        `${patch}${OVERLAY_BODY_SUFFIX} instead of replacing it, or ship the fork's artifact ` +
-        `under another id.`,
+        `(clean --pack ${pack}) or ask the pack's author to rename the artifact. ${forkRemedy}`,
       { code: "VALIDATION_ERROR" },
     );
   }

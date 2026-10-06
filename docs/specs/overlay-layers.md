@@ -314,7 +314,7 @@ a body nobody emits, and the report would say the patch applied.
 `u5a-overlay-refusal`, integrated as `8484b70a`; cited at `eb4f0727`): one
 resolved base is never patched.** When the base the walk resolves is a pack
 SKILL, the pair is not merged. A pack skill projects from the pack's own files,
-read as raw bytes by a lane that never sees this index's merge
+which that lane reads itself and never through this index's merge
 (`src/pack/projection.ts:612-636`), so the merge used to be reported as
 `patched` by `validate` and reach no client — the outcome the "Dropped" line
 above names. `applyOverlays` now judges such a pair by stage, after both
@@ -323,8 +323,8 @@ it with `VALIDATION_ERROR` (`refusePackSkillOverlay`, `:1529-1560`), and the for
 stage skips it, recording each half in `ContentIndex.skipped` with a reason
 naming the pack and the skill (`forkPackSkillSkipReason`, `:1562-1576`); the
 overlay-layer header states the rule (`:1255-1260`). Overlays on a pack's
-agents, commands and rules still apply. The "Landed" paragraph's line citations
-(`catalog.ts:526-580`) date from the design; the merge's durable address is
+agents, commands and rules still apply. The Decision and Landed paragraphs' line
+citations (`catalog.ts:526-580`) date from the design; the merge's durable address is
 `applyOverlays` in `src/content/catalog.ts`.
 
 ### REQ-OVERLAY-004 — An overlay and a full override of one id are refused together
@@ -514,10 +514,11 @@ source.` (`src/content/catalog.ts:1547-1560`). It offers no `clean --pack`:
 removing the pack would leave the overlay an orphan, refused again by the
 REQ-OVERLAY-010 row (`review/18` of that run). `validate` reports it as an error
 against the overlay file and exits 1, matching a half's POSIX path in the
-message (`overlayFailure`, `src/cli/commands/validate.ts:635-637`). At the fork
+message (`overlayFailure`, `src/cli/commands/validate.ts:664-672`, called at `:635-637`). At the fork
 stage the same pair is a skip, not a refusal, for the package-global reason
 REQ-FORK-004 gives; `validate` prints its reason as a warning at exit 0
-(`classifyForkOverlays`, `src/cli/commands/validate.ts:700-748`).
+(`classifyForkOverlays`, `src/cli/commands/validate.ts:700-753`, the warning mapping at
+`:749-751`).
 
 **Rationale.** Parity with the settled posture for a malformed override, and
 with the reason it was settled: a walk that carries on past a defective artifact
@@ -725,7 +726,9 @@ that the contract changed.
 
 One set per requirement. Thirty-four criteria; each is machine-checkable unless
 tagged otherwise. The count moved by two when the ceiling joined the
-REQ-OVERLAY-009 table.
+REQ-OVERLAY-009 table. Amended 2026-10-06: the four criteria tagged "added
+2026-10-06" make it thirty-eight, recounted as the `- GIVEN` lines under this
+heading.
 
 **REQ-OVERLAY-001**
 

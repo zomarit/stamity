@@ -1627,9 +1627,21 @@ describe("the fork layer", () => {
       expect(refusal.message).toContain("fork/rules/ops.customize.md");
       expect(refusal.message).toContain("instead of replacing it");
       expect(refusal.message).toContain("under another id");
+      // The non-skill fork remedy, pinned whole (review/60): withholding the
+      // patch remedy for a pack skill must leave every other class's text as it was.
+      expect(refusal.message).toContain(
+        "From this repository, remove the pack (clean --pack ops) or ask the pack's author to " +
+          "rename the artifact. From the fork, patch the pack's artifact with " +
+          "fork/rules/ops.customize.yaml or fork/rules/ops.customize.md instead of replacing " +
+          "it, or ship the fork's artifact under another id.",
+      );
     });
 
-    it("spells the fork-side patch remedy for a skill as the carrier directory's halves", async () => {
+    // TEST CHANGE, justified (review/60): 2026-10-06. This case pinned the
+    // patch remedy for a skill, but the fork stage skips any overlay on a pack
+    // skill, so following that remedy shipped the fork's change nowhere. The
+    // skill arm now withholds the patch spelling and offers only another id.
+    it("withholds the fork-side patch remedy for a pack skill, which is never patched", async () => {
       const refusal = await expectRejection(
         () =>
           forkIndexOf(
@@ -1652,8 +1664,15 @@ describe("the fork layer", () => {
       );
 
       expect(refusal.message).toContain("fork-layer artifact at fork/skills/triage/SKILL.md");
-      expect(refusal.message).toContain("fork/skills/triage/SKILL.customize.yaml");
-      expect(refusal.message).toContain("fork/skills/triage/SKILL.customize.md");
+      expect(refusal.message).not.toContain("customize");
+      expect(refusal.message).not.toContain("instead of replacing it");
+      // The consumer's remedies stay; the fork's is another id only.
+      expect(refusal.message).toContain(
+        "From this repository, remove the pack (clean --pack ops) or ask the pack's author to " +
+          "rename the artifact. From the fork, a pack skill cannot be patched: overlays on pack " +
+          "skills are not applied, so a fork patch of it is skipped. Ship the fork's skill under " +
+          "another id.",
+      );
     });
 
     it("keeps the install-time claim for a pack colliding with the corpus, where it is true", async () => {

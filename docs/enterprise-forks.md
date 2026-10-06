@@ -632,7 +632,9 @@ that already holds between a pack and the corpus. Whoever meets it has the same 
 remove the pack with `clean --pack <id>`, or ask the pack's author to rename the artifact. From the
 fork's side there is no reason to reach for a pack's id at all. To change what a pack supplies,
 patch it with `fork/<class>/<id>.customize.yaml` or `fork/<class>/<id>.customize.md`, or ship your
-own artifact under an id of your own.
+own artifact under an id of your own. A pack's skill is the exception: overlays on pack skills are
+not applied, so a fork patch of one is skipped, and the only route is your own skill under an id of
+your own. The refusal says so when the artifact is a skill.
 
 **A fork patch can outrun the pack it patches.** The fork layer is package-global and packs are
 per-repository. A fork patch addressed at an id only an installed pack supplies is skipped in a

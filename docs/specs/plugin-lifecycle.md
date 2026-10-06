@@ -720,7 +720,7 @@ Amended 2026-10-06 (run `2026-10-03_pack-engine-defects`, units `u4a-pack-skill-
 `u4b-pack-reach-row`, integrated as `efc7b79d` and `778c9ef0` with their fix rounds; cited at
 `eb4f0727`). Two facts about installed packs under the boundary.
 
-- **Pack skills reach plugin-backed clients; nothing else of a pack does.** The 2026-09-20 sentence
+- **Pack skills reach plugin-backed clients; nothing else of a pack is exempt.** The 2026-09-20 sentence
   "a pack skill row is exempt" held for no row: the pack skill lane built its rows without `origin`,
   so both exemptions read them as core rows and dropped them. `projectOnePackSkill` now stamps
   `origin: "pack"` on every row it builds, `SKILL.md` and support files alike
