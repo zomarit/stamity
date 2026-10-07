@@ -708,6 +708,50 @@ const COLLISION_REMEDY: Record<CollisionKind, (paths: readonly string[]) => stri
 };
 
 /**
+ * One line per refusal class among `refused`, each naming the remedy that
+ * clears it. Split by remedy: a row refused at its source is the engine's own
+ * file, and neither moving it aside nor --force clears it; nor does --force
+ * clear an instruction file whose owner text the recorded import decision
+ * would replace (REQ-PLUGIN-046), whose remedy is the decision itself. Shared
+ * by `sync` and `workspace sync`, so a member's refusal names the same remedy.
+ */
+export function refusalRemedyLines(plan: SyncPlan, refused: readonly string[]): string[] {
+  const lines: string[] = [];
+  const atSource = new Set(plan.outputs.filter((output) => output.sourceRefusal !== undefined).map((output) => output.path));
+  const byDecision = new Set(
+    plan.entries.filter((entry) => entry.collisionKind === "import-decision").map((entry) => entry.path),
+  );
+  const unproven = refused.filter((path) => !atSource.has(path) && !byDecision.has(path));
+  const sourceRefused = refused.filter((path) => atSource.has(path));
+  const decisionRefused = refused.filter((path) => !atSource.has(path) && byDecision.has(path));
+  if (unproven.length > 0) {
+    lines.push(
+      `${unproven.length} file(s) were NOT written — they collide with files the engine ` +
+        `cannot prove it wrote (named above). Everything else in the plan is on disk. Move each ` +
+        `aside and re-run, or re-run with --force to overwrite them after a verified .bak.`,
+    );
+  }
+  if (sourceRefused.length > 0) {
+    lines.push(
+      `${sourceRefused.length} file(s) were NOT written — ${sourceRefused.join(", ")} repeat(s) a ` +
+        `file the engine refused to republish (the reason is named above). Everything else in the ` +
+        `plan is on disk. --force does not clear this: repair that file as the warning says — a ` +
+        `regular, unlinked file with no flagged text — then run sync.`,
+    );
+  }
+  if (decisionRefused.length > 0) {
+    lines.push(
+      `${decisionRefused.length} file(s) were NOT written — ${decisionRefused.join(", ")} hold(s) your ` +
+        `text beside the engine's managed block, and the manifest's import decision would replace it ` +
+        `(named above). Everything else in the plan is on disk. --force does not clear this: restore ` +
+        `\`supplement\` for the path under importChoice in ${STATE_DIR}/${MANIFEST_FILE} and run sync, or run ` +
+        `${packageCommand("init --force --import-config replace")} to replace it behind a verified .bak.`,
+    );
+  }
+  return lines;
+}
+
+/**
  * The refusal a collision-bearing plan throws without `--force`, with one
  * remedy sentence per class actually present.
  *

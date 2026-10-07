@@ -1,8 +1,8 @@
 import type { Command } from "commander";
-import { hasNpmChannel, packageCommand, packageName } from "../kit/packageName.ts";
+import { hasNpmChannel, packageName } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { WorkingTreeStatus } from "../engine/gitStatus.ts";
-import { applySync, planSync, type SyncApplyReport, type SyncPlan } from "./sync/engine.ts";
+import { applySync, planSync, refusalRemedyLines, type SyncApplyReport, type SyncPlan } from "./sync/engine.ts";
 import { renderSyncReport, syncJsonPayload } from "./sync/report.ts";
 
 /**
@@ -104,41 +104,7 @@ export function syncClosingLines(plan: SyncPlan, report: SyncApplyReport): strin
   // Last line, because it is the one the exit code is about. A partial run
   // prints its successes above; without this the operator would read a report
   // full of written files and an exit 1 with nothing connecting them.
-  // Split by remedy: a row refused at its source is the engine's own file, and
-  // neither moving it aside nor --force clears it; nor does --force clear an
-  // instruction file whose owner text the recorded import decision would
-  // replace (REQ-PLUGIN-046), whose remedy is the decision itself.
-  const atSource = new Set(plan.outputs.filter((output) => output.sourceRefusal !== undefined).map((output) => output.path));
-  const byDecision = new Set(
-    plan.entries.filter((entry) => entry.collisionKind === "import-decision").map((entry) => entry.path),
-  );
-  const unproven = report.refused.filter((path) => !atSource.has(path) && !byDecision.has(path));
-  const sourceRefused = report.refused.filter((path) => atSource.has(path));
-  const decisionRefused = report.refused.filter((path) => !atSource.has(path) && byDecision.has(path));
-  if (unproven.length > 0) {
-    lines.push(
-      `${unproven.length} file(s) were NOT written — they collide with files the engine ` +
-        `cannot prove it wrote (named above). Everything else in the plan is on disk. Move each ` +
-        `aside and re-run, or re-run with --force to overwrite them after a verified .bak.`,
-    );
-  }
-  if (sourceRefused.length > 0) {
-    lines.push(
-      `${sourceRefused.length} file(s) were NOT written — ${sourceRefused.join(", ")} repeat(s) a ` +
-        `file the engine refused to republish (the reason is named above). Everything else in the ` +
-        `plan is on disk. --force does not clear this: repair that file as the warning says — a ` +
-        `regular, unlinked file with no flagged text — then run sync.`,
-    );
-  }
-  if (decisionRefused.length > 0) {
-    lines.push(
-      `${decisionRefused.length} file(s) were NOT written — ${decisionRefused.join(", ")} hold(s) your ` +
-        `text beside the engine's managed block, and the manifest's import decision would replace it ` +
-        `(named above). Everything else in the plan is on disk. --force does not clear this: restore ` +
-        `\`supplement\` for the path under importChoice in .stamity/manifest.json and run sync, or run ` +
-        `${packageCommand("init --force --import-config replace")} to replace it behind a verified .bak.`,
-    );
-  }
+  lines.push(...refusalRemedyLines(plan, report.refused));
   return lines;
 }
 

@@ -10,7 +10,7 @@ import {
   selectMany,
   type PromptGate,
 } from "../kit/prompts.ts";
-import { applySync, planSync } from "./sync/engine.ts";
+import { applySync, planSync, refusalRemedyLines, type SyncPlan } from "./sync/engine.ts";
 import { TOOLS, VALID_TOOLS, type Tool } from "../../types/core.ts";
 import { EngineError } from "../../types/errors.ts";
 import { MANIFEST_FILE, type McpConfig, type SetupManifest } from "../../types/manifest.ts";
@@ -1008,13 +1008,16 @@ function missingMemberManifest(ctx: CliContext, repoPath: string, memberDir: str
   );
 }
 
-/** A member whose apply refused at least one path — the verdict `stamity sync` reaches. */
-function refusedPaths(repoPath: string, refused: readonly string[]): EngineError {
+/**
+ * A member whose apply refused at least one path — the verdict `stamity sync`
+ * reaches, with the remedy it names per refusal class: `--force` is offered
+ * only for a file the engine cannot prove it wrote, never for a row refused at
+ * its source or an instruction file an import decision protects.
+ */
+function refusedPaths(repoPath: string, plan: SyncPlan, refused: readonly string[]): EngineError {
   return new EngineError(
     `Workspace member "${repoPath}" refused ${String(refused.length)} path(s): ` +
-      `${refused.join(", ")}. They collide with files the engine cannot prove it wrote; ` +
-      `everything else in that member's plan is on disk. Move each aside and re-run, or ` +
-      `re-run with --force to overwrite them after a verified .bak.`,
+      `${refused.join(", ")}. ${refusalRemedyLines(plan, refused).join(" ")}`,
     { code: "ADAPTER_ERROR" },
   );
 }
@@ -1077,7 +1080,7 @@ function createBridge(
     });
     // An append to a file the operator owns is named, as the member's own sync names it.
     outcome.gitignoreAdded = [...(applied.gitignoreAdded ?? [])];
-    if (applied.refused.length > 0) throw refusedPaths(repo.path, applied.refused);
+    if (applied.refused.length > 0) throw refusedPaths(repo.path, plan, applied.refused);
   };
 }
 

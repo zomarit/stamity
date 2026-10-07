@@ -11,6 +11,7 @@ import {
   __setContentRootForTests,
 } from "../../../src/content/contentRoot.ts";
 import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
+import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
 import { REQUIRED_GITIGNORE_ENTRIES } from "../../../src/mcp/env.ts";
 import type { MaturityTier, Tool } from "../../../src/types/core.ts";
 import { MANIFEST_FILE, type SetupManifest } from "../../../src/types/manifest.ts";
@@ -1545,12 +1546,39 @@ describe("workspace sync — one member's failure is one row", () => {
     expect(failed?.state).toBe("failed");
     expect(failed?.error?.code).toBe("ADAPTER_ERROR");
     expect(failed?.error?.message).toContain("AGENTS.md");
+    // A file the engine cannot prove it wrote is the one class --force clears.
+    expect(failed?.error?.message).toContain("re-run with --force");
     // The foreign file was never overwritten — a refusal is not a partial apply.
     expect(await readFile(join(api, "AGENTS.md"), "utf8")).toBe("hand-written, not the engine's\n");
     // The sibling with no collision synced clean.
     expect(doc.repos[1]?.state).toBe("synced");
     expect((await readManifest(web))?.tools).toEqual(["claude"]);
   });
+
+  // REQ-PLUGIN-046: an instruction file whose owner text the recorded import
+  // decision would replace is refused forced or not, so the member's error
+  // names that remedy and never offers --force, as `sync` does.
+  it.each([[[] as string[]], [["--force"]]])(
+    "names the import-decision remedy for a member refusal, never --force (%j)",
+    async (extra) => {
+      const temp = getTemp();
+      await seedCorpus(temp);
+      const root = await seedWorkspace(temp, manifestOf([{ path: "apps/api" }], { defaults: { tools: ["claude"] } }));
+      const api = await seedSyncMember(root, "apps/api", { tools: ["claude"] });
+      const supplemented = `${wrapInManagedBlock("engine charter", "AGENTS.md", "1.11.0")}\n# Team notes\n\nKeep this.\n`;
+      await writeFile(join(api, "AGENTS.md"), supplemented, "utf8");
+
+      const doc = singleSyncDocument((await runSync(root, [...extra, "--json"])).stdout);
+
+      const message = doc.repos[0]?.error?.message ?? "";
+      expect(doc.repos[0]?.state).toBe("failed");
+      expect(message).toContain("AGENTS.md");
+      expect(message).toContain("init --force --import-config replace");
+      expect(message).toContain("--force does not clear this");
+      expect(message).not.toContain("re-run with --force");
+      expect(await readFile(join(api, "AGENTS.md"), "utf8")).toBe(supplemented);
+    },
+  );
 
   // D4: `--force` on `sync` had zero coverage — the flag could be unwired and
   // the suite would stay green. This is the WITH-force control for the case
