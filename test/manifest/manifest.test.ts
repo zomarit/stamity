@@ -268,6 +268,10 @@ describe("collectManifestErrors", () => {
       expect(collectManifestErrors({ ...fullManifest(), ledger: [{ ...settingsRow(undefined) }] })).toEqual([]);
     });
 
+    it("accepts a pointer holding an empty reference token, which the core writes for an owner's empty key", () => {
+      expect(errorsFor({ members: { "/": HASH }, elements: { "/hooks/": [HASH] }, preexisting: ["/hooks", "/hooks/", "//"] })).toEqual([]);
+    });
+
     it("names each defect once", () => {
       const cases: readonly [unknown, string][] = [
         ["record", "`ledger[0].coOwned` must be an object"],

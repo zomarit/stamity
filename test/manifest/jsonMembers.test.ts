@@ -32,7 +32,19 @@ describe("memberPointer / parseMemberPointer", () => {
     expect(parseMemberPointer("/hooks/Pre~1Tool")).toEqual(["hooks", "Pre/Tool"]);
   });
 
-  it.each(["", "permissions", "/", "/a/b/c", "/a//", "/a~2", "/a~", "//b"])(
+  it("takes an empty reference token, which RFC 6901 allows, and parses what memberPointer builds for it", () => {
+    // An owner's `{"hooks":{"":[]}}` names the event `""`: its pointer must parse.
+    expect(memberPointer(["hooks", ""])).toBe("/hooks/");
+    expect(parseMemberPointer("/hooks/")).toEqual(["hooks", ""]);
+    expect(parseMemberPointer("/")).toEqual([""]);
+    expect(parseMemberPointer("//b")).toEqual(["", "b"]);
+    expect(parseMemberPointer("//")).toEqual(["", ""]);
+  });
+
+  // TEST CHANGE, justified: review/33 — RFC 6901 allows an empty reference
+  // token, so "/" and "//b" are pointers (to the key "" and to "b" under it);
+  // they moved to the case above. A depth past 2 and a bad escape still refuse.
+  it.each(["", "permissions", "/a/b/c", "/a//", "///", "/a~2", "/a~"])(
     "refuses %j as a member pointer, naming it",
     (pointer) => {
       let caught: unknown = null;

@@ -506,6 +506,16 @@ describe("planCoOwnedJson — containers", () => {
   it("keeps createdFile from a previous row", () => {
     expect(plan(EMITTED, recorded({ elements: ENGINE_ELEMENTS, createdFile: true })).record?.createdFile).toBe(true);
   });
+
+  it("adopts an owner's event under the empty key (RFC 6901's empty token) instead of aborting, and the reducer keeps it", () => {
+    const raw = '{"hooks":{"":[]}}\n';
+    const out = plan(raw, noRow());
+    expect(out.collision).toBeNull();
+    expect(out.record?.preexisting).toEqual(["/hooks", "/hooks/"]);
+    expect(parsed(out.content)).toEqual({ hooks: { "": [], PreToolUse: [GUARD] }, permissions: { allow: ENGINE_ROWS } });
+    const back = reduceCoOwnedJson(out.content as string, SPEC, { record: out.record, legacy: false, deleteWhenEngineOnly: true });
+    expect(back).toMatchObject({ kind: "reduced", content: raw, proven: true });
+  });
 });
 
 describe("planCoOwnedJson — collisions (co-owned-shape; no --force anywhere)", () => {

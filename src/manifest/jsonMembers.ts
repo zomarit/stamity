@@ -47,7 +47,10 @@ const BAD_ESCAPE = /~(?![01])/;
 /**
  * The segments `pointer` names. Refuses, as a `VALIDATION_ERROR` naming the
  * pointer, the empty pointer, one without a leading `/`, a depth of 0 or past
- * 2, an empty segment and a `~` not followed by `0` or `1`.
+ * 2, and a `~` not followed by `0` or `1`. An empty segment is a key like any
+ * other — RFC 6901 allows the empty reference token, and an owner's
+ * `{"hooks":{"":[]}}` names its event by one — so every pointer
+ * {@link memberPointer} builds parses back.
  */
 export function parseMemberPointer(pointer: string): MemberSegments {
   const refuse = (): EngineError =>
@@ -56,7 +59,7 @@ export function parseMemberPointer(pointer: string): MemberSegments {
     });
   if (!pointer.startsWith("/")) throw refuse();
   const raw = pointer.slice(1).split("/");
-  if (raw.length > 2 || raw.some((segment) => segment === "" || BAD_ESCAPE.test(segment))) throw refuse();
+  if (raw.length > 2 || raw.some((segment) => BAD_ESCAPE.test(segment))) throw refuse();
   // `~1` before `~0`, so `~01` decodes to `~1` and never to `/`.
   const segments = raw.map((segment) => segment.replaceAll("~1", "/").replaceAll("~0", "~"));
   return segments.length === 1 ? [segments[0] as string] : [segments[0] as string, segments[1] as string];
