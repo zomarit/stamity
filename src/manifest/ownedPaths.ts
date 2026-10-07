@@ -50,6 +50,19 @@ export interface OwnedPathBound {
 }
 
 /**
+ * The instruction files `init` imports, by name: the cross-tool pair it probes
+ * whatever the tools, then Claude's and Copilot's own, probed only for those
+ * tools. {@link OwnedPathBound.importTargets} is built from these, so `init`
+ * reads the names rather than positions in that list.
+ */
+export const IMPORT_TARGET = Object.freeze({
+  agentsMd: "AGENTS.md",
+  agentMd: "AGENT.md",
+  claudeMd: "CLAUDE.md",
+  copilotInstructions: ".github/copilot-instructions.md",
+});
+
+/**
  * The bound. `.cursor/skills/` is the layout 1.0.0 to 1.10.0 wrote and the
  * sweep still reclaims. A unit that adds an emitted path extends this value and
  * raises `version`.
@@ -89,7 +102,12 @@ export const OWNED_PATHS: OwnedPathBound = Object.freeze({
   ]),
   stateRoots: Object.freeze([`${STATE_DIR}/generated/`, `${STATE_DIR}/mcp/`]),
   packRoot: `${STATE_DIR}/packs/`,
-  importTargets: Object.freeze(["AGENTS.md", "AGENT.md", "CLAUDE.md", ".github/copilot-instructions.md"]),
+  importTargets: Object.freeze([
+    IMPORT_TARGET.agentsMd,
+    IMPORT_TARGET.agentMd,
+    IMPORT_TARGET.claudeMd,
+    IMPORT_TARGET.copilotInstructions,
+  ]),
 });
 
 /** Which part of the bound a ledger row falls in. */
