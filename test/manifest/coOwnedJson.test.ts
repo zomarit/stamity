@@ -14,6 +14,7 @@ import {
   type CoOwnedPlan,
 } from "../../src/manifest/coOwnedJson.ts";
 import { memberHash } from "../../src/manifest/jsonMembers.ts";
+import { collectManifestErrors } from "../../src/manifest/manifest.ts";
 import type * as AtomicWrite from "../../src/merge/atomicWrite.ts";
 import { ledgerHashIndex } from "../../src/merge/safeWrite.ts";
 import { sha256 } from "../../src/cli/engine/emissionWrite.ts";
@@ -170,6 +171,17 @@ const plan = (existing: string | null, ownership: CoOwnedOwnership, emitted = EM
   planCoOwnedJson(FILE, emitted, existing, spec, ownership);
 
 const parsed = (content: string | null): unknown => JSON.parse(content ?? "null");
+
+/** This repository's own committed manifest with its settings row's record replaced: what the reader would see. */
+const manifestWith = async (record: CoOwnership | null): Promise<unknown> => {
+  const manifest = JSON.parse(await readFile(join(process.cwd(), ".stamity", "manifest.json"), "utf8")) as {
+    ledger: { path: string; coOwned?: unknown }[];
+  };
+  const row = manifest.ledger.find((entry) => entry.path === SHOWN);
+  if (row === undefined) throw new Error("the committed manifest has no settings row");
+  row.coOwned = record;
+  return manifest;
+};
 
 // ── planCoOwnedJson ──────────────────────────────────────────────────────
 
@@ -505,6 +517,41 @@ describe("planCoOwnedJson — containers", () => {
 
   it("keeps createdFile from a previous row", () => {
     expect(plan(EMITTED, recorded({ elements: ENGINE_ELEMENTS, createdFile: true })).record?.createdFile).toBe(true);
+  });
+
+  it("holds the manifest reader's pointer bound: adopting more containers than a record takes is a named collision, never a refused manifest (review/36)", async () => {
+    const events = (count: number): string =>
+      doc({ hooks: Object.fromEntries(Array.from({ length: count }, (_, i) => [`Event${i}`, []])) });
+    // `/hooks` plus 63 events: 64 preexisting pointers, the bound itself.
+    const atBound = plan(events(63), noRow(), EMITTED_PLUGIN);
+    expect(atBound.collision).toBeNull();
+    expect(atBound.record?.preexisting).toHaveLength(64);
+    expect(collectManifestErrors(await manifestWith(atBound.record))).toEqual([]);
+
+    const over = plan(events(64), noRow(), EMITTED_PLUGIN);
+    expect(over.result.action).toBe("skipped");
+    expect(over.record).toBeNull();
+    expect(over.collision).toBe(
+      `Skipped ${SHOWN}: it holds 65 containers on the engine's pointers (hooks events and the like), more than ` +
+        `the 64 the ledger can record for one file, so the engine cannot record which entries in it are its own. ` +
+        `It was left untouched. Remove the containers you do not use and re-run sync.`,
+    );
+    expect(over.collision).not.toContain("--force");
+  });
+
+  it("refuses, rather than records, more engine entries in one array than a record takes", () => {
+    const spec: CoOwnedJsonSpec = {
+      noun: "list document",
+      elements: [{ pointer: "/list", recognise: () => false, inBound: () => true, outsideBound: "foreign" }],
+      members: [],
+    };
+    const many = doc({ list: Array.from({ length: 257 }, (_, i) => `row${i}`) });
+    const out = plan(null, noRow(), many, spec);
+    expect(out.result.action).toBe("skipped");
+    expect(out.collision).toBe(
+      `Skipped ${SHOWN}: the engine's entries in it exceed what the ledger can record for one file (64 members or ` +
+        `arrays, 256 entries in one array). It was left untouched; nothing in the file needs to change.`,
+    );
   });
 
   it("adopts an owner's event under the empty key (RFC 6901's empty token) instead of aborting, and the reducer keeps it", () => {

@@ -89,6 +89,8 @@ import { EngineError } from "../types/errors.ts";
 import type { CoOwnership } from "../types/manifest.ts";
 import {
   ENGINE_JSON_STYLE,
+  MAX_CO_OWNED_ELEMENTS,
+  MAX_CO_OWNED_POINTERS,
   canonicalJson,
   jsonStyleOf,
   memberHash,
@@ -854,6 +856,42 @@ function foreignTally(
  * `existingRaw` the bytes on disk, `null` when there are none.
  */
 export function planCoOwnedJson(
+  filePath: string,
+  emitted: string,
+  existingRaw: string | null,
+  spec: CoOwnedJsonSpec,
+  ownership: CoOwnedOwnership,
+): CoOwnedPlan {
+  const planned = planUnbounded(filePath, emitted, existingRaw, spec, ownership);
+  const overBound = planned.record === null ? null : recordOverBound(planned.record);
+  if (overBound === null) return planned;
+  return skippedPlan(filePath, `Skipped ${displayPath(filePath, ownership.boundaryDir)}: ${overBound}`);
+}
+
+/**
+ * Why `record` holds more than the manifest reader takes (`./manifest.ts`), as
+ * the rest of a refusal sentence; `null` within the bound. The writer holds
+ * the reader's bound, so no run writes a manifest the next run refuses.
+ */
+function recordOverBound(record: CoOwnership): string | null {
+  const preexisting = record.preexisting?.length ?? 0;
+  if (preexisting > MAX_CO_OWNED_POINTERS) {
+    return (
+      `it holds ${preexisting} containers on the engine's pointers (hooks events and the like), more than the ` +
+      `${MAX_CO_OWNED_POINTERS} the ledger can record for one file, so the engine cannot record which entries in it ` +
+      `are its own. It was left untouched. Remove the containers you do not use and re-run sync.`
+    );
+  }
+  const pointers = [Object.keys(record.members ?? {}).length, Object.keys(record.elements ?? {}).length];
+  const perArray = Object.values(record.elements ?? {}).map((hashes) => hashes.length);
+  if (pointers.every((count) => count <= MAX_CO_OWNED_POINTERS) && perArray.every((count) => count <= MAX_CO_OWNED_ELEMENTS)) return null;
+  return (
+    `the engine's entries in it exceed what the ledger can record for one file (${MAX_CO_OWNED_POINTERS} members or ` +
+    `arrays, ${MAX_CO_OWNED_ELEMENTS} entries in one array). It was left untouched; nothing in the file needs to change.`
+  );
+}
+
+function planUnbounded(
   filePath: string,
   emitted: string,
   existingRaw: string | null,

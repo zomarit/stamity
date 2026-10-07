@@ -52,7 +52,7 @@ import {
   type SetupManifest,
 } from "../types/manifest.ts";
 import { STATE_DIR } from "../types/markers.ts";
-import { parseMemberPointer } from "./jsonMembers.ts";
+import { MAX_CO_OWNED_ELEMENTS, MAX_CO_OWNED_POINTERS, parseMemberPointer } from "./jsonMembers.ts";
 import { OWNED_PATHS, ownedPathDefect } from "./ownedPaths.ts";
 
 /**
@@ -318,10 +318,6 @@ function ledgerOwnerDefect(value: unknown): string | null {
 
 /** The fields of a row's `coOwned` record (`CoOwnership`). */
 const CO_OWNED_FIELDS = ["members", "elements", "preexisting", "lines", "createdFile", "terminatorAdded"] as const;
-/** At most this many member pointers in `members`, `elements` and `preexisting` each. */
-const MAX_CO_OWNED_POINTERS = 64;
-/** At most this many element hashes under one array pointer. */
-const MAX_CO_OWNED_ELEMENTS = 256;
 /** The longest owned line (`u1-gitignore-lines`'s value bound). */
 const MAX_CO_OWNED_LINE = 1024;
 const SHA256_HEX = /^[0-9a-f]{64}$/;

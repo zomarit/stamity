@@ -25,6 +25,15 @@ import { isPlainObject } from "../config/parse.ts";
 import { EngineError } from "../types/errors.ts";
 import type { CoOwnership } from "../types/manifest.ts";
 
+/**
+ * At most this many member pointers in a `coOwned` record's `members`,
+ * `elements` and `preexisting` each: the manifest reader refuses more
+ * (`./manifest.ts`), so the writer (`./coOwnedJson.ts`) never records more.
+ */
+export const MAX_CO_OWNED_POINTERS = 64;
+/** At most this many element hashes under one array pointer of a `coOwned` record. */
+export const MAX_CO_OWNED_ELEMENTS = 256;
+
 /** An RFC 6901 pointer of depth 1 or 2, e.g. `/permissions/allow`. */
 export type MemberPointer = string;
 
