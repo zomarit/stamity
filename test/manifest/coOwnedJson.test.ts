@@ -17,6 +17,7 @@ import {
 import { memberHash } from "../../src/manifest/jsonMembers.ts";
 import { collectManifestErrors } from "../../src/manifest/manifest.ts";
 import type * as AtomicWrite from "../../src/merge/atomicWrite.ts";
+import type * as FsPromises from "node:fs/promises";
 import { ledgerHashIndex } from "../../src/merge/safeWrite.ts";
 import { sha256 } from "../../src/cli/engine/emissionWrite.ts";
 import { EngineError } from "../../src/types/errors.ts";
@@ -55,11 +56,31 @@ vi.mock("../../src/merge/atomicWrite.ts", async (importOriginal) => {
   };
 });
 
+// TEST CHANGE, justified: review/63 — an lstat failure that is not ENOENT is
+// injected rather than provoked. A path under a regular file fails lstat with
+// ENOTDIR on POSIX and with ENOENT on win32, which the guard rightly reads as
+// "missing", so the two cases asserting the rethrow resolved there. EACCES is
+// the one non-ENOENT failure every platform can report, and the guard's rule
+// (only ENOENT falls through) is what both cases hold.
+const lstatFault = vi.hoisted(() => ({ path: null as string | null }));
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>();
+  return {
+    ...actual,
+    lstat: (...args: Parameters<typeof actual.lstat>) =>
+      lstatFault.path !== null && args[0] === lstatFault.path
+        ? Promise.reject(Object.assign(new Error(`EACCES: permission denied, lstat '${lstatFault.path}'`), { code: "EACCES" }))
+        : actual.lstat(...args),
+  };
+});
+
 const getRepo = useTempDir("co-owned-json");
 
 beforeEach(() => {
   writes.paths.length = 0;
   writes.releaseThrows = undefined;
+  lstatFault.path = null;
 });
 
 // ── Fixtures ───────────────────────────────────────────────────────────────
@@ -1359,8 +1380,11 @@ describe("predictCoOwnedMerge / materializeCoOwned", () => {
   it("refuses nothing at a missing path, and rethrows an lstat failure that is not ENOENT", async () => {
     const repo = getRepo();
     await expect(refuseLinkedCoOwnedTarget(repo.path("nothing-here.json"))).resolves.toBeUndefined();
-    await writeFile(repo.path("file"), "x");
-    await expect(refuseLinkedCoOwnedTarget(repo.path("file", "below.json"))).rejects.toMatchObject({ code: "ENOTDIR" });
+    // TEST CHANGE, justified: review/63 — the non-ENOENT failure is injected (see `lstatFault`).
+    const path = repo.path("unreadable.json");
+    await writeFile(path, "{}");
+    lstatFault.path = path;
+    await expect(refuseLinkedCoOwnedTarget(path)).rejects.toMatchObject({ code: "EACCES" });
   });
 });
 
@@ -1497,9 +1521,11 @@ describe("predictCoOwnedMerge / materializeCoOwned — edges", () => {
 
   it("rethrows an lstat failure from the preview that is not a link refusal", async () => {
     const repo = getRepo();
-    await writeFile(repo.path("file"), "x");
-    const path = repo.path("file", "below.json");
-    await expect(predictCoOwnedMerge(path, planner(path, noRow()), SPEC.noun)).rejects.toMatchObject({ code: "ENOTDIR" });
+    // TEST CHANGE, justified: review/63 — the non-ENOENT failure is injected (see `lstatFault`).
+    const path = repo.path("unreadable.json");
+    await writeFile(path, "{}");
+    lstatFault.path = path;
+    await expect(predictCoOwnedMerge(path, planner(path, noRow()), SPEC.noun)).rejects.toMatchObject({ code: "EACCES" });
   });
 
   it("passes an errno the shared table does not map through unchanged when the parent cannot be created", async () => {
