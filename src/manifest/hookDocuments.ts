@@ -19,11 +19,14 @@
  * THE BOUND (S11, narrowed in the safe direction as the settings lane is): an
  * engine entry leaves without a backup only when the script it EXECUTES is the
  * engine's — on Cursor the program's first argument under
- * `.stamity/generated/hooks/cursor/` or a guard path
- * (`./coOwnedJson.ts::executedScript`); on Codex every inner command is the
- * engine's `node -e` starter, which runs only the runner beside the trusted
- * `.codex/hooks.json`, or (≤1.6.0) an argv naming a script under
- * `.stamity/generated/hooks/codex/`.
+ * `.stamity/generated/hooks/cursor/`, a guard path, or an installed pack's
+ * `.stamity/packs/<id>/` (`./coOwnedJson.ts::executedScript`); on Codex every
+ * inner command is the engine's `node -e` starter, which runs only the runner
+ * beside the trusted `.codex/hooks.json`, or (≤1.6.0) an argv naming a script
+ * under `.stamity/generated/hooks/codex/` or executing one under an installed
+ * pack's folder (`./coOwnedJson.ts::argvExecutedScript`). The pack folder is
+ * the settings lane's bound too (`./coOwnedJson.ts::commandRunsStateScript`):
+ * 1.0.0–1.6.0 wired a pack's hooks directly beside the user's (review/69).
  *
  * THE RELEASE-HISTORY BOUND (`MemberSpec.known`). The core proves a member by
  * the engine's CURRENT rendering, so a release that changed a member's value
@@ -43,7 +46,7 @@
 import { createHash } from "node:crypto";
 import { isPlainObject } from "../config/parse.ts";
 import { HOOKS_GENERATED_DIR, STATE_DIR } from "../types/markers.ts";
-import { executedScript, printableName, type CoOwnedJsonSpec } from "./coOwnedJson.ts";
+import { argvExecutedScript, executedScript, isPackScriptPath, printableName, type CoOwnedJsonSpec } from "./coOwnedJson.ts";
 import { memberHash } from "./jsonMembers.ts";
 
 // ── S19: the events Cursor accepts ───────────────────────────────────────
@@ -226,7 +229,8 @@ export interface CursorHooksSpecOptions {
  * What the engine writes into `.cursor/hooks.json`: each entry of a
  * `hooks.<event>` array, and `version`. An entry is recognised when its
  * command names the engine's Cursor scripts or a guard; it is in the bound
- * when the script it executes is one of them.
+ * when the script it executes is one of them, or lies in an installed pack's
+ * folder.
  */
 export function cursorHooksSpec(opts: CursorHooksSpecOptions): CoOwnedJsonSpec {
   const guards = new Set(opts.guardPaths);
@@ -243,7 +247,7 @@ export function cursorHooksSpec(opts: CursorHooksSpecOptions): CoOwnedJsonSpec {
           const command = cursorCommand(element);
           const script = command === null ? null : executedScript(command);
           // `executedScript` refuses an empty segment, so a path under the folder names a file in it.
-          return script !== null && (script.startsWith(CURSOR_SCRIPTS) || guards.has(script));
+          return script !== null && (script.startsWith(CURSOR_SCRIPTS) || guards.has(script) || isPackScriptPath(script));
         },
         outsideBound: "backup",
       },
@@ -297,22 +301,28 @@ function isEngineStarter(command: string): boolean {
 
 /**
  * True for one inner Codex hook that runs the engine's own script: a starter
- * (1.7.0 on; `commandWindows` too, when present), or an argv whose program
- * runs a script under the generated Codex folder (≤1.6.0).
+ * (1.7.0 on; `commandWindows` too, when present), or (≤1.6.0, which wrote no
+ * `commandWindows`) an argv whose program runs a script under the generated
+ * Codex folder, or that executes one under an installed pack's folder.
  */
 function codexHookInBound(hook: unknown): boolean {
   if (!isPlainObject(hook)) return false;
   const { command, commandWindows } = hook;
   if (Array.isArray(command)) {
+    if (commandWindows !== undefined) return false;
     const [program, script] = command;
     // Every segment named, as `./coOwnedJson.ts::executedScript` reads a
     // Cursor command: a `..` would leave the folder the prefix names.
-    return (
+    if (
       program === "node" &&
       typeof script === "string" &&
       script.startsWith(CODEX_SCRIPTS) &&
       script.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..")
-    );
+    ) {
+      return true;
+    }
+    const executed = argvExecutedScript(command);
+    return executed !== null && isPackScriptPath(executed);
   }
   if (typeof command !== "string" || !isEngineStarter(command)) return false;
   return commandWindows === undefined || (typeof commandWindows === "string" && isEngineStarter(commandWindows));
@@ -381,7 +391,7 @@ export function isKnownCodexHooksStamity(value: unknown): boolean {
  * `hooks.<Event>` array, `description`, and — written up to 1.6.0, never now —
  * `stamity`. A group is recognised when some inner command names the
  * generated Codex folder; it is in the bound when every inner hook runs the
- * engine's own script. An old `stamity` is the engine's by its release value
+ * engine's own script or an installed pack's. An old `stamity` is the engine's by its release value
  * and leaves silently; any other `stamity` is the owner's.
  */
 export function codexHooksSpec(): CoOwnedJsonSpec {
@@ -460,20 +470,23 @@ function directShellCommand(argv: readonly string[]): string {
  * through the portable runner — on Cursor `{ command, matcher?, failClosed? }`,
  * `failClosed` on `preToolUse` (the one blocking event then); on Codex the
  * rows grouped by matcher in their order, each `{ type, command: argv,
- * timeout? }`. Rows the engine supplies itself (its generated scripts, an
- * installed pack's) are left out: those releases grouped the core's rows with
- * a digest this cannot re-render, so only a definition's own entry is proved
- * this way — a group the core shared with one stays recognised and leaves
- * behind a backup. Equal to an element on disk, an entry here proves it was
- * the engine's direct wiring of a hook it still wires, so replacing it with
- * the runner's entry runs that hook once.
+ * timeout? }`. A row running a generated script is left out: those releases
+ * gave the core's rows a digest this cannot re-render, so a group the core
+ * shared with a definition stays recognised and leaves behind a backup. An
+ * installed pack's rows stay in (review/69): 1.0.0–1.6.0 wired them beside the
+ * user's with no digest, in one lane order — user rows, then pack rows
+ * (`v1.6.0:src/emit/hooksInfra.ts`) — which `rows` keeps, as the runner's
+ * rendering carries it, so a group they share re-renders as it was written.
+ * Equal to an element on disk, an entry here proves it was the engine's direct
+ * wiring of a hook it still wires, so replacing it with the runner's entry
+ * runs that hook once.
  */
 export function directHookRendering(client: "cursor" | "codex", rows: readonly DirectHookRow[]): { hooks: Record<string, unknown[]> } {
   const hooks: Record<string, unknown[]> = {};
   for (const row of rows) {
     const event = DIRECT_EVENTS[client][row.event];
     const script = row.command[1] ?? "";
-    if (event === undefined || script.startsWith(`${HOOKS_GENERATED_DIR}/`) || script.startsWith(`${STATE_DIR}/packs/`)) continue;
+    if (event === undefined || script.startsWith(`${HOOKS_GENERATED_DIR}/`)) continue;
     const entries = (hooks[event] ??= []);
     if (client === "cursor") {
       entries.push({

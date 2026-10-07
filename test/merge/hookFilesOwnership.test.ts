@@ -16,6 +16,7 @@ import {
 import { sha256 } from "../../src/cli/engine/emissionWrite.ts";
 import { createApp } from "../../src/index.ts";
 import { readManifest, writeManifest } from "../../src/manifest/manifest.ts";
+import { applyPackInstall, planPackInstall } from "../../src/pack/install.ts";
 import type { MergeResult } from "../../src/types/content.ts";
 import type { Tool } from "../../src/types/core.ts";
 import { HOOKS_GENERATED_DIR, STATE_DIR } from "../../src/types/markers.ts";
@@ -658,6 +659,117 @@ describe("a direct upgrade from a release up to 1.6.0, which wired user hooks di
       expect(owned(await readDoc(cleaned, path))).toEqual([lookalike, own]);
     },
   );
+});
+
+// ── A direct upgrade with an installed pack's hook (review/69) ─
+
+/**
+ * An installed pack whose one hook shares the user hook's event and matcher,
+ * so 1.6.0 put both in one Codex group ("core scripts, then user hooks, then
+ * installed-pack hooks", `v1.6.0:src/emit/hooksInfra.ts`). No pack class can
+ * ship a script, so a pack's hook runs a script the repository committed: one
+ * elsewhere in the repository, or one an operator placed in the pack's own
+ * folder, which the bound proves by path as the settings lane's does.
+ */
+const HOOK_PACK_ID = "acme-gate";
+const PACK_SCRIPTS = {
+  elsewhere: "scripts/acme-gate.mjs",
+  "in the pack's folder": `${STATE_DIR}/packs/${HOOK_PACK_ID}/tools/gate.mjs`,
+} as const;
+
+/**
+ * The pack's hook as 1.6.0 wired it directly into `tool`'s hooks file, after
+ * the user hook: on Codex in the user hook's group when it shares its matcher,
+ * else in a group of its own after it.
+ */
+function packEntryOfReleaseOneSix(tool: "cursor" | "codex", script: string, matcher: string): (doc: Record<string, unknown>) => void {
+  return (doc) => {
+    const hooks = doc["hooks"] as Record<string, Record<string, unknown>[]>;
+    if (tool === "cursor") {
+      hooks["preToolUse"] = [...(hooks["preToolUse"] ?? []), { command: `node ${script}`, matcher, failClosed: true }];
+      return;
+    }
+    const groups = (hooks["PreToolUse"] ??= []);
+    const group = groups.find((entry) => entry["matcher"] === matcher) as { hooks: unknown[] } | undefined;
+    if (group === undefined) groups.push({ matcher, hooks: [{ type: "command", command: ["node", script] }] });
+    else group.hooks.push({ type: "command", command: ["node", script] });
+  };
+}
+
+/** {@link setUpByReleaseOneSix} with {@link HOOK_PACK_ID} installed through the real install path, its hook running `script` on `matcher`. */
+async function setUpByReleaseOneSixWithPack(tool: "cursor" | "codex", script: string, matcher = "Bash"): Promise<string> {
+  const sub = "repo";
+  const root = await setUpByReleaseOneSix(tool, packEntryOfReleaseOneSix(tool, script, matcher), sub);
+  await mkdir(join(abs(root, script), ".."), { recursive: true });
+  await writeFile(abs(root, script), "process.exit(0)\n", "utf8");
+  const definition = `${JSON.stringify({ hooks: [{ event: "pre_tool_use", matcher, command: ["node", script] }] }, null, 2)}\n`;
+  const source = `pack-src-${sub}/${HOOK_PACK_ID}`;
+  await getTemp().seedFiles({
+    [`${source}/hooks/hooks.json`]: definition,
+    [`${source}/pack.json`]: `${JSON.stringify(
+      { name: HOOK_PACK_ID, version: "1.0.0", integrity: { "hooks/hooks.json": sha256(definition) }, permissions: { toolFootprint: ["read"] } },
+      null,
+      2,
+    )}\n`,
+  });
+  const plan = await planPackInstall(root, getTemp().path(source), { allowUntrusted: true });
+  expect(plan.collisions).toEqual([]);
+  const manifest = await readManifest(root);
+  if (manifest === null) throw new Error("fixture lost its manifest");
+  const applied = await applyPackInstall(root, plan, manifest, { engineVersion: ENGINE_VERSION, now: T0 });
+  expect(applied.result.errors).toEqual([]);
+  await writeManifest(root, applied.manifest, { now: T1 });
+  return root;
+}
+
+describe("a direct upgrade from a release up to 1.6.0 with an installed pack's hook (review/69)", () => {
+  const cases = (["cursor", "codex"] as const).flatMap((tool) =>
+    Object.entries(PACK_SCRIPTS).map(([where, script]) => [tool, where, script, tool === "cursor" ? CURSOR_HOOKS : CODEX_HOOKS] as const),
+  );
+
+  it.each(cases)("%s, the script %s: the first sync runs the pack's hook and the user hook once each, and takes no .bak", async (tool, _where, script, path) => {
+    const root = await setUpByReleaseOneSixWithPack(tool, script);
+    expect(await runsOf(root, path, script)).toBe(1);
+
+    await sync(root);
+
+    expect(await runsOf(root, path, script)).toBe(1);
+    expect(await runsOf(root, path, USER_SCRIPT)).toBe(1);
+    expect(await readText(root, path)).not.toContain(script);
+    expect(await backups(root)).toEqual([]);
+  });
+
+  it.each(cases)("%s, the script %s: the pack removed after that sync (clean --pack, then sync), its hook runs no more", async (tool, _where, script, path) => {
+    const root = await setUpByReleaseOneSixWithPack(tool, script);
+    await sync(root);
+
+    expect((await clean(root, ["--pack", HOOK_PACK_ID])).code).toBe(0);
+    await sync(root);
+
+    expect(await runsOf(root, path, script)).toBe(0);
+    expect(await runsOf(root, path, USER_SCRIPT)).toBe(1);
+  });
+
+  // Removed before any sync, the pack's definition is gone, so only the path
+  // can prove its 1.6.0 entry: the pack's folder can, a script elsewhere
+  // cannot, and neither can a Codex group the pack's row shared with a user
+  // row — the class of a user definition deleted before the first sync, which
+  // stays the owner's (the build/54 sign-off). So the pack's hook has a
+  // matcher of its own here.
+  it.each([
+    ["cursor", CURSOR_HOOKS],
+    ["codex", CODEX_HOOKS],
+  ] as const)("%s: the pack removed before any sync, its 1.6.0 entry running a script in the pack's folder leaves with no .bak", async (tool, path) => {
+    const script = PACK_SCRIPTS["in the pack's folder"];
+    const root = await setUpByReleaseOneSixWithPack(tool, script, "Edit");
+
+    expect((await clean(root, ["--pack", HOOK_PACK_ID])).code).toBe(0);
+    await sync(root);
+
+    expect(await runsOf(root, path, script)).toBe(0);
+    expect(await runsOf(root, path, USER_SCRIPT)).toBe(1);
+    expect(await backups(root)).toEqual([]);
+  });
 });
 
 /** The `description` 1.7.0 rendered into `.codex/hooks.json` (its golden snapshot, read 2026-10-07). */

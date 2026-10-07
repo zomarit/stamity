@@ -257,7 +257,28 @@ export function executedScript(command: string): string | null {
   const simple = firstSimpleCommand(command);
   if (simple === null) return null;
   if (simple.rest !== "" && !GUARD_TAIL.test(simple.rest)) return null;
-  const [program, ...args] = simple.words;
+  return scriptOfWords(simple.words);
+}
+
+/**
+ * The repo-relative path of the script an exec-form `argv` EXECUTES (a Codex
+ * hook's `command` array, which no shell reads), by the same rule as
+ * {@link executedScript}: the program, or the first argument after an allowed
+ * launcher, a leading `./` dropped. `null` when a word is not a string, or
+ * the path holds an empty, `.` or `..` segment.
+ */
+export function argvExecutedScript(argv: readonly unknown[]): string | null {
+  const words: string[] = [];
+  for (const word of argv) {
+    if (typeof word !== "string" || word.includes(ROOT_WORD)) return null;
+    words.push(word);
+  }
+  return scriptOfWords(words);
+}
+
+/** The script path a command's words execute, by {@link executedScript}'s rule; `null` when they name none it reads. */
+function scriptOfWords(words: readonly string[]): string | null {
+  const [program, ...args] = words;
   if (program === undefined) return null;
   const word = !ALLOWED_LAUNCHERS.has(program) ? program : RUN_FILE_LAUNCHERS.has(program) && args[0] === "run" ? args[1] : args[0];
   if (word === undefined) return null;
@@ -293,8 +314,18 @@ function isStateScriptPath(path: string): boolean {
   const segments = path.split("/");
   const under = (root: readonly string[]): boolean => root.every((segment, index) => segments[index] === segment);
   if (under(GENERATED_HOOK_SEGMENTS)) return segments.length > GENERATED_HOOK_SEGMENTS.length;
-  // `.stamity/packs/<id>/<file…>`: a pack id folder and a file below it.
-  return under([STATE_DIR, "packs"]) && segments.length >= 4;
+  return isPackScriptPath(path);
+}
+
+/**
+ * True for a repo-relative path ({@link executedScript}'s or
+ * {@link argvExecutedScript}'s, so no segment is empty, `.` or `..`) that
+ * names a file below one installed pack's folder: `.stamity/packs/<id>/<file…>`
+ * (`../pack/receipt.ts::packDirRelPath`), a pack id folder and a file below it.
+ */
+export function isPackScriptPath(path: string): boolean {
+  const segments = path.split("/");
+  return segments[0] === STATE_DIR && segments[1] === "packs" && segments.length >= 4;
 }
 
 /**

@@ -18,7 +18,7 @@ import {
   referencedHookScripts,
 } from "../../src/manifest/hookDocuments.ts";
 import { memberHash } from "../../src/manifest/jsonMembers.ts";
-import { HOOKS_GENERATED_DIR } from "../../src/types/markers.ts";
+import { HOOKS_GENERATED_DIR, STATE_DIR } from "../../src/types/markers.ts";
 
 /**
  * The two hook documents' specs, the release-history bound, S19's defect
@@ -50,6 +50,19 @@ const RELEASE_ONE_SIX = JSON.parse(readFileSync(join(import.meta.dirname, "fixtu
 >;
 
 const row = (event: HookInterchange["event"], script: string): HookInterchange => ({ event, command: ["node", script] });
+
+/** A script in an installed pack's folder, which the bound proves by path as the settings lane's does (review/69). */
+const PACK_SCRIPT = `${STATE_DIR}/packs/acme__ops/tools/gate.mjs`;
+
+/** Cursor commands that name a pack's folder but do not execute a script in it. */
+const OUTSIDE_PACK_BOUND = [
+  `node ${STATE_DIR}/packs/gate.mjs`,
+  `node ${STATE_DIR}/packs/acme/../../hooks/x.mjs`,
+  `node scripts/wrap.mjs ${PACK_SCRIPT}`,
+  `npx ${PACK_SCRIPT}`,
+  `node ${PACK_SCRIPT}; node scripts/x.mjs`,
+  `node $(echo ${PACK_SCRIPT})`,
+];
 const encoded = (value: unknown): string => Buffer.from(JSON.stringify(value)).toString("base64url");
 
 /** The 1.7.0–1.8.0 starter, its body as that golden holds it, and a row. */
@@ -220,6 +233,14 @@ describe("cursorHooksSpec", () => {
     expect(cursorElement.inBound({ command: `node $(echo ${MCP_GUARD_PATH})` })).toBe(false);
   });
 
+  it("bounds, without recognising, an entry executing a script in an installed pack's folder, as the settings lane does (review/69)", () => {
+    for (const command of [`node ${PACK_SCRIPT}`, `node ./${PACK_SCRIPT}`, `deno run ${PACK_SCRIPT}`, PACK_SCRIPT]) {
+      expect(cursorElement.recognise({ command, failClosed: true })).toBe(false);
+      expect(cursorElement.inBound({ command, failClosed: true })).toBe(true);
+    }
+    for (const command of OUTSIDE_PACK_BOUND) expect(cursorElement.inBound({ command })).toBe(false);
+  });
+
   it("knows `version` 1, the one value every release wrote, and no other", () => {
     const [version] = cursor.members;
     expect(version).toMatchObject({ pointer: "/version", foreign: "collide", structural: true });
@@ -252,6 +273,28 @@ describe("codexHooksSpec", () => {
     const argv = { type: "command", command: ["node", `${HOOKS_GENERATED_DIR}/codex/stamity-session-start.mjs`], sha256: "a".repeat(64) };
     expect(codexElement.recognise(group(argv))).toBe(true);
     expect(codexElement.inBound(group(argv))).toBe(true);
+  });
+
+  it("bounds, without recognising, a 1.0.0–1.6.0 argv executing a script in an installed pack's folder (review/69)", () => {
+    for (const command of [["node", PACK_SCRIPT], ["node", `./${PACK_SCRIPT}`], ["deno", "run", PACK_SCRIPT], [PACK_SCRIPT]]) {
+      expect(codexElement.recognise(group({ type: "command", command }))).toBe(false);
+      expect(codexElement.inBound(group({ type: "command", command }))).toBe(true);
+    }
+    const argvOutside: unknown[][] = [
+      ["node", `${STATE_DIR}/packs/gate.mjs`],
+      ["node", `${STATE_DIR}/packs/acme/../../hooks/x.mjs`],
+      ["node", `${STATE_DIR}/packs/acme//x.mjs`],
+      ["node", "scripts/wrap.mjs", PACK_SCRIPT],
+      ["npx", PACK_SCRIPT],
+      ["node", PACK_SCRIPT, 3],
+      ["node", `${String.fromCharCode(0)}/${PACK_SCRIPT}`],
+      ["node", `${STATE_DIR}/hooks/x.mjs`],
+    ];
+    for (const command of argvOutside) expect(codexElement.inBound(group({ type: "command", command }))).toBe(false);
+    // 1.0.0–1.6.0 wrote no `commandWindows`, so an argv carrying one proves nothing, the engine's folder included.
+    for (const script of [PACK_SCRIPT, `${HOOKS_GENERATED_DIR}/codex/x.mjs`]) {
+      expect(codexElement.inBound(group({ type: "command", command: ["node", script], commandWindows: "node scripts/team.mjs" }))).toBe(false);
+    }
   });
 
   it("does not bound a group holding anything but the engine's starter", () => {
@@ -400,7 +443,7 @@ describe("directHookRendering — what releases up to 1.6.0 wired directly (buil
     expect(directHookRendering("codex", [user])).toEqual({ hooks: { PreToolUse: [codexGroup] } });
   });
 
-  it("groups Codex rows by matcher, rounds a timeout up, quotes as 1.6.0 quoted, and skips the engine's own rows and a later event", () => {
+  it("groups Codex rows by matcher, rounds a timeout up, quotes as 1.6.0 quoted, keeps a pack's row, and skips the generated rows and a later event", () => {
     const rows = [
       { event: "stop", command: ["node", "scripts/a b.mjs", "it's"] },
       { event: "stop", command: ["node", "scripts/c.mjs"], timeoutMs: 1 },
@@ -418,10 +461,12 @@ describe("directHookRendering — what releases up to 1.6.0 wired directly (buil
           { command: "node scripts/d.mjs", matcher: "x" },
           { command: "" },
         ],
+        sessionStart: [{ command: "node .stamity/packs/p/hook.mjs" }],
       },
     });
     expect(directHookRendering("codex", rows)).toEqual({
       hooks: {
+        SessionStart: [{ hooks: [{ type: "command", command: ["node", ".stamity/packs/p/hook.mjs"] }] }],
         Stop: [
           {
             hooks: [
@@ -458,6 +503,40 @@ describe("directHookRendering — what releases up to 1.6.0 wired directly (buil
     }
     const odd = { event: "stop", matcher: 3, timeoutMs: "5", command: ["node", "scripts/x.mjs"] };
     expect(cursor.earlier?.({ hooks: { stop: [{ command: `${runner}${b64(odd)}` }] } })).toEqual({ hooks: { stop: [{ command: "node scripts/x.mjs" }] } });
+  });
+
+  it("re-renders a Codex group 1.6.0 shared between a user row and a pack row, user row first, from the runner's rendering (review/69)", () => {
+    const pack = { event: "pre_tool_use", matcher: "Bash", command: ["node", PACK_SCRIPT] };
+    const started = (value: typeof user): { type: string; command: string; commandWindows: string } => {
+      const command = portableHookCommand("codex", value as HookInterchange, { syncCall: "stamity sync" });
+      return { type: "command", command, commandWindows: command };
+    };
+    const rendering = { hooks: { PreToolUse: [{ matcher: "Bash", hooks: [started(user), started(pack)] }] } };
+    const oneSix = JSON.parse(RELEASE_ONE_SIX[".codex/hooks.json"] as string).hooks.PreToolUse[1] as { hooks: unknown[] };
+    const shared = { ...oneSix, hooks: [...oneSix.hooks, { type: "command", command: ["node", PACK_SCRIPT] }] };
+    expect(codex.earlier?.(rendering)).toEqual({ hooks: { PreToolUse: [shared] } });
+
+    // Through the planner under a legacy row: the shared group is the engine's and leaves.
+    const existing = `${JSON.stringify({ hooks: { PreToolUse: [shared] } }, null, 2)}\n`;
+    const plan = planCoOwnedJson("/r/.codex/hooks.json", `${JSON.stringify(rendering, null, 2)}\n`, existing, codex, { owned: true, legacy: true, record: null });
+    expect(JSON.parse(plan.content as string).hooks.PreToolUse).toEqual(rendering.hooks.PreToolUse);
+  });
+
+  it("a forged record over an owner's entry that only looks like a pack's proves nothing beyond the bound (review/69)", () => {
+    const emitted = `${JSON.stringify({ version: 1, hooks: {} }, null, 2)}\n`;
+    for (const command of OUTSIDE_PACK_BOUND) {
+      const owner = { command };
+      const existing = `${JSON.stringify({ version: 1, hooks: { stop: [owner] } }, null, 2)}\n`;
+      // Recorded: the record makes it the engine's to touch, but it leaves only behind a backup, named.
+      const recorded = { owned: true, legacy: false, record: { elements: { "/hooks/stop": [memberHash(owner)] } } };
+      const plan = planCoOwnedJson("/r/.cursor/hooks.json", emitted, existing, cursor, recorded);
+      expect(plan.backup).toBe(existing);
+      expect(plan.result.warning).toContain("hooks.stop[0]");
+      // A legacy row proves nothing outside the bound: the entry stays.
+      const kept = planCoOwnedJson("/r/.cursor/hooks.json", emitted, existing, cursor, { owned: true, legacy: true, record: null });
+      expect(kept.backup).toBeNull();
+      expect(JSON.parse(kept.content ?? existing).hooks.stop).toEqual([owner]);
+    }
   });
 
   it("proves a 1.6.0 direct entry the engine's under a legacy row, through the planner and the reducer; an owner's differing entry stays", () => {
