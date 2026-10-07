@@ -310,8 +310,10 @@ describe("a private fork's regenerated marketplace", () => {
  * The whole identity-sensitive gate, inside a renamed private copy of this checkout.
  *
  * OPT-IN (`STAMITY_FORK_SUITE=1`). Not for its wall time — measured at about 25 seconds on
- * a warm POSIX machine, 2026-09-19 — but for what it does to get there: it copies the whole
- * working tree and starts a second vitest inside the first, over nineteen suites. A nested
+ * a warm POSIX machine, 2026-09-19, and 165 seconds for both fork classes over the longer list,
+ * 2026-10-07 — but for what it does to get there: it copies the whole
+ * working tree and starts a second vitest inside the first, over twenty-four suites (once per
+ * fork class since REQ-PLUGIN-048: a private fork and a `--registry` fork). A nested
  * runner is charged differently by the coverage leg and by the Windows leg, and neither is
  * a cost the default gate should carry for a property the group above already proves in
  * under a second. This group is the end-to-end witness a reviewer or a release run asks
@@ -341,12 +343,31 @@ const IDENTITY_SUITES = [
   "test/cli/flows.e2e.test.ts",
   "test/cli/notice/updateNotice.test.ts",
   "test/cli/surface.e2e.test.ts",
+  // TEST CHANGE, justified: REQ-PLUGIN-048 (fix rounds 2-3 of u0-registry-bound-calls). Measured
+  // red on a renamed fork, registry-less and `--registry` alike, before those rounds, and outside
+  // this list, so the witness never saw them: two plugin-root oracles, the shared-charter drift
+  // case, the upgrade remedy's prefix strip and the kit's checkout-derived remedies.
+  "test/ci/pluginPackages.copilot.test.ts",
+  "test/ci/pluginPackages.cursor.test.ts",
+  "test/emit/sharedCharterIdentity.test.ts",
+  "test/pack/upgradeRemedy.test.ts",
+  "test/cli/kit/packageName.test.ts",
 ];
 
+/**
+ * The two fork classes `scripts/fork-identity.mjs` makes. TEST CHANGE, justified: REQ-PLUGIN-048
+ * — a `--registry` fork renders `--@<scope>:registry=<url>` into every pinned call, a shape the
+ * registry-less run never exercises, so the witness runs both.
+ */
+const FORK_CLASSES = [
+  { label: "registry-less (private)", args: [] as string[], registry: undefined },
+  { label: "--registry", args: ["--registry", "https://npm.pkg.github.com"], registry: "https://npm.pkg.github.com" },
+] as const;
+
 describe.skipIf(!FORK_SUITE)(
-  "the inherited gate in a renamed private checkout (set STAMITY_FORK_SUITE=1 to run; ~25s)",
+  "the inherited gate in a renamed checkout, private and --registry (set STAMITY_FORK_SUITE=1 to run)",
   () => {
-    it("passes every suite that reads this package's identity", () => {
+    it.each(FORK_CLASSES)("passes every suite that reads this package's identity ($label)", (forkClass) => {
       const root = workspace("stamity-fork-suite-");
       // Cached AND untracked-not-ignored, the same list `scripts/leak-gate.mjs` builds: a
       // copy of the committed tree alone would run the suite without the working-tree file
@@ -389,7 +410,12 @@ describe.skipIf(!FORK_SUITE)(
       }
       const renamed = spawnSync(
         process.execPath,
-        [join(root, "scripts/fork-identity.mjs"), "--repository", `https://github.com/${FORK_OWNER}/${FORK_REPO}`],
+        [
+          join(root, "scripts/fork-identity.mjs"),
+          "--repository",
+          `https://github.com/${FORK_OWNER}/${FORK_REPO}`,
+          ...forkClass.args,
+        ],
         { cwd: root, encoding: "utf-8" },
       );
       expect(renamed.status, `fork-identity.mjs\n${renamed.stdout}\n${renamed.stderr}`).toBe(0);
@@ -397,7 +423,12 @@ describe.skipIf(!FORK_SUITE)(
       for (const relPath of targets) expect(renamed.stdout, `${relPath} was not rewritten`).toContain(`updated ${relPath}`);
       const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as Record<string, unknown>;
       expect(pkg["name"]).toBe(`@${FORK_OWNER}/stamity`);
-      expect(pkg["private"]).toBe(true);
+      if (forkClass.registry === undefined) {
+        expect(pkg["private"]).toBe(true);
+      } else {
+        expect(pkg).not.toHaveProperty("private");
+        expect(pkg["publishConfig"]).toEqual({ registry: forkClass.registry });
+      }
 
       const result = spawnSync(
         process.execPath,

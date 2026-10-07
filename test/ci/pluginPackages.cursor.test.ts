@@ -202,7 +202,15 @@ beforeAll(async () => {
     // `${STAMITY:CLI}`, which the generator resolves from the identity it builds at (this
     // manifest's name and version) and staging refuses without one. The oracle stages with the
     // same identity, so the byte comparisons below stay exact.
-    cli: { packageName: canonical().name, version },
+    // TEST CHANGE, justified: REQ-PLUGIN-048 — the generator also renders the checkout's channel
+    // and a `--registry` fork's registry; on the canonical checkout both are the defaults, so the
+    // staged bytes are the ones this oracle produced before.
+    cli: {
+      packageName: canonical().name,
+      version,
+      npmChannel: canonical().npmChannel,
+      ...(canonical().registry === undefined ? {} : { registry: canonical().registry }),
+    },
   })) as { root: string; forkRoot: string; dispose: () => Promise<void> };
   try {
     const contentRoot = { root: staged.root, forkRoot: staged.forkRoot };
@@ -220,6 +228,12 @@ beforeAll(async () => {
         ledger: [],
       },
       engineVersion: version,
+      // TEST CHANGE, justified: REQ-PLUGIN-048 — the identity the generator plans the hooks with
+      // (`scripts/generate-plugin-packages.mjs`); on the canonical checkout these are the planner's
+      // own defaults, so the plan is the one this oracle produced before.
+      packageName: canonical().name,
+      npmChannel: canonical().npmChannel,
+      ...(canonical().registry === undefined ? {} : { npmRegistry: canonical().registry }),
       facts: { monorepoPackages: [], hookScriptsRoot: "${CURSOR_PLUGIN_ROOT}/hooks" },
       contentRoot,
     });

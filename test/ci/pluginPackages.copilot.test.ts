@@ -190,11 +190,24 @@ const NATIVE_ENGINE_VERSION = "0.0.0-test";
 /** The package both renderings name: this checkout's own, read from its manifest. */
 const PACKAGE = canonical().name;
 
+/**
+ * How this checkout's pinned call obtains the package: its channel, and a `--registry` fork's
+ * registry. TEST CHANGE, justified: REQ-PLUGIN-048 — the generator renders the checkout's own
+ * `npx --no` (a registry-less fork) or `--@<scope>:registry=<url>` (a registry fork), so the
+ * oracle takes the same identity; on the canonical checkout both are the defaults (`-y`, none),
+ * and every rendering below is byte-identical to the one this suite asserted before.
+ */
+const CALL_OPTIONS = {
+  npmChannel: canonical().npmChannel,
+  ...(canonical().registry === undefined ? {} : { registry: canonical().registry }),
+};
+
 /** The pinned call as the native oracle renders it, and as the plugin build renders it at its release. */
-const NATIVE_CLI = pinnedCliPrefix(PACKAGE, NATIVE_ENGINE_VERSION);
+const NATIVE_CLI = pinnedCliPrefix(PACKAGE, NATIVE_ENGINE_VERSION, CALL_OPTIONS);
 const PLUGIN_CLI = pinnedCliPrefix(
   PACKAGE,
   (JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as { version: string }).version,
+  CALL_OPTIONS,
 );
 
 /**
@@ -235,7 +248,10 @@ async function planCopilotResidue(): Promise<AdapterOutput[]> {
     },
     engineVersion: NATIVE_ENGINE_VERSION,
     // The same package the generator builds from, so a pinned CLI call differs only by version.
+    // TEST CHANGE, justified: REQ-PLUGIN-048 — and the same channel and registry ({@link CALL_OPTIONS}).
     packageName: PACKAGE,
+    npmChannel: CALL_OPTIONS.npmChannel,
+    ...(CALL_OPTIONS.registry === undefined ? {} : { npmRegistry: CALL_OPTIONS.registry }),
     facts: { monorepoPackages: [], hookScriptsRoot: `\${${ROOT_VARIABLE}}/hooks` },
     contentRoot: CORPUS_ROOT,
   });

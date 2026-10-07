@@ -3,7 +3,7 @@ import { link, readFile, readdir, rm, symlink, writeFile } from "node:fs/promise
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { CODEX_AGENTS_OVERRIDE_FILE } from "../../src/adapters/codex.ts";
-import { checkCommand, runDriftGate } from "../../src/cli/commands/check.ts";
+import { checkCommand, runDriftGate, type DriftReport } from "../../src/cli/commands/check.ts";
 import { applyInit } from "../../src/cli/commands/init/apply.ts";
 import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
 import { syncClosingLines } from "../../src/cli/commands/sync.ts";
@@ -24,6 +24,7 @@ import {
   type GoldenRepo,
 } from "./goldenFixture.ts";
 import { runInProcess } from "../support/inProcess.ts";
+import type * as PackageNameApi from "../../src/cli/kit/packageName.ts";
 
 /**
  * The shared root `AGENTS.md` is the same file with and without Codex
@@ -43,6 +44,44 @@ import { runInProcess } from "../support/inProcess.ts";
  * git seam is the one stub (`goldenGitRunner`, justified in the fixture: it
  * keeps the working-tree probe off child processes and off this checkout).
  */
+
+/**
+ * The package identity `planSync` falls back to when its caller names none — the RUNNING
+ * checkout's (`src/cli/kit/packageName.ts`). `runDriftGate` takes no identity, so `check`'s own
+ * gate reads it there, while the fixture renders under the golden one (`goldenFixture.ts`: every
+ * `planSync` over a golden repo passes it). {@link goldenDriftGate} pins the fallback to the
+ * golden identity for exactly its own call; every other case reads the real kit.
+ */
+const pinnedIdentity = vi.hoisted(() => ({ current: null as { name: string; npmChannel: boolean } | null }));
+vi.mock("../../src/cli/kit/packageName.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof PackageNameApi>();
+  return {
+    ...actual,
+    packageName: (): string => pinnedIdentity.current?.name ?? actual.packageName(),
+    hasNpmChannel: (): boolean => pinnedIdentity.current?.npmChannel ?? actual.hasNpmChannel(),
+    registryOption: (opts: Parameters<typeof actual.registryOption>[0]): ReturnType<typeof actual.registryOption> =>
+      pinnedIdentity.current === null
+        ? actual.registryOption(opts)
+        : opts.npmRegistry === undefined
+          ? {}
+          : { npmRegistry: opts.npmRegistry },
+  };
+});
+
+/**
+ * `check`'s drift gate at the fixture's engine version AND package identity. TEST CHANGE,
+ * justified: REQ-PLUGIN-048 — the gate read the running checkout's name, channel and registry, so
+ * a renamed fork re-rendered every pinned call and drifted on all of them. On the canonical
+ * checkout the golden identity IS the running one, so the gate's verdict is unchanged there.
+ */
+async function goldenDriftGate(rootDir: string): Promise<DriftReport> {
+  pinnedIdentity.current = { name: GOLDEN_PACKAGE_NAME, npmChannel: GOLDEN_NPM_CHANNEL };
+  try {
+    return await runDriftGate(rootDir, GOLDEN_ENGINE_VERSION);
+  } finally {
+    pinnedIdentity.current = null;
+  }
+}
 
 /** Each case pays for one or two whole-repository emissions; the sync proof's own measured budget. */
 const CASE_TIMEOUT_MS = 60_000;
@@ -294,7 +333,7 @@ describe("upgrading a 1.10.0 setup whose whole-file AGENTS.md carried the Codex 
       expect(seeded?.ledger.some((row) => row.path === CODEX_AGENTS_OVERRIDE_FILE)).toBe(false);
 
       // Non-degenerate: before the sync the seeded state is drift on both files.
-      expect((await runDriftGate(repo.rootDir, GOLDEN_ENGINE_VERSION)).clean).toBe(false);
+      expect((await goldenDriftGate(repo.rootDir)).clean).toBe(false);
       const upgrade = await plan(repo);
       expect(actionOf(upgrade, AGENTS_MD_FILE)).toBe("update");
       expect(actionOf(upgrade, CODEX_AGENTS_OVERRIDE_FILE)).toBe("create");
@@ -323,7 +362,8 @@ describe("upgrading a 1.10.0 setup whose whole-file AGENTS.md carried the Codex 
 
       // `check` afterwards: its own drift gate, at the fixture's engine version (the CLI's would
       // read this checkout's version, and every pinned call in the fixture would then differ).
-      const drift = await runDriftGate(repo.rootDir, GOLDEN_ENGINE_VERSION);
+      // TEST CHANGE, justified: REQ-PLUGIN-048 — and at its package identity (goldenDriftGate).
+      const drift = await goldenDriftGate(repo.rootDir);
       expect(drift.changes.map((entry) => `${entry.path}:${entry.action}`)).toEqual([]);
       expect(drift.missing).toEqual([]);
       expect(drift.clean).toBe(true);
