@@ -514,11 +514,15 @@ class LeavingReport {
   private readonly removedRecognised: string[] = [];
   private readonly outside: string[] = [];
   private readonly edited: string[] = [];
+  // Plain fields, not constructor parameter properties: `scripts/generate-docs.mjs`
+  // runs `src/` under Node's strip-only TypeScript, which refuses those.
+  private readonly shown: string;
+  private readonly hint: string;
 
-  constructor(
-    private readonly shown: string,
-    private readonly hint: string,
-  ) {}
+  constructor(shown: string, hint: string) {
+    this.shown = shown;
+    this.hint = hint;
+  }
 
   /**
    * `stale`: the rendering carries no element of this kind at all (a
