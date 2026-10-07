@@ -54,6 +54,7 @@ import * as manifestCore from "../manifest/manifest.ts";
 import * as ledger from "../manifest/ledger.ts";
 import * as mcpFilter from "../manifest/mcpFilter.ts";
 import * as claudeSettings from "../manifest/claudeSettings.ts";
+import * as ownedPaths from "../manifest/ownedPaths.ts";
 import * as mcpCatalog from "../mcp/catalog.ts";
 import * as descriptionScan from "../mcp/descriptionScan.ts";
 import * as mcpEnv from "../mcp/env.ts";
@@ -167,6 +168,7 @@ export interface EngineRegistry {
     readonly ledger: typeof ledger;
     readonly mcpFilter: typeof mcpFilter;
     readonly claudeSettings: typeof claudeSettings;
+    readonly ownedPaths: typeof ownedPaths;
   };
   readonly mcp: {
     readonly catalog: typeof mcpCatalog;
@@ -354,7 +356,7 @@ export function createEngine(): EngineRegistry {
       validation: handoffValidation,
       store: handoffStore,
     },
-    manifest: { manifest: manifestCore, ledger, mcpFilter, claudeSettings },
+    manifest: { manifest: manifestCore, ledger, mcpFilter, claudeSettings, ownedPaths },
     mcp: {
       catalog: mcpCatalog,
       descriptionScan,

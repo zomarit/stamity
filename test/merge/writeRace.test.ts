@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import * as realFsPromises from "node:fs/promises";
 import { join } from "node:path";
@@ -38,20 +39,31 @@ interface Fixture {
   realParent: string;
 }
 
-/** `<temp>/repo/pkg/<name>` inside, `<temp>/outside/<name>` as the victim. */
+/**
+ * `<temp>/repo/.cursor/rules/<name>` inside, `<temp>/outside/<name>` as the victim.
+ *
+ * TEST CHANGE, justified: REQ-PLUGIN-045 — the recorded file sat under a
+ * root-level `pkg/`, a folder no release writes, so gate 1 now refuses it
+ * before the race window opens. It sits in a rule folder the engine writes,
+ * and its row records the hash of its bytes (below), which an engine-named
+ * delete now needs; the race under test is unchanged.
+ */
+const PARENT = ".cursor/rules";
+const ENGINE_BYTES = "engine output\n";
+
 async function seed(name: string, victimBytes: string): Promise<Fixture> {
   const base = getTempDir().dir;
   const root = join(base, "repo");
   const outside = join(base, "outside");
-  const realParent = join(root, "pkg");
+  const realParent = join(root, ".cursor", "rules");
   await mkdir(realParent, { recursive: true });
   await mkdir(outside, { recursive: true });
-  await writeFile(join(realParent, name), "engine output\n", "utf8");
+  await writeFile(join(realParent, name), ENGINE_BYTES, "utf8");
   await writeFile(join(outside, name), victimBytes, "utf8");
   return { root, outside, realParent };
 }
 
-/** Replace `repo/pkg` (a real directory) with a symlink pointing out of the repo. */
+/** Replace `repo/.cursor/rules` (a real directory) with a symlink pointing out of the repo. */
 async function swapParentForSymlink(fixture: Fixture): Promise<void> {
   await rm(fixture.realParent, { recursive: true, force: true });
   await symlink(fixture.outside, fixture.realParent, "dir");
@@ -59,7 +71,14 @@ async function swapParentForSymlink(fixture: Fixture): Promise<void> {
 
 function candidate(path: string): ReclaimCandidate {
   return {
-    entry: { path, adapter: "cursor", artifactId: `artifact:${path}`, artifactType: "rule" },
+    entry: {
+      path,
+      adapter: "cursor",
+      artifactId: `artifact:${path}`,
+      artifactType: "rule",
+      // TEST CHANGE, justified: REQ-PLUGIN-045 — see `seed`.
+      contentHash: createHash("sha256").update(ENGINE_BYTES).digest("hex"),
+    },
     reason: "deselected",
   };
 }
@@ -89,7 +108,7 @@ describe("reclaim sweep — the tree moves between the gate and the unlink", () 
     const mod: typeof ReclaimApi = await import("../../src/merge/reclaim.ts");
 
     try {
-      const report = await mod.sweepReclaimCandidates([candidate(`pkg/${name}`)], {
+      const report = await mod.sweepReclaimCandidates([candidate(`${PARENT}/${name}`)], {
         rootDir: fixture.root,
         consent: true,
       });
@@ -132,7 +151,7 @@ describe("reclaim sweep — the tree moves between the gate and the unlink", () 
     const mod: typeof ReclaimApi = await import("../../src/merge/reclaim.ts");
 
     try {
-      const report = await mod.sweepReclaimCandidates([candidate(`pkg/${name}`)], {
+      const report = await mod.sweepReclaimCandidates([candidate(`${PARENT}/${name}`)], {
         rootDir: fixture.root,
         consent: true,
       });
@@ -151,7 +170,7 @@ describe("reclaim sweep — the tree moves between the gate and the unlink", () 
     const fixture = await seed(name, "unrelated\n");
 
     const { sweepReclaimCandidates } = await import("../../src/merge/reclaim.ts");
-    const report = await sweepReclaimCandidates([candidate(`pkg/${name}`)], {
+    const report = await sweepReclaimCandidates([candidate(`${PARENT}/${name}`)], {
       rootDir: fixture.root,
       consent: true,
     });

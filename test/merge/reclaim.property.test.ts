@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import type { ReclaimCandidate } from "../../src/manifest/ledger.ts";
+import { OWNED_PATHS } from "../../src/manifest/ownedPaths.ts";
 import { wrapInManagedBlock } from "../../src/merge/managedBlocks.ts";
 import {
   sweepReclaimCandidates,
@@ -11,7 +12,7 @@ import {
   type ReclaimReport,
 } from "../../src/merge/reclaim.ts";
 import { TOOLS, type Tool } from "../../src/types/core.ts";
-import { CONTENT_PREFIX, STATE_DIR } from "../../src/types/markers.ts";
+import { CONTENT_PREFIX } from "../../src/types/markers.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -23,6 +24,17 @@ import { useTempDir } from "../support/tempDir.ts";
  *    are still on disk afterwards.
  * 2. A file the engine CAN prove it wrote is always acted on — no candidate
  *    quietly falls through the ladder into silence.
+ *
+ * TEST CHANGE, justified: REQ-PLUGIN-045 — the proof rule moved, so the model
+ * is re-specified to it rather than narrowed. A path proves nothing outside
+ * the owned-path bound; inside it, an engine-minted name proves a whole-file
+ * delete only beside a recorded hash that matches the bytes (or a managed
+ * block spanning the file), a hash alone proves one only in a state folder,
+ * and a row with no hash proves nothing. The generator now draws paths from
+ * inside the bound (content and state folders) and adds the adversarial kinds
+ * the old rule got wrong — an engine name with no hash, a matching hash on an
+ * unprefixed file in a content folder, and engine-looking paths outside the
+ * bound — so both invariants are quantified over the new rule's whole space.
  *
  * Real-filesystem lane, for the same reason `reclaim.test.ts` uses it: the
  * subject's contract is `lstat` file-type discrimination, `realpath`
@@ -54,23 +66,43 @@ let runCounter = 0;
 // ── Fixture model ──────────────────────────────────────────────────────────
 
 /**
- * How a fixture file proves — or fails to prove — engine authorship.
+ * How a fixture file proves — or fails to prove — engine authorship, under the
+ * proof rule of REQ-PLUGIN-045.
  *
- * - `engine-named-plain`  — engine-minted basename, no managed block.
- * - `engine-named-block`  — engine-minted basename wrapped whole in a block.
- * - `engine-ancestor`     — unprefixed file under an engine-minted DIRECTORY.
- * - `state-hashed`        — unprefixed name in the state dir, recorded hash MATCHES.
- * - `user-plain`          — unprefixed name, no hash, nowhere admissible.
- * - `user-edited-hash`    — state-dir path whose recorded hash MISMATCHES the
- *                           bytes: the user-edit survival case.
+ * Owned (the sweep must delete):
+ * - `engine-named-hashed`    — engine-minted basename in a content folder, no
+ *                              block, recorded hash MATCHES.
+ * - `engine-named-block`     — engine-minted basename wrapped whole in a block.
+ * - `engine-ancestor-block`  — unprefixed file inside an engine-minted SKILL
+ *                              folder (`skills/<prefix>…/`), wrapped whole.
+ * - `engine-ancestor-hashed` — the same layout, no block, recorded hash MATCHES.
+ * - `state-hashed`           — unprefixed name in a state folder, hash MATCHES.
+ *
+ * Not provable (the sweep must leave the bytes):
+ * - `engine-named-hashless`  — engine-minted basename, no block, NO hash: a
+ *                              name alone proves nothing.
+ * - `engine-named-edited`    — engine-minted basename, hash MISMATCHES.
+ * - `user-plain`             — unprefixed name in a content folder, no hash.
+ * - `user-hashed-content`    — unprefixed name in a content folder whose hash
+ *                              MATCHES: a hash alone proves nothing there.
+ * - `user-edited-hash`       — state-folder path whose hash MISMATCHES: the
+ *                              user-edit survival case.
+ * - `outside-bound`          — an engine-minted name with a MATCHING hash at a
+ *                              path no release writes (the shape a forged row
+ *                              aimed `sync` with).
  */
 const FIXTURE_KINDS = [
-  "engine-named-plain",
+  "engine-named-hashed",
   "engine-named-block",
-  "engine-ancestor",
+  "engine-ancestor-block",
+  "engine-ancestor-hashed",
   "state-hashed",
+  "engine-named-hashless",
+  "engine-named-edited",
   "user-plain",
+  "user-hashed-content",
   "user-edited-hash",
+  "outside-bound",
 ] as const;
 
 type FixtureKind = (typeof FIXTURE_KINDS)[number];
@@ -81,6 +113,8 @@ interface FixtureFile {
   kind: FixtureKind;
   /** Repo-relative POSIX path. */
   path: string;
+  /** The artifact type its ledger row records. */
+  artifactType: "agent" | "skill" | "rule" | "command" | "infra";
   /** Bytes written to disk. */
   content: string;
   /** Hash recorded on the ledger row, when the kind records one. */
@@ -116,8 +150,18 @@ const reasonArb = fc.constantFrom<ReclaimCandidate["reason"]>(
 
 const toolArb = fc.constantFrom<Tool>(...TOOLS);
 
+/** The content folders, drawn from the bound itself, and the skill folders
+ *  among them (the only ones whose engine marker may sit on a container). */
+const CONTENT_ROOTS = OWNED_PATHS.contentRoots;
+const SKILL_ROOTS = CONTENT_ROOTS.filter((root) => root.endsWith("/skills/"));
+const CONTENT_TYPES = ["agent", "skill", "rule", "command"] as const;
+
 const specArb = fc.record({
   kind: fc.constantFrom<FixtureKind>(...FIXTURE_KINDS),
+  contentRoot: fc.constantFrom(...CONTENT_ROOTS),
+  skillRoot: fc.constantFrom(...SKILL_ROOTS),
+  stateRoot: fc.constantFrom(...OWNED_PATHS.stateRoots),
+  contentType: fc.constantFrom(...CONTENT_TYPES),
   dir: fc.array(wordArb, { minLength: 1, maxLength: 2 }),
   name: wordArb,
   body: proseArb,
@@ -132,64 +176,110 @@ const sha256 = (content: string): string =>
   createHash("sha256").update(Buffer.from(content, "utf8")).digest("hex");
 
 /**
- * Turn one generated spec into a concrete fixture file. The `f<index>/` prefix
- * gives every file a private subtree, which is what makes collisions between
- * two generated paths — a file where another file wants a directory — impossible
- * by construction rather than by filtering.
+ * Turn one generated spec into a concrete fixture file. Every file gets a
+ * private subtree keyed by its index — `f<index>/` below its folder, or the
+ * index in the skill folder's own minted name — which is what makes
+ * collisions between two generated paths impossible by construction rather
+ * than by filtering.
  */
 function materialize(spec: FixtureSpec, index: number): FixtureFile {
   const nest = spec.dir.join("/");
   const stem = `${spec.name}${index}`;
+  const plain = `${spec.body}\n`;
   const common = {
     kind: spec.kind,
     reason: spec.reason,
     adapter: spec.adapter,
     coOwners: spec.coOwners,
   };
+  const inContent = `${spec.contentRoot}f${index}/${nest}`;
+  const content = { ...common, artifactType: spec.contentType };
 
   switch (spec.kind) {
-    case "engine-named-plain":
+    case "engine-named-hashed":
       return {
-        ...common,
-        path: `f${index}/${nest}/${CONTENT_PREFIX}${stem}.md`,
-        content: `${spec.body}\n`,
+        ...content,
+        path: `${inContent}/${CONTENT_PREFIX}${stem}.md`,
+        content: plain,
+        contentHash: sha256(plain),
         outcome: "deleted",
       };
     case "engine-named-block":
       return {
-        ...common,
-        path: `f${index}/${nest}/${CONTENT_PREFIX}${stem}.md`,
+        ...content,
+        path: `${inContent}/${CONTENT_PREFIX}${stem}.md`,
         content: wrapInManagedBlock(spec.body),
         outcome: "deleted",
       };
-    case "engine-ancestor":
-      // The engine mints the DIRECTORY; the file inside it carries no prefix of
-      // its own, which is the skill-projection layout.
+    case "engine-ancestor-block":
+      // The engine mints the SKILL FOLDER directly under `skills/`; the files
+      // inside it carry no prefix of their own (the skill-projection layout).
       return {
-        ...common,
-        path: `f${index}/${nest}/${CONTENT_PREFIX}${stem}/SKILL.md`,
+        ...content,
+        path: `${spec.skillRoot}${CONTENT_PREFIX}${stem}/${nest}/SKILL.md`,
         content: wrapInManagedBlock(spec.body),
+        outcome: "deleted",
+      };
+    case "engine-ancestor-hashed":
+      return {
+        ...content,
+        path: `${spec.skillRoot}${CONTENT_PREFIX}${stem}/${nest}/reference.md`,
+        content: plain,
+        contentHash: sha256(plain),
         outcome: "deleted",
       };
     case "state-hashed":
       return {
         ...common,
-        path: `${STATE_DIR}/f${index}/${nest}/${stem}.json`,
-        content: `${spec.body}\n`,
-        contentHash: sha256(`${spec.body}\n`),
+        artifactType: "infra",
+        path: `${spec.stateRoot}f${index}/${nest}/${stem}.json`,
+        content: plain,
+        contentHash: sha256(plain),
         outcome: "deleted",
       };
+    case "engine-named-hashless":
+      return {
+        ...content,
+        path: `${inContent}/${CONTENT_PREFIX}${stem}.md`,
+        content: plain,
+        outcome: "skipped-unsafe-path",
+      };
+    case "engine-named-edited":
+      return {
+        ...content,
+        path: `${inContent}/${CONTENT_PREFIX}${stem}.md`,
+        content: plain,
+        // The ledger recorded what the ENGINE wrote; the bytes on disk have
+        // since been edited, so the hashes disagree and the edit survives.
+        contentHash: sha256(`${plain}edited by hand\n`),
+        outcome: "skipped-user-content",
+      };
     case "user-plain":
-      return { ...common, path: `f${index}/${nest}/${stem}.md`, content: `${spec.body}\n`, outcome: "skipped-unsafe-path" };
+      return { ...content, path: `${inContent}/${stem}.md`, content: plain, outcome: "skipped-unsafe-path" };
+    case "user-hashed-content":
+      return {
+        ...content,
+        path: `${inContent}/${stem}.md`,
+        content: plain,
+        contentHash: sha256(plain),
+        outcome: "skipped-unsafe-path",
+      };
     case "user-edited-hash":
       return {
         ...common,
-        path: `${STATE_DIR}/f${index}/${nest}/${stem}.json`,
-        content: `${spec.body}\n`,
-        // The ledger recorded what the ENGINE wrote; the bytes on disk have
-        // since been edited, so the hashes disagree and the edit survives.
-        contentHash: sha256(`${spec.body}\nedited by hand\n`),
+        artifactType: "infra",
+        path: `${spec.stateRoot}f${index}/${nest}/${stem}.json`,
+        content: plain,
+        contentHash: sha256(`${plain}edited by hand\n`),
         outcome: "skipped-user-content",
+      };
+    case "outside-bound":
+      return {
+        ...content,
+        path: `f${index}/${nest}/${CONTENT_PREFIX}${stem}.md`,
+        content: plain,
+        contentHash: sha256(plain),
+        outcome: "skipped-unsafe-path",
       };
   }
 }
@@ -235,7 +325,7 @@ const candidateRow = (file: FixtureFile, adapter: Tool): ReclaimCandidate => ({
     path: file.path,
     adapter,
     artifactId: `artifact:${file.path}`,
-    artifactType: "rule",
+    artifactType: file.artifactType,
     ...(file.contentHash === undefined ? {} : { contentHash: file.contentHash }),
   },
   reason: file.reason,
@@ -271,23 +361,40 @@ async function exists(path: string): Promise<boolean> {
 
 /**
  * Whether the engine can prove it wrote this file, re-derived from the fixture's
- * RAW data — path segments, bytes, recorded hash — rather than read off the
- * `outcome` column the fixture model declares.
+ * RAW data — path segments, artifact type, bytes, recorded hash — rather than
+ * read off the `outcome` column the fixture model declares.
  *
  * The distinction is the safety property's whole point. A property that selects
  * its check-set from its own expectation table stops examining a file the moment
  * that table is wrong, so a mis-declared row silently shrinks the invariant
- * instead of failing it. This predicate restates the ladder's two whole-file
- * ownership proofs from first principles — an engine-minted segment anywhere on
- * the path, or a state-dir path whose recorded hash still equals the bytes — and
- * the property below quantifies over its complement, so no declaration of ours
- * can excuse a file from the never-delete guarantee.
+ * instead of failing it. This predicate restates the ladder's whole-file
+ * ownership proofs from first principles (REQ-PLUGIN-045): the path lies in a
+ * content folder (for a content row) or a state folder (for an `infra` row);
+ * a recorded hash, when there is one, still equals the bytes; and then either
+ * the name is engine-minted — its basename, or a skill folder directly under
+ * `skills/` — beside a matching hash or a block spanning the file, or the path
+ * is in a state folder beside a matching hash. The property below quantifies
+ * over its complement, so no declaration of ours can excuse a file from the
+ * never-delete guarantee.
+ *
+ * TEST CHANGE, justified: REQ-PLUGIN-045 — the predicate restated the old
+ * rule (an engine-minted segment anywhere, or any `.stamity/` path with a
+ * matching hash); it now restates the bounded one.
  */
 function isProvablyEngineOwned(file: FixtureFile): boolean {
-  const engineNamed = file.path.split("/").some((segment) => segment.startsWith(CONTENT_PREFIX));
-  const hashProven =
-    file.path.startsWith(`${STATE_DIR}/`) && file.contentHash === sha256(file.content);
-  return engineNamed || hashProven;
+  const segments = file.path.split("/");
+  const inContentFolder =
+    file.artifactType !== "infra" && CONTENT_ROOTS.some((root) => file.path.startsWith(root));
+  const inStateFolder =
+    file.artifactType === "infra" && OWNED_PATHS.stateRoots.some((root) => file.path.startsWith(root));
+  if (!inContentFolder && !inStateFolder) return false;
+  const hashMatches = file.contentHash !== undefined && file.contentHash === sha256(file.content);
+  if (file.contentHash !== undefined && !hashMatches) return false;
+  const blockSpans = /^<!-- STAMITY:BEGIN[^\n]*-->\n[\s\S]*\n<!-- STAMITY:END -->\n?$/.test(file.content);
+  const engineNamed =
+    (segments.at(-1) ?? "").startsWith(CONTENT_PREFIX) ||
+    segments.some((segment, index) => segments[index - 1] === "skills" && segment.startsWith(CONTENT_PREFIX));
+  return (inContentFolder && engineNamed && (hashMatches || blockSpans)) || (inStateFolder && hashMatches);
 }
 
 // ── Properties ─────────────────────────────────────────────────────────────
@@ -318,6 +425,14 @@ describe("reclaim — generator coverage", () => {
 
     // Repeated paths reach the sweep, so the co-owner grouping path is live.
     expect(files.some((file) => file.coOwners.length > 0)).toBe(true);
+
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — the re-derived predicate agrees
+    // with the expectation table on every generated file, so neither can drift
+    // from the rule without the other noticing, and the space reaches every
+    // part of the bound the generator draws from.
+    for (const file of files) expect(isProvablyEngineOwned(file), file.path).toBe(file.outcome === "deleted");
+    for (const root of CONTENT_ROOTS) expect(files.some((file) => file.path.startsWith(root)), root).toBe(true);
+    for (const root of OWNED_PATHS.stateRoots) expect(files.some((file) => file.path.startsWith(root)), root).toBe(true);
   });
 });
 
@@ -398,6 +513,13 @@ describe("reclaim — user files are never deleted", () => {
           expect(entry.action).toBe(file.outcome === "deleted" ? "dry-run" : file.outcome);
           if (file.outcome === "deleted") {
             expect(entry.detail).toContain("Consent would delete this path");
+            // TEST CHANGE, justified: REQ-PLUGIN-045 — the preview names what
+            // consent would do and what proves it: a hash when one was
+            // recorded (every hashed owned kind matches), else the block.
+            expect(entry.wouldBe).toBe("deleted");
+            expect(entry.proof).toBe(file.contentHash === undefined ? "block" : "hash");
+          } else {
+            expect(entry).not.toHaveProperty("proof");
           }
           // Every byte of the tree, provable or not, is still exactly as seeded.
           expect(await readFile(absolute(root, file.path), "utf8")).toBe(file.content);
@@ -409,7 +531,9 @@ describe("reclaim — user files are never deleted", () => {
 });
 
 describe("reclaim — provably owned candidates are always acted on", () => {
-  it("unlinks every file whose name, ancestor directory or recorded hash proves authorship", async () => {
+  // TEST CHANGE, justified: REQ-PLUGIN-045 — re-titled to the bounded rule;
+  // the body is unchanged and quantifies over the re-specified model.
+  it("unlinks every in-bound file whose engine name with a matching hash or block, or state-folder hash, proves authorship", async () => {
     const temp = tempDir();
     await fc.assert(
       fc.asyncProperty(treeArb, async (files) => {
@@ -496,7 +620,10 @@ describe("reclaim — co-owned rows", () => {
         fc.array(fc.tuple(reasonArb, toolArb), { minLength: 2, maxLength: 4 }),
         async (name, body, rows) => {
           const root = await nextRoot(temp.dir);
-          const path = `rules/${CONTENT_PREFIX}${name}.md`;
+          // TEST CHANGE, justified: REQ-PLUGIN-045 — a root-level `rules/`
+          // folder lies outside the owned-path bound; the shared path sits in a
+          // rule folder the engine writes. The block still proves the delete.
+          const path = `.claude/rules/${CONTENT_PREFIX}${name}.md`;
           await writeTree(root, [{ path, content: wrapInManagedBlock(body) }]);
 
           const rank: Record<ReclaimCandidate["reason"], number> = {
@@ -546,7 +673,10 @@ describe("reclaim — managed-block strip preserves user bytes", () => {
         proseArb,
         async (name, prefix, body, suffix) => {
           const root = await nextRoot(temp.dir);
-          const path = `agents/${CONTENT_PREFIX}${name}.md`;
+          // TEST CHANGE, justified: REQ-PLUGIN-045 — a root-level `agents/`
+          // folder lies outside the owned-path bound; the file sits in an agent
+          // folder the engine writes.
+          const path = `.claude/agents/${CONTENT_PREFIX}${name}.md`;
           // Markers only count on their own lines, so the user prefix ends with
           // a newline and the suffix starts on the line after the END marker.
           const content = `${prefix}\n${wrapInManagedBlock(body)}${suffix}\n`;

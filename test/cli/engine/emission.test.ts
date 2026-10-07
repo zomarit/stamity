@@ -297,11 +297,17 @@ describe("sync emission write boundary", () => {
   it("refuses an output whose directory is redirected out of the repo root", async () => {
     const root = getRepo().dir;
     const outside = getOutside();
-    await symlink(outside.dir, join(root, "docs"), "dir");
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — `docs/stamity-guide.md` is a
+    // `rule` row outside every content folder, which the planned-row check now
+    // refuses (VALIDATION_ERROR) before the write lane is reached; the
+    // redirected directory is a rule folder the engine writes, so the write
+    // lane's own boundary refusal is still the one under test.
+    await mkdir(join(root, ".claude"), { recursive: true });
+    await symlink(outside.dir, join(root, ".claude", "rules"), "dir");
 
     let thrown: unknown;
     try {
-      await applyTo(root, [syncOutput("docs/stamity-guide.md", "Guide body.\n")]);
+      await applyTo(root, [syncOutput(".claude/rules/stamity-guide.md", "Guide body.\n")]);
     } catch (error) {
       thrown = error;
     }
@@ -344,13 +350,16 @@ describe("sync emission write boundary", () => {
     // resolved on the same terms as the landing.
     await symlink(join(root, "shared", "rules"), join(root, ".cursor", "rules"), "dir");
 
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — the plain-directory output moved
+    // from `docs/` (outside the owned-path bound, refused before any write) to
+    // a rule folder the engine writes.
     const report = await applyTo(root, [
-      syncOutput("docs/stamity-guide.md", "Guide body.\n"),
+      syncOutput(".claude/rules/stamity-guide.md", "Guide body.\n"),
       syncOutput(".cursor/rules/stamity-guide.md", "Rule body.\n"),
     ]);
 
     expect(report.created).toBe(2);
-    expect(await readFile(join(physical, "docs", "stamity-guide.md"), "utf8")).toBe("Guide body.\n");
+    expect(await readFile(join(physical, ".claude", "rules", "stamity-guide.md"), "utf8")).toBe("Guide body.\n");
     expect(await readFile(join(physical, "shared", "rules", "stamity-guide.md"), "utf8")).toBe(
       "Rule body.\n",
     );

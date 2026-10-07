@@ -500,23 +500,36 @@ describe("applyInit — the plugin ownership boundary (REQ-PLUGIN-015)", () => {
 });
 
 describe("applyInit — planned emission (planner seam)", () => {
-  /** A managed-block output stamped with the test engine version. */
-  function managedOutput(path: string, body: string): AdapterOutput {
+  /**
+   * A managed-block output stamped with the test engine version.
+   *
+   * TEST CHANGE, justified: REQ-PLUGIN-045 — the persisted ledger must lie in
+   * the owned-path bound, which reads the row's type: a `rule` only under a
+   * content folder, `AGENTS.md` only as `infra`. The helper typed every row
+   * `rule`, so the `AGENTS.md` cases now pass `infra`, as every release
+   * records the charter.
+   */
+  function managedOutput(path: string, body: string, artifactType: "rule" | "infra" = "rule"): AdapterOutput {
     return {
       path,
       content: wrapInManagedBlock(body, path, ENGINE_VERSION),
-      owner: { adapter: "claude", artifactId: "guide", artifactType: "rule" },
+      owner: { adapter: "claude", artifactId: "guide", artifactType },
     };
   }
 
+  // TEST CHANGE, justified: REQ-PLUGIN-045 — the guide sat at
+  // `docs/stamity-guide.md`, a `rule` row outside every content folder, which
+  // the manifest writer now refuses; it moved into `.claude/rules/`.
+  const GUIDE = ".claude/rules/stamity-guide.md";
+
   it("writes planner outputs through the merge engine and stands behind them in the ledger", async () => {
-    plannerOutputs.value = [managedOutput("docs/stamity-guide.md", "Guide body.\n")];
+    plannerOutputs.value = [managedOutput(GUIDE, "Guide body.\n")];
     const root = await makeRepo();
 
     const report = await applyInit(optionsFor(root));
 
     expect(report.wrote).toEqual([
-      { path: join(root, "docs", "stamity-guide.md"), action: "created" },
+      { path: join(root, ".claude", "rules", "stamity-guide.md"), action: "created" },
     ]);
     expect(report.ledgerCount).toBe(1);
 
@@ -530,12 +543,12 @@ describe("applyInit — planned emission (planner seam)", () => {
     // from disk, not merely that some string is present.
     expect(manifest?.ledger).toEqual([
       {
-        path: "docs/stamity-guide.md",
+        path: GUIDE,
         adapter: "claude",
         artifactId: "guide",
         artifactType: "rule",
         contentHash: createHash("sha256")
-          .update(wrapInManagedBlock("Guide body.\n", "docs/stamity-guide.md", ENGINE_VERSION))
+          .update(wrapInManagedBlock("Guide body.\n", GUIDE, ENGINE_VERSION))
           .digest("hex"),
         stampedVersion: ENGINE_VERSION,
       },
@@ -550,7 +563,7 @@ describe("applyInit — planned emission (planner seam)", () => {
     // marker-less user file. Under init's write options the merge engine
     // prepends the managed block and preserves every user byte below it —
     // surfaced as a warning-bearing `wrote[]` row, never silent loss.
-    plannerOutputs.value = [managedOutput("AGENTS.md", "Managed body.\n")];
+    plannerOutputs.value = [managedOutput("AGENTS.md", "Managed body.\n", "infra")];
     const root = await makeRepo();
     const userBytes = "## My conventions\nuser notes survive merges\n";
     await writeFile(join(root, "AGENTS.md"), userBytes, "utf8");
@@ -578,7 +591,7 @@ describe("applyInit — planned emission (planner seam)", () => {
   });
 
   it("predicts the same collision disposition under dryRun while touching nothing", async () => {
-    plannerOutputs.value = [managedOutput("AGENTS.md", "Managed body.\n")];
+    plannerOutputs.value = [managedOutput("AGENTS.md", "Managed body.\n", "infra")];
     const root = await makeRepo();
     await writeFile(join(root, "AGENTS.md"), "user notes\n", "utf8");
     const before = await snapshotTree(root);

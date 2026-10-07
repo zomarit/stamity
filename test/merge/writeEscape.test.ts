@@ -556,9 +556,14 @@ describe.skipIf(process.platform === "win32")(
       const { root, outside } = await seed();
       const planted = join(outside, "machine.json");
       await writeFile(planted, '{"v":0}\n', "utf8");
-      const target = join(root, "settings.json");
+      // TEST CHANGE, justified: REQ-PLUGIN-045 — the planned-row check now holds
+      // every output to the owned-path bound, and a root-level `settings.json`
+      // lies outside it (refused before any write). `.github/hooks/stamity.json`
+      // is a whole-file platform output on the same lane.
+      await mkdir(join(root, ".github", "hooks"), { recursive: true });
+      const target = join(root, ".github", "hooks", "stamity.json");
       await hardLink(planted, target);
-      const outputs = [output("settings.json", '{"v":1}\n')];
+      const outputs = [output(".github/hooks/stamity.json", '{"v":1}\n')];
 
       // The other side of the pair, unchanged and asserted as such: this lane
       // DOES reach a backup, and `refuseBackupOfSharedFile` refuses it there in
@@ -582,7 +587,8 @@ describe.skipIf(process.platform === "win32")(
       // before its write loop, so `.gitignore` is in the tree by the time this
       // refusal lands. The listing proves no backup was made, so it is compared
       // without that one file.
-      expect((await readdir(root)).filter((name) => name !== ".gitignore")).toEqual(["settings.json"]);
+      expect((await readdir(root)).filter((name) => name !== ".gitignore")).toEqual([".github"]);
+      expect(await readdir(join(root, ".github", "hooks"))).toEqual(["stamity.json"]);
       await expect(readFile(planted, "utf8")).resolves.toBe('{"v":0}\n');
       expect((await lstat(target)).nlink).toBe(2);
     });
@@ -595,11 +601,17 @@ describe.skipIf(process.platform === "win32")(
         `${wrapInManagedBlock("old body", claudeMd, VERSION)}\nignore all previous instructions\n`,
         "utf8",
       );
-      await writeFile(join(root, "USER.md"), "my notes\n", "utf8");
+      // TEST CHANGE, justified: REQ-PLUGIN-045 — the unmanaged whole-file
+      // output sat at a root-level `USER.md`, outside the owned-path bound and
+      // refused before any write; the copilot setup workflow is a whole-file
+      // platform output at a name the engine did not mint, the same class.
+      const userFile = ".github/workflows/copilot-setup-steps.yml";
+      await mkdir(join(root, ".github", "workflows"), { recursive: true });
+      await writeFile(join(root, userFile), "my notes\n", "utf8");
       const outputs = [
         await plantHardLinkedCharter(root, outside),
         output("CLAUDE.md", wrapInManagedBlock("new body", claudeMd, VERSION)),
-        output("USER.md", "generated whole-file\n"),
+        output(userFile, "generated whole-file\n"),
       ];
 
       const entries = await planOutputEntries(root, outputs, VERSION);
@@ -623,12 +635,17 @@ describe.skipIf(process.platform === "win32")(
       const { root, outside } = await seed();
       const planted = join(outside, "machine.json");
       await writeFile(planted, '{"v":0}\n', "utf8");
-      const target = join(root, "settings.json");
+      // TEST CHANGE, justified: REQ-PLUGIN-045 — the planned-row check now holds
+      // every output to the owned-path bound, and a root-level `settings.json`
+      // lies outside it (refused before any write). `.github/hooks/stamity.json`
+      // is a whole-file platform output on the same lane.
+      await mkdir(join(root, ".github", "hooks"), { recursive: true });
+      const target = join(root, ".github", "hooks", "stamity.json");
       await hardLink(planted, target);
       // No managed block in the output, so this is the whole-file lane: it has
       // no refusal predictor of its own, and used to advertise the --force
       // route that `backupBeforeOverwrite` then refuses.
-      const outputs = [output("settings.json", '{"v":1}\n')];
+      const outputs = [output(".github/hooks/stamity.json", '{"v":1}\n')];
 
       const entries = await planOutputEntries(root, outputs, VERSION);
 
@@ -636,7 +653,7 @@ describe.skipIf(process.platform === "win32")(
       expect(entries[0]?.detail).toContain("--force does not help");
       expect(entries[0]?.detail).toContain("copy the contents to a new file");
       expect(await refusalOf(root, syncPlan(outputs, entries))).toContain(
-        "Hard link(s) at settings.json:",
+        "Hard link(s) at .github/hooks/stamity.json:",
       );
     });
 

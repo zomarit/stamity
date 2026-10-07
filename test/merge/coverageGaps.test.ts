@@ -19,6 +19,7 @@ import {
   insertManagedBlock,
   wrapInManagedBlock,
 } from "../../src/merge/managedBlocks.ts";
+import { OWNED_PATHS } from "../../src/manifest/ownedPaths.ts";
 import { sweepReclaimCandidates } from "../../src/merge/reclaim.ts";
 import { predictDenyRefusal, safeWriteFile } from "../../src/merge/safeWrite.ts";
 import type { ReclaimCandidate } from "../../src/manifest/ledger.ts";
@@ -172,19 +173,39 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** A ledger row the sweep may act on, shaped like the rows `reclaim` receives. */
+/**
+ * A ledger row the sweep may act on, shaped like the rows `reclaim` receives.
+ *
+ * TEST CHANGE, justified: REQ-PLUGIN-045 — the sweep refuses at gate 1 a row
+ * outside the owned-path bound, which reads the row's type, so the helper
+ * types a row the way a release records it at that path: `rule` under a
+ * content folder, `infra` elsewhere (a state folder here).
+ */
 function candidate(path: string, contentHash?: string): ReclaimCandidate {
   return {
     entry: {
       path,
       adapter: "cursor",
       artifactId: `artifact:${path}`,
-      artifactType: "rule",
+      artifactType: OWNED_PATHS.contentRoots.some((root) => path.startsWith(root)) ? "rule" : "infra",
       ...(contentHash === undefined ? {} : { contentHash }),
     },
     reason: "deselected",
   };
 }
+
+/**
+ * TEST CHANGE, justified: REQ-PLUGIN-045 — the reclaim cases below used a
+ * root-level `stamity-rule.md`, a path no release writes, which gate 1 now
+ * refuses before any gate these cases target; the file sits in a rule folder
+ * the engine writes. The faults still match on the basename.
+ */
+const RULE = ".cursor/rules/stamity-rule.md";
+/** The block-less fixture body, and the hash its row records: an engine-named
+ *  block-less file is deleted only beside a matching hash, so the cases that
+ *  need the sweep to reach its delete step record it (REQ-PLUGIN-045). */
+const CONTENT = "content\n";
+const CONTENT_HASH = createHash("sha256").update(CONTENT).digest("hex");
 
 // ── src/merge/atomicWrite.ts ───────────────────────────────────────────────
 
@@ -300,12 +321,12 @@ describe("reclaim: a recorded path carrying a NUL byte", () => {
 
 describe("reclaim: the generated frontmatter stub above a block", () => {
   it("treats leading blank lines plus one complete fence as engine-authored", async () => {
-    const block = wrapInManagedBlock("generated body", "stamity-rule.md");
+    const block = wrapInManagedBlock("generated body", RULE);
     await tempDir().seedFiles({
-      "stamity-rule.md": `\n\n---\ndescription: generated stub\n---\n\n${block}`,
+      [RULE]: `\n\n---\ndescription: generated stub\n---\n\n${block}`,
     });
 
-    const report = await sweepReclaimCandidates([candidate("stamity-rule.md")], {
+    const report = await sweepReclaimCandidates([candidate(RULE)], {
       rootDir: tempDir().dir,
       consent: true,
     });
@@ -314,10 +335,10 @@ describe("reclaim: the generated frontmatter stub above a block", () => {
   });
 
   it("vetoes deletion when that fence is never closed", async () => {
-    const block = wrapInManagedBlock("generated body", "stamity-rule.md");
-    await tempDir().seedFiles({ "stamity-rule.md": `---\ndescription: unterminated\n${block}` });
+    const block = wrapInManagedBlock("generated body", RULE);
+    await tempDir().seedFiles({ [RULE]: `---\ndescription: unterminated\n${block}` });
 
-    const report = await sweepReclaimCandidates([candidate("stamity-rule.md")], {
+    const report = await sweepReclaimCandidates([candidate(RULE)], {
       rootDir: tempDir().dir,
       consent: true,
     });
@@ -329,13 +350,16 @@ describe("reclaim: the generated frontmatter stub above a block", () => {
 describe("reclaim: a second row contributing the content hash for one path", () => {
   it("admits the hash the co-owner recorded", async () => {
     const body = "state file\n";
-    await tempDir().seedFiles({ ".stamity/state.json": body });
+    // TEST CHANGE, justified: REQ-PLUGIN-045 — the state file moved from the
+    // `.stamity/` root, where a hash no longer proves anything, into a state
+    // folder the engine writes.
+    await tempDir().seedFiles({ ".stamity/generated/state.json": body });
     const hash = createHash("sha256").update(Buffer.from(body)).digest("hex");
 
     const report = await sweepReclaimCandidates(
       // The first row records no hash, so only the second row's hash can prove
       // authorship — it has to survive the merge into the shared path group.
-      [candidate(".stamity/state.json"), candidate(".stamity/state.json", hash)],
+      [candidate(".stamity/generated/state.json"), candidate(".stamity/generated/state.json", hash)],
       { rootDir: tempDir().dir, consent: true },
     );
 
@@ -350,20 +374,20 @@ describe("reclaim: the repo root rejecting with a non-Error value", () => {
     arm({ fn: "realpath", match: root, reject: "root vanished" });
 
     await expect(
-      sweepReclaimCandidates([candidate("stamity-rule.md")], { rootDir: root, consent: true }),
+      sweepReclaimCandidates([candidate(RULE)], { rootDir: root, consent: true }),
     ).rejects.toThrow("root vanished");
   });
 });
 
 describe("reclaim: the parent directory failing to resolve for a reason other than absence", () => {
   it("skips the path as unsafe instead of reporting it as already gone", async () => {
-    await tempDir().seedFiles({ "gapdir/stamity-rule.md": "content\n" });
+    await tempDir().seedFiles({ ".cursor/rules/gapdir/stamity-rule.md": CONTENT });
     // The root resolves normally (its realpath call carries no `gapdir`), so
     // only the parent lookup is faulted — the ENOENT arm is a separate case
     // and stays covered by the "already gone" behaviour.
     arm({ fn: "realpath", match: "gapdir", reject: errno("EACCES") });
 
-    const report = await sweepReclaimCandidates([candidate("gapdir/stamity-rule.md")], {
+    const report = await sweepReclaimCandidates([candidate(".cursor/rules/gapdir/stamity-rule.md")], {
       rootDir: tempDir().dir,
       consent: true,
     });
@@ -376,13 +400,13 @@ describe("reclaim: the parent directory failing to resolve for a reason other th
 
 describe("reclaim: inspection and read failures after the parent resolves", () => {
   beforeEach(async () => {
-    await tempDir().seedFiles({ "stamity-rule.md": "content\n" });
+    await tempDir().seedFiles({ [RULE]: CONTENT });
   });
 
   it("skips a path whose lstat fails for a reason other than absence", async () => {
     arm({ fn: "lstat", match: "stamity-rule.md", reject: errno("EACCES") });
 
-    const report = await sweepReclaimCandidates([candidate("stamity-rule.md")], {
+    const report = await sweepReclaimCandidates([candidate(RULE)], {
       rootDir: tempDir().dir,
       consent: true,
     });
@@ -398,7 +422,7 @@ describe("reclaim: inspection and read failures after the parent resolves", () =
       resolve: { isDirectory: () => false, isSymbolicLink: () => false, isFile: () => false },
     });
 
-    const report = await sweepReclaimCandidates([candidate("stamity-rule.md")], {
+    const report = await sweepReclaimCandidates([candidate(RULE)], {
       rootDir: tempDir().dir,
       consent: true,
     });
@@ -409,7 +433,7 @@ describe("reclaim: inspection and read failures after the parent resolves", () =
   it("reports a file removed between the inspection and the read as missing", async () => {
     arm({ fn: "readFile", match: "stamity-rule.md", reject: errno("ENOENT") });
 
-    const report = await sweepReclaimCandidates([candidate("stamity-rule.md")], {
+    const report = await sweepReclaimCandidates([candidate(RULE)], {
       rootDir: tempDir().dir,
       consent: true,
     });
@@ -421,7 +445,7 @@ describe("reclaim: inspection and read failures after the parent resolves", () =
   it("leaves ownership unproven when the read fails for any other reason", async () => {
     arm({ fn: "readFile", match: "stamity-rule.md", reject: errno("EACCES") });
 
-    const report = await sweepReclaimCandidates([candidate("stamity-rule.md")], {
+    const report = await sweepReclaimCandidates([candidate(RULE)], {
       rootDir: tempDir().dir,
       consent: true,
     });
@@ -441,7 +465,7 @@ describe("reclaim: inspection and read failures after the parent resolves", () =
  */
 describe("reclaim: the target changing between the gates and the unlink", () => {
   beforeEach(async () => {
-    await tempDir().seedFiles({ "stamity-rule.md": "content\n" });
+    await tempDir().seedFiles({ [RULE]: CONTENT });
   });
 
   it("refuses when the path stopped being a regular file", async () => {
@@ -452,7 +476,7 @@ describe("reclaim: the target changing between the gates and the unlink", () => 
       resolve: { isFile: () => false, isSymbolicLink: () => false, dev: 1, ino: 1 },
     });
 
-    const report = await sweepReclaimCandidates([candidate("stamity-rule.md")], {
+    const report = await sweepReclaimCandidates([candidate(RULE, CONTENT_HASH)], {
       rootDir: tempDir().dir,
       consent: true,
     });
@@ -469,7 +493,7 @@ describe("reclaim: the target changing between the gates and the unlink", () => 
     // the parent's second identity read is what has to disagree.
     arm({ fn: "stat", match: tempDir().dir, skip: 1, resolve: { dev: 4242, ino: 4242 } });
 
-    const report = await sweepReclaimCandidates([candidate("stamity-rule.md")], {
+    const report = await sweepReclaimCandidates([candidate(RULE, CONTENT_HASH)], {
       rootDir: tempDir().dir,
       consent: true,
     });
@@ -489,7 +513,7 @@ describe("reclaim: the target changing between the gates and the unlink", () => 
       resolve: { isFile: () => true, isSymbolicLink: () => false, dev: 4242, ino: 4242 },
     });
 
-    const report = await sweepReclaimCandidates([candidate("stamity-rule.md")], {
+    const report = await sweepReclaimCandidates([candidate(RULE, CONTENT_HASH)], {
       rootDir: tempDir().dir,
       consent: true,
     });
@@ -502,7 +526,7 @@ describe("reclaim: the target changing between the gates and the unlink", () => 
   it("lets the mutation report a file that vanished during the re-check", async () => {
     arm({ fn: "lstat", match: "stamity-rule.md", skip: 1, reject: errno("ENOENT") });
 
-    const report = await sweepReclaimCandidates([candidate("stamity-rule.md")], {
+    const report = await sweepReclaimCandidates([candidate(RULE, CONTENT_HASH)], {
       rootDir: tempDir().dir,
       consent: true,
     });
@@ -515,7 +539,7 @@ describe("reclaim: the target changing between the gates and the unlink", () => 
   it("refuses when the re-check itself fails for any other reason", async () => {
     arm({ fn: "lstat", match: "stamity-rule.md", skip: 1, reject: errno("EACCES") });
 
-    const report = await sweepReclaimCandidates([candidate("stamity-rule.md")], {
+    const report = await sweepReclaimCandidates([candidate(RULE, CONTENT_HASH)], {
       rootDir: tempDir().dir,
       consent: true,
     });
@@ -529,10 +553,10 @@ describe("reclaim: the target changing between the gates and the unlink", () => 
 
 describe("reclaim: the mutation step losing to another process", () => {
   it("reports an unlink that raced to ENOENT as already missing", async () => {
-    await tempDir().seedFiles({ "stamity-rule.md": "content\n" });
+    await tempDir().seedFiles({ [RULE]: CONTENT });
     arm({ fn: "unlink", match: "stamity-rule.md", reject: errno("ENOENT") });
 
-    const report = await sweepReclaimCandidates([candidate("stamity-rule.md")], {
+    const report = await sweepReclaimCandidates([candidate(RULE, CONTENT_HASH)], {
       rootDir: tempDir().dir,
       consent: true,
     });
@@ -542,10 +566,10 @@ describe("reclaim: the mutation step losing to another process", () => {
   });
 
   it("reports an unlink that failed with the file still on disk", async () => {
-    await tempDir().seedFiles({ "stamity-rule.md": "content\n" });
+    await tempDir().seedFiles({ [RULE]: CONTENT });
     arm({ fn: "unlink", match: "stamity-rule.md", reject: errno("EPERM") });
 
-    const report = await sweepReclaimCandidates([candidate("stamity-rule.md")], {
+    const report = await sweepReclaimCandidates([candidate(RULE, CONTENT_HASH)], {
       rootDir: tempDir().dir,
       consent: true,
     });
@@ -555,9 +579,9 @@ describe("reclaim: the mutation step losing to another process", () => {
   });
 
   it("leaves the file unchanged when the block strip cannot be written", async () => {
-    const block = wrapInManagedBlock("generated body", "stamity-rule.md");
+    const block = wrapInManagedBlock("generated body", RULE);
     const original = `user prose above\n\n${block}`;
-    await tempDir().seedFiles({ "stamity-rule.md": original });
+    await tempDir().seedFiles({ [RULE]: original });
     // Losing to another process means losing for as long as that process holds
     // the name, not for one attempt. The strip goes through the atomic writer,
     // whose publish rename retries a whole platform-sized schedule of transient
@@ -576,7 +600,7 @@ describe("reclaim: the mutation step losing to another process", () => {
     };
     arm(refusal);
 
-    const report = await sweepReclaimCandidates([candidate("stamity-rule.md")], {
+    const report = await sweepReclaimCandidates([candidate(RULE)], {
       rootDir: tempDir().dir,
       consent: true,
     });
@@ -585,7 +609,7 @@ describe("reclaim: the mutation step losing to another process", () => {
     expect(report.entries[0]?.detail).toContain("could not be stripped");
     // The title's claim, read off the disk rather than inferred from the
     // verdict: a strip that landed anyway would rewrite these bytes.
-    expect(await readFile(tempDir().path("stamity-rule.md"), "utf8")).toBe(original);
+    expect(await readFile(tempDir().path(RULE), "utf8")).toBe(original);
   });
 
   it("stays refused for the whole win32 rename budget, which is the wider one", async () => {
@@ -594,9 +618,9 @@ describe("reclaim: the mutation step losing to another process", () => {
     // half — the eight-retry win32 half, the one that let the strip land on CI,
     // is unreachable from here without re-importing the sweep under a stubbed
     // `process.platform`. Same fixture, widest budget.
-    const block = wrapInManagedBlock("generated body", "stamity-rule.md");
+    const block = wrapInManagedBlock("generated body", RULE);
     const original = `user prose above\n\n${block}`;
-    await tempDir().seedFiles({ "stamity-rule.md": original });
+    await tempDir().seedFiles({ [RULE]: original });
     const refusal: Fault = {
       fn: "rename",
       match: "stamity-rule.md",
@@ -612,7 +636,7 @@ describe("reclaim: the mutation step losing to another process", () => {
       const { sweepReclaimCandidates: sweepOnWin32 } = await import("../../src/merge/reclaim.ts");
       const { RENAME_RETRY_COUNT } = await import("../../src/merge/atomicWrite.ts");
 
-      const report = await sweepOnWin32([candidate("stamity-rule.md")], {
+      const report = await sweepOnWin32([candidate(RULE)], {
         rootDir: tempDir().dir,
         consent: true,
       });
@@ -622,7 +646,7 @@ describe("reclaim: the mutation step losing to another process", () => {
       // Read off the compiled constant rather than a copy of it: the hold
       // outlasted the budget, instead of the budget outlasting the fixture.
       expect(refusal.fired).toBe(RENAME_RETRY_COUNT + 1);
-      expect(await readFile(tempDir().path("stamity-rule.md"), "utf8")).toBe(original);
+      expect(await readFile(tempDir().path(RULE), "utf8")).toBe(original);
     } finally {
       Object.defineProperty(process, "platform", { value: realPlatform, configurable: true });
       vi.resetModules();

@@ -72,8 +72,14 @@ vi.mock("../../../src/cli/engine/emission.ts", async (importOriginal) => {
 const tempDir = useTempDir("stamity-sync-cmd");
 
 const T0 = new Date("2026-01-01T00:00:00.000Z");
-const GUIDE_PATH = ".claude/stamity-guide.md";
-const USER_DOC = "docs/USER.md";
+// TEST CHANGE, justified: REQ-PLUGIN-045 — the planned-row check now holds
+// every planner output to the owned-path bound: a `rule` row directly under
+// `.claude/` and an `infra` row at `docs/USER.md` lie outside it and are
+// refused before any write. The guide moved into a rule folder, and the
+// whole-file output to a platform file the engine writes whole at a name it
+// did not mint — the same lanes, the same collisions.
+const GUIDE_PATH = ".claude/rules/stamity-guide.md";
+const USER_DOC = ".github/hooks/stamity.json";
 const USER_BYTES = "my notes\n";
 const HONESTY_LINE = "no generated outputs in this build yet";
 
