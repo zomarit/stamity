@@ -432,6 +432,29 @@ describe("sweepReclaimCandidates — containment", () => {
     });
   });
 
+  // The skill container carries the engine's name, so a folder spelled
+  // otherwise is the same hole one level up: the row's `st-foo` reaches an
+  // owner's `St-Foo/SKILL.md` on a case-insensitive volume. Every segment below
+  // the bound folder is held to the row's spelling.
+  it("keeps an owner's skill a hashed row reaches only through a folder of another spelling", async (ctx) => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const owner = "owner skill\n";
+    await temp.seedFiles({ "repo/.claude/skills/St-Foo/SKILL.md": owner });
+    const folds = await lstat(join(root, ".claude/skills/st-foo/SKILL.md")).then(
+      () => true,
+      () => false,
+    );
+    if (!folds) ctx.skip();
+
+    const row = recorded(candidate(".claude/skills/st-foo/SKILL.md", "deselected", "claude"), owner);
+    const report = await sweepReclaimCandidates([row], { rootDir: root, consent: true });
+
+    expect(onlyEntry(report).action).toBe("skipped-unsafe-path");
+    expect(onlyEntry(report).detail).toContain("spelled exactly `st-foo`");
+    expect(await readFile(join(root, ".claude/skills/St-Foo/SKILL.md"), "utf-8")).toBe(owner);
+  });
+
   it("refuses a symlink standing in for the recorded file", async () => {
     const temp = tempDir();
     const root = temp.path("repo");

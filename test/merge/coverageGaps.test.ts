@@ -447,6 +447,24 @@ describe("reclaim: inspection and read failures after the parent resolves", () =
     expect(await readFile(tempDir().path(RULE), "utf-8")).toBe(CONTENT);
   });
 
+  // The same refusal one level up: a skill container listed under another
+  // spelling. The first listing read is the bound folder's own, which is where
+  // the injected listing lands.
+  it("refuses a path whose skill folder is listed only under another spelling", async () => {
+    const skill = ".claude/skills/st-foo/SKILL.md";
+    await tempDir().seedFiles({ [skill]: CONTENT });
+    arm({ fn: "readdir", match: "skills", resolve: ["St-Foo"] });
+
+    const report = await sweepReclaimCandidates([candidate(skill, CONTENT_HASH)], {
+      rootDir: tempDir().dir,
+      consent: true,
+    });
+
+    expect(report.entries[0]?.action).toBe("skipped-unsafe-path");
+    expect(report.entries[0]?.detail).toContain("spelled exactly `st-foo`");
+    expect(await readFile(tempDir().path(skill), "utf-8")).toBe(CONTENT);
+  });
+
   it("reports a file removed between the inspection and the read as missing", async () => {
     arm({ fn: "readFile", match: "stamity-rule.md", reject: errno("ENOENT") });
 

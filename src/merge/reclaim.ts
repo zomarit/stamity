@@ -72,7 +72,8 @@ import { backupBeforeOverwrite } from "./safeWrite.ts";
  *    under the root's realpath — and under the realpath of the bound folder the
  *    row's path lies in, when it lies in one, with no link on the chain of
  *    `.stamity/` and its state and pack folders — the candidate itself is a regular
- *    file, and its folder lists it under exactly the recorded spelling (a
+ *    file, and every segment below that bound folder — the file and any folder
+ *    between — is listed under exactly the recorded spelling (a
  *    case-insensitive volume answers other spellings too). A
  *    symlinked directory anywhere on the path, a symlink in place of the recorded
  *    file, or a directory where a file was recorded all end the sweep for that
@@ -616,12 +617,22 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
   // whole string, so there is no "no final segment" case to defend against.
   const name = path.slice(path.lastIndexOf("/") + 1);
   const target = join(parentReal, name);
+  // The segments the row spells below its bound folder — a skill's container
+  // and its files, or a rule's own name — or the file's name alone at a path
+  // the bound names by itself. Each is read off its own folder's listing.
+  const below = folder === null ? [name] : path.slice(folder.length).split("/");
+  const listingRoot = folderReal ?? parentReal;
 
   let stats;
-  let siblings: string[];
+  let misspelt: string | null = null;
   try {
     stats = await lstat(target);
-    siblings = await readdir(parentReal);
+    for (const [depth, entry] of below.entries()) {
+      if (!(await readdir(join(listingRoot, ...below.slice(0, depth)))).includes(entry)) {
+        misspelt = entry;
+        break;
+      }
+    }
   } catch (err) {
     if (errnoCode(err) === "ENOENT") return skip("skipped-missing", "Already absent from disk.");
     return skip("skipped-unsafe-path", `The file could not be inspected: ${describeError(err)}.`);
@@ -642,13 +653,15 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
     return skip("skipped-unsafe-path", "The path is not a regular file.");
   }
   // A case-insensitive volume (APFS and NTFS by default) answers the row's
-  // spelling with a file spelled otherwise, so a hashed row `stamity-notes.md`
-  // would reach an owner's `Stamity-Notes.md`. The folder's own listing is the
-  // spelling on disk, and the row has to name it exactly.
-  if (!siblings.includes(name)) {
+  // spelling with an entry spelled otherwise, so a hashed row `stamity-notes.md`
+  // would reach an owner's `Stamity-Notes.md`, and `skills/st-foo/SKILL.md` an
+  // owner's `skills/St-Foo/SKILL.md` — the engine's name sits on the container
+  // there. Each folder's own listing is the spelling on disk, and the row has to
+  // name every segment below its bound folder exactly.
+  if (misspelt !== null) {
     return skip(
       "skipped-unsafe-path",
-      `No entry in its folder is spelled exactly \`${name}\`: the file system matched the recorded name to a file spelled otherwise (a case-insensitive volume), so this is not the file the row records.`,
+      `No entry in its folder is spelled exactly \`${misspelt}\`: the file system matched the recorded name to an entry spelled otherwise (a case-insensitive volume), so this is not the file the row records.`,
     );
   }
   const pin: TargetPin = {
