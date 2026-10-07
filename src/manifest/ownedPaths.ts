@@ -64,11 +64,15 @@ export const IMPORT_TARGET = Object.freeze({
 
 /**
  * The bound. `.cursor/skills/` is the layout 1.0.0 to 1.10.0 wrote and the
- * sweep still reclaims. A unit that adds an emitted path extends this value and
+ * sweep still reclaims, and so are the Cursor guards' 1.11.0 names
+ * (`.cursor/hooks/mcp-guard.mjs`, `.cursor/hooks/subagent-guard.mjs`, which
+ * became `stamity-mcp-guard.mjs` and `stamity-subagent-guard.mjs` in version 2,
+ * REQ-FLOW-038): their rows must validate for the first sync after an upgrade
+ * to reclaim them. A unit that adds an emitted path extends this value and
  * raises `version`.
  */
 export const OWNED_PATHS: OwnedPathBound = Object.freeze({
-  version: 1,
+  version: 2,
   exact: Object.freeze([
     "AGENTS.md",
     "AGENTS.override.md",
@@ -81,6 +85,8 @@ export const OWNED_PATHS: OwnedPathBound = Object.freeze({
     ".cursor/mcp.json",
     ".cursor/hooks/mcp-guard.mjs",
     ".cursor/hooks/subagent-guard.mjs",
+    ".cursor/hooks/stamity-mcp-guard.mjs",
+    ".cursor/hooks/stamity-subagent-guard.mjs",
     ".github/hooks/stamity.json",
     ".github/workflows/copilot-setup-steps.yml",
     ".vscode/mcp.json",

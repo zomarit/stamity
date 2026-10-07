@@ -9,6 +9,7 @@ import {
   CURSOR_RULES_DIR,
   CURSOR_RULE_LINE_CAP,
   EVENT_RENAME,
+  LEGACY_CURSOR_GUARD_PATHS,
   MCP_GUARD_PATH,
   SUBAGENT_GUARD_PATH,
   buildCursorAgent,
@@ -1099,6 +1100,37 @@ describe("`.cursor/hooks.json`", () => {
     // reach emission without a declared name.
     for (const event of CANONICAL_HOOK_EVENTS) expect(EVENT_RENAME[event]).toBeTruthy();
   });
+
+  it("writes exactly the two stamity- guards into .cursor/hooks/ and runs them fail-closed (REQ-FLOW-038)", async () => {
+    const plan = await planFor(await seedCorpus());
+
+    // `.cursor/hooks/` is a folder owners keep their own hook scripts in, so
+    // every engine file there carries the prefix (1.11.0 wrote
+    // `subagent-guard.mjs` and `mcp-guard.mjs`).
+    const inGuardDir = plan.map((row) => row.path).filter((path) => path.startsWith(".cursor/hooks/"));
+    expect(inGuardDir.toSorted()).toEqual([
+      ".cursor/hooks/stamity-mcp-guard.mjs",
+      ".cursor/hooks/stamity-subagent-guard.mjs",
+    ]);
+    expect([SUBAGENT_GUARD_PATH, MCP_GUARD_PATH]).toEqual([
+      ".cursor/hooks/stamity-subagent-guard.mjs",
+      ".cursor/hooks/stamity-mcp-guard.mjs",
+    ]);
+    expect(LEGACY_CURSOR_GUARD_PATHS).toEqual([".cursor/hooks/subagent-guard.mjs", ".cursor/hooks/mcp-guard.mjs"]);
+
+    const doc = parseHooks(contentAt(plan, P.hooksConfig));
+    expect(doc.hooks[CURSOR_GUARD_EVENTS.subagentSpawn]).toEqual([
+      { command: "node .cursor/hooks/stamity-subagent-guard.mjs", failClosed: true },
+    ]);
+    expect(doc.hooks[CURSOR_GUARD_EVENTS.mcpExecution]).toEqual([
+      { command: "node .cursor/hooks/stamity-mcp-guard.mjs", failClosed: true },
+    ]);
+    expect([CURSOR_GUARD_EVENTS.subagentSpawn, CURSOR_GUARD_EVENTS.mcpExecution]).toEqual([
+      "subagentStart",
+      "beforeMCPExecution",
+    ]);
+    for (const legacy of LEGACY_CURSOR_GUARD_PATHS) expect(contentAt(plan, P.hooksConfig)).not.toContain(legacy);
+  });
 });
 
 // ── Guard scripts ────────────────────────────────────────────────
@@ -1600,11 +1632,12 @@ describe("hooks.json under a plugin root", () => {
       const entry = doc.hooks[event]?.[0];
       expect(entry?.failClosed, event).toBe(true);
     }
+    // TEST CHANGE, justified: REQ-FLOW-038 — the guards carry the stamity- prefix
     expect(doc.hooks[CURSOR_GUARD_EVENTS.subagentSpawn]?.[0]?.command).toBe(
-      `node "${ROOT}/subagent-guard.mjs"`,
+      `node "${ROOT}/stamity-subagent-guard.mjs"`,
     );
     expect(doc.hooks[CURSOR_GUARD_EVENTS.mcpExecution]?.[0]?.command).toBe(
-      `node "${ROOT}/mcp-guard.mjs"`,
+      `node "${ROOT}/stamity-mcp-guard.mjs"`,
     );
   });
 

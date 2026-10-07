@@ -120,8 +120,9 @@ describe("an all-four-client emission", () => {
       expect.arrayContaining([
         ".claude/settings.json",
         ".codex/hooks.json",
-        ".cursor/hooks/mcp-guard.mjs",
-        ".cursor/hooks/subagent-guard.mjs",
+        // TEST CHANGE, justified: REQ-FLOW-038 — the guards carry the stamity- prefix
+        ".cursor/hooks/stamity-mcp-guard.mjs",
+        ".cursor/hooks/stamity-subagent-guard.mjs",
         ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs",
       ]),
     );

@@ -4,7 +4,12 @@ import { resolve } from "node:path";
 import { CLAUDE_SETTINGS_PATH, claudeUserHookEntries } from "../../adapters/claude.ts";
 import { CODEX_CONFIG_FILE, CODEX_HOOKS_FILE, codexConfigTableRendering } from "../../adapters/codex.ts";
 import { COPILOT_HOOKS_PATH } from "../../adapters/copilot.ts";
-import { CURSOR_HOOKS_CONFIG_PATH, MCP_GUARD_PATH, SUBAGENT_GUARD_PATH } from "../../adapters/cursor.ts";
+import {
+  CURSOR_HOOKS_CONFIG_PATH,
+  LEGACY_CURSOR_GUARD_PATHS,
+  MCP_GUARD_PATH,
+  SUBAGENT_GUARD_PATH,
+} from "../../adapters/cursor.ts";
 import { isPluginOwned } from "../../emit/ownership.ts";
 import { readHookDefinitions, type UserHookDefinition } from "../../hooks/userHooks.ts";
 import {
@@ -408,8 +413,15 @@ interface CoOwnedLanePrediction extends CoOwnedPrediction {
   rejected?: string;
 }
 
-/** Cursor's guards, as `.cursor/hooks.json` runs them and the sweep reads them. */
-const CURSOR_GUARD_PATHS: readonly string[] = [SUBAGENT_GUARD_PATH, MCP_GUARD_PATH];
+/**
+ * Cursor's guards, as `.cursor/hooks.json` runs them and the sweep reads them:
+ * the current names and the 1.11.0 ones (REQ-FLOW-038). With the old names
+ * here, the first sync after an upgrade recognises an entry running one as the
+ * engine's and replaces it, and a hooks document the sweep leaves in place —
+ * kept, refused or linked — still holds an old guard it runs back from the
+ * sweep that reclaims the old names.
+ */
+const CURSOR_GUARD_PATHS: readonly string[] = [SUBAGENT_GUARD_PATH, MCP_GUARD_PATH, ...LEGACY_CURSOR_GUARD_PATHS];
 
 /**
  * A lane for a hooks document owned entry by entry on the core's own rules

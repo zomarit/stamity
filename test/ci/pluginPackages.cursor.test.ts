@@ -364,19 +364,21 @@ describe("hooks/hooks.json", () => {
 
   it("ships both adapter guards and the four core scripts, and keeps the guard rows fail-closed", () => {
     const scripts = treeFiles(join(root, "hooks")).filter((rel) => rel.endsWith(".mjs"));
+    // TEST CHANGE, justified: REQ-FLOW-038 — the guards carry the stamity- prefix
     expect(scripts.toSorted()).toEqual([
-      "mcp-guard.mjs",
       "stamity-config-tamper-notice.mjs",
+      "stamity-mcp-guard.mjs",
       "stamity-portable-hook.mjs",
       "stamity-pre-tool-use-guard.mjs",
       "stamity-session-start.mjs",
-      "subagent-guard.mjs",
+      "stamity-subagent-guard.mjs",
     ]);
 
     const hooks = doc().hooks;
     for (const [event, script] of [
-      [CURSOR_GUARD_EVENTS.subagentSpawn, "subagent-guard.mjs"],
-      [CURSOR_GUARD_EVENTS.mcpExecution, "mcp-guard.mjs"],
+      // TEST CHANGE, justified: REQ-FLOW-038 — the guards carry the stamity- prefix
+      [CURSOR_GUARD_EVENTS.subagentSpawn, "stamity-subagent-guard.mjs"],
+      [CURSOR_GUARD_EVENTS.mcpExecution, "stamity-mcp-guard.mjs"],
     ] as const) {
       const rows = hooks[event] ?? [];
       expect(rows.length, event).toBe(1);

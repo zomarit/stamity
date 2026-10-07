@@ -187,6 +187,22 @@ describe.each(SELECTIONS)("emitted tree for $label", ({ label, tools }) => {
   // recorded in only one of them leaves half the emitted surface unaccounted.
   //
   //   - 2026-10-07, plan 016 file 0, unit u0-hook-files-ownership, the JSON
+  //     half's pass 2 (run 2026-10-07_security-fixes). Cursor's two guards
+  //     carry the stamity- prefix (REQ-FLOW-038, S18): two emitted paths
+  //     renamed, none added or removed.
+  //
+  //     CHANGED `.cursor/hooks/subagent-guard.mjs` -> `.cursor/hooks/stamity-subagent-guard.mjs`
+  //       (same bytes, 3733) and `.cursor/hooks/mcp-guard.mjs` ->
+  //       `.cursor/hooks/stamity-mcp-guard.mjs` (7637 -> 7645: its comment
+  //       names its own path), in cursor and all-four.
+  //     CHANGED `.cursor/hooks.json` (1505 -> 1521) — the two guard commands
+  //       name the new paths — in cursor and all-four.
+  //     CHANGED `.stamity/manifest.json` — cursor 21847 -> 21863, all-four
+  //       81044 -> 81060: the two guard rows' paths and the new hashes.
+  //
+  //     What did NOT move: claude, codex and copilot; every other cursor file.
+  //
+  //   - 2026-10-07, plan 016 file 0, unit u0-hook-files-ownership, the JSON
   //     half's pass 1 (run 2026-10-07_security-fixes). Only the manifest moved:
   //     the ledger rows of `.cursor/hooks.json` and `.codex/hooks.json` now
   //     carry the per-entry record (`coOwned`, REQ-FLOW-037). No emitted path

@@ -109,11 +109,28 @@ export const CURSOR_HOOKS_CONFIG_PATH = ".cursor/hooks.json";
 /** Repo-relative home of the two adapter-owned guard scripts. */
 export const CURSOR_GUARD_DIR = ".cursor/hooks";
 
-/** The spawn guard: denies a sub-agent id outside the shipped roster. */
-export const SUBAGENT_GUARD_PATH = `${CURSOR_GUARD_DIR}/subagent-guard.mjs`;
+/**
+ * The spawn guard: denies a sub-agent id outside the shipped roster. Both
+ * guards carry the `stamity-` prefix because `.cursor/hooks/` is a folder
+ * owners keep their own hook scripts in (REQ-FLOW-038).
+ */
+export const SUBAGENT_GUARD_PATH = `${CURSOR_GUARD_DIR}/stamity-subagent-guard.mjs`;
 
 /** The MCP guard: denies a server outside the resolved `.cursor/mcp.json` set. */
-export const MCP_GUARD_PATH = `${CURSOR_GUARD_DIR}/mcp-guard.mjs`;
+export const MCP_GUARD_PATH = `${CURSOR_GUARD_DIR}/stamity-mcp-guard.mjs`;
+
+/**
+ * The guards' names up to 1.11.0, in the order of the two above. Nothing
+ * writes them any more; they are still read, so the first `sync` after an
+ * upgrade can move the guards. `.cursor/hooks.json`'s spec recognises an entry
+ * running one as the engine's and replaces it with the current one, the
+ * reclaim sweep removes each old file as a `path-renamed` candidate only when
+ * its bytes still hash to what the ledger recorded (an edited one is kept and
+ * reported), and no verb deletes one while a hooks document it keeps still
+ * runs it. The owned-path bound (`../manifest/ownedPaths.ts`) keeps both names
+ * so their ledger rows validate.
+ */
+export const LEGACY_CURSOR_GUARD_PATHS = [`${CURSOR_GUARD_DIR}/subagent-guard.mjs`, `${CURSOR_GUARD_DIR}/mcp-guard.mjs`] as const;
 
 /**
  * Per-rule body budget. Cursor's own guidance caps a rule at 500 lines
@@ -759,7 +776,13 @@ interface CursorHookEntry {
 
 /**
  * The `.cursor/hooks.json` document: portable interchange rows renamed into
- * the client's taxonomy, plus the two adapter-owned guards.
+ * the client's taxonomy, plus the two adapter-owned guards
+ * ({@link SUBAGENT_GUARD_PATH}, {@link MCP_GUARD_PATH}; their 1.11.0 names,
+ * {@link LEGACY_CURSOR_GUARD_PATHS}, are never written here).
+ *
+ * The document is co-owned entry by entry (REQ-FLOW-037,
+ * `../manifest/hookDocuments.ts`): this function renders the engine's
+ * entries, and the write lane merges them beside an owner's own.
  *
  * Native command strings launch the portable runner, which keeps the authored
  * argv intact and translates supported hookSpecificOutput fields. timeoutMs is

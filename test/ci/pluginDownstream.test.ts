@@ -267,10 +267,11 @@ const TOUCHED_IDS = EXPECTED_PLUGIN_FILES.filter(([path]) => DELIVERED_DOCUMENT.
  * by construction and they are not "untouched ids":
  *
  *   `<client>/stamity-plugin.json`   declares a per-class COUNT, so one added agent moves it.
- *   `cursor/hooks/subagent-guard.mjs`  embeds the agent roster it guards; the fork's added agent
- *                                      is one line inside that list.
+ *   `cursor/hooks/stamity-subagent-guard.mjs`  embeds the agent roster it guards; the fork's
+ *                                              added agent is one line inside that list.
  */
-const CORPUS_DERIVED = [...CLIENTS.map((client) => `${client}/stamity-plugin.json`), "cursor/hooks/subagent-guard.mjs"];
+// TEST CHANGE, justified: REQ-FLOW-038 — the guards carry the stamity- prefix
+const CORPUS_DERIVED = [...CLIENTS.map((client) => `${client}/stamity-plugin.json`), "cursor/hooks/stamity-subagent-guard.mjs"];
 
 let forked: Fixture;
 let forkedDist: string;

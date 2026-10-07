@@ -69,6 +69,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that Cursor accepts, a command entry with no `command`, a prompt entry with no `prompt`, or an
   entry of another `type` makes Cursor load none of the file's hooks.
   `check` now names the entry and exits 1. `sync` and `init` keep the entry and warn.
+- **The two Cursor guards are renamed** `.cursor/hooks/stamity-subagent-guard.mjs` and
+  `.cursor/hooks/stamity-mcp-guard.mjs`, so every file the engine writes into `.cursor/hooks/`
+  carries the `stamity-` prefix. The next `sync` writes them, points `.cursor/hooks.json` at them,
+  and removes the old names it can prove it wrote; an old guard you edited is kept and the sync
+  report names it.
 
 ## [1.11.0] - 2026-10-01
 

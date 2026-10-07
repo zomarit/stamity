@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { LEGACY_CURSOR_GUARD_PATHS, MCP_GUARD_PATH, SUBAGENT_GUARD_PATH } from "../../src/adapters/cursor.ts";
 import { addCommand } from "../../src/cli/commands/add.ts";
 import { planSync } from "../../src/cli/commands/sync/engine.ts";
 import { createApp } from "../../src/index.ts";
@@ -61,14 +62,25 @@ describe("OWNED_PATHS", () => {
     }
   });
 
-  it("lists the fourteen platform files, the twelve content folders and the two state folders", () => {
-    expect(OWNED_PATHS.version).toBe(1);
-    expect(OWNED_PATHS.exact).toHaveLength(14);
+  // TEST CHANGE, justified: REQ-FLOW-038 — the guards carry the stamity- prefix: the bound adds
+  // the two new guard names (version 1 -> 2) and keeps the 1.11.0 names so their rows validate.
+  it("lists the sixteen platform files, the twelve content folders and the two state folders", () => {
+    expect(OWNED_PATHS.version).toBe(2);
+    expect(OWNED_PATHS.exact).toHaveLength(16);
     expect(OWNED_PATHS.contentRoots).toHaveLength(12);
     expect(OWNED_PATHS.stateRoots).toEqual([".stamity/generated/", ".stamity/mcp/"]);
     expect(OWNED_PATHS.packRoot).toBe(".stamity/packs/");
     expect(OWNED_PATHS.charterFileName).toBe("AGENTS.md");
     for (const root of [...OWNED_PATHS.contentRoots, ...OWNED_PATHS.stateRoots]) expect(root.endsWith("/")).toBe(true);
+  });
+});
+
+describe("the Cursor guards in the bound (REQ-FLOW-038)", () => {
+  it("holds the current guard names and the 1.11.0 names the next sync reclaims", () => {
+    for (const path of [SUBAGENT_GUARD_PATH, MCP_GUARD_PATH, ...LEGACY_CURSOR_GUARD_PATHS]) {
+      expect(OWNED_PATHS.exact, path).toContain(path);
+      expect(ownedPathKind({ path, adapter: "cursor", artifactType: "infra" }), path).toBe("exact");
+    }
   });
 });
 

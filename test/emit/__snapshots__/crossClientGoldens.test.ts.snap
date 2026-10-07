@@ -201,20 +201,20 @@ env_vars = ["GITHUB_PAT"]
     ],
     "subagentStart": [
       {
-        "command": "node .cursor/hooks/subagent-guard.mjs",
+        "command": "node .cursor/hooks/stamity-subagent-guard.mjs",
         "failClosed": true
       }
     ],
     "beforeMCPExecution": [
       {
-        "command": "node .cursor/hooks/mcp-guard.mjs",
+        "command": "node .cursor/hooks/stamity-mcp-guard.mjs",
         "failClosed": true
       }
     ]
   }
 }
 ",
-  ".cursor/hooks/mcp-guard.mjs": "#!/usr/bin/env node
+  ".cursor/hooks/stamity-mcp-guard.mjs": "#!/usr/bin/env node
 /* eslint-disable */
 // stamity — MCP server allowlist guard.
 //
@@ -239,7 +239,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-// This script sits at .cursor/hooks/mcp-guard.mjs; the project manifest is its sibling
+// This script sits at .cursor/hooks/stamity-mcp-guard.mjs; the project manifest is its sibling
 // one level up, and the operator's own file lives under the home directory.
 const MANIFESTS = [join(HERE, "..", "mcp.json"), join(homedir(), ".cursor", "mcp.json")];
 const TOOL_PREFIX = "mcp__";
@@ -416,7 +416,7 @@ if (allowed.size === 0 && faults.length > 0) {
   allow();
 }
 ",
-  ".cursor/hooks/subagent-guard.mjs": "#!/usr/bin/env node
+  ".cursor/hooks/stamity-subagent-guard.mjs": "#!/usr/bin/env node
 /* eslint-disable */
 // stamity — sub-agent spawn guard.
 //
@@ -1435,9 +1435,9 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".cursor/agents/stamity-security.md": "2d0d577f43f980e2268aa9cc428cbb10a604615ec2bea86b6f16576f3027d866 10398 bytes",
   ".cursor/agents/stamity-spec-author.md": "7f6bbe7cfa3a6f33f921eea7c138f6d6324c9a0bf91cd6466339b6e3197334da 11706 bytes",
   ".cursor/agents/stamity-test-runner.md": "73ccc6754c6586164663f4d89998152de901a531561286cb7fabb20494fe2039 7747 bytes",
-  ".cursor/hooks.json": "5031f7452e229cdd728ee389a90c9b4d5d084a72294155e08b9f7273a2d13ac0 1505 bytes",
-  ".cursor/hooks/mcp-guard.mjs": "fb202a8a79c1792612e4827084ad7b0bc66f7eec8f49c042d0078c4f7432a3a9 7637 bytes",
-  ".cursor/hooks/subagent-guard.mjs": "6424c46bf5e3a390b26af88a8201fcebc7083aec40ca096e8e4d7efd7369d31a 3733 bytes",
+  ".cursor/hooks.json": "8d32fc5e6e9d6935a18866be216b40092a32042320556910bdc247c9ef220e03 1521 bytes",
+  ".cursor/hooks/stamity-mcp-guard.mjs": "ff6ede2e8ee71868f15447783aadd980e0b4ea1b53a1d0ca76f18578b356935e 7645 bytes",
+  ".cursor/hooks/stamity-subagent-guard.mjs": "6424c46bf5e3a390b26af88a8201fcebc7083aec40ca096e8e4d7efd7369d31a 3733 bytes",
   ".cursor/mcp.json": "3bd0d234eb9a7ee4eff8351d4236a3c22a03ef445538c411f68b9d1267bd3a8d 395 bytes",
   ".cursor/rules/stamity-ai-evals.mdc": "402253ef486f95a09da3f1d9fd1ee4147b90db1e742566fbd5c38f6170d6938b 4148 bytes",
   ".cursor/rules/stamity-api-versioning.mdc": "5f582c602434db96d06f806d24bc6e5b4c0b28542dba322c08c0b10db6aaa34f 5083 bytes",
@@ -1506,7 +1506,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "6052342711dc031d5129a68052d5351e494476fd751a56ffbd60c45ff0eee596 81044 bytes",
+  ".stamity/manifest.json": "5cb4c57a8f8ee038e244fa46e99745e084f8212b6a91d028d30a353649459b64 81060 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "430f44d4c4877bbfe8dafd590be8f2e9fcabbe8ae9e595f5a33d39f7e49e70f7 5304 bytes",
@@ -2946,20 +2946,20 @@ exports[`emitted tree for cursor > matches the residue-document golden byte for 
     ],
     "subagentStart": [
       {
-        "command": "node .cursor/hooks/subagent-guard.mjs",
+        "command": "node .cursor/hooks/stamity-subagent-guard.mjs",
         "failClosed": true
       }
     ],
     "beforeMCPExecution": [
       {
-        "command": "node .cursor/hooks/mcp-guard.mjs",
+        "command": "node .cursor/hooks/stamity-mcp-guard.mjs",
         "failClosed": true
       }
     ]
   }
 }
 ",
-  ".cursor/hooks/mcp-guard.mjs": "#!/usr/bin/env node
+  ".cursor/hooks/stamity-mcp-guard.mjs": "#!/usr/bin/env node
 /* eslint-disable */
 // stamity — MCP server allowlist guard.
 //
@@ -2984,7 +2984,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-// This script sits at .cursor/hooks/mcp-guard.mjs; the project manifest is its sibling
+// This script sits at .cursor/hooks/stamity-mcp-guard.mjs; the project manifest is its sibling
 // one level up, and the operator's own file lives under the home directory.
 const MANIFESTS = [join(HERE, "..", "mcp.json"), join(homedir(), ".cursor", "mcp.json")];
 const TOOL_PREFIX = "mcp__";
@@ -3161,7 +3161,7 @@ if (allowed.size === 0 && faults.length > 0) {
   allow();
 }
 ",
-  ".cursor/hooks/subagent-guard.mjs": "#!/usr/bin/env node
+  ".cursor/hooks/stamity-subagent-guard.mjs": "#!/usr/bin/env node
 /* eslint-disable */
 // stamity — sub-agent spawn guard.
 //
@@ -3428,9 +3428,9 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".cursor/agents/stamity-security.md": "2d0d577f43f980e2268aa9cc428cbb10a604615ec2bea86b6f16576f3027d866 10398 bytes",
   ".cursor/agents/stamity-spec-author.md": "7f6bbe7cfa3a6f33f921eea7c138f6d6324c9a0bf91cd6466339b6e3197334da 11706 bytes",
   ".cursor/agents/stamity-test-runner.md": "73ccc6754c6586164663f4d89998152de901a531561286cb7fabb20494fe2039 7747 bytes",
-  ".cursor/hooks.json": "5031f7452e229cdd728ee389a90c9b4d5d084a72294155e08b9f7273a2d13ac0 1505 bytes",
-  ".cursor/hooks/mcp-guard.mjs": "fb202a8a79c1792612e4827084ad7b0bc66f7eec8f49c042d0078c4f7432a3a9 7637 bytes",
-  ".cursor/hooks/subagent-guard.mjs": "6424c46bf5e3a390b26af88a8201fcebc7083aec40ca096e8e4d7efd7369d31a 3733 bytes",
+  ".cursor/hooks.json": "8d32fc5e6e9d6935a18866be216b40092a32042320556910bdc247c9ef220e03 1521 bytes",
+  ".cursor/hooks/stamity-mcp-guard.mjs": "ff6ede2e8ee71868f15447783aadd980e0b4ea1b53a1d0ca76f18578b356935e 7645 bytes",
+  ".cursor/hooks/stamity-subagent-guard.mjs": "6424c46bf5e3a390b26af88a8201fcebc7083aec40ca096e8e4d7efd7369d31a 3733 bytes",
   ".cursor/mcp.json": "3bd0d234eb9a7ee4eff8351d4236a3c22a03ef445538c411f68b9d1267bd3a8d 395 bytes",
   ".cursor/rules/stamity-ai-evals.mdc": "402253ef486f95a09da3f1d9fd1ee4147b90db1e742566fbd5c38f6170d6938b 4148 bytes",
   ".cursor/rules/stamity-api-versioning.mdc": "5f582c602434db96d06f806d24bc6e5b4c0b28542dba322c08c0b10db6aaa34f 5083 bytes",
@@ -3455,7 +3455,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "5d92fba7c2872d3bcde03f9ab3dd8dd275ac5aa06eacd0c1115f6ed5cff10097 21847 bytes",
+  ".stamity/manifest.json": "6333861733c7c507e1f853f4c6ec02d295b1ca6bab0d0590f1bc05cc9cdb346b 21863 bytes",
   "AGENTS.md": "430f44d4c4877bbfe8dafd590be8f2e9fcabbe8ae9e595f5a33d39f7e49e70f7 5304 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

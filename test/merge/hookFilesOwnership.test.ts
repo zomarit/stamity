@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { link, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MCP_GUARD_PATH, SUBAGENT_GUARD_PATH } from "../../src/adapters/cursor.ts";
@@ -7,6 +7,7 @@ import { checkCommand, runDriftGate } from "../../src/cli/commands/check.ts";
 import { cleanCommand } from "../../src/cli/commands/clean.ts";
 import { applyInit } from "../../src/cli/commands/init/apply.ts";
 import { buildInitDecisions } from "../../src/cli/commands/init/plan.ts";
+import { syncCommand } from "../../src/cli/commands/sync.ts";
 import { applySync, planSync, type SyncPlanEntry } from "../../src/cli/commands/sync/engine.ts";
 import {
   __resetContentRootCacheForTests,
@@ -662,3 +663,218 @@ describe("a direct upgrade from a release up to 1.6.0, which wired user hooks di
 /** The `description` 1.7.0 rendered into `.codex/hooks.json` (its golden snapshot, read 2026-10-07). */
 const RELEASE_ONE_SEVEN_DESCRIPTION =
   "Stamity hooks. Review and trust with /hooks; stamity check detects emitted-file drift. The role guard is telemetry because PreToolUse carries no agent identity.";
+
+// ── REQ-FLOW-038: the Cursor guards carry the stamity- prefix ─
+
+/** The guards' names up to 1.11.0, and the names that replace them. */
+const RENAMED_GUARDS = [
+  [".cursor/hooks/subagent-guard.mjs", ".cursor/hooks/stamity-subagent-guard.mjs"],
+  [".cursor/hooks/mcp-guard.mjs", ".cursor/hooks/stamity-mcp-guard.mjs"],
+] as const;
+const OLD_SUBAGENT_GUARD = RENAMED_GUARDS[0][0];
+const OLD_MCP_GUARD = RENAMED_GUARDS[1][0];
+
+/**
+ * A Cursor setup rewritten to the shape 1.11.0 left: the two guards at their
+ * old names (their own bytes naming the old path, as 1.11.0 rendered them),
+ * `.cursor/hooks.json` running them, ledger rows at the old paths, no co-owned
+ * record, and every hash recomputed over the bytes now on disk. `ownerEntry`
+ * adds an owner's entry after the hashes are taken, as an owner edits the file.
+ */
+async function setUpByReleaseOneEleven(sub = "repo", ownerEntry = false): Promise<string> {
+  const root = await freshRepo(sub);
+  await init(root, ["cursor"]);
+  const respell = (text: string): string =>
+    RENAMED_GUARDS.reduce((acc, [old, current]) => acc.replaceAll(current, old), text);
+  const moved = await Promise.all(
+    RENAMED_GUARDS.map(async ([old, current]) => {
+      const text = respell(await readText(root, current));
+      await writeFile(abs(root, old), text, "utf8");
+      await rm(abs(root, current));
+      return [old, sha256(text)] as const;
+    }),
+  );
+  const hashes = new Map<string, string>(moved);
+  const hooks = respell(await readText(root, CURSOR_HOOKS));
+  await writeFile(abs(root, CURSOR_HOOKS), hooks, "utf8");
+  hashes.set(CURSOR_HOOKS, sha256(hooks));
+  const manifest = await readManifest(root);
+  if (manifest === null) throw new Error("fixture lost its manifest");
+  const ledger = manifest.ledger.map((row) => {
+    const { coOwned: _dropped, ...rest } = row;
+    const path = RENAMED_GUARDS.find(([, current]) => current === row.path)?.[0] ?? row.path;
+    const contentHash = hashes.get(path);
+    return { ...rest, path, ...(contentHash === undefined ? {} : { contentHash }) };
+  });
+  await writeManifest(root, { ...manifest, ledger }, { now: T1 });
+  if (ownerEntry) await addHookEntry(root, CURSOR_HOOKS, "afterFileEdit", OWNER_CURSOR_ENTRY);
+  return root;
+}
+
+/** The script each guard entry of `.cursor/hooks.json` runs, by event. */
+async function guardCommands(root: string): Promise<Record<string, unknown>> {
+  const hooks = (await readDoc(root, CURSOR_HOOKS))["hooks"] as Record<string, { command?: string }[]>;
+  return {
+    subagentStart: hooks["subagentStart"]?.map((entry) => entry.command),
+    beforeMCPExecution: hooks["beforeMCPExecution"]?.map((entry) => entry.command),
+  };
+}
+
+describe("the Cursor guards carry the stamity- prefix, and the first sync after an upgrade moves them (REQ-FLOW-038)", () => {
+  it("init -y --tools cursor writes exactly the two stamity- guards and runs them fail-closed", async () => {
+    const root = await freshRepo();
+    await init(root, ["cursor"]);
+
+    expect((await readdir(abs(root, ".cursor/hooks"))).toSorted()).toEqual(["stamity-mcp-guard.mjs", "stamity-subagent-guard.mjs"]);
+    const hooks = (await readDoc(root, CURSOR_HOOKS))["hooks"] as Record<string, unknown[]>;
+    expect(hooks["subagentStart"]).toEqual([{ command: "node .cursor/hooks/stamity-subagent-guard.mjs", failClosed: true }]);
+    expect(hooks["beforeMCPExecution"]).toEqual([{ command: "node .cursor/hooks/stamity-mcp-guard.mjs", failClosed: true }]);
+  });
+
+  it("a 1.11.0 setup: sync -y writes the new guards, rewires .cursor/hooks.json, deletes both old names by hash proof with no .bak, and check then exits 0", async () => {
+    const root = await setUpByReleaseOneEleven();
+    expect(await guardCommands(root)).toEqual({
+      subagentStart: [`node ${OLD_SUBAGENT_GUARD}`],
+      beforeMCPExecution: [`node ${OLD_MCP_GUARD}`],
+    });
+
+    const { report } = await sync(root);
+
+    for (const [old, current] of RENAMED_GUARDS) {
+      expect(existsSync(abs(root, old)), old).toBe(false);
+      expect(existsSync(abs(root, current)), current).toBe(true);
+      expect(report.reclaimed?.entries.find((entry) => entry.path === old)).toMatchObject({
+        action: "deleted",
+        candidateReason: "path-renamed",
+        proof: "hash",
+      });
+    }
+    expect(await guardCommands(root)).toEqual({
+      subagentStart: [`node ${SUBAGENT_GUARD_PATH}`],
+      beforeMCPExecution: [`node ${MCP_GUARD_PATH}`],
+    });
+    const rewired = await readText(root, CURSOR_HOOKS);
+    for (const [old] of RENAMED_GUARDS) expect(rewired).not.toContain(old);
+    expect(await backups(root)).toEqual([]);
+    const rows = (await readManifest(root))?.ledger.map((row) => row.path) ?? [];
+    for (const [old, current] of RENAMED_GUARDS) {
+      expect(rows).not.toContain(old);
+      expect(rows).toContain(current);
+    }
+
+    const check = await runInProcess([checkCommand], ["check"], { cwd: root });
+    expect(check.code, check.stdout + check.stderr).toBe(0);
+  });
+
+  it("a 1.11.0 setup with an owner entry: sync -y keeps the entry, rewires the guards behind a verified .bak, deletes both old names, and check then exits 0", async () => {
+    const root = await setUpByReleaseOneEleven("repo", true);
+    const edited = await readText(root, CURSOR_HOOKS);
+
+    await sync(root);
+
+    for (const [old, current] of RENAMED_GUARDS) {
+      expect(existsSync(abs(root, old)), old).toBe(false);
+      expect(existsSync(abs(root, current)), current).toBe(true);
+    }
+    const doc = await readDoc(root, CURSOR_HOOKS);
+    expect((doc["hooks"] as Record<string, unknown[]>)["afterFileEdit"]).toEqual([OWNER_CURSOR_ENTRY]);
+    expect(await guardCommands(root)).toEqual({
+      subagentStart: [`node ${SUBAGENT_GUARD_PATH}`],
+      beforeMCPExecution: [`node ${MCP_GUARD_PATH}`],
+    });
+    // The legacy row's hash no longer proves the file unedited, so the old
+    // guard entries leave behind a verified .bak, as the plan's expand/contract
+    // rule says.
+    expect(await backups(root)).toEqual([`${CURSOR_HOOKS}.bak`]);
+    expect(await readText(root, `${CURSOR_HOOKS}.bak`)).toBe(edited);
+
+    const check = await runInProcess([checkCommand], ["check"], { cwd: root });
+    expect(check.code, check.stdout + check.stderr).toBe(0);
+  });
+
+  it("a 1.11.0 setup whose old MCP guard was edited by hand: sync -y keeps it byte for byte and the sync report names it", async () => {
+    const root = await setUpByReleaseOneEleven();
+    const edited = `${await readText(root, OLD_MCP_GUARD)}// the team's own tweak\n`;
+    await writeFile(abs(root, OLD_MCP_GUARD), edited, "utf8");
+
+    const synced = await runInProcess([syncCommand], ["sync", "-y"], { cwd: root });
+
+    expect(synced.code, synced.stderr).toBe(0);
+    expect(await readText(root, OLD_MCP_GUARD)).toBe(edited);
+    expect(existsSync(abs(root, OLD_SUBAGENT_GUARD))).toBe(false);
+    expect(existsSync(abs(root, MCP_GUARD_PATH))).toBe(true);
+    expect(synced.stdout).toContain(OLD_MCP_GUARD);
+    expect(await readText(root, CURSOR_HOOKS)).not.toContain(OLD_MCP_GUARD);
+  });
+
+  it("a 1.11.0 setup with an owner entry: clean -y before any sync keeps the entry alone, behind a verified .bak, and deletes both old guards it no longer runs", async () => {
+    const root = await setUpByReleaseOneEleven("repo", true);
+    const edited = await readText(root, CURSOR_HOOKS);
+
+    const cleaned = await clean(root);
+
+    expect(cleaned.code).toBe(0);
+    expect(await readDoc(root, CURSOR_HOOKS)).toEqual({ version: 1, hooks: { afterFileEdit: [OWNER_CURSOR_ENTRY] } });
+    expect(await readText(root, `${CURSOR_HOOKS}.bak`)).toBe(edited);
+    for (const [old, current] of RENAMED_GUARDS) {
+      expect(existsSync(abs(root, old)), old).toBe(false);
+      expect(existsSync(abs(root, current)), current).toBe(false);
+    }
+  });
+});
+
+describe("no verb deletes a renamed guard a kept .cursor/hooks.json still runs (REQ-FLOW-038 with S17, review/58)", () => {
+  it("a .cursor/hooks.json sync refuses (an owner's version) keeps both old guards it still names", async () => {
+    const root = await setUpByReleaseOneEleven();
+    const doc = await readDoc(root, CURSOR_HOOKS);
+    await writeDoc(root, CURSOR_HOOKS, { ...doc, version: 2 });
+    const before = await readText(root, CURSOR_HOOKS);
+
+    const { entries, report } = await sync(root);
+
+    expect(entries.find((entry) => entry.path === CURSOR_HOOKS)).toMatchObject({ action: "collision", collisionKind: "co-owned-shape" });
+    expect(await readText(root, CURSOR_HOOKS)).toBe(before);
+    for (const [old, current] of RENAMED_GUARDS) {
+      expect(existsSync(abs(root, old)), old).toBe(true);
+      expect(existsSync(abs(root, current)), current).toBe(true);
+      const entry = report.reclaimed?.entries.find((candidate) => candidate.path === old);
+      expect(entry?.action, old).toBe("skipped-user-content");
+      expect(entry?.detail, old).toContain(CURSOR_HOOKS);
+    }
+  });
+
+  // A hard link: Windows reports no link count this check can rely on, the
+  // posture `./reclaim.test.ts` takes for its hard-link cases.
+  it.skipIf(process.platform === "win32")("a linked .cursor/hooks.json, which sync refuses before any read, keeps both old guards", async () => {
+    const root = await setUpByReleaseOneEleven();
+    await link(abs(root, CURSOR_HOOKS), getTemp().path("outside-hooks.json"));
+    const before = await readText(root, CURSOR_HOOKS);
+
+    const { entries, report } = await sync(root);
+
+    expect(entries.find((entry) => entry.path === CURSOR_HOOKS)?.action).toBe("collision");
+    expect(await readText(root, CURSOR_HOOKS)).toBe(before);
+    for (const [old] of RENAMED_GUARDS) {
+      expect(existsSync(abs(root, old)), old).toBe(true);
+      expect(report.reclaimed?.entries.find((candidate) => candidate.path === old)?.action, old).toBe("skipped-user-content");
+    }
+  });
+
+  it("a .cursor/hooks.json clean keeps (it does not parse) keeps both old guards it names, and each kept guard names the file", async () => {
+    const root = await setUpByReleaseOneEleven();
+    const broken = `${await readText(root, CURSOR_HOOKS)},`;
+    await writeFile(abs(root, CURSOR_HOOKS), broken, "utf8");
+
+    const cleaned = await clean(root, ["--json"]);
+
+    expect(cleaned.code).toBe(0);
+    expect(await readText(root, CURSOR_HOOKS)).toBe(broken);
+    const doc = JSON.parse(cleaned.stdout.trim()) as { entries: { path: string; action: string; detail: string }[] };
+    for (const [old] of RENAMED_GUARDS) {
+      expect(existsSync(abs(root, old)), old).toBe(true);
+      const entry = doc.entries.find((candidate) => candidate.path === old);
+      expect(entry?.action, old).toBe("skipped-user-content");
+      expect(entry?.detail, old).toContain(CURSOR_HOOKS);
+    }
+  });
+});

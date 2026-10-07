@@ -422,7 +422,8 @@ describe("a renamed fork's emission", () => {
           ".codex/hooks.json",
           ".stamity/generated/hooks/claude/stamity-config-tamper-notice.mjs",
           ".claude/settings.json",
-          ".cursor/hooks/mcp-guard.mjs",
+          // TEST CHANGE, justified: REQ-FLOW-038 — the guards carry the stamity- prefix
+          ".cursor/hooks/stamity-mcp-guard.mjs",
         ].map(async (path) => [path, await readFile(join(repo.dir, path), "utf8")] as const),
       );
       for (const [path, content] of written) {
