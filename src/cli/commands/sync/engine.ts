@@ -52,6 +52,7 @@ import { getEmissionPlanner } from "../../engine/emission.ts";
 import {
   coOwnedDocumentLanes,
   coOwnedOwnershipOf,
+  coOwnedRowsCarriedThroughRefusal,
   coOwnedReclaimReducers,
   installedPackServers,
   type CoOwnedDocumentLane,
@@ -981,6 +982,9 @@ export async function applySync(
       // the source is repaired updates the file, and a deselection reclaims it.
       if (output.sourceRefusal !== undefined) {
         emitted.push(...(await rowsStillProvenOnDisk(rootDir, plan.manifest.ledger, output.path)));
+      } else if (coOwnedLanes.has(output.path)) {
+        // A co-owned document this run refused keeps its rows and record whole.
+        emitted.push(...coOwnedRowsCarriedThroughRefusal(plan.manifest.ledger, output.path));
       }
       continue;
     }
@@ -1053,7 +1057,11 @@ export async function applySync(
     // `../../engine/emissionWrite.ts::ledgerRowsForOutput`, the one builder
     // `init` records through as well, so the same emission yields the same
     // ledger whichever verb produced it.
-    if (result.action === "skipped") continue;
+    if (result.action === "skipped") {
+      // The same carry for a co-owned refusal the write itself made.
+      if (coOwnedLane !== undefined) emitted.push(...coOwnedRowsCarriedThroughRefusal(plan.manifest.ledger, output.path));
+      continue;
+    }
     emitted.push(...ledgerRowsForOutput(output, written, managedBody, engineVersion, coOwnedRecord));
   }
 

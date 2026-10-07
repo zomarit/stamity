@@ -359,6 +359,49 @@ describe("a ledger record that claims an owner's members", () => {
   });
 });
 
+describe("a co-owned-shape refusal of a ledgered settings file (review/40)", () => {
+  it("keeps the row and its record through the refusal, so once the owner fixes the file the engine's rows are still its own and clean restores the bytes", async () => {
+    const root = await freshRepo();
+    await seedSettings(root, FIRST);
+    await init(root);
+    const [recordBefore] = await settingsLedgerRows(root);
+    const doc = await settingsDoc(root);
+    (doc["hooks"] as Record<string, unknown>)["PreToolUse"] = {};
+    await writeFile(SETTINGS_ABS(root), `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+
+    const refused = await sync(root);
+
+    expect(settingsRow(refused.wrote).action).toBe("skipped");
+    const kept = await settingsLedgerRows(root);
+    expect(kept).toHaveLength(1);
+    expect(kept[0]?.coOwned).toEqual(recordBefore?.coOwned);
+    expect(kept[0]?.contentHash).toBe(recordBefore?.contentHash);
+
+    // The owner fixes the member; the engine's allow rows are still recorded as its own.
+    (doc["hooks"] as Record<string, unknown>)["PreToolUse"] = [OWNER_GROUP];
+    await writeFile(SETTINGS_ABS(root), `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+    await sync(root);
+    expect((await settingsLedgerRows(root))[0]?.coOwned?.elements?.["/permissions/allow"]).toEqual(["Read", "Grep", "Glob"].map(memberHash));
+
+    const cleaned = await clean(root);
+    expect(cleaned.code).toBe(0);
+    expect(await readSettings(root)).toBe(FIRST);
+  });
+
+  it("init --force carries the previous row through a co-owned-shape refusal too", async () => {
+    const root = await freshRepo();
+    await seedSettings(root, FIRST);
+    await init(root);
+    const [recordBefore] = await settingsLedgerRows(root);
+    await writeFile(SETTINGS_ABS(root), `${JSON.stringify({ permissions: "allow-all" }, null, 2)}\n`, "utf8");
+
+    const report = await init(root, true);
+
+    expect(settingsRow(report.wrote).action).toBe("skipped");
+    expect((await settingsLedgerRows(root))[0]?.coOwned).toEqual(recordBefore?.coOwned);
+  });
+});
+
 describe("an engine hook entry the operator edited, at clean -y (REQ-PLUGIN-016, review/43)", () => {
   it("leaves behind a verified .bak holding the edit, and the output names that entry", async () => {
     const root = await freshRepo();

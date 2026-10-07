@@ -51,6 +51,7 @@ import { hasNpmChannel, packageName } from "../../kit/packageName.ts";
 import {
   coOwnedDocumentLanes,
   coOwnedOwnershipOf,
+  coOwnedRowsCarriedThroughRefusal,
   installedPackServers,
   ledgerRowsForOutput,
   type CoOwnedDocumentLane,
@@ -410,8 +411,18 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
   // Grouping by adapter is init's own business: the rebuild below iterates
   // `manifest.tools`, not the closed tool set sync rebuilds over.
   const emittedByAdapter = new Map<Tool, EmittedArtifact[]>();
+  const add = (row: EmittedArtifact): void => {
+    const rows = emittedByAdapter.get(row.adapter) ?? [];
+    rows.push(row);
+    emittedByAdapter.set(row.adapter, rows);
+  };
   for (const output of outputs) {
-    if (skippedPaths.has(output.path)) continue;
+    if (skippedPaths.has(output.path)) {
+      // A co-owned document this run refused keeps the previous setup's rows
+      // and record whole (`coOwnedRowsCarriedThroughRefusal`); none on a first init.
+      if (coOwnedLanes.has(output.path)) for (const row of coOwnedRowsCarriedThroughRefusal(previousLedger, output.path)) add(row);
+      continue;
+    }
     const managedBody = extractManagedBlock(
       output.content,
       join(rootDir, ...output.path.split("/")),
@@ -423,9 +434,7 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
       engineVersion,
       writtenRecordByPath.get(output.path),
     )) {
-      const rows = emittedByAdapter.get(row.adapter) ?? [];
-      rows.push(row);
-      emittedByAdapter.set(row.adapter, rows);
+      add(row);
     }
   }
   let ledger: LedgerEntry[] = manifest.ledger;

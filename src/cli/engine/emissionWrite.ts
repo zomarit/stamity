@@ -23,6 +23,7 @@ import {
   type CoOwnedReducer,
   type MergeResult,
 } from "../../types/content.ts";
+import { VALID_TOOLS, type Tool } from "../../types/core.ts";
 import type { CoOwnership, LedgerEntry, SetupManifest } from "../../types/manifest.ts";
 
 /**
@@ -423,6 +424,21 @@ export function coOwnedOwnershipOf(
     ...(opts.ledgerHashes === undefined ? {} : { ledgerHashes: opts.ledgerHashes }),
     ...(opts.boundaryDir === undefined ? {} : { boundaryDir: opts.boundaryDir }),
   };
+}
+
+/**
+ * The pre-run ledger rows at a co-owned `path` this run refused to write
+ * (`co-owned-shape`, or a linked target), carried into the rebuilt ledger
+ * whole — the record and the recorded hash included — as 1.11.0 kept its row
+ * when it replaced a key. Dropping them would leave `clean` unable to reach the
+ * document's engine entries, and the first write after the owner's fix would
+ * re-adopt the file and turn the engine's own rows foreign (S13). A stale hash
+ * only makes the sweep read the bytes as drifted, which takes the backup.
+ */
+export function coOwnedRowsCarriedThroughRefusal(ledger: readonly LedgerEntry[], path: string): EmittedArtifact[] {
+  return ledger.flatMap((row) =>
+    row.path === path && VALID_TOOLS.has(row.adapter) ? [{ ...row, adapter: row.adapter as Tool }] : [],
+  );
 }
 
 /**

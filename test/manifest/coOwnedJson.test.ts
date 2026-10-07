@@ -1020,7 +1020,7 @@ describe("reduceCoOwnedJson", () => {
     });
 
     it("yield: a forged record over the owner's own value removes it only behind a backup (review/31)", () => {
-      const forged: CoOwnership = { members: { "/description": memberHash("mine") }, elements: record.elements };
+      const forged: CoOwnership = { members: { "/description": memberHash("mine") }, elements: { "/hooks/stop": [memberHash(E)] } };
       expect(mreduce({ description: "mine", hooks: { stop: [E] } }, forged, { rendered: { description: "engine" } })).toMatchObject({
         kind: "engine-only",
         proven: false,
@@ -1030,7 +1030,7 @@ describe("reduceCoOwnedJson", () => {
 
     it("yield, structural: a removed one outside the bound is mustBackUp; one kept beside foreign content owes nothing", () => {
       const spec: CoOwnedJsonSpec = { ...MSPEC, members: [{ pointer: "/description", foreign: "yield", structural: true }] };
-      const rec: CoOwnership = { members: { "/description": memberHash("engine") }, elements: record.elements, createdFile: true };
+      const rec: CoOwnership = { members: { "/description": memberHash("engine") }, elements: { "/hooks/stop": [memberHash(E)] }, createdFile: true };
       const run = (value: unknown): unknown =>
         reduceCoOwnedJson(doc(value), spec, { record: rec, legacy: false, deleteWhenEngineOnly: true });
       expect(run({ description: "engine", hooks: { stop: [E] } })).toMatchObject({ kind: "engine-only", proven: false, mustBackUp: true });
