@@ -1909,11 +1909,33 @@ function renderProvenance(ctx: CliContext, provenance: ProvenanceRollup | null):
   }
 }
 
-/** Paths a sync would refuse to write because a user file already holds them. */
+/**
+ * Paths a sync would refuse to write because a user file already holds them —
+ * the ones {@link collisionStep}'s two remedies clear. A source refusal and an
+ * `import-decision` collision are stated with their own steps instead.
+ */
 function collidingPaths(report: DriftReport): string[] {
   return report.changes
-    .filter((entry) => entry.action === "collision" && entry.refusedAtSource !== true)
+    .filter(
+      (entry) =>
+        entry.action === "collision" &&
+        entry.refusedAtSource !== true &&
+        entry.collisionKind !== "import-decision",
+    )
     .map((entry) => entry.path);
+}
+
+/**
+ * The step for an `import-decision` collision (REQ-PLUGIN-046): the plan
+ * entry's own detail, which names the recorded decision and the two remedies
+ * that work — restoring `supplement`, or `init --force --import-config
+ * replace`. `sync --force` is not one of them, so the generic collision step,
+ * which offers it, never names these paths.
+ */
+function importDecisionSteps(report: DriftReport): string[] {
+  return report.changes
+    .filter((entry) => entry.action === "collision" && entry.collisionKind === "import-decision")
+    .map((entry) => entry.detail ?? "");
 }
 
 /**
@@ -2050,6 +2072,7 @@ function renderNextSteps(
     steps.push(
       ...(collisions.length > 0 ? [collisionStep(collisions)] : []),
       ...sourceRefusedEntries(outcome.report).map(sourceRefusalStep),
+      ...importDecisionSteps(outcome.report),
       ...(hasNonCollisionDrift(outcome.report)
         ? [`${packageCommand("sync")} — regenerate the files that drifted`]
         : []),
@@ -2278,6 +2301,7 @@ function checkFailureDoc(doctor: readonly DoctorCheck[], drift: DriftOutcome): F
   const collisionSteps = [
     ...(collisions.length > 0 ? [collisionStep(collisions)] : []),
     ...(drift.kind === "evaluated" ? sourceRefusedEntries(drift.report).map(sourceRefusalStep) : []),
+    ...(drift.kind === "evaluated" ? importDecisionSteps(drift.report) : []),
   ];
   return {
     code: "INTEGRITY_ERROR",

@@ -12,6 +12,7 @@ import {
 } from "../../../src/content/contentRoot.ts";
 import { suggestStackPacks } from "../../../src/detect/stackSupport.ts";
 import { readManifest } from "../../../src/manifest/manifest.ts";
+import { OWNED_PATHS } from "../../../src/manifest/ownedPaths.ts";
 import type { ContentClass } from "../../../src/types/content.ts";
 import type { Tool } from "../../../src/types/core.ts";
 import { EngineError } from "../../../src/types/errors.ts";
@@ -277,6 +278,22 @@ describe("buildInitDecisions — existing config paths", () => {
       "CLAUDE.md",
       ".github/copilot-instructions.md",
     ]);
+  });
+
+  it("probes exactly the four files the owned-path bound names as import targets", async () => {
+    // REQ-PLUGIN-046: the import targets have one home, and manifest
+    // validation refuses a decision at any other path, so the files init
+    // offers to import and the files a decision may name are the same list.
+    const root = await seedRepo({
+      "AGENTS.md": "# Agents\n",
+      "AGENT.md": "# Agent\n",
+      "CLAUDE.md": "# Instructions\n",
+      ".claude/settings.json": "{}",
+      ".github/copilot-instructions.md": "# Instructions\n",
+    });
+    const decisions = await buildInitDecisions(root, {}, { history: null });
+
+    expect(decisions.existingConfigPaths).toEqual([...OWNED_PATHS.importTargets]);
   });
 
   it("does not report an instruction file for a trace-only tool", async () => {

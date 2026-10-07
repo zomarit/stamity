@@ -34,9 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - **A committed manifest can no longer make `sync` or `clean` delete or overwrite a file the
-  engine does not own.** The ledger may name only paths a stamity release writes, and a row with
-  no content hash proves nothing; `check` names every path a `sync` would reclaim and refuses a
-  manifest that breaks these rules.
+  engine does not own.** The ledger may name only paths a stamity release writes, an import
+  decision only the four instruction files `init` imports, and a row with no content hash proves
+  nothing; `check` names every path a `sync` would reclaim and refuses a manifest that breaks
+  these rules.
 
 ## [1.11.0] - 2026-10-01
 

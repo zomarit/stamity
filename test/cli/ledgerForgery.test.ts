@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { addCommand } from "../../src/cli/commands/add.ts";
@@ -238,6 +238,173 @@ describe("inside the bound, a row with no content hash proves nothing", () => {
       reclaim: { entries: { path: string; action: string; proof?: string }[] };
     };
     expect(doc.reclaim.entries.find((candidate) => candidate.path === GONE)).toMatchObject({
+      action: "deleted",
+      proof: "hash",
+    });
+  });
+});
+
+// ── REQ-PLUGIN-046: the import decisions ───────────────────────────────────
+
+/** The owner's own instruction file, which a `supplement` import keeps below the engine's block. */
+const OWNER_AGENTS = "# Team notes\n\nOur own agent instructions. Keep this.\n";
+
+interface ManifestDoc {
+  ledger: LedgerEntry[];
+  importChoice?: { path: string; mode: string }[];
+}
+
+/** Rewrites the committed manifest, as a hand edit of it does. */
+async function editManifest(root: string, edit: (manifest: ManifestDoc) => void): Promise<void> {
+  const path = join(root, ".stamity", "manifest.json");
+  const manifest = JSON.parse(await readFile(path, "utf8")) as ManifestDoc;
+  edit(manifest);
+  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+}
+
+/** A repository whose owner `AGENTS.md` was imported with `supplement`, as `init --import-config supplement` does. */
+async function supplementedRepo(): Promise<string> {
+  const root = getTemp().path("repo");
+  await mkdir(root, { recursive: true });
+  await seed(root, { "AGENTS.md": OWNER_AGENTS });
+  const decisions = await buildInitDecisions(root, { tools: ["claude", "cursor"] }, { history: null, skipWorkspaceProbe: true });
+  await applyInit({
+    rootDir: root,
+    decisions,
+    importChoice: [{ path: "AGENTS.md", mode: "supplement" }],
+    engineVersion: ENGINE_VERSION,
+    dryRun: false,
+    force: false,
+    now: T0,
+  });
+  return root;
+}
+
+interface CheckDoc extends JsonDoc {
+  drift?: { changes: { path: string; action: string; collisionKind?: string; detail?: string }[] } | null;
+  error?: { code?: string; message?: string; why?: string; next?: string };
+}
+
+describe("an import decision binds only as init records it", () => {
+  it("refuses a skip decision for a file init never imports, naming each decision", async () => {
+    const root = await initialisedRepo();
+    const guards = [".cursor/hooks.json", ".cursor/hooks/subagent-guard.mjs", ".cursor/hooks/mcp-guard.mjs"];
+    await editManifest(root, (manifest) => {
+      manifest.importChoice = [...(manifest.importChoice ?? []), ...guards.map((path) => ({ path, mode: "skip" }))];
+      manifest.ledger = manifest.ledger.filter((row) => !guards.includes(row.path));
+    });
+    for (const path of guards) await rm(join(root, path), { force: true });
+
+    const { code, doc } = await runJson(checkCommand, root, ["check"]);
+
+    expect(code).toBe(1);
+    const manifestRow = doc.doctor?.find((row) => row.id === "manifest");
+    expect(manifestRow?.status).toBe("fail");
+    for (const path of guards) {
+      expect(manifestRow?.detail).toMatch(
+        new RegExp(`\`importChoice\\[\\d+\\]\\.path\` ${JSON.stringify(path).replaceAll(".", "\\.")} is not an instruction file init imports`),
+      );
+    }
+  });
+
+  it("refuses a skip decision beside a ledger row for the same path, and sync leaves AGENTS.md as it is", async () => {
+    const root = await supplementedRepo();
+    const bytes = await readFile(join(root, "AGENTS.md"), "utf8");
+    expect(bytes).toContain("Keep this.");
+    await editManifest(root, (manifest) => {
+      const decision = manifest.importChoice?.find((choice) => choice.path === "AGENTS.md");
+      if (decision !== undefined) decision.mode = "skip";
+      for (const row of manifest.ledger) if (row.path === "AGENTS.md") row.contentHash = sha256(bytes);
+    });
+    const before = await snapshot(root);
+
+    const sync = await runJson(syncCommand, root, ["sync", "-y"]);
+
+    expect(sync.code).toBe(1);
+    expect(sync.doc.error?.code).toBe("CONFIG_ERROR");
+    expect(failureText(sync.doc)).toMatch(/`ledger\[\d+\]` records "AGENTS\.md", which `importChoice\[\d+\]` skips/);
+    expect(await snapshot(root)).toEqual(before);
+  }, 60_000);
+
+  const FLIPS = [
+    ["replace", ["sync", "-y"]],
+    ["replace", ["sync", "-y", "--force"]],
+    ["removed", ["sync", "-y"]],
+    ["removed", ["sync", "-y", "--force"]],
+  ] as const;
+
+  it.each(FLIPS)(
+    "never writes over a supplemented AGENTS.md whose decision reads %s (%j)",
+    async (flip, argv) => {
+      const root = await supplementedRepo();
+      await editManifest(root, (manifest) => {
+        if (flip === "removed") {
+          manifest.importChoice = (manifest.importChoice ?? []).filter((choice) => choice.path !== "AGENTS.md");
+          if (manifest.importChoice.length === 0) delete manifest.importChoice;
+          return;
+        }
+        const decision = manifest.importChoice?.find((choice) => choice.path === "AGENTS.md");
+        if (decision !== undefined) decision.mode = flip;
+      });
+      const bytes = await readFile(join(root, "AGENTS.md"), "utf8");
+
+      const check = await runInProcess([checkCommand], ["check", "--json"], { cwd: root });
+      expect(check.code).toBe(1);
+      const doc = JSON.parse(check.stdout.trim()) as CheckDoc;
+      expect(doc.drift?.changes.find((entry) => entry.path === "AGENTS.md")).toMatchObject({
+        action: "collision",
+        collisionKind: "import-decision",
+      });
+      expect(doc.error?.next).toContain("init --force --import-config replace");
+      expect(doc.error?.next).not.toContain("sync --force");
+
+      const sync = await runInProcess([syncCommand], [...argv], { cwd: root });
+
+      expect(sync.code).toBe(1);
+      expect(await readFile(join(root, "AGENTS.md"), "utf8")).toBe(bytes);
+      expect((await readdir(root)).filter((name) => name.startsWith("AGENTS.md.bak"))).toEqual([]);
+    },
+    60_000,
+  );
+});
+
+describe("an instruction file leaves only on its own bytes", () => {
+  it("keeps an owner's docs/AGENTS.md that a forged row hashes", async () => {
+    const root = await initialisedRepo();
+    const owner = "# Docs agents\n\nHow we write docs here.\n";
+    await seed(root, { "docs/AGENTS.md": owner });
+    await forgeRows(root, [hashedInfraRow("docs/AGENTS.md", owner, "codex")]);
+
+    const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
+
+    expect(sync.code).toBe(0);
+    const doc = JSON.parse(sync.stdout.trim()) as { reclaim: { entries: { path: string; action: string; detail: string }[] } };
+    const entry = doc.reclaim.entries.find((candidate) => candidate.path === "docs/AGENTS.md");
+    expect(entry?.action).toBe("skipped-user-content");
+    expect(entry?.detail).toContain("only when its own bytes show the engine wrote it");
+    expect(await readFile(join(root, "docs/AGENTS.md"), "utf8")).toBe(owner);
+  });
+
+  it("deletes the engine's unedited per-package charter once its package leaves", async () => {
+    const root = getTemp().path("repo");
+    await mkdir(root, { recursive: true });
+    await seed(root, {
+      "package.json": `${JSON.stringify({ name: "x", private: true, workspaces: ["packages/*"] })}\n`,
+      "packages/app/package.json": `${JSON.stringify({ name: "app", version: "1.0.0" })}\n`,
+    });
+    const decisions = await buildInitDecisions(root, { tools: ["codex"] }, { history: null, skipWorkspaceProbe: true });
+    await applyInit({ rootDir: root, decisions, engineVersion: ENGINE_VERSION, dryRun: false, force: false, now: T0 });
+    const manifest = JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as ManifestDoc;
+    expect(manifest.ledger.map((row) => row.path)).toContain("packages/app/AGENTS.md");
+    await rm(join(root, "packages/app/package.json"));
+
+    const sync = await runInProcess([syncCommand], ["sync", "-y", "--json"], { cwd: root });
+
+    expect(sync.code).toBe(0);
+    const doc = JSON.parse(sync.stdout.trim()) as {
+      reclaim: { entries: { path: string; action: string; proof?: string }[] };
+    };
+    expect(doc.reclaim.entries.find((candidate) => candidate.path === "packages/app/AGENTS.md")).toMatchObject({
       action: "deleted",
       proof: "hash",
     });

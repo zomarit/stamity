@@ -52,7 +52,7 @@ import {
   type SetupManifest,
 } from "../types/manifest.ts";
 import { STATE_DIR } from "../types/markers.ts";
-import { ownedPathDefect } from "./ownedPaths.ts";
+import { OWNED_PATHS, ownedPathDefect } from "./ownedPaths.ts";
 
 /**
  * The `.stamity/manifest.json` boundary: create, validate, read, write, and the
@@ -683,7 +683,10 @@ function collectGatesErrors(value: unknown, errors: string[]): void {
  * pre-existing instruction file the repo carried. Each `path` runs the same
  * containment grammar every other persisted repo path does: a record
  * suppresses or redirects emission at its path, so a hand-edited absolute or
- * `..` value would be a way to point that somewhere it does not belong.
+ * `..` value would be a way to point that somewhere it does not belong. And it
+ * names one of the four instruction files `init` imports
+ * (`OWNED_PATHS.importTargets`, REQ-PLUGIN-046), the only paths a decision is
+ * ever recorded for.
  *
  * Every element is indexed in its error message, because a manifest with three
  * decisions and one bad path is unrepairable from an unindexed complaint.
@@ -705,12 +708,43 @@ function collectImportChoiceErrors(value: unknown, errors: string[]): void {
       const defect = repoPathDefect(entry.path);
       if (defect !== null) {
         errors.push(`\`${field}.path\` ${JSON.stringify(entry.path)} ${defect}`);
+      } else if (!OWNED_PATHS.importTargets.includes(entry.path)) {
+        // REQ-PLUGIN-046: init records a decision only for an instruction file
+        // it imports. A decision anywhere else is a hand edit, and a `skip`
+        // there silently drops a path the engine owns (measured: the Cursor
+        // hook file and both guards, with `check` still green).
+        errors.push(
+          `\`${field}.path\` ${JSON.stringify(entry.path)} is not an instruction file init imports ` +
+            `(${OWNED_PATHS.importTargets.join(", ")})`,
+        );
       }
     }
     collectEnumError(entry.mode, VALID_IMPORT_MODES, `${field}.mode`, errors);
     if (entry.mode === undefined) errors.push(`\`${field}.mode\` is required`);
     for (const key of unknownFields(entry, ["path", "mode"])) {
       errors.push(`unknown field \`${field}.${key}\``);
+    }
+  }
+}
+
+/**
+ * The one cross check between the ledger and the import decisions
+ * (REQ-PLUGIN-046): the planner drops a path a `skip` decision names, so the
+ * engine never records a row for it, and a row beside such a decision is a hand
+ * edit. Left standing, the pair let a row hashing the owner's file make `sync`
+ * delete it whole. A malformed ledger or decision list is named by its own
+ * check and skipped here.
+ */
+function collectSkippedRowErrors(ledger: unknown, importChoice: unknown, errors: string[]): void {
+  if (!Array.isArray(ledger) || !Array.isArray(importChoice)) return;
+  for (const [choiceIndex, choice] of importChoice.entries()) {
+    if (!isPlainObject(choice) || choice.mode !== "skip" || typeof choice.path !== "string") continue;
+    for (const [rowIndex, row] of ledger.entries()) {
+      if (!isPlainObject(row) || row.path !== choice.path) continue;
+      errors.push(
+        `\`ledger[${rowIndex}]\` records ${JSON.stringify(choice.path)}, which \`importChoice[${choiceIndex}]\` ` +
+          `skips: the engine never records a row for a skipped file`,
+      );
     }
   }
 }
@@ -881,7 +915,10 @@ export function collectManifestErrors(data: unknown): string[] {
   if (data.models !== undefined) collectModelsErrors(data.models, errors);
   if (data.plugin !== undefined) collectPluginErrors(data.plugin, errors);
   if (data.gates !== undefined) collectGatesErrors(data.gates, errors);
-  if (data.importChoice !== undefined) collectImportChoiceErrors(data.importChoice, errors);
+  if (data.importChoice !== undefined) {
+    collectImportChoiceErrors(data.importChoice, errors);
+    collectSkippedRowErrors(data.ledger, data.importChoice, errors);
+  }
   if (data.toolOptions !== undefined) collectToolOptionsErrors(data.toolOptions, errors);
   if (data.detected !== undefined) collectDetectedErrors(data.detected, errors);
 

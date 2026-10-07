@@ -14,6 +14,7 @@ import {
   type ReclaimCandidate,
 } from "../../../manifest/ledger.ts";
 import { manifestPath, readManifest, writeManifest } from "../../../manifest/manifest.ts";
+import { OWNED_PATHS } from "../../../manifest/ownedPaths.ts";
 import {
   materializeClaudeSettings,
   predictClaudeSettingsMerge,
@@ -23,7 +24,7 @@ import type { PackSuppliedServer } from "../../../mcp/catalog.ts";
 import { engineOwnedServerIds, MERGED_MCP_JSON_PATHS } from "../../../mcp/emit.ts";
 import { ensureGitignoreEntry } from "../../../mcp/env.ts";
 import { isSharedRegularFile } from "../../../merge/atomicWrite.ts";
-import { extractManagedBlock } from "../../../merge/managedBlocks.ts";
+import { extractManagedBlock, hasOwnerTextOutsideBlock } from "../../../merge/managedBlocks.ts";
 import { sweepReclaimCandidates, type ReclaimReport } from "../../../merge/reclaim.ts";
 import {
   isManagedPath,
@@ -44,7 +45,8 @@ import {
 import { TOOLS, type Tool } from "../../../types/core.ts";
 import type { DetectedSummary } from "../../../types/detect.ts";
 import { EngineError } from "../../../types/errors.ts";
-import type { LedgerEntry, SetupManifest } from "../../../types/manifest.ts";
+import { MANIFEST_FILE, type ImportDecision, type LedgerEntry, type SetupManifest } from "../../../types/manifest.ts";
+import { STATE_DIR } from "../../../types/markers.ts";
 import { ensureStateScaffold } from "../../../emit/stateScaffold.ts";
 import { getEmissionPlanner } from "../../engine/emission.ts";
 import {
@@ -113,13 +115,22 @@ import type { GitRunner } from "../../../workspace/git.ts";
  *   (`AdapterOutput.sourceRefusal`), as is a `deny-scan` hit on those bytes;
  *   both hold under `--force`, because {@link applySync} never attempts a row
  *   that carries one.
+ * - `import-decision` — a whole-file engine output at an instruction file
+ *   `init` imports (`OWNED_PATHS.importTargets`) whose existing bytes hold the
+ *   owner's text outside the engine's managed block: the shape only a
+ *   `supplement` import leaves, under a manifest that records another decision
+ *   or none (REQ-PLUGIN-046). The manifest is committed and cannot be
+ *   authenticated, so the recorded decision does not get to replace the
+ *   owner's text. Not force-overridable: {@link applySync} never attempts the
+ *   row under `--force` either, and the remedy is restoring `supplement` or
+ *   `init --force --import-config replace`, which backs the file up first.
  *
  * The per-lane account above is this file's only one. Every other comment here
  * defers to it or scopes itself to a single lane in its opening words, and
  * {@link COLLISION_REMEDY}'s `shared-name` sentence says the same thing to the
  * operator — a second, differently-worded mechanism is a defect, not a variant.
  */
-type CollisionKind = "unmanaged-name" | "deny-scan" | "shared-name" | "linked-source";
+type CollisionKind = "unmanaged-name" | "deny-scan" | "shared-name" | "linked-source" | "import-decision";
 
 /** One planned path and the disposition the apply run would give it. */
 export interface SyncPlanEntry {
@@ -279,6 +290,18 @@ function sharedNameDetail(path: string): string {
   );
 }
 
+/** The `import-decision` collision's detail: what the bytes and the record each say, and the two remedies. */
+function importDecisionDetail(path: string, decisions: readonly ImportDecision[] | undefined): string {
+  const mode = (decisions ?? []).findLast((decision) => decision.path === path)?.mode;
+  const recorded = mode === undefined ? "no decision" : `\`${mode}\``;
+  return (
+    `${path} holds your text outside the engine's managed block, the shape a \`supplement\` import ` +
+    `leaves, but the manifest records ${recorded} for it, so sync would replace your text. Restore ` +
+    `\`supplement\` for this path in ${STATE_DIR}/${MANIFEST_FILE}, or run ` +
+    `${packageCommand("init --force --import-config replace")} to replace it behind a verified .bak.`
+  );
+}
+
 /**
  * Classify the planned outputs against the working tree: the disposition
  * {@link predictMergeAction} predicts, with a preserved-content refusal
@@ -301,6 +324,8 @@ export async function planOutputEntries(
   packServers?: readonly PackSuppliedServer[],
   /** The settings keys the install mode makes the engine's (`../../../adapters/claude.ts::claudeSettingsOwnedKeys`); the rendering's own keys when absent. */
   settingsOwnedKeys?: readonly string[],
+  /** The manifest's recorded import decisions, named in an `import-decision` collision's detail; none when absent. */
+  importDecisions?: readonly ImportDecision[],
 ): Promise<SyncPlanEntry[]> {
   return pLimit(PREDICT_CONCURRENCY).map([...outputs], async (output) => {
     const absPath = join(rootDir, output.path);
@@ -392,6 +417,26 @@ export async function planOutputEntries(
       return { ...base, action: ACTION_OF[predicted.result.action] };
     }
     const existing = await readIfExists(absPath);
+    // A whole-file write (a row with no managed block) over an instruction
+    // file whose owner text sits outside the engine's block would replace
+    // that text, whatever the ledger proves: the block is the engine's, the
+    // rest is the owner's. The row carries no block only because the manifest
+    // records no `supplement` for its path (`../../../emit/planner.ts` wraps
+    // the row in a block under one), so the record and the bytes disagree,
+    // and the bytes win (REQ-PLUGIN-046).
+    if (
+      managedBody === null &&
+      existing !== null &&
+      OWNED_PATHS.importTargets.includes(output.path) &&
+      hasOwnerTextOutsideBlock(existing, absPath)
+    ) {
+      return {
+        ...base,
+        action: "collision" as const,
+        collisionKind: "import-decision" as const,
+        detail: importDecisionDetail(output.path, importDecisions),
+      };
+    }
     // The prediction is pure — `boundaryDir` is inert here — but it is built
     // from the same call so the plan and the apply cannot drift apart.
     const action = predictMergeAction(existing, output.content, outputWriteOptions(managedBody, engineVersion, false, rootDir, ledgerPaths), absPath);
@@ -504,6 +549,7 @@ export async function planSync(
     manifest.mcp?.servers ?? [],
     packServers,
     claudeSettingsOwnedKeys(manifest),
+    manifest.importChoice,
   );
   const collisions = entries.filter((entry) => entry.action === "collision").map((entry) => entry.path);
 
@@ -540,8 +586,9 @@ export interface SyncApplyReport {
   /**
    * Paths the collision gate refused to write, repo-relative and in plan order.
    * Empty on a dry run. Under `--force` it holds only the rows refused at
-   * their source (`SyncPlanEntry.refusedAtSource`), which force does not
-   * clear; force clears the one class it can and lets the writer judge the rest.
+   * their source (`SyncPlanEntry.refusedAtSource`) and the `import-decision`
+   * collisions, which force does not clear; force clears the one class it can
+   * and lets the writer judge the rest.
    *
    * Non-empty means the run did real work AND left something undone, which is
    * a state the report had no way to express while a single collision threw the
@@ -626,7 +673,13 @@ async function rowsStillProvenOnDisk(
 }
 
 /** Fixed sentence order, so a mixed plan reads the same way every run. */
-const COLLISION_KIND_ORDER = ["unmanaged-name", "deny-scan", "shared-name", "linked-source"] as const;
+const COLLISION_KIND_ORDER = [
+  "unmanaged-name",
+  "deny-scan",
+  "shared-name",
+  "linked-source",
+  "import-decision",
+] as const;
 
 /**
  * The remedy sentence each class earns. Only the classes actually present are
@@ -650,6 +703,8 @@ const COLLISION_REMEDY: Record<CollisionKind, (paths: readonly string[]) => stri
     `${paths.join(", ")} repeat(s) another file that is a symbolic or hard link: --force does not ` +
     `clear it. Replace the linked file the plan entry's detail names with a regular file, then ` +
     `re-run.`,
+  "import-decision": () =>
+    `An import-decision collision is never force-overridable — see the plan entry's detail.`,
 };
 
 /**
@@ -787,8 +842,15 @@ export async function applySync(
   // whole-plan remedy sentence, the report counts them, and the command exits
   // non-zero, so a CI probe still fails on a collision it has not resolved.
   // A row whose producer refused its source is never attempted, forced or not.
+  // Nor, forced or not, is a path whose owner text the recorded import
+  // decision would replace (`import-decision`, REQ-PLUGIN-046).
   const refused = force
-    ? new Set(plan.outputs.filter((output) => output.sourceRefusal !== undefined).map((output) => output.path))
+    ? new Set([
+        ...plan.outputs.filter((output) => output.sourceRefusal !== undefined).map((output) => output.path),
+        ...plan.entries
+          .filter((entry) => entry.collisionKind === "import-decision")
+          .map((entry) => entry.path),
+      ])
     : new Set(plan.collisions);
   const refusalMessage = refused.size > 0 ? collisionRefusalMessage(plan) : null;
 

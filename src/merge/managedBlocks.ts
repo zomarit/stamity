@@ -396,6 +396,45 @@ export function hasManagedBlock(content: string, filePath?: string): boolean {
 }
 
 /**
+ * True when the slice ahead of a managed block is engine-authored rather than
+ * user prose: whitespace only, or exactly one complete YAML frontmatter fence
+ * (the generated stub emitted above the block so slash-command pickers can read
+ * a description) surrounded by whitespace. Anything else — prose, a second
+ * fence, an unterminated fence — is the user's.
+ */
+function isEngineAuthoredPrefix(before: string): boolean {
+  if (before.trim() === "") return true;
+  const lines = before.split("\n").map((line) => line.replace(/\r$/, "").trim());
+  let index = 0;
+  while (index < lines.length && lines[index] === "") index++;
+  if (lines[index] !== "---") return false;
+  index++;
+  while (index < lines.length && lines[index] !== "---") index++;
+  if (index >= lines.length) return false;
+  return lines.slice(index + 1).every((line) => line === "");
+}
+
+/**
+ * True when {@link content} holds a managed block AND bytes outside it that the
+ * engine did not write: prose before the block (anything but whitespace or the
+ * one frontmatter stub the engine emits above it), or anything but whitespace
+ * after it. `false` when there is no block at all — every byte is then the
+ * owner's, but there is no block for them to sit outside of.
+ *
+ * Two readers ask it (REQ-PLUGIN-046). The reclaim sweep
+ * (`./reclaim.ts`, gate 4): such bytes veto a whole-file delete, so only the
+ * block is stripped. And the sync plan (`../cli/commands/sync/engine.ts`): at
+ * an instruction file this is the shape only a `supplement` import leaves, so
+ * a whole-file write over it, under any other recorded decision, would replace
+ * the owner's text.
+ */
+export function hasOwnerTextOutsideBlock(content: string, filePath?: string): boolean {
+  const split = splitAtManagedBlock(content, filePath);
+  if (split === null) return false;
+  return !isEngineAuthoredPrefix(split.before) || split.after.trim() !== "";
+}
+
+/**
  * True when a merge via {@link insertManagedBlock} would rewrite the on-disk
  * marker variant to the one {@link getMarkersForPath} selects for
  * {@link filePath} — the wrong-variant auto-repair. Callers surface a one-line

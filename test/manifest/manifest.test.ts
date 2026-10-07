@@ -391,6 +391,82 @@ describe("collectManifestErrors", () => {
     });
   });
 
+  describe("the import decisions (REQ-PLUGIN-046)", () => {
+    it("accepts a decision at each of the four files init imports", () => {
+      expect(
+        collectManifestErrors({
+          ...fullManifest(),
+          importChoice: [
+            { path: "AGENTS.md", mode: "supplement" },
+            { path: "AGENT.md", mode: "skip" },
+            { path: "CLAUDE.md", mode: "replace" },
+            { path: ".github/copilot-instructions.md", mode: "supplement" },
+          ],
+        }),
+      ).toEqual([]);
+    });
+
+    it("refuses a decision naming any other path, each one indexed", () => {
+      const errors = collectManifestErrors({
+        ...fullManifest(),
+        importChoice: [
+          { path: "AGENTS.md", mode: "supplement" },
+          { path: ".cursor/hooks.json", mode: "skip" },
+          { path: "docs/AGENTS.md", mode: "replace" },
+        ],
+      });
+
+      expect(errors).toEqual([
+        '`importChoice[1].path` ".cursor/hooks.json" is not an instruction file init imports ' +
+          "(AGENTS.md, AGENT.md, CLAUDE.md, .github/copilot-instructions.md)",
+        '`importChoice[2].path` "docs/AGENTS.md" is not an instruction file init imports ' +
+          "(AGENTS.md, AGENT.md, CLAUDE.md, .github/copilot-instructions.md)",
+      ]);
+    });
+
+    it("names a path the shape check refuses once, for its shape", () => {
+      const errors = collectManifestErrors({
+        ...fullManifest(),
+        importChoice: [{ path: "../AGENTS.md", mode: "skip" }],
+      });
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).not.toContain("is not an instruction file");
+    });
+
+    it("refuses a skip decision beside a ledger row for the same path, and accepts one beside supplement", () => {
+      const rows = [
+        { path: "AGENTS.md", adapter: "claude", artifactId: "charter", artifactType: "infra", contentHash: "a".repeat(64) },
+        { path: "AGENTS.md", adapter: "cursor", artifactId: "charter", artifactType: "infra", contentHash: "a".repeat(64) },
+        { path: "CLAUDE.md", adapter: "claude", artifactId: "bridge", artifactType: "infra", contentHash: "b".repeat(64) },
+      ];
+      const errors = collectManifestErrors({
+        ...fullManifest(),
+        ledger: rows,
+        importChoice: [
+          { path: "CLAUDE.md", mode: "supplement" },
+          { path: "AGENTS.md", mode: "skip" },
+        ],
+      });
+
+      expect(errors).toEqual([
+        '`ledger[0]` records "AGENTS.md", which `importChoice[1]` skips: the engine never records a row for a skipped file',
+        '`ledger[1]` records "AGENTS.md", which `importChoice[1]` skips: the engine never records a row for a skipped file',
+      ]);
+      expect(
+        collectManifestErrors({ ...fullManifest(), ledger: rows, importChoice: [{ path: "AGENTS.md", mode: "supplement" }] }),
+      ).toEqual([]);
+      // A malformed ledger or decision list is named by its own check, not by the cross check.
+      expect(
+        collectManifestErrors({ ...fullManifest(), ledger: "rows", importChoice: [{ path: "AGENTS.md", mode: "skip" }] }).join(" | "),
+      ).not.toContain("skips");
+      expect(
+        collectManifestErrors({ ...fullManifest(), ledger: [null, ...rows], importChoice: [7, { path: "AGENTS.md", mode: "skip" }] }).filter(
+          (error) => error.includes("skips"),
+        ),
+      ).toHaveLength(2);
+    });
+  });
+
   it("validates all six detected fields, including the two the gate resolver reads", () => {
     // `packageManager` and `packageScripts` were the two fields this collector
     // skipped and the two the gate resolver consumes: a hand-edited or

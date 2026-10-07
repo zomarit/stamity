@@ -3,6 +3,7 @@ import { lstat, readFile, realpath, rmdir, unlink } from "node:fs/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { ReclaimCandidate } from "../manifest/ledger.ts";
 import {
+  bytesShowEngineOutput,
   carriesEngineMintedPrefix,
   hasEngineMintedName,
   ownedPathKind,
@@ -18,7 +19,7 @@ import {
   sameDirectoryIdentity,
   type DirectoryIdentity,
 } from "./atomicWrite.ts";
-import { splitAtManagedBlock } from "./managedBlocks.ts";
+import { hasOwnerTextOutsideBlock, splitAtManagedBlock } from "./managedBlocks.ts";
 import { backupBeforeOverwrite } from "./safeWrite.ts";
 
 /**
@@ -60,8 +61,11 @@ import { backupBeforeOverwrite } from "./safeWrite.ts";
  *    listed the exact path in `trustedExactPaths`, the allowlist for infra files
  *    the engine writes under names it did not mint (MCP config, hook config).
  *    A whole-file delete then needs the bytes: a matching recorded hash where
- *    (b) holds, the engine's name AND a matching recorded hash in a content
- *    folder, or a managed block that spans the file. A row with no recorded
+ *    (b) holds — plus, at an `AGENTS.md` in any folder, `AGENTS.override.md`,
+ *    `CLAUDE.md` and the Copilot setup workflow, bytes that show the engine
+ *    wrote them (`../manifest/ownedPaths.ts::bytesShowEngineOutput`,
+ *    REQ-PLUGIN-046) — the engine's name AND a matching recorded hash in a
+ *    content folder, or a managed block that spans the file. A row with no recorded
  *    hash proves nothing: no release ever wrote one, so it is a hand edit.
  * 3. **Containment (physical).** The parent directory's realpath still resolves
  *    under the root's realpath, and the candidate itself is a regular file. A
@@ -364,25 +368,6 @@ function matchesRecordedHash(recorded: ReadonlySet<string>, bytes: Buffer, conte
 /** True when `candidate` is `root` or sits underneath it. */
 function isWithin(candidate: string, root: string): boolean {
   return candidate === root || candidate.startsWith(root + sep);
-}
-
-/**
- * True when the slice ahead of a managed block is engine-authored rather than
- * user prose: whitespace only, or exactly one complete YAML frontmatter fence
- * (the generated stub emitted above the block so slash-command pickers can read
- * a description) surrounded by whitespace. Anything else — prose, a second
- * fence, an unterminated fence — is the user's and vetoes deletion.
- */
-function isEngineAuthoredPrefix(before: string): boolean {
-  if (before.trim() === "") return true;
-  const lines = before.split("\n").map((line) => line.replace(/\r$/, "").trim());
-  let index = 0;
-  while (index < lines.length && lines[index] === "") index++;
-  if (lines[index] !== "---") return false;
-  index++;
-  while (index < lines.length && lines[index] !== "---") index++;
-  if (index >= lines.length) return false;
-  return lines.slice(index + 1).every((line) => line === "");
 }
 
 // ── Candidate grouping ─────────────────────────────────────────────────────
@@ -706,11 +691,19 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
     group.recordedHashes.size > 0 && matchesRecordedHash(group.recordedHashes, bytes, content);
   const hashVetoed = group.recordedHashes.size > 0 && !hashMatched;
 
+  // At an instruction file or the Copilot setup workflow the match is not
+  // enough on its own (REQ-PLUGIN-046): an owner's file sits at the very name
+  // the engine writes, and a hand-added row can record the hash of the owner's
+  // bytes as easily as of the engine's. There the bytes must also show the
+  // engine wrote them; when they do not, the file falls through to the block
+  // split below — a block spanning it still proves it, a block beside owner
+  // text is stripped, and a block-less file is kept.
+  const bytesProveEngine = bytesShowEngineOutput(path, content);
   // Settled before the managed-block split on purpose: bytes identical to what
   // the engine recorded writing leave nothing a user could have authored, so
   // there is no veto for the split to find and no block worth stripping out of
   // a file that is engine output end to end.
-  if (hashProvable && hashMatched) {
+  if (hashProvable && hashMatched && bytesProveEngine) {
     return {
       kind: "delete",
       target,
@@ -724,6 +717,14 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
   const split = splitAtManagedBlock(content, target);
   if (split === null) {
     if (hashVetoed) return skip("skipped-user-content", hashMismatchDetail);
+    // Only reachable when the byte proof above failed: the hash matched where a
+    // hash is admissible, so nothing else stood between the file and the unlink.
+    if (hashProvable && hashMatched) {
+      return skip(
+        "skipped-user-content",
+        "The bytes still hash to what the ledger records, but an instruction file is deleted whole only when its own bytes show the engine wrote it, and these do not — the file is kept; delete it by hand if it is yours to remove.",
+      );
+    }
     if (engineNamed) {
       // The name alone used to earn the delete, which made a hashless row a
       // delete primitive for any owner file a hand edit gave an engine-looking
@@ -753,9 +754,7 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
     );
   }
 
-  const userBytesOutside =
-    !isEngineAuthoredPrefix(split.before) || split.after.trim() !== "";
-  if (!userBytesOutside) {
+  if (!hasOwnerTextOutsideBlock(content, target)) {
     // A block spanning the file normally proves the file is engine output, but
     // a recorded hash that disagrees with the bytes outranks it: something
     // rewrote the block body, and regenerating it is the sync's job, not the

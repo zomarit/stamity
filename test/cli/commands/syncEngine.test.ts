@@ -1207,3 +1207,107 @@ describe("a hashless ledger row in the write lane", () => {
     expect(await previewReclaim(root, { ...plan, reclaim: [] })).toBeNull();
   });
 });
+
+/**
+ * REQ-PLUGIN-046: at an instruction file or the Copilot setup workflow a
+ * recorded hash licenses a backup-free overwrite only when the bytes show the
+ * engine wrote them. A forged row that hashes the owner's own bytes used to be
+ * that licence.
+ */
+describe("the byte proof in the write lane", () => {
+  const WORKFLOW = ".github/workflows/copilot-setup-steps.yml";
+  const OWNER_WORKFLOW =
+    'name: "Copilot Setup Steps"\non: workflow_dispatch\njobs:\n  copilot-setup-steps:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo owner\n';
+
+  it("backs up an owner's workflow whose forged row records the hash of its bytes", async () => {
+    const handle = tempDir();
+    const forged: LedgerEntry = {
+      path: WORKFLOW,
+      adapter: "copilot",
+      artifactId: "copilot-setup-steps",
+      artifactType: "infra",
+      contentHash: sha256(OWNER_WORKFLOW),
+    };
+    const root = await seedRepo(handle, { tools: ["copilot"], ledger: [forged] });
+    await handle.seedFiles({ [`repo/${WORKFLOW}`]: OWNER_WORKFLOW });
+
+    const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+    const report = await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: false, dryRun: false, now: T1 });
+
+    const row = report.wrote.find((result) => result.path === WORKFLOW);
+    expect(row?.action).toBe("updated");
+    expect(row?.warning).toContain(`${WORKFLOW}.bak`);
+    expect(await readFile(join(root, `${WORKFLOW}.bak`), "utf8")).toBe(OWNER_WORKFLOW);
+  });
+
+  it("backs up an owner's AGENTS.md whose forged row records the hash of its bytes", async () => {
+    const handle = tempDir();
+    const owner = "# Team notes\n\nOur own agent instructions.\n";
+    const forged: LedgerEntry = {
+      path: "AGENTS.md",
+      adapter: "claude",
+      artifactId: "charter",
+      artifactType: "infra",
+      contentHash: sha256(owner),
+    };
+    const root = await seedRepo(handle, { ledger: [forged] });
+    await handle.seedFiles({ "repo/AGENTS.md": owner });
+
+    const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+    expect(plan.entries.find((entry) => entry.path === "AGENTS.md")?.action).toBe("update");
+    const report = await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: false, dryRun: false, now: T1 });
+
+    expect(report.wrote.find((result) => result.path === "AGENTS.md")?.warning).toContain("AGENTS.md.bak");
+    expect(await readFile(join(root, "AGENTS.md.bak"), "utf8")).toBe(owner);
+  });
+
+  it("takes no backup where the bytes are the engine's own: a block spanning the file", async () => {
+    const handle = tempDir();
+    const spanning = wrapInManagedBlock("an earlier engine charter", "AGENTS.md", "1.0.0");
+    const row: LedgerEntry = {
+      path: "AGENTS.md",
+      adapter: "claude",
+      artifactId: "charter",
+      artifactType: "infra",
+      contentHash: sha256(spanning),
+    };
+    const root = await seedRepo(handle, { ledger: [row] });
+    await handle.seedFiles({ "repo/AGENTS.md": spanning });
+
+    const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+    const report = await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: false, dryRun: false, now: T1 });
+
+    expect(report.wrote.find((result) => result.path === "AGENTS.md")).toMatchObject({ action: "updated" });
+    expect(report.wrote.find((result) => result.path === "AGENTS.md")?.warning).toBeUndefined();
+    expect(existsSync(join(root, "AGENTS.md.bak"))).toBe(false);
+  });
+
+  it("plans an import-decision collision that --force does not clear", async () => {
+    const handle = tempDir();
+    const supplemented = `${wrapInManagedBlock("engine charter", "AGENTS.md", "1.11.0")}\n# Team notes\n\nKeep this.\n`;
+    const row: LedgerEntry = {
+      path: "AGENTS.md",
+      adapter: "claude",
+      artifactId: "charter",
+      artifactType: "infra",
+      contentHash: sha256(supplemented),
+    };
+    const root = await seedRepo(handle, { ledger: [row] });
+    await handle.seedFiles({ "repo/AGENTS.md": supplemented });
+
+    const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+    const entry = plan.entries.find((candidate) => candidate.path === "AGENTS.md");
+    expect(entry).toMatchObject({ action: "collision", collisionKind: "import-decision" });
+    expect(entry?.detail).toContain("records no decision for it");
+    expect(entry?.detail).toContain("init --force --import-config replace");
+
+    const forced = await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: true, dryRun: false, now: T1 });
+
+    expect(forced.refused).toEqual(["AGENTS.md"]);
+    expect(forced.wrote.find((result) => result.path === "AGENTS.md")?.warning).toContain(
+      "An import-decision collision is never force-overridable",
+    );
+    expect(await readFile(join(root, "AGENTS.md"), "utf8")).toBe(supplemented);
+    expect(existsSync(join(root, "AGENTS.md.bak"))).toBe(false);
+  });
+});

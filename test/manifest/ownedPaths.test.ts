@@ -7,17 +7,21 @@ import { addCommand } from "../../src/cli/commands/add.ts";
 import { planSync } from "../../src/cli/commands/sync/engine.ts";
 import { createApp } from "../../src/index.ts";
 import { createManifest, writeManifest } from "../../src/manifest/manifest.ts";
+import { hasManagedBlock, hasOwnerTextOutsideBlock } from "../../src/merge/managedBlocks.ts";
 import {
   OWNED_PATHS,
+  bytesShowEngineOutput,
   carriesEngineMintedPrefix,
   hasEngineMintedName,
+  isEngineCharterDocument,
+  needsByteProof,
   ownedPathDefect,
   ownedPathKind,
   packDirName,
   type OwnedPathRow,
 } from "../../src/manifest/ownedPaths.ts";
 import { packDirRelPath } from "../../src/pack/receipt.ts";
-import { outputOwners } from "../../src/types/content.ts";
+import { outputOwners, type AdapterOutput } from "../../src/types/content.ts";
 import { TOOLS, type Tool } from "../../src/types/core.ts";
 import type { SetupManifest } from "../../src/types/manifest.ts";
 import { runInProcess } from "../support/inProcess.ts";
@@ -185,7 +189,7 @@ const REPO_FILES: Readonly<Record<string, string>> = {
   ".stamity/overrides/skills/my-skill/SKILL.md": "---\nid: my-skill\ntype: skill\ndescription: A team skill for doing a thing well.\n---\n\n# My skill\n\nDo it.\n",
 };
 
-async function plannedRows(scenario: Scenario, sub: string): Promise<OwnedPathRow[]> {
+async function plannedOutputs(scenario: Scenario, sub: string): Promise<AdapterOutput[]> {
   const root = getTemp().path(sub);
   for (const [path, content] of Object.entries(REPO_FILES)) {
     await mkdir(dirname(join(root, path)), { recursive: true });
@@ -215,7 +219,11 @@ async function plannedRows(scenario: Scenario, sub: string): Promise<OwnedPathRo
     expect(added.code, added.stderr).toBe(0);
   }
   const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
-  return plan.outputs.flatMap((output) =>
+  return plan.outputs;
+}
+
+async function plannedRows(scenario: Scenario, sub: string): Promise<OwnedPathRow[]> {
+  return (await plannedOutputs(scenario, sub)).flatMap((output) =>
     outputOwners(output).map((owner) => ({ path: output.path, adapter: owner.adapter, artifactType: owner.artifactType })),
   );
 }
@@ -255,4 +263,124 @@ describe("every row the head's planner plans lies in the bound", () => {
       expect(paths.has(path), path).toBe(true);
     }
   }, 60_000);
+});
+
+// ── The byte proof at instruction files (REQ-PLUGIN-046) ───────────────────
+
+const CHARTER_1_0_0 = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "fixtures", "charter-1.0.0.md"),
+  "utf8",
+);
+
+/** GitHub's own template for the Copilot setup workflow: no engine header line. */
+const GITHUB_TEMPLATE_WORKFLOW = [
+  'name: "Copilot Setup Steps"',
+  "",
+  "on: workflow_dispatch",
+  "",
+  "jobs:",
+  "  copilot-setup-steps:",
+  "    runs-on: ubuntu-latest",
+  "    permissions:",
+  "      contents: read",
+  "    steps:",
+  "      - uses: actions/checkout@v5",
+  "",
+].join("\n");
+
+const BOM = String.fromCharCode(0xfe_ff);
+
+describe("needsByteProof", () => {
+  it("names AGENTS.md at any depth, AGENTS.override.md, CLAUDE.md and the Copilot setup workflow", () => {
+    for (const path of [
+      "AGENTS.md",
+      "docs/AGENTS.md",
+      "packages/app/AGENTS.md",
+      "AGENTS.override.md",
+      "CLAUDE.md",
+      ".github/workflows/copilot-setup-steps.yml",
+    ]) {
+      expect(needsByteProof(path), path).toBe(true);
+    }
+  });
+
+  it("names nothing else", () => {
+    for (const path of [
+      ".codex/config.toml",
+      ".cursor/hooks.json",
+      ".claude/agents/stamity-x.md",
+      "docs/AGENTS.md.bak",
+      "docs/MY-AGENTS.md",
+      "docs/CLAUDE.md",
+      "docs/AGENTS.override.md",
+      ".github/workflows/ci.yml",
+    ]) {
+      expect(needsByteProof(path), path).toBe(false);
+    }
+  });
+});
+
+describe("the charter recogniser", () => {
+  it("reads every byte-proof output the head's planner renders as the engine's", async () => {
+    const outputs = [
+      ...(await plannedOutputs({ label: "four clients", tools: ALL }, "proof-all")),
+      ...(await plannedOutputs({ label: "codex", tools: ["codex"] }, "proof-codex")),
+    ];
+    const proven = outputs.filter((output) => needsByteProof(output.path));
+    const paths = new Set(proven.map((output) => output.path));
+    for (const path of ["AGENTS.md", "AGENTS.override.md", "CLAUDE.md", ".github/workflows/copilot-setup-steps.yml", "packages/app/AGENTS.md", "src/api/AGENTS.md"]) {
+      expect(paths.has(path), path).toBe(true);
+    }
+    for (const output of proven) {
+      if (output.path === "CLAUDE.md") {
+        // The bridge is one managed block spanning the file; the bytes
+        // themselves prove nothing, the spanning block does.
+        expect(bytesShowEngineOutput(output.path, output.content)).toBe(false);
+        expect(hasManagedBlock(output.content, output.path)).toBe(true);
+        expect(hasOwnerTextOutsideBlock(output.content, output.path)).toBe(false);
+        continue;
+      }
+      expect(bytesShowEngineOutput(output.path, output.content), output.path).toBe(true);
+    }
+  }, 60_000);
+
+  it("reads the head's charter with a BOM and with CRLF line endings, and the charter 1.0.0 wrote", async () => {
+    const outputs = await plannedOutputs({ label: "claude", tools: ["claude"] }, "proof-claude");
+    const charter = outputs.find((output) => output.path === "AGENTS.md")?.content ?? "";
+    expect(isEngineCharterDocument(charter)).toBe(true);
+    expect(isEngineCharterDocument(`${BOM}${charter}`)).toBe(true);
+    expect(isEngineCharterDocument(charter.replaceAll("\n", "\r\n"))).toBe(true);
+    expect(CHARTER_1_0_0).not.toContain("Invariants version");
+    expect(isEngineCharterDocument(CHARTER_1_0_0)).toBe(true);
+    expect(bytesShowEngineOutput("AGENTS.override.md", CHARTER_1_0_0)).toBe(true);
+  }, 60_000);
+
+  it("refuses notes under the charter's title, markers, and headings out of order or missing", () => {
+    expect(isEngineCharterDocument("# Charter\n\nmy notes\n")).toBe(false);
+    expect(isEngineCharterDocument(`<!-- STAMITY:BEGIN v1.11.0 -->\n${CHARTER_1_0_0}\n<!-- STAMITY:END -->\n`)).toBe(false);
+    expect(isEngineCharterDocument(`# Team notes\n\n${CHARTER_1_0_0}`)).toBe(false);
+    const swapped = CHARTER_1_0_0.replace("## Repo facts", "## Placeholder").replace("## Touchpoints", "## Repo facts");
+    expect(isEngineCharterDocument(swapped)).toBe(false);
+    expect(isEngineCharterDocument(CHARTER_1_0_0.replace("## Conditional layer", "## Other layer"))).toBe(false);
+    expect(isEngineCharterDocument("")).toBe(false);
+  });
+
+  it("reads the Codex rule appendix only below the root, and the Copilot workflow by its header line", () => {
+    const appendix = "\n# Conditional rules (Codex down-conversion) — `packages/app`\n\nRules.\n";
+    expect(bytesShowEngineOutput("packages/app/AGENTS.md", appendix)).toBe(true);
+    expect(bytesShowEngineOutput("packages/app/AGENTS.md", appendix.replaceAll("\n", "\r\n"))).toBe(true);
+    expect(bytesShowEngineOutput("AGENTS.md", appendix)).toBe(false);
+    expect(bytesShowEngineOutput("AGENTS.override.md", appendix)).toBe(false);
+    expect(bytesShowEngineOutput("docs/AGENTS.md", "# Docs agents\n\nHow we write docs here.\n")).toBe(false);
+    expect(bytesShowEngineOutput("docs/AGENTS.md", "\n\n")).toBe(false);
+    expect(bytesShowEngineOutput(".github/workflows/copilot-setup-steps.yml", GITHUB_TEMPLATE_WORKFLOW)).toBe(false);
+    expect(
+      bytesShowEngineOutput(
+        ".github/workflows/copilot-setup-steps.yml",
+        "name: x\r\n\r\n# Prepares the environment the GitHub Copilot coding agent works in. The agent runs\r\n",
+      ),
+    ).toBe(true);
+    expect(bytesShowEngineOutput("CLAUDE.md", CHARTER_1_0_0)).toBe(false);
+    expect(bytesShowEngineOutput(".codex/config.toml", "anything")).toBe(true);
+  });
 });

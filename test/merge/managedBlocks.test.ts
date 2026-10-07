@@ -4,6 +4,7 @@ import {
   extractManagedBlock,
   getStampedVersion,
   hasManagedBlock,
+  hasOwnerTextOutsideBlock,
   insertManagedBlock,
   isHealableManagedPrefix,
   isManagedBlockStale,
@@ -498,5 +499,31 @@ describe("isManagedBlockStale (only-when-stale contract)", () => {
   it("no detectable block -> stale (nothing on disk is current)", () => {
     expect(isManagedBlockStale("prose only\n", "1.2.3", "a.md")).toBe(true);
     expect(isManagedBlockStale("", "1.2.3", "a.md")).toBe(true);
+  });
+});
+
+// ── hasOwnerTextOutsideBlock (REQ-PLUGIN-046) ──────────────────────────────
+
+describe("hasOwnerTextOutsideBlock", () => {
+  const block = wrapInManagedBlock("engine text", "AGENTS.md", "1.11.0");
+
+  it("is false with no block at all: there is no block for owner text to sit outside", () => {
+    expect(hasOwnerTextOutsideBlock("# Team notes\n\nKeep this.\n", "AGENTS.md")).toBe(false);
+  });
+
+  it("is false for a block spanning the file, alone or behind the engine's frontmatter stub", () => {
+    expect(hasOwnerTextOutsideBlock(`\n${block}\n`, "AGENTS.md")).toBe(false);
+    expect(hasOwnerTextOutsideBlock(`---\ndescription: x\n---\n\n${block}`, "AGENTS.md")).toBe(false);
+    expect(hasOwnerTextOutsideBlock(`---\r\ndescription: x\r\n---\r\n${block}`, "AGENTS.md")).toBe(false);
+  });
+
+  it("is true for owner text after the block, the shape a supplement import leaves", () => {
+    expect(hasOwnerTextOutsideBlock(`${block}\n# Team notes\n\nKeep this.\n`, "AGENTS.md")).toBe(true);
+  });
+
+  it("is true for owner text before the block, and for a frontmatter fence that never closes or is followed by prose", () => {
+    expect(hasOwnerTextOutsideBlock(`# Team notes\n\n${block}`, "AGENTS.md")).toBe(true);
+    expect(hasOwnerTextOutsideBlock(`---\ndescription: x\n\n${block}`, "AGENTS.md")).toBe(true);
+    expect(hasOwnerTextOutsideBlock(`---\ndescription: x\n---\nmine\n${block}`, "AGENTS.md")).toBe(true);
   });
 });

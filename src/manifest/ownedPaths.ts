@@ -1,3 +1,4 @@
+import { hasManagedBlock } from "../merge/managedBlocks.ts";
 import { PACK_OWNER_PREFIX } from "../types/manifest.ts";
 import { STATE_DIR, carriesEngineContentPrefix } from "../types/markers.ts";
 
@@ -214,4 +215,104 @@ export function hasEngineMintedName(path: string): boolean {
       (segment, index) =>
         segments[index - 1] === SKILL_CONTAINER_SEGMENT && carriesEngineMintedPrefix(segment),
     );
+}
+
+// ── The byte proof at instruction files (REQ-PLUGIN-046) ───────────────────
+
+/** The instruction-file paths, besides a charter in any folder, whose bytes must show the engine wrote them. */
+const BYTE_PROOF_PATHS: ReadonlySet<string> = new Set([
+  "AGENTS.override.md",
+  "CLAUDE.md",
+  ".github/workflows/copilot-setup-steps.yml",
+]);
+
+/**
+ * True when a recorded hash at `path` proves a whole-file delete or a
+ * backup-free overwrite only together with bytes that show the engine wrote
+ * them ({@link bytesShowEngineOutput}): an `AGENTS.md` in any folder,
+ * `AGENTS.override.md`, `CLAUDE.md` and the Copilot setup workflow.
+ *
+ * These are the paths where an owner's own file sits at the name the engine
+ * writes, so a hand-added row hashing the owner's bytes would otherwise read as
+ * the engine's record of writing them. The engine cannot authenticate a
+ * committed record (the manifest carries no signature, and a key kept in the
+ * repository would be as forgeable as the record), so at these paths the bytes
+ * themselves have to agree.
+ */
+export function needsByteProof(path: string): boolean {
+  if (BYTE_PROOF_PATHS.has(path)) return true;
+  return path.slice(path.lastIndexOf("/") + 1) === OWNED_PATHS.charterFileName;
+}
+
+/** UTF-8 byte-order mark, dropped before the fingerprint reads the first line. */
+const BOM = "\uFEFF";
+
+/** The four headings every release's charter carries, in this order (1.0.0 to the head). */
+const CHARTER_HEADINGS: readonly string[] = ["## Repo facts", "## Invariants", "## Touchpoints", "## Conditional layer"];
+
+/** The first line of every charter. */
+const CHARTER_TITLE = "# Charter";
+
+/** How the Codex rule appendix opens when it is a folder's own `AGENTS.md` (`../adapters/codex.ts`). */
+const CODEX_APPENDIX_TITLE = "# Conditional rules (Codex down-conversion)";
+
+/** The header line every release's Copilot setup workflow carries (`../adapters/copilot.ts`). */
+const COPILOT_SETUP_HEADER_LINE =
+  "# Prepares the environment the GitHub Copilot coding agent works in. The agent runs";
+
+/** The text as lines, with an optional leading BOM dropped and `\r\n` read as `\n`. */
+function linesOf(text: string): string[] {
+  const body = text.startsWith(BOM) ? text.slice(BOM.length) : text;
+  return body.replaceAll("\r\n", "\n").split("\n");
+}
+
+/** The first line that is not blank, or `undefined` for blank text. */
+function firstNonBlankLine(lines: readonly string[]): string | undefined {
+  return lines.find((line) => line.trim() !== "");
+}
+
+/**
+ * True when `text` is a charter the engine rendered: no managed-block markers,
+ * the first non-blank line exactly `# Charter`, and the lines `## Repo facts`,
+ * `## Invariants`, `## Touchpoints` and `## Conditional layer` in that order.
+ *
+ * A fingerprint of the structure, not of the words: every release from 1.0.0
+ * carries the four headings (1.0.0 to 1.7.0 without an `Invariants version`
+ * line), and a charter the operator edited so a heading changed is no longer
+ * provably the engine's — it is kept at reclaim and backed up before an
+ * overwrite. A charter inside markers is the supplemented shape, which the
+ * managed-block rules decide instead.
+ */
+export function isEngineCharterDocument(text: string): boolean {
+  if (hasManagedBlock(text, OWNED_PATHS.charterFileName)) return false;
+  const lines = linesOf(text);
+  if (firstNonBlankLine(lines) !== CHARTER_TITLE) return false;
+  let next = 0;
+  for (const line of lines) {
+    if (line === CHARTER_HEADINGS[next]) next++;
+  }
+  return next === CHARTER_HEADINGS.length;
+}
+
+/**
+ * True when the bytes at `path` show the engine wrote them, for a path
+ * {@link needsByteProof} names; `true` for every other path, which this proof
+ * does not govern.
+ *
+ * - `AGENTS.md` and `AGENTS.override.md`: a charter ({@link isEngineCharterDocument}),
+ *   or, for an `AGENTS.md` below the root only, the Codex rule appendix (first
+ *   non-blank line opening `# Conditional rules (Codex down-conversion)`).
+ * - `CLAUDE.md`: never. The engine writes it as one managed block, so only a
+ *   block spanning the file proves it, which the callers test on their own.
+ * - The Copilot setup workflow: a line equal to the engine's header line.
+ */
+export function bytesShowEngineOutput(path: string, text: string): boolean {
+  if (!needsByteProof(path)) return true;
+  if (path === "CLAUDE.md") return false;
+  const lines = linesOf(text);
+  if (path === ".github/workflows/copilot-setup-steps.yml") {
+    return lines.includes(COPILOT_SETUP_HEADER_LINE);
+  }
+  if (isEngineCharterDocument(text)) return true;
+  return path.includes("/") && (firstNonBlankLine(lines)?.startsWith(CODEX_APPENDIX_TITLE) ?? false);
 }

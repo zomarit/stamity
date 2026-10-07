@@ -91,6 +91,13 @@ const PACK_FILE = ".stamity/packs/acme__ops/agents/reviewer.md";
 const PACK_BODY = "---\nid: reviewer\n---\nReview the change.\n";
 
 /**
+ * The smallest bytes the charter recogniser reads as the engine's: the title
+ * line and the four headings every release's charter carries, in order
+ * (`../../src/manifest/ownedPaths.ts::isEngineCharterDocument`, REQ-PLUGIN-046).
+ */
+const CHARTER_BODY = "# Charter\n\n## Repo facts\n\n## Invariants\n\n## Touchpoints\n\n## Conditional layer\n";
+
+/**
  * A row for content the engine installed verbatim: a name it did not mint, no
  * managed block, and the hash of the bytes it wrote. The recorded hash is the
  * only ownership proof such a file has.
@@ -980,9 +987,13 @@ describe("sweepReclaimCandidates — recorded-hash ownership", () => {
   it("deletes a trusted path whose bytes match the recorded hash", async () => {
     const temp = tempDir();
     const root = temp.path("repo");
-    await temp.seedFiles({ "repo/AGENTS.md": PACK_BODY });
+    // TEST CHANGE, justified: REQ-PLUGIN-046 — at `AGENTS.md` a matching hash
+    // deletes only bytes that show the engine wrote them, so the fixture holds
+    // a charter rather than a pack agent's body; the subject (a trusted hash
+    // match is the uninstall licence) is unchanged.
+    await temp.seedFiles({ "repo/AGENTS.md": CHARTER_BODY });
 
-    const report = await sweepReclaimCandidates([hashedCandidate("AGENTS.md", PACK_BODY)], {
+    const report = await sweepReclaimCandidates([hashedCandidate("AGENTS.md", CHARTER_BODY)], {
       rootDir: root,
       consent: true,
       trustedExactPaths: new Set(["AGENTS.md"]),
@@ -1199,7 +1210,10 @@ describe("sweepReclaimCandidates — the bytes, not the row, prove a delete", ()
     const temp = tempDir();
     const root = temp.path("repo");
     const charter = "packages/app/AGENTS.md";
-    const body = "# Charter\n\nengine charter\n";
+    // TEST CHANGE, justified: REQ-PLUGIN-046 — a charter is deleted whole only
+    // when its bytes carry the charter's four headings; `# Charter` followed by
+    // a line of text is exactly the shape the recogniser refuses.
+    const body = CHARTER_BODY;
     await temp.seedFiles({ [`repo/${charter}`]: body });
     const row = recorded(candidate(charter, "deselected", "codex"), body);
 
@@ -1243,6 +1257,86 @@ describe("sweepReclaimCandidates — the bytes, not the row, prove a delete", ()
  * MCP reducer's own judgement is proved in `test/manifest/mcpFilter.test.ts`, and
  * the two meeting in a shipped verb in `test/cli/commands/syncMcpOwnership.test.ts`.
  */
+describe("sweepReclaimCandidates — an instruction file leaves only on its own bytes", () => {
+  // REQ-PLUGIN-046: at `AGENTS.md` in any folder, `AGENTS.override.md`,
+  // `CLAUDE.md` and the Copilot setup workflow, a matching recorded hash is not
+  // enough on its own — an owner's file sits at the very name the engine
+  // writes, and a hand-added row can hash the owner's bytes.
+  const OWNER = "# Team notes\n\nOur own agent instructions.\n";
+
+  it("keeps an owner's AGENTS.md that a trusted row hashes, and names why", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ "repo/AGENTS.md": OWNER });
+
+    const report = await sweepReclaimCandidates([hashedCandidate("AGENTS.md", OWNER)], {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: new Set(["AGENTS.md"]),
+    });
+
+    const entry = onlyEntry(report);
+    expect(entry.action).toBe("skipped-user-content");
+    expect(entry.detail).toContain("only when its own bytes show the engine wrote it");
+    expect(entry).not.toHaveProperty("proof");
+    expect(await readFile(join(root, "AGENTS.md"), "utf-8")).toBe(OWNER);
+  });
+
+  it("still deletes an instruction file a managed block spans, naming the block", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const spanning = wrapInManagedBlock("an earlier engine charter", "CLAUDE.md");
+    await temp.seedFiles({ "repo/CLAUDE.md": spanning });
+
+    const report = await sweepReclaimCandidates([hashedCandidate("CLAUDE.md", spanning)], {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: new Set(["CLAUDE.md"]),
+    });
+
+    expect(onlyEntry(report)).toMatchObject({ action: "deleted", proof: "block" });
+    expect(await snapshot(root)).toEqual({});
+  });
+
+  it("strips only the block from a supplemented AGENTS.md a trusted row hashes", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const supplemented = `${wrapInManagedBlock("engine charter", "AGENTS.md")}${OWNER}`;
+    await temp.seedFiles({ "repo/AGENTS.md": supplemented });
+
+    const report = await sweepReclaimCandidates([hashedCandidate("AGENTS.md", supplemented)], {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: new Set(["AGENTS.md"]),
+    });
+
+    expect(onlyEntry(report)).toMatchObject({ action: "managed-block-stripped", proof: "block" });
+    // Every byte outside the block is kept verbatim, the newline after the END marker included.
+    expect(await readFile(join(root, "AGENTS.md"), "utf-8")).toBe(`\n${OWNER}`);
+  });
+
+  it("deletes the engine's Copilot workflow and a folder's Codex appendix on their own bytes", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const workflow = ".github/workflows/copilot-setup-steps.yml";
+    const workflowBytes =
+      "name: Copilot Setup Steps\n\n# Prepares the environment the GitHub Copilot coding agent works in. The agent runs\n";
+    const appendix = "packages/app/AGENTS.md";
+    const appendixBytes = "# Conditional rules (Codex down-conversion) — `packages/app`\n\nRules.\n";
+    await temp.seedFiles({ [`repo/${workflow}`]: workflowBytes, [`repo/${appendix}`]: appendixBytes });
+
+    const report = await sweepReclaimCandidates(
+      [hashedCandidate(workflow, workflowBytes), hashedCandidate(appendix, appendixBytes)],
+      { rootDir: root, consent: true, trustedExactPaths: new Set([workflow, appendix]) },
+    );
+
+    expect(report.entries.map((entry) => [entry.path, entry.action, entry.proof])).toEqual([
+      [workflow, "deleted", "hash"],
+      [appendix, "deleted", "hash"],
+    ]);
+  });
+});
+
 describe("sweepReclaimCandidates — co-owned documents", () => {
   const CO_OWNED = ".mcp.json";
   const ENGINE_LINE = "ENGINE-OWNED\n";
@@ -1533,12 +1627,15 @@ describe("sweepReclaimCandidates — co-owned documents", () => {
   it("does not consult a reducer for a path that is not declared co-owned", async () => {
     const temp = tempDir();
     const root = temp.path("repo");
-    await temp.seedFiles({ "repo/AGENTS.md": PACK_BODY });
+    // TEST CHANGE, justified: REQ-PLUGIN-046 — `AGENTS.md` is deleted on a hash
+    // only when its bytes are a charter, so the fixture holds one; the subject
+    // (an undeclared path never reaches a reducer) is unchanged.
+    await temp.seedFiles({ "repo/AGENTS.md": CHARTER_BODY });
 
     // The blast-radius guard: declaring one path co-owned must not change how any
     // other trusted hash-proved path is judged, or the fix would have withdrawn
     // the block-less-infra uninstall it is not about.
-    const report = await sweepReclaimCandidates([hashedCandidate("AGENTS.md", PACK_BODY)], {
+    const report = await sweepReclaimCandidates([hashedCandidate("AGENTS.md", CHARTER_BODY)], {
       rootDir: root,
       consent: true,
       trustedExactPaths: new Set(["AGENTS.md"]),

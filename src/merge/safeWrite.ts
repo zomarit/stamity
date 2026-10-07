@@ -15,6 +15,7 @@ import {
   scanForDeniedPatterns,
 } from "../denyscan/denyScan.ts";
 import type { DenyHit } from "../denyscan/denyScan.ts";
+import { bytesShowEngineOutput } from "../manifest/ownedPaths.ts";
 import type { MergeResult, SourceRefusal } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
 import { MANAGED_BLOCK_VARIANTS, getMarkersForPath } from "../types/markers.ts";
@@ -31,6 +32,7 @@ import { mapFsErrno } from "./fsErrors.ts";
 import {
   extractCustomContent,
   hasManagedBlock,
+  hasOwnerTextOutsideBlock,
   insertManagedBlock,
   isHealableManagedPrefix,
   isManagedBlockStale,
@@ -931,6 +933,19 @@ export function hasLedgerDrift(
   return folded === existingContent || !recorded.has(ledgerHash(folded));
 }
 
+/**
+ * True when the bytes at a repo-relative `path` show the engine wrote them —
+ * the byte proof of REQ-PLUGIN-046, which governs only an `AGENTS.md` in any
+ * folder, `AGENTS.override.md`, `CLAUDE.md` and the Copilot setup workflow and
+ * answers `true` for every other path. A managed block spanning the file proves
+ * it as well: such a file holds nothing but the engine's block, which is how
+ * the reclaim sweep reads the same bytes (`./reclaim.ts`, gate 4).
+ */
+function bytesProveEngineOutput(path: string, existingContent: string): boolean {
+  if (bytesShowEngineOutput(path, existingContent)) return true;
+  return hasManagedBlock(existingContent, path) && !hasOwnerTextOutsideBlock(existingContent, path);
+}
+
 /** The ledger's spelling of a content hash — `../cli/engine/emissionWrite.ts::sha256`. */
 function ledgerHash(content: string): string {
   return createHash("sha256").update(content).digest("hex");
@@ -1189,7 +1204,16 @@ async function safeWriteFileLocked(
   // engine-owned, machine-local, regenerable state where the copy is litter
   // rather than protection (`../pack/install.ts` rollback), and a caller that
   // states that has stated it about drift too.
-  const drifted = managed && hasLedgerDrift(filePath, existingContent, options.ledgerHashes);
+  //
+  // At an instruction file or the Copilot setup workflow a matching hash is
+  // not the whole licence (REQ-PLUGIN-046): an owner's file sits at the name the
+  // engine writes, and a hand-added row can hash the owner's bytes. There the
+  // bytes must also show the engine wrote them, or the overwrite takes the
+  // `.bak` like any drifted one.
+  const unproven =
+    managed && !bytesProveEngineOutput(displayPath(filePath, options.boundaryDir), existingContent);
+  const drifted =
+    managed && (unproven || hasLedgerDrift(filePath, existingContent, options.ledgerHashes));
   if ((managed && !drifted) || options.backup === false) {
     await atomicWriteFileUnlocked(filePath, content, writeOpts);
     return { path: filePath, action: "updated" };
@@ -1204,7 +1228,11 @@ async function safeWriteFileLocked(
   return {
     path: filePath,
     action: "updated",
-    warning: drifted
+    warning: unproven
+      ? `Overwrote ${displayPath(filePath, options.boundaryDir)}: the ledger records this path, but ` +
+        `its bytes do not show the engine wrote them, so they may be yours. This output is written ` +
+        `whole, so the file was regenerated in full. Your previous file is at ${bakPath}.`
+      : drifted
       ? // Says nothing about markers, deliberately: this lane writes whole
         // files, and a drifted target may carry a block the incoming content no
         // longer has. The reason it was replaced is the lane, not the markers.

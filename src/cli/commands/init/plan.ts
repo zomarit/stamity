@@ -14,6 +14,7 @@ import {
 } from "../../../types/core.ts";
 import type { DetectedSummary, PackageEntry, RepoInfo } from "../../../types/detect.ts";
 import { EngineError } from "../../../types/errors.ts";
+import { OWNED_PATHS } from "../../../manifest/ownedPaths.ts";
 import type { GatesConfig } from "../../../types/manifest.ts";
 import {
   detectSubRepos,
@@ -162,8 +163,19 @@ const DEFAULT_TOOLS: readonly Tool[] = ["claude"];
 /** Contributor count at which the git-history seed reads a repo as a team's. */
 const TEAM_CONTRIBUTOR_FLOOR = 2;
 
+/**
+ * The four instruction files `init` imports, from their one home
+ * (`OWNED_PATHS.importTargets`, REQ-PLUGIN-046): manifest validation refuses
+ * an import decision at any other path, so the files probed here and the
+ * files a decision may name are the same list by construction. Read by
+ * position — the cross-tool pair first, then Claude's and Copilot's own;
+ * `test/cli/commands/initPlan.test.ts` holds the probe equal to the list.
+ */
+const [AGENTS_MD, AGENT_MD, CLAUDE_INSTRUCTIONS, COPILOT_INSTRUCTIONS] =
+  OWNED_PATHS.importTargets as readonly [string, string, string, string];
+
 /** Cross-tool instruction files probed at the repo root regardless of detection. */
-const CROSS_TOOL_CONFIG_FILES: readonly string[] = ["AGENTS.md", "AGENT.md"];
+const CROSS_TOOL_CONFIG_FILES: readonly string[] = [AGENTS_MD, AGENT_MD];
 
 /**
  * Importable instruction FILES per tool, probed only for detected tools. Cursor
@@ -173,9 +185,9 @@ const CROSS_TOOL_CONFIG_FILES: readonly string[] = ["AGENTS.md", "AGENT.md"];
  * directory it cannot merge.
  */
 const TOOL_INSTRUCTION_FILES: Record<Tool, readonly string[]> = {
-  claude: ["CLAUDE.md"],
+  claude: [CLAUDE_INSTRUCTIONS],
   cursor: [],
-  copilot: [".github/copilot-instructions.md"],
+  copilot: [COPILOT_INSTRUCTIONS],
   codex: [],
 };
 
