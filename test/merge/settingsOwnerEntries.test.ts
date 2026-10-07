@@ -359,6 +359,31 @@ describe("a ledger record that claims an owner's members", () => {
   });
 });
 
+describe("an engine hook entry the operator edited, at clean -y (REQ-PLUGIN-016, review/43)", () => {
+  it("leaves behind a verified .bak holding the edit, and the output names that entry", async () => {
+    const root = await freshRepo();
+    await seedSettings(root, FIRST);
+    await init(root);
+    const doc = await settingsDoc(root);
+    const groups = (doc["hooks"] as Record<string, Record<string, unknown>[]>)["PreToolUse"] ?? [];
+    const engineIndex = groups.findIndex((group) => isEngineGroup(group));
+    expect(engineIndex).toBeGreaterThan(-1);
+    groups[engineIndex] = { ...groups[engineIndex], timeout: 99 };
+    await writeFile(SETTINGS_ABS(root), `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+    const edited = await readSettings(root);
+
+    const cleaned = await clean(root);
+
+    expect(cleaned.code).toBe(0);
+    expect(cleaned.stdout).toContain(`hooks.PreToolUse[${engineIndex}]`);
+    expect(await readFile(`${SETTINGS_ABS(root)}.bak`, "utf8")).toBe(edited);
+    // The owner's content stays; the edited engine entry is gone from the file.
+    const after = await settingsDoc(root);
+    expect((after["permissions"] as { deny: unknown })["deny"]).toEqual([DENY_RULE]);
+    expect((after["hooks"] as Record<string, unknown[]>)["PreToolUse"]).toEqual([OWNER_GROUP]);
+  });
+});
+
 describe("an owner's hook entry that runs their own .stamity/hooks/ script (review/44)", () => {
   it("under a record claiming it, leaves only behind a verified .bak, and the warning names it", async () => {
     const root = await freshRepo();
